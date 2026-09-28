@@ -1,0 +1,11 @@
+rules:
+  - id: security-runtime.python-command-injection
+    languages: [python]
+    severity: ERROR
+    message: User-controlled data may execute a system command
+    patterns:
+      - pattern-either:
+          - pattern: os.system(...)
+          - pattern: subprocess.run(..., shell=True, ...)
+          - pattern: subprocess.call(..., shell=True, ...)
+          - pattern: subprocess.Popen(..., shell=True, ...)
