@@ -1,0 +1,28 @@
+AI SECURITY RUNTIME PROPRIETARY LICENSE
+
+Copyright (c) 2026 AI Security Runtime. All rights reserved.
+
+Except for files or components that explicitly state a different license, the
+AI Security Runtime software, including its source code, binaries, runtime
+logic, risk and policy engines, commercial rule packs, intelligence data,
+documentation, and associated materials (the "Software"), is proprietary.
+
+Permission is granted only to use the Software under the applicable AI
+Security Runtime End User License Agreement (EULA) or another written agreement
+with the copyright holder.
+
+Unless expressly permitted by such an agreement or by applicable law, you may
+not copy, modify, distribute, sublicense, sell, rent, lease, provide the
+Software as a competing product or service, remove proprietary notices, or
+circumvent licensing or technical restrictions.
+
+Third-party components and explicitly identified open-source components remain
+licensed under their own license terms. See LICENSING.md and
+THIRD_PARTY_NOTICES.md.
+
+THE SOFTWARE IS PROVIDED "AS IS" TO THE MAXIMUM EXTENT PERMITTED BY LAW,
+WITHOUT WARRANTIES OF ANY KIND, EXCEPT AS EXPRESSLY PROVIDED IN A SEPARATE
+WRITTEN AGREEMENT.
+
+For commercial licensing, redistribution, OEM, or enterprise terms, contact
+the AI Security Runtime project owner.
