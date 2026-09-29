@@ -536,6 +536,20 @@ The repository itself currently uses three GitHub Actions checks:
 
 ---
 
+# Licensing
+
+AI Security Runtime follows a **closed-core, open-ecosystem** model:
+
+- Runtime Core, risk/policy engines, and future advanced rules/intelligence: **Proprietary**.
+- Public Plugin API and the current base `ai-security-core` rule pack: **Apache-2.0**.
+- Semgrep, Gitleaks, Trivy, and other third-party components retain their own licenses.
+
+Free use does not mean open source. Unless a component is explicitly marked Apache-2.0, the Runtime is governed by the root `LICENSE` and `EULA.md`.
+
+See [Licensing model](LICENSING.md).
+
+---
+
 # Rule and license boundaries
 
 Engine licenses and rule-pack licenses are tracked separately.
