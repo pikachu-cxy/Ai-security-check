@@ -45,6 +45,22 @@ Quick scans changed and untracked files, or staged files in the pre-commit hook.
 
 ## Agent integrations
 
+For Cursor or WorkBuddy, run `security-check setup` inside a Git project. It detects installed clients, adds a project connection, and verifies the local MCP server with the official MCP client SDK. Restart the coding tool after setup, then ask it to call `scan_diff`. Use `security-check integrations` to see whether that client has invoked the Runtime. `NEEDS_RESTART` means the Runtime passed verification but a client call has not yet been observed.
+
+```bash
+security-check setup
+security-check setup cursor
+security-check setup workbuddy
+security-check integrations
+security-check integrations repair
+security-check integrations remove cursor
+security-check stats
+```
+
+The project connection stays in `.cursor/mcp.json` or `.workbuddy/mcp.json` and binds scans to the project's Git root. Setup preserves other MCP servers, rejects invalid JSON, writes atomically, and restores the previous file if verification fails. These generated files contain machine-specific executable paths and are ignored by Git. To inspect paths and verification details, use `security-check setup cursor --verbose` or `security-check doctor --verbose`.
+
+For any other MCP-compatible coding tool, use `security-check mcp config --json` or `--toml` and add the printed configuration to that tool. On Windows, `security-check mcp config --copy` copies the JSON configuration. For a tool that can run commands but does not support MCP, use `security-check scan --mode quick --json`.
+
 ```text
 Codex / Cursor / Claude Code / WorkBuddy
                 │
@@ -55,9 +71,9 @@ Codex / Cursor / Claude Code / WorkBuddy
     local scanner executables
 ```
 
-Configure an agent MCP client to launch `security-check mcp` in the project directory. Available tools: `scan_diff`, `scan_project`, `get_findings`, `generate_fix`, `verify`. `generate_fix` returns a coding task and never edits source.
+Available tools: `scan_diff`, `scan_project`, `get_findings`, `generate_fix`, `verify`. `generate_fix` returns a coding task and never edits source.
 
-The MCP tools `scan_diff` and `scan_project` accept an optional `workspace_path`. An explicit path takes priority; otherwise the server locates the Git root above its startup directory. The old `path` argument remains accepted for existing clients. Paths that resolve to the user Home, a drive root, or a Windows system directory are rejected. The same workspace resolver is used by the CLI and pre-commit hook.
+The MCP tools `scan_diff` and `scan_project` accept an optional `workspace_path`. Project connections bind both tools to the configured Git root, regardless of the server's starting directory. An unconfigured server locates the Git root above its startup directory. The old `path` argument remains accepted for existing clients. Paths that resolve to the user Home, a drive root, or a Windows system directory are rejected. The same workspace resolver is used by the CLI and pre-commit hook.
 
 `doctor` locates the Git root by default. Outside a Git repository it returns immediately with a project hint. An explicit `--path` may inspect a non-Git project directory. `doctor --json` returns a stable machine-readable environment, workspace, scanner plan, and status. Missing scanners limit scan coverage without disabling the Runtime. Scan results include `coverage` (`FULL`, `PARTIAL`, or `MINIMAL`); incomplete scans do not claim the project is safe.
 

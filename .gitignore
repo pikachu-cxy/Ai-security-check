@@ -7,3 +7,5 @@ build/
 *.egg-info/
 .security-runtime/
 *.db
+.cursor/mcp.json
+.workbuddy/mcp.json
