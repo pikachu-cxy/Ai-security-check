@@ -25,6 +25,14 @@ class Permission(StrEnum):
     NO = "NO"
 
 
+class LicenseAction(StrEnum):
+    USE = "USE"
+    AUTO_DOWNLOAD = "AUTO_DOWNLOAD"
+    REDISTRIBUTE = "REDISTRIBUTE"
+    BUNDLE = "BUNDLE"
+    HOSTED_SERVICE = "HOSTED_SERVICE"
+
+
 @dataclass(frozen=True)
 class LicenseMetadata:
     license_spdx: str
@@ -46,25 +54,41 @@ class LicenseMetadata:
 
 class LicensePolicy:
     @staticmethod
-    def can_auto_download(metadata: LicenseMetadata | None) -> bool:
-        return bool(metadata and metadata.auto_download_allowed and not metadata.external_license_required
-                    and metadata.license_class not in {LicenseClass.RESTRICTED, LicenseClass.UNKNOWN})
+    def permission(metadata: LicenseMetadata | None, action: LicenseAction) -> Permission:
+        if (metadata is None or metadata.external_license_required or
+                metadata.license_class in {LicenseClass.RESTRICTED, LicenseClass.UNKNOWN} or
+                not metadata.commercial_use_allowed):
+            return Permission.NO
+        if action == LicenseAction.USE:
+            return Permission.YES
+        if action == LicenseAction.AUTO_DOWNLOAD:
+            return Permission.YES if metadata.auto_download_allowed else Permission.NO
+        if action == LicenseAction.HOSTED_SERVICE:
+            return Permission.YES if metadata.hosted_service_allowed else Permission.NO
+        if action == LicenseAction.REDISTRIBUTE:
+            return metadata.redistribution_allowed
+        if action == LicenseAction.BUNDLE:
+            if metadata.redistribution_allowed == Permission.NO or metadata.bundle_allowed == Permission.NO:
+                return Permission.NO
+            if Permission.WITH_OBLIGATIONS in {metadata.redistribution_allowed, metadata.bundle_allowed}:
+                return Permission.WITH_OBLIGATIONS
+            return Permission.YES
+        raise ValueError(f"Unknown license action: {action}")
+
+    @classmethod
+    def can_auto_download(cls, metadata: LicenseMetadata | None) -> bool:
+        return cls.permission(metadata, LicenseAction.AUTO_DOWNLOAD) != Permission.NO
 
     @staticmethod
-    def distribution_status(metadata: LicenseMetadata | None) -> str:
+    def distribution_status(metadata: LicenseMetadata | None, action: LicenseAction = LicenseAction.BUNDLE) -> str:
         if metadata is None or metadata.external_license_required:
             return "EXTERNAL LICENSE REQUIRED" if metadata and metadata.external_license_required else "BLOCKED"
-        if metadata.license_class in {LicenseClass.RESTRICTED, LicenseClass.UNKNOWN}:
-            return "BLOCKED"
-        if metadata.redistribution_allowed == Permission.NO or metadata.bundle_allowed == Permission.NO:
-            return "BLOCKED"
-        if Permission.WITH_OBLIGATIONS in {metadata.redistribution_allowed, metadata.bundle_allowed}:
-            return "REVIEWED"
-        return "OK"
+        permission = LicensePolicy.permission(metadata, action)
+        return {Permission.NO: "BLOCKED", Permission.WITH_OBLIGATIONS: "REVIEWED", Permission.YES: "OK"}[permission]
 
     @classmethod
     def can_bundle(cls, metadata: LicenseMetadata | None) -> bool:
-        return cls.distribution_status(metadata) in {"OK", "REVIEWED"}
+        return cls.permission(metadata, LicenseAction.BUNDLE) != Permission.NO
 
 
 GITLEAKS_LICENSE = LicenseMetadata(

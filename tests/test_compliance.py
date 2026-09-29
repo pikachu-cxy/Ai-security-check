@@ -9,9 +9,9 @@ from unittest.mock import patch
 
 from security_runtime.engines import BUILTIN_ENGINES
 from security_runtime.findings import FindingNormalizer
-from security_runtime.licensing import CODEQL_FUTURE_LICENSE, LicenseMetadata, LicensePolicy
+from security_runtime.licensing import CODEQL_FUTURE_LICENSE, SEMGREP_LICENSE, LicenseAction, LicenseMetadata, LicensePolicy, Permission
 from security_runtime.models import ScanContext, ScanMode, RunStatus
-from security_runtime.rulepacks import RulePackManager, can_bundle_rule_pack
+from security_runtime.rulepacks import FIRST_PARTY_RULE_PACK, RulePackManager, can_bundle_rule_pack
 from security_runtime.scanners import SemgrepAdapter
 from security_runtime.toolchain import ToolManager, ToolStatus, ToolManifest, OfficialReleaseProvider
 from security_runtime.cli import main as cli_main
@@ -99,3 +99,37 @@ class ComplianceTests(unittest.TestCase):
             self.assertTrue(any("command-injection" in str(rule_id) for rule_id in rule_ids))
             self.assertTrue(any("unsafe-eval" in str(rule_id) for rule_id in rule_ids))
             self.assertTrue(all(f.technical_details.get("rule_pack") == "ai-security-core" for f in findings))
+
+    def test_semgrep_resolves_from_interpreter_scripts_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            scripts = Path(tmp) / "Scripts"
+            scripts.mkdir()
+            executable = scripts / ("semgrep.exe" if os.name == "nt" else "semgrep")
+            executable.write_bytes(b"test fixture")
+            manager = ToolManager(root=Path(tmp) / "managed")
+            with patch("security_runtime.toolchain.sysconfig.get_path", return_value=str(scripts)), \
+                 patch("security_runtime.toolchain.importlib.metadata.version", return_value="1.178.0"), \
+                 patch("security_runtime.toolchain.shutil.which", return_value=None):
+                resolved = manager.resolve("semgrep")
+            self.assertEqual(resolved.status, ToolStatus.READY)
+            self.assertEqual(Path(resolved.path), executable.resolve())
+
+    def test_license_actions_keep_lgpl_obligations_and_restricted_gate(self):
+        self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.USE), Permission.YES)
+        self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.AUTO_DOWNLOAD), Permission.YES)
+        self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.REDISTRIBUTE), Permission.WITH_OBLIGATIONS)
+        self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.BUNDLE), Permission.WITH_OBLIGATIONS)
+        self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.HOSTED_SERVICE), Permission.YES)
+        for action in LicenseAction:
+            self.assertEqual(LicensePolicy.permission(CODEQL_FUTURE_LICENSE, action), Permission.NO)
+
+    def test_first_party_rule_metadata_cannot_be_empty(self):
+        source = Path(__file__).resolve().parents[1] / "src/security_runtime/rules/core/python.yml"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "LICENSE").write_text("MIT", encoding="utf-8")
+            rule = root / "python.yml"
+            rule.write_text(source.read_text(encoding="utf-8").replace(
+                "publisher: AI Security Runtime", "publisher: ''"), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "identity mismatch"):
+                RulePackManager._validate(FIRST_PARTY_RULE_PACK, root)

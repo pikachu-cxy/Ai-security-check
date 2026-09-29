@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .capabilities import Capability
 from .engines import BUILTIN_ENGINES
-from .licensing import LicensePolicy
+from .licensing import LicenseAction, LicensePolicy, Permission
 from .git import GitError
 from .logging_utils import configure_logging
 from .risk import MESSAGES
@@ -239,12 +239,18 @@ def main(argv: list[str] | None = None) -> int:
                 status = LicensePolicy.distribution_status(metadata)
                 print(f"{descriptor.display_name:<12} {metadata.license_spdx:<18} {status}")
                 if args.check_distribution:
-                    if not LicensePolicy.can_bundle(metadata):
+                    # This wheel carries our code and first-party rules. A
+                    # runtime dependency or a later managed download is not
+                    # an engine binary bundled inside the Runtime wheel.
+                    delivery_actions = {"RUNTIME_DEPENDENCY": LicenseAction.USE,
+                                        "PINNED_RELEASE": LicenseAction.AUTO_DOWNLOAD}
+                    action = delivery_actions.get(descriptor.install_strategy)
+                    if action is None or LicensePolicy.permission(metadata, action) == Permission.NO:
                         failed = True
                     license_file = Path(__file__).parent / "licenses" / descriptor.engine_id / "LICENSE"
                     if not license_file.is_file():
                         failed = True
-                    if descriptor.engine_id == "trivy" and not (license_file.parent / "NOTICE").is_file():
+                    if metadata.notice_required and not (license_file.parent / "NOTICE").is_file():
                         failed = True
                     if metadata.source_offer_required and not distributed_file("SOURCE_OFFER.md"):
                         failed = True

@@ -11,6 +11,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import sysconfig
 import tarfile
 import tempfile
 import time
@@ -303,7 +304,11 @@ class ToolManager:
         if managed.exists():
             return self._check(tool_id, managed, ToolSource.MANAGED)
         if tool_id == "semgrep":
-            runtime_exe = Path(sys.executable).with_name("semgrep.exe" if os.name == "nt" else "semgrep")
+            executable = "semgrep.exe" if os.name == "nt" else "semgrep"
+            # In a Windows system install python.exe is in the installation
+            # root while console scripts are in Scripts/. A venv puts both
+            # under Scripts/. Resolve the active interpreter's scripts path.
+            runtime_exe = Path(sysconfig.get_path("scripts")) / executable
             try:
                 if runtime_exe.is_file() and importlib.metadata.version("semgrep") == self.versions["semgrep"]:
                     return ResolvedTool(tool_id, self.versions[tool_id], str(runtime_exe.resolve()), ToolSource.MANAGED, ToolStatus.READY)

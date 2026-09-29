@@ -6,15 +6,34 @@ on:
 
 jobs:
   compliance:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      SECURITY_RUNTIME_OFFLINE: '1'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - name: Install Runtime and test dependencies
-        run: python -m pip install -e ".[mcp,test]"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[mcp,test]" build
       - name: Fail closed on engine and rule-pack licenses
-        run: security-check licenses --check-distribution
-      - name: Verify first-party rules and engine contracts
-        run: python -m pytest -q tests/test_compliance.py tests/test_capability_extension.py
+        run: |
+          security-check licenses
+          security-check licenses --check-distribution
+      - name: Verify rules, engine contracts and MCP core
+        run: python -m pytest -q
+      - name: Build source and wheel distributions
+        run: python -m build
+      - name: Verify wheel contents
+        run: python scripts/check_wheel.py
+      - name: Verify installed wheel license and rule pack
+        run: |
+          python -c "from pathlib import Path; import subprocess, sys; wheels=list(Path('dist').glob('*.whl')); assert len(wheels)==1; subprocess.run([sys.executable, '-m', 'pip', 'install', '--force-reinstall', '--no-deps', str(wheels[0])], check=True)"
+          python -m security_runtime.cli licenses --check-distribution
+          python -c "from security_runtime.rulepacks import RulePackManager; print(RulePackManager().resolve().checksum)"

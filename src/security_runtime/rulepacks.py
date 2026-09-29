@@ -133,15 +133,24 @@ class RulePackManager:
                 raise ValueError("Rule pack references a remote registry")
             if require_first_party_metadata:
                 data = yaml.safe_load(content)
+                if not isinstance(data, dict) or not isinstance(data.get("rules"), list) or not data["rules"]:
+                    raise ValueError(f"Rule pack has no valid rules: {file.name}")
                 for rule in data.get("rules", []):
+                    if not isinstance(rule, dict):
+                        raise ValueError(f"Invalid rule entry: {file.name}")
                     metadata = rule.get("metadata", {})
                     required = {"publisher", "rule_pack", "rule_version", "confidence", "license", "references", "provenance"}
-                    if not rule.get("id", "").startswith("ai-security.") or not required.issubset(metadata):
+                    if (not isinstance(metadata, dict) or not str(rule.get("id", "")).startswith("ai-security.")
+                            or not required.issubset(metadata)):
                         raise ValueError(f"Rule license or provenance metadata missing: {file.name}")
-                    if metadata["license"] != descriptor.license or metadata["rule_pack"] != descriptor.rule_pack_id:
+                    if (metadata["license"] != descriptor.license or metadata["rule_pack"] != descriptor.rule_pack_id
+                            or metadata["publisher"] != descriptor.publisher
+                            or metadata["rule_version"] != descriptor.version or not metadata["references"]):
                         raise ValueError(f"Rule license or pack identity mismatch: {file.name}")
                     provenance = metadata["provenance"]
-                    if not {"origin", "author", "created_at", "references", "license", "derived_from"}.issubset(provenance):
+                    if (not isinstance(provenance, dict) or
+                            not {"origin", "author", "created_at", "references", "license", "derived_from"}.issubset(provenance)
+                            or not provenance["author"] or not provenance["created_at"]):
                         raise ValueError(f"Rule provenance incomplete: {file.name}")
                     if provenance["derived_from"]:
                         raise ValueError("Derived rule requires source license review")
