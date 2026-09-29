@@ -25,6 +25,11 @@ class ComplianceTests(unittest.TestCase):
                 self.assertTrue(LicensePolicy.can_auto_download(engine.license_metadata))
                 self.assertTrue(LicensePolicy.can_bundle(engine.license_metadata))
         self.assertTrue((root / "src/security_runtime/licenses/trivy/NOTICE").is_file())
+        self.assertTrue((root / "LICENSE").is_file())
+        self.assertTrue((root / "EULA.md").is_file())
+        self.assertTrue((root / "LICENSING.md").is_file())
+        self.assertTrue((root / "LICENSES/Apache-2.0.txt").is_file())
+        self.assertEqual(FIRST_PARTY_RULE_PACK.license, "Apache-2.0")
         self.assertTrue((root / "THIRD_PARTY_NOTICES.md").is_file())
         self.assertEqual((root / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
                          render_third_party_notices())
