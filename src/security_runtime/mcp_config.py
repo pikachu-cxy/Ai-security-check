@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+import sysconfig
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,6 +24,9 @@ def resolve_runtime_command() -> RuntimeCommand:
     adjacent = Path(sys.executable).resolve().with_name(name)
     if adjacent.is_file():
         return RuntimeCommand(str(adjacent), ("mcp",))
+    scripts_entry = Path(sysconfig.get_path("scripts")) / name
+    if scripts_entry.is_file():
+        return RuntimeCommand(str(scripts_entry.resolve()), ("mcp",))
     installed = shutil.which("security-check")
     if installed and Path(installed).is_file():
         return RuntimeCommand(str(Path(installed).resolve()), ("mcp",))

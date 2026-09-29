@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from security_runtime.capabilities import Capability, CapabilityRegistry
 from security_runtime.mcp_server import create_server
+from security_runtime.mcp_config import resolve_runtime_command
 from security_runtime.planner import ScannerPlanner
 from security_runtime.models import ScanContext, ScanMode
 from security_runtime.runtime import SecurityRuntime
@@ -84,12 +85,12 @@ class PluginE2ETests(unittest.TestCase):
                 self.assertTrue(any("fake-scanner" in finding.scanner_sources for finding in direct.findings))
 
             async def run_mcp():
-                command = Path(sys.executable).with_name("security-check.exe")
+                runtime_command = resolve_runtime_command()
                 env = dict(os.environ)
                 env["PYTHONPATH"] = str(plugin_dir) + os.pathsep + env.get("PYTHONPATH", "")
                 env["SECURITY_RUNTIME_OFFLINE"] = "1"
                 env["SECURITY_RUNTIME_STATE_DIR"] = str(base / "state")
-                params = StdioServerParameters(command=str(command), args=["mcp"], cwd=root, env=env)
+                params = StdioServerParameters(command=runtime_command.command, args=list(runtime_command.args), cwd=root, env=env)
                 async with stdio_client(params) as (read, write):
                     async with ClientSession(read, write) as client:
                         await client.initialize()

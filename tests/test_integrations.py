@@ -13,7 +13,7 @@ import pytest
 from security_runtime.integration_config import IntegrationConfigError, IntegrationConfigStore, SERVER_NAME
 from security_runtime.integration_state import DogfoodEvent, IntegrationStateStore
 from security_runtime.integrations import CursorIntegration, IntegrationStatusCode, WorkBuddyIntegration
-from security_runtime.mcp_config import json_config, server_entry, toml_config
+from security_runtime.mcp_config import json_config, resolve_runtime_command, server_entry, toml_config
 from security_runtime.mcp_verify import verify_mcp_entry
 from security_runtime.cli import main
 
@@ -119,6 +119,18 @@ def test_detection_and_clipboard_fallback(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
     assert "Clipboard unavailable" in output
     assert json.loads(output[output.index("{"):])["mcpServers"][SERVER_NAME]["args"] == ["mcp"]
+
+
+def test_runtime_launcher_resolves_system_scripts_directory(tmp_path, monkeypatch):
+    scripts = tmp_path / "Scripts"
+    scripts.mkdir()
+    executable = scripts / ("security-check.exe" if os.name == "nt" else "security-check")
+    executable.write_bytes(b"test fixture")
+    monkeypatch.setattr("security_runtime.mcp_config.sys.executable", str(tmp_path / "python.exe"))
+    monkeypatch.setattr("security_runtime.mcp_config.sysconfig.get_path", lambda name: str(scripts))
+    runtime = resolve_runtime_command()
+    assert runtime.command == str(executable.resolve())
+    assert runtime.args == ("mcp",)
 
 
 def test_real_sdk_stdio_bound_workspace(tmp_path, monkeypatch):
