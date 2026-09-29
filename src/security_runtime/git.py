@@ -30,6 +30,9 @@ class GitService:
     def branch(self) -> str:
         return self._run("branch", "--show-current")
 
+    def top_level(self) -> Path:
+        return Path(self._run("rev-parse", "--show-toplevel")).resolve()
+
     def changed_files(self, mode: str, staged: bool = False) -> list[str]:
         if mode == "release":
             return [f for f in self._run("ls-files", "--cached", "--others", "--exclude-standard").splitlines() if not f.replace("\\", "/").startswith(".security-runtime/")]

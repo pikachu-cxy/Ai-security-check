@@ -12,8 +12,12 @@ logger = logging.getLogger(__name__)
 def create_server(runtime: SecurityRuntime | None = None):
     try:
         from mcp.server.fastmcp import FastMCP
+        from mcp.server.fastmcp import server as fastmcp_server
     except ImportError as exc:
         raise ImportError("Install MCP support with: pip install -e '.[mcp]'") from exc
+    # The SDK's generic Settings.lifespan annotation references FastMCP. Rebuild
+    # it with the defining module's namespace before BaseSettings reads fields.
+    fastmcp_server.Settings.model_rebuild(_types_namespace=vars(fastmcp_server))
     engine = runtime or SecurityRuntime()
     server = FastMCP("AI Security Runtime")
 

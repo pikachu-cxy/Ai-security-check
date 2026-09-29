@@ -6,7 +6,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from .git import GitError
+from .git import GitError, GitService
 from .logging_utils import configure_logging
 from .risk import MESSAGES
 from .runtime import SecurityRuntime
@@ -14,7 +14,7 @@ from .scanners import ScannerRegistry
 from .target import TargetDetector
 
 
-def doctor(path: Path) -> int:
+def doctor(path: Path | None = None) -> int:
     print("AI Security Runtime\n\nEnvironment")
     print(f"Git          {'✓' if shutil.which('git') else '✗ not installed'}")
     registry = ScannerRegistry()
@@ -23,7 +23,16 @@ def doctor(path: Path) -> int:
         present = bool(shutil.which(adapter.executable))
         available += present
         print(f"{adapter.name.title():<12} {'✓' if present else '✗ not installed'}")
-    profile = TargetDetector().detect(path.resolve())
+    if path is None:
+        try:
+            path = GitService(Path.cwd()).top_level()
+        except GitError:
+            print("\nNo project detected. Run security-check doctor --path <project-path>")
+            return 2
+    path = path.resolve(strict=True)
+    if not path.is_dir():
+        raise ValueError("Project path must be a directory")
+    profile = TargetDetector().detect(path)
     print("\nProject\n" + (", ".join(profile.languages + profile.frameworks) or "Unknown"))
     print("\nStatus\n" + ("Ready" if available else "No scanners installed"))
     return 0 if available else 2
@@ -45,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor_parser = sub.add_parser("doctor")
-    doctor_parser.add_argument("--path", default=".")
+    doctor_parser.add_argument("--path")
     scan_parser = sub.add_parser("scan")
     scan_parser.add_argument("--path", default=".")
     scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
@@ -59,7 +68,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "doctor":
-            return doctor(Path(args.path))
+            return doctor(Path(args.path) if args.path is not None else None)
         if args.command == "scan":
             result = SecurityRuntime().scan(args.path, args.mode, staged=args.staged)
             print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result))

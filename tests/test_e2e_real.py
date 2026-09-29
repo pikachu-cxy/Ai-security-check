@@ -82,29 +82,62 @@ class RealDemoTests(unittest.TestCase):
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
         async def run():
-            params = StdioServerParameters(command=sys.executable, args=["-m", "security_runtime.cli", "mcp"], cwd=self.root, env=dict(os.environ))
-            async with stdio_client(params) as (read, write):
-                async with ClientSession(read, write) as client:
-                    await client.initialize()
-                    names = {t.name for t in (await client.list_tools()).tools}
-                    self.assertEqual(names, {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify"})
-                    result = await asyncio.wait_for(client.call_tool("scan_diff", {"path": str(self.root)}), timeout=75)
-                    payload = result.structuredContent or json.loads(result.content[0].text)
-                    if "result" in payload:
-                        payload = payload["result"]
-                    self.assertTrue(payload["findings"])
-                    finding = next(f for f in payload["findings"] if f["category"] == "command-injection")
-                    stored = await client.call_tool("get_findings", {"scan_id": payload["scan_id"]})
-                    self.assertFalse(stored.isError)
-                    fix = await client.call_tool("generate_fix", {"finding_id": finding["id"]})
-                    self.assertFalse(fix.isError)
-                    shutil.copy(SAMPLE / "safe_app.py", self.root / "app.py")
-                    verified = await client.call_tool("verify", {"finding_id": finding["id"]})
-                    detail = verified.structuredContent or json.loads(verified.content[0].text)
-                    if "result" in detail:
-                        detail = detail["result"]
-                    self.assertEqual(detail["status"], "RESOLVED")
+            command = Path(sys.executable).with_name("security-check.exe")
+            self.assertTrue(command.is_file(), f"Installed Windows entry point missing: {command}")
+            params = StdioServerParameters(command=str(command), args=["mcp"], cwd=self.root, env=dict(os.environ))
+            with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as stderr:
+                async with stdio_client(params, errlog=stderr) as (read, write):
+                    async with ClientSession(read, write) as client:
+                        initialized = await client.initialize()
+                        self.assertIsNotNone(initialized.serverInfo)
+                        names = {t.name for t in (await client.list_tools()).tools}
+                        self.assertEqual(names, {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify"})
+                        result = await asyncio.wait_for(client.call_tool("scan_diff", {"path": "."}), timeout=75)
+                        self.assertFalse(result.isError)
+                        payload = result.structuredContent or json.loads(result.content[0].text)
+                        if "result" in payload:
+                            payload = payload["result"]
+                        self.assertTrue(payload["findings"])
+                        saved = SQLiteStore(self.root / ".security-runtime" / "scans.db").get_scan(payload["scan_id"])
+                        self.assertEqual(Path(saved["target_profile"]["path"]), self.root)
+                        finding = payload["findings"][0]
+                        stored = await client.call_tool("get_findings", {"scan_id": payload["scan_id"]})
+                        self.assertFalse(stored.isError)
+                        fix = await client.call_tool("generate_fix", {"finding_id": finding["id"]})
+                        self.assertFalse(fix.isError)
+                        shutil.copy(SAMPLE / "safe_app.py", self.root / "app.py")
+                        verified = await client.call_tool("verify", {"finding_id": finding["id"]})
+                        detail = verified.structuredContent or json.loads(verified.content[0].text)
+                        if "result" in detail:
+                            detail = detail["result"]
+                        self.assertEqual(detail["status"], "RESOLVED")
+                stderr.seek(0)
+                self.assertNotIn("IncompleteFieldDefinitionWarning", stderr.read())
         asyncio.run(run())
+
+    def test_mcp_stdout_contains_only_protocol_json(self):
+        command = Path(sys.executable).with_name("security-check.exe")
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "raw-test", "version": "1"}},
+        }
+        result = subprocess.run(
+            [str(command), "mcp"],
+            input=json.dumps(request) + "\n",
+            capture_output=True,
+            text=True,
+            cwd=self.root,
+            timeout=15,
+            check=False,
+        )
+        lines = result.stdout.splitlines()
+        self.assertEqual(len(lines), 1, result.stdout + result.stderr)
+        response = json.loads(lines[0])
+        self.assertEqual(response["id"], 1)
+        self.assertEqual(response["result"]["serverInfo"]["name"], "AI Security Runtime")
+        self.assertNotIn("IncompleteFieldDefinitionWarning", result.stderr)
 
 
 if __name__ == "__main__":

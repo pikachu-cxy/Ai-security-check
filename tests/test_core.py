@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from security_runtime.findings import FindingNormalizer, deduplicate
 from security_runtime.models import ScanContext, ScanMode
@@ -21,6 +22,29 @@ class CoreTests(unittest.TestCase):
             self.assertEqual(profile.languages, ["Python"])
             self.assertEqual(profile.frameworks, ["FastAPI"])
             self.assertEqual(profile.ecosystems, ["npm"])
+
+    def test_detector_excludes_generated_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name in (".git", ".venv", "venv", "node_modules", ".idea", ".vscode", "dist", "build", "target", "__pycache__"):
+                directory = root / name
+                directory.mkdir()
+                (directory / "ignored.py").write_text("pass")
+            (root / "app.py").write_text("pass")
+            self.assertEqual(TargetDetector().detect(root).files, ["app.py"])
+
+    def test_detector_limits_files_and_directories(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "a.py").write_text("pass")
+            (root / "b.py").write_text("pass")
+            with patch("security_runtime.target.MAX_FILES", 1):
+                with self.assertRaisesRegex(ValueError, "file limit"):
+                    TargetDetector().detect(root)
+            (root / "nested").mkdir()
+            with patch("security_runtime.target.MAX_DIRECTORIES", 1):
+                with self.assertRaisesRegex(ValueError, "directory limit"):
+                    TargetDetector().detect(root)
 
     def test_planner(self):
         with tempfile.TemporaryDirectory() as tmp:
