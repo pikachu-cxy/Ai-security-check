@@ -33,10 +33,10 @@ def main() -> None:
 from pathlib import Path
 import security_runtime
 from security_runtime.rulepacks import RulePackManager
-package = Path(security_runtime.__file__).parent
-assert package.is_relative_to(Path(__import__('sys').prefix))
+package = Path(security_runtime.__file__).resolve().parent
+assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
-assert pack.path.is_relative_to(package)
+assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == 'ai-security-core'
 for engine in ('semgrep', 'gitleaks', 'trivy'):
     assert (package / 'licenses' / engine / 'LICENSE').is_file()
