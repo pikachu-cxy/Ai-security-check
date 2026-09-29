@@ -65,6 +65,7 @@ class AIAppProfile:
 class ScanPlan:
     scanners: tuple[str, ...]
     files: tuple[str, ...]
+    capabilities: tuple[str, ...] = ()
 
 
 @dataclass
@@ -121,3 +122,4 @@ class ScanContext:
     mode: ScanMode
     files: tuple[str, ...]
     staged: bool = False
+    rules_path: str | None = None

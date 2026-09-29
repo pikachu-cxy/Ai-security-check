@@ -128,6 +128,7 @@ class RealDemoTests(unittest.TestCase):
             system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
             env = dict(os.environ)
             env["PATH"] = os.pathsep.join(map(str, (semgrep_dir, git_dir, system_root / "System32", system_root)))
+            env["SECURITY_RUNTIME_GITLEAKS_PATH"] = str(self.root / "missing-gitleaks.exe")
             params = StdioServerParameters(command=str(command), args=["mcp"], cwd=self.root, env=env)
             async with stdio_client(params) as (read, write):
                 async with ClientSession(read, write) as client:

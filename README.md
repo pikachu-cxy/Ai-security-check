@@ -8,7 +8,7 @@ Repository: https://github.com/pikachu-cxy/Ai-security-check
 
 AI Security Runtime 是独立的本地安全检查工具，供 AI Coding Agent 和开发者通过 CLI、MCP 或 Git Hook 调用。默认在本机扫描 Git 项目，不上传完整源码。扫描结果用于帮助发现和复核风险，不代表对项目安全性的绝对保证。`samples/vulnerable-python` 中的漏洞和密钥字符串均为演示用途，请勿用于生产环境。
 
-Agent writes. Security Runtime verifies. The first release scans a local Git repository without uploading its source. It uses local Semgrep, Gitleaks, and Trivy executables when available. Missing scanners are reported and do not prevent the others from running.
+Agent writes. Security Runtime verifies. The first release scans a local Git repository without uploading its source. Semgrep is installed with the Python package. Gitleaks and Trivy are prepared automatically on first use. Missing scanners are reported and do not prevent the others from running.
 
 ## Install
 
@@ -25,15 +25,20 @@ security-check scan
 security-check mcp
 ```
 
-Install [Semgrep](https://semgrep.dev/docs/getting-started/quickstart), [Gitleaks](https://github.com/gitleaks/gitleaks), and [Trivy](https://trivy.dev/latest/getting-started/installation/) separately. `doctor` shows availability. The CLI itself works without an AI API key.
+The CLI itself works without an AI API key. `security-check scan` prepares pinned scanner versions and the Trivy vulnerability database automatically. The first run needs internet access; later scans can use managed copies offline. Official release assets are downloaded over HTTPS and checked against pinned SHA256 digests before execution. No system installation or PATH change is needed.
 
-Trivy needs a local vulnerability database before its first offline scan. Prepare it once with `trivy image --download-db-only`; this downloads scanner data and does not send project source. If a scanner or its data is unavailable, the scan reports `PARTIAL` and `REVIEW` rather than claiming the project is safe.
+The Trivy database download does not send project source. If a scanner or its data is unavailable, the scan reports `PARTIAL` and `REVIEW` rather than claiming the project is safe.
 
 ```bash
 security-check scan --mode quick --path .
 security-check scan --mode feature --json
 security-check scan --mode release
 security-check hooks install pre-commit
+security-check tools status
+security-check tools install --all
+security-check doctor --verbose
+security-check licenses
+security-check licenses --check-distribution
 ```
 
 Quick scans changed and untracked files, or staged files in the pre-commit hook. Feature scans the branch diff against main/master plus local changes. Release scans the tracked and untracked project files. `--json` returns a stable machine-readable scan result and a nonzero exit code for `BLOCKED`. A missing scanner produces a partial result, never a false claim of safety.
@@ -61,3 +66,11 @@ Discovery skips generated and dependency directories and stops at bounded file, 
 The intentionally vulnerable sample is in `samples/vulnerable-python`. Copy it into a temporary Git repository for a safe demo. The sample contains a synthetic token and a command injection example.
 
 See [architecture](docs/ARCHITECTURE.md) and [extension guide](docs/EXTENDING.md).
+
+## Managed tools
+
+`security-check tools status` reports each engine and the Trivy database. `security-check tools install gitleaks`, `security-check tools install trivy`, and `security-check tools install --all` prepare them explicitly for troubleshooting. Windows stores managed tools in `%LOCALAPPDATA%\AI-Security-Runtime`; set `SECURITY_RUNTIME_DATA_DIR` to change that location. `SECURITY_RUNTIME_OFFLINE=1` prevents new downloads. Enterprises may set `SECURITY_RUNTIME_GITLEAKS_PATH` or `SECURITY_RUNTIME_TRIVY_PATH`, or use `[tools.gitleaks] path = "..."` in the data directory's `config.toml`. An explicit path must point to the pinned compatible version.
+
+## Rule and license boundaries
+
+Semgrep is an independently installed subprocess engine. Default scans use only the versioned, local `ai-security-core` first-party rule pack. They do not fetch Semgrep community or registry rules. `security-check scan --rules <directory>` runs user-provided local rules without copying or redistributing them. Engine licenses and rule-pack licenses are tracked separately. See [third-party notices](THIRD_PARTY_NOTICES.md) and [extension guide](docs/EXTENDING.md).

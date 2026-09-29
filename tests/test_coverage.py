@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 from security_runtime.models import RunStatus, ScannerRun
+from security_runtime.capabilities import Capability
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.scanners import ScannerRegistry
 from security_runtime.storage import SQLiteStore
@@ -12,6 +13,9 @@ from security_runtime.storage import SQLiteStore
 class StubScanner:
     def __init__(self, name: str, status: RunStatus):
         self.name = name
+        self.scanner_id = name
+        self.capabilities = frozenset({Capability.CODE_SAST if name == "semgrep" else Capability.SECRET_SCAN})
+        self.filter_changed_lines = False
         self.status = status
 
     def supports(self, profile, context) -> bool:

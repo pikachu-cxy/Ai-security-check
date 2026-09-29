@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Local security runtime for AI coding agents"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["semgrep==1.178.0", "PyYAML>=6,<7"]
 
 [project.optional-dependencies]
 mcp = ["mcp>=1.0,<3"]
@@ -21,4 +21,7 @@ security-check = "security_runtime.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-security_runtime = ["rules/*.yml"]
+security_runtime = ["rules/LICENSE", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE"]
+
+[tool.setuptools.data-files]
+"share/ai-security-runtime" = ["THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]

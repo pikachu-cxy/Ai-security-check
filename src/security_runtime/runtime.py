@@ -24,7 +24,7 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None) -> ScanResult:
         start = time.monotonic()
         root = WorkspaceResolver().resolve(repository_path).path
         scan_mode = ScanMode(mode)
@@ -39,7 +39,7 @@ class SecurityRuntime:
         else:
             profile = TargetDetector().detect(root)
         profile.git_info = {"branch": git.branch()}
-        context = ScanContext(str(root), scan_mode, tuple(files), staged)
+        context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path)
         normalizer = FindingNormalizer(root)
         findings = []
         runs: list[ScannerRun] = []
@@ -54,7 +54,7 @@ class SecurityRuntime:
                     found, run = futures[scanner.name].result()
                 except Exception as exc:
                     found, run = [], ScannerRun(scanner.name, "", RunStatus.FAILED, 0, error=type(exc).__name__)
-                if scan_mode != ScanMode.RELEASE and scanner.name in {"semgrep", "gitleaks"}:
+                if scan_mode != ScanMode.RELEASE and getattr(scanner, "filter_changed_lines", False):
                     found = [f for f in found if f.line_start in changed_lines.get(f.file_path, set())]
                     run.finding_count = len(found)
                 findings.extend(found)

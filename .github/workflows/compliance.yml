@@ -1,0 +1,20 @@
+name: License and rule-pack compliance
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compliance:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install Runtime and test dependencies
+        run: python -m pip install -e ".[mcp,test]"
+      - name: Fail closed on engine and rule-pack licenses
+        run: security-check licenses --check-distribution
+      - name: Verify first-party rules and engine contracts
+        run: python -m pytest -q tests/test_compliance.py tests/test_capability_extension.py
