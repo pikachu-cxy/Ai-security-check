@@ -1,5 +1,7 @@
 # AI Security Runtime
 
+**English** | [简体中文](README.zh-CN.md)
+
 > **Agent writes. Security Runtime verifies.**
 
 AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through **CLI** and **MCP**.
