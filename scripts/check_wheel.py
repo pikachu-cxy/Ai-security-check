@@ -21,6 +21,10 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/engines.py",
             "security_runtime/rulepacks.py",
             "security_runtime/rules/LICENSE",
+            data_prefix + "LICENSE",
+            data_prefix + "EULA.md",
+            data_prefix + "LICENSING.md",
+            data_prefix + "LICENSES/Apache-2.0.txt",
             data_prefix + "THIRD_PARTY_NOTICES.md",
             data_prefix + "SOURCE_OFFER.md",
         }
