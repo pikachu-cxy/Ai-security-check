@@ -679,6 +679,20 @@ security-check scan --mode release --json
 
 ---
 
+# 软件许可
+
+AI Security Runtime 采用 **闭源 Core + 开放生态** 模式：
+
+- Runtime Core、Risk/Policy Engine、未来高级规则与 Intelligence：**Proprietary**；
+- 公共 Plugin API 和当前基础 `ai-security-core` 规则包：**Apache-2.0**；
+- Semgrep、Gitleaks、Trivy 等第三方组件继续遵守各自许可证。
+
+免费使用不等于开源。除明确标注 Apache-2.0 的组件外，Runtime 默认受根目录 `LICENSE` 和 `EULA.md` 约束。
+
+详见 [Licensing model](LICENSING.md)。
+
+---
+
 # Rule 和 License 边界
 
 Engine License 和 Rule Pack License 分开管理。
