@@ -44,14 +44,14 @@ def check(wheel: Path, project: Path) -> None:
                 provenance = metadata.get("provenance", {})
                 if (not str(rule.get("id", "")).startswith("ai-security.")
                         or metadata.get("publisher") != "AI Security Runtime"
-                        or metadata.get("license") != "MIT"
+                        or metadata.get("license") != "Apache-2.0"
                         or metadata.get("rule_pack") != "ai-security-core"
                         or not metadata.get("rule_version")
                         or not metadata.get("references")
                         or provenance.get("origin") != "FIRST_PARTY"
                         or not provenance.get("author")
                         or not provenance.get("created_at")
-                        or provenance.get("license") != "MIT"
+                        or provenance.get("license") != "Apache-2.0"
                         or not provenance.get("references")):
                     raise ValueError(f"Rule metadata incomplete: {rule.get('id', relative)}")
         bundled_rules = {name for name in names if name.startswith("security_runtime/rules/")
