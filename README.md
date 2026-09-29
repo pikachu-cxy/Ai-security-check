@@ -2,6 +2,12 @@
 
 Security runtime for AI coding agents.
 
+Repository: https://github.com/pikachu-cxy/Ai-security-check
+
+## 项目声明
+
+AI Security Runtime 是独立的本地安全检查工具，供 AI Coding Agent 和开发者通过 CLI、MCP 或 Git Hook 调用。默认在本机扫描 Git 项目，不上传完整源码。扫描结果用于帮助发现和复核风险，不代表对项目安全性的绝对保证。`samples/vulnerable-python` 中的漏洞和密钥字符串均为演示用途，请勿用于生产环境。
+
 Agent writes. Security Runtime verifies. The first release scans a local Git repository without uploading its source. It uses local Semgrep, Gitleaks, and Trivy executables when available. Missing scanners are reported and do not prevent the others from running.
 
 ## Install
@@ -9,6 +15,8 @@ Agent writes. Security Runtime verifies. The first release scans a local Git rep
 Python 3.12 or newer is required.
 
 ```bash
+git clone https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
 python -m venv .venv
 pip install -e '.[mcp]'
 security-check doctor
