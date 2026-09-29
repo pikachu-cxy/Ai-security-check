@@ -19,49 +19,178 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 
 ## 5 分钟快速开始
 
-### 环境要求
+如果你只是想试用，不需要先理解 Python、虚拟环境或 MCP。
 
-- Windows、Linux 或 macOS
-- Python **3.12+**
-- Git
+你只需要做 3 件事：
 
-当前 Developer Alpha 位于：
+```text
+1. 安装 Python 和 Git
+2. 安装 AI Security Runtime
+3. 进入自己的项目，开始扫描 / 接入 Cursor 或 WorkBuddy
+```
 
-`feature/runtime-mvp`
+> 当前还是 Developer Alpha，因此暂时需要 Python 3.12+ 和 Git。正式发布版本的目标会进一步简化为安装包或一条安装命令。
 
-### 1. 安装
+---
 
-#### Windows PowerShell
+### 第 1 步：确认电脑有 Python 和 Git
+
+#### Windows 用户
+
+打开 **PowerShell**：
+
+- 按键盘 `Win`
+- 输入 `PowerShell`
+- 打开“Windows PowerShell”或“终端”
+
+然后分别输入：
+
+```powershell
+python --version
+git --version
+```
+
+如果看到类似：
+
+```text
+Python 3.12.x
+git version 2.x.x
+```
+
+说明环境已经准备好，可以直接进入下一步。
+
+#### 如果提示“找不到 python”或“找不到 git”
+
+最省事的方式是在 PowerShell 中安装：
+
+```powershell
+winget install -e --id Python.Python.3.12
+winget install -e --id Git.Git
+```
+
+安装完成后，**关闭 PowerShell，再重新打开一次**。
+
+然后重新确认：
+
+```powershell
+python --version
+git --version
+```
+
+> Python 和 Git 只是 Runtime 的运行环境。你不需要会 Python，也不需要会写 Git 命令。
+
+---
+
+### 第 2 步：安装 AI Security Runtime
+
+在 PowerShell 中直接复制下面几行，按回车执行：
+
+```powershell
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+python -m pip install --upgrade pip
+python -m pip install -e ".[mcp]"
+```
+
+这里每行的意思分别是：
+
+| 命令 | 作用 |
+| --- | --- |
+| `git clone ...` | 下载 AI Security Runtime |
+| `cd Ai-security-check` | 进入下载好的目录 |
+| `python -m pip install --upgrade pip` | 更新 Python 安装工具 |
+| `python -m pip install -e ".[mcp]"` | 安装 Runtime 和 MCP 能力 |
+
+正常情况下，你不需要修改这些命令。
+
+安装完成后执行：
+
+```powershell
+security-check --help
+```
+
+如果看到：
+
+```text
+usage: security-check ...
+```
+
+说明安装成功。
+
+---
+
+### 第 3 步：进入你的项目开始使用
+
+例如你的项目在：
+
+```text
+C:\Users\你的名字\Desktop\my-project
+```
+
+就在 PowerShell 中执行：
+
+```powershell
+cd "C:\Users\你的名字\Desktop\my-project"
+security-check doctor
+security-check scan --mode quick
+```
+
+第一次扫描可能会自动准备 Gitleaks、Trivy 等安全工具。
+
+你不需要自己下载安装这些 Scanner。
+
+如果你使用 Cursor：
+
+```powershell
+security-check setup cursor
+```
+
+如果你使用 WorkBuddy：
+
+```powershell
+security-check setup workbuddy
+```
+
+就这么开始。
+
+---
+
+### 我只想先试一下，不想扫描自己的项目
+
+仓库已经自带一个故意包含漏洞的测试项目。
+
+在 `Ai-security-check` 目录下执行：
+
+```powershell
+cd samples\vulnerable-python
+git init
+security-check doctor
+security-check scan --mode quick
+```
+
+如果能看到安全 Finding，说明 Runtime 已经正常工作。
+
+---
+
+<details>
+<summary><strong>开发者：使用虚拟环境安装（可选）</strong></summary>
+
+如果你熟悉 Python，并希望把依赖隔离在单独的虚拟环境里，可以使用：
 
 ```powershell
 git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
 cd Ai-security-check
 
-py -3.12 -m venv .venv
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 python -m pip install --upgrade pip
-pip install -e ".[mcp]"
+python -m pip install -e ".[mcp]"
 ```
 
-#### Linux / macOS
+普通试用用户不需要使用这一节。
 
-```bash
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install -e ".[mcp]"
-```
-
-确认 CLI 已安装：
-
-```bash
-security-check --help
-```
+</details>
 
 ---
 
