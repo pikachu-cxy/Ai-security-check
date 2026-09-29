@@ -1,96 +1,573 @@
 # AI Security Runtime
 
-Security runtime for AI coding agents.
+> **Agent writes. Security Runtime verifies.**
 
-Repository: https://github.com/pikachu-cxy/Ai-security-check
+AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through **CLI** and **MCP**.
 
-## 项目声明
+- **Local-first:** project source stays on your machine by default.
+- **One-command setup:** native onboarding for **Cursor** and **WorkBuddy**.
+- **Generic MCP:** works with other MCP-compatible coding tools such as Codex.
+- **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
+- **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
 
-AI Security Runtime 是独立的本地安全检查工具，供 AI Coding Agent 和开发者通过 CLI、MCP 或 Git Hook 调用。默认在本机扫描 Git 项目，不上传完整源码。扫描结果用于帮助发现和复核风险，不代表对项目安全性的绝对保证。`samples/vulnerable-python` 中的漏洞和密钥字符串均为演示用途，请勿用于生产环境。
+> Developer Alpha. Current checks can find security issues, but a PASS result is not a guarantee that a project is secure.
 
-Agent writes. Security Runtime verifies. The first release scans a local Git repository without uploading its source. Semgrep is installed with the Python package. Gitleaks and Trivy are prepared automatically on first use. Missing scanners are reported and do not prevent the others from running.
+---
 
-## Install
+## 5-minute quick start
 
-Python 3.12 or newer is required.
+### Requirements
+
+- Windows, Linux, or macOS
+- Python **3.12+**
+- Git
+
+The current Developer Alpha lives on the `feature/runtime-mvp` branch.
+
+### 1. Install
+
+#### Windows PowerShell
+
+```powershell
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+pip install -e ".[mcp]"
+```
+
+#### Linux / macOS
 
 ```bash
-git clone https://github.com/pikachu-cxy/Ai-security-check.git
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
 cd Ai-security-check
-python -m venv .venv
-pip install -e '.[mcp]'
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+pip install -e ".[mcp]"
+```
+
+Confirm the CLI is installed:
+
+```bash
+security-check --help
+```
+
+---
+
+## 2. Run your first CLI scan
+
+Run AI Security Runtime **inside a Git project**.
+
+For a safe first test, copy the included intentionally vulnerable sample into a temporary Git repository.
+
+### Windows PowerShell
+
+From the `Ai-security-check` directory:
+
+```powershell
+New-Item -ItemType Directory -Force ..\security-runtime-demo | Out-Null
+Copy-Item -Recurse .\samples\vulnerable-python\* ..\security-runtime-demo\
+cd ..\security-runtime-demo
+git init
+```
+
+Check the environment:
+
+```bash
+security-check doctor
+```
+
+Then scan:
+
+```bash
+security-check scan --mode quick
+```
+
+The first scan may download pinned versions of Gitleaks and Trivy and prepare the Trivy vulnerability database. Downloads are verified before use and do not require a system-wide PATH change.
+
+A successful test should:
+
+1. identify the current workspace;
+2. run the available local security engines;
+3. report findings from the intentionally vulnerable sample;
+4. show scan coverage such as `FULL` or `PARTIAL`.
+
+Machine-readable output is available with:
+
+```bash
+security-check scan --mode quick --json
+```
+
+### Scan modes
+
+```bash
+security-check scan --mode quick
+security-check scan --mode feature
+security-check scan --mode release
+```
+
+- **quick** — changed and untracked files; intended for fast development feedback.
+- **feature** — branch diff against main/master plus local changes.
+- **release** — tracked and untracked project files for broader release review.
+
+---
+
+# Connect an AI coding tool
+
+AI Security Runtime exposes these MCP tools:
+
+- `scan_diff`
+- `scan_project`
+- `get_findings`
+- `generate_fix`
+- `verify`
+
+`generate_fix` returns a coding task; it does not silently edit source code.
+
+The recommended workflow is:
+
+```text
+AI edits code
+    ↓
+scan_diff
+    ↓
+Finding
+    ↓
+AI fixes code
+    ↓
+verify
+    ↓
+RESOLVED
+```
+
+---
+
+## Cursor — one-command setup
+
+Inside the Git project you want to protect:
+
+```bash
+security-check setup cursor
+```
+
+Expected result:
+
+```text
+AI Security Runtime
+
+Workspace
+✓ <your-project>
+
+Connecting Cursor...
+✓ Runtime verified for Cursor
+Restart Cursor to load the project connection.
+
+Code stays local.
+```
+
+The Runtime manages a project-level connection in:
+
+```text
+.cursor/mcp.json
+```
+
+It preserves existing MCP servers and only manages its own `ai-security-runtime` entry.
+
+Restart Cursor if requested.
+
+Then ask Cursor:
+
+> Use AI Security Runtime to scan the current Git diff. Show me the findings. If there are security issues, fix them and call verify afterwards.
+
+A real acceptance pass means Cursor actually calls the Runtime and completes:
+
+```text
+scan_diff → finding → fix → verify → RESOLVED
+```
+
+Check integration state:
+
+```bash
+security-check integrations
+```
+
+---
+
+## WorkBuddy — one-command setup
+
+Inside the Git project:
+
+```bash
+security-check setup workbuddy
+```
+
+The Runtime manages the project-level WorkBuddy MCP configuration and preserves other MCP entries.
+
+Restart WorkBuddy if requested.
+
+Then ask WorkBuddy:
+
+> Use AI Security Runtime to scan the current Git diff and show me the security findings.
+
+After confirming `scan_diff` works, test:
+
+> Fix the reported issue and use AI Security Runtime to verify the fix.
+
+Check status with:
+
+```bash
+security-check integrations
+```
+
+---
+
+## Codex and other MCP-compatible tools
+
+Codex is currently supported through the **Generic MCP** path rather than a dedicated native installer.
+
+Run this from the Git project you want to protect:
+
+```bash
+security-check mcp config --toml
+```
+
+For JSON-based MCP clients:
+
+```bash
+security-check mcp config --json
+```
+
+On Windows you can copy the generated JSON directly:
+
+```bash
+security-check mcp config --copy
+```
+
+The generated configuration contains:
+
+- the absolute Runtime command;
+- `mcp` arguments;
+- the bound project workspace;
+- the integration identifier.
+
+Paste the generated configuration into the MCP settings of the coding tool, restart/reload that tool if necessary, and ask:
+
+> Use AI Security Runtime to scan the current Git diff.
+
+A Generic MCP integration is considered working only when the client can see and call the Runtime tools, not merely when the configuration text exists.
+
+### No MCP support?
+
+If a coding agent can execute shell commands but cannot connect to MCP, use the universal CLI fallback:
+
+```bash
+security-check scan --mode quick --json
+```
+
+---
+
+# Recommended acceptance checklist
+
+Use the same temporary vulnerable Git project for all clients.
+
+| Test | Pass condition |
+| --- | --- |
+| CLI install | `security-check --help` works |
+| Environment | `security-check doctor` identifies the correct workspace |
+| CLI scan | `security-check scan --mode quick` returns real findings |
+| JSON | `--json` returns parseable machine-readable output |
+| Cursor | `security-check setup cursor` succeeds and Cursor can call `scan_diff` |
+| WorkBuddy | `security-check setup workbuddy` succeeds and WorkBuddy can call `scan_diff` |
+| Codex / Generic MCP | generated MCP config allows the client to call `scan_diff` |
+| Fix loop | finding → agent fix → `verify` → `RESOLVED` |
+| Workspace isolation | another repository does not reuse findings from the previous repository |
+| Repeated setup | running setup repeatedly does not duplicate or damage MCP config |
+| Offline reuse | already installed local tools continue to work when downloads are disabled |
+| Partial coverage | one unavailable scanner does not stop the remaining scanners |
+
+If you need to inspect details:
+
+```bash
+security-check doctor --verbose
+security-check integrations --verbose
+security-check tools status
+```
+
+---
+
+# Useful commands
+
+### Environment
+
+```bash
 security-check doctor
 security-check doctor --json
-security-check scan
-security-check mcp
+security-check doctor --verbose
 ```
 
-The CLI itself works without an AI API key. `security-check scan` prepares pinned scanner versions and the Trivy vulnerability database automatically. The first run needs internet access; later scans can use managed copies offline. Official release assets are downloaded over HTTPS and checked against pinned SHA256 digests before execution. No system installation or PATH change is needed.
-
-The Trivy database download does not send project source. If a scanner or its data is unavailable, the scan reports `PARTIAL` and `REVIEW` rather than claiming the project is safe.
+### Scanning
 
 ```bash
-security-check scan --mode quick --path .
-security-check scan --mode feature --json
+security-check scan --mode quick
+security-check scan --mode feature
 security-check scan --mode release
-security-check hooks install pre-commit
-security-check tools status
-security-check tools install --all
-security-check doctor --verbose
-security-check licenses
-security-check licenses --check-distribution
+security-check scan --mode quick --json
 ```
 
-Quick scans changed and untracked files, or staged files in the pre-commit hook. Feature scans the branch diff against main/master plus local changes. Release scans the tracked and untracked project files. `--json` returns a stable machine-readable scan result and a nonzero exit code for `BLOCKED`. A missing scanner produces a partial result, never a false claim of safety.
-
-## Agent integrations
-
-For Cursor or WorkBuddy, run `security-check setup` inside a Git project. It detects installed clients, adds a project connection, and verifies the local MCP server with the official MCP client SDK. Restart the coding tool after setup, then ask it to call `scan_diff`. Use `security-check integrations` to see whether that client has invoked the Runtime. `NEEDS_RESTART` means the Runtime passed verification but a client call has not yet been observed.
+### AI coding integrations
 
 ```bash
 security-check setup
 security-check setup cursor
 security-check setup workbuddy
+
 security-check integrations
+security-check integrations --verbose
 security-check integrations repair
 security-check integrations remove cursor
+security-check integrations remove workbuddy
+```
+
+### Generic MCP
+
+```bash
+security-check mcp config
+security-check mcp config --json
+security-check mcp config --toml
+security-check mcp config --copy
+```
+
+### Managed security tools
+
+```bash
+security-check tools status
+security-check tools install --all
+```
+
+### Local usage statistics
+
+```bash
 security-check stats
 ```
 
-The project connection stays in `.cursor/mcp.json` or `.workbuddy/mcp.json` and binds scans to the project's Git root. Setup preserves other MCP servers, rejects invalid JSON, writes atomically, and restores the previous file if verification fails. These generated files contain machine-specific executable paths and are ignored by Git. To inspect paths and verification details, use `security-check setup cursor --verbose` or `security-check doctor --verbose`.
+### Git pre-commit hook
 
-For any other MCP-compatible coding tool, use `security-check mcp config --json` or `--toml` and add the printed configuration to that tool. On Windows, `security-check mcp config --copy` copies the JSON configuration. For a tool that can run commands but does not support MCP, use `security-check scan --mode quick --json`.
-
-```text
-Codex / Cursor / Claude Code / WorkBuddy
-                │
-       MCP (local stdio) or Hook
-                │
-          Security Runtime
-                │
-    local scanner executables
+```bash
+security-check hooks install pre-commit
 ```
 
-Available tools: `scan_diff`, `scan_project`, `get_findings`, `generate_fix`, `verify`. `generate_fix` returns a coding task and never edits source.
+### License / distribution check
 
-The MCP tools `scan_diff` and `scan_project` accept an optional `workspace_path`. Project connections bind both tools to the configured Git root, regardless of the server's starting directory. An unconfigured server locates the Git root above its startup directory. The old `path` argument remains accepted for existing clients. Paths that resolve to the user Home, a drive root, or a Windows system directory are rejected. The same workspace resolver is used by the CLI and pre-commit hook.
+```bash
+security-check licenses
+security-check licenses --check-distribution
+```
 
-`doctor` locates the Git root by default. Outside a Git repository it returns immediately with a project hint. An explicit `--path` may inspect a non-Git project directory. `doctor --json` returns a stable machine-readable environment, workspace, scanner plan, and status. Missing scanners limit scan coverage without disabling the Runtime. Scan results include `coverage` (`FULL`, `PARTIAL`, or `MINIMAL`); incomplete scans do not claim the project is safe.
+---
 
-Discovery skips generated and dependency directories and stops at bounded file, directory, depth, and file-size limits. Adjust them with `SECURITY_RUNTIME_MAX_FILES`, `SECURITY_RUNTIME_MAX_DIRECTORIES`, `SECURITY_RUNTIME_MAX_DEPTH`, `SECURITY_RUNTIME_MAX_FILE_SIZE`, and the comma-separated `SECURITY_RUNTIME_EXCLUDE_DIRS` when needed. MCP logs use stderr and default to `WARNING`; set `SECURITY_RUNTIME_LOG_LEVEL` to `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Scan history uses a user-level state directory (Windows `%LOCALAPPDATA%\AI Security Runtime`); override it with `SECURITY_RUNTIME_STATE_DIR`.
+# What runs locally?
 
-The intentionally vulnerable sample is in `samples/vulnerable-python`. Copy it into a temporary Git repository for a safe demo. The sample contains a synthetic token and a command injection example.
+Current built-in security capabilities are backed by:
 
-See [architecture](docs/ARCHITECTURE.md) and [extension guide](docs/EXTENDING.md).
+- **Semgrep** — pattern-based code security using the local first-party `ai-security-core` rule pack.
+- **Gitleaks** — secret detection.
+- **Trivy** — dependency vulnerability and related project security checks.
 
-## CI checks
+The Runtime chooses engines by security capability and normalizes results into one finding model.
 
-GitHub Actions reports three separate checks. **Runtime tests** runs the full test suite on Ubuntu and Windows for pushes and pull requests. **Compliance** checks license metadata, first-party rule provenance, forbidden registry references, and generated notices on pushes and pull requests; it installs no scanner engine and runs with scanner downloads disabled. **Package integrity** builds the source archive and wheel, checks bundled files, and installs the wheel in a clean environment on Ubuntu and Windows. Package integrity runs for pull requests, pushes to `main` or `feature/runtime-mvp`, and version tags. The feature branch trigger supports this development phase; release gates can require all three checks.
+Semgrep community/registry rules are **not** downloaded or bundled by default. The default Semgrep scan uses only this project's independently authored local rule pack.
 
-## Managed tools
+Gitleaks and Trivy are resolved in this order:
 
-`security-check tools status` reports each engine and the Trivy database. `security-check tools install gitleaks`, `security-check tools install trivy`, and `security-check tools install --all` prepare them explicitly for troubleshooting. Windows stores managed tools in `%LOCALAPPDATA%\AI-Security-Runtime`; set `SECURITY_RUNTIME_DATA_DIR` to change that location. `SECURITY_RUNTIME_OFFLINE=1` prevents new downloads. Enterprises may set `SECURITY_RUNTIME_GITLEAKS_PATH` or `SECURITY_RUNTIME_TRIVY_PATH`, or use `[tools.gitleaks] path = "..."` in the data directory's `config.toml`. An explicit path must point to the pinned compatible version.
+```text
+Explicit path
+    ↓
+Runtime-managed copy
+    ↓
+Compatible system PATH copy
+    ↓
+Automatic managed install
+```
 
-## Rule and license boundaries
+Offline mode disables new downloads but still allows already installed compatible local tools.
 
-Semgrep is an independently installed subprocess engine. Default scans use only the versioned, local `ai-security-core` first-party rule pack. They do not fetch Semgrep community or registry rules. `security-check scan --rules <directory>` runs user-provided local rules without copying or redistributing them. Engine licenses and rule-pack licenses are tracked separately. See [third-party notices](THIRD_PARTY_NOTICES.md) and [extension guide](docs/EXTENDING.md).
+To disable downloads:
+
+```text
+SECURITY_RUNTIME_OFFLINE=1
+```
+
+---
+
+# Coverage and result meaning
+
+AI Security Runtime does not treat missing scanners as a clean security result.
+
+Scan output includes coverage:
+
+- **FULL** — planned checks were available.
+- **PARTIAL** — some planned checks were unavailable.
+- **MINIMAL** — only limited checks were available.
+
+Release status is intended to communicate:
+
+- **PASS** — current checks found no policy blocker.
+- **REVIEW** — human or agent review is recommended.
+- **BLOCKED** — the current policy found a release-blocking issue.
+
+A PASS result is not a claim of absolute security.
+
+---
+
+# Workspace safety
+
+The CLI, MCP server, Cursor, WorkBuddy, and pre-commit hook use the same workspace resolver.
+
+The Runtime rejects unsafe broad roots such as:
+
+- the user home directory;
+- a drive root;
+- Windows system directories.
+
+Generated/dependency directories are skipped, and discovery has file-count, directory-count, depth, and file-size limits.
+
+MCP logs go to stderr so stdout remains available for the stdio protocol.
+
+---
+
+# Troubleshooting
+
+### `No project detected`
+
+Run the command inside a Git repository:
+
+```bash
+git init
+security-check doctor
+```
+
+Or explicitly inspect a project:
+
+```bash
+security-check doctor --path <project>
+```
+
+### A scanner is missing
+
+Normal scans attempt to prepare required managed tools automatically.
+
+Check status:
+
+```bash
+security-check tools status
+```
+
+Prepare them explicitly:
+
+```bash
+security-check tools install --all
+```
+
+### Cursor / WorkBuddy configuration changed after reinstalling the Runtime
+
+Repair the managed connection:
+
+```bash
+security-check integrations repair
+```
+
+### Need detailed integration information
+
+```bash
+security-check integrations --verbose
+security-check doctor --verbose
+```
+
+### Remove a native project connection
+
+```bash
+security-check integrations remove cursor
+security-check integrations remove workbuddy
+```
+
+Only the `ai-security-runtime` entry managed by this project is removed.
+
+---
+
+# Local state and privacy
+
+Scan history and integration state use a user-level local state directory.
+
+On Windows, managed Runtime data is stored under:
+
+```text
+%LOCALAPPDATA%\AI-Security-Runtime
+```
+
+The product does not require an AI API key for CLI scanning.
+
+Dogfood/usage state must not store full source code, secrets, private file contents, or full prompts.
+
+---
+
+# CI / automation
+
+The CLI is the universal automation interface and can later be used in Jenkins, GitHub Actions, GitLab CI, or other pipelines.
+
+A simple machine-readable invocation is:
+
+```bash
+security-check scan --mode release --json
+```
+
+The repository itself currently uses three GitHub Actions checks:
+
+- **Runtime tests** — Windows and Ubuntu test suite.
+- **Compliance** — engine license metadata, first-party rule provenance, forbidden rule sources, notices.
+- **Package integrity** — builds and verifies the source/wheel distribution.
+
+---
+
+# Rule and license boundaries
+
+Engine licenses and rule-pack licenses are tracked separately.
+
+The Runtime does not bundle or automatically fetch Semgrep Community/Registry Rules.
+
+User-provided local rules can be used with:
+
+```bash
+security-check scan --rules <directory>
+```
+
+See:
+
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Source availability notice](SOURCE_OFFER.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Extension guide](docs/EXTENDING.md)
+
+---
+
+## Current Developer Alpha support
+
+| Interface | Status |
+| --- | --- |
+| CLI | Supported |
+| Cursor native onboarding | Supported |
+| WorkBuddy native onboarding | Supported |
+| Generic stdio MCP | Supported |
+| Codex | Generic MCP |
+| Other MCP coding tools | Generic MCP |
+| Git pre-commit | Supported |
+| CI/CD | CLI foundation available |
+
+The product goal is simple:
+
+> **Native where valuable. Generic MCP everywhere else. CLI as the universal fallback.**
