@@ -1,0 +1,33 @@
+name: Package integrity
+
+on:
+  pull_request:
+  push:
+    branches: [main, feature/runtime-mvp]
+    tags: ['v*']
+
+jobs:
+  package:
+    name: Package integrity (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package verification tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build "PyYAML>=6,<7"
+      - name: Build source and wheel distributions
+        run: python -m build
+      - name: Verify wheel contents
+        run: python scripts/check_wheel.py
+      - name: Install wheel in a clean environment and verify CLI
+        run: python scripts/verify_package.py

@@ -305,9 +305,9 @@ class ToolManager:
             return self._check(tool_id, managed, ToolSource.MANAGED)
         if tool_id == "semgrep":
             executable = "semgrep.exe" if os.name == "nt" else "semgrep"
-            # In a Windows system install python.exe is in the installation
-            # root while console scripts are in Scripts/. A venv puts both
-            # under Scripts/. Resolve the active interpreter's scripts path.
+            # The declared Python dependency belongs to this interpreter and
+            # takes priority over an unrelated Semgrep found on system PATH.
+            # Python package metadata pins this executable's package version.
             runtime_exe = Path(sysconfig.get_path("scripts")) / executable
             try:
                 if runtime_exe.is_file() and importlib.metadata.version("semgrep") == self.versions["semgrep"]:
@@ -337,6 +337,8 @@ class ToolManager:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
         requirement = self.python_requirements.get(tool_id)
         if offline and not (requirement and requirement[1]):
+            if current.source is not None and current.status != ToolStatus.MISSING:
+                return current
             return ResolvedTool(tool_id, "", "", None, ToolStatus.OFFLINE, "tool unavailable offline")
         try:
             if requirement:

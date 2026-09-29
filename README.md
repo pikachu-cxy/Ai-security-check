@@ -83,6 +83,10 @@ The intentionally vulnerable sample is in `samples/vulnerable-python`. Copy it i
 
 See [architecture](docs/ARCHITECTURE.md) and [extension guide](docs/EXTENDING.md).
 
+## CI checks
+
+GitHub Actions reports three separate checks. **Runtime tests** runs the full test suite on Ubuntu and Windows for pushes and pull requests. **Compliance** checks license metadata, first-party rule provenance, forbidden registry references, and generated notices on pushes and pull requests; it installs no scanner engine and runs with scanner downloads disabled. **Package integrity** builds the source archive and wheel, checks bundled files, and installs the wheel in a clean environment on Ubuntu and Windows. Package integrity runs for pull requests, pushes to `main` or `feature/runtime-mvp`, and version tags. The feature branch trigger supports this development phase; release gates can require all three checks.
+
 ## Managed tools
 
 `security-check tools status` reports each engine and the Trivy database. `security-check tools install gitleaks`, `security-check tools install trivy`, and `security-check tools install --all` prepare them explicitly for troubleshooting. Windows stores managed tools in `%LOCALAPPDATA%\AI-Security-Runtime`; set `SECURITY_RUNTIME_DATA_DIR` to change that location. `SECURITY_RUNTIME_OFFLINE=1` prevents new downloads. Enterprises may set `SECURITY_RUNTIME_GITLEAKS_PATH` or `SECURITY_RUNTIME_TRIVY_PATH`, or use `[tools.gitleaks] path = "..."` in the data directory's `config.toml`. An explicit path must point to the pinned compatible version.

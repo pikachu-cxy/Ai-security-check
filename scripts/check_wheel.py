@@ -54,10 +54,17 @@ def check(wheel: Path, project: Path) -> None:
                         or provenance.get("license") != "MIT"
                         or not provenance.get("references")):
                     raise ValueError(f"Rule metadata incomplete: {rule.get('id', relative)}")
+        bundled_rules = {name for name in names if name.startswith("security_runtime/rules/")
+                         and name.endswith((".yml", ".yaml"))}
+        expected_rules = {"security_runtime/" + file.relative_to(source_package).as_posix()
+                          for file in rule_files}
+        if bundled_rules != expected_rules:
+            raise ValueError("Wheel contains stale or missing rule files")
         missing = sorted(required - names)
         if missing:
             raise ValueError("Wheel missing required files: " + ", ".join(missing))
-        if any(name.startswith("semgrep/") or name.endswith(("gitleaks.exe", "trivy.exe")) for name in names):
+        if any(name.startswith("semgrep/") or "semgrep-rules" in name.lower()
+               or name.endswith(("gitleaks.exe", "trivy.exe")) for name in names):
             raise ValueError("Runtime wheel unexpectedly bundles a third-party engine")
     print(f"Wheel compliance OK: {wheel.name}, {len(rule_files)} first-party rule file(s)")
 
