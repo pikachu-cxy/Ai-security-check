@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 AI Security Runtime contributors
 """Public scanner extension contract loaded from Python entry points."""
 from __future__ import annotations
 
