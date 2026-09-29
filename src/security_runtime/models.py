@@ -109,6 +109,7 @@ class ScanResult:
     summary: str
     release_status: str
     duration_ms: int
+    coverage: str = "FULL"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

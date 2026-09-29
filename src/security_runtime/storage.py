@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -16,8 +17,19 @@ class ScanStore(Protocol):
 
 
 class SQLiteStore:
+    @staticmethod
+    def default_path() -> Path:
+        configured = os.getenv("SECURITY_RUNTIME_STATE_DIR")
+        if configured:
+            directory = Path(configured)
+        elif os.name == "nt" and os.getenv("LOCALAPPDATA"):
+            directory = Path(os.environ["LOCALAPPDATA"]) / "AI Security Runtime"
+        else:
+            directory = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ai-security-runtime"
+        return directory / "scans.db"
+
     def __init__(self, path: Path | None = None):
-        self.path = path or Path.cwd() / ".security-runtime" / "scans.db"
+        self.path = path if path is not None else self.default_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as db:
             with db:

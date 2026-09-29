@@ -39,12 +39,30 @@ class CoreTests(unittest.TestCase):
             (root / "a.py").write_text("pass")
             (root / "b.py").write_text("pass")
             with patch("security_runtime.target.MAX_FILES", 1):
-                with self.assertRaisesRegex(ValueError, "file limit"):
+                with self.assertRaisesRegex(ValueError, "more than 1 files"):
                     TargetDetector().detect(root)
             (root / "nested").mkdir()
             with patch("security_runtime.target.MAX_DIRECTORIES", 1):
-                with self.assertRaisesRegex(ValueError, "directory limit"):
+                with self.assertRaisesRegex(ValueError, "more than 1 directories"):
                     TargetDetector().detect(root)
+            (root / "nested" / "deeper").mkdir()
+            with self.assertRaisesRegex(ValueError, "deeper than 1 levels"):
+                TargetDetector(max_depth=1).detect(root)
+
+    def test_detector_skips_binary_and_oversized_app_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "app.py").write_bytes(b"\0fastapi")
+            self.assertEqual(TargetDetector().detect(root).frameworks, [])
+            (root / "app.py").write_text("from fastapi import FastAPI")
+            self.assertEqual(TargetDetector(max_file_size=5).detect(root).frameworks, [])
+
+    def test_detector_extra_exclusions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "generated").mkdir()
+            (root / "generated" / "app.py").write_text("pass")
+            self.assertEqual(TargetDetector(ignored_dirs={"generated"}).detect(root).files, [])
 
     def test_planner(self):
         with tempfile.TemporaryDirectory() as tmp:

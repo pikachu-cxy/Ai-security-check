@@ -14,6 +14,7 @@ from .risk import MESSAGES, RiskEngine
 from .scanners import ScannerRegistry
 from .storage import ScanStore, SQLiteStore
 from .target import TargetDetector
+from .workspace import WorkspaceResolver, WorkspaceError
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,9 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path = ".", mode: str = "quick", staged: bool = False) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False) -> ScanResult:
         start = time.monotonic()
-        root = Path(repository_path).resolve(strict=True)
-        if not root.is_dir():
-            raise ValueError("Repository path must be a directory")
+        root = WorkspaceResolver().resolve(repository_path).path
         scan_mode = ScanMode(mode)
         git = GitService(root)
         files = git.changed_files(scan_mode, staged=staged)
@@ -63,10 +62,14 @@ class SecurityRuntime:
         findings = deduplicate(findings)
         planned_runs = [run for run in runs if run.status != RunStatus.SKIPPED]
         no_changes = scan_mode != ScanMode.RELEASE and not files
-        complete = no_changes or (bool(planned_runs) and all(run.status == RunStatus.SUCCESS for run in planned_runs))
+        successful = sum(run.status == RunStatus.SUCCESS for run in planned_runs)
+        complete = no_changes or (bool(planned_runs) and successful == len(planned_runs))
+        coverage = "FULL" if complete else "PARTIAL" if successful else "MINIMAL"
         release_status = RiskEngine().assess(findings, complete)
         summary = "没有需要检查的代码变更" if no_changes else MESSAGES[release_status]
-        result = ScanResult(str(uuid.uuid4()), scan_mode, profile, "COMPLETED" if complete else "PARTIAL", findings, runs, summary, release_status, round((time.monotonic()-start)*1000))
+        if not complete:
+            summary += "；Security check completed with limited coverage."
+        result = ScanResult(str(uuid.uuid4()), scan_mode, profile, "COMPLETED" if complete else "PARTIAL", findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage)
         self.store.save(result)
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})
         return result
@@ -82,12 +85,14 @@ class SecurityRuntime:
         finding, _ = record
         return {"finding_id": finding_id, "root_cause": finding["plain_title"], "fix_strategy": finding["fix_advice"], "coding_agent_prompt": f"Fix {finding['plain_title']} at {finding['file_path']}:{finding['line_start']}. {finding['fix_advice']} Preserve behavior and add a regression test. Do not include secrets in output."}
 
-    def verify(self, finding_id: str) -> dict:
+    def verify(self, finding_id: str, workspace_path: str | Path | None = None) -> dict:
         record = self.store.get_finding(finding_id)
         if not record:
             raise KeyError("Finding not found")
         finding, scan = record
-        root = Path(scan["target_profile"]["path"])
+        root = WorkspaceResolver().resolve(scan["target_profile"]["path"]).path
+        if workspace_path is not None and WorkspaceResolver().resolve(workspace_path).path != root:
+            raise WorkspaceError("Finding does not belong to the requested workspace")
         relative = Path(finding["file_path"])
         file = (root / relative).resolve()
         if not file.is_relative_to(root.resolve()):

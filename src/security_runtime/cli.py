@@ -4,45 +4,77 @@ import argparse
 import json
 import shutil
 import sys
+import tomllib
 from pathlib import Path
 
-from .git import GitError, GitService
+from .git import GitError
 from .logging_utils import configure_logging
 from .risk import MESSAGES
 from .runtime import SecurityRuntime
 from .scanners import ScannerRegistry
 from .target import TargetDetector
+from .tools_info import installation_help
+from .workspace import WorkspaceError, WorkspaceResolver
 
 
-def doctor(path: Path | None = None) -> int:
-    print("AI Security Runtime\n\nEnvironment")
-    print(f"Git          {'✓' if shutil.which('git') else '✗ not installed'}")
+def doctor(path: Path | None = None, *, json_output: bool = False) -> int:
     registry = ScannerRegistry()
-    available = 0
-    for adapter in registry.adapters:
-        present = bool(shutil.which(adapter.executable))
-        available += present
-        print(f"{adapter.name.title():<12} {'✓' if present else '✗ not installed'}")
-    if path is None:
+    scanners = [{"name": adapter.name, "available": bool(shutil.which(adapter.executable)), "install": installation_help(adapter.name)} for adapter in registry.adapters]
+    report = {"runtime": {"git_available": bool(shutil.which("git")), "scanners": scanners}, "workspace": None, "scanner_plan": {"available": [], "unavailable": []}, "status": "unavailable", "message": ""}
+    try:
+        workspace = WorkspaceResolver().resolve(path, allow_non_git_explicit=True)
+        profile = TargetDetector().detect(workspace.path)
+        project = workspace.path.name
+        manifest = workspace.path / "pyproject.toml"
         try:
-            path = GitService(Path.cwd()).top_level()
-        except GitError:
-            print("\nNo project detected. Run security-check doctor --path <project-path>")
-            return 2
-    path = path.resolve(strict=True)
-    if not path.is_dir():
-        raise ValueError("Project path must be a directory")
-    profile = TargetDetector().detect(path)
-    print("\nProject\n" + (", ".join(profile.languages + profile.frameworks) or "Unknown"))
-    print("\nStatus\n" + ("Ready" if available else "No scanners installed"))
-    return 0 if available else 2
+            if manifest.is_file() and manifest.stat().st_size <= 1_000_000:
+                project = tomllib.loads(manifest.read_text(encoding="utf-8")).get("project", {}).get("name", project)
+        except (OSError, ValueError, tomllib.TOMLDecodeError):
+            pass
+        report["workspace"] = {"path": str(workspace.path), "git": workspace.is_git, "languages": profile.languages, "frameworks": profile.frameworks, "project": project}
+        report["scanner_plan"]["available"] = [item["name"] for item in scanners if item["available"]]
+        report["scanner_plan"]["unavailable"] = [item["name"] for item in scanners if not item["available"]]
+        if not workspace.is_git:
+            report["status"] = "workspace-only"
+            report["message"] = "Workspace detected. A Git repository is required for scans."
+        elif not report["runtime"]["git_available"]:
+            report["status"] = "unavailable"
+            report["message"] = "Git is required for scans."
+        else:
+            report["status"] = "ready" if report["scanner_plan"]["available"] else "limited"
+            report["message"] = "Runtime ready." if report["status"] == "ready" else "Runtime ready with limited coverage."
+        code = 0
+    except (WorkspaceError, ValueError, OSError) as exc:
+        report["message"] = str(exc)
+        code = 2
+    if json_output:
+        print(json.dumps(report, ensure_ascii=False))
+        return code
+    print("AI Security Runtime\n\nRuntime")
+    print(f"Git          {'✓' if report['runtime']['git_available'] else '✗ not installed'}")
+    for item in scanners:
+        print(f"{item['name'].title():<12} {'✓' if item['available'] else '✗ not installed'}")
+    if report["workspace"]:
+        workspace_info = report["workspace"]
+        print(f"\nWorkspace\nPath: {workspace_info['path']}\nGit: {'✓' if workspace_info['git'] else '○'}")
+        print("Languages: " + (", ".join(workspace_info["languages"]) or "Unknown"))
+        print("Project: " + workspace_info["project"])
+        print("\nScanner Plan\nAvailable")
+        for name in report["scanner_plan"]["available"]:
+            print(f"✓ {name.title()}")
+        print("Unavailable")
+        for item in scanners:
+            if not item["available"]:
+                print(f"○ {item['name'].title()}\n  not installed\n  Install: {item['install']}")
+    print("\n" + report["message"])
+    return code
 
 
 def render(result) -> str:
     lines = ["AI Security Check", "", "检查完成。", f"发现 {len(result.findings)} 个需要处理的问题。", ""]
     for f in result.findings:
         lines += [f.severity, f.plain_title, f"位置：{f.file_path}:{f.line_start}", f"为什么危险：{f.impact}", f"建议：{f.fix_advice}", ""]
-    lines += ["结果：", MESSAGES[result.release_status], "", f"耗时：{result.duration_ms} ms"]
+    lines += ["结果：", MESSAGES[result.release_status], f"Coverage: {result.coverage}", "", f"耗时：{result.duration_ms} ms"]
     for run in result.scanner_runs:
         if run.status != "SUCCESS":
             lines.append(f"{run.scanner}: {run.status} {run.error}")
@@ -50,13 +82,13 @@ def render(result) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    configure_logging()
     parser = argparse.ArgumentParser(prog="security-check")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor_parser = sub.add_parser("doctor")
     doctor_parser.add_argument("--path")
+    doctor_parser.add_argument("--json", action="store_true")
     scan_parser = sub.add_parser("scan")
-    scan_parser.add_argument("--path", default=".")
+    scan_parser.add_argument("--path")
     scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
     scan_parser.add_argument("--json", action="store_true")
     scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
@@ -64,11 +96,12 @@ def main(argv: list[str] | None = None) -> int:
     hooks_parser = sub.add_parser("hooks")
     hooks_parser.add_argument("action", choices=["install"])
     hooks_parser.add_argument("hook", choices=["pre-commit"])
-    hooks_parser.add_argument("--path", default=".")
+    hooks_parser.add_argument("--path")
     args = parser.parse_args(argv)
     try:
+        configure_logging(mcp=args.command == "mcp")
         if args.command == "doctor":
-            return doctor(Path(args.path) if args.path is not None else None)
+            return doctor(Path(args.path) if args.path is not None else None, json_output=args.json)
         if args.command == "scan":
             result = SecurityRuntime().scan(args.path, args.mode, staged=args.staged)
             print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result))
@@ -79,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "hooks":
             from .hooks import install_pre_commit
-            print(install_pre_commit(Path(args.path)))
+            print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
             return 0
     except (GitError, ValueError, FileNotFoundError, ImportError) as exc:
         print(f"security-check: {exc}", file=sys.stderr)

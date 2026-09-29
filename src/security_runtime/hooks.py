@@ -5,6 +5,8 @@ import subprocess
 from enum import StrEnum
 from pathlib import Path
 
+from .workspace import WorkspaceResolver
+
 
 class HookEvent(StrEnum):
     FILE_CHANGED = "FILE_CHANGED"
@@ -15,7 +17,7 @@ class HookEvent(StrEnum):
 
 
 def install_pre_commit(root: Path) -> Path:
-    root = root.resolve(strict=True)
+    root = WorkspaceResolver().resolve(root).path
     proc = subprocess.run(["git", "-c", f"safe.directory={root.as_posix()}", "-C", str(root), "rev-parse", "--git-path", "hooks"], capture_output=True, text=True, timeout=5, check=True)
     hooks = Path(proc.stdout.strip())
     if not hooks.is_absolute():

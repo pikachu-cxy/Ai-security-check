@@ -98,7 +98,9 @@ class RealDemoTests(unittest.TestCase):
                         if "result" in payload:
                             payload = payload["result"]
                         self.assertTrue(payload["findings"])
-                        saved = SQLiteStore(self.root / ".security-runtime" / "scans.db").get_scan(payload["scan_id"])
+                        self.assertEqual(Path(payload["workspace"]), self.root)
+                        self.assertEqual(payload["coverage"], "FULL")
+                        saved = SQLiteStore(SQLiteStore.default_path()).get_scan(payload["scan_id"])
                         self.assertEqual(Path(saved["target_profile"]["path"]), self.root)
                         finding = payload["findings"][0]
                         stored = await client.call_tool("get_findings", {"scan_id": payload["scan_id"]})
@@ -113,6 +115,39 @@ class RealDemoTests(unittest.TestCase):
                         self.assertEqual(detail["status"], "RESOLVED")
                 stderr.seek(0)
                 self.assertNotIn("IncompleteFieldDefinitionWarning", stderr.read())
+        asyncio.run(run())
+
+    def test_mcp_rejects_unsafe_workspace_and_reports_partial_coverage(self):
+        from mcp import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        async def run():
+            command = Path(sys.executable).with_name("security-check.exe")
+            git_dir = Path(shutil.which("git")).parent
+            semgrep_dir = Path(shutil.which("semgrep")).parent
+            system_root = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+            env = dict(os.environ)
+            env["PATH"] = os.pathsep.join(map(str, (semgrep_dir, git_dir, system_root / "System32", system_root)))
+            params = StdioServerParameters(command=str(command), args=["mcp"], cwd=self.root, env=env)
+            async with stdio_client(params) as (read, write):
+                async with ClientSession(read, write) as client:
+                    await client.initialize()
+                    for unsafe in (str(Path.home()), str(Path(Path.home().anchor))):
+                        rejected = await client.call_tool("scan_diff", {"workspace_path": unsafe})
+                        self.assertTrue(rejected.isError)
+                        self.assertIn("will not scan", rejected.content[0].text)
+                    invalid = await client.call_tool("scan_diff", {"workspace_path": str(self.root / "missing")})
+                    self.assertTrue(invalid.isError)
+                    result = await client.call_tool("scan_diff", {"workspace_path": str(self.root)})
+                    self.assertFalse(result.isError)
+                    payload = result.structuredContent or json.loads(result.content[0].text)
+                    payload = payload.get("result", payload)
+                    self.assertEqual(payload["coverage"], "PARTIAL")
+                    runs = {run["scanner"]: run["status"] for run in payload["scanner_runs"]}
+                    self.assertEqual(runs["semgrep"], "SUCCESS")
+                    self.assertEqual(runs["gitleaks"], "UNAVAILABLE")
+                    findings = await client.call_tool("get_findings", {"scan_id": payload["scan_id"]})
+                    self.assertFalse(findings.isError)
         asyncio.run(run())
 
     def test_mcp_stdout_contains_only_protocol_json(self):

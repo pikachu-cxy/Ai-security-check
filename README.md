@@ -20,6 +20,7 @@ cd Ai-security-check
 python -m venv .venv
 pip install -e '.[mcp]'
 security-check doctor
+security-check doctor --json
 security-check scan
 security-check mcp
 ```
@@ -50,6 +51,12 @@ Codex / Cursor / Claude Code / WorkBuddy
 ```
 
 Configure an agent MCP client to launch `security-check mcp` in the project directory. Available tools: `scan_diff`, `scan_project`, `get_findings`, `generate_fix`, `verify`. `generate_fix` returns a coding task and never edits source.
+
+The MCP tools `scan_diff` and `scan_project` accept an optional `workspace_path`. An explicit path takes priority; otherwise the server locates the Git root above its startup directory. The old `path` argument remains accepted for existing clients. Paths that resolve to the user Home, a drive root, or a Windows system directory are rejected. The same workspace resolver is used by the CLI and pre-commit hook.
+
+`doctor` locates the Git root by default. Outside a Git repository it returns immediately with a project hint. An explicit `--path` may inspect a non-Git project directory. `doctor --json` returns a stable machine-readable environment, workspace, scanner plan, and status. Missing scanners limit scan coverage without disabling the Runtime. Scan results include `coverage` (`FULL`, `PARTIAL`, or `MINIMAL`); incomplete scans do not claim the project is safe.
+
+Discovery skips generated and dependency directories and stops at bounded file, directory, depth, and file-size limits. Adjust them with `SECURITY_RUNTIME_MAX_FILES`, `SECURITY_RUNTIME_MAX_DIRECTORIES`, `SECURITY_RUNTIME_MAX_DEPTH`, `SECURITY_RUNTIME_MAX_FILE_SIZE`, and the comma-separated `SECURITY_RUNTIME_EXCLUDE_DIRS` when needed. MCP logs use stderr and default to `WARNING`; set `SECURITY_RUNTIME_LOG_LEVEL` to `ERROR`, `WARNING`, `INFO`, or `DEBUG`. Scan history uses a user-level state directory (Windows `%LOCALAPPDATA%\AI Security Runtime`); override it with `SECURITY_RUNTIME_STATE_DIR`.
 
 The intentionally vulnerable sample is in `samples/vulnerable-python`. Copy it into a temporary Git repository for a safe demo. The sample contains a synthetic token and a command injection example.
 
