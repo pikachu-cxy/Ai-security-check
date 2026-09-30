@@ -141,7 +141,7 @@ def main() -> None:
             (project / "app.py").write_text("import os\nos.system(input())\n", encoding="utf-8")
             (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
             result = subprocess.run([str(executable), "scan", "--mode", "quick", "--path", str(project), "--json"],
-                                    cwd=project, env=env, capture_output=True, text=True, timeout=1200)
+                                    cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if result.returncode not in (0, 1):
                 raise RuntimeError(f"Sample scan failed: {result.stderr[-1000:]}")
             payload = json.loads(result.stdout)
@@ -152,7 +152,7 @@ def main() -> None:
             if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy": "SKIPPED"}:
                 raise ValueError("Quick sample scan violated its scope: " + json.dumps(payload["scanner_runs"]))
             release_scan = subprocess.run([str(executable), "scan", "--mode", "release", "--path", str(project), "--json"],
-                                          cwd=project, env=env, capture_output=True, text=True, timeout=1200)
+                                          cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if release_scan.returncode not in (0, 1):
                 raise RuntimeError(f"Release sample scan failed: {release_scan.stderr[-1000:]}")
             all_engines = json.loads(release_scan.stdout)["scanner_runs"]
@@ -166,7 +166,7 @@ def main() -> None:
             (plugin_metadata / "METADATA").write_text("Metadata-Version: 2.1\nName: distribution-probe\nVersion: 1.0.0\n", encoding="utf-8")
             (plugin_metadata / "entry_points.txt").write_text("[ai_security_runtime.scanners]\ndistribution-probe = distribution_probe:Probe\n", encoding="utf-8")
             plugin_result = subprocess.run([str(executable), "scan", "--mode", "quick", "--path", str(project), "--json"],
-                                           cwd=root, env=env, capture_output=True, text=True, timeout=1200)
+                                           cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if plugin_result.returncode not in (0, 1) or not any(
                     item["scanner"] == "distribution-probe" and item["status"] == "SUCCESS"
                     for item in json.loads(plugin_result.stdout)["scanner_runs"]):
