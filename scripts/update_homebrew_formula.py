@@ -43,6 +43,7 @@ def generate(manifest: Path, output: Path) -> None:
     end
   end
   on_linux do
+    depends_on arch: :x86_64
     url "{linux_url}"
     sha256 "{linux_sha}"
   end
