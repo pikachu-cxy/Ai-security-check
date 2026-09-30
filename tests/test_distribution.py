@@ -17,6 +17,7 @@ from security_runtime._version import __version__
 from security_runtime.cli import main
 from security_runtime.engines import BUILTIN_ENGINES
 from security_runtime.rulepacks import FIRST_PARTY_RULE_PACK
+from security_runtime.mcp_config import resolve_runtime_command
 from security_runtime.licensing import LicenseAction, LicensePolicy, Permission, MANAGED_PYTHON_LICENSE, PYINSTALLER_BOOTLOADER_LICENSE
 
 
@@ -67,3 +68,21 @@ def test_doctor_redirected_ascii_environment_emits_utf8(tmp_path):
     assert result.returncode in (0, 1), (stdout, stderr)
     assert "codec can't encode" not in stderr
     assert "Security Runtime" in stdout
+
+
+def test_frozen_mcp_preserves_stable_install_alias(tmp_path, monkeypatch):
+    binary = tmp_path / "version-directory" / "security-check.exe"
+    binary.parent.mkdir()
+    binary.write_bytes(b"runtime")
+    alias = tmp_path / "stable-bin" / "security-check.exe"
+    alias.parent.mkdir()
+    os.link(binary, alias)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "executable", str(binary))
+    monkeypatch.setattr("security_runtime.mcp_config.shutil.which", lambda _: str(alias))
+    command = resolve_runtime_command()
+    assert command.command == str(alias)
+    assert command.args == ("mcp",)
+    alias.unlink()
+    alias.write_bytes(b"unrelated runtime")
+    assert resolve_runtime_command().command == str(binary)

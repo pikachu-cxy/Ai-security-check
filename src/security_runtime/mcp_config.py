@@ -21,6 +21,15 @@ class RuntimeCommand:
 
 def resolve_runtime_command() -> RuntimeCommand:
     if getattr(sys, "frozen", False):
+        installed = shutil.which("security-check")
+        if installed:
+            try:
+                if Path(installed).samefile(sys.executable):
+                    # Preserve the package manager's stable alias so upgrades
+                    # can retarget it without invalidating saved MCP configs.
+                    return RuntimeCommand(str(Path(installed).absolute()), ("mcp",))
+            except OSError:
+                pass
         return RuntimeCommand(str(Path(sys.executable).resolve()), ("mcp",))
     name = "security-check.exe" if os.name == "nt" else "security-check"
     adjacent = Path(sys.executable).resolve().with_name(name)
