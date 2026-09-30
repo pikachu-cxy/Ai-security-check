@@ -33,4 +33,3 @@ security_runtime = ["python_downloads.json", "rules/LICENSE", "rules/*/*.yml", "
 [tool.setuptools.data-files]
 "share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]
 "share/ai-security-runtime/LICENSES" = ["LICENSES/Apache-2.0.txt"]
-"share/ai-security-runtime/licenses" = ["LICENSE"]

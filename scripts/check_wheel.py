@@ -30,7 +30,6 @@ def check(wheel: Path, project: Path) -> None:
             data_prefix + "LICENSES/Apache-2.0.txt",
             data_prefix + "THIRD_PARTY_NOTICES.md",
             data_prefix + "SOURCE_OFFER.md",
-            data_prefix + "licenses/LICENSE",
         }
         source_package = project / "src" / "security_runtime"
         for engine in ("gitleaks", "trivy", "semgrep"):

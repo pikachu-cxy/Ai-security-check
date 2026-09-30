@@ -45,7 +45,6 @@ assert (package / 'python_downloads.json').is_file()
 share = Path(__import__('sys').prefix) / 'share' / 'ai-security-runtime'
 assert (share / 'THIRD_PARTY_NOTICES.md').is_file()
 assert (share / 'SOURCE_OFFER.md').is_file()
-assert (share / 'licenses' / 'LICENSE').is_file()
 for name in ('LICENSE', 'EULA.md', 'LICENSING.md', 'LICENSES/Apache-2.0.txt'):
     assert (share / name).is_file()
 print('Installed wheel integrity OK')
