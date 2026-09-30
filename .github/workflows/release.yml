@@ -56,6 +56,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --verify-tag --draft --title "AI Security Runtime $GITHUB_REF_NAME" --generate-notes
-          gh release upload "$GITHUB_REF_NAME" dist/release/* distribution/homebrew/Formula/*.rb distribution/winget/*.yaml
+          if gh release view "$GITHUB_REF_NAME" --json isDraft > release-state.json 2>/dev/null; then
+            python -c 'import json; assert json.load(open("release-state.json"))["isDraft"], "Refusing to overwrite a published release"'
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --prerelease --title "AI Security Runtime $GITHUB_REF_NAME" --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/release/* distribution/homebrew/Formula/*.rb distribution/winget/*.yaml --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false

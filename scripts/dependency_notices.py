@@ -106,6 +106,6 @@ def inventory(bundle: Path) -> None:
     source_offer = bundle / "SOURCE_OFFER.md"
     source_offer.write_text(source_offer.read_text(encoding="utf-8") + "\n## Bundled dependency source locations\n\n" +
                             "\n".join(f"- {key} {version}: https://pypi.org/project/{key}/{version}/#files"
-                                      for key, version, *_ in sorted(rows) if key != "CPython") +
-                            f"\n- CPython {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}: https://www.python.org/downloads/source/\n",
+                                      for key, version, *_ in sorted(rows) if key not in {"CPython", "ai-security-runtime"}) +
+                            f"\n- CPython {python_version}: https://github.com/python/cpython/tree/v{python_version}\n",
                             encoding="utf-8")

@@ -6,6 +6,13 @@ The Homebrew Formula and WinGet manifests are generated **only after all four ac
 
 The tag-only release workflow validates each native archive before creating a draft GitHub Release and publishes the draft only after all assets upload. Uninstalling the Runtime does not remove the user data directory, managed scanners, scan history, or Trivy DB.
 
+Runtime Core remains proprietary under `LICENSE` and `EULA.md`; the public
+Plugin API and `ai-security-core` rules remain Apache-2.0. Every bundle includes
+`LICENSING.md`, `EULA.md`, the original Apache license, dependency notices and
+source locations. The custom Homebrew tap uses `license :cannot_represent`
+for the proprietary product; WinGet uses `License: Proprietary`. These are
+not submissions to homebrew/core and do not relicense Core or third-party code.
+
 ## Local native verification
 
 Install the development extras `.[test,build-standalone]`, then run:
