@@ -5,6 +5,9 @@ import importlib.metadata
 import re
 import shutil
 import sys
+import hashlib
+import json
+import urllib.request
 from pathlib import Path
 
 from packaging.requirements import Requirement
@@ -71,11 +74,25 @@ def inventory(bundle: Path) -> None:
                 queue.append((requirement.name, set(requirement.extras)))
     python_license = next((candidate for candidate in (Path(sys.base_prefix) / "LICENSE.txt", Path(sys.base_prefix) / "LICENSE")
                            if candidate.is_file()), None)
-    if python_license is None:
-        raise ValueError("Bundled CPython original license text is missing")
     python_directory = bundle / "third_party_licenses" / "cpython"
     python_directory.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(python_license, python_directory / "LICENSE.txt")
+    python_version = ".".join(map(str, sys.version_info[:3]))
+    source_url = f"https://raw.githubusercontent.com/python/cpython/v{python_version}/LICENSE"
+    if python_license is not None:
+        license_bytes = python_license.read_bytes()
+        provenance = "Installed CPython distribution; " + source_url
+    else:
+        # setup-python's Unix toolcache omits the top-level license. Fetch the
+        # original text for the exact interpreter tag; a failed fetch blocks build.
+        with urllib.request.urlopen(source_url, timeout=60) as response:
+            license_bytes = response.read(200_000)
+        provenance = source_url
+    if b"PYTHON SOFTWARE FOUNDATION LICENSE" not in license_bytes:
+        raise ValueError("CPython original license text is invalid")
+    (python_directory / "LICENSE.txt").write_bytes(license_bytes)
+    (python_directory / "provenance.json").write_text(json.dumps({
+        "version": python_version, "source": provenance,
+        "sha256": hashlib.sha256(license_bytes).hexdigest()}, indent=2) + "\n", encoding="utf-8")
     rows.append(("CPython", ".".join(map(str, sys.version_info[:3])), "Python Software Foundation and contributors",
                  "Python-2.0", "https://www.python.org"))
     notice = bundle / "THIRD_PARTY_NOTICES.md"

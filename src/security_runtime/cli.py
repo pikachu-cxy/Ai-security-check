@@ -128,6 +128,11 @@ def render(result) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows redirected streams may otherwise use cp1252/cp936. MCP JSON and
+    # CLI status symbols are UTF-8 on every delivery format.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)

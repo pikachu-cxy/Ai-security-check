@@ -80,7 +80,7 @@ def extract(archive: Path, root: Path) -> None:
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60) -> subprocess.CompletedProcess:
-    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout)
+    result = subprocess.run(command, cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8", timeout=timeout)
     if result.returncode:
         raise RuntimeError(f"{command[1:]} failed ({result.returncode}): {result.stderr[-1000:]} {result.stdout[-1000:]}")
     return result
@@ -122,7 +122,7 @@ def main() -> None:
         if version != f"AI Security Runtime {__version__}":
             raise ValueError(f"Unexpected version: {version}")
         run([str(executable), "--help"], cwd=root, env=env)
-        no_project = subprocess.run([str(executable), "doctor"], cwd=root, env=env, capture_output=True, text=True, timeout=30)
+        no_project = subprocess.run([str(executable), "doctor"], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
         if "No project detected" not in no_project.stdout + no_project.stderr:
             raise ValueError("Standalone doctor did not report the missing project")
         project = root / "project"

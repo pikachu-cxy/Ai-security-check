@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -53,3 +56,14 @@ def test_generators_require_real_versioned_release_metadata(tmp_path):
     manifest.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(KeyError):
         generate_homebrew(manifest, formula)
+
+
+def test_doctor_redirected_ascii_environment_emits_utf8(tmp_path):
+    environment = dict(os.environ, PYTHONIOENCODING="ascii", SECURITY_RUNTIME_OFFLINE="1",
+                       SECURITY_RUNTIME_DATA_DIR=str(tmp_path / "data"))
+    result = subprocess.run([sys.executable, "-m", "security_runtime.cli", "doctor", "--path", str(tmp_path)],
+                            cwd=tmp_path, env=environment, capture_output=True, timeout=60)
+    stdout, stderr = result.stdout.decode("utf-8"), result.stderr.decode("utf-8")
+    assert result.returncode in (0, 1), (stdout, stderr)
+    assert "codec can't encode" not in stderr
+    assert "Security Runtime" in stdout
