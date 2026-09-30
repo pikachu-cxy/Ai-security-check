@@ -18,7 +18,9 @@ REVIEWED_LICENSES = {
     "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)",
 }
 REVIEWED_MISSING_LABELS = {
-    "ai-security-runtime": "MIT",
+    # The product owner's Core is governed by the root LICENSE/EULA, not a
+    # third-party license grant. This exact label applies only to this package.
+    "ai-security-runtime": "LicenseRef-AI-Security-Runtime-Proprietary",
     "pyinstaller-hooks-contrib": "GPL-2.0-or-later (build hooks); Apache-2.0 (bundled runtime hooks)",
     "colorama": "BSD-3-Clause",
 }

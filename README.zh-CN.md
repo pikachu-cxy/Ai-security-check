@@ -17,107 +17,32 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 
 ---
 
-## 5 分钟快速开始
+## 安装
 
-如果你只是想试用，不需要先理解 Python、虚拟环境或 MCP。
+Package-manager installation is being prepared for the next Developer Alpha release.
+GitHub 发行资产、Homebrew Tap 和 WinGet 清单尚未发布，以下命令目前不可用。
 
-你只需要做 3 件事：
+### Windows
+
+```powershell
+winget install --id PikachuCXY.AISecurityRuntime -e
+```
+
+### macOS / Linux x64
+
+```bash
+brew install pikachu-cxy/tap/ai-security-runtime
+```
+
+Standalone Runtime 自带运行环境。第一次扫描会按需准备独立的 Semgrep、
+Gitleaks、Trivy 和数据库，不要求用户安装 Python、pip 或 venv。
+项目扫描仍使用 Git，请进入自己的 Git 项目后执行：
 
 ```text
-1. 安装 Python 和 Git
-2. 安装 AI Security Runtime
-3. 进入自己的项目，开始扫描 / 接入 Cursor 或 WorkBuddy
+security-check --version
+security-check doctor
+security-check scan --mode quick
 ```
-
-> 当前还是 Developer Alpha，因此暂时需要 Python 3.12+ 和 Git。正式发布版本的目标会进一步简化为安装包或一条安装命令。
-
----
-
-### 第 1 步：确认电脑有 Python 和 Git
-
-#### Windows 用户
-
-打开 **PowerShell**：
-
-- 按键盘 `Win`
-- 输入 `PowerShell`
-- 打开“Windows PowerShell”或“终端”
-
-然后分别输入：
-
-```powershell
-python --version
-git --version
-```
-
-如果看到类似：
-
-```text
-Python 3.12.x
-git version 2.x.x
-```
-
-说明环境已经准备好，可以直接进入下一步。
-
-#### 如果提示“找不到 python”或“找不到 git”
-
-最省事的方式是在 PowerShell 中安装：
-
-```powershell
-winget install -e --id Python.Python.3.12
-winget install -e --id Git.Git
-```
-
-安装完成后，**关闭 PowerShell，再重新打开一次**。
-
-然后重新确认：
-
-```powershell
-python --version
-git --version
-```
-
-> Python 和 Git 只是 Runtime 的运行环境。你不需要会 Python，也不需要会写 Git 命令。
-
----
-
-### 第 2 步：安装 AI Security Runtime
-
-在 PowerShell 中直接复制下面几行，按回车执行：
-
-```powershell
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-python -m pip install --upgrade pip
-python -m pip install -e ".[mcp]"
-```
-
-这里每行的意思分别是：
-
-| 命令 | 作用 |
-| --- | --- |
-| `git clone ...` | 下载 AI Security Runtime |
-| `cd Ai-security-check` | 进入下载好的目录 |
-| `python -m pip install --upgrade pip` | 更新 Python 安装工具 |
-| `python -m pip install -e ".[mcp]"` | 安装 Runtime 和 MCP 能力 |
-
-正常情况下，你不需要修改这些命令。
-
-安装完成后执行：
-
-```powershell
-security-check --help
-```
-
-如果看到：
-
-```text
-usage: security-check ...
-```
-
-说明安装成功。
-
----
 
 ### 第 3 步：进入你的项目开始使用
 
@@ -730,3 +655,112 @@ security-check scan --rules <directory>
 产品原则：
 
 > **重要平台做 Native，其他平台走 Generic MCP，CLI 作为通用兜底。**
+
+## Development / Contributing
+
+下面的源码安装步骤仅用于开发环境。
+
+### 源码安装
+
+如果你只是想试用，不需要先理解 Python、虚拟环境或 MCP。
+
+你只需要做 3 件事：
+
+```text
+1. 安装 Python 和 Git
+2. 安装 AI Security Runtime
+3. 进入自己的项目，开始扫描 / 接入 Cursor 或 WorkBuddy
+```
+
+> 当前还是 Developer Alpha，因此暂时需要 Python 3.12+ 和 Git。正式发布版本的目标会进一步简化为安装包或一条安装命令。
+
+---
+
+### 第 1 步：确认电脑有 Python 和 Git
+
+#### Windows 用户
+
+打开 **PowerShell**：
+
+- 按键盘 `Win`
+- 输入 `PowerShell`
+- 打开“Windows PowerShell”或“终端”
+
+然后分别输入：
+
+```powershell
+python --version
+git --version
+```
+
+如果看到类似：
+
+```text
+Python 3.12.x
+git version 2.x.x
+```
+
+说明环境已经准备好，可以直接进入下一步。
+
+#### 如果提示“找不到 python”或“找不到 git”
+
+最省事的方式是在 PowerShell 中安装：
+
+```powershell
+winget install -e --id Python.Python.3.12
+winget install -e --id Git.Git
+```
+
+安装完成后，**关闭 PowerShell，再重新打开一次**。
+
+然后重新确认：
+
+```powershell
+python --version
+git --version
+```
+
+> Python 和 Git 只是 Runtime 的运行环境。你不需要会 Python，也不需要会写 Git 命令。
+
+---
+
+### 第 2 步：安装 AI Security Runtime
+
+在 PowerShell 中直接复制下面几行，按回车执行：
+
+```powershell
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+python -m pip install --upgrade pip
+python -m pip install -e ".[test,scanner-test,build-standalone]"
+```
+
+这里每行的意思分别是：
+
+| 命令 | 作用 |
+| --- | --- |
+| `git clone ...` | 下载 AI Security Runtime |
+| `cd Ai-security-check` | 进入下载好的目录 |
+| `python -m pip install --upgrade pip` | 更新 Python 安装工具 |
+| `python -m pip install -e ".[test,scanner-test,build-standalone]"` | 安装 Runtime 和 MCP 能力 |
+
+正常情况下，你不需要修改这些命令。
+
+安装完成后执行：
+
+```powershell
+security-check --help
+```
+
+如果看到：
+
+```text
+usage: security-check ...
+```
+
+说明安装成功。
+
+---
+
+
+发行构建、验证与首次外部发布步骤见 [distribution staging](distribution/README.md)。

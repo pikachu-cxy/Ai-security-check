@@ -74,7 +74,7 @@ Then scan:
 security-check scan --mode quick
 ```
 
-The first scan may download pinned versions of Gitleaks and Trivy and prepare the Trivy vulnerability database. Downloads are verified before use and do not require a system-wide PATH change.
+The first scan may download pinned versions of Semgrep, Gitleaks and Trivy and prepare the Trivy vulnerability database. Downloads are verified before use and do not require a system-wide PATH change.
 
 A successful test should:
 
@@ -516,6 +516,11 @@ The repository itself currently uses three GitHub Actions checks:
 - **Runtime tests** — Windows and Ubuntu test suite.
 - **Compliance** — engine license metadata, first-party rule provenance, forbidden rule sources, notices.
 - **Package integrity** — builds and verifies the source/wheel distribution.
+
+Version tags run these as sequential release gates before four native standalone builds.
+Distribution changes on the feature branch also run Windows x64, Ubuntu 22.04 x64,
+macOS arm64 and macOS x64 verification: first managed scanner preparation, quick
+and release sample scans, plugin discovery, and a real MCP SDK stdio session.
 
 ---
 

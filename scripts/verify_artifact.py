@@ -97,7 +97,7 @@ def main() -> None:
         extract(args.archive, root)
         bundle = root / "security-check"
         executable = bundle / ("security-check.exe" if os.name == "nt" else "security-check")
-        for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "version.json"):
+        for name in ("LICENSE", "EULA.md", "LICENSING.md", "LICENSES/Apache-2.0.txt", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md", "version.json"):
             if not (bundle / name).is_file():
                 raise ValueError(f"Artifact missing {name}")
         metadata = json.loads((bundle / "version.json").read_text(encoding="utf-8"))

@@ -13,6 +13,7 @@ from scripts.validate_manager_metadata import validate
 from security_runtime._version import __version__
 from security_runtime.cli import main
 from security_runtime.engines import BUILTIN_ENGINES
+from security_runtime.rulepacks import FIRST_PARTY_RULE_PACK
 from security_runtime.licensing import LicenseAction, LicensePolicy, Permission, MANAGED_PYTHON_LICENSE, PYINSTALLER_BOOTLOADER_LICENSE
 
 
@@ -25,6 +26,9 @@ def test_runtime_version_and_semgrep_delivery(capsys):
     assert LicensePolicy.permission(MANAGED_PYTHON_LICENSE, LicenseAction.AUTO_DOWNLOAD) != Permission.NO
     assert LicensePolicy.permission(MANAGED_PYTHON_LICENSE, LicenseAction.BUNDLE) == Permission.NO
     assert LicensePolicy.permission(PYINSTALLER_BOOTLOADER_LICENSE, LicenseAction.BUNDLE) != Permission.NO
+    root = Path(__file__).resolve().parents[1]
+    assert "PROPRIETARY LICENSE" in (root / "LICENSE").read_text(encoding="utf-8")
+    assert FIRST_PARTY_RULE_PACK.license == "Apache-2.0"
 
 
 def test_generators_require_real_versioned_release_metadata(tmp_path):

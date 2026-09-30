@@ -30,7 +30,7 @@ def generate(manifest: Path, output: Path) -> None:
   desc "Local security runtime for AI coding agents"
   homepage "https://github.com/pikachu-cxy/Ai-security-check"
   version "{__version__}"
-  license "MIT"
+  license :cannot_represent
 
   on_macos do
     on_arm do

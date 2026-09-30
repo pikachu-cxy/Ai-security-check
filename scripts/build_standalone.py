@@ -24,8 +24,9 @@ def main() -> None:
     # contains the developer's absolute checkout path.
     for provenance in bundle.rglob("direct_url.json"):
         provenance.unlink()
-    for name in ("LICENSE", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"):
+    for name in ("LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"):
         shutil.copy2(root / name, bundle / name)
+    shutil.copytree(root / "LICENSES", bundle / "LICENSES", dirs_exist_ok=True)
     inventory(bundle)
     (bundle / "version.json").write_text(json.dumps({"name": "AI Security Runtime", "version": __version__,
         "format": "pyinstaller-onedir", "managed_engines": ["semgrep", "gitleaks", "trivy"]}, indent=2) + "\n", encoding="utf-8")

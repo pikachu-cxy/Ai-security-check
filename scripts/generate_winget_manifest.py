@@ -31,7 +31,7 @@ def generate(manifest: Path, output: Path) -> None:
     common = {"PackageIdentifier": IDENTIFIER, "PackageVersion": __version__}
     version = {**common, "DefaultLocale": "en-US", "ManifestType": "version", "ManifestVersion": "1.10.0"}
     locale = {**common, "PackageLocale": "en-US", "Publisher": "PikachuCXY",
-              "PackageName": "AI Security Runtime", "License": "MIT", "Moniker": "security-check",
+              "PackageName": "AI Security Runtime", "License": "Proprietary", "Moniker": "security-check",
               "ShortDescription": "Local security runtime for AI coding agents",
               "ManifestType": "defaultLocale", "ManifestVersion": "1.10.0"}
     installer = {**common, "InstallerType": "zip", "NestedInstallerType": "portable",
