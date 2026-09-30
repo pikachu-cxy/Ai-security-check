@@ -12,7 +12,7 @@ from typing import Protocol
 from .findings import FindingNormalizer
 from .models import Finding, RunStatus, ScanContext, ScannerRun, TargetProfile
 from .capabilities import Capability
-from .toolchain import ToolManager, ToolStatus
+from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_loader
 from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
 from .sast import SASTRequest, SemgrepEngineProvider
@@ -39,7 +39,9 @@ class ScannerAdapter(Protocol):
 def _execute(args: list[str], cwd: str, timeout: int) -> tuple[int, str]:
     # Keep subprocess output bounded even if a scanner ignores quiet flags.
     with tempfile.TemporaryFile() as out:
-        proc = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.DEVNULL)
+        with external_tool_loader():
+            proc = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL, stdout=out,
+                                    stderr=subprocess.DEVNULL, env=tool_environment(Path(args[0])))
         deadline = time.monotonic() + timeout
         try:
             while proc.poll() is None:

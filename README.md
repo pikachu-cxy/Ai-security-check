@@ -16,51 +16,34 @@ AI Security Runtime is a local-first security layer for AI coding workflows. It 
 
 ---
 
-## 5-minute quick start
+## Installation
 
-### Requirements
+Package-manager installation is being prepared for the next Developer Alpha release.
+These commands are not available until the GitHub assets and external listings are published.
 
-- Windows, Linux, or macOS
-- Python **3.12+**
-- Git
-
-The current Developer Alpha lives on the `feature/runtime-mvp` branch.
-
-### 1. Install
-
-#### Windows PowerShell
+### Windows
 
 ```powershell
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-python -m pip install --upgrade pip
-pip install -e ".[mcp]"
+winget install --id PikachuCXY.AISecurityRuntime -e
 ```
 
-#### Linux / macOS
+### macOS / Linux x64
 
 ```bash
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install -e ".[mcp]"
+brew install pikachu-cxy/tap/ai-security-runtime
 ```
 
-Confirm the CLI is installed:
+The standalone Runtime includes its Python runtime. On the first scan it prepares
+Semgrep in an isolated managed environment and downloads Gitleaks and Trivy as
+needed. No system Python, pip or venv is required. Run inside your Git project:
 
 ```bash
-security-check --help
+security-check --version
+security-check doctor
+security-check scan --mode quick
+security-check setup cursor
+security-check setup workbuddy
 ```
-
----
 
 ## 2. Run your first CLI scan
 
@@ -587,3 +570,56 @@ See:
 The product goal is simple:
 
 > **Native where valuable. Generic MCP everywhere else. CLI as the universal fallback.**
+
+## Development / Contributing
+
+The following source installation is for developers.
+
+### Source checkout
+
+### Requirements
+
+- Windows, Linux, or macOS
+- Python **3.12+**
+- Git
+
+The current Developer Alpha lives on the `feature/runtime-mvp` branch.
+
+### 1. Install
+
+#### Windows PowerShell
+
+```powershell
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+python -m pip install --upgrade pip
+pip install -e ".[test,scanner-test,build-standalone]"
+```
+
+#### Linux / macOS
+
+```bash
+git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+python -m pip install --upgrade pip
+pip install -e ".[test,scanner-test,build-standalone]"
+```
+
+Confirm the CLI is installed:
+
+```bash
+security-check --help
+```
+
+---
+
+
+See [distribution staging](distribution/README.md) for native builds, verification, and the first external publication steps.

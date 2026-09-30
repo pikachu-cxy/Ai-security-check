@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import venv
 from pathlib import Path
+from security_runtime._version import __version__
 
 
 def run(*command: str, cwd: Path) -> None:
@@ -14,7 +15,7 @@ def run(*command: str, cwd: Path) -> None:
 
 def main() -> None:
     repository = Path(__file__).resolve().parents[1]
-    wheels = list((repository / "dist").glob("*.whl"))
+    wheels = list((repository / "dist").glob(f"ai_security_runtime-{__version__}-*.whl"))
     if len(wheels) != 1:
         raise ValueError("Expected exactly one built wheel")
     with tempfile.TemporaryDirectory(prefix="ai-security-wheel-") as temporary:
@@ -24,10 +25,9 @@ def main() -> None:
         scripts = environment / ("Scripts" if os.name == "nt" else "bin")
         python = scripts / ("python.exe" if os.name == "nt" else "python")
         cli = scripts / ("security-check.exe" if os.name == "nt" else "security-check")
-        # Runtime tests install the declared scanner dependency. Package
-        # integrity only needs the wheel and its lightweight YAML parser.
-        run(str(python), "-m", "pip", "install", "--no-deps", str(wheels[0]), "PyYAML>=6,<7", cwd=root)
+        run(str(python), "-m", "pip", "install", str(wheels[0]), cwd=root)
         run(str(cli), "--help", cwd=root)
+        run(str(cli), "--version", cwd=root)
         run(str(cli), "licenses", "--check-distribution", cwd=root)
         check = """
 from pathlib import Path
@@ -41,9 +41,11 @@ assert pack.descriptor.rule_pack_id == 'ai-security-core'
 for engine in ('semgrep', 'gitleaks', 'trivy'):
     assert (package / 'licenses' / engine / 'LICENSE').is_file()
     assert (package / 'licenses' / engine / 'NOTICE').is_file()
+assert (package / 'python_downloads.json').is_file()
 share = Path(__import__('sys').prefix) / 'share' / 'ai-security-runtime'
 assert (share / 'THIRD_PARTY_NOTICES.md').is_file()
 assert (share / 'SOURCE_OFFER.md').is_file()
+assert (share / 'licenses' / 'LICENSE').is_file()
 print('Installed wheel integrity OK')
 """
         run(str(python), "-c", check, cwd=root)

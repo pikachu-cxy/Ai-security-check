@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches: [main, feature/runtime-mvp]
-    tags: ['v*']
+  workflow_call:
 
 jobs:
   package:
@@ -24,7 +24,7 @@ jobs:
       - name: Install package verification tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install build "PyYAML>=6,<7"
+          python -m pip install -e . build
       - name: Build source and wheel distributions
         run: python -m build
       - name: Verify wheel contents

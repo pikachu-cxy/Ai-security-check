@@ -22,6 +22,7 @@ from .workspace import WorkspaceError, WorkspaceResolver
 from .integrations import IntegrationRegistry, IntegrationStatusCode
 from .integration_state import DogfoodEvent, IntegrationStateStore
 from .mcp_config import copy_to_clipboard, json_config, resolve_runtime_command, toml_config
+from ._version import __version__
 
 
 def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool = False) -> int:
@@ -128,6 +129,7 @@ def render(result) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
+    parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
     doctor_parser = sub.add_parser("doctor")
     doctor_parser.add_argument("--path")
@@ -221,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
             for tool_id in names:
                 print(f"Preparing {tool_id}...", file=sys.stderr)
                 resolved = manager.ensure(tool_id)
-                print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
+                print(f"{tool_id.title():<12} {resolved.status} {resolved.path} {resolved.detail}")
                 successful &= resolved.status == ToolStatus.READY
             if "trivy" in names and manager.resolve("trivy").status == ToolStatus.READY:
                 database = manager.prepare_trivy_database(manager.resolve("trivy").path)
@@ -229,7 +231,8 @@ def main(argv: list[str] | None = None) -> int:
                 successful &= database == ToolStatus.READY
             return 0 if successful else 2
         if args.command == "licenses":
-            notice_roots = (Path(__file__).resolve().parents[2], Path(sys.prefix) / "share" / "ai-security-runtime")
+            notice_roots = (Path(__file__).resolve().parent, Path(__file__).resolve().parents[2],
+                            Path(sys.prefix) / "share" / "ai-security-runtime")
             def distributed_file(name: str) -> bool:
                 return any((directory / name).is_file() for directory in notice_roots)
             print(f"{'Engine':<12} {'License':<18} Distribution")
@@ -243,6 +246,7 @@ def main(argv: list[str] | None = None) -> int:
                     # runtime dependency or a later managed download is not
                     # an engine binary bundled inside the Runtime wheel.
                     delivery_actions = {"RUNTIME_DEPENDENCY": LicenseAction.USE,
+                                        "MANAGED_PYTHON_PACKAGE": LicenseAction.AUTO_DOWNLOAD,
                                         "PINNED_RELEASE": LicenseAction.AUTO_DOWNLOAD}
                     action = delivery_actions.get(descriptor.install_strategy)
                     if action is None or LicensePolicy.permission(metadata, action) == Permission.NO:

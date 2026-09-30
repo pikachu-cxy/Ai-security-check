@@ -4,16 +4,19 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ai-security-runtime"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Local security runtime for AI coding agents"
 readme = "README.md"
-license = {file = "LICENSE"}
+license = "LicenseRef-AI-Security-Runtime-Proprietary"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["semgrep==1.178.0", "PyYAML>=6,<7"]
+dependencies = ["PyYAML==6.0.3", "mcp==1.29.0"]
 
 [project.optional-dependencies]
-mcp = ["mcp>=1.0,<3"]
-test = ["pytest>=8"]
+mcp = []
+test = ["pytest>=8", "jsonschema>=4,<5"]
+scanner-test = ["semgrep==1.178.0"]
+build-standalone = ["pyinstaller==6.22.3"]
 
 [project.scripts]
 security-check = "security_runtime.cli:main"
@@ -21,8 +24,13 @@ security-check = "security_runtime.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.dynamic]
+version = {attr = "security_runtime._version.__version__"}
+
 [tool.setuptools.package-data]
-security_runtime = ["rules/LICENSE", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE"]
+security_runtime = ["python_downloads.json", "rules/LICENSE", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE"]
 
 [tool.setuptools.data-files]
-"share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "LICENSES/Apache-2.0.txt", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]
+"share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]
+"share/ai-security-runtime/LICENSES" = ["LICENSES/Apache-2.0.txt"]
+"share/ai-security-runtime/licenses" = ["LICENSE"]

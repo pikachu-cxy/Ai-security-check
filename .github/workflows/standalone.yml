@@ -1,0 +1,48 @@
+name: Standalone artifacts
+
+on:
+  workflow_call:
+  push:
+    branches: [feature/runtime-mvp]
+    paths:
+      - 'src/**'
+      - 'scripts/**'
+      - 'distribution/**'
+      - 'pyproject.toml'
+      - '.github/workflows/standalone.yml'
+      - '.github/workflows/release.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Standalone artifact (${{ matrix.platform }})
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, platform: windows-x64}
+          - {os: ubuntu-22.04, platform: linux-x64}
+          - {os: macos-15, platform: macos-arm64}
+          - {os: macos-15-intel, platform: macos-x64}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e ".[build-standalone]"
+      - run: python scripts/build_standalone.py
+      - run: python scripts/package_artifact.py --platform ${{ matrix.platform }}
+      - name: Verify native archive, MCP, and first managed scanner preparation
+        shell: bash
+        run: |
+          python scripts/verify_artifact.py --full $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/release/*
+          if-no-files-found: error

@@ -10,3 +10,6 @@ dist/
 *.db
 .cursor/mcp.json
 .workbuddy/mcp.json
+.test-tmp/
+.distribution-venv/
+.test-tmp-run*/

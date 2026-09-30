@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import sys
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 import yaml
+from security_runtime._version import __version__
 
 
 def check(wheel: Path, project: Path) -> None:
@@ -20,6 +22,7 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/licensing.py",
             "security_runtime/engines.py",
             "security_runtime/rulepacks.py",
+            "security_runtime/python_downloads.json",
             "security_runtime/rules/LICENSE",
             data_prefix + "LICENSE",
             data_prefix + "EULA.md",
@@ -27,6 +30,7 @@ def check(wheel: Path, project: Path) -> None:
             data_prefix + "LICENSES/Apache-2.0.txt",
             data_prefix + "THIRD_PARTY_NOTICES.md",
             data_prefix + "SOURCE_OFFER.md",
+            data_prefix + "licenses/LICENSE",
         }
         source_package = project / "src" / "security_runtime"
         for engine in ("gitleaks", "trivy", "semgrep"):
@@ -70,12 +74,18 @@ def check(wheel: Path, project: Path) -> None:
         if any(name.startswith("semgrep/") or "semgrep-rules" in name.lower()
                or name.endswith(("gitleaks.exe", "trivy.exe")) for name in names):
             raise ValueError("Runtime wheel unexpectedly bundles a third-party engine")
+        metadata = [name for name in names if name.endswith(".dist-info/METADATA")]
+        if len(metadata) != 1:
+            raise ValueError("Wheel metadata missing or ambiguous")
+        requirements = Parser().parsestr(package.read(metadata[0]).decode("utf-8")).get_all("Requires-Dist", [])
+        if any(item.lower().startswith("semgrep") and "extra ==" not in item for item in requirements):
+            raise ValueError("Runtime wheel still requires Semgrep")
     print(f"Wheel compliance OK: {wheel.name}, {len(rule_files)} first-party rule file(s)")
 
 
 if __name__ == "__main__":
     repository = Path(__file__).resolve().parents[1]
-    wheels = list((repository / "dist").glob("*.whl")) if len(sys.argv) == 1 else [Path(sys.argv[1])]
+    wheels = list((repository / "dist").glob(f"ai_security_runtime-{__version__}-*.whl")) if len(sys.argv) == 1 else [Path(sys.argv[1])]
     if len(wheels) != 1:
         raise SystemExit("Expected exactly one wheel in dist/")
     check(wheels[0], repository)

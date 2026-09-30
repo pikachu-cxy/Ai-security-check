@@ -51,7 +51,7 @@ class ManagedEngine(Protocol):
 
 BUILTIN_ENGINES = {
     "semgrep": EngineDescriptor("semgrep", "Semgrep", EngineType.PYTHON_PACKAGE, "1.178.0", "PyPI",
-                                "https://semgrep.dev", "LGPL-2.1-only", False, "", ("windows", "linux", "macos"), "RUNTIME_DEPENDENCY", ExecutionTrust.SAFE_LOCAL, SEMGREP_LICENSE),
+                                "https://semgrep.dev", "LGPL-2.1-only", False, "", ("windows", "linux", "macos"), "MANAGED_PYTHON_PACKAGE", ExecutionTrust.SAFE_LOCAL, SEMGREP_LICENSE),
     "gitleaks": EngineDescriptor("gitleaks", "Gitleaks", EngineType.BINARY, "8.30.0", "Official GitHub Release",
                                  "https://github.com/gitleaks/gitleaks", "MIT", False, "", ("windows", "linux", "macos"), "PINNED_RELEASE", ExecutionTrust.SAFE_LOCAL, GITLEAKS_LICENSE),
     "trivy": EngineDescriptor("trivy", "Trivy", EngineType.BINARY, "0.74.0", "Official GitHub Release",

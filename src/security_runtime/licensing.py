@@ -112,3 +112,19 @@ CODEQL_FUTURE_LICENSE = LicenseMetadata(
 
 
 AI_INFRA_GUARD_FUTURE_ATTRIBUTION = "This product integrates AI-Infra-Guard, open-sourced by Tencent Zhuque Lab."
+
+# The standalone bootstrap downloads a separate CPython distribution. It is
+# never bundled in the Runtime artifact; upstream retains its license inventory.
+MANAGED_PYTHON_LICENSE = LicenseMetadata(
+    "Python-2.0 AND LicenseRef-PBS-20260211-Components",
+    "CPython and python-build-standalone component licenses",
+    "https://github.com/astral-sh/python-build-standalone/blob/main/docs/running.rst",
+    True, True, Permission.NO, Permission.NO, False, True, False, True,
+    "Preserve the downloaded Python distribution's license inventory.", False,
+    LicenseClass.WEAK_COPYLEFT, "Copyright Python Software Foundation and distribution contributors")
+
+PYINSTALLER_BOOTLOADER_LICENSE = LicenseMetadata(
+    "GPL-2.0-or-later WITH Bootloader-exception", "PyInstaller bootloader license with distribution exception",
+    "https://pyinstaller.org/en/v6.22.3/license.html",
+    True, True, Permission.WITH_OBLIGATIONS, Permission.WITH_OBLIGATIONS, True, True, False, False, "", False,
+    LicenseClass.STRONG_COPYLEFT, "Copyright PyInstaller Development Team")

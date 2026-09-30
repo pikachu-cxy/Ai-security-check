@@ -17,7 +17,7 @@ from security_runtime.models import RunStatus, ScanContext, ScanMode
 from security_runtime.scanners import SemgrepAdapter
 from security_runtime.toolchain import (
     OfficialReleaseProvider, ResolvedTool, ToolManager, ToolManifest, ToolSource,
-    ToolStatus, sha256_file,
+    ToolStatus, sha256_file, tool_environment, matches_version,
 )
 
 
@@ -40,6 +40,8 @@ def managed_executable(manager: ToolManager, tool: str) -> Path:
     (install_dir / "NOTICE").write_text("test notice", encoding="utf-8")
     (install_dir / "metadata.json").write_text(json.dumps({
         "license": manager.license_metadata(tool).license_spdx,
+        "version": manager.versions[tool],
+        "executable_sha256": sha256_file(path),
     }), encoding="utf-8")
     marker = {"archive_sha256": manager.manifest(tool).sha256,
               "binary_sha256": sha256_file(path)} if tool != "semgrep" else {}
@@ -128,7 +130,7 @@ def test_online_missing_tool_installs_then_resolves(tool, tmp_path, monkeypatch)
     assert (resolved.status, resolved.source) == (ToolStatus.READY, ToolSource.MANAGED)
 
 
-def test_semgrep_pip_script_outside_path_is_interpreter_managed_tool(tmp_path, monkeypatch):
+def test_semgrep_pip_script_outside_path_is_validated_as_system_tool(tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
     scripts = tmp_path / "Scripts"
     semgrep = local_executable(scripts, "semgrep")
@@ -136,8 +138,9 @@ def test_semgrep_pip_script_outside_path_is_interpreter_managed_tool(tmp_path, m
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: None)
     monkeypatch.setattr("security_runtime.toolchain.sysconfig.get_path", lambda name: str(scripts))
     monkeypatch.setattr("security_runtime.toolchain.importlib.metadata.version", lambda name: manager.versions[name])
+    monkeypatch.setattr(manager, "_version", lambda name, path: manager.versions[name])
     resolved = manager.ensure("semgrep", offline=True)
-    assert (resolved.status, resolved.source, Path(resolved.path)) == (ToolStatus.READY, ToolSource.MANAGED, semgrep.resolve())
+    assert (resolved.status, resolved.source, Path(resolved.path)) == (ToolStatus.READY, ToolSource.SYSTEM, semgrep.resolve())
 
 
 def test_first_party_rules_scan_offline():
@@ -169,6 +172,27 @@ def test_release_checksum_failure_removes_untrusted_asset(tmp_path):
         with pytest.raises(ValueError, match="SHA256 mismatch"):
             OfficialReleaseProvider().download(manifest, destination)
     assert not destination.exists()
+
+
+def test_engine_helpers_use_selected_environment(tmp_path, monkeypatch):
+    selected = tmp_path / "engine" / "bin" / "semgrep"
+    monkeypatch.setenv("PATH", str(tmp_path / "old-engine"))
+    monkeypatch.setenv("PYTHONPATH", str(tmp_path / "old-python"))
+    monkeypatch.setenv("PYTHONHOME", str(tmp_path / "old-python"))
+    environment = tool_environment(selected)
+    assert environment["PATH"].split(os.pathsep)[0] == str(selected.parent.resolve())
+    assert "PYTHONPATH" not in environment and "PYTHONHOME" not in environment
+    assert matches_version("1.178.0", "semgrep 1.178.0")
+    assert not matches_version("1.178.0", "semgrep 11.178.0")
+    assert not matches_version("1.178.0", "semgrep 1.178.01")
+
+
+def test_missing_managed_python_offline_never_downloads(tmp_path, monkeypatch):
+    manager = ToolManager(root=tmp_path)
+    monkeypatch.setenv("SECURITY_RUNTIME_OFFLINE", "1")
+    with patch.object(manager.provider, "download", side_effect=AssertionError("network attempted")):
+        with pytest.raises(ValueError, match="unavailable offline"):
+            manager.prepare_python_runtime()
 
 
 def test_trivy_db_preparation_does_not_use_docker_credentials(tmp_path, monkeypatch):

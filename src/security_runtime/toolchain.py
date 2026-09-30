@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -21,12 +22,14 @@ import urllib.request
 import venv
 import zipfile
 from dataclasses import asdict, dataclass
+from contextlib import contextmanager
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
 from .engines import BUILTIN_ENGINES
-from .licensing import LicenseMetadata, LicensePolicy
+from .licensing import LicenseMetadata, LicensePolicy, MANAGED_PYTHON_LICENSE
+from .plugin_api import discover_plugin_directory
 
 
 class ToolStatus(StrEnum):
@@ -135,6 +138,44 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def tool_environment(executable: Path) -> dict[str, str]:
+    """Keep helper commands in the selected engine's environment.
+
+    In particular, Semgrep delegates to pysemgrep on PATH. A frozen Runtime's
+    library search path must also not leak into external Python processes.
+    """
+    env = dict(os.environ)
+    env["PATH"] = str(executable.resolve().parent) + os.pathsep + env.get("PATH", "")
+    for name in ("PYTHONHOME", "PYTHONPATH"):
+        env.pop(name, None)
+    if getattr(sys, "frozen", False):
+        for name in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
+            original = env.get(name + "_ORIG")
+            if original is None:
+                env.pop(name, None)
+            else:
+                env[name] = original
+    return env
+
+
+def matches_version(expected: str, output: str) -> bool:
+    return bool(re.search(r"(?<![0-9.])" + re.escape(expected) + r"(?![0-9.])", output))
+
+
+@contextmanager
+def external_tool_loader():
+    """Do not pass PyInstaller's DLL directory to independent executables."""
+    reset = getattr(sys, "frozen", False) and os.name == "nt"
+    if reset:
+        import ctypes
+        ctypes.windll.kernel32.SetDllDirectoryW(None)
+    try:
+        yield
+    finally:
+        if reset:
+            ctypes.windll.kernel32.SetDllDirectoryW(str(sys._MEIPASS))
+
+
 class ToolSourceProvider(Protocol):
     def download(self, manifest: ToolManifest, destination: Path) -> None: ...
 
@@ -169,6 +210,7 @@ class ToolManager:
         self.python_requirements = {"semgrep": (f"semgrep=={VERSIONS['semgrep']}", False, None)}
         self.extra_manifests: dict[tuple[str, str, str], ToolManifest] = {}
         self.extra_licenses: dict[str, LicenseMetadata] = {}
+        discover_plugin_directory(self.root / "plugins")
         self._load_external_engines()
 
     def register_manifest(self, manifest: ToolManifest) -> None:
@@ -232,8 +274,9 @@ class ToolManager:
         manifest = self.manifest(tool_id)
         python_executable = self.python_requirements.get(tool_id, ("", False, None))[2]
         executable = manifest.executable_name if manifest else python_executable or tool_id + (".exe" if os.name == "nt" else "")
-        base = self.root / "tools" / tool_id / self.versions[tool_id]
-        return base / "venv" / ("Scripts" if os.name == "nt" else "bin") / executable if tool_id in self.python_engines else base / executable
+        base = self.root / ("engines" if tool_id == "semgrep" else "tools") / tool_id / self.versions[tool_id]
+        runtime = "runtime" if tool_id == "semgrep" else "venv"
+        return base / runtime / ("Scripts" if os.name == "nt" else "bin") / executable if tool_id in self.python_engines else base / executable
 
     def trivy_cache_dir(self) -> Path:
         return Path(os.getenv("SECURITY_RUNTIME_TRIVY_CACHE_DIR") or os.getenv("TRIVY_CACHE_DIR") or self.root / "cache" / "trivy")
@@ -257,8 +300,10 @@ class ToolManager:
 
     def _version(self, tool_id: str, path: Path) -> str:
         try:
-            proc = subprocess.run([str(path.resolve()), "--version"], stdin=subprocess.DEVNULL,
-                                  capture_output=True, text=True, timeout=8, check=False)
+            with external_tool_loader():
+                proc = subprocess.run([str(path.resolve()), "--version"], stdin=subprocess.DEVNULL,
+                                      capture_output=True, text=True, timeout=8, check=False,
+                                      env=tool_environment(path))
             if proc.returncode:
                 return ""
             return (proc.stdout + proc.stderr).strip()[:160]
@@ -269,10 +314,20 @@ class ToolManager:
         path = path.expanduser().resolve()
         if not path.is_file():
             return ResolvedTool(tool_id, "", str(path), source, ToolStatus.MISSING)
-        if source == ToolSource.MANAGED and tool_id in self.python_engines and path.is_relative_to(self.root / "tools"):
+        if source == ToolSource.MANAGED and tool_id in self.python_engines and path.is_relative_to(self.root / ("engines" if tool_id == "semgrep" else "tools")):
             install_dir = path.parents[2]
             if not all((install_dir / name).is_file() for name in ("install.json", "metadata.json", "LICENSE", "NOTICE")):
                 return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "Python package installation is incomplete")
+            if tool_id == "semgrep":
+                try:
+                    metadata = json.loads((install_dir / "metadata.json").read_text(encoding="utf-8"))
+                    if metadata["version"] != self.versions[tool_id]:
+                        return ResolvedTool(tool_id, metadata["version"], str(path), source,
+                                            ToolStatus.VERSION_MISMATCH, f"expected {self.versions[tool_id]}")
+                    if metadata["executable_sha256"] != sha256_file(path):
+                        return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python executable checksum mismatch")
+                except (OSError, ValueError, KeyError):
+                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python metadata invalid")
         if source == ToolSource.MANAGED and tool_id not in self.python_engines:
             marker = path.parent / "install.json"
             try:
@@ -290,7 +345,7 @@ class ToolManager:
         if not output:
             return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "executable failed version check")
         expected = self.versions[tool_id]
-        if expected not in output:
+        if not matches_version(expected, output):
             return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}")
         return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.READY)
 
@@ -303,15 +358,14 @@ class ToolManager:
         managed = self.managed_path(tool_id)
         if managed.exists():
             return self._check(tool_id, managed, ToolSource.MANAGED)
-        if tool_id == "semgrep":
+        if tool_id == "semgrep" and not getattr(sys, "frozen", False):
             executable = "semgrep.exe" if os.name == "nt" else "semgrep"
-            # The declared Python dependency belongs to this interpreter and
-            # takes priority over an unrelated Semgrep found on system PATH.
-            # Python package metadata pins this executable's package version.
+            # Backward-compatible use of an already installed Python script.
+            # A standalone Runtime has no Semgrep Python dependency.
             runtime_exe = Path(sysconfig.get_path("scripts")) / executable
             try:
                 if runtime_exe.is_file() and importlib.metadata.version("semgrep") == self.versions["semgrep"]:
-                    return ResolvedTool(tool_id, self.versions[tool_id], str(runtime_exe.resolve()), ToolSource.MANAGED, ToolStatus.READY)
+                    return self._check(tool_id, runtime_exe, ToolSource.SYSTEM)
             except importlib.metadata.PackageNotFoundError:
                 pass
         system = shutil.which(tool_id)
@@ -399,56 +453,138 @@ class ToolManager:
                 shutil.rmtree(final)
             os.replace(staging, final)
 
+    def prepare_python_runtime(self) -> Path:
+        """Bootstrap a relocatable, checksum-pinned CPython without system Python."""
+        if not LicensePolicy.can_auto_download(MANAGED_PYTHON_LICENSE):
+            raise ValueError("Managed Python download prohibited by license policy")
+        key = "-".join(platform_key())
+        entries = json.loads((Path(__file__).parent / "python_downloads.json").read_text(encoding="utf-8"))
+        entry = entries.get(key)
+        if entry is None:
+            raise ValueError(f"No reviewed Python bootstrap for {key}")
+        relative_exe = Path("python.exe") if os.name == "nt" else Path("bin/python3.12")
+        parent = self.root / "python" / (entry["version"] + "-" + entry["build"])
+        parent.mkdir(parents=True, exist_ok=True)
+        final = parent / key
+        executable = final / relative_exe
+        try:
+            record = json.loads((final / "metadata.json").read_text(encoding="utf-8"))
+            if (record["sha256"] == entry["sha256"] and record["binary_sha256"] == sha256_file(executable)
+                    and matches_version(entry["version"], self._version("cpython", executable))):
+                return executable
+        except (OSError, ValueError, KeyError):
+            pass
+        if os.getenv("SECURITY_RUNTIME_OFFLINE") == "1":
+            raise ValueError("Managed Python unavailable offline")
+        manifest = ToolManifest("cpython", "Managed CPython", entry["version"], *platform_key(),
+                                entry["url"], entry["sha256"], "tar.gz", relative_exe.as_posix(),
+                                "https://github.com/astral-sh/python-build-standalone", MANAGED_PYTHON_LICENSE.license_spdx,
+                                MANAGED_PYTHON_LICENSE)
+        with tempfile.TemporaryDirectory(dir=parent, prefix="install-") as temporary:
+            staging = Path(temporary)
+            archive = staging / "python.tar.gz"
+            self.provider.download(manifest, archive)
+            with tarfile.open(archive, "r:gz") as package:
+                members = package.getmembers()
+                if (sum(member.size for member in members) > 600_000_000
+                        or any(not member.name.startswith("python/") and member.name != "python" for member in members)):
+                    raise ValueError("Unexpected Python bootstrap archive")
+                package.extractall(staging, filter="data")
+            installed = staging / "python"
+            candidate = installed / relative_exe
+            if not matches_version(entry["version"], self._version("cpython", candidate)):
+                raise ValueError("Managed Python failed version validation")
+            if not any(path.is_file() for path in installed.rglob("*LICENSE*")):
+                raise ValueError("Managed Python license inventory is missing")
+            (installed / "metadata.json").write_text(json.dumps({
+                "engine_id": "cpython-bootstrap", "version": entry["version"], "build": entry["build"],
+                "download_source": entry["url"], "sha256": entry["sha256"],
+                "binary_sha256": sha256_file(candidate), "license": MANAGED_PYTHON_LICENSE.license_spdx,
+                "installed_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
+            if final.exists():
+                shutil.rmtree(final)
+            os.replace(installed, final)
+        return executable
+
     def install_python_package(self, tool_id: str, version: str, requirement: str, *, executable_name: str | None = None, no_index: bool = False) -> Path:
         license_metadata = self.license_metadata(tool_id)
         if not LicensePolicy.can_auto_download(license_metadata):
             raise ValueError("Python engine installation prohibited by license policy")
         self.versions[tool_id] = version
         self.python_engines.add(tool_id)
-        parent = self.root / "tools" / tool_id
+        parent = self.root / ("engines" if tool_id == "semgrep" else "tools") / tool_id
         parent.mkdir(parents=True, exist_ok=True)
         final = parent / version
         if final.exists():
             shutil.rmtree(final)
         final.mkdir()
         try:
-            environment = final / "venv"
-            venv.EnvBuilder(with_pip=True).create(environment)
+            staging = final
+            environment = staging / ("runtime" if tool_id == "semgrep" else "venv")
+            if getattr(sys, "frozen", False):
+                bootstrap = self.prepare_python_runtime()
+                with external_tool_loader():
+                    proc = subprocess.run([str(bootstrap), "-m", "venv", str(environment)],
+                                          env=tool_environment(bootstrap), stdin=subprocess.DEVNULL,
+                                          capture_output=True, text=True, timeout=120, check=False)
+                if proc.returncode:
+                    raise ValueError("Managed Python bootstrap failed: " + proc.stderr[-200:])
+            else:
+                venv.EnvBuilder(with_pip=True).create(environment)
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-            command = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input"]
+            report = staging / "pip-report.json"
+            command = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--report", str(report)]
             if no_index:
                 command += ["--no-index", "--no-build-isolation"]
             command.append(requirement)
-            proc = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=600, check=False)
+            with external_tool_loader():
+                proc = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                                      timeout=600, check=False, env=tool_environment(python))
             if proc.returncode:
                 raise ValueError("Python package engine installation failed: " + proc.stderr[-200:])
             executable = environment / ("Scripts" if os.name == "nt" else "bin") / (executable_name or tool_id + (".exe" if os.name == "nt" else ""))
             if not executable.is_file():
                 raise ValueError("Python package engine did not provide the expected command")
-            if version not in self._version(tool_id, executable):
+            if not matches_version(version, self._version(tool_id, executable)):
                 raise ValueError("Python package engine failed version validation")
             license_candidates = list(environment.rglob("*.dist-info/LICENSE")) + list(environment.rglob("*.dist-info/LICENSE.txt"))
             own_license = next((candidate for candidate in license_candidates
                                 if candidate.parent.name.replace("-", "_").lower().startswith(tool_id.replace("-", "_").lower() + "_")), None)
             bundled_license = Path(__file__).parent / "licenses" / tool_id / "LICENSE"
             if own_license is not None:
-                shutil.copy2(own_license, final / "LICENSE")
+                shutil.copy2(own_license, staging / "LICENSE")
             elif bundled_license.is_file():
-                shutil.copy2(bundled_license, final / "LICENSE")
+                shutil.copy2(bundled_license, staging / "LICENSE")
             elif license_metadata.notice_required:
                 raise ValueError("Python package license text is missing")
             notice = Path(__file__).parent / "licenses" / tool_id / "NOTICE"
             if notice.is_file():
-                shutil.copy2(notice, final / "NOTICE")
+                shutil.copy2(notice, staging / "NOTICE")
             else:
-                (final / "NOTICE").write_text(f"{tool_id} {version}\n{license_metadata.copyright}\n{license_metadata.license_spdx}\n", encoding="utf-8")
-            (final / "metadata.json").write_text(json.dumps({"name": tool_id, "version": version,
-                "download_source": requirement, "sha256": sha256_file(Path(requirement)) if Path(requirement).is_file() else "",
-                "license": license_metadata.license_spdx, "installed_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
-            marker = final / "install.json.tmp"
+                (staging / "NOTICE").write_text(f"{tool_id} {version}\n{license_metadata.copyright}\n{license_metadata.license_spdx}\n", encoding="utf-8")
+            pip_data = json.loads(report.read_text(encoding="utf-8"))
+            selected = next((item for item in pip_data.get("install", [])
+                             if item.get("metadata", {}).get("name", "").lower().replace("_", "-") == tool_id), None)
+            if selected is None:
+                raise ValueError("Python package provenance is missing")
+            if selected.get("metadata", {}).get("version") != version:
+                raise ValueError("Python package version mismatch")
+            source = selected.get("download_info", {})
+            digest = source.get("archive_info", {}).get("hashes", {}).get("sha256", "")
+            if not digest and Path(requirement).is_file():
+                digest = sha256_file(Path(requirement))
+            if not digest:
+                raise ValueError("Python package checksum is missing")
+            report.unlink()
+            (staging / "metadata.json").write_text(json.dumps({"engine_id": tool_id, "name": tool_id, "version": version,
+                "source": source.get("url", requirement), "download_source": source.get("url", requirement),
+                "sha256": digest, "license": license_metadata.license_spdx,
+                "executable_sha256": sha256_file(executable),
+                "installed_at": datetime.now(timezone.utc).isoformat()}), encoding="utf-8")
+            marker = staging / "install.json.tmp"
             marker.write_text(json.dumps({"tool_id": tool_id, "version": version, "requirement": requirement}), encoding="utf-8")
-            os.replace(marker, final / "install.json")
-            return executable
+            os.replace(marker, staging / "install.json")
+            return self.managed_path(tool_id)
         except Exception:
             shutil.rmtree(final, ignore_errors=True)
             raise
@@ -466,13 +602,14 @@ class ToolManager:
         # Docker credential helper or Docker being installed at all.
         docker_config = cache / "docker-config"
         docker_config.mkdir(exist_ok=True)
-        env = dict(os.environ)
+        env = tool_environment(Path(binary))
         env["DOCKER_CONFIG"] = str(docker_config)
         for attempt in range(2):
             try:
-                proc = subprocess.run([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(cache), "--quiet"],
-                                      stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
-                                      timeout=900, check=False)
+                with external_tool_loader():
+                    proc = subprocess.run([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(cache), "--quiet"],
+                                          stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
+                                          timeout=900, check=False)
                 if proc.returncode == 0 and self.database_status() == ToolStatus.READY:
                     return ToolStatus.READY
                 logger.warning("trivy_database_prepare_failed attempt=%s detail=%s", attempt + 1, proc.stderr[-300:])

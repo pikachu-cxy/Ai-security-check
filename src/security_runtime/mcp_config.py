@@ -20,6 +20,8 @@ class RuntimeCommand:
 
 
 def resolve_runtime_command() -> RuntimeCommand:
+    if getattr(sys, "frozen", False):
+        return RuntimeCommand(str(Path(sys.executable).resolve()), ("mcp",))
     name = "security-check.exe" if os.name == "nt" else "security-check"
     adjacent = Path(sys.executable).resolve().with_name(name)
     if adjacent.is_file():
