@@ -5,7 +5,8 @@ __pycache__/
 .pytest_cache/
 build/
 !distribution/build/
-!distribution/build/**
+!distribution/build/entry.py
+!distribution/build/security-check.spec
 dist/
 *.egg-info/
 .security-runtime/
