@@ -117,6 +117,7 @@ def main() -> None:
         system = Path(os.environ.get("SystemRoot", "C:/Windows"))
         platform_paths = [system / "System32", system] if os.name == "nt" else [Path("/usr/bin"), Path("/bin")]
         env["PATH"] = os.pathsep.join(map(str, [bundle, Path(git).parent, *platform_paths]))
+        env["SECURITY_RUNTIME_PLUGIN_DIR"] = str(root / "plugins")
         env["SECURITY_RUNTIME_OFFLINE"] = "0" if args.full else "1"
         version = run([str(executable), "--version"], cwd=root, env=env).stdout.strip()
         if version != f"AI Security Runtime {__version__}":
@@ -157,7 +158,7 @@ def main() -> None:
             all_engines = json.loads(release_scan.stdout)["scanner_runs"]
             if any(item["status"] != "SUCCESS" for item in all_engines):
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))
-            plugin = data / "plugins"
+            plugin = Path(env["SECURITY_RUNTIME_PLUGIN_DIR"])
             plugin.mkdir(parents=True, exist_ok=True)
             (plugin / "distribution_probe.py").write_text(PLUGIN_PROBE, encoding="utf-8")
             plugin_metadata = plugin / "distribution_probe-1.0.0.dist-info"
@@ -171,7 +172,7 @@ def main() -> None:
                     for item in json.loads(plugin_result.stdout)["scanner_runs"]):
                 raise ValueError("Standalone external entry-point plugin discovery failed")
         mcp_tools = asyncio.run(verify_mcp(executable, root, project, env))
-        record = {"version": __version__, "platform": "-".join(platform_key()),
+        record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}

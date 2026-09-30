@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import subprocess
 from pathlib import Path
 
 from security_runtime._version import __version__
@@ -15,6 +16,7 @@ def main() -> None:
     release = Path(__file__).resolve().parents[1] / "dist" / "release"
     artifacts = {}
     lines = []
+    source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     for platform in PLATFORMS:
         name = f"ai-security-runtime-v{__version__}-{platform}" + (".zip" if platform.startswith("windows") else ".tar.gz")
         path = release / name
@@ -24,12 +26,13 @@ def main() -> None:
         verification = json.loads(path.with_name(name + ".verification.json").read_text(encoding="utf-8"))
         if (verification.get("archive_sha256") != digest or verification.get("version") != __version__
                 or verification.get("platform") != platform or not verification.get("smoke")
-                or not verification.get("managed_engines")):
+                or not verification.get("managed_engines") or not verification.get("plugin_discovery")
+                or verification.get("source_commit") != source_commit):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}
         lines.append(f"{digest}  {name}")
     (release / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
+    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "source_commit": source_commit, "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
     print(release / "release-manifest.json")
 
 

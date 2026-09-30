@@ -28,8 +28,11 @@ def main() -> None:
         shutil.copy2(root / name, bundle / name)
     shutil.copytree(root / "LICENSES", bundle / "LICENSES", dirs_exist_ok=True)
     inventory(bundle)
+    source_commit = subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}", "-C", str(root),
+                                              "rev-parse", "HEAD"], text=True).strip()
     (bundle / "version.json").write_text(json.dumps({"name": "AI Security Runtime", "version": __version__,
-        "format": "pyinstaller-onedir", "managed_engines": ["semgrep", "gitleaks", "trivy"]}, indent=2) + "\n", encoding="utf-8")
+        "format": "pyinstaller-onedir", "source_commit": source_commit,
+        "managed_engines": ["semgrep", "gitleaks", "trivy"]}, indent=2) + "\n", encoding="utf-8")
     executable = bundle / ("security-check.exe" if os.name == "nt" else "security-check")
     subprocess.run([str(executable), "--version"], cwd=root, check=True, timeout=30)
     print(bundle)
