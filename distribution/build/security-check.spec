@@ -1,0 +1,27 @@
+"""PyInstaller one-directory Runtime; scanner engines stay external."""
+
+from pathlib import Path
+from PyInstaller.utils.hooks import collect_data_files, copy_metadata
+
+root = Path(SPECPATH).resolve().parents[1]
+package = root / "src" / "security_runtime"
+datas = collect_data_files("security_runtime")
+datas += [(str(root / name), "security_runtime") for name in ("LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md")]
+datas += copy_metadata("ai-security-runtime")
+hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server"]
+
+a = Analysis(
+    [str(root / "distribution" / "build" / "entry.py")],
+    pathex=[str(root / "src")],
+    binaries=[],
+    datas=datas,
+    hiddenimports=hiddenimports,
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=["semgrep", "semgrep_core", "pytest"],
+    noarchive=False,
+)
+pyz = PYZ(a.pure)
+exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="security-check", console=True)
+coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name="security-check")

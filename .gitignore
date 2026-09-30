@@ -4,6 +4,8 @@ __pycache__/
 .tools/
 .pytest_cache/
 build/
+!distribution/build/
+!distribution/build/**
 dist/
 *.egg-info/
 .security-runtime/
