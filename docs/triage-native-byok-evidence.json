@@ -1,0 +1,24 @@
+{
+  "scenario": "Final native Windows CLI; explicitly seeded synthetic raw finding; real loopback OpenAI-compatible fake server; no external model",
+  "source_commit": "557052049c74c6d1ca4321c2d9559483a36f55d2",
+  "no_consent_zero_requests": true,
+  "authorized_request_count": 1,
+  "cache_hits": 1,
+  "pure_json_stdout": true,
+  "quiet_stderr": true,
+  "raw_secret_not_in_request_or_output": true,
+  "api_key_not_in_output": true,
+  "scan_coverage_unchanged": true,
+  "triage_coverage": {
+    "total_candidates": 1,
+    "eligible_for_triage": 1,
+    "triaged": 1,
+    "actionable": 1,
+    "review": 0,
+    "lower_priority": 0,
+    "suppressed": 0,
+    "failed": 0,
+    "stale": 0,
+    "untriaged": 0
+  }
+}

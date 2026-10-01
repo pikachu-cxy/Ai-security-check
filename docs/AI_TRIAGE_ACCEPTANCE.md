@@ -8,7 +8,7 @@
 
 ## B. 最终 HEAD
 
-代码及报告在本分支提交、推送。最终提交 SHA 随交付消息记录，CI 记录补充于 AD。未操作 main。并行工作产生的 ARCHITECTURE／PROJECT_STATE／DECISIONS 等文档保留在工作区，未纳入本轮提交。
+最终实现 HEAD：`557052049c74c6d1ca4321c2d9559483a36f55d2`，包含首轮实现 `93ef02f`、完整 Finding 行数预算修正 `f195020` 和 external provider 离线限制 `5570520`。最终报告提交 SHA 随交付消息记录，CI 记录见 AD。未操作 main。并行工作产生的 ARCHITECTURE／PROJECT_STATE／DECISIONS 等文档保留在工作区，未纳入本轮提交。
 
 ## C. 修改文件
 
@@ -80,7 +80,7 @@ security-check ai configure --provider openai-compatible --base-url https://prov
 
 ## P. 外传授权
 
-普通 scan 为 deterministic only。`triage --provider configured` 没有 `--allow-external-code-context` 即 fail closed，noninteractive／CI 同样生效。配置命令明确说明将发送经过限制和脱敏的代码上下文；配置本身不授权发送。所有 CI BYOK 测试仅 mock 或 loopback，不调用收费／公网模型。
+普通 scan 为 deterministic only。`triage --provider configured` 没有 `--allow-external-code-context` 即 fail closed，noninteractive／CI 同样生效。配置命令明确说明将发送经过限制和脱敏的代码上下文；配置本身不授权发送。OFFLINE=1 时，即使提供授权 flag，也拒绝非 loopback provider。所有 CI BYOK 测试仅 mock 或 loopback，不调用收费／公网模型。
 
 ## Q. Cache
 
@@ -132,7 +132,7 @@ get_findings 返回完整原列表并附加 triage_status／verdict／triage_con
 
 ## AA. Pytest
 
-Baseline 308 passed。初轮完整回归暴露三项旧输出／工具枚举断言，已按候选语义和新增工具修正；原不适用能力仍隐藏。当前 Triage 定向 70 passed。最终全量结果随最终回归补充于此。
+Baseline 308 passed。初轮完整回归暴露三项旧输出／工具枚举断言，已按候选语义和新增工具修正；原不适用能力仍隐藏。最终 Triage 定向 74 passed；最终全量离线回归 382 passed、6 skipped、6 subtests passed，90.60 秒。超长 Finding 匹配范围直接拒绝交接，不能绕过 120 行预算。
 
 安全测试包括 Secret 四个出口、注入、不授权零请求、workspace/symlink escape、伪造／越界引用、非法 JSON／schema／枚举、响应大小、timeout/HTTP 错误、API/proxy 凭证、原 Finding 不改、会话伪造／重放、Secret/context/prompt 变化、cache、batch、三种接口和进度。
 
@@ -142,11 +142,22 @@ licenses --check-distribution 和 notices --check 通过。未新增第三方 ru
 
 ## AC. Package Integrity
 
-wheel/sdist build 和 check_wheel 通过，门禁显式要求四个 triage 模块；synthetic fixture 随 sdist 提供。clean wheel install／CLI help/version/licenses 验收结果及最终 standalone 记录补充于 AD。
+最终实现 HEAD 的 wheel/sdist build 和 check_wheel 通过，门禁显式要求四个 triage 模块；synthetic fixture 随 sdist 提供。clean venv wheel install、CLI help/version/licenses 和已安装包 integrity 全部通过。
 
 ## AD. Standalone / CI
 
-本地 Windows 完整归档验收已通过：默认 managed scanners、原生 OSV synthetic offline CLI/MCP fallback、插件、MCP 及 Triage。新增 verify_artifact 检查 prepare/submit/get，并在四平台 CI 运行。安全会话补强后会重建并重验最终包。
+最终实现 HEAD 的本地 Windows 完整归档验收通过：默认 managed scanners、原生 OSV synthetic offline CLI/MCP fallback、插件、MCP 及 Triage prepare/submit/get。归档 SHA256 为 `def77a2b701485c9e200ec690aa309aa245cbc3f06b20a6971af6bcee560e194`。
+
+最终冻结程序完成同一真实 Jeepay Raw Result 的 26 条 MCP 验证，见 [冻结程序 benchmark](jeepay-frozen-triage-evidence.json)。另以 synthetic Finding 和真实 loopback 假服务器验证 native BYOK CLI：无授权零请求、显式授权一次请求、第二次命中 cache、纯 JSON stdout、安静 stderr、Secret/API key 不进入出口、原 scan coverage 不变，见 [native BYOK evidence](triage-native-byok-evidence.json)。这是本地协议验收，不是公网模型效果测量。
+
+同一实现 SHA 的四组 CI 均成功；Standalone artifacts 包含四平台完整验收与 OSV offline fallback/MCP Triage：
+
+- [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36879333177)
+- [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36879333141)
+- [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36879333069)
+- [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36879333124)
+
+完整扫描、缓存与交付摘要见 [delivery evidence](triage-delivery-evidence.json)。
 
 ## AE. 尚未解决
 
