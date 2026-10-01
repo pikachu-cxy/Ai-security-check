@@ -87,6 +87,8 @@ class EvidenceBuilder:
         start,end=finding['line_start'],finding['line_end']
         if not (1<=start<=end<=len(lines)):
             raise ValueError('Finding line range is invalid for the current file')
+        if end-start+1>self.budget.max_lines_per_file:
+            raise ValueError('Finding range exceeds the evidence line budget')
         md=finding.get('technical_details',{})
         metadata={key:md[key] for key in ('rule_id','rule_pack','rule_pack_version','rule_confidence',
             'rule_maturity','rule_category','cwe','framework') if key in md}

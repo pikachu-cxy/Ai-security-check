@@ -434,3 +434,26 @@ def test_unicode_escaped_api_key_echo_is_scrubbed(sample,monkeypatch):
     provider=OpenAICompatibleProvider(AIConfig('https://llm.example/v1','fake'),allow_external_code_context=True)
     with patch('urllib.request.OpenerDirector.open',return_value=Response()): answer=provider.triage(packet)
     assert key not in json.dumps(answer)
+
+
+def test_long_finding_range_cannot_exceed_line_budget(sample,tmp_path):
+    result,store,service=sample
+    (tmp_path/'App.java').write_text('\n'.join('class Candidate {}' for _ in range(150)))
+    result.findings[0].line_start=1;result.findings[0].line_end=150;store.save(result)
+    prepared=service.prepare('scan',finding_ids=[result.findings[0].id])
+    assert not prepared['packets'] and prepared['errors']
+
+
+def test_byok_cli_loopback_authorized_json_and_quiet_streams(sample,monkeypatch,capsys):
+    _,store,service=sample;packet=packet_for(sample,1)
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR',str(store.path.parent))
+    monkeypatch.setenv('SECURITY_RUNTIME_AI_KEY','fakeCliAPIKey999')
+    with FakeServer(packet) as server:
+        AIConfig(server.url,'synthetic-cli').save()
+        assert main(['triage','--latest','--provider','configured','--allow-external-code-context',
+            '--category','secret','--limit','1','--json','--no-progress'])==0
+        assert len(server.requests)==1
+    output=capsys.readouterr()
+    assert not output.err and SECRET not in output.out and 'fakeCliAPIKey999' not in output.out
+    result=json.loads(output.out)
+    assert result['view']['triage_coverage']['triaged']==1 and result['view']['scan_coverage']=='PARTIAL'
