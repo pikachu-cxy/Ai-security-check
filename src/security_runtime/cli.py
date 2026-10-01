@@ -10,12 +10,13 @@ from pathlib import Path
 from .capabilities import Capability
 from .engines import BUILTIN_ENGINES
 from .licensing import LicenseAction, LicensePolicy, Permission
-from .git import GitError
+from .git import GitError, GitService
 from .logging_utils import configure_logging
 from .risk import MESSAGES
 from .runtime import SecurityRuntime
 from .scanners import ScannerRegistry
-from .target import TargetDetector
+from .target import TargetDetector, DiscoveryLimitError
+from .models import TargetProfile
 from .toolchain import ToolManager, ToolStatus, VERSIONS
 from .tools_info import installation_help
 from .workspace import WorkspaceError, WorkspaceResolver
@@ -31,7 +32,15 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
               "status": "unavailable", "message": ""}
     try:
         workspace = WorkspaceResolver().resolve(path, allow_non_git_explicit=True)
-        profile = TargetDetector().detect(workspace.path)
+        report["profile"] = "READY"
+        try:
+            files = GitService(workspace.path).changed_files("release") if workspace.is_git else None
+            profile = TargetDetector().detect(workspace.path, files)
+        except DiscoveryLimitError:
+            profile = TargetProfile(str(workspace.path))
+            report["profile"] = "LIMITED"
+            report["profile_warning"] = ("Project profiling was limited because automatic discovery exceeded configured limits. "
+                                         "Scanning can still use Git-scoped files.")
         project = workspace.path.name
         manifest = workspace.path / "pyproject.toml"
         try:
@@ -85,7 +94,12 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
     if report["workspace"]:
         workspace_info = report["workspace"]
         print(f"\nWorkspace\n{workspace_info['path']}")
+        print("Workspace: READY")
+        print("Git: " + ("READY" if workspace_info["git"] else "MISSING"))
         print("Languages: " + (", ".join(workspace_info["languages"]) or "Unknown"))
+        print(f"Profile: {report['profile']}")
+        if report.get("profile_warning"):
+            print("Warning: " + report["profile_warning"])
         print("\nSecurity capabilities")
         for label, state in report["capabilities"].items():
             print(f"{label:<22} {'✓' if state == 'READY' else '○'}")
@@ -117,12 +131,19 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
 
 
 def render(result) -> str:
+    if result.execution_state in {"NO_CHANGES", "NOT_APPLICABLE"}:
+        return f"AI Security Check\n\n{result.summary}\nStatus: {result.execution_state}\n耗时：{result.duration_ms} ms"
     lines = ["AI Security Check", "", "检查完成。", f"发现 {len(result.findings)} 个需要处理的问题。", ""]
     for f in result.findings:
         lines += [f.severity, f.plain_title, f"位置：{f.file_path}:{f.line_start}", f"为什么危险：{f.impact}", f"建议：{f.fix_advice}", ""]
-    lines += ["结果：", MESSAGES[result.release_status], f"Coverage: {result.coverage}", "", f"耗时：{result.duration_ms} ms"]
+    lines += ["结果：", result.summary, f"Coverage: {result.coverage} (planned files and checks only)", "", f"耗时：{result.duration_ms} ms"]
+    labels = {"CODE_SAST": "Code Security", "SECRET_SCAN": "Secret Security", "DEPENDENCY_VULN": "Dependency Security", "IAC_MISCONFIG": "IaC Security"}
+    for state, heading in (("EXECUTED", "Executed"), ("NOT_APPLICABLE", "Not applicable")):
+        items = [labels.get(capability, capability) for capability, value in result.capability_results.items() if value == state]
+        if items:
+            lines += ["", heading, *[f"{item:<22} {'✓' if state == 'EXECUTED' else '-'}" for item in items]]
     for run in result.scanner_runs:
-        if run.status != "SUCCESS":
+        if run.status not in {"SUCCESS", "SKIPPED", "NOT_APPLICABLE"}:
             lines.append(f"{run.scanner}: {run.status} {run.error}")
     return "\n".join(lines)
 
@@ -136,17 +157,17 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
-    doctor_parser = sub.add_parser("doctor")
+    doctor_parser = sub.add_parser("doctor", help="Check Runtime and project readiness")
     doctor_parser.add_argument("--path")
     doctor_parser.add_argument("--json", action="store_true")
     doctor_parser.add_argument("--verbose", action="store_true")
-    scan_parser = sub.add_parser("scan")
+    scan_parser = sub.add_parser("scan", help="Scan code changes or the project")
     scan_parser.add_argument("--path")
     scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
     scan_parser.add_argument("--json", action="store_true")
     scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
     scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
-    mcp_parser = sub.add_parser("mcp")
+    mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
     config_parser = mcp_sub.add_parser("config")
     config_parser.add_argument("--path")
@@ -155,11 +176,11 @@ def main(argv: list[str] | None = None) -> int:
     config_format.add_argument("--toml", action="store_true")
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
-    setup_parser = sub.add_parser("setup")
+    setup_parser = sub.add_parser("setup", help="Configure an AI coding tool connection")
     setup_parser.add_argument("integration", nargs="?", choices=["cursor", "workbuddy"])
     setup_parser.add_argument("--path")
     setup_parser.add_argument("--verbose", action="store_true")
-    integrations_parser = sub.add_parser("integrations")
+    integrations_parser = sub.add_parser("integrations", help="Inspect AI coding integrations")
     integrations_parser.add_argument("--path")
     integrations_parser.add_argument("--verbose", action="store_true")
     integrations_sub = integrations_parser.add_subparsers(dest="integrations_action")
@@ -176,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     hooks_parser.add_argument("action", choices=["install"])
     hooks_parser.add_argument("hook", choices=["pre-commit"])
     hooks_parser.add_argument("--path")
-    tools_parser = sub.add_parser("tools")
+    tools_parser = sub.add_parser("tools", help="Manage security engines")
     tools_sub = tools_parser.add_subparsers(dest="tools_action", required=True)
     tools_sub.add_parser("status")
     install_parser = tools_sub.add_parser("install")
@@ -189,23 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             return doctor(Path(args.path) if args.path is not None else None, json_output=args.json, verbose=args.verbose)
         if args.command == "scan":
             registry = ScannerRegistry()
-            if not args.staged:
-                print("Preparing security tools...", file=sys.stderr)
-                for tool_id in VERSIONS:
-                    try:
-                        current_status = registry.tool_manager.resolve(tool_id).status
-                    except Exception:
-                        current_status = ToolStatus.BROKEN
-                    if current_status != ToolStatus.READY:
-                        print(f"{tool_id.title():<12} preparing...", file=sys.stderr)
-                    resolved = registry.tool_manager.ensure(tool_id)
-                    print(f"{tool_id.title():<12} {resolved.status}", file=sys.stderr)
-                trivy = registry.tool_manager.resolve("trivy")
-                if trivy.status == ToolStatus.READY:
-                    if registry.tool_manager.database_status() != ToolStatus.READY:
-                        print("Preparing vulnerability database...", file=sys.stderr)
-                    database = registry.tool_manager.prepare_trivy_database(trivy.path)
-                    print(f"Trivy DB     {database}", file=sys.stderr)
+            # Adapters prepare their engines only after Runtime scope/planning.
             result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules)
             try:
                 IntegrationStateStore().event(DogfoodEvent("cli", result.target_profile.path, args.mode,
@@ -304,7 +309,10 @@ def main(argv: list[str] | None = None) -> int:
                 except ValueError as exc:
                     print(f"{adapter.display_name} configuration could not be updated.\n{exc}\nRun: security-check setup {adapter.integration_id} --verbose")
                     return 2
-                print(f"✓ Runtime verified for {adapter.display_name}")
+                print(f"✓ {adapter.display_name} configuration written")
+                print(f"Config path: {state.details['config_path']}")
+                print("✓ Runtime MCP self-test passed")
+                print(f"○ {adapter.display_name} client connection not confirmed yet")
                 if state.status == IntegrationStatusCode.NEEDS_RESTART:
                     print(f"Restart {adapter.display_name} to load the project connection.")
                 if args.verbose:
@@ -329,8 +337,12 @@ def main(argv: list[str] | None = None) -> int:
             for adapter in registry.native():
                 state = adapter.status(workspace)
                 print(f"{adapter.display_name:<12} {state.status}")
+                for key in ("config_path", "configuration_status", "runtime_self_test", "last_client_invocation"):
+                    print(f"  {key}: {state.details.get(key) or '-'}")
                 if args.verbose:
                     for key, value in state.details.items():
+                        if key in {"config_path", "configuration_status", "runtime_self_test", "last_client_invocation"}:
+                            continue
                         print(f"  {key}: {value or '-'}")
             print("\nOther tools\nGeneric MCP  AVAILABLE\nCLI          AVAILABLE")
             return 0
@@ -352,7 +364,16 @@ def main(argv: list[str] | None = None) -> int:
             from .hooks import install_pre_commit
             print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
             return 0
-    except (GitError, ValueError, FileNotFoundError, ImportError) as exc:
+    except WorkspaceError as exc:
+        hint = args.command
+        if args.command == "setup" and args.integration:
+            hint += " " + args.integration
+        elif args.command == "mcp":
+            hint += " config"
+        message = str(exc).replace("security-check doctor --path <project>", f"security-check {hint} --path <project>")
+        print(f"security-check: {message}", file=sys.stderr)
+        return 2
+    except (GitError, ValueError, OSError, ImportError) as exc:
         print(f"security-check: {exc}", file=sys.stderr)
         return 2
     return 2

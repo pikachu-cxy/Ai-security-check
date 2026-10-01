@@ -71,12 +71,25 @@ class IntegrationStateStore:
 
     def save(self, binding: WorkspaceBinding, status: str, config_path: str, command_path: str) -> None:
         self._initialize()
+        prior = self.get(binding.integration_id, Path(binding.root)) or {}
         state = {"binding": asdict(binding), "status": status, "scope": binding.scope,
                  "installed_at": binding.created_at, "last_verified_at": binding.last_verified_at,
-                 "config_path": config_path, "command_path": command_path}
+                 "config_path": config_path, "command_path": command_path,
+                 "last_client_invocation_at": prior.get("last_client_invocation_at", ""),
+                 "runtime_self_test": "PASSED" if binding.last_verified_at else "UNKNOWN"}
         with closing(self._connect()) as database, database:
             database.execute("INSERT OR REPLACE INTO integrations VALUES (?, ?, ?)",
                              (binding.integration_id, binding.root, json.dumps(state)))
+
+    def client_invoked(self, integration_id: str, workspace: Path) -> None:
+        prior = self.get(integration_id, workspace)
+        if not prior:
+            return
+        prior["last_client_invocation_at"] = _now()
+        prior["status"] = "CONNECTED"
+        with closing(self._connect()) as database, database:
+            database.execute("UPDATE integrations SET state = ? WHERE integration_id = ? AND workspace = ?",
+                             (json.dumps(prior), integration_id, str(workspace.resolve())))
 
     def get(self, integration_id: str, workspace: Path) -> dict | None:
         if not self.path.is_file():

@@ -37,8 +37,10 @@ def requested_capabilities(profile: TargetProfile, mode: ScanMode, files: tuple[
     if files or mode == ScanMode.RELEASE:
         result.add(Capability.SECRET_SCAN)
     manifest_names = {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "Dockerfile", "pom.xml", "go.mod"}
-    if mode == ScanMode.RELEASE or (mode == ScanMode.FEATURE and any(name.rsplit("/", 1)[-1] in manifest_names for name in files)):
-        result.update({Capability.DEPENDENCY_VULN, Capability.IAC_MISCONFIG, Capability.CONTAINER_VULN, Capability.LICENSE_SCAN, Capability.SBOM})
+    if (mode == ScanMode.RELEASE and profile.ecosystems) or (mode == ScanMode.FEATURE and any(name.rsplit("/", 1)[-1] in manifest_names - {"Dockerfile"} for name in files)):
+        result.add(Capability.DEPENDENCY_VULN)
+    if mode != ScanMode.QUICK and any(name.rsplit("/", 1)[-1] == "Dockerfile" or name.endswith((".tf", ".yaml", ".yml")) for name in files):
+        result.add(Capability.IAC_MISCONFIG)
     # Plugins can add capabilities without core changes; supports() still scopes targets.
     builtin = {Capability.CODE_SAST, Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN,
                Capability.IAC_MISCONFIG, Capability.CONTAINER_VULN, Capability.LICENSE_SCAN, Capability.SBOM}

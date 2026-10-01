@@ -1,0 +1,673 @@
+{
+  "fixture": "isolated Git repo, 16-level tracked source and ignored clone cache",
+  "client_note": "Generic MCP SDK calls; no real WorkBuddy application connection is asserted",
+  "workbuddy_setup": {
+    "status": "NEEDS_RESTART",
+    "details": {
+      "scope": "PROJECT",
+      "config_path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.workbuddy\\mcp.json",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+      "last_verified": "2026-10-01T03:41:27.747034+00:00",
+      "mcp_health": "RUNTIME_VERIFIED",
+      "command_path": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\security-check.exe",
+      "configuration_status": "WRITTEN",
+      "runtime_self_test": "PASSED",
+      "last_client_invocation": ""
+    }
+  },
+  "workbuddy_status_output": {
+    "exit_code": 0,
+    "stdout": "AI Security Runtime\n\nAI Coding integrations\nCursor       DETECTED\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.cursor\\mcp.json\n  configuration_status: MISSING\n  runtime_self_test: UNKNOWN\n  last_client_invocation: -\nWorkBuddy    NEEDS_RESTART\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.workbuddy\\mcp.json\n  configuration_status: WRITTEN\n  runtime_self_test: PASSED\n  last_client_invocation: -\n\nOther tools\nGeneric MCP  AVAILABLE\nCLI          AVAILABLE\n"
+  },
+  "owned_config_git_status": "",
+  "cli_no_changes": {
+    "exit_code": 0,
+    "stdout": "AI Security Check\n\n没有需要检查的代码变更。\n本次没有执行代码安全扫描。\nStatus: NO_CHANGES\n耗时：287 ms\n"
+  },
+  "mcp_no_changes": {
+    "scan_id": "0acafaa5-5e67-4cea-9d91-e3be39a7bdd6",
+    "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+    "status": "NO_CHANGES",
+    "execution_state": "NO_CHANGES",
+    "coverage_scope": "PLANNED_FILES",
+    "capability_results": {
+      "CODE_SAST": "NOT_APPLICABLE",
+      "SECRET_SCAN": "NOT_APPLICABLE",
+      "DEPENDENCY_VULN": "NOT_APPLICABLE",
+      "IAC_MISCONFIG": "NOT_APPLICABLE"
+    },
+    "coverage": "NONE",
+    "summary": "没有需要检查的代码变更。\n本次没有执行代码安全扫描。",
+    "findings": [],
+    "recommendation": "NOT_ASSESSED",
+    "duration_ms": 268,
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "status": "NOT_APPLICABLE"
+      },
+      {
+        "scanner": "gitleaks",
+        "status": "NOT_APPLICABLE"
+      },
+      {
+        "scanner": "trivy",
+        "status": "NOT_APPLICABLE"
+      }
+    ]
+  },
+  "stable_fingerprint": {
+    "staged": [
+      "7d8b48f20cfffa397c56811d",
+      "947d27fe485d50fe801a8001"
+    ],
+    "unstaged": [
+      "7d8b48f20cfffa397c56811d",
+      "947d27fe485d50fe801a8001"
+    ]
+  },
+  "actual_quick_scan": {
+    "scan_id": "ed08b972-8d58-401e-823e-863dc376e2a1",
+    "mode": "quick",
+    "target_profile": {
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+      "target_type": "CODE",
+      "languages": [
+        "Python"
+      ],
+      "frameworks": [],
+      "ecosystems": [
+        "pip"
+      ],
+      "files": [
+        "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "requirements.txt"
+      ],
+      "git_info": {
+        "branch": "acceptance-feature"
+      }
+    },
+    "status": "COMPLETED",
+    "findings": [
+      {
+        "id": "7d8b48f20cfffa397c56811d",
+        "category": "command-injection",
+        "title": "A shell command is built from program input",
+        "plain_title": "用户输入可能被用于执行系统命令",
+        "description": "A shell command is built from program input",
+        "impact": "攻击者可能通过构造输入执行服务器命令。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 2,
+        "line_end": 2,
+        "evidence": "requires login",
+        "fix_advice": "避免拼接命令；使用安全 API 并验证输入。",
+        "scanner_sources": [
+          "semgrep"
+        ],
+        "fingerprint": "7d8b48f20cfffa397c56811d",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "ai-security.Ai-security-check.src.security_runtime.rules.core.ai-security.python.command-injection",
+          "engine": "semgrep",
+          "rule_pack": "ai-security-core",
+          "rule_pack_version": "1.0.0"
+        }
+      },
+      {
+        "id": "947d27fe485d50fe801a8001",
+        "category": "secret",
+        "title": "Uncovered a GitHub Personal Access Token, potentially leading to unauthorized repository access and sensitive content exposure.",
+        "plain_title": "代码中包含一个可能有效的密钥",
+        "description": "A possible secret was found in source code.",
+        "impact": "密钥泄露可能让他人访问系统或数据。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 3,
+        "line_end": 3,
+        "evidence": "[REDACTED_SECRET]",
+        "fix_advice": "立即撤销密钥，并改用环境变量或密钥管理服务。",
+        "scanner_sources": [
+          "gitleaks"
+        ],
+        "fingerprint": "947d27fe485d50fe801a8001",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "github-pat"
+        }
+      }
+    ],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "version": "1.178.0",
+        "status": "SUCCESS",
+        "duration_ms": 5884,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "gitleaks",
+        "version": "8.30.0",
+        "status": "SUCCESS",
+        "duration_ms": 1015,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "trivy",
+        "version": "",
+        "status": "NOT_APPLICABLE",
+        "duration_ms": 0,
+        "finding_count": 0,
+        "error": ""
+      }
+    ],
+    "summary": "建议先处理以下问题再继续",
+    "release_status": "BLOCKED",
+    "duration_ms": 6300,
+    "coverage": "FULL",
+    "execution_state": "EXECUTED",
+    "coverage_scope": "PLANNED_FILES",
+    "capability_results": {
+      "CODE_SAST": "EXECUTED",
+      "SECRET_SCAN": "EXECUTED",
+      "DEPENDENCY_VULN": "NOT_APPLICABLE",
+      "IAC_MISCONFIG": "NOT_APPLICABLE"
+    }
+  },
+  "doctor_large": {
+    "exit_code": 0,
+    "stdout": "AI Security Runtime\n\nWorkspace\nC:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\nWorkspace: READY\nGit: READY\nLanguages: Python\nProfile: READY\n\nSecurity capabilities\nCode Security          ✓\nSecret Security        ✓\nDependency Security    ✓\nIaC Security           ✓\n\nIntegrations\nCursor         DETECTED\n  scope: PROJECT\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.cursor\\mcp.json\n  workspace: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\n  last_verified: -\n  mcp_health: -\n  command_path: -\n  configuration_status: MISSING\n  runtime_self_test: UNKNOWN\n  last_client_invocation: -\nWorkbuddy      NEEDS_RESTART\n  scope: PROJECT\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.workbuddy\\mcp.json\n  workspace: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\n  last_verified: 2026-10-01T03:41:27.747034+00:00\n  mcp_health: RUNTIME_VERIFIED\n  command_path: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\security-check.exe\n  configuration_status: WRITTEN\n  runtime_self_test: PASSED\n  last_client_invocation: -\nGeneric-Mcp    AVAILABLE\n  scope: PROJECT\n\nRuntime\nGit: READY\n\nSemgrep\nStatus: READY\nVersion: 1.178.0\nSource: SYSTEM\nPath: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\semgrep.exe\n\nGitleaks\nStatus: READY\nVersion: 8.30.0\nSource: MANAGED\nPath: C:\\Users\\Administrator\\AppData\\Local\\AI-Security-Runtime\\tools\\gitleaks\\8.30.0\\gitleaks.exe\n\nTrivy\nStatus: READY\nVersion: 0.74.0\nSource: MANAGED\nPath: C:\\Users\\Administrator\\AppData\\Local\\AI-Security-Runtime\\tools\\trivy\\0.74.0\\trivy.exe\nDatabase: READY\nUpdated: 2026-10-01T01:24:14.992991033Z\n\nRuntime ready.\n"
+  },
+  "doctor_limited": {
+    "exit_code": 0,
+    "stdout": "AI Security Runtime\n\nWorkspace\nC:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\nWorkspace: READY\nGit: READY\nLanguages: Unknown\nProfile: LIMITED\nWarning: Project profiling was limited because automatic discovery exceeded configured limits. Scanning can still use Git-scoped files.\n\nSecurity capabilities\nCode Security          ✓\nSecret Security        ✓\nDependency Security    ✓\nIaC Security           ✓\n\nIntegrations\nCursor         DETECTED\n  scope: PROJECT\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.cursor\\mcp.json\n  workspace: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\n  last_verified: -\n  mcp_health: -\n  command_path: -\n  configuration_status: MISSING\n  runtime_self_test: UNKNOWN\n  last_client_invocation: -\nWorkbuddy      NEEDS_RESTART\n  scope: PROJECT\n  config_path: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\\.workbuddy\\mcp.json\n  workspace: C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project\n  last_verified: 2026-10-01T03:41:27.747034+00:00\n  mcp_health: RUNTIME_VERIFIED\n  command_path: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\security-check.exe\n  configuration_status: WRITTEN\n  runtime_self_test: PASSED\n  last_client_invocation: -\nGeneric-Mcp    AVAILABLE\n  scope: PROJECT\n\nRuntime\nGit: READY\n\nSemgrep\nStatus: READY\nVersion: 1.178.0\nSource: SYSTEM\nPath: C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\Scripts\\semgrep.exe\n\nGitleaks\nStatus: READY\nVersion: 8.30.0\nSource: MANAGED\nPath: C:\\Users\\Administrator\\AppData\\Local\\AI-Security-Runtime\\tools\\gitleaks\\8.30.0\\gitleaks.exe\n\nTrivy\nStatus: READY\nVersion: 0.74.0\nSource: MANAGED\nPath: C:\\Users\\Administrator\\AppData\\Local\\AI-Security-Runtime\\tools\\trivy\\0.74.0\\trivy.exe\nDatabase: READY\nUpdated: 2026-10-01T01:24:14.992991033Z\n\nRuntime ready.\n"
+  },
+  "feature_large": {
+    "scan_id": "fd1d91c8-521f-4da7-866f-92d8b32899e5",
+    "mode": "feature",
+    "target_profile": {
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+      "target_type": "CODE",
+      "languages": [
+        "Python"
+      ],
+      "frameworks": [],
+      "ecosystems": [
+        "pip"
+      ],
+      "files": [
+        "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "requirements.txt"
+      ],
+      "git_info": {
+        "branch": "acceptance-feature"
+      }
+    },
+    "status": "COMPLETED",
+    "findings": [
+      {
+        "id": "7d8b48f20cfffa397c56811d",
+        "category": "command-injection",
+        "title": "A shell command is built from program input",
+        "plain_title": "用户输入可能被用于执行系统命令",
+        "description": "A shell command is built from program input",
+        "impact": "攻击者可能通过构造输入执行服务器命令。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 2,
+        "line_end": 2,
+        "evidence": "requires login",
+        "fix_advice": "避免拼接命令；使用安全 API 并验证输入。",
+        "scanner_sources": [
+          "semgrep"
+        ],
+        "fingerprint": "7d8b48f20cfffa397c56811d",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "ai-security.Ai-security-check.src.security_runtime.rules.core.ai-security.python.command-injection",
+          "engine": "semgrep",
+          "rule_pack": "ai-security-core",
+          "rule_pack_version": "1.0.0"
+        }
+      },
+      {
+        "id": "947d27fe485d50fe801a8001",
+        "category": "secret",
+        "title": "Uncovered a GitHub Personal Access Token, potentially leading to unauthorized repository access and sensitive content exposure.",
+        "plain_title": "代码中包含一个可能有效的密钥",
+        "description": "A possible secret was found in source code.",
+        "impact": "密钥泄露可能让他人访问系统或数据。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 3,
+        "line_end": 3,
+        "evidence": "[REDACTED_SECRET]",
+        "fix_advice": "立即撤销密钥，并改用环境变量或密钥管理服务。",
+        "scanner_sources": [
+          "gitleaks",
+          "trivy"
+        ],
+        "fingerprint": "947d27fe485d50fe801a8001",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "github-pat"
+        }
+      },
+      {
+        "id": "27ebe138e9a97ce6b8ddcbe6",
+        "category": "dependency",
+        "title": "requests: subsequent requests to the same host ignore cert verification",
+        "plain_title": "requests: subsequent requests to the same host ignore cert verification",
+        "description": "requests: subsequent requests to the same host ignore cert verification",
+        "impact": "requests: subsequent requests to the same host ignore cert verification",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "27ebe138e9a97ce6b8ddcbe6",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2024-35195"
+        }
+      },
+      {
+        "id": "2f11c2cae29bb0cac0b79335",
+        "category": "dependency",
+        "title": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "plain_title": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "description": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "impact": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "2f11c2cae29bb0cac0b79335",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2024-47081"
+        }
+      },
+      {
+        "id": "31bdbd46ba7a70dec8848d4e",
+        "category": "dependency",
+        "title": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "plain_title": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "description": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "impact": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "31bdbd46ba7a70dec8848d4e",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2026-25645"
+        }
+      }
+    ],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "version": "1.178.0",
+        "status": "SUCCESS",
+        "duration_ms": 3982,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "gitleaks",
+        "version": "8.30.0",
+        "status": "SUCCESS",
+        "duration_ms": 1129,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "trivy",
+        "version": "0.74.0",
+        "status": "SUCCESS",
+        "duration_ms": 990,
+        "finding_count": 4,
+        "error": ""
+      }
+    ],
+    "summary": "建议先处理以下问题再继续",
+    "release_status": "BLOCKED",
+    "duration_ms": 4903,
+    "coverage": "FULL",
+    "execution_state": "EXECUTED",
+    "coverage_scope": "PLANNED_FILES",
+    "capability_results": {
+      "CODE_SAST": "EXECUTED",
+      "SECRET_SCAN": "EXECUTED",
+      "DEPENDENCY_VULN": "EXECUTED",
+      "IAC_MISCONFIG": "NOT_APPLICABLE"
+    }
+  },
+  "release_large": {
+    "scan_id": "b362473f-c0db-4d8a-b98e-af6544fc03a1",
+    "mode": "release",
+    "target_profile": {
+      "path": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+      "target_type": "CODE",
+      "languages": [
+        "Python"
+      ],
+      "frameworks": [],
+      "ecosystems": [
+        "pip"
+      ],
+      "files": [
+        ".gitignore",
+        "app.py",
+        "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "requirements.txt"
+      ],
+      "git_info": {
+        "branch": "acceptance-feature"
+      }
+    },
+    "status": "COMPLETED",
+    "findings": [
+      {
+        "id": "7d8b48f20cfffa397c56811d",
+        "category": "command-injection",
+        "title": "A shell command is built from program input",
+        "plain_title": "用户输入可能被用于执行系统命令",
+        "description": "A shell command is built from program input",
+        "impact": "攻击者可能通过构造输入执行服务器命令。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 2,
+        "line_end": 2,
+        "evidence": "requires login",
+        "fix_advice": "避免拼接命令；使用安全 API 并验证输入。",
+        "scanner_sources": [
+          "semgrep"
+        ],
+        "fingerprint": "7d8b48f20cfffa397c56811d",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "ai-security.Ai-security-check.src.security_runtime.rules.core.ai-security.python.command-injection",
+          "engine": "semgrep",
+          "rule_pack": "ai-security-core",
+          "rule_pack_version": "1.0.0"
+        }
+      },
+      {
+        "id": "947d27fe485d50fe801a8001",
+        "category": "secret",
+        "title": "Uncovered a GitHub Personal Access Token, potentially leading to unauthorized repository access and sensitive content exposure.",
+        "plain_title": "代码中包含一个可能有效的密钥",
+        "description": "A possible secret was found in source code.",
+        "impact": "密钥泄露可能让他人访问系统或数据。",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 3,
+        "line_end": 3,
+        "evidence": "[REDACTED_SECRET]",
+        "fix_advice": "立即撤销密钥，并改用环境变量或密钥管理服务。",
+        "scanner_sources": [
+          "gitleaks",
+          "trivy"
+        ],
+        "fingerprint": "947d27fe485d50fe801a8001",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "github-pat"
+        }
+      },
+      {
+        "id": "27ebe138e9a97ce6b8ddcbe6",
+        "category": "dependency",
+        "title": "requests: subsequent requests to the same host ignore cert verification",
+        "plain_title": "requests: subsequent requests to the same host ignore cert verification",
+        "description": "requests: subsequent requests to the same host ignore cert verification",
+        "impact": "requests: subsequent requests to the same host ignore cert verification",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "27ebe138e9a97ce6b8ddcbe6",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2024-35195"
+        }
+      },
+      {
+        "id": "2f11c2cae29bb0cac0b79335",
+        "category": "dependency",
+        "title": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "plain_title": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "description": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "impact": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "2f11c2cae29bb0cac0b79335",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2024-47081"
+        }
+      },
+      {
+        "id": "31bdbd46ba7a70dec8848d4e",
+        "category": "dependency",
+        "title": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "plain_title": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "description": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "impact": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "line_end": 1,
+        "evidence": "",
+        "fix_advice": "检查受影响代码并修复后重新扫描。",
+        "scanner_sources": [
+          "trivy"
+        ],
+        "fingerprint": "31bdbd46ba7a70dec8848d4e",
+        "status": "OPEN",
+        "technical_details": {
+          "rule_id": "CVE-2026-25645"
+        }
+      }
+    ],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "version": "1.178.0",
+        "status": "SUCCESS",
+        "duration_ms": 7162,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "gitleaks",
+        "version": "8.30.0",
+        "status": "SUCCESS",
+        "duration_ms": 650,
+        "finding_count": 1,
+        "error": ""
+      },
+      {
+        "scanner": "trivy",
+        "version": "0.74.0",
+        "status": "SUCCESS",
+        "duration_ms": 934,
+        "finding_count": 4,
+        "error": ""
+      }
+    ],
+    "summary": "建议先处理以下问题再继续",
+    "release_status": "BLOCKED",
+    "duration_ms": 7336,
+    "coverage": "FULL",
+    "execution_state": "EXECUTED",
+    "coverage_scope": "PLANNED_FILES",
+    "capability_results": {
+      "CODE_SAST": "EXECUTED",
+      "SECRET_SCAN": "EXECUTED",
+      "DEPENDENCY_VULN": "EXECUTED",
+      "IAC_MISCONFIG": "NOT_APPLICABLE"
+    }
+  },
+  "mcp_scan_project_large": {
+    "scan_id": "47170842-eb5c-4bd5-90fa-ce796c3f7551",
+    "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\alpha-acceptance-68it_vev\\project",
+    "status": "COMPLETED",
+    "execution_state": "EXECUTED",
+    "coverage_scope": "PLANNED_FILES",
+    "capability_results": {
+      "CODE_SAST": "EXECUTED",
+      "SECRET_SCAN": "EXECUTED",
+      "DEPENDENCY_VULN": "EXECUTED",
+      "IAC_MISCONFIG": "NOT_APPLICABLE"
+    },
+    "coverage": "FULL",
+    "summary": "建议先处理以下问题再继续",
+    "findings": [
+      {
+        "id": "7d8b48f20cfffa397c56811d",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "plain_title": "用户输入可能被用于执行系统命令",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 2,
+        "impact": "攻击者可能通过构造输入执行服务器命令。",
+        "fix_advice": "避免拼接命令；使用安全 API 并验证输入。"
+      },
+      {
+        "id": "947d27fe485d50fe801a8001",
+        "severity": "HIGH",
+        "confidence": "HIGH",
+        "plain_title": "代码中包含一个可能有效的密钥",
+        "file_path": "d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/d/deep.py",
+        "line_start": 3,
+        "impact": "密钥泄露可能让他人访问系统或数据。",
+        "fix_advice": "立即撤销密钥，并改用环境变量或密钥管理服务。"
+      },
+      {
+        "id": "27ebe138e9a97ce6b8ddcbe6",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "plain_title": "requests: subsequent requests to the same host ignore cert verification",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "impact": "requests: subsequent requests to the same host ignore cert verification",
+        "fix_advice": "检查受影响代码并修复后重新扫描。"
+      },
+      {
+        "id": "2f11c2cae29bb0cac0b79335",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "plain_title": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "impact": "requests: Requests vulnerable to .netrc credentials leak via malicious URLs",
+        "fix_advice": "检查受影响代码并修复后重新扫描。"
+      },
+      {
+        "id": "31bdbd46ba7a70dec8848d4e",
+        "severity": "MEDIUM",
+        "confidence": "MEDIUM",
+        "plain_title": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "file_path": "requirements.txt",
+        "line_start": 1,
+        "impact": "requests: Requests: Security bypass due to predictable temporary file creation",
+        "fix_advice": "检查受影响代码并修复后重新扫描。"
+      }
+    ],
+    "recommendation": "BLOCKED",
+    "duration_ms": 6824,
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "status": "SUCCESS"
+      },
+      {
+        "scanner": "gitleaks",
+        "status": "SUCCESS"
+      },
+      {
+        "scanner": "trivy",
+        "status": "SUCCESS"
+      }
+    ]
+  },
+  "verify_before": [
+    {
+      "finding_id": "7d8b48f20cfffa397c56811d",
+      "status": "STILL_PRESENT"
+    },
+    {
+      "finding_id": "947d27fe485d50fe801a8001",
+      "status": "STILL_PRESENT"
+    }
+  ],
+  "verify_after": [
+    {
+      "finding_id": "7d8b48f20cfffa397c56811d",
+      "status": "RESOLVED"
+    },
+    {
+      "finding_id": "947d27fe485d50fe801a8001",
+      "status": "RESOLVED"
+    }
+  ],
+  "tool_status": {
+    "semgrep": {
+      "status": "READY",
+      "version": "1.178.0"
+    },
+    "gitleaks": {
+      "status": "READY",
+      "version": "8.30.0"
+    },
+    "trivy": {
+      "status": "READY",
+      "version": "0.74.0"
+    }
+  },
+  "trivy_database": "READY"
+}

@@ -21,7 +21,7 @@ class GitTests(unittest.TestCase):
             git(root, "add", "a.py")
             git(root, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "-m", "start")
             result = SecurityRuntime(store=SQLiteStore(root / ".security-runtime" / "scan.db")).scan(root)
-            self.assertEqual((result.release_status, result.status, result.findings), ("SAFE", "COMPLETED", []))
+            self.assertEqual((result.release_status, result.status, result.findings), ("NOT_ASSESSED", "NO_CHANGES", []))
 
     def test_quick_staged_and_unstaged(self):
         with tempfile.TemporaryDirectory() as tmp:

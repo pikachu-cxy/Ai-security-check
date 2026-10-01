@@ -13,7 +13,7 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 - **CLI**：不依赖任何 AI Coding 工具，可独立使用，也适合后续接入 CI/CD。
 - **不虚报安全**：如果部分扫描能力不可用，会降低 Coverage，而不是把项目误判为安全。
 
-> 当前为 Developer Alpha。PASS 仅表示当前检查未发现阻断项，不代表项目绝对安全。
+> 当前为 Developer Alpha。SAFE 仅表示已执行检查在所述范围内未发现阻断项，不代表项目绝对安全。
 
 ---
 
@@ -148,7 +148,7 @@ security-check doctor
 security-check scan --mode quick
 ```
 
-第一次扫描可能会自动下载固定版本的 Gitleaks 和 Trivy，并准备 Trivy 漏洞数据库。下载内容会在执行前进行校验，不需要修改系统 PATH。
+扫描只准备本次计划选中的工具。quick 无变更时不下载任何引擎；quick 不准备 Trivy 或漏洞数据库。下载内容在执行前校验，不需要修改系统 PATH。
 
 一次正常的测试应该能够：
 
@@ -224,7 +224,9 @@ Workspace
 ✓ <你的项目>
 
 Connecting Cursor...
-✓ Runtime verified for Cursor
+✓ Cursor configuration written
+✓ Runtime MCP self-test passed
+○ Cursor client connection not confirmed yet
 Restart Cursor to load the project connection.
 
 Code stays local.
@@ -269,6 +271,22 @@ security-check setup workbuddy
 ```
 
 Runtime 会管理项目级 WorkBuddy MCP 配置，并保留其他已有 MCP Server。
+
+项目路径为 `<项目>/.workbuddy/mcp.json`，与
+[WorkBuddy 官方 MCP 指南](https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide)
+一致。但部分桌面版本在 UI 中使用 `%USERPROFILE%/.workbuddy-ai/mcp.json`。
+项目配置写入成功不证明当前版本已加载它。若客户端使用全局 UI，请执行
+`security-check mcp config --json`，在 UI 中注册生成的项目绑定配置。
+每个项目使用独立条目/服务会话，不要跨项目复用固定的 workspace binding。
+本轮尚未实现自动全局注册。
+
+`integrations` 分别展示配置路径、配置状态、Runtime 自测和最后真实 MCP 调用。
+`NEEDS_RESTART` 只表示配置与自测成功，等待宿主调用；实际调用后才记录
+`CONNECTED`。自测流量不会制造连接记录。连接归属来自配置中的 integration 标识，
+不是对客户端 UI 的探测。
+
+Runtime 新建的项目配置使用 `.git/info/exclude` 中可逆的独立块；不会改共享
+`.gitignore`，也不会隐藏原有的混合用户配置。
 
 如果提示需要重启 WorkBuddy，请重启。
 
@@ -476,17 +494,22 @@ SECURITY_RUNTIME_OFFLINE=1
 
 扫描结果包含 Coverage：
 
-- **FULL**：计划中的安全检查均可执行。
-- **PARTIAL**：部分检查不可用。
-- **MINIMAL**：只有有限安全能力可用。
+- **NONE / NO_CHANGES**：没有需要检查的变更，没有执行扫描；推荐值为 **NOT_ASSESSED**。
+- **FULL**：选中文件上适用的计划检查成功执行，包括代码和 Secret 检查。范围是本次计划，不代表全仓或所有能力。
+- **SCOPED**：适用检查执行成功，但代码安全检查不适用，例如仅 Secret 文件变更。
+- **PARTIAL**：部分适用检查失败或不可用。
+- **MINIMAL**：没有适用检查执行成功。
+
+CLI JSON / MCP 包含 `execution_state`、`coverage_scope: PLANNED_FILES` 和
+`capability_results`；`NOT_APPLICABLE` 与失败/不可用明确区分。
 
 Release Status：
 
-- **PASS**：当前检查未发现策略阻断项。
+- **SAFE**：已经执行的检查在所述范围内未发现策略阻断项。
 - **REVIEW**：建议进行人工或 Agent 复核。
 - **BLOCKED**：当前策略发现需要阻断的问题。
 
-PASS 不代表项目绝对安全。
+SAFE 不代表项目绝对安全。
 
 ---
 
@@ -500,7 +523,10 @@ Runtime 会拒绝过大的危险根目录，例如：
 - 磁盘根目录；
 - Windows 系统目录。
 
-项目发现过程会跳过生成目录和依赖目录，并限制最大文件数、目录数、深度和单文件大小。
+Git 项目 quick/feature 以 Git 变更文件为边界，release 使用有效的 Git 文件列表。
+显式文件列表允许超过 12 层；深度和目录数量限制主要用于非 Git 递归发现。
+仍保留越界、symlink/junction、最大文件数和文件大小保护。verify 只分析对应文件，
+调用原始 Scanner。doctor 遇到 profiling 限制会展示 LIMITED 并继续诊断工具和 workspace。
 
 MCP 日志输出到 stderr，避免污染 stdio MCP 协议使用的 stdout。
 

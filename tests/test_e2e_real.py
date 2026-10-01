@@ -41,7 +41,7 @@ class RealDemoTests(unittest.TestCase):
         self.assertTrue(any(f.category == "command-injection" for f in quick.findings))
         self.assertTrue(any(f.category == "secret" for f in quick.findings))
         self.assertEqual(quick.release_status, "BLOCKED")
-        self.assertEqual(next(r for r in quick.scanner_runs if r.scanner == "trivy").status, "SKIPPED")
+        self.assertEqual(next(r for r in quick.scanner_runs if r.scanner == "trivy").status, "NOT_APPLICABLE")
         command = next(f for f in quick.findings if f.category == "command-injection")
         task = self.runtime.generate_fix(command.id)
         self.assertIn("coding_agent_prompt", task)

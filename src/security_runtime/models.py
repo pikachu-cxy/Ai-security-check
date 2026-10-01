@@ -22,6 +22,7 @@ class TargetType(StrEnum):
 class RunStatus(StrEnum):
     SUCCESS = "SUCCESS"
     SKIPPED = "SKIPPED"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
     UNAVAILABLE = "UNAVAILABLE"
     FAILED = "FAILED"
     TIMEOUT = "TIMEOUT"
@@ -111,6 +112,9 @@ class ScanResult:
     release_status: str
     duration_ms: int
     coverage: str = "FULL"
+    execution_state: str = "EXECUTED"
+    coverage_scope: str = "PLANNED_FILES"
+    capability_results: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -123,3 +127,4 @@ class ScanContext:
     files: tuple[str, ...]
     staged: bool = False
     rules_path: str | None = None
+    context_files: tuple[str, ...] = ()

@@ -12,7 +12,7 @@ AI Security Runtime is a local-first security layer for AI coding workflows. It 
 - **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
 - **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
 
-> Developer Alpha. Current checks can find security issues, but a PASS result is not a guarantee that a project is secure.
+> Developer Alpha. Current checks can find security issues, but a SAFE result is not a guarantee that a project is secure.
 
 ---
 
@@ -74,7 +74,7 @@ Then scan:
 security-check scan --mode quick
 ```
 
-The first scan may download pinned versions of Semgrep, Gitleaks and Trivy and prepare the Trivy vulnerability database. Downloads are verified before use and do not require a system-wide PATH change.
+Only engines selected by the scan plan are prepared. A quick scan with no changes downloads nothing; quick scans do not prepare Trivy or its database. Downloads are verified before use and do not require a system-wide PATH change.
 
 A successful test should:
 
@@ -150,7 +150,9 @@ Workspace
 ✓ <your-project>
 
 Connecting Cursor...
-✓ Runtime verified for Cursor
+✓ Cursor configuration written
+✓ Runtime MCP self-test passed
+○ Cursor client connection not confirmed yet
 Restart Cursor to load the project connection.
 
 Code stays local.
@@ -193,6 +195,25 @@ security-check setup workbuddy
 ```
 
 The Runtime manages the project-level WorkBuddy MCP configuration and preserves other MCP entries.
+
+Setup writes `<project>/.workbuddy/mcp.json`, as documented in the
+[WorkBuddy MCP guide](https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide).
+Some desktop versions expose `%USERPROFILE%/.workbuddy-ai/mcp.json` in their UI.
+The Runtime does not assume that writing a project config proves that your desktop
+version loaded it. If your version uses the global UI, use `security-check mcp
+config --json` and register the generated workspace-bound entry there. Use a
+separate entry/server session per workspace; do not reuse one project's binding
+for another project. Automatic global registration is not implemented in this alpha.
+
+`integrations` shows the configuration path, configuration status, Runtime
+self-test, and last real MCP invocation separately. `NEEDS_RESTART` means that
+configuration and self-test succeeded but a host tool invocation is still pending.
+Only an actual tool invocation records `CONNECTED`; Runtime self-tests do not.
+This records MCP traffic attributed by the configured integration identifier,
+not a probe of the application's UI.
+
+New Runtime-owned project config files use a reversible block in `.git/info/exclude`.
+Shared `.gitignore` and pre-existing mixed user config remain untouched.
 
 Restart WorkBuddy if requested.
 
@@ -396,17 +417,26 @@ AI Security Runtime does not treat missing scanners as a clean security result.
 
 Scan output includes coverage:
 
-- **FULL** — planned checks were available.
-- **PARTIAL** — some planned checks were unavailable.
-- **MINIMAL** — only limited checks were available.
+- **NONE / NO_CHANGES** — no changed files to check; no security scan executed,
+  and recommendation is **NOT_ASSESSED**.
+- **FULL** — applicable planned code and secret checks succeeded on the selected
+  files. This describes the plan, not every security capability or every project file.
+- **SCOPED** — applicable checks succeeded, but code security was not applicable
+  (for example, a secret-only file change).
+- **PARTIAL** — some applicable checks failed or were unavailable.
+- **MINIMAL** — no applicable check succeeded.
+
+JSON/MCP expose `execution_state`, `coverage_scope: PLANNED_FILES`, and individual
+`capability_results`. `NOT_APPLICABLE` is distinct from engine failure or
+unavailability; ordinary output groups these checks separately.
 
 Release status is intended to communicate:
 
-- **PASS** — current checks found no policy blocker.
+- **SAFE** — the executed checks found no policy blocker within the stated scope.
 - **REVIEW** — human or agent review is recommended.
 - **BLOCKED** — the current policy found a release-blocking issue.
 
-A PASS result is not a claim of absolute security.
+A SAFE result is not a claim of absolute security.
 
 ---
 
@@ -420,7 +450,12 @@ The Runtime rejects unsafe broad roots such as:
 - a drive root;
 - Windows system directories.
 
-Generated/dependency directories are skipped, and discovery has file-count, directory-count, depth, and file-size limits.
+Git projects use changed files for quick/feature and `git ls-files --cached --others
+--exclude-standard` for release. Explicit scoped lists may contain files deeper
+than 12 levels; depth/directory limits apply to recursive non-Git discovery.
+Path escape, symlink/junction, file-count and file-size safeguards still apply.
+Single-finding verification profiles only its affected file and uses its originating
+scanners. Doctor reports profiling limits without hiding tool/workspace diagnostics.
 
 MCP logs go to stderr so stdout remains available for the stdio protocol.
 

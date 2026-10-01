@@ -6,6 +6,8 @@ import logging
 import subprocess
 import tempfile
 import time
+import shutil
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol
 
@@ -16,10 +18,25 @@ from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_
 from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
 from .sast import SASTRequest, SemgrepEngineProvider
+from .target import TargetDetector
 
 
 MAX_OUTPUT = 4_000_000
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _snapshot(context: ScanContext):
+    """Directory-based engines receive only validated, scoped project files."""
+    root = Path(context.root)
+    files = TargetDetector().detect(root, list(dict.fromkeys((*context.files, *context.context_files)))).files
+    with tempfile.TemporaryDirectory(prefix="security-runtime-scope-") as temporary:
+        scoped = Path(temporary)
+        for name in files:
+            destination = scoped / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(root / name, destination)
+        yield scoped
 
 
 class ScannerAdapter(Protocol):
@@ -127,13 +144,16 @@ class PatternSASTScanner(BaseScanner):
         return bool(profile.languages) and (context.mode == "release" or bool(context.files))
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
-        targets = ["."] if context.mode == "release" else list(context.files)
+        targets = list(context.files)
         rule_pack = self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
-        request = SASTRequest(Path(context.root), rule_pack, tuple(targets))
-        code, output = _execute(self.engine_provider.command(binary, request), context.root, self.timeout)
-        if code not in (0, 1):
-            raise ValueError("Semgrep failed")
-        findings = self.normalize(json.loads(output), n)
+        findings = []
+        # Bound command-line length on Windows as well as scanner output.
+        for offset in range(0, len(targets), 40):
+            request = SASTRequest(Path(context.root), rule_pack, tuple(targets[offset:offset + 40]))
+            code, output = _execute(self.engine_provider.command(binary, request), context.root, self.timeout)
+            if code not in (0, 1):
+                raise ValueError("Semgrep failed")
+            findings.extend(self.normalize(json.loads(output), n))
         for finding in findings:
             finding.technical_details.update({"engine": self.engine_provider.engine_id,
                                               "rule_pack": rule_pack.descriptor.rule_pack_id,
@@ -166,7 +186,13 @@ class GitleaksAdapter(BaseScanner):
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         # Quick and feature scan changed files only. Gitleaks directory mode is
         # intentionally not used here because it would read the whole project.
-        targets = [context.root] if context.mode == "release" else [str(Path(context.root) / f) for f in context.files]
+        if context.mode == "release":
+            with _snapshot(context) as scoped:
+                return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped)
+        targets = [str(Path(context.root) / f) for f in context.files]
+        return self._scan_targets(binary, targets, context, n)
+
+    def _scan_targets(self, binary, targets, context, n, snapshot_root=None):
         found = []
         for target in targets:
             with tempfile.TemporaryDirectory() as tmp:
@@ -175,6 +201,11 @@ class GitleaksAdapter(BaseScanner):
                 if code != 0:
                     raise ValueError("Gitleaks failed")
                 data = json.loads(Path(report).read_text(encoding="utf-8")) if Path(report).exists() else []
+                if snapshot_root is not None:
+                    for item in data:
+                        path = Path(item.get("File", ""))
+                        if path.is_absolute():
+                            item["File"] = path.resolve().relative_to(snapshot_root.resolve()).as_posix()
                 found.extend(self.normalize(data, n))
         return found
 
@@ -194,13 +225,20 @@ class TrivyAdapter(BaseScanner):
         return self.tool_manager.prepare_trivy_database(binary)
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
-        return context.mode == "release" or (context.mode == "feature" and any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "Dockerfile"} for f in context.files))
+        relevant = any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "pom.xml", "build.gradle", "go.mod", "Dockerfile"} or f.endswith((".tf", ".yaml", ".yml")) for f in context.files)
+        return context.mode in {"feature", "release"} and relevant
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
-        code, output = _execute([binary, "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", "--skip-dirs", ".git", "--skip-dirs", ".venv", "--skip-dirs", ".tools", "--skip-dirs", ".security-runtime", context.root], context.root, self.timeout)
-        if code != 0:
-            raise ValueError("Trivy failed or local vulnerability database unavailable")
-        return self.normalize(json.loads(output), n)
+        with _snapshot(context) as scoped:
+            code, output = _execute([binary, "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
+            if code != 0:
+                raise ValueError("Trivy failed or local vulnerability database unavailable")
+            data = json.loads(output)
+            for result in data.get("Results", []):
+                target = Path(result.get("Target", ""))
+                if target.is_absolute():
+                    result["Target"] = target.resolve().relative_to(scoped.resolve()).as_posix()
+            return self.normalize(data, n)
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, dict)

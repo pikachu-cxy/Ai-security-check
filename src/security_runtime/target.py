@@ -44,6 +44,7 @@ class TargetDetector:
 
     def detect(self, root: Path, files: list[str] | None = None) -> TargetProfile:
         root = root.resolve(strict=True)
+        explicit = files is not None
         if files is None:
             files = []
             directory_count = 0
@@ -53,7 +54,9 @@ class TargetDetector:
             for directory, subdirs, names in os.walk(root, onerror=walk_error):
                 directory_count += 1
                 depth = len(Path(directory).relative_to(root).parts)
-                subdirs[:] = [name for name in subdirs if name not in self.ignored]
+                subdirs[:] = [name for name in subdirs if name not in self.ignored
+                              and not (Path(directory) / name).is_symlink()
+                              and not (Path(directory) / name).is_junction()]
                 if depth >= self.max_depth and subdirs:
                     raise DiscoveryLimitError(f"Detected directories deeper than {self.max_depth} levels.")
                 if directory_count + len(subdirs) > self.max_directories:
@@ -65,8 +68,21 @@ class TargetDetector:
             files = [name for name in files if not set(Path(name).parts) & self.ignored]
             if len(files) > self.max_files:
                 raise DiscoveryLimitError(f"Detected more than {self.max_files} files.")
-            if any(len(Path(name).parts) - 1 > self.max_depth for name in files):
-                raise DiscoveryLimitError(f"Detected directories deeper than {self.max_depth} levels.")
+            # An explicit Git/workspace list has a boundary already. Depth is
+            # only a limit on unbounded recursive discovery.
+        bounded = []
+        for name in files:
+            relative = Path(name)
+            source = root / relative
+            if relative.is_absolute() or '..' in relative.parts or not source.resolve().is_relative_to(root):
+                raise ValueError("Target path is outside the workspace")
+            if any(item.is_symlink() or item.is_junction() for item in (source, *source.parents) if item != root and item.is_relative_to(root)):
+                raise ValueError("Target symlinks and junctions are not supported")
+            if source.is_file():
+                if explicit and source.stat().st_size > self.max_file_size:
+                    raise DiscoveryLimitError(f"File exceeds {self.max_file_size} bytes: {name}")
+                bounded.append(relative.as_posix())
+        files = bounded
         languages, ecosystems, frameworks = set(), set(), set()
         for name in files:
             path = Path(name)

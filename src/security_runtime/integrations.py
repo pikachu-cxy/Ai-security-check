@@ -89,10 +89,14 @@ class ProjectMCPIntegration:
         return server_entry(workspace, self.integration_id, include_type=self.include_type)
 
     def _details(self, workspace: Path, *, health: str = "") -> dict[str, str]:
+        workspace = workspace.resolve()
         record = self.state.get(self.integration_id, workspace)
         return {"scope": "PROJECT", "config_path": str(self._config(workspace).path),
                 "workspace": str(workspace), "last_verified": (record or {}).get("last_verified_at") or "",
-                "mcp_health": health, "command_path": (record or {}).get("command_path") or ""}
+                "mcp_health": health, "command_path": (record or {}).get("command_path") or "",
+                "configuration_status": "WRITTEN" if self._config(workspace).path.exists() else "MISSING",
+                "runtime_self_test": (record or {}).get("runtime_self_test", "UNKNOWN"),
+                "last_client_invocation": (record or {}).get("last_client_invocation_at", "")}
 
     def status(self, workspace: Path) -> IntegrationStatus:
         config = self._config(workspace)
@@ -107,14 +111,14 @@ class ProjectMCPIntegration:
                                      "Application detected" if self.detect() else "Application not detected", self._details(workspace))
         expected = self._expected(workspace)
         if (entry.get("command") != expected["command"] or entry.get("args") != expected["args"]
-                or entry.get("env", {}).get("SECURITY_RUNTIME_WORKSPACE") != str(workspace)
+                or entry.get("env", {}).get("SECURITY_RUNTIME_WORKSPACE") != expected["env"]["SECURITY_RUNTIME_WORKSPACE"]
                 or entry.get("env", {}).get("SECURITY_RUNTIME_INTEGRATION") != self.integration_id
                 or (self.include_type and entry.get("type") != "stdio")):
             return IntegrationStatus(self.integration_id, self.display_name, IntegrationStatusCode.BROKEN,
                                      "Runtime path or workspace binding has changed", self._details(workspace),
                                      "security-check integrations repair")
         record = self.state.get(self.integration_id, workspace)
-        if record and record["status"] == IntegrationStatusCode.CONNECTED:
+        if record and record.get("last_client_invocation_at"):
             return IntegrationStatus(self.integration_id, self.display_name, IntegrationStatusCode.CONNECTED,
                                      "Client invoked the Runtime in this workspace", self._details(workspace, health="VERIFIED"))
         if not record:
@@ -123,7 +127,7 @@ class ProjectMCPIntegration:
                                      self._details(workspace, health="UNKNOWN"),
                                      "security-check integrations repair")
         return IntegrationStatus(self.integration_id, self.display_name, IntegrationStatusCode.NEEDS_RESTART,
-                                 "Runtime verified; restart the client to load the project connection",
+                                 "Configuration written; Runtime self-test passed; client connection not confirmed yet",
                                  self._details(workspace, health="RUNTIME_VERIFIED"))
 
     def install(self, workspace: Path) -> IntegrationStatus:

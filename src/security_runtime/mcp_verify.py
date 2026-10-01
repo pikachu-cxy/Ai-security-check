@@ -15,6 +15,8 @@ async def _verify(entry: dict, workspace: Path, *, call_scan_diff: bool) -> tupl
 
     environment = dict(os.environ)
     environment.update(entry.get("env", {}))
+    # Even an optional scan call from this verifier is Runtime self-test traffic.
+    environment["SECURITY_RUNTIME_MCP_SELF_TEST"] = "1"
     parameters = StdioServerParameters(command=entry["command"], args=entry["args"],
                                       cwd=workspace, env=environment)
     async with stdio_client(parameters) as (read, write):

@@ -18,6 +18,7 @@ class DoctorTests(unittest.TestCase):
             env=dict(os.environ),
             capture_output=True,
             text=True,
+            encoding="utf-8",
             timeout=15,
             check=False,
         )

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+import os
 from pathlib import Path
 
 from .logging_utils import mcp_log_level
@@ -22,6 +22,9 @@ def _agent_result(result) -> dict:
         "scan_id": result.scan_id,
         "workspace": result.target_profile.path,
         "status": result.status,
+        "execution_state": result.execution_state,
+        "coverage_scope": result.coverage_scope,
+        "capability_results": result.capability_results,
         "coverage": result.coverage,
         "summary": result.summary,
         "findings": [_agent_finding(f.__dict__) for f in result.findings],
@@ -70,15 +73,13 @@ def create_server(runtime: SecurityRuntime | None = None):
             raise ValueError("Finding does not belong to this MCP workspace")
 
     def event(value: DogfoodEvent, *, connected: bool = False) -> None:
+        if os.getenv("SECURITY_RUNTIME_MCP_SELF_TEST") == "1":
+            return
         try:
             state = IntegrationStateStore()
             state.event(value)
-            if connected and binding is not None and binding.integration_id in {"cursor", "workbuddy"}:
-                prior = state.get(binding.integration_id, Path(binding.root))
-                if prior:
-                    verified = WorkspaceBinding.create(Path(binding.root), binding.integration_id,
-                        created_at=prior["installed_at"], last_verified_at=datetime.now(timezone.utc).isoformat())
-                    state.save(verified, "CONNECTED", prior["config_path"], prior["command_path"])
+            if connected and binding is not None and binding.integration_id in {"cursor", "workbuddy"} and os.getenv("SECURITY_RUNTIME_MCP_SELF_TEST") != "1":
+                state.client_invoked(binding.integration_id, Path(binding.root))
         except Exception as exc:
             logger.warning("dogfood_event_failed reason=%s", type(exc).__name__)
 
@@ -112,6 +113,8 @@ def create_server(runtime: SecurityRuntime | None = None):
     def get_findings(scan_id: str) -> list[dict]:
         """Retrieve findings from a previous scan."""
         check_scan(scan_id)
+        if binding:
+            event(DogfoodEvent(binding.integration_id, binding.root), connected=True)
         return [_agent_finding(finding) for finding in engine.get_findings(scan_id)]
 
     @server.tool()
@@ -120,7 +123,7 @@ def create_server(runtime: SecurityRuntime | None = None):
         check_finding(finding_id)
         result = engine.generate_fix(finding_id)
         if binding:
-            event(DogfoodEvent(binding.integration_id, binding.root, fix_generated=True))
+            event(DogfoodEvent(binding.integration_id, binding.root, fix_generated=True), connected=True)
         return result
 
     @server.tool()
@@ -129,7 +132,7 @@ def create_server(runtime: SecurityRuntime | None = None):
         check_finding(finding_id)
         result = engine.verify(finding_id, bound_path(workspace_path))
         if binding:
-            event(DogfoodEvent(binding.integration_id, binding.root, verify_result=result["status"]))
+            event(DogfoodEvent(binding.integration_id, binding.root, verify_result=result["status"]), connected=True)
         return result
 
     return server

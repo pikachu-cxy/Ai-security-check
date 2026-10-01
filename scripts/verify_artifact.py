@@ -149,7 +149,7 @@ def main() -> None:
                        for item in payload.get("findings", [])):
                 raise ValueError("First-party scanner finding missing")
             statuses = {item["scanner"]: item["status"] for item in payload["scanner_runs"]}
-            if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy": "SKIPPED"}:
+            if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy": "NOT_APPLICABLE"}:
                 raise ValueError("Quick sample scan violated its scope: " + json.dumps(payload["scanner_runs"]))
             release_scan = subprocess.run([str(executable), "scan", "--mode", "release", "--path", str(project), "--json"],
                                           cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
