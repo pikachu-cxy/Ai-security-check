@@ -101,7 +101,7 @@ FALLBACK_SELECTED → FALLBACK_PREPARING → ENGINE_PREPARING／READY → FALLBA
 
 ## R. 测试结果
 
-完整回归：308 passed、6 skipped、6 subtests passed（85.76 秒）；后续仅补全 installed_version 别名及 CVSS 向量保留，并重新运行相关测试。专门回退／分发／合规测试 80 项通过。规则门禁 24 条规则：25 positive／28 negative，lint 与真实 Semgrep fixture 均通过，checksum 与原规则阶段相同。原 Alpha SDK acceptance 通过。
+最终完整回归：308 passed、6 skipped、6 subtests passed（79.79 秒，按 CI 全局 `SECURITY_RUNTIME_OFFLINE=1` 复跑），包含 installed_version 别名及 CVSS 向量保留。首轮 CI 的 18 个模拟在线输出用例继承了全局 offline，提前返回 OFFLINE_MODE；fixture 已明确控制各用例模式，所有网络和 native 调用仍被 mock，不更改 Runtime 的离线保护。专门回退／分发／合规测试 80 项通过。规则门禁 24 条规则：25 positive／28 negative，lint 与真实 Semgrep fixture 均通过，checksum 与原规则阶段相同。原 Alpha SDK acceptance 通过。
 
 覆盖用户 33 类验收：能力失败隔离；健康主 provider 零回退；Maven／网络／不可用触发与完整性禁止；FULL／PARTIAL／双失败／离线；按需安装、doctor、tools status；四平台固定配置与 checksum；超时、输出限制、网络来源和 proxy 脱敏；normalize、别名去重；progress／JSON／MCP 元数据与流隔离；原 Maven 诊断、Rule Coverage、Java 规则、Alpha、wheel、合规及独立包。真实 Jeepay 在线验收单列于 P，仍待授权。
 

@@ -20,6 +20,13 @@ from security_runtime.storage import SQLiteStore
 from security_runtime.toolchain import ToolManager, ResolvedTool, ToolStatus
 
 
+@pytest.fixture(autouse=True)
+def explicit_test_network_mode(monkeypatch):
+    # Online-mode native output/coverage cases mock every process and download.
+    # Offline cases explicitly set 1. Do not inherit a runner's global mode.
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE','0')
+
+
 @pytest.mark.parametrize('code',['MAVEN_RATE_LIMITED','NETWORK_TIMEOUT','DNS_RESOLUTION_FAILED','PROXY_CONNECTION_FAILED','HTTP_5XX','DEPENDENCY_RESOLUTION_FAILED','ENGINE_UNAVAILABLE','OFFLINE_MODE'])
 def test_eligible_failures(code):
     assert should_fallback(ScannerRun('trivy-vuln','','FAILED',1,error_code=code))
