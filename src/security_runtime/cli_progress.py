@@ -11,6 +11,7 @@ from .progress import ProgressReporter
 
 
 LABELS = {
+    'RULE_PLAN_READY': '代码安全规则计划已准备', 'SAST_NOT_COVERED': '代码安全未覆盖',
     'SCAN_STARTED': '正在检查代码', 'WORKSPACE_DISCOVERY_STARTED': '正在识别项目',
     'WORKSPACE_DISCOVERY_COMPLETED': '项目识别完成', 'TARGET_DISCOVERY_STARTED': '正在发现扫描文件',
     'TARGET_DISCOVERY_COMPLETED': '扫描文件发现完成', 'PLANNING_STARTED': '正在规划安全检查',

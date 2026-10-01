@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
+from .rule_catalog import RuleRecord, validate_rule, load_catalog
 
 import yaml
 
@@ -53,6 +54,7 @@ class ResolvedRulePack:
     descriptor: RulePackDescriptor
     path: Path
     checksum: str
+    catalog: tuple[RuleRecord, ...] = ()
 
 
 class RulePackProvider(Protocol):
@@ -69,7 +71,7 @@ class RulePackUpdateProvider(RulePackProvider, Protocol):
 
 
 FIRST_PARTY_RULE_PACK = RulePackDescriptor(
-    "ai-security-core", "AI Security Runtime Core Rules", "1.0.0", "AI Security Runtime",
+    "ai-security-core", "AI Security Runtime Core Rules", "1.1.0", "AI Security Runtime",
     "Copyright AI Security Runtime contributors", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0",
     True, True, True, True, "bundled local package",
     RuleProvenance("FIRST_PARTY", "AI Security Runtime contributors", "2026-09-29",
@@ -125,37 +127,25 @@ class RulePackManager:
         if not files or len(files) > 1000:
             raise ValueError("Rule pack has no rules or exceeds the file limit")
         digest = hashlib.sha256()
+        definitions = {}
         for file in files:
             if file.is_symlink() or file.stat().st_size > 1_000_000:
                 raise ValueError("Rule file is a symlink or too large")
             content = file.read_bytes()
             if any(marker in content for marker in (b"--config" + b"=auto", b"semgrep" + b".dev/registry", b"semgrep" + b"-rules")):
                 raise ValueError("Rule pack references a remote registry")
-            if require_first_party_metadata:
-                data = yaml.safe_load(content)
-                if not isinstance(data, dict) or not isinstance(data.get("rules"), list) or not data["rules"]:
-                    raise ValueError(f"Rule pack has no valid rules: {file.name}")
-                for rule in data.get("rules", []):
-                    if not isinstance(rule, dict):
-                        raise ValueError(f"Invalid rule entry: {file.name}")
-                    metadata = rule.get("metadata", {})
-                    required = {"publisher", "rule_pack", "rule_version", "confidence", "license", "references", "provenance"}
-                    if (not isinstance(metadata, dict) or not str(rule.get("id", "")).startswith("ai-security.")
-                            or not required.issubset(metadata)):
-                        raise ValueError(f"Rule license or provenance metadata missing: {file.name}")
-                    if (metadata["license"] != descriptor.license or metadata["rule_pack"] != descriptor.rule_pack_id
-                            or metadata["publisher"] != descriptor.publisher
-                            or metadata["rule_version"] != descriptor.version or not metadata["references"]):
-                        raise ValueError(f"Rule license or pack identity mismatch: {file.name}")
-                    provenance = metadata["provenance"]
-                    if (not isinstance(provenance, dict) or
-                            not {"origin", "author", "created_at", "references", "license", "derived_from"}.issubset(provenance)
-                            or not provenance["author"] or not provenance["created_at"]):
-                        raise ValueError(f"Rule provenance incomplete: {file.name}")
-                    if provenance["derived_from"]:
-                        raise ValueError("Derived rule requires source license review")
-                    if provenance["origin"] != "FIRST_PARTY" or provenance["license"] != descriptor.license or not provenance["references"]:
-                        raise ValueError(f"Rule provenance does not match first-party pack: {file.name}")
+            data = yaml.safe_load(content)
+            if not isinstance(data,dict) or not isinstance(data.get('rules'),list) or not data['rules']:
+                raise ValueError(f'Rule pack has no valid rules: {file.name}')
+            for rule in data['rules']:
+                validate_rule(rule,descriptor,first_party=require_first_party_metadata)
+                if rule['id'] in definitions:
+                    raise ValueError('Duplicate rule id')
+                definitions[rule['id']]=(rule,file.relative_to(path).as_posix())
             digest.update(file.relative_to(path).as_posix().encode())
             digest.update(content)
-        return ResolvedRulePack(descriptor, path, digest.hexdigest())
+        catalog = load_catalog(path, descriptor, definitions, first_party=require_first_party_metadata)
+        if (path / 'catalog.json').is_file():
+            digest.update(b'catalog.json')
+            digest.update((path / 'catalog.json').read_bytes())
+        return ResolvedRulePack(descriptor, path, digest.hexdigest(), catalog)

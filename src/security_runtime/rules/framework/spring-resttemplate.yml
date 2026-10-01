@@ -1,0 +1,83 @@
+rules:
+- id: ai-security.java.spring-resttemplate
+  languages:
+  - java
+  severity: ERROR
+  message: 外部输入可能控制远程请求地址，请检查目的地限制。
+  mode: taint
+  pattern-sources:
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  pattern-sinks:
+  - pattern: (org.springframework.web.client.RestTemplate $REST).getForObject($URL,
+      ...)
+  - pattern: (org.springframework.web.client.RestTemplate $REST).getForEntity($URL,
+      ...)
+  - pattern: (org.springframework.web.client.RestTemplate $REST).postForObject($URL,
+      ...)
+  - pattern: (org.springframework.web.client.RestTemplate $REST).exchange($URL, ...)
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.1.0
+    language: java
+    category: ssrf
+    cwe:
+    - CWE-918
+    confidence: HIGH
+    maturity: BETA
+    framework: Spring
+    license: Apache-2.0
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/918.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-01'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''

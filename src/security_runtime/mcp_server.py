@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 def _agent_finding(finding: dict) -> dict:
-    return {key: finding[key] for key in ("id", "severity", "confidence", "plain_title", "file_path", "line_start", "impact", "fix_advice") if key in finding}
+    return {key: finding[key] for key in ("id", "severity", "confidence", "plain_title", "file_path", "line_start", "impact", "fix_advice", "technical_details") if key in finding}
 
 
 def _agent_result(result) -> dict:
@@ -26,6 +26,7 @@ def _agent_result(result) -> dict:
         "execution_state": result.execution_state,
         "coverage_scope": result.coverage_scope,
         "capability_results": result.capability_results,
+        "rule_coverage": {key:value for key,value in result.rule_coverage.items() if key!='scope_files'},
         "coverage": result.coverage,
         "summary": result.summary,
         "findings": [_agent_finding(f.__dict__) for f in result.findings],

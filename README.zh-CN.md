@@ -1,5 +1,10 @@
 # AI Security Runtime
 
+默认 `ai-security-core 1.1.0` 包含 22 条 BETA Java 规则和两条 Python 规则。
+Rule Coverage 参与执行计划：零适用规则显示 `NOT_COVERED`，不准备、不启动 Semgrep；
+Java 已执行而 JavaScript 无规则时，`CODE_SAST=PARTIAL`。
+详见 [实际规则覆盖](docs/RULE_COVERAGE.md)，包括完整 catalog、质量门禁及覆盖边界。
+
 扫描超过 500 ms 时，CLI 会在 **stderr** 显示实际的项目发现、引擎准备、
 下载、数据库准备和扫描状态；最终结果及 JSON 仍输出到 **stdout**。
 交互终端每秒更新实际耗时，重定向日志每 10 秒提供一次 heartbeat，

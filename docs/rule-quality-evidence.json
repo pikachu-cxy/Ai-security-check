@@ -1,0 +1,109 @@
+{
+  "rule_pack": "ai-security-core",
+  "version": "1.1.0",
+  "checksum": "52188177327841e4d0c8c517cbccd86f0503a1623c0cf6adf103fbbc2e9ec742",
+  "rules": 24,
+  "positive": 25,
+  "negative": 28,
+  "cases": {
+    "ai-security.java.runtime-exec": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.java.process-builder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.jdbc-statement": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.spring-jdbc": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.mybatis-annotation": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.mybatis-xml": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.url-connection": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.spring-resttemplate": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.file-access": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.java.xxe-document-builder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-sax-parser": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-stax": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.object-deserialization": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xml-decoder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.jndi-lookup": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.ldap-search": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.open-redirect": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.trust-all-hostname": {
+      "positive": 2,
+      "negative": 2
+    },
+    "ai-security.java.trust-all-certificates": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.weak-cipher": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.weak-digest": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.security-random": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.python.command-injection": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.python.unsafe-eval": {
+      "positive": 1,
+      "negative": 1
+    }
+  },
+  "engine": "1.178.0",
+  "lint": "PASS",
+  "fixtures": "PASS"
+}

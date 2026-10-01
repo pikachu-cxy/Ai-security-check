@@ -5,6 +5,7 @@ import uuid
 import logging
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from contextvars import copy_context
+from dataclasses import replace
 from pathlib import Path
 
 from .findings import FindingNormalizer, deduplicate
@@ -91,7 +92,17 @@ class SecurityRuntime:
         no_changes = scan_mode != ScanMode.RELEASE and not files
         checkpoint()
         emit('PLANNING_STARTED')
+        rule_plans={}
+        if files and not no_changes:
+            for adapter in self.registry.adapters:
+                if callable(getattr(adapter,'plan_rules',None)) and adapter.supports(profile,context):
+                    rule_plans[adapter.name]=adapter.plan_rules(profile,context)
+                    plan=rule_plans[adapter.name]
+                    emit('RULE_PLAN_READY',scanner=adapter.name,message=f'{len(plan.rules)} 条适用规则 · {len(plan.files)} 个 SAST 文件')
+                    if not plan.rules:
+                        emit('SAST_NOT_COVERED',message='代码安全未执行：当前规则包没有适用于 ' + ' / '.join(plan.detected_languages) + ' 的规则')
         _, selected = ScannerPlanner(self.registry).plan(profile, context)
+        selected=[adapter for adapter in selected if adapter.name not in rule_plans or rule_plans[adapter.name].rules]
         if no_changes or not files:
             selected = []
         emit('PLAN_READY', message=f'将执行 {len(selected)} 个安全引擎')
@@ -101,7 +112,8 @@ class SecurityRuntime:
             if not isinstance(scanner, BaseScanner):
                 emit('SCANNER_STARTED', scanner=scanner.name, capability=tuple(scanner.capabilities))
             try:
-                found, run = scanner.scan(context, normalizer)
+                scanner_context=replace(context,rule_plan=rule_plans[scanner.name]) if scanner.name in rule_plans else context
+                found, run = scanner.scan(scanner_context, normalizer)
             except ScanCancelled:
                 raise
             except Exception:
@@ -109,9 +121,11 @@ class SecurityRuntime:
                     error_code='SCANNER_FAILED', error_summary='Scanner did not complete successfully.',
                     remediation='Inspect local engine configuration and retry the check.')
             if scan_mode != ScanMode.RELEASE and getattr(scanner, 'filter_changed_lines', False):
-                found = [f for f in found if f.line_start in changed_lines.get(f.file_path, set())]
+                found = [f for f in found if any(f.line_start<=line<=f.line_end for line in changed_lines.get(f.file_path,set()))]
                 run.finding_count = len(found)
             run.capabilities = tuple(sorted(scanner.capabilities))
+            if scanner.name in rule_plans and not run.rule_coverage:
+                run.rule_coverage=rule_plans[scanner.name].coverage(run.status)
             event_type = {'SUCCESS': 'SCANNER_COMPLETED', 'FAILED': 'SCANNER_FAILED',
                           'UNAVAILABLE': 'SCANNER_UNAVAILABLE', 'TIMEOUT': 'SCANNER_TIMEOUT'}.get(run.status)
             if event_type:
@@ -125,7 +139,9 @@ class SecurityRuntime:
             futures = {scanner.name: pool.submit(copy_context().run, execute, scanner) for scanner in selected}
             for scanner in self.registry.adapters:
                 if scanner.name not in futures:
-                    runs.append(ScannerRun(scanner.name, "", RunStatus.NOT_APPLICABLE, 0))
+                    plan=rule_plans.get(scanner.name)
+                    runs.append(ScannerRun(scanner.name,'',RunStatus.NOT_COVERED if plan and not plan.rules else RunStatus.NOT_APPLICABLE,0,
+                        capabilities=tuple(scanner.capabilities),rule_coverage=plan.coverage('NOT_COVERED') if plan else {}))
                     continue
                 try:
                     while True:
@@ -148,7 +164,8 @@ class SecurityRuntime:
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
         findings = deduplicate(findings)
-        planned_runs = [run for run in runs if run.status not in {RunStatus.SKIPPED, RunStatus.NOT_APPLICABLE}]
+        rule_coverage=next((run.rule_coverage for run in runs if run.rule_coverage),{})
+        planned_runs = [run for run in runs if run.status not in {RunStatus.SKIPPED, RunStatus.NOT_APPLICABLE, RunStatus.NOT_COVERED}]
         successful = sum(run.status == RunStatus.SUCCESS for run in planned_runs)
         complete = bool(planned_runs) and successful == len(planned_runs)
         coverage = "FULL" if complete else "PARTIAL" if successful else "MINIMAL"
@@ -158,7 +175,9 @@ class SecurityRuntime:
         for capability in (Capability.CODE_SAST, Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN, Capability.IAC_MISCONFIG):
             supporting = [run for run in planned_runs if any(adapter.name == run.scanner and capability in adapter.capabilities for adapter in selected)]
             capability_results[capability] = "NOT_APPLICABLE" if not files or capability not in wanted else aggregate_provider_statuses(supporting)
-        if complete and any(value in {"PARTIAL", "FAILED", "UNAVAILABLE"} for value in capability_results.values()):
+        if rule_coverage and files:
+            capability_results[Capability.CODE_SAST]=rule_coverage['status']
+        if complete and any(value in {'PARTIAL','FAILED','UNAVAILABLE','NOT_COVERED'} for value in capability_results.values()):
             complete = False
             coverage = "PARTIAL" if successful else "MINIMAL"
             release_status = RiskEngine().assess(findings, False)
@@ -166,6 +185,8 @@ class SecurityRuntime:
             coverage = "SCOPED"
         status = "COMPLETED" if complete else "PARTIAL"
         execution_state = "EXECUTED" if successful else "UNAVAILABLE" if planned_runs and all(run.status == RunStatus.UNAVAILABLE for run in planned_runs) else "FAILED"
+        if not planned_runs and rule_coverage.get('status')=='NOT_COVERED':
+            execution_state='NOT_COVERED'
         summary = MESSAGES[release_status]
         if no_changes or not files:
             status = execution_state = "NO_CHANGES" if no_changes else "NOT_APPLICABLE"
@@ -175,7 +196,7 @@ class SecurityRuntime:
         elif not complete:
             summary += "；Security check completed with limited coverage."
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
-                            execution_state=execution_state, capability_results=capability_results)
+                            execution_state=execution_state, capability_results=capability_results, rule_coverage=rule_coverage)
         self.store.save(result)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})

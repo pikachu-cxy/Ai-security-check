@@ -137,7 +137,11 @@ def mock_registry(root):
     registry = ScannerRegistry(tool_manager=manager)
     def execute(args, cwd, timeout):
         if Path(args[0]).name == 'semgrep':
-            return ProcessResult(0, '{"results": []}', '', 1)
+            import yaml
+            config=yaml.safe_load(Path(args[args.index('--config')+1]).read_text(encoding='utf-8'))
+            scope=args[args.index('--no-git-ignore')+1:]
+            return ProcessResult(0, json.dumps({'results':[], 'errors':[], 'paths':{'scanned':scope},
+                'time':{'rules':[rule['id'] for rule in config['rules']]}}), '', 1)
         if args[0] == 'gitleaks':
             report = Path(args[args.index('--report-path') + 1])
             report.write_text(json.dumps([{'Description': 'Synthetic secret', 'File': 'application.yml',

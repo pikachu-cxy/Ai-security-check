@@ -26,6 +26,7 @@ class RunStatus(StrEnum):
     UNAVAILABLE = "UNAVAILABLE"
     FAILED = "FAILED"
     TIMEOUT = "TIMEOUT"
+    NOT_COVERED = "NOT_COVERED"
 
 
 @dataclass
@@ -87,7 +88,7 @@ class Finding:
     scanner_sources: list[str]
     fingerprint: str
     status: str = "OPEN"
-    technical_details: dict[str, str] = field(default_factory=dict)
+    technical_details: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -107,6 +108,7 @@ class ScannerRun:
     http_proxy: str = "not configured"
     https_proxy: str = "not configured"
     capabilities: tuple[str, ...] = ()
+    rule_coverage: dict = field(default_factory=dict)
 
     def __post_init__(self):
         from .diagnostics import sanitize
@@ -133,6 +135,7 @@ class ScanResult:
     execution_state: str = "EXECUTED"
     coverage_scope: str = "PLANNED_FILES"
     capability_results: dict[str, str] = field(default_factory=dict)
+    rule_coverage: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -146,3 +149,4 @@ class ScanContext:
     staged: bool = False
     rules_path: str | None = None
     context_files: tuple[str, ...] = ()
+    rule_plan: Any = None

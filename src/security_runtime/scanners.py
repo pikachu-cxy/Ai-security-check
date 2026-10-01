@@ -16,6 +16,9 @@ from .capabilities import Capability
 from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_loader
 from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
+from .rule_coverage import plan_rules
+from dataclasses import replace
+import yaml
 from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
 from .processes import ProcessResult, run_process, OutputLimitError
@@ -144,29 +147,68 @@ class PatternSASTScanner(BaseScanner):
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
         return bool(profile.languages) and (context.mode == "release" or bool(context.files))
 
+    def plan_rules(self, profile, context):
+        pack=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
+        return plan_rules(pack, context.files)
+
+    def scan(self, context, normalizer):
+        plan=context.rule_plan or self.plan_rules(None,context)
+        context=replace(context,rule_plan=plan)
+        if not plan.rules:
+            return [], ScannerRun(self.name,'',RunStatus.NOT_COVERED,0,rule_coverage=plan.coverage('NOT_COVERED'))
+        findings,run=super().scan(context,normalizer)
+        run.rule_coverage=plan.coverage(run.status)
+        return findings,run
+
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
-        targets = list(context.files)
-        rule_pack = self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
-        findings = []
-        # Bound command-line length on Windows as well as scanner output.
-        for offset in range(0, len(targets), 40):
-            request = SASTRequest(Path(context.root), rule_pack, tuple(targets[offset:offset + 40]))
-            process = _execute(self.engine_provider.command(binary, request), context.root, self.timeout)
-            if process.return_code not in (0, 1):
-                _process_failure(process)
-            findings.extend(self.normalize(json.loads(process.stdout), n))
+        plan=context.rule_plan
+        rule_pack=plan.pack
+        selected_ids={r.rule_id for r in plan.rules}
+        definitions=[]
+        for relative in sorted({r.path for r in plan.rules}):
+            definitions.extend(rule for rule in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules'] if rule['id'] in selected_ids)
+        findings=[]
+        # Serialize selected execution rules, without copying source files.
+        with tempfile.TemporaryDirectory(prefix='security-runtime-rules-') as temporary:
+            config=Path(temporary)/'selected.yml'
+            config.write_text(yaml.safe_dump({'rules':definitions},sort_keys=False),encoding='utf-8')
+            for offset in range(0,len(plan.files),40):
+                batch=plan.files[offset:offset+40]
+                request=SASTRequest(Path(context.root),rule_pack,batch,config)
+                process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
+                if process.return_code not in (0,1):
+                    _process_failure(process)
+                data=json.loads(process.stdout)
+                plan.observe(data,batch)
+                findings.extend(self.normalize(data,n))
+        catalog={rule.rule_id:rule for rule in plan.rules}
         for finding in findings:
-            finding.technical_details.update({"engine": self.engine_provider.engine_id,
-                                              "rule_pack": rule_pack.descriptor.rule_pack_id,
-                                              "rule_pack_version": rule_pack.descriptor.version})
-            rule_id = finding.technical_details.get("rule_id", "")
-            if rule_pack.descriptor.rule_pack_id == "ai-security-core" and "ai-security." in rule_id:
-                finding.technical_details["rule_id"] = "ai-security." + rule_id.split("ai-security.", 1)[1]
+            rule_id=finding.technical_details.get('rule_id','')
+            record=catalog.get(rule_id)
+            finding.technical_details.update(engine=self.engine_provider.engine_id,rule_pack=rule_pack.descriptor.rule_pack_id,
+                rule_pack_version=rule_pack.descriptor.version)
+            if record:
+                finding.category=record.category
+                finding.confidence=record.confidence
+                finding.technical_details.update(rule_category=record.category,cwe=list(record.cwe),
+                    rule_confidence=record.confidence,rule_maturity=record.maturity,rule_severity=record.severity,
+                    rule_version=record.rule_version,framework=record.framework,validation_status='NOT_VALIDATED')
         return findings
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, dict)
-        return [n.make(scanner=self.name, category="command-injection" if "command" in item.get("check_id", "").lower() else "code", title=item.get("extra", {}).get("message", "Code security issue"), description=item.get("extra", {}).get("message", ""), severity={"ERROR": "HIGH", "WARNING": "MEDIUM"}.get(item.get("extra", {}).get("severity"), "LOW"), confidence="HIGH" if "command" in item.get("check_id", "").lower() else "MEDIUM", file_path=item.get("path", ""), line=item.get("start", {}).get("line", 1), evidence=item.get("extra", {}).get("lines", ""), rule_id=item.get("check_id", "")) for item in data.get("results", [])]
+        findings=[]
+        for item in data.get('results',[]):
+            extra=item.get('extra',{})
+            metadata=extra.get('metadata',{})
+            finding=n.make(scanner=self.name,category=metadata.get('category','command-injection' if 'command' in item.get('check_id','').lower() else 'code'),
+                title=extra.get('message','Code security issue'),description=extra.get('message',''),
+                severity={'ERROR':'HIGH','WARNING':'MEDIUM'}.get(extra.get('severity'),'LOW'),
+                confidence=metadata.get('confidence','MEDIUM'),file_path=item.get('path',''),line=item.get('start',{}).get('line',1),
+                evidence=extra.get('lines',''),rule_id=item.get('check_id',''))
+            findings.append(finding)
+            finding.line_end=max(finding.line_start,item.get('end',{}).get('line',finding.line_start))
+        return findings
 
 
 class SemgrepAdapter(PatternSASTScanner):

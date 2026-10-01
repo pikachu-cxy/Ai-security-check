@@ -12,7 +12,7 @@ This Runtime installs or invokes the independently licensed scanner engines belo
 
 | Component | Version | Copyright | License | Source | Attribution |
 | --- | --- | --- | --- | --- | --- |
-| AI Security Runtime Core Rules (`ai-security-core`) | 1.0.0 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
+| AI Security Runtime Core Rules (`ai-security-core`) | 1.1.0 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
 
 The bundled rule pack is independently authored. Semgrep Community Rules and Semgrep Registry Rules are not bundled or fetched by default. User-provided rules remain under the user's own license and are never copied into the managed tool directory.
 

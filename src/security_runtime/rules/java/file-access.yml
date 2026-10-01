@@ -1,0 +1,100 @@
+rules:
+- id: ai-security.java.file-access
+  languages:
+  - java
+  severity: ERROR
+  message: 外部输入可能控制文件访问路径，请检查目录边界。
+  mode: taint
+  pattern-sources:
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern: new java.io.FileInputStream($PATH)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: new java.io.FileOutputStream($PATH)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.readAllBytes($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.readString($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.write($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.writeString($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.newInputStream($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.newOutputStream($PATH, ...)
+    - focus-metavariable: $PATH
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.1.0
+    language: java
+    category: path-traversal
+    cwe:
+    - CWE-22
+    confidence: HIGH
+    maturity: BETA
+    framework: JDK
+    license: Apache-2.0
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/22.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-01'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''

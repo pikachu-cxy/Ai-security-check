@@ -1,5 +1,11 @@
 # AI Security Runtime
 
+The bundled `ai-security-core 1.1.0` catalog has 22 BETA Java rules and two Python
+rules. Rule coverage participates in planning: no applicable rules means
+`NOT_COVERED` and no Semgrep preparation or execution. Mixed Java and uncovered
+JavaScript reports `CODE_SAST=PARTIAL`. See [actual rule coverage](docs/RULE_COVERAGE.md)
+for the catalog, quality gate and limitations.
+
 CLI scans show actual preparation and scanner states on **stderr** after a 500 ms
 delay. Final human results and JSON remain on **stdout**. Interactive terminals
 refresh elapsed time every second; redirected logs receive a heartbeat every

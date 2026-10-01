@@ -1,0 +1,36 @@
+rules:
+- id: ai-security.java.trust-all-certificates
+  languages:
+  - java
+  severity: ERROR
+  message: TLS 校验被无条件接受，连接可能遭到中间人攻击。
+  pattern-either:
+  - pattern: new javax.net.ssl.X509TrustManager() { ... public void checkServerTrusted(java.security.cert.X509Certificate[]
+      $CHAIN, String $AUTH) { } ... }
+  - patterns:
+    - pattern-inside: class $CLASS implements javax.net.ssl.X509TrustManager { ...
+        }
+    - pattern: public void checkServerTrusted(java.security.cert.X509Certificate[]
+        $CHAIN, String $AUTH) { }
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.1.0
+    language: java
+    category: trust-all-tls
+    cwe:
+    - CWE-295
+    confidence: HIGH
+    maturity: BETA
+    framework: JDK
+    license: Apache-2.0
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/295.html
+    - https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-01'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''

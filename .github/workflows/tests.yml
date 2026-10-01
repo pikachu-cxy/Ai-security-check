@@ -29,3 +29,5 @@ jobs:
           python -m pip install -e ".[test,scanner-test]"
       - name: Run Runtime tests
         run: python -m pytest -q
+      - name: First-party rule quality gate
+        run: python scripts/test_rules.py

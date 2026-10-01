@@ -13,6 +13,7 @@ class SASTRequest:
     workspace: Path
     rule_pack: ResolvedRulePack
     scan_scope: tuple[str, ...]
+    config_path: Path | None = None
 
 
 class SASTEngineProvider(Protocol):
@@ -27,5 +28,6 @@ class SemgrepEngineProvider:
     def command(self, executable: str, request: SASTRequest) -> list[str]:
         if not request.rule_pack.path.is_dir():
             raise ValueError("Local rule pack is missing")
-        return [str(Path(executable).resolve()), "scan", "--config", str(request.rule_pack.path),
-                "--json", "--quiet", "--metrics", "off", "--disable-version-check", *request.scan_scope]
+        return [str(Path(executable).resolve()), "scan", "--config", str(request.config_path or request.rule_pack.path),
+                "--json", "--time", "--quiet", "--metrics", "off", "--disable-version-check",
+                "--no-rewrite-rule-ids", "--no-git-ignore", *request.scan_scope]

@@ -4,6 +4,7 @@ from .diagnostics import sanitize
 CAPABILITY_LABELS = {'CODE_SAST': '代码安全', 'SECRET_SCAN': '敏感信息检测',
                      'DEPENDENCY_VULN': '依赖安全', 'IAC_MISCONFIG': 'IaC 配置安全'}
 STATES = {'EXECUTED': '已完成', 'PARTIAL': '部分完成', 'FAILED': '失败', 'UNAVAILABLE': '不可用',
+          'NOT_COVERED': '未覆盖',
           'NOT_APPLICABLE': '本次不适用', 'SUCCESS': '完成', 'TIMEOUT': '超时'}
 REASONS = {'MAVEN_RATE_LIMITED': '解析项目依赖时 Maven 仓库返回 HTTP 429。',
     'NETWORK_TIMEOUT': '连接或下载超时。', 'CONNECTION_REFUSED': '远端拒绝连接。',
@@ -54,18 +55,28 @@ def render_scan(result, *, verbose=False):
     summary = result.summary.replace('；Security check completed with limited coverage.', '。部分安全检查未能完成，结果覆盖不完整。')
     lines += ['结果：', summary, f'覆盖范围：{result.coverage}（仅针对计划文件和检查）',
               f'耗时：{result.duration_ms} ms', '', '安全检查']
-    for state in ('EXECUTED', 'PARTIAL', 'FAILED', 'UNAVAILABLE', 'NOT_APPLICABLE'):
+    for state in ('EXECUTED', 'PARTIAL', 'FAILED', 'UNAVAILABLE', 'NOT_COVERED', 'NOT_APPLICABLE'):
         if state == 'NOT_APPLICABLE' and not verbose:
             continue
         items = [CAPABILITY_LABELS.get(cap, cap) for cap, value in result.capability_results.items() if value == state]
         if items:
             lines += ['', STATES[state], *[label + '：' + STATES[state] for label in items]]
+    if result.rule_coverage:
+        coverage=result.rule_coverage
+        lines += ['', '规则覆盖（仅针对本次 SAST 文件）', f"规则包：{coverage['rule_pack_id']} {coverage['rule_pack_version']}"]
+        for language, row in coverage['per_language'].items():
+            lines += ['', language + '：' + STATES.get(row['status'],row['status']),
+                f"适用规则：{row['selected_rules']}；执行规则：{row['executed_rules']}；计划文件：{row['target_files']}；实际文件：{row['scanned_files']}"]
+            if row['status']=='NOT_COVERED':
+                lines.append(f"检测到 {language} 源码，但当前规则包没有适用规则，未启动该语言的扫描。")
+            elif row['status']=='EXECUTED':
+                lines.append(f"已执行 {row['executed_rules']} 条规则；结果仅表示这些规则的匹配情况，不代表项目没有安全漏洞。")
     if result.status == 'PARTIAL':
         lines += ['', '为什么覆盖不完整？', f'已完成检查发现的 {len(result.findings)} 个问题仍然有效。',
                   '失败或不可用的检查可能导致其他问题未被发现。']
     from dataclasses import asdict
     for run in result.scanner_runs:
-        if run.status in {'SUCCESS', 'SKIPPED', 'NOT_APPLICABLE'}:
+        if run.status in {'SUCCESS', 'SKIPPED', 'NOT_APPLICABLE', 'NOT_COVERED'}:
             continue
         lines += ['', f'{run.scanner} {run.version}', '状态：' + STATES.get(run.status, run.status)]
         affected = [CAPABILITY_LABELS.get(cap, cap) + ('仅部分完成' if result.capability_results[cap] == 'PARTIAL' else '未完成')

@@ -1,0 +1,8 @@
+<mapper namespace="Example">
+<!-- ruleid: ai-security.java.mybatis-xml -->
+<select id="unsafe">SELECT * FROM users WHERE name='${name}'</select>
+</mapper>
+<mapper namespace="Example">
+<!-- ok: ai-security.java.mybatis-xml -->
+<select id="safe">SELECT * FROM users WHERE name=#{name}</select>
+</mapper>
