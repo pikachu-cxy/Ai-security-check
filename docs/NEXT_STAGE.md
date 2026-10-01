@@ -1,14 +1,20 @@
-# Next Stage — AI Triage Quality Validation & Ground Truth
+# Next Stage — AI Triage Quality Validation & Developer Guidance
 
-更新：2026-10-02。基线：`feature/runtime-mvp` / `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`；最终实现 `557052049c74c6d1ca4321c2d9559483a36f55d2`。**AI Finding Triage & Risk Validation v0.1 已完成；本文仅规划下一阶段，不实施新功能、标注、模型请求或 Joern。**
+更新：2026-10-02。规划基线：`feature/runtime-mvp` / `7e197443eb4f712d10bc9a61be82c4929b1569da`；代码/既有验收快照 `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`，最终实现 `557052049c74c6d1ca4321c2d9559483a36f55d2`。**用户已确认本路线；本轮只持久化规划，未授权或实施源码开发、人工标注、模型请求或 Joern。**
+
+下一阶段为 **AI Triage Quality Validation & Developer Guidance**。产品目标是让安全从业者与缺少安全知识的开发者都能从检查结果获得具体任务，沿着任务完成核查、准备修复和验证；独立人工 Ground Truth 仍是质量工作的核心。首个待授权开发迭代是 **开发者任务入口 v0.1**。
 
 先读 [PROJECT_STATE](PROJECT_STATE.md)、[ARCHITECTURE](ARCHITECTURE.md)、[DECISIONS](DECISIONS.md) 和 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)。
 
-## 为什么先验证质量
+## 为什么同时验证质量与使用效果
 
-当前 Jeepay 有 115 Raw、26 triaged，2 ACTIONABLE / 23 REVIEW / 1 LOWER_PRIORITY / 0 SUPPRESSED / 89 UNTRIAGED。独立人工标签文件仍全部 UNREVIEWED/null。现有 `scripts/jeepay_triage_benchmark.py` 通过 `host_analysis` 回放 Coding Agent 审阅 artifact，验证实际 MCP handoff、policy、cache 与 Raw 保留；不是实时调用不同模型的评测器，也不是独立人工 ground truth。
+已提交的 Jeepay 历史回放有 115 Raw、26 triaged，2 ACTIONABLE / 23 REVIEW / 1 LOWER_PRIORITY / 0 SUPPRESSED / 89 UNTRIAGED。独立人工标签文件仍全部 UNREVIEWED/null。现有 `scripts/jeepay_triage_benchmark.py` 通过 `host_analysis` 回放 Coding Agent 审阅 artifact，验证实际 MCP handoff、policy、cache 与 Raw 保留；不是实时调用不同模型的评测器，也不是独立人工 ground truth。
 
-当前 BYOK 只有 mock/loopback 协议验收；invalid output rate=0 和 382 passed 不能转成“准确率”。先明确人工真值、模型误判与错误压制风险，才能判断深度数据流工具究竟解决哪些证据缺口。**下一阶段不是立即做 Joern。**
+当前 BYOK 只有 mock/loopback 协议验收；invalid output rate=0 和 382 passed 不能转成“准确率”。先明确人工真值、模型误判与错误压制风险，才能判断深度数据流工具究竟解决哪些证据缺口。**Joern 继续后置。**
+
+用户随后提供了固定 scan `99ca7566-4a6f-4818-b447-38646072457b` 的实际宿主 MCP 验收报告：115 Raw、26 VALID、0 ACTIONABLE / 26 REVIEW / 0 LOWER_PRIORITY / 0 SUPPRESSED、0 FAILED / 0 STALE、89 UNTRIAGED，整体及 Dependency 仍 PARTIAL。该结果与历史脚本回放是不同运行，不能为了匹配回放调整 verdict/priority。报告尚未固化为仓库内机器可核验的验收 artifact，本轮也未直接重跑该 MCP；它是产品问题的输入，不是新的独立 ground truth。
+
+用户需要连续转发多轮提示词，才从验收表走到 TLS 的业务影响与修复方案。后续调用链来自宿主 Agent 额外只读源码核查，并未提交为 Runtime Triage；不能把它记成 Runtime 自动调用链分析或扫描覆盖提升。当前 `human.render_triage` 将有效分析记录称为“已验证”，容易与人工验证混淆。因此，先改善任务入口与表达，同时推进独立质量验证；易读性和判断正确性分别验收。
 
 ## 当前已实现与本阶段 Planned
 
@@ -20,8 +26,49 @@
 | 显式授权 BYOK、结构化输出、依赖 batch/cache | suppression risk、precision/agreement 的有效统计 |
 | 独立 scan/triage coverage、Raw 分组和保守 policy | prompt/model regression 与人工确认的质量门槛 |
 | 合成 fixtures 和真实 26 项审阅回放 | Joern Java PoC、compiler-grade dataflow |
+| 八个 MCP 工具、CLI 技术报告与依赖分组 | 当前 workspace 结果入口、开发者任务投影与普通/详细视图 |
+| 宿主可在其授权范围内继续读源码 | 内置继续核查引导、待分析项推进、来源分层与必要业务提问 |
+| 确定性 generate_fix 任务、原 scanner verify | 可审阅补丁与完整修复验证流程 |
 
-本阶段不增加 scanner、不自动构建目标项目、不做全仓主动 AI 审计、不自动修改 priority policy 或增加 FALSE_POSITIVE 反证类型。质量实验若暴露实现缺陷，应记录独立问题、按新的修复任务处理，再复验；不能把评测脚本的结果悄悄改成 Runtime 产品行为。
+产品迭代与质量工作流均保留 Raw、现有 TriagePolicy、RiskEngine、覆盖契约、Secret 保护与 External AI 授权边界。不增加 scanner、不自动构建目标项目、不做全仓主动 AI 审计、不增加 FALSE_POSITIVE 反证类型。质量实验若暴露实现缺陷，应记录独立问题、按新的修复任务处理，再复验；不能把评测脚本的结果悄悄改成 Runtime 产品行为。
+
+## 用户已确认的产品迭代顺序（全部 Planned）
+
+| 顺序 | 交付范围 | 用户可获得的结果 |
+| --- | --- | --- |
+| 1：开发者任务入口 v0.1 | 定位当前 workspace 的扫描；只读汇总；保守合并相关发现；普通/详细视图；明确建议下一步 | 一页能看懂且可追溯的任务单 |
+| 2：继续核查 | 引导宿主选择待分析项、准备受限证据、推进已有 MCP handoff；先查代码能回答的问题，再询问必要业务事实 | 用户选择一个任务后继续推进，不必编写验收提示词 |
+| 3：修复与验证 | 准备可审阅补丁、兼容性说明和验证计划；执行已获授权的编辑/验证，记录未执行项 | 用户能够审阅修复及其效果和剩余条件 |
+
+独立人工质量验证与上述迭代协同开展，不用“报告更易读”替代风险判断质量。当前只确认规划；源码开发须有后续明确任务，每次只交付一个迭代。
+
+### 首轮：开发者任务入口 v0.1
+
+建议新增只读 MCP 汇总入口，暂定名为 `get_security_summary`，实际签名在开发设计中确定。**当前仍只有八个 MCP 工具；该入口尚未实现。** 核心是共用任务投影和展示，不先建设 GUI、云服务或另一套模型推理路径。
+
+1. **Workspace 定位。** 有明确 scan ID 时校验其归属；未提供时，只能在已绑定/明确选择的 workspace 内定位最近扫描，不取全局最近记录。未绑定或目标有歧义时要求明确 workspace；无记录时返回“需要首次检查”和可选下一步，不自行扫描。旧工具不默认获得 `scan_id="latest"` 别名。
+2. **纯只读汇总。** 输出基于现有 scan、Raw 与 Triage 记录，不调用 scanner/模型、不收集目标项目环境变量或凭证值、不改源码或 DB。现有 `TriageService.view` 可写入 STALE，不能直接包装后宣称纯只读；开发需建立不写入的 freshness/投影路径，证据不可核对时保留过期/不可核对状态，不能把历史 VALID 当成当前确认。
+3. **保守任务合并。** 有明确共同位置/规则语义/修复目标的 TLS 发现可合并；依赖沿用 ecosystem/package/version/manifest 分组，每条 advisory 保留独立 identity 和分析状态。不能仅凭相同 severity、文件或模型叙述合并不相关风险。任务是展示投影，首轮不另建持久化任务数据库，不覆盖原 Finding/TriageRecord。
+4. **普通与详细视图。** 默认一页、最多三个推荐跟进任务，提供完整任务列表/Raw 入口。任务包含可能影响、已有依据、未知条件、建议下一步及关联 Finding。UUID、CVE 明细、confidence、evidence_refs、policy_notes 留在详细视图。所有 REVIEW 时仍可建议“核查影响”，但不得重映射为 ACTIONABLE，不自动隐藏其余候选。
+5. **状态表达。** “已验证”改成“已完成 AI 审阅”，明确 VALID 是记录通过 Runtime 校验，非人工验证、复现或线上可利用证明。扫描覆盖与审阅覆盖分别展示；FAILED、STALE、UNTRIAGED、IaC 不 eligible 分开解释。0 ACTIONABLE 不生成“安全”结论。
+6. **来源与权限。** 区分扫描器候选、Runtime 已接受的 AI 审阅和宿主补充核查。模型 reason/合法引用不是确定性事实证明；未被 Runtime 接受的额外调用链不得伪装为其已验证证据。当前没有通用宿主补充报告的导入接口，首轮不伪造已持久化记录。下一步先展示建议动作，不自动执行编辑、构建、联网或模型上传；既有授权在其范围内有效，不重复询问已授权的只读工作。
+
+Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为“核查云闪付 HTTPS 连接”；明确区分不安全实现、静态业务调用与未知生产条件。此前宿主追踪到下单、关单、退款及补单查询，这属于用户提供的补充核查报告，尚无本轮独立复验或已接受的新 Triage 记录。Secret 先核对用途与部署覆盖，用户只提供状态而非原值；依赖缺少 affected range/fixed version 时先补信息，不编造升级版本。
+
+### 首轮验收标准（尚未执行）
+
+- 无需手工寻找 UUID 就能取得当前 workspace 的结果；多 workspace、显式不匹配 scan、未绑定/有歧义、无扫描记录均有确定行为，不串项目。
+- 默认报告让用户能回答“先做什么、为什么、下一步如何推进”；技术详情和完整列表仍可获得，不以省略信息制造低风险印象。
+- 两条相关 TLS Finding 能形成一个任务，并能逐条回溯；依赖 grouping 不吞 advisory，不混淆未审阅/失败/过期状态。
+- 26 REVIEW / 0 ACTIONABLE、部分扫描、75 eligible 未审阅与 14 不 eligible 的 IaC 等状态都能准确表达；历史回放另测，不能要求同一 priority 分布。
+- 汇总读取不改变 scans/findings/triage_records；来源、Secret 脱敏、workspace 边界与现有授权约束完整。新增工具数与所有展示在交付时据真实代码更新。
+- 找三位未参与开发的开发者，不给工程验收长提示词，观察其是否能取得结果、理解首个任务并选择下一步。记录困惑、错误理解和所需额外解释；此项检验易用性，不当作安全准确率。
+
+### 后两轮的依赖与边界
+
+继续核查迭代要处理当前“排序后先取 limit、再查 cache”的推进问题，避免反复返回同一批；仅在其明确开发任务中改变选择策略，保留缓存、batch budget、hash/session/引用校验。额外源码核查须标明范围和来源；词法结果不宣称 compiler-grade 调用链，不把宿主任意读取结果塞进不允许的 evidence_refs。
+
+修复迭代复用现有修复任务和扫描复查基础，但不能把 `generate_fix` 宣称为现有自动补丁能力，或把 `verify` 无匹配当业务修复证明。准备补丁、应用补丁、构建/测试、扫描复查与生产发布分别报告执行状态；沿用用户已给出的授权，超出范围的实际执行再取得相应授权。目标 Maven/Gradle/npm/pip 构建仍不默认执行。两轮详细设计、数值门槛和实现均未开展。
 
 ## 固定 Benchmark 与评测边界
 
@@ -41,7 +88,7 @@
 
 模型比较使用同一冻结的受限脱敏 packet、相同选择列表、预算和 prompt 意图。人工可在授权本地范围核对更完整上下文，但须记录依据是 BOUNDED_PACKET、LOCAL_SOURCE 还是 EXTERNAL_RUNTIME_FACT；分别评价“给定证据能合理判断什么”和“实际风险已被人工证实什么”，避免惩罚模型无法获得的运行信息。
 
-## 八个规划阶段
+## 质量工作流：八个规划阶段
 
 阶段 1 先冻结样本并做独立试标；阶段 2/3 形成 schema 和标准，再回到阶段 1 完成正式标注。模型比较、指标与回归使用冻结后的 adjudicated 版本，不在模型输出之后随意改标签。以下路径都是**未来可能涉及的文件**，本轮不创建或修改它们。
 
@@ -158,10 +205,12 @@
 
 验收：先写具体问题、预期证据增益和比较基线，再决定是否实施；PoC 结果不污染 Raw、scan coverage 或已冻结 ground truth。Joern / compiler-grade dataflow 在当前代码中仍 **NOT_IMPLEMENTED**。
 
-## 质量阶段完成标准与交接
+## 阶段完成标准与交接
 
-阶段完成必须同时具备：可复现 benchmark 身份；独立人工标签与分歧记录；五类 verdict/实际风险/利用条件的区别；可追溯多模型 run（或明确未运行限制）；分母完整的 precision/agreement/suppression-risk；安全边界回归；预先确立并满足的质量门槛。没有足够人工真值或真实模型结果只能交付部分测量，不宣布完成整体质量 milestone。
+质量工作流完成必须同时具备：可复现 benchmark 身份；独立人工标签与分歧记录；五类 verdict/实际风险/利用条件的区别；可追溯多模型 run（或明确未运行限制）；分母完整的 precision/agreement/suppression-risk；安全边界回归；预先确立并满足的质量门槛。没有足够人工真值或真实模型结果只能交付部分测量，不宣布完成整体质量 milestone。
 
-最小下一任务：**核实固定 Jeepay 源码身份，完成盲审试标并确定 ground truth schema/指南**。先使用既有目录与证据，新增报告尽量合并为一个质量 acceptance，不再为每次运行增加顶层总结文档。旧验收按原时点保留，原 ground truth 的 null 不在本轮填写。
+首个产品开发任务：**开发者任务入口 v0.1**，范围和验收以上文为准；当前仅批准规划，未开始源码开发。同步的质量任务：**核实固定 Jeepay 源码身份，完成独立人工盲审试标并确定 ground truth schema/指南**。没有人工审阅者时如实保留 UNREVIEWED，不由 Agent 自填。
 
-新聊天从 [PROJECT_STATE](PROJECT_STATE.md) 的 Agent Handoff 开始。授权下一阶段之前，只维护这份规划；不能默认开始公网模型请求、替人工打标签、训练/调参或实现 Joern。
+整体 milestone 需分别交付获授权的产品迭代并达到质量工作流门槛。产品迭代需同时满足其使用验收和既有边界回归；独立质量工作流按前述身份、标签、指标与风险门槛单独验收。任务入口完成不代表八项质量工作或整个新 milestone 完成。先使用既有目录与证据，新增报告尽量合并为一个 acceptance，不再为每次运行增加顶层总结文档。旧验收按原时点保留，原 ground truth 的 null 不在本轮填写。
+
+新聊天从 [PROJECT_STATE](PROJECT_STATE.md) 的 Agent Handoff 开始。本次用户确认只授权持久化本路线并提交推送；新聊天开始源码开发前需接到明确开发任务。不能默认开始公网模型请求、替人工打标签、训练/调参或实现 Joern。

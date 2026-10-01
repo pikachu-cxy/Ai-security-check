@@ -1,6 +1,6 @@
 # AI Security Runtime — Architecture Decisions
 
-更新：2026-10-02。依据 `feature/runtime-mvp` 的 `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` 当前实现与验收。下列 Accepted 表示已确立的决策，列出的限制不因此变成已实现能力。未来建议单列，不用 ADR 掩盖代码缺口。
+更新：2026-10-02。既有实现与验收依据 `feature/runtime-mvp` 的 `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`；本轮规划基线为 `7e197443eb4f712d10bc9a61be82c4929b1569da`，加入用户确认的任务引导与来源原则。Accepted 表示已确立的决策；各项分别标明 Implemented / Planned，不因路线获批而宣称已实现。
 
 恢复入口：[PROJECT_STATE](PROJECT_STATE.md)；实现事实：[ARCHITECTURE](ARCHITECTURE.md)；后续规划：[NEXT_STAGE](NEXT_STAGE.md)。
 
@@ -70,7 +70,7 @@ Agent-native 将脱敏 packet 交给宿主，但 Runtime 不调用其模型。`i
 
 Scan coverage 回答本次计划中的规则、文件、能力/库存检查执行程度。Triage coverage 回答候选中多少已有有效独立审阅，以及 actionable/review/lower/suppressed/failed/stale/untriaged 数量。前者不证明没有漏洞；后者不补齐未执行规则或未解析依赖。
 
-两套字段分别返回。只 triage 26 项不能把 115 Raw 算作全验证，也不能把 Jeepay Dependency PARTIAL 改成 FULL。当前 IaC 不 eligible，仍计入总 Raw 与未验证项；FAILED/STALE 与单纯 UNTRIAGED 分开报告。
+两套字段分别返回。只 triage 26 项不能把 115 Raw 算作全验证，也不能把 Jeepay Dependency PARTIAL 改成 FULL。当前 IaC 不 eligible，仍计入总 Raw 与未审阅项；FAILED/STALE 与单纯 UNTRIAGED 分开报告。
 
 依据：[rule_coverage.py](../src/security_runtime/rule_coverage.py)、[runtime.py](../src/security_runtime/runtime.py)、[triage.py](../src/security_runtime/triage.py)。
 
@@ -110,7 +110,7 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 现有 Java 是规则 search/taint + bounded evidence；没有 Joern CPG、完整跨文件 source-to-sink 或依赖 reachability。不能把词法引用升级成编译器级结论。
 
-下一阶段先做 AI Triage Quality Validation & Ground Truth。26 条 Coding Agent 审阅及脚本回放不是独立人工真值；应先识别当前误判、模型差异与 suppression risk。只有质量基线和回归门槛建立后，才为确有证据缺口的 Java 场景规划独立、受限、可测的 Joern PoC；不默认执行目标构建，也不对无路径结果宣布不可达。
+下一阶段为 AI Triage Quality Validation & Developer Guidance；独立 Ground Truth 仍是质量工作核心，产品先迭代开发者任务入口。26 条 Coding Agent 审阅及脚本回放不是独立人工真值；应先识别当前误判、模型差异与 suppression risk。只有质量基线和回归门槛建立后，才为确有证据缺口的 Java 场景规划独立、受限、可测的 Joern PoC；不默认执行目标构建，也不对无路径结果宣布不可达。
 
 依据：[JAVA_RULES_ACCEPTANCE](JAVA_RULES_ACCEPTANCE.md)、[AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)、[NEXT_STAGE](NEXT_STAGE.md)。
 
@@ -124,8 +124,36 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 依据：[jeepay-human-ground-truth.json](jeepay-human-ground-truth.json)、[benchmark replay](../scripts/jeepay_triage_benchmark.py)、[NEXT_STAGE](NEXT_STAGE.md)。
 
-## Proposed / 尚未实现的事项
+## ADR-013 — 任务引导与风险判定分开
 
-版本化 ground truth schema、人工盲审与 adjudication、不同真实模型比较、precision/agreement/suppression-risk 统计、prompt/model regression 和质量门槛后的 Joern Java PoC，均在 NEXT_STAGE 规划，本轮未开发。数据库 retention/完整审计、更多自动反证、IaC AI validation、云端多租户及主动审计也没有实现；它们不是当前质量阶段的默认开发任务。
+**Status：Accepted 的产品决策 / Planned；用户已于 2026-10-02 确认，尚未开发。**
+
+面向普通开发者的默认结果应回答“先做什么、为什么、下一步如何推进”。相关候选可投影成一个任务，保留原 Finding/Advisory、证据和状态的完整访问；普通/详细视图共享同一结果，不靠隐藏未完成检查制造安全印象。首轮最多展示三个推荐跟进任务，并提供完整列表入口。
+
+建议跟进动作与 Runtime priority 是不同字段：所有结果为 REVIEW 时，可以推荐先“核查 TLS 影响”，但不能改成 ACTIONABLE、删除 Raw 或降低 release_status。VALID 应表达为“已完成 AI 审阅”，而非人工验证、复现或确定线上可利用。优先级策略如需变化，另以人工基准和独立回归证据决策；不会为匹配历史分布调整结论。
+
+当前 workspace 的扫描定位与只读汇总为首轮 Planned；不得取全局最新记录或直接把有写入副作用的 TriageService.view 包装成纯只读。无扫描时给出下一步，不自行启动扫描。后续“继续核查”和“修复与验证”分别迭代，沿用已授予范围内的授权，源码修改、构建、联网/模型上传等超出范围的执行另行处理。
+
+理由：当前工程验收输出要求用户理解内部枚举并编写多轮提示词，增加决策负担。可执行任务应减少用户负担，同时保持证据、未知条件和风险政策的真实含义。易用性试用与安全质量分别验收。
+
+依据：[当前展示](../src/security_runtime/human.py)、[当前 MCP](../src/security_runtime/mcp_server.py)、[PROJECT_STATE](PROJECT_STATE.md) 的用户报告与 [NEXT_STAGE](NEXT_STAGE.md) 的已批准范围。
+
+## ADR-014 — 证据来源与核查范围显式区分
+
+**Status：Accepted 的来源原则；现有引用/hash 校验已实现，完整任务来源展示/宿主补充报告契约为 Planned。**
+
+扫描器候选、Runtime 接受的 AI 审阅、宿主额外源码核查和独立人工判断具有不同证据含义。结构/引用合法不证明语义正确；静态业务调用不证明生产启用；有限依赖与词法证据不证明完整图或 reachability。展示时保留来源和未知条件，不把一种分析升级为另一种确认。
+
+用户提供的 Jeepay 实际宿主 MCP 运行与已提交脚本回放使用不同 scan identity，分别记录，不覆盖原验收或要求匹配 verdict/priority。宿主后来读取完整调用链的报告没有作为新的 Triage packet/hash/refs 提交，不能伪装成 Runtime 已接受结论，也不能补齐 scan coverage。当前没有通用宿主补充报告导入接口，未固化 revision/artifact 的聊天报告仅作为带来源的产品输入。
+
+理由：跨设备和跨聊天需要知道事实来自哪次运行、哪些核查尚未实施。模型审阅、宿主分析和人工真值混在一起会掩盖证据缺口，并污染质量指标。
+
+依据：[EvidenceBuilder](../src/security_runtime/triage_evidence.py)、[TriageService](../src/security_runtime/triage.py)、[PROJECT_STATE](PROJECT_STATE.md)、[NEXT_STAGE](NEXT_STAGE.md)。
+
+## Approved / Planned 与其它尚未实现事项
+
+已批准路线包括开发者任务入口、继续核查、修复与验证三个产品迭代，以及独立人工质量工作；版本化 ground truth schema、人工盲审与 adjudication、不同真实模型比较、precision/agreement/suppression-risk、prompt/model regression 和质量门槛后的 Joern Java PoC，均在 NEXT_STAGE 规划。本轮只授权持久化路线及提交推送，未实施这些功能或实验。
+
+数据库 retention/完整审计、更多自动反证、IaC AI validation、云端多租户及主动审计也没有实现；它们不属于本轮已批准产品迭代的默认开发任务。
 
 变更这些决策时，应新增或明确 supersede ADR，写出原因、证据和行为变化；历史验收按原时点保留，不用聊天记录取代持久化决策。

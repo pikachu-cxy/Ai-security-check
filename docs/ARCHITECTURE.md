@@ -1,6 +1,6 @@
 # AI Security Runtime — Architecture
 
-更新：2026-10-02（Asia/Shanghai）。核对分支：`feature/runtime-mvp`；代码及验收 HEAD：`3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`。Triage v0.1 最终实现提交：`557052049c74c6d1ca4321c2d9559483a36f55d2`。Runtime 包版本仍为 `0.3.1`，Triage milestone 与包版本不同。
+更新：2026-10-02（Asia/Shanghai）。核对分支：`feature/runtime-mvp`；本轮规划基线 HEAD：`7e197443eb4f712d10bc9a61be82c4929b1569da`；代码及既有验收快照：`3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`。Triage v0.1 最终实现提交：`557052049c74c6d1ca4321c2d9559483a36f55d2`。Runtime 包版本仍为 `0.3.1`，Triage milestone 与包版本不同；本轮没有源码改动。
 
 本文以当前源码为事实依据。项目恢复先读 [PROJECT_STATE](PROJECT_STATE.md)，架构理由见 [DECISIONS](DECISIONS.md)，后续规划见 [NEXT_STAGE](NEXT_STAGE.md)。历史 acceptance 描述各阶段时点，不能把其中“五工具”“尚未实现 AI”直接当作当前状态。
 
@@ -120,6 +120,12 @@ BYOK `OpenAICompatibleProvider` 使用标准库请求 `/chat/completions`，要�
 
 `verify` 仅枚举 primary adapters，OSV-only origin 通常返回 UNKNOWN；文件删除有直接 RESOLVED 路径，位置 fingerprint 消失不是业务漏洞修复证明。MCP 返回 compact scan/coverage/provider 数据，不使用 CLI progress renderer，stdout 保持 SDK JSON-RPC。
 
+## Implemented：当前展示与用户流程的边界
+
+[human.py](../src/security_runtime/human.py) 的 render_triage 展示 coverage、priority、逐项 verdict/reason/exploitability、证据位置、依赖分组及 IaC 分类。当前将有效 AI 分析记录写为“已验证”；其技术含义是记录通过 Runtime 校验，不是人工验证、漏洞复现或线上可利用证明。该用词尚未在代码中修正。
+
+当前没有开发者任务单、当前 workspace 最新扫描的 MCP 汇总入口或内置的继续核查流程。宿主 Agent 可在另获/已有授权范围内阅读源码，但其额外分析不是 Runtime 的确定性检查，也不自动进入受 hash/session/引用约束的 TriageRecord。已有 EvidenceBuilder 的有限词法关联不提供 compiler-grade 调用链。用户提供的 Jeepay 宿主调用链报告按 PROJECT_STATE 的来源说明保留，不能提升 scan/triage coverage。
+
 ## Implemented：Progress、Diagnostics、Storage 与 Packaging
 
 ProgressEvent / ContextVar reporter / heartbeat / checkpoint 与外部进程取消已实现，包含 scan、engine、fallback、triage 生命周期。CLI 进度仅 stderr，JSON 结果仅 stdout；`--no-progress` 关闭 renderer，致命错误仍可写 stderr。事件不默认持久化或上传，不制造百分比。Diagnostics 保存限长脱敏的标准错误、来源 host、retry-after 和 proxy configured 状态。来源：[progress.py](../src/security_runtime/progress.py)、[cli_progress.py](../src/security_runtime/cli_progress.py)、[diagnostics.py](../src/security_runtime/diagnostics.py)、[processes.py](../src/security_runtime/processes.py)。
@@ -137,8 +143,20 @@ ProgressEvent / ContextVar reporter / heartbeat / checkpoint 与外部进程取�
 
 wheel/sdist 与 PyInstaller onedir 已实现；Windows x64、Linux x64、macOS x64/arm64 工作流有原生归档验收。Scanner engines 单独按需安装，不捆绑在 Runtime 包。规则、法律声明、四个 triage 模块及 source commit/artifact 完整性有分发门禁。最近实现提交的 382 passed / 6 skipped / 6 subtests、74 项 Triage 定向测试、四组 CI 及 native BYOK/MCP 证据记录于 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md) 和 [triage-delivery-evidence.json](triage-delivery-evidence.json)，属于既有验收，本轮未重跑构建或模型。
 
-## Planned：AI Triage Quality Validation & Ground Truth
+## Planned：AI Triage Quality Validation & Developer Guidance
 
-下一阶段是 [AI Triage Quality Validation & Ground Truth](NEXT_STAGE.md)：独立人工标注固定 Jeepay benchmark、版本化 ground truth schema、一致判定标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 及 prompt/model regression。当前 26 条 Coding Agent 审阅通过脚本回放实际 MCP，是交接/策略验收，不能当独立人工真值或模型准确率。
+用户已确认下一阶段路线，详细范围与验收见 [NEXT_STAGE](NEXT_STAGE.md)；本轮只更新文档。新增能力均未实现，当前八个工具、Raw/Triage 分离、覆盖契约、TriagePolicy 和授权边界仍以以上 Implemented 部分为准。
 
-Joern Java PoC 必须在上述质量门槛通过后单独评估。Joern、compiler-grade dataflow、完整 Maven reachability、主动 AI 全仓审计、自动构建、自动修复、retention 与云服务均未实现。`privacy.py` 的旧 ContextProvider/LocalContextProvider/AIProvider.generate_fix 没有接入当前 Runtime；正式 Triage 使用 EvidenceBuilder 与新的 provider 接口。
+| 迭代 | Planned 内容 | 本轮边界 |
+| --- | --- | --- |
+| 1：开发者任务入口 v0.1 | 当前 workspace 的扫描定位、纯只读汇总、保守任务投影、普通/详细视图、准确状态与来源、明确下一步；建议 MCP 名称 get_security_summary | 无新工具、数据模型或展示代码；不自动核查、修改 priority 或执行修复 |
+| 2：继续核查 | 宿主沿任务推进已有 MCP handoff、选取待分析项、补充受限证据，先核对源码可回答的事实，再问必要业务问题 | cache/batch 推进调整和来源导入契约未开发；不是自动 compiler-grade 调用链 |
+| 3：修复与验证 | 可审阅补丁、兼容性说明、授权后的编辑与验证、执行状态与剩余条件 | 现有 generate_fix / verify 不等于完整修复流程 |
+
+首轮建议以现有记录建立展示投影，不另建持久化任务数据库；合并任务保留每条 Finding/Advisory 的独立身份及状态。Runtime priority 与建议跟进动作分别表达，REVIEW 可以对应“核查影响”，不升级为 ACTIONABLE。模型叙述或引用合法不等于事实语义已经证实；扫描器候选、Runtime 接受的 AI 审阅与宿主补充核查需区分，额外源码分析不能伪装为已接受 evidence_refs。当前没有通用宿主补充报告的持久化/导入接口。
+
+只读汇总还需设计不写入的 freshness/投影路径；现有 TriageService.view 可持久化 STALE，直接包装不能满足纯只读目标。自动定位扫描须按明确 workspace 约束，不用全局最新记录，不静默启动扫描；旧 MCP 工具仍无 latest 别名。
+
+独立质量工作协同开展：固定 Jeepay benchmark 身份、独立人工标注、版本化 ground truth schema、五类 verdict 一致标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 和 prompt/model regression。已提交的 26 项脚本回放与用户提供的另一组实际宿主报告分别保留 provenance；均不能当独立人工真值。三位未参与开发的开发者试用仅评价易用性，不能换算安全准确率。任务入口完成不代表质量阶段完成。
+
+Joern Java PoC 必须在质量门槛通过后单独评估。Joern、compiler-grade dataflow、完整 Maven reachability、主动 AI 全仓审计、自动构建、自动修复、retention 与云服务均未实现。`privacy.py` 的旧 ContextProvider/LocalContextProvider/AIProvider.generate_fix 没有接入当前 Runtime；正式 Triage 使用 EvidenceBuilder 与新的 provider 接口。

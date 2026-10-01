@@ -7,21 +7,24 @@
 | 项目 | 当前记录 |
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
-| 本轮起始 / 核对 HEAD | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
+| 本轮起始 / 规划基线 HEAD | `7e197443eb4f712d10bc9a61be82c4929b1569da` |
+| 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
 | 当前 milestone | **AI Finding Triage & Risk Validation v0.1 已完成实现和验收** |
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
-| 下一阶段 | **AI Triage Quality Validation & Ground Truth**；尚未实施 |
-| 本轮范围 | 仅持久化四份主文档，不开发新功能，不操作 main |
+| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；用户已确认路线，尚未实施 |
+| 首个产品迭代 | **开发者任务入口 v0.1**；待明确开发任务授权 |
+| 本轮范围 | 更新既有四份主文档并提交推送 `feature/runtime-mvp`，无源码开发 |
 
-此表的 HEAD 是本轮读取代码与验收的确定快照。包含本文的文档提交是其后继；恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
+此表分别记录本轮规划起始 HEAD、既有代码/验收快照与实现提交。包含本文的文档提交是规划基线的后继；恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
 
-本轮开始工作区有此前聊天留下的 ARCHITECTURE 修改及 PROJECT_STATE / DECISIONS / NEXT_STAGE 草稿；这些内容已按当前 v0.1 重写。开始时没有未提交源码改动。此前以 `47c41f4` 为基线、把 triage 当 WIP 的草稿已失效。
+上一轮 `7e19744` 已将四份主文档按 v0.1 重写并推送；此前以 `47c41f4` 为基线、把 triage 当 WIP 的草稿已失效。本轮从干净工作区开始，根据用户确认加入开发者任务引导路线及后续宿主报告；保留既有实现/验收，不重新扫描、不替人工标注、不改源码。
 
 最近关键提交：
 
 | Commit | 交付内容 |
 | --- | --- |
+| 7e19744 | Triage v0.1 架构、项目状态、决策与交接持久化 |
 | 3d773aa | Triage/native 最终验收与证据 |
 | 5570520 | offline 阻止外部模型调用 |
 | f195020 | 完整 Finding range 的 120 行预算 |
@@ -63,7 +66,7 @@
 
 `tools install --all` 仅准备三个主引擎，OSV 按需或显式安装。doctor 只读且 OSV 非强制就绪项。Dependency EXECUTED 要 SUCCESS + FULL coverage contract；SUCCESS/PARTIAL 仍 PARTIAL，不能只看进程状态。
 
-MCP 当前工具：`scan_diff`、`scan_project`、`get_findings`、`generate_fix`、`verify`、`prepare_triage`、`submit_triage`、`get_triage`。`generate_fix` 是确定性任务，`verify` 是原 scanner 复查；Triage 是独立的风险审阅。
+MCP 当前工具：`scan_diff`、`scan_project`、`get_findings`、`generate_fix`、`verify`、`prepare_triage`、`submit_triage`、`get_triage`。`generate_fix` 是确定性任务，`verify` 是原 scanner 复查；Triage 是独立的风险审阅。当前没有 workspace 结果汇总/开发者任务工具，MCP 也没有最新扫描入口或 `latest` 别名；后文规划不能当成已新增工具。
 
 ## Java Rule Coverage
 
@@ -75,7 +78,9 @@ Java 22 条（21 AST + 1 MyBatis XML），12 个类别，7 search / 15 taint；P
 
 Jeepay：650 个项目文件；Java 22/22/22 规则、548 Java/XML SAST 文件实际执行；JavaScript 10 文件、0 规则 NOT_COVERED；CODE_SAST=PARTIAL。有限 search/taint 不等价于 compiler-grade 跨文件 reachability。详情：[JAVA_RULES_ACCEPTANCE](JAVA_RULES_ACCEPTANCE.md)、[RULE_COVERAGE](RULE_COVERAGE.md)。
 
-## Jeepay 最新真实 Dogfood
+## Jeepay 已提交 Dogfood 基线与后续宿主报告
+
+### 已提交的 native scan 与脚本化 MCP 回放
 
 扫描时间：2026-10-01。保存的 scan ID：`f5224162-0624-416f-8472-0f0474e7fd58`。使用实际安装 CLI/scanners；公开 Jeepay 的依赖元数据在线解析/查询已获当次用户授权。本轮没有重新扫描、调用公网模型或修改证据。
 
@@ -109,6 +114,25 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 证据：[真实 native scan](jeepay-osv-online-evidence.json)、[MCP triage](jeepay-triage-evidence.json)、[frozen MCP triage](jeepay-frozen-triage-evidence.json)、[人工标注入口](jeepay-human-ground-truth.json)、[native BYOK loopback](triage-native-byok-evidence.json)。原 capture 含原电脑 workspace，只有 branch=master，**没有明确 Jeepay commit SHA**；跨设备复现必须补核对应源码版本，不能猜测一致。
 
+### 用户提供的后续实际宿主 MCP 验收（与历史回放分开）
+
+报告来源：2026-10-02 用户在当前聊天粘贴的 Jeepay 宿主 Codex 验收与随后只读核查回复。固定 scan ID：`99ca7566-4a6f-4818-b447-38646072457b`。**本轮未在 Jeepay 宿主直接重跑 MCP，也未固化该运行的机器可核验 artifact、Runtime/Jeepay revision 和 packet 摘要；以下是用户提供的报告，不替换上述已提交的历史证据。**
+
+| 状态 | 报告数量 |
+| --- | ---: |
+| Raw / eligible | 115 / 101 |
+| VALID triaged | 26（4 code + 9 Secret + 13 dependency） |
+| ACTIONABLE / REVIEW | **0 / 26** |
+| LOWER_PRIORITY / SUPPRESSED | 0 / 0 |
+| FAILED / STALE | 0 / 0 |
+| UNTRIAGED | 89（75 eligible dependency + 14 不 eligible IaC） |
+
+该宿主轮次追加处理 9 Secret + 13 dependency，报告 cache hits=0，保留先前 4 code。整体 scan、CODE_SAST、DEPENDENCY_VULN 为 PARTIAL；SECRET_SCAN、IAC_MISCONFIG 为 EXECUTED。Dependency 保留 Trivy MAVEN_RATE_LIMITED 失败与 OSV fallback 的部分覆盖；AI Triage 未提升 coverage。与历史的 2 ACTIONABLE / 23 REVIEW / 1 LOWER_PRIORITY 分布不同，不能为匹配旧输出调整新判断。
+
+宿主随后额外读取 Jeepay 源码，报告 YsfHttpUtil 的校验绕过实现位于云闪付渠道下单、关单、退款和补单查询的请求链中；生产渠道、部署版本、信任配置和代理条件仍未知。这是**宿主补充只读核查**，没有在本轮作为新 evidence_refs/context_hash 提交 Runtime。它不是 Runtime 自动调用链分析、人工 ground truth、已执行补丁或修复验收。
+
+产品反馈：用户需要多轮验收提示词才能取得可执行任务。将两条 TLS 候选合为一个跟进任务、Agent 先查仓库能够回答的问题、只询问必要业务事实，应成为后续产品流程；Secret 不询问原值，依赖信息缺失时不编造升级版本。当前优先级维持原结果，0 ACTIONABLE 不表示安全。
+
 ## 当前验收依据与文档导航
 
 四份主文档各司其职：本文恢复项目状态；ARCHITECTURE 描述当前实现；DECISIONS 记录决策；NEXT_STAGE 规划未来工作。其它 acceptance 与 JSON/TXT 保留为阶段验收和证据，不要求每次恢复全部阅读，也不新增重复总结文件。
@@ -127,6 +151,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 ## 已知限制与不可误读的状态
 
+- 默认 `human.render_triage` 当前仍使用“已验证”称呼有效 AI 记录；VALID 仅表示分析记录通过 Runtime 校验，不表示人工验证、复现或线上可利用。开发者任务入口尚未实现，后续迭代将修正表达并提供普通/详细视图。
 - 无 Joern、compiler-grade 跨文件 dataflow、完整 dependency reachability、主动 AI 全仓审计；版本命中、有限词法搜索与文件位置不能证明可利用性或误报。
 - 实际公网 BYOK 模型效果/兼容性、不同模型一致性、triage precision 与 suppression risk 未测；独立人工标注未完成，不能宣布“99% 准确率”或“零漏报”。
 - Raw 始终保留；SUPPRESSED 仅影响独立显示优先级。原 RiskEngine 不随 triage 自动解禁。
@@ -140,9 +165,17 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 ## 下一阶段
 
-[AI Triage Quality Validation & Ground Truth](NEXT_STAGE.md) 共八个规划阶段：固定 benchmark 的独立人工标注；ground truth schema；五类判定一致性；Agent-native/BYOK 不同模型比较；false-negative suppression risk；precision/agreement；prompt/model regression；质量门槛满足后才做 Joern Java PoC。
+用户于 2026-10-02 确认 **AI Triage Quality Validation & Developer Guidance** 路线，详细范围与验收见 [NEXT_STAGE](NEXT_STAGE.md)。**本次确认授权路线持久化、commit + push；没有授权本轮源码开发。所有新增能力均为 Planned。**
 
-当前仅规划，无新 schema、人工标签、模型跑分或 Joern 实现。第一步是核对固定 Jeepay 源码版本及证据身份、安排盲审与标注标准；不能让 Coding Agent 自己把现有输出填成人工真值。
+产品迭代顺序：
+
+1. **开发者任务入口 v0.1**：当前 workspace 的扫描定位、纯只读汇总、保守任务合并、普通/详细视图、准确状态与来源、明确下一步。建议新 MCP 名称 `get_security_summary` 尚未实现；当前仍八个工具。
+2. **继续核查**：引导宿主推进待分析项、补充受限证据，先查代码能回答的问题，再询问必要业务事实；处理重复批次/cache 推进问题。
+3. **修复与验证**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
+
+独立人工质量工作协同推进：冻结 Jeepay benchmark 身份、人工盲审与 ground truth schema、五类 verdict 标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 与 prompt/model regression。没有人工审阅者时保持 UNREVIEWED；模型不得自填人工真值。易用性用三位未参与开发的开发者试用观察，不能换算为安全准确率。
+
+首个待授权产品开发任务是任务入口；首个质量任务是核实固定源码身份与独立人工试标。Raw、TriagePolicy、RiskEngine、覆盖契约和上传/执行授权边界保持完整。任务入口交付不表示整体质量 milestone 完成；Joern Java PoC 仍须在质量稳定且有明确证据增益后单独评估。
 
 ## Agent Handoff
 
@@ -151,4 +184,5 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 3. 执行 `git status`、`git branch --show-current`、`git log -10 --oneline`、`git rev-parse HEAD`，确认当前版本。以当前代码和最新 acceptance 校准本文的快照，区分已实现与计划。
 4. 根据任务阅读 `src/security_runtime/runtime.py`、`models.py`、`scanners.py`、`osv.py`、`dependency_fallback.py`、`rule_coverage.py`，以及四个 `triage*.py`、`mcp_server.py`、`storage.py` 和对应 tests。不要凭旧 README 或 Capability 枚举预留项宣称已支持。
 5. 按 README 的当前安装说明恢复运行环境，先使用 `security-check doctor --path <project>` / `tools status`。Git 不会恢复用户 state/tools、API key 或 Jeepay 源码；在新 workspace 扫描会产生本地 identity，不能直接套用旧 scan ID。需要重放固定 benchmark 时先确认源码版本与输入摘要；不要自动启动在线依赖查询或模型上传。
-6. 默认继续任务是 **质量验证与独立 Ground Truth**，不是重写 v0.1 或立即做 Joern。没有独立人工标签时，质量指标保持 UNKNOWN / NOT_MEASURED；保留全部 Raw、scan/triage coverage 与安全边界。后续功能须有新的明确任务授权。
+6. 恢复后的首个待授权产品任务是 **开发者任务入口 v0.1**，同步质量工作是固定身份与独立人工 Ground Truth。先按 NEXT_STAGE 区分已批准路线与尚未实施功能，再接收明确开发任务；本次“确认”只授权文档持久化及推送。不能自行重写 v0.1、实现后两轮或立即做 Joern。没有独立人工标签时，质量指标保持 UNKNOWN / NOT_MEASURED；保留全部 Raw、scan/triage coverage 与安全边界。
+7. 两组 Jeepay 结果不可混用：已提交回放 `f5224162-...` 与用户提供的实际宿主报告 `99ca7566-...` 分别保留来源和状态。旧 scan ID 不是跨设备标识；宿主补充调用链不是已接受 Runtime Triage。恢复质量样本须核对源码 revision/packet 身份，未固化的报告只作为待补证据的产品输入。
