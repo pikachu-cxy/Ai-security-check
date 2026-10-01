@@ -35,7 +35,7 @@ class WorkspaceResolver:
                 allow_non_git_source: bool = False) -> Workspace:
         explicit = path is not None
         candidate = Path(path) if explicit else Path.cwd()
-        if any(item.is_symlink() or item.is_junction() for item in (candidate.absolute(), *candidate.absolute().parents)):
+        if candidate.absolute().is_symlink() or candidate.absolute().is_junction():
             raise WorkspaceError("Workspace symlinks and junctions are not supported")
         if self._unsafe(candidate.absolute()):
             raise WorkspaceError(UNSAFE_WORKSPACE if explicit else NO_PROJECT)

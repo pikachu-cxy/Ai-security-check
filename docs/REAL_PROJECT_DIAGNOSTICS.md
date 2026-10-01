@@ -252,7 +252,7 @@ Authorization、Proxy-Authorization、password/token/API key、XML Maven passwor
 
 ## P. pytest
 
-最终完整 pytest：147 passed / 6 skipped / 5 subtests passed。新增诊断测试 61 个。6 个旧 E2E 因 managed Gitleaks/Trivy 不在全局 PATH 而 skip；独立实际验收通过 ToolManager 解析执行三个真实引擎。上一轮 alpha acceptance 脚本已通过：NO_CHANGES、Git 深目录 scope、稳定 fingerprint、verify before/after、MCP、集成状态、owned config exclude。
+最终完整 pytest：148 passed / 6 skipped / 5 subtests passed。新增诊断测试 62 个，含 macOS 平台父目录别名回归。6 个旧 E2E 因 managed Gitleaks/Trivy 不在全局 PATH 而 skip；独立实际验收通过 ToolManager 解析执行三个真实引擎。上一轮 alpha acceptance 脚本已通过：NO_CHANGES、Git 深目录 scope、稳定 fingerprint、verify before/after、MCP、集成状态、owned config exclude。
 
 ## Q. Compliance
 

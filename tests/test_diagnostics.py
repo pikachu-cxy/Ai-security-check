@@ -223,6 +223,15 @@ def test_non_git_default_source_directory(tmp_path, monkeypatch):
         assert SecurityRuntime(registry, SQLiteStore(tmp_path / '.security-runtime' / 'test.db')).scan(mode='release').status == 'PARTIAL'
 
 
+def test_platform_parent_alias_does_not_reject_safe_project(tmp_path, monkeypatch):
+    # macOS commonly exposes temporary projects through /var -> /private/var.
+    # Validate the project boundary after canonicalization, not a system alias.
+    java_fixture(tmp_path)
+    original = Path.is_symlink
+    monkeypatch.setattr(Path, 'is_symlink', lambda path: path == tmp_path.parent or original(path))
+    assert WorkspaceResolver().resolve(tmp_path, allow_non_git_explicit=True).path == tmp_path.resolve()
+
+
 @pytest.mark.parametrize('target', ['home', 'drive'])
 def test_non_git_unsafe_root_before_scanner(target):
     root = Path.home() if target == 'home' else Path(Path.cwd().anchor)
