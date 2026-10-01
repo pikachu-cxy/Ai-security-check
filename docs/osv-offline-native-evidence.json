@@ -1,0 +1,28 @@
+{
+  "scenario": "synthetic npm lockfile with locally authored test database; loopback proxy denies network",
+  "run": {
+    "scanner": "osv-scanner",
+    "version": "2.6.0",
+    "status": "SUCCESS",
+    "duration_ms": 194,
+    "finding_count": 0,
+    "error": "",
+    "error_code": "",
+    "error_summary": "",
+    "remediation": "",
+    "retry_after_seconds": null,
+    "diagnostic_detail": "",
+    "source": "",
+    "http_proxy": "not configured",
+    "https_proxy": "not configured",
+    "capabilities": [
+      "DEPENDENCY_VULN"
+    ],
+    "provider": "osv-scanner",
+    "provider_role": "FALLBACK",
+    "coverage_contract": "FULL",
+    "coverage_notes": [],
+    "rule_coverage": {}
+  },
+  "finding_count": 0
+}

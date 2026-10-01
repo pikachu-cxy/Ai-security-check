@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 import zipfile
@@ -90,8 +91,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--full", action="store_true", help="Prepare real managed engines and run a real sample scan")
+    parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()
+    if args.osv_fallback and not args.full:
+        parser.error('--osv-fallback requires --full')
     with tempfile.TemporaryDirectory(prefix="ai-security-release-") as temporary:
         root = Path(temporary)
         extract(args.archive, root)
@@ -106,8 +110,9 @@ def main() -> None:
         if any("semgrep-rules" in part.lower() or part == ".git" for path in bundle.rglob("*") for part in path.parts):
             raise ValueError("Forbidden content in artifact")
         data = args.data_dir.resolve() if args.data_dir else root / "user-data"
+        osv_preexisting = (data/'tools'/'osv-scanner').exists()
         env = dict(os.environ, SECURITY_RUNTIME_DATA_DIR=str(data), SECURITY_RUNTIME_STATE_DIR=str(root / "state"))
-        for name in ("SECURITY_RUNTIME_SEMGREP_PATH", "SECURITY_RUNTIME_GITLEAKS_PATH", "SECURITY_RUNTIME_TRIVY_PATH",
+        for name in ("SECURITY_RUNTIME_SEMGREP_PATH", "SECURITY_RUNTIME_GITLEAKS_PATH", "SECURITY_RUNTIME_TRIVY_PATH", "SECURITY_RUNTIME_OSV_SCANNER_PATH",
                      "SECURITY_RUNTIME_CONFIG", "SECURITY_RUNTIME_WORKSPACE", "SECURITY_RUNTIME_PLUGIN_DIR",
                      "SECURITY_RUNTIME_TRIVY_CACHE_DIR", "TRIVY_CACHE_DIR"):
             env.pop(name, None)
@@ -158,6 +163,15 @@ def main() -> None:
             all_engines = json.loads(release_scan.stdout)["scanner_runs"]
             if any(item["status"] not in {"SUCCESS", "NOT_APPLICABLE"} for item in all_engines):
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))
+            if not osv_preexisting and (data/'tools'/'osv-scanner').exists():
+                raise ValueError('Healthy primary scanner preparation/scan unexpectedly downloaded OSV')
+            if args.osv_fallback:
+                # An explicit acceptance operation, after proving a healthy
+                # normal scan did not prepare the optional engine.
+                run([str(executable),'tools','install','osv-scanner'],cwd=project,env=env,timeout=180)
+                script=Path(__file__).with_name('osv_fallback_acceptance.py').resolve()
+                evidence=args.archive.resolve().with_name(args.archive.name+'.osv-fallback.json')
+                run([sys.executable,str(script),'--executable',str(executable),'--output',str(evidence)],cwd=root,env=env,timeout=120)
             plugin = Path(env["SECURITY_RUNTIME_PLUGIN_DIR"])
             plugin.mkdir(parents=True, exist_ok=True)
             (plugin / "distribution_probe.py").write_text(PLUGIN_PROBE, encoding="utf-8")
@@ -176,6 +190,7 @@ def main() -> None:
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
+        record['osv_offline_fallback']=args.osv_fallback
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")
 

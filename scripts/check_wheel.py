@@ -24,6 +24,8 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/rulepacks.py",
             "security_runtime/rule_catalog.py",
             "security_runtime/rule_coverage.py",
+            "security_runtime/osv.py",
+            "security_runtime/dependency_fallback.py",
             "security_runtime/rules/catalog.json",
             "security_runtime/python_downloads.json",
             "security_runtime/rules/LICENSE",
@@ -35,7 +37,7 @@ def check(wheel: Path, project: Path) -> None:
             data_prefix + "SOURCE_OFFER.md",
         }
         source_package = project / "src" / "security_runtime"
-        for engine in ("gitleaks", "trivy", "semgrep"):
+        for engine in ("gitleaks", "trivy", "semgrep", "osv-scanner"):
             for name in ("LICENSE", "NOTICE"):
                 required.add(f"security_runtime/licenses/{engine}/{name}")
         rule_files = sorted((source_package / "rules").rglob("*.yml")) + sorted((source_package / "rules").rglob("*.yaml"))
@@ -74,7 +76,7 @@ def check(wheel: Path, project: Path) -> None:
         if missing:
             raise ValueError("Wheel missing required files: " + ", ".join(missing))
         if any(name.startswith("semgrep/") or "semgrep-rules" in name.lower()
-               or name.endswith(("gitleaks.exe", "trivy.exe")) for name in names):
+               or name.endswith(("gitleaks.exe", "trivy.exe", "osv-scanner.exe")) for name in names):
             raise ValueError("Runtime wheel unexpectedly bundles a third-party engine")
         metadata = [name for name in names if name.endswith(".dist-info/METADATA")]
         if len(metadata) != 1:

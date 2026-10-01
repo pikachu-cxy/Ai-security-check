@@ -7,6 +7,7 @@ This Runtime installs or invokes the independently licensed scanner engines belo
 | Semgrep | 1.178.0 | Copyright Semgrep, Inc. and contributors | LGPL-2.1-only | https://semgrep.dev | Retain LICENSE and NOTICE; see SOURCE_OFFER.md for source availability |
 | Gitleaks | 8.30.0 | Copyright (c) 2019 Zachary Rice | MIT | https://github.com/gitleaks/gitleaks | Retain LICENSE and NOTICE |
 | Trivy | 0.74.0 | Copyright Aqua Security and contributors | Apache-2.0 | https://trivy.dev | Retain LICENSE and NOTICE |
+| OSV-Scanner | 2.6.0 | Copyright Google LLC and OSV-Scanner contributors | Apache-2.0 | https://github.com/google/osv-scanner | Retain LICENSE and NOTICE |
 
 ## Rule packs
 

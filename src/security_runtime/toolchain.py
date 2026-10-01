@@ -28,7 +28,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 
-from .engines import BUILTIN_ENGINES
+from .engines import BUILTIN_ENGINES, ON_DEMAND_ENGINES
 from .licensing import LicenseMetadata, LicensePolicy, MANAGED_PYTHON_LICENSE
 from .plugin_api import discover_plugin_directory
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
@@ -87,15 +87,19 @@ class ResolvedTool:
 
 
 def _manifest(tool: str, version: str, platform_name: str, arch: str, asset: str, digest: str, homepage: str, license_name: str) -> ToolManifest:
-    owner = "gitleaks/gitleaks" if tool == "gitleaks" else "aquasecurity/trivy"
+    owner = {"gitleaks": "gitleaks/gitleaks", "trivy": "aquasecurity/trivy", "osv-scanner": "google/osv-scanner"}[tool]
     return ToolManifest(tool, tool.title(), version, platform_name, arch,
                         f"https://github.com/{owner}/releases/download/v{version}/{asset}", digest,
-                        "zip" if asset.endswith(".zip") else "tar.gz",
+                        "binary" if tool == "osv-scanner" else "zip" if asset.endswith(".zip") else "tar.gz",
                         tool + (".exe" if platform_name == "windows" else ""), homepage, license_name,
                         BUILTIN_ENGINES[tool].license_metadata)
 
 
 _ASSETS = {
+    ("osv-scanner", "windows", "x64"): ("osv-scanner_windows_amd64.exe", "e0ed7644118b717b028c249ee9d3515024e55e8510747ca08906eb96765354d6"),
+    ("osv-scanner", "linux", "x64"): ("osv-scanner_linux_amd64", "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108"),
+    ("osv-scanner", "macos", "x64"): ("osv-scanner_darwin_amd64", "60c5296637e977b28eeda5c7f13573e447659a632922737f94d11fa7e30ad6ca"),
+    ("osv-scanner", "macos", "arm64"): ("osv-scanner_darwin_arm64", "98c460dcd37de25819babd757d04542045b6243113e209edcd4d89fedb0256b4"),
     ("gitleaks", "windows", "x64"): ("gitleaks_8.30.0_windows_x64.zip", "54fe94f644b832dd08e8c3a5915efb3bfa862386d59fb27ca0792cb687a83573"),
     ("gitleaks", "linux", "x64"): ("gitleaks_8.30.0_linux_x64.tar.gz", "79a3ab579b53f71efd634f3aaf7e04a0fa0cf206b7ed434638d1547a2470a66e"),
     ("gitleaks", "macos", "x64"): ("gitleaks_8.30.0_darwin_x64.tar.gz", "ca221d012d247080c2f6f61f4b7a83bffa2453806b0c195c795bbe9a8c775ed5"),
@@ -105,9 +109,9 @@ _ASSETS = {
     ("trivy", "macos", "x64"): ("trivy_0.74.0_macOS-64bit.tar.gz", "472816f6888dda689d075c30254d4210b4d1035acf365aa72332f584c2f60485"),
     ("trivy", "macos", "arm64"): ("trivy_0.74.0_macOS-ARM64.tar.gz", "1caada5e0e2091909357c7525d3aa76f4b660b13821bc143b190c7483e31cc11"),
 }
-VERSIONS = {"semgrep": "1.178.0", "gitleaks": "8.30.0", "trivy": "0.74.0"}
-HOMEPAGES = {"gitleaks": "https://github.com/gitleaks/gitleaks", "trivy": "https://trivy.dev"}
-LICENSES = {"gitleaks": "MIT", "trivy": "Apache-2.0"}
+VERSIONS = {name: descriptor.version for name, descriptor in BUILTIN_ENGINES.items()}
+HOMEPAGES = {name: descriptor.homepage for name, descriptor in BUILTIN_ENGINES.items()}
+LICENSES = {name: descriptor.license for name, descriptor in BUILTIN_ENGINES.items()}
 logger = logging.getLogger(__name__)
 
 
@@ -368,7 +372,7 @@ class ToolManager:
                 value = tomllib.loads(config.read_text(encoding="utf-8")).get("tools", {}).get(tool_id, {}).get("path")
                 return Path(value).expanduser() if value else None
         except (OSError, ValueError, tomllib.TOMLDecodeError):
-            pass
+            raise DiagnosticError(ErrorDiagnostic('CONFIG_CORRUPTED', 'Invalid tool configuration.', 'Repair the local tool configuration before retrying.')) from None
         return None
 
     def _version(self, tool_id: str, path: Path) -> str:
@@ -470,7 +474,8 @@ class ToolManager:
             raise
         except Exception as exc:
             logger.warning("tool_resolution_failed tool=%s reason=%s", tool_id, type(exc).__name__)
-            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, type(exc).__name__)
+            diagnostic = exc.diagnostic if isinstance(exc, DiagnosticError) else classify_network_error(exc, fallback='ENGINE_UNAVAILABLE')
+            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, diagnostic.error_summary, diagnostic)
         if current.status == ToolStatus.READY:
             return current
         if current.source == ToolSource.EXPLICIT:
@@ -510,7 +515,11 @@ class ToolManager:
             archive = staging / "release.archive"
             self.provider.download(manifest, archive)
             executable = staging / manifest.executable_name
-            if manifest.archive_type == "zip":
+            if manifest.archive_type == "binary":
+                if archive.stat().st_size > 200_000_000 or sha256_file(archive) != manifest.sha256:
+                    raise ValueError("Release binary checksum mismatch or oversized")
+                shutil.copyfile(archive, executable)
+            elif manifest.archive_type == "zip":
                 with zipfile.ZipFile(archive) as package:
                     members = [item for item in package.infolist() if not item.is_dir() and Path(item.filename).name == manifest.executable_name]
                     if len(members) != 1 or members[0].file_size > 200_000_000:
@@ -735,7 +744,7 @@ class ToolManager:
         return {tool_id: self.resolve(tool_id) for tool_id in self.versions}
 
     def prepare_all(self, *, include_database: bool = True) -> dict[str, ResolvedTool]:
-        results = {tool_id: self.ensure(tool_id) for tool_id in VERSIONS}
+        results = {tool_id: self.ensure(tool_id) for tool_id in VERSIONS if tool_id not in ON_DEMAND_ENGINES}
         if include_database and results["trivy"].status == ToolStatus.READY:
             self.prepare_trivy_database(results["trivy"].path)
         return results

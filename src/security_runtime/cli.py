@@ -9,7 +9,7 @@ from pathlib import Path
 
 from .capabilities import Capability
 from .diagnostics import format_diagnostic, sanitize
-from .engines import BUILTIN_ENGINES
+from .engines import BUILTIN_ENGINES, ON_DEMAND_ENGINES
 from .licensing import LicenseAction, LicensePolicy, Permission
 from .git import GitError, GitService
 from .logging_utils import configure_logging
@@ -69,6 +69,9 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
             scanners.append({"name": adapter.name, "engine": engine, "status": tool.status,
                 "available": tool.status == ToolStatus.READY, "version": tool.version,
                 "source": tool.source, "path": tool.path, "install": installation_help(engine)})
+        report["optional_providers"] = [{"name": name, "role": "FALLBACK", "status": "ON_DEMAND",
+            "engine_status": tool.status, "version": tool.version, "path": tool.path,
+            "available": tool.status == ToolStatus.READY} for name,tool in resolved.items() if name in ON_DEMAND_ENGINES]
         report["runtime"]["scanners"] = scanners
         report["scanner_plan"]["available"] = [item["name"] for item in scanners if item["available"]]
         report["scanner_plan"]["unavailable"] = [item["name"] for item in scanners if not item["available"]]
@@ -128,6 +131,9 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
                         print(f"Updated: {updated or '-'}")
                 if not item["available"]:
                     print(f"Install: {item['install']}")
+    if verbose:
+        for item in report.get("optional_providers", []):
+            print(f"\n{item['name']}: ON_DEMAND / FALLBACK; engine: {item['engine_status']}")
     print("\n" + report["message"])
     return code
 
@@ -219,13 +225,16 @@ def main(argv: list[str] | None = None) -> int:
             manager = ToolManager()
             if args.tools_action == "status":
                 for tool_id, resolved in manager.statuses().items():
-                    print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
+                    if tool_id in ON_DEMAND_ENGINES:
+                        print(f"{tool_id.title():<12} ON_DEMAND / FALLBACK ({resolved.status}) {resolved.path}")
+                    else:
+                        print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
                 for name, state in manager.trivy_data_statuses().items():
                     print(f"Trivy {name}: {state}")
                 return 0
             if not args.all and args.tool is None:
                 parser.error("tools install requires a tool name or --all")
-            names = tuple(VERSIONS) if args.all else (args.tool,)
+            names = tuple(name for name in VERSIONS if name not in ON_DEMAND_ENGINES) if args.all else (args.tool,)
             successful = True
             for tool_id in names:
                 print(f"Preparing {tool_id}...", file=sys.stderr)

@@ -29,6 +29,13 @@ class RunStatus(StrEnum):
     NOT_COVERED = "NOT_COVERED"
 
 
+class ProviderRole(StrEnum):
+    PRIMARY = 'PRIMARY'
+    FALLBACK = 'FALLBACK'
+    SUPPLEMENTAL = 'SUPPLEMENTAL'
+    USER_PROVIDED = 'USER_PROVIDED'
+
+
 @dataclass
 class Target:
     id: str
@@ -139,6 +146,7 @@ class ScanResult:
     execution_state: str = "EXECUTED"
     coverage_scope: str = "PLANNED_FILES"
     capability_results: dict[str, str] = field(default_factory=dict)
+    capability_details: dict[str, Any] = field(default_factory=dict)
     rule_coverage: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:

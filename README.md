@@ -399,13 +399,14 @@ Current built-in security capabilities are backed by:
 
 - **Semgrep** — pattern-based code security using the local first-party `ai-security-core` rule pack.
 - **Gitleaks** — secret detection.
-- **Trivy** — dependency vulnerability and related project security checks.
+- **Trivy** — independent dependency vulnerability (`vuln`) and IaC (`misconfig`) providers.
+- **OSV-Scanner 2.6.0** — optional dependency fallback, prepared only after an eligible primary failure.
 
 The Runtime chooses engines by security capability and normalizes results into one finding model.
 
 Semgrep community/registry rules are **not** downloaded or bundled by default. The default Semgrep scan uses only this project's independently authored local rule pack.
 
-Gitleaks and Trivy are resolved in this order:
+Gitleaks, Trivy and the on-demand OSV-Scanner are resolved in this order:
 
 ```text
 Explicit path
@@ -690,4 +691,12 @@ Release scans also accept a source directory without Git: `security-check scan -
 
 Each scanner failure includes `error_code`, `error_summary`, `remediation`, optional `retry_after_seconds`, and bounded sanitized `diagnostic_detail`. CLI JSON and MCP carry the same fields. Raw stdout/stderr remain internal, bounded, and absent from scan history and MCP responses. URLs are reduced to hosts; credentials and authorization values are redacted; proxy output only says configured/not configured.
 
-Capabilities report `EXECUTED` when all planned providers succeed, `PARTIAL` when success is mixed with failure/unavailability/timeout, `FAILED` when no provider succeeds and execution fails, `UNAVAILABLE` when providers cannot execute, and `NOT_APPLICABLE` for checks outside the scan scope. Findings from completed checks remain valid under partial coverage; additional issues may remain undetected. Failed preparation gives a retry command such as `security-check tools install gitleaks`. Maven rate limits suggest a local cache, mirror or later retry. Runtime never automatically runs the target project's Maven/Gradle/npm/pip/go build or dependency commands.
+Dependency capability reports `EXECUTED` when at least one successful provider satisfies its FULL planned-inventory coverage contract, preserving failed primary history and fallback identity. Direct manifest/POM results without graph completeness proof remain `PARTIAL`. Other capabilities report `EXECUTED` when their planned required providers succeed, `PARTIAL` when success is mixed with failure/unavailability/timeout, `FAILED` when no provider succeeds and execution fails, `UNAVAILABLE` when providers cannot execute, and `NOT_APPLICABLE` for checks outside the scan scope. Findings from completed checks remain valid under partial coverage; additional issues may remain undetected. Failed preparation gives a retry command such as `security-check tools install gitleaks`. Maven rate limits suggest a local cache, mirror or later retry. Runtime never automatically runs the target project's Maven/Gradle/npm/pip/go build or dependency commands.
+
+## Dependency providers and fallback
+
+Gitleaks independently satisfies default SECRET_SCAN. Trivy dependency failures do not affect its separate IaC process. Eligible dependency failures (including Maven 429, network timeout, DNS/proxy failure, HTTP 5xx, resolution failure or engine unavailability) select OSV-Scanner; integrity, boundary, configuration and invariant failures are exposed without automatic fallback. JSON and MCP include `capability_details` and role/coverage metadata for every executed provider.
+
+`tools install --all` prepares the primary engines. OSV remains `ON_DEMAND / FALLBACK` in `tools status`; `doctor --verbose` reports its availability without requiring it for readiness or downloading it. `tools install osv-scanner` explicitly prepares the pinned official, checksum-verified release. OSV online scans query deps.dev/OSV.dev using dependency identity information. Offline scanning requires both a locally compatible engine and ecosystem databases at `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip`; Runtime does not download them in offline mode. Call analysis and target builds are disabled. Maven POM extraction/resolution remains PARTIAL because complete transitive/test dependency coverage is not attested.
+
+See [Trivy decoupling acceptance](docs/TRIVY_CAPABILITY_DECOUPLING.md) and [OSV fallback acceptance](docs/OSV_DEPENDENCY_FALLBACK.md).

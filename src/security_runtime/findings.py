@@ -32,6 +32,25 @@ class FindingNormalizer:
         fingerprint = hashlib.sha256(f"{self.root}|{category}|{relative}|{line}|{discriminator}".encode()).hexdigest()[:24]
         return Finding(fingerprint, category, title, plain, self.redactor.redact(description)[:400], impact, severity.upper(), confidence.upper(), relative, line, line, self.redactor.redact(evidence)[:160], advice, [scanner], fingerprint, technical_details={"rule_id": rule_id})
 
+    def dependency(self, *, scanner, package, version, ecosystem, manifest,
+                   vulnerability_id, aliases=(), severity='UNKNOWN', title='', description='', source=''):
+        from .diagnostics import sanitize
+        package,version,ecosystem,vulnerability_id = (sanitize(value,200) for value in (package,version,ecosystem,vulnerability_id))
+        aliases=sorted({sanitize(value,100) for value in aliases if isinstance(value,str)})
+        canonical=next((value for value in sorted({vulnerability_id,*aliases}) if value.startswith('CVE-')),vulnerability_id)
+        normalized_ecosystem={'pip':'pypi','python':'pypi','node-pkg':'npm','jar':'maven','pom':'maven','gomod':'go'}.get(ecosystem.lower(),ecosystem.lower())
+        severity={'MODERATE':'MEDIUM','IMPORTANT':'HIGH'}.get(str(severity).upper(),str(severity).upper())
+        if severity not in {'CRITICAL','HIGH','MEDIUM','LOW','UNKNOWN'}:
+            severity='UNKNOWN'
+        finding=self.make(scanner=scanner,category='dependency',title=title or canonical,description=description,
+                          severity=severity,confidence='MEDIUM',file_path=manifest,line=1,rule_id=vulnerability_id)
+        fingerprint=hashlib.sha256(f'{self.root}|dependency|{normalized_ecosystem}|{package}|{version}|{canonical}|{finding.file_path}'.encode()).hexdigest()[:24]
+        finding.id=finding.fingerprint=fingerprint
+        finding.technical_details.update(package=package,package_version=version,installed_version=version,ecosystem=normalized_ecosystem,
+            manifest=finding.file_path,vulnerability_id=vulnerability_id,canonical_vulnerability_id=canonical,
+            aliases=aliases,severity=severity,source=source)
+        return finding
+
 
 def deduplicate(findings: list[Finding]) -> list[Finding]:
     merged: dict[str, Finding] = {}
@@ -39,6 +58,12 @@ def deduplicate(findings: list[Finding]) -> list[Finding]:
         if finding.fingerprint in merged:
             old = merged[finding.fingerprint]
             old.scanner_sources = sorted(set(old.scanner_sources + finding.scanner_sources))
+            if old.category=='dependency':
+                old.technical_details['aliases']=sorted(set(old.technical_details.get('aliases',[])+finding.technical_details.get('aliases',[])))
+                order={'UNKNOWN':0,'LOW':1,'MEDIUM':2,'HIGH':3,'CRITICAL':4}
+                if order.get(finding.severity,0)>order.get(old.severity,0):
+                    old.severity=finding.severity
+                    old.technical_details['severity']=finding.severity
         else:
             merged[finding.fingerprint] = finding
     return list(merged.values())

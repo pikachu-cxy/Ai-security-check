@@ -20,6 +20,7 @@ from .target import TargetDetector, DEPENDENCIES
 from .workspace import WorkspaceResolver, WorkspaceError
 from .progress import NullProgressReporter, progress_context, current_reporter, emit, checkpoint, ScanCancelled
 from .scanners import BaseScanner
+from .dependency_fallback import should_fallback, dependency_status, capability_detail
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,17 @@ class SecurityRuntime:
                 emit(event_type, scanner=run.scanner, scanner_version=run.version,
                     capability=run.capabilities, duration_ms=run.duration_ms, finding_count=run.finding_count,
                     error_code=run.error_code, source=run.source)
-            return found, run
+            provider_runs = [run]
+            if Capability.DEPENDENCY_VULN in scanner.capabilities and run.provider_role == 'PRIMARY' and should_fallback(run):
+                fallback = next((adapter for adapter in getattr(self.registry, 'fallback_adapters', [])
+                    if Capability.DEPENDENCY_VULN in adapter.capabilities and adapter.supports(profile, context)), None)
+                if fallback:
+                    emit('FALLBACK_SELECTED', scanner=fallback.name, capability=(Capability.DEPENDENCY_VULN,),
+                        error_code=run.error_code, message='依赖检查切换至 OSV-Scanner')
+                    more, fallback_runs = execute(fallback)
+                    found.extend(more)
+                    provider_runs.extend(fallback_runs)
+            return found, provider_runs
 
         pool = ThreadPoolExecutor(max_workers=max(1, len(selected)))
         try:
@@ -148,18 +159,18 @@ class SecurityRuntime:
                 try:
                     while True:
                         try:
-                            found, run = futures[scanner.name].result(timeout=.1)
+                            found, provider_runs = futures[scanner.name].result(timeout=.1)
                             break
                         except FutureTimeout:
                             checkpoint()
                 except ScanCancelled:
                     raise
                 except Exception as exc:
-                    found, run = [], ScannerRun(scanner.name, "", RunStatus.FAILED, 0,
+                    found, provider_runs = [], [ScannerRun(scanner.name, "", RunStatus.FAILED, 0,
                         error_code="SCANNER_FAILED", error_summary="Scanner did not complete successfully.",
-                        remediation="Inspect local engine configuration and retry the check.")
+                        remediation="Inspect local engine configuration and retry the check.")]
                 findings.extend(found)
-                runs.append(run)
+                runs.extend(provider_runs)
         except (KeyboardInterrupt, ScanCancelled):
             current_reporter().cancel()
             raise
@@ -175,14 +186,21 @@ class SecurityRuntime:
         wanted = requested_capabilities(profile, scan_mode, context.files)
         capability_results = {}
         for capability in (Capability.CODE_SAST, Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN, Capability.IAC_MISCONFIG):
-            supporting = [run for run in planned_runs if any(adapter.name == run.scanner and capability in adapter.capabilities for adapter in selected)]
-            capability_results[capability] = "NOT_APPLICABLE" if not files or capability not in wanted else aggregate_provider_statuses(supporting)
+            supporting = [run for run in planned_runs if capability in run.capabilities]
+            aggregate = dependency_status(supporting) if capability == Capability.DEPENDENCY_VULN else aggregate_provider_statuses(supporting)
+            capability_results[capability] = "NOT_APPLICABLE" if not files or capability not in wanted else aggregate
         if rule_coverage and files:
             capability_results[Capability.CODE_SAST]=rule_coverage['status']
-        if complete and any(value in {'PARTIAL','FAILED','UNAVAILABLE','NOT_COVERED'} for value in capability_results.values()):
-            complete = False
-            coverage = "PARTIAL" if successful else "MINIMAL"
-            release_status = RiskEngine().assess(findings, False)
+        capability_details = {cap: capability_detail([run for run in planned_runs if cap in run.capabilities], state)
+                              for cap, state in capability_results.items()}
+        if rule_coverage:
+            capability_details[Capability.CODE_SAST]['coverage'] = 'FULL' if capability_results[Capability.CODE_SAST]=='EXECUTED' else 'PARTIAL' if capability_results[Capability.CODE_SAST]=='PARTIAL' else 'NONE'
+        complete = bool(planned_runs) and all(value in {'EXECUTED','NOT_APPLICABLE'} for value in capability_results.values())
+        # Third-party capabilities retain their independent provider contract.
+        complete = complete and all(run.status == RunStatus.SUCCESS for run in planned_runs
+            if not set(run.capabilities).intersection(capability_results))
+        coverage = "FULL" if complete else "PARTIAL" if successful else "MINIMAL"
+        release_status = RiskEngine().assess(findings, complete)
         if complete and capability_results[Capability.CODE_SAST] != "EXECUTED":
             coverage = "SCOPED"
         status = "COMPLETED" if complete else "PARTIAL"
@@ -198,7 +216,7 @@ class SecurityRuntime:
         elif not complete:
             summary += "；Security check completed with limited coverage."
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
-                            execution_state=execution_state, capability_results=capability_results, rule_coverage=rule_coverage)
+                            execution_state=execution_state, capability_results=capability_results, capability_details=capability_details, rule_coverage=rule_coverage)
         self.store.save(result)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})

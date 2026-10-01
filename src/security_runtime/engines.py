@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from .licensing import GITLEAKS_LICENSE, TRIVY_LICENSE, SEMGREP_LICENSE, LicenseMetadata
+from .licensing import GITLEAKS_LICENSE, TRIVY_LICENSE, SEMGREP_LICENSE, OSV_SCANNER_LICENSE, LicenseMetadata
 
 
 class EngineType(StrEnum):
@@ -56,4 +56,7 @@ BUILTIN_ENGINES = {
                                  "https://github.com/gitleaks/gitleaks", "MIT", False, "", ("windows", "linux", "macos"), "PINNED_RELEASE", ExecutionTrust.SAFE_LOCAL, GITLEAKS_LICENSE),
     "trivy": EngineDescriptor("trivy", "Trivy", EngineType.BINARY, "0.74.0", "Official GitHub Release",
                               "https://trivy.dev", "Apache-2.0", False, "", ("windows", "linux", "macos"), "PINNED_RELEASE", ExecutionTrust.SAFE_LOCAL, TRIVY_LICENSE),
+    "osv-scanner": EngineDescriptor("osv-scanner", "OSV-Scanner", EngineType.BINARY, "2.6.0", "Official GitHub Release",
+                              "https://github.com/google/osv-scanner", "Apache-2.0", False, "", ("windows", "linux", "macos"), "PINNED_RELEASE", ExecutionTrust.SAFE_LOCAL, OSV_SCANNER_LICENSE),
 }
+ON_DEMAND_ENGINES = frozenset({"osv-scanner"})

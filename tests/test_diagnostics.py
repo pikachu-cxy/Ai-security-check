@@ -134,7 +134,7 @@ def mock_registry(root):
     manager = ToolManager(root=root / 'managed')
     manager.ensure = lambda tool: ResolvedTool(tool, 'mock', tool, None, ToolStatus.READY)
     manager.prepare_trivy_database = lambda binary: ToolStatus.READY
-    registry = ScannerRegistry(tool_manager=manager)
+    registry = ScannerRegistry(tool_manager=manager, fallback_adapters=[])
     def execute(args, cwd, timeout):
         if Path(args[0]).name == 'semgrep':
             import yaml

@@ -71,12 +71,26 @@ def render_scan(result, *, verbose=False):
                 lines.append(f"检测到 {language} 源码，但当前规则包没有适用规则，未启动该语言的扫描。")
             elif row['status']=='EXECUTED':
                 lines.append(f"已执行 {row['executed_rules']} 条规则；结果仅表示这些规则的匹配情况，不代表项目没有安全漏洞。")
+    for cap, detail in result.capability_details.items():
+        if detail.get('provider_role') == 'FALLBACK':
+            lines += ['', CAPABILITY_LABELS.get(cap,cap)+'：'+STATES.get(detail['status'],detail['status'])
+                +f"（{detail['active_provider']} 回退；覆盖 {detail['coverage']}）"]
+            if detail['status']=='EXECUTED':
+                lines.append('本次计划中的依赖检查已由回退完成。')
+            else:
+                lines.append('回退已执行，但未证明完整依赖图覆盖；依赖安全仍为部分完成。')
+            if verbose:
+                lines.extend(detail.get('coverage_notes',[]))
     if result.status == 'PARTIAL':
         lines += ['', '为什么覆盖不完整？', f'已完成检查发现的 {len(result.findings)} 个问题仍然有效。',
                   '失败或不可用的检查可能导致其他问题未被发现。']
     from dataclasses import asdict
     for run in result.scanner_runs:
         if run.status in {'SUCCESS', 'SKIPPED', 'NOT_APPLICABLE', 'NOT_COVERED'}:
+            continue
+        resolved_by_fallback = any(result.capability_results.get(cap)=='EXECUTED' and
+            result.capability_details.get(cap,{}).get('provider_role')=='FALLBACK' for cap in run.capabilities)
+        if resolved_by_fallback and not verbose:
             continue
         lines += ['', f'{run.scanner} {run.version}', '状态：' + STATES.get(run.status, run.status)]
         affected = [CAPABILITY_LABELS.get(cap, cap) + ('仅部分完成' if result.capability_results[cap] == 'PARTIAL' else '未完成')

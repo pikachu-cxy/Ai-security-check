@@ -26,6 +26,7 @@ def _agent_result(result) -> dict:
         "execution_state": result.execution_state,
         "coverage_scope": result.coverage_scope,
         "capability_results": result.capability_results,
+        "capability_details": result.capability_details,
         "rule_coverage": {key:value for key,value in result.rule_coverage.items() if key!='scope_files'},
         "coverage": result.coverage,
         "summary": result.summary,

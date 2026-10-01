@@ -99,6 +99,10 @@ TRIVY_LICENSE = LicenseMetadata(
     "Apache-2.0", "Apache License 2.0", "https://github.com/aquasecurity/trivy/blob/v0.74.0/LICENSE",
     True, True, Permission.YES, Permission.YES, True, True, False, False, "", False,
     LicenseClass.PERMISSIVE, "Copyright Aqua Security and contributors")
+OSV_SCANNER_LICENSE = LicenseMetadata(
+    "Apache-2.0", "Apache License 2.0", "https://github.com/google/osv-scanner/blob/v2.6.0/LICENSE",
+    True, True, Permission.YES, Permission.YES, True, True, False, False, "", False,
+    LicenseClass.PERMISSIVE, "Copyright Google LLC and OSV-Scanner contributors")
 SEMGREP_LICENSE = LicenseMetadata(
     "LGPL-2.1-only", "GNU Lesser General Public License v2.1", "https://github.com/semgrep/semgrep/blob/v1.178.0/LICENSE",
     True, True, Permission.WITH_OBLIGATIONS, Permission.WITH_OBLIGATIONS, True, True, True, False, "", False,

@@ -107,6 +107,8 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
         code, summary, remedy = 'OFFLINE_MODE', 'Required local data or engine is unavailable in offline mode.', 'Prepare the required engine/data online, then retry offline.'
     elif 'checksum' in lower or 'sha256 mismatch' in lower:
         code, summary, remedy = 'CHECKSUM_MISMATCH', 'Downloaded artifact failed checksum verification (SHA256 mismatch).', 'Retry the pinned official download. Do not bypass checksum verification.'
+    elif any(word in lower for word in ('config corrupted', 'invalid install marker', 'metadata invalid', 'invalid tool configuration')):
+        code, summary, remedy = 'CONFIG_CORRUPTED', 'Local engine configuration or installation metadata is invalid.', 'Repair the local configuration or installation metadata before retrying.'
     elif status:
         code = f'HTTP_{status}' if status < 500 else 'HTTP_5XX'
         summary = f'Remote source returned HTTP {status}.'
@@ -145,6 +147,8 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
         code, summary = 'NETWORK_TIMEOUT', 'Connection timed out while contacting the remote source.'
     elif isinstance(cause, (IncompleteRead, ConnectionResetError)) or any(word in lower for word in ('incomplete read', 'incompleteread', 'connection reset', 'unexpected eof', 'download interrupted')):
         code, summary = 'DOWNLOAD_INTERRUPTED', 'Remote download was interrupted before completion.'
+    elif 'failed to resolve dependencies' in lower or 'dependency resolution failed' in lower:
+        code, summary = 'DEPENDENCY_RESOLUTION_FAILED', 'Project dependency resolution did not complete.'
     elif isinstance(error, urllib.error.URLError) or any(word in lower for word in ('network', 'dial tcp', 'connection error', 'http error')):
         code, summary = 'UNKNOWN_NETWORK_ERROR', 'A remote connection or download failed.'
     if code in {'NETWORK_TIMEOUT', 'CONNECTION_REFUSED', 'DNS_RESOLUTION_FAILED', 'PROXY_CONNECTION_FAILED', 'TLS_ERROR', 'DOWNLOAD_INTERRUPTED', 'UNKNOWN_NETWORK_ERROR'}:

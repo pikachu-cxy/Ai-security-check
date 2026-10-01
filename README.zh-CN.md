@@ -476,7 +476,8 @@ security-check licenses --check-distribution
 
 - **Semgrep**：使用本地 first-party `ai-security-core` 规则包进行代码安全匹配。
 - **Gitleaks**：Secret 检测。
-- **Trivy**：依赖漏洞及相关项目安全检查。
+- **Trivy**：分别执行依赖漏洞（`vuln`）和 IaC（`misconfig`）检查。
+- **OSV-Scanner 2.6.0**：按需准备的依赖回退，仅在主 provider 满足回退条件时启动。
 
 Runtime 按 Capability 选择安全引擎，并把不同工具的结果统一为同一种 Finding。
 
@@ -817,3 +818,13 @@ usage: security-check ...
 扫描器错误包含 `error_code`、`error_summary`、`remediation`、可选 `retry_after_seconds` 和有界脱敏的 `diagnostic_detail`。CLI JSON 和 MCP 使用相同结构，不保存或返回原始大段 stdout/stderr。URL 仅保留主机名，凭据和 Authorization 脱敏；代理只显示 configured / not configured。
 
 能力状态：所有计划 provider 成功为 `EXECUTED`；成功与失败/不可用/超时并存为 `PARTIAL`；没有成功且存在执行失败为 `FAILED`；均无法执行为 `UNAVAILABLE`；scope 不需要为 `NOT_APPLICABLE`。部分覆盖下，已完成检查的 findings 仍有效，其他问题可能尚未检出。准备失败会提示 `security-check tools install <engine>` 重试；Maven 限流建议本地缓存、mirror 或等待后重试。Runtime 不会自动执行目标项目的 Maven、Gradle、npm、pip、go 构建或依赖命令。
+
+## 依赖 Provider 与按需回退
+
+默认敏感信息能力由 Gitleaks 独立提供。Trivy 依赖进程失败不会影响单独执行的 IaC 检查。Maven 429、网络超时、DNS／代理失败、HTTP 5xx、依赖解析失败或引擎不可用可以触发 OSV；完整性、路径边界、配置损坏和内部 invariant 错误不会被自动回退掩盖。
+
+依赖能力由覆盖契约决定：一个 provider 成功且满足本次完整锁文件范围的 FULL 契约即可 EXECUTED，即使主 provider 曾失败。只有直接清单或未证明完整依赖图的 POM 结果保持 PARTIAL。JSON／MCP 的 `capability_details` 保留 active provider、role、coverage 和主 provider 诊断。
+
+`tools install --all` 只准备默认主引擎；OSV 在 `tools status` 中显示 `ON_DEMAND / FALLBACK`，不影响 doctor 的默认就绪状态。`tools install osv-scanner` 可显式准备固定版本和官方 SHA-256 校验的二进制。在线 OSV 会向 deps.dev／OSV.dev 查询依赖名称与版本。离线执行必须已有引擎和 `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip` 数据，不会自动下载。调用图分析和目标构建均关闭，Runtime 不修改 Maven settings 或自动添加 mirror。
+
+验收记录：[Trivy 能力解耦](docs/TRIVY_CAPABILITY_DECOUPLING.md)、[OSV 依赖回退](docs/OSV_DEPENDENCY_FALLBACK.md)。

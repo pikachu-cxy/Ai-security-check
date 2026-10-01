@@ -6,6 +6,7 @@ import logging
 import tempfile
 import time
 import shutil
+import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol
@@ -272,13 +273,23 @@ class TrivyAdapter(BaseScanner):
     def _prepare(self, binary: str) -> ToolStatus:
         return self.tool_manager.prepare_trivy_database(binary)
 
+    def scan(self, context, normalizer):
+        found,run=super().scan(context,normalizer)
+        if self.checks=='vuln' and os.getenv('SECURITY_RUNTIME_OFFLINE')=='1' and run.status==RunStatus.SUCCESS:
+            run.coverage_contract='PARTIAL'
+            run.coverage_notes=['Offline Trivy extraction does not attest a complete resolved dependency graph.']
+        return found,run
+
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
         relevant = any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "pom.xml", "build.gradle", "go.mod"} for f in context.files)
         return context.mode in {"feature", "release"} and relevant
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         with _snapshot(context) as scoped:
-            process = _execute([binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
+            args=[binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update"]
+            if os.getenv('SECURITY_RUNTIME_OFFLINE')=='1':
+                args.append('--offline-scan')
+            process = _execute([*args,str(scoped)], str(scoped), self.timeout)
             if process.return_code != 0:
                 _process_failure(process)
             data = json.loads(process.stdout)
@@ -293,7 +304,10 @@ class TrivyAdapter(BaseScanner):
         found = []
         for result in data.get("Results", []):
             for item in result.get("Vulnerabilities", []) if self.checks == "vuln" else []:
-                found.append(n.make(scanner=self.name, category="dependency", title=item.get("Title") or "Vulnerable dependency", description=item.get("Title") or "Dependency vulnerability", severity=item.get("Severity", "MEDIUM"), confidence="MEDIUM", file_path=result.get("Target", ""), line=1, rule_id=item.get("VulnerabilityID", "")))
+                found.append(n.dependency(scanner=self.name, package=item.get('PkgName',''), version=item.get('InstalledVersion',''),
+                    ecosystem=result.get('Type',''), manifest=result.get('Target',''), vulnerability_id=item.get('VulnerabilityID',''),
+                    aliases=item.get('Aliases',[]), severity=item.get('Severity','UNKNOWN'), title=item.get('Title') or 'Vulnerable dependency',
+                    description=item.get('Description') or item.get('Title',''), source='Trivy'))
             for item in result.get("Misconfigurations", []) if self.checks == "misconfig" else []:
                 found.append(n.make(scanner=self.name, category="configuration", title=item.get("Title", "Configuration issue"), description=item.get("Description", ""), severity=item.get("Severity", "MEDIUM"), confidence="MEDIUM", file_path=result.get("Target", ""), line=item.get("CauseMetadata", {}).get("StartLine", 1), rule_id=item.get("ID", "")))
         return found
@@ -320,8 +334,10 @@ class TrivyMisconfigAdapter(TrivyAdapter):
 
 
 class ScannerRegistry:
-    def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None):
+    def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None, *, fallback_adapters=None):
         self.tool_manager = tool_manager or ToolManager()
+        from .osv import OSVDependencyAdapter
+        self.fallback_adapters = fallback_adapters if fallback_adapters is not None else ([OSVDependencyAdapter(self.tool_manager)] if adapters is None else [])
         self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:

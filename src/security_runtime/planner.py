@@ -12,6 +12,7 @@ class ScannerPlanner:
         wanted = requested_capabilities(profile, context.mode, context.files, available)
         capabilities = CapabilityRegistry(self.registry)
         selected = [adapter for adapter in self.registry.adapters
-                    if any(adapter in capabilities.get_scanners(capability) for capability in wanted)
+                    if getattr(adapter,'provider_role','PRIMARY') != 'FALLBACK'
+                    and any(adapter in capabilities.get_scanners(capability) for capability in wanted)
                     and adapter.supports(profile, context)]
         return ScanPlan(tuple(adapter.name for adapter in selected), context.files, tuple(sorted(wanted))), selected

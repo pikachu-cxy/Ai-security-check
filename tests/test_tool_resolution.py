@@ -22,7 +22,7 @@ from security_runtime.toolchain import (
 )
 
 
-TOOLS = ("semgrep", "gitleaks", "trivy")
+TOOLS = ("semgrep", "gitleaks", "trivy", "osv-scanner")
 
 
 def local_executable(root: Path, tool: str) -> Path:
@@ -55,7 +55,7 @@ def test_offline_explicit_precedes_managed_and_path(tool, tmp_path, monkeypatch)
     manager = ToolManager(root=tmp_path / "managed")
     explicit = local_executable(tmp_path / "explicit", tool)
     managed_executable(manager, tool)
-    monkeypatch.setenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", str(explicit))
+    monkeypatch.setenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", str(explicit))
     monkeypatch.setattr(manager, "_version", lambda name, path: manager.versions[name])
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: str(local_executable(tmp_path / "path", name)))
     resolved = manager.ensure(tool, offline=True)
@@ -66,7 +66,7 @@ def test_offline_explicit_precedes_managed_and_path(tool, tmp_path, monkeypatch)
 def test_offline_managed_precedes_path(tool, tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
     managed = managed_executable(manager, tool)
-    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", raising=False)
+    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", raising=False)
     monkeypatch.setattr(manager, "_version", lambda name, path: manager.versions[name])
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: str(local_executable(tmp_path / "path", name)))
     resolved = manager.ensure(tool, offline=True)
@@ -77,7 +77,7 @@ def test_offline_managed_precedes_path(tool, tmp_path, monkeypatch):
 def test_offline_system_path_is_used_without_install(tool, tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
     system = local_executable(tmp_path / "path", tool)
-    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", raising=False)
+    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", raising=False)
     monkeypatch.setattr("security_runtime.toolchain.sysconfig.get_path", lambda name: str(tmp_path / "missing-scripts"))
     monkeypatch.setattr(manager, "_version", lambda name, path: manager.versions[name])
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: str(system) if name == tool else None)
@@ -90,7 +90,7 @@ def test_offline_system_path_is_used_without_install(tool, tmp_path, monkeypatch
 @pytest.mark.parametrize("tool", TOOLS)
 def test_offline_missing_tool_never_installs(tool, tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
-    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", raising=False)
+    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", raising=False)
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: None)
     monkeypatch.setattr("security_runtime.toolchain.sysconfig.get_path", lambda name: str(tmp_path / "missing-scripts"))
     with patch.object(manager, "_install_binary", side_effect=AssertionError("download attempted")), \
@@ -103,7 +103,7 @@ def test_offline_missing_tool_never_installs(tool, tmp_path, monkeypatch):
 def test_offline_reports_incompatible_local_version(tool, tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
     system = local_executable(tmp_path / "path", tool)
-    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", raising=False)
+    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", raising=False)
     monkeypatch.setattr("security_runtime.toolchain.sysconfig.get_path", lambda name: str(tmp_path / "missing-scripts"))
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: str(system) if name == tool else None)
     monkeypatch.setattr(manager, "_version", lambda name, path: "0.0.0")
@@ -114,7 +114,7 @@ def test_offline_reports_incompatible_local_version(tool, tmp_path, monkeypatch)
 @pytest.mark.parametrize("tool", TOOLS)
 def test_online_missing_tool_installs_then_resolves(tool, tmp_path, monkeypatch):
     manager = ToolManager(root=tmp_path / "managed")
-    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper()}_PATH", raising=False)
+    monkeypatch.delenv(f"SECURITY_RUNTIME_{tool.upper().replace('-', '_')}_PATH", raising=False)
     monkeypatch.setattr("security_runtime.toolchain.shutil.which", lambda name: None)
     monkeypatch.setattr("security_runtime.toolchain.sysconfig.get_path", lambda name: str(tmp_path / "missing-scripts"))
     monkeypatch.setattr(manager, "_version", lambda name, path: manager.versions[name])
