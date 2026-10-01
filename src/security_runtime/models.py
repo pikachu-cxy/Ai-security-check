@@ -106,6 +106,7 @@ class ScannerRun:
     source: str = ""
     http_proxy: str = "not configured"
     https_proxy: str = "not configured"
+    capabilities: tuple[str, ...] = ()
 
     def __post_init__(self):
         from .diagnostics import sanitize

@@ -3,7 +3,8 @@ from __future__ import annotations
 import time
 import uuid
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+from contextvars import copy_context
 from pathlib import Path
 
 from .findings import FindingNormalizer, deduplicate
@@ -16,6 +17,8 @@ from .scanners import ScannerRegistry
 from .storage import ScanStore, SQLiteStore
 from .target import TargetDetector, DEPENDENCIES
 from .workspace import WorkspaceResolver, WorkspaceError
+from .progress import NullProgressReporter, progress_context, current_reporter, emit, checkpoint, ScanCancelled
+from .scanners import BaseScanner
 
 logger = logging.getLogger(__name__)
 
@@ -36,14 +39,30 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None) -> ScanResult:
+        reporter = progress or NullProgressReporter()
+        with progress_context(reporter):
+            try:
+                return self._scan(repository_path, mode, staged, rules_path)
+            except (KeyboardInterrupt, ScanCancelled):
+                reporter.cancel()
+                emit('SCAN_CANCELLED')
+                raise
+
+    def _scan(self, repository_path, mode, staged, rules_path):
         start = time.monotonic()
+        checkpoint()
+        emit('SCAN_STARTED', message=f'模式：{mode}')
         scan_mode = ScanMode(mode)
+        emit('WORKSPACE_DISCOVERY_STARTED')
         workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
         root = workspace.path
+        emit('WORKSPACE_DISCOVERY_COMPLETED', message=f'项目：{root.name}')
         if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged):
             raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
         git = GitService(root) if workspace.is_git else None
+        checkpoint()
+        emit('TARGET_DISCOVERY_STARTED')
         files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
         # TargetDetector validates every explicit path before any file is read.
         if scan_mode != ScanMode.RELEASE:
@@ -63,32 +82,71 @@ class SecurityRuntime:
         files = [name for name in files if name in profile.files]
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
+        emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
                               tuple(name for name in profile.files if name not in files))
         normalizer = FindingNormalizer(root)
         findings = []
         runs: list[ScannerRun] = []
         no_changes = scan_mode != ScanMode.RELEASE and not files
+        checkpoint()
+        emit('PLANNING_STARTED')
         _, selected = ScannerPlanner(self.registry).plan(profile, context)
         if no_changes or not files:
             selected = []
-        with ThreadPoolExecutor(max_workers=max(1, len(selected))) as pool:
-            futures = {scanner.name: pool.submit(scanner.scan, context, normalizer) for scanner in selected}
+        emit('PLAN_READY', message=f'将执行 {len(selected)} 个安全引擎')
+
+        def execute(scanner):
+            checkpoint()
+            if not isinstance(scanner, BaseScanner):
+                emit('SCANNER_STARTED', scanner=scanner.name, capability=tuple(scanner.capabilities))
+            try:
+                found, run = scanner.scan(context, normalizer)
+            except ScanCancelled:
+                raise
+            except Exception:
+                found, run = [], ScannerRun(scanner.name, '', RunStatus.FAILED, 0,
+                    error_code='SCANNER_FAILED', error_summary='Scanner did not complete successfully.',
+                    remediation='Inspect local engine configuration and retry the check.')
+            if scan_mode != ScanMode.RELEASE and getattr(scanner, 'filter_changed_lines', False):
+                found = [f for f in found if f.line_start in changed_lines.get(f.file_path, set())]
+                run.finding_count = len(found)
+            run.capabilities = tuple(sorted(scanner.capabilities))
+            event_type = {'SUCCESS': 'SCANNER_COMPLETED', 'FAILED': 'SCANNER_FAILED',
+                          'UNAVAILABLE': 'SCANNER_UNAVAILABLE', 'TIMEOUT': 'SCANNER_TIMEOUT'}.get(run.status)
+            if event_type:
+                emit(event_type, scanner=run.scanner, scanner_version=run.version,
+                    capability=run.capabilities, duration_ms=run.duration_ms, finding_count=run.finding_count,
+                    error_code=run.error_code, source=run.source)
+            return found, run
+
+        pool = ThreadPoolExecutor(max_workers=max(1, len(selected)))
+        try:
+            futures = {scanner.name: pool.submit(copy_context().run, execute, scanner) for scanner in selected}
             for scanner in self.registry.adapters:
                 if scanner.name not in futures:
                     runs.append(ScannerRun(scanner.name, "", RunStatus.NOT_APPLICABLE, 0))
                     continue
                 try:
-                    found, run = futures[scanner.name].result()
+                    while True:
+                        try:
+                            found, run = futures[scanner.name].result(timeout=.1)
+                            break
+                        except FutureTimeout:
+                            checkpoint()
+                except ScanCancelled:
+                    raise
                 except Exception as exc:
                     found, run = [], ScannerRun(scanner.name, "", RunStatus.FAILED, 0,
                         error_code="SCANNER_FAILED", error_summary="Scanner did not complete successfully.",
                         remediation="Inspect local engine configuration and retry the check.")
-                if scan_mode != ScanMode.RELEASE and getattr(scanner, "filter_changed_lines", False):
-                    found = [f for f in found if f.line_start in changed_lines.get(f.file_path, set())]
-                    run.finding_count = len(found)
                 findings.extend(found)
                 runs.append(run)
+        except (KeyboardInterrupt, ScanCancelled):
+            current_reporter().cancel()
+            raise
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
         findings = deduplicate(findings)
         planned_runs = [run for run in runs if run.status not in {RunStatus.SKIPPED, RunStatus.NOT_APPLICABLE}]
         successful = sum(run.status == RunStatus.SUCCESS for run in planned_runs)
@@ -119,6 +177,7 @@ class SecurityRuntime:
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
                             execution_state=execution_state, capability_results=capability_results)
         self.store.save(result)
+        emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})
         return result
 

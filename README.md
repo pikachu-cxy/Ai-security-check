@@ -1,5 +1,15 @@
 # AI Security Runtime
 
+CLI scans show actual preparation and scanner states on **stderr** after a 500 ms
+delay. Final human results and JSON remain on **stdout**. Interactive terminals
+refresh elapsed time every second; redirected logs receive a heartbeat every
+10 seconds. Short scans stay quiet. Progress never predicts percentages.
+
+Use `security-check scan --mode release --json --no-progress` for a quiet script
+result, or `--verbose` to include capabilities that do not apply. Human scan
+results are Chinese; JSON enums remain unchanged. Ctrl+C cancels the scan and
+stops external engine processes. Library and MCP calls do not enable CLI progress.
+
 **English** | [简体中文](README.zh-CN.md)
 
 > **Agent writes. Security Runtime verifies.**

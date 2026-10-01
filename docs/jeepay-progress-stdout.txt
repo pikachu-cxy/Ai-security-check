@@ -1,0 +1,94 @@
+AI Security Check
+
+检查完成。
+发现 9 个需要处理的问题。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：conf/manager/application.yml:35
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：conf/manager/application.yml:125
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：conf/merchant/application.yml:35
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：conf/merchant/application.yml:125
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：conf/payment/application.yml:35
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：jeepay-manager/src/main/resources/application.yml:11
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：jeepay-merchant/src/main/resources/application.yml:11
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：jeepay-core/src/main/java/com/jeequan/jeepay/core/utils/JeepayKit.java:44
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+HIGH
+代码中包含一个可能有效的密钥
+位置：jeepay-payment/src/main/resources/markdown/doc/api1.md:40
+为什么危险：密钥泄露可能让他人访问系统或数据。
+建议：立即撤销密钥，并改用环境变量或密钥管理服务。
+
+结果：
+建议先处理以下问题再继续。部分安全检查未能完成，结果覆盖不完整。
+覆盖范围：PARTIAL（仅针对计划文件和检查）
+耗时：39134 ms
+
+安全检查
+
+已完成
+代码安全：已完成
+
+部分完成
+敏感信息检测：部分完成
+
+失败
+依赖安全：失败
+IaC 配置安全：失败
+
+为什么覆盖不完整？
+已完成检查发现的 9 个问题仍然有效。
+失败或不可用的检查可能导致其他问题未被发现。
+
+trivy 0.74.0
+状态：失败
+trivy 未完成，因此：
+- 依赖安全未完成
+- IaC 配置安全未完成
+- 敏感信息检测仅部分完成
+原因：解析项目依赖时 Maven 仓库返回 HTTP 429。
+错误类别：MAVEN_RATE_LIMITED
+来源：repo.maven.apache.org
+建议重试：738 秒后
+HTTP 代理：未配置
+HTTPS 代理：未配置
+建议：等待限流解除，或准备本地 Maven 缓存 / 配置 Maven 镜像。
+重试：security-check scan --mode release

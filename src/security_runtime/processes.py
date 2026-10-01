@@ -3,6 +3,10 @@ from dataclasses import dataclass
 import subprocess
 import threading
 import time
+import os
+import signal
+
+from .progress import checkpoint
 
 
 @dataclass(frozen=True)
@@ -22,9 +26,10 @@ class OutputLimitError(ValueError):
 
 
 def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -> ProcessResult:
+    checkpoint()
     start = time.monotonic()
     proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name != 'nt')
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()
 
@@ -46,6 +51,7 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -
     failure = None
     try:
         while proc.poll() is None:
+            checkpoint()
             if overflow.is_set():
                 failure = OutputLimitError("scanner output limit exceeded")
                 break
@@ -55,7 +61,21 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -
             time.sleep(.01)
     finally:
         if proc.poll() is None:
-            proc.kill()
+            if os.name == 'nt':
+                # Kill engine helpers too; use the trusted system utility only.
+                taskkill = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe')
+                try:
+                    subprocess.run([taskkill, '/PID', str(proc.pid), '/T', '/F'],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+                if proc.poll() is None:
+                    proc.kill()
+            else:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
         proc.wait(timeout=5)
         for reader in readers:
             reader.join(timeout=1)

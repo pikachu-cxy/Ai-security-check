@@ -129,29 +129,9 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
     return code
 
 
-def render(result) -> str:
-    if result.execution_state in {"NO_CHANGES", "NOT_APPLICABLE"}:
-        return f"AI Security Check\n\n{result.summary}\nStatus: {result.execution_state}\n耗时：{result.duration_ms} ms"
-    lines = ["AI Security Check", "", "检查完成。", f"发现 {len(result.findings)} 个需要处理的问题。", ""]
-    for f in result.findings:
-        lines += [f.severity, f.plain_title, f"位置：{f.file_path}:{f.line_start}", f"为什么危险：{f.impact}", f"建议：{f.fix_advice}", ""]
-    lines += ["结果：", result.summary, f"Coverage: {result.coverage} (planned files and checks only)", "", f"耗时：{result.duration_ms} ms"]
-    labels = {"CODE_SAST": "Code Security", "SECRET_SCAN": "Secret Security", "DEPENDENCY_VULN": "Dependency Security", "IAC_MISCONFIG": "IaC Security"}
-    lines += ["", "Security checks"]
-    for state, heading in (("EXECUTED", "Executed"), ("PARTIAL", "Partial"), ("FAILED", "Failed"), ("UNAVAILABLE", "Unavailable"), ("NOT_APPLICABLE", "Not applicable")):
-        items = [labels.get(capability, capability) for capability, value in result.capability_results.items() if value == state]
-        if items:
-            lines += ["", heading, *[f"{item:<22} {state}" for item in items]]
-    if result.status == "PARTIAL":
-        lines += ["", "Why partial?", f"The {len(result.findings)} findings reported by completed checks remain valid. Failed or unavailable checks may leave additional issues undetected."]
-    for run in result.scanner_runs:
-        if run.status not in {"SUCCESS", "SKIPPED", "NOT_APPLICABLE"}:
-            lines.append(f"{run.scanner} {run.version}: {run.status} {run.error}")
-            if run.error_code:
-                from dataclasses import asdict
-                retry = f"security-check tools install {run.scanner}" if run.status == "UNAVAILABLE" and run.scanner in VERSIONS else "security-check scan --mode release --path <project>"
-                lines.append(format_diagnostic(asdict(run), retry=retry))
-    return "\n".join(lines)
+def render(result, *, verbose=False) -> str:
+    from .human import render_scan
+    return render_scan(result, verbose=verbose)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -171,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
     scan_parser.add_argument("--path")
     scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
     scan_parser.add_argument("--json", action="store_true")
+    scan_parser.add_argument("--no-progress", action="store_true", help="不显示进度，仍输出正式结果和错误")
+    scan_parser.add_argument("--verbose", action="store_true", help="显示本次不适用的检查")
     scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
     scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
     mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
@@ -217,13 +199,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "scan":
             registry = ScannerRegistry()
             # Adapters prepare their engines only after Runtime scope/planning.
-            result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules)
+            from .cli_progress import CLIProgressRenderer
+            if args.no_progress:
+                result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules)
+            else:
+                with CLIProgressRenderer() as reporter:
+                    result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules, progress=reporter)
             try:
                 IntegrationStateStore().event(DogfoodEvent("cli", result.target_profile.path, args.mode,
                     result.duration_ms, len(result.findings), result.coverage))
             except OSError:
                 pass
-            print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result))
+            print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result, verbose=args.verbose))
             return 0 if result.release_status != "BLOCKED" else 1
         if args.command == "tools":
             manager = ToolManager()
@@ -375,6 +362,9 @@ def main(argv: list[str] | None = None) -> int:
             from .hooks import install_pre_commit
             print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
             return 0
+    except KeyboardInterrupt:
+        print("扫描已取消。", file=sys.stderr)
+        return 130
     except WorkspaceError as exc:
         hint = args.command
         if args.command == "setup" and args.integration:

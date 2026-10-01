@@ -20,6 +20,8 @@ import urllib.error
 import urllib.request
 import venv
 import zipfile
+import queue
+import threading
 from dataclasses import asdict, dataclass
 from contextlib import contextmanager
 from enum import StrEnum
@@ -31,6 +33,7 @@ from .licensing import LicenseMetadata, LicensePolicy, MANAGED_PYTHON_LICENSE
 from .plugin_api import discover_plugin_directory
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .processes import run_process
+from .progress import emit, checkpoint, ScanCancelled
 
 
 class ToolStatus(StrEnum):
@@ -187,11 +190,19 @@ class ToolSourceProvider(Protocol):
 
 class OfficialReleaseProvider:
     def download(self, manifest: ToolManifest, destination: Path) -> None:
+        checkpoint()
+        emit('ENGINE_DOWNLOAD_STARTED', scanner=manifest.tool_id, scanner_version=manifest.version)
         try:
             self._download(manifest, destination)
+            emit('ENGINE_DOWNLOAD_COMPLETED', scanner=manifest.tool_id, scanner_version=manifest.version)
+        except ScanCancelled:
+            destination.unlink(missing_ok=True)
+            raise
         except Exception as exc:
             destination.unlink(missing_ok=True)
             diagnostic = classify_network_error(exc, url=manifest.download_url, fallback='DOWNLOAD_FAILED')
+            emit('ENGINE_DOWNLOAD_FAILED', scanner=manifest.tool_id, scanner_version=manifest.version,
+                 error_code=diagnostic.error_code, source=diagnostic.source)
             raise DiagnosticError(diagnostic) from None
 
     def _download(self, manifest: ToolManifest, destination: Path) -> None:
@@ -200,15 +211,53 @@ class OfficialReleaseProvider:
         request = urllib.request.Request(manifest.download_url, headers={"User-Agent": "ai-security-runtime"})
         digest = hashlib.sha256()
         size = 0
-        with urllib.request.urlopen(request, timeout=60) as response, destination.open("wb") as output:
-            if not response.url.startswith("https://"):
-                raise ValueError("Insecure release redirect")
-            for chunk in iter(lambda: response.read(1024 * 1024), b""):
-                size += len(chunk)
-                if size > 200_000_000:
-                    raise ValueError("Release asset exceeds 200 MB")
-                digest.update(chunk)
-                output.write(chunk)
+        # A blocking TLS connect/read cannot consume Ctrl+C in a pool worker.
+        # One bounded daemon reader owns the response; only this worker writes
+        # the destination. Cancellation closes/unlinks it immediately.
+        chunks = queue.Queue(maxsize=2)
+        stop = threading.Event()
+        def send(kind, value=None):
+            while not stop.is_set():
+                try:
+                    chunks.put((kind, value), timeout=.1)
+                    return
+                except queue.Full:
+                    continue
+        def receive():
+            try:
+                with urllib.request.urlopen(request, timeout=60) as response:
+                    if not response.url.startswith('https://'):
+                        raise ValueError('Insecure release redirect')
+                    while not stop.is_set():
+                        chunk = response.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        send('chunk', chunk)
+                send('done')
+            except Exception as exc:
+                send('error', exc)
+        reader = threading.Thread(target=receive, name='security-download', daemon=True)
+        reader.start()
+        try:
+            with destination.open('wb') as output:
+                while True:
+                    checkpoint()
+                    try:
+                        kind, value = chunks.get(timeout=.1)
+                    except queue.Empty:
+                        continue
+                    if kind == 'done':
+                        break
+                    if kind == 'error':
+                        raise value
+                    size += len(value)
+                    if size > 200_000_000:
+                        raise ValueError('Release asset exceeds 200 MB')
+                    digest.update(value)
+                    output.write(value)
+        finally:
+            stop.set()
+            reader.join(timeout=.1)
         if digest.hexdigest() != manifest.sha256:
             destination.unlink(missing_ok=True)
             raise ValueError("Release SHA256 mismatch")
@@ -397,8 +446,20 @@ class ToolManager:
         return ResolvedTool(tool_id, "", "", None, ToolStatus.MISSING)
 
     def ensure(self, tool_id: str, *, offline: bool | None = None) -> ResolvedTool:
+        checkpoint()
+        emit('ENGINE_PREPARING', scanner=tool_id, scanner_version=self.versions.get(tool_id, ''))
+        result = self._ensure(tool_id, offline=offline)
+        emit('ENGINE_READY' if result.status == ToolStatus.READY else 'ENGINE_PREPARATION_FAILED',
+            scanner=tool_id, scanner_version=result.version or self.versions.get(tool_id, ''),
+            error_code=result.diagnostic.error_code if result.diagnostic else '',
+            source=result.diagnostic.source if result.diagnostic else '')
+        return result
+
+    def _ensure(self, tool_id: str, *, offline: bool | None = None) -> ResolvedTool:
         try:
             current = self.resolve(tool_id)
+        except ScanCancelled:
+            raise
         except Exception as exc:
             logger.warning("tool_resolution_failed tool=%s reason=%s", tool_id, type(exc).__name__)
             return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, type(exc).__name__)
@@ -425,6 +486,8 @@ class ToolManager:
                     return ResolvedTool(tool_id, "", "", None, ToolStatus.UNSUPPORTED_PLATFORM)
                 self._install_binary(manifest)
             return self.resolve(tool_id)
+        except ScanCancelled:
+            raise
         except Exception as exc:
             logger.warning("tool_install_failed tool=%s reason=%s", tool_id, type(exc).__name__)
             diagnostic = exc.diagnostic if isinstance(exc, DiagnosticError) else classify_network_error(exc, fallback='ENGINE_PREPARATION_FAILED')
@@ -530,6 +593,8 @@ class ToolManager:
         return executable
 
     def install_python_package(self, tool_id: str, version: str, requirement: str, *, executable_name: str | None = None, no_index: bool = False) -> Path:
+        checkpoint()
+        emit('ENGINE_PACKAGE_PREPARING', scanner=tool_id, scanner_version=version)
         license_metadata = self.license_metadata(tool_id)
         if not LicensePolicy.can_auto_download(license_metadata):
             raise ValueError("Python engine installation prohibited by license policy")
@@ -611,6 +676,18 @@ class ToolManager:
             raise
 
     def prepare_trivy_database(self, binary: str, *, offline: bool | None = None) -> ToolStatus:
+        checkpoint()
+        if self.database_status() == ToolStatus.READY:
+            return self._prepare_trivy_database(binary, offline=offline)
+        emit('DATA_PREPARING', scanner='trivy', component='vulnerability_db')
+        result = self._prepare_trivy_database(binary, offline=offline)
+        diagnostic = self.data_diagnostics.get('vulnerability_db')
+        emit('DATA_READY' if result == ToolStatus.READY else 'DATA_PREPARATION_FAILED',
+             scanner='trivy', component='vulnerability_db', error_code=diagnostic.error_code if diagnostic else '',
+             source=diagnostic.source if diagnostic else '')
+        return result
+
+    def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None) -> ToolStatus:
         self.data_diagnostics.pop('vulnerability_db', None)
         if self.database_status() == ToolStatus.READY:
             return ToolStatus.READY

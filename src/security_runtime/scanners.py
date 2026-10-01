@@ -20,6 +20,7 @@ from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
 from .processes import ProcessResult, run_process, OutputLimitError
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
+from .progress import emit, checkpoint, ScanCancelled
 
 
 MAX_OUTPUT = 4_000_000
@@ -91,7 +92,10 @@ class BaseScanner:
             return [], ScannerRun(self.name, version, status, round((time.monotonic()-start)*1000),
                                   error=diagnostic.error_summary, **diagnostic.to_dict())
         try:
+            checkpoint()
             resolved = self.tool_manager.ensure(self.scanner_id)
+        except ScanCancelled:
+            raise
         except Exception as exc:
             logger.warning("scanner_engine_unavailable scanner=%s reason=%s", self.scanner_id, type(exc).__name__)
             return failed(RunStatus.UNAVAILABLE, classify_network_error(exc))
@@ -102,6 +106,8 @@ class BaseScanner:
             if self._prepare(resolved.path) != ToolStatus.READY:
                 diagnostic = getattr(self.tool_manager, 'data_diagnostics', {}).get('vulnerability_db') or ErrorDiagnostic('VULNERABILITY_DB_UNAVAILABLE', 'Local vulnerability database is unavailable.', 'Run security-check tools install trivy to prepare engine data.')
                 return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
+            checkpoint()
+            emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
             findings = self._scan(resolved.path, context, normalizer)
             return findings, ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
         except DiagnosticError as exc:

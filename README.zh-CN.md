@@ -1,5 +1,16 @@
 # AI Security Runtime
 
+扫描超过 500 ms 时，CLI 会在 **stderr** 显示实际的项目发现、引擎准备、
+下载、数据库准备和扫描状态；最终结果及 JSON 仍输出到 **stdout**。
+交互终端每秒更新实际耗时，重定向日志每 10 秒提供一次 heartbeat，
+短任务保持安静，不预测百分比。只显示本次计划中的引擎。
+
+脚本可使用 `security-check scan --mode release --json --no-progress` 关闭进度，
+真正的 CLI 错误仍写入 stderr。`--verbose` 会额外显示本次不适用的能力。
+扫描 human 结果统一为中文，JSON 枚举保持英文。Ctrl+C 会取消扫描并停止
+外部引擎及其子进程；library 和 MCP 默认不会开启 CLI 进度。
+失败后的简短重试命令应在原项目目录运行。
+
 [English](README.md) | **简体中文**
 
 > **Agent writes. Security Runtime verifies.**  

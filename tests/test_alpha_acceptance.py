@@ -199,7 +199,7 @@ def test_cli_plan_prepares_no_unselected_tools(repo, tmp_path, monkeypatch, caps
     assert main(["scan", "--path", str(repo)]) == 0
     assert ensured == ["gitleaks"]
     output = capsys.readouterr().out
-    assert "UNAVAILABLE" in output
+    assert "不可用" in output
 
 
 def test_not_applicable_human_output(repo, tmp_path):
@@ -207,8 +207,9 @@ def test_not_applicable_human_output(repo, tmp_path):
     engine, _ = runtime(tmp_path)
     result = engine.scan(repo)
     output = render(result)
-    assert "Executed" in output and "Secret Security" in output
-    assert "Not applicable" in output and "Code Security" in output
+    assert "已完成" in output and "敏感信息检测" in output
+    assert "本次不适用" not in output and "代码安全" not in output
+    assert "本次不适用" in render(result, verbose=True) and "代码安全" in render(result, verbose=True)
     assert "SKIPPED" not in output and "FULL" not in output
 
 
