@@ -31,9 +31,10 @@ class WorkspaceBinding:
     @classmethod
     def create(cls, root: Path, integration_id: str, *, created_at: str | None = None,
                last_verified_at: str | None = None) -> "WorkspaceBinding":
-        resolved = WorkspaceResolver().resolve(root).path
+        workspace = WorkspaceResolver().resolve(root, allow_non_git_explicit=integration_id == "generic-mcp")
+        resolved = workspace.path
         identity = hashlib.sha256(str(resolved).casefold().encode("utf-8")).hexdigest()[:24]
-        return cls(identity, str(resolved), str(resolved), integration_id, "PROJECT",
+        return cls(identity, str(resolved), str(resolved) if workspace.is_git else "", integration_id, "PROJECT",
                    created_at or _now(), last_verified_at)
 
     @classmethod

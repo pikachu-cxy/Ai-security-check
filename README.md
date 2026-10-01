@@ -663,3 +663,15 @@ security-check --help
 
 
 See [distribution staging](distribution/README.md) for native builds, verification, and the first external publication steps.
+
+## Scan failures and source directories
+
+`doctor` reports local prerequisites using `READY` / `MISSING`. READY means required local engine prerequisites are available; actual project scans may still need project-specific or remote dependency resolution. It does not guarantee that a project scan succeeds.
+
+`doctor --verbose` and `tools status` report Trivy vulnerability DB and Java DB separately. Java DB is `MISSING` or `READY` based on local files; checks availability is `UNKNOWN`. This release does not automatically prepare Java DB or checks data. A Maven repository HTTP 429 is reported as `MAVEN_RATE_LIMITED`, independently of local database readiness.
+
+Release scans also accept a source directory without Git: `security-check scan --path <directory> --mode release`. In a safely recognized source directory, `doctor` and release scans can use the current directory. Quick, feature and staged scans require Git and suggest release scanning instead. Git projects use Git file lists; ordinary directories use bounded discovery with file, directory, depth, size and ignored-directory limits. Home, drive/system roots and symlinks/junctions remain protected.
+
+Each scanner failure includes `error_code`, `error_summary`, `remediation`, optional `retry_after_seconds`, and bounded sanitized `diagnostic_detail`. CLI JSON and MCP carry the same fields. Raw stdout/stderr remain internal, bounded, and absent from scan history and MCP responses. URLs are reduced to hosts; credentials and authorization values are redacted; proxy output only says configured/not configured.
+
+Capabilities report `EXECUTED` when all planned providers succeed, `PARTIAL` when success is mixed with failure/unavailability/timeout, `FAILED` when no provider succeeds and execution fails, `UNAVAILABLE` when providers cannot execute, and `NOT_APPLICABLE` for checks outside the scan scope. Findings from completed checks remain valid under partial coverage; additional issues may remain undetected. Failed preparation gives a retry command such as `security-check tools install gitleaks`. Maven rate limits suggest a local cache, mirror or later retry. Runtime never automatically runs the target project's Maven/Gradle/npm/pip/go build or dependency commands.

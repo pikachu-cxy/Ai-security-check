@@ -70,4 +70,6 @@ class DoctorTests(unittest.TestCase):
             report = json.loads(result.stdout)
             self.assertEqual(report["workspace"]["path"], str(root.resolve()))
             self.assertEqual(report["workspace"]["languages"], ["Python"])
-            self.assertEqual(report["status"], "workspace-only")
+            self.assertIn(report["status"], {"ready", "limited"})
+            self.assertIn("release scans", report["message"])
+            self.assertIn("java_db", report["trivy_data"])

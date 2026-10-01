@@ -790,3 +790,14 @@ usage: security-check ...
 
 
 发行构建、验证与首次外部发布步骤见 [distribution staging](distribution/README.md)。
+## 扫描失败与普通源码目录
+
+`doctor` 用 `READY` / `MISSING` 表示本地执行前提。READY 表示所需本地引擎条件已就绪；项目扫描仍可能依赖远程仓库或项目依赖解析，不能保证任意扫描成功。
+
+`doctor --verbose` 与 `tools status` 分别展示 Trivy Vulnerability DB、Java DB 和 checks 状态。Java DB 按本地文件显示 `READY` / `MISSING`，checks 保守显示 `UNKNOWN`。本轮不自动下载 Java DB 或 checks；Maven 仓库 HTTP 429 会独立报告为 `MAVEN_RATE_LIMITED`，不会归因为漏洞库缺失。
+
+普通源码目录支持 `security-check scan --path <directory> --mode release`；安全识别到当前源码目录时，也支持直接运行 `doctor` 和 release。quick、feature、staged 仍要求 Git，并提示改用 release。Git 项目优先使用 Git 文件列表；普通目录采用有界递归发现，保留文件数、目录数、深度、大小、忽略目录以及 Home、系统目录、盘符根、symlink/junction 边界。
+
+扫描器错误包含 `error_code`、`error_summary`、`remediation`、可选 `retry_after_seconds` 和有界脱敏的 `diagnostic_detail`。CLI JSON 和 MCP 使用相同结构，不保存或返回原始大段 stdout/stderr。URL 仅保留主机名，凭据和 Authorization 脱敏；代理只显示 configured / not configured。
+
+能力状态：所有计划 provider 成功为 `EXECUTED`；成功与失败/不可用/超时并存为 `PARTIAL`；没有成功且存在执行失败为 `FAILED`；均无法执行为 `UNAVAILABLE`；scope 不需要为 `NOT_APPLICABLE`。部分覆盖下，已完成检查的 findings 仍有效，其他问题可能尚未检出。准备失败会提示 `security-check tools install <engine>` 重试；Maven 限流建议本地缓存、mirror 或等待后重试。Runtime 不会自动执行目标项目的 Maven、Gradle、npm、pip、go 构建或依赖命令。

@@ -15,6 +15,7 @@ from security_runtime.engines import BUILTIN_ENGINES
 from security_runtime.findings import FindingNormalizer
 from security_runtime.models import RunStatus, ScanContext, ScanMode
 from security_runtime.scanners import SemgrepAdapter
+from security_runtime.processes import ProcessResult
 from security_runtime.toolchain import (
     OfficialReleaseProvider, ResolvedTool, ToolManager, ToolManifest, ToolSource,
     ToolStatus, sha256_file, tool_environment, matches_version,
@@ -201,10 +202,10 @@ def test_trivy_db_preparation_does_not_use_docker_credentials(tmp_path, monkeypa
 
     def run(*args, **kwargs):
         seen.append(kwargs["env"]["DOCKER_CONFIG"])
-        return subprocess.CompletedProcess(args[0], 1, "", "temporary failure")
+        return ProcessResult(1, "", "temporary failure", 1)
 
     monkeypatch.setenv("SECURITY_RUNTIME_TRIVY_CACHE_DIR", str(tmp_path / "cache"))
-    with patch("security_runtime.toolchain.subprocess.run", side_effect=run), \
+    with patch("security_runtime.toolchain.run_process", side_effect=run), \
          patch("security_runtime.toolchain.time.sleep"):
         assert manager.prepare_trivy_database(str(tmp_path / "trivy.exe"), offline=False) == ToolStatus.BROKEN
     assert len(seen) == 2

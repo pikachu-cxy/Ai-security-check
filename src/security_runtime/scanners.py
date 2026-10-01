@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import importlib.metadata
 import logging
-import subprocess
 import tempfile
 import time
 import shutil
@@ -19,6 +18,8 @@ from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
 from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
+from .processes import ProcessResult, run_process, OutputLimitError
+from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 
 
 MAX_OUTPUT = 4_000_000
@@ -53,28 +54,13 @@ class ScannerAdapter(Protocol):
     def normalize(self, raw: object, normalizer: FindingNormalizer) -> list[Finding]: ...
 
 
-def _execute(args: list[str], cwd: str, timeout: int) -> tuple[int, str]:
-    # Keep subprocess output bounded even if a scanner ignores quiet flags.
-    with tempfile.TemporaryFile() as out:
-        with external_tool_loader():
-            proc = subprocess.Popen(args, cwd=cwd, stdin=subprocess.DEVNULL, stdout=out,
-                                    stderr=subprocess.DEVNULL, env=tool_environment(Path(args[0])))
-        deadline = time.monotonic() + timeout
-        try:
-            while proc.poll() is None:
-                if out.seek(0, 2) > MAX_OUTPUT:
-                    raise ValueError("scanner output limit exceeded")
-                if time.monotonic() >= deadline:
-                    raise TimeoutError("scanner timed out")
-                time.sleep(0.05)
-            if out.seek(0, 2) > MAX_OUTPUT:
-                raise ValueError("scanner output limit exceeded")
-        except (TimeoutError, ValueError):
-            proc.kill()
-            proc.wait(timeout=5)
-            raise
-        out.seek(0)
-        return proc.returncode, out.read(MAX_OUTPUT).decode("utf-8", errors="replace")
+def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
+    with external_tool_loader():
+        return run_process(args, cwd=cwd, env=tool_environment(Path(args[0])), timeout=timeout, max_output=MAX_OUTPUT)
+
+
+def _process_failure(result: ProcessResult):
+    raise DiagnosticError(classify_network_error(stderr=result.stderr, return_code=result.return_code))
 
 
 class BaseScanner:
@@ -101,24 +87,33 @@ class BaseScanner:
 
     def scan(self, context: ScanContext, normalizer: FindingNormalizer) -> tuple[list[Finding], ScannerRun]:
         start = time.monotonic()
+        def failed(status, diagnostic, version=''):
+            return [], ScannerRun(self.name, version, status, round((time.monotonic()-start)*1000),
+                                  error=diagnostic.error_summary, **diagnostic.to_dict())
         try:
             resolved = self.tool_manager.ensure(self.scanner_id)
         except Exception as exc:
             logger.warning("scanner_engine_unavailable scanner=%s reason=%s", self.scanner_id, type(exc).__name__)
-            return [], ScannerRun(self.name, "", RunStatus.UNAVAILABLE, round((time.monotonic()-start)*1000), error=type(exc).__name__)
+            return failed(RunStatus.UNAVAILABLE, classify_network_error(exc))
         if resolved.status != ToolStatus.READY:
-            return [], ScannerRun(self.name, "", RunStatus.UNAVAILABLE, round((time.monotonic()-start)*1000), error=f"{resolved.status}: {resolved.detail}"[:160])
+            diagnostic = resolved.diagnostic if getattr(resolved, 'diagnostic', None) else classify_network_error(resolved.detail, offline=resolved.status == ToolStatus.OFFLINE, fallback='ENGINE_UNAVAILABLE')
+            return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
         try:
             if self._prepare(resolved.path) != ToolStatus.READY:
-                return [], ScannerRun(self.name, resolved.version, RunStatus.UNAVAILABLE, round((time.monotonic()-start)*1000), error="engine data unavailable")
+                diagnostic = getattr(self.tool_manager, 'data_diagnostics', {}).get('vulnerability_db') or ErrorDiagnostic('VULNERABILITY_DB_UNAVAILABLE', 'Local vulnerability database is unavailable.', 'Run security-check tools install trivy to prepare engine data.')
+                return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
             findings = self._scan(resolved.path, context, normalizer)
             return findings, ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
+        except DiagnosticError as exc:
+            return failed(RunStatus.FAILED, exc.diagnostic, resolved.version)
         except TimeoutError:
-            return [], ScannerRun(self.name, "", RunStatus.TIMEOUT, round((time.monotonic()-start)*1000), error="scanner timed out")
+            return failed(RunStatus.TIMEOUT, ErrorDiagnostic('PROCESS_TIMEOUT', 'Scanner exceeded its execution deadline.', 'Retry with a smaller scan scope or inspect engine performance.'), resolved.version)
+        except OutputLimitError:
+            return failed(RunStatus.FAILED, ErrorDiagnostic('OUTPUT_LIMIT_EXCEEDED', 'Scanner output exceeded configured limits.', 'Retry with a smaller scan scope.'), resolved.version)
         except ValueError as exc:
-            return [], ScannerRun(self.name, "", RunStatus.FAILED, round((time.monotonic()-start)*1000), error=str(exc)[:120])
+            return failed(RunStatus.FAILED, ErrorDiagnostic('SCANNER_OUTPUT_OR_CONFIG_ERROR', sanitize(str(exc), 200), 'Check local rules/configuration and retry.'), resolved.version)
         except (OSError, KeyError) as exc:
-            return [], ScannerRun(self.name, "", RunStatus.FAILED, round((time.monotonic()-start)*1000), error=type(exc).__name__)
+            return failed(RunStatus.FAILED, classify_network_error(exc, fallback='LOCAL_IO_ERROR'), resolved.version)
 
     def _scan(self, binary: str, context: ScanContext, normalizer: FindingNormalizer) -> list[Finding]:
         raise NotImplementedError
@@ -150,10 +145,10 @@ class PatternSASTScanner(BaseScanner):
         # Bound command-line length on Windows as well as scanner output.
         for offset in range(0, len(targets), 40):
             request = SASTRequest(Path(context.root), rule_pack, tuple(targets[offset:offset + 40]))
-            code, output = _execute(self.engine_provider.command(binary, request), context.root, self.timeout)
-            if code not in (0, 1):
-                raise ValueError("Semgrep failed")
-            findings.extend(self.normalize(json.loads(output), n))
+            process = _execute(self.engine_provider.command(binary, request), context.root, self.timeout)
+            if process.return_code not in (0, 1):
+                _process_failure(process)
+            findings.extend(self.normalize(json.loads(process.stdout), n))
         for finding in findings:
             finding.technical_details.update({"engine": self.engine_provider.engine_id,
                                               "rule_pack": rule_pack.descriptor.rule_pack_id,
@@ -197,9 +192,11 @@ class GitleaksAdapter(BaseScanner):
         for target in targets:
             with tempfile.TemporaryDirectory() as tmp:
                 report = str(Path(tmp) / "findings.json")
-                code, _ = _execute([binary, "dir", target, "--report-format", "json", "--report-path", report, "--redact=100", "--no-banner", "--exit-code", "0"], context.root, self.timeout)
-                if code != 0:
-                    raise ValueError("Gitleaks failed")
+                process = _execute([binary, "dir", target, "--report-format", "json", "--report-path", report, "--redact=100", "--no-banner", "--exit-code", "0"], context.root, self.timeout)
+                if process.return_code != 0:
+                    _process_failure(process)
+                if Path(report).exists() and Path(report).stat().st_size > MAX_OUTPUT:
+                    raise OutputLimitError("scanner report exceeds configured limits")
                 data = json.loads(Path(report).read_text(encoding="utf-8")) if Path(report).exists() else []
                 if snapshot_root is not None:
                     for item in data:
@@ -230,10 +227,10 @@ class TrivyAdapter(BaseScanner):
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         with _snapshot(context) as scoped:
-            code, output = _execute([binary, "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
-            if code != 0:
-                raise ValueError("Trivy failed or local vulnerability database unavailable")
-            data = json.loads(output)
+            process = _execute([binary, "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
+            if process.return_code != 0:
+                _process_failure(process)
+            data = json.loads(process.stdout)
             for result in data.get("Results", []):
                 target = Path(result.get("Target", ""))
                 if target.is_absolute():

@@ -8,6 +8,7 @@ import tomllib
 from pathlib import Path
 
 from .capabilities import Capability
+from .diagnostics import format_diagnostic, sanitize
 from .engines import BUILTIN_ENGINES
 from .licensing import LicenseAction, LicensePolicy, Permission
 from .git import GitError, GitService
@@ -31,7 +32,7 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
               "capabilities": {}, "scanner_plan": {"available": [], "unavailable": []}, "database": "MISSING",
               "status": "unavailable", "message": ""}
     try:
-        workspace = WorkspaceResolver().resolve(path, allow_non_git_explicit=True)
+        workspace = WorkspaceResolver().resolve(path, allow_non_git_explicit=True, allow_non_git_source=True)
         report["profile"] = "READY"
         try:
             files = GitService(workspace.path).changed_files("release") if workspace.is_git else None
@@ -58,6 +59,7 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
         registry = ScannerRegistry(tool_manager=manager)
         resolved = manager.statuses()
         report["database"] = manager.database_status()
+        report["trivy_data"] = manager.trivy_data_statuses()
         scanners = [{"name": adapter.name, "status": resolved[adapter.scanner_id].status,
                      "available": resolved[adapter.scanner_id].status == ToolStatus.READY,
                      "version": resolved[adapter.scanner_id].version, "source": resolved[adapter.scanner_id].source,
@@ -74,15 +76,10 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
                         (adapter.scanner_id != "trivy" or report["database"] == ToolStatus.READY)
                         for adapter in supporting if adapter.scanner_id in resolved)
             report["capabilities"][label] = "READY" if ready else "MISSING"
+        report["status"] = "ready" if all(value == "READY" for value in report["capabilities"].values()) else "limited"
+        report["message"] = "Local prerequisites checked. READY does not guarantee a project scan succeeds; remote repositories may fail."
         if not workspace.is_git:
-            report["status"] = "workspace-only"
-            report["message"] = "Workspace detected. A Git repository is required for scans."
-        elif not report["runtime"]["git_available"]:
-            report["status"] = "unavailable"
-            report["message"] = "Git is required for scans."
-        else:
-            report["status"] = "ready" if all(value == "READY" for value in report["capabilities"].values()) else "limited"
-            report["message"] = "Runtime ready." if report["status"] == "ready" else "Runtime ready with limited coverage."
+            report["message"] += " Source directory supports release scans; quick/feature/staged require Git."
         code = 0
     except (WorkspaceError, ValueError, OSError) as exc:
         report["message"] = str(exc)
@@ -102,7 +99,7 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
             print("Warning: " + report["profile_warning"])
         print("\nSecurity capabilities")
         for label, state in report["capabilities"].items():
-            print(f"{label:<22} {'✓' if state == 'READY' else '○'}")
+            print(f"{label:<22} {state}")
         print("\nIntegrations")
         for name, state in report["integrations"].items():
             print(f"{name.title():<14} {state['status']}")
@@ -117,6 +114,8 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
                 print(f"Source: {item['source'] or 'NONE'}\nPath: {item['path'] or '-'}")
                 if item["name"] == "trivy":
                     print(f"Database: {report['database']}")
+                    for name, state in report["trivy_data"].items():
+                        print(f"{name}: {state}")
                     if report["database"] == ToolStatus.READY:
                         metadata = manager.trivy_cache_dir() / "db" / "metadata.json"
                         try:
@@ -138,13 +137,20 @@ def render(result) -> str:
         lines += [f.severity, f.plain_title, f"位置：{f.file_path}:{f.line_start}", f"为什么危险：{f.impact}", f"建议：{f.fix_advice}", ""]
     lines += ["结果：", result.summary, f"Coverage: {result.coverage} (planned files and checks only)", "", f"耗时：{result.duration_ms} ms"]
     labels = {"CODE_SAST": "Code Security", "SECRET_SCAN": "Secret Security", "DEPENDENCY_VULN": "Dependency Security", "IAC_MISCONFIG": "IaC Security"}
-    for state, heading in (("EXECUTED", "Executed"), ("NOT_APPLICABLE", "Not applicable")):
+    lines += ["", "Security checks"]
+    for state, heading in (("EXECUTED", "Executed"), ("PARTIAL", "Partial"), ("FAILED", "Failed"), ("UNAVAILABLE", "Unavailable"), ("NOT_APPLICABLE", "Not applicable")):
         items = [labels.get(capability, capability) for capability, value in result.capability_results.items() if value == state]
         if items:
-            lines += ["", heading, *[f"{item:<22} {'✓' if state == 'EXECUTED' else '-'}" for item in items]]
+            lines += ["", heading, *[f"{item:<22} {state}" for item in items]]
+    if result.status == "PARTIAL":
+        lines += ["", "Why partial?", f"The {len(result.findings)} findings reported by completed checks remain valid. Failed or unavailable checks may leave additional issues undetected."]
     for run in result.scanner_runs:
         if run.status not in {"SUCCESS", "SKIPPED", "NOT_APPLICABLE"}:
-            lines.append(f"{run.scanner}: {run.status} {run.error}")
+            lines.append(f"{run.scanner} {run.version}: {run.status} {run.error}")
+            if run.error_code:
+                from dataclasses import asdict
+                retry = f"security-check tools install {run.scanner}" if run.status == "UNAVAILABLE" and run.scanner in VERSIONS else "security-check scan --mode release --path <project>"
+                lines.append(format_diagnostic(asdict(run), retry=retry))
     return "\n".join(lines)
 
 
@@ -224,7 +230,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.tools_action == "status":
                 for tool_id, resolved in manager.statuses().items():
                     print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
-                print(f"Trivy DB     {manager.database_status()}")
+                for name, state in manager.trivy_data_statuses().items():
+                    print(f"Trivy {name}: {state}")
                 return 0
             if not args.all and args.tool is None:
                 parser.error("tools install requires a tool name or --all")
@@ -234,10 +241,14 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Preparing {tool_id}...", file=sys.stderr)
                 resolved = manager.ensure(tool_id)
                 print(f"{tool_id.title():<12} {resolved.status} {resolved.path} {resolved.detail}")
+                if resolved.diagnostic:
+                    print(format_diagnostic(resolved.diagnostic, retry=f"security-check tools install {tool_id}"))
                 successful &= resolved.status == ToolStatus.READY
             if "trivy" in names and manager.resolve("trivy").status == ToolStatus.READY:
                 database = manager.prepare_trivy_database(manager.resolve("trivy").path)
                 print(f"Trivy DB     {database}")
+                if manager.data_diagnostics.get("vulnerability_db"):
+                    print(format_diagnostic(manager.data_diagnostics["vulnerability_db"], retry="security-check tools install trivy"))
                 successful &= database == ToolStatus.READY
             return 0 if successful else 2
         if args.command == "licenses":
@@ -374,7 +385,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"security-check: {message}", file=sys.stderr)
         return 2
     except (GitError, ValueError, OSError, ImportError) as exc:
-        print(f"security-check: {exc}", file=sys.stderr)
+        print(f"security-check: {sanitize(str(exc))}", file=sys.stderr)
         return 2
     return 2
 

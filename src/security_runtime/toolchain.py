@@ -10,7 +10,6 @@ import os
 import platform
 import re
 import shutil
-import subprocess
 import sys
 import sysconfig
 import tarfile
@@ -30,6 +29,8 @@ from typing import Protocol
 from .engines import BUILTIN_ENGINES
 from .licensing import LicenseMetadata, LicensePolicy, MANAGED_PYTHON_LICENSE
 from .plugin_api import discover_plugin_directory
+from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
+from .processes import run_process
 
 
 class ToolStatus(StrEnum):
@@ -73,6 +74,10 @@ class ResolvedTool:
     source: ToolSource | None
     status: ToolStatus
     detail: str = ""
+    diagnostic: ErrorDiagnostic | None = None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'detail', sanitize(self.detail, 500))
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -182,6 +187,14 @@ class ToolSourceProvider(Protocol):
 
 class OfficialReleaseProvider:
     def download(self, manifest: ToolManifest, destination: Path) -> None:
+        try:
+            self._download(manifest, destination)
+        except Exception as exc:
+            destination.unlink(missing_ok=True)
+            diagnostic = classify_network_error(exc, url=manifest.download_url, fallback='DOWNLOAD_FAILED')
+            raise DiagnosticError(diagnostic) from None
+
+    def _download(self, manifest: ToolManifest, destination: Path) -> None:
         if not manifest.download_url.startswith("https://github.com/"):
             raise ValueError("Only pinned official HTTPS release assets are accepted")
         request = urllib.request.Request(manifest.download_url, headers={"User-Agent": "ai-security-runtime"})
@@ -205,6 +218,7 @@ class ToolManager:
     def __init__(self, root: Path | None = None, provider: ToolSourceProvider | None = None):
         self.root = root if root is not None else default_data_root()
         self.provider = provider or OfficialReleaseProvider()
+        self.data_diagnostics: dict[str, ErrorDiagnostic] = {}
         self.versions = dict(VERSIONS)
         self.python_engines = {"semgrep"}
         self.python_requirements = {"semgrep": (f"semgrep=={VERSIONS['semgrep']}", False, None)}
@@ -285,6 +299,14 @@ class ToolManager:
         directory = self.trivy_cache_dir() / "db"
         return ToolStatus.READY if (directory / "trivy.db").is_file() and (directory / "metadata.json").is_file() else ToolStatus.MISSING
 
+    def trivy_data_statuses(self) -> dict[str, str]:
+        java = self.trivy_cache_dir() / 'java-db'
+        return {'vulnerability_db': self.database_status(),
+                'java_db': 'READY' if (java / 'trivy-java.db').is_file() and (java / 'metadata.json').is_file() else 'MISSING',
+                # Do not infer completed misconfiguration scanning from a log
+                # or from the binary alone. Embedded-policy availability varies.
+                'checks': 'UNKNOWN'}
+
     def _configured_path(self, tool_id: str) -> Path | None:
         value = os.getenv(f"SECURITY_RUNTIME_{tool_id.upper().replace('-', '_')}_PATH")
         if value:
@@ -301,13 +323,12 @@ class ToolManager:
     def _version(self, tool_id: str, path: Path) -> str:
         try:
             with external_tool_loader():
-                proc = subprocess.run([str(path.resolve()), "--version"], stdin=subprocess.DEVNULL,
-                                      capture_output=True, text=True, timeout=8, check=False,
-                                      env=tool_environment(path))
+                proc = run_process([str(path.resolve()), "--version"], timeout=8, max_output=16_000,
+                                   env=tool_environment(path))
             if proc.returncode:
                 return ""
-            return (proc.stdout + proc.stderr).strip()[:160]
-        except (OSError, subprocess.TimeoutExpired):
+            return sanitize((proc.stdout + proc.stderr).strip(), 160)
+        except (OSError, TimeoutError, ValueError):
             return ""
 
     def _check(self, tool_id: str, path: Path, source: ToolSource) -> ResolvedTool:
@@ -393,7 +414,8 @@ class ToolManager:
         if offline and not (requirement and requirement[1]):
             if current.source is not None and current.status != ToolStatus.MISSING:
                 return current
-            return ResolvedTool(tool_id, "", "", None, ToolStatus.OFFLINE, "tool unavailable offline")
+            diagnostic = classify_network_error(offline=True)
+            return ResolvedTool(tool_id, "", "", None, ToolStatus.OFFLINE, diagnostic.error_summary, diagnostic)
         try:
             if requirement:
                 self.install_python_package(tool_id, self.versions[tool_id], requirement[0], no_index=requirement[1], executable_name=requirement[2])
@@ -405,7 +427,8 @@ class ToolManager:
             return self.resolve(tool_id)
         except Exception as exc:
             logger.warning("tool_install_failed tool=%s reason=%s", tool_id, type(exc).__name__)
-            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, str(exc)[:200])
+            diagnostic = exc.diagnostic if isinstance(exc, DiagnosticError) else classify_network_error(exc, fallback='ENGINE_PREPARATION_FAILED')
+            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, diagnostic.error_summary, diagnostic)
 
     def _install_binary(self, manifest: ToolManifest) -> None:
         parent = self.root / "tools" / manifest.tool_id
@@ -524,11 +547,10 @@ class ToolManager:
             if getattr(sys, "frozen", False):
                 bootstrap = self.prepare_python_runtime()
                 with external_tool_loader():
-                    proc = subprocess.run([str(bootstrap), "-m", "venv", str(environment)],
-                                          env=tool_environment(bootstrap), stdin=subprocess.DEVNULL,
-                                          capture_output=True, text=True, timeout=120, check=False)
+                    proc = run_process([str(bootstrap), "-m", "venv", str(environment)],
+                                       env=tool_environment(bootstrap), timeout=120)
                 if proc.returncode:
-                    raise ValueError("Managed Python bootstrap failed: " + proc.stderr[-200:])
+                    raise DiagnosticError(classify_network_error(stderr=proc.stderr, return_code=proc.return_code, fallback='PYTHON_BOOTSTRAP_FAILED'))
             else:
                 venv.EnvBuilder(with_pip=True).create(environment)
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
@@ -538,10 +560,9 @@ class ToolManager:
                 command += ["--no-index", "--no-build-isolation"]
             command.append(requirement)
             with external_tool_loader():
-                proc = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                                      timeout=600, check=False, env=tool_environment(python))
+                proc = run_process(command, timeout=600, env=tool_environment(python))
             if proc.returncode:
-                raise ValueError("Python package engine installation failed: " + proc.stderr[-200:])
+                raise DiagnosticError(classify_network_error(stderr=proc.stderr, return_code=proc.return_code, fallback='PYTHON_PACKAGE_PREPARATION_FAILED'))
             executable = environment / ("Scripts" if os.name == "nt" else "bin") / (executable_name or tool_id + (".exe" if os.name == "nt" else ""))
             if not executable.is_file():
                 raise ValueError("Python package engine did not provide the expected command")
@@ -590,11 +611,13 @@ class ToolManager:
             raise
 
     def prepare_trivy_database(self, binary: str, *, offline: bool | None = None) -> ToolStatus:
+        self.data_diagnostics.pop('vulnerability_db', None)
         if self.database_status() == ToolStatus.READY:
             return ToolStatus.READY
         if offline is None:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
         if offline:
+            self.data_diagnostics['vulnerability_db'] = classify_network_error(offline=True)
             return ToolStatus.OFFLINE
         cache = self.trivy_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)
@@ -607,14 +630,18 @@ class ToolManager:
         for attempt in range(2):
             try:
                 with external_tool_loader():
-                    proc = subprocess.run([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(cache), "--quiet"],
-                                          stdin=subprocess.DEVNULL, capture_output=True, text=True, env=env,
-                                          timeout=900, check=False)
+                    proc = run_process([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(cache), "--quiet"],
+                                       env=env, timeout=900)
                 if proc.returncode == 0 and self.database_status() == ToolStatus.READY:
+                    self.data_diagnostics.pop('vulnerability_db', None)
                     return ToolStatus.READY
-                logger.warning("trivy_database_prepare_failed attempt=%s detail=%s", attempt + 1, proc.stderr[-300:])
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                logger.warning("trivy_database_prepare_failed attempt=%s reason=%s", attempt + 1, type(exc).__name__)
+                diagnostic = classify_network_error(stderr=proc.stderr, return_code=proc.returncode, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
+            except (OSError, TimeoutError, ValueError) as exc:
+                diagnostic = classify_network_error(exc, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
+            self.data_diagnostics['vulnerability_db'] = diagnostic
+            logger.warning("trivy_database_prepare_failed attempt=%s category=%s source=%s", attempt + 1, diagnostic.error_code, diagnostic.source)
+            if diagnostic.error_code in {'HTTP_429', 'HTTP_401', 'HTTP_403', 'HTTP_404', 'OFFLINE_MODE'}:
+                break
             if attempt == 0:
                 time.sleep(2)
         return ToolStatus.BROKEN

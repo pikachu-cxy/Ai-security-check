@@ -20,6 +20,17 @@ from .workspace import WorkspaceResolver, WorkspaceError
 logger = logging.getLogger(__name__)
 
 
+def aggregate_provider_statuses(runs: list[ScannerRun]) -> str:
+    if not runs:
+        return "UNAVAILABLE"
+    successes = sum(run.status == RunStatus.SUCCESS for run in runs)
+    if successes == len(runs):
+        return "EXECUTED"
+    if successes:
+        return "PARTIAL"
+    return "UNAVAILABLE" if all(run.status == RunStatus.UNAVAILABLE for run in runs) else "FAILED"
+
+
 class SecurityRuntime:
     def __init__(self, registry: ScannerRegistry | None = None, store: ScanStore | None = None):
         self.registry = registry or ScannerRegistry()
@@ -27,10 +38,13 @@ class SecurityRuntime:
 
     def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None) -> ScanResult:
         start = time.monotonic()
-        root = WorkspaceResolver().resolve(repository_path).path
         scan_mode = ScanMode(mode)
-        git = GitService(root)
-        files = git.changed_files(scan_mode, staged=staged)
+        workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
+        root = workspace.path
+        if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged):
+            raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
+        git = GitService(root) if workspace.is_git else None
+        files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
         # TargetDetector validates every explicit path before any file is read.
         if scan_mode != ScanMode.RELEASE:
             manifests = set()
@@ -48,7 +62,7 @@ class SecurityRuntime:
             profile = TargetDetector().detect(root, files)
         files = [name for name in files if name in profile.files]
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE else {}
-        profile.git_info = {"branch": git.branch()}
+        profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
                               tuple(name for name in profile.files if name not in files))
         normalizer = FindingNormalizer(root)
@@ -67,7 +81,9 @@ class SecurityRuntime:
                 try:
                     found, run = futures[scanner.name].result()
                 except Exception as exc:
-                    found, run = [], ScannerRun(scanner.name, "", RunStatus.FAILED, 0, error=type(exc).__name__)
+                    found, run = [], ScannerRun(scanner.name, "", RunStatus.FAILED, 0,
+                        error_code="SCANNER_FAILED", error_summary="Scanner did not complete successfully.",
+                        remediation="Inspect local engine configuration and retry the check.")
                 if scan_mode != ScanMode.RELEASE and getattr(scanner, "filter_changed_lines", False):
                     found = [f for f in found if f.line_start in changed_lines.get(f.file_path, set())]
                     run.finding_count = len(found)
@@ -83,10 +99,8 @@ class SecurityRuntime:
         capability_results = {}
         for capability in (Capability.CODE_SAST, Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN, Capability.IAC_MISCONFIG):
             supporting = [run for run in planned_runs if any(adapter.name == run.scanner and capability in adapter.capabilities for adapter in selected)]
-            capability_results[capability] = ("NOT_APPLICABLE" if not files or capability not in wanted else
-                "EXECUTED" if supporting and all(run.status == RunStatus.SUCCESS for run in supporting) else
-                "UNAVAILABLE" if not supporting or all(run.status == RunStatus.UNAVAILABLE for run in supporting) else "FAILED")
-        if complete and any(value in {"FAILED", "UNAVAILABLE"} for value in capability_results.values()):
+            capability_results[capability] = "NOT_APPLICABLE" if not files or capability not in wanted else aggregate_provider_statuses(supporting)
+        if complete and any(value in {"PARTIAL", "FAILED", "UNAVAILABLE"} for value in capability_results.values()):
             complete = False
             coverage = "PARTIAL" if successful else "MINIMAL"
             release_status = RiskEngine().assess(findings, False)
@@ -124,8 +138,8 @@ class SecurityRuntime:
         if not record:
             raise KeyError("Finding not found")
         finding, scan = record
-        root = WorkspaceResolver().resolve(scan["target_profile"]["path"]).path
-        if workspace_path is not None and WorkspaceResolver().resolve(workspace_path).path != root:
+        root = WorkspaceResolver().resolve(scan["target_profile"]["path"], allow_non_git_explicit=True).path
+        if workspace_path is not None and WorkspaceResolver().resolve(workspace_path, allow_non_git_explicit=True).path != root:
             raise WorkspaceError("Finding does not belong to the requested workspace")
         relative = Path(finding["file_path"])
         file = (root / relative).resolve()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import asdict
 from pathlib import Path
 
 from .logging_utils import mcp_log_level
@@ -30,7 +31,7 @@ def _agent_result(result) -> dict:
         "findings": [_agent_finding(f.__dict__) for f in result.findings],
         "recommendation": result.release_status,
         "duration_ms": result.duration_ms,
-        "scanner_runs": [{"scanner": run.scanner, "status": run.status} for run in result.scanner_runs],
+        "scanner_runs": [asdict(run) for run in result.scanner_runs],
     }
 
 
@@ -53,7 +54,7 @@ def create_server(runtime: SecurityRuntime | None = None):
         candidate = Path(value) if value is not None else Path(binding.root)
         if not candidate.is_absolute():
             candidate = Path(binding.root) / candidate
-        resolved = WorkspaceResolver().resolve(candidate).path
+        resolved = WorkspaceResolver().resolve(candidate, allow_non_git_explicit=True).path
         if resolved != Path(binding.root):
             raise ValueError("Requested workspace is outside this MCP connection")
         return binding.root

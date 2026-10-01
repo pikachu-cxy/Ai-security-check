@@ -31,9 +31,12 @@ class Workspace:
 
 
 class WorkspaceResolver:
-    def resolve(self, path: str | Path | None = None, *, allow_non_git_explicit: bool = False) -> Workspace:
+    def resolve(self, path: str | Path | None = None, *, allow_non_git_explicit: bool = False,
+                allow_non_git_source: bool = False) -> Workspace:
         explicit = path is not None
         candidate = Path(path) if explicit else Path.cwd()
+        if any(item.is_symlink() or item.is_junction() for item in (candidate.absolute(), *candidate.absolute().parents)):
+            raise WorkspaceError("Workspace symlinks and junctions are not supported")
         if self._unsafe(candidate.absolute()):
             raise WorkspaceError(UNSAFE_WORKSPACE if explicit else NO_PROJECT)
         try:
@@ -47,12 +50,27 @@ class WorkspaceResolver:
         try:
             root = GitService(candidate).top_level()
         except GitError as exc:
-            if explicit and allow_non_git_explicit:
+            if (explicit and allow_non_git_explicit) or (allow_non_git_source and self._source_directory(candidate)):
                 return Workspace(candidate, False)
             raise WorkspaceError(NO_PROJECT) from exc
         if self._unsafe(root):
             raise WorkspaceError(UNSAFE_WORKSPACE)
         return Workspace(root, True)
+
+    @staticmethod
+    def _source_directory(path: Path) -> bool:
+        # Bounded name-only recognition; never walk an arbitrary default directory.
+        from .target import DEPENDENCIES, EXTENSIONS, IGNORED
+        for index, item in enumerate(path.iterdir()):
+            if index >= 1000:
+                return False
+            if item.name in IGNORED or item.is_symlink() or item.is_junction():
+                continue
+            if item.is_file() and (item.name in DEPENDENCIES or item.suffix.lower() in EXTENSIONS):
+                return True
+            if item.is_dir() and item.name == "src":
+                return True
+        return False
 
     @staticmethod
     def _unsafe(path: Path) -> bool:

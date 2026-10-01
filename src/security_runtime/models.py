@@ -98,6 +98,23 @@ class ScannerRun:
     duration_ms: int
     finding_count: int = 0
     error: str = ""
+    error_code: str = ""
+    error_summary: str = ""
+    remediation: str = ""
+    retry_after_seconds: int | None = None
+    diagnostic_detail: str = ""
+    source: str = ""
+    http_proxy: str = "not configured"
+    https_proxy: str = "not configured"
+
+    def __post_init__(self):
+        from .diagnostics import sanitize
+        for name in ('error', 'error_summary', 'remediation', 'diagnostic_detail', 'source'):
+            setattr(self, name, sanitize(getattr(self, name)))
+        import re
+        self.error_code = re.sub(r'[^A-Z0-9_]', '', self.error_code)[:80]
+        for name in ('http_proxy', 'https_proxy'):
+            setattr(self, name, 'configured' if getattr(self, name) == 'configured' else 'not configured')
 
 
 @dataclass
