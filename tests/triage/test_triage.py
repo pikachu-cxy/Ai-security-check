@@ -23,6 +23,13 @@ from security_runtime.cli import main
 SECRET='syntheticCredentialNotForProduction999'
 
 
+@pytest.fixture(autouse=True)
+def explicit_mock_mode(monkeypatch):
+    # Every public-looking provider endpoint in this module is mocked. The
+    # only actual HTTP servers are loopback; offline cases opt in explicitly.
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE','0')
+
+
 @pytest.fixture
 def sample(tmp_path):
     (tmp_path/'App.java').write_text('''import javax.net.ssl.*;
@@ -457,3 +464,11 @@ def test_byok_cli_loopback_authorized_json_and_quiet_streams(sample,monkeypatch,
     assert not output.err and SECRET not in output.out and 'fakeCliAPIKey999' not in output.out
     result=json.loads(output.out)
     assert result['view']['triage_coverage']['triaged']==1 and result['view']['scan_coverage']=='PARTIAL'
+
+
+def test_offline_external_model_never_queries_even_with_consent(sample,monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE','1')
+    monkeypatch.setenv('SECURITY_RUNTIME_AI_KEY','fakeApiKey')
+    provider=OpenAICompatibleProvider(AIConfig('https://llm.example/v1','fake'),allow_external_code_context=True)
+    with patch('urllib.request.OpenerDirector.open',side_effect=AssertionError('External model queried')):
+        with pytest.raises(ValueError,match='offline'): provider.triage(packet_for(sample))

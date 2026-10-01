@@ -117,6 +117,8 @@ class OpenAICompatibleProvider:
         return result['results']
 
     def _request(self,evidence,schema):
+        if os.getenv('SECURITY_RUNTIME_OFFLINE')=='1' and urlsplit(self.provider_name).hostname not in {'localhost','127.0.0.1','::1'}:
+            raise ValueError('External AI provider is unavailable in offline mode')
         key=os.getenv(self.config.api_key_env,'')
         if not key: raise ValueError('Configured AI key environment variable is missing')
         body=encoded({'model':self.model,'messages':[
