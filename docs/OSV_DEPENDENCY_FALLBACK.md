@@ -107,7 +107,9 @@ FALLBACK_SELECTED → FALLBACK_PREPARING → ENGINE_PREPARING／READY → FALLBA
 
 ## S. CI／standalone／compliance
 
-已有规则及解耦提交的 Runtime tests、Compliance、Package integrity、四平台 Standalone artifacts 全部成功。OSV 阶段四平台工作流新增 `verify_artifact.py --full --osv-fallback`：健康 primary 未下载 OSV，显式准备后使用真实冻结程序运行 synthetic offline CLI／MCP fallback。本地 Windows 完整归档验收（含干净引擎准备、真实 primary 样例、原生 OSV 离线回退、外部插件、MCP）已通过，规则范围与零规则不启动引擎也通过；wheel／sdist 构建、wheel 完整性、干净环境安装、licenses --check-distribution、notices --check 均通过。OSV 最终提交的 CI 结果随后补充，未在推送前宣称跨平台已通过。
+已有规则及解耦提交的 Runtime tests、Compliance、Package integrity、四平台 Standalone artifacts 全部成功。OSV 阶段四平台工作流新增 `verify_artifact.py --full --osv-fallback`：健康 primary 未下载 OSV，显式准备后使用真实冻结程序运行 synthetic offline CLI／MCP fallback。本地 Windows 完整归档验收（含干净引擎准备、真实 primary 样例、原生 OSV 离线回退、外部插件、MCP）已通过，规则范围与零规则不启动引擎也通过；wheel／sdist 构建、wheel 完整性、干净环境安装、licenses --check-distribution、notices --check 均通过。
+
+代码提交 `26fe6364ae358ff7625a75c7be8ff4d700b62a3c` 的 [四平台 Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36859704876) 已全部成功，四个平台均执行原生 OSV offline CLI／MCP fallback 验收。仅测试 fixture 修正提交 `2538e1b33c786237b1354a779d3feaea68b208cb` 的 [Windows／Linux Runtime tests 与规则门禁](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36860449731)、[Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36860449737)、[Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36860449848) 均成功。测试修正未改动 Runtime／独立包代码。
 
 ## T. 尚未解决
 
