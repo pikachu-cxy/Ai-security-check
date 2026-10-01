@@ -34,6 +34,7 @@ class OSVDependencyAdapter(BaseScanner):
         worker = OSVDependencyAdapter(self.tool_manager)
         worker.coverage = 'PARTIAL'
         worker.notes = []
+        worker.inventory = {}
         emit('FALLBACK_PREPARING',scanner=self.name,capability=tuple(self.capabilities))
         found, run = BaseScanner.scan(worker, context, normalizer)
         if run.error_code == 'OFFLINE_MODE':
@@ -43,6 +44,8 @@ class OSVDependencyAdapter(BaseScanner):
         run.capabilities = tuple(self.capabilities)
         run.coverage_contract = worker.coverage if run.status == RunStatus.SUCCESS else 'NONE'
         run.coverage_notes = worker.notes
+        run.coverage_notes = list(dict.fromkeys(run.coverage_notes))
+        run.dependency_inventory = worker.inventory
         emit('FALLBACK_COMPLETED' if run.status == RunStatus.SUCCESS else 'FALLBACK_FAILED',
             scanner=self.name,capability=run.capabilities,duration_ms=run.duration_ms,
             finding_count=run.finding_count,error_code=run.error_code,
@@ -141,6 +144,14 @@ class OSVDependencyAdapter(BaseScanner):
                 self.notes.append('Native extraction/resolution diagnostics: '+sanitize(process.stderr,500))
             if not self.notes:
                 self.coverage='FULL'
+            packages=[entry.get('package',{}) for result in data['results'] for entry in result.get('packages',[])]
+            self.inventory = {'package_occurrences':len(packages),
+                'unique_packages':len({(p.get('ecosystem',''),p.get('name',''),p.get('version','')) for p in packages}),
+                'confirmed_package_occurrences':sum(all(p.get(k) for k in ('ecosystem','name','version')) for p in packages),
+                'confirmed_manifests':len(observed), 'planned_manifests':len(supported),
+                'per_manifest':{result['source']['path']:len(result.get('packages',[])) for result in data['results']},
+                'complete_dependency_graph_attested':False if self.coverage=='PARTIAL' else True,
+                'native_duration_ms':process.duration_ms}
             return self.normalize(data,normalizer)
 
     def normalize(self, data, normalizer):
@@ -160,5 +171,15 @@ class OSVDependencyAdapter(BaseScanner):
                     from .diagnostics import sanitize
                     finding.technical_details['severity_vectors']=[{'type':sanitize(item.get('type',''),30),
                         'score':sanitize(item.get('score',''),300)} for item in vuln.get('severity',[]) if isinstance(item,dict)]
+                    ranges=[];fixed=[]
+                    for affected in vuln.get('affected',[]):
+                        identity=affected.get('package',{})
+                        if identity.get('name')!=package.get('name') or identity.get('ecosystem')!=package.get('ecosystem'):
+                            continue
+                        for row in affected.get('ranges',[])[:20]:
+                            events=[{key:sanitize(value,100) for key,value in event.items() if key in {'introduced','fixed','last_affected','limit'}} for event in row.get('events',[])[:40]]
+                            ranges.append({'type':sanitize(row.get('type',''),30),'events':events})
+                            fixed.extend(event['fixed'] for event in events if event.get('fixed'))
+                    finding.technical_details.update(affected_ranges=ranges[:20],fixed_versions=sorted(set(fixed))[:40])
                     found.append(finding)
         return found

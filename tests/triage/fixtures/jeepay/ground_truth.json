@@ -1,0 +1,16 @@
+{
+  "label_schema": ["LIKELY_TRUE_POSITIVE", "LIKELY_FALSE_POSITIVE", "NEEDS_REVIEW"],
+  "note": "Human labels are independent of model output. These are authored synthetic reference cases, not measured real-project accuracy. Reviewers may change labels and record their identity.",
+  "labels": {
+    "tls-installed-hostname": "LIKELY_TRUE_POSITIVE",
+    "tls-installed-trust-manager": "LIKELY_TRUE_POSITIVE",
+    "tls-unproven-use": "NEEDS_REVIEW",
+    "md5-payment-signature": "NEEDS_REVIEW",
+    "md5-cache-key": "LIKELY_FALSE_POSITIVE",
+    "secret-doc-uncertain": "NEEDS_REVIEW",
+    "secret-config-uncertain": "NEEDS_REVIEW",
+    "secret-explicit-placeholder": "LIKELY_FALSE_POSITIVE",
+    "dependency-version-match": "NEEDS_REVIEW",
+    "source-prompt-injection": "NEEDS_REVIEW"
+  }
+}

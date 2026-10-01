@@ -152,6 +152,27 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    ai_parser=sub.add_parser('ai',help='Configure user BYOK; AI is disabled during scan')
+    ai_sub=ai_parser.add_subparsers(dest='ai_action',required=True)
+    ai_config=ai_sub.add_parser('configure')
+    ai_config.add_argument('--provider',choices=['openai-compatible'],default='openai-compatible')
+    ai_config.add_argument('--base-url',required=True)
+    ai_config.add_argument('--model',required=True)
+    ai_config.add_argument('--api-key-env',default='SECURITY_RUNTIME_AI_KEY')
+    triage_parser=sub.add_parser('triage',help='Validate stored candidates; keeps raw findings')
+    triage_select=triage_parser.add_mutually_exclusive_group(required=True)
+    triage_select.add_argument('--latest',action='store_true')
+    triage_select.add_argument('--scan')
+    triage_parser.add_argument('--path')
+    triage_parser.add_argument('--provider',choices=['configured'])
+    triage_parser.add_argument('--allow-external-code-context',action='store_true',help='Authorize bounded redacted code context to configured external LLM')
+    triage_parser.add_argument('--category',choices=['code','secret','dependency'],action='append')
+    triage_parser.add_argument('--severity',choices=['CRITICAL','HIGH','MEDIUM','LOW','UNKNOWN'],action='append')
+    triage_parser.add_argument('--limit',type=int,default=20)
+    triage_parser.add_argument('--json',action='store_true')
+    triage_parser.add_argument('--raw',action='store_true')
+    triage_parser.add_argument('--prepare',action='store_true',help='Export agent-native evidence and schema as JSON')
+    triage_parser.add_argument('--no-progress',action='store_true')
     doctor_parser = sub.add_parser("doctor", help="Check Runtime and project readiness")
     doctor_parser.add_argument("--path")
     doctor_parser.add_argument("--json", action="store_true")
@@ -203,6 +224,45 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command=='ai':
+            from .triage_providers import AIConfig
+            AIConfig(args.base_url,args.model,args.api_key_env,args.provider).save()
+            print('BYOK 配置已保存，仅保存 API key 环境变量名。AI 默认关闭。')
+            print('将向外部 LLM Provider 发送经过限制和脱敏的代码上下文，用于安全 Finding 验证。')
+            print('使用 triage --provider configured --allow-external-code-context 显式授权。')
+            return 0
+        if args.command=='triage':
+            from .triage import TriageService
+            from .triage_providers import AIConfig,OpenAICompatibleProvider
+            from .storage import SQLiteStore
+            from .human import render_triage
+            store=SQLiteStore();service=TriageService(store)
+            scan=store.latest_scan(args.path) if args.latest else store.get_scan(args.scan)
+            if scan is None: raise ValueError('No stored scan found')
+            if args.path and Path(scan['target_profile']['path']).resolve()!=Path(args.path).resolve():
+                raise ValueError('Scan does not belong to this workspace')
+            selection=dict(categories=args.category,severities=args.severity,limit=args.limit)
+            if args.raw:
+                if args.provider or args.prepare: raise ValueError('--raw cannot invoke or prepare AI')
+                print(json.dumps(scan['findings'],ensure_ascii=False,indent=2))
+                return 0
+            if args.provider:
+                if args.prepare: raise ValueError('Choose BYOK or agent-native prepare')
+                if not args.allow_external_code_context:
+                    raise ValueError('将向外部 LLM Provider 发送经过限制和脱敏的代码上下文。必须显式提供 --allow-external-code-context')
+                provider=OpenAICompatibleProvider(AIConfig.load(),allow_external_code_context=True)
+                if args.no_progress: output=service.run(scan['scan_id'],provider,**selection)
+                else:
+                    from .cli_progress import CLIProgressRenderer
+                    with CLIProgressRenderer() as reporter: output=service.run(scan['scan_id'],provider,progress=reporter,**selection)
+                print(json.dumps(output,ensure_ascii=False) if args.json else render_triage(output['view']))
+                return 2 if output['failures'] or output['evidence_errors'] else 0
+            if args.prepare:
+                print(json.dumps(service.prepare(scan['scan_id'],**selection),ensure_ascii=False))
+            else:
+                view=service.view(scan['scan_id'])
+                print(json.dumps(view,ensure_ascii=False) if args.json else render_triage(view))
+            return 0
         if args.command == "doctor":
             return doctor(Path(args.path) if args.path is not None else None, json_output=args.json, verbose=args.verbose)
         if args.command == "scan":

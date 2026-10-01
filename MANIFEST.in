@@ -2,5 +2,7 @@ recursive-include tests/rules *.java *.xml *.py
 recursive-include samples/java-benchmarks *.java
 include scripts/test_rules.py
 include scripts/osv_fallback_acceptance.py
+include scripts/jeepay_triage_benchmark.py
 include scripts/rule_benchmark.py
 include scripts/progress_acceptance.py
+recursive-include tests/triage *.py *.json *.md

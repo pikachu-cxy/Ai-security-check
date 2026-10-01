@@ -175,7 +175,7 @@ def test_maven_mock_end_to_end_storage_human_json_mcp(tmp_path, capsys):
     failure = next(run for run in result.scanner_runs if run.scanner == 'trivy-vuln')
     assert failure.error_code == 'MAVEN_RATE_LIMITED' and failure.retry_after_seconds == 1299
     human = render(result)
-    assert all(value in human for value in ('敏感信息检测', '已完成', '依赖安全', '失败', '1299', '仍然有效', '未被发现'))
+    assert all(value in human for value in ('敏感信息检测', '已完成', '依赖安全', '失败', '1299', '候选问题仍保留', '未被发现'))
     stored = runtime.store.get_scan(result.scan_id)
     mcp = _agent_result(result)
     assert next(run for run in mcp['scanner_runs'] if run['scanner']=='trivy-vuln')['error_code'] == 'MAVEN_RATE_LIMITED'

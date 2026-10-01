@@ -48,8 +48,23 @@ def diagnostic_zh(data, *, retry=''):
 def render_scan(result, *, verbose=False):
     if result.execution_state in {'NO_CHANGES', 'NOT_APPLICABLE'}:
         return f'AI Security Check\n\n{result.summary}\n状态：{result.execution_state}\n耗时：{result.duration_ms} ms'
-    lines = ['AI Security Check', '', '检查完成。', f'发现 {len(result.findings)} 个需要处理的问题。', '']
+    from .triage_models import category, dependency_groups, iac_classification
+    raw=[finding.__dict__ for finding in result.findings]
+    lines = ['AI Security Check', '', '检查完成。', f'发现 {len(result.findings)} 个候选安全问题。',
+        '部分问题需要结合代码和运行环境进一步确认。', '']
+    for key,label in [('code','代码安全'),('secret','敏感信息'),('dependency','依赖漏洞'),('iac','配置安全')]:
+        count=sum(category(f)==key for f in raw)
+        if count or verbose: lines.append(f'{label}：{count}')
+    groups=dependency_groups(raw)
+    if groups:
+        lines += ['', '依赖风险（按包／版本／清单分组；具体 advisory 可在 JSON／Raw Findings 中展开）']
+        for group in groups:
+            lines.append(f"{group['highest_severity']} · {group['package']} {group['version']} · {len(group['finding_ids'])} 个候选漏洞 · UNTRIAGED · {group['manifest']}")
     for finding in result.findings:
+        if finding.category=='dependency' and not verbose:
+            continue
+        if finding.category=='configuration':
+            lines.append('配置分类：'+iac_classification(finding.__dict__))
         lines += [finding.severity, finding.plain_title, f'位置：{finding.file_path}:{finding.line_start}',
                   '为什么危险：' + finding.impact, '建议：' + finding.fix_advice, '']
     summary = result.summary.replace('；Security check completed with limited coverage.', '。部分安全检查未能完成，结果覆盖不完整。')
@@ -82,7 +97,7 @@ def render_scan(result, *, verbose=False):
             if verbose:
                 lines.extend(detail.get('coverage_notes',[]))
     if result.status == 'PARTIAL':
-        lines += ['', '为什么覆盖不完整？', f'已完成检查发现的 {len(result.findings)} 个问题仍然有效。',
+        lines += ['', '为什么覆盖不完整？', f'已完成检查发现的 {len(result.findings)} 个候选问题仍保留。',
                   '失败或不可用的检查可能导致其他问题未被发现。']
     from dataclasses import asdict
     for run in result.scanner_runs:
@@ -100,4 +115,37 @@ def render_scan(result, *, verbose=False):
         if run.error_code:
             retry = f'security-check tools install {run.scanner}' if run.status == 'UNAVAILABLE' and run.scanner in {'semgrep', 'gitleaks', 'trivy'} else f'security-check scan --mode {result.mode}'
             lines.append(diagnostic_zh(asdict(run), retry=retry))
+    return '\n'.join(lines)
+
+
+def render_triage(view):
+    coverage=view['triage_coverage']
+    lines=['AI Risk Validation', '', f"候选问题：{coverage['total_candidates']}",
+        f"已验证：{coverage['triaged']}；未验证：{coverage['total_candidates']-coverage['triaged']}",
+        f"优先处理：{coverage['actionable']}",f"需要确认：{coverage['review']}",
+        f"低优先级：{coverage['lower_priority']}",f"已降噪：{coverage['suppressed']}（原始 Finding 保留）",
+        f"失败：{coverage['failed']}；过期：{coverage['stale']}",f"Scan Coverage：{view['scan_coverage']}"]
+    for priority,label in [('ACTIONABLE','优先处理'),('REVIEW','需要确认'),('LOWER_PRIORITY','低优先级'),('SUPPRESSED','已降噪 Findings')]:
+        items=[row for row in view['findings'] if row['triage_status']=='VALID' and row['triage']['priority']==priority]
+        if not items: continue
+        lines += ['',label]
+        for row in items:
+            triage=row['triage']
+            lines += [f"{row['severity']} · {triage['verdict']} · {row['title']}",
+                f"位置：{row['file']}:{row['line']}",f"原因：{triage['reason']}",
+                f"Exploitability：{triage['exploitability']}"]
+            lines += [f"证据：{ref['file']}:{ref['start_line']}-{ref['end_line']}" for ref in triage['evidence_refs']]
+    if view['dependency_groups']:
+        lines += ['', '依赖风险（Raw advisories 按包分组）']
+        rows={row['finding_id']:row for row in view['findings']}
+        for group in view['dependency_groups']:
+            states={rows[fid]['triage']['verdict'] if rows[fid]['triage_status']=='VALID' else rows[fid]['triage_status'] for fid in group['finding_ids']}
+            lines.append(f"{group['package']} {group['version']} · 最高 {group['highest_severity']} · {len(group['finding_ids'])} 个候选漏洞 · {' / '.join(sorted(states))}")
+    iac=[row for row in view['findings'] if row['category']=='iac']
+    if iac:
+        lines += ['', 'IaC 未进行 AI Triage']
+        for classification in ('SECURITY_MISCONFIGURATION','HARDENING','BEST_PRACTICE'):
+            lines.append(f"{classification}：{sum(row['classification']==classification for row in iac)}")
+    lines += ['', 'Raw Findings 仍可通过 get_findings 或 security-check triage --raw 查看。',
+        'Agent-native 验证：prepare_triage → 宿主模型分析 → submit_triage。普通 scan 不调用 AI。']
     return '\n'.join(lines)

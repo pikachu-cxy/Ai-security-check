@@ -17,7 +17,7 @@ from pathlib import Path
 from security_runtime._version import __version__
 from security_runtime.toolchain import platform_key
 
-REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify"}
+REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage"}
 PLUGIN_PROBE = '''
 from security_runtime.capabilities import Capability
 from security_runtime.models import ScannerRun, RunStatus
@@ -57,6 +57,22 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 payload = payload.get("result", payload)
                 if not Path(payload["workspace"]).samefile(project):
                     raise ValueError("Standalone MCP workspace binding is incorrect")
+                prepared=await client.call_tool('prepare_triage',{'scan_id':payload['scan_id']})
+                if prepared.isError: raise ValueError('Standalone prepare_triage failed')
+                data=prepared.structuredContent or json.loads(prepared.content[0].text)
+                data=data.get('result',data)
+                if data['packets']:
+                    packet=data['packets'][0]
+                    # Explicit mock host analysis, real frozen Runtime validation.
+                    value={'finding_id':packet['finding_id'],'context_hash':packet['context_hash'],
+                        'verdict':'NEEDS_REVIEW','confidence':'LOW','exploitability':'UNKNOWN',
+                        'reason':'Synthetic standalone host analysis; context remains unknown.','attack_path':'',
+                        'evidence_refs':[{'file':packet['file'],'start_line':packet['line']['start'],'end_line':packet['line']['end'],'claim':'Scanner candidate'}],
+                        'preconditions_met':[],'preconditions_unknown':['Reachability'],'recommended_action':'Review'}
+                    accepted=await client.call_tool('submit_triage',{'scan_id':payload['scan_id'],'results':[value],'triage_session':data['triage_session']})
+                    if accepted.isError: raise ValueError('Standalone submit_triage failed')
+                view=await client.call_tool('get_triage',{'scan_id':payload['scan_id']})
+                if view.isError: raise ValueError('Standalone triage view failed')
         stderr.seek(0)
         if "IncompleteFieldDefinitionWarning" in stderr.read():
             raise ValueError("Standalone MCP Settings warning returned")

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -15,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _agent_finding(finding: dict) -> dict:
-    return {key: finding[key] for key in ("id", "severity", "confidence", "plain_title", "file_path", "line_start", "impact", "fix_advice", "technical_details") if key in finding}
+    return {key: finding[key] for key in ("id", "category", "severity", "confidence", "plain_title", "file_path", "line_start", "impact", "fix_advice", "technical_details", "triage_status", "verdict", "triage_confidence", "exploitability", "triage") if key in finding}
 
 
 def _agent_result(result) -> dict:
@@ -49,6 +51,8 @@ def create_server(runtime: SecurityRuntime | None = None):
     engine = runtime or SecurityRuntime()
     binding = WorkspaceBinding.from_environment()
     server = FastMCP("AI Security Runtime", log_level=mcp_log_level())
+    # Connection-local opaque handoffs hold hashes only, never packet source.
+    triage_sessions={}
 
     def bound_path(value: str | None) -> str | None:
         if binding is None:
@@ -118,7 +122,56 @@ def create_server(runtime: SecurityRuntime | None = None):
         check_scan(scan_id)
         if binding:
             event(DogfoodEvent(binding.integration_id, binding.root), connected=True)
-        return [_agent_finding(finding) for finding in engine.get_findings(scan_id)]
+        from .triage import TriageService
+        view=TriageService(engine.store).view(scan_id)
+        rows={row['finding_id']:row for row in view['findings']}
+        found=[]
+        for finding in engine.get_findings(scan_id):
+            row=rows[finding['id']]
+            item=_agent_finding(finding)
+            item['triage_status']=row['triage_status']
+            item['triage']=row['triage']
+            if row['triage_status']=='VALID':
+                item.update(verdict=row['triage']['verdict'],triage_confidence=row['triage']['confidence'],exploitability=row['triage']['exploitability'])
+            found.append(item)
+        return found
+
+    @server.tool()
+    def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20) -> dict:
+        """Return bounded redacted UNTRUSTED_CODE evidence to this host agent; does not invoke AI."""
+        check_scan(scan_id)
+        from .triage import TriageService
+        data=TriageService(engine.store).prepare(scan_id,finding_ids,categories,limit)
+        expired=[key for key,value in triage_sessions.items() if time.monotonic()-value[2]>900]
+        for key in expired: triage_sessions.pop(key,None)
+        if len(triage_sessions)>=64: triage_sessions.pop(next(iter(triage_sessions)))
+        token=secrets.token_urlsafe(32)
+        triage_sessions[token]=(scan_id,{packet['finding_id']:packet['context_hash'] for packet in data['packets']},time.monotonic())
+        data['triage_session']=token
+        data['triage_session_expires_in_seconds']=900
+        return data
+
+    @server.tool()
+    def submit_triage(scan_id: str, results: list[dict], triage_session: str) -> dict:
+        """Validate structured host analysis and evidence references; preserves every raw finding."""
+        check_scan(scan_id)
+        session=triage_sessions.get(triage_session)
+        if session is None or session[0]!=scan_id or time.monotonic()-session[2]>900:
+            raise ValueError('Invalid or expired triage handoff session; prepare evidence again')
+        if not results or len(results)>20 or any(not isinstance(item,dict) or
+            session[1].get(item.get('finding_id'))!=item.get('context_hash') for item in results):
+            raise ValueError('Triage result does not belong to this evidence handoff')
+        from .triage import TriageService
+        data=TriageService(engine.store).submit(scan_id,results)
+        for item in results: session[1].pop(item['finding_id'],None)
+        return data
+
+    @server.tool()
+    def get_triage(scan_id: str) -> dict:
+        """Independent triage coverage and grouped view; never changes scan coverage."""
+        check_scan(scan_id)
+        from .triage import TriageService
+        return TriageService(engine.store).view(scan_id)
 
     @server.tool()
     def generate_fix(finding_id: str) -> dict:

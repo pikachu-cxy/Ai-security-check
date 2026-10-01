@@ -120,6 +120,7 @@ class ScannerRun:
     coverage_contract: str = "FULL"
     coverage_notes: list[str] = field(default_factory=list)
     rule_coverage: dict = field(default_factory=dict)
+    dependency_inventory: dict = field(default_factory=dict)
 
     def __post_init__(self):
         from .diagnostics import sanitize

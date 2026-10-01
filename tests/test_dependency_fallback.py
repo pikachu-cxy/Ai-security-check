@@ -133,6 +133,9 @@ def test_native_success_contract_and_safe_scope(tmp_path,name,expected):
     with patch('security_runtime.osv.run_process',side_effect=execute):
         findings,run=adapter.scan(context,n)
     assert not findings and run.status=='SUCCESS' and run.coverage_contract==expected
+    assert run.dependency_inventory['package_occurrences']==1
+    assert run.dependency_inventory['unique_packages']==1
+    assert run.dependency_inventory['native_duration_ms']==1
     assert seen==[[name,'runtime-osv.toml'] if name < 'runtime-osv.toml' else ['runtime-osv.toml',name]]
 
 

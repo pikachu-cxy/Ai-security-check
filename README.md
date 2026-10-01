@@ -700,3 +700,18 @@ Gitleaks independently satisfies default SECRET_SCAN. Trivy dependency failures 
 `tools install --all` prepares the primary engines. OSV remains `ON_DEMAND / FALLBACK` in `tools status`; `doctor --verbose` reports its availability without requiring it for readiness or downloading it. `tools install osv-scanner` explicitly prepares the pinned official, checksum-verified release. OSV online scans query deps.dev/OSV.dev using dependency identity information. Offline scanning requires both a locally compatible engine and ecosystem databases at `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip`; Runtime does not download them in offline mode. Call analysis and target builds are disabled. Maven POM extraction/resolution remains PARTIAL because complete transitive/test dependency coverage is not attested.
 
 See [Trivy decoupling acceptance](docs/TRIVY_CAPABILITY_DECOUPLING.md) and [OSV fallback acceptance](docs/OSV_DEPENDENCY_FALLBACK.md).
+
+## Finding Triage v0.1
+
+Scanner results are candidates. Raw Findings are preserved, with independent TriageRecords and separate scan/triage coverage. IaC receives deterministic rule-ID classification in this version.
+
+```text
+security-check scan --mode release
+security-check triage --latest
+security-check triage --latest --prepare --category code --limit 20
+security-check triage --latest --raw
+```
+
+MCP host agents use `prepare_triage` for bounded, redacted UNTRUSTED_CODE evidence, analyze it with their own model, and return structured results using `submit_triage` with the returned triage_session. `get_triage` returns coverage and grouped views. Runtime does not invoke the host model.
+
+Configure a user-supplied OpenAI-compatible provider with `ai configure --base-url https://provider.example/v1 --model user-model --api-key-env SECURITY_RUNTIME_AI_KEY`. The key value is read only from the environment. External context requires `triage --latest --provider configured --allow-external-code-context`; absent consent fails closed. Normal scan never invokes AI. Secret values are redacted and repository content is untrusted data. Suppression requires explicit validated counterevidence; documentation/example placement or missing API search matches cannot suppress a candidate. See [acceptance and limits](docs/AI_TRIAGE_ACCEPTANCE.md).

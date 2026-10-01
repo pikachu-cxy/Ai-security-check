@@ -93,7 +93,11 @@ FALLBACK_SELECTED → FALLBACK_PREPARING → ENGINE_PREPARING／READY → FALLBA
 
 拆分后的真实独立执行：Trivy vuln FAILED／MAVEN_RATE_LIMITED，2,899 ms；Trivy IaC SUCCESS，1,221 ms，14 findings；Gitleaks SUCCESS，2,650 ms，9 findings。SECRET_SCAN 和 IAC_MISCONFIG 独立 EXECUTED。[真实记录](trivy-decoupling-evidence.json)。IaC 是尚未验证的 scanner finding，不宣称云上可利用。
 
-**Jeepay OSV 在线验收尚未执行。** 自动审批拒绝了该动作，理由为未确认向 deps.dev／OSV.dev 发送这个真实项目依赖信息的授权。已请求用户仅针对本轮在线依赖查询批准，收到答复前保持该步骤待验收。没有用 mock、离线测试或扫描器安装结果冒充真实在线成功。
+用户于本轮明确授权仅公开 Jeepay 的依赖元数据在线解析／查询；真实 `security-check scan --mode release` 已执行。Trivy 0.74.0 返回 MAVEN_RATE_LIMITED（3,167 ms），自动切换 OSV-Scanner 2.6.0；OSV SUCCESS，108,827 ms（原生调用 108,577 ms），88 条依赖 vulnerability findings。整体 CLI 113,395 ms。
+
+10/10 份 POM 产出库存，177 条 package occurrences、135 个不同 ecosystem/name/version 组合；其中含未确认版本，不能把这些计数称为已证明完整解析的图。依赖图 incomplete：内部 com.jeequan 模块解析失败、部分版本／ecosystem 不明，且 Maven test／完整传递图未获上游证明，所以 DEPENDENCY_VULN=PARTIAL、coverage=PARTIAL。active_provider=osv-scanner，provider_role=FALLBACK；primary FAILED/MAVEN_RATE_LIMITED 保留。Secret/IaC 独立 EXECUTED。全部真实 finding：SAST 4 + Secret 9 + dependency 88 + IaC 14 =115。
+
+Human／保存的 JSON／同一实际 native result 的 MCP provider contract 均保持 PARTIAL；没有再次把完整图未证实的 Maven 扫描提升 FULL。[真实记录](jeepay-osv-online-evidence.json)、[普通候选输出](jeepay-candidate-human.txt)、[本地 MCP Triage 记录](jeepay-triage-evidence.json)。同一结果经过实际 SDK stdio MCP 读取／证据交接／验证，不以 synthetic offline 结果代替在线记录。后续 richer advisory 元数据不追补到旧结果中。
 
 ## Q. Finding normalize／dedupe
 
@@ -103,7 +107,7 @@ FALLBACK_SELECTED → FALLBACK_PREPARING → ENGINE_PREPARING／READY → FALLBA
 
 最终完整回归：308 passed、6 skipped、6 subtests passed（79.79 秒，按 CI 全局 `SECURITY_RUNTIME_OFFLINE=1` 复跑），包含 installed_version 别名及 CVSS 向量保留。首轮 CI 的 18 个模拟在线输出用例继承了全局 offline，提前返回 OFFLINE_MODE；fixture 已明确控制各用例模式，所有网络和 native 调用仍被 mock，不更改 Runtime 的离线保护。专门回退／分发／合规测试 80 项通过。规则门禁 24 条规则：25 positive／28 negative，lint 与真实 Semgrep fixture 均通过，checksum 与原规则阶段相同。原 Alpha SDK acceptance 通过。
 
-覆盖用户 33 类验收：能力失败隔离；健康主 provider 零回退；Maven／网络／不可用触发与完整性禁止；FULL／PARTIAL／双失败／离线；按需安装、doctor、tools status；四平台固定配置与 checksum；超时、输出限制、网络来源和 proxy 脱敏；normalize、别名去重；progress／JSON／MCP 元数据与流隔离；原 Maven 诊断、Rule Coverage、Java 规则、Alpha、wheel、合规及独立包。真实 Jeepay 在线验收单列于 P，仍待授权。
+覆盖用户 33 类验收：能力失败隔离；健康主 provider 零回退；Maven／网络／不可用触发与完整性禁止；FULL／PARTIAL／双失败／离线；按需安装、doctor、tools status；四平台固定配置与 checksum；超时、输出限制、网络来源和 proxy 脱敏；normalize、别名去重；progress／JSON／MCP 元数据与流隔离；原 Maven 诊断、Rule Coverage、Java 规则、Alpha、wheel、合规及独立包。真实 Jeepay 在线验收单列于 P，已获授权并完成。
 
 ## S. CI／standalone／compliance
 
@@ -113,4 +117,4 @@ FALLBACK_SELECTED → FALLBACK_PREPARING → ENGINE_PREPARING／READY → FALLBA
 
 ## T. 尚未解决
 
-真实 Jeepay OSV 在线回退仍待明确外传授权；不会绕过自动审批拒绝。POM 完整传递／测试依赖图未被证明，原生成功仍可能 PARTIAL；不强行等价。缓存数据新鲜度和未支持 manifest 格式会影响覆盖，未引入包管理器执行。CVSS 向量保留但未新增评分计算器。未知 native 解析诊断保守降低 FULL，不自动修改镜像／settings。Syft／Grype／KICS 等不在本轮范围。
+真实 Jeepay OSV 在线回退已获明确授权并完成；现有依赖 graph 仍不完整。POM 完整传递／测试依赖图未被证明，原生成功仍可能 PARTIAL；不强行等价。缓存数据新鲜度和未支持 manifest 格式会影响覆盖，未引入包管理器执行。CVSS 向量保留但未新增评分计算器。未知 native 解析诊断保守降低 FULL，不自动修改镜像／settings。Syft／Grype／KICS 等不在本轮范围。

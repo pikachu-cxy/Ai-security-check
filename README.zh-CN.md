@@ -828,3 +828,25 @@ usage: security-check ...
 `tools install --all` 只准备默认主引擎；OSV 在 `tools status` 中显示 `ON_DEMAND / FALLBACK`，不影响 doctor 的默认就绪状态。`tools install osv-scanner` 可显式准备固定版本和官方 SHA-256 校验的二进制。在线 OSV 会向 deps.dev／OSV.dev 查询依赖名称与版本。离线执行必须已有引擎和 `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip` 数据，不会自动下载。调用图分析和目标构建均关闭，Runtime 不修改 Maven settings 或自动添加 mirror。
 
 验收记录：[Trivy 能力解耦](docs/TRIVY_CAPABILITY_DECOUPLING.md)、[OSV 依赖回退](docs/OSV_DEPENDENCY_FALLBACK.md)。
+
+## Finding Triage v0.1
+
+扫描发现的是候选安全问题。Raw Findings 永久保留；验证结果作为独立 TriageRecord 保存，Scan Coverage 与 Triage Coverage 分开。IaC 本轮只做规则 ID 分类。
+
+```text
+security-check scan --mode release
+security-check triage --latest
+security-check triage --latest --prepare --category code --limit 20
+security-check triage --latest --raw
+```
+
+Coding Agent 可用 MCP `prepare_triage` 获取限定、脱敏的 UNTRUSTED_CODE 证据，使用自己的模型分析，再携带返回的 triage_session 调用 `submit_triage`；`get_triage` 返回独立覆盖和分组视图。
+
+BYOK 为 OpenAI-compatible 用户 provider：
+
+```text
+security-check ai configure --base-url https://provider.example/v1 --model user-model --api-key-env SECURITY_RUNTIME_AI_KEY
+security-check triage --latest --provider configured --allow-external-code-context --category code --severity HIGH --limit 20
+```
+
+实际 key 只从环境变量读取。普通 scan 不调用 AI；外部代码上下文必须显式授权，无授权 fail closed。Secret 值不进入 EvidencePacket，源码与注释只作为不可信数据；FALSE_POSITIVE 需要严格明确反证，不能因 docs/example 或未搜索到 API 自动隐藏。详见 [AI Triage 验收](docs/AI_TRIAGE_ACCEPTANCE.md)。

@@ -1,0 +1,166 @@
+{
+  "scan_id": "f5224162-0624-416f-8472-0f0474e7fd58",
+  "allowed_labels": [
+    "LIKELY_TRUE_POSITIVE",
+    "LIKELY_FALSE_POSITIVE",
+    "NEEDS_REVIEW"
+  ],
+  "records": [
+    {
+      "finding_id": "d598121157024de36fd86f9d",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "d682bdfed9db0ac92835086b",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "2b04d345834edbe99683d3d0",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "f36da42fcf21a223337df3fc",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "a1bff97770922d4c426d92ac",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "e33ec4cd55c077147a4c4503",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "db5093ff11555aed130224d9",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "a82c27d68a7691aadf44583c",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "b5a5dbaeea759df0f1f8a4dc",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "e0af727e293d16cdc70a8374",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "9b32a1f28a97f26e70ac2626",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "3ba7bfcba4601e321f44dd25",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "deaa657d94b7fbef439018ef",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "8b217d7785e8dd5ee9dd35d9",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "ccb86b94b4c57de249288b4a",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "29bb4ae8eb0098fa6735a44c",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "b372b13e67c89b75f98d6fa2",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "0fda59d6e8e385b1710d4fdc",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "eb39173d93d0492f226ab962",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "ff0219cbb62d78f99324e424",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "888468803c9a0f379a78f2de",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "104081ef2650d6036f5ba7b7",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "37150aa02e7e8a5a38789d11",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "09156fb738c9d86f32891c98",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "35cf05e0a6676b810c9b53da",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    },
+    {
+      "finding_id": "b4a18eb25f09b3a07d050eed",
+      "human_label": null,
+      "reviewer": null,
+      "status": "UNREVIEWED"
+    }
+  ]
+}

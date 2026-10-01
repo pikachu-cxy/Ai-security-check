@@ -258,7 +258,12 @@ class GitleaksAdapter(BaseScanner):
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, list)
-        return [n.make(scanner=self.name, category="secret", title=item.get("Description", "Potential secret"), description="A possible secret was found in source code.", severity="HIGH", confidence="HIGH", file_path=item.get("File", ""), line=item.get("StartLine", 1), evidence="[REDACTED_SECRET]", rule_id=item.get("RuleID", "")) for item in data]
+        found=[]
+        for item in data:
+            finding=n.make(scanner=self.name, category="secret", title=item.get("Description", "Potential secret"), description="A possible secret was found in source code.", severity="HIGH", confidence="HIGH", file_path=item.get("File", ""), line=item.get("StartLine", 1), evidence="[REDACTED_SECRET]", rule_id=item.get("RuleID", ""))
+            finding.line_end=max(finding.line_start,item.get('EndLine',finding.line_start))
+            found.append(finding)
+        return found
 
 
 class TrivyAdapter(BaseScanner):

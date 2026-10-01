@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -35,6 +36,8 @@ class SQLiteStore:
             with db:
                 db.execute("CREATE TABLE IF NOT EXISTS scans (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
                 db.execute("CREATE TABLE IF NOT EXISTS findings (id TEXT PRIMARY KEY, scan_id TEXT NOT NULL, data TEXT NOT NULL)")
+                db.execute('CREATE TABLE IF NOT EXISTS triage_records (id INTEGER PRIMARY KEY, scan_id TEXT NOT NULL, finding_id TEXT NOT NULL, cache_key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(scan_id,finding_id,cache_key))')
+                db.execute('CREATE INDEX IF NOT EXISTS triage_cache ON triage_records(cache_key)')
 
     def _connect(self):
         return sqlite3.connect(self.path)
@@ -51,6 +54,48 @@ class SQLiteStore:
         with closing(self._connect()) as db:
             row = db.execute("SELECT data FROM scans WHERE id = ?", (scan_id,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def latest_scan(self, workspace=None):
+        with closing(self._connect()) as db:
+            rows=db.execute('SELECT data FROM scans ORDER BY rowid DESC').fetchall()
+        for row in rows:
+            data=json.loads(row[0])
+            if workspace is None or Path(data['target_profile']['path']).resolve()==Path(workspace).resolve():
+                return data
+        return None
+
+    def save_triage(self, record, cache_key):
+        data=record.to_dict()
+        with closing(self._connect()) as db:
+            with db:
+                db.execute('INSERT OR REPLACE INTO triage_records(scan_id,finding_id,cache_key,data) VALUES (?,?,?,?)',
+                    (record.scan_id,record.finding_id,cache_key,json.dumps(data)))
+
+    def triage_records(self, scan_id):
+        with closing(self._connect()) as db:
+            rows=db.execute('SELECT data FROM triage_records WHERE scan_id=? ORDER BY id', (scan_id,)).fetchall()
+        return {record['finding_id']:record for record in (json.loads(row[0]) for row in rows)}
+
+    def cached_triage(self, cache_key):
+        with closing(self._connect()) as db:
+            rows=db.execute('SELECT data FROM triage_records WHERE cache_key=? ORDER BY id DESC',(cache_key,)).fetchall()
+        return next((data for data in (json.loads(row[0]) for row in rows) if data['status']=='VALID'),None)
+
+    def evidence_key(self):
+        # Local random HMAC key, not an API key. It never enters packets,
+        # records, logs or provider requests. Secret changes can invalidate a
+        # redacted context without exposing a guessable unkeyed secret hash.
+        path=self.path.parent/'triage-evidence.key'
+        if path.is_symlink(): raise ValueError('Invalid local evidence key path')
+        try:
+            descriptor=os.open(path,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+        except FileExistsError:
+            pass
+        else:
+            with os.fdopen(descriptor,'wb') as stream: stream.write(secrets.token_bytes(32))
+        key=path.read_bytes()
+        if len(key)!=32: raise ValueError('Invalid local evidence key')
+        return key
 
     def get_finding(self, finding_id: str) -> tuple[dict, dict] | None:
         with closing(self._connect()) as db:
