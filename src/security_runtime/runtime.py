@@ -124,6 +124,8 @@ class SecurityRuntime:
                 found = [f for f in found if any(f.line_start<=line<=f.line_end for line in changed_lines.get(f.file_path,set()))]
                 run.finding_count = len(found)
             run.capabilities = tuple(sorted(scanner.capabilities))
+            run.provider = getattr(scanner, 'engine_id', '') or scanner.scanner_id
+            run.provider_role = getattr(scanner, 'provider_role', 'PRIMARY')
             if scanner.name in rule_plans and not run.rule_coverage:
                 run.rule_coverage=rule_plans[scanner.name].coverage(run.status)
             event_type = {'SUCCESS': 'SCANNER_COMPLETED', 'FAILED': 'SCANNER_FAILED',

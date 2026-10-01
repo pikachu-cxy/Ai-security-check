@@ -240,10 +240,10 @@ def test_chinese_relation_and_retry(tmp_path):
     runtime=SecurityRuntime(registry,SQLiteStore(tmp_path/'.security-runtime/state.db'))
     with patch('security_runtime.scanners._execute',side_effect=execute): result=runtime.scan(tmp_path,'release')
     text=render(result)
-    for phrase in ('安全检查','为什么覆盖不完整','trivy 未完成，因此','依赖安全未完成','敏感信息检测仅部分完成','Maven 仓库返回 HTTP 429','重试：security-check scan --mode release'):
+    for phrase in ('安全检查','为什么覆盖不完整','trivy-vuln 未完成，因此','依赖安全未完成','敏感信息检测：已完成','Maven 仓库返回 HTTP 429','重试：security-check scan --mode release'):
         assert phrase in text
     assert '<project>' not in text and 'Why partial?' not in text and 'Security checks' not in text
-    assert result.scanner_runs[-1].error_summary.startswith('Maven repository')
+    assert next(run for run in result.scanner_runs if run.scanner=='trivy-vuln').error_summary.startswith('Maven repository')
 
 
 def test_not_applicable_hidden_unless_verbose(tmp_path):

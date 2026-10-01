@@ -180,7 +180,7 @@ def test_doctor_profile_limited(repo, monkeypatch, capsys):
     assert report["profile"] == "LIMITED"
     assert report["workspace"]["git"]
     assert "Git-scoped files" in report["profile_warning"]
-    assert len(report["runtime"]["scanners"]) == 3
+    assert len(report["runtime"]["scanners"]) == 4
 
 
 def test_cli_plan_prepares_no_unselected_tools(repo, tmp_path, monkeypatch, capsys):

@@ -148,6 +148,8 @@ def mock_registry(root):
                                          'StartLine': 1, 'RuleID': 'synthetic-test'}]))
             return ProcessResult(0, '', '', 1)
         assert args[0] == 'trivy'
+        if args[args.index('--scanners')+1] == 'misconfig':
+            return ProcessResult(0, json.dumps({'Results': []}), '', 1)
         return ProcessResult(1, '', MAVEN_FAILURE, 1)
     return registry, execute
 
@@ -167,15 +169,16 @@ def test_maven_mock_end_to_end_storage_human_json_mcp(tmp_path, capsys):
     assert result.status == 'PARTIAL' and result.release_status != 'SAFE'
     assert len(result.findings) == 1
     assert result.capability_results['CODE_SAST'] == 'EXECUTED'
-    assert result.capability_results['SECRET_SCAN'] == 'PARTIAL'
+    assert result.capability_results['SECRET_SCAN'] == 'EXECUTED'
+    assert result.capability_results['IAC_MISCONFIG'] == 'EXECUTED'
     assert result.capability_results['DEPENDENCY_VULN'] == 'FAILED'
-    failure = next(run for run in result.scanner_runs if run.scanner == 'trivy')
+    failure = next(run for run in result.scanner_runs if run.scanner == 'trivy-vuln')
     assert failure.error_code == 'MAVEN_RATE_LIMITED' and failure.retry_after_seconds == 1299
     human = render(result)
-    assert all(value in human for value in ('敏感信息检测', 'PARTIAL', '依赖安全', '失败', '1299', '仍然有效', '未被发现'))
+    assert all(value in human for value in ('敏感信息检测', '已完成', '依赖安全', '失败', '1299', '仍然有效', '未被发现'))
     stored = runtime.store.get_scan(result.scan_id)
     mcp = _agent_result(result)
-    assert mcp['scanner_runs'][-1]['error_code'] == 'MAVEN_RATE_LIMITED'
+    assert next(run for run in mcp['scanner_runs'] if run['scanner']=='trivy-vuln')['error_code'] == 'MAVEN_RATE_LIMITED'
     assert 'PRIVATE_' not in json.dumps([result.to_dict(), stored, mcp, human])
     assert capsys.readouterr() == ('', '')
 

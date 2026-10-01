@@ -108,6 +108,10 @@ class ScannerRun:
     http_proxy: str = "not configured"
     https_proxy: str = "not configured"
     capabilities: tuple[str, ...] = ()
+    provider: str = ""
+    provider_role: str = "PRIMARY"
+    coverage_contract: str = "FULL"
+    coverage_notes: list[str] = field(default_factory=list)
     rule_coverage: dict = field(default_factory=dict)
 
     def __post_init__(self):

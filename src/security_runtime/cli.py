@@ -60,11 +60,15 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
         resolved = manager.statuses()
         report["database"] = manager.database_status()
         report["trivy_data"] = manager.trivy_data_statuses()
-        scanners = [{"name": adapter.name, "status": resolved[adapter.scanner_id].status,
-                     "available": resolved[adapter.scanner_id].status == ToolStatus.READY,
-                     "version": resolved[adapter.scanner_id].version, "source": resolved[adapter.scanner_id].source,
-                     "path": resolved[adapter.scanner_id].path, "install": installation_help(adapter.name)}
-                    for adapter in registry.adapters if adapter.scanner_id in resolved]
+        scanners = []
+        for adapter in registry.adapters:
+            engine = getattr(adapter, "engine_id", "") or adapter.scanner_id
+            if engine not in resolved:
+                continue
+            tool = resolved[engine]
+            scanners.append({"name": adapter.name, "engine": engine, "status": tool.status,
+                "available": tool.status == ToolStatus.READY, "version": tool.version,
+                "source": tool.source, "path": tool.path, "install": installation_help(engine)})
         report["runtime"]["scanners"] = scanners
         report["scanner_plan"]["available"] = [item["name"] for item in scanners if item["available"]]
         report["scanner_plan"]["unavailable"] = [item["name"] for item in scanners if not item["available"]]
@@ -72,9 +76,8 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
                   Capability.DEPENDENCY_VULN: "Dependency Security", Capability.IAC_MISCONFIG: "IaC Security"}
         for capability, label in labels.items():
             supporting = [adapter for adapter in registry.adapters if capability in adapter.capabilities]
-            ready = any(resolved[adapter.scanner_id].status == ToolStatus.READY and
-                        (adapter.scanner_id != "trivy" or report["database"] == ToolStatus.READY)
-                        for adapter in supporting if adapter.scanner_id in resolved)
+            ready = any(item["available"] and (item["name"] != "trivy-vuln" or report["database"] == ToolStatus.READY)
+                        for item in scanners if any(adapter.name == item["name"] for adapter in supporting))
             report["capabilities"][label] = "READY" if ready else "MISSING"
         report["status"] = "ready" if all(value == "READY" for value in report["capabilities"].values()) else "limited"
         report["message"] = "Local prerequisites checked. READY does not guarantee a project scan succeeds; remote repositories may fail."
@@ -109,10 +112,10 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
         if verbose:
             print(f"\nRuntime\nGit: {'READY' if report['runtime']['git_available'] else 'MISSING'}")
             for item in report["runtime"]["scanners"]:
-                descriptor = BUILTIN_ENGINES.get(item["name"])
+                descriptor = BUILTIN_ENGINES.get(item["engine"])
                 print(f"\n{item['name'].title()}\nStatus: {item['status']}\nVersion: {item['version'] or (descriptor.version if descriptor else '')}")
                 print(f"Source: {item['source'] or 'NONE'}\nPath: {item['path'] or '-'}")
-                if item["name"] == "trivy":
+                if item["engine"] == "trivy":
                     print(f"Database: {report['database']}")
                     for name, state in report["trivy_data"].items():
                         print(f"{name}: {state}")

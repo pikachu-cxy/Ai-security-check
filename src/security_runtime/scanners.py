@@ -76,18 +76,19 @@ class BaseScanner:
     supported_ecosystems: frozenset[str] = frozenset()
     filter_changed_lines = False
     timeout = 30
+    engine_id = ""
 
     def __init__(self, tool_manager: ToolManager | None = None):
         self.tool_manager = tool_manager or ToolManager()
 
     def required_engines(self) -> tuple[str, ...]:
-        return (self.scanner_id,)
+        return (self.engine_id or self.scanner_id,)
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
         return True
 
     def version(self) -> str:
-        return self.tool_manager.resolve(self.scanner_id).version
+        return self.tool_manager.resolve(self.engine_id or self.scanner_id).version
 
     def scan(self, context: ScanContext, normalizer: FindingNormalizer) -> tuple[list[Finding], ScannerRun]:
         start = time.monotonic()
@@ -96,7 +97,7 @@ class BaseScanner:
                                   error=diagnostic.error_summary, **diagnostic.to_dict())
         try:
             checkpoint()
-            resolved = self.tool_manager.ensure(self.scanner_id)
+            resolved = self.tool_manager.ensure(self.engine_id or self.scanner_id)
         except ScanCancelled:
             raise
         except Exception as exc:
@@ -260,9 +261,11 @@ class GitleaksAdapter(BaseScanner):
 
 
 class TrivyAdapter(BaseScanner):
-    name = scanner_id = "trivy"
-    display_name = "Trivy"
-    capabilities = frozenset({Capability.DEPENDENCY_VULN, Capability.SECRET_SCAN, Capability.IAC_MISCONFIG, Capability.CONTAINER_VULN, Capability.LICENSE_SCAN, Capability.SBOM})
+    name = scanner_id = "trivy-vuln"
+    engine_id = "trivy"
+    display_name = "Trivy dependency vulnerabilities"
+    capabilities = frozenset({Capability.DEPENDENCY_VULN})
+    checks = "vuln"
     supported_ecosystems = frozenset({"pip", "npm", "yarn", "pnpm", "maven", "go"})
     timeout = 90
 
@@ -270,12 +273,12 @@ class TrivyAdapter(BaseScanner):
         return self.tool_manager.prepare_trivy_database(binary)
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
-        relevant = any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "pom.xml", "build.gradle", "go.mod", "Dockerfile"} or f.endswith((".tf", ".yaml", ".yml")) for f in context.files)
+        relevant = any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "pom.xml", "build.gradle", "go.mod"} for f in context.files)
         return context.mode in {"feature", "release"} and relevant
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         with _snapshot(context) as scoped:
-            process = _execute([binary, "fs", "--format", "json", "--scanners", "vuln,secret,misconfig", "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
+            process = _execute([binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update", str(scoped)], str(scoped), self.timeout)
             if process.return_code != 0:
                 _process_failure(process)
             data = json.loads(process.stdout)
@@ -289,23 +292,41 @@ class TrivyAdapter(BaseScanner):
         assert isinstance(data, dict)
         found = []
         for result in data.get("Results", []):
-            for item in result.get("Vulnerabilities", []):
+            for item in result.get("Vulnerabilities", []) if self.checks == "vuln" else []:
                 found.append(n.make(scanner=self.name, category="dependency", title=item.get("Title") or "Vulnerable dependency", description=item.get("Title") or "Dependency vulnerability", severity=item.get("Severity", "MEDIUM"), confidence="MEDIUM", file_path=result.get("Target", ""), line=1, rule_id=item.get("VulnerabilityID", "")))
-            for item in result.get("Misconfigurations", []):
+            for item in result.get("Misconfigurations", []) if self.checks == "misconfig" else []:
                 found.append(n.make(scanner=self.name, category="configuration", title=item.get("Title", "Configuration issue"), description=item.get("Description", ""), severity=item.get("Severity", "MEDIUM"), confidence="MEDIUM", file_path=result.get("Target", ""), line=item.get("CauseMetadata", {}).get("StartLine", 1), rule_id=item.get("ID", "")))
-            for item in result.get("Secrets", []):
-                found.append(n.make(scanner=self.name, category="secret", title=item.get("Title", "Potential secret"), description="A possible secret was found in source code.", severity=item.get("Severity", "HIGH"), confidence="HIGH", file_path=result.get("Target", ""), line=item.get("StartLine", 1), evidence="[REDACTED_SECRET]", rule_id=item.get("RuleID", "")))
         return found
+
+
+class TrivyMisconfigAdapter(TrivyAdapter):
+    name = scanner_id = "trivy-misconfig"
+    display_name = "Trivy IaC misconfiguration"
+    capabilities = frozenset({Capability.IAC_MISCONFIG})
+    supported_ecosystems = frozenset()
+    checks = "misconfig"
+
+    def _prepare(self, binary):
+        # Built-in checks run without preparing the vulnerability/Java databases.
+        return ToolStatus.READY
+
+    def supports(self, profile, context):
+        return context.mode in {"feature", "release"} and any(
+            Path(f).name == "Dockerfile" or f.endswith((".tf", ".yaml", ".yml")) for f in context.files)
+
+    def _scan(self, binary, context, n):
+        files = tuple(f for f in context.files if Path(f).name == "Dockerfile" or f.endswith((".tf", ".yaml", ".yml")))
+        return super()._scan(binary, replace(context, files=files, context_files=()), n)
 
 
 class ScannerRegistry:
     def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None):
         self.tool_manager = tool_manager or ToolManager()
-        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), *self._discover_plugins()]
+        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []
-        used_ids = {"semgrep", "gitleaks", "trivy"}
+        used_ids = {"semgrep", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
         for entry in importlib.metadata.entry_points(group=SCANNER_ENTRY_POINT):
             try:
                 loaded = entry.load()

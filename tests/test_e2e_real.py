@@ -41,7 +41,7 @@ class RealDemoTests(unittest.TestCase):
         self.assertTrue(any(f.category == "command-injection" for f in quick.findings))
         self.assertTrue(any(f.category == "secret" for f in quick.findings))
         self.assertEqual(quick.release_status, "BLOCKED")
-        self.assertEqual(next(r for r in quick.scanner_runs if r.scanner == "trivy").status, "NOT_APPLICABLE")
+        self.assertEqual(next(r for r in quick.scanner_runs if r.scanner == "trivy-vuln").status, "NOT_APPLICABLE")
         command = next(f for f in quick.findings if f.category == "command-injection")
         task = self.runtime.generate_fix(command.id)
         self.assertIn("coding_agent_prompt", task)
@@ -53,7 +53,7 @@ class RealDemoTests(unittest.TestCase):
         self.assertGreater(quick.duration_ms, 0)
         self.assertGreater(feature.duration_ms, 0)
         self.assertGreater(release.duration_ms, 0)
-        self.assertEqual({r.scanner: r.status for r in release.scanner_runs}, {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy": "SUCCESS"})
+        self.assertEqual({r.scanner: r.status for r in release.scanner_runs}, {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy-vuln": "NOT_APPLICABLE", "trivy-misconfig": "NOT_APPLICABLE"})
 
     def test_cli_quick_and_release(self):
         cli = shutil.which("security-check")

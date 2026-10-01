@@ -268,6 +268,8 @@ class ToolManager:
         self.root = root if root is not None else default_data_root()
         self.provider = provider or OfficialReleaseProvider()
         self.data_diagnostics: dict[str, ErrorDiagnostic] = {}
+        self._engine_locks = {tool_id: threading.RLock() for tool_id in VERSIONS}
+        self._lock_guard = threading.Lock()
         self.versions = dict(VERSIONS)
         self.python_engines = {"semgrep"}
         self.python_requirements = {"semgrep": (f"semgrep=={VERSIONS['semgrep']}", False, None)}
@@ -448,7 +450,13 @@ class ToolManager:
     def ensure(self, tool_id: str, *, offline: bool | None = None) -> ResolvedTool:
         checkpoint()
         emit('ENGINE_PREPARING', scanner=tool_id, scanner_version=self.versions.get(tool_id, ''))
-        result = self._ensure(tool_id, offline=offline)
+        # Multiple capability providers can share one engine. Serialize its
+        # resolution/install transaction without serializing actual scans.
+        with self._lock_guard:
+            lock = self._engine_locks.setdefault(tool_id, threading.RLock())
+        with lock:
+            checkpoint()
+            result = self._ensure(tool_id, offline=offline)
         emit('ENGINE_READY' if result.status == ToolStatus.READY else 'ENGINE_PREPARATION_FAILED',
             scanner=tool_id, scanner_version=result.version or self.versions.get(tool_id, ''),
             error_code=result.diagnostic.error_code if result.diagnostic else '',

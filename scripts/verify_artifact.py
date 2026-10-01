@@ -149,14 +149,14 @@ def main() -> None:
                        for item in payload.get("findings", [])):
                 raise ValueError("First-party scanner finding missing")
             statuses = {item["scanner"]: item["status"] for item in payload["scanner_runs"]}
-            if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy": "NOT_APPLICABLE"}:
+            if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy-vuln": "NOT_APPLICABLE", "trivy-misconfig": "NOT_APPLICABLE"}:
                 raise ValueError("Quick sample scan violated its scope: " + json.dumps(payload["scanner_runs"]))
             release_scan = subprocess.run([str(executable), "scan", "--mode", "release", "--path", str(project), "--json"],
                                           cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if release_scan.returncode not in (0, 1):
                 raise RuntimeError(f"Release sample scan failed: {release_scan.stderr[-1000:]}")
             all_engines = json.loads(release_scan.stdout)["scanner_runs"]
-            if any(item["status"] != "SUCCESS" for item in all_engines):
+            if any(item["status"] not in {"SUCCESS", "NOT_APPLICABLE"} for item in all_engines):
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))
             plugin = Path(env["SECURITY_RUNTIME_PLUGIN_DIR"])
             plugin.mkdir(parents=True, exist_ok=True)
