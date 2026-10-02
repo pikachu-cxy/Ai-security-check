@@ -65,7 +65,8 @@ class TriageService:
         if scan is None: raise ValueError('Scan does not exist')
         return scan
 
-    def prepare(self,scan_id,finding_ids=None,categories=None,limit=None,severities=None,provider=None):
+    def prepare(self,scan_id,finding_ids=None,categories=None,limit=None,severities=None,provider=None,
+                *,pending_only=False,retry_failed=False):
         scan=self.scan(scan_id);budget=self.budget
         limit=budget.max_findings_per_batch if limit is None else limit
         if type(limit) is not int or not 1<=limit<=budget.max_findings_per_batch:
@@ -81,10 +82,27 @@ class TriageService:
         order={'CRITICAL':5,'HIGH':4,'MEDIUM':3,'LOW':2,'UNKNOWN':1}
         selected.sort(key=lambda f:(-order.get(f['severity'],0),{'code':0,'secret':1,'dependency':2}[category(f)],
             -{'HIGH':3,'MEDIUM':2,'LOW':1}.get(f['confidence'],0),f['file_path'],f['line_start'],f['id']))
+        retained=[];deferred=[]
+        if pending_only and selected:
+            from .storage import ReadOnlySQLiteStore
+            readonly=TriageService(ReadOnlySQLiteStore(self.store.path),self.budget)
+            rows={row['finding_id']:row for row in readonly.view(scan_id,persist_stale=False)['findings']}
+            retained=[f['id'] for f in selected if rows[f['id']]['triage_status']=='VALID']
+            deferred=[f['id'] for f in selected if rows[f['id']]['triage_status']=='FAILED' and not retry_failed]
+            selected=[f for f in selected if f['id'] not in retained and f['id'] not in deferred]
+            rank={'UNTRIAGED':0,'STALE':1,'FAILED':2}
+            selected.sort(key=lambda f:rank[rows[f['id']]['triage_status']])
         provider=provider or AgentNativeProvider()
-        packets=[];cached=[];errors=[];builder=self.builder(scan)
-        for finding in selected[:limit]:
+        packets=[];cached=[];errors=[];examined=[]
+        try: builder=self.builder(scan) if selected else None
+        except (ValueError,OSError): builder=None
+        # Cache reuse is not a new model analysis. Bound local preparation work
+        # separately so cache-heavy scans cannot cause an unbounded request.
+        for finding in selected[:1000]:
+            if len(packets)+len(errors)>=limit: break
+            examined.append(finding)
             try:
+                if builder is None: raise ValueError('Evidence unavailable')
                 packet=builder.build(finding)
                 key=cache_key(finding,packet,provider)
                 old=self.store.cached_triage(key)
@@ -97,8 +115,9 @@ class TriageService:
         return {'scan_id':scan_id,'packets':packets,'cached_finding_ids':cached,'errors':errors,
             'required_output_schema':RESULT_SCHEMA,'triage_instructions':INSTRUCTIONS,'prompt_version':PROMPT_VERSION,
             'provider':{'provider_type':provider.provider_type,'provider_name':provider.provider_name,'model':provider.model},
-            'dependency_groups':dependency_groups(selected[:limit]),'selected':min(len(selected),limit),
-            'remaining':max(0,len(selected)-limit)}
+            'dependency_groups':dependency_groups(examined),'selected':len(examined),
+            'remaining':max(0,len(selected)-len(examined)),
+            'retained_finding_ids':retained,'deferred_failed_finding_ids':deferred}
 
     def submit(self,scan_id,results,*,provider=None):
         provider=provider or AgentNativeProvider()

@@ -31,6 +31,8 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/triage_evidence.py",
             "security_runtime/triage_providers.py",
             "security_runtime/security_summary.py",
+            "security_runtime/task_triage.py",
+            "security_runtime/host_guidance.py",
             "security_runtime/rules/catalog.json",
             "security_runtime/python_downloads.json",
             "security_runtime/rules/LICENSE",

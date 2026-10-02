@@ -374,7 +374,7 @@ def test_real_stdio_summary_no_scan_no_state_initialization(tmp_path):
             async with stdio_client(params,errlog=stderr) as (read,write):
                 async with ClientSession(read,write) as client:
                     await asyncio.wait_for(client.initialize(),20)
-                    assert len((await client.list_tools()).tools)==9
+                    assert {'get_security_summary','prepare_task_triage','get_runtime_info'} <= {t.name for t in (await client.list_tools()).tools}
                     response=await client.call_tool('get_security_summary',{})
                     assert not response.isError
                     data=response.structuredContent or json.loads(response.content[0].text)

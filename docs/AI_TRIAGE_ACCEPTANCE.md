@@ -208,3 +208,40 @@ wheel/sdist 构建、新 summary 模块与 23 个规则文件分发门禁、独�
 三位未参与开发者的真实试用 **Pending**。用户明确回复“目前无法安排，保留待验收”；不使用 Agent 模拟用户或自动测试替代真实反馈，不声称首轮全部使用验收或整体 milestone 已完成。
 
 “继续核查”和“修复与验证”两轮保持 **Planned**。独立 ground truth 保持 UNREVIEWED/null，质量指标 UNKNOWN / NOT_MEASURED，真实模型实验未运行；Joern 保持后置。
+
+
+## AH. 继续核查 v0.1（2026-10-02）
+
+开发起始 `feature/runtime-mvp` / `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`，干净工作区、ff-only 同步。仅实现第二轮核查，不修改 Jeepay 源码、不构建目标、不做新 Jeepay scan/公网模型实验、自动补丁或 Joern。第一轮 AG 的历史时点/验收不覆盖，第三轮修复与验证仍 Planned。
+
+### 普通用户入口与机器交接
+
+用户只需说“检查这个项目”“继续/处理第一项”或选择任务。宿主负责工具选择及已有授权范围内的准备、分析、提交和结果展示；不要求用户 UUID、复制技术提示词、拼接工具顺序或把 generate_fix 输出再粘给 Agent。固定 FastMCP server instructions 已接入，实际 SDK initialize 收到并验证；工具描述和 readOnly/destructive/openWorld annotations 也通过 SDK 列表核对。
+
+summary 的 task_ref/continuation 绑定 workspace、固定 scan 和精确成员/指纹/位置/规则/依赖身份。T01 是响应内编号，排序/审阅推进不会把引用映射到其他任务；格式/版本/成员变化或 scan 被移除要求 REFRESH_REQUIRED，不回退当前第一项。新 scan 不替换旧引用的 scan。引用是内容身份，不是权限凭据；跨 workspace 拒绝，源码变化独立由 HMAC context_hash/freshness 拒绝旧 packet。没有新持久化任务表或汇总 key。
+
+新增 prepare_task_triage(task_ref, workspace_path=None, limit=20, retry_failed=False)，沿原 prepare_triage 实现准备 → 宿主受限分析 → 原 submit_triage 保存校验。Runtime 不调用宿主模型。任务级 session 在提交时再次核对引用身份，原15分钟/64 sessions、消费与重放拒绝、schema/hash/evidence_refs/脱敏/UNTRUSTED_CODE 与 Raw/policy/coverage 保留；任意额外宿主报告仍 NOT_IMPORTED。
+
+当前 VALID 保留，UNTRIAGED 在 STALE 前，STALE 使用新证据，FAILED 单独默认延后，仅 retry_failed=true 显式重试。prepare 不再先截 limit 后查 cache；每次最多检查1000候选，cache 不占新分析名额，packet/证据错误最多原 limit（上限20）。已有审阅摘要另限20条/64 KiB、未知最多20项，截断明确标记并提供完整 details；记录不删除。全有效时复用依据，业务问题只对已有审阅里的明确未知生成固定候选，宿主先去除已有证据已回答/不影响下一步的问题；缺范围/修复版本等保留 BOUNDED_EVIDENCE_LIMIT，不编造或提优先级。
+
+新增 get_runtime_info / CLI runtime-info --json，版本0.3.1、能力契约 developer-guidance-v0.2；当前11个工具。检查 required_guidance_tools 子集，允许未来新增工具，不以总数相等作为连接门禁。返回同一 executable/environment 的可执行核对参数和连接恢复：先查实际运行环境，已有新能力但宿主看不到则重连/刷新工具列表、必要时新聊天；仅实际安装旧时更新对应包，不盲目重装 editable。该检查不扫描、初始化数据库或修改配置；旧 session 不跨连接。
+
+### 自动化与真实保存记录
+
+本轮修改前基线：416 passed / 6 skipped / 6 subtests，97.78 秒。新增45项测试；定向汇总/进度/任务验收114 passed，39.84 秒。最终全量离线 **461 passed / 6 skipped / 6 subtests passed，152.30 秒**；skipped 不算通过。覆盖精确引用/重排/新 scan/失效/跨 workspace、pending/cached/stale/failed/限额推进、既有审阅上下文预算、source hash、session/schema/恶意字段/伪造引用/重放/过期、实际 SDK initialize/metadata/短选择对应的真实工具链和同环境能力恢复。25成员fixture前20缓存时 limit=2 仍产生2个新 packet、余3；提交后下一次取得不同2项，不重复前批。
+
+对公开 Jeepay **已有真实保存记录** `99ca7566-4a6f-4818-b447-38646072457b`，使用项目配置指向的 `.venv/Scripts/security-check.exe`（editable）建立全新 SDK stdio 连接：实际收到宿主 instructions、能力契约与所需工具；summary 为115 Raw / 101 eligible / 26 VALID / 0 ACTIONABLE / 26 REVIEW / 0 FAILED/STALE/SUPPRESSED / 89 UNTRIAGED（75 eligible +14 IaC），54任务、3推荐、scan coverage PARTIAL。
+
+宿主机器交接选择该响应第一项 TLS task_ref，得到 **AWAITING_BUSINESS_FACTS、0 packet、复用2条有效审阅**，候选问题为当前部署/生产渠道是否启用；没有重复调用模型分析、scanner、补丁、构建或扫描复查。state/key 文件 SHA-256 前后不变，stderr 为空。此为真实保存审阅的 SDK 复用检查，与 f5224162 历史回放的2 ACTIONABLE分开；并非实际宿主模型自然语言试用，也没有补全 Jeepay source revision 或独立准确率结论。
+
+wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件、licenses/notices 通过；**新建独立 venv 实际安装当前 wheel**，确认模块来自该 venv、版本/能力/宿主指导和法律检查通过。曾复用同版本旧安装的尝试不计本轮独立安装验收；已用全新环境排除旧包未更新的问题。无新增运行依赖或 scanner 捆绑。
+
+### 实现与分发/CI
+
+本轮实现提交待提交；本机 Windows 原生与当前实现 CI 待完成。仅记录真正完成的状态，历史 CI 不替代当前验收；完成后更新本段。
+
+### 未完成的真实使用/质量验收
+
+实际宿主自然语言“继续第一项”的端到端使用试用 **Pending**，原 Jeepay 聊天旧工具列表恢复亦未验证。实际 SDK/合成宿主返回成功只证明接入和校验，不声称普通开发者已能用好。三位未参与开发者试用仍 Pending（用户当前无法安排）；独立 ground truth UNREVIEWED/null、指标 UNKNOWN/NOT_MEASURED。
+
+完整产品目标“一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果”尚未闭环。本轮接通核查机器交接与宿主指导；generate_fix 仍只是 coding_agent_prompt/说明，不是自动修复。第三轮必须继续让宿主衔接，不能让用户搬运提示词；补丁/目标构建/测试与扫描复查均未在 Jeepay 执行，修复与验证保持 Planned，0 ACTIONABLE 不表示安全。

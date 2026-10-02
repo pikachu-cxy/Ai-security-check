@@ -862,3 +862,6 @@ security-check triage --latest --provider configured --allow-external-code-conte
 ```
 
 实际 key 只从环境变量读取。普通 scan 不调用 AI；外部代码上下文必须显式授权，无授权 fail closed。Secret 值不进入 EvidencePacket，源码与注释只作为不可信数据；FALSE_POSITIVE 需要严格明确反证，不能因 docs/example 或未搜索到 API 自动隐藏。详见 [AI Triage 验收](docs/AI_TRIAGE_ACCEPTANCE.md)。
+
+
+继续核查 v0.1：MCP 当前11个工具，新增 `prepare_task_triage`。用户看到汇总后说“继续第一项”，宿主使用**实际展示响应**中该项的 `continuation.arguments`，不能把 T01 当稳定身份或重新取第一项。得到受限 packet 后沿 `submit_triage` 提交，Runtime 不调用宿主模型。有效审阅保留，缓存不占新分析名额，STALE 重建、FAILED 仅 `retry_failed=true` 显式重试。任务变化/引用无效要求刷新重新选择；不存在自动补丁或目标构建。三位真实开发者试用仍待验收。

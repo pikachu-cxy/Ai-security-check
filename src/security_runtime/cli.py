@@ -152,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
+    info_parser.add_argument('--json',action='store_true')
     summary_parser=sub.add_parser('summary',help='Read developer tasks for this workspace; never scans or invokes AI')
     summary_parser.add_argument('--path')
     summary_parser.add_argument('--scan')
@@ -229,6 +231,13 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command=='runtime-info':
+            from .host_guidance import runtime_info
+            info=runtime_info()
+            print(json.dumps(info,ensure_ascii=False) if args.json else '\n'.join([
+                'AI Security Runtime '+info['version'], 'Capabilities: '+info['capability_contract'],
+                *info['connection_recovery']]))
+            return 0
         if args.command=='summary':
             import os
             from .security_summary import SecuritySummaryService

@@ -17,7 +17,7 @@ from pathlib import Path
 from security_runtime._version import __version__
 from security_runtime.toolchain import platform_key
 
-REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary"}
+REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary", "prepare_task_triage", "get_runtime_info"}
 PLUGIN_PROBE = '''
 from security_runtime.capabilities import Capability
 from security_runtime.models import ScannerRun, RunStatus
@@ -46,10 +46,17 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
         async with stdio_client(params, errlog=stderr) as (read, write):
             async with ClientSession(read, write) as client:
-                await asyncio.wait_for(client.initialize(), timeout=30)
+                initialized=await asyncio.wait_for(client.initialize(), timeout=30)
+                if 'Do not ask users for Finding UUIDs' not in (initialized.instructions or ''):
+                    raise ValueError('Standalone host workflow instructions missing')
                 names = {tool.name for tool in (await client.list_tools()).tools}
                 if not REQUIRED_TOOLS.issubset(names):
                     raise ValueError("Standalone MCP tools incomplete")
+                runtime=await client.call_tool('get_runtime_info',{})
+                if runtime.isError:raise ValueError('Standalone runtime capability discovery failed')
+                runtime_data=runtime.structuredContent or json.loads(runtime.content[0].text)
+                runtime_data=runtime_data.get('result',runtime_data)
+                if runtime_data['features']['task_triage']!='v0.1':raise ValueError('Standalone task capability missing')
                 summary_before=await client.call_tool('get_security_summary',{})
                 if summary_before.isError: raise ValueError('Standalone security summary failed')
                 response = await asyncio.wait_for(client.call_tool("scan_diff", {}), timeout=120)
@@ -59,7 +66,11 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 payload = payload.get("result", payload)
                 if not Path(payload["workspace"]).samefile(project):
                     raise ValueError("Standalone MCP workspace binding is incorrect")
-                prepared=await client.call_tool('prepare_triage',{'scan_id':payload['scan_id']})
+                task_summary=await client.call_tool('get_security_summary',{'scan_id':payload['scan_id'],'details':True})
+                if task_summary.isError: raise ValueError('Standalone task summary failed')
+                tasks=task_summary.structuredContent or json.loads(task_summary.content[0].text)
+                tasks=tasks.get('result',tasks)['tasks']
+                prepared=await client.call_tool('prepare_task_triage',tasks[0]['continuation']['arguments']) if tasks else await client.call_tool('prepare_triage',{'scan_id':payload['scan_id']})
                 if prepared.isError: raise ValueError('Standalone prepare_triage failed')
                 data=prepared.structuredContent or json.loads(prepared.content[0].text)
                 data=data.get('result',data)

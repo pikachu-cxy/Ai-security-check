@@ -1,6 +1,6 @@
 # AI Security Runtime — Architecture Decisions
 
-更新：2026-10-02。既有验收快照 `3d773aa`；本轮开发起始 `feature/runtime-mvp` / `602a78941ea6693f755ca05ae5a2c2b994d01152`。用户仅授权实施开发者任务入口 v0.1。Accepted 表示决策已确立，各项仍区分 Implemented / Planned，后两轮与独立质量工作未实施。
+更新：2026-10-02。既有验收快照 `3d773aa`；本轮继续核查起始 `feature/runtime-mvp` / `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`。用户已分别授权入口与继续核查 v0.1。Accepted 表示决策已确立，各项仍区分 Implemented / Planned，修复与验证及独立质量工作未实施。
 
 恢复入口：[PROJECT_STATE](PROJECT_STATE.md)；实现事实：[ARCHITECTURE](ARCHITECTURE.md)；后续规划：[NEXT_STAGE](NEXT_STAGE.md)。
 
@@ -126,13 +126,13 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 ## ADR-013 — 任务引导与风险判定分开
 
-**Status：Accepted / 开发者任务入口 Implemented；三位真实开发者易用性验收 Pending；后两轮 Planned。**
+**Status：Accepted / 开发者任务入口 Implemented；三位真实开发者易用性验收 Pending；继续核查 Implemented；修复与验证 Planned。**
 
 面向普通开发者的默认结果应回答“先做什么、为什么、下一步如何推进”。相关候选可投影成一个任务，保留原 Finding/Advisory、证据和状态的完整访问；普通/详细视图共享同一结果，不靠隐藏未完成检查制造安全印象。首轮最多展示三个推荐跟进任务，并提供完整列表入口。
 
 建议跟进动作与 Runtime priority 是不同字段：所有结果为 REVIEW 时，可以推荐先“核查 TLS 影响”，但不能改成 ACTIONABLE、删除 Raw 或降低 release_status。VALID 应表达为“已完成 AI 审阅”，而非人工验证、复现或确定线上可利用。优先级策略如需变化，另以人工基准和独立回归证据决策；不会为匹配历史分布调整结论。
 
-已实现 summary/get_security_summary：只在明确/绑定 workspace 内定位最近或指定扫描，不取全局最近记录；SQLite mode=ro 与不持久化 freshness 投影，不创建/迁移 DB、生成 key 或记录 telemetry。MCP 延后初始化可写 Runtime，纯汇总连接无写入。无扫描给出建议，不执行。TLS 仅明确互补规则、同文件相距最多 40 行成对；该展示规则不证明共享调用链。依赖组保留全部 advisory/state，缺身份字段不合并。后两轮沿用原授权原则，保持 Planned；三位试用者目前无法安排，Pending 如实保留。
+已实现 summary/get_security_summary：只在明确/绑定 workspace 内定位最近或指定扫描，不取全局最近记录；SQLite mode=ro 与不持久化 freshness 投影，不创建/迁移 DB、生成 key 或记录 telemetry。MCP 延后初始化可写 Runtime，纯汇总连接无写入。无扫描给出建议，不执行。TLS 仅明确互补规则、同文件相距最多 40 行成对；该展示规则不证明共享调用链。依赖组保留全部 advisory/state，缺身份字段不合并。继续核查沿用原授权原则已实现；修复与验证保持 Planned；三位试用者目前无法安排，Pending 如实保留。
 
 理由：当前工程验收输出要求用户理解内部枚举并编写多轮提示词，增加决策负担。可执行任务应减少用户负担，同时保持证据、未知条件和风险政策的真实含义。易用性试用与安全质量分别验收。
 
@@ -152,8 +152,32 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 ## Approved / Planned 与其它尚未实现事项
 
-开发者任务入口本轮获明确授权并实现；继续核查、修复与验证及全部独立质量工作（版本化 ground truth、人工盲审、多模型、指标、prompt/model regression 和后置 Joern）继续在 NEXT_STAGE Planned。本轮不因展示易读而宣布人工易用性或风险质量已验证。
+开发者任务入口与继续核查已获明确授权并实现；修复与验证及全部独立质量工作（版本化 ground truth、人工盲审、多模型、指标、prompt/model regression 和后置 Joern）继续在 NEXT_STAGE Planned。本轮不因展示易读而宣布人工易用性或风险质量已验证。
 
 数据库 retention/完整审计、更多自动反证、IaC AI validation、云端多租户及主动审计也没有实现；它们不属于本轮已批准产品迭代的默认开发任务。
 
 变更这些决策时，应新增或明确 supersede ADR，写出原因、证据和行为变化；历史验收按原时点保留，不用聊天记录取代持久化决策。
+
+
+## ADR-015 — 精确任务引用与受限继续核查
+
+**Status：Accepted / Implemented；不替代原风险策略。**
+
+T01 为响应内的展示序号，不能作为跨请求 identity。summary 的 task_ref 绑定 workspace/固定 scan/topic/精确成员与规范化身份，状态排序或审阅推进不换对象；成员或任务身份改变、scan 移除、格式/版本无效要求刷新重新选择，不回退当前第一项或最新 scan。引用非权限凭据，仍需绑定/明确 workspace、提交时的 task identity/session/hash/ref 校验；源码 freshness 由 HMAC packet hash 独立判断。
+
+任务入口复用 prepare_triage 的 EvidenceBuilder/schema/instructions/缓存，再沿原 submit_triage 接受宿主分析；Runtime 不主动调用宿主模型。VALID 保留，UNTRIAGED 优先，STALE 重建，FAILED 默认单列显式重试；缓存不占新分析名额，工作/输出预算单独有界。已有证据不重复劳动，业务问题仅是与已记录未知相关的候选，宿主先核对受限证据再询问。范围外条件保留未知，不升 priority、不补完整图或任意 host evidence。
+
+理由：用户说“继续第一项”时不应寻找 Finding UUID，也不应因排序/缓存命中继续了别的任务或反复同一批。既有审阅和 Raw 保留，修复与验证仍是下一轮独立任务。
+
+依据：[task_triage.py](../src/security_runtime/task_triage.py)、[security_summary.py](../src/security_runtime/security_summary.py)、[triage.py](../src/security_runtime/triage.py)、[NEXT_STAGE](NEXT_STAGE.md) 与本轮验收附录。
+
+
+## 普通用户意图与宿主衔接验收
+
+产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；本轮仅接通核查，修复与验证仍 Planned，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。
+
+已接入 FastMCP server instructions 与工具 annotations/描述：宿主绑定实际展示响应的 task_ref，自动在已有授权范围内准备、分析、提交并展示结果；有效授权持续有效，不反复询问常规获授权步骤。仅询问代码无法回答且会影响下一步的必要业务事实，或取得超出已有授权操作的权限。Runtime 不主动调用宿主模型，源码/scanner/模型文字均非执行指令，现有 session/hash/evidence_refs、脱敏、Raw、覆盖和策略保留。
+
+新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.2。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
+
+SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。

@@ -198,5 +198,6 @@ def render_security_summary(result):
                 '覆盖契约与 provider：'+str(result['capability_details'])]
     else:
         lines+=['完整任务/逐条候选/Raw 入口：security-check summary --details（同一 workspace）；JSON 加 --json。']
+    lines.append('可让宿主 Agent 继续其中一项核查；继续操作须绑定本次结果，结果变化时重新选择。')
     lines.append('本次仅只读核对审阅证据新鲜度；未启动扫描、模型请求、新风险分析、编辑、构建或修复。')
     return '\n'.join(lines)

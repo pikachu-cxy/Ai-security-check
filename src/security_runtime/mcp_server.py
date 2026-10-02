@@ -43,6 +43,7 @@ def create_server(runtime: SecurityRuntime | None = None):
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import server as fastmcp_server
+        from mcp.types import ToolAnnotations
     except ImportError as exc:
         raise ImportError("Install MCP support with: pip install -e '.[mcp]'") from exc
     # The SDK's generic Settings.lifespan annotation references FastMCP. Rebuild
@@ -57,9 +58,21 @@ def create_server(runtime: SecurityRuntime | None = None):
             engine = SecurityRuntime()
         return engine
     binding = WorkspaceBinding.from_environment()
-    server = FastMCP("AI Security Runtime", log_level=mcp_log_level())
+    from .host_guidance import HOST_INSTRUCTIONS
+    server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
+
+    def register_handoff(data, task_binding=None):
+        expired=[key for key,value in triage_sessions.items() if time.monotonic()-value[2]>900]
+        for key in expired: triage_sessions.pop(key,None)
+        if len(triage_sessions)>=64: triage_sessions.pop(next(iter(triage_sessions)))
+        token=secrets.token_urlsafe(32)
+        triage_sessions[token]=(data['scan_id'],{p['finding_id']:p['context_hash'] for p in data['packets']},
+                                time.monotonic(),task_binding)
+        data['triage_session']=token
+        data['triage_session_expires_in_seconds']=900
+        return data
 
     def bound_path(value: str | None) -> str | None:
         if binding is None:
@@ -149,14 +162,7 @@ def create_server(runtime: SecurityRuntime | None = None):
         check_scan(scan_id)
         from .triage import TriageService
         data=TriageService(runtime_engine().store).prepare(scan_id,finding_ids,categories,limit)
-        expired=[key for key,value in triage_sessions.items() if time.monotonic()-value[2]>900]
-        for key in expired: triage_sessions.pop(key,None)
-        if len(triage_sessions)>=64: triage_sessions.pop(next(iter(triage_sessions)))
-        token=secrets.token_urlsafe(32)
-        triage_sessions[token]=(scan_id,{packet['finding_id']:packet['context_hash'] for packet in data['packets']},time.monotonic())
-        data['triage_session']=token
-        data['triage_session_expires_in_seconds']=900
-        return data
+        return register_handoff(data)
 
     @server.tool()
     def submit_triage(scan_id: str, results: list[dict], triage_session: str) -> dict:
@@ -168,19 +174,48 @@ def create_server(runtime: SecurityRuntime | None = None):
         if not results or len(results)>20 or any(not isinstance(item,dict) or
             session[1].get(item.get('finding_id'))!=item.get('context_hash') for item in results):
             raise ValueError('Triage result does not belong to this evidence handoff')
+        if session[3] is not None:
+            from .task_triage import TaskTriageService
+            reference,workspace=session[3]
+            resolved=TaskTriageService(runtime_engine().store).resolve(reference,workspace,
+                bound_workspace=binding.root if binding else None)
+            if resolved['status']!='RESOLVED':
+                raise ValueError('Task changed or reference expired; refresh get_security_summary and prepare again')
         from .triage import TriageService
         data=TriageService(runtime_engine().store).submit(scan_id,results)
+        if session[3] is not None:
+            data['execution']={'host_result_accepted':True,'accepted_records':data['accepted'],
+                               'patch_applied':False,'target_build':False,'tests_or_scanner_recheck':False}
         for item in results: session[1].pop(item['finding_id'],None)
         return data
 
-    @server.tool()
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_runtime_info() -> dict:
+        """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
+        from .host_guidance import runtime_info
+        return runtime_info()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_security_summary(workspace_path: str | None = None, scan_id: str | None = None, details: bool = False) -> dict:
-        """Read current workspace tasks without scans, AI, edits or state writes; details expands every finding."""
+        """Read workspace tasks without scans, AI or writes. User 'continue first' selects that response's recommended_tasks[0].continuation; never resolve T01 against a new summary."""
         from .security_summary import SecuritySummaryService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
         return SecuritySummaryService(ReadOnlySQLiteStore(path)).get(
             workspace_path, scan_id, details=details, bound_workspace=binding.root if binding else None)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 20, retry_failed: bool = False) -> dict:
+        """Continue the displayed task using its task_ref, never T01 or user UUIDs. Host analyzes packets then submit_triage; no model invocation here."""
+        from .task_triage import TaskTriageService
+        from .storage import ReadOnlySQLiteStore, SQLiteStore
+        from .triage import TriageService
+        path=engine.store.path if engine is not None else SQLiteStore.default_path()
+        service=TaskTriageService(ReadOnlySQLiteStore(path))
+        resolved=service.resolve(task_ref,workspace_path,bound_workspace=binding.root if binding else None)
+        if resolved['status']!='RESOLVED': return resolved
+        data=service.prepare(resolved,TriageService(runtime_engine().store),limit=limit,retry_failed=retry_failed)
+        return register_handoff(data,(task_ref,resolved['workspace'])) if data['packets'] else data
 
     @server.tool()
     def get_triage(scan_id: str) -> dict:

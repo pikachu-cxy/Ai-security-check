@@ -2,10 +2,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import base64
+import hashlib
+import json
 
 from .storage import ReadOnlySQLiteStore
 from .triage import TriageService
-from .triage_evidence import EvidenceBuilder
+from .triage_evidence import EvidenceBuilder, encoded
 from .triage_models import category, dependency_groups
 from .workspace import WorkspaceResolver
 
@@ -13,6 +16,35 @@ TLS_RULES = {'ai-security.java.trust-all-hostname', 'ai-security.java.trust-all-
 SEVERITIES = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'UNKNOWN': 1}
 PRIORITIES = ('ACTIONABLE', 'REVIEW', 'LOWER_PRIORITY', 'SUPPRESSED', 'UNTRIAGED')
 REVIEW_STATES = ('VALID', 'FAILED', 'STALE', 'UNTRIAGED', 'NOT_ELIGIBLE')
+
+
+def task_reference(scan, topic, ids):
+    # Content identity, not an authorization credential. No source excerpts or
+    # credentials are placed in the reference; packet freshness stays HMAC-bound.
+    members = []
+    for f in sorted((f for f in scan['findings'] if f['id'] in ids), key=lambda f: f['id']):
+        md = f.get('technical_details', {})
+        members.append({key: f.get(key) for key in ('id', 'fingerprint', 'category', 'severity',
+                        'confidence', 'file_path', 'line_start', 'line_end', 'scanner_sources')})
+        members[-1]['identity'] = {key: md.get(key) for key in ('rule_id', 'ecosystem', 'package',
+            'package_version', 'manifest', 'canonical_vulnerability_id', 'vulnerability_id', 'aliases')}
+    payload = {'workspace': str(Path(scan['target_profile']['path']).resolve()), 'scan': scan['scan_id'],
+               'digest': hashlib.sha256(encoded(['task-group-v1', topic, members])).hexdigest()}
+    return 'task-v1.' + base64.urlsafe_b64encode(encoded(payload)).decode().rstrip('=')
+
+
+def decode_task_reference(value):
+    try:
+        if not isinstance(value, str) or not value.startswith('task-v1.') or len(value) > 8192:
+            raise ValueError()
+        data = json.loads(base64.b64decode(value[8:] + '=' * (-len(value[8:]) % 4), altchars=b'-_', validate=True))
+        if set(data) != {'workspace', 'scan', 'digest'} or any(not isinstance(v, str) for v in data.values()):
+            raise ValueError()
+        if not data['scan'] or len(data['scan']) > 100 or len(data['digest']) != 64:
+            raise ValueError()
+        return data
+    except (ValueError, TypeError, UnicodeError):
+        raise ValueError('Invalid task reference; refresh get_security_summary and use its task_ref, never T01') from None
 
 
 def _workspace(value):
@@ -98,6 +130,11 @@ class SecuritySummaryService:
                               'host_supplemental': 'NOT_IMPORTED'},
                   'notice': 'VALID 表示记录通过 Runtime 校验，非人工验证、漏洞复现或线上可利用证明。0 个优先处理项不表示安全。',
                   'automatic_execution': False}
+        result['task_selection_protocol'] = {
+            'identity': 'task_ref', 'display_numbers': 'RESPONSE_LOCAL_ONLY',
+            'instruction': '“继续第一项”对应本次 recommended_tasks 的第一项及其 continuation；不重新查询后按 T01 换对象。缺少原响应或引用失效时刷新并重新选择。',
+            'flow': ['prepare_task_triage', 'HOST_ANALYSIS_OF_BOUNDED_PACKETS', 'submit_triage'],
+            'runtime_calls_host_model': False}
         if details:
             result.update(scan_id=scan['scan_id'], tasks=tasks,
                           capability_details={cap: {key: safe(value) if key == 'coverage_notes' else value
@@ -173,6 +210,7 @@ class SecuritySummaryService:
             if states['STALE']:
                 why.append(f"{states['STALE']} 条历史审阅已过期或无法核对；不能沿用其优先级。")
             tasks.append({'topic': topic, 'title': title, 'possible_impact': impact, 'basis': why,
+                          'task_ref': task_reference(scan, topic, ids),
                           'unknown_conditions': unknown, 'next_step': {'kind': 'SUGGESTION', 'label': next_step,
                                                                       'automatic_execution': False},
                           'finding_count': len(ids), 'locations': sorted(set(f"{m['file']}:{m['line']}" for m in members)),
@@ -185,6 +223,9 @@ class SecuritySummaryService:
                                   -SEVERITIES.get(t['highest_severity'], 0), t['locations']))
         for index, task in enumerate(tasks, 1):
             task['task'] = f'T{index:02d}'
+            task['continuation'] = {'mcp_tool': 'prepare_task_triage',
+                                    'arguments': {'task_ref': task['task_ref'],
+                                                  'workspace_path': str(Path(scan['target_profile']['path']).resolve())}}
         return tasks
 
     @staticmethod

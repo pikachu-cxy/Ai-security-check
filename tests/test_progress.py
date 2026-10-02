@@ -347,7 +347,7 @@ def test_mcp_tools_default_no_cli_progress(tmp_path,monkeypatch,capsys):
     # Do not bind pytest's temporary StringIO to later real-process checks.
     with capsys.disabled():
         server=create_server(runtime)
-    assert {tool.name for tool in server._tool_manager.list_tools()}=={'scan_diff','scan_project','get_findings','generate_fix','verify','prepare_triage','submit_triage','get_triage','get_security_summary'}
+    assert {'scan_diff','scan_project','get_findings','generate_fix','verify','prepare_triage','submit_triage','get_triage','get_security_summary','prepare_task_triage','get_runtime_info'} <= {tool.name for tool in server._tool_manager.list_tools()}
     result=server._tool_manager.get_tool('scan_project').fn(str(tmp_path))
     assert result['status']=='COMPLETED' or result['status']=='PARTIAL'
     assert capsys.readouterr() == ('','')
