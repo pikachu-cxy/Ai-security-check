@@ -10,7 +10,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 
 复查最多100成员/20原受影响文件/2MB，同 provider/file 复用，默认离线不下载或自动fallback，不构建/编辑目标、不调用模型。prepare 沿用 EvidenceBuilder 的20项/32KiB/120行/5相关文件预算，原 triage session/hash/evidence_refs 防护不变。宿主 patch/build/tests 声明为 UNTRUSTED_HOST_REPORT，不能改变 Runtime 观察或结论。Gitleaks/IaC 未提供原 detector/check 执行清单时缺席保守 INCONCLUSIVE；POM PARTIAL 不能证明完整图修复。
 
-完整离线508 passed / 6 skipped / 6 subtests passed（120.12秒）。真实 Semgrep 1.178.0 合成100→110行仍存在、安全替换、分组只修一项及实际子进程失败均符合预期；包/合规/wheel/sdist 与本地全新 Runtime venv 安装通过（复用本地 SDK 依赖，无公网）。最终 native/四平台 CI 门禁待实际记录，见 [AJ 验收](AI_TRIAGE_ACCEPTANCE.md) 和 [合成证据](fix-verify-synthetic-evidence.json)；结构/边界详见 [当前架构](ARCHITECTURE.md)。
+完整离线508 passed / 6 skipped / 6 subtests passed（120.12秒）。真实 Semgrep 1.178.0 合成100→110行仍存在、安全替换、分组只修一项及实际子进程失败均符合预期；包/合规/wheel/sdist 与本地全新 Runtime venv 安装通过（复用本地 SDK 依赖，无公网）。Windows native/实际 SDK及四平台新 CI 门禁均通过（实现 HEAD `1e10b53`），见 [AJ 验收](AI_TRIAGE_ACCEPTANCE.md) 和 [合成证据](fix-verify-synthetic-evidence.json)；结构/边界详见 [当前架构](ARCHITECTURE.md)。
 
 没有修改 Jeepay、旧 scan/benchmark、ground truth、risk/coverage/policy；没有 scanner 公网查询、外部模型、目标构建或生产变更。三位真实开发者试用、真实宿主普通意图连续 UX 仍 Pending，独立人工 ground truth UNREVIEWED/null、质量指标 NOT_MEASURED。Hook 当前 Planned / NOT_STARTED，旧 PREREQUISITE_MISSING 留作历史门禁记录。
 
@@ -24,6 +24,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 | Branch | `feature/runtime-mvp` |
 | 本轮开发起始 HEAD | Fix & Verify：`0f33d2624204794c84da6fa10cf43b8178cd5a56`；历史 Hook 前置检查：`787aace817bd607efd22bc70a7bd613a5f313faa`；继续核查历史起始 `50a01e6870d78e6fd8a96a8b8fbe236521c5306f` |
 | 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；第一轮 AG 验收附录 |
+| Fix & Verify 实现 HEAD | `1e10b53aacf0dc0f69ad00c3126f8d8298e78989`；第三轮 AJ 验收附录 |
 | 继续核查实现 HEAD | `f2cb534f27698881ead2b2f3452bc36598c6e957`；第二轮 AH 验收附录 |
 | 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
@@ -41,6 +42,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 
 | Commit | 交付内容 |
 | --- | --- |
+| 1e10b53 | Stable equivalence / 原规则文件执行证据 / task_fix / 宿主执行声明分离 / 13工具 / 47项新增回归 |
 | f2cb534 | 绑定任务继续核查、pending/cache推进、宿主普通意图指导/版本能力恢复、45项测试 |
 | 00cbd72 | workspace 只读开发者任务入口、CLI summary / MCP get_security_summary、保守合并与 34 项入口测试 |
 | 602a789 | NEXT_STAGE 产品与质量路线规划 |
@@ -201,9 +203,9 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 前两个产品迭代已获授权并实现；首个未开展的质量任务仍是固定源码身份与独立人工试标。Raw、TriagePolicy、RiskEngine、覆盖契约和上传/执行授权边界保持完整。任务入口交付不表示整体质量 milestone 完成；Joern Java PoC 仍后置。
 
-## Hook Integration 前置检查（2026-10-02）
+## Hook Integration 前置检查历史（2026-10-02，已由本轮前置交付更新）
 
-用户新任务假设 Developer Fix & Verify v0.1 已完成，要求复用其不依赖 occurrence 行号的 Finding identity；若缺少则停止正式 Hook delta 实现。干净工作区执行 ff-only 同步后，远端/本机仍为 `787aace817bd607efd22bc70a7bd613a5f313faa`，没有新的 Fix & Verify 提交。当前文档将修复与验证标为 Planned，findings.py 的代码指纹仍含 line，runtime.py 的 verify 仍按旧 fingerprint 判消失。
+该旧任务假设 Developer Fix & Verify v0.1 已完成，要求复用其不依赖 occurrence 行号的 Finding identity；若缺少则停止正式 Hook delta 实现。当时干净工作区执行 ff-only 同步后，远端/本机仍为 `787aace817bd607efd22bc70a7bd613a5f313faa`，没有新的 Fix & Verify 提交。该时点文档将修复与验证标为 Planned，findings.py 的代码指纹含 line，runtime.py 的旧 verify 按 fingerprint 判消失。本轮已修正该缺陷并交付前置，但未开始 Hook。
 
 隔离合成 scanner 复现：同一规则/文件/代码仅从100行移到110行，fingerprint 改变，旧 verify 返回 RESOLVED；预期 STILL_PRESENT。不是实际 Semgrep 或业务修复验收。完整离线 baseline 为 **461 passed / 6 skipped / 6 subtests passed，108.77秒**。本轮仅记录门禁；不另建 identity、不实现 Coordinator/delta/host Hook 配置，不修改现有 pre-commit。恢复时先核对前置阶段的真实提交和行号移动回归，不能直接跳到 Hook 开发。详情见 AI_TRIAGE_ACCEPTANCE 的 AI 附录。
 
@@ -228,3 +230,5 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.3。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。旧 Jeepay 聊天已尝试但未执行新 summary/任务级 handoff，未通过；刷新连接后的复验 Pending，旧工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
+
+本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。

@@ -10,14 +10,14 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 
 复查最多100成员/20原受影响文件/2MB，同 provider/file 复用，默认离线不下载或自动fallback，不构建/编辑目标、不调用模型。prepare 沿用 EvidenceBuilder 的20项/32KiB/120行/5相关文件预算，原 triage session/hash/evidence_refs 防护不变。宿主 patch/build/tests 声明为 UNTRUSTED_HOST_REPORT，不能改变 Runtime 观察或结论。Gitleaks/IaC 未提供原 detector/check 执行清单时缺席保守 INCONCLUSIVE；POM PARTIAL 不能证明完整图修复。
 
-完整离线508 passed / 6 skipped / 6 subtests passed（120.12秒）。真实 Semgrep 1.178.0 合成100→110行仍存在、安全替换、分组只修一项及实际子进程失败均符合预期；包/合规/wheel/sdist 与本地全新 Runtime venv 安装通过（复用本地 SDK 依赖，无公网）。最终 native/四平台 CI 门禁待实际记录，见 [AJ 验收](AI_TRIAGE_ACCEPTANCE.md) 和 [合成证据](fix-verify-synthetic-evidence.json)；结构/边界详见 [当前架构](ARCHITECTURE.md)。
+完整离线508 passed / 6 skipped / 6 subtests passed（120.12秒）。真实 Semgrep 1.178.0 合成100→110行仍存在、安全替换、分组只修一项及实际子进程失败均符合预期；包/合规/wheel/sdist 与本地全新 Runtime venv 安装通过（复用本地 SDK 依赖，无公网）。Windows native/实际 SDK及四平台新 CI 门禁均通过（实现 HEAD `1e10b53`），见 [AJ 验收](AI_TRIAGE_ACCEPTANCE.md) 和 [合成证据](fix-verify-synthetic-evidence.json)；结构/边界详见 [当前架构](ARCHITECTURE.md)。
 
 没有修改 Jeepay、旧 scan/benchmark、ground truth、risk/coverage/policy；没有 scanner 公网查询、外部模型、目标构建或生产变更。三位真实开发者试用、真实宿主普通意图连续 UX 仍 Pending，独立人工 ground truth UNREVIEWED/null、质量指标 NOT_MEASURED。Hook 当前 Planned / NOT_STARTED，旧 PREREQUISITE_MISSING 留作历史门禁记录。
 
 
 更新：2026-10-02。路线规划基线 `7e19744`；本轮继续核查起始 `feature/runtime-mvp` / `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。**入口、继续核查及第三轮 Developer Fix & Verify v0.1 已获授权实现；本轮不实施 Hook、独立人工质量工作、模型实验或 Joern。**
 
-下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，自动化、分发及四组 CI 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。继续核查已实现、源码/wheel/SDK 验收通过；修复与验证 v0.1 已实现，实际宿主 UX Pending；独立人工 Ground Truth 仍是质量工作的核心。
+下一阶段为 **AI Triage Quality Validation & Developer Guidance**。三次产品迭代的 Runtime接口与宿主指导已实现、自动化/分发及新 CI 通过；真实宿主连续 UX 与三位开发者试用 Pending，整体质量 milestone 未完成。继续核查已实现、源码/wheel/SDK 验收通过；修复与验证 v0.1 已实现，实际宿主 UX Pending；独立人工 Ground Truth 仍是质量工作的核心。
 
 先读 [PROJECT_STATE](PROJECT_STATE.md)、[ARCHITECTURE](ARCHITECTURE.md)、[DECISIONS](DECISIONS.md) 和 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)。
 
@@ -57,7 +57,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 
 独立人工质量工作仍 Planned；不把报告易读性当风险判断质量。第二轮曾调整受限缓存/批次推进；本轮实现第三轮 Runtime 修复交接/验证，不调用真实模型或由 Runtime 应用补丁。
 
-2026-10-02 真实用户在原 Jeepay 聊天用两句普通意图试用，回复虽可读，调用记录却仅有 get_triage，继续轮没有工具调用；未取得新 summary/task_ref 或执行任务级 handoff，不能计验收通过。旧聊天此前缺少新入口，同配置程序的全新 SDK 连接已确认能力存在，疑似旧连接/工具列表未刷新，具体原因未证明。先刷新宿主连接与工具列表，再在新聊天取得新 summary 后复验；不让用户搬运技术提示词或盲目重装 editable。见 [试用记录](jeepay-host-task-trial.json) 与 AH。三位独立开发者和人工质量状态不变，第三轮继续 Planned。
+2026-10-02 真实用户在原 Jeepay 聊天用两句普通意图试用，回复虽可读，调用记录却仅有 get_triage，继续轮没有工具调用；未取得新 summary/task_ref 或执行任务级 handoff，不能计验收通过。旧聊天此前缺少新入口，同配置程序的全新 SDK 连接已确认能力存在，疑似旧连接/工具列表未刷新，具体原因未证明。先刷新宿主连接与工具列表，再在新聊天取得新 summary 后复验；不让用户搬运技术提示词或盲目重装 editable。见 [试用记录](jeepay-host-task-trial.json) 与 AH。三位独立开发者和人工质量状态不变；当时第三轮 Planned，本轮已实现 Runtime 交接与验证，真实宿主 UX 仍 Pending。
 
 ### 首轮：开发者任务入口 v0.1
 
@@ -257,3 +257,5 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.3。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
+
+本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。

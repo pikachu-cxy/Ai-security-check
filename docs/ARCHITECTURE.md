@@ -2,7 +2,7 @@
 
 ## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
 
-本轮获用户明确授权，从干净且 ff-only 同步的 `feature/runtime-mvp` / `0f33d2624204794c84da6fa10cf43b8178cd5a56` 开始。先完成 A 并回归，再实施 B；没有开始 Hook Integration。实现已落地，最终分发与 CI 门禁仍待本轮实际结果记录；不能用历史 CI 代替。
+本轮获用户明确授权，从干净且 ff-only 同步的 `feature/runtime-mvp` / `0f33d2624204794c84da6fa10cf43b8178cd5a56` 开始。先完成 A 并回归，再实施 B；没有开始 Hook Integration。实现 HEAD `1e10b53aacf0dc0f69ad00c3126f8d8298e78989` 已推送，508项完整离线、包/合规、Windows native/实际 SDK 与新四平台 CI 均通过；真实宿主 UX Pending。
 
 - Occurrence ID/fingerprint 的旧语义保留，含位置；新增 `eq-v1` 的 `equivalence_key` 不含行号。SAST/配置/Secret 使用 category、scanner identity、可靠 rule_id 与规范化相对文件；同文件不同 rule、同 rule 不同文件不等价。Secret 不使用原值、匹配行或凭据摘要。Dependency 复用 ecosystem/package/version/canonical advisory/manifest。
 - 原 `verify(finding_id, workspace_path=None)` 仍在：原 occurrence 或同家族命中为 STILL_PRESENT，返回 matched_by 与安全原/当前坐标。只有原文件、原规则、原 provider 的完整成功复查无等价项，才返回旧 `status=RESOLVED` 加 `verification_status=SCANNER_VERIFIED_RESOLVED`。缺文件/身份/引擎/规则、失败、超时、解析错误或不能证明 scope 为 INCONCLUSIVE。文件删除不再直接 resolved。
@@ -220,3 +220,5 @@ packet 存在时先核对其受限证据；没有新的待分析成员且已有�
 新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.3。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
+
+本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。

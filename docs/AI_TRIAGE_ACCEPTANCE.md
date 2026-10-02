@@ -276,7 +276,7 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 
 新增等价身份、Rule/file 执行证明、provider/offline/预算、低层 verify、结构化 task_fix、两个 MCP 工具和 v0.3 宿主能力指导。Raw/triage/缓存/风险/覆盖保留；任务从固定 scan JSON 取成员，新扫描不能覆盖全局 finding lookup 后误换任务。13个工具是当前 inventory，required subset 才是连接契约。prepare 只读、verify 有 local scanner/cache/temp 副作用而非 destructive。
 
-最终 targeted / MCP SDK / full offline / package / compliance / wheel/sdist / Windows native / 四平台 CI：待实际完成后追加精确结果与实现 HEAD，不能以既有通过记录替代。真实三位开发者试用 Pending；宿主普通意图连续使用/旧聊天连接恢复 Pending；独立 ground truth UNREVIEWED/null；precision/suppression-risk 等 NOT_MEASURED。
+本轮全部自动化/分发门禁已完成，精确结果和实现 HEAD 见 AJ.1/AJ.2；真实宿主与人工质量验收独立保留 Pending。真实三位开发者试用 Pending；宿主普通意图连续使用/旧聊天连接恢复 Pending；独立 ground truth UNREVIEWED/null；precision/suppression-risk 等 NOT_MEASURED。
 
 安全：没有修改 Jeepay、覆盖旧 scan/benchmark 或人工标签；没有公网 scanner 查询、外部模型/源码上传、目标 Maven/Gradle/npm 构建、生产操作、新 Hook 或新 Hook 配置。Git 同步/推送与 CI 属于本轮交付授权，另行记录网络边界。
 
@@ -286,4 +286,23 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 
 package integrity、licenses --check-distribution、generate_notices --check、wheel/sdist 构建及新模块分发检查通过。Windows 创建全新 venv 并 --no-index/--no-deps 安装新 wheel，模块必须来自新 venv，实际 SDK工具列表/能力契约和合规通过；仅复用本地 system-site-packages 第三方依赖，严格独立 clean dependency install 由 CI package gate 验收。无本地公网请求。
 
-实现提交将用于本机 Windows onedir/归档与实际 native SDK Semgrep fix/verify、四平台新 CI 门禁；这些当前仍 PENDING，之后追加 source_commit/archive/run URL 及结论，不提前计通过。
+本机 Windows onedir/归档与实际 native SDK Semgrep fix/verify、四平台新 CI 门禁现已完成，见下 AJ.2；代码/分发身份与实现 HEAD 一致。
+
+### AJ.2 Windows 实际安装程序与本轮 CI（全部通过）
+
+实现 HEAD `1e10b53aacf0dc0f69ad00c3126f8d8298e78989`，起始 `0f33d2624204794c84da6fa10cf43b8178cd5a56`。最终验收文档提交是其后仅文档/证据提交；实际文档 HEAD 由 Git 获取，不在文档中捏造自身 SHA。
+
+Windows PyInstaller onedir、原生归档 smoke/许可/SDK initialize/list/summary/triage、以及真实 native SDK task_fix+Semgrep 合成验收通过。实际13工具、developer-guidance-v0.3；prepare无scanner/修改，verify对原组全部成员验证未改 STILL_PRESENT、只修一项 PARTIALLY_RESOLVED、全部移除原危险模式 SCANNER_VERIFIED_RESOLVED。Runtime DB bytes不变，host tests_run=true仅为 UNTRUSTED_HOST_REPORT，Runtime tests_run=false。测试夹具由脚本编辑，没有实际模型或人工开发者参与；不计宿主普通意图 UX。
+
+独立包 `ai-security-runtime-v0.3.1-windows-x64.zip` source_commit = 实现 HEAD；SHA-256 `af682a6906a7c53d76b964146f68540e167c63eba6d3c84928cb40782319c746`。机器证据：[native protocol/package/CI](fix-verify-native-evidence.json)；[source Semgrep fixtures](fix-verify-synthetic-evidence.json)。wheel/sdist使用最终源码重建；本地新 venv复用本地SDK依赖，CI则实际 clean venv安装依赖并校验新模块、工具、能力和许可。
+
+| 本轮 CI（全部针对实现 HEAD） | 实际结论 |
+| --- | --- |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37026386994) | Windows / Ubuntu success；完整测试和 first-party rule gate |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37026387269) | Windows / Ubuntu success；wheel/sdist、完整性、clean venv 实际安装与新能力 |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37026387193) | success |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37026387343) | windows-x64 / linux-x64 / macos-x64 / macos-arm64 全 success；归档、真实 MCP、managed engine、OSV offline fallback及新增 --fix-verify 原生SDK合成验收 |
+
+安全边界：本机新 scanner/SDK fixtures 全离线；没有 Jeepay修改、旧 scan/benchmark/ground truth覆盖、外部模型/源码上传、目标构建或生产操作。公网交付连接限 GitHub同步/推送/CI状态读取；既有CI正常联网取得构建依赖/engine/漏洞数据库并扫描其合成样例，不代表获授权上传目标源码。没有更改现有 pre-commit，也没有实施新 Hooks。
+
+仍待验收：实际宿主新连接下“检查→继续第一项→修复它→自然反馈”的连续 UX；三位未参与开发的开发者（用户当前无法安排）；独立人工真值和质量统计。ground truth 保留 UNREVIEWED/null、指标 NOT_MEASURED。Scanner复查只证明原规则和文件，不承诺业务/生产完全修复；当前Secret/IaC原check执行清单和离线POM图不足的保守状态继续生效。本轮完成推送后停止，Hook Integration Planned / NOT_STARTED。
