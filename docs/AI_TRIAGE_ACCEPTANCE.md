@@ -195,7 +195,13 @@ wheel/sdist 构建、新 summary 模块与 23 个规则文件分发门禁、独�
 
 ### 分发与 CI 状态
 
-本轮实现提交：待提交。Windows 原生归档与当前提交 CI：待完成；历史 CI 不计入本轮新功能验收，实际完成后更新此段。
+本轮实现已提交推送 `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`。本机 Windows x64 PyInstaller onedir 构建、归档 smoke/完整性检查（`full=False`）与该原生程序读取既有 Jeepay 记录的 CLI Human/JSON/实际 SDK stdio MCP 验收全部通过，结果与源码版一致，state/key 字节不变。version.json 的 source_commit 等于上述实现 SHA。
+
+本机归档：`dist/release/ai-security-runtime-v0.3.1-windows-x64.zip`；SHA-256 `d9e1a0ff0c7bfbdf24390d60673d2ced0a071521dd9141ac97889fca15783455`。未建立 tag/Release，没有向外发布软件；CI 原生包另按其工作流全验收。
+
+当前实现提交的 [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36967736351)（Linux/Windows）、[Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36967736392) 和 [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36967736424)（Linux/Windows）均 success。历史 CI 不计入本轮新功能验收。
+
+[Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36967736441) 最终 success，Windows x64、Linux x64、macOS x64/arm64 四平台 full/OSV fallback/实际 MCP 验收通过。首次运行的 Linux x64、macOS x64/arm64 均通过；Windows 在 `tools install gitleaks` 阶段报 PermissionError，尚未进入新汇总验证。仅重试失败 job 后 Windows 通过；保留首次失败，不修改源码或放宽安装/验收门禁。
 
 ### 人工验收及后续范围
 

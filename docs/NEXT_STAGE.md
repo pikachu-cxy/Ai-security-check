@@ -2,7 +2,7 @@
 
 更新：2026-10-02。路线规划基线 `7e19744`；本轮开发起始 `feature/runtime-mvp` / `602a78941ea6693f755ca05ae5a2c2b994d01152`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。**用户本轮明确授权仅实现“开发者任务入口 v0.1”，不实施后两轮、独立人工质量工作、模型实验或 Joern。**
 
-下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，本地源码/CLI/MCP/wheel 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。后续继续核查/修复仍须分别实施；独立人工 Ground Truth 仍是质量工作的核心。
+下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，自动化、分发及四组 CI 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。后续继续核查/修复仍须分别实施；独立人工 Ground Truth 仍是质量工作的核心。
 
 先读 [PROJECT_STATE](PROJECT_STATE.md)、[ARCHITECTURE](ARCHITECTURE.md)、[DECISIONS](DECISIONS.md) 和 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)。
 
@@ -36,7 +36,7 @@
 
 | 顺序 | 交付范围 | 用户可获得的结果 |
 | --- | --- | --- |
-| 1：开发者任务入口 v0.1 — Implemented / 本地自动化验收通过 / 人工试用 Pending | 定位当前 workspace 的扫描；只读汇总；保守合并；普通/详细视图；建议下一步 | 任务单及完整逐项入口，不自动执行动作 |
+| 1：开发者任务入口 v0.1 — Implemented / 自动化与分发 CI 验收通过 / 人工试用 Pending | 定位当前 workspace 的扫描；只读汇总；保守合并；普通/详细视图；建议下一步 | 任务单及完整逐项入口，不自动执行动作 |
 | 2：继续核查 — Planned | 引导宿主选择待分析项、准备受限证据、推进已有 MCP handoff；先查代码，再询问必要业务事实 | 用户选择任务后继续推进；本轮不实现 |
 | 3：修复与验证 — Planned | 可审阅补丁、兼容性与验证计划；授权后执行编辑/验证，记录未执行项 | 用户审阅修复效果；本轮不实现 |
 
@@ -57,7 +57,7 @@ TLS 合并限定为两个明确 first-party trust-all 规则、同文件、行�
 
 Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为“核查云闪付 HTTPS 连接”；明确区分不安全实现、静态业务调用与未知生产条件。此前宿主追踪到下单、关单、退款及补单查询，这属于用户提供的补充核查报告，尚无本轮独立复验或已接受的新 Triage 记录。Secret 先核对用途与部署覆盖，用户只提供状态而非原值；依赖缺少 affected range/fixed version 时先补信息，不编造升级版本。
 
-### 首轮验收标准（本地自动化通过；人工易用性 Pending）
+### 首轮验收标准（自动化/分发/CI 通过；人工易用性 Pending）
 
 - 无需手工寻找 UUID 就能取得当前 workspace 的结果；多 workspace、显式不匹配 scan、未绑定/有歧义、无扫描记录均有确定行为，不串项目。
 - 默认报告让用户能回答“先做什么、为什么、下一步如何推进”；技术详情和完整列表仍可获得，不以省略信息制造低风险印象。

@@ -8,12 +8,13 @@
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
 | 本轮开发起始 HEAD | `602a78941ea6693f755ca05ae5a2c2b994d01152` |
+| 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；分发/CI 记录见本轮验收附录 |
 | 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
 | 当前 milestone | **AI Finding Triage & Risk Validation v0.1 已完成实现和验收** |
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
 | 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；仅首个产品迭代实施，整体质量 milestone 未完成 |
-| 首个产品迭代 | **开发者任务入口 v0.1**；实现与本地源码/CLI/MCP/wheel 验收通过；三位真实开发者试用 Pending |
+| 首个产品迭代 | **开发者任务入口 v0.1**；源码/CLI/MCP/wheel/Windows native/四组 CI 验收通过；三位真实开发者试用 Pending |
 | 本轮范围 | 只读 workspace 汇总、任务投影、CLI/MCP 普通与详细视图、必要测试和真实状态更新；提交推送 `feature/runtime-mvp` |
 
 此表分别记录本轮开发起始 HEAD 与既有 Triage 代码/验收快照；本轮实现提交及分发验收见 AI_TRIAGE_ACCEPTANCE 的开发者入口附录。恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
@@ -24,6 +25,8 @@
 
 | Commit | 交付内容 |
 | --- | --- |
+| 00cbd72 | workspace 只读开发者任务入口、CLI summary / MCP get_security_summary、保守合并与 34 项入口测试 |
+| 602a789 | NEXT_STAGE 产品与质量路线规划 |
 | 7e19744 | Triage v0.1 架构、项目状态、决策与交接持久化 |
 | 3d773aa | Triage/native 最终验收与证据 |
 | 5570520 | offline 阻止外部模型调用 |
@@ -162,7 +165,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 - Evidence 依赖对应 workspace/文件仍存在；失效或不可读取变 STALE。跨设备绝对根路径和本地 HMAC key 不同，ID/cache 不保证可复用；provider 的 host-managed 标签也不是精确模型版本证明。
 - 当前按排序结果先取 limit，再查 cache；重复默认批次可能优先命中既有项，继续未验证项应明确选择 finding IDs/筛选条件。单批最多 20，115 候选不意味着一次 triage 全覆盖。
 - `verify` 只枚举 primary adapters，OSV-only Finding 一般 UNKNOWN；位置变化/文件删除不能替代业务修复验证。
-- scans/findings 不是数据库级 immutable audit log；Triage 先批次校验，再逐记录提交，没有整批事务、retention 或多租户隔离。未绑定 MCP 也不提供 workspace 隔离。
+- scans/findings 不是数据库级 immutable audit log；Triage 先批次校验，再逐记录提交，没有整批事务、retention 或多租户隔离。旧 MCP 工具未绑定时不提供 workspace 隔离；新汇总即使未绑定也必须明确 workspace，不能读取全局最近记录。
 - 程序未自动执行目标项目构建。scanner plugins 是受信任 Python 代码；进程 timeout/快照不是 OS sandbox。原 WorkBuddy 版本的 UI 路径与真实连接限制见历史验收，不因 SDK 测试而宣称全部客户端自动可用。
 - `privacy.py` 的旧 LocalContextProvider/AIProvider.generate_fix 没有接入新 Triage。State 与 managed tool DATA_DIR 分开，不静默搬移数据库。
 
@@ -172,7 +175,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 产品迭代顺序：
 
-1. **开发者任务入口 v0.1 — Implemented，本地源码/CLI/MCP/wheel 验收通过 / 人工易用性 Pending**：新增 get_security_summary，当前共九个工具；来源与完整列表保留。用户明确目前无法安排三位未参与开发的试用者，因此不声称这一验收已通过。
+1. **开发者任务入口 v0.1 — Implemented，自动化及分发/四组 CI 验收通过 / 人工易用性 Pending**：新增 get_security_summary，当前共九个工具；来源与完整列表保留。用户明确目前无法安排三位未参与开发的试用者，因此不声称这一验收已通过。
 2. **继续核查 — Planned**：引导宿主推进待分析项、补充受限证据，先查代码能回答的问题，再询问必要业务事实；处理重复批次/cache 推进问题。
 3. **修复与验证 — Planned**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
 
