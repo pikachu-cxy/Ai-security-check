@@ -14,7 +14,7 @@
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
 | 当前 milestone | **AI Finding Triage & Risk Validation v0.1 已完成实现和验收** |
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
-| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代实现/自动化/分发 CI 通过；实际宿主与独立开发者试用 Pending，整体质量 milestone 未完成 |
+| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代实现/自动化/分发 CI 通过；旧聊天实际宿主试用未通过，刷新后复验与独立开发者试用 Pending，整体质量 milestone 未完成 |
 | 首个产品迭代 | **开发者任务入口 v0.1**；源码/CLI/MCP/wheel/Windows native/四组 CI 验收通过；三位真实开发者试用 Pending |
 | 本轮范围 | 继续核查 v0.1：绑定任务引用、任务级 MCP handoff、待分析/缓存推进、受限证据与必要业务条件；提交推送 `feature/runtime-mvp` |
 
@@ -179,7 +179,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 产品迭代顺序：
 
 1. **开发者任务入口 v0.1 — Implemented，自动化及分发/四组 CI 验收通过 / 人工易用性 Pending**：新增 get_security_summary，当前共十一个工具；来源与完整列表保留。用户明确目前无法安排三位未参与开发的试用者，因此不声称这一验收已通过。
-2. **继续核查 v0.1 — Implemented / 自动化/原生/四组 CI 通过 / 实际宿主试用 Pending**：summary 任务自带 task_ref/continuation；宿主使用本次显示项的引用，不按 T01 重新索引。prepare_task_triage → 宿主受限分析 → submit_triage；有效审阅保留，过期重建，失败显式重试，必要业务问题仅为候选提示。
+2. **继续核查 v0.1 — Implemented / 自动化/原生/四组 CI 通过 / 旧聊天实际试用未通过，刷新后复验 Pending**：summary 任务自带 task_ref/continuation；宿主使用本次显示项的引用，不按 T01 重新索引。prepare_task_triage → 宿主受限分析 → submit_triage；有效审阅保留，过期重建，失败显式重试，必要业务问题仅为候选提示。用户实际两句试用的调用记录仅有 get_triage，继续轮没有工具调用；不能把聊天中的修复草案计为任务交接成功。同一配置程序的新离线 SDK 连接确认能力存在，疑似旧连接/工具列表，具体原因及宿主刷新未验证。见 [试用记录](jeepay-host-task-trial.json) 与 AH。
 3. **修复与验证 — Planned**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
 
 独立人工质量工作协同推进：冻结 Jeepay benchmark 身份、人工盲审与 ground truth schema、五类 verdict 标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 与 prompt/model regression。没有人工审阅者时保持 UNREVIEWED；模型不得自填人工真值。易用性用三位未参与开发的开发者试用观察，不能换算为安全准确率。
@@ -205,4 +205,4 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.2。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
-SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
+SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。旧 Jeepay 聊天已尝试但未执行新 summary/任务级 handoff，未通过；刷新连接后的复验 Pending，旧工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。

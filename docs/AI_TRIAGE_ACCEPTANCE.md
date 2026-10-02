@@ -246,6 +246,10 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 
 ### 未完成的真实使用/质量验收
 
-实际宿主自然语言“继续第一项”的端到端使用试用 **Pending**，原 Jeepay 聊天旧工具列表恢复亦未验证。实际 SDK/合成宿主返回成功只证明接入和校验，不声称普通开发者已能用好。三位未参与开发者试用仍 Pending（用户当前无法安排）；独立 ground truth UNREVIEWED/null、指标 UNKNOWN/NOT_MEASURED。
+实际宿主自然语言试用已尝试一次，**未通过**；重连后的真实宿主复验 **Pending**，原 Jeepay 聊天旧工具列表恢复仍未验证。2026-10-02 用户回传“查看这个项目已有的安全检查结果”“继续第一项”的回复，随后通过 Codex app read_thread 核对实际调用记录：前一轮仅调用旧 get_triage，没有 get_security_summary/task_ref；后一轮没有任何工具或命令调用，仅沿此前聊天的额外只读源码核查给出文字修复草案。因此可读回复不证明精确任务引用或任务级 MCP handoff 已执行，也不计修复与验证交付。
+
+旧聊天此前曾明确报告缺少 get_security_summary，疑似旧连接/工具列表未刷新，但尚未证明具体原因。对 Jeepay 配置指向的同一程序复核 runtime-info，并建立全新离线 SDK 连接，确认新能力/固定 instructions 均存在；第一项仍 AWAITING_BUSINESS_FACTS、0 packet、复用2条有效审阅，state/key 哈希不变。首次受限沙箱管道权限失败后，获准复核本地 MCP 管道并成功；没有 scanner/model/patch/target build。这是独立连接检查，不能替代真实宿主复验。记录见 [实际宿主试用](jeepay-host-task-trial.json)。下一步为刷新宿主 MCP 连接及工具列表，在新聊天取得新 summary 后用同样两句普通意图复验；不要求用户提供 UUID、工具顺序或技术提示词，不盲目重装当前 editable 环境。
+
+实际 SDK/合成宿主返回成功只证明接入和校验，不声称普通开发者已能用好。三位未参与开发者试用仍 Pending（用户当前无法安排）；独立 ground truth UNREVIEWED/null、指标 UNKNOWN/NOT_MEASURED。
 
 完整产品目标“一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果”尚未闭环。本轮接通核查机器交接与宿主指导；generate_fix 仍只是 coding_agent_prompt/说明，不是自动修复。第三轮必须继续让宿主衔接，不能让用户搬运提示词；补丁/目标构建/测试与扫描复查均未在 Jeepay 执行，修复与验证保持 Planned，0 ACTIONABLE 不表示安全。
