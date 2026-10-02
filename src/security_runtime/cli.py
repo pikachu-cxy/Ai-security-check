@@ -152,6 +152,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    summary_parser=sub.add_parser('summary',help='Read developer tasks for this workspace; never scans or invokes AI')
+    summary_parser.add_argument('--path')
+    summary_parser.add_argument('--scan')
+    summary_parser.add_argument('--details',action='store_true',help='Show every task, identity and accepted AI review')
+    summary_parser.add_argument('--json',action='store_true')
     ai_parser=sub.add_parser('ai',help='Configure user BYOK; AI is disabled during scan')
     ai_sub=ai_parser.add_subparsers(dest='ai_action',required=True)
     ai_config=ai_sub.add_parser('configure')
@@ -224,6 +229,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command=='summary':
+            import os
+            from .security_summary import SecuritySummaryService
+            from .human import render_security_summary
+            bound=os.getenv('SECURITY_RUNTIME_WORKSPACE')
+            root=args.path or bound
+            if root is None:
+                root=WorkspaceResolver().resolve(allow_non_git_source=True).path
+            result=SecuritySummaryService().get(root,args.scan,details=args.details,bound_workspace=bound)
+            print(json.dumps(result,ensure_ascii=False) if args.json else render_security_summary(result))
+            return 0
         if args.command=='ai':
             from .triage_providers import AIConfig
             AIConfig(args.base_url,args.model,args.api_key_env,args.provider).save()

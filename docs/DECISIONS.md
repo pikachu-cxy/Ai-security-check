@@ -1,6 +1,6 @@
 # AI Security Runtime — Architecture Decisions
 
-更新：2026-10-02。既有实现与验收依据 `feature/runtime-mvp` 的 `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`；本轮规划基线为 `7e197443eb4f712d10bc9a61be82c4929b1569da`，加入用户确认的任务引导与来源原则。Accepted 表示已确立的决策；各项分别标明 Implemented / Planned，不因路线获批而宣称已实现。
+更新：2026-10-02。既有验收快照 `3d773aa`；本轮开发起始 `feature/runtime-mvp` / `602a78941ea6693f755ca05ae5a2c2b994d01152`。用户仅授权实施开发者任务入口 v0.1。Accepted 表示决策已确立，各项仍区分 Implemented / Planned，后两轮与独立质量工作未实施。
 
 恢复入口：[PROJECT_STATE](PROJECT_STATE.md)；实现事实：[ARCHITECTURE](ARCHITECTURE.md)；后续规划：[NEXT_STAGE](NEXT_STAGE.md)。
 
@@ -126,13 +126,13 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 ## ADR-013 — 任务引导与风险判定分开
 
-**Status：Accepted 的产品决策 / Planned；用户已于 2026-10-02 确认，尚未开发。**
+**Status：Accepted / 开发者任务入口 Implemented；三位真实开发者易用性验收 Pending；后两轮 Planned。**
 
 面向普通开发者的默认结果应回答“先做什么、为什么、下一步如何推进”。相关候选可投影成一个任务，保留原 Finding/Advisory、证据和状态的完整访问；普通/详细视图共享同一结果，不靠隐藏未完成检查制造安全印象。首轮最多展示三个推荐跟进任务，并提供完整列表入口。
 
 建议跟进动作与 Runtime priority 是不同字段：所有结果为 REVIEW 时，可以推荐先“核查 TLS 影响”，但不能改成 ACTIONABLE、删除 Raw 或降低 release_status。VALID 应表达为“已完成 AI 审阅”，而非人工验证、复现或确定线上可利用。优先级策略如需变化，另以人工基准和独立回归证据决策；不会为匹配历史分布调整结论。
 
-当前 workspace 的扫描定位与只读汇总为首轮 Planned；不得取全局最新记录或直接把有写入副作用的 TriageService.view 包装成纯只读。无扫描时给出下一步，不自行启动扫描。后续“继续核查”和“修复与验证”分别迭代，沿用已授予范围内的授权，源码修改、构建、联网/模型上传等超出范围的执行另行处理。
+已实现 summary/get_security_summary：只在明确/绑定 workspace 内定位最近或指定扫描，不取全局最近记录；SQLite mode=ro 与不持久化 freshness 投影，不创建/迁移 DB、生成 key 或记录 telemetry。MCP 延后初始化可写 Runtime，纯汇总连接无写入。无扫描给出建议，不执行。TLS 仅明确互补规则、同文件相距最多 40 行成对；该展示规则不证明共享调用链。依赖组保留全部 advisory/state，缺身份字段不合并。后两轮沿用原授权原则，保持 Planned；三位试用者目前无法安排，Pending 如实保留。
 
 理由：当前工程验收输出要求用户理解内部枚举并编写多轮提示词，增加决策负担。可执行任务应减少用户负担，同时保持证据、未知条件和风险政策的真实含义。易用性试用与安全质量分别验收。
 
@@ -140,7 +140,7 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 ## ADR-014 — 证据来源与核查范围显式区分
 
-**Status：Accepted 的来源原则；现有引用/hash 校验已实现，完整任务来源展示/宿主补充报告契约为 Planned。**
+**Status：Accepted；引用/hash 校验与任务来源分层 Implemented；宿主补充报告导入契约 Planned。**
 
 扫描器候选、Runtime 接受的 AI 审阅、宿主额外源码核查和独立人工判断具有不同证据含义。结构/引用合法不证明语义正确；静态业务调用不证明生产启用；有限依赖与词法证据不证明完整图或 reachability。展示时保留来源和未知条件，不把一种分析升级为另一种确认。
 
@@ -152,7 +152,7 @@ Runtime 自身安装 scanner engine/规则与目标项目构建不同。当前�
 
 ## Approved / Planned 与其它尚未实现事项
 
-已批准路线包括开发者任务入口、继续核查、修复与验证三个产品迭代，以及独立人工质量工作；版本化 ground truth schema、人工盲审与 adjudication、不同真实模型比较、precision/agreement/suppression-risk、prompt/model regression 和质量门槛后的 Joern Java PoC，均在 NEXT_STAGE 规划。本轮只授权持久化路线及提交推送，未实施这些功能或实验。
+开发者任务入口本轮获明确授权并实现；继续核查、修复与验证及全部独立质量工作（版本化 ground truth、人工盲审、多模型、指标、prompt/model regression 和后置 Joern）继续在 NEXT_STAGE Planned。本轮不因展示易读而宣布人工易用性或风险质量已验证。
 
 数据库 retention/完整审计、更多自动反证、IaC AI validation、云端多租户及主动审计也没有实现；它们不属于本轮已批准产品迭代的默认开发任务。
 

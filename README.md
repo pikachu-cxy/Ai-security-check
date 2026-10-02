@@ -712,6 +712,18 @@ security-check triage --latest --prepare --category code --limit 20
 security-check triage --latest --raw
 ```
 
+Start with the current project's read-only developer task summary, without looking up a scan UUID:
+
+```bash
+security-check summary --path <project>
+security-check summary --path <project> --details
+security-check summary --path <project> --json
+```
+
+The default view recommends at most three follow-up tasks. Details retain every finding/advisory, review state and Raw access. The summary never scans, invokes AI, changes source/state or generates an evidence key. No history returns a first-scan suggestion. VALID means an AI review passed Runtime validation, not independent human validation or proven exploitability; recommendations never promote REVIEW to ACTIONABLE. Zero ACTIONABLE does not mean safe.
+
+A workspace-bound MCP client can call `get_security_summary` without an ID, with `details=true` for the full list. An unbound client must supply `workspace_path`. Continued investigation and repair remain Planned; the three independent developer usability trials are still pending.
+
 MCP host agents use `prepare_triage` for bounded, redacted UNTRUSTED_CODE evidence, analyze it with their own model, and return structured results using `submit_triage` with the returned triage_session. `get_triage` returns coverage and grouped views. Runtime does not invoke the host model.
 
 Configure a user-supplied OpenAI-compatible provider with `ai configure --base-url https://provider.example/v1 --model user-model --api-key-env SECURITY_RUNTIME_AI_KEY`. The key value is read only from the environment. External context requires `triage --latest --provider configured --allow-external-code-context`; absent consent fails closed. Normal scan never invokes AI. Secret values are redacted and repository content is untrusted data. Suppression requires explicit validated counterevidence; documentation/example placement or missing API search matches cannot suppress a candidate. See [acceptance and limits](docs/AI_TRIAGE_ACCEPTANCE.md).

@@ -7,18 +7,18 @@
 | 项目 | 当前记录 |
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
-| 本轮起始 / 规划基线 HEAD | `7e197443eb4f712d10bc9a61be82c4929b1569da` |
+| 本轮开发起始 HEAD | `602a78941ea6693f755ca05ae5a2c2b994d01152` |
 | 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
 | 当前 milestone | **AI Finding Triage & Risk Validation v0.1 已完成实现和验收** |
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
-| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；用户已确认路线，尚未实施 |
-| 首个产品迭代 | **开发者任务入口 v0.1**；待明确开发任务授权 |
-| 本轮范围 | 更新既有四份主文档并提交推送 `feature/runtime-mvp`，无源码开发 |
+| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；仅首个产品迭代实施，整体质量 milestone 未完成 |
+| 首个产品迭代 | **开发者任务入口 v0.1**；实现与本地源码/CLI/MCP/wheel 验收通过；三位真实开发者试用 Pending |
+| 本轮范围 | 只读 workspace 汇总、任务投影、CLI/MCP 普通与详细视图、必要测试和真实状态更新；提交推送 `feature/runtime-mvp` |
 
-此表分别记录本轮规划起始 HEAD、既有代码/验收快照与实现提交。包含本文的文档提交是规划基线的后继；恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
+此表分别记录本轮开发起始 HEAD 与既有 Triage 代码/验收快照；本轮实现提交及分发验收见 AI_TRIAGE_ACCEPTANCE 的开发者入口附录。恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
 
-上一轮 `7e19744` 已将四份主文档按 v0.1 重写并推送；此前以 `47c41f4` 为基线、把 triage 当 WIP 的草稿已失效。本轮从干净工作区开始，根据用户确认加入开发者任务引导路线及后续宿主报告；保留既有实现/验收，不重新扫描、不替人工标注、不改源码。
+上一轮 `7e19744` 持久化 Triage 状态，`602a789` 持久化下一阶段规划。本轮用户明确授权仅实现“开发者任务入口 v0.1”，从干净工作区同步后开始；不重新在线扫描、不替人工标注、不执行后两轮。既有历史证据保留。
 
 最近关键提交：
 
@@ -48,7 +48,8 @@
 | 模型接入 | triage_providers.py；Agent-native 交接与显式授权的 OpenAI-compatible BYOK |
 | 持久化 | storage.py；scans/findings + 加法新增 triage_records/cache index |
 | 展示 | human.py、cli.py；候选语义、dependency grouping、独立 scan/triage coverage |
-| MCP | mcp_server.py；当前 8 工具，session/hash/引用校验与 workspace binding |
+| 开发者任务入口 | security_summary.py、ReadOnlySQLiteStore；当前 workspace 最近扫描、只读 freshness、保守任务投影、最多三项推荐/完整详细视图 |
+| MCP | mcp_server.py；当前 9 工具，新增 get_security_summary；既有 session/hash/引用校验与 workspace binding |
 | 进度/诊断 | progress.py、cli_progress.py、diagnostics.py、processes.py；stderr、heartbeat、限长脱敏错误 |
 | 工具与分发 | toolchain.py、engines.py、licensing.py；wheel/sdist、PyInstaller onedir、四平台 CI |
 
@@ -66,7 +67,9 @@
 
 `tools install --all` 仅准备三个主引擎，OSV 按需或显式安装。doctor 只读且 OSV 非强制就绪项。Dependency EXECUTED 要 SUCCESS + FULL coverage contract；SUCCESS/PARTIAL 仍 PARTIAL，不能只看进程状态。
 
-MCP 当前工具：`scan_diff`、`scan_project`、`get_findings`、`generate_fix`、`verify`、`prepare_triage`、`submit_triage`、`get_triage`。`generate_fix` 是确定性任务，`verify` 是原 scanner 复查；Triage 是独立的风险审阅。当前没有 workspace 结果汇总/开发者任务工具，MCP 也没有最新扫描入口或 `latest` 别名；后文规划不能当成已新增工具。
+MCP 当前工具：`scan_diff`、`scan_project`、`get_findings`、`generate_fix`、`verify`、`prepare_triage`、`submit_triage`、`get_triage`、`get_security_summary`。新汇总在绑定/明确 workspace 内定位最近扫描，支持显式 scan_id 和 details；旧工具仍没有 `scan_id="latest"` 别名。`generate_fix` 是确定性任务，`verify` 是原 scanner 复查；Triage 是独立的风险审阅。
+
+CLI：`security-check summary --path <project>`；加 `--details` 展开所有任务和逐 Finding/Advisory/AI 信息，加 `--json` 获取同一投影。未提供 path 时使用已绑定 workspace 或安全识别到的当前项目；MCP 未绑定且未明确 workspace 时拒绝取全局最近扫描。无记录仅返回 NEEDS_SCAN 和建议，不启动扫描。汇总经 SQLite mode=ro 读取，不创建 schema/state/HMAC key、不持久化 STALE、不调用 scanner/模型、不收集目标环境变量或凭据值。为核对已有审阅 freshness 可读取现有预算内的脱敏证据；新源码分析/继续核查不在本轮。
 
 ## Java Rule Coverage
 
@@ -147,11 +150,11 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 | 进度、失败语义与集成历史 | [CLI_PROGRESS_ACCEPTANCE](CLI_PROGRESS_ACCEPTANCE.md)、[REAL_PROJECT_DIAGNOSTICS](REAL_PROJECT_DIAGNOSTICS.md)、[DEVELOPER_ALPHA_ACCEPTANCE](DEVELOPER_ALPHA_ACCEPTANCE.md) |
 | 扩展/分发/许可 | [EXTENDING](EXTENDING.md)、[distribution README](../distribution/README.md)、[LICENSING](../LICENSING.md) |
 
-最终实现 `5570520` 的既有验收：全量离线 **382 passed、6 skipped、6 subtests passed**（90.60 秒），Triage 定向 **74 passed**；规则门禁、合规、wheel/sdist、clean install、Windows native archive 与 BYOK loopback 通过。报告记录同一实现 SHA 的 Runtime tests / Compliance / Package integrity / 四平台 Standalone CI 成功，链接保留在 AI_TRIAGE_ACCEPTANCE。skipped 不计为通过。本轮仅校对文档/源码/证据及 Git 差异，不冒充重跑这些验收。
+既有实现 `5570520` 的 382 passed / 6 skipped / 6 subtests（90.60 秒）、74 项 Triage 定向、native BYOK loopback 及 CI 属于历史验收。本轮从同步后的干净工作区重跑基线：382 passed / 6 skipped / 6 subtests（125.57 秒）；新增 34 项开发者入口测试，最终全量离线 **416 passed、6 skipped、6 subtests passed**（93.83 秒）。wheel/sdist、新模块分发门禁、独立安装、licenses/notices 通过；已有 Jeepay 记录的真实 CLI/JSON/MCP 只读验收产生 54 个任务，保留全部 115 Raw，数据库/key 文件字节不变。没有新扫描或模型请求。原生包/当前提交 CI 的实际进度见 AI_TRIAGE_ACCEPTANCE 本轮附录；skipped 和人工试用 Pending 不计为通过。
 
 ## 已知限制与不可误读的状态
 
-- 默认 `human.render_triage` 当前仍使用“已验证”称呼有效 AI 记录；VALID 仅表示分析记录通过 Runtime 校验，不表示人工验证、复现或线上可利用。开发者任务入口尚未实现，后续迭代将修正表达并提供普通/详细视图。
+- `human.render_triage` 与任务入口现在使用“已完成 AI 审阅”；VALID 只表示记录通过 Runtime 校验，非人工验证、复现或线上可利用。建议跟进任务不修改 Runtime priority；0 ACTIONABLE 不表示安全。普通视图最多三项，完整详细列表和 Raw 入口仍可获得。
 - 无 Joern、compiler-grade 跨文件 dataflow、完整 dependency reachability、主动 AI 全仓审计；版本命中、有限词法搜索与文件位置不能证明可利用性或误报。
 - 实际公网 BYOK 模型效果/兼容性、不同模型一致性、triage precision 与 suppression risk 未测；独立人工标注未完成，不能宣布“99% 准确率”或“零漏报”。
 - Raw 始终保留；SUPPRESSED 仅影响独立显示优先级。原 RiskEngine 不随 triage 自动解禁。
@@ -165,17 +168,17 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 ## 下一阶段
 
-用户于 2026-10-02 确认 **AI Triage Quality Validation & Developer Guidance** 路线，详细范围与验收见 [NEXT_STAGE](NEXT_STAGE.md)。**本次确认授权路线持久化、commit + push；没有授权本轮源码开发。所有新增能力均为 Planned。**
+用户于 2026-10-02 确认路线，随后明确授权仅实施 **开发者任务入口 v0.1**。详细边界见 [NEXT_STAGE](NEXT_STAGE.md)。独立人工质量工作、继续核查、修复与验证未实施；原 ground truth 仍 UNREVIEWED/null。
 
 产品迭代顺序：
 
-1. **开发者任务入口 v0.1**：当前 workspace 的扫描定位、纯只读汇总、保守任务合并、普通/详细视图、准确状态与来源、明确下一步。建议新 MCP 名称 `get_security_summary` 尚未实现；当前仍八个工具。
-2. **继续核查**：引导宿主推进待分析项、补充受限证据，先查代码能回答的问题，再询问必要业务事实；处理重复批次/cache 推进问题。
-3. **修复与验证**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
+1. **开发者任务入口 v0.1 — Implemented，本地源码/CLI/MCP/wheel 验收通过 / 人工易用性 Pending**：新增 get_security_summary，当前共九个工具；来源与完整列表保留。用户明确目前无法安排三位未参与开发的试用者，因此不声称这一验收已通过。
+2. **继续核查 — Planned**：引导宿主推进待分析项、补充受限证据，先查代码能回答的问题，再询问必要业务事实；处理重复批次/cache 推进问题。
+3. **修复与验证 — Planned**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
 
 独立人工质量工作协同推进：冻结 Jeepay benchmark 身份、人工盲审与 ground truth schema、五类 verdict 标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 与 prompt/model regression。没有人工审阅者时保持 UNREVIEWED；模型不得自填人工真值。易用性用三位未参与开发的开发者试用观察，不能换算为安全准确率。
 
-首个待授权产品开发任务是任务入口；首个质量任务是核实固定源码身份与独立人工试标。Raw、TriagePolicy、RiskEngine、覆盖契约和上传/执行授权边界保持完整。任务入口交付不表示整体质量 milestone 完成；Joern Java PoC 仍须在质量稳定且有明确证据增益后单独评估。
+任务入口本轮获授权并实现；首个未开展的质量任务仍是固定源码身份与独立人工试标。Raw、TriagePolicy、RiskEngine、覆盖契约和上传/执行授权边界保持完整。任务入口交付不表示整体质量 milestone 完成；Joern Java PoC 仍后置。
 
 ## Agent Handoff
 
@@ -184,5 +187,5 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 3. 执行 `git status`、`git branch --show-current`、`git log -10 --oneline`、`git rev-parse HEAD`，确认当前版本。以当前代码和最新 acceptance 校准本文的快照，区分已实现与计划。
 4. 根据任务阅读 `src/security_runtime/runtime.py`、`models.py`、`scanners.py`、`osv.py`、`dependency_fallback.py`、`rule_coverage.py`，以及四个 `triage*.py`、`mcp_server.py`、`storage.py` 和对应 tests。不要凭旧 README 或 Capability 枚举预留项宣称已支持。
 5. 按 README 的当前安装说明恢复运行环境，先使用 `security-check doctor --path <project>` / `tools status`。Git 不会恢复用户 state/tools、API key 或 Jeepay 源码；在新 workspace 扫描会产生本地 identity，不能直接套用旧 scan ID。需要重放固定 benchmark 时先确认源码版本与输入摘要；不要自动启动在线依赖查询或模型上传。
-6. 恢复后的首个待授权产品任务是 **开发者任务入口 v0.1**，同步质量工作是固定身份与独立人工 Ground Truth。先按 NEXT_STAGE 区分已批准路线与尚未实施功能，再接收明确开发任务；本次“确认”只授权文档持久化及推送。不能自行重写 v0.1、实现后两轮或立即做 Joern。没有独立人工标签时，质量指标保持 UNKNOWN / NOT_MEASURED；保留全部 Raw、scan/triage coverage 与安全边界。
+6. **开发者任务入口 v0.1 已实现，人工易用性试用仍 Pending**。恢复后先使用 summary/get_security_summary 按 workspace 检查记录，再核对本轮实际验收。继续核查、修复与验证保持 Planned，只有新的明确任务才实施。没有独立人工标签时质量指标保持 UNKNOWN / NOT_MEASURED；不能自行填写 ground truth、立即做 Joern 或更改 Raw/policy/coverage/上传边界。
 7. 两组 Jeepay 结果不可混用：已提交回放 `f5224162-...` 与用户提供的实际宿主报告 `99ca7566-...` 分别保留来源和状态。旧 scan ID 不是跨设备标识；宿主补充调用链不是已接受 Runtime Triage。恢复质量样本须核对源码 revision/packet 身份，未固化的报告只作为待补证据的产品输入。

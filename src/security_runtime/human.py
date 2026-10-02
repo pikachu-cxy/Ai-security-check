@@ -121,7 +121,8 @@ def render_scan(result, *, verbose=False):
 def render_triage(view):
     coverage=view['triage_coverage']
     lines=['AI Risk Validation', '', f"候选问题：{coverage['total_candidates']}",
-        f"已验证：{coverage['triaged']}；未验证：{coverage['total_candidates']-coverage['triaged']}",
+        f"已完成 AI 审阅：{coverage['triaged']}；尚无有效审阅：{coverage['total_candidates']-coverage['triaged']}",
+        'VALID 仅表示记录通过 Runtime 校验，非人工验证、漏洞复现或线上可利用证明。',
         f"优先处理：{coverage['actionable']}",f"需要确认：{coverage['review']}",
         f"低优先级：{coverage['lower_priority']}",f"已降噪：{coverage['suppressed']}（原始 Finding 保留）",
         f"失败：{coverage['failed']}；过期：{coverage['stale']}",f"Scan Coverage：{view['scan_coverage']}"]
@@ -148,4 +149,54 @@ def render_triage(view):
             lines.append(f"{classification}：{sum(row['classification']==classification for row in iac)}")
     lines += ['', 'Raw Findings 仍可通过 get_findings 或 security-check triage --raw 查看。',
         'Agent-native 验证：prepare_triage → 宿主模型分析 → submit_triage。普通 scan 不调用 AI。']
+    return '\n'.join(lines)
+
+
+def render_security_summary(result):
+    import shlex
+    if result['status']=='NEEDS_SCAN':
+        command='security-check '+shlex.join(result['next_step']['cli_args'])
+        return '\n'.join(['开发者安全任务',result['message'],f'可选下一步：{command}',
+                          '尚未执行扫描；首次扫描可能需要准备引擎和联网解析依赖。'])
+    c=result['triage_coverage']
+    lines=['开发者安全任务',f"扫描覆盖：{result['scan_coverage']}；原扫描发布状态：{result['release_status']}",
+           f"原始候选 {c['total_candidates']}；已完成 AI 审阅 {c['triaged']}/{c['eligible_for_triage']} 个适用候选。",
+           f"适用候选未审阅 {c['eligible_untriaged']}；审阅失败 {c['failed']}；过期/无法核对 {c['stale']}；不适用 AI {c['not_eligible']}（含 IaC）。",
+           f"优先处理 {c['actionable']}；待复核 {c['review']}；低优先级 {c['lower_priority']}；降噪 {c['suppressed']}。",
+           'VALID 是 Runtime 接受的 AI 审阅，非人工验证、复现或线上可利用证明；0 个优先处理项不表示安全。',
+           '来源：扫描器候选 + 已接受的 AI 审阅；宿主补充核查未导入。']
+    lines.append('检查状态：'+'；'.join(CAPABILITY_LABELS.get(cap,cap)+' '+STATES.get(state,state)
+                                      for cap,state in result['capability_results'].items()))
+    tasks=result['tasks'] if result['details'] else result['recommended_tasks']
+    lines+=['','完整任务列表' if result['details'] else f"建议先跟进以下 {len(tasks)} 项（共 {result['task_count']} 个任务；未展开项仍保留）"]
+    if not tasks: lines.append('当前没有推荐任务；请结合扫描覆盖与完整 Raw 复核，不能据此判定安全。')
+    for task in tasks:
+        s=task['review_states']
+        basis=' '.join(task['basis']) if result['details'] else (
+            f"{task['finding_count']} 条扫描候选；AI 审阅 {s['VALID']}、未审阅 {s['UNTRIAGED']}、过期/无法核对 {s['STALE']}、失败 {s['FAILED']}、不适用 {s['NOT_ELIGIBLE']}。")
+        lines += [f"{task['task']} · {task['title']}（{task['finding_count']} 条候选）",
+                  '可能影响：'+task['possible_impact'],'已有依据：'+basis,
+                  '位置：'+'；'.join(task['locations'][:2]),
+                  '未知条件：'+' '.join(task['unknown_conditions']), '下一步（建议，未执行）：'+task['next_step']['label']]
+        if result['details']:
+            lines+=['Runtime priority：'+str(task['priority_counts']),'审阅状态：'+str(task['review_states'])]
+            for member in task['members']:
+                lines += [f"Finding {member['finding_id']} · {member['file']}:{member['line']} · {member['severity']} · {member['review_status']} · {member['freshness']}",
+                          '规则：'+member['rule_id']]
+                if member['advisory']:
+                    lines.append('Advisory：'+str(member['advisory']))
+                if member['classification']:
+                    lines.append('配置分类：'+member['classification'])
+                if member['ai_review']:
+                    r=member['ai_review']
+                    lines+=['AI 审阅（非确定性事实）：'+r['reason'],f"Verdict：{r['verdict']}；confidence：{r['confidence']}；exploitability：{r['exploitability']}",
+                            'AI 未知前提：'+str(r['preconditions_unknown']),
+                            '引用：'+str(r['evidence_refs']), 'Policy notes：'+str(r['policy_notes'])]
+        lines.append('')
+    if result['details']:
+        lines+=['Scan ID：'+result['scan_id'],'Raw：security-check '+shlex.join(result['raw_access']['cli_args']),
+                '覆盖契约与 provider：'+str(result['capability_details'])]
+    else:
+        lines+=['完整任务/逐条候选/Raw 入口：security-check summary --details（同一 workspace）；JSON 加 --json。']
+    lines.append('本次仅只读核对审阅证据新鲜度；未启动扫描、模型请求、新风险分析、编辑、构建或修复。')
     return '\n'.join(lines)

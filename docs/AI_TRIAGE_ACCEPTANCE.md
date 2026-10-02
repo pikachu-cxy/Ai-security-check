@@ -1,6 +1,6 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
-2026-10-01，`feature/runtime-mvp`。本轮实现已有 Scanner Finding 的证据验证与独立展示层。未增加 scanner、主动 AI 仓库审计或跨文件编译器级可达性分析。公开 Jeepay 的 OSV 在线测试使用用户本次明确授权；BYOK 验收仅访问本地 loopback 假服务器。
+2026-10-01，`feature/runtime-mvp`。原轮实现已有 Scanner Finding 的证据验证与独立展示层；2026-10-02 开发者任务入口的独立验收见末尾附录。未增加 scanner、主动 AI 仓库审计或跨文件编译器级可达性分析。公开 Jeepay 的 OSV 在线测试使用用户当次明确授权；BYOK 验收仅访问本地 loopback 假服务器。
 
 ## A. 起始 HEAD
 
@@ -166,3 +166,39 @@ licenses --check-distribution 和 notices --check 通过。未新增第三方 ru
 ## AF. 下一阶段建议（未实现）
 
 由独立人工完善 ground truth，再比较模型／prompt regression；扩展可解释反证类型；单独做 IaC context validation；研究 Joern 或 compiler-grade reachability；设计限额、retention 和更细的 provider-session provenance。继续保持 scan coverage 与 triage coverage 独立。
+
+
+## AG. 开发者任务入口 v0.1（2026-10-02）
+
+本轮从干净、已同步的 `feature/runtime-mvp` / `602a78941ea6693f755ca05ae5a2c2b994d01152` 开始，仅实现 NEXT_STAGE 第一轮。没有重跑 Jeepay scanner、公网模型、目标构建或修复，没有改写历史扫描/审阅 artifact 和 ground truth。
+
+### 交付与边界
+
+- CLI：`security-check summary --path <project>`，`--details` 展开完整列表/逐项审阅，`--json` 输出同一投影。MCP 新增 `get_security_summary(workspace_path=None, scan_id=None, details=False)`，当前共九个工具。
+- 最新记录严格局限于当前绑定/明确选择的 workspace；显式 scan ID 校验归属。未绑定 MCP 不取全局最近扫描，无记录返回 NEEDS_SCAN 和建议、不自动扫描。旧工具不增加 `latest` 别名。
+- 普通视图最多三项推荐，保留原 ACTIONABLE 优先级后尽量涵盖不同主题。详细视图列出全部任务/Raw 成员/每条 advisory 身份和分析状态，以及 UUID、引用、confidence、policy_notes 和 Raw 入口；任务编号仅为当次投影。
+- TLS 仅合并两个明确 first-party trust-all 规则、同文件且行起点相距不超过 40 行；同规则、远距离、不同文件不合并，不证明共享调用链。依赖沿用 ecosystem/package/version/manifest 四元组，缺身份字段则逐条展示。不凭 severity/文件/模型叙述合并其他候选。
+- VALID 表述为“已完成 AI 审阅”，说明是记录通过 Runtime 校验，非人工验证/复现/线上可利用证明。扫描/审阅覆盖分列，FAILED、STALE、UNTRIAGED、IaC 不 eligible 分开解释，0 ACTIONABLE 不表示安全。
+- 扫描器、Runtime 接受的 AI 审阅与宿主补充核查分层。后者标 NOT_IMPORTED，没有通用导入接口，不臆造云闪付业务调用链。模型分析不作为确定性事实。
+- 独立 SQLite mode=ro/query_only 存储不创建 DB/schema/HMAC key；`persist_stale=False` 只计算内存 freshness，源变更/消失/缺 key 不沿用历史优先级、不写回状态。纯汇总 MCP 延后初始化可写 Runtime，不记录 telemetry。只读取核对 freshness 所需的预算内已有脱敏证据，不返回源码 packet、scanner secret evidence 或环境凭据。
+- 所有下一步仅建议，不执行编辑、构建、联网或模型上传。Raw、TriagePolicy、RiskEngine、scan coverage、cache/batch/session 和原授权边界保留。
+
+### 本地自动化与已保存的真实记录
+
+同步后的基线：382 passed、6 skipped、6 subtests passed，125.57 秒。新增 34 项入口测试，最终全量离线 **416 passed、6 skipped、6 subtests passed，93.83 秒**。skipped 不计通过。覆盖无数据库/legacy/corrupt 只读、安全 workspace 与跨项目、当前/过期/不可核对 freshness、TLS/依赖保守合并、完整成员保留、脱敏/注入、CLI/实际 SDK stdio MCP、一页推荐与零 scanner/model/network 调用。
+
+115 Raw / 101 eligible / 26 REVIEW / 0 ACTIONABLE / 75 eligible-untriaged / 14 IaC 的合成 fixture 验证 54 个任务和全部 115 成员保留。此 fixture 明确是合成测试，不冒充用户提供的 `99ca7566` 宿主运行机器 artifact，不调整历史 policy 来匹配用户报告。
+
+另对本机已有 `.security-runtime/frozen-jeepay-final/scans.db` 做真实 CLI Human/JSON 与 SDK stdio MCP 普通/详细视图一致性验收：来自已保存的 `f5224162` 原生扫描和历史审阅回放，115 Raw、101 eligible、26 VALID、2 ACTIONABLE / 23 REVIEW / 1 LOWER_PRIORITY、0 FAILED / STALE / SUPPRESSED、89 UNTRIAGED，其中 75 eligible、14 IaC 不 eligible。形成 **54 个任务，普通推荐 3 个，详细保留全部 115 Raw 成员**。state/key 文件 SHA-256 前后完全一致；JSON/stdio stdout 纯协议，stderr 为空。这是已有真实记录的只读投影，不是新 scan/model 或独立准确率测量；Jeepay source revision 仍 UNKNOWN。
+
+wheel/sdist 构建、新 summary 模块与 23 个规则文件分发门禁、独立 venv 安装后的版本/summary 命令/法律文件校验、licenses 与 notices 检查均通过。没有新增运行时依赖或捆绑 scanner。
+
+### 分发与 CI 状态
+
+本轮实现提交：待提交。Windows 原生归档与当前提交 CI：待完成；历史 CI 不计入本轮新功能验收，实际完成后更新此段。
+
+### 人工验收及后续范围
+
+三位未参与开发者的真实试用 **Pending**。用户明确回复“目前无法安排，保留待验收”；不使用 Agent 模拟用户或自动测试替代真实反馈，不声称首轮全部使用验收或整体 milestone 已完成。
+
+“继续核查”和“修复与验证”两轮保持 **Planned**。独立 ground truth 保持 UNREVIEWED/null，质量指标 UNKNOWN / NOT_MEASURED，真实模型实验未运行；Joern 保持后置。

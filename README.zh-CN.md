@@ -840,6 +840,18 @@ security-check triage --latest --prepare --category code --limit 20
 security-check triage --latest --raw
 ```
 
+先从当前项目取得建议跟进任务，无需手工寻找扫描 UUID：
+
+```bash
+security-check summary --path <project>
+security-check summary --path <project> --details
+security-check summary --path <project> --json
+```
+
+普通视图最多推荐三项，详细视图保留完整任务、每条候选/advisory、审阅状态和 Raw 入口。只读汇总不扫描、不调用 AI、不改 DB/源码；无记录仅建议首次检查。扫描覆盖与 AI 审阅覆盖分开，VALID 表示“已完成 AI 审阅”，不等于人工验证或线上可利用。建议核查 REVIEW 不会把它升级为 ACTIONABLE；0 ACTIONABLE 不表示安全。
+
+绑定项目的 MCP 可直接调用 `get_security_summary`，`details=true` 展开全部；未绑定时必须明确 `workspace_path`。后续核查/修复尚未内置。本轮三位真实开发者试用仍待验收，参见 PROJECT_STATE/NEXT_STAGE。
+
 Coding Agent 可用 MCP `prepare_triage` 获取限定、脱敏的 UNTRUSTED_CODE 证据，使用自己的模型分析，再携带返回的 triage_session 调用 `submit_triage`；`get_triage` 返回独立覆盖和分组视图。
 
 BYOK 为 OpenAI-compatible 用户 provider：

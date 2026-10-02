@@ -1,8 +1,8 @@
 # Next Stage — AI Triage Quality Validation & Developer Guidance
 
-更新：2026-10-02。规划基线：`feature/runtime-mvp` / `7e197443eb4f712d10bc9a61be82c4929b1569da`；代码/既有验收快照 `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`，最终实现 `557052049c74c6d1ca4321c2d9559483a36f55d2`。**用户已确认本路线；本轮只持久化规划，未授权或实施源码开发、人工标注、模型请求或 Joern。**
+更新：2026-10-02。路线规划基线 `7e19744`；本轮开发起始 `feature/runtime-mvp` / `602a78941ea6693f755ca05ae5a2c2b994d01152`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。**用户本轮明确授权仅实现“开发者任务入口 v0.1”，不实施后两轮、独立人工质量工作、模型实验或 Joern。**
 
-下一阶段为 **AI Triage Quality Validation & Developer Guidance**。产品目标是让安全从业者与缺少安全知识的开发者都能从检查结果获得具体任务，沿着任务完成核查、准备修复和验证；独立人工 Ground Truth 仍是质量工作的核心。首个待授权开发迭代是 **开发者任务入口 v0.1**。
+下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，本地源码/CLI/MCP/wheel 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。后续继续核查/修复仍须分别实施；独立人工 Ground Truth 仍是质量工作的核心。
 
 先读 [PROJECT_STATE](PROJECT_STATE.md)、[ARCHITECTURE](ARCHITECTURE.md)、[DECISIONS](DECISIONS.md) 和 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)。
 
@@ -14,7 +14,7 @@
 
 用户随后提供了固定 scan `99ca7566-4a6f-4818-b447-38646072457b` 的实际宿主 MCP 验收报告：115 Raw、26 VALID、0 ACTIONABLE / 26 REVIEW / 0 LOWER_PRIORITY / 0 SUPPRESSED、0 FAILED / 0 STALE、89 UNTRIAGED，整体及 Dependency 仍 PARTIAL。该结果与历史脚本回放是不同运行，不能为了匹配回放调整 verdict/priority。报告尚未固化为仓库内机器可核验的验收 artifact，本轮也未直接重跑该 MCP；它是产品问题的输入，不是新的独立 ground truth。
 
-用户需要连续转发多轮提示词，才从验收表走到 TLS 的业务影响与修复方案。后续调用链来自宿主 Agent 额外只读源码核查，并未提交为 Runtime Triage；不能把它记成 Runtime 自动调用链分析或扫描覆盖提升。当前 `human.render_triage` 将有效分析记录称为“已验证”，容易与人工验证混淆。因此，先改善任务入口与表达，同时推进独立质量验证；易读性和判断正确性分别验收。
+用户需要连续转发多轮提示词，才从验收表走到 TLS 的业务影响与修复方案。后续调用链来自宿主 Agent 额外只读源码核查，并未提交为 Runtime Triage；不能把它记成 Runtime 自动调用链分析或扫描覆盖提升。此前 `human.render_triage` 将有效分析记录称为“已验证”，容易与人工验证混淆；本轮已修正为“已完成 AI 审阅”，质量验证仍独立 Planned。易读性和判断正确性分别验收。
 
 ## 当前已实现与本阶段 Planned
 
@@ -26,28 +26,30 @@
 | 显式授权 BYOK、结构化输出、依赖 batch/cache | suppression risk、precision/agreement 的有效统计 |
 | 独立 scan/triage coverage、Raw 分组和保守 policy | prompt/model regression 与人工确认的质量门槛 |
 | 合成 fixtures 和真实 26 项审阅回放 | Joern Java PoC、compiler-grade dataflow |
-| 八个 MCP 工具、CLI 技术报告与依赖分组 | 当前 workspace 结果入口、开发者任务投影与普通/详细视图 |
+| 九个 MCP 工具、新增 get_security_summary 和 CLI summary；当前 workspace 只读任务投影、普通/详细视图 | 三位未参与开发者的真实易用性反馈（Pending） |
 | 宿主可在其授权范围内继续读源码 | 内置继续核查引导、待分析项推进、来源分层与必要业务提问 |
 | 确定性 generate_fix 任务、原 scanner verify | 可审阅补丁与完整修复验证流程 |
 
 产品迭代与质量工作流均保留 Raw、现有 TriagePolicy、RiskEngine、覆盖契约、Secret 保护与 External AI 授权边界。不增加 scanner、不自动构建目标项目、不做全仓主动 AI 审计、不增加 FALSE_POSITIVE 反证类型。质量实验若暴露实现缺陷，应记录独立问题、按新的修复任务处理，再复验；不能把评测脚本的结果悄悄改成 Runtime 产品行为。
 
-## 用户已确认的产品迭代顺序（全部 Planned）
+## 用户已确认的产品迭代顺序
 
 | 顺序 | 交付范围 | 用户可获得的结果 |
 | --- | --- | --- |
-| 1：开发者任务入口 v0.1 | 定位当前 workspace 的扫描；只读汇总；保守合并相关发现；普通/详细视图；明确建议下一步 | 一页能看懂且可追溯的任务单 |
-| 2：继续核查 | 引导宿主选择待分析项、准备受限证据、推进已有 MCP handoff；先查代码能回答的问题，再询问必要业务事实 | 用户选择一个任务后继续推进，不必编写验收提示词 |
-| 3：修复与验证 | 准备可审阅补丁、兼容性说明和验证计划；执行已获授权的编辑/验证，记录未执行项 | 用户能够审阅修复及其效果和剩余条件 |
+| 1：开发者任务入口 v0.1 — Implemented / 本地自动化验收通过 / 人工试用 Pending | 定位当前 workspace 的扫描；只读汇总；保守合并；普通/详细视图；建议下一步 | 任务单及完整逐项入口，不自动执行动作 |
+| 2：继续核查 — Planned | 引导宿主选择待分析项、准备受限证据、推进已有 MCP handoff；先查代码，再询问必要业务事实 | 用户选择任务后继续推进；本轮不实现 |
+| 3：修复与验证 — Planned | 可审阅补丁、兼容性与验证计划；授权后执行编辑/验证，记录未执行项 | 用户审阅修复效果；本轮不实现 |
 
-独立人工质量验证与上述迭代协同开展，不用“报告更易读”替代风险判断质量。当前只确认规划；源码开发须有后续明确任务，每次只交付一个迭代。
+独立人工质量工作仍 Planned；不把报告易读性当风险判断质量。本次仅交付第一轮，不改变缓存批次推进策略，不实施新增核查、补丁或真实模型实验。
 
 ### 首轮：开发者任务入口 v0.1
 
-建议新增只读 MCP 汇总入口，暂定名为 `get_security_summary`，实际签名在开发设计中确定。**当前仍只有八个 MCP 工具；该入口尚未实现。** 核心是共用任务投影和展示，不先建设 GUI、云服务或另一套模型推理路径。
+已新增 `get_security_summary(workspace_path=None, scan_id=None, details=False)`，当前共九个 MCP 工具；CLI 为 `security-check summary [--path <project>] [--scan ID] [--details] [--json]`。共用 security_summary.py 投影和 ReadOnlySQLiteStore；纯汇总连接延后初始化可写 Runtime，不创建 DB/schema/key 或 telemetry。没有 GUI、云服务、新推理路径或持久化任务表。
+
+TLS 合并限定为两个明确 first-party trust-all 规则、同文件、行起点相距不超过 40 行；同规则、远距离或不同文件不合并。阈值用于展示共同校验核查目标，不证明对象共享调用链。依赖按既有四元组分组，身份字段缺失则保守逐条展示。普通最多三项推荐，详细列出全部任务/成员/状态/来源与 Raw 入口。原 policy、覆盖和 release 状态不改；任务编号是当次展示投影。
 
 1. **Workspace 定位。** 有明确 scan ID 时校验其归属；未提供时，只能在已绑定/明确选择的 workspace 内定位最近扫描，不取全局最近记录。未绑定或目标有歧义时要求明确 workspace；无记录时返回“需要首次检查”和可选下一步，不自行扫描。旧工具不默认获得 `scan_id="latest"` 别名。
-2. **纯只读汇总。** 输出基于现有 scan、Raw 与 Triage 记录，不调用 scanner/模型、不收集目标项目环境变量或凭证值、不改源码或 DB。现有 `TriageService.view` 可写入 STALE，不能直接包装后宣称纯只读；开发需建立不写入的 freshness/投影路径，证据不可核对时保留过期/不可核对状态，不能把历史 VALID 当成当前确认。
+2. **纯只读汇总。** 输出基于现有 scan、Raw 与 Triage 记录，不调用 scanner/模型、不收集目标项目环境变量或凭证值、不改源码或 DB。旧 `TriageService.view` 默认写入 STALE 的行为保留；新入口使用只读存储和 `persist_stale=False` 的 freshness/投影路径。证据不可核对时保留过期/不可核对状态，不能把历史 VALID 当成当前确认。
 3. **保守任务合并。** 有明确共同位置/规则语义/修复目标的 TLS 发现可合并；依赖沿用 ecosystem/package/version/manifest 分组，每条 advisory 保留独立 identity 和分析状态。不能仅凭相同 severity、文件或模型叙述合并不相关风险。任务是展示投影，首轮不另建持久化任务数据库，不覆盖原 Finding/TriageRecord。
 4. **普通与详细视图。** 默认一页、最多三个推荐跟进任务，提供完整任务列表/Raw 入口。任务包含可能影响、已有依据、未知条件、建议下一步及关联 Finding。UUID、CVE 明细、confidence、evidence_refs、policy_notes 留在详细视图。所有 REVIEW 时仍可建议“核查影响”，但不得重映射为 ACTIONABLE，不自动隐藏其余候选。
 5. **状态表达。** “已验证”改成“已完成 AI 审阅”，明确 VALID 是记录通过 Runtime 校验，非人工验证、复现或线上可利用证明。扫描覆盖与审阅覆盖分别展示；FAILED、STALE、UNTRIAGED、IaC 不 eligible 分开解释。0 ACTIONABLE 不生成“安全”结论。
@@ -55,7 +57,7 @@
 
 Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为“核查云闪付 HTTPS 连接”；明确区分不安全实现、静态业务调用与未知生产条件。此前宿主追踪到下单、关单、退款及补单查询，这属于用户提供的补充核查报告，尚无本轮独立复验或已接受的新 Triage 记录。Secret 先核对用途与部署覆盖，用户只提供状态而非原值；依赖缺少 affected range/fixed version 时先补信息，不编造升级版本。
 
-### 首轮验收标准（尚未执行）
+### 首轮验收标准（本地自动化通过；人工易用性 Pending）
 
 - 无需手工寻找 UUID 就能取得当前 workspace 的结果；多 workspace、显式不匹配 scan、未绑定/有歧义、无扫描记录均有确定行为，不串项目。
 - 默认报告让用户能回答“先做什么、为什么、下一步如何推进”；技术详情和完整列表仍可获得，不以省略信息制造低风险印象。
@@ -63,6 +65,8 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 - 26 REVIEW / 0 ACTIONABLE、部分扫描、75 eligible 未审阅与 14 不 eligible 的 IaC 等状态都能准确表达；历史回放另测，不能要求同一 priority 分布。
 - 汇总读取不改变 scans/findings/triage_records；来源、Secret 脱敏、workspace 边界与现有授权约束完整。新增工具数与所有展示在交付时据真实代码更新。
 - 找三位未参与开发的开发者，不给工程验收长提示词，观察其是否能取得结果、理解首个任务并选择下一步。记录困惑、错误理解和所需额外解释；此项检验易用性，不当作安全准确率。
+
+用户明确回复“目前无法安排，保留待验收”。本轮不以 Agent 模拟用户或自动化测试替代三位真实试用者，不声称首轮全部验收/整体质量 milestone 已完成；实际自动化及分发结果见 AI_TRIAGE_ACCEPTANCE 的本轮附录。
 
 ### 后两轮的依赖与边界
 
@@ -209,8 +213,8 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 
 质量工作流完成必须同时具备：可复现 benchmark 身份；独立人工标签与分歧记录；五类 verdict/实际风险/利用条件的区别；可追溯多模型 run（或明确未运行限制）；分母完整的 precision/agreement/suppression-risk；安全边界回归；预先确立并满足的质量门槛。没有足够人工真值或真实模型结果只能交付部分测量，不宣布完成整体质量 milestone。
 
-首个产品开发任务：**开发者任务入口 v0.1**，范围和验收以上文为准；当前仅批准规划，未开始源码开发。同步的质量任务：**核实固定 Jeepay 源码身份，完成独立人工盲审试标并确定 ground truth schema/指南**。没有人工审阅者时如实保留 UNREVIEWED，不由 Agent 自填。
+**开发者任务入口 v0.1 已实现，三位真实开发者试用仍 Pending**；实际自动化结果独立记录。继续核查、修复与验证均 Planned。独立质量任务仍未开展：冻结 Jeepay 身份、人工盲审及 ground truth schema/指南；原 UNREVIEWED/null 不由 Agent 填写。
 
 整体 milestone 需分别交付获授权的产品迭代并达到质量工作流门槛。产品迭代需同时满足其使用验收和既有边界回归；独立质量工作流按前述身份、标签、指标与风险门槛单独验收。任务入口完成不代表八项质量工作或整个新 milestone 完成。先使用既有目录与证据，新增报告尽量合并为一个 acceptance，不再为每次运行增加顶层总结文档。旧验收按原时点保留，原 ground truth 的 null 不在本轮填写。
 
-新聊天从 [PROJECT_STATE](PROJECT_STATE.md) 的 Agent Handoff 开始。本次用户确认只授权持久化本路线并提交推送；新聊天开始源码开发前需接到明确开发任务。不能默认开始公网模型请求、替人工打标签、训练/调参或实现 Joern。
+新聊天从 PROJECT_STATE 的 Agent Handoff 开始，区分本轮已实现入口与后两轮 Planned。后续源码开发须另有明确任务；不能默认公网模型请求、人工标签代填、训练/调参或 Joern。

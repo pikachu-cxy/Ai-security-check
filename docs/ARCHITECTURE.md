@@ -1,6 +1,6 @@
 # AI Security Runtime — Architecture
 
-更新：2026-10-02（Asia/Shanghai）。核对分支：`feature/runtime-mvp`；本轮规划基线 HEAD：`7e197443eb4f712d10bc9a61be82c4929b1569da`；代码及既有验收快照：`3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399`。Triage v0.1 最终实现提交：`557052049c74c6d1ca4321c2d9559483a36f55d2`。Runtime 包版本仍为 `0.3.1`，Triage milestone 与包版本不同；本轮没有源码改动。
+更新：2026-10-02（Asia/Shanghai）。分支 feature/runtime-mvp，本轮开发起始 `602a78941ea6693f755ca05ae5a2c2b994d01152`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。本轮仅新增开发者任务入口 v0.1；包版本仍 0.3.1，后两轮与独立质量工作未实施。
 
 本文以当前源码为事实依据。项目恢复先读 [PROJECT_STATE](PROJECT_STATE.md)，架构理由见 [DECISIONS](DECISIONS.md)，后续规划见 [NEXT_STAGE](NEXT_STAGE.md)。历史 acceptance 描述各阶段时点，不能把其中“五工具”“尚未实现 AI”直接当作当前状态。
 
@@ -95,7 +95,7 @@ IaC 不进入 v0.1 AI Triage，另按明确 rule ID 分类：DS-0002 / DS-0029 �
 
 Cache key 含 finding fingerprint、packet context_hash、provider_type/name/model 和 `triage-v0.1.0` prompt version。Packet 的 opaque keyed revision 使脱敏前相关源码/Secret 变化也改变 hash；随机 HMAC key 保存在 state 的 `triage-evidence.key`，不进入 packet。源码/context 或 prompt 改变、workspace 消失使旧记录 STALE；provider/model 身份改变不能命中同一 cache key。读取 triage view 可持久化 STALE 状态，prepare 可写 cache 复用记录，不能将这些操作描述为纯只读。无关仓库内容不会简单触发整仓 hash 失效。
 
-## Implemented：Agent-native、BYOK 与八个 MCP 工具
+## Implemented：Agent-native、BYOK 与九个 MCP 工具
 
 [triage_providers.py](../src/security_runtime/triage_providers.py) 的正式接口为 `AIProvider.triage`。AgentNativeProvider 仅描述宿主交接，Runtime 无法主动调用 Host 模型；`prepare_triage → 宿主分析 → submit_triage` 是实际路径。`is_external=False` 表示 Runtime 没有直接发起外部 AI HTTP，不代表宿主模型必然本地运行或没有自己的数据策略。
 
@@ -103,7 +103,7 @@ BYOK `OpenAICompatibleProvider` 使用标准库请求 `/chat/completions`，要�
 
 同一依赖组在 BYOK 中共享 context 并 batch 返回；每条仍校验独立 ID/hash/引用。普通 scan 不走上述两条模型路径。
 
-[mcp_server.py](../src/security_runtime/mcp_server.py) 当前正式注册 **8 个工具**：
+[mcp_server.py](../src/security_runtime/mcp_server.py) 当前正式注册 **9 个工具**：
 
 | Tool | 职责 |
 | --- | --- |
@@ -115,16 +115,23 @@ BYOK `OpenAICompatibleProvider` 使用标准库请求 `/chat/completions`，要�
 | prepare_triage | 返回受限脱敏 packet/schema/instructions 与 handoff session，不调用模型 |
 | submit_triage | 验证交接、结构/引用与 policy，保存独立记录 |
 | get_triage | coverage、逐项记录及分组视图；可标记并保存 STALE |
+| get_security_summary | 已绑定/明确 workspace 的最近或指定扫描；只读任务投影，details 展开完整成员；不扫描/调用 AI/写 state |
 
 当前 stdio server 在内存保存 handoff 的 scan ID、finding IDs/hash；15 分钟过期，最多 64 个 session。成功提交消费对应项，拒绝重放。配置 WorkspaceBinding 时，scan/finding/handoff 被约束到连接的 workspace；未绑定连接不提供这一隔离，不能称多租户服务。
 
 `verify` 仅枚举 primary adapters，OSV-only origin 通常返回 UNKNOWN；文件删除有直接 RESOLVED 路径，位置 fingerprint 消失不是业务漏洞修复证明。MCP 返回 compact scan/coverage/provider 数据，不使用 CLI progress renderer，stdout 保持 SDK JSON-RPC。
 
-## Implemented：当前展示与用户流程的边界
+## Implemented：开发者任务入口与展示边界
 
-[human.py](../src/security_runtime/human.py) 的 render_triage 展示 coverage、priority、逐项 verdict/reason/exploitability、证据位置、依赖分组及 IaC 分类。当前将有效 AI 分析记录写为“已验证”；其技术含义是记录通过 Runtime 校验，不是人工验证、漏洞复现或线上可利用证明。该用词尚未在代码中修正。
+[human.py](../src/security_runtime/human.py) 现在使用“已完成 AI 审阅”；VALID 仅表示记录通过 Runtime 校验，非人工验证、复现或线上可利用证明。render_security_summary 默认最多三个建议任务、覆盖与未完成数量；详细视图列出全部任务、每条 Finding/Advisory、confidence/refs/policy notes 和 Raw 入口。所有 REVIEW 时可推荐核查，但不提升 ACTIONABLE。
 
-当前没有开发者任务单、当前 workspace 最新扫描的 MCP 汇总入口或内置的继续核查流程。宿主 Agent 可在另获/已有授权范围内阅读源码，但其额外分析不是 Runtime 的确定性检查，也不自动进入受 hash/session/引用约束的 TriageRecord。已有 EvidenceBuilder 的有限词法关联不提供 compiler-grade 调用链。用户提供的 Jeepay 宿主调用链报告按 PROJECT_STATE 的来源说明保留，不能提升 scan/triage coverage。
+[security_summary.py](../src/security_runtime/security_summary.py) 共用 CLI summary / MCP get_security_summary。未指定 ID 只定位选定 workspace 的最近记录；绑定连接禁止跨项目，未绑定 MCP 需明确 workspace。CLI 可安全识别当前项目；无记录返回 NEEDS_SCAN 和建议，不执行扫描。旧工具不增加 latest 别名。
+
+ReadOnlySQLiteStore 以 SQLite mode=ro/query_only 读取现有表，旧表缺失不迁移，无 DB 不创建目录或文件，已有证据 key 限长读取而不生成。TriageService.view 的 persist_stale=False 在内存中标记 CHANGED/UNVERIFIABLE，原记录不写；原 get_triage/prepare 路径保留其既有写入行为。MCP 只有旧执行工具被调用时才初始化可写 Runtime；新汇总不记录 dogfood telemetry。动态文本复用受限已知 Secret 脱敏，无法核对时省略，输出不含源码 packet/环境/凭据值。
+
+任务为无持久化展示投影：明确 TLS trust-all-hostname/certificates 同文件且起点相距不超过 40 行可成一对，其余同文件/严重性候选不据此合并。依赖沿用 ecosystem/package/version/manifest，缺身份字段保守拆分，每条 advisory/state 保留。推荐次序不改变 Finding、Runtime priority、release_status 或 coverage。三位独立开发者易用性验收 Pending，不能把自动化通过当使用效果已验证。
+
+继续核查仍 Planned。宿主额外分析不是 Runtime 确定性检查，也不自动进入 TriageRecord；新入口明确 host_supplemental=NOT_IMPORTED，没有报告导入接口。有限词法关联不提供 compiler-grade 调用链；两组 Jeepay 结果分别保留，不因展示提升 coverage。
 
 ## Implemented：Progress、Diagnostics、Storage 与 Packaging
 
@@ -141,21 +148,21 @@ ProgressEvent / ContextVar reporter / heartbeat / checkpoint 与外部进程取�
 
 [workspace.py](../src/security_runtime/workspace.py)、[target.py](../src/security_runtime/target.py)、scoped snapshots 和参数数组约束目标输入；`run_process` 有 timeout/output cap，是进程管理器而非 OS sandbox。默认扫描与 triage 不自动执行被扫项目 Maven/Gradle/npm/pip/go 构建或安装。普通 scan 无模型上传，但工具下载、数据准备或在线依赖解析仍可能联网。
 
-wheel/sdist 与 PyInstaller onedir 已实现；Windows x64、Linux x64、macOS x64/arm64 工作流有原生归档验收。Scanner engines 单独按需安装，不捆绑在 Runtime 包。规则、法律声明、四个 triage 模块及 source commit/artifact 完整性有分发门禁。最近实现提交的 382 passed / 6 skipped / 6 subtests、74 项 Triage 定向测试、四组 CI 及 native BYOK/MCP 证据记录于 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md) 和 [triage-delivery-evidence.json](triage-delivery-evidence.json)，属于既有验收，本轮未重跑构建或模型。
+wheel/sdist 与 PyInstaller onedir 已实现；Windows x64、Linux x64、macOS x64/arm64 工作流有原生归档验收。Scanner engines 单独按需安装，不捆绑在 Runtime 包。规则、法律声明、triage 模块、新 summary 模块及 source commit/artifact 完整性有分发门禁。既有 382 项、74 项 Triage 定向及 native BYOK 证据保留在 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md) 和 [triage-delivery-evidence.json](triage-delivery-evidence.json)。本轮新增 34 项入口测试，最终 416 passed / 6 skipped / 6 subtests（93.83 秒），wheel/sdist/新模块门禁/独立安装/合规通过；原生包与当前 CI 的实际状态见本轮验收附录。没有新增真实模型请求。
 
-## Planned：AI Triage Quality Validation & Developer Guidance
+## 本阶段实现与后续 Planned
 
-用户已确认下一阶段路线，详细范围与验收见 [NEXT_STAGE](NEXT_STAGE.md)；本轮只更新文档。新增能力均未实现，当前八个工具、Raw/Triage 分离、覆盖契约、TriagePolicy 和授权边界仍以以上 Implemented 部分为准。
+用户明确授权仅实施开发者任务入口 v0.1；当前九个工具。NEXT_STAGE 的后两轮及独立质量工作继续 Planned。Raw/Triage 分离、policy、覆盖与授权边界不变。
 
-| 迭代 | Planned 内容 | 本轮边界 |
+| 迭代/状态 | 范围 | 本轮边界 |
 | --- | --- | --- |
-| 1：开发者任务入口 v0.1 | 当前 workspace 的扫描定位、纯只读汇总、保守任务投影、普通/详细视图、准确状态与来源、明确下一步；建议 MCP 名称 get_security_summary | 无新工具、数据模型或展示代码；不自动核查、修改 priority 或执行修复 |
+| 1：开发者任务入口 v0.1 — Implemented / 人工试用 Pending | workspace 定位、只读汇总、保守投影、普通/详细视图、状态与来源、建议下一步；get_security_summary | 无任务表；不自动继续核查、修改 priority 或执行修复 |
 | 2：继续核查 | 宿主沿任务推进已有 MCP handoff、选取待分析项、补充受限证据，先核对源码可回答的事实，再问必要业务问题 | cache/batch 推进调整和来源导入契约未开发；不是自动 compiler-grade 调用链 |
 | 3：修复与验证 | 可审阅补丁、兼容性说明、授权后的编辑与验证、执行状态与剩余条件 | 现有 generate_fix / verify 不等于完整修复流程 |
 
 首轮建议以现有记录建立展示投影，不另建持久化任务数据库；合并任务保留每条 Finding/Advisory 的独立身份及状态。Runtime priority 与建议跟进动作分别表达，REVIEW 可以对应“核查影响”，不升级为 ACTIONABLE。模型叙述或引用合法不等于事实语义已经证实；扫描器候选、Runtime 接受的 AI 审阅与宿主补充核查需区分，额外源码分析不能伪装为已接受 evidence_refs。当前没有通用宿主补充报告的持久化/导入接口。
 
-只读汇总还需设计不写入的 freshness/投影路径；现有 TriageService.view 可持久化 STALE，直接包装不能满足纯只读目标。自动定位扫描须按明确 workspace 约束，不用全局最新记录，不静默启动扫描；旧 MCP 工具仍无 latest 别名。
+只读汇总已使用独立只读存储和不持久化 freshness 路径，定位受 workspace 约束；无记录建议首次检查，不自行执行。继续核查、修复验证和独立质量评测保持 Planned。
 
 独立质量工作协同开展：固定 Jeepay benchmark 身份、独立人工标注、版本化 ground truth schema、五类 verdict 一致标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 和 prompt/model regression。已提交的 26 项脚本回放与用户提供的另一组实际宿主报告分别保留 provenance；均不能当独立人工真值。三位未参与开发的开发者试用仅评价易用性，不能换算安全准确率。任务入口完成不代表质量阶段完成。
 

@@ -104,3 +104,50 @@ class SQLiteStore:
             return None
         scan = self.get_scan(row[0])
         return json.loads(row[1]), scan
+
+
+class ReadOnlySQLiteStore:
+    """Existing state only: no schema migration, directory/key creation or writes."""
+
+    def __init__(self, path: Path | None = None):
+        self.path = path if path is not None else SQLiteStore.default_path()
+
+    def _rows(self, table: str, query: str, parameters=()):
+        if not self.path.is_file():
+            return []
+        try:
+            with closing(sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+                db.execute('PRAGMA query_only=ON')
+                if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+                    return []
+                return db.execute(query, parameters).fetchall()
+        except sqlite3.DatabaseError:
+            raise ValueError('Existing scan state cannot be read safely; no state was changed') from None
+
+    def get_scan(self, scan_id):
+        rows = self._rows('scans', 'SELECT data FROM scans WHERE id=?', (scan_id,))
+        return json.loads(rows[0][0]) if rows else None
+
+    def latest_scan(self, workspace):
+        # Never offer a global latest alias, even if only one scan exists.
+        if workspace is None:
+            raise ValueError('A workspace is required for the security summary')
+        for row in self._rows('scans', 'SELECT data FROM scans ORDER BY rowid DESC'):
+            scan = json.loads(row[0])
+            if Path(scan['target_profile']['path']).resolve() == Path(workspace).resolve():
+                return scan
+        return None
+
+    def triage_records(self, scan_id):
+        rows = self._rows('triage_records', 'SELECT data FROM triage_records WHERE scan_id=? ORDER BY id', (scan_id,))
+        return {record['finding_id']: record for record in (json.loads(row[0]) for row in rows)}
+
+    def evidence_key(self):
+        path = self.path.parent / 'triage-evidence.key'
+        if path.is_symlink() or path.is_junction():
+            raise ValueError('Invalid local evidence key path')
+        with path.open('rb') as stream:
+            key = stream.read(33)
+        if len(key) != 32:
+            raise ValueError('Invalid local evidence key')
+        return key

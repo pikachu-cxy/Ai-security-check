@@ -138,7 +138,7 @@ class TriageService:
         return {'accepted':len(records),'records':[record.to_dict() for record,key in records],
             'view':self.view(scan_id)}
 
-    def view(self,scan_id):
+    def view(self,scan_id,*,persist_stale=True):
         scan=self.scan(scan_id);records=self.store.triage_records(scan_id)
         coverage=dict(total_candidates=len(scan['findings']),eligible_for_triage=0,triaged=0,
             actionable=0,review=0,lower_priority=0,suppressed=0,failed=0,stale=0,untriaged=0)
@@ -149,15 +149,19 @@ class TriageService:
             eligible=category(finding) in {'code','secret','dependency'}
             coverage['eligible_for_triage']+=eligible
             record=records.get(finding['id'])
+            freshness='PREVIOUSLY_STALE' if record and record['status']=='STALE' else 'NOT_CHECKED'
             if record and record['status']=='VALID':
                 try:
                     if builder is None: raise ValueError('Workspace unavailable')
                     current=builder.build(finding)
                     if record['context_hash']!=current['context_hash'] or record['prompt_version']!=PROMPT_VERSION:
                         record=replace(TriageRecord(**record),status='STALE',priority='UNTRIAGED').to_dict()
+                        freshness='CHANGED'
+                    else: freshness='CURRENT'
                 except (ValueError,OSError):
                     record=replace(TriageRecord(**record),status='STALE',priority='UNTRIAGED').to_dict()
-                if record['status']=='STALE':
+                    freshness='UNVERIFIABLE'
+                if record['status']=='STALE' and persist_stale:
                     key=hashlib.sha256(encoded([finding['fingerprint'],record['context_hash'],record['provider_type'],
                         record['provider_name'],record['model'],record['prompt_version']])).hexdigest()
                     self.store.save_triage(TriageRecord(**record),key)
@@ -169,7 +173,7 @@ class TriageService:
             else: coverage['untriaged']+=1
             row={'finding_id':finding['id'],'category':category(finding),'severity':finding['severity'],
                 'title':finding['plain_title'],'file':finding['file_path'],'line':finding['line_start'],
-                'triage_status':state,'triage':record}
+                'triage_status':state,'triage':record,'freshness':freshness}
             if category(finding)=='iac': row['classification']=iac_classification(finding)
             rows.append(row)
         return {'scan_id':scan_id,'scan_coverage':scan.get('coverage'),'capability_results':scan.get('capability_results'),

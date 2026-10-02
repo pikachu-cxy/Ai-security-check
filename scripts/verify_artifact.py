@@ -17,7 +17,7 @@ from pathlib import Path
 from security_runtime._version import __version__
 from security_runtime.toolchain import platform_key
 
-REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage"}
+REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary"}
 PLUGIN_PROBE = '''
 from security_runtime.capabilities import Capability
 from security_runtime.models import ScannerRun, RunStatus
@@ -50,6 +50,8 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 names = {tool.name for tool in (await client.list_tools()).tools}
                 if not REQUIRED_TOOLS.issubset(names):
                     raise ValueError("Standalone MCP tools incomplete")
+                summary_before=await client.call_tool('get_security_summary',{})
+                if summary_before.isError: raise ValueError('Standalone security summary failed')
                 response = await asyncio.wait_for(client.call_tool("scan_diff", {}), timeout=120)
                 if response.isError:
                     raise ValueError("Standalone MCP scan_diff failed")
@@ -73,6 +75,12 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                     if accepted.isError: raise ValueError('Standalone submit_triage failed')
                 view=await client.call_tool('get_triage',{'scan_id':payload['scan_id']})
                 if view.isError: raise ValueError('Standalone triage view failed')
+                summary=await client.call_tool('get_security_summary',{'scan_id':payload['scan_id'],'details':True})
+                if summary.isError: raise ValueError('Standalone detailed security summary failed')
+                summary_data=summary.structuredContent or json.loads(summary.content[0].text)
+                summary_data=summary_data.get('result',summary_data)
+                if summary_data['scan_id']!=payload['scan_id'] or summary_data['automatic_execution']:
+                    raise ValueError('Standalone summary identity/action contract failed')
         stderr.seek(0)
         if "IncompleteFieldDefinitionWarning" in stderr.read():
             raise ValueError("Standalone MCP Settings warning returned")
