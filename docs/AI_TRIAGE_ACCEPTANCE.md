@@ -359,3 +359,48 @@ wheel/sdist构建、check_wheel、licenses --check-distribution、generate_notic
 本仓库项目级 `.codex/hooks.json` 已实际生成 SessionStart/PostToolUse/Stop 命令。install/status/repair/remove/reinstall全部通过，repair与重装前后字节一致；remove仅移除Runtime所有的配置，最终保留安装，并使用本地Git exclude排除机器路径配置。没有自动批准Codex trust，也没有改动宿主MCP配置。**fresh actual Codex host trial未执行，PENDING**；需宿主审阅并信任配置后启动新会话。
 
 Native与本轮新CI结果在后续AK.2及 [交付证据](hook-delivery-evidence.json) 中补全，不能用旧Fix & Verify CI代替。三位开发者试用Pending；独立ground truth仍UNREVIEWED/null，质量NOT_MEASURED。
+
+
+### AK.2 最终分发与新CI（2026-10-03）
+
+起点 `8a36b3884a7d25cfb7f75c3405df727909ed1c90`；初次Hook实现 `40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd`；最终实现（含实际CI发现的验收修正）`c1d42552d63596790bfba6eaadf206bffae754f2`，均已推送feature/runtime-mvp。保留中断工作区，不重新实现。修正后最终完整离线576 passed / **6 skipped** / 6 subtests passed，155.59秒。6项跳过原因见AK.1，不计通过。
+
+Windows standalone重新构建、打包、archive/许可证/实际MCP smoke及实际native Hook生命周期通过；包内source_commit=c1d42552d63596790bfba6eaadf206bffae754f2。SHA256 `a540576f9928344d8d7ee545573cd0d5469fb788955b81c65d93fa643c6ae28b`。旧包在本地备份，未发布tag/release。见 [native真实证据](hook-native-evidence.json) 和 [完整交付记录](hook-delivery-evidence.json)。wheel/sdist/package integrity、完全隔离clean venv和合规的本地门禁通过；最终CI再次从当前HEAD构建发行物并执行clean install。
+
+最终implementation HEAD的新CI，全部success：
+
+| Workflow | 结论 | 作业 |
+| --- | --- | --- |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008) | success | Runtime tests (ubuntu-latest): success; Runtime tests (windows-latest): success |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954) | success | Package integrity (windows-latest): success; Package integrity (ubuntu-latest): success |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865969) | success | Compliance: success |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181) | success | Standalone artifact (windows-x64): success; Standalone artifact (macos-arm64): success; Standalone artifact (linux-x64): success; Standalone artifact (macos-x64): success |
+
+Standalone四平台均实际执行managed engine准备、archive/MCP、既有offline OSV fallback/Fix & Verify，以及新增实际native Hook fixture；不是只构建或引用旧CI。
+
+首轮CI真实记录保留：
+
+| Workflow | 结论 |
+| --- | --- |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129778) | failure |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129812) | success |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129736) | success |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817) | cancelled |
+
+首轮Runtime Linux失败：测试patch共享time.sleep，误拦截POSIX subprocess.wait的内部轮询；Windows通过。已把“不sleep”守卫限于Coordinator模块，未改变生产代码。首轮Standalone arm64失败：既有OSV fixture强制要求stderr进度，但scan在renderer现有0.5秒延迟前完成，可合法静默；保留全部FULL/active_provider/provider_role/primary failure/CLI/MCP断言，记录progress_visible。实际Windows native OSV fixture再次通过。首轮Standalone Windows/Linux通过、macOS x64尚运行时因修正push被现有concurrency取消，整体cancelled，绝不记为四平台通过；第二轮四平台已全通过。
+
+第二轮Windows第一次准备Gitleaks时报PermissionError（job 111000314144），尚未进入Hook fixture。没有证据证明具体文件占用来源，不称为已确认Defender问题；保留失败记录。在同一implementation HEAD上重跑失败作业，实际native/archive/MCP/managed engines/OSV/Fix & Verify/Hook全部通过后才记最终success，未跳过或修改gate。
+
+| Host | Adapter实现/协议与配置验收 | 实际宿主自动触发 |
+| --- | --- | --- |
+| Codex | IMPLEMENTED；官方schema、stdin、实际生成shell命令VERIFIED；本仓库install/status/repair/remove/reinstall通过；安装状态CONFIG_ONLY | **PENDING，未执行fresh actual host trial** |
+| Cursor | IMPLEMENTED；官方schema、协议和安全配置merge测试VERIFIED；配置能力CONFIG_ONLY，本仓库未安装Cursor配置 | PENDING |
+| Kiro | MANUAL_CONFIGURATION_REQUIRED；自动adapter NOT_IMPLEMENTED；没有猜schema或写配置 | 未执行 |
+| WorkBuddy桌面 | MANUAL_CONFIGURATION_REQUIRED；自动adapter NOT_IMPLEMENTED；没有挪用CodeBuddy CLI schema | 未执行 |
+| Qoder | MANUAL_CONFIGURATION_REQUIRED；自动adapter NOT_IMPLEMENTED；没有猜schema或写配置 | 未执行 |
+
+本仓库最终保留Codex项目配置，未自动批准trust，当前session未加载/触发该配置；不能从CLI成功推导host成功。宿主需review/trust后启动新会话，按AK中的步骤在可丢弃fixture实际试用。
+
+安全边界：Hook仅现有离线quick SAST/Secret，ADVISORY；无Scanner公网请求/在线解析、无Runtime模型调用、无目标源码编辑/目标构建/自动补丁。只有公开Python依赖和CI发行引擎/数据库获取、GitHub git/Actions网络；不上传目标源码/Secret。开发只修改Runtime与可丢弃synthetic fixture，Jeepay/冻结benchmark/Raw/triage/task_ref/risk/coverage contract/人工标签原状。Secret状态与输出只保留安全metadata/count/coordinates，无Secret值、匹配行或凭证hash。
+
+仍Pending：fresh实际Codex/Cursor host trial；Kiro/WorkBuddy/Qoder官方schema确认与自动接入；旧Jeepay普通意图UX刷新后复验；三位真实开发者试用。独立Ground Truth UNREVIEWED/null、质量NOT_MEASURED，未开展。后续阶段继续Planned，本轮完成后停止。

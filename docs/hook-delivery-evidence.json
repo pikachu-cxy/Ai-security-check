@@ -1,6 +1,6 @@
 {
   "starting_head": "8a36b3884a7d25cfb7f75c3405df727909ed1c90",
-  "implementation_head": "PENDING_COMMIT",
+  "implementation_head": "c1d42552d63596790bfba6eaadf206bffae754f2",
   "baseline": {
     "passed": 508,
     "skipped": 6,
@@ -14,7 +14,7 @@
     "passed": 576,
     "skipped": 6,
     "subtests_passed": 6,
-    "seconds": 168.31,
+    "seconds": 155.59,
     "skipped_reason": "tests/test_e2e_real.py requires semgrep, gitleaks and trivy together on PATH"
   },
   "package": {
@@ -148,13 +148,335 @@
     "actual_fresh_host_trial": "PENDING",
     "trust_auto_approved": false
   },
-  "native": "PENDING",
-  "ci": [],
+  "native": {
+    "source_commit": "c1d42552d63596790bfba6eaadf206bffae754f2",
+    "archive": "ai-security-runtime-v0.3.1-windows-x64.zip",
+    "sha256": "a540576f9928344d8d7ee545573cd0d5469fb788955b81c65d93fa643c6ae28b",
+    "native_smoke_mcp": true,
+    "actual_native_hook_synthetic": true,
+    "scanner_public_requests": false,
+    "model_invocation": false,
+    "target_build": false,
+    "jeepay_modified": false,
+    "fresh_actual_codex_host_trial": "PENDING"
+  },
+  "ci": [
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Runtime tests (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008/job/111000301988"
+        },
+        {
+          "name": "Runtime tests (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008/job/111000302273"
+        }
+      ],
+      "name": "Runtime tests",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008",
+      "database_id": 37055866008
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Package integrity (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954/job/111000301868"
+        },
+        {
+          "name": "Package integrity (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954/job/111000302106"
+        }
+      ],
+      "name": "Package integrity",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954",
+      "database_id": 37055865954
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Compliance",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865969/job/111000301811"
+        }
+      ],
+      "name": "Compliance",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865969",
+      "database_id": 37055865969
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Standalone artifact (windows-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111003296646"
+        },
+        {
+          "name": "Standalone artifact (macos-arm64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111003297833"
+        },
+        {
+          "name": "Standalone artifact (linux-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111003298230"
+        },
+        {
+          "name": "Standalone artifact (macos-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111003355897"
+        }
+      ],
+      "name": "Standalone artifacts",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181",
+      "database_id": 37055866181,
+      "run_attempt": 2
+    }
+  ],
   "fresh_actual_codex_host_trial": "PENDING",
   "ground_truth": "UNREVIEWED/null; NOT_MEASURED",
   "three_developer_trials": "PENDING",
   "hook_network": false,
   "runtime_model_calls": false,
   "target_source_edits": false,
-  "target_build": false
+  "target_build": false,
+  "initial_implementation_head": "40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd",
+  "sdist_integrity": {
+    "sdist_expected_hook_modules": true,
+    "wheel_and_sdist_no_local_state_config_or_venv": true,
+    "sdist_sha256": "14ab9bfe304451e47b0597eab037a91363da09988770d376c0c677d430567de4",
+    "wheel_sha256": "83d6577caab240794f58082c033ba0a97f6e1941b4ff40fcad4ddca545bbc86e"
+  },
+  "ci_before_failed_job_retry": [
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Runtime tests (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008/job/111000301988"
+        },
+        {
+          "name": "Runtime tests (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008/job/111000302273"
+        }
+      ],
+      "name": "Runtime tests",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866008",
+      "database_id": 37055866008
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Package integrity (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954/job/111000301868"
+        },
+        {
+          "name": "Package integrity (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954/job/111000302106"
+        }
+      ],
+      "name": "Package integrity",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865954",
+      "database_id": 37055865954
+    },
+    {
+      "conclusion": "success",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Compliance",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865969/job/111000301811"
+        }
+      ],
+      "name": "Compliance",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055865969",
+      "database_id": 37055865969
+    },
+    {
+      "conclusion": "failure",
+      "headSha": "c1d42552d63596790bfba6eaadf206bffae754f2",
+      "jobs": [
+        {
+          "name": "Standalone artifact (macos-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111000313921"
+        },
+        {
+          "name": "Standalone artifact (macos-arm64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111000314099"
+        },
+        {
+          "name": "Standalone artifact (windows-x64)",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111000314144"
+        },
+        {
+          "name": "Standalone artifact (linux-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181/job/111000314164"
+        }
+      ],
+      "name": "Standalone artifacts",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055866181",
+      "database_id": 37055866181
+    }
+  ],
+  "ci_windows_preparation_failure": {
+    "job_id": 111000314144,
+    "reason": "Gitleaks tools install reported PermissionError; exact external file occupation cause unproven",
+    "gate_skipped": false,
+    "retry": "failed jobs rerun on identical implementation HEAD; final actual success required"
+  },
+  "initial_ci": [
+    {
+      "conclusion": "failure",
+      "headSha": "40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd",
+      "jobs": [
+        {
+          "name": "Runtime tests (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129778/job/110997834907"
+        },
+        {
+          "name": "Runtime tests (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129778/job/110997835116"
+        }
+      ],
+      "name": "Runtime tests",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129778",
+      "database_id": 37055129778
+    },
+    {
+      "conclusion": "success",
+      "headSha": "40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd",
+      "jobs": [
+        {
+          "name": "Package integrity (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129812/job/110997835142"
+        },
+        {
+          "name": "Package integrity (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129812/job/110997835424"
+        }
+      ],
+      "name": "Package integrity",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129812",
+      "database_id": 37055129812
+    },
+    {
+      "conclusion": "success",
+      "headSha": "40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd",
+      "jobs": [
+        {
+          "name": "Compliance",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129736/job/110997834830"
+        }
+      ],
+      "name": "Compliance",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129736",
+      "database_id": 37055129736
+    },
+    {
+      "conclusion": "cancelled",
+      "headSha": "40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd",
+      "jobs": [
+        {
+          "name": "Standalone artifact (windows-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817/job/110997835577"
+        },
+        {
+          "name": "Standalone artifact (macos-x64)",
+          "status": "completed",
+          "conclusion": "cancelled",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817/job/110997835778"
+        },
+        {
+          "name": "Standalone artifact (linux-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817/job/110997835935"
+        },
+        {
+          "name": "Standalone artifact (macos-arm64)",
+          "status": "completed",
+          "conclusion": "failure",
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817/job/110997836173"
+        }
+      ],
+      "name": "Standalone artifacts",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37055129817",
+      "database_id": 37055129817
+    }
+  ],
+  "ci_failure_repairs": [
+    "Hook cooldown test patched shared time.sleep and intercepted POSIX subprocess polling; scope guard to coordinator module.",
+    "Old OSV fixture required progress text even when actual scan completed before existing 0.5s renderer delay; preserve dependency coverage assertions and allow silent short operation."
+  ],
+  "distribution_sha256": {
+    "ai_security_runtime-0.3.1-py3-none-any.whl": "83d6577caab240794f58082c033ba0a97f6e1941b4ff40fcad4ddca545bbc86e",
+    "ai_security_runtime-0.3.1.tar.gz": "14ab9bfe304451e47b0597eab037a91363da09988770d376c0c677d430567de4"
+  },
+  "final_docs_head": "Read from git log -1 --format=%H -- docs/PROJECT_STATE.md; not self-referential",
+  "remote_push": "implementation verified pushed; final docs push verified separately"
 }
