@@ -1,6 +1,14 @@
 # Next Stage — AI Triage Quality Validation & Developer Guidance
 
-## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
+## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
+
+本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。最终提交/推送尚待本轮门禁完成，文档 HEAD 必须从 Git 获取。
+
+Hook 仅触发现有本地 quick SAST/Secret 检查，ADVISORY；MCP 继续负责核查/修复交接，Git pre-commit 保留 quick --staged 的原边界。没有 Runtime 调用模型、网络依赖解析、自动补丁、目标构建、后台 watcher/daemon、新 scanner/规则、Joern 或 Deep Audit。三位试用 Pending，独立人工 ground truth UNREVIEWED/null、质量 NOT_MEASURED；Jeepay 源码、冻结 benchmark、人工标签保持原状。
+
+Codex/Cursor 的官方 schema 已核实，项目配置/适配与实际生成命令测试通过；**fresh Codex/Cursor host trial 仍 PENDING**，不得把 CLI/合成 fixture 当成宿主真实自动触发。WorkBuddy（桌面）/Kiro/Qoder 为 MANUAL_CONFIGURATION_REQUIRED，提供中立命令，不从 CodeBuddy CLI 或其他产品推测其 schema。详见 [AK 验收与试用步骤](AI_TRIAGE_ACCEPTANCE.md#ak-host-agnostic-hook-integration-v01)。
+
+## 历史交接：Developer Fix & Verify v0.1（2026-10-02）
 
 起始干净、ff-only 同步 HEAD `0f33d2624204794c84da6fa10cf43b8178cd5a56`，分支 feature/runtime-mvp。本轮明确授权 A→B，先完成 A 回归再实施 B。Stable Finding Equivalence 与任务修复/验证 v0.1 已实现；整体宿主产品 UX 尚待真实验收。Hook Integration 未开始，完成本轮推送后停止。
 
@@ -259,3 +267,9 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
 
 本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。
+
+## 本轮结束后的范围（2026-10-03）
+
+Hook 核心、Codex/Cursor适配和 CLI/合成 quick链路已实现；当前验收/分发事实以 AK为准。完成最终门禁、提交推送 feature/runtime-mvp 后停止。fresh Codex Host trial 需宿主重新加载并信任项目hooks，当前聊天不能替代这个新会话；Cursor实际事件及界面反馈同样未验收。三位真实开发者用户当前无法安排，保持 Pending；独立人工 ground truth UNREVIEWED/null。没有授权后续自动修复、构建、watcher、模型/在线查询、Joern 或新 scanner/rules。
+
+WorkBuddy桌面、Kiro、Qoder schema 未证明时保留 MANUAL_CONFIGURATION_REQUIRED；CodeBuddy CLI 的设置不能直接当 WorkBuddy桌面契约。未来只有独立新任务和对应官方 schema/真实环境证据，才扩展适配。MCP 的核查/修复工具流和 Git commit边界仍各司其职；本轮不是质量/人工真值阶段完成。

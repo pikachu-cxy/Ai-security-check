@@ -41,17 +41,17 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None) -> ScanResult:
         reporter = progress or NullProgressReporter()
         with progress_context(reporter):
             try:
-                return self._scan(repository_path, mode, staged, rules_path)
+                return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer)
             except (KeyboardInterrupt, ScanCancelled):
                 reporter.cancel()
                 emit('SCAN_CANCELLED')
                 raise
 
-    def _scan(self, repository_path, mode, staged, rules_path):
+    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None):
         start = time.monotonic()
         checkpoint()
         emit('SCAN_STARTED', message=f'模式：{mode}')
@@ -66,6 +66,12 @@ class SecurityRuntime:
         checkpoint()
         emit('TARGET_DISCOVERY_STARTED')
         files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
+        if hook_scope is not None:
+            if scan_mode != ScanMode.QUICK or staged:
+                raise ValueError('Hook scope requires an unstaged quick check')
+            # Coordinator supplies only dirty files and previously dirty files
+            # reverting to HEAD. Validate through the normal target boundary.
+            files = list(hook_scope)
         # TargetDetector validates every explicit path before any file is read.
         if scan_mode != ScanMode.RELEASE:
             manifests = set()
@@ -82,7 +88,7 @@ class SecurityRuntime:
         else:
             profile = TargetDetector().detect(root, files)
         files = [name for name in files if name in profile.files]
-        changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE else {}
+        changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
         emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
@@ -121,7 +127,7 @@ class SecurityRuntime:
                 found, run = [], ScannerRun(scanner.name, '', RunStatus.FAILED, 0,
                     error_code='SCANNER_FAILED', error_summary='Scanner did not complete successfully.',
                     remediation='Inspect local engine configuration and retry the check.')
-            if scan_mode != ScanMode.RELEASE and getattr(scanner, 'filter_changed_lines', False):
+            if scan_mode != ScanMode.RELEASE and hook_scope is None and getattr(scanner, 'filter_changed_lines', False):
                 found = [f for f in found if any(f.line_start<=line<=f.line_end for line in changed_lines.get(f.file_path,set()))]
                 run.finding_count = len(found)
             run.capabilities = tuple(sorted(scanner.capabilities))
@@ -176,6 +182,11 @@ class SecurityRuntime:
             raise
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
+        if hook_observer is not None:
+            # Preserve rule/coordinate multiplicity before historical occurrence
+            # fingerprints merge colliding rules on the same line. Raw remains
+            # unchanged; the hook observer projects safe family metadata only.
+            hook_observer(findings, runs, rule_plans)
         findings = deduplicate(findings)
         rule_coverage=next((run.rule_coverage for run in runs if run.rule_coverage),{})
         planned_runs = [run for run in runs if run.status not in {RunStatus.SKIPPED, RunStatus.NOT_APPLICABLE, RunStatus.NOT_COVERED}]

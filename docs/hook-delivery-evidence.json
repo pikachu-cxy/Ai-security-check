@@ -1,0 +1,160 @@
+{
+  "starting_head": "8a36b3884a7d25cfb7f75c3405df727909ed1c90",
+  "implementation_head": "PENDING_COMMIT",
+  "baseline": {
+    "passed": 508,
+    "skipped": 6,
+    "subtests_passed": 6
+  },
+  "targeted": {
+    "passed": 68,
+    "seconds": 42.19
+  },
+  "final_offline": {
+    "passed": 576,
+    "skipped": 6,
+    "subtests_passed": 6,
+    "seconds": 168.31,
+    "skipped_reason": "tests/test_e2e_real.py requires semgrep, gitleaks and trivy together on PATH"
+  },
+  "package": {
+    "wheel_sdist": true,
+    "integrity": true,
+    "compliance": true,
+    "installed_hook_modules": true,
+    "installed_hook_cli": true,
+    "new_environment": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.security-runtime\\hook-wheel-19aq2wln",
+    "executable": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.security-runtime\\hook-wheel-19aq2wln\\Scripts\\security-check.exe",
+    "dependency_source": "LOCAL_SYSTEM_SITE_PACKAGES; NO_INDEX/NO_DEPS",
+    "public_network_requests": false,
+    "strict_clean_dependency_install": "CI_PACKAGE_GATE"
+  },
+  "clean_install": {
+    "strict_clean_venv": true,
+    "exit": 0,
+    "seconds": 17.48,
+    "system_site_packages": false,
+    "dependency_acquisition": "pip package index/cache; no project source upload",
+    "hook_scanner_network": false
+  },
+  "project_codex_configuration": {
+    "project": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check",
+    "generated_events": [
+      "SessionStart",
+      "PostToolUse",
+      "Stop"
+    ],
+    "installed": {
+      "host": "codex",
+      "status": "CONFIG_ONLY",
+      "implementation": "IMPLEMENTED",
+      "schema_verified": true,
+      "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+      "fresh_host_trial": "PENDING",
+      "message": "Project configuration updated. Review/trust in Codex; fresh host execution remains pending."
+    },
+    "status": {
+      "host": "codex",
+      "status": "CONFIG_ONLY",
+      "implementation": "IMPLEMENTED",
+      "schema_verified": true,
+      "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+      "fresh_host_trial": "PENDING",
+      "message": "Review/trust these project hooks in Codex and start a fresh session; generated configuration is not host execution proof."
+    },
+    "repair": {
+      "host": "codex",
+      "status": "CONFIG_ONLY",
+      "implementation": "IMPLEMENTED",
+      "schema_verified": true,
+      "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+      "fresh_host_trial": "PENDING",
+      "message": "Project configuration updated. Review/trust in Codex; fresh host execution remains pending."
+    },
+    "repair_preserved_bytes": true,
+    "remove": {
+      "host": "codex",
+      "status": "REMOVED",
+      "implementation": "IMPLEMENTED",
+      "schema_verified": true,
+      "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+      "fresh_host_trial": "PENDING",
+      "message": "Project configuration updated. Review/trust in Codex; fresh host execution remains pending."
+    },
+    "remove_deleted_owned_configuration": true,
+    "reinstalled": {
+      "host": "codex",
+      "status": "CONFIG_ONLY",
+      "implementation": "IMPLEMENTED",
+      "schema_verified": true,
+      "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+      "fresh_host_trial": "PENDING",
+      "message": "Project configuration updated. Review/trust in Codex; fresh host execution remains pending."
+    },
+    "same_configuration_after_reinstall": true,
+    "hosts": {
+      "codex": {
+        "host": "codex",
+        "status": "CONFIG_ONLY",
+        "implementation": "IMPLEMENTED",
+        "schema_verified": true,
+        "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.codex\\hooks.json",
+        "fresh_host_trial": "PENDING",
+        "message": "Review/trust these project hooks in Codex and start a fresh session; generated configuration is not host execution proof."
+      },
+      "cursor": {
+        "host": "cursor",
+        "status": "NOT_IMPLEMENTED",
+        "implementation": "IMPLEMENTED",
+        "schema_verified": true,
+        "config_path": "C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.cursor\\hooks.json",
+        "fresh_host_trial": "PENDING",
+        "message": "Review/trust these project hooks in Codex and start a fresh session; generated configuration is not host execution proof."
+      },
+      "kiro": {
+        "host": "kiro",
+        "status": "MANUAL_CONFIGURATION_REQUIRED",
+        "schema_verified": false,
+        "commands": {
+          "session-start": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"session-start\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"kiro\" \"--json\"",
+          "file-changed": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"file-changed\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"kiro\" \"--json\"",
+          "agent-stop": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"agent-stop\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"kiro\" \"--json\""
+        },
+        "message": "Official lifecycle schema has not been validated for this Runtime adapter. No host configuration was written."
+      },
+      "workbuddy": {
+        "host": "workbuddy",
+        "status": "MANUAL_CONFIGURATION_REQUIRED",
+        "schema_verified": false,
+        "commands": {
+          "session-start": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"session-start\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"workbuddy\" \"--json\"",
+          "file-changed": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"file-changed\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"workbuddy\" \"--json\"",
+          "agent-stop": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"agent-stop\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"workbuddy\" \"--json\""
+        },
+        "message": "Official lifecycle schema has not been validated for this Runtime adapter. No host configuration was written."
+      },
+      "qoder": {
+        "host": "qoder",
+        "status": "MANUAL_CONFIGURATION_REQUIRED",
+        "schema_verified": false,
+        "commands": {
+          "session-start": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"session-start\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"qoder\" \"--json\"",
+          "file-changed": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"file-changed\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"qoder\" \"--json\"",
+          "agent-stop": "\"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\\.venv\\Scripts\\security-check.exe\" \"hook\" \"agent-stop\" \"--path\" \"C:\\Users\\Administrator\\Desktop\\ai-security\\Ai-security-check\" \"--host\" \"qoder\" \"--json\""
+        },
+        "message": "Official lifecycle schema has not been validated for this Runtime adapter. No host configuration was written."
+      }
+    },
+    "actual_fresh_host_trial": "PENDING",
+    "trust_auto_approved": false
+  },
+  "native": "PENDING",
+  "ci": [],
+  "fresh_actual_codex_host_trial": "PENDING",
+  "ground_truth": "UNREVIEWED/null; NOT_MEASURED",
+  "three_developer_trials": "PENDING",
+  "hook_network": false,
+  "runtime_model_calls": false,
+  "target_source_edits": false,
+  "target_build": false
+}

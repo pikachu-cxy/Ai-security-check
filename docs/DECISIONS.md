@@ -1,6 +1,14 @@
 # AI Security Runtime — Architecture Decisions
 
-## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
+## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
+
+本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。最终提交/推送尚待本轮门禁完成，文档 HEAD 必须从 Git 获取。
+
+Hook 仅触发现有本地 quick SAST/Secret 检查，ADVISORY；MCP 继续负责核查/修复交接，Git pre-commit 保留 quick --staged 的原边界。没有 Runtime 调用模型、网络依赖解析、自动补丁、目标构建、后台 watcher/daemon、新 scanner/规则、Joern 或 Deep Audit。三位试用 Pending，独立人工 ground truth UNREVIEWED/null、质量 NOT_MEASURED；Jeepay 源码、冻结 benchmark、人工标签保持原状。
+
+Codex/Cursor 的官方 schema 已核实，项目配置/适配与实际生成命令测试通过；**fresh Codex/Cursor host trial 仍 PENDING**，不得把 CLI/合成 fixture 当成宿主真实自动触发。WorkBuddy（桌面）/Kiro/Qoder 为 MANUAL_CONFIGURATION_REQUIRED，提供中立命令，不从 CodeBuddy CLI 或其他产品推测其 schema。详见 [AK 验收与试用步骤](AI_TRIAGE_ACCEPTANCE.md#ak-host-agnostic-hook-integration-v01)。
+
+## 历史交接：Developer Fix & Verify v0.1（2026-10-02）
 
 起始干净、ff-only 同步 HEAD `0f33d2624204794c84da6fa10cf43b8178cd5a56`，分支 feature/runtime-mvp。本轮明确授权 A→B，先完成 A 回归再实施 B。Stable Finding Equivalence 与任务修复/验证 v0.1 已实现；整体宿主产品 UX 尚待真实验收。Hook Integration 未开始，完成本轮推送后停止。
 
@@ -214,3 +222,9 @@ SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机
 宿主执行报告为未验证声明，与 Runtime 观察分离，不影响风险/覆盖、triage、修复状态或生成新的 AI 审阅。明确选中修复意图授权范围内本地修改，超出公网/生产/发布等仍遵守既有授权边界；不以普通用户重复确认替代精确引用。SDK 自动化与真实宿主 UX、独立人工真值分别验收。
 
 本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。
+
+## ADR-018 — Advisory Hook 家族多重集（Accepted / Implemented v0.1）
+
+Rule/file 覆盖决定能否证明消失；eq-v1 复用为 family key，并保存数量/安全坐标。不能 set-diff 家族后把第二处遗漏，不能把不同行的同家族当唯一 instance，不能在 scanner failure/删除/部分覆盖时 resolved。Secret 只存 detector/path/count/coords，未知缺席保留。Hook quick 使用变更文件完整候选，其前置适用规则规划、Raw历史指纹、风险策略和 MCP 校验保持；不调用模型，不执行构建/补丁或在线解析。
+
+短进程使用跨进程持久冷却/OS lock。首次缺 session baseline 只建立基线；Stop 强制收敛或复用，不启动 watcher。项目 Hook 配置依据当前官方 schema，配置成功不等于 Host触发成功；Codex/Cursor fresh host trial Pending，未验证产品不生成 schema。依据本轮用户明确要求及 AK 证据，ADR-016 的旧 PREREQUISITE_MISSING 仅为历史记录。

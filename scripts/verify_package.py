@@ -39,6 +39,9 @@ pack = RulePackManager().resolve()
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == 'ai-security-core'
 from security_runtime import task_fix, equivalence, verification, verification_policy
+from security_runtime import hook_runtime, hook_state, hook_adapters
+for module in (hook_runtime, hook_state, hook_adapters):
+    assert Path(module.__file__).resolve().is_relative_to(package)
 from security_runtime.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS
 from security_runtime.mcp_server import create_server
 assert runtime_info()['features']['task_fix_verify'] == 'v0.1'
@@ -56,6 +59,19 @@ for name in ('LICENSE', 'EULA.md', 'LICENSING.md', 'LICENSES/Apache-2.0.txt'):
 print('Installed wheel integrity OK')
 """
         run(str(python), "-c", check, cwd=root)
+        project = root / 'hook-project'
+        project.mkdir()
+        run('git', 'init', str(project), cwd=root)
+        env = dict(os.environ, SECURITY_RUNTIME_STATE_DIR=str(root/'hook-state'), SECURITY_RUNTIME_OFFLINE='1')
+        import json
+        result = json.loads(subprocess.check_output([str(cli),'hook','session-start','--path',str(project),'--host','codex','--json'],
+            env=env,cwd=root,text=True,encoding='utf-8',timeout=30))
+        assert result['status']=='BASELINE_ESTABLISHED' and not result['execution']['scanner_run']
+        result = json.loads(subprocess.check_output([str(cli),'hook','agent-stop','--path',str(project),'--host','codex','--json'],
+            env=env,cwd=root,text=True,encoding='utf-8',timeout=30))
+        assert result['status']=='REUSED_LAST_RESULT' and not result['execution']['scanner_run']
+        run(str(cli),'hooks','install','codex','--path',str(project),'--json',cwd=root)
+        run(str(cli),'hooks','remove','codex','--path',str(project),'--json',cwd=root)
 
 
 if __name__ == "__main__":

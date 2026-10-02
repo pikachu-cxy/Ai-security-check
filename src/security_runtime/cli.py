@@ -219,9 +219,18 @@ def main(argv: list[str] | None = None) -> int:
     license_parser = sub.add_parser("licenses")
     license_parser.add_argument("--check-distribution", action="store_true")
     hooks_parser = sub.add_parser("hooks")
-    hooks_parser.add_argument("action", choices=["install"])
-    hooks_parser.add_argument("hook", choices=["pre-commit"])
+    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove"])
+    hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"])
     hooks_parser.add_argument("--path")
+    hooks_parser.add_argument("--json", action="store_true")
+    hook_parser = sub.add_parser('hook', help='Advisory local lifecycle quick check')
+    hook_parser.add_argument('event', choices=['session-start','file-changed','agent-stop','host-event'])
+    hook_parser.add_argument('--path')
+    hook_parser.add_argument('--host', choices=['codex','cursor','kiro','workbuddy','codebuddy','qoder','generic'], default='generic')
+    hook_parser.add_argument('--session-id')
+    hook_parser.add_argument('--json',action='store_true')
+    hook_parser.add_argument('--stdin',action='store_true')
+    hook_parser.add_argument('--adapter-id',choices=['ai-security-runtime-hook-v1'],help=argparse.SUPPRESS)
     tools_parser = sub.add_parser("tools", help="Manage security engines")
     tools_sub = tools_parser.add_subparsers(dest="tools_action", required=True)
     tools_sub.add_parser("status")
@@ -231,6 +240,29 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'hook':
+            try:
+                from .hook_runtime import HookCoordinator
+                if args.event == 'host-event':
+                    if not args.stdin:
+                        raise ValueError('Host event requires JSON stdin')
+                    from .hook_adapters import run_host_event
+                    data = sys.stdin.buffer.read(100_001)
+                    if len(data)>100_000:
+                        raise ValueError('Host payload budget exceeded')
+                    output = run_host_event(json.loads(data),args.path,args.host)
+                else:
+                    if args.stdin:
+                        raise ValueError('Use host-event for lifecycle payloads')
+                    event = args.event.upper().replace('-','_')
+                    output = HookCoordinator().handle(event,args.path,args.host,args.session_id)
+                print(json.dumps(output,ensure_ascii=True) if args.json or args.event=='host-event' else
+                      f"{output['status']} · coverage {output['coverage']} · new families {output['delta']['new']} · added occurrences {output['delta']['additional_occurrences']}\n{output['next_step']}")
+                return 0  # Findings and scanner limitations are advisory.
+            except Exception:
+                # Do not echo untrusted stdin, paths or exception source text.
+                print(json.dumps({'status':'FAILED','error_code':'HOOK_RUNTIME_FAILED','systemMessage':'AI Security Runtime hook could not complete. Retry the local advisory check.'}))
+                return 2
         if args.command=='runtime-info':
             from .host_guidance import runtime_info
             info=runtime_info()
@@ -456,8 +488,18 @@ def main(argv: list[str] | None = None) -> int:
             serve()
             return 0
         if args.command == "hooks":
-            from .hooks import install_pre_commit
-            print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
+            if args.hook == 'pre-commit':
+                if args.action != 'install':
+                    raise ValueError('Existing pre-commit supports install only')
+                from .hooks import install_pre_commit
+                print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
+                return 0
+            from .hook_adapters import HookIntegrationRegistry
+            registry = HookIntegrationRegistry()
+            if args.action != 'status' and args.hook is None:
+                raise ValueError('Select a hook host')
+            result = registry.manage(args.action,args.hook,args.path) if args.hook else registry.status(args.path)
+            print(json.dumps(result,ensure_ascii=True) if args.json else json.dumps(result,ensure_ascii=False,indent=2))
             return 0
     except KeyboardInterrupt:
         print("扫描已取消。", file=sys.stderr)

@@ -9,6 +9,7 @@ from .workspace import WorkspaceResolver
 
 
 class HookEvent(StrEnum):
+    SESSION_START = "SESSION_START"
     FILE_CHANGED = "FILE_CHANGED"
     AGENT_STOP = "AGENT_STOP"
     BEFORE_COMMAND = "BEFORE_COMMAND"

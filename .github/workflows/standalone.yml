@@ -44,7 +44,7 @@ jobs:
       - name: Verify native archive, MCP, and first managed scanner preparation
         shell: bash
         run: |
-          python scripts/verify_artifact.py --full --osv-fallback --fix-verify $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+          python scripts/verify_artifact.py --full --osv-fallback --fix-verify --hooks $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}

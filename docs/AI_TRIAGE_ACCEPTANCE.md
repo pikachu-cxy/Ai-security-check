@@ -306,3 +306,56 @@ Windows PyInstaller onedir、原生归档 smoke/许可/SDK initialize/list/summa
 安全边界：本机新 scanner/SDK fixtures 全离线；没有 Jeepay修改、旧 scan/benchmark/ground truth覆盖、外部模型/源码上传、目标构建或生产操作。公网交付连接限 GitHub同步/推送/CI状态读取；既有CI正常联网取得构建依赖/engine/漏洞数据库并扫描其合成样例，不代表获授权上传目标源码。没有更改现有 pre-commit，也没有实施新 Hooks。
 
 仍待验收：实际宿主新连接下“检查→继续第一项→修复它→自然反馈”的连续 UX；三位未参与开发的开发者（用户当前无法安排）；独立人工真值和质量统计。ground truth 保留 UNREVIEWED/null、指标 NOT_MEASURED。Scanner复查只证明原规则和文件，不承诺业务/生产完全修复；当前Secret/IaC原check执行清单和离线POM图不足的保守状态继续生效。本轮完成推送后停止，Hook Integration Planned / NOT_STARTED。
+
+## AK. Host-agnostic Hook Integration v0.1
+
+日期2026-10-02→03（Asia/Shanghai）；干净起始/ff-only 同步 `8a36b3884a7d25cfb7f75c3405df727909ed1c90`，feature/runtime-mvp。前置 eq-v1 / Developer Fix & Verify 已通过 AJ，因此本轮正式实现获明确授权。旧 AI前置失败/AJ历史保留。本轮代码提交/最终文档HEAD、最终完整门禁、native/CI证据将在 AK.1追加，当前不将未完成门禁记为成功。
+
+现有基线508 passed /6 skipped /6 subtests，133.17秒（整体133.71）。首批核心32 passed（21.98秒）；加入CLI/Codex后52 passed（29.22秒），旧equivalence/task_fix47 passed（9.78秒）；后续100项相关定向（38.94秒），Cursor/配置定向21 passed（8.22秒）。首轮full offline568 passed /6 skipped /6 subtests，161.42秒；随后增加配置回滚/本地排除测试及并发锁，最终完整回归另记，不拿此结果覆盖最终code gate。实际曾因测试夹具make参数不匹配/巨大参数id失败，已修正；最终通过数独立记录。
+
+可重复 `scripts/hook_acceptance.py` 使用可丢弃 Git Java项目，真正本地 Semgrep 1.178.0 /Gitleaks 8.30.0，没有 Jeepay编辑/扫描或目标构建。SessionStart baseline、安全编辑0 NEW、首次危险家族NEW、100→110 PERSISTING、1→2 additional=1、2→1 removed=1且未resolved、全部安全替换才resolved、Stop复用与同snapshot NO_CHANGE均通过。实际generated Codex shell command 从含空格与&目录的子目录执行，通过JSON stdin/输出；原precommit内容保持quick --staged。这是CLI/配置/引擎链路测试，不是Codex真正事件dispatcher或自然用户试用。
+
+当前源版性能样本（非SLA）：snapshot-only 206ms；NO_CHANGE 311ms；rapid FILE_CHANGED 232ms /DEBOUNCED；small quick 6379ms；Stop复用 299ms；Stop在rapid变更后收敛 5323ms。NO_CHANGE/DEBOUNCED/REUSED都没有engine process；snapshots仍要读有界文件/Git，不能承诺所有项目相同耗时。
+
+测试覆盖 unstaged/staged/untracked、index变化、同文件内容变化、移动/改名/删除保守状态、所有计数变化、不同rule/同line旧fp collision、Secret2→1不存原值/证据/credential hash、坏/过大state、路径越界/符号链接、shell符号文件名、workspace隔离、并发edit/stop单飞、崩溃锁释放、预算与during-scan变更、旧失败缓存仍FAILED、配置未知字段/MCP保留/idempotent/repair/remove/invalid fail-safe、CLI advisory exit0及异常脱敏。平台权限导致无法创建symlink时测试明确skip，不将skip作为通过。
+
+| Host | Runtime 适配/配置状态 | 真实宿主验收 |
+| --- | --- | --- |
+| Codex | IMPLEMENTED；schema验证、CONFIG_ONLY、stdin/生成命令/CLI | fresh session PENDING |
+| Cursor | IMPLEMENTED；schema验证、CONFIG_ONLY、协议/安全merge单测 | 实际Cursor事件/UI PENDING |
+| WorkBuddy桌面 | MANUAL_CONFIGURATION_REQUIRED；中立commands | NOT_RUN；不能复用CodeBuddy CLI schema |
+| Kiro | MANUAL_CONFIGURATION_REQUIRED；中立commands | NOT_RUN |
+| Qoder | MANUAL_CONFIGURATION_REQUIRED；中立commands | NOT_RUN |
+
+官方来源（2026-10-02实际访问）：[OpenAI Hooks](https://learn.chatgpt.com/docs/hooks) 确认本地project hooks.json、command事件/stdin/stdout和trust；[OpenAI config basics](https://learn.chatgpt.com/docs/config-file/config-basic) 确认trusted project层；[Cursor Hooks](https://prod.cursor.com/docs/hooks) 确认version1及events/workspace_roots/conversation_id。WorkBuddy官方可取得的[CodeBuddy CLI plugin docs](https://www.workbuddy.ai/docs/zh/cli/plugins-reference)不证明桌面生命周期。未生成未确认schema。project hooks/config创建不是自动授权Host信任，Runtime不修改trust或关审批。
+
+### 本地试用与实际 Host Pending
+
+在当前仓库根目录 PowerShell，用本机已有同一 editable Runtime：
+
+```powershell
+.\.venv\Scripts\security-check.exe hooks install codex --path . --json
+.\.venv\Scripts\security-check.exe hooks status --path . --json
+.\.venv\Scripts\security-check.exe hook session-start --path . --host codex --session-id manual-trial --json
+.\.venv\Scripts\security-check.exe hook file-changed --path . --host codex --session-id manual-trial --json
+.\.venv\Scripts\security-check.exe hook agent-stop --path . --host codex --session-id manual-trial --json
+```
+
+相同snapshot最后两条应NO_CHANGE/REUSED_LAST_RESULT、scanner_run=false；首次无SessionStart则BASELINE_ESTABLISHED。要验证实际Codex自动触发，在宿主查看/信任本项目的Hook定义，重新加载后新会话，在可丢弃Gitfixture让宿主编辑，再检查事件反馈；当前开发聊天不能伪造为fresh trial。CLI可以直接执行受限本地quick，模型不参与。尚未安装Semgrep/Gitleaks时报告真实UNAVAILABLE/PARTIAL，不自动联网下载；安装引擎是另一个显式本机操作。移除配置用 `hooks remove codex --path .`，不删用户MCP/其他hooks。
+
+安全与限制：默认Hook不加载第三方scanner plugin、无依赖在线解析/模型/源码上传/目标构建/源代码写入/自动补丁/daemon/生产操作；状态仅HMAC/安全家族与坐标计数，不存EvidencePacket/提示词/模型回复。eq-v1不能证明exact instance movement；new family只代表当前quick scope新增观察，不证明由某次edit引入。Secret detector缺执行证明时缺席unknown；scanner失败/部分scope不报resolved，last_check_status与coverage保留。独立ground truth UNREVIEWED/null、质量NOT_MEASURED，三位开发者Pending、Jeepay与冻结资料未改。
+
+
+### AK.1 最终本地门禁（2026-10-03）
+
+从额度中断前的未提交实现继续，未 reset/clean 或重新实现。基线 508 passed / 6 skipped / 6 subtests passed；中断前全量 570 passed。本轮交付复核仅补充损坏快照嵌套容器的类型校验及6项恢复测试：专项68 passed（42.19秒）；最终完整离线 **576 passed / 6 skipped / 6 subtests passed（168.31秒）**。跳过单列：`tests/test_e2e_real.py` 的6项旧测试要求 Semgrep/Gitleaks/Trivy 同时在 PATH，本机未满足；不能称为这些用例已通过。
+
+最终源码实际 Scanner fixture 通过：Semgrep 1.178.0 / Gitleaks 8.30.0；安全编辑无NEW，行号移动PERSISTING，1→2/2→1记录occurrence变化，完整原规则/文件成功检查下全部移除RESOLVED，同快照Stop复用且没有engine process。实际生成的Codex shell命令已从含空格与`&`的项目路径/子目录执行，通过JSON stdin适配；这不是宿主自动触发验收。见 [源码实际证据](hook-synthetic-evidence.json)。
+
+该次测量：snapshot 146ms、NO_CHANGE 205ms、小quick 5849ms、快速编辑200ms/DEBOUNCED、Stop收敛5018ms、重复Stop209ms。仅为本地样本，不是性能SLA。
+
+wheel/sdist构建、check_wheel、licenses --check-distribution、generate_notices --check通过；离线全新Runtime安装通过。进一步实际执行 `scripts/verify_package.py` 的完全隔离clean venv（system-site-packages=false），依赖通过pip公开包索引/缓存取得，CLI/version/许可证/规则包/Hook模块/MCP required subset及安装后baseline/Stop/配置安装删除全部通过（17.48秒）。包获取允许联网，Hook/Scanner没有公网查询，没有上传目标源码。
+
+本仓库项目级 `.codex/hooks.json` 已实际生成 SessionStart/PostToolUse/Stop 命令。install/status/repair/remove/reinstall全部通过，repair与重装前后字节一致；remove仅移除Runtime所有的配置，最终保留安装，并使用本地Git exclude排除机器路径配置。没有自动批准Codex trust，也没有改动宿主MCP配置。**fresh actual Codex host trial未执行，PENDING**；需宿主审阅并信任配置后启动新会话。
+
+Native与本轮新CI结果在后续AK.2及 [交付证据](hook-delivery-evidence.json) 中补全，不能用旧Fix & Verify CI代替。三位开发者试用Pending；独立ground truth仍UNREVIEWED/null，质量NOT_MEASURED。

@@ -1,6 +1,14 @@
 # AI Security Runtime — Project State
 
-## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
+## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
+
+本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。最终提交/推送尚待本轮门禁完成，文档 HEAD 必须从 Git 获取。
+
+Hook 仅触发现有本地 quick SAST/Secret 检查，ADVISORY；MCP 继续负责核查/修复交接，Git pre-commit 保留 quick --staged 的原边界。没有 Runtime 调用模型、网络依赖解析、自动补丁、目标构建、后台 watcher/daemon、新 scanner/规则、Joern 或 Deep Audit。三位试用 Pending，独立人工 ground truth UNREVIEWED/null、质量 NOT_MEASURED；Jeepay 源码、冻结 benchmark、人工标签保持原状。
+
+Codex/Cursor 的官方 schema 已核实，项目配置/适配与实际生成命令测试通过；**fresh Codex/Cursor host trial 仍 PENDING**，不得把 CLI/合成 fixture 当成宿主真实自动触发。WorkBuddy（桌面）/Kiro/Qoder 为 MANUAL_CONFIGURATION_REQUIRED，提供中立命令，不从 CodeBuddy CLI 或其他产品推测其 schema。详见 [AK 验收与试用步骤](AI_TRIAGE_ACCEPTANCE.md#ak-host-agnostic-hook-integration-v01)。
+
+## 历史交接：Developer Fix & Verify v0.1（2026-10-02）
 
 起始干净、ff-only 同步 HEAD `0f33d2624204794c84da6fa10cf43b8178cd5a56`，分支 feature/runtime-mvp。本轮明确授权 A→B，先完成 A 回归再实施 B。Stable Finding Equivalence 与任务修复/验证 v0.1 已实现；整体宿主产品 UX 尚待真实验收。Hook Integration 未开始，完成本轮推送后停止。
 
@@ -22,7 +30,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 | 项目 | 当前记录 |
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
-| 本轮开发起始 HEAD | Fix & Verify：`0f33d2624204794c84da6fa10cf43b8178cd5a56`；历史 Hook 前置检查：`787aace817bd607efd22bc70a7bd613a5f313faa`；继续核查历史起始 `50a01e6870d78e6fd8a96a8b8fbe236521c5306f` |
+| 本轮开发起始 HEAD | Hook Integration：`8a36b3884a7d25cfb7f75c3405df727909ed1c90`；旧 Fix & Verify 起始见 AJ |
 | 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；第一轮 AG 验收附录 |
 | Fix & Verify 实现 HEAD | `1e10b53aacf0dc0f69ad00c3126f8d8298e78989`；第三轮 AJ 验收附录 |
 | 继续核查实现 HEAD | `f2cb534f27698881ead2b2f3452bc36598c6e957`；第二轮 AH 验收附录 |
@@ -32,7 +40,7 @@ MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据�
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
 | 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代实现/自动化/分发 CI 通过；旧聊天实际宿主试用未通过，刷新后复验与独立开发者试用 Pending，整体质量 milestone 未完成 |
 | 首个产品迭代 | **开发者任务入口 v0.1**；源码/CLI/MCP/wheel/Windows native/四组 CI 验收通过；三位真实开发者试用 Pending |
-| 本轮范围 | **Developer Fix & Verify v0.1：A stable equivalence / verify hardening → B task fix handoff / bounded verification**；Hook 未开始 |
+| 本轮范围 | **Host-agnostic Hook Integration v0.1**；实现与自动化已进行，最终 package/native/CI/推送见 AK |
 
 此表分别记录本轮开发起始 HEAD 与既有 Triage 代码/验收快照；本轮实现提交及分发验收见 AI_TRIAGE_ACCEPTANCE 的开发者入口附录。恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
 
@@ -218,7 +226,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 5. 按 README 的当前安装说明恢复运行环境，先使用 `security-check doctor --path <project>` / `tools status`。Git 不会恢复用户 state/tools、API key 或 Jeepay 源码；在新 workspace 扫描会产生本地 identity，不能直接套用旧 scan ID。需要重放固定 benchmark 时先确认源码版本与输入摘要；不要自动启动在线依赖查询或模型上传。
 6. **开发者任务入口 v0.1 已实现，人工易用性试用仍 Pending**。恢复后先使用 summary/get_security_summary 按 workspace 检查记录；“继续第一项”使用当次响应里该项 continuation 的 task_ref，进入 prepare_task_triage。引用无效/成员变化必须刷新重新选择。继续核查已实现，修复与验证 v0.1 已实现，实际宿主 UX Pending；先核对本轮实际验收。没有独立人工标签时质量指标保持 UNKNOWN / NOT_MEASURED；不能自行填写 ground truth、立即做 Joern 或更改 Raw/policy/coverage/上传边界。
 7. 两组 Jeepay 结果不可混用：已提交回放 `f5224162-...` 与用户提供的实际宿主报告 `99ca7566-...` 分别保留来源和状态。旧 scan ID 不是跨设备标识；宿主补充调用链不是已接受 Runtime Triage。恢复质量样本须核对源码 revision/packet 身份，未固化的报告只作为待补证据的产品输入。
-8. **Hook Integration Planned / NOT_STARTED；旧 PREREQUISITE_MISSING 为历史记录。** 新任务要求先有 Developer Fix & Verify 和稳定 Finding equivalence；本轮已交付 eq-v1，后续获授权的 Hook 必须复用同一身份；本轮不开发 Hook。实际 Codex Hook、其它 Host adapter、Hook 性能及分发验收均未运行，不能拿旧 MCP/CI 验收替代。
+8. **Hook Integration 已获授权并实现；本轮真实门禁见 AK。** 复用 eq-v1 家族多重集，不能把家族当 occurrence 的唯一身份；实际新宿主会话仍 Pending。完成本轮验收与推送后停止，不启动后续迭代。
 
 
 ## 普通用户意图与宿主衔接验收

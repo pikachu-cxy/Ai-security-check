@@ -151,12 +151,15 @@ def main() -> None:
     parser.add_argument("--full", action="store_true", help="Prepare real managed engines and run a real sample scan")
     parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
     parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
+    parser.add_argument('--hooks', action='store_true', help='Also exercise offline native Hook CLI with actual local engines')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()
     if args.osv_fallback and not args.full:
         parser.error('--osv-fallback requires --full')
     if args.fix_verify and not args.full:
         parser.error('--fix-verify requires --full for local managed Semgrep availability')
+    if args.hooks and not args.full:
+        parser.error('--hooks requires --full for local managed engines')
     with tempfile.TemporaryDirectory(prefix="ai-security-release-") as temporary:
         root = Path(temporary)
         extract(args.archive, root)
@@ -252,12 +255,18 @@ def main() -> None:
             evidence = args.archive.resolve().with_name(args.archive.name + '.fix-verify.json')
             run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+        if args.hooks:
+            script = Path(__file__).with_name('hook_acceptance.py').resolve()
+            evidence = args.archive.resolve().with_name(args.archive.name + '.hooks.json')
+            run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
         record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
         record['osv_offline_fallback']=args.osv_fallback
         record['fix_verify_offline_synthetic'] = args.fix_verify
+        record['hooks_offline_synthetic'] = args.hooks
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")
 

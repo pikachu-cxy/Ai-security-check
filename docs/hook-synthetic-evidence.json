@@ -1,0 +1,734 @@
+{
+  "fixture": "DISPOSABLE_GIT_SYNTHETIC_JAVA",
+  "transport": "SOURCE_COORDINATOR_AND_REAL_CLI",
+  "runtime_executable": "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Python\\Python313\\python.exe",
+  "versions": {
+    "semgrep": "1.178.0",
+    "gitleaks": "8.30.0"
+  },
+  "records": {
+    "session_baseline": {
+      "schema_version": "hook-v1",
+      "event": "SESSION_START",
+      "host": "codex",
+      "status": "BASELINE_ESTABLISHED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "a3fa211654249d84740cf274ef2ee22c6b4d6acc7adf5414435eeeef47cce14f",
+      "scan_id": null,
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": []
+      },
+      "coverage": "NONE",
+      "execution_state": "NO_CHANGES",
+      "last_check_status": "NO_CHANGES",
+      "capabilities": {},
+      "scanner_runs": [],
+      "execution": {
+        "scanner_run": false,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": false,
+      "state_recovered": false,
+      "next_step": "Baseline established for the current quick scope; existing candidates are not attributed to this edit.",
+      "duration_ms": 352,
+      "wall_duration_ms": 352
+    },
+    "safe_edit": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "93d9ded4b0c6cfc4774d9011e2e5cb3fc902df249da3e6d720329c072b084026",
+      "scan_id": "ca68f31e-1545-4c9e-a826-c5f5affdf30a",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": []
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 5202,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 698,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5849,
+      "wall_duration_ms": 5849
+    },
+    "one_family": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "42710cb5b7768c98784c1e74d9b0b02b851a31ec597ed9a69339c785770f3871",
+      "scan_id": "915426a0-3ac1-4184-8ec5-7c4905236ef1",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 1,
+        "persisting": 0,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "NEW_FAMILY",
+            "previous_count": 0,
+            "current_count": 1,
+            "occurrence_delta": 1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4426,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 670,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5078,
+      "wall_duration_ms": 5078
+    },
+    "rapid_file_change": {
+      "schema_version": "hook-v1",
+      "event": "FILE_CHANGED",
+      "host": "codex",
+      "status": "DEBOUNCED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "045563eb1860e0ec7152950746bd0273aa114e4876cafb5d04a5dd0acafce9b5",
+      "scan_id": "915426a0-3ac1-4184-8ec5-7c4905236ef1",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": []
+      },
+      "coverage": "FULL",
+      "execution_state": "NOT_EXECUTED",
+      "last_check_status": "NOT_EXECUTED",
+      "capabilities": {},
+      "scanner_runs": [],
+      "execution": {
+        "scanner_run": false,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Pending changes will be checked on the next event or agent stop.",
+      "duration_ms": 200,
+      "wall_duration_ms": 200
+    },
+    "stop_after_rapid_change": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "045563eb1860e0ec7152950746bd0273aa114e4876cafb5d04a5dd0acafce9b5",
+      "scan_id": "aee9b457-1475-4291-b336-97b27fae2527",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 1,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "PERSISTING",
+            "previous_count": 1,
+            "current_count": 1,
+            "occurrence_delta": 0,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4386,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 652,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5018,
+      "wall_duration_ms": 5018
+    },
+    "line_100_to_110": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "2b3f98a32423df5f4a765715fa5d901a201c078d5b1a2d9f4d85bcbfe66fd4d6",
+      "scan_id": "5858c288-3578-49d6-9811-9bdf56a29ac1",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 1,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "PERSISTING",
+            "previous_count": 1,
+            "current_count": 1,
+            "occurrence_delta": 0,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4417,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 647,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5063,
+      "wall_duration_ms": 5063
+    },
+    "count_1_to_2": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "72162adae71f3ea8c36f4191249b6b2751a2bf3c093fe3101f1189d3ee25ed63",
+      "scan_id": "827258ad-6a1f-45dd-88d6-588597eefbf0",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 1,
+        "resolved": 0,
+        "additional_occurrences": 1,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "PERSISTING",
+            "previous_count": 1,
+            "current_count": 2,
+            "occurrence_delta": 1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4618,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 700,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5273,
+      "wall_duration_ms": 5273
+    },
+    "count_2_to_1": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "2b3f98a32423df5f4a765715fa5d901a201c078d5b1a2d9f4d85bcbfe66fd4d6",
+      "scan_id": "faaa00c4-0ea7-4148-8070-c7fe7517c855",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 1,
+        "resolved": 0,
+        "additional_occurrences": 0,
+        "removed_occurrences": 1,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "PERSISTING",
+            "previous_count": 2,
+            "current_count": 1,
+            "occurrence_delta": -1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4383,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 655,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5021,
+      "wall_duration_ms": 5021
+    },
+    "all_fixed": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "SCANNED",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "93d9ded4b0c6cfc4774d9011e2e5cb3fc902df249da3e6d720329c072b084026",
+      "scan_id": "8737a3c1-ee0b-4643-a537-99fe935b6bab",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 1,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "RESOLVED_FAMILY",
+            "previous_count": 1,
+            "current_count": 0,
+            "occurrence_delta": -1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4483,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 695,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": true,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.",
+      "duration_ms": 5122,
+      "wall_duration_ms": 5122
+    },
+    "final_stop_same_snapshot": {
+      "schema_version": "hook-v1",
+      "event": "AGENT_STOP",
+      "host": "codex",
+      "status": "REUSED_LAST_RESULT",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "93d9ded4b0c6cfc4774d9011e2e5cb3fc902df249da3e6d720329c072b084026",
+      "scan_id": "8737a3c1-ee0b-4643-a537-99fe935b6bab",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 1,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "RESOLVED_FAMILY",
+            "previous_count": 1,
+            "current_count": 0,
+            "occurrence_delta": -1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4483,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 695,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": false,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Reuse the existing advisory result; coverage limits still apply.",
+      "duration_ms": 209,
+      "wall_duration_ms": 209
+    },
+    "duplicate_edit": {
+      "schema_version": "hook-v1",
+      "event": "FILE_CHANGED",
+      "host": "codex",
+      "status": "NO_CHANGE",
+      "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-hook-fixture-y_md_2zi\\project with spaces & data",
+      "workspace_id": "b75dbe29c6e2eb47472b25a3e725efe439a1d969a80afe99391b47823fb2f7a7",
+      "session_id": "b3cc0475bb78a5026098858e9889acf666d31062d513d303314eca31d36e72f2",
+      "change_digest": "93d9ded4b0c6cfc4774d9011e2e5cb3fc902df249da3e6d720329c072b084026",
+      "scan_id": "8737a3c1-ee0b-4643-a537-99fe935b6bab",
+      "policy": "ADVISORY",
+      "delta": {
+        "new": 0,
+        "persisting": 0,
+        "resolved": 1,
+        "additional_occurrences": 0,
+        "removed_occurrences": 0,
+        "families": [
+          {
+            "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+            "file_path": "Tls.java",
+            "rule_id": "ai-security.java.trust-all-hostname",
+            "category": "trust-all-tls",
+            "status": "RESOLVED_FAMILY",
+            "previous_count": 1,
+            "current_count": 0,
+            "occurrence_delta": -1,
+            "count_certainty": "COMPLETE_RULE_FILE_SCOPE"
+          }
+        ]
+      },
+      "coverage": "FULL",
+      "execution_state": "EXECUTED",
+      "last_check_status": "SCANNED",
+      "capabilities": {
+        "CODE_SAST": "EXECUTED",
+        "SECRET_SCAN": "EXECUTED",
+        "DEPENDENCY_VULN": "NOT_APPLICABLE",
+        "IAC_MISCONFIG": "NOT_APPLICABLE"
+      },
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4483,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        },
+        {
+          "scanner": "gitleaks",
+          "status": "SUCCESS",
+          "version": "8.30.0",
+          "duration_ms": 695,
+          "error_code": "",
+          "coverage_contract": "FULL"
+        }
+      ],
+      "execution": {
+        "scanner_run": false,
+        "ai_called": false,
+        "network_required": false,
+        "source_modified": false,
+        "target_build": false
+      },
+      "baseline_available": true,
+      "state_recovered": false,
+      "next_step": "Reuse the existing advisory result; coverage limits still apply.",
+      "duration_ms": 205,
+      "wall_duration_ms": 205
+    }
+  },
+  "performance": {
+    "snapshot_only_ms": 146,
+    "no_change_ms": 205,
+    "small_quick_ms": 5849,
+    "agent_stop_reuse_ms": 209,
+    "rapid_event_ms": 200,
+    "rapid_event_status": "DEBOUNCED",
+    "stop_after_rapid_change_ms": 5018
+  },
+  "codex_stdin_adapter": {
+    "systemMessage": "AI Security Runtime advisory: REUSED_LAST_RESULT; coverage FULL; new families 0, added occurrences 0, resolved families 1. Reuse the existing advisory result; coverage limits still apply."
+  },
+  "generated_codex_shell_command_executed": true,
+  "codex_config_status": "CONFIG_ONLY",
+  "fresh_codex_host_trial": "PENDING",
+  "existing_precommit_quick_staged_compatible": true,
+  "model_invocation": false,
+  "network_query": false,
+  "target_build": false,
+  "jeepay_modified": false,
+  "ground_truth": "UNREVIEWED_NOT_MEASURED",
+  "limitations": "Counts are finding families/observed coordinates, not proof of exact instance movement or security safety."
+}

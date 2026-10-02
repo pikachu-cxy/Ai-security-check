@@ -1,6 +1,14 @@
 # AI Security Runtime — Architecture
 
-## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
+## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
+
+本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。最终提交/推送尚待本轮门禁完成，文档 HEAD 必须从 Git 获取。
+
+Hook 仅触发现有本地 quick SAST/Secret 检查，ADVISORY；MCP 继续负责核查/修复交接，Git pre-commit 保留 quick --staged 的原边界。没有 Runtime 调用模型、网络依赖解析、自动补丁、目标构建、后台 watcher/daemon、新 scanner/规则、Joern 或 Deep Audit。三位试用 Pending，独立人工 ground truth UNREVIEWED/null、质量 NOT_MEASURED；Jeepay 源码、冻结 benchmark、人工标签保持原状。
+
+Codex/Cursor 的官方 schema 已核实，项目配置/适配与实际生成命令测试通过；**fresh Codex/Cursor host trial 仍 PENDING**，不得把 CLI/合成 fixture 当成宿主真实自动触发。WorkBuddy（桌面）/Kiro/Qoder 为 MANUAL_CONFIGURATION_REQUIRED，提供中立命令，不从 CodeBuddy CLI 或其他产品推测其 schema。详见 [AK 验收与试用步骤](AI_TRIAGE_ACCEPTANCE.md#ak-host-agnostic-hook-integration-v01)。
+
+## 历史交接：Developer Fix & Verify v0.1（2026-10-02）
 
 本轮获用户明确授权，从干净且 ff-only 同步的 `feature/runtime-mvp` / `0f33d2624204794c84da6fa10cf43b8178cd5a56` 开始。先完成 A 并回归，再实施 B；没有开始 Hook Integration。实现 HEAD `1e10b53aacf0dc0f69ad00c3126f8d8298e78989` 已推送，508项完整离线、包/合规、Windows native/实际 SDK 与新四平台 CI 均通过；真实宿主 UX Pending。
 
@@ -222,3 +230,19 @@ packet 存在时先核对其受限证据；没有新的待分析成员且已有�
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。
 
 本轮实现与分发依据：`1e10b53`；起始 `0f33d26`。Windows 独立包实际 source_commit 与实现一致，SDK 取得13工具及 v0.3 契约，真实 Semgrep 组内仍存在/部分/全部规则复查结果通过；本轮测试、package、compliance 和四平台 standalone CI 均 success，详见 AJ 与 [native/CI 证据](fix-verify-native-evidence.json)。文档最终 HEAD 用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；代码之后若变化须重新验收。不要自行开始 Hook；真实 UX、三位试用与独立人工质量状态不变。
+
+## Hook v0.1 执行架构（当前实现）
+
+`Host lifecycle → thin adapter → HookEvent → HookCoordinator → snapshot → dedupe → persisted cooldown → workspace OS lock/single-flight → local quick → eq-v1 family multiset → advisory result`。独立模块为 hook_adapters.py / hook_runtime.py / hook_state.py；CLI 只解析输入和输出，不复制扫描/身份/变化逻辑。Host payload 仅取事件、workspace、session；忽略 tool_input/response、transcript、模型和助理文本，不作为 shell 指令或状态保存。
+
+快照用零分隔 Git 文件列表合并 unstaged tracked、staged 和 untracked（含删除），安全规范化相对路径后读取。digest 是本地随机 key 的 HMAC，包含 HEAD、相关 index 状态及分文件 HMAC；不保存源码、Secret 或无 key 的凭证摘要。支持 unborn HEAD。Runtime 忽略目录不入 scope。上限1000文件、每文件1MB、总20MB；state2MB、2000家族/10000坐标、每workspace最多64 session状态。状态路径为默认 Runtime state directory/hooks/<workspace hash>/<host+session hash>.json；坏/过大或身份不符的状态重新建立基线，异常内容不回显。临时文件+fsync+replace 原子保存。
+
+workspace 锁使用 Windows msvcrt 或 Unix flock；同 workspace 跨 host/session 也单飞，跨 workspace 独立。锁文件不删除，崩溃由 OS 释放，因此不存在删“过期锁”造成双 owner 的窗口。FILE_CHANGED 非阻塞 BUSY；Stop 最多短等2秒，仍 BUSY 时如实提示重试，不保证持续高并发下当次必完成。冷却默认1000ms，跨短进程保存 completed wall time；FILE_CHANGED DEBOUNCED 不 sleep、不启动 timer；Stop 跳过冷却完成待检查变更。相同 digest 先去重，NO_CHANGE/REUSED_LAST_RESULT scanner_run=false；保留 last_check_status、coverage、capabilities，不把已失败检查的缓存伪装为通过。
+
+仅 quick 的当前 dirty 文件和上一快照 dirty 文件（用于 revert）；删除文件无法评估原规则，因此不据删除 resolved。内部 `_hook_scope` 经过正常 TargetDetector 边界，变更文件内保留完整候选，避免 changed-line filter 把未修改行上的旧问题藏掉；普通 quick/feature/release 和 pre-commit 默认行为不变。默认 Hook 不发现第三方 scanner plugin，只用原 Semgrep/Gitleaks；local_recheck 强制离线，规则适用规划先于引擎准备，无规则不启动 Semgrep。执行后再取一次 digest，有并发编辑则 PARTIAL/UNKNOWN、不提交 completed snapshot，下一事件重新收敛。
+
+eq-v1 是 category/scanner/rule/file 家族（依赖仍沿原 metadata 身份），不是跨请求唯一 instance。Hook 在历史 fingerprint dedupe 前投影安全家族/坐标，保留不同 rule 同行、同 rule 不同行的数量，不改 Raw 的旧 ID。0→1 NEW_FAMILY；1→1 PERSISTING；1→2 PERSISTING+additional_occurrences；2→1 PERSISTING+removed_occurrences；相同数量坐标改变仍 PERSISTING，不能证明某个具体 instance 移动。1→0 只有原规则、checksum/version/engine 与文件均有成功执行证据才 RESOLVED_FAMILY。失败、未覆盖、删除/重命名旧路径为 UNCONFIRMED_ABSENCE / PARTIAL；Gitleaks 缺 detector执行清单时只能报告观察数量和持久不确定性，Secret 不以原值/匹配行/credential hash 匹配。
+
+SessionStart 优先建立当前 quick scope 的基线；没有该事件时首个 edit 是 BASELINE_ESTABLISHED，已有候选不算 NEW。clean session-start 不做全仓 release baseline；后续首次进入 scope 的文件中 NEW_FAMILY 仅是新观察到的家族，不证明由本次编辑引入。相同数量下更换了真实实例也不能被 eq-v1 区分，这一限制保留。
+
+Codex 使用 .codex/hooks.json 官方 command handlers（SessionStart、PostToolUse apply_patch/Edit/Write、Stop）；不修改 config.toml/MCP/信任设置，须用户在宿主 review/trust，再开启新会话。Cursor 使用 .cursor/hooks.json version1/sessionStart/afterFileEdit/stop；后两者不发 followup_message，结果由中立 CLI/state 取得，不能声称 UI已展示。安装/修复/删除使用 Runtime marker，只操作自身 handlers，保留未知字段/用户 hooks；Runtime-only untracked配置仅加入本地 Git exclude，混合用户配置不隐藏。配置写入和排除失败回滚，workspace锁串行配置修改。配置状态 CONFIG_ONLY 与 fresh Host PENDING 分开。
