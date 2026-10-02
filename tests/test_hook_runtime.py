@@ -99,7 +99,11 @@ def test_dedupe_before_cooldown_and_stop_converges(repo,tmp_path,monkeypatch):
     dirty(repo);runtime=FakeRuntime(); now=[1000]
     c=coordinator(tmp_path,runtime,clock=lambda:now[0])
     c.handle('FILE_CHANGED',repo,'codex')
-    monkeypatch.setattr(time,'sleep',lambda _:pytest.fail('Debounce must not sleep'))
+    import security_runtime.hook_runtime as module
+    # POSIX subprocess.wait itself sleeps while polling a child with timeout.
+    # Guard only the coordinator, without patching the stdlib's shared module.
+    monkeypatch.setattr(module,'time',SimpleNamespace(time=time.time,monotonic=time.monotonic,
+        sleep=lambda _:pytest.fail('Debounce must not sleep')))
     assert c.handle('FILE_CHANGED',repo,'codex')['status']=='NO_CHANGE'
     dirty(repo,'new change\n')
     assert c.handle('FILE_CHANGED',repo,'codex')['status']=='DEBOUNCED'
