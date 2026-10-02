@@ -7,7 +7,7 @@
 | 项目 | 当前记录 |
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
-| 本轮开发起始 HEAD | `50a01e6870d78e6fd8a96a8b8fbe236521c5306f` |
+| 本轮开发起始 HEAD | Hook 前置检查：`787aace817bd607efd22bc70a7bd613a5f313faa`；继续核查历史起始 `50a01e6870d78e6fd8a96a8b8fbe236521c5306f` |
 | 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；第一轮 AG 验收附录 |
 | 继续核查实现 HEAD | `f2cb534f27698881ead2b2f3452bc36598c6e957`；第二轮 AH 验收附录 |
 | 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
@@ -16,7 +16,7 @@
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
 | 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代实现/自动化/分发 CI 通过；旧聊天实际宿主试用未通过，刷新后复验与独立开发者试用 Pending，整体质量 milestone 未完成 |
 | 首个产品迭代 | **开发者任务入口 v0.1**；源码/CLI/MCP/wheel/Windows native/四组 CI 验收通过；三位真实开发者试用 Pending |
-| 本轮范围 | 继续核查 v0.1：绑定任务引用、任务级 MCP handoff、待分析/缓存推进、受限证据与必要业务条件；提交推送 `feature/runtime-mvp` |
+| 本轮范围 | Host-agnostic Hook Integration v0.1 前置检查：**PREREQUISITE_MISSING，正式实现未开始**；缺少 Developer Fix & Verify 及稳定 Finding equivalence，按用户门禁停止 Hook delta 实现 |
 
 此表分别记录本轮开发起始 HEAD 与既有 Triage 代码/验收快照；本轮实现提交及分发验收见 AI_TRIAGE_ACCEPTANCE 的开发者入口附录。恢复时用 `git rev-parse HEAD` 获取 checkout 的实际最终 HEAD，用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取最近状态文档提交，避免把无法包含自身 SHA 的文档快照当成永远最新。若有更晚代码提交，必须重新核对状态。
 
@@ -186,6 +186,12 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 
 前两个产品迭代已获授权并实现；首个未开展的质量任务仍是固定源码身份与独立人工试标。Raw、TriagePolicy、RiskEngine、覆盖契约和上传/执行授权边界保持完整。任务入口交付不表示整体质量 milestone 完成；Joern Java PoC 仍后置。
 
+## Hook Integration 前置检查（2026-10-02）
+
+用户新任务假设 Developer Fix & Verify v0.1 已完成，要求复用其不依赖 occurrence 行号的 Finding identity；若缺少则停止正式 Hook delta 实现。干净工作区执行 ff-only 同步后，远端/本机仍为 `787aace817bd607efd22bc70a7bd613a5f313faa`，没有新的 Fix & Verify 提交。当前文档将修复与验证标为 Planned，findings.py 的代码指纹仍含 line，runtime.py 的 verify 仍按旧 fingerprint 判消失。
+
+隔离合成 scanner 复现：同一规则/文件/代码仅从100行移到110行，fingerprint 改变，旧 verify 返回 RESOLVED；预期 STILL_PRESENT。不是实际 Semgrep 或业务修复验收。完整离线 baseline 为 **461 passed / 6 skipped / 6 subtests passed，108.77秒**。本轮仅记录门禁；不另建 identity、不实现 Coordinator/delta/host Hook 配置，不修改现有 pre-commit。恢复时先核对前置阶段的真实提交和行号移动回归，不能直接跳到 Hook 开发。详情见 AI_TRIAGE_ACCEPTANCE 的 AI 附录。
+
 ## Agent Handoff
 
 1. 在新电脑取得该仓库。新 clone 可用 `git clone --branch feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git`。已有 checkout 先 `git status`；有本地改动先保留并处理，勿覆盖。切到 `feature/runtime-mvp` 后 `git pull --ff-only origin feature/runtime-mvp`，不 merge/rebase main。
@@ -195,6 +201,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 5. 按 README 的当前安装说明恢复运行环境，先使用 `security-check doctor --path <project>` / `tools status`。Git 不会恢复用户 state/tools、API key 或 Jeepay 源码；在新 workspace 扫描会产生本地 identity，不能直接套用旧 scan ID。需要重放固定 benchmark 时先确认源码版本与输入摘要；不要自动启动在线依赖查询或模型上传。
 6. **开发者任务入口 v0.1 已实现，人工易用性试用仍 Pending**。恢复后先使用 summary/get_security_summary 按 workspace 检查记录；“继续第一项”使用当次响应里该项 continuation 的 task_ref，进入 prepare_task_triage。引用无效/成员变化必须刷新重新选择。继续核查已实现，修复与验证保持 Planned；先核对本轮实际验收。没有独立人工标签时质量指标保持 UNKNOWN / NOT_MEASURED；不能自行填写 ground truth、立即做 Joern 或更改 Raw/policy/coverage/上传边界。
 7. 两组 Jeepay 结果不可混用：已提交回放 `f5224162-...` 与用户提供的实际宿主报告 `99ca7566-...` 分别保留来源和状态。旧 scan ID 不是跨设备标识；宿主补充调用链不是已接受 Runtime Triage。恢复质量样本须核对源码 revision/packet 身份，未固化的报告只作为待补证据的产品输入。
+8. **Hook Integration 为 PREREQUISITE_MISSING，正式实现未开始。** 新任务要求先有 Developer Fix & Verify 和稳定 Finding equivalence；当前只有位置敏感的旧指纹。先同步并验收该前置阶段，不在 Hook 模块重新发明身份。实际 Codex Hook、其它 Host adapter、Hook 性能及分发验收均未运行，不能拿旧 MCP/CI 验收替代。
 
 
 ## 普通用户意图与宿主衔接验收

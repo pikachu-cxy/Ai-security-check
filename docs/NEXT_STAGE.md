@@ -76,6 +76,12 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 
 修复迭代复用现有修复任务和扫描复查基础，但不能把 `generate_fix` 宣称为现有自动补丁能力，或把 `verify` 无匹配当业务修复证明。准备补丁、应用补丁、构建/测试、扫描复查与生产发布分别报告执行状态；沿用用户已给出的授权，超出范围的实际执行再取得相应授权。目标 Maven/Gradle/npm/pip 构建仍不默认执行。修复与验证的详细设计及实现尚未开展。
 
+## Host-agnostic Hook Integration v0.1 — PREREQUISITE_MISSING
+
+用户已提出新的 Hook 任务，并明确以前置 Developer Fix & Verify v0.1 和稳定 Finding equivalence 为门禁。2026-10-02 干净工作区 ff-only 同步后仍为 `787aace`：修复与验证尚为 Planned，现有位置敏感指纹/旧 verify 在同规则同文件仅移动行号时仍错误返回 RESOLVED。完整离线 baseline 461 passed / 6 skipped / 6 subtests passed（108.77秒）；基线通过不证明前置能力存在。
+
+按用户要求停止 Hook delta 正式实现，未实现或安装 Codex/其它 Host Hook，不另建第二套 Finding Identity，也不在本任务自动补做 Fix & Verify。恢复条件是先交付/同步前置阶段并验收行号移动仍 PERSISTING/STILL_PRESENT，再复用其身份开展本轮范围。实际 fresh Codex Hook、性能、package/standalone 与新 Hook CI 全部 NOT_RUN；旧 MCP/CI 不能计本轮验收。现有 pre-commit、独立人工 ground truth 和其它 Planned 状态保持。检查依据见 AI_TRIAGE_ACCEPTANCE 的 AI 附录。
+
 ## 固定 Benchmark 与评测边界
 
 已保存输入为 [jeepay-osv-online-evidence.json](jeepay-osv-online-evidence.json)，scan ID `f5224162-0624-416f-8472-0f0474e7fd58`，文件 SHA-256：

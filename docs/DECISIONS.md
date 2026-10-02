@@ -172,6 +172,14 @@ T01 为响应内的展示序号，不能作为跨请求 identity。summary 的 t
 依据：[task_triage.py](../src/security_runtime/task_triage.py)、[security_summary.py](../src/security_runtime/security_summary.py)、[triage.py](../src/security_runtime/triage.py)、[NEXT_STAGE](NEXT_STAGE.md) 与本轮验收附录。
 
 
+## ADR-016 — Hook Delta 必须复用 Fix & Verify 稳定身份
+
+**Status：Accepted 的任务门禁；PREREQUISITE_MISSING，Hook 正式实现未开始。**
+
+Host-agnostic Hook Integration v0.1 的 NEW/PERSISTING/RESOLVED 必须复用前置 Developer Fix & Verify 的 Finding identity/equivalence。行号仅为 occurrence；现有固定 scan/member task_ref 也不是跨扫描语义等价。若前置阶段未交付，停止 Hook delta 正式实现，不以另一套摘要/匹配机制绕过门禁。
+
+2026-10-02 ff-only 同步后 HEAD 仍为 `787aace`，Fix & Verify 文档为 Planned；findings.py 含 line 的指纹和 runtime.py 的旧 verify 在隔离合成100→110行样例中产生错误 RESOLVED。该复现只证明当前前置缺失，不是 scanner 质量统计。现有 Git pre-commit 保持不变；Codex及其它 Host 的 Hook adapter/schema/真实试用均未实现或验收。后续必须先取得前置实现提交与回归证据。来源：用户本轮明确门禁、当前源码、AI_TRIAGE_ACCEPTANCE 的 AI 附录。
+
 ## 普通用户意图与宿主衔接验收
 
 产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；本轮仅接通核查，修复与验证仍 Planned，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。

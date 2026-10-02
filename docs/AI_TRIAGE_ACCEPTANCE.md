@@ -253,3 +253,17 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 实际 SDK/合成宿主返回成功只证明接入和校验，不声称普通开发者已能用好。三位未参与开发者试用仍 Pending（用户当前无法安排）；独立 ground truth UNREVIEWED/null、指标 UNKNOWN/NOT_MEASURED。
 
 完整产品目标“一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果”尚未闭环。本轮接通核查机器交接与宿主指导；generate_fix 仍只是 coding_agent_prompt/说明，不是自动修复。第三轮必须继续让宿主衔接，不能让用户搬运提示词；补丁/目标构建/测试与扫描复查均未在 Jeepay 执行，修复与验证保持 Planned，0 ACTIONABLE 不表示安全。
+
+## AI. Host-agnostic Hook Integration v0.1 前置门禁（2026-10-02）
+
+**结果：PREREQUISITE_MISSING，正式 Hook 实现未开始。** 用户任务明确假设 Developer Fix & Verify v0.1 已交付，且 occurrence 行号移动不会把仍存在的问题误判为 RESOLVED；缺少时要求停止 Hook delta 正式实现，不另建身份机制。
+
+开始工作区干净，分支 feature/runtime-mvp；执行 git pull --ff-only origin feature/runtime-mvp，Already up to date。starting HEAD 为 `787aace817bd607efd22bc70a7bd613a5f313faa`。已读取五份主文档及 hooks/cli/runtime/git/findings/integrations/integration_state/mcp_server，核对当前模块和提交历史。Fix & Verify 仍为 Planned；当前 FindingNormalizer.make 的代码指纹含 line，SecurityRuntime.verify 仍以原 fingerprint 是否出现在成功扫描结果中决定 STILL_PRESENT/RESOLVED，没有前置稳定 equivalence。
+
+完整离线基线使用本机已有 Python 3.13 / pytest 9.1.1，SECURITY_RUNTIME_OFFLINE=1：**461 passed、6 skipped、6 subtests passed，108.77秒**（整体进程109.36秒），退出0；skipped 不计通过。最初配置中的 Runtime .venv 无 pytest，未取得基线结果，随后使用已有测试环境，没有联网安装依赖。测试的 MCP 管道/loopback 使用授权本地执行，不调用公网模型或目标构建。
+
+独立合成复现使用临时非业务源码、内存 store、成功返回候选的 synthetic scanner；走真实 normalizer 和 Runtime.verify，不执行 Semgrep：同文件/同规则/同段代码由100行移动到110行，fingerprint_changed=true，expected=STILL_PRESENT、actual=RESOLVED。复现首次受限沙箱临时文件权限失败，授权本地临时样例执行后复现成功；不计为已经修复或通过的回归。
+
+本轮只更新现有状态/架构/决策/计划/验收文档。HookCoordinator、snapshot/dedupe/debounce/single-flight/state/delta、新统一 CLI、五个 Host Hook adapter/config、Hook 性能、fixture Host 集成及 actual fresh Codex Host trial 均 **NOT_IMPLEMENTED / NOT_RUN**。未研究或猜测 Host schema、未生成任何用户 Hook 配置、未改变现有 Git pre-commit；没有本轮实现 HEAD，不拿旧 package/standalone/CI 通过数作新 Hook 验收，也不启动无代码变更的四平台构建。
+
+网络仅用于已授权 Git 同步和文档提交推送；没有目标扫描的在线依赖解析、外部模型调用、业务源码修改、目标项目构建、真实 Secret 保存或 Ground Truth 修改。独立人工状态保持 UNREVIEWED/null、NOT_MEASURED。恢复本任务须先取得并验收前置 Fix & Verify /稳定身份提交，不在本任务自行扩大范围补做前置阶段。
