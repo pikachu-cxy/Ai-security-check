@@ -26,7 +26,7 @@
 | 显式授权 BYOK、结构化输出、依赖 batch/cache | suppression risk、precision/agreement 的有效统计 |
 | 独立 scan/triage coverage、Raw 分组和保守 policy | prompt/model regression 与人工确认的质量门槛 |
 | 合成 fixtures 和真实 26 项审阅回放 | Joern Java PoC、compiler-grade dataflow |
-| 九个 MCP 工具、新增 get_security_summary 和 CLI summary；当前 workspace 只读任务投影、普通/详细视图 | 三位未参与开发者的真实易用性反馈（Pending） |
+| 十一个 MCP 工具；summary 只读任务投影、task_ref 继续核查、版本/能力与宿主连接指导 | 实际宿主自然语言试用及三位未参与开发者的真实易用性反馈（Pending） |
 | 宿主可在其授权范围内继续读源码 | 通用宿主补充报告导入与超出受限证据的分析（未实现） |
 | 确定性 generate_fix 任务、原 scanner verify | 可审阅补丁与完整修复验证流程 |
 
@@ -37,7 +37,7 @@
 | 顺序 | 交付范围 | 用户可获得的结果 |
 | --- | --- | --- |
 | 1：开发者任务入口 v0.1 — Implemented / 自动化与分发 CI 验收通过 / 人工试用 Pending | 定位当前 workspace 的扫描；只读汇总；保守合并；普通/详细视图；建议下一步 | 任务单及完整逐项入口，不自动执行动作 |
-| 2：继续核查 v0.1 — Implemented / 源码/wheel/SDK 通过 / 实际宿主试用 Pending | 精确任务引用、pending-only/cache 推进、受限 MCP handoff；先查已有证据，再询问必要业务候选问题 | 用户说继续某项，无需 Finding UUID；Runtime 不调用宿主模型 |
+| 2：继续核查 v0.1 — Implemented / 自动化/原生/四组 CI 通过 / 实际宿主试用 Pending | 精确任务引用、pending-only/cache 推进、受限 MCP handoff；先查已有证据，再询问必要业务候选问题 | 用户说继续某项，无需 Finding UUID；Runtime 不调用宿主模型 |
 | 3：修复与验证 — Planned | 可审阅补丁、兼容性与验证计划；授权后执行编辑/验证，记录未执行项 | 用户审阅修复效果；本轮不实现 |
 
 独立人工质量工作仍 Planned；不把报告易读性当风险判断质量。本次交付第二轮并调整受限缓存/批次推进；不实施补丁或真实模型实验。

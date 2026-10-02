@@ -8,12 +8,13 @@
 | --- | --- |
 | Branch | `feature/runtime-mvp` |
 | 本轮开发起始 HEAD | `50a01e6870d78e6fd8a96a8b8fbe236521c5306f` |
-| 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；分发/CI 记录见本轮验收附录 |
+| 开发者任务入口实现 HEAD | `00cbd721792ad14118f005ff1fcbb3996e5a8aa0`；第一轮 AG 验收附录 |
+| 继续核查实现 HEAD | `f2cb534f27698881ead2b2f3452bc36598c6e957`；第二轮 AH 验收附录 |
 | 代码及既有验收快照 | `3d773aaaa1b95b8c7596bf32c77c4bd5eabfd399` |
 | Triage 最终实现 HEAD | `557052049c74c6d1ca4321c2d9559483a36f55d2` |
 | 当前 milestone | **AI Finding Triage & Risk Validation v0.1 已完成实现和验收** |
 | Runtime package version | `0.3.1`；不等于 Triage milestone 编号 |
-| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代已实现，继续核查源码/wheel/SDK 验收通过，原生/CI 见本轮附录；整体质量 milestone 未完成 |
+| 下一阶段 | **AI Triage Quality Validation & Developer Guidance**；前两个产品迭代实现/自动化/分发 CI 通过；实际宿主与独立开发者试用 Pending，整体质量 milestone 未完成 |
 | 首个产品迭代 | **开发者任务入口 v0.1**；源码/CLI/MCP/wheel/Windows native/四组 CI 验收通过；三位真实开发者试用 Pending |
 | 本轮范围 | 继续核查 v0.1：绑定任务引用、任务级 MCP handoff、待分析/缓存推进、受限证据与必要业务条件；提交推送 `feature/runtime-mvp` |
 
@@ -25,6 +26,7 @@
 
 | Commit | 交付内容 |
 | --- | --- |
+| f2cb534 | 绑定任务继续核查、pending/cache推进、宿主普通意图指导/版本能力恢复、45项测试 |
 | 00cbd72 | workspace 只读开发者任务入口、CLI summary / MCP get_security_summary、保守合并与 34 项入口测试 |
 | 602a789 | NEXT_STAGE 产品与质量路线规划 |
 | 7e19744 | Triage v0.1 架构、项目状态、决策与交接持久化 |
@@ -154,7 +156,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 | 进度、失败语义与集成历史 | [CLI_PROGRESS_ACCEPTANCE](CLI_PROGRESS_ACCEPTANCE.md)、[REAL_PROJECT_DIAGNOSTICS](REAL_PROJECT_DIAGNOSTICS.md)、[DEVELOPER_ALPHA_ACCEPTANCE](DEVELOPER_ALPHA_ACCEPTANCE.md) |
 | 扩展/分发/许可 | [EXTENDING](EXTENDING.md)、[distribution README](../distribution/README.md)、[LICENSING](../LICENSING.md) |
 
-既有实现 `5570520` 的 382 passed / 6 skipped / 6 subtests（90.60 秒）、74 项 Triage 定向、native BYOK loopback 及 CI 属于历史验收。本轮从同步后的干净工作区重跑基线：382 passed / 6 skipped / 6 subtests（125.57 秒）；新增 34 项开发者入口测试，最终全量离线 **416 passed、6 skipped、6 subtests passed**（93.83 秒）。wheel/sdist、新模块分发门禁、独立安装、licenses/notices 通过；已有 Jeepay 记录的真实 CLI/JSON/MCP 只读验收产生 54 个任务，保留全部 115 Raw，数据库/key 文件字节不变。没有新扫描或模型请求。原生包/当前提交 CI 的实际进度见 AI_TRIAGE_ACCEPTANCE 本轮附录；skipped 和人工试用 Pending 不计为通过。
+既有实现 `5570520` 的 382 passed / 6 skipped / 6 subtests（90.60 秒）、74 项 Triage 定向、native BYOK loopback 及 CI 属于历史验收。第一轮从同步后的干净工作区重跑基线：382 passed / 6 skipped / 6 subtests（125.57 秒）；新增 34 项开发者入口测试，最终全量离线 **416 passed、6 skipped、6 subtests passed**（93.83 秒）。wheel/sdist、新模块分发门禁、独立安装、licenses/notices 通过；已有 Jeepay 记录的真实 CLI/JSON/MCP 只读验收产生 54 个任务，保留全部 115 Raw，数据库/key 文件字节不变。没有新扫描或模型请求。第二轮基线416 passed（97.78秒），新增45项，最终461 passed / 6 skipped / 6 subtests（152.30秒）；新模块wheel/sdist/全新venv安装、Windows native/实际SDK交接通过。当前实现CI状态见 AH；实际宿主自然语言试用/旧聊天工具恢复/三位开发者均Pending，skipped不计通过。
 
 ## 已知限制与不可误读的状态
 
@@ -177,7 +179,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 产品迭代顺序：
 
 1. **开发者任务入口 v0.1 — Implemented，自动化及分发/四组 CI 验收通过 / 人工易用性 Pending**：新增 get_security_summary，当前共十一个工具；来源与完整列表保留。用户明确目前无法安排三位未参与开发的试用者，因此不声称这一验收已通过。
-2. **继续核查 v0.1 — Implemented / 源码/wheel/SDK 通过 / 实际宿主试用 Pending**：summary 任务自带 task_ref/continuation；宿主使用本次显示项的引用，不按 T01 重新索引。prepare_task_triage → 宿主受限分析 → submit_triage；有效审阅保留，过期重建，失败显式重试，必要业务问题仅为候选提示。
+2. **继续核查 v0.1 — Implemented / 自动化/原生/四组 CI 通过 / 实际宿主试用 Pending**：summary 任务自带 task_ref/continuation；宿主使用本次显示项的引用，不按 T01 重新索引。prepare_task_triage → 宿主受限分析 → submit_triage；有效审阅保留，过期重建，失败显式重试，必要业务问题仅为候选提示。
 3. **修复与验证 — Planned**：准备可审阅补丁、兼容性说明与验证计划，执行已获授权的操作；现有 generate_fix / verify 不等于该完整流程。
 
 独立人工质量工作协同推进：冻结 Jeepay benchmark 身份、人工盲审与 ground truth schema、五类 verdict 标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 与 prompt/model regression。没有人工审阅者时保持 UNREVIEWED；模型不得自填人工真值。易用性用三位未参与开发的开发者试用观察，不能换算为安全准确率。

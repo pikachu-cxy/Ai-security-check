@@ -238,7 +238,11 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 
 ### 实现与分发/CI
 
-本轮实现提交待提交；本机 Windows 原生与当前实现 CI 待完成。仅记录真正完成的状态，历史 CI 不替代当前验收；完成后更新本段。
+本轮实现已提交推送 `f2cb534f27698881ead2b2f3452bc36598c6e957`。本机 Windows x64 PyInstaller onedir、归档 smoke/实际 SDK MCP initialize/instructions/metadata/能力/任务入口通过（full=False）；该原生程序复用同一已保存99ca7566 TLS审阅，0 packet、2有效审阅，state/key字节不变。version.json source_commit 等于实现 SHA。
+
+本机归档 `dist/release/ai-security-runtime-v0.3.1-windows-x64.zip`，SHA-256 `ab41d14ba9d6427638c6e4403be34bdd1e89f023810d172e0fd4474893f83f73`。第一轮同名旧本机归档保留在忽略目录 .security-runtime/developer-entry-archive，历史 SHA/证据不覆盖；没有 tag/Release/软件发布或 Jeepay 源码编辑/构建。
+
+当前实现 [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36978159854)、[Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36978159847)、[Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36978159875) 和 [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/36978159836) 四组均 success。Runtime/Package 的 Linux/Windows，以及原生 Windows x64、Linux x64、macOS x64/arm64 的 full/OSV fallback/实际 SDK MCP 通过；历史 CI 不计当前验收。
 
 ### 未完成的真实使用/质量验收
 
