@@ -233,7 +233,7 @@ SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机
 
 ## Hook v0.1 执行架构（当前实现）
 
-`Host lifecycle → thin adapter → HookEvent → HookCoordinator → snapshot → dedupe → persisted cooldown → workspace OS lock/single-flight → local quick → eq-v1 family multiset → advisory result`。独立模块为 hook_adapters.py / hook_runtime.py / hook_state.py；CLI 只解析输入和输出，不复制扫描/身份/变化逻辑。Host payload 仅取事件、workspace、session；忽略 tool_input/response、transcript、模型和助理文本，不作为 shell 指令或状态保存。
+`Host lifecycle → thin adapter → HookEvent → HookCoordinator → workspace OS lock/single-flight → bounded state + snapshot → dedupe → persisted cooldown → local quick → eq-v1 family multiset → atomic state → advisory result`。锁覆盖状态读取、快照、去重、冷却判断和检查/保存全过程；相同快照或冷却分支直接返回，不重复保存已完成状态。独立模块为 hook_adapters.py / hook_runtime.py / hook_state.py；CLI 只解析输入和输出，不复制扫描/身份/变化逻辑。Host payload 仅取事件、workspace、session；忽略 tool_input/response、transcript、模型和助理文本，不作为 shell 指令或状态保存。
 
 快照用零分隔 Git 文件列表合并 unstaged tracked、staged 和 untracked（含删除），安全规范化相对路径后读取。digest 是本地随机 key 的 HMAC，包含 HEAD、相关 index 状态及分文件 HMAC；不保存源码、Secret 或无 key 的凭证摘要。支持 unborn HEAD。Runtime 忽略目录不入 scope。上限1000文件、每文件1MB、总20MB；state2MB、2000家族/10000坐标、每workspace最多64 session状态。状态路径为默认 Runtime state directory/hooks/<workspace hash>/<host+session hash>.json；坏/过大或身份不符的状态重新建立基线，异常内容不回显。临时文件+fsync+replace 原子保存。
 
