@@ -9,8 +9,9 @@ from .diagnostics import DiagnosticError, ErrorDiagnostic
 from .models import RunStatus, ScannerRun
 from .scanners import BaseScanner, _snapshot, _process_failure
 from .toolchain import tool_environment, external_tool_loader
-from .processes import run_process
+from .processes import run_process, OutputLimitError
 from .progress import emit
+from .verification_policy import offline_scanning, scanner_process_observed
 
 # Lockfiles describe a bounded inventory. POM/requirements/go.mod can need
 # resolution; successful extraction alone does not prove a complete graph.
@@ -57,9 +58,11 @@ class OSVDependencyAdapter(BaseScanner):
         supported = [f for f in scope if Path(f).name in MANIFESTS]
         if not supported:
             raise DiagnosticError(ErrorDiagnostic('DEPENDENCY_SCOPE_UNSUPPORTED', 'No supported dependency inventory is in the planned scope.', 'Provide a supported manifest or lockfile.'))
-        offline = os.getenv('SECURITY_RUNTIME_OFFLINE') == '1'
+        offline = offline_scanning()
         db_root = self.tool_manager.root / 'data' / 'osv'
         environment = tool_environment(Path(binary))
+        if offline:
+            environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         environment['OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY'] = str(db_root)
         if offline:
             ecosystems = {'Maven' if Path(f).name.endswith('.xml') or 'gradle' in Path(f).name else 'Go' if Path(f).name=='go.mod' else 'PyPI' if Path(f).name=='requirements.txt' else 'npm' for f in supported}
@@ -105,7 +108,12 @@ class OSVDependencyAdapter(BaseScanner):
             args.append(str(scoped))
             emit('FALLBACK_RUNNING',scanner=self.name,capability=tuple(self.capabilities))
             with external_tool_loader():
-                process=run_process(args,cwd=str(scoped),env=environment,timeout=self.timeout,max_output=4_000_000)
+                try:
+                    process=run_process(args,cwd=str(scoped),env=environment,timeout=self.timeout,max_output=4_000_000)
+                except (TimeoutError, OutputLimitError):
+                    scanner_process_observed()
+                    raise
+                scanner_process_observed()
             if process.return_code not in (0,1):
                 _process_failure(process)
             data=json.loads(process.stdout)

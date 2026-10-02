@@ -224,6 +224,25 @@ def create_server(runtime: SecurityRuntime | None = None):
         from .triage import TriageService
         return TriageService(runtime_engine().store).view(scan_id)
 
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def prepare_task_fix(task_ref: str, workspace_path: str | None = None) -> dict:
+        """Prepare bounded constraints/evidence for the exact displayed task. Host edits; no scanner, model, network or writes here."""
+        from .task_fix import TaskFixService
+        from .storage import ReadOnlySQLiteStore, SQLiteStore
+        path = engine.store.path if engine is not None else SQLiteStore.default_path()
+        return TaskFixService(ReadOnlySQLiteStore(path)).prepare(task_ref, workspace_path,
+            bound_workspace=binding.root if binding else None)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None) -> dict:
+        """Locally recheck every original task member with originating scanners/equivalence, bounded and offline. Never edits/builds target; engine caches/temp files may be written. Host reports are untrusted claims."""
+        from .task_fix import TaskFixService
+        from .storage import ReadOnlySQLiteStore, SQLiteStore
+        path = engine.store.path if engine is not None else SQLiteStore.default_path()
+        return TaskFixService(ReadOnlySQLiteStore(path), engine.registry if engine is not None else None).verify(
+            task_ref, workspace_path, bound_workspace=binding.root if binding else None,
+            host_reported_execution=host_reported_execution)
+
     @server.tool()
     def generate_fix(finding_id: str) -> dict:
         """Create a safe coding task without editing source."""

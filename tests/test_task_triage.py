@@ -275,7 +275,7 @@ def test_actual_stdio_user_first_task_to_host_submit_to_retained_review(sample):
                     assert not metadata['prepare_task_triage'].annotations.readOnlyHint
                     info=unwrap(await client.call_tool('get_runtime_info',{}))
                     assert set(info['required_guidance_tools']) <= set(metadata)
-                    assert info['capability_contract']=='developer-guidance-v0.2'
+                    assert info['capability_contract']=='developer-guidance-v0.3'
                     summary=unwrap(await client.call_tool('get_security_summary',{}))
                     first=summary['recommended_tasks'][0]['continuation']
                     data=unwrap(await client.call_tool(first['mcp_tool'],first['arguments']))

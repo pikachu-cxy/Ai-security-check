@@ -17,7 +17,7 @@ from pathlib import Path
 from security_runtime._version import __version__
 from security_runtime.toolchain import platform_key
 
-REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary", "prepare_task_triage", "get_runtime_info"}
+REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary", "prepare_task_triage", "get_runtime_info", "prepare_task_fix", "verify_task_fix"}
 PLUGIN_PROBE = '''
 from security_runtime.capabilities import Capability
 from security_runtime.models import ScannerRun, RunStatus
@@ -57,6 +57,7 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 runtime_data=runtime.structuredContent or json.loads(runtime.content[0].text)
                 runtime_data=runtime_data.get('result',runtime_data)
                 if runtime_data['features']['task_triage']!='v0.1':raise ValueError('Standalone task capability missing')
+                if runtime_data['features']['task_fix_verify']!='v0.1':raise ValueError('Standalone task fix capability missing')
                 summary_before=await client.call_tool('get_security_summary',{})
                 if summary_before.isError: raise ValueError('Standalone security summary failed')
                 response = await asyncio.wait_for(client.call_tool("scan_diff", {}), timeout=120)
@@ -92,6 +93,28 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 summary_data=summary_data.get('result',summary_data)
                 if summary_data['scan_id']!=payload['scan_id'] or summary_data['automatic_execution']:
                     raise ValueError('Standalone summary identity/action contract failed')
+                for task in summary_data['tasks'][:1]:
+                    prepared_fix = await client.call_tool('prepare_task_fix', task['fix_handoff']['arguments'])
+                    if prepared_fix.isError: raise ValueError('Standalone prepare_task_fix failed')
+                    fix = prepared_fix.structuredContent or json.loads(prepared_fix.content[0].text)
+                    fix = fix.get('result', fix)
+                    if fix['execution']['patch_applied'] or not fix['fix_constraints']:
+                        raise ValueError('Standalone fix constraints/execution contract failed')
+                    checked = await client.call_tool('verify_task_fix', fix['verification_plan']['arguments'])
+                    if checked.isError: raise ValueError('Standalone verify_task_fix failed')
+                    checked_data = checked.structuredContent or json.loads(checked.content[0].text)
+                    checked_data = checked_data.get('result', checked_data)
+                    if checked_data['status'] not in {'STILL_PRESENT','INCONCLUSIVE','NOT_VERIFIED'}:
+                        raise ValueError('Standalone unchanged source falsely resolved')
+                # Even a smoke with no candidates exercises fail-closed entry
+                # points, without initializing state or choosing another task.
+                if not summary_data['tasks']:
+                    for name in ('prepare_task_fix','verify_task_fix'):
+                        bad = await client.call_tool(name, {'task_ref':'T01'})
+                        if bad.isError: raise ValueError('Standalone invalid fix reference protocol failed')
+                        bad_data = bad.structuredContent or json.loads(bad.content[0].text)
+                        if bad_data.get('result', bad_data)['status'] != 'REFRESH_REQUIRED':
+                            raise ValueError('Standalone task number retargeted')
         stderr.seek(0)
         if "IncompleteFieldDefinitionWarning" in stderr.read():
             raise ValueError("Standalone MCP Settings warning returned")
@@ -127,10 +150,13 @@ def main() -> None:
     parser.add_argument("archive", type=Path)
     parser.add_argument("--full", action="store_true", help="Prepare real managed engines and run a real sample scan")
     parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
+    parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()
     if args.osv_fallback and not args.full:
         parser.error('--osv-fallback requires --full')
+    if args.fix_verify and not args.full:
+        parser.error('--fix-verify requires --full for local managed Semgrep availability')
     with tempfile.TemporaryDirectory(prefix="ai-security-release-") as temporary:
         root = Path(temporary)
         extract(args.archive, root)
@@ -221,11 +247,17 @@ def main() -> None:
                     for item in json.loads(plugin_result.stdout)["scanner_runs"]):
                 raise ValueError("Standalone external entry-point plugin discovery failed")
         mcp_tools = asyncio.run(verify_mcp(executable, root, project, env))
+        if args.fix_verify:
+            script = Path(__file__).with_name('fix_verify_acceptance.py').resolve()
+            evidence = args.archive.resolve().with_name(args.archive.name + '.fix-verify.json')
+            run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
         record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
         record['osv_offline_fallback']=args.osv_fallback
+        record['fix_verify_offline_synthetic'] = args.fix_verify
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")
 

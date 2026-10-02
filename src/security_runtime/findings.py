@@ -5,6 +5,7 @@ from pathlib import Path
 
 from .models import Finding
 from .redactor import SecretRedactor
+from .equivalence import equivalence_key
 
 
 class FindingNormalizer:
@@ -30,7 +31,9 @@ class FindingNormalizer:
             plain, impact, advice = title or "发现潜在安全问题", self.redactor.redact(description)[:400], "检查受影响代码并修复后重新扫描。"
         discriminator = rule_id if category in {"dependency", "configuration"} else ""
         fingerprint = hashlib.sha256(f"{self.root}|{category}|{relative}|{line}|{discriminator}".encode()).hexdigest()[:24]
-        return Finding(fingerprint, category, title, plain, self.redactor.redact(description)[:400], impact, severity.upper(), confidence.upper(), relative, line, line, self.redactor.redact(evidence)[:160], advice, [scanner], fingerprint, technical_details={"rule_id": rule_id})
+        finding = Finding(fingerprint, category, title, plain, self.redactor.redact(description)[:400], impact, severity.upper(), confidence.upper(), relative, line, line, self.redactor.redact(evidence)[:160], advice, [scanner], fingerprint, technical_details={"rule_id": rule_id})
+        finding.equivalence_key = equivalence_key(finding)
+        return finding
 
     def dependency(self, *, scanner, package, version, ecosystem, manifest,
                    vulnerability_id, aliases=(), severity='UNKNOWN', title='', description='', source=''):
@@ -49,6 +52,7 @@ class FindingNormalizer:
         finding.technical_details.update(package=package,package_version=version,installed_version=version,ecosystem=normalized_ecosystem,
             manifest=finding.file_path,vulnerability_id=vulnerability_id,canonical_vulnerability_id=canonical,
             aliases=aliases,severity=severity,source=source)
+        finding.equivalence_key = equivalence_key(finding)
         return finding
 
 
@@ -58,6 +62,7 @@ def deduplicate(findings: list[Finding]) -> list[Finding]:
         if finding.fingerprint in merged:
             old = merged[finding.fingerprint]
             old.scanner_sources = sorted(set(old.scanner_sources + finding.scanner_sources))
+            old.equivalence_key = equivalence_key(old)
             if old.category=='dependency':
                 old.technical_details['aliases']=sorted(set(old.technical_details.get('aliases',[])+finding.technical_details.get('aliases',[])))
                 order={'UNKNOWN':0,'LOW':1,'MEDIUM':2,'HIGH':3,'CRITICAL':4}

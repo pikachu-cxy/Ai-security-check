@@ -38,6 +38,12 @@ assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == 'ai-security-core'
+from security_runtime import task_fix, equivalence, verification, verification_policy
+from security_runtime.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS
+from security_runtime.mcp_server import create_server
+assert runtime_info()['features']['task_fix_verify'] == 'v0.1'
+assert runtime_info()['capability_contract'] == 'developer-guidance-v0.3'
+assert REQUIRED_GUIDANCE_TOOLS <= {t.name for t in create_server()._tool_manager.list_tools()}
 for engine in ('semgrep', 'gitleaks', 'trivy'):
     assert (package / 'licenses' / engine / 'LICENSE').is_file()
     assert (package / 'licenses' / engine / 'NOTICE').is_file()

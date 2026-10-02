@@ -267,3 +267,23 @@ wheel/sdist、新 task_triage/host_guidance 模块分发门禁、23规则文件�
 本轮只更新现有状态/架构/决策/计划/验收文档。HookCoordinator、snapshot/dedupe/debounce/single-flight/state/delta、新统一 CLI、五个 Host Hook adapter/config、Hook 性能、fixture Host 集成及 actual fresh Codex Host trial 均 **NOT_IMPLEMENTED / NOT_RUN**。未研究或猜测 Host schema、未生成任何用户 Hook 配置、未改变现有 Git pre-commit；没有本轮实现 HEAD，不拿旧 package/standalone/CI 通过数作新 Hook 验收，也不启动无代码变更的四平台构建。
 
 网络仅用于已授权 Git 同步和文档提交推送；没有目标扫描的在线依赖解析、外部模型调用、业务源码修改、目标项目构建、真实 Secret 保存或 Ground Truth 修改。独立人工状态保持 UNREVIEWED/null、NOT_MEASURED。恢复本任务须先取得并验收前置 Fix & Verify /稳定身份提交，不在本任务自行扩大范围补做前置阶段。
+
+## AJ. Developer Fix & Verify v0.1（2026-10-02，本轮验收）
+
+起始干净、ff-only 同步 HEAD `0f33d2624204794c84da6fa10cf43b8178cd5a56`，分支 feature/runtime-mvp。Baseline：461 passed / 6 skipped / 6 subtests passed，107.51秒；skipped 单列。A 定向及相关回归163 passed（38.99秒）加旧 Triage/核心/存储83 passed（8.23秒），合计246，通过后才进入 B。首轮 B 测试发现没有 HMAC key 的只读准备不足，已修正为不创建 key 的 fix-only 证据；不得用于 submit_triage，原 session/hash 防护不变。
+
+真实本地 Semgrep 1.178.0 合成 Java：[fix-verify-synthetic-evidence.json](fix-verify-synthetic-evidence.json)，由可重复 [验收脚本](../scripts/fix_verify_acceptance.py) 构造临时项目。100→110 行只移动时 STILL_PRESENT / equivalence_key，安全替换 SCANNER_VERIFIED_RESOLVED；同 TLS 组只修一项 PARTIALLY_RESOLVED，全部安全替换为 SCANNER_VERIFIED_RESOLVED；实际 Semgrep 无效参数退出使整体 INCONCLUSIVE。不是 Jeepay 修复、独立人工真值或实际宿主自然语言 UX。
+
+新增等价身份、Rule/file 执行证明、provider/offline/预算、低层 verify、结构化 task_fix、两个 MCP 工具和 v0.3 宿主能力指导。Raw/triage/缓存/风险/覆盖保留；任务从固定 scan JSON 取成员，新扫描不能覆盖全局 finding lookup 后误换任务。13个工具是当前 inventory，required subset 才是连接契约。prepare 只读、verify 有 local scanner/cache/temp 副作用而非 destructive。
+
+最终 targeted / MCP SDK / full offline / package / compliance / wheel/sdist / Windows native / 四平台 CI：待实际完成后追加精确结果与实现 HEAD，不能以既有通过记录替代。真实三位开发者试用 Pending；宿主普通意图连续使用/旧聊天连接恢复 Pending；独立 ground truth UNREVIEWED/null；precision/suppression-risk 等 NOT_MEASURED。
+
+安全：没有修改 Jeepay、覆盖旧 scan/benchmark 或人工标签；没有公网 scanner 查询、外部模型/源码上传、目标 Maven/Gradle/npm 构建、生产操作、新 Hook 或新 Hook 配置。Git 同步/推送与 CI 属于本轮交付授权，另行记录网络边界。
+
+### AJ.1 本地最终实现门禁
+
+最终 equivalence 定向21项、task fix/verify 定向26项（含实际 SDK stdio initialize/list/info/prepare/verify/failure/refresh），合计47 passed（10.51秒）；之前 task_triage45项与两类定向一起91 passed（24.22秒），随后补一项多来源失败测试并在全量复验。最终 full offline **508 passed / 6 skipped / 6 subtests passed，120.12秒**，没有把跳过算通过。六项旧真实 scanner 测试因 PATH 未同时提供三个引擎跳过，本轮实际 Semgrep 合成验收另行运行且通过。
+
+package integrity、licenses --check-distribution、generate_notices --check、wheel/sdist 构建及新模块分发检查通过。Windows 创建全新 venv 并 --no-index/--no-deps 安装新 wheel，模块必须来自新 venv，实际 SDK工具列表/能力契约和合规通过；仅复用本地 system-site-packages 第三方依赖，严格独立 clean dependency install 由 CI package gate 验收。无本地公网请求。
+
+实现提交将用于本机 Windows onedir/归档与实际 native SDK Semgrep fix/verify、四平台新 CI 门禁；这些当前仍 PENDING，之后追加 source_commit/archive/run URL 及结论，不提前计通过。

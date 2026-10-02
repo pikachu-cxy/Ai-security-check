@@ -12,6 +12,8 @@ from pathlib import Path
 from typing import Protocol
 
 from .findings import FindingNormalizer
+from .equivalence import equivalence_key
+from .verification_policy import offline_scanning, local_recheck_requested, scanner_process_observed
 from .models import Finding, RunStatus, ScanContext, ScannerRun, TargetProfile
 from .capabilities import Capability
 from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_loader
@@ -61,7 +63,16 @@ class ScannerAdapter(Protocol):
 
 def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
     with external_tool_loader():
-        return run_process(args, cwd=cwd, env=tool_environment(Path(args[0])), timeout=timeout, max_output=MAX_OUTPUT)
+        environment = tool_environment(Path(args[0]))
+        if local_recheck_requested():
+            environment['SECURITY_RUNTIME_OFFLINE'] = '1'
+        try:
+            result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT)
+        except (TimeoutError, OutputLimitError):
+            scanner_process_observed()
+            raise
+        scanner_process_observed()
+        return result
 
 
 def _process_failure(result: ProcessResult):
@@ -98,7 +109,7 @@ class BaseScanner:
                                   error=diagnostic.error_summary, **diagnostic.to_dict())
         try:
             checkpoint()
-            resolved = self.tool_manager.ensure(self.engine_id or self.scanner_id)
+            resolved = self.tool_manager.ensure(self.engine_id or self.scanner_id, **({'offline': True} if local_recheck_requested() else {}))
         except ScanCancelled:
             raise
         except Exception as exc:
@@ -188,13 +199,14 @@ class PatternSASTScanner(BaseScanner):
             rule_id=finding.technical_details.get('rule_id','')
             record=catalog.get(rule_id)
             finding.technical_details.update(engine=self.engine_provider.engine_id,rule_pack=rule_pack.descriptor.rule_pack_id,
-                rule_pack_version=rule_pack.descriptor.version)
+                rule_pack_version=rule_pack.descriptor.version,rule_pack_checksum=rule_pack.checksum)
             if record:
                 finding.category=record.category
                 finding.confidence=record.confidence
                 finding.technical_details.update(rule_category=record.category,cwe=list(record.cwe),
                     rule_confidence=record.confidence,rule_maturity=record.maturity,rule_severity=record.severity,
                     rule_version=record.rule_version,framework=record.framework,validation_status='NOT_VALIDATED')
+            finding.equivalence_key = equivalence_key(finding)
         return findings
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
@@ -247,7 +259,9 @@ class GitleaksAdapter(BaseScanner):
                     _process_failure(process)
                 if Path(report).exists() and Path(report).stat().st_size > MAX_OUTPUT:
                     raise OutputLimitError("scanner report exceeds configured limits")
-                data = json.loads(Path(report).read_text(encoding="utf-8")) if Path(report).exists() else []
+                if not Path(report).is_file():
+                    raise ValueError('Secret scanner did not produce its scoped report')
+                data = json.loads(Path(report).read_text(encoding="utf-8"))
                 if snapshot_root is not None:
                     for item in data:
                         path = Path(item.get("File", ""))
@@ -276,11 +290,11 @@ class TrivyAdapter(BaseScanner):
     timeout = 90
 
     def _prepare(self, binary: str) -> ToolStatus:
-        return self.tool_manager.prepare_trivy_database(binary)
+        return self.tool_manager.prepare_trivy_database(binary, **({'offline': True} if local_recheck_requested() else {}))
 
     def scan(self, context, normalizer):
         found,run=super().scan(context,normalizer)
-        if self.checks=='vuln' and os.getenv('SECURITY_RUNTIME_OFFLINE')=='1' and run.status==RunStatus.SUCCESS:
+        if self.checks=='vuln' and offline_scanning() and run.status==RunStatus.SUCCESS:
             run.coverage_contract='PARTIAL'
             run.coverage_notes=['Offline Trivy extraction does not attest a complete resolved dependency graph.']
         return found,run
@@ -292,7 +306,7 @@ class TrivyAdapter(BaseScanner):
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         with _snapshot(context) as scoped:
             args=[binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update"]
-            if os.getenv('SECURITY_RUNTIME_OFFLINE')=='1':
+            if offline_scanning():
                 args.append('--offline-scan')
             process = _execute([*args,str(scoped)], str(scoped), self.timeout)
             if process.return_code != 0:

@@ -96,6 +96,7 @@ class Finding:
     fingerprint: str
     status: str = "OPEN"
     technical_details: dict[str, Any] = field(default_factory=dict)
+    equivalence_key: str = ""
 
 
 @dataclass

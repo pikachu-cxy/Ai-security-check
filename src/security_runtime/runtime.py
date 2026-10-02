@@ -241,37 +241,5 @@ class SecurityRuntime:
         root = WorkspaceResolver().resolve(scan["target_profile"]["path"], allow_non_git_explicit=True).path
         if workspace_path is not None and WorkspaceResolver().resolve(workspace_path, allow_non_git_explicit=True).path != root:
             raise WorkspaceError("Finding does not belong to the requested workspace")
-        relative = Path(finding["file_path"])
-        file = (root / relative).resolve()
-        if not file.is_relative_to(root.resolve()):
-            return {"finding_id": finding_id, "status": "UNKNOWN", "reason": "invalid path"}
-        if not file.exists():
-            return {"finding_id": finding_id, "status": "RESOLVED", "reason": "file removed"}
-        # Reuse the same adapters, scoped to the affected file. Only a successful
-        # run from the originating scanner can establish resolution.
-        try:
-            profile = TargetDetector().detect(root, [relative.as_posix()])
-        except (ValueError, OSError):
-            return {"finding_id": finding_id, "status": "UNKNOWN", "reason": "affected file cannot be safely profiled"}
-        context = ScanContext(str(root), ScanMode.QUICK, (relative.as_posix(),))
-        n = FindingNormalizer(root)
-        successful = False
-        observed = []
-        origin_runs = []
-        for adapter in self.registry.adapters:
-            if adapter.name not in finding["scanner_sources"]:
-                continue
-            try:
-                found, run = adapter.scan(context, n)
-            except Exception:
-                found, run = [], ScannerRun(adapter.name, "", RunStatus.FAILED, 0)
-            origin_runs.append(run)
-            if run.status == RunStatus.SUCCESS:
-                successful = True
-                observed.extend(found)
-        if any(f.fingerprint == finding["fingerprint"] for f in observed):
-            return {"finding_id": finding_id, "status": "STILL_PRESENT"}
-        if not successful or len(origin_runs) != len(set(finding["scanner_sources"])) or any(run.status != RunStatus.SUCCESS for run in origin_runs):
-            return {"finding_id": finding_id, "status": "UNKNOWN", "reason": "originating scanner unavailable or failed"}
-        still = any(f.fingerprint == finding["fingerprint"] for f in observed)
-        return {"finding_id": finding_id, "status": "STILL_PRESENT" if still else "RESOLVED"}
+        from .verification import VerificationService
+        return VerificationService(self.registry).verify_many(root, [finding], scan)[0]

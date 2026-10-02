@@ -1,8 +1,23 @@
 # Next Stage — AI Triage Quality Validation & Developer Guidance
 
-更新：2026-10-02。路线规划基线 `7e19744`；本轮继续核查起始 `feature/runtime-mvp` / `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。**用户已分别授权并实现第一轮入口及第二轮“继续核查 v0.1”；本轮不实施修复与验证、独立人工质量工作、模型实验或 Joern。**
+## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
 
-下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，自动化、分发及四组 CI 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。继续核查已实现、源码/wheel/SDK 验收通过；修复与验证保持 Planned；独立人工 Ground Truth 仍是质量工作的核心。
+起始干净、ff-only 同步 HEAD `0f33d2624204794c84da6fa10cf43b8178cd5a56`，分支 feature/runtime-mvp。本轮明确授权 A→B，先完成 A 回归再实施 B。Stable Finding Equivalence 与任务修复/验证 v0.1 已实现；整体宿主产品 UX 尚待真实验收。Hook Integration 未开始，完成本轮推送后停止。
+
+保留旧 occurrence ID/fingerprint 与历史 Raw/triage/task_ref；eq-v1 无行号，区分原 rule/provider/file，Dependency 复用稳定包/advisory身份，Secret 不含原值/匹配行/凭据摘要。旧 verify 只有完整原规则/文件复查证明缺席时才 RESOLVED + SCANNER_VERIFIED_RESOLVED，行号移动仍 STILL_PRESENT，缺文件/规则/引擎或 scope 无证明为 INCONCLUSIVE。
+
+MCP 当前13工具，新增 prepare_task_fix（严格只读约束/受限证据交接）、verify_task_fix（本地 scanner/cache/temp 副作用，非 destructive）；能力契约 developer-guidance-v0.3，required subset。固定 task_ref 绑定 workspace/scan/精确成员，变化刷新，新 scan 不换对象。宿主响应明确“修复它/修第一项”后编辑选定本地代码并调用复查；Agent fixes. Runtime verifies。组内全部修复/全部仍在/混合为 SCANNER_VERIFIED_RESOLVED/STILL_PRESENT/PARTIALLY_RESOLVED，任一未知整体 INCONCLUSIVE，完全未复查 NOT_VERIFIED。
+
+复查最多100成员/20原受影响文件/2MB，同 provider/file 复用，默认离线不下载或自动fallback，不构建/编辑目标、不调用模型。prepare 沿用 EvidenceBuilder 的20项/32KiB/120行/5相关文件预算，原 triage session/hash/evidence_refs 防护不变。宿主 patch/build/tests 声明为 UNTRUSTED_HOST_REPORT，不能改变 Runtime 观察或结论。Gitleaks/IaC 未提供原 detector/check 执行清单时缺席保守 INCONCLUSIVE；POM PARTIAL 不能证明完整图修复。
+
+完整离线508 passed / 6 skipped / 6 subtests passed（120.12秒）。真实 Semgrep 1.178.0 合成100→110行仍存在、安全替换、分组只修一项及实际子进程失败均符合预期；包/合规/wheel/sdist 与本地全新 Runtime venv 安装通过（复用本地 SDK 依赖，无公网）。最终 native/四平台 CI 门禁待实际记录，见 [AJ 验收](AI_TRIAGE_ACCEPTANCE.md) 和 [合成证据](fix-verify-synthetic-evidence.json)；结构/边界详见 [当前架构](ARCHITECTURE.md)。
+
+没有修改 Jeepay、旧 scan/benchmark、ground truth、risk/coverage/policy；没有 scanner 公网查询、外部模型、目标构建或生产变更。三位真实开发者试用、真实宿主普通意图连续 UX 仍 Pending，独立人工 ground truth UNREVIEWED/null、质量指标 NOT_MEASURED。Hook 当前 Planned / NOT_STARTED，旧 PREREQUISITE_MISSING 留作历史门禁记录。
+
+
+更新：2026-10-02。路线规划基线 `7e19744`；本轮继续核查起始 `feature/runtime-mvp` / `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。**入口、继续核查及第三轮 Developer Fix & Verify v0.1 已获授权实现；本轮不实施 Hook、独立人工质量工作、模型实验或 Joern。**
+
+下一阶段为 **AI Triage Quality Validation & Developer Guidance**。首个产品迭代已实现，自动化、分发及四组 CI 验收通过，三位真实开发者易用性试用 Pending；整体 milestone 未完成。继续核查已实现、源码/wheel/SDK 验收通过；修复与验证 v0.1 已实现，实际宿主 UX Pending；独立人工 Ground Truth 仍是质量工作的核心。
 
 先读 [PROJECT_STATE](PROJECT_STATE.md)、[ARCHITECTURE](ARCHITECTURE.md)、[DECISIONS](DECISIONS.md) 和 [AI_TRIAGE_ACCEPTANCE](AI_TRIAGE_ACCEPTANCE.md)。
 
@@ -28,7 +43,7 @@
 | 合成 fixtures 和真实 26 项审阅回放 | Joern Java PoC、compiler-grade dataflow |
 | 十一个 MCP 工具；summary 只读任务投影、task_ref 继续核查、版本/能力与宿主连接指导 | 实际宿主自然语言试用及三位未参与开发者的真实易用性反馈（Pending） |
 | 宿主可在其授权范围内继续读源码 | 通用宿主补充报告导入与超出受限证据的分析（未实现） |
-| 确定性 generate_fix 任务、原 scanner verify | 可审阅补丁与完整修复验证流程 |
+| generate_fix/verify 兼容；task_fix 结构化交接及原规则等价复查 v0.1 | 真实宿主 UX / 生产与业务验证 |
 
 产品迭代与质量工作流均保留 Raw、现有 TriagePolicy、RiskEngine、覆盖契约、Secret 保护与 External AI 授权边界。不增加 scanner、不自动构建目标项目、不做全仓主动 AI 审计、不增加 FALSE_POSITIVE 反证类型。质量实验若暴露实现缺陷，应记录独立问题、按新的修复任务处理，再复验；不能把评测脚本的结果悄悄改成 Runtime 产品行为。
 
@@ -38,9 +53,9 @@
 | --- | --- | --- |
 | 1：开发者任务入口 v0.1 — Implemented / 自动化与分发 CI 验收通过 / 人工试用 Pending | 定位当前 workspace 的扫描；只读汇总；保守合并；普通/详细视图；建议下一步 | 任务单及完整逐项入口，不自动执行动作 |
 | 2：继续核查 v0.1 — Implemented / 自动化/原生/四组 CI 通过 / 旧聊天试用未通过，刷新后复验 Pending | 精确任务引用、pending-only/cache 推进、受限 MCP handoff；先查已有证据，再询问必要业务候选问题 | 用户说继续某项，无需 Finding UUID；Runtime 不调用宿主模型 |
-| 3：修复与验证 — Planned | 可审阅补丁、兼容性与验证计划；授权后执行编辑/验证，记录未执行项 | 用户审阅修复效果；本轮不实现 |
+| 3：Developer Fix & Verify v0.1 — Implemented / 宿主 UX Pending | 结构化约束、宿主获授权编辑、原规则 bounded 复查与分组结论 | 不改生产、不自动构建；用户不搬 prompt/UUID |
 
-独立人工质量工作仍 Planned；不把报告易读性当风险判断质量。本次交付第二轮并调整受限缓存/批次推进；不实施补丁或真实模型实验。
+独立人工质量工作仍 Planned；不把报告易读性当风险判断质量。第二轮曾调整受限缓存/批次推进；本轮实现第三轮 Runtime 修复交接/验证，不调用真实模型或由 Runtime 应用补丁。
 
 2026-10-02 真实用户在原 Jeepay 聊天用两句普通意图试用，回复虽可读，调用记录却仅有 get_triage，继续轮没有工具调用；未取得新 summary/task_ref 或执行任务级 handoff，不能计验收通过。旧聊天此前缺少新入口，同配置程序的全新 SDK 连接已确认能力存在，疑似旧连接/工具列表未刷新，具体原因未证明。先刷新宿主连接与工具列表，再在新聊天取得新 summary 后复验；不让用户搬运技术提示词或盲目重装 editable。见 [试用记录](jeepay-host-task-trial.json) 与 AH。三位独立开发者和人工质量状态不变，第三轮继续 Planned。
 
@@ -74,11 +89,11 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 
 继续核查已处理“排序后先取 limit、再查 cache”的推进问题：缓存不占新分析名额，任务模式保留 VALID、优先 UNTRIAGED、其次 STALE、FAILED 显式 retry_failed。每次最多检查1000候选，packet/证据错误最多20；hash/session/引用/原策略保留。额外源码核查须标明范围和来源；词法结果不宣称 compiler-grade 调用链，不把宿主任意读取结果塞进不允许的 evidence_refs。
 
-修复迭代复用现有修复任务和扫描复查基础，但不能把 `generate_fix` 宣称为现有自动补丁能力，或把 `verify` 无匹配当业务修复证明。准备补丁、应用补丁、构建/测试、扫描复查与生产发布分别报告执行状态；沿用用户已给出的授权，超出范围的实际执行再取得相应授权。目标 Maven/Gradle/npm/pip 构建仍不默认执行。修复与验证的详细设计及实现尚未开展。
+修复迭代复用现有修复任务和扫描复查基础，但不能把 `generate_fix` 宣称为现有自动补丁能力，或把 `verify` 无匹配当业务修复证明。准备补丁、应用补丁、构建/测试、扫描复查与生产发布分别报告执行状态；沿用用户已给出的授权，超出范围的实际执行再取得相应授权。目标 Maven/Gradle/npm/pip 构建仍不默认执行。修复与验证 v0.1 的设计与实现见本文当前状态，真实宿主 UX 尚未通过。
 
-## Host-agnostic Hook Integration v0.1 — PREREQUISITE_MISSING
+## Host-agnostic Hook Integration v0.1 — Planned / NOT_STARTED（下述为历史门禁）
 
-用户已提出新的 Hook 任务，并明确以前置 Developer Fix & Verify v0.1 和稳定 Finding equivalence 为门禁。2026-10-02 干净工作区 ff-only 同步后仍为 `787aace`：修复与验证尚为 Planned，现有位置敏感指纹/旧 verify 在同规则同文件仅移动行号时仍错误返回 RESOLVED。完整离线 baseline 461 passed / 6 skipped / 6 subtests passed（108.77秒）；基线通过不证明前置能力存在。
+用户已提出新的 Hook 任务，并明确以前置 Developer Fix & Verify v0.1 和稳定 Finding equivalence 为门禁。2026-10-02 干净工作区 ff-only 同步后仍为 `787aace`：该历史时点修复与验证尚为 Planned，旧位置敏感指纹/旧 verify 在同规则同文件仅移动行号时仍错误返回 RESOLVED。完整离线 baseline 461 passed / 6 skipped / 6 subtests passed（108.77秒）；基线通过不证明前置能力存在。
 
 按用户要求停止 Hook delta 正式实现，未实现或安装 Codex/其它 Host Hook，不另建第二套 Finding Identity，也不在本任务自动补做 Fix & Verify。恢复条件是先交付/同步前置阶段并验收行号移动仍 PERSISTING/STILL_PRESENT，再复用其身份开展本轮范围。实际 fresh Codex Hook、性能、package/standalone 与新 Hook CI 全部 NOT_RUN；旧 MCP/CI 不能计本轮验收。现有 pre-commit、独立人工 ground truth 和其它 Planned 状态保持。检查依据见 AI_TRIAGE_ACCEPTANCE 的 AI 附录。
 
@@ -221,24 +236,24 @@ Jeepay TLS 是贯穿用户任务的样例：两条校验绕过候选可组织为
 
 质量工作流完成必须同时具备：可复现 benchmark 身份；独立人工标签与分歧记录；五类 verdict/实际风险/利用条件的区别；可追溯多模型 run（或明确未运行限制）；分母完整的 precision/agreement/suppression-risk；安全边界回归；预先确立并满足的质量门槛。没有足够人工真值或真实模型结果只能交付部分测量，不宣布完成整体质量 milestone。
 
-**开发者任务入口 v0.1 已实现，三位真实开发者试用仍 Pending**；实际自动化结果独立记录。继续核查已实现，修复与验证仍 Planned。独立质量任务仍未开展：冻结 Jeepay 身份、人工盲审及 ground truth schema/指南；原 UNREVIEWED/null 不由 Agent 填写。
+**开发者任务入口 v0.1 已实现，三位真实开发者试用仍 Pending**；实际自动化结果独立记录。继续核查已实现，修复与验证 v0.1 已实现，实际宿主 UX Pending。独立质量任务仍未开展：冻结 Jeepay 身份、人工盲审及 ground truth schema/指南；原 UNREVIEWED/null 不由 Agent 填写。
 
 整体 milestone 需分别交付获授权的产品迭代并达到质量工作流门槛。产品迭代需同时满足其使用验收和既有边界回归；独立质量工作流按前述身份、标签、指标与风险门槛单独验收。任务入口完成不代表八项质量工作或整个新 milestone 完成。先使用既有目录与证据，新增报告尽量合并为一个 acceptance，不再为每次运行增加顶层总结文档。旧验收按原时点保留，原 ground truth 的 null 不在本轮填写。
 
-新聊天从 PROJECT_STATE 的 Agent Handoff 开始，区分已实现入口/继续核查与修复验证 Planned。后续源码开发须另有明确任务；不能默认公网模型请求、人工标签代填、训练/调参或 Joern。
+新聊天从 PROJECT_STATE 的 Agent Handoff 开始，区分已实现入口/继续核查/修复验证 v0.1 与真实宿主 UX Pending。后续源码开发须另有明确任务；不能默认公网模型请求、人工标签代填、训练/调参或 Joern。
 
 
-第二轮接口：`prepare_task_triage(task_ref, workspace_path=None, limit=20, retry_failed=False)`，当前11个 MCP 工具。宿主从实际展示项的 continuation 参数发起，然后分析本次受限 packet 并使用返回的 scan_id/triage_session 调用 submit_triage；用户不提供 UUID，Runtime 不调用宿主模型。引用绑定固定 workspace/scan/精确成员身份，与 T01 或 priority 排序无关；格式/版本/归属/成员变化要求刷新重新选择，新 scan 不替换原引用。源码改变由 freshness/context_hash 防护。
+第二轮接口：`prepare_task_triage(task_ref, workspace_path=None, limit=20, retry_failed=False)`，当前13个 MCP 工具。宿主从实际展示项的 continuation 参数发起，然后分析本次受限 packet 并使用返回的 scan_id/triage_session 调用 submit_triage；用户不提供 UUID，Runtime 不调用宿主模型。引用绑定固定 workspace/scan/精确成员身份，与 T01 或 priority 排序无关；格式/版本/归属/成员变化要求刷新重新选择，新 scan 不替换原引用。源码改变由 freshness/context_hash 防护。
 
-全有效审阅时可返回已有依据与必要业务候选问题，不重复模型工作；FAILED_RETRY_REQUIRED、EVIDENCE_UNAVAILABLE、BOUNDED_EVIDENCE_LIMIT、NOT_ELIGIBLE 分开表达。既有审阅摘要上限20条/64KiB、未知最多20项，截断显式显示，完整成员/记录仍在 details。额外宿主报告不自动入库，不能扩展 evidence_refs。三位真实试用者 Pending，独立 ground truth 仍 UNREVIEWED/null，质量指标未测；修复与验证保持 Planned。
+全有效审阅时可返回已有依据与必要业务候选问题，不重复模型工作；FAILED_RETRY_REQUIRED、EVIDENCE_UNAVAILABLE、BOUNDED_EVIDENCE_LIMIT、NOT_ELIGIBLE 分开表达。既有审阅摘要上限20条/64KiB、未知最多20项，截断显式显示，完整成员/记录仍在 details。额外宿主报告不自动入库，不能扩展 evidence_refs。三位真实试用者 Pending，独立 ground truth 仍 UNREVIEWED/null，质量指标未测；修复与验证 v0.1 已实现，实际宿主 UX Pending。
 
 
 ## 普通用户意图与宿主衔接验收
 
-产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；本轮仅接通核查，修复与验证仍 Planned，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。
+产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；本轮仅接通核查，修复与验证 v0.1 已实现，实际宿主 UX Pending，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。
 
 已接入 FastMCP server instructions 与工具 annotations/描述：宿主绑定实际展示响应的 task_ref，自动在已有授权范围内准备、分析、提交并展示结果；有效授权持续有效，不反复询问常规获授权步骤。仅询问代码无法回答且会影响下一步的必要业务事实，或取得超出已有授权操作的权限。Runtime 不主动调用宿主模型，源码/scanner/模型文字均非执行指令，现有 session/hash/evidence_refs、脱敏、Raw、覆盖和策略保留。
 
-新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.2。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
+新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.3。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。

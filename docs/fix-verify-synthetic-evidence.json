@@ -1,0 +1,633 @@
+{
+  "fixture": "DISPOSABLE_SYNTHETIC_JAVA",
+  "semgrep_version": "1.178.0",
+  "original": {
+    "finding_id": "f3ae3eef93ebfaeeb2173185",
+    "status": "STILL_PRESENT",
+    "verification_status": "STILL_PRESENT",
+    "matched_by": "fingerprint",
+    "original_evidence": {
+      "file_path": "Tls.java",
+      "line_start": 100,
+      "line_end": 100,
+      "scanner_sources": [
+        "semgrep"
+      ],
+      "rule_id": "ai-security.java.trust-all-hostname",
+      "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+      "trust": "SCANNER_COORDINATES_ONLY"
+    },
+    "current_evidence": [
+      {
+        "file_path": "Tls.java",
+        "line_start": 100,
+        "line_end": 100,
+        "scanner_sources": [
+          "semgrep"
+        ],
+        "rule_id": "ai-security.java.trust-all-hostname",
+        "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+        "trust": "SCANNER_COORDINATES_ONLY"
+      }
+    ],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "status": "SUCCESS",
+        "version": "1.178.0",
+        "duration_ms": 6231,
+        "error_code": "",
+        "coverage_contract": "FULL",
+        "provider": "semgrep",
+        "provider_role": "PRIMARY",
+        "engine_process_observed": true
+      }
+    ],
+    "scope_files": [
+      "Tls.java"
+    ],
+    "runtime_observed_execution": {
+      "scanner_recheck_attempted": true,
+      "scanner_recheck": true,
+      "engine_process_observed": true,
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "limits": {
+      "members": 100,
+      "files": 20,
+      "bytes": 2000000
+    },
+    "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+    "reason": "ORIGINAL_OR_EQUIVALENT_FINDING_OBSERVED"
+  },
+  "line_100_to_110": {
+    "finding_id": "f3ae3eef93ebfaeeb2173185",
+    "status": "STILL_PRESENT",
+    "verification_status": "STILL_PRESENT",
+    "matched_by": "equivalence_key",
+    "original_evidence": {
+      "file_path": "Tls.java",
+      "line_start": 100,
+      "line_end": 100,
+      "scanner_sources": [
+        "semgrep"
+      ],
+      "rule_id": "ai-security.java.trust-all-hostname",
+      "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+      "trust": "SCANNER_COORDINATES_ONLY"
+    },
+    "current_evidence": [
+      {
+        "file_path": "Tls.java",
+        "line_start": 110,
+        "line_end": 110,
+        "scanner_sources": [
+          "semgrep"
+        ],
+        "rule_id": "ai-security.java.trust-all-hostname",
+        "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+        "trust": "SCANNER_COORDINATES_ONLY"
+      }
+    ],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "status": "SUCCESS",
+        "version": "1.178.0",
+        "duration_ms": 8276,
+        "error_code": "",
+        "coverage_contract": "FULL",
+        "provider": "semgrep",
+        "provider_role": "PRIMARY",
+        "engine_process_observed": true
+      }
+    ],
+    "scope_files": [
+      "Tls.java"
+    ],
+    "runtime_observed_execution": {
+      "scanner_recheck_attempted": true,
+      "scanner_recheck": true,
+      "engine_process_observed": true,
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "limits": {
+      "members": 100,
+      "files": 20,
+      "bytes": 2000000
+    },
+    "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+    "reason": "ORIGINAL_OR_EQUIVALENT_FINDING_OBSERVED"
+  },
+  "minimal_fix": {
+    "finding_id": "f3ae3eef93ebfaeeb2173185",
+    "status": "RESOLVED",
+    "verification_status": "SCANNER_VERIFIED_RESOLVED",
+    "matched_by": null,
+    "original_evidence": {
+      "file_path": "Tls.java",
+      "line_start": 100,
+      "line_end": 100,
+      "scanner_sources": [
+        "semgrep"
+      ],
+      "rule_id": "ai-security.java.trust-all-hostname",
+      "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+      "trust": "SCANNER_COORDINATES_ONLY"
+    },
+    "current_evidence": [],
+    "scanner_runs": [
+      {
+        "scanner": "semgrep",
+        "status": "SUCCESS",
+        "version": "1.178.0",
+        "duration_ms": 4175,
+        "error_code": "",
+        "coverage_contract": "FULL",
+        "provider": "semgrep",
+        "provider_role": "PRIMARY",
+        "engine_process_observed": true
+      }
+    ],
+    "scope_files": [
+      "Tls.java"
+    ],
+    "runtime_observed_execution": {
+      "scanner_recheck_attempted": true,
+      "scanner_recheck": true,
+      "engine_process_observed": true,
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "limits": {
+      "members": 100,
+      "files": 20,
+      "bytes": 2000000
+    },
+    "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+    "reason": "ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT"
+  },
+  "target_build": false,
+  "ground_truth": "NOT_INDEPENDENT_HUMAN_REVIEW",
+  "target_edits": "SYNTHETIC_HARNESS_ONLY",
+  "jeepay_modified": false,
+  "grouped_one_remaining": {
+    "status": "PARTIALLY_RESOLVED",
+    "verification_status": "PARTIALLY_RESOLVED",
+    "task_ref": "task-v1.eyJkaWdlc3QiOiJkMDlhYTU2NTU0NmEzOWZkZjNkZjE4YWJmYzAzZjA2NTRjYTk3ODg5YzE0YjIwNDFlYjFhYWFjMDUyZmY1MTI3Iiwic2NhbiI6InN5bnRoZXRpYy1maXgtYiIsIndvcmtzcGFjZSI6IkM6XFxVc2Vyc1xcQWRtaW5pc3RyYXRvclxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHJ1bnRpbWUtZml4LXZlcmlmaWNhdGlvbi1zYzBzYnVmdiJ9",
+    "scan_id": "synthetic-fix-b",
+    "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-fix-verification-sc0sbufv",
+    "task_title": "核查 HTTPS 连接的证书与主机名校验",
+    "members": [
+      {
+        "finding_id": "f3ae3eef93ebfaeeb2173185",
+        "status": "RESOLVED",
+        "verification_status": "SCANNER_VERIFIED_RESOLVED",
+        "matched_by": null,
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 100,
+          "line_end": 100,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-hostname",
+          "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "SUCCESS",
+            "version": "1.178.0",
+            "duration_ms": 6343,
+            "error_code": "",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT"
+      },
+      {
+        "finding_id": "34435c483cd6eeb315aefe15",
+        "status": "STILL_PRESENT",
+        "verification_status": "STILL_PRESENT",
+        "matched_by": "fingerprint",
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 101,
+          "line_end": 105,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-certificates",
+          "equivalence_key": "eq-v1:4b3a0068d1538781c6480357dbb1f29e1e442cafdcbf22879fb0493729988804",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [
+          {
+            "file_path": "Tls.java",
+            "line_start": 101,
+            "line_end": 105,
+            "scanner_sources": [
+              "semgrep"
+            ],
+            "rule_id": "ai-security.java.trust-all-certificates",
+            "equivalence_key": "eq-v1:4b3a0068d1538781c6480357dbb1f29e1e442cafdcbf22879fb0493729988804",
+            "trust": "SCANNER_COORDINATES_ONLY"
+          }
+        ],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "SUCCESS",
+            "version": "1.178.0",
+            "duration_ms": 6343,
+            "error_code": "",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ORIGINAL_OR_EQUIVALENT_FINDING_OBSERVED"
+      }
+    ],
+    "member_counts": {
+      "SCANNER_VERIFIED_RESOLVED": 1,
+      "STILL_PRESENT": 1
+    },
+    "runtime_observed_execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "scan_coverage": "ORIGINAL_SCAN_UNCHANGED",
+    "raw_and_triage": "UNCHANGED",
+    "production_verification": "NOT_PERFORMED",
+    "automatic_execution": false,
+    "next_steps": [
+      "仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。",
+      "扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。"
+    ]
+  },
+  "grouped_all_fixed": {
+    "status": "SCANNER_VERIFIED_RESOLVED",
+    "verification_status": "SCANNER_VERIFIED_RESOLVED",
+    "task_ref": "task-v1.eyJkaWdlc3QiOiJkMDlhYTU2NTU0NmEzOWZkZjNkZjE4YWJmYzAzZjA2NTRjYTk3ODg5YzE0YjIwNDFlYjFhYWFjMDUyZmY1MTI3Iiwic2NhbiI6InN5bnRoZXRpYy1maXgtYiIsIndvcmtzcGFjZSI6IkM6XFxVc2Vyc1xcQWRtaW5pc3RyYXRvclxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHJ1bnRpbWUtZml4LXZlcmlmaWNhdGlvbi1zYzBzYnVmdiJ9",
+    "scan_id": "synthetic-fix-b",
+    "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-fix-verification-sc0sbufv",
+    "task_title": "核查 HTTPS 连接的证书与主机名校验",
+    "members": [
+      {
+        "finding_id": "f3ae3eef93ebfaeeb2173185",
+        "status": "RESOLVED",
+        "verification_status": "SCANNER_VERIFIED_RESOLVED",
+        "matched_by": null,
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 100,
+          "line_end": 100,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-hostname",
+          "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "SUCCESS",
+            "version": "1.178.0",
+            "duration_ms": 6454,
+            "error_code": "",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT"
+      },
+      {
+        "finding_id": "34435c483cd6eeb315aefe15",
+        "status": "RESOLVED",
+        "verification_status": "SCANNER_VERIFIED_RESOLVED",
+        "matched_by": null,
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 101,
+          "line_end": 105,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-certificates",
+          "equivalence_key": "eq-v1:4b3a0068d1538781c6480357dbb1f29e1e442cafdcbf22879fb0493729988804",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "SUCCESS",
+            "version": "1.178.0",
+            "duration_ms": 6454,
+            "error_code": "",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT"
+      }
+    ],
+    "member_counts": {
+      "SCANNER_VERIFIED_RESOLVED": 2
+    },
+    "runtime_observed_execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "scan_coverage": "ORIGINAL_SCAN_UNCHANGED",
+    "raw_and_triage": "UNCHANGED",
+    "production_verification": "NOT_PERFORMED",
+    "automatic_execution": false,
+    "next_steps": [
+      "仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。",
+      "扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。"
+    ]
+  },
+  "real_scanner_failure": {
+    "status": "INCONCLUSIVE",
+    "verification_status": "INCONCLUSIVE",
+    "task_ref": "task-v1.eyJkaWdlc3QiOiJkMDlhYTU2NTU0NmEzOWZkZjNkZjE4YWJmYzAzZjA2NTRjYTk3ODg5YzE0YjIwNDFlYjFhYWFjMDUyZmY1MTI3Iiwic2NhbiI6InN5bnRoZXRpYy1maXgtYiIsIndvcmtzcGFjZSI6IkM6XFxVc2Vyc1xcQWRtaW5pc3RyYXRvclxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHJ1bnRpbWUtZml4LXZlcmlmaWNhdGlvbi1zYzBzYnVmdiJ9",
+    "scan_id": "synthetic-fix-b",
+    "workspace": "C:\\Users\\Administrator\\AppData\\Local\\Temp\\runtime-fix-verification-sc0sbufv",
+    "task_title": "核查 HTTPS 连接的证书与主机名校验",
+    "members": [
+      {
+        "finding_id": "f3ae3eef93ebfaeeb2173185",
+        "status": "INCONCLUSIVE",
+        "verification_status": "INCONCLUSIVE",
+        "matched_by": null,
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 100,
+          "line_end": 100,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-hostname",
+          "equivalence_key": "eq-v1:85370abc62e82109b318fa08390811ffbdecb0dada2b3926c109638325251836",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "FAILED",
+            "version": "1.178.0",
+            "duration_ms": 1954,
+            "error_code": "SCANNER_FAILED",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ORIGINATING_SCANNER_DID_NOT_SUCCEED"
+      },
+      {
+        "finding_id": "34435c483cd6eeb315aefe15",
+        "status": "INCONCLUSIVE",
+        "verification_status": "INCONCLUSIVE",
+        "matched_by": null,
+        "original_evidence": {
+          "file_path": "Tls.java",
+          "line_start": 101,
+          "line_end": 105,
+          "scanner_sources": [
+            "semgrep"
+          ],
+          "rule_id": "ai-security.java.trust-all-certificates",
+          "equivalence_key": "eq-v1:4b3a0068d1538781c6480357dbb1f29e1e442cafdcbf22879fb0493729988804",
+          "trust": "SCANNER_COORDINATES_ONLY"
+        },
+        "current_evidence": [],
+        "scanner_runs": [
+          {
+            "scanner": "semgrep",
+            "status": "FAILED",
+            "version": "1.178.0",
+            "duration_ms": 1954,
+            "error_code": "SCANNER_FAILED",
+            "coverage_contract": "FULL",
+            "provider": "semgrep",
+            "provider_role": "PRIMARY",
+            "engine_process_observed": true
+          }
+        ],
+        "scope_files": [
+          "Tls.java"
+        ],
+        "runtime_observed_execution": {
+          "scanner_recheck_attempted": true,
+          "scanner_recheck": true,
+          "engine_process_observed": true,
+          "patch_applied": false,
+          "target_build": false,
+          "tests_run": false
+        },
+        "host_reported_execution": {
+          "status": "NOT_REPORTED"
+        },
+        "limits": {
+          "members": 100,
+          "files": 20,
+          "bytes": 2000000
+        },
+        "proof": "Scanner resolution is scoped evidence, not proof of runtime safety.",
+        "reason": "ORIGINATING_SCANNER_DID_NOT_SUCCEED"
+      }
+    ],
+    "member_counts": {
+      "INCONCLUSIVE": 2
+    },
+    "runtime_observed_execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "execution": {
+      "patch_applied": false,
+      "target_build": false,
+      "tests_run": false,
+      "scanner_recheck": true,
+      "scanner_recheck_attempted": true,
+      "engine_process_observed": true
+    },
+    "host_reported_execution": {
+      "status": "NOT_REPORTED"
+    },
+    "scan_coverage": "ORIGINAL_SCAN_UNCHANGED",
+    "raw_and_triage": "UNCHANGED",
+    "production_verification": "NOT_PERFORMED",
+    "automatic_execution": false,
+    "next_steps": [
+      "仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。",
+      "扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。"
+    ]
+  }
+}

@@ -1,6 +1,25 @@
 # AI Security Runtime — Architecture
 
-更新：2026-10-02（Asia/Shanghai）。分支 feature/runtime-mvp，继续核查开发起始 `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。本轮新增继续核查 v0.1；包版本仍 0.3.1，修复与验证及独立质量工作未实施。
+## Developer Fix & Verify v0.1 — 当前状态（2026-10-02）
+
+本轮获用户明确授权，从干净且 ff-only 同步的 `feature/runtime-mvp` / `0f33d2624204794c84da6fa10cf43b8178cd5a56` 开始。先完成 A 并回归，再实施 B；没有开始 Hook Integration。实现已落地，最终分发与 CI 门禁仍待本轮实际结果记录；不能用历史 CI 代替。
+
+- Occurrence ID/fingerprint 的旧语义保留，含位置；新增 `eq-v1` 的 `equivalence_key` 不含行号。SAST/配置/Secret 使用 category、scanner identity、可靠 rule_id 与规范化相对文件；同文件不同 rule、同 rule 不同文件不等价。Secret 不使用原值、匹配行或凭据摘要。Dependency 复用 ecosystem/package/version/canonical advisory/manifest。
+- 原 `verify(finding_id, workspace_path=None)` 仍在：原 occurrence 或同家族命中为 STILL_PRESENT，返回 matched_by 与安全原/当前坐标。只有原文件、原规则、原 provider 的完整成功复查无等价项，才返回旧 `status=RESOLVED` 加 `verification_status=SCANNER_VERIFIED_RESOLVED`。缺文件/身份/引擎/规则、失败、超时、解析错误或不能证明 scope 为 INCONCLUSIVE。文件删除不再直接 resolved。
+- Semgrep 以本地 catalog/pack/version/checksum 和 `time.rules`、`paths.scanned`、errors/skipped_rules 证明原规则与文件执行；更改规则包、丢失原规则或只返回空结果不能证明修复。OSV fallback origins 也可选中；离线 POM/Trivy 依赖图 PARTIAL 不能证明完整修复。现有 Gitleaks/Trivy IaC JSON 无原 detector/check 执行清单，存在仍可报告，缺席保守 INCONCLUSIVE。受信任扩展须显式声明 exact-file/offline 复查契约；这不是 OS sandbox。
+- `prepare_task_fix(task_ref, workspace_path=None)` 严格只读：固定 workspace/scan/精确成员再次校验；给出目标、候选 root cause、已有事实/有效审阅与未知、结构化约束、建议修改、回归要求、受限 UNTRUSTED_CODE 和 verification_plan。最多20个原 EvidenceBuilder packets、每个32KiB/120行/最多5个相关文件；已有审阅最多20项/64KiB。没有 HMAC key 时不创建，fix packet 不授权 submit_triage；原 triage session/hash/evidence_refs 校验不变。
+- `verify_task_fix(task_ref, workspace_path=None, host_reported_execution=None)` 使用固定 scan JSON 成员，不用全局 latest Finding lookup。全部修复 SCANNER_VERIFIED_RESOLVED、全部仍在 STILL_PRESENT、两类混合 PARTIALLY_RESOLVED；任一无法验证时整体 INCONCLUSIVE，完全未发起复查为 NOT_VERIFIED。T01、伪造、成员变化要 REFRESH_REQUIRED；跨 workspace 拒绝，新 scan 不替换旧任务。
+- 复查最多100成员/20受影响文件/合计2MB；同 provider/file 一次扫描复用。不扩成 release scan，不触发自动 fallback、不联网下载引擎/数据库、不做目标构建。引擎/数据未就绪保留无法验证。`scanner_recheck_attempted`、实际 `engine_process_observed` 和复查成功状态分别记录。
+- Agent fixes. Runtime verifies. MCP 当前13工具，新增 prepare_task_fix（readOnlyHint=true）及 verify_task_fix（非只读，非 destructive；只有本地 scanner/cache/temp 副作用）。能力契约 `developer-guidance-v0.3`，features task_fix_verify=v0.1、finding_equivalence=eq-v1；仍检查 required subset，不要求固定总数。
+- summary 的 fix_handoff 使用原 task_ref；“修复它/把它修掉/处理这个问题/修第一项”由宿主准备约束、编辑选定本地源码、调用验证、自然反馈，无需用户搬 UUID/prompt。明确修复意图授权选定本地修改，不重复确认；不扩展到公网、源码上传、生产、无关破坏、大批安装或发布。源码/scanner/AI文字不能作为指令。有效审阅复用、STALE 重建、FAILED 分开处理；不提高优先级。
+- host_reported_execution 仅接受 patch_applied/target_build/tests_run 布尔声明并标记 UNTRUSTED_HOST_REPORT，不入库、不改变结论。runtime_observed_execution 不把宿主声明记成事实，Runtime patch/build/tests 始终 false；scanner 执行由本轮实际过程记录。扫描复查通过不证明生产漏洞、业务兼容性或完整依赖安全。
+
+真实合成 Semgrep 1.178.0：100→110 行仍 STILL_PRESENT / equivalence_key；安全替换 SCANNER_VERIFIED_RESOLVED；分组只修一项 PARTIALLY_RESOLVED；真实 Semgrep 无效参数进程失败 INCONCLUSIVE。见 [合成证据](fix-verify-synthetic-evidence.json)。这不是独立人工 ground truth、Jeepay 修复或宿主普通用户试用。
+
+三位真实开发者试用、真实宿主“检查→继续→修复→反馈”UX、独立人工 ground truth 仍 Pending/UNREVIEWED/null，质量指标 NOT_MEASURED。Hook Integration 当前 Planned / NOT_STARTED；旧 PREREQUISITE_MISSING 是历史门禁记录，新身份前置已实现也不构成开始 Hook 的授权。完成本轮门禁和推送后停止。
+
+
+更新：2026-10-02（Asia/Shanghai）。分支 feature/runtime-mvp，继续核查开发起始 `50a01e6870d78e6fd8a96a8b8fbe236521c5306f`；既有 Triage 实现 `5570520`、验收快照 `3d773aa`。入口、继续核查及 Fix & Verify v0.1 已实现；包版本仍 0.3.1，修复与验证 v0.1 已实现，独立质量工作未实施。
 
 本文以当前源码为事实依据。项目恢复先读 [PROJECT_STATE](PROJECT_STATE.md)，架构理由见 [DECISIONS](DECISIONS.md)，后续规划见 [NEXT_STAGE](NEXT_STAGE.md)。历史 acceptance 描述各阶段时点，不能把其中“五工具”“尚未实现 AI”直接当作当前状态。
 
@@ -103,14 +122,16 @@ BYOK `OpenAICompatibleProvider` 使用标准库请求 `/chat/completions`，要�
 
 同一依赖组在 BYOK 中共享 context 并 batch 返回；每条仍校验独立 ID/hash/引用。普通 scan 不走上述两条模型路径。
 
-[mcp_server.py](../src/security_runtime/mcp_server.py) 当前正式注册 **11 个工具**：
+[mcp_server.py](../src/security_runtime/mcp_server.py) 当前正式注册 **13 个工具**：
 
 | Tool | 职责 |
 | --- | --- |
 | scan_diff | quick/feature Git 变更扫描 |
 | scan_project | release 项目扫描 |
 | get_findings | 完整原候选列表的 agent projection，附加 triage 状态；不因 suppression 删除项 |
-| generate_fix | 生成确定性修复任务，不调用 LLM、不改源码 |
+| generate_fix | 保留低层确定性修复 prompt，不调用 LLM、不改源码 |
+| prepare_task_fix | 只读约束/证据交接，宿主编辑 |
+| verify_task_fix | 所有原成员 bounded/offline 等价复查，报告独立 execution |
 | verify | 受影响文件上的原 scanner 复查 |
 | prepare_triage | 返回受限脱敏 packet/schema/instructions 与 handoff session，不调用模型 |
 | submit_triage | 验证交接、结构/引用与 policy，保存独立记录 |
@@ -121,7 +142,7 @@ BYOK `OpenAICompatibleProvider` 使用标准库请求 `/chat/completions`，要�
 
 当前 stdio server 在内存保存 handoff 的 scan ID、finding IDs/hash；15 分钟过期，最多 64 个 session。成功提交消费对应项，拒绝重放。任务级 session 另保存引用/workspace，submit 时再次校验成员身份；变化要求刷新。配置 WorkspaceBinding 时，scan/finding/handoff 被约束到连接的 workspace；未绑定连接不提供这一隔离，不能称多租户服务。
 
-`verify` 仅枚举 primary adapters，OSV-only origin 通常返回 UNKNOWN；文件删除有直接 RESOLVED 路径，位置 fingerprint 消失不是业务漏洞修复证明。MCP 返回 compact scan/coverage/provider 数据，不使用 CLI progress renderer，stdout 保持 SDK JSON-RPC。
+`verify` 已委托 verification.py：原/fallback provider 的 bounded 离线复查，eq-v1 防止行号移动误判；文件删除保守 INCONCLUSIVE。旧 RESOLVED 仅在 scanner 充分证明时与 SCANNER_VERIFIED_RESOLVED 同返，不能证明业务漏洞完全修复。MCP 返回 compact scan/coverage/provider 数据，不使用 CLI progress renderer，stdout 保持 SDK JSON-RPC。
 
 ## Implemented：开发者任务入口与展示边界
 
@@ -154,7 +175,7 @@ wheel/sdist 与 PyInstaller onedir 已实现；Windows x64、Linux x64、macOS x
 
 ## 本阶段实现与后续 Planned
 
-用户已分别授权入口与继续核查 v0.1；当前十一个工具。修复与验证及独立质量工作继续 Planned。Raw/Triage 分离、policy、覆盖与授权边界不变。
+用户已分别授权入口与继续核查 v0.1；当前十三个工具。修复与验证 v0.1 已实现，独立质量工作继续 Planned。Raw/Triage 分离、policy、覆盖与授权边界不变。
 
 | 迭代/状态 | 范围 | 本轮边界 |
 | --- | --- | --- |
@@ -164,14 +185,14 @@ wheel/sdist 与 PyInstaller onedir 已实现；Windows x64、Linux x64、macOS x
 
 首轮建议以现有记录建立展示投影，不另建持久化任务数据库；合并任务保留每条 Finding/Advisory 的独立身份及状态。Runtime priority 与建议跟进动作分别表达，REVIEW 可以对应“核查影响”，不升级为 ACTIONABLE。模型叙述或引用合法不等于事实语义已经证实；扫描器候选、Runtime 接受的 AI 审阅与宿主补充核查需区分，额外源码分析不能伪装为已接受 evidence_refs。当前没有通用宿主补充报告的持久化/导入接口。
 
-只读汇总已使用独立只读存储和不持久化 freshness 路径，定位受 workspace 约束；无记录建议首次检查，不自行执行。继续核查沿原受限 Triage 路径实现；修复验证和独立质量评测保持 Planned。
+只读汇总已使用独立只读存储和不持久化 freshness 路径，定位受 workspace 约束；无记录建议首次检查，不自行执行。继续核查沿原受限 Triage 路径实现；修复验证 v0.1 已实现，独立质量评测保持 Planned。
 
 独立质量工作协同开展：固定 Jeepay benchmark 身份、独立人工标注、版本化 ground truth schema、五类 verdict 一致标准、Agent-native/BYOK 模型比较、suppression risk、precision/agreement 和 prompt/model regression。已提交的 26 项脚本回放与用户提供的另一组实际宿主报告分别保留 provenance；均不能当独立人工真值。三位未参与开发的开发者试用仅评价易用性，不能换算安全准确率。任务入口完成不代表质量阶段完成。
 
 Joern Java PoC 必须在质量门槛通过后单独评估。Joern、compiler-grade dataflow、完整 Maven reachability、主动 AI 全仓审计、自动构建、自动修复、retention 与云服务均未实现。`privacy.py` 的旧 ContextProvider/LocalContextProvider/AIProvider.generate_fix 没有接入当前 Runtime；正式 Triage 使用 EvidenceBuilder 与新的 provider 接口。
 
 
-## Planned：Host-agnostic Hook Integration v0.1（前置缺失）
+## Planned：Host-agnostic Hook Integration v0.1（以下为前置缺失的历史记录）
 
 规划链路为 Host Hook → Hook Adapter → Hook Coordinator → SecurityRuntime.scan → Finding Delta。Hooks 负责触发扫描，MCP 负责 Agent 交互，两者互补。该链路 **NOT_IMPLEMENTED**；现有 hooks.py 仅定义事件和 Git pre-commit 安装，CLI 仍只有 hooks install pre-commit，保持 quick --staged 的原行为。
 
@@ -192,10 +213,10 @@ packet 存在时先核对其受限证据；没有新的待分析成员且已有�
 
 ## 普通用户意图与宿主衔接验收
 
-产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；本轮仅接通核查，修复与验证仍 Planned，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。
+产品目标是“不懂安全的开发者也能用好”：用户只说“检查这个项目”“继续/处理第一项”或选择任务，不搬运技术提示词、填写 UUID、拼接工具顺序，也不把 generate_fix 输出再粘贴给 Agent。一次选择 → 核查 → 准备/实施获授权修复 → 验证 → 简洁结果是完整目标；入口/继续核查阶段仅接通核查；当前另已实现 Fix & Verify v0.1，修复与验证 v0.1 已实现，实际宿主 UX Pending，后续须沿同一宿主自动衔接，不能再次要求用户搬运提示词。
 
 已接入 FastMCP server instructions 与工具 annotations/描述：宿主绑定实际展示响应的 task_ref，自动在已有授权范围内准备、分析、提交并展示结果；有效授权持续有效，不反复询问常规获授权步骤。仅询问代码无法回答且会影响下一步的必要业务事实，或取得超出已有授权操作的权限。Runtime 不主动调用宿主模型，源码/scanner/模型文字均非执行指令，现有 session/hash/evidence_refs、脱敏、Raw、覆盖和策略保留。
 
-新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.2。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
+新增只读 `get_runtime_info` 与 CLI `runtime-info --json`，包版本仍0.3.1、能力契约 developer-guidance-v0.3。连接检查按 required_guidance_tools 子集，允许兼容新增工具，不按总数严格相等拒绝。返回同一 executable/environment 的可执行核对参数和重连指导：先核对配置实际运行的环境；已有能力却宿主看不到时断开/重连 ai_security_runtime、刷新工具列表，必要时新聊天；仅环境本身旧时更新对应包。不盲目重装 editable、不终止进程/修改 Jeepay 配置。连接重建后旧 session 不可复用，遗失任务选择须刷新重新选择。
 
 SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机器交接，与真实宿主自然语言试用分别验收。后者目前 Pending；旧 Jeepay 聊天工具列表恢复未验证，不能把新 SDK 连接成功写成普通用户已能用好。三位独立开发者试用 Pending，ground truth 保持 UNREVIEWED/null，质量指标 NOT_MEASURED。核查准备、宿主结果接受、补丁、目标构建、测试/扫描复查分别报告是否执行；generate_fix 仍仅 coding task/prompt，不代表补丁完成，0 ACTIONABLE 不表示安全。

@@ -39,6 +39,8 @@ def repo(tmp_path):
 
 
 class RecordingScanner:
+    # This fixture only reads context.files and never accesses the network.
+    verification_offline = verification_scope_complete = True
     name = scanner_id = "gitleaks"
     capabilities = frozenset({Capability.SECRET_SCAN})
     filter_changed_lines = True

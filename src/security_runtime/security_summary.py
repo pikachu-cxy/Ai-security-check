@@ -226,6 +226,7 @@ class SecuritySummaryService:
             task['continuation'] = {'mcp_tool': 'prepare_task_triage',
                                     'arguments': {'task_ref': task['task_ref'],
                                                   'workspace_path': str(Path(scan['target_profile']['path']).resolve())}}
+            task['fix_handoff'] = {'mcp_tool': 'prepare_task_fix', 'arguments': dict(task['continuation']['arguments'])}
         return tasks
 
     @staticmethod
