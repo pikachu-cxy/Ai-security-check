@@ -1,5 +1,13 @@
 # AI Security Runtime — Architecture Decisions
 
+## ADR-019 — Codex MCP transport POC（Accepted / Host trial Pending）
+
+2026-10-03按用户授权，只增加PostToolUse的MCP transport，复用唯一HookCoordinator和原Codex事件翻译/输出，不移除command hook。原因是用户报告Windows command Host runner错误0x80131506；协议替代验证与真实Host修复是不同结论。
+
+采用[官方Hooks schema](https://learn.chatgpt.com/docs/hooks)的mcp_tool/server/tool/input/timeout/statusMessage及${hook_event_name}/${cwd}/${session_id}/${tool_name}。turn_id虽在官方PostToolUse输入中存在，现有核心不需要它，本轮不接收；不转发源码/工具输出/模型/transcript。MCP声明不可信，服务端workspace绑定必需，missing/invalid/foreign claims不能扫描或换workspace。JSON生成是可回滚、显式启用的POC，不自动安装或批准trust。
+
+返回受限metadata/count与官方advisory输出；不阻断、不提高优先级、不定义新的risk/coverage。SDK错误拒绝未知字段并隐藏输入值；原预算、脱敏、快照、多重集及离线边界不变。注册工具数可增加，连接兼容性继续按required subset，不能硬编码13。fresh Desktop自动调用及systemMessage消费必须独立实测；当前只证明SDK stdio与本地Scanner，不把它写成Host通过。
+
 ## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
 
 本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。初次实现 `40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd` 与跨平台验收修正后的实现 `c1d42552d63596790bfba6eaadf206bffae754f2` 已推送；最终576项离线回归、wheel/sdist、完全隔离clean venv、合规、本地Windows native和本轮四类新CI全部通过，详见AK.1/AK.2。文档最终HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取。

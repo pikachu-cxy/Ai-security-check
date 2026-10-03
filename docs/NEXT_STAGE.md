@@ -1,5 +1,11 @@
 # Next Stage — AI Triage Quality Validation & Developer Guidance
 
+## 当前transport POC边界（2026-10-03）
+
+Codex MCP Tool Hook POC仅实现PostToolUse/FILE_CHANGED薄适配与独立配置生成，复用原HookCoordinator；原command hook保持。真实SDK stdio/Scanner验收通过，fresh Codex Desktop自动触发及advisory消费Pending，见[AL](AI_TRIAGE_ACCEPTANCE.md#al-codex-mcp-tool-hook-poc)。完成本轮测试、文档和commit后停止；不因POC自动开始SessionStart/Stop迁移、自动修复/构建、Deep Audit、Joern、watcher、新scanner/policy或Host重构。
+
+用户仍无法安排三位独立试用者，保留Pending；独立ground truth UNREVIEWED/null，质量NOT_MEASURED。以下既有规划状态不由transport协议测试改变。
+
 ## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
 
 本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。初次实现 `40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd` 与跨平台验收修正后的实现 `c1d42552d63596790bfba6eaadf206bffae754f2` 已推送；最终576项离线回归、wheel/sdist、完全隔离clean venv、合规、本地Windows native和本轮四类新CI全部通过，详见AK.1/AK.2。文档最终HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取。

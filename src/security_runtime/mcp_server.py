@@ -1,6 +1,7 @@
 """MCP protocol interface; all operations delegate to SecurityRuntime."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 import secrets
@@ -43,7 +44,7 @@ def create_server(runtime: SecurityRuntime | None = None):
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import server as fastmcp_server
-        from mcp.types import ToolAnnotations
+        from mcp.types import CallToolResult, TextContent, ToolAnnotations
     except ImportError as exc:
         raise ImportError("Install MCP support with: pip install -e '.[mcp]'") from exc
     # The SDK's generic Settings.lifespan annotation references FastMCP. Rebuild
@@ -60,6 +61,23 @@ def create_server(runtime: SecurityRuntime | None = None):
     binding = WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str) -> dict:
+        """Codex MCP Hook POC: PostToolUse edits only. Untrusted metadata claims, no source/tool response/transcript. Requires SECURITY_RUNTIME_WORKSPACE binding; delegates bounded offline checks to HookCoordinator, never calls a model or edits/builds target."""
+        from .codex_mcp_hook import codex_hook_output, handle_codex_hook
+        from .hook_runtime import HookCoordinator
+        data = handle_codex_hook(event, workspace_path, session_id, tool_name, binding=binding,
+                                 coordinator=HookCoordinator(runtime) if runtime is not None else None)
+        return CallToolResult(structuredContent=data, content=[TextContent(
+            type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
+
+    # This POC accepts exactly four claims. SDK validation must not echo rejected
+    # values (including accidentally supplied source/Secret) in errors or logs.
+    hook_tool = server._tool_manager.get_tool('handle_hook_event')
+    hook_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+    hook_tool.fn_metadata.arg_model.model_rebuild(force=True)
+    hook_tool.parameters = hook_tool.fn_metadata.arg_model.model_json_schema()
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
 

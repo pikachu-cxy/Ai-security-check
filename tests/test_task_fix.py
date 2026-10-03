@@ -187,7 +187,8 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
                 initialized = await client.initialize()
                 assert 'Agent fixes. Runtime verifies.' in initialized.instructions
                 tools = {t.name:t for t in (await client.list_tools()).tools}
-                assert len(tools) == 13  # inventory only; clients require subset
+                from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
+                assert REQUIRED_GUIDANCE_TOOLS <= set(tools)
                 assert tools['prepare_task_fix'].annotations.readOnlyHint
                 assert not tools['verify_task_fix'].annotations.destructiveHint
                 async def call(name, args):

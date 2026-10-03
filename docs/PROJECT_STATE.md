@@ -1,5 +1,13 @@
 # AI Security Runtime — Project State
 
+## Codex MCP Tool Hook POC — 当前交接（2026-10-03）
+
+起点为干净的 `feature/runtime-mvp` / `7a38593fb795cec4d7d09291f33f389430df8dba`。新增可选 MCP 工具 `handle_hook_event` 与 `hooks generate-mcp-poc codex` JSON 生成入口；仅 PostToolUse → FILE_CHANGED → 原 HookCoordinator。MCP当前14工具，包版本0.3.1、developer-guidance-v0.3及原8个required guidance tools不变。command adapter/core/host-event/原项目配置保留，后续阶段仍Planned。
+
+最终full offline **601 passed /6 skipped /6 subtests passed（174.14秒）**，新增25项POC cases均通过；6项旧real e2e因三引擎PATH未满足跳过，单列不算通过。wheel/sdist/POC模块入包/package integrity/compliance通过。实现和文档在同一POC提交；用`git log -1 --format=%H -- src/security_runtime/codex_mcp_hook.py`取得实际implementation HEAD。
+
+真实本地SDK stdio工具调用完成离线Scanner检查（最终5012ms、当前quick scope coverage FULL），重复快照复用、越界声明拒绝。它是显式协议验收，**fresh Codex Desktop自动Hook dispatch、advisory UI/context消费仍PENDING**。用户报告既有Windows command Host runner `0x80131506`；本轮SDK路径未观察到该错误，不能据此宣布真实Host已修复。事实、配置、试用与回滚见[AL验收](AI_TRIAGE_ACCEPTANCE.md#al-codex-mcp-tool-hook-poc)和[协议证据](codex-mcp-hook-poc-evidence.json)。
+
 ## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
 
 本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。初次实现 `40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd` 与跨平台验收修正后的实现 `c1d42552d63596790bfba6eaadf206bffae754f2` 已推送；最终576项离线回归、wheel/sdist、完全隔离clean venv、合规、本地Windows native和本轮四类新CI全部通过，详见AK.1/AK.2。文档最终HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取。
@@ -229,7 +237,7 @@ Verdict：2 CONFIRMED（局部 TLS bypass 安装证据）、1 LIKELY（Java Secr
 5. 按 README 的当前安装说明恢复运行环境，先使用 `security-check doctor --path <project>` / `tools status`。Git 不会恢复用户 state/tools、API key 或 Jeepay 源码；在新 workspace 扫描会产生本地 identity，不能直接套用旧 scan ID。需要重放固定 benchmark 时先确认源码版本与输入摘要；不要自动启动在线依赖查询或模型上传。
 6. **开发者任务入口 v0.1 已实现，人工易用性试用仍 Pending**。恢复后先使用 summary/get_security_summary 按 workspace 检查记录；“继续第一项”使用当次响应里该项 continuation 的 task_ref，进入 prepare_task_triage。引用无效/成员变化必须刷新重新选择。继续核查已实现，修复与验证 v0.1 已实现，实际宿主 UX Pending；先核对本轮实际验收。没有独立人工标签时质量指标保持 UNKNOWN / NOT_MEASURED；不能自行填写 ground truth、立即做 Joern 或更改 Raw/policy/coverage/上传边界。
 7. 两组 Jeepay 结果不可混用：已提交回放 `f5224162-...` 与用户提供的实际宿主报告 `99ca7566-...` 分别保留来源和状态。旧 scan ID 不是跨设备标识；宿主补充调用链不是已接受 Runtime Triage。恢复质量样本须核对源码 revision/packet 身份，未固化的报告只作为待补证据的产品输入。
-8. **Hook Integration 已获授权并实现；本轮真实门禁见 AK。** 复用 eq-v1 家族多重集，不能把家族当 occurrence 的唯一身份；实际新宿主会话仍 Pending。完成本轮验收与推送后停止，不启动后续迭代。
+8. **Hook Integration已实现；原门禁见AK，最新transport POC见AL。** MCP POC只支持PostToolUse，复用原HookCoordinator/eq-v1家族多重集，不能把家族当occurrence唯一身份。用户报告Windows command Host runner失败，原command实现仍保留；fresh MCP Hook宿主自动触发尚Pending。不得从SDK工具调用成功推导Host通过，不启动后续迭代。
 
 
 ## 普通用户意图与宿主衔接验收

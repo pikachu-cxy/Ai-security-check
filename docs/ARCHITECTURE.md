@@ -1,5 +1,15 @@
 # AI Security Runtime — Architecture
 
+## Codex MCP Tool Hook POC（2026-10-03）
+
+`Codex PostToolUse → connected ai_security_runtime.handle_hook_event → codex_mcp_hook transport validation → 原 CodexHookAdapter.translate → 原 HookCoordinator(FILE_CHANGED, codex, session) → compact advisory`。不重写baseline/snapshot/cooldown/single-flight/family multiset/coverage；原command路径与MCP路径使用相同workspace/host/session状态。POC没有SessionStart/Stop，首次edit只建立baseline；冷却中的pending变更要等待后续事件，本轮没有timer或自动Stop迁移。
+
+工具仅接受event/workspace_path/session_id/tool_name四个必填字符串；SDK拒绝额外字段和错误类型且不回显输入值。要求服务端SECURITY_RUNTIME_WORKSPACE绑定；host cwd必须为绝对路径，由原WorkspaceResolver/Codex adapter核对同一Git root。未绑定、越界、不支持事件/工具或未展开模板返回INCONCLUSIVE/UNKNOWN且不扫描；异常文本不返回。Runtime自己取得受限快照，不接收source、tool_input/response、transcript或模型输出。
+
+MCP structuredContent包含原结果的固定metadata/count投影与Hook输出；text content只包含官方systemMessage/hookSpecificOutput形状。additionalContext为简短JSON摘要，不含families/原始finding/Secret/错误原文。核心没有actionable/review counts，因此POC不制造这些字段。原offline/budgets/redaction/状态HMAC/覆盖及风险语义保持。每个Hook事件没有command runner/security-check.exe子进程；现有Scanner执行机制保留，MCP服务本身仍须已连接。
+
+生成器只输出独立JSON，默认不写/merge/trust配置。官方schema与模板依据[当前OpenAI Hooks文档](https://learn.chatgpt.com/docs/hooks)；实际SDK调用与fresh Desktop自动触发分别验收，后者Pending，详见AL。此POC不更改v0.3契约或其它Host adapter。
+
 ## Host-agnostic Hook Integration v0.1 — 当前交接（2026-10-03）
 
 本轮从干净且 ff-only 同步的 `feature/runtime-mvp` / `8a36b3884a7d25cfb7f75c3405df727909ed1c90` 开始，用户明确授权 Hook 实现；前置 Fix & Verify / eq-v1 已交付。HookCoordinator、本地快照/锁/冷却、多重集变化、中立 CLI、Codex 和 Cursor 适配已实现。本轮新的完整自动化、包和原生/CI 门禁以 AK 附录为准，后文“Hook 未开始”是旧阶段历史状态，不能作为当前结论。初次实现 `40d9905b1ddb8fbac93fd2a31ba2f3075f3cb6bd` 与跨平台验收修正后的实现 `c1d42552d63596790bfba6eaadf206bffae754f2` 已推送；最终576项离线回归、wheel/sdist、完全隔离clean venv、合规、本地Windows native和本轮四类新CI全部通过，详见AK.1/AK.2。文档最终HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取。

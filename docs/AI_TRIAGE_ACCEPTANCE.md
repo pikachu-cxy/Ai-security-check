@@ -307,6 +307,44 @@ Windows PyInstaller onedir、原生归档 smoke/许可/SDK initialize/list/summa
 
 仍待验收：实际宿主新连接下“检查→继续第一项→修复它→自然反馈”的连续 UX；三位未参与开发的开发者（用户当前无法安排）；独立人工真值和质量统计。ground truth 保留 UNREVIEWED/null、指标 NOT_MEASURED。Scanner复查只证明原规则和文件，不承诺业务/生产完全修复；当前Secret/IaC原check执行清单和离线POM图不足的保守状态继续生效。本轮完成推送后停止，Hook Integration Planned / NOT_STARTED。
 
+## AL. Codex MCP Tool Hook POC
+
+日期2026-10-03；从干净`feature/runtime-mvp` / `7a38593fb795cec4d7d09291f33f389430df8dba`开始。仅增加MCP transport，原HookCoordinator/hook_state/CodexHookAdapter与command host-event保留。用户报告Windows Codex command runner因0x80131506失败；这是用户实机报告，不能把原CLI验收成功当成Host通过。
+
+本轮实际读取[OpenAI官方Hooks文档](https://learn.chatgpt.com/docs/hooks)的MCP tool hooks、matcher、common input/output及PostToolUse段落。使用type=mcp_tool、已连接server名称ai_security_runtime、tool=handle_hook_event、对象input、timeout秒、statusMessage；使用整值${hook_event_name}/${cwd}/${session_id}/${tool_name}模板。apply_patch规范名称兼容Edit/Write matcher。只取必要字段；不取tool_input/response、source、transcript、model、Secret或不需要的turn_id/tool_use_id。生成文件见[hooks.json](examples/codex-mcp-hook-poc/hooks.json)。
+
+工具schema：四个必填string字段`event/workspace_path/session_id/tool_name`，additionalProperties=false。仅event=PostToolUse及apply_patch/Edit/Write；SDK错误类型/缺字段/多余字段fail closed，验证错误不回显输入值。语义不符、未绑定/未展开模板、越界或检查异常返回INCONCLUSIVE/UNKNOWN/scanner_run=false。必须有服务端SECURITY_RUNTIME_WORKSPACE绑定，声明cwd绝对且先进行词法containment，拒绝外部/UNC声明后才允许文件系统/Git访问；链接路径继续拒绝，最终Git root必须等于绑定。有效声明调用唯一HookCoordinator FILE_CHANGED，所有budget/offline/redaction/family/coverage语义不变。
+
+structuredContent返回status、coverage、scan_id、scanner_run、new/persisting/resolved_families、additional/removed_occurrences、duration_ms、reused/debounced、baseline_available、last_check_status（若有）、execution及简短Hook输出。text content只包含systemMessage与hookSpecificOutput（hookEventName=PostToolUse、additionalContext为固定metadata/count JSON）。不返回families/Secret/源码/错误原文；不发decision:block、continue:false、suppressOutput或updatedMCPToolOutput。核心没有actionable/review counts，POC不制造这些字段或重新判断风险。
+
+### 本地验收与真实Host边界
+
+新工具+原command/core targeted首轮90 passed（58.53秒）；补入真实stdio测试后新增POC 23 passed（20.28秒）；修正旧SDK固定13工具断言后，task_fix+POC 49 passed（30.70秒）。首轮full offline为598 passed /1 failed /6 skipped /6 subtests（207.23秒），失败仅来自旧test_task_fix.py硬编码总数13；改成既有REQUIRED_GUIDANCE_TOOLS子集校验，保留全部原required工具要求，没有降低Runtime契约。修正后599 passed；再加入2项外部/UNC声明前置拒绝测试后的**最终full offline：601 passed /6 skipped /6 subtests passed（174.14秒）**。6个skip均为test_e2e_real.py要求Semgrep/Gitleaks/Trivy同时在PATH而本机未满足，不能算通过；新增25个POC cases全部通过，原command Hook/core测试不回归。
+
+实际本地MCP stdio连接（未mock Scanner）发现14工具，PostToolUse声明→原Coordinator→离线Scanner：BASELINE_ESTABLISHED、scanner_run=true、最终5012ms（前次6216ms）、当前quick scope coverage FULL、所有family counts=0；相同快照NO_CHANGE/reused、scanner_run=false；外部cwd INCONCLUSIVE/UNKNOWN。源文件hash不变；model/network/source_modified/target_build均false。未使用command Hook runner或每事件security-check.exe，没有观察到0x80131506。详见[真实协议证据](codex-mcp-hook-poc-evidence.json)。**该SDK显式调用不是Codex Desktop原生自动Hook触发，也没有证明Desktop消费systemMessage/structuredContent/text的路径。fresh actual Host trial仍PENDING。** FULL仅指本次quick适用能力scope，不表示全仓/依赖/人工安全结论。
+
+wheel/sdist实际构建、POC模块入包、check_wheel、licenses --check-distribution及generate_notices --check通过。没有新增scanner/rule/policy，没有目标build、自动补丁、模型调用、在线解析或源码上传。原项目.codex/hooks.json byte hash `63c700f13f68b26fb8e79a7090ff74326a5959e53db724f901c9d1f5524d9993`保持；只在独立可丢弃fixture放置MCP POC项目配置，未替换原command配置。包版本/能力契约仍0.3.1/developer-guidance-v0.3。
+
+### Fresh Codex Desktop试用（尚未执行）
+
+本机已准备可丢弃Git项目：`C:\Users\Administrator\Desktop\ai-security\Ai-security-check\.security-runtime\codex-mcp-hook-poc-project`。该项目.codex/hooks.json实际由生成命令输出，只有PostToolUse MCP handler；config.toml指向本机当前editable Runtime并显式绑定该fixture，独立state。安装/生成不自动批准Host trust。本轮没有创建或伪造新Codex聊天。
+
+1. 在Codex Desktop打开上述目录作为项目，查看并信任该项目的MCP及Hook定义。确认Hooks已启用，ai_security_runtime连接成功、能发现handle_hook_event；旧连接没有新工具时断开/重连并刷新。不要把仍运行旧wheel/native的进程当成本次源码；如需更新，只更新实际配置运行的环境。当前fixture指向本机editable环境。
+2. 开启全新聊天，只发送：“新增一个普通Java Service文件，只修改代码，不主动运行security-check或安全扫描。”通过apply_patch/Edit/Write修改才能命中本POC matcher；shell写文件不在matcher中。不要让Agent显式调用handle_hook_event冒充自动触发。
+3. 观察PostToolUse自动MCP调用handle_hook_event、advisory/systemMessage和返回scanner_run。第一次应建立BASELINE_ESTABLISHED（不把既存候选归因为NEW）；Scanner成功与否仍以last_check_status/coverage/execution为准，缺engine不自动下载。保留Host事件与metadata/count作为验收依据，不能保存源码、tool_response或Secret。若没有自动事件/连接未就绪/输出未消费，记失败或Pending，不能用SDK结果代替。
+4. 要证明绕过command transport，确认这个试用项目只加载MCP POC handler且没有其它user/plugin/managed command hooks参与本轮；官方说明匹配的多源Hook可同时运行，增加MCP handler不会覆盖原command。无需删除原仓库command支持。当前项目fixture配置只生成MCP handler，仍须在Host核对实际有效配置。
+5. 成功须同时满足：用户未请求扫描、Host自动触发、Coordinator确实检查、Host收到advisory、不运行command Hook runner、未出现0x80131506。当前这些Host条件尚未同时实际执行。
+
+需要重新生成通用JSON时，在仓库目录执行：
+
+```powershell
+.\.venv\Scripts\security-check.exe hooks generate-mcp-poc codex --json
+```
+
+这是纯输出命令，不写当前.codex/hooks.json；任何环境生成的JSON相同，不嵌入本机源码/绝对路径。回滚POC时仅移除试用项目PostToolUse中statusMessage为`AI Security Runtime [mcp-hook-poc]`的handler，重新加载Host；不运行原command registry的remove来假定它能删除POC。原仓库command hook和其它用户配置保持。代码可通过独立POC commit的git revert回退；不reset/clean当前工作区。
+
+Pending：fresh Desktop自动触发及UI/context消费；原Windows command Host runner问题；Cursor真实Host trial；其它Host schema资料；三位真实开发者试用；独立ground truth UNREVIEWED/null、质量NOT_MEASURED。Deep Audit、Joern、watcher、新scanner/policy、自动修复/build及SessionStart/Stop迁移未开始。
+
 ## AK. Host-agnostic Hook Integration v0.1
 
 日期2026-10-02→03（Asia/Shanghai）；干净起始/ff-only 同步 `8a36b3884a7d25cfb7f75c3405df727909ed1c90`，feature/runtime-mvp。前置 eq-v1 / Developer Fix & Verify 已通过 AJ，因此本轮正式实现获明确授权。旧 AI前置失败/AJ历史保留。本轮代码提交/最终文档HEAD、最终完整门禁、native/CI证据将在 AK.1追加，当前不将未完成门禁记为成功。

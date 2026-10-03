@@ -219,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     license_parser = sub.add_parser("licenses")
     license_parser.add_argument("--check-distribution", action="store_true")
     hooks_parser = sub.add_parser("hooks")
-    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove"])
+    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc"])
     hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"])
     hooks_parser.add_argument("--path")
     hooks_parser.add_argument("--json", action="store_true")
@@ -488,6 +488,12 @@ def main(argv: list[str] | None = None) -> int:
             serve()
             return 0
         if args.command == "hooks":
+            if args.action == 'generate-mcp-poc':
+                if args.hook != 'codex' or args.path is not None:
+                    raise ValueError('MCP POC generation supports codex only, without --path; prints JSON without installing')
+                from .codex_mcp_hook import codex_mcp_hook_config
+                print(json.dumps(codex_mcp_hook_config(), ensure_ascii=True, indent=2))
+                return 0
             if args.hook == 'pre-commit':
                 if args.action != 'install':
                     raise ValueError('Existing pre-commit supports install only')
