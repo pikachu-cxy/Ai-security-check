@@ -569,3 +569,79 @@ macOS原生验收在旧prepare_task_fix流程报KeyError: execution。新的task
 | [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149611) | failure | 账号billing/spending limit阻止启动，非测试执行失败 |
 
 工具实际读取三种workflow的失败注解，steps=[]、runner_name为空；GitHub未区分付款失败与限额哪一种。最后的记录文档提交仍可能受同一外部条件阻止，最终回复按实际新run列出；不循环提交制造绿色状态。恢复账号后可重跑当前HEAD的失败run。无需修改代码/风险/覆盖，也没有权限更改账号付款或增加支出。新的CONFIRM_REQUIRED Desktop门禁、三位试用及独立Ground Truth保持原真实状态，开发在此停止。
+
+
+## AO. CONFIRM_REQUIRED PostToolUse Host Semantics Fix
+
+### AO.1 真实 Bug 与 transport 选择
+
+起点干净 `feature/runtime-mvp` / `9d2dbd539ce2ed3753bfd0420b9507aa20ae2ade`。用户真实 Desktop 回传：CONFIRM_REQUIRED policy 和 confirmation identity/TTL PASS；主动交互 PARTIAL；问题语义 FAIL（问成批准应用危险配置）；approve→repair、decline NOT VALIDATED。smart_auto Desktop PASS（USER_REPORTED）独立保留。新的确认批准和拒绝 Desktop trial 均 PENDING，不将本地模拟认作实机。
+
+重新搜索并实际读取 [官方 Hooks 文档](https://learn.chatgpt.com/docs/hooks)，核对 PostToolUse decision/continue/stopReason/systemMessage/additionalContext 与 Code mode：副作用不撤回；block 会在执行后 reject promise；continue:false 会用反馈替换原结果继续模型，不 reject promise。因此只改 CONFIRM_REQUIRED，AUTO_FIX 原 block/reason 固定反馈不变；command Hook 保留。continue:false 本身不停止模型，主动询问和等待必须由宿主遵守 guidance 并在 Desktop 实测。
+
+最终确认 Host text output（占位引用，非持久化真实 token）：
+
+```json
+{
+  "continue": false,
+  "stopReason": "SECURITY_REMEDIATION_CONFIRMATION_REQUIRED. The preceding file edit has ALREADY executed. Do NOT retry, re-apply, or repeat the insecure edit. ... 是否允许我修复这个安全问题？ ... WAIT ...",
+  "systemMessage": "Security Runtime: the file edit already executed. Do not repeat it. Explain the risk and ask whether to remediate it, then wait.",
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "additionalContext": "JSON-encoded bounded Hook summary including remediation.interaction, fixed guidance, impact_summary, confirmation_ref and exact task_ref"
+  }
+}
+```
+
+没有 decision:block/reason；structuredContent 同一字段同值，另含有界状态/覆盖/delta metadata。interaction = {phase: POST_EDIT_REMEDIATION_CONFIRMATION, edit_already_applied: true, requested_user_decision: REMEDIATE_SECURITY_FINDING, must_not_retry_previous_edit: true}。Core 不含 Codex控制字段，风险语义、覆盖、身份和授权生命周期唯一实现不变。原 MCP 15 tools/schema/0.3.1/developer-guidance-v0.3 保持。
+
+固定 guidance 明示编辑已发生、风险来自已完成 edit、不得 retry/re-apply/repeat 或自动 revert，只询问是否修复风险，不问是否应用/保留/启用危险配置；解释 hostname 风险、默认校验可能拒绝不匹配端点和 ask_before_fix批准原因，主动问“是否允许我修复这个安全问题？”并等待。仅立即回答清晰修复问题的“允许”算批准，其他上下文先澄清。用户明确批准 → confirm true → AUTHORIZED/grant → prepare → 宿主局部 edit → 自动 Hook/resolved=1 → verify SCANNER_VERIFIED_RESOLVED，无第二条修复请求。拒绝 → confirm false → DECLINED，无 prepare/verify/edit/suppression/Raw删除，无关 edit 不 re-ask。
+
+### AO.2 自动化与本地分发验收
+
+前轮已交付 baseline **688 passed /6 skipped /6 subtests**（未重复跑旧 HEAD）。本轮针对性 **210 passed，368.48s**，新4项（Write/Edit/apply_patch实际文件副作用+明确确认字段/transport输出回归，以及允许歧义的固定指导）；原批准前gate、批准/修复/验证、拒绝/no-reprompt、身份/TTL/restart/snapshot/workspace/Secret/恶意prose案例保留，并增加批准但未prepare的verify拒绝断言。初次收集曾因新指导测试未声明模块参数setup而失败，已补齐fixture；最终全量 **692 passed /6 skipped /6 subtests passed**，pytest耗时 490.59 秒（门禁总耗时491.76秒）。command/MCP/equivalence/family multiset、旧授权和coverage/risk契约均回归。
+
+6 skipped单列：tests/test_e2e_real.py 的38/58/68/80/120/154行，多引擎PATH前提未满足，未计通过。要求的21场景证据映射如下；复用生命周期测试，不另造模型语义模拟器：
+
+| 场景 | 证据 |
+| --- | --- |
+| 1–4 post-edit/REMEDIATE/no-repeat/不暗示edit失败 | test_completed_host_edit_requests_repair_without_rejecting_or_repeating（Write、Edit、apply_patch） |
+| 5–7 无AUTO grant/prepare与verify前置gate | test_confirmation_feedback_is_fixed_distinct_and_no_grant；test_preconfirmation_prepare_and_verify_fail_closed；MCP legacy gate |
+| 8–11 授权/prepare/resolve/验证 | test_explicit_approval_prepares_and_mode_stays_ask；test_approved_edit_hook_and_explicit_verification；实际SDK/native原引擎 |
+| 12–15 拒绝/no prepare/no verify/no re-ask | test_decline_keeps_raw_and_no_unrelated_reprompt；实际MCP decline proof |
+| 16–17 原AUTO、report_only | test_remediation.py 原全套与4种mode/choice的实际SDK/native验收 |
+| 18–20 family/equivalence、command、MCP | test_hook_runtime.py、test_hook_adapters.py、test_codex_mcp_hook.py和完整离线回归 |
+| 21 package/compliance | wheel/sdist、check_wheel、licenses --check-distribution、notices --check、test_compliance.py |
+
+| 本地门禁 | 实际结论 |
+| --- | --- |
+| wheel/sdist + package integrity | PASS；3个改动Runtime模块与源码逐字节相同 |
+| Compliance | PASS；licenses、distribution、notices与全量合规测试 |
+| Strict clean wheel venv | PASS；system_site_packages=false，无editable，实际MCP/离线Scanner四条链路 |
+| Source SDK | PASS；text/structured continue/stopReason一致；危险源码保留至批准；原AUTO仍block |
+| Windows standalone | PASS；重新构建，实际native MCP与离线Semgrep/Gitleaks四条链路 |
+| Linux/macOS arm64/macOS x64本轮native | 以本轮新Standalone CI为准，未在Windows机器冒充执行 |
+| Fresh Desktop批准/拒绝 | PENDING / PENDING；未实际执行，驱动选择/编辑是SIMULATED_BY_ACCEPTANCE_DRIVER |
+
+有界metadata：[SDK](postedit-sdk-evidence.json)、[clean wheel](postedit-clean-evidence.json)、[Windows native](postedit-native-evidence.json)、[门禁与源码hash](postedit-acceptance.json)。不存源码packet/Secret/用户prompt/transcript；本地native在dirty实现构建，version.json.source_commit仍为starting HEAD，不能冒充本轮commit产物。最终CI按实际HEAD记录。新修复验收Scanner强制离线，用户选择与宿主edit模拟；Runtime不模型/target edit/build，公共包/GitHub delivery可联网，既有Standalone合成fixture门禁可取得公开工具/漏洞库，不上传源码/Secret给Scanner或模型。
+
+### AO.3 fresh Desktop 实机门禁
+
+具体可执行模式命令及普通编码prompt见 [fresh Desktop批准与拒绝](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)。先重连当前版本MCP，在 **新 Chat + ConfirmationTlsTrial2.java** 安全baseline后另一次编辑引入bypass；原生自动Hook必须continue:false、edit_already_applied=true，并主动问是否修复风险。此时危险源码仍在，prepare/verify NOT CALLED，无重复应用或revert。900秒内仅“允许修复”→confirm true→AUTHORIZED→prepare→宿主edit→Hook RESOLVED=1→verify SCANNER_VERIFIED_RESOLVED。另 **新 Chat + ConfirmationTlsDecline2.java** 重复baseline/风险，仅“不修”→DECLINED、危险源码仍在、无prepare/verify；同session普通无关edit不再问该family。
+
+只有两条真实Desktop链路都通过才可标整体PASS；仍问“应用危险配置”或声称先前edit失败即FAIL。当前无法用本会话的显式工具调用替代新Chat自动dispatch/真实用户选择，所以均PENDING。三位试用Pending，人工Ground Truth UNREVIEWED/null、质量NOT_MEASURED。没有修改Jeepay、用户fixture、冻结benchmark或人工标签，Secret rotation未执行。完成交付后停止，其余阶段Planned。
+
+### AO.4 提交与本轮新 CI
+
+Implementation HEAD `158a85db8aeb553f58926188aad112fe332cd45c` 已成功推送 origin/feature/runtime-mvp。以下全是本次提交实际新run；工具读取所有9个jobs的失败注解，runner_name为空、steps=[]，没有执行测试/构建：
+
+| Workflow | GitHub conclusion | 实际执行 |
+| --- | --- | --- |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37129799118) | failure | 未启动；付款失败或支出限额 |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37129799121) | failure | 未启动；付款失败或支出限额 |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37129799144) | failure | 未启动；付款失败或支出限额 |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37129799107) | failure | 未启动；付款失败或支出限额 |
+
+GitHub注解为“recent account payments have failed or your spending limit needs to be increased”，没有区分哪种账号条件。当前交付 **CI BLOCKED / PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，四平台Standalone也没有本轮CI产物，不能引用AN历史success当本轮通过。账号付款/支出设置未修改，无权限擅自增加支出；没有workflow绕过或coverage/风险降级。恢复后重跑本次实际失败run并核实jobs/产物；当前只记录真实外部阻塞。本地Windows native/clean/package/full通过独立有效。
+
+最终文档HEAD通过 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；随后docs-only提交也会触发Runtime/Package/Compliance，它们的实际新结论在最终交付回复单列，不能预写PASS；Standalone仅由本次implementation改动触发。Desktop批准/拒绝及人工质量待办保持真实PENDING。
