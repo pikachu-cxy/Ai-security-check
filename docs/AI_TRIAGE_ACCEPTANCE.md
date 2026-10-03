@@ -466,4 +466,15 @@ wheel/sdist 构建、现有 check_wheel/许可证分发/notices检查通过，�
 
 ### AM.1 提交与当前 CI
 
-待本轮提交推送后填入实际 implementation HEAD、run链接和结论；没有用旧CI替代。本轮 Desktop Smart Auto trial PENDING，Cursor实机Pending；Kiro/WorkBuddy/Qoder仍MANUAL_CONFIGURATION_REQUIRED，没有扩大到其他宿主。
+Implementation HEAD：`462633e8b5d4dcc730dba868bd9ac66e8bc40b37`，已推送 origin/feature/runtime-mvp，提交后工作区干净。本次全部新 CI 如下：
+
+| Workflow | 结论 | 实际 jobs |
+| --- | --- | --- |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455490) | success | Compliance: success |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455478) | success | Package integrity (ubuntu-latest): success; Package integrity (windows-latest): success |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455480) | success | Runtime tests (windows-latest): success; Runtime tests (ubuntu-latest): success |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499) | success | Standalone artifact (macos-x64): success; Standalone artifact (macos-arm64): success; Standalone artifact (windows-x64): success; Standalone artifact (linux-x64): success |
+
+Standalone archive gate 包含 --full/--osv-fallback/--fix-verify/--hooks/--remediation；四平台均完成实际离线 native MCP grant、prepare、模拟宿主编辑、自动验证、verify 和无关编辑不重开。未声称 actual Codex Desktop same-turn 自动修复通过。
+
+final docs HEAD 从 git log -1 --format=%H -- docs/PROJECT_STATE.md 取得（避免文档自引用SHA）；docs-only后续CI若触发在最终交付消息补充。实现源代码保持本次成功验证的同一HEAD，无未提交修改。

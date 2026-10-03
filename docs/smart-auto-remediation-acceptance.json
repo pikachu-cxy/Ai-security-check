@@ -41,5 +41,102 @@
   "runtime_source_edit": false,
   "target_build": false,
   "jeepay_modified": false,
-  "ci": "PENDING_PUSH_AND_ACTUAL_RUNS"
+  "ci": [
+    {
+      "conclusion": "success",
+      "databaseId": 37115455490,
+      "headSha": "462633e8b5d4dcc730dba868bd9ac66e8bc40b37",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455490",
+      "workflowName": "Compliance",
+      "jobs": [
+        {
+          "name": "Compliance",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455490/job/111181303061"
+        }
+      ]
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 37115455478,
+      "headSha": "462633e8b5d4dcc730dba868bd9ac66e8bc40b37",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455478",
+      "workflowName": "Package integrity",
+      "jobs": [
+        {
+          "name": "Package integrity (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455478/job/111181303201"
+        },
+        {
+          "name": "Package integrity (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455478/job/111181303379"
+        }
+      ]
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 37115455480,
+      "headSha": "462633e8b5d4dcc730dba868bd9ac66e8bc40b37",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455480",
+      "workflowName": "Runtime tests",
+      "jobs": [
+        {
+          "name": "Runtime tests (windows-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455480/job/111181302987"
+        },
+        {
+          "name": "Runtime tests (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455480/job/111181303149"
+        }
+      ]
+    },
+    {
+      "conclusion": "success",
+      "databaseId": 37115455499,
+      "headSha": "462633e8b5d4dcc730dba868bd9ac66e8bc40b37",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499",
+      "workflowName": "Standalone artifacts",
+      "jobs": [
+        {
+          "name": "Standalone artifact (macos-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499/job/111181303373"
+        },
+        {
+          "name": "Standalone artifact (macos-arm64)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499/job/111181303573"
+        },
+        {
+          "name": "Standalone artifact (windows-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499/job/111181303594"
+        },
+        {
+          "name": "Standalone artifact (linux-x64)",
+          "status": "completed",
+          "conclusion": "success",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37115455499/job/111181303597"
+        }
+      ]
+    }
+  ],
+  "implementation_head": "462633e8b5d4dcc730dba868bd9ac66e8bc40b37",
+  "remote_push": "SUCCESS"
 }
