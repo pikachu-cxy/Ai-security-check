@@ -1,0 +1,242 @@
+{
+  "A": {
+    "case": "A",
+    "mode": "smart_auto",
+    "transport": "ACTUAL_MCP_STDIO",
+    "security_verification": "SCANNER_VERIFIED_RESOLVED",
+    "functional_result": {
+      "security_verification": {
+        "status": "SCANNER_VERIFIED_RESOLVED"
+      },
+      "functional_verification": {
+        "status": "NOT_AVAILABLE",
+        "coverage": "NONE",
+        "steps": [
+          {
+            "kind": "BUILD",
+            "provider": "maven",
+            "command_id": "maven-compile",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          },
+          {
+            "kind": "TEST",
+            "provider": "maven",
+            "command_id": "maven-test",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          }
+        ],
+        "baseline": "UNKNOWN",
+        "regression_attribution": "NOT_PROVEN",
+        "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE",
+        "reused": false
+      },
+      "overall_status": "SECURITY_VERIFIED_FUNCTION_UNKNOWN",
+      "action": "NONE",
+      "production_correctness": "UNKNOWN",
+      "guidance": "安全验证与功能验证独立；结果仅覆盖列出的本地验证，不证明生产业务正确或 SAFE_TO_SHIP。"
+    },
+    "functional_acceptance": "PENDING_LOCAL_PREREQUISITES",
+    "plan": {
+      "version": "functional-verification-v0.1",
+      "detected_stack": [
+        "maven"
+      ],
+      "steps": [
+        {
+          "kind": "BUILD",
+          "provider": "maven",
+          "command_id": "maven-compile",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        },
+        {
+          "kind": "TEST",
+          "provider": "maven",
+          "command_id": "maven-test",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        }
+      ],
+      "config_hash": "e97e189a4e7adff0175c56ba5f027c349b98117e7ccad43b81e9cc649bf83b7d",
+      "workspace_id": "3d09d5e2965d0c1236c4ef047bdfd7864b4ed8b8acef6dcb468412799b3c393c",
+      "snapshot_digest": "6a99687434034c18c38b959cb21ad47dfecca1ed2c2293c9e98eaa65ec3b949c",
+      "execution_available": false,
+      "unavailable_reason": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+    },
+    "duration_ms": 44737,
+    "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "desktop_trial": "PENDING",
+    "source_persisted": false,
+    "network_authorized": false,
+    "package_download": false,
+    "runtime_source_edit": false,
+    "baseline": "UNKNOWN",
+    "ground_truth": "UNREVIEWED"
+  },
+  "B": {
+    "case": "B",
+    "mode": "smart_auto",
+    "transport": "ACTUAL_MCP_STDIO",
+    "security_verification": "SCANNER_VERIFIED_RESOLVED",
+    "functional_result": {
+      "security_verification": {
+        "status": "SCANNER_VERIFIED_RESOLVED"
+      },
+      "functional_verification": {
+        "status": "NOT_AVAILABLE",
+        "coverage": "NONE",
+        "steps": [
+          {
+            "kind": "BUILD",
+            "provider": "maven",
+            "command_id": "maven-compile",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          },
+          {
+            "kind": "TEST",
+            "provider": "maven",
+            "command_id": "maven-test",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          }
+        ],
+        "baseline": "UNKNOWN",
+        "regression_attribution": "NOT_PROVEN",
+        "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE",
+        "reused": false
+      },
+      "overall_status": "SECURITY_VERIFIED_FUNCTION_UNKNOWN",
+      "action": "NONE",
+      "production_correctness": "UNKNOWN",
+      "guidance": "安全验证与功能验证独立；结果仅覆盖列出的本地验证，不证明生产业务正确或 SAFE_TO_SHIP。"
+    },
+    "functional_acceptance": "PENDING_LOCAL_PREREQUISITES",
+    "plan": {
+      "version": "functional-verification-v0.1",
+      "detected_stack": [
+        "maven"
+      ],
+      "steps": [
+        {
+          "kind": "BUILD",
+          "provider": "maven",
+          "command_id": "maven-compile",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        },
+        {
+          "kind": "TEST",
+          "provider": "maven",
+          "command_id": "maven-test",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        }
+      ],
+      "config_hash": "9ae46095a17fc68ca52d2a40b10a38fc964be6a1ebcd02c91d4482d776820bfc",
+      "workspace_id": "5e0ccb1a2fb4ca3362b2b8d71c89d4836c7b300f0dd940f3e9868458f582e420",
+      "snapshot_digest": "5f2ed9d17e903faa02d5bb064b45b6a6f148450733317ddc9f9f343ef614ea08",
+      "execution_available": false,
+      "unavailable_reason": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+    },
+    "duration_ms": 38607,
+    "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "desktop_trial": "PENDING",
+    "source_persisted": false,
+    "network_authorized": false,
+    "package_download": false,
+    "runtime_source_edit": false,
+    "baseline": "UNKNOWN",
+    "ground_truth": "UNREVIEWED"
+  },
+  "confirmed": {
+    "case": "A",
+    "mode": "ask_before_fix",
+    "transport": "ACTUAL_MCP_STDIO",
+    "security_verification": "SCANNER_VERIFIED_RESOLVED",
+    "functional_result": {
+      "security_verification": {
+        "status": "SCANNER_VERIFIED_RESOLVED"
+      },
+      "functional_verification": {
+        "status": "NOT_AVAILABLE",
+        "coverage": "NONE",
+        "steps": [
+          {
+            "kind": "BUILD",
+            "provider": "maven",
+            "command_id": "maven-compile",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          },
+          {
+            "kind": "TEST",
+            "provider": "maven",
+            "command_id": "maven-test",
+            "status": "NOT_RUN",
+            "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+          }
+        ],
+        "baseline": "UNKNOWN",
+        "regression_attribution": "NOT_PROVEN",
+        "reason_code": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE",
+        "reused": false
+      },
+      "overall_status": "SECURITY_VERIFIED_FUNCTION_UNKNOWN",
+      "action": "NONE",
+      "production_correctness": "UNKNOWN",
+      "guidance": "安全验证与功能验证独立；结果仅覆盖列出的本地验证，不证明生产业务正确或 SAFE_TO_SHIP。"
+    },
+    "functional_acceptance": "PENDING_LOCAL_PREREQUISITES",
+    "plan": {
+      "version": "functional-verification-v0.1",
+      "detected_stack": [
+        "maven"
+      ],
+      "steps": [
+        {
+          "kind": "BUILD",
+          "provider": "maven",
+          "command_id": "maven-compile",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        },
+        {
+          "kind": "TEST",
+          "provider": "maven",
+          "command_id": "maven-test",
+          "working_directory": ".",
+          "network_allowed": false,
+          "wrapper": false,
+          "available": false
+        }
+      ],
+      "config_hash": "c2e032be5d268cba0f25f699da86a6a1ff1c0dbd7745fa441f9c56c94de8241e",
+      "workspace_id": "fb8bee9bbc2929eac628546bf38f5c63900e90e943750b8680aaaf950dfe377e",
+      "snapshot_digest": "5041e764cd1a1c9c6fe2527dd7a0f04f9b19627c493d429055fffaf269cf3323",
+      "execution_available": false,
+      "unavailable_reason": "ENFORCED_LOCAL_SANDBOX_UNAVAILABLE"
+    },
+    "duration_ms": 39216,
+    "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "desktop_trial": "PENDING",
+    "source_persisted": false,
+    "network_authorized": false,
+    "package_download": false,
+    "runtime_source_edit": false,
+    "baseline": "UNKNOWN",
+    "ground_truth": "UNREVIEWED"
+  }
+}

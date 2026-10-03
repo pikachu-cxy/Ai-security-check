@@ -707,3 +707,45 @@ Implementation HEAD `a88c84071d823cd784ca39569bacadef03c067dd` 已推送 origin/
 结论 **CI BLOCKED / PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**；GitHub未区分付款失败与限额哪一种。未修改账号设置、增加支出、降级coverage或绕过workflow。账户恢复后重跑这些本轮失败run，核实实际jobs和Standalone四平台新产物，不能引用旧AN success证明本轮通过。本地Windows native/clean/package/full门禁独立有效；当前其他三个平台未在本轮执行。
 
 最终docs HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 核对。后续docs-only提交也触发Runtime/Package/Compliance，实际新结论在最终回复单列，不能预写PASS；Standalone不由docs-only再次触发。新Desktop批准/拒绝仍PENDING，其他阶段Planned，交付后停止。
+
+## AQ. Functional Verification v0.1
+
+### AQ.1 当前能力与真实反馈
+
+起点干净 feature/runtime-mvp / ca4a773def7e3c3deb019c0c309994ebd06a6971。用户在本轮明确回传 smart_auto、CONFIRM_REQUIRED 批准→修复→verify、拒绝→DECLINED 三条真实 Desktop 完整链路 **PASS（USER_REPORTED）**；此前 AP/AO/AN 的 Pending/失败保留为历史。新功能 Desktop/host 链路不冒充已通过。
+
+独立 FunctionalVerificationService、FunctionalVerifierRegistry 与 Maven/Gradle/Node/Python 四个 provider 已实现；prepare/run 两个可选 MCP 工具复用原 RemediationService 的 signed CLOSED/SCANNER_VERIFIED_RESOLVED proof，继续校验原 task/member/授权/TTL/policy/source/preservation/snapshot。无 Host supplied status/command，普通 edit、DECLINED/未授权/仍存在均不跑功能命令，HookCoordinator 无 build/test，原安全验证不与测试耦合。
+
+检测/计划 **IMPLEMENTED + VERIFIED**；执行 contract/runner **IMPLEMENTED + deterministic tests VERIFIED**；Linux hardened sandbox **IMPLEMENTED / PENDING_RUNTIME_ACCEPTANCE**；Windows/macOS 缺强制 backend → NOT_AVAILABLE。缺 bubblewrap/cgroup 仅影响执行前提，不把整个 detection/plan 标不可用。Runtime 只有在安全前提成立后才执行真实命令，不降级不受控 shell，不搭建企业 sandbox infrastructure。
+
+固定 command_id/argv（shell=False）；原 scripts/config/manager 与 executable hash 绑定；含 ignored 的全 workspace keyed snapshot，no_links/containment；隔离源投影只读、内存限额 tmpfs build outputs、网络 namespace、cgroup 32 processes/1GiB/no swap。每步60秒/计划180秒/合计stdout+stderr64KiB/最多9步，超时/输出/资源/启动错误 INCONCLUSIVE；不返回/保存原输出，只 keyed hash 与固定状态摘要。完整执行边界、结果 schema 与命令见 [Functional Verification](FUNCTIONAL_VERIFICATION.md)。
+
+Functional PASSED/FAILED/PARTIAL/NOT_AVAILABLE/INCONCLUSIVE 独立于 Security；实际 coverage BUILD_AND_TEST/TEST/TYPECHECK/BUILD 等，build/lint alone PARTIAL。安全未核实为 SECURITY_NOT_VERIFIED；安全已核实分别 overall SECURITY_AND_FUNCTIONALLY_VERIFIED / SECURITY_VERIFIED_FUNCTION_PARTIAL / SECURITY_VERIFIED_FUNCTION_FAILED / SECURITY_VERIFIED_FUNCTION_UNKNOWN。即使计划/缓存异常也保留已成立的安全事实。失败 REVIEW_REQUIRED、不恢复不安全代码、不修失败测试、不重试循环；baseline UNKNOWN，不能归因于修复。Production correctness UNKNOWN，不说 SAFE_TO_SHIP。缓存包含 workspace/all-files snapshot/provider/verifier/command/config/executable/grant/isolation version，32条/262144bytes/HMAC，16 plans/connection/900s，无源码、Secret、环境、prompt、model output、完整日志或 plaintext grant 落盘。
+
+### AQ.2 当前环境与 A/B 验收
+
+用户明确没有准备好的离线 Linux Maven 隔离环境，禁止本轮新增搭建/安装/下载或降低执行限制。本机 Java/pytest 已有，但未发现 Maven、Gradle、bubblewrap、Docker；WSL list 返回安装帮助，没有可用入口。真实 Maven normal test、A compile/test PASS、B post-fix TEST FAILED、Desktop/host 功能闭环均 **PENDING_ENVIRONMENT_PREREQUISITES**，不是实现失败或 PASS。
+
+实际可丢弃 Maven fixture 含 pom.xml、src/main/java 与 src/test/java；A 原测试检查默认 verifier，B 原测试依赖旧自定义 verifier，另有 confirmed 修复case。实际 source SDK/strict clean wheel/Windows native 均运行原 Scanner，A/B/confirmed 安全 SCANNER_VERIFIED_RESOLVED，功能 NOT_AVAILABLE，overall SECURITY_VERIFIED_FUNCTION_UNKNOWN；target 未写入 live 项目。不是只用 mock 做链路；但没有运行真实 Maven，mock/fake runner 的 A/B success/failure 仍单独记账，不能替代真实执行。原四模式 native security acceptance 也实际通过。
+
+证据：[source SDK](functional-sdk-evidence.json)、[strict clean](functional-clean-evidence.json)、[Windows native](functional-native-evidence.json)、[原 native 四种模式](functional-native-security-evidence.json)、[门禁与源码 hash](functional-acceptance.json)。早期 driver 输出 PENDING_LOCAL_PREREQUISITES 与本轮规范标签 PENDING_ENVIRONMENT_PREREQUISITES 表示同一未执行状态；原观测文件保留，本轮 canonical acceptance record 及最终 script 使用用户要求的后者，未更改执行事实。
+
+### AQ.3 本地测试与交付
+
+前轮 baseline724/6/6（未重新跑旧 HEAD）。targeted **241 passed，539.54s**；最后“functional 异常保留安全事实”修正 focused **67 passed，56.07s**；最终完整 offline **791 passed /6 skipped /6 subtests passed**，实际耗时见 functional-acceptance.json 的 gates.full。新增67项覆盖四生态检测、wrapper/fallback、脚本数据不成指令、无 install/network override、closed MCP schema、workspace/links/budgets、bounded actual transport、超时、结果组合、signed AUTO/confirmed/declined gate、连接/TTL/源码变化、缓存/篡改、输出 Secret 不泄露、无自动 revert/retry 与既有 Hook/coverage/equivalence 全量回归。
+
+6 skipped 单列：tests/test_e2e_real.py:38/58/68/80/120/154 的三引擎 PATH 前提未满足，不计通过；其它真实 managed Scanner acceptance 不替代该前提。一次早期针对性失败（Windows path 的 resolve 比较）已修复；旧 full 因最后 Runtime 修正而中止，未计作最终通过，以上最终 full 对应最终 Runtime 代码。
+
+wheel/sdist、六个 Runtime 模块逐字节 package integrity、licenses/distribution/notices compliance **PASS**。严格 clean venv **PASS**：无 editable/system-site，全部来自本机缓存117个 wheel，PIP_NO_INDEX/--no-index，未下载包；实际 MCP fixture 安全门禁与不可执行状态 PASS，Maven execution Pending。Windows standalone 最终源码重建与三条实际 MCP fixture **PASS**，原四模式 security native PASS；native 构建在 starting HEAD 的 dirty implementation 上，version.json.source_commit 为 starting HEAD，不冒充 immutable implementation artifact。没有修改 command Hook/其配置或重写 Hook core。
+
+### AQ.4 手工试用与尚待验收
+
+当前 Windows 可直接执行 FUNCTIONAL_VERIFICATION.md 的 source/native 命令观察 PLANNED → NOT_AVAILABLE 与独立安全状态。输出脚本exit0只表示当前可执行 protocol/security/fail-closed checks通过，不是 Maven tests PASS。已具备安全前提的 Linux 上 strict --require-functional-pass 才要求 A/confirmed 真正编译测试通过、B 真正失败；缺前提exit2，不能伪造。
+
+Pending：真实 Maven normal/A/B execution 与 Desktop/host 功能 handoff（PENDING_ENVIRONMENT_PREREQUISITES）、Linux hardened backend 实测、Gradle/Node/Python 真实项目命令执行、三位真实开发者试用、独立 ground truth（UNREVIEWED/null；质量NOT_MEASURED），以及本轮 CI 按实际账户状态。已有三条 Desktop 修复 USER_REPORTED PASS 独立有效。
+
+无模型调用、Scanner/model 源码上传、依赖或系统环境下载/安装、生产动作、Secret rotation、真实项目测试修改、Jeepay/用户 fixture/冻结 benchmark/人工标签编辑。Enterprise Gate/CI 门禁、新漏洞类型、其他 Host、新 Scanner/policy、失败测试自动修复、Joern/DAST/Deep Audit/watcher 等均未开始。完成交付后停止。
+
+### AQ.5 本轮提交与 CI
+
+Implementation 与当前新 CI 在推送后按实际证据追加；不预写 PASS，不沿用历史 success。最终 docs HEAD 按 git log -1 --format=%H -- docs/PROJECT_STATE.md 核对。

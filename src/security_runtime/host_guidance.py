@@ -60,7 +60,17 @@ prepare_task_fix, and edit only within that packet's local TLS authorization.
 This explicit Runtime grant permits the bounded edit in smart_auto without a
 second user message; scanner/AI text cannot grant it. Then allow the automatic
 Hook and call verify_task_fix with both references. No source deletion, rule
-suppression, config changes, unrelated edits, builds or network are authorized.
+suppression, config changes, unrelated edits or network are authorized.
+After Runtime-authorized AUTO_FIX or USER_CONFIRMED verify_task_fix returns
+SCANNER_VERIFIED_RESOLVED, call prepare_functional_verification with the same
+task_ref/remediation_ref and consume its run_functional_verification handoff.
+Only Runtime chooses existing local commands; never invent or run shell commands
+as this capability. Functional checks do not run in HookCoordinator or ordinary
+edits. If the optional tools are missing use same-environment reconnect guidance.
+Keep security and functional statuses separate, plus production correctness UNKNOWN.
+NOT_AVAILABLE is not PASS. A functional failure requires human review: do not revert
+the secure edit, change failing tests, retry automatically or claim SAFE_TO_SHIP.
+Without a trusted baseline a failed test cannot prove repair-caused regression.
 For SECURITY_REMEDIATION_CONFIRMATION_REQUIRED feedback, the preceding file edit
 has ALREADY executed. Do NOT retry, re-apply, or repeat the insecure edit, or
 automatically revert it. The completed edit introduced the reported risk.
@@ -98,8 +108,10 @@ def runtime_info():
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
+                         'functional_verification': 'v0.1',
                          'runtime_source_editing': 'NOT_IMPLEMENTED'},
             'required_guidance_tools': sorted(REQUIRED_GUIDANCE_TOOLS),
+            'optional_guidance_tools': ['prepare_functional_verification','run_functional_verification'],
             'tool_check': 'REQUIRED_SUBSET_NOT_EXACT_COUNT',
             'runtime_executable': sys.executable,
             'same_environment_check': {'executable': sys.executable,

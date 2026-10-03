@@ -1,5 +1,8 @@
 # Smart Auto Remediation v0.1
 
+2026-10-04：用户回传 smart_auto、批准修复、拒绝三条真实 Desktop 闭环均 PASS（USER_REPORTED）。原下文 Pending 是历史状态。安全复核后新的可选功能验证 handoff 见 [Functional Verification v0.1](FUNCTIONAL_VERIFICATION.md)，不跑在 HookCoordinator 内；本机仍 NOT_AVAILABLE，不能把安全消失等于生产正确。
+
+
 ## CONFIRM_REQUIRED 跨回合签名确认修正（2026-10-03）
 
 本次用户回传的真实 Codex Desktop 结果：**smart_auto PASS（USER_REPORTED）**，无需“帮我修”即可 NEW → AUTO_FIX → prepare → 宿主 edit → RESOLVED → verify → SCANNER_VERIFIED_RESOLVED。最新 ask_before_fix 实机回传为post-edit语义、edit_already_applied、主动解释风险/询问修复/未问反均PASS（USER_REPORTED）；用户下一回合回答“允许”后confirmation被REFRESH_REQUIRED拒绝，approval handoff FAIL，未授权/修改源码。此次新完整批准/拒绝实机闭环仍PENDING。下方旧迭代正文的 Desktop Pending 是当时状态。本次改进后的 **CONFIRM_REQUIRED real-host 验收 PENDING**；SDK/native 的模拟用户选择与编辑不能代替它。

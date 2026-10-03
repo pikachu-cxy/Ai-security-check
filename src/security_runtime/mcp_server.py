@@ -65,6 +65,8 @@ def create_server(runtime: SecurityRuntime | None = None):
     from .hook_runtime import HookCoordinator
     hook_coordinator = HookCoordinator(runtime)
     remediation = RemediationService(getattr(runtime, 'store', None), hooks=hook_coordinator.store)
+    from .functional_verification import FunctionalVerificationService
+    functional = FunctionalVerificationService(remediation)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str) -> dict:
@@ -292,6 +294,23 @@ def create_server(runtime: SecurityRuntime | None = None):
     confirmation_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
     confirmation_tool.fn_metadata.arg_model.model_rebuild(force=True)
     confirmation_tool.parameters = confirmation_tool.fn_metadata.arg_model.model_json_schema()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def prepare_functional_verification(remediation_ref: str, task_ref: str, workspace_path: str | None = None) -> dict:
+        """Plan existing local verifiers only after Runtime-authorized repair has signed SCANNER_VERIFIED_RESOLVED. No shell/source/log/host status input; never runs builds in HookCoordinator."""
+        return functional.prepare(remediation_ref,task_ref,workspace_path or (binding.root if binding else None),
+                                  bound_workspace=binding.root if binding else None)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def run_functional_verification(functional_ref: str) -> dict:
+        """Consume the current connection's exact bounded plan. Executes only with enforceable local isolation; otherwise NOT_AVAILABLE. Independent security/functional/production statuses, no auto-revert/retry or dependency downloads."""
+        return functional.run(functional_ref,bound_workspace=binding.root if binding else None)
+
+    for name in ('prepare_functional_verification','run_functional_verification'):
+        tool = server._tool_manager.get_tool(name)
+        tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+        tool.fn_metadata.arg_model.model_rebuild(force=True)
+        tool.parameters = tool.fn_metadata.arg_model.model_json_schema()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:

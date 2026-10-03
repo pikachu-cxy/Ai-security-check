@@ -267,6 +267,12 @@ def main() -> None:
             run([sys.executable, str(script), '--runtime', str(executable), '--cross-turn-only',
                  '--output', str(restart_evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+            # Existing artifact gate only: no new CI workflow/enterprise policy.
+            # Unsupported isolation yields explicit Pending, never functional PASS.
+            functional_script = Path(__file__).with_name('functional_acceptance.py').resolve()
+            functional_evidence = args.archive.resolve().with_name(args.archive.name + '.functional.json')
+            run([sys.executable,str(functional_script),'--runtime',str(executable),'--output',str(functional_evidence)],
+                cwd=root,env=dict(env,SECURITY_RUNTIME_OFFLINE='1'),timeout=480)
         if args.hooks:
             script = Path(__file__).with_name('hook_acceptance.py').resolve()
             evidence = args.archive.resolve().with_name(args.archive.name + '.hooks.json')
