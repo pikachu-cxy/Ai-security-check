@@ -1,0 +1,45 @@
+{
+  "starting_head": "3d6611d7e94d80e9804ee526c6d35b809ca69c20",
+  "full_offline": {
+    "passed": 651,
+    "skipped": 6,
+    "subtests_passed": 6,
+    "seconds": 260.36
+  },
+  "baseline": {
+    "passed": 601,
+    "skipped": 6,
+    "subtests_passed": 6,
+    "provenance": "PREVIOUS_DELIVERED_POC_REGRESSION"
+  },
+  "new_test_cases": 50,
+  "skipped_reason": "tests/test_e2e_real.py requires all real scanner binaries on PATH",
+  "package": {
+    "wheel_sdist": true,
+    "module_bytes_match_final_source": true,
+    "integrity": true,
+    "compliance": true,
+    "wheel_sha256": "83c708e24581b55d8e8753574fb0937a5cad4da77ba1779523e0803f2e96bab3",
+    "sdist_sha256": "1211e20bd48cc307bf876cf105ee012ba1d7d018d754bf30854d0a850fcee07e"
+  },
+  "source_modules": {
+    "remediation.py": "4bd4dc167228c8ace59c03487c60671b97a5a415f07fb48de262251530bd28ee",
+    "remediation_policy.py": "66991d94ba91aa1fbe8a8ea195233d11a1eb7b2127417e94af3c8079928f9752",
+    "remediation_guard.py": "4c00d5962223cce2fdfc0f9d2149d4b687559bba4dbe543e15ae104b4a76ad02",
+    "codex_mcp_hook.py": "e71873fb9fe2eb40a25754c443638b18a9dbf579b21ea534ced9ec547c361873",
+    "mcp_server.py": "dbea57da7b14c9a896e96c1638743dab23caf2b8da784f02321f1b64092c6a72"
+  },
+  "previous_desktop_hook_poc": "PASS_USER_REPORTED",
+  "fresh_desktop_smart_auto_trial": "PENDING",
+  "independent_ground_truth": "UNREVIEWED",
+  "quality": "NOT_MEASURED",
+  "independent_three_user_trial": "PENDING",
+  "command_hook_modified": false,
+  "new_scanner": false,
+  "scanner_network": false,
+  "runtime_model": false,
+  "runtime_source_edit": false,
+  "target_build": false,
+  "jeepay_modified": false,
+  "ci": "PENDING_PUSH_AND_ACTUAL_RUNS"
+}

@@ -61,6 +61,10 @@ def create_server(runtime: SecurityRuntime | None = None):
     binding = WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
+    from .remediation import RemediationService
+    from .hook_runtime import HookCoordinator
+    hook_coordinator = HookCoordinator(runtime)
+    remediation = RemediationService(getattr(runtime, 'store', None), hooks=hook_coordinator.store)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str) -> dict:
@@ -68,7 +72,7 @@ def create_server(runtime: SecurityRuntime | None = None):
         from .codex_mcp_hook import codex_hook_output, handle_codex_hook
         from .hook_runtime import HookCoordinator
         data = handle_codex_hook(event, workspace_path, session_id, tool_name, binding=binding,
-                                 coordinator=HookCoordinator(runtime) if runtime is not None else None)
+                                 coordinator=hook_coordinator, remediation=remediation)
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
 
@@ -243,19 +247,28 @@ def create_server(runtime: SecurityRuntime | None = None):
         return TriageService(runtime_engine().store).view(scan_id)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def prepare_task_fix(task_ref: str, workspace_path: str | None = None) -> dict:
+    def prepare_task_fix(task_ref: str, workspace_path: str | None = None, remediation_ref: str | None = None) -> dict:
         """Prepare bounded constraints/evidence for the exact displayed task. Host edits; no scanner, model, network or writes here."""
         from .task_fix import TaskFixService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
+        if remediation_ref is not None:
+            if binding is None:
+                return remediation._fail('WORKSPACE_BINDING_REQUIRED')
+            return remediation.prepare(remediation_ref, task_ref, bound_path(workspace_path))
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
         return TaskFixService(ReadOnlySQLiteStore(path)).prepare(task_ref, workspace_path,
             bound_workspace=binding.root if binding else None)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None) -> dict:
+    def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:
         """Locally recheck every original task member with originating scanners/equivalence, bounded and offline. Never edits/builds target; engine caches/temp files may be written. Host reports are untrusted claims."""
         from .task_fix import TaskFixService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
+        if remediation_ref is not None:
+            if binding is None:
+                return remediation._fail('WORKSPACE_BINDING_REQUIRED')
+            return remediation.verify(remediation_ref, task_ref, bound_path(workspace_path),
+                                      host_reported_execution=host_reported_execution)
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
         return TaskFixService(ReadOnlySQLiteStore(path), engine.registry if engine is not None else None).verify(
             task_ref, workspace_path, bound_workspace=binding.root if binding else None,

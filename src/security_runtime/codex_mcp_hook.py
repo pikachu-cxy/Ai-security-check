@@ -39,7 +39,8 @@ def _inconclusive(reason: str) -> dict:
 
 def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_name: str,
                       *, binding: WorkspaceBinding | None,
-                      coordinator: HookCoordinator | None = None) -> dict:
+                      coordinator: HookCoordinator | None = None, remediation=None) -> dict:
+    decision = None
     claims = (event, workspace_path, session_id, tool_name)
     limits = (32, 4096, 500, 64)
     if any(not isinstance(value, str) or not value.strip() or len(value) > limit
@@ -67,6 +68,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         else:
             try:
                 result = (coordinator or HookCoordinator()).handle(hook_event, root, 'codex', session)
+                if remediation is not None:
+                    decision = remediation.on_hook(result, root, session)
             except Exception:
                 result = _inconclusive('HOOK_CHECK_INCONCLUSIVE')
 
@@ -85,6 +88,14 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     if 'last_check_status' in result:
         summary['last_check_status'] = result['last_check_status']
     output = CodexHookAdapter().output({'hook_event_name': 'PostToolUse'}, result)
+    if decision is not None:
+        summary['remediation'] = decision
+        if decision.get('feedback_required') is True and decision['action'] == 'AUTO_FIX':
+            output.update(decision='block', reason=decision['guidance'])
+            output['systemMessage'] = 'Security Runtime: automatic TLS remediation required.'
+        elif decision['action'] == 'NONE':
+            output['systemMessage'] = ('Security Runtime verified the local repair.'
+                                       if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else '')
     # Bounded metadata only; no families, findings, file contents or scanner errors.
     output['hookSpecificOutput']['additionalContext'] = json.dumps(summary, ensure_ascii=True)
     return {**summary, **output}
@@ -92,4 +103,4 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
 
 def codex_hook_output(result: dict) -> dict:
     """The documented Hook output shape for the MCP text content channel."""
-    return {key: result[key] for key in ('systemMessage', 'hookSpecificOutput')}
+    return {key: result[key] for key in ('systemMessage', 'hookSpecificOutput', 'decision', 'reason') if key in result}

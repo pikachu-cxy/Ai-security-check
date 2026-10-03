@@ -1,5 +1,22 @@
 # AI Security Runtime — Project State
 
+## Smart Auto Remediation v0.1 — 当前交接（2026-10-03）
+
+本轮从 `feature/runtime-mvp` / `3d6611d7e94d80e9804ee526c6d35b809ca69c20`、干净工作区继续；现有 Hook/command/MCP 实现保留。上一轮 Codex Desktop MCP Hook POC 的自动触发、baseline/NEW/PERSISTING/multiset/RESOLVED 由用户在本轮明确报告真实 PASS，来源 **USER_REPORTED**；下方历史 POC Pending 是当时状态，不覆盖这项新反馈。本轮 **same-turn Smart Auto Remediation Desktop trial 仍 PENDING**，不得把 SDK 模拟宿主编辑当成新宿主 PASS。
+
+独立 RemediationPolicy/Service 仅 allowlist `ai-security.java.trust-all-hostname` 的明确局部 JDK HTTPS inline installation。Runtime 发 AUTO_FIX grant，宿主沿现有 prepare_task_fix → edit → 自动 Hook/VerificationService → verify_task_fix；Runtime 不编辑源码、不调用宿主模型。用户级 smart_auto 默认，ask_before_fix/report_only 可选；两次尝试上限、HMAC/OS lock/有界 metadata、原 task_ref 和额外 grant 绑定、保留性证明防删除/抑制/移动/配置规避。已有 REVIEW/STALE/FAILED 与 Raw/risk/coverage 不提升或改写，本地 TLS 不变量的独立 ACTIONABLE repair policy 不证明生产可达性。
+
+最终源码离线回归 **651 passed / 6 skipped / 6 subtests passed，260.36 秒**（新测试50项）；旧阶段已交付 baseline 601/6/6。六项 skipped 单列为 tests/test_e2e_real.py 的三引擎 PATH 前提，未计为通过。实际 SDK、严格 clean-wheel venv、Windows native MCP/离线 Semgrep/Gitleaks 修复验证通过；模拟宿主编辑、原引擎子进程实际执行。wheel/sdist/package integrity/licenses/notices 通过。本轮四类新 CI 需以 AM 的具体 run/结论为准，不能引用历史 CI 为当前通过。
+
+包版本0.3.1、developer-guidance-v0.3 保持，新增 optional smart_auto_remediation v0.1。说明、真实 schema、模式命令、预算/连接中断/cooldown 限制、实机步骤见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md) 和 [AM 验收](AI_TRIAGE_ACCEPTANCE.md#am-smart-auto-remediation-v01)。现有 fixture 用户改动未覆盖；command hook 保留，不迁移 SessionStart/Stop 或其他 Host。
+
+后续 Deep Audit、watcher/daemon、MCP/Skill Security、Joern、自动构建、自动依赖升级、Secret rotation、业务/IAM/IaC 自动修改未开始，继续 Planned。三位试用 Pending；独立 ground truth UNREVIEWED/null，质量 NOT_MEASURED；Jeepay、冻结 benchmark、人工标签原状。完成本轮提交/推送/验收记录后停止，不开始下一阶段。
+
+### Agent Handoff
+
+先核对 git status/branch/HEAD 和 AM 当前 run，保留全部工作区；不要重写 Hook/创建第二套 fix engine。查看 SMART_AUTO_REMEDIATION 的 narrow eligibility 与连接/cooldown/保留性限制。上一轮用户报告 POC PASS != 本轮自动修复 Desktop PASS；本轮仍需用户真实试用。最终 implementation/docs SHA 从 AM/交付记录及 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 核对。
+
+
 ## Codex MCP Tool Hook POC — 当前交接（2026-10-03）
 
 起点为干净的 `feature/runtime-mvp` / `7a38593fb795cec4d7d09291f33f389430df8dba`。新增可选 MCP 工具 `handle_hook_event` 与 `hooks generate-mcp-poc codex` JSON 生成入口；仅 PostToolUse → FILE_CHANGED → 原 HookCoordinator。MCP当前14工具，包版本0.3.1、developer-guidance-v0.3及原8个required guidance tools不变。command adapter/core/host-event/原项目配置保留，后续阶段仍Planned。

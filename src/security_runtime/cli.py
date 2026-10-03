@@ -154,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
+    remediation_parser = sub.add_parser('remediation', help='User-level automatic remediation preferences')
+    remediation_parser.add_argument('action', choices=['status', 'configure'])
+    remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'])
     summary_parser=sub.add_parser('summary',help='Read developer tasks for this workspace; never scans or invokes AI')
     summary_parser.add_argument('--path')
     summary_parser.add_argument('--scan')
@@ -263,6 +266,17 @@ def main(argv: list[str] | None = None) -> int:
                 # Do not echo untrusted stdin, paths or exception source text.
                 print(json.dumps({'status':'FAILED','error_code':'HOOK_RUNTIME_FAILED','systemMessage':'AI Security Runtime hook could not complete. Retry the local advisory check.'}))
                 return 2
+        if args.command == 'remediation':
+            from .remediation_policy import RemediationConfig
+            config = RemediationConfig()
+            if args.action == 'configure':
+                if args.mode is None:
+                    raise ValueError('configure requires --mode')
+                config.write(args.mode)
+            elif args.mode is not None:
+                raise ValueError('status does not accept --mode')
+            print(json.dumps({'remediation': {'mode': config.read()}, 'max_auto_fix_attempts': 2}))
+            return 0
         if args.command=='runtime-info':
             from .host_guidance import runtime_info
             info=runtime_info()

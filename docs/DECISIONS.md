@@ -1,5 +1,27 @@
 # AI Security Runtime — Architecture Decisions
 
+## Smart Auto Remediation v0.1 — 当前交接（2026-10-03）
+
+本轮从 `feature/runtime-mvp` / `3d6611d7e94d80e9804ee526c6d35b809ca69c20`、干净工作区继续；现有 Hook/command/MCP 实现保留。上一轮 Codex Desktop MCP Hook POC 的自动触发、baseline/NEW/PERSISTING/multiset/RESOLVED 由用户在本轮明确报告真实 PASS，来源 **USER_REPORTED**；下方历史 POC Pending 是当时状态，不覆盖这项新反馈。本轮 **same-turn Smart Auto Remediation Desktop trial 仍 PENDING**，不得把 SDK 模拟宿主编辑当成新宿主 PASS。
+
+独立 RemediationPolicy/Service 仅 allowlist `ai-security.java.trust-all-hostname` 的明确局部 JDK HTTPS inline installation。Runtime 发 AUTO_FIX grant，宿主沿现有 prepare_task_fix → edit → 自动 Hook/VerificationService → verify_task_fix；Runtime 不编辑源码、不调用宿主模型。用户级 smart_auto 默认，ask_before_fix/report_only 可选；两次尝试上限、HMAC/OS lock/有界 metadata、原 task_ref 和额外 grant 绑定、保留性证明防删除/抑制/移动/配置规避。已有 REVIEW/STALE/FAILED 与 Raw/risk/coverage 不提升或改写，本地 TLS 不变量的独立 ACTIONABLE repair policy 不证明生产可达性。
+
+最终源码离线回归 **651 passed / 6 skipped / 6 subtests passed，260.36 秒**（新测试50项）；旧阶段已交付 baseline 601/6/6。六项 skipped 单列为 tests/test_e2e_real.py 的三引擎 PATH 前提，未计为通过。实际 SDK、严格 clean-wheel venv、Windows native MCP/离线 Semgrep/Gitleaks 修复验证通过；模拟宿主编辑、原引擎子进程实际执行。wheel/sdist/package integrity/licenses/notices 通过。本轮四类新 CI 需以 AM 的具体 run/结论为准，不能引用历史 CI 为当前通过。
+
+包版本0.3.1、developer-guidance-v0.3 保持，新增 optional smart_auto_remediation v0.1。说明、真实 schema、模式命令、预算/连接中断/cooldown 限制、实机步骤见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md) 和 [AM 验收](AI_TRIAGE_ACCEPTANCE.md#am-smart-auto-remediation-v01)。现有 fixture 用户改动未覆盖；command hook 保留，不迁移 SessionStart/Stop 或其他 Host。
+
+后续 Deep Audit、watcher/daemon、MCP/Skill Security、Joern、自动构建、自动依赖升级、Secret rotation、业务/IAM/IaC 自动修改未开始，继续 Planned。三位试用 Pending；独立 ground truth UNREVIEWED/null，质量 NOT_MEASURED；Jeepay、冻结 benchmark、人工标签原状。完成本轮提交/推送/验收记录后停止，不开始下一阶段。
+
+### Smart Auto v0.1 决策
+
+- 一个确定 JDK hostname bypass 的显式修复 allowlist，不扩展 scanner/policy DSL/Host 通用框架。
+- 未审阅 NEW 在本地类型/安装位置/保留性均可核对时由独立 remediation policy 标 ACTIONABLE（source 明示），绝不伪造 AI review 或生产 exploitability；已有 REVIEW 优先，STALE/FAILED 不自动提升。
+- AUTO_FIX 通过官方 PostToolUse decision:block 返回反馈，不撤销编辑；Code mode promise rejection 与宿主自动继续是独立实机门槛。NONE/BEST_PRACTICE 静默，失败或上限 ESCALATE 不再次 block。
+- 两次 Runtime 授权计数；原 coverage contract 加保留性证明，两者缺一即 INCONCLUSIVE。连接重启牺牲自动推进，保留只读准备与安全预算。
+- 保留 default cooldown；first-edit baseline 不当 NEW，DEBOUNCED 不声称已执行。没有后台补扫定时器/Stop 全量迁移。
+- capability contract 不强行 bump；新增 feature metadata，Desktop 自动修复 gate Pending，Runtime 自动 patch 仍 NOT_IMPLEMENTED。
+
+
 ## ADR-019 — Codex MCP transport POC（Accepted / Host trial Pending）
 
 2026-10-03按用户授权，只增加PostToolUse的MCP transport，复用唯一HookCoordinator和原Codex事件翻译/输出，不移除command hook。原因是用户报告Windows command Host runner错误0x80131506；协议替代验证与真实Host修复是不同结论。

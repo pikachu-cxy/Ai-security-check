@@ -442,3 +442,28 @@ Standalone四平台均实际执行managed engine准备、archive/MCP、既有off
 安全边界：Hook仅现有离线quick SAST/Secret，ADVISORY；无Scanner公网请求/在线解析、无Runtime模型调用、无目标源码编辑/目标构建/自动补丁。只有公开Python依赖和CI发行引擎/数据库获取、GitHub git/Actions网络；不上传目标源码/Secret。开发只修改Runtime与可丢弃synthetic fixture，Jeepay/冻结benchmark/Raw/triage/task_ref/risk/coverage contract/人工标签原状。Secret状态与输出只保留安全metadata/count/coordinates，无Secret值、匹配行或凭证hash。
 
 仍Pending：fresh实际Codex/Cursor host trial；Kiro/WorkBuddy/Qoder官方schema确认与自动接入；旧Jeepay普通意图UX刷新后复验；三位真实开发者试用。独立Ground Truth UNREVIEWED/null、质量NOT_MEASURED，未开展。后续阶段继续Planned，本轮完成后停止。
+
+
+## AM. Smart Auto Remediation v0.1
+
+2026-10-03，起点 `3d6611d7e94d80e9804ee526c6d35b809ca69c20`，feature/runtime-mvp，干净工作区。上一轮实际 Desktop Hook POC 的 PASS 由用户明确反馈，来源 USER_REPORTED；历史 AL/AK Pending 保留其当时含义。本轮 fresh same-turn Desktop auto-remediation 仍 **PENDING**。
+
+新增 remediation_policy.py、remediation.py、remediation_guard.py、test_remediation.py、scripts/remediation_acceptance.py；扩展 Codex MCP transport、两现有 fix tools、用户级 CLI 和 host guidance。HookCoordinator/command adapters/pre-commit 未改变；fix/equivalence/triage/Raw/risk/coverage engine 未重写。新增 standalone archive 的可选 --remediation gate，在四平台既有 workflow 实际执行。
+
+旧已交付 POC baseline：601 passed / 6 skipped / 6 subtests passed。本轮新增50项 deterministic tests 覆盖 policy、REVIEW/manual/modes、两次上限、closed/unrelated、删除/清空/抑制/ignored移动/config/business变动、原rule/file/pack/engine/partial/provider failure、只读prepare、无Source/Secret/token持久化、损坏状态与连接重启等。最终源码 full offline：**651 passed / 6 skipped / 6 subtests passed（260.36秒）**。
+
+Skipped 单列：tests/test_e2e_real.py 第38/58/68/80/120/154行，三真实引擎 PATH 前提缺失，不记通过。另行使用已管理 Semgrep/Gitleaks 的真实 SDK/native/clean-wheel integration，原引擎 process observed=true。源码 SDK、clean venv 和 Windows standalone：baseline → NEW/AUTO_FIX/block → existing prepare → **driver 模拟宿主编辑** → Hook自动 VerificationService → SCANNER_VERIFIED_RESOLVED → existing verify → 无关编辑NONE，均PASS。metadata证据不保存fix packet source，详见三份 [SDK](smart-auto-remediation-evidence.json)、[clean-wheel](smart-auto-remediation-clean-evidence.json)、[native](smart-auto-remediation-native-evidence.json)；不能推导 Desktop 自动响应/同turn执行 PASS。
+
+wheel/sdist 构建、现有 check_wheel/许可证分发/notices检查通过，新模块 bytes 与最终源码逐一相同；严格 clean venv 无 system-site-packages、安装 wheel 非 editable 并实际 SDK验证通过。包SHA/源码模块hash见 [acceptance metadata](smart-auto-remediation-acceptance.json)。本地 native 是 dirty implementation 工作区构建，version.json 的 source_commit 指向起点；新CI artifact 将使用实际提交HEAD，不混淆 provenance。
+
+官方 [Hooks](https://learn.chatgpt.com/docs/hooks) 已复核 mcp_tool 同输出contract、PostToolUse decision:block/reason/systemMessage/hookSpecificOutput；Code mode 有副作用后的 promise rejection。AUTO_FIX反复反馈仅两次；NONE/RESOLVED/BEST_PRACTICE不block；不撤销原编辑。保留1秒cooldown：新session首次edit基线不是NEW；太快发现DEBOUNCED不宣称执行，SDK驱动明确模拟1.1秒编辑耗时。实际宿主连续编辑及feedback消费仍须验收。
+
+独立本地TLS不变量 policy ACTIONABLE 明示source，不更改旧triage priority、AI verdict/exploitability或Raw；已有有效REVIEW、STALE、FAILED不自动提升。32KiB目标及200files/200dirs/401entries/2MB保留性预算，workspace外用户state，原provider/rule/file/pack完整证据和不变业务tokens/其他文件都是必要条件；删除/suppress/规则配置变化/移动未扫描路径不能Verified。prepare只读 attestation 在连接内，重启丢失则fail closed，不重置persistent attempt预算。
+
+配置/决策schema、fresh现有 codex-mcp-hook-poc-project 试用步骤及唯一用户消息见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md)。现有fixture与项目/global command Hook未修改，不自动批准信任；MCP需重连刷新新版 schema/feature。
+
+网络仅公开Python包依赖获取与GitHub分发/CI，不上传目标源码或Secret；Scanner force offline、Runtime模型未调用、Runtime未改目标、目标未build/执行、不自动commit/PR产品功能。Jeepay/benchmark/人工标签未改。三位试用Pending、独立Ground Truth UNREVIEWED/null、质量NOT_MEASURED；下一阶段均Planned，交付后停止。
+
+### AM.1 提交与当前 CI
+
+待本轮提交推送后填入实际 implementation HEAD、run链接和结论；没有用旧CI替代。本轮 Desktop Smart Auto trial PENDING，Cursor实机Pending；Kiro/WorkBuddy/Qoder仍MANUAL_CONFIGURATION_REQUIRED，没有扩大到其他宿主。
