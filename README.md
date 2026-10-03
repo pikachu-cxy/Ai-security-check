@@ -23,7 +23,7 @@ stops external engine processes. Library and MCP calls do not enable CLI progres
 AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through **CLI** and **MCP**.
 
 - **Local-first:** project source stays on your machine by default.
-- **One-command setup:** native onboarding for **Cursor** and **WorkBuddy**.
+- **One-command setup:** owned project setup for **Codex**, plus existing **Cursor** and **WorkBuddy** onboarding.
 - **Generic MCP:** works with other MCP-compatible coding tools such as Codex.
 - **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
 - **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
@@ -59,7 +59,12 @@ security-check doctor
 security-check scan --mode quick
 security-check setup cursor
 security-check setup workbuddy
+security-check setup codex --path .
 ```
+
+For Codex, see [setup, status, repair/remove and fresh Desktop acceptance](docs/CODEX_INTEGRATION.md).
+A recent readiness observation is not a safety result. Actual Desktop cold-start
+acceptance for this lifecycle version remains pending; no manual warm-up is a product prerequisite.
 
 ## 2. Run your first CLI scan
 

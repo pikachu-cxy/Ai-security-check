@@ -1,5 +1,15 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
+
+干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
+
+本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
+
+新增 focused **59 passed**；定向 **438 passed /420.09s**，最后三项 readiness 状态/恢复由 focused 与 final full 覆盖。最终完整离线 **894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34)**，六项 skipped 单列。wheel/sdist/七模块逐字节完整性/package/compliance/严格离线 clean（无 editable/system site，117 cached wheels）/Windows native **PASS**。实际本地 MCP + Semgrep/Gitleaks 合成冷启动不调用 get_runtime_info、不重复显式 verify，无 verifier 时不调用 functional run。门禁见 [AS 验收](AI_TRIAGE_ACCEPTANCE.md#as-codex-integration-productization-v02--cold-start-readiness-v03)、[证据](codex-product-acceptance.json)、[用户命令与 fresh trial](CODEX_INTEGRATION.md)。新 CI 推送后按实际 jobs/steps/annotations 核对，未预写通过。
+
+最新验收为 AS，以下旧章节是历史时点。
+
 最终文档提交 eaafecc9c595b924940d272249a7ac7a08b26909 的Runtime/Package/Compliance实际failure，GitHub检查注解明确为付款失败或支出限额，未分配Runner、未执行步骤；文档CI验收 PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。修正implementation 73c0945 的四类/四平台实际success不变，不把文档CI外部阻塞写为PASS。账号付款/支出设置未修改；恢复后重跑，无源码/coverage降级或workflow绕过。
 
 本轮 implementation HEAD `73c0945c934fe82fef7323db9e10bfe938e3fc74` 已推送 origin/feature/runtime-mvp，Runtime tests（Linux/Windows）、Package integrity（Linux/Windows）、Compliance、Standalone artifacts（Windows/Linux/macOS arm64/x64）全部实际 success；具体新 run 见 AN.2。最终 docs HEAD 用 git log -1 --format=%H -- docs/PROJECT_STATE.md 获取。
@@ -855,3 +865,61 @@ Implementation HEAD `74f5aae9d3a054254e2e9f5b29d3e1572c157092` 已推送 origin/
 本地 Windows native 与 CI 独立记账；不使用历史成功证明本轮。最终 docs-only 提交会触发 Runtime/Package/Compliance，新 run 在最终回复按实际观察单列。final docs HEAD 按 PROJECT_STATE.md 的 git log 核对。
 
 仍 Pending：fresh Desktop Trial3 自动编排；真实 Maven A/B/Desktop功能execution 与 Linux hardened/其它生态真实执行 PENDING_ENVIRONMENT_PREREQUISITES；三位试用；独立 Ground Truth UNREVIEWED/null、质量 NOT_MEASURED；本轮 CI 按实际账户状态。没有安装/下载 Maven/JDK/bwrap/容器/依赖，没有降低 isolation/containment/argv/副作用限制；Runtime 无模型调用/源码编辑/构建，Scanner 无在线调用；driver 只编辑可丢弃合成项目，未改用户fixture/Jeepay/冻结benchmark/标签，无 Secret rotation。公共官方文档和授权 GitHub delivery 可联网，不上传目标源码给模型/Scanner。Enterprise Enforcement 等下一阶段仍 Planned，本轮交付后停止。
+
+## AS. Codex Integration Productization v0.2 / Cold-start Readiness v0.3
+
+### AS.1 起点与真实状态
+
+## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
+
+干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
+
+本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
+
+新增 focused **59 passed**；定向 **438 passed /420.09s**，最后三项 readiness 状态/恢复由 focused 与 final full 覆盖。最终完整离线 **894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34)**，六项 skipped 单列。wheel/sdist/七模块逐字节完整性/package/compliance/严格离线 clean（无 editable/system site，117 cached wheels）/Windows native **PASS**。实际本地 MCP + Semgrep/Gitleaks 合成冷启动不调用 get_runtime_info、不重复显式 verify，无 verifier 时不调用 functional run。门禁见 [AS 验收](AI_TRIAGE_ACCEPTANCE.md#as-codex-integration-productization-v02--cold-start-readiness-v03)、[证据](codex-product-acceptance.json)、[用户命令与 fresh trial](CODEX_INTEGRATION.md)。新 CI 推送后按实际 jobs/steps/annotations 核对，未预写通过。
+
+
+新 Desktop cold-start/SessionStart/required ordering PENDING_ACTUAL_DESKTOP。官方文档证明schema/support边界，不证明本机Desktop已派发。前轮AUTO内部verify/functionalprepare回传USER_REPORTED PASS；未补写explicitverify/run。
+
+### AS.2 架构与协议
+
+Manager/Adapter/Codex与Core分离；七新改模块在wheel/sdist/source逐字节一致，十二核心与startingHEAD不变。自己的exe/environment只读cap检查；requiredserver MCP+SessionStart观察+原PostToolUse，非commandrunner。workspace规范化/有界/UNCforeign/linkcontainment，configparse/type/size/duplicatekey failclosed，signedfingerprints ownership。事务/幂等/并发/legacy策略见ARCHITECTURE/DECISIONS/CODEX_INTEGRATION。
+
+新readiness三字段event/workspace_path/session_id，additionalProperties=false/strict/hide_input_in_errors，4KiB signedhashmetadata，无source/Secret/prompts/transcript/payload，无scan/model/build/edit/remediation/network，Ready非live/safe。Hook的匹配task/grant CLOSED SCANNER_VERIFIED_RESOLVED回执是既有真实verify结果，Host可不再显式verify；functionalprepare仍校验原signedstate与guards，缺证明reject，未降FULL/process/rule/path/absence标准。
+
+### AS.3 本地验证
+
+| 门禁 | 实际结果 |
+|---|---|
+| prior baseline | 835 passed /6 skipped /6 subtests passed |
+| focused | 59 passed，28.53s wrapper |
+| targeted | 438 passed in 420.09s；最后三项由focused/finalfull覆盖 |
+| final full offline | 894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34) |
+| wheel/sdist/package/compliance | PASS，3.1s |
+| bytes integrity | 七模块PASS，十二核心不变 |
+| strict clean | PASS，58.0s，无editable/systemsite、117缓存wheels、无下载 |
+| Windows native | PASS，78.26s，Unicode/空格path、FROZEN ownexe、atomiclifecycle与MCP |
+| source SDK cold start | PASS，46.45s，新process/session无get_runtime_info |
+
+skipped单列：
+
+- SKIPPED [1] tests\test_e2e_real.py:58: real scanner binaries required
+- SKIPPED [1] tests\test_e2e_real.py:80: real scanner binaries required
+- SKIPPED [1] tests\test_e2e_real.py:120: real scanner binaries required
+- SKIPPED [1] tests\test_e2e_real.py:154: real scanner binaries required
+- SKIPPED [1] tests\test_e2e_real.py:68: real scanner binaries required
+- SKIPPED [1] tests\test_e2e_real.py:38: real scanner binaries required
+
+source/wheel/native各有codex-product-*-evidence.json。宿主edits由driver模拟；firstbaseline scanner_run=true/new0，危险editnew1/AUTO→prepare→修复resolved1→内部SCANNER_VERIFIED_RESOLVED/CLOSED匹配task/grant→直接functionalprepare。未调用verify_task_fix/get_runtime_infowarmup；无verifier无handoff不run。不是Desktop模型或MavenPASS。native预提交构建versionmetadata的source_commit是startingHEAD，实际包含最终工作区实现；不能把该字段当实现commit的immutablebuild证明。
+
+### AS.4 实机验收与lifecycle
+
+见CODEX_INTEGRATION的命令和fresh步骤。setup后完全退出/重开，firstordinaryJavaedit前不get_runtime_info/scan/status；safe baseline再ordinary edit引入always-truehost verifier，应自动fix/Hook内部verify/functionalprepare。首edit不触发且warmup后才恢复为FAIL；缺Host官方可用机制为HOST_LIFECYCLE_PREREQUISITE_PENDING。setup/status/setupagain/repair/remove/setupagain另做disposabletrial，检查bytes/mtime、unrelatedconfig/source/DB保留。自动化不是用户实机反馈，未改用户主config；projecttrust为Host前提。
+
+### AS.5 CI
+
+implementation push后查询Runtime/Package/Compliance/四平台Standalone真实jobs/steps/annotations。无runner/steps且billingannotations为PENDING_RERUN_AFTER_ACCOUNT_RECOVERY，不能称代码FAIL或PASS；本轮新runs随最终文档更新，旧AR不替代。
+
+### AS.6 Pending与边界
+
+新actualDesktopcold-start/session/用户lifecycle反馈Pending；真实MavenA/B/hardenedLinux PENDING_ENVIRONMENT_PREREQUISITES，三位试用Pending，GroundTruth UNREVIEWED/null，质量NOT_MEASURED。未安装/下载Maven/JDK/bwrap/容器/构建依赖、未目标build/Runtime模型/Secretrotation；Scanner离线，无Jeepay/原Desktopfixture/人工标签变化。仅官方OpenAIdocs/GitHub交付CI联网；既有四平台artifact准备公开engine/cache流程保留，fixture扫描本身offline不上传source或Secret。未开始Enforcement/EnterpriseGate/其它Host/第二AUTO/DeepAudit/Joern/DAST/watcher。

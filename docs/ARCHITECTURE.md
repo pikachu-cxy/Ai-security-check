@@ -1,5 +1,23 @@
 # AI Security Runtime — Architecture
 
+## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
+
+干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
+
+本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
+
+新增 focused **59 passed**；定向 **438 passed /420.09s**，最后三项 readiness 状态/恢复由 focused 与 final full 覆盖。最终完整离线 **894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34)**，六项 skipped 单列。wheel/sdist/七模块逐字节完整性/package/compliance/严格离线 clean（无 editable/system site，117 cached wheels）/Windows native **PASS**。实际本地 MCP + Semgrep/Gitleaks 合成冷启动不调用 get_runtime_info、不重复显式 verify，无 verifier 时不调用 functional run。门禁见 [AS 验收](AI_TRIAGE_ACCEPTANCE.md#as-codex-integration-productization-v02--cold-start-readiness-v03)、[证据](codex-product-acceptance.json)、[用户命令与 fresh trial](CODEX_INTEGRATION.md)。新 CI 推送后按实际 jobs/steps/annotations 核对，未预写通过。
+
+### Host 生命周期边界
+
+IntegrationManager → IntegrationAdapter protocol → CodexIntegrationAdapter；独立于旧 Cursor/WorkBuddy registry 和 Runtime Core。CLI 只分发/渲染。Python 使用自己 sys.executable + -I -m security_runtime.cli（避免 target cwd/PYTHONPATH shadow），frozen 用自己 executable，区分 PYTHON_VENV/SYSTEM_PYTHON/FROZEN。当前环境 runtime-info + 实际 MCP initialize/list_tools 只读子集检查，额外工具允许，不执行用户 config 的任意 command。项目 TOML 自有 ai_security_runtime required=true、startup60/tool120/cwd/env binding；PostToolUse 原工具，SessionStart 最小 readiness。trust/全局 hooks/其它 servers 不写。
+
+项目外 HMAC ownership 保存 integration_id/managed_version/workspace_hash/server 与 block/server/按 event 单 handler wrapper fingerprint，16KiB上限，无完整 config/history/源码/Secret。TOML 自有 delimited block 精确 hash与解析语义双验证，其他原始 bytes/comments保留；JSON保留无关值/顺序和混合 group 用户 handler。OS workspace lock→重读→有界 parse/type/duplicate-key/link校验→merge owned→validate→CAS→atomic replace→重读两文件。多文件非单次OStransaction：UPDATING journal最多old/new两组fingerprints；异常仅在未被别的writer改动时内存回滚，crash后repair识别旧新自有版本；无法证明failclosed，不持久化含Secret的完整configbackup。
+
+readiness 单个4KiB signed observation，只含workspace/session hash、version/contract/config hash/时间，最近900秒有效。同session重复有效事件不写；malformed/oversize不算READY，新有效bound事件可替换自有损坏slot。不初始化写DB/扫描/模型/build/源代码修复，不独立认证人类或Host品牌，live_connection UNKNOWN。分事件Hook状态，配置变化旧观察STALE。
+
+以下章节为历史记录，最新状态以上文与 AS 为准。
+
 ## Smart Auto Host Orchestration v0.2（2026-10-04）
 
 Implementation `74f5aae9d3a054254e2e9f5b29d3e1572c157092` 已推送；新四类 CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，9 jobs 未分配 Runner、steps为空，实际检查注解均为账户付款失败/支出限额，未执行代码。不是代码 FAIL 或 PASS；未修改账户设置或验收门槛。四平台未运行。 新 run 见 AR.5。

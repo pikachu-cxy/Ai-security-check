@@ -84,6 +84,20 @@ def create_server(runtime: SecurityRuntime | None = None):
     hook_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
     hook_tool.fn_metadata.arg_model.model_rebuild(force=True)
     hook_tool.parameters = hook_tool.fn_metadata.arg_model.model_json_schema()
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def handle_readiness_event(event: str, workspace_path: str, session_id: str) -> dict:
+        """Observe bound Codex SessionStart readiness only. Untrusted metadata claims; no prompt/source/transcript. Writes bounded hashed integration metadata, never scans, builds, calls a model or edits target source. Ready is not safe."""
+        from .integration_readiness import handle_readiness
+        from .codex_mcp_hook import codex_hook_output
+        data = handle_readiness(event, workspace_path, session_id, binding=binding,
+                               tools={t.name for t in server._tool_manager.list_tools()})
+        return CallToolResult(structuredContent=data, content=[TextContent(
+            type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
+
+    readiness_tool = server._tool_manager.get_tool('handle_readiness_event')
+    readiness_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+    readiness_tool.fn_metadata.arg_model.model_rebuild(force=True)
+    readiness_tool.parameters = readiness_tool.fn_metadata.arg_model.model_json_schema()
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
 

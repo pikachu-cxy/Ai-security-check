@@ -9,7 +9,9 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
 HOST_INSTRUCTIONS = '''AI Security Runtime developer workflow:
 Users express ordinary intent, such as 检查这个项目 or 继续第一项/处理第一个问题.
 Do not ask users for Finding UUIDs, tool names, technical prompts, or copy/paste
-between tools. Check get_runtime_info and required tool capabilities by subset,
+between tools. Codex setup owns startup/readiness; never require a get_runtime_info
+warm-up or security prompt before the first ordinary edit. For diagnostics, check
+get_runtime_info and required tool capabilities by subset,
 not exact tool count. Missing tools can mean a stale MCP connection; follow its
 connection recovery guidance. Do not blindly reinstall an editable environment.
 For an authorized scan request use scan_project/scan_diff for the bound or explicit
@@ -66,11 +68,20 @@ SECURITY_AUTO_REMEDIATION_AUTHORIZED and its interaction contract require automa
 continuation, including USER_CONFIRMED grants whose approval has already occurred.
 Retain the exact task_ref/remediation_ref, immediately call prepare_task_fix and
 edit only within that packet's local TLS authorization. Then allow the automatic
-Hook and call verify_task_fix with both references. No source deletion, rule
+Hook. Retain the original task_ref/remediation_ref and grant_id from the grant.
+Only a Runtime Hook security_verification receipt matching that task_ref/grant_id,
+with status SCANNER_VERIFIED_RESOLVED and phase CLOSED, permits skipping duplicate
+verify_task_fix. The signed original remediation state was closed by the same
+TaskFixService/VerificationService. Hook delta/no findings alone is not proof.
+If the Hook is missing, INCONCLUSIVE or the receipt mismatches, call verify_task_fix
+with both original references. No source deletion, rule
 suppression, config changes, unrelated edits or network are authorized.
-After Runtime-authorized AUTO_FIX or USER_CONFIRMED verify_task_fix returns
-SCANNER_VERIFIED_RESOLVED, call prepare_functional_verification with the same
-task_ref/remediation_ref and consume its run_functional_verification handoff.
+After Runtime-authorized AUTO_FIX or USER_CONFIRMED obtains that matched Hook receipt
+or explicit verify_task_fix returns SCANNER_VERIFIED_RESOLVED, call
+prepare_functional_verification with the same task_ref/remediation_ref. Runtime
+revalidates the signed CLOSED original grant and source/snapshot/policy guards.
+Consume run_functional_verification only for PLANNED with both functional_ref and
+handoff present. NOT_AVAILABLE without those fields stops functional execution.
 Only Runtime chooses existing local commands; never invent or run shell commands
 as this capability. Functional checks do not run in HookCoordinator or ordinary
 edits. If the optional tools are missing use same-environment reconnect guidance.
@@ -128,7 +139,8 @@ def runtime_info(*, remediation_config=None):
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
-                         'functional_verification': 'v0.1',
+                          'functional_verification': 'v0.1',
+                          'codex_integration': 'v0.2', 'cold_start_readiness': 'v0.3',
                          'runtime_source_editing': 'NOT_IMPLEMENTED'},
             'required_guidance_tools': sorted(REQUIRED_GUIDANCE_TOOLS),
             'optional_guidance_tools': ['prepare_functional_verification','run_functional_verification'],

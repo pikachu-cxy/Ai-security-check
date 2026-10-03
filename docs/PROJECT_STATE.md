@@ -1,5 +1,23 @@
 # AI Security Runtime — Project State
 
+## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
+
+干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
+
+本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
+
+新增 focused **59 passed**；定向 **438 passed /420.09s**，最后三项 readiness 状态/恢复由 focused 与 final full 覆盖。最终完整离线 **894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34)**，六项 skipped 单列。wheel/sdist/七模块逐字节完整性/package/compliance/严格离线 clean（无 editable/system site，117 cached wheels）/Windows native **PASS**。实际本地 MCP + Semgrep/Gitleaks 合成冷启动不调用 get_runtime_info、不重复显式 verify，无 verifier 时不调用 functional run。门禁见 [AS 验收](AI_TRIAGE_ACCEPTANCE.md#as-codex-integration-productization-v02--cold-start-readiness-v03)、[证据](codex-product-acceptance.json)、[用户命令与 fresh trial](CODEX_INTEGRATION.md)。新 CI 推送后按实际 jobs/steps/annotations 核对，未预写通过。
+
+### Agent Handoff
+
+先读 AS、CODEX_INTEGRATION 和 evidence，检查 Git HEAD/状态。用户无需手改配置/了解 venv，setup 使用自己的环境、默认 MCP Hook。不要调用 get_runtime_info 热身后声称 cold-start PASS。官方支持 SessionStart MCP，但可能早于 server ready；采用自有 server required=true 初始化前提 + readiness 观察。新 Desktop required/start ordering 待真实试验；无可用机制记录 HOST_LIFECYCLE_PREREQUISITE_PENDING。
+
+核心 HookCoordinator/snapshot/cooldown/single-flight/family multiset/equivalence、Scanner/规则、RemediationPolicy、TaskFix/Verification、Functional 三模块与 command fallback 未改。仅匹配原 task_ref/grant_id 的 Runtime CLOSED/SCANNER_VERIFIED_RESOLVED 回执可避免重复 verify；原签名/source/preservation/snapshot/policy/FULL/process/rule/path/absence 标准不降低。functional prepare 无 handoff 必须停止。
+
+真实 Maven A/B/Linux hardened execution PENDING_ENVIRONMENT_PREREQUISITES；三位试用 PENDING、独立 Ground Truth UNREVIEWED/null、质量 NOT_MEASURED。未安装/下载 Maven/JDK/bubblewrap/容器/构建依赖。无 Scanner 网络、Runtime 模型、目标构建、Runtime 源码修复或 Secret rotation；宿主 edit 仅合成 fixture，未改 Jeepay/实际 Desktop fixture/冻结 benchmark/人工标签。后续 Enforcement/Enterprise Gate/其它 Host/第二类 AUTO/新 Scanner-policy/Joern/Deep Audit/watcher保持 Planned。完成本轮交付后停止。
+
+以下章节为历史记录，最新状态以上文与 AS 为准。
+
 ## Smart Auto Host Orchestration v0.2（2026-10-04）
 
 Implementation `74f5aae9d3a054254e2e9f5b29d3e1572c157092` 已推送；新四类 CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，9 jobs 未分配 Runner、steps为空，实际检查注解均为账户付款失败/支出限额，未执行代码。不是代码 FAIL 或 PASS；未修改账户设置或验收门槛。四平台未运行。 新 run 见 AR.5。

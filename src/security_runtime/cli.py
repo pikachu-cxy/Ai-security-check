@@ -205,9 +205,15 @@ def main(argv: list[str] | None = None) -> int:
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
     setup_parser = sub.add_parser("setup", help="Configure an AI coding tool connection")
-    setup_parser.add_argument("integration", nargs="?", choices=["cursor", "workbuddy"])
+    setup_parser.add_argument("integration", nargs="?", choices=["codex", "cursor", "workbuddy"])
     setup_parser.add_argument("--path")
+    setup_parser.add_argument('--json', action='store_true')
     setup_parser.add_argument("--verbose", action="store_true")
+    lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
+    lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
+    lifecycle_parser.add_argument('integration', choices=['codex'])
+    lifecycle_parser.add_argument('--path')
+    lifecycle_parser.add_argument('--json', action='store_true')
     integrations_parser = sub.add_parser("integrations", help="Inspect AI coding integrations")
     integrations_parser.add_argument("--path")
     integrations_parser.add_argument("--verbose", action="store_true")
@@ -433,6 +439,12 @@ def main(argv: list[str] | None = None) -> int:
                 print("Environment: SECURITY_RUNTIME_WORKSPACE=" + str(workspace))
                 print("\nFor any MCP-compatible coding tool:\n1. Open MCP settings\n2. Add local stdio server\n3. Use the command and arguments above")
             return 0
+        if args.command == 'integration' or (args.command == 'setup' and args.integration == 'codex'):
+            from .integration_lifecycle import IntegrationManager, render_integration
+            data = IntegrationManager().execute('setup' if args.command == 'setup' else args.action,
+                                                args.integration, args.path)
+            print(json.dumps(data, ensure_ascii=True) if args.json else render_integration(data))
+            return 2 if data['overall'] == 'BROKEN' else 0
         if args.command == "setup":
             workspace = WorkspaceResolver().resolve(args.path).path
             registry = IntegrationRegistry()

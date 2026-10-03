@@ -153,6 +153,7 @@ def main() -> None:
     parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
     parser.add_argument('--hooks', action='store_true', help='Also exercise offline native Hook CLI with actual local engines')
     parser.add_argument('--remediation', action='store_true', help='Also exercise native smart-auto MCP repair/verification with simulated host edits')
+    parser.add_argument('--codex-integration', action='store_true', help='Exercise disposable owned Codex lifecycle and fresh MCP readiness without warmup')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()
     if args.osv_fallback and not args.full:
@@ -163,6 +164,8 @@ def main() -> None:
         parser.error('--hooks requires --full for local managed engines')
     if args.remediation and not args.full:
         parser.error('--remediation requires --full for local managed engines')
+    if args.codex_integration and not args.full:
+        parser.error('--codex-integration requires --full for local managed engines')
     with tempfile.TemporaryDirectory(prefix="ai-security-release-") as temporary:
         root = Path(temporary)
         extract(args.archive, root)
@@ -278,6 +281,11 @@ def main() -> None:
             evidence = args.archive.resolve().with_name(args.archive.name + '.hooks.json')
             run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+        if args.codex_integration:
+            script = Path(__file__).with_name('codex_integration_acceptance.py').resolve()
+            evidence = args.archive.resolve().with_name(args.archive.name + '.codex-integration.json')
+            run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
         record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
@@ -286,6 +294,7 @@ def main() -> None:
         record['fix_verify_offline_synthetic'] = args.fix_verify
         record['hooks_offline_synthetic'] = args.hooks
         record['remediation_offline_synthetic'] = args.remediation
+        record['codex_integration_offline_synthetic'] = args.codex_integration
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")
 

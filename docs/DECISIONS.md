@@ -1,5 +1,24 @@
 # AI Security Runtime — Architecture Decisions
 
+## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
+
+干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
+
+本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
+
+新增 focused **59 passed**；定向 **438 passed /420.09s**，最后三项 readiness 状态/恢复由 focused 与 final full 覆盖。最终完整离线 **894 passed, 6 skipped, 6 subtests passed in 514.48s (0:08:34)**，六项 skipped 单列。wheel/sdist/七模块逐字节完整性/package/compliance/严格离线 clean（无 editable/system site，117 cached wheels）/Windows native **PASS**。实际本地 MCP + Semgrep/Gitleaks 合成冷启动不调用 get_runtime_info、不重复显式 verify，无 verifier 时不调用 functional run。门禁见 [AS 验收](AI_TRIAGE_ACCEPTANCE.md#as-codex-integration-productization-v02--cold-start-readiness-v03)、[证据](codex-product-acceptance.json)、[用户命令与 fresh trial](CODEX_INTEGRATION.md)。新 CI 推送后按实际 jobs/steps/annotations 核对，未预写通过。
+
+### 本轮决策
+
+1. Core唯一实现保留，只增加可替换Host lifecycle adapter，不扩Cursor或enforcement。
+2. 官方required=true用于自动初始化前提，SessionStart MCP只作观察，不是启动器或派发顺序保证。无command fallback热身，无最终用户安全prompt前置条件；真实Desktop Pending独立。
+3. 不采用PATH-old Runtime、不猜schema，不用exact tool count。新配置signedfingerprints ownership才可修改/删除；用户同名/manual POC无法证明时failclosed。
+4. 旧command只有旧生成器完整三events精确匹配与Git本地exclude provenance一起成立才迁移；command子串/statusMessage单独不是ownership。保留疑似用户Hook并报POTENTIAL_DUPLICATE_HOOK；command实现与测试保留。
+5. 幂等不重写正确配置；repair deterministic merge，不删光重装；remove不删DB/源码/其他Hook-server。保留用户mode，不为setup写remediationconfig。
+6. Matched CLOSED/scanner-resolution receipt可跳过重复explicitverify；不是新授权能力。functionalprepare仍验证原signedgrant/source/snapshot/policy。No findings、delta或Host声称不替代proof。仅PLANNED+functional_ref+handoff才run；NOT_AVAILABLE无handoff停止。
+
+以下章节为历史记录，最新状态以上文与 AS 为准。
+
 ## Smart Auto Host Orchestration v0.2（2026-10-04）
 
 Implementation `74f5aae9d3a054254e2e9f5b29d3e1572c157092` 已推送；新四类 CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，9 jobs 未分配 Runner、steps为空，实际检查注解均为账户付款失败/支出限额，未执行代码。不是代码 FAIL 或 PASS；未修改账户设置或验收门槛。四平台未运行。 新 run 见 AR.5。
