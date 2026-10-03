@@ -199,7 +199,7 @@ def test_foreign_workspace_fails_closed(setup, tmp_path):
     assert next(iter(state(setup).values()))['phase'] == 'PENDING_CONFIRMATION'
 
 
-@pytest.mark.parametrize('phase', ['pending', 'authorized'])
+@pytest.mark.parametrize('phase', ['authorized'])
 def test_connection_restart_cannot_reuse(setup, phase):
     root, _, _, service, _, _ = setup
     authorized = choice(setup) if phase == 'authorized' else None
@@ -223,7 +223,11 @@ def test_ttl_expiration(setup, monkeypatch, phase):
     import security_runtime.remediation as module
     now = module.time.monotonic()
     out = choice(setup) if phase == 'authorized' else None
-    monkeypatch.setattr(module.time, 'monotonic', lambda: now + CONFIRMATION_TTL + 1)
+    if phase == 'authorized':
+        monkeypatch.setattr(module.time, 'monotonic', lambda: now + CONFIRMATION_TTL + 1)
+    else:
+        expires = next(iter(state(setup).values()))['confirmation_expires_at_epoch']
+        monkeypatch.setattr(module.time, 'time', lambda: expires + 1)
     if out:
         args = grant_args(out)
         assert setup[3].prepare(args['remediation_ref'], args['task_ref'], setup[0])['reason_code'] == 'REPAIR_GRANT_STALE'
@@ -278,7 +282,7 @@ def test_mcp_tool_closed_schema_boundary_and_legacy_gate(setup, monkeypatch, tmp
     assert fn(data['confirmation_ref'], data['task_ref'], True)['status'] == 'AUTHORIZED'
 
 
-@pytest.mark.parametrize('extra', ['source', 'secret', 'prompt', 'transcript'])
+@pytest.mark.parametrize('extra', ['source', 'secret', 'prompt', 'transcript', 'confirmation_expires_at_epoch'])
 def test_mcp_rejected_values_not_echoed(setup, monkeypatch, extra):
     from security_runtime.mcp_server import create_server
     from mcp.server.fastmcp.exceptions import ToolError

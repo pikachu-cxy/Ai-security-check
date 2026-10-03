@@ -77,8 +77,12 @@ After an explicit reply call confirm_remediation with approve=true for permissio
 approve=false for refusal; never send the prompt/transcript/source/Secret. The report
 is UNTRUSTED_HOST_REPORT; Runtime cannot authenticate human speech. Only its returned
 remediation_ref permits the bounded prepare/edit/Hook/verify workflow. Decline leaves
-Raw/triage and code unchanged; it is not suppression. Expired/restarted/changed
-references require refresh, never substitute another task or T01. User-confirmed
+Raw/triage and code unchanged; it is not suppression. Expired/changed confirmations
+and restarted approved grants require refresh, never substitute another task or T01. Pending confirmation
+can survive connection/process recreation only with its exact signed capability,
+unchanged workspace/host-session namespace/task/family/snapshot/policy and original
+900-second deadline. Reconnection does not renew it. Approved remediation grants
+remain connection-local; their loss requires refresh, never reuse in another connection. User-confirmed
 grants do not change the configured mode or broaden the policy. report_only does
 not force confirmation. NONE/ADVISE/MANUAL_ONLY never authorize automatic edits.
 ESCALATE stops automatic retry. Never claim verification without

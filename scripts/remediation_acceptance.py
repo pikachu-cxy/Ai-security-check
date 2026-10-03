@@ -1,6 +1,7 @@
 """Actual local SDK/scanner acceptance; simulated host edits, NOT Codex dispatch."""
 import argparse
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 from pathlib import Path
@@ -175,13 +176,122 @@ async def run_all(command):
     return record
 
 
+async def run_cross_turn(command, approve):
+    """Close actual server A, launch server B with signed state, then replay C.
+
+    This proves process persistence, not Desktop dispatch or a human reply.
+    """
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix='runtime-confirmation-restart-') as temporary:
+        parent = Path(temporary).resolve()
+        root = parent / 'project'; root.mkdir()
+        for args in [('init',), ('config','user.name','Synthetic Fixture'),
+                     ('config','user.email','fixture@example.invalid')]:
+            subprocess.run(['git','-C',str(root),*args], check=True, capture_output=True)
+        (root / 'README.md').write_text('Disposable offline cross-process acceptance.\n')
+        subprocess.run(['git','-C',str(root),'add','.'], check=True, capture_output=True)
+        subprocess.run(['git','-C',str(root),'commit','-m','fixture'], check=True, capture_output=True)
+        path = root / 'UnsafeTlsService.java'; path.write_text(SAFE)
+        state = parent / 'state'; state.mkdir()
+        (state / 'remediation.json').write_text(json.dumps({'remediation':{'mode':'ask_before_fix'}}))
+        env = dict(os.environ, SECURITY_RUNTIME_WORKSPACE=str(root), SECURITY_RUNTIME_STATE_DIR=str(state),
+                   SECURITY_RUNTIME_OFFLINE='1', SECURITY_RUNTIME_MCP_SELF_TEST='1', PYTHONUTF8='1')
+        params = StdioServerParameters(command=command[0], args=command[1:] + ['mcp'], env=env, cwd=root)
+        @asynccontextmanager
+        async def connection():
+            with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
+                async with stdio_client(params, errlog=errors) as (read, write):
+                    async with ClientSession(read, write) as client:
+                        await client.initialize()
+                        async def call(name, arguments):
+                            response = await client.call_tool(name, arguments)
+                            assert not response.isError, name
+                            data = response.structuredContent or json.loads(response.content[0].text)
+                            return data.get('result', data), response
+                        yield call
+                errors.seek(0)
+                assert '0x80131506' not in errors.read()
+        def record():
+            states = list((state / 'remediation').glob('*/*.json'))
+            assert len(states) == 1
+            rows = json.loads(states[0].read_bytes())['records']
+            assert len(rows) == 1
+            return next(iter(rows.values()))
+        claims = dict(event='PostToolUse', workspace_path=str(root),
+                      session_id='cross-turn-confirmation', tool_name='apply_patch')
+        async with connection() as call_a:
+            baseline, _ = await call_a('handle_hook_event', claims)
+            assert baseline['status'] == 'BASELINE_ESTABLISHED'
+            await asyncio.sleep(1.1)
+            path.write_text(UNSAFE)  # Simulated host side effect, never Runtime.
+            pending, response = await call_a('handle_hook_event', claims)
+            assert pending['new_families'] == 1 and pending['remediation']['action'] == 'CONFIRM_REQUIRED'
+            assert pending['continue'] is json.loads(response.content[0].text)['continue'] is False
+            assert 'decision' not in pending
+            arguments = pending['remediation']['confirmation']['arguments']
+            expires = record()['confirmation_expires_at_epoch']
+        # A's stdio context has exited; B is a distinct OS server process.
+        assert path.read_text() == UNSAFE and record()['phase'] == 'PENDING_CONFIRMATION'
+        async with connection() as call_b:
+            out, _ = await call_b('confirm_remediation', dict(arguments, approve=approve))
+            assert out['status'] == ('AUTHORIZED' if approve else 'DECLINED'), out
+            assert record()['confirmation_expires_at_epoch'] == expires
+            proof = dict(pending_from_server_a=True, confirmation_in_server_b=out['status'],
+                         deadline_unchanged=True, source_unsafe_before_choice=True,
+                         original_session_namespace=True, mcp_server_launches=3)
+            if approve:
+                assert out['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
+                grant = out['prepare']['arguments']
+                prepared, _ = await call_b('prepare_task_fix', grant)
+                assert prepared['status'] == 'READY_FOR_HOST_FIX'
+                assert path.read_text() == UNSAFE and not any(prepared['execution'].values())
+                await asyncio.sleep(1.1)
+                path.write_text(SAFE)
+                closed, _ = await call_b('handle_hook_event', claims)
+                assert closed['resolved_families'] == 1
+                assert closed['remediation']['verification']['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+                verified, _ = await call_b('verify_task_fix', grant)
+                assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+                assert verified['runtime_observed_execution']['engine_process_observed']
+                proof.update(prepare_status=prepared['status'], resolved_families=1,
+                             verification_status=verified['verification_status'],
+                             observed_execution=verified['runtime_observed_execution'])
+            else:
+                await asyncio.sleep(1.1)
+                (root / 'Other.java').write_text('class Other {}\n')
+                later, _ = await call_b('handle_hook_event', claims)
+                assert not later['remediation']['feedback_required'] and 'continue' not in later
+                assert path.read_text() == UNSAFE
+                proof.update(prepare_called=False, verify_called=False, unsafe_source_remains=True,
+                             unrelated_edit_feedback=False)
+        async with connection() as call_c:
+            replay, _ = await call_c('confirm_remediation', dict(arguments, approve=True))
+            assert replay['reason_code'] == 'CONFIRMATION_ALREADY_CONSUMED'
+            proof['cross_process_replay'] = replay['reason_code']
+            if approve:
+                lost, _ = await call_c('prepare_task_fix', grant)
+                assert lost['reason_code'] == 'REPAIR_GRANT_STALE'
+                proof['authorized_grant_after_restart'] = lost['reason_code']
+    return dict(transport='ACTUAL_LOCAL_MCP_STDIO_CLOSE_AND_RELAUNCH', proof=proof,
+                approve=approve, duration_ms=round((time.monotonic()-started)*1000),
+                scanner='ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE', scanner_network=False,
+                user_choice='SIMULATED_BY_ACCEPTANCE_DRIVER', host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',
+                runtime_source_edit=False, runtime_model_invoked=False, target_build=False,
+                codex_native_dispatch='PENDING', real_human_confirmation='NOT_EXECUTED')
+
+
+async def run_cross_turn_all(command):
+    return {'approval': await run_cross_turn(command, True), 'decline': await run_cross_turn(command, False)}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--runtime', help='Optional built standalone executable')
     parser.add_argument('--output', type=Path)
+    parser.add_argument('--cross-turn-only', action='store_true', help='Actual stdio server recreation approval/decline')
     args = parser.parse_args()
     command = [args.runtime] if args.runtime else [sys.executable, '-m', 'security_runtime.cli']
-    record = asyncio.run(run_all(command))
+    record = asyncio.run(run_cross_turn_all(command) if args.cross_turn_only else run_all(command))
     if args.output:
         args.output.write_text(json.dumps(record, indent=2), encoding='utf-8')
     print(json.dumps(record, indent=2))

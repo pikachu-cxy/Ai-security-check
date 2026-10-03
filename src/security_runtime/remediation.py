@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import json
+import math
 from pathlib import Path
 import secrets
 import re
@@ -51,6 +52,13 @@ POLICY_VERSION = 'confirmation-v1/local-jdk-hostname-v1'
 CONFIRMATION_TTL = 900
 
 
+class ConfirmationReferenceError(ValueError):
+    """Fixed diagnostic enum only; never carry rejected claims or exceptions."""
+    def __init__(self, diagnostic):
+        self.diagnostic = diagnostic
+        super().__init__(diagnostic)
+
+
 class RemediationService:
     def __init__(self, store=None, *, registry=None, hooks=None, config=None, directory=None):
         self.store = ReadOnlySQLiteStore(store.path if store is not None else SQLiteStore.default_path())
@@ -62,9 +70,8 @@ class RemediationService:
         # Read-only prepare remains read-only. A restart loses preparation
         # attestation, never the persistent attempt budget or a safety check.
         self.prepared = set()
-        # Connection-local receipt hashes, not human-authentication claims.
-        # Restart never revives a pending confirmation or approved grant.
-        self.confirmations = {}
+        # Pending is an HMAC-signed persistent capability. Approved grants
+        # and preparation attestation remain connection-local.
         self.authorized = {}
 
     def _fix(self):
@@ -157,7 +164,7 @@ class RemediationService:
         if record.get('authorization_kind') != 'USER_CONFIRMED':
             return self.config.read() == 'smart_auto'
         deadline = self.authorized.get(record.get('token_hash'), 0)
-        return (time.monotonic() < deadline and
+        return (time.monotonic() < deadline and self._confirmation_remaining(record) > 0 and
                 self._policy_binding(key)[1] == record['policy_binding'])
 
     def _member_current(self, record, root):
@@ -168,20 +175,57 @@ class RemediationService:
                 members[0].get('technical_details', {}).get('rule_id') == RULE and
                 resolved['task']['members'][0]['review_status'] == 'UNTRIAGED')
 
+    @staticmethod
+    def _confirmation_remaining(record):
+        issued = record.get('confirmation_issued_at_epoch')
+        expires = record.get('confirmation_expires_at_epoch')
+        now = time.time()
+        if (type(issued) not in (int, float) or type(expires) not in (int, float) or
+                not all(math.isfinite(v) for v in (issued, expires, now)) or
+                not 0 < expires - issued <= CONFIRMATION_TTL or now < issued):
+            return 0  # Missing old-format deadline or backward clock: refresh.
+        return max(0, expires - now)
+
+    def _pending_failure(self, record, root, key):
+        if not self._confirmation_remaining(record):
+            return 'CONFIRMATION_EXPIRED'
+        if self._policy_binding(key)[1] != record['policy_binding']:
+            return 'CONFIRMATION_POLICY_CHANGED'
+        if self._snapshot(root) != record['last_snapshot_digest']:
+            return 'CONFIRMATION_SNAPSHOT_CHANGED'
+        if not self._guard(root, record, key):
+            return 'CONFIRMATION_SOURCE_GUARD_CHANGED'
+        if not self._member_current(record, root):
+            return 'CONFIRMATION_TASK_CHANGED'
+        return None
+
+    def _confirmation_fail(self, reason, diagnostic):
+        return dict(self._fail(reason), diagnostic_reason=diagnostic)
+
     def _pending(self, path, record, snapshot, key, mode):
-        for entries in (self.confirmations, self.authorized):
-            for token_hash in [token for token, deadline in entries.items() if time.monotonic() >= deadline]:
-                entries.pop(token_hash, None)
-        if len(self.confirmations) + len(self.authorized) >= 32:
+        for token_hash in [token for token, deadline in self.authorized.items() if time.monotonic() >= deadline]:
+            self.authorized.pop(token_hash, None)
+        # Under the existing workspace OS lock. Reconnection cannot reset the
+        # pending budget; validate signed records, never trust a cache count.
+        paths = list(path.parent.glob('*.json'))
+        if len(paths) > 64:
+            return self._fail('CONFIRMATION_BUDGET_EXCEEDED')
+        pending = sum(1 for p in paths for r in self._read(p, key).values()
+                      if r['phase'] == 'PENDING_CONFIRMATION' and self._confirmation_remaining(r))
+        if pending + len(self.authorized) >= 32:
             return self._fail('CONFIRMATION_BUDGET_EXCEEDED')
         token = 'confirm-v1.' + path.stem + '.' + identity(record['family_key']) + '.' + secrets.token_hex(24)
         current_mode, policy_binding = self._policy_binding(key)
         if current_mode != mode:
             return self._fail('REMEDIATION_POLICY_CHANGED')
+        issued = time.time()
+        if not math.isfinite(issued):
+            return self._fail('CONFIRMATION_CLOCK_UNAVAILABLE')
         record.update(phase='PENDING_CONFIRMATION', attempt_count=0, last_action='CONFIRM_REQUIRED',
                       last_snapshot_digest=snapshot, confirmation_hash=identity(token),
+                      confirmation_issued_at_epoch=issued, confirmation_expires_at_epoch=issued + CONFIRMATION_TTL,
+                      workspace_id=path.parent.name, host_session_namespace=path.stem,
                       policy_binding=policy_binding, mode=mode, policy_version=POLICY_VERSION)
-        self.confirmations[identity(token)] = time.monotonic() + CONFIRMATION_TTL
         return dict(self.policy.decide(family=record['family_key'], rule=RULE, priority='ACTIONABLE',
                     coverage=True, deterministic=True, mode=mode).to_dict(),
                     status='PENDING_CONFIRMATION', feedback_required=True, guidance=CONFIRMATION_GUIDANCE,
@@ -225,11 +269,8 @@ class RemediationService:
                 return self._fail('HOOK_SNAPSHOT_CHANGED')
             for record in rows.values():
                 if record['phase'] == 'PENDING_CONFIRMATION':
-                    if (snapshot != record['last_snapshot_digest'] or
-                            time.monotonic() >= self.confirmations.get(record['confirmation_hash'], 0) or
-                            self._policy_binding(key)[1] != record['policy_binding']):
+                    if self._pending_failure(record, root, key):
                         record.update(phase='EXPIRED', last_action='ADVISE')
-                        self.confirmations.pop(record['confirmation_hash'], None)
                         self._save(path, rows, key)
                     continue
                 if record['phase'] not in {'OFFERED', 'AUTHORIZED'} or snapshot == record['last_snapshot_digest']:
@@ -342,17 +383,33 @@ class RemediationService:
 
     def _reference(self, root, ref, task_ref, *, confirmation=False):
         if not isinstance(ref, str) or len(ref) > 256:
+            if confirmation:
+                raise ConfirmationReferenceError('CONFIRMATION_REFERENCE_INVALID')
             raise ValueError('Invalid repair grant; refresh Hook result')
         parts = ref.split('.')
         if (len(parts) != 4 or parts[0] != ('confirm-v1' if confirmation else 'rem-v1') or
                 [len(p) for p in parts[1:]] != [64, 64, 48] or
                 any(any(c not in '0123456789abcdef' for c in p) for p in parts[1:])):
+            if confirmation:
+                raise ConfirmationReferenceError('CONFIRMATION_REFERENCE_INVALID')
             raise ValueError('Invalid repair grant; refresh Hook result')
         path = self.state.workspace_directory(root) / (parts[1] + '.json')
         key_path = path.parent / 'snapshot.key'
         no_links(key_path)
         key = key_path.read_bytes()
         rows = self._read(path, key)
+        if confirmation:
+            match = [r for r in rows.values() if identity(r['family_key']) == parts[2] and
+                     hmac.compare_digest(r.get('confirmation_hash', ''), identity(ref))]
+            if len(match) != 1:
+                raise ConfirmationReferenceError('CONFIRMATION_REFERENCE_MISMATCH')
+            record = match[0]
+            if record['task_ref'] != task_ref:
+                raise ConfirmationReferenceError('CONFIRMATION_TASK_CHANGED')
+            if (record.get('workspace_id') != path.parent.name or
+                    record.get('host_session_namespace') != path.stem):
+                raise ConfirmationReferenceError('CONFIRMATION_NAMESPACE_MISMATCH')
+            return path, key, rows, record
         match = [r for r in rows.values() if identity(r['family_key']) == parts[2] and
                  hmac.compare_digest(r.get('confirmation_hash' if confirmation else 'token_hash', ''), identity(ref)) and r['task_ref'] == task_ref]
         if len(match) != 1:
@@ -369,27 +426,33 @@ class RemediationService:
                 if not acquired:
                     return self._fail('REMEDIATION_BUSY')
                 path, key, rows, record = self._reference(root, ref, task_ref, confirmation=True)
-                deadline = self.confirmations.get(identity(ref), 0)
                 if record['phase'] != 'PENDING_CONFIRMATION':
                     return self._fail('CONFIRMATION_ALREADY_CONSUMED')
-                if (time.monotonic() >= deadline or self._policy_binding(key)[1] != record['policy_binding'] or
-                        self._snapshot(root) != record['last_snapshot_digest'] or
-                        not self._guard(root, record, key) or not self._member_current(record, root)):
+                diagnostic = self._pending_failure(record, root, key)
+                if diagnostic:
                     record.update(phase='EXPIRED', last_action='ADVISE')
-                    self.confirmations.pop(identity(ref), None)
                     self._save(path, rows, key)
-                    return self._fail('CONFIRMATION_EXPIRED_OR_CHANGED_REFRESH_REQUIRED')
+                    return self._confirmation_fail('CONFIRMATION_EXPIRED_OR_CHANGED_REFRESH_REQUIRED', diagnostic)
                 # Recheck after reading current membership. No scanner is run
                 # and no evidence/source is stored by this handoff.
-                if (self._snapshot(root) != record['last_snapshot_digest'] or
-                        self._policy_binding(key)[1] != record['policy_binding']):
-                    return self._fail('CONFIRMATION_EXPIRED_OR_CHANGED_REFRESH_REQUIRED')
-                self.confirmations.pop(identity(ref), None)
+                diagnostic = self._pending_failure(record, root, key)
+                if diagnostic:
+                    record.update(phase='EXPIRED', last_action='ADVISE')
+                    self._save(path, rows, key)
+                    return self._confirmation_fail('CONFIRMATION_EXPIRED_OR_CHANGED_REFRESH_REQUIRED', diagnostic)
                 if not approve:
                     record.update(phase='DECLINED', last_action='NONE')
                     output = {'status': 'DECLINED', 'action': 'NONE', 'feedback_required': False,
                               'reason_code': 'USER_DECLINED', 'raw_and_triage': 'UNCHANGED'}
                 else:
+                    for token in [t for t, deadline in self.authorized.items() if time.monotonic() >= deadline]:
+                        self.authorized.pop(token, None)
+                    if len(self.authorized) >= 32:
+                        return self._fail('CONFIRMATION_BUDGET_EXCEEDED')
+                    remaining = self._confirmation_remaining(record)
+                    if not remaining:
+                        return self._confirmation_fail('CONFIRMATION_EXPIRED_OR_CHANGED_REFRESH_REQUIRED', 'CONFIRMATION_EXPIRED')
+                    deadline = time.monotonic() + remaining
                     record.update(attempt_count=1, authorization_kind='USER_CONFIRMED',
                                   connection_deadline=deadline, approval_trust='UNTRUSTED_HOST_REPORT')
                     output = self._grant(path, record, record['last_snapshot_digest'])
@@ -397,8 +460,12 @@ class RemediationService:
                                   approval_trust='UNTRUSTED_HOST_REPORT', expires_in_seconds=max(0, int(deadline-time.monotonic())))
                 self._save(path, rows, key)
                 return output
+        except ConfirmationReferenceError as error:
+            return self._confirmation_fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED', error.diagnostic)
+        except FileNotFoundError:
+            return self._confirmation_fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED', 'CONFIRMATION_STATE_NOT_FOUND')
         except Exception:
-            return self._fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED')
+            return self._confirmation_fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED', 'CONFIRMATION_STATE_INVALID')
 
     def task_gate(self, task_ref, root):
         """Read-only legacy gate: the same pending/declined task cannot omit its grant."""
