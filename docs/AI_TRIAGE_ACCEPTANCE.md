@@ -758,3 +758,91 @@ Implementation HEAD `c9e99d7eb3f5a98248cedb68126e557397aed694` 已推送 origin/
 | Standalone artifacts | [37139051642](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642) | 未启动，账户条件 |
 
 四平台新artifact未在CI生成；本地Windows native证据独立有效。账户恢复后重跑本轮run，不使用历史AN成功证明本轮。最终docs-only提交也触发Runtime/Package/Compliance，其实际新结论在最终回复报告；Standalone不由docs-only触发。最终docs HEAD按PROJECT_STATE的git log核对。
+
+## AR. Smart Auto Host Orchestration v0.2
+
+### AR.1 问题证据、根因与范围
+
+从干净 `ce6383573583c49a4a03daa4fccf0e2ea74916da` 继续。最新真实用户记录是 smart_auto、AUTO_FIX，但 Host 问“是否允许我修复这个安全问题？”，prepare=NO/resolved=0/verify=NO。Runtime policy **PASS**，本次 Host AUTO_FIX orchestration **FAIL**。AQ 的旧完整成功保留其时点，不作为本次成功证据。代码中原 AUTO 文案只称 required，缺少结构化无需确认契约，HOST_INSTRUCTIONS 未明确 block 不选择确认；修复这些可证明的契约歧义。无法由已有记录证明具体模型内部决策原因，不再归因于 mode。
+
+保留 [官方 PostToolUse contract](https://learn.chatgpt.com/docs/hooks) 的 block 机制：已完成编辑不会撤销；模型后续遵循行为必须另验收。只修改四个 Runtime 模块、两个本地 SDK acceptance driver、原断言及新增 contract tests；不重构 Hook、不修改 command fallback/config、不新建功能 backend。
+
+### AR.2 两种 interaction 与 authority
+
+AUTO_FIX（包括已批准的 USER_CONFIRMED grant）固定输出：
+
+```json
+{"phase":"AUTO_REMEDIATION_AUTHORIZED","user_confirmation_required":false,"must_not_ask_user":true,"must_continue_automatically":true,"next_action":"PREPARE_TASK_FIX"}
+```
+
+guidance 开头 SECURITY_AUTO_REMEDIATION_AUTHORIZED / USER CONFIRMATION IS NOT REQUIRED；立即按原 task_ref/remediation_ref prepare、仅最小编辑、自动 Hook、verify，安全 resolved 后 functional prepare/run。systemMessage 固定为已授权、不要询问、立即 prepare。AUTO 保留 decision:block，无 continue:false、confirmation_ref、固定修复问题或 WAIT。来源仍须 Runtime-issued valid grant，不接受源码/Scanner/AI 自授权限。
+
+CONFIRM_REQUIRED 原结构保持：
+
+```json
+{"phase":"POST_EDIT_REMEDIATION_CONFIRMATION","edit_already_applied":true,"requested_user_decision":"REMEDIATE_SECURITY_FINDING","must_not_retry_previous_edit":true}
+```
+
+编辑已完成，不重试；固定解释并问“是否允许我修复这个安全问题？”后 WAIT。批准前无 remediation_ref/prepare/verify grant，continue:false、不返回 block/reason；拒绝仍 DECLINED。只有这个 action 可主动问修复许可。显式批准后 Runtime 返回 AUTO_FIX/USER_CONFIRMED 且同无需再问的 interaction，原签名/TTL/连接/一次性/预算全部保留。
+
+HOST_INSTRUCTIONS 按 remediation.action 两个分支互斥；decision=block、severity、Scanner prose、Host 风险判断均不能把 AUTO_FIX 升级为 CONFIRM_REQUIRED。smart_auto→AUTO_FIX；ask_before_fix 同资格→CONFIRM_REQUIRED；report_only→ADVISE，模式和资格不变。
+
+get_runtime_info 的 remediation.mode 是该 MCP 服务实际使用的 reader 当前读值，不是能力版本。返回 VALID 或 UNKNOWN/INVALID；缺文件读默认 smart_auto，不写配置/DB/扫描。无 state_scope 路径字段，异常和 malformed/oversized 内容不回显。CLI 使用同 reader；测试覆盖显式/default、实时变更及 runtime store 与环境 state 不同的情况。Runtime 版本0.3.1、developer-guidance-v0.3、两能力 v0.1、required subset 保持。
+
+### AR.3 测试、包与真实本地 transport
+
+前轮 baseline **791 passed /6 skipped /6 subtests passed**（本轮未重跑旧 HEAD）。新增 **44 项**，最终 focused 加原真实 SDK 启动测试：45 passed in 42.03s；targeted 396 passed in 422.26s (0:07:02)；final full 835 passed, 6 skipped, 6 subtests passed in 528.67s (0:08:48)。实际耗时见 [门禁 JSON](orchestration-acceptance.json)。新增覆盖三个模式×三个 Host 工具、互斥/批准后不再问/拒绝无 grant、authority、mode 3合法/缺省/非法/Secret JSON/超大×CLI/MCP×default/explicit、无写入/初始化/路径泄露、实际service reader及异常脱敏。原 approval/decline/persistence/functional/MCP/command/equivalence 全量回归保持。早期 targeted395通过/1失败：新增测试的 capsys 在首次 SDK 导入时绑定了非 OS stderr，旧进程测试无法 fileno；已改为只捕获 stdout，再完整复验，不修改 Runtime 或降低断言。
+
+6 skipped 独立列：test_e2e_real.py:38/58/68/80/120/154 的三引擎 PATH 前提缺失，不能计 PASS；managed Scanner driver 不替代该 PATH 验收。wheel/sdist 与11模块逐字节一致、package/compliance PASS；Hook/policy/guards/Functional backend 与 starting HEAD 按规范换行字节一致。
+
+严格 clean venv 无 editable/system-site，从117个本机缓存 wheel 用 --no-index 安装，没有下载。Windows native 用最终 Runtime 源码重建；version.json.source_commit 是 starting HEAD 加 dirty workspace，不冒充 immutable implementation artifact。实际 [SDK](orchestration-sdk-evidence.json)、[clean](orchestration-clean-evidence.json)、[native functional](orchestration-native-functional-evidence.json)、[native四模式](orchestration-native-evidence.json) 使用 MCP stdio + 离线 managed Semgrep/Gitleaks。A/B/confirmed 安全 resolved1、prepare/verify、功能 prepare/run 均成立，Windows NOT_AVAILABLE / SECURITY_VERIFIED_FUNCTION_UNKNOWN。driver 模拟编辑与 user choice，不证明 Desktop 模型自动继续，也不证明 Maven 测试通过。
+
+### AR.4 Fresh Desktop Trial3（PENDING）
+
+先让配置指向本次源码环境或新包/native，断开重连 ai_security_runtime，再创建全新 Chat。Git 推送不会自动更新旧 wheel/native 进程。在 Chat 首先只读验证：
+
+```text
+允许你只读调用一次 AI Security Runtime 的 get_runtime_info。
+不要扫描，不要修改文件。
+只告诉我：
+1. remediation.mode
+2. smart_auto_remediation version
+3. functional_verification version
+```
+
+期望 smart_auto / v0.1 / v0.1；若不同，先核对该 MCP 实际 executable/environment，不猜模式。使用已有 pom.xml 的可丢弃 Maven 测试项目（无需安装 Maven 或下载依赖，Windows 仅验门禁），避免其它同族 finding。全新 SmartAutoFunctionalTrial3.java 安全 baseline 请求：
+
+```text
+新增 SmartAutoFunctionalTrial3.java，提供 request(String url) 方法，用 JDK HttpsURLConnection 打开 URL，设置连接超时1000毫秒，保持默认 hostname verifier。只修改代码，不主动运行 security-check、安全扫描或构建。
+```
+
+待自动 PostToolUse 确立 baseline 后发普通编辑请求：
+
+```text
+在 SmartAutoFunctionalTrial3.java 中创建 connection 之后，加入 connection.setHostnameVerifier((hostname, session) -> true);。只修改代码，不主动运行 security-check、安全扫描或构建。
+```
+
+之后不发安全相关提示。自动发生 AUTO_FIX→prepare_task_fix→Agent移除 bypass→PostToolUse resolved_families=1→verify_task_fix SCANNER_VERIFIED_RESOLVED→prepare_functional_verification→run_functional_verification。Windows NOT_AVAILABLE/overall SECURITY_VERIFIED_FUNCTION_UNKNOWN 合理；若出现修复许可问题仍 FAIL。不能用自动化 SDK driver 代替这项真实宿主验收。
+
+最后只根据已有记录查询（不得再调用工具）：
+
+```text
+不要调用任何新工具。只根据刚才已经发生的执行记录告诉我：
+1. remediation.action
+2. prepare_task_fix 是否调用
+3. resolved_families
+4. verify_task_fix 是否调用
+5. verification_status
+6. prepare_functional_verification 是否调用
+7. run_functional_verification 是否调用
+8. functional_verification.status
+9. overall_status
+```
+
+PASS 必须 AUTO_FIX / YES / 1 / YES / SCANNER_VERIFIED_RESOLVED / YES / YES / NOT_AVAILABLE / SECURITY_VERIFIED_FUNCTION_UNKNOWN，且未问许可。仅真实反馈可把本次 PENDING 改 PASS。若项目没有任何现有 verifier，prepare 会如实返回 NO_EXISTING_LOCAL_VERIFIER，无 run handoff；不能伪造 run，这种项目不足以验收上述九项完整交接。
+
+### AR.5 提交、CI 与 Pending
+
+本轮新 CI 尚待推送及实际观察，不使用前轮结论代替。Implementation/final docs SHA 在推送后记录；四平台若账户阻止 runner，必须 PENDING_RERUN_AFTER_ACCOUNT_RECOVERY，不能写代码失败或 PASS。
+
+仍 Pending：fresh Desktop Trial3 自动编排；真实 Maven A/B/Desktop功能execution 与 Linux hardened/其它生态真实执行 PENDING_ENVIRONMENT_PREREQUISITES；三位试用；独立 Ground Truth UNREVIEWED/null、质量 NOT_MEASURED；本轮 CI 按实际账户状态。没有安装/下载 Maven/JDK/bwrap/容器/依赖，没有降低 isolation/containment/argv/副作用限制；Runtime 无模型调用/源码编辑/构建，Scanner 无在线调用；driver 只编辑可丢弃合成项目，未改用户fixture/Jeepay/冻结benchmark/标签，无 Secret rotation。公共官方文档和授权 GitHub delivery 可联网，不上传目标源码给模型/Scanner。Enterprise Enforcement 等下一阶段仍 Planned，本轮交付后停止。

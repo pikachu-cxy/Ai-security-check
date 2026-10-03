@@ -99,7 +99,7 @@ def test_new_grant_and_readonly_existing_prepare(setup):
     assert grant['remediation']['finding_policy'] == 'ACTIONABLE'
     assert grant['remediation']['policy_source'] == 'DETERMINISTIC_LOCAL_TLS_INVARIANT'
     assert grant['remediation']['production_reachability'] == 'UNKNOWN'
-    assert 'SECURITY_REMEDIATION_REQUIRED' in codex_hook_output(grant)['reason']
+    assert 'SECURITY_AUTO_REMEDIATION_AUTHORIZED' in codex_hook_output(grant)['reason']
     before = {p: p.read_bytes() for p in service.state.directory.rglob('*') if p.is_file()}
     packet = prepare(setup)
     assert packet['status'] == 'READY_FOR_HOST_FIX'

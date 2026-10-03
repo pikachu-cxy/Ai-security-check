@@ -1,0 +1,88 @@
+{
+  "stage": "Smart Auto Host Orchestration v0.2",
+  "starting_head": "ce6383573583c49a4a03daa4fccf0e2ea74916da",
+  "baseline": {
+    "passed": 791,
+    "skipped": 6,
+    "subtests_passed": 6,
+    "source": "PRIOR_DELIVERED_NOT_RERUN"
+  },
+  "gates": {
+    "focused": {
+      "exit": 0,
+      "seconds": 42.7
+    },
+    "targeted": {
+      "exit": 0,
+      "seconds": 422.88
+    },
+    "full": {
+      "exit": 0,
+      "seconds": 529.25
+    },
+    "package": {
+      "exit": 0,
+      "seconds": 3.12
+    },
+    "clean": {
+      "exit": 0,
+      "seconds": 126.99,
+      "system_site_packages": false,
+      "editable": false,
+      "public_package_download": false,
+      "cached_wheels": 117
+    },
+    "native": {
+      "exit": 0,
+      "seconds": 291.58
+    },
+    "sdk": {
+      "exit": 0,
+      "seconds": 124.73
+    }
+  },
+  "focused_summary": "45 passed in 42.03s",
+  "targeted_summary": "396 passed in 422.26s (0:07:02)",
+  "full_summary": "835 passed, 6 skipped, 6 subtests passed in 528.67s (0:08:48)",
+  "package_sha256": {
+    "codex_mcp_hook.py": "ea7401c4f8d5fcf83d6e5d752ae17f65b16ca4810f4d7143e7c272bd461c2ca1",
+    "remediation.py": "4e45f4af9cce85914310949e8b3a5b12a4644ea301dea9bbaed8630121a700dd",
+    "host_guidance.py": "af5b0b2726867fc6706c621baa519df9743f4eb8acb6968e1e1f4f29ff3b3805",
+    "mcp_server.py": "cde16e07709d23c2a9a6f1133f4acdd8f96e18a6e8cab6e0d9653e3e3a5e7d5a",
+    "functional_verifiers.py": "f0b0dcdd5bfb4ff6793abb41b06ddb8476e96ac868e826a5ba32bd76824d2153",
+    "functional_execution.py": "fd841602193df2e09949bb46181d27673d612b0d210c0029aa44bb2bcb5c7894",
+    "functional_verification.py": "5c48d3df5f64ea9dfa1dfd41e9428f0b930f6611e5f962d3a329c87093c1042f",
+    "remediation_policy.py": "66991d94ba91aa1fbe8a8ea195233d11a1eb7b2127417e94af3c8079928f9752",
+    "remediation_guard.py": "4c00d5962223cce2fdfc0f9d2149d4b687559bba4dbe543e15ae104b4a76ad02",
+    "hook_runtime.py": "a4090f3a98456cb664f1b8029a50c406bc3bc258c98be6d1dc73ad4a7e6d41b9",
+    "hook_adapters.py": "77cb5498881e0aaa83fefe02ab7c1249ac77729ecfd21d0cdebb05133caa33e0"
+  },
+  "unchanged_runtime_modules": [
+    "remediation_policy.py",
+    "remediation_guard.py",
+    "hook_runtime.py",
+    "hook_state.py",
+    "hook_adapters.py",
+    "functional_execution.py",
+    "functional_verifiers.py",
+    "functional_verification.py"
+  ],
+  "runtime_policy_user_observation": "PASS_AUTO_FIX",
+  "latest_desktop_host_observation": "FAIL_ASKED_REPAIR_PERMISSION",
+  "post_fix_desktop_trial": "PENDING",
+  "maven_execution": "PENDING_ENVIRONMENT_PREREQUISITES",
+  "early_targeted_attempt": {
+    "passed": 395,
+    "failed": 1,
+    "reason": "NEW_TEST_STDERR_CAPTURE_SDK_IMPORT_DEFAULT",
+    "correction": "New test uses stdout-only capture; no Runtime change"
+  },
+  "ci": "PENDING_PUSH_AND_OBSERVATION",
+  "runtime_model_invoked": false,
+  "runtime_source_edit": false,
+  "scanner_network": false,
+  "public_package_download": false,
+  "ground_truth": "UNREVIEWED",
+  "quality": "NOT_MEASURED",
+  "three_developer_trials": "PENDING"
+}

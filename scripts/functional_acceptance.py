@@ -85,6 +85,8 @@ async def run(command,failure=False,mode='smart_auto'):
                         return data.get('result',data)
                     info=await call('get_runtime_info',{})
                     assert info['features']['functional_verification']=='v0.1'
+                    assert info['remediation']=={'mode':mode,'configuration_status':'VALID'}
+                    assert str(state) not in json.dumps(info)
                     claims=dict(event='PostToolUse',workspace_path=str(root),session_id='functional-maven',tool_name='apply_patch')
                     baseline=await call('handle_hook_event',claims)
                     assert baseline['status']=='BASELINE_ESTABLISHED' and baseline['new_families']==0
@@ -95,6 +97,15 @@ async def run(command,failure=False,mode='smart_auto'):
                         decision=await call('confirm_remediation',dict(hook['remediation']['confirmation']['arguments'],approve=True))
                         assert decision['status']=='AUTHORIZED'
                     else: decision=hook['remediation']; assert decision['action']=='AUTO_FIX'
+                    assert decision['interaction']=={'phase':'AUTO_REMEDIATION_AUTHORIZED',
+                        'user_confirmation_required':False,'must_not_ask_user':True,
+                        'must_continue_automatically':True,'next_action':'PREPARE_TASK_FIX'}
+                    assert 'USER CONFIRMATION IS NOT REQUIRED' in decision['guidance']
+                    assert 'WAIT' not in decision['guidance'] and '是否允许我修复这个安全问题？' not in decision['guidance']
+                    assert 'confirmation_ref' not in json.dumps(decision)
+                    if mode=='smart_auto':
+                        assert hook['decision']=='block' and 'continue' not in hook
+                        assert 'Do not ask the user for confirmation' in hook['systemMessage']
                     grant=decision['prepare']['arguments']
                     rejected=await call('prepare_functional_verification',grant)
                     assert rejected['overall_status']=='SECURITY_NOT_VERIFIED'
@@ -119,6 +130,9 @@ async def run(command,failure=False,mode='smart_auto'):
                     if status in {'PASSED','FAILED'}: assert repeat['functional_verification']['reused']
                     assert not (root/'target').exists()
     return dict(case='B' if failure else 'A',mode=mode,transport='ACTUAL_MCP_STDIO',
+                observed_mode=info['remediation']['mode'],interaction=decision['interaction'],
+                prepare_task_fix=True,verify_task_fix=True,resolved_families=closed['resolved_families'],
+                prepare_functional_verification=True,run_functional_verification=True,
                 security_verification='SCANNER_VERIFIED_RESOLVED',functional_result=out,
                 functional_acceptance='PASS' if status in {'PASSED','FAILED'} else 'PENDING_ENVIRONMENT_PREREQUISITES',
                 plan=planned['plan'],duration_ms=round((time.monotonic()-start)*1000),

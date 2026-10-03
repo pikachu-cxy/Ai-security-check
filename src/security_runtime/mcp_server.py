@@ -217,7 +217,7 @@ def create_server(runtime: SecurityRuntime | None = None):
     def get_runtime_info() -> dict:
         """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
         from .host_guidance import runtime_info
-        return runtime_info()
+        return runtime_info(remediation_config=remediation.config)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_security_summary(workspace_path: str | None = None, scan_id: str | None = None, details: bool = False) -> dict:

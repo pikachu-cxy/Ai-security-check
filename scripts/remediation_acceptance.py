@@ -57,6 +57,9 @@ async def run(command, mode='smart_auto', approve=True):
                         return data.get('result', data), response
                     claims = dict(event='PostToolUse', workspace_path=str(root),
                                   session_id='local-sdk-remediation', tool_name='apply_patch')
+                    info, _ = await call('get_runtime_info', {})
+                    assert info['remediation'] == {'mode': mode, 'configuration_status': 'VALID'}
+                    assert str(state) not in json.dumps(info)
                     baseline, _ = await call('handle_hook_event', claims)
                     assert baseline['status'] == 'BASELINE_ESTABLISHED'
                     assert baseline['new_families'] == 0
@@ -126,6 +129,15 @@ async def run(command, mode='smart_auto', approve=True):
                     if mode == 'smart_auto':
                         assert new['decision'] == text['decision'] == 'block'
                         assert 'continue' not in new and 'continue' not in text
+                        interaction = new['remediation']['interaction']
+                        assert interaction == {'phase': 'AUTO_REMEDIATION_AUTHORIZED',
+                            'user_confirmation_required': False, 'must_not_ask_user': True,
+                            'must_continue_automatically': True, 'next_action': 'PREPARE_TASK_FIX'}
+                        assert 'AUTO_FIX is already authorized' in text['systemMessage']
+                        assert 'Do not ask the user for confirmation' in text['systemMessage']
+                        assert 'USER CONFIRMATION IS NOT REQUIRED' in text['reason']
+                        assert '是否允许我修复这个安全问题？' not in text['reason'] and 'WAIT' not in text['reason']
+                        assert 'confirmation_ref' not in json.dumps(new['remediation'])
                     packet, _ = await call('prepare_task_fix', arguments)
                     assert packet['status'] == 'READY_FOR_HOST_FIX'
                     assert packet['remediation_authorization']['action'] == 'AUTO_FIX'
@@ -151,7 +163,8 @@ async def run(command, mode='smart_auto', approve=True):
                                  authorization_kind=packet['remediation_authorization']['authorization_kind'],
                                  preconfirmation_grant_available=False if mode == 'ask_before_fix' else None,
                                  hook_feedback='continue:false' if mode == 'ask_before_fix' else new['decision'],
-                                 interaction=new['remediation'].get('interaction'), prepare_status=packet['status'],
+                                  interaction=new['remediation'].get('interaction'), prepare_status=packet['status'],
+                                  observed_mode=info['remediation']['mode'],
                                  resolved_families=closed['resolved_families'],
                                  automatic_verification=closed['remediation']['verification'],
                                  explicit_verification=verified['verification_status'],
