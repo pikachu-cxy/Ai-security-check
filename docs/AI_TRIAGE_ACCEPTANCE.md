@@ -1,5 +1,7 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+最终文档提交 eaafecc9c595b924940d272249a7ac7a08b26909 的Runtime/Package/Compliance实际failure，GitHub检查注解明确为付款失败或支出限额，未分配Runner、未执行步骤；文档CI验收 PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。修正implementation 73c0945 的四类/四平台实际success不变，不把文档CI外部阻塞写为PASS。账号付款/支出设置未修改；恢复后重跑，无源码/coverage降级或workflow绕过。
+
 本轮 implementation HEAD `73c0945c934fe82fef7323db9e10bfe938e3fc74` 已推送 origin/feature/runtime-mvp，Runtime tests（Linux/Windows）、Package integrity（Linux/Windows）、Compliance、Standalone artifacts（Windows/Linux/macOS arm64/x64）全部实际 success；具体新 run 见 AN.2。最终 docs HEAD 用 git log -1 --format=%H -- docs/PROJECT_STATE.md 获取。
 
 初次实现 `c21ccd80c405f34aa84e63e54645d8c2df7c9abd` 已推送，其Runtime/Package/Compliance通过；首轮Standalone的两个macOS任务实际失败（Windows/Linux通过）。已定位并修正无confirmation目录时的legacy gate链接边界，真实symlink回归通过；新的修正提交/四类CI最终结论在AN.2记录，不能把首轮Standalone写成通过。
@@ -555,3 +557,15 @@ Standalone四平台沿现有artifact gate执行新增确认批准/拒绝/report_
 | [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37125599187) | success | Runtime tests (ubuntu-latest): success; Runtime tests (windows-latest): success |
 
 macOS原生验收在旧prepare_task_fix流程报KeyError: execution。新的task_gate在confirmation目录不存在时仍先检查所有parent links，macOS temp alias因此误判STATE_UNAVAILABLE；返回失败对象而非原准备包。修正为无catalog时保持旧流，存在catalog仍完整no_links/HMAC验证；真实目录symlink的37项确认回归证明两端分支，原Raw/risk/coverage未放宽。修正后全量688/6/6、包/合规/严格clean和Windows native复查通过；最终新四平台CI必须独立成功才算分发通过。
+
+### AN.5 文档 CI 的实际外部阻塞
+
+最终文档提交 eaafecc9c595b924940d272249a7ac7a08b26909 的Runtime/Package/Compliance实际failure，GitHub检查注解明确为付款失败或支出限额，未分配Runner、未执行步骤；文档CI验收 PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。修正implementation 73c0945 的四类/四平台实际success不变，不把文档CI外部阻塞写为PASS。账号付款/支出设置未修改；恢复后重跑，无源码/coverage降级或workflow绕过。
+
+| Workflow | GitHub conclusion | 实际执行 |
+| --- | --- | --- |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149637) | failure | 账号billing/spending limit阻止启动，非测试执行失败 |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149679) | failure | 账号billing/spending limit阻止启动，非测试执行失败 |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149611) | failure | 账号billing/spending limit阻止启动，非测试执行失败 |
+
+工具实际读取三种workflow的失败注解，steps=[]、runner_name为空；GitHub未区分付款失败与限额哪一种。最后的记录文档提交仍可能受同一外部条件阻止，最终回复按实际新run列出；不循环提交制造绿色状态。恢复账号后可重跑当前HEAD的失败run。无需修改代码/风险/覆盖，也没有权限更改账号付款或增加支出。新的CONFIRM_REQUIRED Desktop门禁、三位试用及独立Ground Truth保持原真实状态，开发在此停止。

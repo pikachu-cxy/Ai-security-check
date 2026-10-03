@@ -273,5 +273,173 @@
   "initial_ci_failure": "macOS arm64/x64 native explicit fix blocked by absent confirmation state under aliased temp parent; repaired with real symlink regression.",
   "remote_push": "origin/feature/runtime-mvp SUCCESS",
   "confirmation_flow_scanner_network": false,
-  "network_scope": "New confirmation/repair acceptance is offline. Existing standalone CI may retrieve public managed engines/vulnerability databases for synthetic fixtures; authorized GitHub delivery is separate."
+  "network_scope": "New confirmation/repair acceptance is offline. Existing standalone CI may retrieve public managed engines/vulnerability databases for synthetic fixtures; authorized GitHub delivery is separate.",
+  "docs_ci": [
+    {
+      "conclusion": "failure",
+      "databaseId": 37127149637,
+      "headSha": "eaafecc9c595b924940d272249a7ac7a08b26909",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149637",
+      "workflowName": "Runtime tests",
+      "jobs": [
+        {
+          "name": "Runtime tests (windows-latest)",
+          "status": "completed",
+          "conclusion": "failure",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149637/job/111214650761"
+        },
+        {
+          "name": "Runtime tests (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "failure",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149637/job/111214650879"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 37127149679,
+      "headSha": "eaafecc9c595b924940d272249a7ac7a08b26909",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149679",
+      "workflowName": "Package integrity",
+      "jobs": [
+        {
+          "name": "Package integrity (ubuntu-latest)",
+          "status": "completed",
+          "conclusion": "failure",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149679/job/111214650923"
+        },
+        {
+          "name": "Package integrity (windows-latest)",
+          "status": "completed",
+          "conclusion": "failure",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149679/job/111214650970"
+        }
+      ]
+    },
+    {
+      "conclusion": "failure",
+      "databaseId": 37127149611,
+      "headSha": "eaafecc9c595b924940d272249a7ac7a08b26909",
+      "status": "completed",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149611",
+      "workflowName": "Compliance",
+      "jobs": [
+        {
+          "name": "Compliance",
+          "status": "completed",
+          "conclusion": "failure",
+          "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37127149611/job/111214650842"
+        }
+      ]
+    }
+  ],
+  "docs_ci_execution": "NOT_STARTED_ACCOUNT_BILLING_OR_SPENDING_LIMIT",
+  "docs_ci_acceptance": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+  "docs_ci_annotations": [
+    {
+      "name": "Runtime tests (ubuntu-latest)",
+      "conclusion": "failure",
+      "started_at": "2026-10-03T13:43:30Z",
+      "completed_at": "2026-10-03T13:43:32Z",
+      "runner_name": "",
+      "steps": [],
+      "annotations": [
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "failure",
+          "title": "",
+          "message": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+          "raw_details": ""
+        },
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "notice",
+          "title": "",
+          "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+          "raw_details": ""
+        }
+      ]
+    },
+    {
+      "name": "Package integrity (ubuntu-latest)",
+      "conclusion": "failure",
+      "started_at": "2026-10-03T13:43:30Z",
+      "completed_at": "2026-10-03T13:43:33Z",
+      "runner_name": "",
+      "steps": [],
+      "annotations": [
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "failure",
+          "title": "",
+          "message": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+          "raw_details": ""
+        },
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "notice",
+          "title": "",
+          "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+          "raw_details": ""
+        }
+      ]
+    },
+    {
+      "name": "Compliance",
+      "conclusion": "failure",
+      "started_at": "2026-10-03T13:43:30Z",
+      "completed_at": "2026-10-03T13:43:33Z",
+      "runner_name": "",
+      "steps": [],
+      "annotations": [
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "failure",
+          "title": "",
+          "message": "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings",
+          "raw_details": ""
+        },
+        {
+          "path": ".github",
+          "blob_href": "https://github.com/pikachu-cxy/Ai-security-check/blob/eaafecc9c595b924940d272249a7ac7a08b26909/.github",
+          "start_line": 1,
+          "start_column": null,
+          "end_line": 1,
+          "end_column": null,
+          "annotation_level": "notice",
+          "title": "",
+          "message": "\"The ubuntu-latest label will migrate to Ubuntu 26 beginning October 19, 2026. For more information, see https://github.com/actions/runner-images/issues/14748\"",
+          "raw_details": ""
+        }
+      ]
+    }
+  ]
 }
