@@ -77,12 +77,43 @@
     "reason": "NEW_TEST_STDERR_CAPTURE_SDK_IMPORT_DEFAULT",
     "correction": "New test uses stdout-only capture; no Runtime change"
   },
-  "ci": "PENDING_PUSH_AND_OBSERVATION",
+  "ci": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
   "runtime_model_invoked": false,
   "runtime_source_edit": false,
   "scanner_network": false,
   "public_package_download": false,
   "ground_truth": "UNREVIEWED",
   "quality": "NOT_MEASURED",
-  "three_developer_trials": "PENDING"
+  "three_developer_trials": "PENDING",
+  "implementation_head": "74f5aae9d3a054254e2e9f5b29d3e1572c157092",
+  "ci_runs": [
+    {
+      "databaseId": 37142647528,
+      "workflowName": "Standalone artifacts",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647528"
+    },
+    {
+      "databaseId": 37142647548,
+      "workflowName": "Compliance",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647548"
+    },
+    {
+      "databaseId": 37142647537,
+      "workflowName": "Package integrity",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647537"
+    },
+    {
+      "databaseId": 37142647527,
+      "workflowName": "Runtime tests",
+      "status": "completed",
+      "conclusion": "failure",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647527"
+    }
+  ]
 }

@@ -843,6 +843,15 @@ PASS 必须 AUTO_FIX / YES / 1 / YES / SCANNER_VERIFIED_RESOLVED / YES / YES / N
 
 ### AR.5 提交、CI 与 Pending
 
-本轮新 CI 尚待推送及实际观察，不使用前轮结论代替。Implementation/final docs SHA 在推送后记录；四平台若账户阻止 runner，必须 PENDING_RERUN_AFTER_ACCOUNT_RECOVERY，不能写代码失败或 PASS。
+Implementation HEAD `74f5aae9d3a054254e2e9f5b29d3e1572c157092` 已推送 origin/feature/runtime-mvp。9 jobs 未分配 Runner、steps为空，实际检查注解均为账户付款失败/支出限额，未执行代码。不是代码 FAIL 或 PASS；未修改账户设置或验收门槛。四平台未运行。 **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**。
+
+| Workflow | 新 run | 结论 |
+| --- | --- | --- |
+| Compliance | [37142647548](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647548) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Package integrity | [37142647537](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647537) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Runtime tests | [37142647527](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647527) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Standalone artifacts | [37142647528](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37142647528) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+
+本地 Windows native 与 CI 独立记账；不使用历史成功证明本轮。最终 docs-only 提交会触发 Runtime/Package/Compliance，新 run 在最终回复按实际观察单列。final docs HEAD 按 PROJECT_STATE.md 的 git log 核对。
 
 仍 Pending：fresh Desktop Trial3 自动编排；真实 Maven A/B/Desktop功能execution 与 Linux hardened/其它生态真实执行 PENDING_ENVIRONMENT_PREREQUISITES；三位试用；独立 Ground Truth UNREVIEWED/null、质量 NOT_MEASURED；本轮 CI 按实际账户状态。没有安装/下载 Maven/JDK/bwrap/容器/依赖，没有降低 isolation/containment/argv/副作用限制；Runtime 无模型调用/源码编辑/构建，Scanner 无在线调用；driver 只编辑可丢弃合成项目，未改用户fixture/Jeepay/冻结benchmark/标签，无 Secret rotation。公共官方文档和授权 GitHub delivery 可联网，不上传目标源码给模型/Scanner。Enterprise Enforcement 等下一阶段仍 Planned，本轮交付后停止。
