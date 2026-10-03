@@ -12,7 +12,7 @@
   "scanner_network": false,
   "ground_truth": "UNREVIEWED",
   "command_hook_runner_used": false,
-  "duration_ms": 37166,
+  "duration_ms": 38751,
   "proof": {
     "baseline_status": "BASELINE_ESTABLISHED",
     "new_families": 1,
@@ -218,7 +218,7 @@
     "scanner_network": false,
     "ground_truth": "UNREVIEWED",
     "command_hook_runner_used": false,
-    "duration_ms": 38673,
+    "duration_ms": 40606,
     "proof": {
       "baseline_status": "BASELINE_ESTABLISHED",
       "new_families": 1,

@@ -394,9 +394,9 @@ class RemediationService:
         try:
             root = Path(root).resolve()
             directory = self.state.workspace_directory(root)
-            no_links(directory)
             if not directory.exists():
                 return None
+            no_links(directory)
             paths = list(directory.glob('*.json'))
             if len(paths) > 64:
                 return self._fail('CONFIRMATION_STATE_UNAVAILABLE')

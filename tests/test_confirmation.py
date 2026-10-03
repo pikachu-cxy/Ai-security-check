@@ -7,6 +7,7 @@ import pytest
 from test_remediation import setup, UNSAFE, FIXED, CANARY
 from test_hook_runtime import repo
 from security_runtime.hook_runtime import HookCoordinator
+from security_runtime.hook_state import HookStateStore
 from security_runtime.remediation import RemediationService, CONFIRMATION_GUIDANCE, CONFIRMATION_TTL
 
 pytestmark = pytest.mark.parametrize('setup', ['ask_before_fix'], indirect=True)
@@ -231,3 +232,21 @@ def test_mcp_rejected_values_not_echoed(setup, monkeypatch, extra):
     with pytest.raises(ToolError) as error:
         asyncio.run(tool.run(data))
     assert CANARY not in str(error.value)
+
+
+def test_legacy_fix_without_confirmation_state_under_temp_alias(setup, tmp_path):
+    # macOS /var temp parents can be aliases. An absent confirmation catalog
+    # cannot block the existing explicit task fix flow; an existing linked
+    # catalog must still fail closed before reading signed records.
+    root, _, _, service, _, _ = setup
+    alias = tmp_path / 'state-alias'
+    try:
+        alias.symlink_to(service.state.directory, target_is_directory=True)
+    except OSError:
+        pytest.skip('Creating directory symlinks is unavailable')
+    current_state = service.state
+    service.state = HookStateStore(alias / 'not-created')
+    assert service.task_gate(pending(setup)['task_ref'], root) is None
+    service.state = HookStateStore(alias)
+    assert service.task_gate(pending(setup)['task_ref'], root)['reason_code'] == 'CONFIRMATION_STATE_UNAVAILABLE'
+    service.state = current_state
