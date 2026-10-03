@@ -1,5 +1,7 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+本轮 implementation HEAD `73c0945c934fe82fef7323db9e10bfe938e3fc74` 已推送 origin/feature/runtime-mvp，Runtime tests（Linux/Windows）、Package integrity（Linux/Windows）、Compliance、Standalone artifacts（Windows/Linux/macOS arm64/x64）全部实际 success；具体新 run 见 AN.2。最终 docs HEAD 用 git log -1 --format=%H -- docs/PROJECT_STATE.md 获取。
+
 初次实现 `c21ccd80c405f34aa84e63e54645d8c2df7c9abd` 已推送，其Runtime/Package/Compliance通过；首轮Standalone的两个macOS任务实际失败（Windows/Linux通过）。已定位并修正无confirmation目录时的legacy gate链接边界，真实symlink回归通过；新的修正提交/四类CI最终结论在AN.2记录，不能把首轮Standalone写成通过。
 
 ## CONFIRM_REQUIRED Host Interaction v0.1 — 当前交接（2026-10-03）
@@ -12,9 +14,9 @@ CONFIRM_REQUIRED 产生 feedback_required=true 和独立固定 guidance，Codex 
 
 沿原 TaskFixService/EvidenceBuilder/VerificationService prepare → 宿主最小 edit → Hook → verify；narrow TLS allowlist、Raw/risk/coverage、脱敏/UNTRUSTED_CODE、preservation proof、两次尝试、snapshot/cooldown/single-flight/family multiset 不变。Core host 参数显式化，Codex adapter 传 host='codex'；没有 Cursor 接入、command Hook 删除、新 Scanner/规则、自动 build/test gate 或下一阶段。
 
-已交付 baseline **651 passed /6 skipped /6 subtests**；新增37项；原针对性 **137 passed**、CI修正后确认测试 **37 passed**；本轮 final full offline **688 passed /6 skipped /6 subtests passed，355.00秒**。六项真实多引擎 PATH e2e skipped 单列，未算通过。wheel/sdist/module bytes/package integrity/licenses/notices、严格 clean venv（无 editable/system site）、实际本地 SDK/Windows native 的批准/拒绝/report_only/原 AUTO 链路通过。Scanner 真实离线执行，用户选择/宿主 edit 是 SIMULATED_BY_ACCEPTANCE_DRIVER；新 Desktop 门禁仍 PENDING。本轮 CI 尚待此提交推送后的实际 run，见 AN，不用历史 CI 代替。
+已交付 baseline **651 passed /6 skipped /6 subtests**；新增37项；原针对性 **137 passed**、CI修正后确认测试 **37 passed**；本轮 final full offline **688 passed /6 skipped /6 subtests passed，355.00秒**。六项真实多引擎 PATH e2e skipped 单列，未算通过。wheel/sdist/module bytes/package integrity/licenses/notices、严格 clean venv（无 editable/system site）、实际本地 SDK/Windows native 的批准/拒绝/report_only/原 AUTO 链路通过。Scanner 真实离线执行，用户选择/宿主 edit 是 SIMULATED_BY_ACCEPTANCE_DRIVER；新 Desktop 门禁仍 PENDING。本轮四类实际新CI全部success，见AN.2；Standalone四平台均运行本次确认/拒绝/原AUTO/report_only离线MCP验收，不代表Desktop实机UX。
 
-包0.3.1、developer-guidance-v0.3 保持，新增 optional confirmation_handoff v0.1；实际 schema/模式与 fresh Desktop 步骤见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)，当前验收与有界证据见 [AN 附录](AI_TRIAGE_ACCEPTANCE.md#an-confirm_required-host-interaction-v01) 和 [acceptance metadata](confirmation-acceptance.json)。不修改 Jeepay、原 fixture 用户编辑、冻结 benchmark、人工标签。Scanner 网络/Runtime模型/目标build/Secret rotation未执行；仅公共包获取及授权的 GitHub分发/CI。三位试用Pending，独立 Ground Truth UNREVIEWED/null，质量NOT_MEASURED；后续 Deep Audit/Joern/watcher/MCP-Skill Security/自动依赖升级继续 Planned。提交推送、核实本轮实际 CI 后停止。
+包0.3.1、developer-guidance-v0.3 保持，新增 optional confirmation_handoff v0.1；实际 schema/模式与 fresh Desktop 步骤见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)，当前验收与有界证据见 [AN 附录](AI_TRIAGE_ACCEPTANCE.md#an-confirm_required-host-interaction-v01) 和 [acceptance metadata](confirmation-acceptance.json)。不修改 Jeepay、原 fixture 用户编辑、冻结 benchmark、人工标签。本轮确认/修复流程的Scanner网络、Runtime模型、目标build及Secret rotation未执行；公共包及授权GitHub分发/CI可联网，既有Standalone门禁可获取公开引擎/漏洞库用于合成fixture，不上传项目源码/Secret给Scanner/模型。三位试用Pending，独立 Ground Truth UNREVIEWED/null，质量NOT_MEASURED；后续 Deep Audit/Joern/watcher/MCP-Skill Security/自动依赖升级继续 Planned。提交推送、核实本轮实际 CI 后停止。
 
 当前新增验收附录为 AN；AM/AL/AK 为各自时点的历史记录。
 
@@ -520,11 +522,20 @@ Skipped单列：tests/test_e2e_real.py 的38、58、68、80、120、154行均需
 | 新 CONFIRM_REQUIRED Desktop | PENDING；SDK/native的选择与edit均SIMULATED_BY_ACCEPTANCE_DRIVER |
 | 三位试用 / 独立 Ground Truth | Pending / UNREVIEWED/null，质量NOT_MEASURED |
 
-有界metadata证据：[源码SDK](confirmation-sdk-evidence.json)、[clean wheel](confirmation-clean-evidence.json)、[native](confirmation-native-evidence.json)、[测试/包hash与CI](confirmation-acceptance.json)。不存packet源码、Secret或用户prompt/transcript；确认本身不跑Scanner/目标edit/build/模型。local native在dirty最终实现构建，version.json.source_commit是starting HEAD；不能冒充实现commit artifact，CI将在实际实现HEAD构建。仅公共Python依赖获取、授权GitHub提交推送/CI；Scanner强制离线，没有项目源码/Secret上传Scanner/模型，没有Jeepay/benchmark/人工真值修改。
+有界metadata证据：[源码SDK](confirmation-sdk-evidence.json)、[clean wheel](confirmation-clean-evidence.json)、[native](confirmation-native-evidence.json)、[测试/包hash与CI](confirmation-acceptance.json)。不存packet源码、Secret或用户prompt/transcript；确认本身不跑Scanner/目标edit/build/模型。local native在dirty修正实现构建，version.json.source_commit是初次implementation c21ccd8；不冒充修正commit artifact，最终CI artifact实际来自修正implementation HEAD。新的确认/修复验收强制离线；公共Python依赖、授权GitHub提交推送/CI及既有Standalone门禁的公开引擎/漏洞库获取可联网，没有项目源码/Secret上传Scanner/模型，没有Jeepay/benchmark/人工真值修改。
 
 ### AN.2 当前提交与 CI
 
-Implementation HEAD：待本轮commit。随后仅记录对应HEAD实际Runtime tests、Package integrity、Compliance及四平台Standalone的新run与最终jobs结论；失败必须修复/如实记录，不引用AM历史CI。final docs HEAD用git log -1 --format=%H -- docs/PROJECT_STATE.md获取。
+Implementation HEAD：`73c0945c934fe82fef7323db9e10bfe938e3fc74`，已推送 origin/feature/runtime-mvp。以下全部为该HEAD的新run，jobs最终结论已实际读取：
+
+| Workflow | 最终结论 | 实际 jobs |
+| --- | --- | --- |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37126440623) | success | Compliance: success |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37126440625) | success | Package integrity (windows-latest): success; Package integrity (ubuntu-latest): success |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37126440537) | success | Standalone artifact (linux-x64): success; Standalone artifact (windows-x64): success; Standalone artifact (macos-x64): success; Standalone artifact (macos-arm64): success |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37126440609) | success | Runtime tests (ubuntu-latest): success; Runtime tests (windows-latest): success |
+
+Standalone四平台沿现有artifact gate执行新增确认批准/拒绝/report_only和原AUTO的实际native MCP及离线Scanner；宿主选择/edit仍模拟，新Desktop UX PENDING。final docs HEAD用git log -1 --format=%H -- docs/PROJECT_STATE.md获取；docs-only提交的Runtime/Package/Compliance在最终回复单列，不重复触发Standalone。
 
 ### AN.3 fresh real-host 门禁
 
