@@ -1,0 +1,64 @@
+{
+  "approval": {
+    "transport": "ACTUAL_LOCAL_MCP_STDIO_CLOSE_AND_RELAUNCH",
+    "proof": {
+      "pending_from_server_a": true,
+      "confirmation_in_server_b": "AUTHORIZED",
+      "deadline_unchanged": true,
+      "source_unsafe_before_choice": true,
+      "original_session_namespace": true,
+      "mcp_server_launches": 3,
+      "prepare_status": "READY_FOR_HOST_FIX",
+      "resolved_families": 1,
+      "verification_status": "SCANNER_VERIFIED_RESOLVED",
+      "observed_execution": {
+        "patch_applied": false,
+        "target_build": false,
+        "tests_run": false,
+        "scanner_recheck": true,
+        "scanner_recheck_attempted": true,
+        "engine_process_observed": true
+      },
+      "cross_process_replay": "CONFIRMATION_ALREADY_CONSUMED",
+      "authorized_grant_after_restart": "REPAIR_GRANT_STALE"
+    },
+    "approve": true,
+    "duration_ms": 55234,
+    "scanner": "ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE",
+    "scanner_network": false,
+    "user_choice": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "runtime_source_edit": false,
+    "runtime_model_invoked": false,
+    "target_build": false,
+    "codex_native_dispatch": "PENDING",
+    "real_human_confirmation": "NOT_EXECUTED"
+  },
+  "decline": {
+    "transport": "ACTUAL_LOCAL_MCP_STDIO_CLOSE_AND_RELAUNCH",
+    "proof": {
+      "pending_from_server_a": true,
+      "confirmation_in_server_b": "DECLINED",
+      "deadline_unchanged": true,
+      "source_unsafe_before_choice": true,
+      "original_session_namespace": true,
+      "mcp_server_launches": 3,
+      "prepare_called": false,
+      "verify_called": false,
+      "unsafe_source_remains": true,
+      "unrelated_edit_feedback": false,
+      "cross_process_replay": "CONFIRMATION_ALREADY_CONSUMED"
+    },
+    "approve": false,
+    "duration_ms": 35225,
+    "scanner": "ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE",
+    "scanner_network": false,
+    "user_choice": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+    "runtime_source_edit": false,
+    "runtime_model_invoked": false,
+    "target_build": false,
+    "codex_native_dispatch": "PENDING",
+    "real_human_confirmation": "NOT_EXECUTED"
+  }
+}

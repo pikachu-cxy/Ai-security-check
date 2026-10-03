@@ -645,3 +645,65 @@ Implementation HEAD `158a85db8aeb553f58926188aad112fe332cd45c` 已成功推送 o
 GitHub注解为“recent account payments have failed or your spending limit needs to be increased”，没有区分哪种账号条件。当前交付 **CI BLOCKED / PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，四平台Standalone也没有本轮CI产物，不能引用AN历史success当本轮通过。账号付款/支出设置未修改，无权限擅自增加支出；没有workflow绕过或coverage/风险降级。恢复后重跑本次实际失败run并核实jobs/产物；当前只记录真实外部阻塞。本地Windows native/clean/package/full通过独立有效。
 
 最终文档HEAD通过 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 获取；随后docs-only提交也会触发Runtime/Package/Compliance，它们的实际新结论在最终交付回复单列，不能预写PASS；Standalone仅由本次implementation改动触发。Desktop批准/拒绝及人工质量待办保持真实PENDING。
+
+
+## AP. CONFIRM_REQUIRED Cross-Turn Confirmation Persistence Fix
+
+### AP.1 最新真实反馈与确定性根因
+
+起点干净 `feature/runtime-mvp` / `1a92dff6d86dc688f5b0a4fbecb56da109a8c4f7`。用户真实Desktop回传的post-edit语义、edit_already_applied、主动风险解释、询问修复而不是批准危险编辑均PASS（USER_REPORTED）；用户下一回合仅“允许”，旧确认返回REFRESH_REQUIRED，未授权/未修复，approval handoff FAIL。原smart_auto完整实机PASS保留。本轮新Desktop批准/拒绝都PENDING。
+
+旧实现的确定性缺陷：Pending虽已HMAC落盘，安全authority仍是发行Service的self.confirmations/monotonic deadline，新Service丢字典即拒绝。真实Host旧通用REJECT没有细分底层证据，本轮不猜Codex内部对象/进程/连接模型，不宣称所有旧错误唯一由缓存缺失造成。修复是跨tool/用户turn的signed persistent handoff，非Host cold-start重构。
+
+### AP.2 持久化、安全边界与诊断
+
+Pending只保存有界metadata：phase、confirmation_hash、confirmation_issued_at_epoch、confirmation_expires_at_epoch、workspace_id、host_id/session_id hash与host_session_namespace、family_key、task_ref、origin_scan_id、snapshot、mode/policy_version/config revision binding、target和source/preservation HMAC、原attempt/phase信息。opaque高熵token只返给宿主，持久化只有hash；不保存源代码、Secret、prompt/transcript、Scanner raw prose或token plaintext。HMAC覆盖完整record，当前workspace OS锁序列化读/检查/一次消费/保存；不引入第二套Hook逻辑。
+
+Runtime发行epoch时间，expires-issued=900秒，确认要求now在[issued,expires)，有效期不超过900且类型/finite值正确。重连、重复Hook或confirm不延长。缺TTL/namespace的旧格式Pending刷新，不自动迁移。前跳到expires过期，回退到issued之前拒绝；本机OS墙钟不是独立可信时间，不能保证检测发行后的所有小幅回拨。批准grant保持连接内authorized hash与prepare attestation、原monotonic剩余期限，另外检查原epoch有效性，C重启不能恢复。
+
+确认authority=opaque原ref+原workspace/host-session namespace下的HMAC状态+hash match+PENDING phase+TTL+原snapshot/policy+原task/scan/member/rule/family+source/preservation proof。成员读取后再次复核，任一变化刷新，不重定向T01/新scan，不放宽coverage或风险。引用是绑定原namespace的bearer capability，不独立认证当前人/调用者；approval_trust仍UNTRUSTED_HOST_REPORT。A退出后同state的B可确认有效Pending；AUTHORIZED/DECLINED后C重放仍ALREADY_CONSUMED。并发消费只发一个grant；其他请求BUSY或ALREADY_CONSUMED。拒绝保留源码/Raw/triage，不suppression，不prepare/verify，无关edit不再问。
+
+Pending最多32/workspace，重启不能重置；发新Pending时加上本连接有效authorized hash检查32，授权hash仍最多32/连接。16families/session、64sessions/workspace、262144bytes/state、原snapshot/cooldown/single-flight/family multiset、脱敏/UNTRUSTED_CODE/覆盖保持。prepare/verify服务没有重构，AUTO_FIX/command Hook/continue:false确认输出未改。
+
+安全diagnostic_reason只用固定枚举：STATE_NOT_FOUND、REFERENCE_INVALID/MISMATCH、NAMESPACE_MISMATCH、EXPIRED、SNAPSHOT_CHANGED、POLICY_CHANGED、TASK_CHANGED、SOURCE_GUARD_CHANGED、STATE_INVALID；不返回path/token/源码/Secret/exception文本。旧通用用户refresh reason保留，MCP输入仍闭合，无client expiry字段。
+
+### AP.3 本地实际验收
+
+前轮baseline692/6/6，未重跑旧HEAD。本轮targeted **172 passed（391.57s）**；后补并发消费和客户端expiry等输入focused **6 passed**（含既有敏感值回归）；最终full offline **724 passed /6 skipped /6 subtests passed，615.42s**。新增32项persistence cases，替换旧“restart必否定Pending”case，并增加1项客户端expiry拒绝。覆盖A→B批准/拒绝/重放、重启Hook不失效/不续期、TTL/回拨/非法deadline、HMAC各字段tamper、source/unrelated/snapshot/task/family/scan/mode/config revision、foreign workspace/ref/namespace、32Pending预算和并发一次消费；批准grant restart失效的旧要求保留。新API与原command/MCP/equivalence/risk/coverage全量回归。
+
+六项skipped单列：tests/test_e2e_real.py:38/58/68/80/120/154需多引擎PATH；未计通过，其他SDK/native实际managed Semgrep/Gitleaks不替代该前提。
+
+| 本地门禁 | 真实结果 |
+| --- | --- |
+| wheel/sdist/package | PASS；2个改动Runtime模块与源码逐字节相同 |
+| Compliance | PASS；licenses/distribution/notices及全量合规测试 |
+| Strict clean wheel install | PASS；无editable/system-site；实际MCP/Scanner原4模式链路和跨进程批准/拒绝 |
+| Source SDK | PASS；A真实stdio退出、B重新启动、C重放；批准完整prepare/edit/Hook/verify |
+| Windows native | PASS；重新构建，实际native MCP进程重启与离线Scanner；不是Desktop模型交互 |
+| 真实human choice/Host edit | 本地均SIMULATED_BY_ACCEPTANCE_DRIVER，非实机人类选择 |
+| Fresh Desktop批准/拒绝 | PENDING / PENDING，未实际执行 |
+
+有界证据：[SDK](persistence-sdk-evidence.json)/[实际restart](persistence-sdk-restart-evidence.json)、[clean wheel](persistence-clean-evidence.json)/[restart](persistence-clean-restart-evidence.json)、[Windows native](persistence-native-evidence.json)/[restart](persistence-native-restart-evidence.json)、[门禁/hash/CI](persistence-acceptance.json)。跨进程每条case启动A/B/C三个真实OS server进程，原TTL不变、C replay拒绝；批准case B实际原Scanner证明RESOLVED，C原grant失效；拒绝case源码仍unsafe、未prepare/verify/no-reprompt。原4模式链路继续验收，Standalone原--remediation gate增加独立--cross-turn-only步骤，各保持180秒离线fixture timeout，没有扩policy/scanner/Functional Verification。
+
+本地native在starting HEAD上dirty实现构建，source_commit为starting HEAD，不冒充本轮immutable CI artifact。Runtime不模型/源码edit/目标build，源代码编辑与选择由driver模拟；Scanner离线，公共包/授权GitHub delivery可联网，既有Standalone合成fixture门禁可获取公开引擎/漏洞库，不上传项目源码或Secret给Scanner/模型。Jeepay、用户fixture、冻结benchmark/人工标签未修改，Secret rotation未执行；Ground Truth UNREVIEWED/null、质量NOT_MEASURED、三位试用Pending。
+
+### AP.4 fresh Desktop批准与拒绝
+
+模式命令/项目配置和完整普通prompt见 [fresh Desktop步骤](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)。在ask_before_fix、新Chat与 **ConfirmationTlsTrial3.java** 建立安全局部JDK HTTPS baseline后，另一次普通编辑加入always-true verifier；PostToolUse自动产生CONFIRM_REQUIRED，明确编辑已完成并问是否修复。危险源码仍在，prepare/verify未调用。用户仅 **“允许”**，应confirm true→AUTHORIZED→prepare→最小edit→自动Hook/resolved=1→verify SCANNER_VERIFIED_RESOLVED，无第二条修复请求；只有snapshot/policy/task/TTL真实变化才可拒绝，不能因实例重建本身拒绝。
+
+独立新Chat **ConfirmationTlsDecline3.java** 重复baseline与风险，主动问题后仅 **“不修”**，confirm false→DECLINED、源码仍危险、无prepare/verify；随后同session普通无关edit不再问。只实际完成用户下一回合批准→修复→验证才标新的approval real-host PASS；当前PENDING，拒绝也PENDING。原问题语义USER_REPORTED PASS及旧approval FAIL保留。交付后停止，不开始下一阶段。
+
+### AP.5 本轮实现与新CI
+
+Implementation HEAD `a88c84071d823cd784ca39569bacadef03c067dd` 已推送 origin/feature/runtime-mvp。本轮实际新run全部completed/failure，9个jobs的runner_name为空、steps=[]；工具读取每项失败注解，均为付款失败或支出限额，未开始测试/构建：
+
+| Workflow | GitHub conclusion | 实际执行 |
+| --- | --- | --- |
+| [Compliance](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37133137074) | failure | 无Runner/steps，账户条件未启动 |
+| [Runtime tests](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37133137060) | failure | 无Runner/steps，账户条件未启动 |
+| [Package integrity](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37133137063) | failure | 无Runner/steps，账户条件未启动 |
+| [Standalone artifacts](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37133137093) | failure | 无Runner/steps，账户条件未启动 |
+
+结论 **CI BLOCKED / PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**；GitHub未区分付款失败与限额哪一种。未修改账号设置、增加支出、降级coverage或绕过workflow。账户恢复后重跑这些本轮失败run，核实实际jobs和Standalone四平台新产物，不能引用旧AN success证明本轮通过。本地Windows native/clean/package/full门禁独立有效；当前其他三个平台未在本轮执行。
+
+最终docs HEAD用 `git log -1 --format=%H -- docs/PROJECT_STATE.md` 核对。后续docs-only提交也触发Runtime/Package/Compliance，实际新结论在最终回复单列，不能预写PASS；Standalone不由docs-only再次触发。新Desktop批准/拒绝仍PENDING，其他阶段Planned，交付后停止。
