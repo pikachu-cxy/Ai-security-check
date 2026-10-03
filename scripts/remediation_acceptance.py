@@ -25,7 +25,7 @@ UNSAFE = SAFE.replace('  connection.setConnectTimeout',
                       '  connection.setHostnameVerifier((hostname, session) -> true);\n  connection.setConnectTimeout')
 
 
-async def run(command):
+async def run(command, mode='smart_auto', approve=True):
     from security_runtime._version import __version__
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix='runtime-remediation-') as temporary:
@@ -41,6 +41,8 @@ async def run(command):
         env = dict(os.environ, SECURITY_RUNTIME_WORKSPACE=str(root),
                    SECURITY_RUNTIME_STATE_DIR=str(parent / 'state'), SECURITY_RUNTIME_OFFLINE='1',
                    SECURITY_RUNTIME_MCP_SELF_TEST='1', PYTHONUTF8='1')
+        state = parent / 'state'; state.mkdir()
+        (state / 'remediation.json').write_text(json.dumps({'remediation': {'mode': mode}}))
         params = StdioServerParameters(command=command[0], args=command[1:] + ['mcp'], env=env, cwd=root)
         with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
             async with stdio_client(params, errlog=errors) as (read, write):
@@ -62,9 +64,50 @@ async def run(command):
                     await asyncio.sleep(1.1)
                     path.write_text(UNSAFE)
                     new, response = await call('handle_hook_event', claims)
-                    assert new['new_families'] == 1 and new['remediation']['action'] == 'AUTO_FIX', new
+                    assert new['new_families'] == 1, new
+                    if mode == 'report_only' or not approve:
+                        if mode == 'report_only':
+                            assert new['remediation']['action'] == 'ADVISE' and 'decision' not in new
+                            decision_status = 'REPORTED_WITHOUT_FORCED_CONFIRMATION'
+                        else:
+                            assert new['remediation']['action'] == 'CONFIRM_REQUIRED' and new['decision'] == 'block'
+                            confirmation_args = dict(new['remediation']['confirmation']['arguments'], approve=False)
+                            refused, _ = await call('confirm_remediation', confirmation_args)
+                            assert refused['status'] == 'DECLINED'
+                            decision_status = refused['status']
+                        await asyncio.sleep(1.1)
+                        (root / 'Other.java').write_text('class Other {}\n')
+                        later, _ = await call('handle_hook_event', claims)
+                        assert 'decision' not in later and not later['remediation']['feedback_required']
+                        assert path.read_text() == UNSAFE
+                        proof = dict(baseline_status=baseline['status'], new_families=new['new_families'],
+                                     action=new['remediation']['action'], decision_status=decision_status,
+                                     prepare_called=False, verify_called=False, affected_source_unchanged=True,
+                                     unrelated_edit_feedback=False)
+                        return dict(mode=mode, proof=proof, host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',
+                                    codex_native_dispatch='PENDING', scanner_network=False)
+                    if mode == 'ask_before_fix':
+                        decision = new['remediation']
+                        assert decision['action'] == 'CONFIRM_REQUIRED' and decision['feedback_required']
+                        assert 'rem-v1.' not in json.dumps(decision) and 'prepare' not in decision
+                        assert 'Proactively ask the user' in decision['guidance']
+                        for name in ('prepare_task_fix', 'verify_task_fix'):
+                            rejected, _ = await call(name, {'task_ref': decision['task_ref']})
+                            assert rejected['reason_code'] == 'CONFIRMATION_HANDOFF_REQUIRED'
+                        assert path.read_text() == UNSAFE
+                        # This is a simulated explicit host-reported reply.
+                        # It cannot prove a real human interaction in Desktop.
+                        authorization, _ = await call('confirm_remediation',
+                            dict(decision['confirmation']['arguments'], approve=True))
+                        assert authorization['status'] == 'AUTHORIZED'
+                        assert authorization['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
+                        arguments = authorization['prepare']['arguments']
+                        repeated, _ = await call('confirm_remediation', dict(decision['confirmation']['arguments'], approve=True))
+                        assert repeated['reason_code'] == 'CONFIRMATION_ALREADY_CONSUMED'
+                    else:
+                        assert new['remediation']['action'] == 'AUTO_FIX', new
+                        arguments = new['remediation']['prepare']['arguments']
                     assert new['decision'] == json.loads(response.content[0].text)['decision'] == 'block'
-                    arguments = new['remediation']['prepare']['arguments']
                     packet, _ = await call('prepare_task_fix', arguments)
                     assert packet['status'] == 'READY_FOR_HOST_FIX'
                     assert packet['remediation_authorization']['action'] == 'AUTO_FIX'
@@ -86,7 +129,9 @@ async def run(command):
                     assert path.read_text() == SAFE
                     # Metadata export only; bounded fix evidence is not saved.
                     proof = dict(baseline_status=baseline['status'], new_families=new['new_families'],
-                                 action=new['remediation']['action'], attempt_count=new['remediation']['attempt_count'],
+                                 action=new['remediation']['action'], attempt_count=packet['remediation_authorization']['attempt_count'],
+                                 authorization_kind=packet['remediation_authorization']['authorization_kind'],
+                                 preconfirmation_grant_available=False if mode == 'ask_before_fix' else None,
                                  hook_feedback=new['decision'], prepare_status=packet['status'],
                                  resolved_families=closed['resolved_families'],
                                  automatic_verification=closed['remediation']['verification'],
@@ -95,13 +140,21 @@ async def run(command):
                                  unrelated_edit_action=later['remediation']['action'])
             errors.seek(0)
             assert '0x80131506' not in errors.read()
-    return dict(runtime_version=__version__, transport='ACTUAL_LOCAL_MCP_STDIO',
+    return dict(runtime_version=__version__, mode=mode, transport='ACTUAL_LOCAL_MCP_STDIO',
                 scanner='ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE', host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',
                 codex_native_dispatch='PENDING', same_turn_codex_model_continuation='PENDING',
                 runtime_model_invoked=False, runtime_source_edit=False, target_build=False,
                 scanner_network=False, ground_truth='UNREVIEWED', command_hook_runner_used=False,
                 duration_ms=round((time.monotonic()-started)*1000), proof=proof,
-                schemas={name:tools[name].inputSchema for name in ('handle_hook_event','prepare_task_fix','verify_task_fix')})
+                schemas={name:tools[name].inputSchema for name in ('handle_hook_event','confirm_remediation','prepare_task_fix','verify_task_fix')})
+
+
+async def run_all(command):
+    record = await run(command)
+    record['confirmation_approval'] = await run(command, 'ask_before_fix')
+    record['confirmation_decline'] = await run(command, 'ask_before_fix', approve=False)
+    record['report_only'] = await run(command, 'report_only')
+    return record
 
 
 if __name__ == '__main__':
@@ -110,7 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path)
     args = parser.parse_args()
     command = [args.runtime] if args.runtime else [sys.executable, '-m', 'security_runtime.cli']
-    record = asyncio.run(run(command))
+    record = asyncio.run(run_all(command))
     if args.output:
         args.output.write_text(json.dumps(record, indent=2), encoding='utf-8')
     print(json.dumps(record, indent=2))

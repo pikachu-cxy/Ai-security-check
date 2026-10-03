@@ -1,5 +1,54 @@
 # Smart Auto Remediation v0.1
 
+## CONFIRM_REQUIRED Host Interaction v0.1（2026-10-03）
+
+本次用户回传的真实 Codex Desktop 结果：**smart_auto PASS（USER_REPORTED）**，无需“帮我修”即可 NEW → AUTO_FIX → prepare → 宿主 edit → RESOLVED → verify → SCANNER_VERIFIED_RESOLVED。旧 ask_before_fix 是 **Policy decision PASS / Host confirmation UX FAIL**，不是完整 PASS。下方旧迭代正文的 Desktop Pending 是当时状态。本次改进后的 **CONFIRM_REQUIRED real-host 验收 PENDING**；SDK/native 的模拟用户选择与编辑不能代替它。
+
+CONFIRM_REQUIRED 现在返回 `feedback_required=true`、固定 `SECURITY_REMEDIATION_CONFIRMATION_REQUIRED` guidance、`impact_summary`、`confirmation_ref` 和原 `task_ref`，不返回 prepare/verify grant。仅 Codex transport 把它投影为官方 PostToolUse `decision:block` / `reason` / `hookSpecificOutput.additionalContext`，要求同一 turn 主动解释、询问并等待；不撤销已完成编辑。Core/RemediationPolicy 没有 Codex 输出字段。固定提示来自本地 JDK hostname 修复 metadata，Scanner description、raw line、源码、Secret、模型输出都不是提示指令。
+
+新增最小工具：
+
+```text
+confirm_remediation(confirmation_ref: str, task_ref: str, approve: bool,
+                    workspace_path: str | None = None)
+```
+
+输入 schema 闭合，approve 必须为 JSON boolean，拒绝额外 source/Secret/prompt/transcript。workspace 必须绑定当前 MCP，绝对路径先做 lexical containment（含 ..），再验证链接和 Git workspace。Host 只能在明确收到用户同意/拒绝后报告 true/false；Runtime 将选择标为 `UNTRUSTED_HOST_REPORT`，不声称独立认证了人的原话或身份。
+
+身份格式为 `confirm-v1.<host/session hash>.<family hash>.<random>`，通过外层 workspace state namespace、HMAC 状态和连接内 hash/截止时间共同绑定 workspace、host/session、family、原 scan/task、原 snapshot、policy version/用户模式配置 revision。最长 900 秒、一次性消费；批准 grant 继承原截止时间，不续期。待确认与批准 hash 合计最多 32/连接，过期不复活；原 16 families/session、64 sessions/workspace、262144 bytes/state 预算保持。Pending attempt=0；批准后 attempt=1，两次尝试上限仍有效。
+
+状态：PENDING_CONFIRMATION → AUTHORIZED → CLOSED（或 ESCALATED）；拒绝为 DECLINED，失效为 EXPIRED。状态只保存有界 metadata、引用/hash/HMAC，不保存源码、Secret、原值匹配、用户 prompt 或 transcript。重连/重启丢失连接内确认/授权，fail closed。模式/配置 revision、snapshot、任务成员/family/review 变化，删除或已移除 bypass，均不能批准旧引用。无效时刷新当前结果并重新取得适用交接，不按 T01 换对象，不重新解释旧引用来继续。已拒绝/失效的原任务不会在同 session 的无关 edit 再次询问。
+
+批准后工具才返回 `status=AUTHORIZED`、`authorization_kind=USER_CONFIRMED` 和真正 `remediation_ref`，再沿原 prepare_task_fix → 宿主最小 edit → Hook → verify_task_fix。原用户模式保持 ask_before_fix。prepare 仍严格只读，确认本身不执行 Scanner/模型/目标 edit/build；原 EvidenceBuilder、UNTRUSTED_CODE/脱敏、preservation guard、原 provider/rule/file/pack/full scope 的验证要求不变。不能省略 grant 绕过同一 pending/declined/expired 任务的 MCP prepare/verify gate；其他显式修复任务接口保持。DECLINED 不删除 Raw、不 suppression，也不等于永久忽略。确认接口不能阻止宿主绕开协议自行调用编辑工具；在该行为下 Runtime 不会提供有效授权或伪造验证。
+
+smart_auto 的原 narrow AUTO_FIX 不变；ask_before_fix 转为上述主动确认；report_only 只报告、不强制询问。RemediationService 的 host 是显式参数，状态键为 root + host + session + family，Codex adapter 传 host='codex'。没有增加 Cursor transport、新规则/Scanner、自动 build/test gate、Secret rotation 或下一阶段。
+
+### fresh Codex Desktop：批准与拒绝
+
+1. 保留既有 fixture 和 MCP hooks.json；现有 command Hook 不删除。fixture MCP 指向当前 editable Runtime 时无需修改 hooks.json。若指向独立包，先换成包含本次提交的安装。断开并重连 ai_security_runtime，打开新聊天；检查 `confirmation_handoff: v0.1` 和新工具 schema。只在试用开始前重连，询问与回答之间保持同一连接，900 秒内回答。
+2. 在 fixture 对应的同一状态目录设置模式（不是更改全局其他项目的状态）：
+
+```powershell
+$env:SECURITY_RUNTIME_STATE_DIR = 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\.security-runtime\codex-mcp-hook-poc-state'
+& 'C:\Users\Administrator\AppData\Local\Programs\Python\Python313\Scripts\security-check.exe' remediation configure --mode ask_before_fix
+& 'C:\Users\Administrator\AppData\Local\Programs\Python\Python313\Scripts\security-check.exe' remediation status
+```
+
+3. 在可丢弃的原 fixture 中发普通开发请求，先建立安全 baseline：
+
+> 新增 ConfirmationTlsTrial.java，使用 import javax.net.ssl.HttpsURLConnection 和 import java.net.URL。在 request(String url) throws Exception 方法内部创建局部 connection = (HttpsURLConnection) new URL(url).openConnection()，设置 1000ms 连接超时。保留其他文件。不主动运行 security-check、Hook、安全扫描或构建。
+
+4. 等第一项完成（至少超过既有 1 秒 cooldown），再发送普通 fixture 编码需求；没有额外安全/修复指令：
+
+> 在刚才 request 方法的局部 connection 上加入 connection.setHostnameVerifier((hostname, session) -> true) 作为此临时测试文件的配置，保留其他代码和文件。只编辑代码，不主动运行 security-check、Hook、安全扫描或构建。
+
+5. 第二条需求的**同一 turn**，原生 PostToolUse 应自动调用 handle_hook_event，返回 NEW / CONFIRM_REQUIRED / block。Codex 应主动解释主机名校验风险、恢复校验可能拒绝现有不匹配端点，询问是否允许修复并等待。此时 prepare_task_fix/verify_task_fix **NOT CALLED**，bypass **NOT AUTOMATICALLY FIXED**。只提到 marker 然后结束原任务是 FAIL。若 baseline、DEBOUNCED、来源身份或窄类型/保留性证明不符合条件，应如实判不满足试用前提，不手动补发 Hook 来冒充自动触发。
+6. 用户只答 **“允许修复”**。观察 confirm_remediation(approve=true) → AUTHORIZED → prepare → Codex 最小 edit → 自动 Hook/resolved_families=1 → verify=SCANNER_VERIFIED_RESOLVED。不要在中间改源码/config、重连或追加“帮我修”技术提示。Runtime 不认证用户话语；宿主须忠实报告这一明确答复。
+7. 拒绝用独立新 session/新临时文件重新做安全 baseline 与 NEW，在主动问题后仅答 **“不修”**：confirm_remediation(approve=false) → DECLINED，源码不变，prepare/verify NOT CALLED；随后普通无关 edit 不再对该 family 重复询问，原 Raw/triage 保留。
+8. 保存状态/工具调用 metadata，无源码/Secret/prompt全文。只有上述真正 Desktop 链路（含主动询问、等待、批准修复和拒绝）完成，才更新 CONFIRM_REQUIRED real-host PASS。当前 PENDING，三位试用仍 Pending，独立 ground truth UNREVIEWED/null、质量 NOT_MEASURED。
+
+当前测试/package/native/CI 结论和源码 SDK、clean-wheel、native 有界证据见 [AN 验收附录](AI_TRIAGE_ACCEPTANCE.md#an-confirm_required-host-interaction-v01)。下方为 Smart Auto v0.1 原交付记录。
+
 Runtime 0.3.1、`developer-guidance-v0.3` 保持；新增可选 feature `smart_auto_remediation: v0.1`。本轮只授权局部 JDK HTTPS 连接的 trust-all hostname verifier 修复。Runtime 决策和验证，宿主修改文件。
 
 ## 决策与身份

@@ -256,8 +256,42 @@ def create_server(runtime: SecurityRuntime | None = None):
                 return remediation._fail('WORKSPACE_BINDING_REQUIRED')
             return remediation.prepare(remediation_ref, task_ref, bound_path(workspace_path))
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
-        return TaskFixService(ReadOnlySQLiteStore(path)).prepare(task_ref, workspace_path,
+        service = TaskFixService(ReadOnlySQLiteStore(path))
+        resolved = service.tasks.resolve(task_ref, workspace_path, bound_workspace=binding.root if binding else None)
+        if resolved['status'] != 'RESOLVED':
+            return resolved
+        gate = remediation.task_gate(task_ref, resolved['workspace'])
+        if gate is not None:
+            return gate
+        return service.prepare(task_ref, workspace_path,
             bound_workspace=binding.root if binding else None)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def confirm_remediation(confirmation_ref: str, task_ref: str, approve: bool, workspace_path: str | None = None) -> dict:
+        """Only after an explicit user reply: report approve=true for permission or false for refusal. Never infer consent. Consume exact connection-local pending confirmation; no source, Secret, prompt or transcript input. Host choice is UNTRUSTED_HOST_REPORT, not authenticated human consent. Returns a bounded repair grant only after approval; stale/restarted references require refresh."""
+        if binding is None:
+            return remediation._fail('WORKSPACE_BINDING_REQUIRED')
+        try:
+            from .hook_state import no_links
+            if workspace_path is not None and (not isinstance(workspace_path, str) or len(workspace_path) > 4096 or
+                    '${' in workspace_path or any(ord(c) < 32 for c in workspace_path)):
+                return remediation._fail('WORKSPACE_CLAIM_REJECTED')
+            claim = Path(workspace_path) if workspace_path is not None else Path(binding.root)
+            if not claim.is_absolute():
+                return remediation._fail('WORKSPACE_CLAIM_REJECTED')
+            candidate = Path(os.path.abspath(claim))
+            if not candidate.is_relative_to(Path(binding.root)):
+                return remediation._fail('WORKSPACE_CLAIM_REJECTED')
+            no_links(candidate)
+            root = bound_path(workspace_path)
+            return remediation.confirm(confirmation_ref, task_ref, root, approve=approve)
+        except Exception:
+            return remediation._fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED')
+
+    confirmation_tool = server._tool_manager.get_tool('confirm_remediation')
+    confirmation_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+    confirmation_tool.fn_metadata.arg_model.model_rebuild(force=True)
+    confirmation_tool.parameters = confirmation_tool.fn_metadata.arg_model.model_json_schema()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:
@@ -270,7 +304,14 @@ def create_server(runtime: SecurityRuntime | None = None):
             return remediation.verify(remediation_ref, task_ref, bound_path(workspace_path),
                                       host_reported_execution=host_reported_execution)
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
-        return TaskFixService(ReadOnlySQLiteStore(path), engine.registry if engine is not None else None).verify(
+        service = TaskFixService(ReadOnlySQLiteStore(path), getattr(engine, 'registry', None))
+        resolved = service.tasks.resolve(task_ref, workspace_path, bound_workspace=binding.root if binding else None)
+        if resolved['status'] != 'RESOLVED':
+            return resolved
+        gate = remediation.task_gate(task_ref, resolved['workspace'])
+        if gate is not None:
+            return gate
+        return service.verify(
             task_ref, workspace_path, bound_workspace=binding.root if binding else None,
             host_reported_execution=host_reported_execution)
 

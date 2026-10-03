@@ -69,7 +69,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             try:
                 result = (coordinator or HookCoordinator()).handle(hook_event, root, 'codex', session)
                 if remediation is not None:
-                    decision = remediation.on_hook(result, root, session)
+                    decision = remediation.on_hook(result, root, session, host='codex')
             except Exception:
                 result = _inconclusive('HOOK_CHECK_INCONCLUSIVE')
 
@@ -93,6 +93,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         if decision.get('feedback_required') is True and decision['action'] == 'AUTO_FIX':
             output.update(decision='block', reason=decision['guidance'])
             output['systemMessage'] = 'Security Runtime: automatic TLS remediation required.'
+        elif decision.get('feedback_required') is True and decision['action'] == 'CONFIRM_REQUIRED':
+            output.update(decision='block', reason=decision['guidance'])
+            output['systemMessage'] = 'Security Runtime: explain the risk, ask for explicit repair approval, then wait.'
         elif decision['action'] == 'NONE':
             output['systemMessage'] = ('Security Runtime verified the local repair.'
                                        if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else '')

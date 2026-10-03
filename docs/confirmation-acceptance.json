@@ -1,0 +1,81 @@
+{
+  "stage": "CONFIRM_REQUIRED Host Interaction v0.1",
+  "starting_head": "5965497e3a687dbe67fb3e86d367dfdc0059052a",
+  "implementation_head": "PENDING_COMMIT",
+  "final_docs_head": "git log -1 --format=%H -- docs/PROJECT_STATE.md",
+  "prior_delivered_baseline": {
+    "passed": 651,
+    "skipped": 6,
+    "subtests": 6
+  },
+  "targeted": {
+    "passed": 137
+  },
+  "final_offline": {
+    "passed": 687,
+    "skipped": 6,
+    "subtests": 6,
+    "seconds": 340.43
+  },
+  "gates": {
+    "targeted": {
+      "exit": 0,
+      "seconds": 192.99
+    },
+    "full": {
+      "exit": 0,
+      "seconds": 340.95
+    },
+    "package": {
+      "exit": 0,
+      "seconds": 3.09
+    },
+    "sdk": {
+      "exit": 0,
+      "seconds": 109.42
+    },
+    "clean": {
+      "exit": 0,
+      "seconds": 130.4,
+      "system_site_packages": false,
+      "editable_install": false,
+      "source_upload": false,
+      "public_package_download": true
+    },
+    "native": {
+      "exit": 0,
+      "seconds": 144.38
+    }
+  },
+  "source_sha256": {
+    "src/security_runtime/codex_mcp_hook.py": "70b255c671c34dcd8b67030605973df0f0741a9dc3edea79853c9e9c8189697c",
+    "src/security_runtime/host_guidance.py": "ec9603827ae67f9a2a7526355fcfdaa04a212e03eeac20d6a3e52a588329f129",
+    "src/security_runtime/mcp_server.py": "ea6e3cccad09044f2cb2cdb723c2903a0e20bb7d49e1b27ccf2278273702af1e",
+    "src/security_runtime/remediation.py": "01535cc7c19dc8d099dab4c035e0eaa8ca32fe4ef9da607a2714f7c5f69e536a"
+  },
+  "wheel_sha256": "1e4b060c0c63b43e4a51db9788b705727e5e29779ca4b080063793cfdd2518c6",
+  "sdist_sha256": "2b361a9a1332f2d0be9ad3d1a002fd8ca709ba9b1831b0442b708c67aca38c65",
+  "module_bytes_match_wheel_and_sdist": true,
+  "local_native_build": {
+    "source_commit": "5965497e3a687dbe67fb3e86d367dfdc0059052a",
+    "working_tree": "DIRTY_PRECOMMIT_IMPLEMENTATION",
+    "note": "Local native tests use this final source; version metadata names the starting HEAD. CI builds use implementation commit."
+  },
+  "real_host": {
+    "smart_auto": "PASS",
+    "smart_auto_provenance": "USER_REPORTED",
+    "previous_ask_policy": "PASS",
+    "previous_ask_confirmation_ux": "FAIL",
+    "new_confirmation_ux": "PENDING"
+  },
+  "human_trials": "PENDING",
+  "ground_truth": "UNREVIEWED",
+  "quality": "NOT_MEASURED",
+  "scanner_network": false,
+  "runtime_model_invoked": false,
+  "runtime_target_edit": false,
+  "target_build": false,
+  "source_or_secret_uploaded_to_scanner_or_model": false,
+  "command_hook_modified": false,
+  "ci": []
+}

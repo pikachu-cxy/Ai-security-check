@@ -1,5 +1,22 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+## CONFIRM_REQUIRED Host Interaction v0.1 — 当前交接（2026-10-03）
+
+从干净 `feature/runtime-mvp` / `5965497e3a687dbe67fb3e86d367dfdc0059052a` 继续，仅修复已暴露的确认反馈/授权链路。用户已报告真实 **smart_auto Desktop PASS（USER_REPORTED）**；原 **ask_before_fix Policy decision PASS / Host confirmation UX FAIL**。本次新的 **CONFIRM_REQUIRED real-host PENDING**，不得把 SDK/native 的模拟用户选择与宿主编辑写成 Desktop PASS。下方旧迭代 Pending 保留其当时语义，由本节记录新的真实回传。
+
+CONFIRM_REQUIRED 产生 feedback_required=true 和独立固定 guidance，Codex 薄 transport 按今日重新核对的 [官方 Hooks contract](https://learn.chatgpt.com/docs/hooks) 返回 PostToolUse block/reason/additionalContext：在当前 turn 解释风险与可能行为变化、主动询问并等待，不撤销已完成 edit。只用 Runtime 固定结构化 metadata，不将 Scanner prose/源码/Secret 当指令。批准前无 remediation_ref；同一 pending 任务的 MCP prepare/verify 也不能省略 grant 绕过。
+
+新增闭合 `confirm_remediation(confirmation_ref, task_ref, approve: bool, workspace_path=None)`；宿主只报告明确用户答复，标记 UNTRUSTED_HOST_REPORT，Runtime 不冒充独立认证人类同意。一次性 opaque 引用绑定 workspace/host/session/family/固定 task/原 scan/snapshot/policy revision，900 秒内有效；批准 grant 继承截止时间。连接重启、snapshot/成员/family/review/mode/config revision 变化失效，不按 T01 换对象。PENDING_CONFIRMATION → AUTHORIZED → CLOSED/ESCALATED；拒绝 DECLINED，失效 EXPIRED。拒绝保留 Raw/triage，不 suppression，同 session 无关 edit 不重复询问。metadata/HMAC 预算保持，待确认+批准 hash 最多32/连接，无源代码、Secret、prompt/transcript持久化。
+
+沿原 TaskFixService/EvidenceBuilder/VerificationService prepare → 宿主最小 edit → Hook → verify；narrow TLS allowlist、Raw/risk/coverage、脱敏/UNTRUSTED_CODE、preservation proof、两次尝试、snapshot/cooldown/single-flight/family multiset 不变。Core host 参数显式化，Codex adapter 传 host='codex'；没有 Cursor 接入、command Hook 删除、新 Scanner/规则、自动 build/test gate 或下一阶段。
+
+已交付 baseline **651 passed /6 skipped /6 subtests**；新增36项，针对性 **137 passed**；本轮 final full offline **687 passed /6 skipped /6 subtests passed，340.43秒**。六项真实多引擎 PATH e2e skipped 单列，未算通过。wheel/sdist/module bytes/package integrity/licenses/notices、严格 clean venv（无 editable/system site）、实际本地 SDK/Windows native 的批准/拒绝/report_only/原 AUTO 链路通过。Scanner 真实离线执行，用户选择/宿主 edit 是 SIMULATED_BY_ACCEPTANCE_DRIVER；新 Desktop 门禁仍 PENDING。本轮 CI 尚待此提交推送后的实际 run，见 AN，不用历史 CI 代替。
+
+包0.3.1、developer-guidance-v0.3 保持，新增 optional confirmation_handoff v0.1；实际 schema/模式与 fresh Desktop 步骤见 [Smart Auto 文档](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)，当前验收与有界证据见 [AN 附录](AI_TRIAGE_ACCEPTANCE.md#an-confirm_required-host-interaction-v01) 和 [acceptance metadata](confirmation-acceptance.json)。不修改 Jeepay、原 fixture 用户编辑、冻结 benchmark、人工标签。Scanner 网络/Runtime模型/目标build/Secret rotation未执行；仅公共包获取及授权的 GitHub分发/CI。三位试用Pending，独立 Ground Truth UNREVIEWED/null，质量NOT_MEASURED；后续 Deep Audit/Joern/watcher/MCP-Skill Security/自动依赖升级继续 Planned。提交推送、核实本轮实际 CI 后停止。
+
+当前新增验收附录为 AN；AM/AL/AK 为各自时点的历史记录。
+
+
 2026-10-01，`feature/runtime-mvp`。原轮实现已有 Scanner Finding 的证据验证与独立展示层；2026-10-02 开发者任务入口的独立验收见末尾附录。未增加 scanner、主动 AI 仓库审计或跨文件编译器级可达性分析。公开 Jeepay 的 OSV 在线测试使用用户当次明确授权；BYOK 验收仅访问本地 loopback 假服务器。
 
 ## A. 起始 HEAD
@@ -478,3 +495,37 @@ Implementation HEAD：`462633e8b5d4dcc730dba868bd9ac66e8bc40b37`，已推送 ori
 Standalone archive gate 包含 --full/--osv-fallback/--fix-verify/--hooks/--remediation；四平台均完成实际离线 native MCP grant、prepare、模拟宿主编辑、自动验证、verify 和无关编辑不重开。未声称 actual Codex Desktop same-turn 自动修复通过。
 
 final docs HEAD 从 git log -1 --format=%H -- docs/PROJECT_STATE.md 取得（避免文档自引用SHA）；docs-only后续CI若触发在最终交付消息补充。实现源代码保持本次成功验证的同一HEAD，无未提交修改。
+
+## AN. CONFIRM_REQUIRED Host Interaction v0.1
+
+起点 `5965497e3a687dbe67fb3e86d367dfdc0059052a`，feature/runtime-mvp，工作区干净。本次用户明确回传：smart_auto真实 Desktop PASS（USER_REPORTED），原 ask_before_fix policy PASS / 主动确认 UX FAIL。本次新确认 real-host **PENDING**，尚未以实际 Desktop 验收闭环。
+
+### AN.1 实现与本地验收
+
+Core 产生独立固定确认 guidance 和有界 confirmation identity，Codex仅做官方 PostToolUse反馈映射；prepare/verify前必须经过明确选择，批准才有实际grant。workspace、host/session、family、原 scan/task、snapshot、policy/config revision、900秒TTL及连接绑定，引用一次消费，模式不更改；DECLINED 不删 Raw、不 suppression。原 Hook snapshot/cooldown/single-flight/multiset 和现有验证/覆盖/脱敏保持。Remediation core的state host显式传入，没有Cursor接入。
+
+原已交付baseline651/6/6；新36项涵盖固定反馈/主动询问指令、批准前无grant/legacy gate、批准后prepare/resolve/verify、拒绝/no-reprompt、snapshot/成员/family/mode/config revision、TTL/一次性/restart、越界与闭合schema、no source/Secret/prompt/token状态、恶意scanner prose不是指令、host中立状态键。针对性137passed，**final full offline 687 passed /6 skipped /6 subtests passed，340.43s**。command/MCP Hook、等价匹配、coverage/triage/verification全量回归保持。
+
+Skipped单列：tests/test_e2e_real.py 的38、58、68、80、120、154行均需三真实引擎在PATH；六项未算通过。本轮其他SDK/native链路实际调用已托管Semgrep/Gitleaks离线Scanner，不据此将这些skip改为pass。
+
+| 门禁 | 实际结果/来源 |
+| --- | --- |
+| wheel/sdist | PASS；4个改动模块字节与最终源代码一致 |
+| Package integrity / licenses / notices | PASS |
+| Strict clean venv | PASS；system_site_packages=false、无editable；实际MCP/Scanner四条模式/选择链路 |
+| Local SDK | PASS；批准前gate、approve/prepare/宿主driver edit/自动Hook/显式verify；拒绝/no-reprompt；report_only无block；原AUTO不回归 |
+| Windows standalone | PASS；实际native MCP及离线Scanner，同上四场景 |
+| 新 CONFIRM_REQUIRED Desktop | PENDING；SDK/native的选择与edit均SIMULATED_BY_ACCEPTANCE_DRIVER |
+| 三位试用 / 独立 Ground Truth | Pending / UNREVIEWED/null，质量NOT_MEASURED |
+
+有界metadata证据：[源码SDK](confirmation-sdk-evidence.json)、[clean wheel](confirmation-clean-evidence.json)、[native](confirmation-native-evidence.json)、[测试/包hash与CI](confirmation-acceptance.json)。不存packet源码、Secret或用户prompt/transcript；确认本身不跑Scanner/目标edit/build/模型。local native在dirty最终实现构建，version.json.source_commit是starting HEAD；不能冒充实现commit artifact，CI将在实际实现HEAD构建。仅公共Python依赖获取、授权GitHub提交推送/CI；Scanner强制离线，没有项目源码/Secret上传Scanner/模型，没有Jeepay/benchmark/人工真值修改。
+
+### AN.2 当前提交与 CI
+
+Implementation HEAD：待本轮commit。随后仅记录对应HEAD实际Runtime tests、Package integrity、Compliance及四平台Standalone的新run与最终jobs结论；失败必须修复/如实记录，不引用AM历史CI。final docs HEAD用git log -1 --format=%H -- docs/PROJECT_STATE.md获取。
+
+### AN.3 fresh real-host 门禁
+
+完整步骤见 [fresh Desktop批准与拒绝](SMART_AUTO_REMEDIATION.md#fresh-codex-desktop批准与拒绝)：先在匹配状态目录切ask_before_fix，重连包含新工具/feature的MCP；新聊天普通编码安全baseline，再普通临时fixture编辑需求（既有cooldown）。同turn必须NEW/CONFIRM_REQUIRED →主动解释风险/行为变化→询问→等待，prepare/verify未调用、bypass未自动修。用户仅“允许修复”才confirm→prepare→宿主edit→自动Hook/RESOLVED→verify=SCANNER_VERIFIED_RESOLVED；独立case仅“不修”→DECLINED/源码不变/no-reprompt。保留真实工具调用metadata，不能手动发送Hook或追加修复提示来伪造自动询问。
+
+此完整Desktop闭环真正执行前，**Policy feedback/Runtime protocol已自动化验证；CONFIRM_REQUIRED Host interaction PENDING**。原UX FAIL保留；smart_auto的用户回传PASS独立记账。完成交付后停止，其他阶段Planned。

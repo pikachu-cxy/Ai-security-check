@@ -53,7 +53,7 @@ class SavedRuntime(FakeRuntime):
 
 
 @pytest.fixture
-def setup(repo, tmp_path):
+def setup(repo, tmp_path, request):
     store = SQLiteStore(tmp_path / 'db/scans.db')
     runtime = SavedRuntime(store)
     hooks = HookStateStore(tmp_path / 'hooks')
@@ -64,6 +64,8 @@ def setup(repo, tmp_path):
         found, run = original(*args); run.version = '1.178.0'; return found, run
     provider.scan = same_version
     service = RemediationService(store, registry=ScannerRegistry([provider]), hooks=hooks)
+    if hasattr(request, 'param'):
+        service.config.write(request.param)
     binding = workspace_binding(repo)
     def hook():
         return handle_codex_hook('PostToolUse', str(repo), 'session', 'apply_patch',
@@ -141,7 +143,7 @@ def test_retry_once_then_escalate_no_infinite_feedback(setup):
     # Restart cannot reset the persistent attempt budget.
     restart = RemediationService(service.store, registry=service.registry, hooks=service.hooks)
     result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'codex', 'session')
-    out = restart.on_hook(result, root, 'session')
+    out = restart.on_hook(result, root, 'session', host='codex')
     assert out['action'] != 'AUTO_FIX'
 
 
@@ -303,8 +305,8 @@ def test_modes_apply_to_hook_and_invalidate_existing_grant(setup, tmp_path, mode
     other = RemediationService(service.store, registry=service.registry, hooks=service.hooks,
                                directory=tmp_path / 'another-state')
     result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'codex', 'session')
-    output = other.on_hook(result, root, 'session')
-    assert output['action'] == expected and not output['feedback_required'], output
+    output = other.on_hook(result, root, 'session', host='codex')
+    assert output['action'] == expected and output['feedback_required'] == (mode == 'ask_before_fix'), output
 
 
 def test_valid_review_is_not_promoted_by_local_assessment(setup, tmp_path):
@@ -319,7 +321,7 @@ def test_valid_review_is_not_promoted_by_local_assessment(setup, tmp_path):
         recommended_action='Review')])
     other = RemediationService(service.store, hooks=service.hooks, directory=tmp_path / 'another-state')
     result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'codex', 'session')
-    output = other.on_hook(result, root, 'session')
+    output = other.on_hook(result, root, 'session', host='codex')
     assert output['action'] == 'ADVISE' and output['finding_policy'] == 'REVIEW'
     assert triage.view(scan_id)['triage_coverage']['review'] == 1
 
@@ -350,5 +352,5 @@ def test_new_hook_best_practice_is_quiet(setup, tmp_path):
     (root / 'A.java').write_text(UNSAFE + '// edit\n')
     result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'codex', 'session')
     other = RemediationService(service.store, hooks=service.hooks, directory=tmp_path / 'another-state')
-    output = other.on_hook(result, root, 'session')
+    output = other.on_hook(result, root, 'session', host='codex')
     assert output['action'] == 'NONE' and not output['feedback_required']
