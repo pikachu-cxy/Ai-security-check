@@ -44,7 +44,7 @@
     },
     "native": {
       "exit": 0,
-      "seconds": 78.26
+      "seconds": 68.66
     },
     "integrity": {
       "status": "PASS",
@@ -92,9 +92,50 @@
   },
   "new_desktop_cold_start": "PENDING_ACTUAL_DESKTOP",
   "lifecycle_sessionstart": "OFFICIALLY_DOCUMENTED_NOT_DESKTOP_VERIFIED",
-  "ci": "PENDING_QUERY_AFTER_PUSH",
+  "ci": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
   "real_maven_ab": "PENDING_ENVIRONMENT_PREREQUISITES",
   "three_developers": "PENDING",
   "ground_truth": "UNREVIEWED/null",
-  "quality": "NOT_MEASURED"
+  "quality": "NOT_MEASURED",
+  "implementation_head": "e68cff74c97a0a7a45df2381015b5906b072a82f",
+  "implementation_ci": [
+    {
+      "workflow": "Compliance",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993106",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 1,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Runtime tests",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993093",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 2,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Package integrity",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993105",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 2,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Standalone artifacts",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993133",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 4,
+      "runner_assigned": false,
+      "steps_executed": false
+    }
+  ],
+  "final_docs_ci": "QUERY_AFTER_FINAL_PUSH; final reply reports exact runs",
+  "native_source_commit": "e68cff74c97a0a7a45df2381015b5906b072a82f"
 }

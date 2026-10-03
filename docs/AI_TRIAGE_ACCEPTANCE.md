@@ -2,6 +2,8 @@
 
 ## Codex Integration Productization v0.2 / Cold-start Readiness v0.3（2026-10-04）
 
+Implementation e68cff74c97a0a7a45df2381015b5906b072a82f 已推送；本轮四类新 CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，9 jobs 无 Runner/steps，实际 annotations 均为账户付款/支出限额阻止启动，不是代码 PASS 或已运行的代码失败。未改账户、workflow门槛或安全契约，四平台未执行。新 runs 见 AS.5。Windows native 已从该已提交 implementation HEAD 重建并完成实际本地 MCP/lifecycle验收，68.66s，version.json source_commit与实现HEAD一致。最终docs HEAD按PROJECT_STATE的git log核对，docs-only新CI在最终交付消息独立核实。
+
 干净起点 feature/runtime-mvp / 022f402a7ade0ed0cf6bbfce50dccd04ed5920a1。最新用户真实 Desktop 回传：MCP Hook/equivalence、CONFIRM 主动询问/批准/拒绝、AUTO 无错误许可问题→prepare→宿主最小修复→Hook resolved1→Runtime 内部 TaskFixService.verify SCANNER_VERIFIED_RESOLVED→functional prepare 无 verifier NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN，均 **USER_REPORTED PASS**。未报告显式 verify_task_fix 或 functional run，不补写已执行。AR 的旧失败/Pending 保留历史语义，由本节最新回传覆盖当前判断。
 
 本轮只交付 Codex 自有项目 setup/status/repair/remove、readiness/诊断及既有复核协议去重。Runtime 0.3.1 / developer-guidance-v0.3 保持，features 新增 codex_integration v0.2 / cold_start_readiness v0.3。新 **fresh Desktop cold-start PENDING_ACTUAL_DESKTOP**；未在当前聊天伪造真实启动派发。source SDK/clean/native 模拟宿主编辑不代替 Desktop。
@@ -898,7 +900,7 @@ Manager/Adapter/Codex与Core分离；七新改模块在wheel/sdist/source逐字�
 | wheel/sdist/package/compliance | PASS，3.1s |
 | bytes integrity | 七模块PASS，十二核心不变 |
 | strict clean | PASS，58.0s，无editable/systemsite、117缓存wheels、无下载 |
-| Windows native | PASS，78.26s，Unicode/空格path、FROZEN ownexe、atomiclifecycle与MCP |
+| Windows native | PASS，68.66s，Unicode/空格path、FROZEN ownexe、atomiclifecycle与MCP |
 | source SDK cold start | PASS，46.45s，新process/session无get_runtime_info |
 
 skipped单列：
@@ -910,7 +912,7 @@ skipped单列：
 - SKIPPED [1] tests\test_e2e_real.py:68: real scanner binaries required
 - SKIPPED [1] tests\test_e2e_real.py:38: real scanner binaries required
 
-source/wheel/native各有codex-product-*-evidence.json。宿主edits由driver模拟；firstbaseline scanner_run=true/new0，危险editnew1/AUTO→prepare→修复resolved1→内部SCANNER_VERIFIED_RESOLVED/CLOSED匹配task/grant→直接functionalprepare。未调用verify_task_fix/get_runtime_infowarmup；无verifier无handoff不run。不是Desktop模型或MavenPASS。native预提交构建versionmetadata的source_commit是startingHEAD，实际包含最终工作区实现；不能把该字段当实现commit的immutablebuild证明。
+source/wheel/native各有codex-product-*-evidence.json。宿主edits由driver模拟；firstbaseline scanner_run=true/new0，危险editnew1/AUTO→prepare→修复resolved1→内部SCANNER_VERIFIED_RESOLVED/CLOSED匹配task/grant→直接functionalprepare。未调用verify_task_fix/get_runtime_infowarmup；无verifier无handoff不run。不是Desktop模型或MavenPASS。此前预提交native构建的source_commit为startingHEAD；本轮又从已提交实现e68cff74c97a0a7a45df2381015b5906b072a82f重建并完成验收，最终native版本元数据与implementation一致，见native-evidence。
 
 ### AS.4 实机验收与lifecycle
 
@@ -919,6 +921,19 @@ source/wheel/native各有codex-product-*-evidence.json。宿主edits由driver模
 ### AS.5 CI
 
 implementation push后查询Runtime/Package/Compliance/四平台Standalone真实jobs/steps/annotations。无runner/steps且billingannotations为PENDING_RERUN_AFTER_ACCOUNT_RECOVERY，不能称代码FAIL或PASS；本轮新runs随最终文档更新，旧AR不替代。
+
+
+
+Implementation commit: e68cff74c97a0a7a45df2381015b5906b072a82f。
+
+| 新 workflow | 实际 run | 结论 |
+|---|---|---|
+| Compliance | [37147993106](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993106) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Runtime tests | [37147993093](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993093) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Package integrity | [37147993105](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993105) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Standalone artifacts | [37147993133](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37147993133) | PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+
+最终文档提交的三个新 workflow在最终交付消息按实际jobs/annotations核实；不把文档push自动算通过。
 
 ### AS.6 Pending与边界
 
