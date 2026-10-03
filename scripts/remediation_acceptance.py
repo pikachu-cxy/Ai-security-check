@@ -65,12 +65,24 @@ async def run(command, mode='smart_auto', approve=True):
                     path.write_text(UNSAFE)
                     new, response = await call('handle_hook_event', claims)
                     assert new['new_families'] == 1, new
+                    text = json.loads(response.content[0].text)
+                    if mode == 'ask_before_fix':
+                        assert new['continue'] is text['continue'] is False
+                        assert new['stopReason'] == text['stopReason'] == new['remediation']['guidance']
+                        assert 'decision' not in new and 'decision' not in text
+                        assert 'reason' not in new and 'reason' not in text
+                        interaction = new['remediation']['interaction']
+                        assert interaction['edit_already_applied'] is True
+                        assert interaction['requested_user_decision'] == 'REMEDIATE_SECURITY_FINDING'
+                        assert interaction['must_not_retry_previous_edit'] is True
+                        assert 'Do NOT retry, re-apply, or repeat' in new['stopReason']
+                        assert path.read_text() == UNSAFE
                     if mode == 'report_only' or not approve:
                         if mode == 'report_only':
                             assert new['remediation']['action'] == 'ADVISE' and 'decision' not in new
                             decision_status = 'REPORTED_WITHOUT_FORCED_CONFIRMATION'
                         else:
-                            assert new['remediation']['action'] == 'CONFIRM_REQUIRED' and new['decision'] == 'block'
+                            assert new['remediation']['action'] == 'CONFIRM_REQUIRED'
                             confirmation_args = dict(new['remediation']['confirmation']['arguments'], approve=False)
                             refused, _ = await call('confirm_remediation', confirmation_args)
                             assert refused['status'] == 'DECLINED'
@@ -84,6 +96,9 @@ async def run(command, mode='smart_auto', approve=True):
                                      action=new['remediation']['action'], decision_status=decision_status,
                                      prepare_called=False, verify_called=False, affected_source_unchanged=True,
                                      unrelated_edit_feedback=False)
+                        if mode == 'ask_before_fix':
+                            proof.update(interaction=interaction, hook_continue=False,
+                                         hook_decision_present=False, retry_or_reapply_requested=False)
                         return dict(mode=mode, proof=proof, host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',
                                     codex_native_dispatch='PENDING', scanner_network=False)
                     if mode == 'ask_before_fix':
@@ -107,7 +122,9 @@ async def run(command, mode='smart_auto', approve=True):
                     else:
                         assert new['remediation']['action'] == 'AUTO_FIX', new
                         arguments = new['remediation']['prepare']['arguments']
-                    assert new['decision'] == json.loads(response.content[0].text)['decision'] == 'block'
+                    if mode == 'smart_auto':
+                        assert new['decision'] == text['decision'] == 'block'
+                        assert 'continue' not in new and 'continue' not in text
                     packet, _ = await call('prepare_task_fix', arguments)
                     assert packet['status'] == 'READY_FOR_HOST_FIX'
                     assert packet['remediation_authorization']['action'] == 'AUTO_FIX'
@@ -132,7 +149,8 @@ async def run(command, mode='smart_auto', approve=True):
                                  action=new['remediation']['action'], attempt_count=packet['remediation_authorization']['attempt_count'],
                                  authorization_kind=packet['remediation_authorization']['authorization_kind'],
                                  preconfirmation_grant_available=False if mode == 'ask_before_fix' else None,
-                                 hook_feedback=new['decision'], prepare_status=packet['status'],
+                                 hook_feedback='continue:false' if mode == 'ask_before_fix' else new['decision'],
+                                 interaction=new['remediation'].get('interaction'), prepare_status=packet['status'],
                                  resolved_families=closed['resolved_families'],
                                  automatic_verification=closed['remediation']['verification'],
                                  explicit_verification=verified['verification_status'],

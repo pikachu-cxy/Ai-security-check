@@ -9,6 +9,8 @@ from test_hook_runtime import repo
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
 from security_runtime.remediation import RemediationService, CONFIRMATION_GUIDANCE, CONFIRMATION_TTL
+from security_runtime.codex_mcp_hook import handle_codex_hook, codex_hook_output
+from test_codex_mcp_hook import binding as workspace_binding
 
 pytestmark = pytest.mark.parametrize('setup', ['ask_before_fix'], indirect=True)
 
@@ -37,8 +39,9 @@ def test_confirmation_feedback_is_fixed_distinct_and_no_grant(setup):
     data = pending(setup)
     assert data['action'] == 'CONFIRM_REQUIRED' and data['feedback_required'] is True
     assert data['status'] == 'PENDING_CONFIRMATION'
-    assert setup[-1]['decision'] == 'block'
-    assert setup[-1]['reason'] == CONFIRMATION_GUIDANCE
+    assert setup[-1]['continue'] is False
+    assert setup[-1]['stopReason'] == CONFIRMATION_GUIDANCE
+    assert 'decision' not in setup[-1]
     context = json.loads(setup[-1]['hookSpecificOutput']['additionalContext'])['remediation']
     assert 'Proactively ask the user' in context['guidance'] and 'WAIT' in context['guidance']
     assert 'Do not call prepare_task_fix or verify_task_fix yet' in context['guidance']
@@ -54,12 +57,61 @@ def test_preconfirmation_prepare_and_verify_fail_closed(setup):
     assert service.task_gate(data['task_ref'], setup[0])['reason_code'] == 'CONFIRMATION_HANDOFF_REQUIRED'
 
 
+@pytest.mark.parametrize('tool_name', ['Write', 'Edit', 'apply_patch'])
+def test_completed_host_edit_requests_repair_without_rejecting_or_repeating(setup, tmp_path, tool_name):
+    # setup performed a real safe-baseline -> unsafe-file write before Hook.
+    # Reuse that scanner result with a fresh remediation state, for each host
+    # tool alias, without trusting tool_input or persisting it.
+    root, runtime, provider, service, _, _ = setup
+    before = (root / 'A.java').read_bytes()
+    fresh = RemediationService(service.store, registry=service.registry, hooks=service.hooks,
+                               config=service.config, directory=tmp_path / 'fresh')
+    output = handle_codex_hook('PostToolUse', str(root), 'session', tool_name,
+        binding=workspace_binding(root),
+        coordinator=HookCoordinator(runtime, service.hooks, cooldown_ms=0), remediation=fresh)
+    data = output['remediation']
+    assert data['action'] == 'CONFIRM_REQUIRED'
+    assert data['interaction'] == {
+        'phase': 'POST_EDIT_REMEDIATION_CONFIRMATION', 'edit_already_applied': True,
+        'requested_user_decision': 'REMEDIATE_SECURITY_FINDING', 'must_not_retry_previous_edit': True}
+    guidance = data['guidance']
+    assert 'file edit has ALREADY executed' in guidance
+    assert 'Do NOT retry, re-apply, or repeat the insecure edit' in guidance
+    assert 'whether to REMEDIATE the detected risk' in guidance
+    assert 'Do NOT ask whether to apply, keep, or enable the insecure edit' in guidance
+    assert '是否允许我修复这个安全问题？' in guidance
+    for misleading in ('approve applying this edit', 'allow this insecure configuration',
+                       'edit failed', 'edit was rejected', 'edit did not happen'):
+        assert misleading not in guidance
+    assert output['continue'] is False and output['stopReason'] == guidance
+    assert 'decision' not in output and 'reason' not in output
+    assert 'already executed' in output['systemMessage']
+    assert (root / 'A.java').read_bytes() == before and '-> true' in (root / 'A.java').read_text()
+    assert not provider.calls and not fresh.prepared and not fresh.authorized
+    assert not {'prepare', 'verify', 'remediation_ref'} & data.keys()
+    # Core metadata stays host-neutral; transport controls only the projection.
+    assert not {'continue', 'decision', 'stopReason', 'systemMessage', 'hookSpecificOutput'} & data.keys()
+    wire = codex_hook_output(output)
+    assert wire['continue'] is False and wire['stopReason'] == guidance
+    assert json.loads(wire['hookSpecificOutput']['additionalContext'])['remediation'] == data
+
+
+def test_host_guidance_limits_ambiguous_permission_to_repair_question(setup):
+    from security_runtime.host_guidance import HOST_INSTRUCTIONS
+    assert 'has ALREADY executed' in HOST_INSTRUCTIONS
+    assert 'Do NOT retry, re-apply, or repeat' in HOST_INSTRUCTIONS
+    assert 'reply of 允许 is repair approval only when' in HOST_INSTRUCTIONS
+    assert 'immediately answering this clear remediation question; otherwise clarify first' in HOST_INSTRUCTIONS
+    assert 'without asking for a second fix request' in HOST_INSTRUCTIONS
+
+
 def test_explicit_approval_prepares_and_mode_stays_ask(setup):
     out = choice(setup)
     assert out['status'] == 'AUTHORIZED' and out['authorization_kind'] == 'USER_CONFIRMED'
     assert out['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
     assert not out['feedback_required'] and out['expires_in_seconds'] <= CONFIRMATION_TTL
     args = grant_args(out)
+    assert setup[3].verify(args['remediation_ref'], args['task_ref'], setup[0])['reason_code'] == 'PREPARATION_REQUIRED'
     packet = setup[3].prepare(args['remediation_ref'], args['task_ref'], setup[0])
     assert packet['status'] == 'READY_FOR_HOST_FIX'
     assert packet['bounded_evidence'][0]['context'][0]['trust'] == 'UNTRUSTED_CODE'
@@ -85,11 +137,16 @@ def test_decline_keeps_raw_and_no_unrelated_reprompt(setup):
     root, runtime, _, service, hook, _ = setup
     scan = runtime.store.latest_scan(root)
     before = runtime.store.get_scan(scan['scan_id'])
-    assert choice(setup, False)['status'] == 'DECLINED'
+    declined = choice(setup, False)
+    assert declined['status'] == 'DECLINED'
+    assert not {'prepare', 'verify', 'remediation_ref'} & declined.keys()
+    assert not service.prepared and not service.authorized
+    assert service.task_gate(pending(setup)['task_ref'], root)['reason_code'] == 'CONFIRMATION_HANDOFF_REQUIRED'
     assert next(iter(state(setup).values()))['phase'] == 'DECLINED'
     (root / 'Other.java').write_text('class Other {}')
     out = hook()
     assert not out['remediation']['feedback_required'] and 'decision' not in out
+    assert 'continue' not in out and 'stopReason' not in out
     assert (root / 'A.java').read_text() == UNSAFE
     assert runtime.store.get_scan(scan['scan_id']) == before
     assert not setup[2].calls
@@ -188,7 +245,7 @@ def test_state_and_feedback_exclude_source_secrets_prompt_and_raw_tokens(setup):
     assert pending(setup)['confirmation_ref'] not in state_text
     assert grant_args(out)['remediation_ref'] not in state_text
     assert CANARY not in state_text and CANARY not in json.dumps(out)
-    assert 'ignore previous instructions' not in setup[-1]['reason']
+    assert 'ignore previous instructions' not in setup[-1]['stopReason']
 
 
 def test_explicit_host_state_key_not_codex_coupled(setup):

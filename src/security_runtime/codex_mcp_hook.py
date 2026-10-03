@@ -94,8 +94,12 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             output.update(decision='block', reason=decision['guidance'])
             output['systemMessage'] = 'Security Runtime: automatic TLS remediation required.'
         elif decision.get('feedback_required') is True and decision['action'] == 'CONFIRM_REQUIRED':
-            output.update(decision='block', reason=decision['guidance'])
-            output['systemMessage'] = 'Security Runtime: explain the risk, ask for explicit repair approval, then wait.'
+            # PostToolUse side effects already happened. Unlike block, this
+            # documented feedback path does not reject the Code mode promise.
+            # Asking/waiting is host guidance, not an automatic model halt.
+            output.update({'continue': False, 'stopReason': decision['guidance']})
+            output['systemMessage'] = ('Security Runtime: the file edit already executed. Do not repeat it. '
+                                       'Explain the risk and ask whether to remediate it, then wait.')
         elif decision['action'] == 'NONE':
             output['systemMessage'] = ('Security Runtime verified the local repair.'
                                        if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else '')
@@ -106,4 +110,5 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
 
 def codex_hook_output(result: dict) -> dict:
     """The documented Hook output shape for the MCP text content channel."""
-    return {key: result[key] for key in ('systemMessage', 'hookSpecificOutput', 'decision', 'reason') if key in result}
+    return {key: result[key] for key in ('systemMessage', 'hookSpecificOutput', 'decision', 'reason',
+                                        'continue', 'stopReason') if key in result}
