@@ -748,4 +748,13 @@ Pending：真实 Maven normal/A/B execution 与 Desktop/host 功能 handoff（PE
 
 ### AQ.5 本轮提交与 CI
 
-Implementation 与当前新 CI 在推送后按实际证据追加；不预写 PASS，不沿用历史 success。最终 docs HEAD 按 git log -1 --format=%H -- docs/PROJECT_STATE.md 核对。
+Implementation HEAD `c9e99d7eb3f5a98248cedb68126e557397aed694` 已推送 origin/feature/runtime-mvp。新四类 CI 全部 completed/failure，但9 jobs 无Runner/steps，逐项注解均为账户付款失败或支出限额而未开始。**CI BLOCKED / PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，不是执行过的代码失败或 PASS；未修改账户设置/CI 门槛，未自动安装环境或循环重跑。
+
+| Workflow | 新 run | 真实执行 |
+| --- | --- | --- |
+| Compliance | [37139051612](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051612) | 未启动，账户条件 |
+| Runtime tests | [37139051635](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051635) | 未启动，账户条件 |
+| Package integrity | [37139051627](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051627) | 未启动，账户条件 |
+| Standalone artifacts | [37139051642](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642) | 未启动，账户条件 |
+
+四平台新artifact未在CI生成；本地Windows native证据独立有效。账户恢复后重跑本轮run，不使用历史AN成功证明本轮。最终docs-only提交也触发Runtime/Package/Compliance，其实际新结论在最终回复报告；Standalone不由docs-only触发。最终docs HEAD按PROJECT_STATE的git log核对。

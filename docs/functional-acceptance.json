@@ -65,5 +65,152 @@
   "ground_truth": "UNREVIEWED",
   "quality": "NOT_MEASURED",
   "three_developer_trials": "PENDING",
-  "enterprise_gate": "PLANNED"
+  "enterprise_gate": "PLANNED",
+  "implementation_head": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+  "implementation_ci": {
+    "head": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+    "runs": [
+      {
+        "conclusion": "failure",
+        "databaseId": 37139051612,
+        "headSha": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+        "status": "completed",
+        "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051612",
+        "workflowName": "Compliance",
+        "jobs": [
+          {
+            "name": "Compliance",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051612/job/111249483500",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          }
+        ]
+      },
+      {
+        "conclusion": "failure",
+        "databaseId": 37139051635,
+        "headSha": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+        "status": "completed",
+        "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051635",
+        "workflowName": "Runtime tests",
+        "jobs": [
+          {
+            "name": "Runtime tests (ubuntu-latest)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051635/job/111249483612",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          },
+          {
+            "name": "Runtime tests (windows-latest)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051635/job/111249483794",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          }
+        ]
+      },
+      {
+        "conclusion": "failure",
+        "databaseId": 37139051627,
+        "headSha": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+        "status": "completed",
+        "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051627",
+        "workflowName": "Package integrity",
+        "jobs": [
+          {
+            "name": "Package integrity (ubuntu-latest)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051627/job/111249483520",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          },
+          {
+            "name": "Package integrity (windows-latest)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051627/job/111249483630",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          }
+        ]
+      },
+      {
+        "conclusion": "failure",
+        "databaseId": 37139051642,
+        "headSha": "c9e99d7eb3f5a98248cedb68126e557397aed694",
+        "status": "completed",
+        "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642",
+        "workflowName": "Standalone artifacts",
+        "jobs": [
+          {
+            "name": "Standalone artifact (windows-x64)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642/job/111249483965",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          },
+          {
+            "name": "Standalone artifact (macos-arm64)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642/job/111249484075",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          },
+          {
+            "name": "Standalone artifact (macos-x64)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642/job/111249484076",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          },
+          {
+            "name": "Standalone artifact (linux-x64)",
+            "status": "completed",
+            "conclusion": "failure",
+            "runner_name": "",
+            "steps": [],
+            "html_url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37139051642/job/111249484122",
+            "failure_annotations": [
+              "The job was not started because recent account payments have failed or your spending limit needs to be increased. Please check the 'Billing & plans' section in your settings"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "ci_acceptance": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+  "remote_implementation_push": "CONFIRMED"
 }
