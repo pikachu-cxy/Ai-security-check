@@ -56,12 +56,12 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
     assert CANARY not in json.dumps(output) and UNSAFE not in json.dumps(output)
     if mode == 'smart_auto':
         assert data['action'] == 'AUTO_FIX' and data['interaction'] == AUTO_INTERACTION
-        assert output['decision'] == wire['decision'] == 'block'
-        assert not {'continue', 'stopReason'} & wire.keys()
+        assert output['continue'] is wire['continue'] is False
+        assert not {'decision', 'reason'} & wire.keys()
         assert 'AUTO_FIX is already authorized' in wire['systemMessage']
         assert 'Do not ask the user for confirmation' in wire['systemMessage']
         assert 'Immediately continue' in wire['systemMessage'] and len(wire['systemMessage']) < 250
-        assert wire['reason'] == data['guidance']
+        assert wire['stopReason'].endswith(data['guidance'])
         assert data['guidance'].startswith('SECURITY_AUTO_REMEDIATION_AUTHORIZED.')
         assert 'USER CONFIRMATION IS NOT REQUIRED' in data['guidance']
         assert 'Do NOT ask the user whether to repair, continue, apply, keep, or approve' in data['guidance']

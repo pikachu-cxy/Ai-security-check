@@ -94,7 +94,12 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     if decision is not None:
         summary['remediation'] = decision
         if decision.get('feedback_required') is True and decision['action'] == 'AUTO_FIX':
-            output.update(decision='block', reason=decision['guidance'])
+            # PostToolUse cannot undo the edit. A blocking decision rejects the
+            # nested Code Mode promise after it ran; use non-reject feedback.
+            output.update({'continue': False, 'stopReason': (
+                'The preceding edit already executed successfully. Do not retry or repeat it. '
+                'Runtime has authorized remediation, not the original insecure edit. '
+                'Immediately call prepare_task_fix. ' + decision['guidance'])})
             output['systemMessage'] = ('Security Runtime: AUTO_FIX is already authorized. '
                                        'Do not ask the user for confirmation. Immediately continue with '
                                        'the Runtime-issued prepare_task_fix handoff.')

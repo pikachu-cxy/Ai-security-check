@@ -94,12 +94,12 @@ def prepare(setup):
 def test_new_grant_and_readonly_existing_prepare(setup):
     root, runtime, provider, service, hook, grant = setup
     assert grant['new_families'] == 1
-    assert grant['decision'] == 'block'
+    assert grant['continue'] is False and 'decision' not in grant
     assert grant['remediation']['action'] == 'AUTO_FIX'
     assert grant['remediation']['finding_policy'] == 'ACTIONABLE'
     assert grant['remediation']['policy_source'] == 'DETERMINISTIC_LOCAL_TLS_INVARIANT'
     assert grant['remediation']['production_reachability'] == 'UNKNOWN'
-    assert 'SECURITY_AUTO_REMEDIATION_AUTHORIZED' in codex_hook_output(grant)['reason']
+    assert 'SECURITY_AUTO_REMEDIATION_AUTHORIZED' in codex_hook_output(grant)['stopReason']
     before = {p: p.read_bytes() for p in service.state.directory.rglob('*') if p.is_file()}
     packet = prepare(setup)
     assert packet['status'] == 'READY_FOR_HOST_FIX'
@@ -132,7 +132,8 @@ def test_retry_once_then_escalate_no_infinite_feedback(setup):
     prepare(setup)
     (root / 'A.java').write_text(UNSAFE + '// attempted repair one\n')
     second = hook()
-    assert second['remediation']['attempt_count'] == 2 and second['decision'] == 'block'
+    assert second['remediation']['attempt_count'] == 2 and second['continue'] is False
+    assert 'decision' not in second
     data = second['remediation']['prepare']['arguments']
     assert service.prepare(data['remediation_ref'], data['task_ref'], root)['status'] == 'READY_FOR_HOST_FIX'
     (root / 'A.java').write_text(UNSAFE + '// attempted repair two\n')

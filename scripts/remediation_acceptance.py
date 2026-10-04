@@ -127,16 +127,18 @@ async def run(command, mode='smart_auto', approve=True):
                         assert new['remediation']['action'] == 'AUTO_FIX', new
                         arguments = new['remediation']['prepare']['arguments']
                     if mode == 'smart_auto':
-                        assert new['decision'] == text['decision'] == 'block'
-                        assert 'continue' not in new and 'continue' not in text
+                        assert new['continue'] is text['continue'] is False
+                        assert not {'decision', 'reason'} & text.keys()
+                        assert 'decision' not in new
                         interaction = new['remediation']['interaction']
                         assert interaction == {'phase': 'AUTO_REMEDIATION_AUTHORIZED',
                             'user_confirmation_required': False, 'must_not_ask_user': True,
                             'must_continue_automatically': True, 'next_action': 'PREPARE_TASK_FIX'}
                         assert 'AUTO_FIX is already authorized' in text['systemMessage']
                         assert 'Do not ask the user for confirmation' in text['systemMessage']
-                        assert 'USER CONFIRMATION IS NOT REQUIRED' in text['reason']
-                        assert '是否允许我修复这个安全问题？' not in text['reason'] and 'WAIT' not in text['reason']
+                        assert 'USER CONFIRMATION IS NOT REQUIRED' in text['stopReason']
+                        assert '是否允许我修复这个安全问题？' not in text['stopReason'] and 'WAIT' not in text['stopReason']
+                        assert 'Do not retry or repeat it.' in text['stopReason']
                         assert 'confirmation_ref' not in json.dumps(new['remediation'])
                     packet, _ = await call('prepare_task_fix', arguments)
                     assert packet['status'] == 'READY_FOR_HOST_FIX'

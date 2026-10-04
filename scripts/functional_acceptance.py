@@ -104,7 +104,8 @@ async def run(command,failure=False,mode='smart_auto'):
                     assert 'WAIT' not in decision['guidance'] and '是否允许我修复这个安全问题？' not in decision['guidance']
                     assert 'confirmation_ref' not in json.dumps(decision)
                     if mode=='smart_auto':
-                        assert hook['decision']=='block' and 'continue' not in hook
+                        assert hook['continue'] is False and 'decision' not in hook
+                        assert 'Do not retry or repeat it.' in hook['stopReason']
                         assert 'Do not ask the user for confirmation' in hook['systemMessage']
                     grant=decision['prepare']['arguments']
                     rejected=await call('prepare_functional_verification',grant)

@@ -95,11 +95,17 @@ async def accept(command):
                     assert finding['status'] != 'BASELINE_ESTABLISHED' and finding['scanner_run']
                     decision = finding['remediation']
                     assert finding['new_families'] == 1 and decision['action'] == 'AUTO_FIX', finding
+                    assert finding['continue'] is False and 'decision' not in finding
+                    assert finding['stopReason'].endswith(decision['guidance'])
+                    assert 'Do not retry or repeat it.' in finding['stopReason']
+                    assert 'not the original insecure edit' in finding['stopReason']
+                    assert 'prepare_task_fix' in finding['systemMessage']
                     original_refs = decision['prepare']['arguments']
                     # Force the observed missing-prepare state. This SDK driver
                     # consumes the Stop handoff; it is not model continuation.
                     guarded = await call('handle_stop_event', stop_claims)
                     assert guarded['decision'] == 'block' and guarded['host_continuation_attempt_count'] == 1
+                    assert 'continue' not in guarded and guarded['reason']
                     assert not any(guarded['execution'].values())
                     resumed = json.loads(guarded['reason'][guarded['reason'].index('{'):])
                     assert resumed == decision['prepare']
@@ -142,6 +148,7 @@ async def accept(command):
                     assert existing['baseline_source'] == 'SETUP_SEED'
                     assert existing['new_families'] == 0 and existing['persisting_families'] == 1, existing
                     assert existing['remediation']['action'] == 'NONE'
+                    assert not {'decision', 'continue', 'stopReason'} & existing.keys()
         assert cli(['integration', 'status', 'codex'])['readiness']['status'] == 'READINESS_NOT_OBSERVED'
         assert cli(['integration', 'remove', 'codex'])['operation'] == 'REMOVED'
         return {'status': 'PASS', 'duration_seconds': round(time.monotonic() - started, 2),
@@ -156,6 +163,7 @@ async def accept(command):
                 'new_families': finding['new_families'], 'resolved_families': closed['resolved_families'],
                 'security_verification': receipt['status'], 'explicit_verify_called': False,
                 'auto_fix_issued': True, 'posttool_natural_continuation': 'NOT_TESTED_DRIVER_FORCED_FALLBACK',
+                'posttool_feedback': 'CONTINUE_FALSE_NON_REJECT_FEEDBACK',
                 'stop_continuation_invoked': True, 'stop_continuation_count': 1,
                 'prepare_task_fix_called': True, 'secure_edit_applied': 'SIMULATED_HOST_ONLY',
                 'explicit_verify_deduped': True, 'functional_prepare_called': True,
