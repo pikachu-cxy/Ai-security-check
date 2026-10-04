@@ -11,7 +11,7 @@ setup 绑定运行这条命令的安装环境，不从 PATH 再找另一个 Runt
 如果 CLI 未加入 PATH，可使用刚安装的完整路径，例如本仓库本地构建包：
 
 ```powershell
-& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone\security-check\security-check.exe' setup codex --path '你的测试项目绝对路径'
+& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-continuation\security-check\security-check.exe' setup codex --path '你的测试项目绝对路径'
 ```
 
 该示例指向本轮本地构建，未宣称 GitHub 已发布可下载的新包。产品实现不硬编码这个路径；其他机器使用自己的包目录。wheel 安装同样支持 `python -m security_runtime.cli setup codex --path .`。
@@ -101,7 +101,7 @@ git -C $trial init
 Set-Content -LiteralPath (Join-Path $trial 'README.md') -Value 'Disposable Stop trial.'
 git -C $trial add README.md
 git -C $trial -c user.name=RuntimeTrial -c user.email=trial@example.invalid commit -m baseline
-& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone\security-check\security-check.exe' setup codex --path $trial
+& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-continuation\security-check\security-check.exe' setup codex --path $trial
 $trial
 ```
 
@@ -141,3 +141,5 @@ security-check setup codex --path .
 ```
 
 第二次 setup 应 ALREADY_CONFIGURED，配置字节/mtime 不变；repair 不改无关内容；remove 后其他 MCP/Hook、源码与 DB 保留；重新 setup 后配置恢复而 readiness 未观察。开发环境可执行 `python scripts/codex_integration_acceptance.py`；它运行一次性 Unicode/空格路径 CLI + 新 MCP process + 实际离线 scanner，模拟宿主编辑，不代替 Desktop。
+
+本轮本机已有 Desktop 使用旧原生目录，原路径重建因 DLL 锁定失败；新包使用 dist/standalone-continuation。构建脚本仅增加 workspace dist 内的可选输出目录，默认四平台 CI 路径不变；没有终止正在运行的 MCP。不要覆盖活动包，新的 fixture 使用上面的新路径。

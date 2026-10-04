@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import argparse
 import os
 import shutil
 import subprocess
@@ -12,9 +13,14 @@ from security_runtime._version import __version__
 from dependency_notices import inventory
 
 
-def main() -> None:
+def main(output_dir: Path | None = None) -> None:
     root = Path(__file__).resolve().parents[1]
-    output = root / "dist" / "standalone"
+    output = root / "dist" / "standalone" if output_dir is None else root / output_dir
+    from security_runtime.hook_state import no_links
+    no_links(output.absolute())
+    output = output.resolve()
+    if not output.is_relative_to(root / 'dist'):
+        raise ValueError('Standalone output must remain inside workspace dist')
     subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
                     "--distpath", str(output), "--workpath", str(root / "build" / "pyinstaller"),
                     str(root / "distribution" / "build" / "security-check.spec")],
@@ -39,4 +45,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output-dir', type=Path, help='Alternate workspace dist directory; avoid replacing a running bundle')
+    main(parser.parse_args().output_dir)
