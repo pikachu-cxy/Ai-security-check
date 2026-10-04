@@ -87,6 +87,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         summary['reason'] = result['reason']
     if 'last_check_status' in result:
         summary['last_check_status'] = result['last_check_status']
+    for key in ('baseline_source', 'baseline_seed_status'):
+        if key in result:
+            summary[key] = result[key]
     output = CodexHookAdapter().output({'hook_event_name': 'PostToolUse'}, result)
     if decision is not None:
         summary['remediation'] = decision
@@ -104,7 +107,11 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                                        'Explain the risk and ask whether to remediate it, then wait.')
         elif decision['action'] == 'NONE':
             output['systemMessage'] = ('Security Runtime verified the local repair.'
-                                       if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else '')
+                                       if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else
+                                       'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT: high-confidence risk is present; '
+                                       'review existing candidates. No earlier baseline proves edit attribution; '
+                                       'automatic remediation is not authorized.'
+                                       if result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' else '')
     # Bounded metadata only; no families, findings, file contents or scanner errors.
     output['hookSpecificOutput']['additionalContext'] = json.dumps(summary, ensure_ascii=True)
     return {**summary, **output}

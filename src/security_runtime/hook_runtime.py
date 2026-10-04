@@ -273,11 +273,55 @@ def family_delta(previous, observed, can_cover):
 
 
 class HookCoordinator:
-    def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time):
+    def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None):
         self.runtime = runtime
         self.store = store or HookStateStore()
         self.cooldown_ms = cooldown_ms
         self.clock = clock
+        self.seeds = seeds
+
+    def _scan_scope(self, result, root, scope, *, baseline=False):
+        """One quick provider/observer path for events and setup seeds."""
+        observation = {'families': {}, 'runs': [], 'plans': {}}
+        def observe(findings, runs, plans):
+            observation.update(families=family_multiset(findings, runs, plans), runs=runs, plans=plans)
+            # Fixed diagnostic only; candidate contents never enter Hook state.
+            result['unattributed_risk_present'] = any(
+                f.severity in {'HIGH', 'CRITICAL'} and f.confidence == 'HIGH' for f in findings)
+        if not scope:
+            result.update(status='NO_CHANGES', coverage='NONE', execution_state='NO_CHANGES')
+            return observation
+        from .runtime import SecurityRuntime
+        runtime = self.runtime
+        if runtime is None:
+            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
+            from .toolchain import ToolManager
+            manager = ToolManager()
+            # Baselines persist ONLY the safe Hook projection, never Finding DB
+            # snippets. Event scans keep their normal remediation records.
+            class ProjectionOnlyStore:
+                def save(self, result):
+                    pass
+            runtime = SecurityRuntime(ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager)],
+                tool_manager=manager, fallback_adapters=[]), store=ProjectionOnlyStore() if baseline else None)
+        kwargs = {}
+        if baseline:
+            from .progress import NullProgressReporter, ScanCancelled
+            class BaselineDeadline(NullProgressReporter):
+                def checkpoint(self):
+                    super().checkpoint()
+                    if time.monotonic() - self.started >= 60:
+                        raise ScanCancelled()
+            kwargs['progress'] = BaselineDeadline()
+        with local_recheck() as ledger:
+            scan = runtime.scan(root, 'quick', _hook_scope=tuple(scope), _hook_observer=observe, **kwargs)
+        result.update(scan_id=scan.scan_id, coverage=scan.coverage, execution_state=scan.execution_state,
+                      capabilities=dict(scan.capability_results))
+        result['execution']['scanner_run'] = ledger['engine_process_observed']
+        result['scanner_runs'] = [{k: getattr(r, k) for k in
+            ('scanner', 'status', 'version', 'duration_ms', 'error_code', 'coverage_contract')} for r in scan.scanner_runs]
+        result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
+        return observation
 
     def handle(self, event, workspace=None, host='generic', session_id=None):
         start = time.monotonic()
@@ -309,45 +353,38 @@ class HookCoordinator:
             result['state_recovered'] = True
         digest,files = capture_snapshot(root,self.store.key(root))
         result['change_digest'] = digest
+        seeded = False
+        if previous is None and host == 'codex':
+            from .baseline_seed import WorkspaceBaselineSeeds
+            seed, diagnostic = (self.seeds or WorkspaceBaselineSeeds()).load(root)
+            result['baseline_seed_status'] = diagnostic
+            if seed is not None:
+                previous = seed
+                seeded = True
+                previous = {**seed, 'host': host, 'session_id': result['session_id'], 'last_completed_at': 0}
+        result['baseline_source'] = 'SETUP_SEED' if seeded else 'SESSION' if previous else 'NONE'
         result['baseline_available'] = previous is not None
-        if previous and digest == previous['change_digest']:
+        if previous and not seeded and digest == previous['change_digest']:
             result.update(previous['last_result'])
             result.update(status='REUSED_LAST_RESULT' if event == HookEvent.AGENT_STOP else 'NO_CHANGE',
                           scan_id=previous['last_scan_id'],next_step='Reuse the existing advisory result; coverage limits still apply.')
             return
-        if previous and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
+        if previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
             result.update(status='DEBOUNCED',scan_id=previous['last_scan_id'],coverage=previous['last_result']['coverage'],
                           next_step='Pending changes will be checked on the next event or agent stop.')
             return
         # Include formerly dirty paths so a revert can be rechecked, while a
         # deletion/rename cannot imply family resolution without file coverage.
-        scope = sorted(set(files) | set(previous['changed_files'] if previous else []))
+        # Seed inventories can include findings in tracked clean files. Recheck
+        # those candidate paths, not the entire setup inventory, so they persist
+        # without false NEW attribution or unproven disappearance.
+        retained = set(previous['changed_files']) | {f['file_path'] for f in previous['families'].values()} if previous else set()
+        scope = sorted(set(files) | retained)
         scope = TargetDetector(max_files=MAX_FILES).detect(root,scope).files
         old = previous['families'] if previous else {}
-        observation = {'families':{},'runs':[],'plans':{}}
-        def observe(findings,runs,plans):
-            observation.update(families=family_multiset(findings,runs,plans),runs=runs,plans=plans)
-        if scope:
-            from .runtime import SecurityRuntime
-            runtime = self.runtime
-            if runtime is None:
-                # Hooks never discover/import third-party scanner plugins:
-                # quick here is the two existing bounded local providers.
-                from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
-                from .toolchain import ToolManager
-                manager = ToolManager()
-                runtime = SecurityRuntime(ScannerRegistry([SemgrepAdapter(manager),GitleaksAdapter(manager)],
-                    tool_manager=manager,fallback_adapters=[]))
-            with local_recheck() as ledger:
-                scan = runtime.scan(root,'quick',_hook_scope=tuple(scope),_hook_observer=observe)
-            result.update(scan_id=scan.scan_id,coverage=scan.coverage,execution_state=scan.execution_state,
-                          capabilities=dict(scan.capability_results))
-            result['execution']['scanner_run'] = ledger['engine_process_observed']
-            result['scanner_runs'] = [{k:getattr(r,k) for k in ('scanner','status','version','duration_ms','error_code','coverage_contract')} for r in scan.scanner_runs]
-            result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
-        else:
-            result.update(status='NO_CHANGES',coverage='NONE',execution_state='NO_CHANGES',
-                          scan_id=previous['last_scan_id'] if previous else None)
+        observation = self._scan_scope(result, root, scope)
+        if not scope:
+            result['scan_id'] = previous['last_scan_id'] if previous else None
         result['last_check_status'] = result['status']
         after,_ = capture_snapshot(root,self.store.key(root))
         if after != digest:
@@ -360,6 +397,10 @@ class HookCoordinator:
             delta = result['delta']
             result['status'] = 'BASELINE_ESTABLISHED'
             result['next_step'] = 'Baseline established for the current quick scope; existing candidates are not attributed to this edit.'
+            if result.get('unattributed_risk_present'):
+                result['reason'] = 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT'
+                result['next_step'] = ('High-confidence risk is present, but no valid earlier baseline proves edit attribution. '
+                    'Review the existing candidates; automatic remediation is not authorized by this first scan.')
         else:
             result['next_step'] = 'Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.'
         result['delta'] = delta

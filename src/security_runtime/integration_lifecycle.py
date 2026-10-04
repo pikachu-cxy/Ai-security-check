@@ -56,7 +56,7 @@ class IntegrationManager:
 def render_integration(value: dict) -> str:
     lines = ['AI Security Runtime / Codex', '']
     for label, key in [('Runtime', 'runtime'), ('MCP', 'mcp'), ('Security Hook', 'post_tool_hook'),
-                       ('Stop Guard', 'stop_hook'), ('Startup Ready', 'readiness')]:
+                       ('Stop Guard', 'stop_hook'), ('Startup Ready', 'readiness'), ('Local Baseline', 'baseline')]:
         lines.append(f"{label:<15}{value.get(key, {}).get('status', 'UNKNOWN')}")
     lines.extend([f"Mode           {value.get('mode', 'UNKNOWN')}", '', f"Status: {value['overall']}"])
     if value.get('operation'):
@@ -64,6 +64,10 @@ def render_integration(value: dict) -> str:
     if value.get('diagnostics'):
         lines.append('Diagnostics: ' + ', '.join(value['diagnostics']))
     lines.append('Readiness is a recent connection observation, not a safety result or a live connection check.')
+    lines.append('Baseline READY is an edit comparison point, not proof that the project is safe.')
+    lines.append('Hook Trust: ' + value.get('hook_trust', 'HOST_MANAGED_UNKNOWN'))
+    if value.get('baseline', {}).get('operation'):
+        lines.append(value['baseline']['operation'])
     observation_only = (value['overall'] == 'CONFIGURED' and
                         value.get('readiness', {}).get('status') == 'READINESS_NOT_OBSERVED' and
                         set(value.get('diagnostics', [])) <= {'READINESS_NOT_OBSERVED'})
@@ -72,5 +76,7 @@ def render_integration(value: dict) -> str:
     if observation_only and not value.get('operation'):
         lines.append('Configuration is ready. Open this trusted project in Codex; readiness is observed during normal startup. No repair or warm-up prompt is required.')
     if value.get('operation') in {'CONFIGURED', 'REPAIRED'}:
-        lines.append('Restart Codex Desktop and open this trusted project. No warm-up prompt is required.')
+        lines.append('One Codex approval remains: open this project in Codex, review and allow AI Security Runtime Hooks once. '
+                     'Project trust and exact Hook approval are managed by Codex; Runtime cannot observe or grant them. '
+                     'Then restart Codex Desktop and continue coding normally. No warm-up prompt is required.')
     return '\n'.join(lines)

@@ -1,4 +1,4 @@
-"""Owned Codex MCP/Hook lifecycle. No target source, scanner or mode mutation.
+"""Owned Codex MCP/Hook lifecycle and offline setup baseline. No source/mode mutation.
 
 TOML user bytes are retained verbatim outside a signed, delimited owned block.
 JSON retains unrelated values/order. A bounded HMAC manifest records fingerprints,
@@ -132,6 +132,8 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
 
 
 def product_hooks() -> dict:
+    # Free v1 Host Hook ABI: freeze these exact definitions, including legacy
+    # version-looking status messages. Internal upgrades must not retrigger trust.
     result = codex_mcp_hook_config()
     result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = 'AI Security Runtime [codex-integration-v0.2]'
     result['hooks']['SessionStart'] = [{'hooks': [{
@@ -151,11 +153,13 @@ def product_hooks() -> dict:
 class CodexIntegrationAdapter:
     integration_id = 'codex'
 
-    def __init__(self, *, directory: Path | None = None, discover=None, probe=None, now=None):
+    def __init__(self, *, directory: Path | None = None, discover=None, probe=None, now=None, baseline_coordinator=None):
         self.store = HookStateStore(directory or SQLiteStore.default_path().parent / 'codex-integrations')
         self.discover = discover or current_runtime
         self.probe = probe or probe_runtime
         self.now = now or time.time
+        from .baseline_seed import WorkspaceBaselineSeeds
+        self.baselines = WorkspaceBaselineSeeds(self, coordinator=baseline_coordinator, now=self.now)
 
     def _state_path(self, root, name):
         path = self.store.workspace_directory(root) / name
@@ -367,13 +371,18 @@ class CodexIntegrationAdapter:
             'WORKSPACE_BINDING_MISMATCH', 'HOOK_MISSING', 'HOOK_DUPLICATE', 'POTENTIAL_DUPLICATE_HOOK', 'LEGACY_HOOK_PRESENT', 'HOST_HOOKS_DISABLED'))
         overall = 'NOT_INSTALLED' if absent else ('READY' if configured and readiness['status'] == 'READINESS_OBSERVED'
             else ('CONFIGURED' if configured else 'DEGRADED'))
+        baseline = self.baselines.status(root)
+        if not absent and baseline['status'] != 'READY':
+            overall = 'DEGRADED'
+            diagnostics.append('BASELINE_SEED_STALE' if baseline['status'] == 'STALE' else 'BASELINE_NOT_ESTABLISHED')
         return {'integration': 'codex', 'workspace_hash': identity(os.path.normcase(str(root))),
                 'installation': 'NOT_INSTALLED' if absent else 'CONFIGURED', 'runtime': {**capability, 'kind': runtime['kind']},
                 'mode': capability['mode'], 'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED'},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
                 'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
                 'readiness': readiness, 'legacy_hook': {'status': 'LEGACY_HOOK_PRESENT' if legacy else ('POTENTIAL_DUPLICATE_HOOK' if 'POTENTIAL_DUPLICATE_HOOK' in diagnostics else 'NONE')},
-                'overall': overall, 'diagnostics': diagnostics, 'live_connection': 'UNKNOWN',
+                'overall': overall, 'diagnostics': diagnostics, 'live_connection': 'UNKNOWN', 'baseline': baseline,
+                'hook_trust': 'HOST_MANAGED_UNKNOWN',
                 'cold_start_host_trial': 'PENDING_ACTUAL_DESKTOP', 'project_trust': 'HOST_MANAGED_PREREQUISITE'}
 
     def readiness_status(self, root, record, manifest):
@@ -479,6 +488,7 @@ class CodexIntegrationAdapter:
                 if self._read(a_path) != new_a or self._read(b_path) != new_b:
                     raise IntegrationDiagnostic('CONFIG_CHANGED_RETRY')
                 if action == 'remove':
+                    self.baselines.remove(root)
                     for name in ('ownership.json', 'readiness.json', 'snapshot.key'):
                         self._state_path(root, name).unlink(missing_ok=True)
                 elif changed or manifest != new_manifest:
@@ -494,6 +504,13 @@ class CodexIntegrationAdapter:
                 raise
             if action == 'remove':
                 return {'integration': 'codex', 'overall': 'NOT_INSTALLED', 'operation': 'REMOVED' if changed or manifest else 'ALREADY_REMOVED', 'diagnostics': []}
+            try:
+                baseline = self.baselines.ensure(root, reestablish=manifest is not None or action == 'repair')
+            except (ValueError, OSError):
+                baseline = self.baselines.status_value('INCONCLUSIVE', 'BASELINE_CHECK_INCONCLUSIVE')
             result = self.status(root)
+            result['baseline'] = baseline
+            if baseline['status'] != 'READY':
+                result['overall'] = 'DEGRADED'
             result['operation'] = 'ALREADY_CONFIGURED' if not changed and manifest == new_manifest else ('REPAIRED' if action == 'repair' else 'CONFIGURED')
             return result

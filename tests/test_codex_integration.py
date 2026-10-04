@@ -23,8 +23,17 @@ from security_runtime.host_guidance import runtime_info, HOST_INSTRUCTIONS
 @pytest.fixture
 def adapter(repo, tmp_path, monkeypatch):
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
+    from test_hook_runtime import FakeRuntime
+    from security_runtime.hook_runtime import HookCoordinator
+    from security_runtime.hook_state import HookStateStore
+    runtime = FakeRuntime()
+    original = runtime.scan
+    def complete(*a, **k):
+        result = original(*a, **k); result.coverage = 'FULL'; return result
+    runtime.scan = complete
     return CodexIntegrationAdapter(directory=tmp_path / 'state/codex-integrations',
-        probe=lambda *a: check_capabilities(runtime_info(), REQUIRED_TOOLS))
+        probe=lambda *a: check_capabilities(runtime_info(), REQUIRED_TOOLS),
+        baseline_coordinator=HookCoordinator(runtime, HookStateStore(tmp_path / 'state/hooks')))
 
 
 def config(root):

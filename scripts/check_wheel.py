@@ -39,6 +39,7 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/host_guidance.py",
             "security_runtime/hook_runtime.py",
             "security_runtime/hook_state.py",
+            "security_runtime/baseline_seed.py",
             "security_runtime/hook_adapters.py",
             "security_runtime/rules/catalog.json",
             "security_runtime/python_downloads.json",

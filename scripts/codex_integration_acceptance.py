@@ -6,6 +6,7 @@ the target, executes user configuration commands, or touches real Codex settings
 import argparse
 import asyncio
 from datetime import timedelta
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -46,11 +47,16 @@ async def accept(command):
             return json.loads(response.stdout)
         assert cli(['integration', 'status', 'codex'])['overall'] == 'NOT_INSTALLED'
         installed = cli(['setup', 'codex']); assert installed['operation'] == 'CONFIGURED'
+        assert installed['baseline']['status'] == 'READY', installed
+        seed = state / 'codex-integrations' / hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest() / 'baseline-seed.json'
+        assert seed.is_file() and not (state / 'scans.db').exists()
+        seed_before = seed.read_bytes(), seed.stat().st_mtime_ns
         first = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in (config, hooks)}
         assert cli(['setup', 'codex'])['operation'] == 'ALREADY_CONFIGURED'
         assert first == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in first}
         assert cli(['integration', 'repair', 'codex'])['operation'] == 'ALREADY_CONFIGURED'
         assert first == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in first}
+        assert seed_before == (seed.read_bytes(), seed.stat().st_mtime_ns)
         entry = tomllib.loads(config.read_text(encoding='utf-8'))['mcp_servers']['ai_security_runtime']
         assert entry['command'] == command[0] and entry['required'] is True
         assert entry['env']['SECURITY_RUNTIME_WORKSPACE'] == str(root)
@@ -81,11 +87,12 @@ async def accept(command):
                     assert quiet['status'] == 'ALLOW_STOP' and not any(quiet['execution'].values())
                     source.write_text(SAFE, encoding='utf-8')  # simulated first ordinary host edit
                     claims = dict(event='PostToolUse', workspace_path=str(root), session_id='new-host-session', tool_name='apply_patch')
-                    baseline = await call('handle_hook_event', claims)
-                    assert baseline['status'] == 'BASELINE_ESTABLISHED' and baseline['scanner_run'] and baseline['new_families'] == 0, baseline
-                    await asyncio.sleep(1.1)
+                    # Deliberately no Hook for this safe edit: exact Desktop
+                    # attribution failure fixture, not a pre-warmed baseline.
                     source.write_text(UNSAFE, encoding='utf-8')
                     finding = await call('handle_hook_event', claims)
+                    assert finding['baseline_available'] and finding['baseline_source'] == 'SETUP_SEED'
+                    assert finding['status'] != 'BASELINE_ESTABLISHED' and finding['scanner_run']
                     decision = finding['remediation']
                     assert finding['new_families'] == 1 and decision['action'] == 'AUTO_FIX', finding
                     original_refs = decision['prepare']['arguments']
@@ -118,17 +125,34 @@ async def accept(command):
         status = cli(['integration', 'status', 'codex'])
         assert status['overall'] == 'READY' and status['live_connection'] == 'UNKNOWN'
         assert cli(['integration', 'remove', 'codex'])['operation'] == 'REMOVED'
+        assert not seed.exists()
         assert config.read_bytes() == original
         assert json.loads(hooks.read_bytes()) == unrelated_hook
         assert source.read_text(encoding='utf-8') == SAFE and (state / 'scans.db').exists()
-        assert cli(['setup', 'codex'])['operation'] == 'CONFIGURED'
+        source.write_text(UNSAFE, encoding='utf-8')  # now pre-existing, not new AI attribution
+        assert cli(['setup', 'codex'])['baseline']['status'] == 'READY'
+        with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
+            async with stdio_client(params, errlog=errors) as (reader, writer):
+                async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=180)) as client:
+                    await client.initialize()
+                    response = await client.call_tool('handle_hook_event', {**claims, 'session_id': 'preexisting-fresh-session'})
+                    assert not response.isError
+                    data = response.structuredContent or json.loads(response.content[0].text)
+                    existing = data.get('result', data)
+                    assert existing['baseline_source'] == 'SETUP_SEED'
+                    assert existing['new_families'] == 0 and existing['persisting_families'] == 1, existing
+                    assert existing['remediation']['action'] == 'NONE'
         assert cli(['integration', 'status', 'codex'])['readiness']['status'] == 'READINESS_NOT_OBSERVED'
         assert cli(['integration', 'remove', 'codex'])['operation'] == 'REMOVED'
         return {'status': 'PASS', 'duration_seconds': round(time.monotonic() - started, 2),
                 'host_dispatch': 'SYNTHETIC_SDK_NOT_DESKTOP', 'actual_desktop_stop_continuation': 'PENDING_ACTUAL_DESKTOP',
                 'runtime_kind': installed['runtime']['kind'], 'workspace_unicode_and_spaces': 'PASS',
                 'lifecycle': 'SETUP_STATUS_IDEMPOTENT_REPAIR_REMOVE_REINSTALL_PASS',
-                'first_edit': baseline['status'], 'scanner_run': baseline['scanner_run'], 'readiness': ready['readiness'],
+                'baseline_seed': installed['baseline'], 'missing_first_safe_hook': 'PASS',
+                'first_edit': 'SKIPPED_UNOBSERVED_SAFE_EDIT', 'first_effective_hook': finding['status'],
+                'baseline_source': finding['baseline_source'], 'untracked_new_file': 'PASS',
+                'preexisting_persisting': existing['persisting_families'], 'preexisting_auto_fix': False,
+                'scanner_run': finding['scanner_run'], 'readiness': ready['readiness'],
                 'new_families': finding['new_families'], 'resolved_families': closed['resolved_families'],
                 'security_verification': receipt['status'], 'explicit_verify_called': False,
                 'auto_fix_issued': True, 'posttool_natural_continuation': 'NOT_TESTED_DRIVER_FORCED_FALLBACK',
