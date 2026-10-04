@@ -1,5 +1,21 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+## AUTO_FIX PostToolUse Code Mode Contract Fix v0.1（2026-10-04）
+
+干净起点 `feature/runtime-mvp` / `50f002deff33d0946ee99c338d700b08a739e394`。最新用户真实 Desktop：缺失首安全 Hook 后危险首有效 Hook 为 SETUP_SEED / baseline_available=true / SCANNED / NEW1 / AUTO_FIX，First-run Baseline Seed、归因、AUTO检测策略 **USER_REPORTED PASS**。之后 Script failed、未prepare/未secure edit、resolved0；Host重试危险编辑导致SESSION/NEW0/ESCALATE。**PostToolUse continuation USER_REPORTED FAIL（Code Mode decision:block contract）**；Stop未进入，Desktop **NOT TESTED**，不能写Stop FAIL。readiness/lifecycle已有真实PASS，不再调查。新transport的fresh Desktop自然继续/Stop闭环 **PENDING_ACTUAL_DESKTOP**。
+
+[当前官方 Hooks 文档](https://learn.chatgpt.com/docs/hooks#tool-calls-from-code-mode)核对于2026-10-04：PostToolUse decision:block 在已执行工具后拒绝nested Code Mode promise；continue:false把反馈作为model-visible result而不拒绝promise。只改codex_mcp_hook.py的AUTO_FIX反馈为continue:false/stopReason，systemMessage原样；固定提示前一编辑已执行、不要retry/repeat、授权的是remediation、立即prepare_task_fix，然后附原bounded guidance。无新字段、无原AUTO decision/reason。CONFIRM_REQUIRED原continue:false/stopReason主动询问并WAIT；NONE无停止；Stop仍decision:block/reason生成continuation prompt，不能机械替换。
+
+实现 `1033abfd5c467661a2a7110442bcc410851e9bb1` 已提交推送。focused **156 passed in 383.80s (0:06:23)**；targeted **534 passed in 1007.83s (0:16:47)**；final full offline **987 passed, 6 skipped, 6 subtests passed in 1142.05s (0:19:02)**。六项skipped单列于AV，不计PASS。wheel/sdist/package/compliance、101打包文件bytes integrity、其余全部Runtime源码不变、严格离线clean安装、actual source SDK、独立新目录Windows native均PASS。新四类CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，实际jobs/annotations见AV；未运行的平台不写PASS。最终docs HEAD按本文件git log核对，其docs-only CI在最终交付回复单列。
+
+AUTO_FIX action/interaction、原task_ref/remediation_ref/grant_id与prepare/verify handoff、policy/guards/verification/state machine保持。HookCoordinator/baseline/snapshot/cooldown/single-flight/family multiset/coverage gating、Raw/脱敏/UNTRUSTED_CODE/session/hash/evidence_refs/预算保持；command hook保留。SessionStart/PostToolUse/Stop的matcher/tool/input/timeout/statusMessage exact Hook定义与起点一致；canonical SHA256 cb407a5d3e175add5d51d90c86e5fd43cb74708b770dc585eab9eca92e82eb8b仅Runtime测试摘要，不猜Host私有hash、不写信任数据库。
+
+SDK/clean/native真实Runtime/Scanner均SETUP_SEED/NEW1/AUTO_FIX，新feedback→driver消费原Stop handoff→prepare→模拟secure edit→resolved1/SCANNER_VERIFIED_RESOLVED/CLOSED，匹配receipt无需重复explicit verify；functional prepare NOT_AVAILABLE、无run。**SYNTHETIC_SDK_NOT_DESKTOP**，不证明自然模型继续。新原生包dist/standalone-code-mode由已提交实现HEAD构建；保留旧活动包/进程。fresh步骤见[Codex使用说明](CODEX_INTEGRATION.md)：全新disposable Git fixture→setup/Local Baseline READY→正常Review & Allow→退出/重开/新Chat→safe edit→danger edit→路径A自然PostToolUse或路径B原Stop兜底→同grant prepare/secure edit/resolved1，不得Script failed或重复危险编辑；不用旧ESCALATED baseline-seed-desktop-trial。
+
+真实Maven A/B/Linux hardened execution PENDING_ENVIRONMENT_PREREQUISITES；不安装/下载/搭环境。三位试用PENDING，独立Ground Truth UNREVIEWED/null、质量NOT_MEASURED。未改Jeepay/用户实际fixture/冻结benchmark/人工标签；Runtime无模型/目标编辑/build/Secret rotation、Scanner离线，仅官方文档与授权GitHub交付联网。Capability/Entitlement、Plus/Pro、Enterprise Gate、Deep Audit、Skill/MCP Scan、Cursor、Installer、新Scanner/rule、baseline/Stop redesign及state relaxation/duplicate retry tolerance/AUTOrenewal均不进入。完成交付后停止。
+
+完整门禁/CI/边界见[AV](AI_TRIAGE_ACCEPTANCE.md#av-auto_fix-posttooluse-code-mode-contract-fix-v01)和[结构化记录](code-mode-acceptance.json)。以下各旧节保留历史事实，当前状态以本节与AV为准。
+
 ## First-run Baseline Seed + Trust UX v0.1（2026-10-04）
 
 干净起点 feature/runtime-mvp / `50ecaf2f4451e4cc6854651c9987ae7167a8b11c`。本轮只修 setup→首有效 Hook 的归因缺口，暂停继续扩展 Stop Guard。最新用户 disposable Desktop 真实反馈：第一条安全编辑无 Hook 记录；第二条危险 TLS 编辑首次有效 Hook 返回 BASELINE_ESTABLISHED、baseline_available=false、scanner_run=true、FULL、NEW0/NONE。这是 **USER_REPORTED FIRST_RUN_TRUST_GAP**，本次没有 AUTO_FIX，不是 Stop Guard 失败。缺失首 Hook 的 Host 底层原因未证明，不能推断用户拒绝信任。旧 readiness/lifecycle PASS 保留历史。
@@ -1097,3 +1113,54 @@ Implementation `4915354cd6e8bef139836cb760ae6fb601d8f76a` 已推送feature/runti
 ### AU.6 Pending / safety / scope
 
 fresh Desktop first-run baseline/trust/Host continuation PENDING_ACTUAL_DESKTOP；CI PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。Maven A/B PENDING_ENVIRONMENT_PREREQUISITES，不搭环境/安装/联网依赖下载；三位试用PENDING，Ground Truth UNREVIEWED/null，质量NOT_MEASURED。SDK/native不代替独立人工。源码编辑仅driver disposable fixture模拟，Runtime不编辑/build/调用模型/联网或Secret rotation，不改Jeepay/冻结benchmark/人工标签。Plus/Pro、Capability/Entitlement、Deep Audit、Skill/MCP Scan、Enterprise Gate、Cursor、新rule/Scanner/Functional sandbox等Planned。完成后停止。
+
+## AV. AUTO_FIX PostToolUse Code Mode Contract Fix v0.1
+
+### AV.1 最新实机事实与根因
+
+用户回传的SETUP_SEED/NEW1/AUTO_FIX证明baseline seed/归因/检测策略USER_REPORTED PASS。旧PostToolUse返回block/reason，Code Mode工具执行后nested promise拒绝，与Script failed及随后危险编辑retry一致。没有prepare/edit/receipt，resolved0，retry后SESSION/NEW0/ESCALATE。Stop未进入，**NOT TESTED**，不是Stop FAIL。不是readiness/trust/scanner根因。旧AU是历史，这次反馈覆盖seed Pending；新的transport Desktop仍Pending。
+
+### AV.2 输出协议与保护范围
+
+before：`{"decision":"block","reason":"<original AUTO guidance>"}`；after：`{"continue":false,"stopReason":"<fixed already executed / no retry / authorized remediation / prepare prefix + original bounded guidance>","systemMessage":"<unchanged AUTO authorization message>"}`，继续保留原hookSpecificOutput safe metadata。AUTO action/interaction、prepare/verify的mcp_tool与arguments、grant_id原样，无risk语义变化。CONFIRM continue:false/stopReason+ask/WAIT；NONE无停止；Stop block/reason、不返回continue:false。
+
+唯一Runtime源码差异为codex_mcp_hook.py AUTO分支。101打包文件wheel/sdist/source逐字节一致，66个sdist test文件与最终通过的源码一致，其余全部Runtime tracked files与starting HEAD一致（未打包rules说明仍逐字节git核对）；ABI exact相同，核心算法与state/scanners/rules/policy/verification/functional/command均未改。无自动grant重签/续期或retry容错。测试[新契约](../tests/test_codex_code_mode_contract.py)含specification oracle，明确旧block导致rejection、新continue:false不reject并有原guidance，只是contract simulation，不冒充Codex内部或Desktop模型。
+
+### AV.3 实际测试与分发
+
+| 门禁 | 真实结果 |
+|---|---|
+| saved baseline（本轮未重跑旧HEAD） | 982 passed /6 skipped /6 subtests passed |
+| focused AUTO/CONFIRM/Stop/NONE+原修复 | 156 passed in 383.80s (0:06:23) |
+| targeted seed/missing-first/untracked/preexisting/family/confirmation/Stop/equivalence/Fix/Functional/lifecycle/readiness | 534 passed in 1007.83s (0:16:47) |
+| final full offline | 987 passed, 6 skipped, 6 subtests passed in 1142.05s (0:19:02) |
+| wheel/sdist/package/compliance | PASS，5.67s，23 first-party rule files；最终sdist tests与已通过full的文件一致 |
+| bytes/source/ABI | PASS，101打包文件，其余全部Runtime文件不变，exact frozen Hook定义 |
+| source SDK actual MCP/local Scanner | PASS，62.93s，driver/模型边界分开 |
+| clean venv | PASS，66.0s，117 cached wheels、noeditable/nosystemsite/nodownload |
+| Windows native新目录 | PASS，158.03s，source_commit=1033abfd5c467661a2a7110442bcc410851e9bb1 |
+
+六项skipped（不是PASS）：tests/test_e2e_real.py:38、58、68、80、120、154，需要PATH真实Scanner；source/clean/native使用已缓存本地引擎的实际链路另有PASS证据。前期新增测试对handoff字段/状态的错误假设已修正，最终suite无失败，未调整生产契约。构建工具首次受Windows临时目录沙箱权限限制，授权范围内重跑成功，无下载/门槛降低。
+
+### AV.4 本地链路与fresh Desktop
+
+[source SDK](code-mode-sdk-evidence.json)、[clean](code-mode-clean-evidence.json)、[native](code-mode-native-evidence.json)：setup READY→deliberately skip first safe Hook→danger first effective SETUP_SEED/NEW1/AUTO_FIX/continue:false→original Stop fallback→driver prepare→driver secure edit→resolved1/SCANNER_VERIFIED_RESOLVED/CLOSED→functional prepare NOT_AVAILABLE/SECURITY_VERIFIED_FUNCTION_UNKNOWN、无functional run/duplicate explicit verify。preexisting PERSISTING1/NEW0/NONE安静；setup幂等/healthyrepair/remove/re-setup与readiness保留。实际Runtime/MCP/Scanner测试，不调用模型；自然PostToolUse和fresh Desktop **PENDING_ACTUAL_DESKTOP**。
+
+新native路径/source_commit/exe SHA256见native证据；现有运行包/进程未覆盖/终止。fresh命令见CODEX_INTEGRATION。使用全新disposable fixture而不是旧ESCALATED trial，正常Review & Allow/退出重开。路径A无需Stop，路径B原Stop最多两次；最终AUTO_FIX YES / Script failed NO / dangerous retry NO / prepare YES / secure edit YES / resolved1 / SCANNER_VERIFIED_RESOLVED / duplicate explicit verify NO，Stop YES或NO均可。未真正执行不写PASS。
+
+### AV.5 实现提交与新CI
+
+starting `50f002deff33d0946ee99c338d700b08a739e394`；implementation `1033abfd5c467661a2a7110442bcc410851e9bb1` 已推送feature/runtime-mvp。最终docs SHA用git log核对。新CI实际结论 **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，逐run/jobs/steps/annotations证据存[结构化记录](code-mode-acceptance.json)。四平台执行必须有真实Runner/steps，不能拿本地Windows PASS代替。
+
+| workflow | 新 run | GitHub conclusion |
+|---|---|---|
+| Runtime tests | [37186165206](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37186165206) | failure |
+| Compliance | [37186165194](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37186165194) | failure |
+| Package integrity | [37186165213](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37186165213) | failure |
+| Standalone artifacts | [37186165218](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37186165218) | failure |
+
+新CI全部未分配Runner、steps为空；failure annotations明确近期账户付款失败或支出限额。不是代码PASS，也不是已执行的代码测试失败；保持PENDING_RERUN_AFTER_ACCOUNT_RECOVERY，不改账户/workflow/契约。
+
+### AV.6 Pending / safety
+
+新Desktop自然/Stop修复闭环PENDING_ACTUAL_DESKTOP；Stop最新实机NOT TESTED。CI PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。Maven A/B PENDING_ENVIRONMENT_PREREQUISITES、不搭环境/装系统依赖/联网下载构建依赖。三位试用PENDING、Ground Truth UNREVIEWED/null、质量NOT_MEASURED。Runtime无源码编辑/模型/build/Scanner联网/Secret rotation；driver只改disposable合成fixture。未改Jeepay、真实用户fixture、benchmark/labels；仅官方文档/GitHub授权交付联网。其余阶段Planned，完成后停止。

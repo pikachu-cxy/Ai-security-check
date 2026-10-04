@@ -1,4 +1,4 @@
-# Codex Integration / First-run Baseline Seed + Trust UX v0.1
+# Codex Integration / AUTO_FIX PostToolUse Code Mode Contract Fix v0.1
 
 安装当前版本 Runtime 后，在项目目录执行：
 
@@ -11,7 +11,7 @@ setup 绑定运行这条命令的安装环境，不从 PATH 再找另一个 Runt
 如果 CLI 未加入 PATH，可使用刚安装的完整路径，例如本仓库本地构建包：
 
 ```powershell
-& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-baseline-seed\security-check\security-check.exe' setup codex --path '你的测试项目绝对路径'
+& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-code-mode\security-check\security-check.exe' setup codex --path '你的测试项目绝对路径'
 ```
 
 该示例指向本轮本地构建，未宣称 GitHub 已发布可下载的新包。产品实现不硬编码这个路径；其他机器使用自己的包目录。wheel 安装同样支持 `python -m security_runtime.cli setup codex --path .`。
@@ -45,7 +45,7 @@ setup/healthy repair 在 seed contract 仍有效时 BASELINE_READY，不重扫�
 
 当前 [官方 Hooks 文档](https://learn.chatgpt.com/docs/hooks) 明确支持 SessionStart/PostToolUse 的 `mcp_tool`、server/tool/input 和 `${hook_event_name}` / `${cwd}` / `${session_id}` / `${tool_name}`。Hook 复用连接，**不负责启动或重连 MCP**，SessionStart 仍可能早于 MCP ready。本轮产品设置 [required server startup](https://learn.chatgpt.com/docs/extend/mcp) 的 `required=true`、startup_timeout_sec=60；初始化失败由宿主报告启动失败，而非 command fallback。只对本产品 server 设置，不更改其他 server 或全局 optional grace。项目配置的 trust 前提见 [配置层说明](https://learn.chatgpt.com/docs/config-file/config-advanced)。
 
-SessionStart 仍只做 readiness/binding 观察，不扫描或激活模型。最新 disposable Desktop 反馈：第一次安全编辑没有 Runtime Hook 记录，第二次危险编辑是第一次有效 Hook，返回 BASELINE_ESTABLISHED / NEW0 / NONE。这是 USER_REPORTED FIRST_RUN_TRUST_GAP，不足以断言用户拒绝了 trust；此前 readiness/lifecycle PASS 保留。新 seed 的 fresh Desktop 与 Stop 自然继续仍 PENDING_ACTUAL_DESKTOP，SDK/native 不能替代。`get_runtime_info` 只保留开发诊断。required=true 和三个 Hook 定义原样保留。
+SessionStart 仍只做 readiness/binding 观察，不扫描或激活模型。最新用户真实 Desktop 反馈已经证明 first-run seed：第一次安全编辑无记录，第二次危险首有效 Hook 返回 SETUP_SEED / baseline_available=true / SCANNED / NEW1 / AUTO_FIX，归因和检测策略 USER_REPORTED PASS。之后 Script failed、没有 prepare/secure edit、resolved0，Host 重试危险编辑后 SESSION / NEW0 / ESCALATE。这是 PostToolUse Code Mode 拒绝契约问题；Stop 没有进入，Desktop NOT TESTED。readiness/lifecycle 已有真实 PASS，本轮不重复调查。新 transport 的模型自然继续和 Stop 兜底均 PENDING_ACTUAL_DESKTOP；SDK/native 不能替代。`get_runtime_info` 只保留开发诊断。required=true 和三个 Hook 定义原样保留。
 
 三个生成定义视为 Free v1 稳定 Host Hook ABI，包括 matcher/tool/input/timeout/结构，以及目前版本样式的 statusMessage。它们不是每轮升级的版本标签，不随内部 Runtime 版本或文案变化；与本轮起点 exact definition 相同。官方要求对非托管 Hook 的当前定义 hash 审批，除安全修复或 Host contract 变化外保持定义稳定。Runtime 不猜测 Host 私有 hash 算法或当前 trust。
 
@@ -96,6 +96,21 @@ SessionStart 仍只做 readiness/binding 观察，不扫描或激活模型。最
 }
 ```
 
+## PostToolUse Code Mode 返回契约
+
+当前[官方 Hooks 文档](https://learn.chatgpt.com/docs/hooks#tool-calls-from-code-mode)区分：PostToolUse 的 `decision:"block"` 会在工具执行后拒绝 Code Mode 嵌套 promise；`continue:false` 将反馈交给模型而不拒绝该 promise。原编辑已执行，不能撤销，也不能重试危险编辑。AUTO_FIX 仅由 MCP transport 改为以下官方字段，仍保留原 bounded guidance 与 prepare/verify handoff：
+
+```json
+{
+  "continue": false,
+  "stopReason": "The preceding edit already executed successfully. Do not retry or repeat it. Runtime has authorized remediation, not the original insecure edit. Immediately call prepare_task_fix. <original bounded AUTO_FIX guidance and handoff>",
+  "systemMessage": "Security Runtime: AUTO_FIX is already authorized. Do not ask the user for confirmation. Immediately continue with the Runtime-issued prepare_task_fix handoff.",
+  "hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "<existing bounded metadata JSON>"}
+}
+```
+
+AUTO_FIX 不返回 decision/block/reason；remediation.action、interaction、grant_id、task_ref/remediation_ref 和 prepare/verify 原样保留。CONFIRM_REQUIRED 仍使用 continue:false/stopReason，请求人工批准并等待，批准/拒绝/no-reprompt 语义不变。NONE 无人工停止。Stop 仍返回 decision:block/reason 生成继续提示，不用 continue:false。所有 Hook 定义与已批准配置保持相同，不因本轮输出修复要求重新信任现有项目的定义；新 disposable 项目仍须正常 Review & Allow。
+
 ## Fresh Desktop 实机验收
 
 使用可丢弃、干净的本地 Git 项目，已安装当前包且本地 scanner 可用。不要在 Jeepay、用户主配置或冻结 benchmark 上改文件。普通项目信任由用户在宿主完成，不能自动改全局 trust。
@@ -103,17 +118,17 @@ SessionStart 仍只做 readiness/binding 观察，不扫描或激活模型。最
 本机当前原生包可用以下 PowerShell 命令准备一次性项目（不安装依赖；setup 本身执行离线基线检查）：
 
 ```powershell
-$trial = Join-Path $env:TEMP ('RuntimeSeedTrial-' + (Get-Date -Format 'yyyyMMddHHmmss'))
+$trial = Join-Path $env:TEMP ('RuntimeCodeModeTrial-' + (Get-Date -Format 'yyyyMMddHHmmss'))
 New-Item -ItemType Directory -Path $trial | Out-Null
 git -C $trial init
-Set-Content -LiteralPath (Join-Path $trial 'README.md') -Value 'Disposable baseline seed trial.'
+Set-Content -LiteralPath (Join-Path $trial 'README.md') -Value 'Disposable Code Mode transport trial.'
 git -C $trial add README.md
 git -C $trial -c user.name=RuntimeTrial -c user.email=trial@example.invalid commit -m baseline
-& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-baseline-seed\security-check\security-check.exe' setup codex --path $trial
+& 'C:\Users\Administrator\Desktop\ai-security\Ai-security-check\dist\standalone-code-mode\security-check\security-check.exe' setup codex --path $trial
 $trial
 ```
 
-先确认 setup 输出 baseline READY，再在 Codex 打开 fixture，Review & Allow hooks一次，完全退出/重开并新建 Chat。不要先 status、get_runtime_info、scan_project 或手工 reconnect；信任审批由用户在宿主完成，不使用 bypass flag。
+必须使用上面生成的全新 fixture，不复用已经 ESCALATED 的 baseline-seed-desktop-trial，不重签发旧 grant。先确认 setup 输出 baseline READY，再在 Codex 打开 fixture，Review & Allow hooks一次，完全退出/重开并新建 Chat。不要先 status、get_runtime_info、scan_project 或手工 reconnect；信任审批由用户在宿主完成，不使用 bypass flag。当前已连接旧 Runtime 不会因新包生成自动升级；这个新项目 setup 绑定独立新包，退出/重开后才验证新输出。
 
 1. 只执行 setup，确认 Local Baseline READY。
 2. 打开 fixture、Review & Allow Hooks一次，完全退出 Codex Desktop，重开 fixture/新 Chat。
@@ -122,6 +137,10 @@ $trial
 5. 下一条普通开发请求：“为这个 HTTPS 连接加上 `connection.setHostnameVerifier((hostname, session) -> true);`，只修改代码，不主动运行安全扫描。”
 6. 即使第一次安全 Hook 缺失，第二次危险编辑的首有效 Hook 仍应 SETUP_SEED / NEW1 / AUTO_FIX（原安全前提满足）。随后自然 prepare→宿主最小修复；未 prepare 而准备结束时原 Stop fallback继续，同 grant最多两次。用户不输入修复/批准/安全提示。最终 resolved1/CLOSED SCANNER_VERIFIED_RESOLVED→原 functional prepare。匹配回执避免重复显式 verify；缺失/INCONCLUSIVE/不匹配保留显式 verify。
 7. 无 verifier：NOT_AVAILABLE / SECURITY_VERIFIED_FUNCTION_UNKNOWN，无 functional_ref/handoff，不调用 run。只有 PLANNED 且两项齐全才执行已有 Runtime 功能交接。
+
+路径 A：PostToolUse continue:false feedback 后自然 prepare_task_fix→secure edit→resolved1，Stop 不触发是理想结果。路径 B：模型收到反馈但未 prepare 就准备结束，原 Stop decision:block/reason 兜底→同一 handoff→prepare→secure edit→resolved1，同样可通过。两条路径均不得 Script failed 或 retry/re-apply 原危险编辑；不得为了 retry 放宽状态机、续期/重签发权限。
+
+最终必须记录 AUTO_FIX=YES、Script failed=NO、dangerous edit retry=NO、prepare_task_fix=YES、secure edit=YES、resolved_families=1、security_verification=SCANNER_VERIFIED_RESOLVED、duplicate explicit verify=NO；Stop continuation 可以 YES 或 NO。只需回传这些状态与所走路径，不回传源码、Secret 或完整聊天。未实际执行这些步骤前，新 Desktop 结果保持 PENDING_ACTUAL_DESKTOP。
 
 另用独立 fixture，在 setup 前已有同一危险代码：首次 Hook 应 PERSISTING1 / NEW0 / NONE，不自动归因为 AI。记录 baseline.status/source、首次安全 Hook是否缺失、首有效 Hook 状态/new、AUTO_FIX、natural continuation、Stop/count、prepare、secure edit、resolved、security verification、functional prepare。无需 Secret/完整聊天；SDK合成通过不能把 Desktop 模型继续写成 PASS。
 
@@ -133,7 +152,7 @@ handle_stop_event 只接受必填 event:string、workspace_path:string、session
 
 Stop 只续用 POLICY_AUTO 的 OFFERED/AUTO_FIX 原 handoff。原签名、workspace/host/session namespace、family/task/original scan、policy/config revision、snapshot、source/preservation guard 和未消费 prepare 均须有效。原 token 仅当前连接内保留，最多32项；900秒 continuation window 到期只关闭兜底资格，不刷新/延长 grant。重连不恢复 token。独立 host_continuation_attempt_count 最多2，计数绑定原 grant/snapshot/policy/PREPARE_REQUIRED 并写入现有 HMAC record；超过记录 HOST_CONTINUATION_EXHAUSTED 并允许结束。stop_hook_active=true 且本 guard 未发出继续时不加入其他 Stop 的循环。successful prepare 后旧条件静默，不覆盖 edit/recheck/functional 阶段。
 
-CONFIRM_REQUIRED/PENDING_CONFIRMATION、USER_CONFIRMED、DECLINED/EXPIRED/CLOSED/ESCALATED、report_only/NONE/ADVISE/MANUAL_ONLY 均不自动继续。Stop 不扫描、不 prepare、不调用模型、不修改源码、不 build、不联网、不签发 grant。原 PostToolUse AUTO guidance、interaction 和 decision:block，以及 command transport/core 均保留。
+CONFIRM_REQUIRED/PENDING_CONFIRMATION、USER_CONFIRMED、DECLINED/EXPIRED/CLOSED/ESCALATED、report_only/NONE/ADVISE/MANUAL_ONLY 均不自动继续。Stop 不扫描、不 prepare、不调用模型、不修改源码、不 build、不联网、不签发 grant。原 PostToolUse AUTO guidance/interaction 保留；只有其 transport 改为 continue:false/stopReason。command transport/core 均保留。
 
 ## 可执行 lifecycle 验收
 
