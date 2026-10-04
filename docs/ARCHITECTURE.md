@@ -1,5 +1,27 @@
 # AI Security Runtime — Architecture
 
+## First-run Baseline Seed + Trust UX v0.1（2026-10-04）
+
+干净起点 feature/runtime-mvp / `50ecaf2f4451e4cc6854651c9987ae7167a8b11c`。本轮只修 setup→首有效 Hook 的归因缺口，暂停继续扩展 Stop Guard。最新用户 disposable Desktop 真实反馈：第一条安全编辑无 Hook 记录；第二条危险 TLS 编辑首次有效 Hook 返回 BASELINE_ESTABLISHED、baseline_available=false、scanner_run=true、FULL、NEW0/NONE。这是 **USER_REPORTED FIRST_RUN_TRUST_GAP**，本次没有 AUTO_FIX，不是 Stop Guard 失败。缺失首 Hook 的 Host 底层原因未证明，不能推断用户拒绝信任。旧 readiness/lifecycle PASS 保留历史。
+
+setup配置提交成功后在项目外建立signed workspace seed，复用HookCoordinator._scan_scope的同一个quick Semgrep/Gitleaks observer、family_multiset与coverage proof。baseline只保存HookSnapshot safe projection与闭合HMAC wrapper，不写Finding DB/源码片段/Secret/prompt/transcript；PRE_EXISTING_BASELINE，无remediation/model/build/test/network/download。完整Git inventory≤1000 files/20MB/单文件1MB，扫描60秒cooperative deadline及既有Git/process/output限制。非空scope要求全部requested quick capabilities完成；空scope允许空比较点，SCOPED不是项目FULL安全声明。部分/失败/缺scanner/budget超限为INCONCLUSIVE、overall DEGRADED，Integration CONFIGURED仍独立保留。
+
+seed绑定normalized workspace identity、baseline/Hook schema、Runtime0.3.1、first-party pack/catalog checksum、pinned Semgrep/Gitleaks versions与已签名自有integration/config。signature、大小、links、scope、schema或binding失效拒绝/STALE；source snapshot变化不作废，正是比较目的。无session时用有效seed，跳过seed的event dedupe/cooldown但不跳scanner，正常state成功保存后只用session。scan scope只含当前/此前dirty paths及既有候选路径，不每个edit重扫setup全inventory。preexisting候选PERSISTING；新文件和首次未观察的后续改动可NEW。缺有效baseline的首HIGH/CRITICAL高置信风险明确FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT，但不虚构NEW或授权AUTO_FIX；无finding首次保持安静。
+
+setup/healthy repair有效seed为BASELINE_READY且不重扫，不因source变化刷新；首次/missing/stale/不兼容升级可建立，repair重建BASELINE_REESTABLISHED；status只读显示baseline READY/NOT_ESTABLISHED/STALE/INCONCLUSIVE、source SETUP_SEED及hook_trust HOST_MANAGED_UNKNOWN。remove只清自有seed/config metadata，保留源码/scanner DB/Finding DB/普通scan历史；re-setup新seed。CLI提示正常项目trust及Review & Allow Hooks一次，再重开正常编码，无info/scan/repair warm-up。
+
+Free v1稳定Host Hook ABI：SessionStart→handle_readiness_event、PostToolUse→handle_hook_event、Stop→handle_stop_event的exact definitions与起点一致，matcher/input/tool/timeout/structure及当前版本样式statusMessage都冻结，不随内部升级改文案。canonical配置SHA256 `cb407a5d3e175add5d51d90c86e5fd43cb74708b770dc585eab9eca92e82eb8b` 仅Runtime测试摘要，不猜Codex私有hash。官方[Hooks](https://learn.chatgpt.com/docs/hooks)要求精确定义审批；没有找到可用受支持trust查询API，不读/写私有信任数据库或绕过审批。SessionStart仍轻量readiness；Stop Guard/command adapter/风险政策/Raw/UNTRUSTED_CODE/脱敏/修复验证/Functional contracts保持。
+
+真实Maven A/B/Linux hardened execution PENDING_ENVIRONMENT_PREREQUISITES；不安装/下载/搭环境。三位试用PENDING，独立Ground Truth UNREVIEWED/null，质量NOT_MEASURED。未改Jeepay/用户实际fixture/冻结benchmark/人工标签；Runtime无模型、目标编辑/build/Secret rotation，Scanner离线，仅官方文档与授权GitHub交付联网。Capability/Entitlement、Plus/Pro、Enterprise Gate、Deep Audit、Skill/MCP Scan、Cursor、其它Host、新AUTO_FIX rule、Functional sandbox扩展等继续Planned。完成本轮交付后停止。
+
+当前架构/决策见ARCHITECTURE与DECISIONS首节；完整门禁/CI/实机边界见[AU](AI_TRIAGE_ACCEPTANCE.md#au-first-run-baseline-seed--trust-ux-v01)，[结构化记录](baseline-seed-acceptance.json)与[试用步骤](CODEX_INTEGRATION.md)。
+
+### 架构
+
+CodexIntegrationAdapter在existing ownership OS lock/atomic/CAS/readback完成后调用WorkspaceBaselineSeeds.ensure；seed扫描另用existing Hook workspace OS lock，前后bounded完整inventory HMAC与dirty snapshot复核，移动源码拒绝。ProjectionOnlyStore丢弃baseline Finding payload。wrapper={schema,binding,status,reason,snapshot,created_at,signature}，snapshot复用hook-v1闭合schema，≤2MB原子写入。读种子不写key、不发probe、不扫描；binding在读取前后重验。HookCoordinator只改previous获取与共同scan helper，五个原核心算法AST未变。session state成为权威后不重新读seed；已知候选路径也保留在小范围复核中，避免误归因/误判缺失。
+
+以下章节为历史记录，最新状态以本节与AU为准。
+
 ## Auto Remediation Continuation Guard v0.1（2026-10-04）
 
 Implementation `17a638f492d277d6bc9a104b019a5bbf081cb2ee` 已推送 origin/feature/runtime-mvp。新 Runtime/Package/Compliance/Standalone 四类 CI 实际 GitHub failure，9 jobs 未分配 Runner、steps为空，检查注解明确为账户付款失败/支出限额，**PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，四平台未运行；不是代码 PASS，不放松契约或更改账户/workflow。新 runs 见 AT.5。Windows native 从该已提交 HEAD 在独立目录重建并实际验收 PASS，71.33s，source_commit/hash可核对。旧活动目录第一次重建 DLL锁定失败；恢复74个缺失且未变资源，旧exe未改、未终止MCP。最终docs HEAD用本文件git log核对，其新CI在最终回复独立核实。

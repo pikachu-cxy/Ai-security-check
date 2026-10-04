@@ -1,5 +1,27 @@
 # AI Security Runtime — Project State
 
+## First-run Baseline Seed + Trust UX v0.1（2026-10-04）
+
+干净起点 feature/runtime-mvp / `50ecaf2f4451e4cc6854651c9987ae7167a8b11c`。本轮只修 setup→首有效 Hook 的归因缺口，暂停继续扩展 Stop Guard。最新用户 disposable Desktop 真实反馈：第一条安全编辑无 Hook 记录；第二条危险 TLS 编辑首次有效 Hook 返回 BASELINE_ESTABLISHED、baseline_available=false、scanner_run=true、FULL、NEW0/NONE。这是 **USER_REPORTED FIRST_RUN_TRUST_GAP**，本次没有 AUTO_FIX，不是 Stop Guard 失败。缺失首 Hook 的 Host 底层原因未证明，不能推断用户拒绝信任。旧 readiness/lifecycle PASS 保留历史。
+
+实现 `4915354cd6e8bef139836cb760ae6fb601d8f76a` 已提交推送；final focused **90 passed in 219.07s (0:03:39)**；targeted **524 passed in 1037.62s (0:17:17)**（最后5项测试由 focused/full覆盖）；final full offline **982 passed, 6 skipped, 6 subtests passed in 1123.35s (0:18:43)**。wheel/sdist/package/compliance、五模块包/source字节一致、严格离线clean venv、实际SDK、独立目录Windows native均PASS。新四类CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，具体jobs/annotations见AU；不能把未启动四平台写PASS。最终docs HEAD按本文件git log核对，docs-only新CI在最终回复单列。
+
+setup配置提交成功后在项目外建立signed workspace seed，复用HookCoordinator._scan_scope的同一个quick Semgrep/Gitleaks observer、family_multiset与coverage proof。baseline只保存HookSnapshot safe projection与闭合HMAC wrapper，不写Finding DB/源码片段/Secret/prompt/transcript；PRE_EXISTING_BASELINE，无remediation/model/build/test/network/download。完整Git inventory≤1000 files/20MB/单文件1MB，扫描60秒cooperative deadline及既有Git/process/output限制。非空scope要求全部requested quick capabilities完成；空scope允许空比较点，SCOPED不是项目FULL安全声明。部分/失败/缺scanner/budget超限为INCONCLUSIVE、overall DEGRADED，Integration CONFIGURED仍独立保留。
+
+setup/healthy repair有效seed为BASELINE_READY且不重扫，不因source变化刷新；首次/missing/stale/不兼容升级可建立，repair重建BASELINE_REESTABLISHED；status只读显示baseline READY/NOT_ESTABLISHED/STALE/INCONCLUSIVE、source SETUP_SEED及hook_trust HOST_MANAGED_UNKNOWN。remove只清自有seed/config metadata，保留源码/scanner DB/Finding DB/普通scan历史；re-setup新seed。CLI提示正常项目trust及Review & Allow Hooks一次，再重开正常编码，无info/scan/repair warm-up。
+
+实际SDK/clean/native deliberately skip first safe Hook：SETUP_SEED、baseline_available=true、NEW1、AUTO_FIX；untracked新文件PASS；preexisting PERSISTING1/NEW0/NONE。driver消费原Stop handoff→prepare→模拟安全edit→resolved1/SCANNER_VERIFIED_RESOLVED→functional prepare NOT_AVAILABLE，无functional run。此为真实Runtime/Scanner、**SIMULATED_HOST_ONLY，不是Desktop模型证据**。fresh Desktop seed/trust/自然继续/Stop完整闭环 **PENDING_ACTUAL_DESKTOP**。步骤见[Codex使用说明](CODEX_INTEGRATION.md)，门禁和CI见[AU](AI_TRIAGE_ACCEPTANCE.md#au-first-run-baseline-seed--trust-ux-v01)。
+
+真实Maven A/B/Linux hardened execution PENDING_ENVIRONMENT_PREREQUISITES；不安装/下载/搭环境。三位试用PENDING，独立Ground Truth UNREVIEWED/null，质量NOT_MEASURED。未改Jeepay/用户实际fixture/冻结benchmark/人工标签；Runtime无模型、目标编辑/build/Secret rotation，Scanner离线，仅官方文档与授权GitHub交付联网。Capability/Entitlement、Plus/Pro、Enterprise Gate、Deep Audit、Skill/MCP Scan、Cursor、其它Host、新AUTO_FIX rule、Functional sandbox扩展等继续Planned。完成本轮交付后停止。
+
+当前架构/决策见ARCHITECTURE与DECISIONS首节；完整门禁/CI/实机边界见[AU](AI_TRIAGE_ACCEPTANCE.md#au-first-run-baseline-seed--trust-ux-v01)，[结构化记录](baseline-seed-acceptance.json)与[试用步骤](CODEX_INTEGRATION.md)。
+
+### Agent Handoff
+
+先核对Git与AU/结构化证据，保留上述最新USER_REPORTED失败与新实现PENDING的区别。不要把旧first-edit PASS覆盖本次缺失首次Hook场景，不为验收推断trust或制造warm-up。只剩fresh Desktop和外部CI/人工/环境验收，不进入新阶段。
+
+以下章节为历史记录，最新状态以本节与AU为准。
+
 ## Auto Remediation Continuation Guard v0.1（2026-10-04）
 
 Implementation `17a638f492d277d6bc9a104b019a5bbf081cb2ee` 已推送 origin/feature/runtime-mvp。新 Runtime/Package/Compliance/Standalone 四类 CI 实际 GitHub failure，9 jobs 未分配 Runner、steps为空，检查注解明确为账户付款失败/支出限额，**PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，四平台未运行；不是代码 PASS，不放松契约或更改账户/workflow。新 runs 见 AT.5。Windows native 从该已提交 HEAD 在独立目录重建并实际验收 PASS，71.33s，source_commit/hash可核对。旧活动目录第一次重建 DLL锁定失败；恢复74个缺失且未变资源，旧exe未改、未终止MCP。最终docs HEAD用本文件git log核对，其新CI在最终回复独立核实。

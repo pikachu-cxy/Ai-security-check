@@ -1,5 +1,23 @@
 # AI Finding Triage & Risk Validation v0.1 验收
 
+## First-run Baseline Seed + Trust UX v0.1（2026-10-04）
+
+干净起点 feature/runtime-mvp / `50ecaf2f4451e4cc6854651c9987ae7167a8b11c`。本轮只修 setup→首有效 Hook 的归因缺口，暂停继续扩展 Stop Guard。最新用户 disposable Desktop 真实反馈：第一条安全编辑无 Hook 记录；第二条危险 TLS 编辑首次有效 Hook 返回 BASELINE_ESTABLISHED、baseline_available=false、scanner_run=true、FULL、NEW0/NONE。这是 **USER_REPORTED FIRST_RUN_TRUST_GAP**，本次没有 AUTO_FIX，不是 Stop Guard 失败。缺失首 Hook 的 Host 底层原因未证明，不能推断用户拒绝信任。旧 readiness/lifecycle PASS 保留历史。
+
+实现 `4915354cd6e8bef139836cb760ae6fb601d8f76a` 已提交推送；final focused **90 passed in 219.07s (0:03:39)**；targeted **524 passed in 1037.62s (0:17:17)**（最后5项测试由 focused/full覆盖）；final full offline **982 passed, 6 skipped, 6 subtests passed in 1123.35s (0:18:43)**。wheel/sdist/package/compliance、五模块包/source字节一致、严格离线clean venv、实际SDK、独立目录Windows native均PASS。新四类CI **PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，具体jobs/annotations见AU；不能把未启动四平台写PASS。最终docs HEAD按本文件git log核对，docs-only新CI在最终回复单列。
+
+实际SDK/clean/native deliberately skip first safe Hook：SETUP_SEED、baseline_available=true、NEW1、AUTO_FIX；untracked新文件PASS；preexisting PERSISTING1/NEW0/NONE。driver消费原Stop handoff→prepare→模拟安全edit→resolved1/SCANNER_VERIFIED_RESOLVED→functional prepare NOT_AVAILABLE，无functional run。此为真实Runtime/Scanner、**SIMULATED_HOST_ONLY，不是Desktop模型证据**。fresh Desktop seed/trust/自然继续/Stop完整闭环 **PENDING_ACTUAL_DESKTOP**。步骤见[Codex使用说明](CODEX_INTEGRATION.md)，门禁和CI见[AU](AI_TRIAGE_ACCEPTANCE.md#au-first-run-baseline-seed--trust-ux-v01)。
+
+真实Maven A/B/Linux hardened execution PENDING_ENVIRONMENT_PREREQUISITES；不安装/下载/搭环境。三位试用PENDING，独立Ground Truth UNREVIEWED/null，质量NOT_MEASURED。未改Jeepay/用户实际fixture/冻结benchmark/人工标签；Runtime无模型、目标编辑/build/Secret rotation，Scanner离线，仅官方文档与授权GitHub交付联网。Capability/Entitlement、Plus/Pro、Enterprise Gate、Deep Audit、Skill/MCP Scan、Cursor、其它Host、新AUTO_FIX rule、Functional sandbox扩展等继续Planned。完成本轮交付后停止。
+
+当前架构/决策见ARCHITECTURE与DECISIONS首节；完整门禁/CI/实机边界见[AU](AI_TRIAGE_ACCEPTANCE.md#au-first-run-baseline-seed--trust-ux-v01)，[结构化记录](baseline-seed-acceptance.json)与[试用步骤](CODEX_INTEGRATION.md)。
+
+### 当前验收
+
+最新结果以本节与AU为准。以下AT及以前为历史记录，不能证明本轮fresh Desktop通过。
+
+以下章节为历史记录，最新状态以本节与AU为准。
+
 ## Auto Remediation Continuation Guard v0.1（2026-10-04）
 
 Implementation `17a638f492d277d6bc9a104b019a5bbf081cb2ee` 已推送 origin/feature/runtime-mvp。新 Runtime/Package/Compliance/Standalone 四类 CI 实际 GitHub failure，9 jobs 未分配 Runner、steps为空，检查注解明确为账户付款失败/支出限额，**PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**，四平台未运行；不是代码 PASS，不放松契约或更改账户/workflow。新 runs 见 AT.5。Windows native 从该已提交 HEAD 在独立目录重建并实际验收 PASS，71.33s，source_commit/hash可核对。旧活动目录第一次重建 DLL锁定失败；恢复74个缺失且未变资源，旧exe未改、未终止MCP。最终docs HEAD用本文件git log核对，其新CI在最终回复独立核实。
@@ -1029,3 +1047,53 @@ Implementation `17a638f492d277d6bc9a104b019a5bbf081cb2ee` 已推送 origin/featu
 ### AT.6 Pending 与边界
 
 新fresh Desktop Stop自动继续 PENDING_ACTUAL_DESKTOP。最新cold-start/readiness/lifecycle USER_REPORTED PASS，不能继续当未验证来调查。真实Maven A/B/hardenedLinux PENDING_ENVIRONMENT_PREREQUISITES，不安装/下载/搭环境、不降低隔离。三位试用 PENDING、GroundTruth UNREVIEWED/null、质量NOT_MEASURED。未修改Jeepay/用户实际fixture/冻结benchmark/人工标签；Scanner offline、Runtime no model/source edit/target build/network、Secretrotation未执行。仅官方OpenAI文档与GitHub授权交付联网。Capability/Entitlement/PlusPro/EnterpriseGate/CIgate/PreToolUseenforcement/其它Host、新AUTO规则、新Scanner、Windowsfunctionalbackend、DeepAudit/Joern/DAST/watcher保持Planned，完成后停止。
+
+
+## AU. First-run Baseline Seed + Trust UX v0.1
+
+### AU.1 根因与当前真实性
+
+starting HEAD 50ecaf2f4451e4cc6854651c9987ae7167a8b11c。用户真实失败：safe Hook无记录、危险首有效Hook BASELINE_ESTABLISHED/FULL/NEW0/NONE，不能断言Host未trust的具体原因。旧代码只读session previous，无setup比较点；因此吸收当前风险。不曾AUTO_FIX，不是Stop失败。最新实现见顶部与CODEX_INTEGRATION；Host原生审批由用户完成，trust UNKNOWN。
+
+### AU.2 Baseline contract / lifecycle / ABI
+
+源码baseline_seed.py的signed closed wrapper与hook-v1 safe projection；bounded outside workspace/atomic/no source与具体bindings见ARCHITECTURE首节。生产默认ProjectionOnlyStore，setup不写普通scan/finding payload；Runtime已有数据保留。setup首次一轮quick scan；有效二次setup/healthy repair不扫描，source变化不失效；missing/stale/incompatible修复重建明确BASELINE_REESTABLISHED。status只读；remove删除seed，re-setup新seed。前三者状态与readiness/live_connection分开；READY不是project safe。完整三事件配置与starting HEAD一致，继续使用[冻结配置](continuation-hooks-example.json)。五个Hook核心算法AST未变，13个保护模块与起点一致，见结构化完整性证据。
+
+### AU.3 实际测试与分发
+
+| 门禁 | 真实结果 |
+|---|---|
+| baseline（上一轮保存，未本轮重跑） | 951 passed /6 skipped /6 subtests passed |
+| final focused | 90 passed in 219.07s (0:03:39) |
+| targeted | 524 passed in 1037.62s (0:17:17)；最后5项测试由focused/full覆盖 |
+| final full offline | 982 passed, 6 skipped, 6 subtests passed in 1123.35s (0:18:43) |
+| wheel/sdist/package/compliance | PASS，6.23s，23 first-party rule files |
+| bytes/ABI/core integrity | PASS；5 modules/13 protected modules/5 original core functions/exact Hook definitions |
+| source actual MCP + local engines | PASS，84.65s，synthetic SDK |
+| strict clean venv | PASS，115.57s，117 cached wheels，无editable/system site/download |
+| Windows native独立新目录 | PASS，92.5s，committed implementation HEAD；旧运行包未覆盖/进程未终止 |
+
+focused包含seed签名/binding/foreign/runtime/rules/providers/schema/future/size/links、源变化正常、moving inventory/partial/failure/unavailable/timeout/cancellation/budget、no source/Secret/DB persistence、missing first Hook/untracked AUTO/preexisting tracked clean文件/普通无finding quiet、session authoritative、setup/status/repair/remove/idempotence/ABI/UX。targeted/full保留PostToolUse、Stop Guard、确认批准/拒绝、equivalence multiset、修复/功能安全与cold-start readiness回归。
+
+六项skipped单列（不是PASS）：tests/test_e2e_real.py:38、58、68、80、120、154；均要求PATH上的真实scanner binaries。另三种实际source/clean/native使用已有缓存local Semgrep/Gitleaks通过；不把全部real e2e skipped隐藏。
+
+### AU.4 真实Runtime与Desktop边界
+
+[SDK](baseline-seed-sdk-evidence.json)、[clean](baseline-seed-clean-evidence.json)、[native](baseline-seed-native-evidence.json)：setup READY→deliberately skip safe PostToolUse→新/untracked危险首有效Hook SETUP_SEED/baseline_available=true/scanner_run=true/NEW1/AUTO_FIX→original Stop fallback→prepare→driver安全edit→resolved1/SCANNER_VERIFIED_RESOLVED/CLOSED matched receipt→functional prepare NOT_AVAILABLE无run。preexisting setup后fresh session PERSISTING1/NEW0/NONE。无info/status/scan warm-up；actual local offline scanners，edit与Host continuation是driver模拟，PENDING_ACTUAL_DESKTOP不改PASS。
+
+Fresh Desktop步骤：新disposable Git项目→新原生包setup确认baseline READY→在Codex打开并Review & Allow Hooks一次→完全退出/重开→fresh Chat普通safe Java edit→下一普通danger edit（可另一fixture故意缺失safe Hook）→NEW1/AUTO_FIX→natural或Stop→prepare→secureedit→resolved1/SCANNER_VERIFIED_RESOLVED。不额外发安全提示、不手工Runtime工具热身。原生包路径与可执行命令见CODEX_INTEGRATION。preexisting用独立fixture，期待PERSISTING1/NONE。记录Host版本/seed/trust人工审批/首Hook/自然或Stop/count/prepare/edit/receipt/functional，勿上传Secret或transcript。
+
+### AU.5 提交与新CI
+
+Implementation `4915354cd6e8bef139836cb760ae6fb601d8f76a` 已推送feature/runtime-mvp；最终docs HEAD按git log核对。新CI按实际jobs/steps/annotations核实：**PENDING_RERUN_AFTER_ACCOUNT_RECOVERY**；GitHub conclusion与未启动执行区分，不预写PASS、不改账户/workflow或安全门槛。
+
+| workflow | 新 run | 实际结论 |
+|---|---|---|
+| Standalone artifacts | [37183840764](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37183840764) | failure; PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Runtime tests | [37183840767](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37183840767) | failure; PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Package integrity | [37183840787](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37183840787) | failure; PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+| Compliance | [37183840731](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37183840731) | failure; PENDING_RERUN_AFTER_ACCOUNT_RECOVERY |
+
+### AU.6 Pending / safety / scope
+
+fresh Desktop first-run baseline/trust/Host continuation PENDING_ACTUAL_DESKTOP；CI PENDING_RERUN_AFTER_ACCOUNT_RECOVERY。Maven A/B PENDING_ENVIRONMENT_PREREQUISITES，不搭环境/安装/联网依赖下载；三位试用PENDING，Ground Truth UNREVIEWED/null，质量NOT_MEASURED。SDK/native不代替独立人工。源码编辑仅driver disposable fixture模拟，Runtime不编辑/build/调用模型/联网或Secret rotation，不改Jeepay/冻结benchmark/人工标签。Plus/Pro、Capability/Entitlement、Deep Audit、Skill/MCP Scan、Enterprise Gate、Cursor、新rule/Scanner/Functional sandbox等Planned。完成后停止。
