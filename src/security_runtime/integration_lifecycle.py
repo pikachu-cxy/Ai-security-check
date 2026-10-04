@@ -56,7 +56,7 @@ class IntegrationManager:
 def render_integration(value: dict) -> str:
     lines = ['AI Security Runtime / Codex', '']
     for label, key in [('Runtime', 'runtime'), ('MCP', 'mcp'), ('Security Hook', 'post_tool_hook'),
-                       ('Startup Ready', 'readiness')]:
+                       ('Stop Guard', 'stop_hook'), ('Startup Ready', 'readiness')]:
         lines.append(f"{label:<15}{value.get(key, {}).get('status', 'UNKNOWN')}")
     lines.extend([f"Mode           {value.get('mode', 'UNKNOWN')}", '', f"Status: {value['overall']}"])
     if value.get('operation'):
@@ -64,8 +64,13 @@ def render_integration(value: dict) -> str:
     if value.get('diagnostics'):
         lines.append('Diagnostics: ' + ', '.join(value['diagnostics']))
     lines.append('Readiness is a recent connection observation, not a safety result or a live connection check.')
-    if value['overall'] not in {'NOT_INSTALLED', 'READY'}:
+    observation_only = (value['overall'] == 'CONFIGURED' and
+                        value.get('readiness', {}).get('status') == 'READINESS_NOT_OBSERVED' and
+                        set(value.get('diagnostics', [])) <= {'READINESS_NOT_OBSERVED'})
+    if value['overall'] not in {'NOT_INSTALLED', 'READY'} and not observation_only:
         lines.append('Run: security-check integration repair codex --path .')
+    if observation_only and not value.get('operation'):
+        lines.append('Configuration is ready. Open this trusted project in Codex; readiness is observed during normal startup. No repair or warm-up prompt is required.')
     if value.get('operation') in {'CONFIGURED', 'REPAIRED'}:
         lines.append('Restart Codex Desktop and open this trusted project. No warm-up prompt is required.')
     return '\n'.join(lines)

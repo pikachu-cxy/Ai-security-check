@@ -88,6 +88,8 @@ class RemediationService:
         # Pending is an HMAC-signed persistent capability. Approved grants
         # and preparation attestation remain connection-local.
         self.authorized = {}
+        from .host_continuation import HostContinuationGuard
+        self.continuation = HostContinuationGuard(self)
 
     def _fix(self):
         if self.registry is None:
@@ -154,6 +156,9 @@ class RemediationService:
 
     def _grant(self, path, record, snapshot):
         token = 'rem-v1.' + path.stem + '.' + identity(record['family_key']) + '.' + secrets.token_hex(24)
+        # Only normal policy-authorized issuance starts a different grant.
+        # Stop itself can never reset this counter or issue a retry.
+        record.pop('host_continuation', None)
         record.update(token_hash=identity(token), last_snapshot_digest=snapshot,
                       last_action='AUTO_FIX', phase='OFFERED', last_verification='NOT_VERIFIED')
         confirmed = record.get('authorization_kind') == 'USER_CONFIRMED'
@@ -161,6 +166,7 @@ class RemediationService:
             record['phase'] = 'AUTHORIZED'
             self.authorized[record['token_hash']] = record['connection_deadline']
         args = {'task_ref': record['task_ref'], 'remediation_ref': token}
+        self.continuation.remember(path, record, snapshot, args)
         return dict(self.policy.decide(family=record['family_key'], rule=RULE, priority='ACTIONABLE',
                                       coverage=True, deterministic=True).to_dict(),
                     policy_source='DETERMINISTIC_LOCAL_TLS_INVARIANT', attempt_count=record['attempt_count'],

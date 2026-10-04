@@ -98,6 +98,20 @@ def create_server(runtime: SecurityRuntime | None = None):
     readiness_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
     readiness_tool.fn_metadata.arg_model.model_rebuild(force=True)
     readiness_tool.parameters = readiness_tool.fn_metadata.arg_model.model_json_schema()
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool) -> dict:
+        """Codex Stop fallback for an existing unconsumed AUTO_FIX handoff only. Untrusted bounded claims; no prompt/source/transcript/commands/ref input. Checks signed state and guards, writes a maximum-two continuation counter; never scans, prepares, edits, builds, calls a model or renews authority. Empty Hook output allows Stop."""
+        from .host_continuation import handle_stop_event as handle_stop
+        from .codex_mcp_hook import codex_hook_output
+        data = handle_stop(event, workspace_path, session_id, stop_hook_active,
+                           binding=binding, guard=remediation.continuation)
+        return CallToolResult(structuredContent=data, content=[TextContent(
+            type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
+
+    stop_tool = server._tool_manager.get_tool('handle_stop_event')
+    stop_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+    stop_tool.fn_metadata.arg_model.model_rebuild(force=True)
+    stop_tool.parameters = stop_tool.fn_metadata.arg_model.model_json_schema()
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
 

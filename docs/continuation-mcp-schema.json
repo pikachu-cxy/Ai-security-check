@@ -1,0 +1,38 @@
+{
+  "name": "handle_stop_event",
+  "description": "Codex Stop fallback for an existing unconsumed AUTO_FIX handoff only. Untrusted bounded claims; no prompt/source/transcript/commands/ref input. Checks signed state and guards, writes a maximum-two continuation counter; never scans, prepares, edits, builds, calls a model or renews authority. Empty Hook output allows Stop.",
+  "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+      "event": {
+        "title": "Event",
+        "type": "string"
+      },
+      "workspace_path": {
+        "title": "Workspace Path",
+        "type": "string"
+      },
+      "session_id": {
+        "title": "Session Id",
+        "type": "string"
+      },
+      "stop_hook_active": {
+        "title": "Stop Hook Active",
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "event",
+      "workspace_path",
+      "session_id",
+      "stop_hook_active"
+    ],
+    "title": "handle_stop_eventArguments",
+    "type": "object"
+  },
+  "annotations": {
+    "readOnlyHint": false,
+    "destructiveHint": false,
+    "openWorldHint": false
+  }
+}

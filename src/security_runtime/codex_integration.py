@@ -36,7 +36,7 @@ BEGIN = '\n# BEGIN AI Security Runtime managed Codex v0.2\n'
 END = '# END AI Security Runtime managed Codex v0.2\n'
 MAX_CONFIG = 262_144
 MAX_METADATA = 16_384
-REQUIRED_TOOLS = REQUIRED_GUIDANCE_TOOLS | {'handle_hook_event', 'handle_readiness_event',
+REQUIRED_TOOLS = REQUIRED_GUIDANCE_TOOLS | {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event',
     'confirm_remediation', 'prepare_functional_verification', 'run_functional_verification'}
 
 
@@ -138,6 +138,12 @@ def product_hooks() -> dict:
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_readiness_event',
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}', 'session_id': '${session_id}'},
         'timeout': 30, 'statusMessage': 'AI Security Runtime [readiness-v0.3]',
+    }]}]
+    result['hooks']['Stop'] = [{'hooks': [{
+        'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_stop_event',
+        'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}',
+                  'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}'},
+        'timeout': 30, 'statusMessage': 'AI Security Runtime [continuation-guard-v0.1]',
     }]}]
     return result
 
@@ -286,7 +292,7 @@ class CodexIntegrationAdapter:
 
     @staticmethod
     def _related(event, group):
-        return any((h.get('server') == SERVER and h.get('tool') in {'handle_hook_event', 'handle_readiness_event'})
+        return any((h.get('server') == SERVER and h.get('tool') in {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'})
                    or (h.get('type') == 'command' and ('security-check' in str(h.get('command', ''))
                        or h.get('statusMessage') == 'AI Security Runtime [hook-v1]')) for h in group['hooks'])
 
@@ -365,6 +371,7 @@ class CodexIntegrationAdapter:
                 'installation': 'NOT_INSTALLED' if absent else 'CONFIGURED', 'runtime': {**capability, 'kind': runtime['kind']},
                 'mode': capability['mode'], 'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED'},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
+                'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
                 'readiness': readiness, 'legacy_hook': {'status': 'LEGACY_HOOK_PRESENT' if legacy else ('POTENTIAL_DUPLICATE_HOOK' if 'POTENTIAL_DUPLICATE_HOOK' in diagnostics else 'NONE')},
                 'overall': overall, 'diagnostics': diagnostics, 'live_connection': 'UNKNOWN',
                 'cold_start_host_trial': 'PENDING_ACTUAL_DESKTOP', 'project_trust': 'HOST_MANAGED_PREREQUISITE'}

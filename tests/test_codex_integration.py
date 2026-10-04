@@ -68,7 +68,8 @@ def test_setup_idempotent_preserves_all_unrelated_bytes_and_mode(adapter, repo):
         assert call(adapter, repo)['operation'] == 'ALREADY_CONFIGURED'
         assert snapshots == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in snapshots}
     value = json.loads(b.read_bytes())
-    assert value['note'] == 'keep' and value['hooks']['Stop'] == original['hooks']['Stop']
+    assert value['note'] == 'keep' and value['hooks']['Stop'][0] == original['hooks']['Stop'][0]
+    assert value['hooks']['Stop'][1] == product_hooks()['hooks']['Stop'][0]
     assert value['hooks']['PostToolUse'][0] == original['hooks']['PostToolUse'][0]
     assert len(value['hooks']['SessionStart']) == 1
 
@@ -308,7 +309,7 @@ def test_exact_legacy_generator_plus_provenance_migrates(adapter, repo):
     assert call(adapter, repo)['operation'] == 'CONFIGURED'
     value = json.loads(config(repo)[1].read_bytes())
     assert all(h['type'] == 'mcp_tool' for groups in value['hooks'].values() for g in groups for h in g['hooks'])
-    assert 'Stop' not in value['hooks']
+    assert value['hooks']['Stop'] == product_hooks()['hooks']['Stop']
 
 
 def test_unowned_similar_command_and_manual_poc_retained(adapter, repo):

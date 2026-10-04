@@ -54,6 +54,10 @@ async def accept(command):
         entry = tomllib.loads(config.read_text(encoding='utf-8'))['mcp_servers']['ai_security_runtime']
         assert entry['command'] == command[0] and entry['required'] is True
         assert entry['env']['SECURITY_RUNTIME_WORKSPACE'] == str(root)
+        generated = json.loads(hooks.read_bytes())
+        owned_stop = generated['hooks']['Stop'][1]['hooks'][0]
+        assert owned_stop['type'] == 'mcp_tool' and owned_stop['tool'] == 'handle_stop_event'
+        assert owned_stop['input']['stop_hook_active'] == '${stop_hook_active}'
         source = root / 'UnsafeTlsService.java'
         params = StdioServerParameters(command=entry['command'], args=entry['args'], cwd=entry['cwd'], env={**env, **entry['env']})
         called = []
@@ -72,6 +76,9 @@ async def accept(command):
                     assert ready['status'] == 'READY' and not any(ready['execution'].values()), ready
                     assert not (state / 'scans.db').exists()
                     assert not source.exists()
+                    stop_claims = dict(event='Stop', workspace_path=str(root), session_id='new-host-session', stop_hook_active=False)
+                    quiet = await call('handle_stop_event', stop_claims)
+                    assert quiet['status'] == 'ALLOW_STOP' and not any(quiet['execution'].values())
                     source.write_text(SAFE, encoding='utf-8')  # simulated first ordinary host edit
                     claims = dict(event='PostToolUse', workspace_path=str(root), session_id='new-host-session', tool_name='apply_patch')
                     baseline = await call('handle_hook_event', claims)
@@ -82,8 +89,17 @@ async def accept(command):
                     decision = finding['remediation']
                     assert finding['new_families'] == 1 and decision['action'] == 'AUTO_FIX', finding
                     original_refs = decision['prepare']['arguments']
+                    # Force the observed missing-prepare state. This SDK driver
+                    # consumes the Stop handoff; it is not model continuation.
+                    guarded = await call('handle_stop_event', stop_claims)
+                    assert guarded['decision'] == 'block' and guarded['host_continuation_attempt_count'] == 1
+                    assert not any(guarded['execution'].values())
+                    resumed = json.loads(guarded['reason'][guarded['reason'].index('{'):])
+                    assert resumed == decision['prepare']
                     packet = await call('prepare_task_fix', original_refs)
                     assert packet['status'] == 'READY_FOR_HOST_FIX' and not any(packet['execution'].values())
+                    prepared_stop = await call('handle_stop_event', {**stop_claims, 'stop_hook_active': True})
+                    assert prepared_stop['status'] == 'ALLOW_STOP' and 'decision' not in prepared_stop
                     await asyncio.sleep(1.1)
                     source.write_text(SAFE, encoding='utf-8')  # simulated host authorized edit
                     closed = await call('handle_hook_event', claims)
@@ -91,6 +107,8 @@ async def accept(command):
                     assert closed['resolved_families'] == 1 and receipt['status'] == 'SCANNER_VERIFIED_RESOLVED'
                     assert receipt['phase'] == 'CLOSED' and receipt['task_ref'] == original_refs['task_ref']
                     assert receipt['grant_id'] == decision['grant_id'] and not receipt['explicit_verification_required']
+                    closed_stop = await call('handle_stop_event', {**stop_claims, 'stop_hook_active': True})
+                    assert closed_stop['status'] == 'ALLOW_STOP' and 'decision' not in closed_stop
                     functional = await call('prepare_functional_verification', original_refs)
                     assert functional['functional_verification']['status'] == 'NOT_AVAILABLE'
                     assert functional['overall_status'] == 'SECURITY_VERIFIED_FUNCTION_UNKNOWN'
@@ -107,12 +125,16 @@ async def accept(command):
         assert cli(['integration', 'status', 'codex'])['readiness']['status'] == 'READINESS_NOT_OBSERVED'
         assert cli(['integration', 'remove', 'codex'])['operation'] == 'REMOVED'
         return {'status': 'PASS', 'duration_seconds': round(time.monotonic() - started, 2),
-                'host_dispatch': 'SYNTHETIC_SDK_NOT_DESKTOP', 'actual_desktop_cold_start': 'PENDING_ACTUAL_DESKTOP',
+                'host_dispatch': 'SYNTHETIC_SDK_NOT_DESKTOP', 'actual_desktop_stop_continuation': 'PENDING_ACTUAL_DESKTOP',
                 'runtime_kind': installed['runtime']['kind'], 'workspace_unicode_and_spaces': 'PASS',
                 'lifecycle': 'SETUP_STATUS_IDEMPOTENT_REPAIR_REMOVE_REINSTALL_PASS',
                 'first_edit': baseline['status'], 'scanner_run': baseline['scanner_run'], 'readiness': ready['readiness'],
                 'new_families': finding['new_families'], 'resolved_families': closed['resolved_families'],
                 'security_verification': receipt['status'], 'explicit_verify_called': False,
+                'auto_fix_issued': True, 'posttool_natural_continuation': 'NOT_TESTED_DRIVER_FORCED_FALLBACK',
+                'stop_continuation_invoked': True, 'stop_continuation_count': 1,
+                'prepare_task_fix_called': True, 'secure_edit_applied': 'SIMULATED_HOST_ONLY',
+                'explicit_verify_deduped': True, 'functional_prepare_called': True,
                 'functional': functional['functional_verification']['status'], 'functional_run_called': False,
                 'warmup_called': False, 'target_build': False, 'network': False, 'model': False,
                 'source_edit': 'SIMULATED_HOST_ONLY', 'ground_truth': 'NOT_PERFORMED',
