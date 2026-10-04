@@ -1,0 +1,176 @@
+{
+  "stage": "Auto Remediation Continuation Guard v0.1",
+  "starting_head": "04c145e8bd5dbe5d266290a1db109e5d220d6368",
+  "branch": "feature/runtime-mvp",
+  "runtime_version": "0.3.1",
+  "contract": "developer-guidance-v0.3",
+  "latest_user_report": {
+    "effective_cold_start": "USER_REPORTED_PASS",
+    "readiness": "READINESS_OBSERVED_OVERALL_READY_USER_REPORTED_PASS",
+    "lifecycle": "USER_REPORTED_PASS",
+    "auto_fix_issued": "USER_REPORTED_PASS",
+    "host_prepare_continuation": "USER_REPORTED_FAIL_UNSTABLE",
+    "prepare_called": false,
+    "secure_edit_applied": false,
+    "resolved": 0,
+    "security_receipt": false,
+    "functional_entry": false
+  },
+  "fresh_desktop_stop_trial": "PENDING_ACTUAL_DESKTOP",
+  "stop_scope": "POLICY_AUTO_PREPARE_REQUIRED_ONLY",
+  "stop_budget": 2,
+  "no_stop_execution": [
+    "scan",
+    "prepare",
+    "model",
+    "source_edit",
+    "build",
+    "network",
+    "grant_issue",
+    "grant_refresh"
+  ],
+  "tests": {
+    "focused": "116 passed in 177.41s (0:02:57)",
+    "targeted_before_final_retry_cleanup": "497 passed in 555.13s (0:09:15)",
+    "post_retry_cleanup": "3 passed in 17.86s",
+    "final_full_offline": "951 passed, 6 skipped, 6 subtests passed in 666.89s (0:11:06)",
+    "baseline_from_AS": "894 passed /6 skipped /6 subtests passed",
+    "skipped": [
+      "tests/test_e2e_real.py:38: real scanner binaries required",
+      "tests/test_e2e_real.py:58: real scanner binaries required",
+      "tests/test_e2e_real.py:68: real scanner binaries required",
+      "tests/test_e2e_real.py:80: real scanner binaries required",
+      "tests/test_e2e_real.py:120: real scanner binaries required",
+      "tests/test_e2e_real.py:154: real scanner binaries required"
+    ]
+  },
+  "gates": {
+    "final-focused": {
+      "exit": 0,
+      "seconds": 178.02
+    },
+    "targeted": {
+      "exit": 0,
+      "seconds": 555.68
+    },
+    "final-full": {
+      "exit": 0,
+      "seconds": 667.48
+    },
+    "package": {
+      "exit": 0,
+      "seconds": 2.94
+    },
+    "clean": {
+      "exit": 0,
+      "seconds": 67.02,
+      "system_site_packages": false,
+      "editable": false,
+      "package_download": false,
+      "cached_wheels": 117
+    },
+    "sdk": {
+      "exit": 0,
+      "seconds": 46.18
+    },
+    "integrity": {
+      "status": "PASS",
+      "wheel_sdist_source_bytes": [
+        "codex_integration",
+        "integration_lifecycle",
+        "integration_readiness",
+        "cli",
+        "host_guidance",
+        "mcp_server",
+        "remediation",
+        "host_continuation"
+      ],
+      "unchanged_core_modules": [
+        "hook_runtime",
+        "equivalence",
+        "scanners",
+        "sast",
+        "remediation_policy",
+        "task_fix",
+        "verification",
+        "verification_policy",
+        "functional_verification",
+        "functional_execution",
+        "functional_verifiers",
+        "hook_adapters"
+      ]
+    },
+    "native": {
+      "exit": 0,
+      "seconds": 71.33
+    }
+  },
+  "windows_native": "PASS",
+  "ci": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+  "source_edit": "SYNTHETIC_HOST_ONLY",
+  "scanner_network": false,
+  "runtime_model": false,
+  "target_build": false,
+  "secret_rotation": false,
+  "ground_truth": "UNREVIEWED/null",
+  "quality": "NOT_MEASURED",
+  "maven_ab": "PENDING_ENVIRONMENT_PREREQUISITES",
+  "three_developer_trials": "PENDING",
+  "next_stage": "PLANNED; stop after delivery",
+  "implementation_head": "17a638f492d277d6bc9a104b019a5bbf081cb2ee",
+  "remote_push": "origin/feature/runtime-mvp SUCCESS",
+  "native_source_commit": "17a638f492d277d6bc9a104b019a5bbf081cb2ee",
+  "native_first_attempt": {
+    "status": "FAILED_ACTIVE_BUNDLE_DLL_LOCK",
+    "seconds": 29.09
+  },
+  "old_bundle_restoration": {
+    "status": "PASS",
+    "operation": "RESTORE_MISSING_UNCHANGED_RESOURCES_ONLY",
+    "files_restored": 74,
+    "old_executable_changed": false,
+    "old_source_commit": "e68cff74c97a0a7a45df2381015b5906b072a82f",
+    "old_cli_version_smoke": "PASS",
+    "process_terminated": false,
+    "network": false
+  },
+  "implementation_ci": [
+    {
+      "workflow": "Compliance",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37180389240",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 1,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Runtime tests",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37180389244",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 2,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Package integrity",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37180389226",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 2,
+      "runner_assigned": false,
+      "steps_executed": false
+    },
+    {
+      "workflow": "Standalone artifacts",
+      "url": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/37180389225",
+      "github_conclusion": "failure",
+      "classified_status": "PENDING_RERUN_AFTER_ACCOUNT_RECOVERY",
+      "jobs": 4,
+      "runner_assigned": false,
+      "steps_executed": false
+    }
+  ],
+  "final_docs_ci": "QUERY_AFTER_FINAL_DOCS_PUSH; final reply reports exact runs"
+}
