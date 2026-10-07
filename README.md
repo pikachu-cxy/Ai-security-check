@@ -1,10 +1,9 @@
 # AI Security Runtime
 
-The bundled `ai-security-core 1.1.0` catalog has 22 BETA Java rules and two Python
-rules. Rule coverage participates in planning: no applicable rules means
-`NOT_COVERED` and no Semgrep preparation or execution. Mixed Java and uncovered
-JavaScript reports `CODE_SAST=PARTIAL`. See [actual rule coverage](docs/RULE_COVERAGE.md)
-for the catalog, quality gate and limitations.
+Rule Program v1 is capability-led: 10 detection capabilities, 2 CORE and 8
+VALIDATED. It contains 19 capability-owned Semgrep variants, 29 installed
+Semgrep rules, 8 legacy Java EXPERIMENTAL rules default-off, and 2 existing
+Python rules. See the [Rule Program](docs/RULE_PROGRAM.md) and [coverage matrix](docs/RULE_COVERAGE_MATRIX.md).
 
 CLI scans show actual preparation and scanner states on **stderr** after a 500 ms
 delay. Final human results and JSON remain on **stdout**. Interactive terminals
@@ -20,15 +19,52 @@ stops external engine processes. Library and MCP calls do not enable CLI progres
 
 > **Agent writes. Security Runtime verifies.**
 
-AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through **CLI** and **MCP**.
+AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through the CLI, verified host integrations, and Generic MCP.
 
 - **Local-first:** project source stays on your machine by default.
-- **One-command setup:** owned project setup for **Codex**, plus existing **Cursor** and **WorkBuddy** onboarding.
-- **Generic MCP:** works with other MCP-compatible coding tools such as Codex.
+- **Codex:** Global Runtime Integration is **DESKTOP VERIFIED**.
+- **Cursor:** detection and advisory remediation are **DESKTOP VERIFIED** on the observed path.
+- **Generic MCP:** remains available for MCP-compatible clients.
 - **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
 - **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
 
 > Developer Alpha. Current checks can find security issues, but a SAFE result is not a guarantee that a project is secure.
+
+## Rule Program v1
+
+The product speaks in capabilities rather than raw rule-file counts:
+
+- 10 detection capabilities: 2 CORE and 8 VALIDATED
+- 19 capability-owned Semgrep variants
+- 29 total installed Semgrep rules
+- 8 legacy Java EXPERIMENTAL rules, default-off
+- 2 existing Python rules
+
+The current Java capabilities are:
+
+| Capability | Maturity |
+| --- | --- |
+| TLS Hostname Verification Disabled | CORE |
+| Hardcoded Secret | CORE |
+| SQL Injection | VALIDATED |
+| Command Injection | VALIDATED |
+| SSRF | VALIDATED |
+| Path Traversal | VALIDATED |
+| Arbitrary File Read | VALIDATED |
+| Arbitrary File Write | VALIDATED |
+| XXE | VALIDATED |
+| Unsafe Deserialization | VALIDATED |
+
+```text
+Capability → underlying scanner rules → Finding Family / Episode
+           → Policy → remediation / proof
+```
+
+The synthetic R0 corpus reports 46 TP / 28 TN / 0 FP / 0 FN. This is not
+production-grade accuracy.
+
+See [Rule Program v1](docs/RULE_PROGRAM.md) and the [coverage matrix](docs/RULE_COVERAGE_MATRIX.md)
+for the detailed mapping, acceptance evidence, and limitations.
 
 ---
 
@@ -62,9 +98,8 @@ security-check setup workbuddy
 security-check setup codex --path .
 ```
 
-For Codex, see [setup, status, repair/remove and fresh Desktop acceptance](docs/CODEX_INTEGRATION.md).
-A recent readiness observation is not a safety result. Actual Desktop cold-start
-acceptance for this lifecycle version remains pending; no manual warm-up is a product prerequisite.
+For Codex, see [setup and integration details](docs/CODEX_INTEGRATION.md). The
+current Global Runtime Integration status is **DESKTOP VERIFIED**.
 
 ## 2. Run your first CLI scan
 
@@ -154,7 +189,7 @@ RESOLVED
 
 ---
 
-## Cursor — one-command setup
+## Cursor — production status and setup
 
 Inside the Git project you want to protect:
 
@@ -179,7 +214,7 @@ Restart Cursor to load the project connection.
 Code stays local.
 ```
 
-The Runtime manages a project-level connection in:
+The Runtime can manage a project-level connection in:
 
 ```text
 .cursor/mcp.json
@@ -193,11 +228,28 @@ Then ask Cursor:
 
 > Use AI Security Runtime to scan the current Git diff. Show me the findings. If there are security issues, fix them and call verify afterwards.
 
-A real acceptance pass means Cursor actually calls the Runtime and completes:
+The current production Cursor events are:
 
 ```text
-scan_diff → finding → fix → verify → RESOLVED
+sessionStart
+afterFileEdit
+afterShellExecution
+stop
 ```
+
+Current status:
+
+```text
+Detection Runtime       = DESKTOP VERIFIED
+First-Scan Attribution   = DESKTOP VERIFIED
+Finding / Policy         = DESKTOP VERIFIED
+Advisory Remediation     = DESKTOP VERIFIED
+Native Chat Feedback     = HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH
+Automatic Continuation   = PENDING_HOST_CAPABILITY
+```
+
+`postToolUse` and `additional_context` are not part of the current production
+Cursor path. A configuration file being written is not itself Desktop verification.
 
 Check integration state:
 
@@ -254,9 +306,26 @@ security-check integrations
 
 ---
 
-## Codex and other MCP-compatible tools
+## Codex Global Runtime Integration
 
-Codex is currently supported through the **Generic MCP** path rather than a dedicated native installer.
+Codex Global Runtime Integration = **DESKTOP VERIFIED**.
+
+The verified core chain is:
+
+```text
+AI edit
+  → Global Hook
+  → mutation reconciliation
+  → Scanner
+  → Finding / Policy
+  → INLINE_PREPARED remediation
+  → Exact Edit Envelope
+  → real Scanner proof
+  → CLOSED
+```
+
+Generic MCP remains available as an interface for Codex and other MCP clients,
+but it is not the only or primary Codex integration path.
 
 Run this from the Git project you want to protect:
 
@@ -311,7 +380,8 @@ Use the same temporary vulnerable Git project for all clients.
 | JSON | `--json` returns parseable machine-readable output |
 | Cursor | `security-check setup cursor` succeeds and Cursor can call `scan_diff` |
 | WorkBuddy | `security-check setup workbuddy` succeeds and WorkBuddy can call `scan_diff` |
-| Codex / Generic MCP | generated MCP config allows the client to call `scan_diff` |
+| Codex Global Runtime | Global Hook → reconciliation → Scanner → Policy → proof → CLOSED |
+| Generic MCP | generated configuration allows the client to call Runtime tools |
 | Fix loop | finding → agent fix → `verify` → `RESOLVED` |
 | Workspace isolation | another repository does not reuse findings from the previous repository |
 | Repeated setup | running setup repeatedly does not duplicate or damage MCP config |
@@ -459,6 +529,21 @@ Release status is intended to communicate:
 - **BLOCKED** — the current policy found a release-blocking issue.
 
 A SAFE result is not a claim of absolute security.
+
+## Next stage
+
+```text
+R1 Detection Quality Hardening
+  → real OSS/internal corpus
+  → independent Ground Truth
+  → FP/FN measurement
+  → precision/recall
+  → evidence-based CORE promotion
+```
+
+The R0 synthetic corpus is not a production accuracy claim. Broader corpus
+coverage and independent review are required before promoting VALIDATED
+capabilities to CORE.
 
 ---
 
@@ -621,10 +706,10 @@ See:
 | Interface | Status |
 | --- | --- |
 | CLI | Supported |
-| Cursor native onboarding | Supported |
-| WorkBuddy native onboarding | Supported |
-| Generic stdio MCP | Supported |
-| Codex | Generic MCP |
+| Cursor | Detection / Attribution / Finding-Policy / Advisory Remediation — DESKTOP VERIFIED; native feedback unavailable on observed path |
+| WorkBuddy | Project setup available; Desktop invocation verified separately |
+| Generic stdio MCP | Available interface |
+| Codex | Global Runtime Integration — DESKTOP VERIFIED; Generic MCP also available |
 | Other MCP coding tools | Generic MCP |
 | Git pre-commit | Supported |
 | CI/CD | CLI foundation available |

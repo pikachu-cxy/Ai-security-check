@@ -1,9 +1,9 @@
 # AI Security Runtime
 
-默认 `ai-security-core 1.1.0` 包含 22 条 BETA Java 规则和两条 Python 规则。
-Rule Coverage 参与执行计划：零适用规则显示 `NOT_COVERED`，不准备、不启动 Semgrep；
-Java 已执行而 JavaScript 无规则时，`CODE_SAST=PARTIAL`。
-详见 [实际规则覆盖](docs/RULE_COVERAGE.md)，包括完整 catalog、质量门禁及覆盖边界。
+Rule Program v1 以 Capability 为产品口径：10 个检测能力，其中 2 个 CORE、8 个
+VALIDATED；包含 19 个 capability-owned Semgrep variants、29 个已安装 Semgrep
+rules、8 个默认关闭的 legacy Java EXPERIMENTAL rules，以及 2 个既有 Python rules。
+详见 [Rule Program](docs/RULE_PROGRAM.md) 和 [覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)。
 
 扫描超过 500 ms 时，CLI 会在 **stderr** 显示实际的项目发现、引擎准备、
 下载、数据库准备和扫描状态；最终结果及 JSON 仍输出到 **stdout**。
@@ -24,12 +24,47 @@ Java 已执行而 JavaScript 无规则时，`CODE_SAST=PARTIAL`。
 AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运行时。它可以检查 AI 编程 Agent 生成或修改的代码，并通过 **CLI** 和 **MCP** 向开发者与 AI Coding 工具提供统一的安全能力。
 
 - **本地优先**：项目源码默认保留在本机。
-- **一条命令接入**：原生支持 **Cursor** 和 **WorkBuddy**。
-- **通用 MCP**：Codex 等其他支持 MCP 的 AI Coding 工具也可以接入。
+- **Codex**：Global Runtime Integration = **DESKTOP VERIFIED**。
+- **Cursor**：Detection Runtime 与 Advisory Remediation = **DESKTOP VERIFIED**（观察路径）。
+- **通用 MCP**：仍作为可用的 MCP 接口保留。
 - **CLI**：不依赖任何 AI Coding 工具，可独立使用，也适合后续接入 CI/CD。
 - **不虚报安全**：如果部分扫描能力不可用，会降低 Coverage，而不是把项目误判为安全。
 
 > 当前为 Developer Alpha。SAFE 仅表示已执行检查在所述范围内未发现阻断项，不代表项目绝对安全。
+
+## Rule Program v1
+
+产品按 Capability 描述能力，而不是按 YAML 文件数量描述产品：
+
+- 10 个检测能力：2 个 CORE、8 个 VALIDATED
+- 19 个 capability-owned Semgrep variants
+- 29 个已安装 Semgrep rules
+- 8 个默认关闭的 legacy Java EXPERIMENTAL rules
+- 2 个既有 Python rules
+
+当前 Java 能力：
+
+| 能力 | 成熟度 |
+| --- | --- |
+| TLS Hostname Verification Disabled | CORE |
+| Hardcoded Secret | CORE |
+| SQL Injection | VALIDATED |
+| Command Injection | VALIDATED |
+| SSRF | VALIDATED |
+| Path Traversal | VALIDATED |
+| Arbitrary File Read | VALIDATED |
+| Arbitrary File Write | VALIDATED |
+| XXE | VALIDATED |
+| Unsafe Deserialization | VALIDATED |
+
+```text
+Capability → underlying scanner rules → Finding Family / Episode
+           → Policy → remediation / proof
+```
+
+R0 synthetic corpus 为 46 TP / 28 TN / 0 FP / 0 FN；这不代表 production-grade accuracy。
+
+详见 [Rule Program v1](docs/RULE_PROGRAM.md) 和 [覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)。
 
 ---
 
@@ -223,7 +258,7 @@ RESOLVED
 
 ---
 
-## Cursor —— 一条命令接入
+## Cursor —— 当前 production 状态与接入
 
 进入你希望保护的 Git 项目：
 
@@ -248,7 +283,7 @@ Restart Cursor to load the project connection.
 Code stays local.
 ```
 
-Runtime 会管理项目级配置：
+Runtime 可以管理项目级配置：
 
 ```text
 .cursor/mcp.json
@@ -264,11 +299,28 @@ Runtime 会管理项目级配置：
 
 > 使用 AI Security Runtime 检查当前 Git diff，告诉我发现了哪些安全问题。如果存在问题，请修复，并在修复后调用 verify 验证。
 
-真正通过验收的标准不是“配置文件生成成功”，而是 Cursor 能完成：
+当前 production Cursor events：
 
 ```text
-scan_diff → Finding → 修复 → verify → RESOLVED
+sessionStart
+afterFileEdit
+afterShellExecution
+stop
 ```
+
+当前状态：
+
+```text
+Detection Runtime       = DESKTOP VERIFIED
+First-Scan Attribution   = DESKTOP VERIFIED
+Finding / Policy         = DESKTOP VERIFIED
+Advisory Remediation     = DESKTOP VERIFIED
+Native Chat Feedback     = HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH
+Automatic Continuation   = PENDING_HOST_CAPABILITY
+```
+
+`postToolUse` 和 `additional_context` 不属于当前 production Cursor 路径。
+配置文件写入成功不等于 Desktop 已验证。
 
 查看接入状态：
 
@@ -322,9 +374,25 @@ security-check integrations
 
 ---
 
-## Codex 和其他支持 MCP 的工具
+## Codex Global Runtime Integration
 
-Codex 当前通过 **Generic MCP** 接入，不提供专属一键安装。
+Codex Global Runtime Integration = **DESKTOP VERIFIED**。
+
+已验证的核心链：
+
+```text
+AI edit
+  → Global Hook
+  → mutation reconciliation
+  → Scanner
+  → Finding / Policy
+  → INLINE_PREPARED remediation
+  → Exact Edit Envelope
+  → real Scanner proof
+  → CLOSED
+```
+
+Generic MCP 仍可用于 Codex 和其他 MCP 客户端，但不再是 Codex 唯一或主要的集成方式。
 
 在你想保护的 Git 项目中执行：
 
@@ -383,7 +451,8 @@ security-check scan --mode quick --json
 | JSON 输出 | `--json` 返回可解析的机器可读结果 |
 | Cursor | `security-check setup cursor` 成功，Cursor 能调用 `scan_diff` |
 | WorkBuddy | `security-check setup workbuddy` 成功，WorkBuddy 能调用 `scan_diff` |
-| Codex / Generic MCP | 生成配置后客户端能真实调用 `scan_diff` |
+| Codex Global Runtime | Global Hook → reconciliation → Scanner → Policy → proof → CLOSED |
+| Generic MCP | 生成配置后客户端能真实调用 Runtime Tools |
 | 修复闭环 | Finding → Agent 修复 → `verify` → `RESOLVED` |
 | Workspace 隔离 | 切换到另一个仓库后不会读取上一个项目的 Finding |
 | 重复 Setup | 多次执行 setup 不重复、不破坏 MCP 配置 |
@@ -527,6 +596,20 @@ Release Status：
 - **BLOCKED**：当前策略发现需要阻断的问题。
 
 SAFE 不代表项目绝对安全。
+
+## 下一阶段
+
+```text
+R1 Detection Quality Hardening
+  → real OSS/internal corpus
+  → independent Ground Truth
+  → FP/FN measurement
+  → precision/recall
+  → evidence-based CORE promotion
+```
+
+R0 synthetic corpus 不是生产准确率结论。VALIDATED 能力在升级为 CORE 前，仍需要
+更广泛语料和独立复核。
 
 ---
 
@@ -687,10 +770,10 @@ security-check scan --rules <directory>
 | 接口 | 当前状态 |
 | --- | --- |
 | CLI | 已支持 |
-| Cursor 原生接入 | 已支持 |
-| WorkBuddy 原生接入 | 已支持 |
-| Generic stdio MCP | 已支持 |
-| Codex | Generic MCP |
+| Cursor | Detection / Attribution / Finding-Policy / Advisory Remediation = DESKTOP VERIFIED |
+| WorkBuddy | 项目配置可用，Desktop 调用需单独验证 |
+| Generic stdio MCP | 可用接口 |
+| Codex | Global Runtime Integration = DESKTOP VERIFIED；Generic MCP 仍可用 |
 | 其他 MCP Coding 工具 | Generic MCP |
 | Git pre-commit | 已支持 |
 | CI/CD | 已具备 CLI 基础 |
