@@ -1,0 +1,23 @@
+{
+  "status": "PASS",
+  "focused": "160 passed",
+  "new_cases": 25,
+  "focused_duration_seconds": 121.85,
+  "full_summary": "1414 passed, 9 skipped, 6 subtests passed in 1853.57s (0:30:53)",
+  "full_duration_seconds": 1854.15,
+  "skipped_details": [
+    "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+    "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+    "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+    "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+    "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+    "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+    "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+    "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+    "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+  ],
+  "temporary_codex_home": true,
+  "active_runtime_replaced": false,
+  "commit": false,
+  "push": false
+}

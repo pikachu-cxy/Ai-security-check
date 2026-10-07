@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "duration_seconds": 3.54,
+  "wheel_sdist": true,
+  "package_compliance": true,
+  "bundled_source_bytes_checked": 101,
+  "clean_install": "NOT_RUN_NOT_REQUIRED_THIS_SCOPE",
+  "standalone": "NOT_REBUILT_ACTIVE_BUNDLES_PRESERVED",
+  "wheel_sha256": "6ff787d05c21a7b588e792d28008b6702f7bbb8e175fcdd5eea81fcd0af8535e",
+  "sdist_sha256": "c201696d2b99610c3403b9baa8d48037e7dc5dfb0fbec9fddfc6892fb175d9aa",
+  "network": false
+}

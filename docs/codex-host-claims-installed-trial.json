@@ -1,0 +1,59 @@
+{
+  "temporary_codex_home": true,
+  "real_codex_home_accessed": false,
+  "active_runtime_replaced": false,
+  "network": false,
+  "model": false,
+  "wheel_sha256": "33f286f45ff59cc036d036ae2644b95ae6d331b2ed570efac5f7dc8e417e03dd",
+  "runtime_module_origin": "TEMPORARY_VENV_SITE_PACKAGES",
+  "codex_cli_config_parse_and_mcp_discovery": "PASS",
+  "codex_cli_version": "codex-cli 0.160.0",
+  "posttooluse_input_fields": [
+    "event",
+    "permission_mode",
+    "session_id",
+    "tool_input",
+    "tool_name",
+    "tool_use_id",
+    "turn_id",
+    "workspace_path"
+  ],
+  "definition_hash": "db9a5d496fc73450eecd79b8b49092c8068e4b83a23aec3034d281ededd19afc",
+  "status": "PASS",
+  "lifecycle": [
+    {
+      "action": "setup",
+      "overall": "CONFIGURED",
+      "operation": "CONFIGURED"
+    },
+    {
+      "action": "setup",
+      "overall": "CONFIGURED",
+      "operation": "ALREADY_CONFIGURED"
+    },
+    {
+      "action": "repair",
+      "overall": "CONFIGURED",
+      "operation": "ALREADY_CONFIGURED"
+    },
+    {
+      "action": "repair",
+      "overall": "CONFIGURED",
+      "operation": "ALREADY_CONFIGURED"
+    },
+    {
+      "action": "status",
+      "overall": "CONFIGURED",
+      "operation": null
+    },
+    {
+      "action": "doctor",
+      "overall": "CONFIGURED",
+      "operation": null
+    }
+  ],
+  "uninstall": "PASS",
+  "original_config_byte_preservation": "PASS",
+  "host_state_value_preservation": "PASS",
+  "duration_seconds": 34.18
+}

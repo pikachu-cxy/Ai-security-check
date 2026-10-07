@@ -1,0 +1,683 @@
+{
+  "status": "PASS",
+  "kind": "ACTUAL_MANAGED_SCANNER",
+  "samples": [
+    {
+      "label": "cold_safe",
+      "wall_ms": 7835.689,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 515.994
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3905.071,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.513,
+          "total": 7835.522,
+          "workspace_discovery": 77.182,
+          "target_preparation": 96.423,
+          "rule_planning": 146.522,
+          "scanner_orchestration": 7506.752,
+          "result_normalization_policy": 0.088
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 459.962,
+              "version_probe_invocation": 2541.671,
+              "capability_preparation": 3449.805,
+              "rule_config_preparation": 148.154,
+              "process_invocation": 3904.538,
+              "process_creation": 5.089,
+              "parsing_normalization": 0.051,
+              "engine_reported_rules_parse": 15.008,
+              "engine_reported_config_time": 493.492,
+              "engine_reported_core_time": 249.023,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 821.006,
+              "scanner_total": 7505.76,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS",
+              "selected_config": "MISS"
+            },
+            "rule_pack_cache": "MISS",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 145.766,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 26.069,
+              "version_probe_invocation": 374.931,
+              "capability_preparation": 455.951,
+              "process_invocation": 515.665,
+              "process_creation": 16.751,
+              "parsing_normalization": 0.199,
+              "scanner_total": 974.009,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "warm_safe_2",
+      "wall_ms": 4617.868,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 599.419
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3881.282,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.72,
+          "total": 4617.711,
+          "workspace_discovery": 91.098,
+          "target_preparation": 94.924,
+          "rule_planning": 11.755,
+          "scanner_orchestration": 4411.017,
+          "result_normalization_policy": 0.136
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 511.4,
+              "capability_preparation": 514.075,
+              "rule_config_preparation": 11.748,
+              "process_invocation": 3880.931,
+              "process_creation": 4.241,
+              "parsing_normalization": 0.043,
+              "engine_reported_rules_parse": 14.786,
+              "engine_reported_config_time": 507.338,
+              "engine_reported_core_time": 238.048,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 817.06,
+              "scanner_total": 4409.901,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 10.814,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 28.674,
+              "capability_preparation": 55.947,
+              "process_invocation": 599.079,
+              "process_creation": 22.36,
+              "parsing_normalization": 0.205,
+              "scanner_total": 657.309,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "warm_safe_3",
+      "wall_ms": 4457.043,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 601.239
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3711.337,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.74,
+          "total": 4456.882,
+          "workspace_discovery": 88.496,
+          "target_preparation": 106.426,
+          "rule_planning": 13.478,
+          "scanner_orchestration": 4239.627,
+          "result_normalization_policy": 0.066
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 511.15,
+              "capability_preparation": 514.25,
+              "rule_config_preparation": 10.685,
+              "process_invocation": 3710.876,
+              "process_creation": 4.569,
+              "parsing_normalization": 0.052,
+              "engine_reported_rules_parse": 14.0,
+              "engine_reported_config_time": 445.545,
+              "engine_reported_core_time": 247.822,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 775.144,
+              "scanner_total": 4238.549,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 12.819,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 26.069,
+              "capability_preparation": 53.354,
+              "process_invocation": 600.939,
+              "process_creation": 20.487,
+              "parsing_normalization": 0.211,
+              "scanner_total": 656.311,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "rebuilt_registry_safe",
+      "wall_ms": 7592.651,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 511.826
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3635.508,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 9.193,
+          "total": 7592.434,
+          "workspace_discovery": 83.094,
+          "target_preparation": 97.439,
+          "rule_planning": 121.136,
+          "scanner_orchestration": 7281.375,
+          "result_normalization_policy": 0.133
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 481.373,
+              "version_probe_invocation": 2596.579,
+              "capability_preparation": 3515.498,
+              "rule_config_preparation": 126.085,
+              "process_invocation": 3635.229,
+              "process_creation": 3.417,
+              "parsing_normalization": 0.053,
+              "engine_reported_rules_parse": 15.002,
+              "engine_reported_config_time": 441.988,
+              "engine_reported_core_time": 255.383,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 775.411,
+              "scanner_total": 7280.192,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS",
+              "selected_config": "MISS"
+            },
+            "rule_pack_cache": "MISS",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 120.434,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 28.592,
+              "version_probe_invocation": 384.156,
+              "capability_preparation": 475.175,
+              "process_invocation": 511.231,
+              "process_creation": 20.753,
+              "parsing_normalization": 0.18,
+              "scanner_total": 989.241,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "five_file_safe",
+      "wall_ms": 4536.041,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 547.202
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 512.58
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 522.302
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 510.774
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 487.763
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3829.88,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 9.579,
+          "total": 4535.785,
+          "workspace_discovery": 89.335,
+          "target_preparation": 96.434,
+          "rule_planning": 17.277,
+          "scanner_orchestration": 4323.022,
+          "result_normalization_policy": 0.085
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 473.651,
+              "capability_preparation": 476.324,
+              "rule_config_preparation": 13.432,
+              "process_invocation": 3829.622,
+              "process_creation": 3.958,
+              "parsing_normalization": 0.046,
+              "engine_reported_rules_parse": 15.571,
+              "engine_reported_config_time": 449.788,
+              "engine_reported_core_time": 247.315,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 780.145,
+              "scanner_total": 4321.815,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 16.687,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 28.454,
+              "capability_preparation": 55.144,
+              "process_invocation": 2578.249,
+              "process_creation": 107.444,
+              "parsing_normalization": 1.166,
+              "scanner_total": 2645.778,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 5
+            },
+            "cache": {
+              "version_probe": "HIT"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 5,
+          "profile_files": 5,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "five_file_risk",
+      "wall_ms": 4603.556,
+      "invocations": [
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 582.796
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 546.835
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 541.857
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 482.333
+        },
+        {
+          "type": "SECRET_SCAN",
+          "wall_ms": 466.268
+        },
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3849.874,
+          "rules": 21,
+          "files": 1
+        }
+      ],
+      "diagnostics": {
+        "timing_ms": {
+          "state_persistence": 9.149,
+          "total": 4603.312,
+          "workspace_discovery": 90.063,
+          "target_preparation": 98.727,
+          "rule_planning": 16.493,
+          "scanner_orchestration": 4388.745,
+          "result_normalization_policy": 0.086
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 515.511,
+              "capability_preparation": 519.003,
+              "rule_config_preparation": 16.234,
+              "process_invocation": 3849.425,
+              "process_creation": 4.091,
+              "parsing_normalization": 0.252,
+              "engine_reported_rules_parse": 14.37,
+              "engine_reported_config_time": 447.695,
+              "engine_reported_core_time": 275.667,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 801.285,
+              "scanner_total": 4387.886,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 15.706,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 28.236,
+              "capability_preparation": 57.765,
+              "process_invocation": 2617.787,
+              "process_creation": 102.239,
+              "parsing_normalization": 1.156,
+              "scanner_total": 2687.025,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 5
+            },
+            "cache": {
+              "version_probe": "HIT"
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 5,
+          "profile_files": 5,
+          "context_files": 0,
+          "repository_discovery": false
+        }
+      }
+    },
+    {
+      "label": "targeted_security_rescan",
+      "wall_ms": 3978.953,
+      "invocations": [
+        {
+          "type": "SAST_SCAN",
+          "wall_ms": 3493.64,
+          "rules": 1,
+          "files": 1
+        }
+      ],
+      "scanner_runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 3960,
+          "error_code": "",
+          "coverage_contract": "FULL",
+          "provider": "semgrep",
+          "provider_role": "PRIMARY",
+          "engine_process_observed": true,
+          "scanner_diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 446.693,
+              "capability_preparation": 449.565,
+              "rule_config_preparation": 14.466,
+              "process_invocation": 3493.155,
+              "process_creation": 4.022,
+              "parsing_normalization": 0.08,
+              "engine_reported_rules_parse": 1.0,
+              "engine_reported_config_time": 225.452,
+              "engine_reported_core_time": 236.699,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 543.089,
+              "scanner_total": 3960.099,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "MISS"
+            },
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 13.688,
+            "scope": {
+              "target_files": 1,
+              "rules": 1,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "network": false,
+  "model": false,
+  "source_persisted": false,
+  "daemon": false,
+  "fake_process": false,
+  "sleep": false
+}

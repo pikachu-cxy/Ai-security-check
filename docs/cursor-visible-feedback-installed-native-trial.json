@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "cases": [
+    {
+      "case": "NO_PENDING",
+      "stdout_shape": "EMPTY_OBJECT",
+      "wall_ms": 489.216
+    },
+    {
+      "case": "REAL_SCANNER_PROCESS_RACE",
+      "writer_pid": 135536,
+      "independent_commands": true,
+      "stdout_shape": "ADDITIONAL_CONTEXT_OBJECT",
+      "context_bytes": 539,
+      "context_sha256": "18bfaed022314911a56ab352bc8127fbe301a52fc9a8b5bcba809e385329f32f",
+      "wall_ms": 19654.877,
+      "after_file_edit_and_delivery_wall_ms": 20592.708,
+      "wait_ms": 19123.388,
+      "scanner_run": false,
+      "current_scanner_and_pre_edit_count": 2
+    },
+    {
+      "case": "DEDUPE",
+      "stdout_shape": "EMPTY_OBJECT"
+    },
+    {
+      "case": "SAFE_EDIT",
+      "stdout_shape": "EMPTY_OBJECT",
+      "wall_ms": 497.736
+    },
+    {
+      "case": "RECURRENCE",
+      "stdout_shape": "ADDITIONAL_CONTEXT_OBJECT"
+    },
+    {
+      "case": "STOP",
+      "stdout_shape": "EMPTY_OBJECT",
+      "scanner_run": false
+    }
+  ],
+  "duration_seconds": 51.18,
+  "scanner": "ACTUAL_MANAGED_OFFLINE",
+  "transport": "INDEPENDENT_NATIVE_COMMAND_PROCESSES",
+  "desktop": "PENDING_ACTUAL_CURSOR_UI",
+  "network": false,
+  "model": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "real_user_configuration_modified": false
+}

@@ -58,7 +58,7 @@ rules:
         ... }
     - pattern-not-inside: $RET $METHOD(...) { ... $FACTORY.setProperty(XMLInputFactory.SUPPORT_DTD,
         false); ... $FACTORY.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES,
-        false); ... }
+        false); ...  ...  $FACTORY.createXMLStreamReader($XML); ... }
     - patterns:
       - pattern: $FACTORY.createXMLStreamReader($XML)
       - focus-metavariable: $XML

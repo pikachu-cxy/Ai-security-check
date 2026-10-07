@@ -281,7 +281,7 @@ def test_mcp_closed_schema_and_optional_discovery(monkeypatch,tmp_path):
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR',str(tmp_path/'state'))
     server=create_server()
     for name,fields in [('prepare_functional_verification',{'remediation_ref','task_ref','workspace_path'}),
-                        ('run_functional_verification',{'functional_ref'})]:
+                        ('run_functional_verification',{'functional_ref', 'execution_result'})]:
         schema=server._tool_manager.get_tool(name).parameters
         assert set(schema['properties'])==fields and schema['additionalProperties'] is False
     info=runtime_info()

@@ -186,8 +186,9 @@ def test_mcp_registration_strict_four_claims_no_echo(monkeypatch, tmp_path):
     server = create_server()
     tools = asyncio.run(server.list_tools()); tool = next(t for t in tools if t.name == 'handle_stop_event')
     assert tool.inputSchema['additionalProperties'] is False
-    assert set(tool.inputSchema['properties']) == {'event', 'workspace_path', 'session_id', 'stop_hook_active'}
-    assert set(tool.inputSchema['required']) == set(tool.inputSchema['properties'])
+    required = {'event', 'workspace_path', 'session_id', 'stop_hook_active'}
+    assert set(tool.inputSchema['properties']) == required | {'turn_id', 'permission_mode'}
+    assert set(tool.inputSchema['required']) == required
     assert tool.inputSchema['properties']['stop_hook_active']['type'] == 'boolean'
     valid = dict(event='Stop', workspace_path='x', session_id='s', stop_hook_active=False)
     async def check():

@@ -1,5 +1,335 @@
 # AI Security Runtime — Architecture Decisions
 
+## Current milestone — R0, 2026-10-07
+
+R0 Rule Program v1 + Java High-Confidence Pack = IMPLEMENTED / LOCAL VERIFIED
+in the uncommitted `feature/runtime-mvp` working tree. This current block
+supersedes older roadmap/status entries below; historical evidence is retained.
+See [Rule Program](RULE_PROGRAM.md), [coverage matrix](RULE_COVERAGE_MATRIX.md)
+and [complete acceptance](rule-program-acceptance.md).
+
+Cursor Host Adapter v1 detection, first-scan attribution, Finding/Policy and
+Advisory Remediation = COMPLETE / DESKTOP VERIFIED from the user's observed
+Desktop evidence. Native user-visible feedback is
+HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH (Cursor 3.22.12 afterFileEdit path,
+postToolUse NOT OBSERVED); automatic continuation is PENDING_HOST_CAPABILITY.
+Do not describe the entire detection Runtime as PARTIAL. Production setup has
+sessionStart/afterFileEdit/afterShellExecution/stop only. Signed old probe/fifth
+entries migrate safely; custom user entries remain. No new pending feedback
+delivery is created by this path; generic presentation storage is dormant.
+
+10 product capabilities: 2 CORE (TLS + Gitleaks Secret), 8 VALIDATED (SQLi,
+command injection, SSRF, path traversal, arbitrary read/write, XXE,
+deserialization). Java Core Pack v1 and Validated Java Pack v1 are explicitly
+separate tiers. VALIDATED detection/guidance is default-on and labelled;
+8 retained unrelated legacy Java EXPERIMENTAL rules are default-off. The two
+legacy Python rules remain default-on for compatibility. 19 owned Java/XML
+Semgrep variants (18 for Java-only files); 29 installed rules including legacy.
+No provider-owned Gitleaks rule-count or new automatic fixer is inferred.
+
+Final actual managed corpus: 71 synthetic cases, 46 TP /28 TN /0 FP /0 FN.
+These author-declared labels are not independent human or production-grade
+ground truth. Findings retain source/sink/basis/location/underlying identity
+and explicit limitations. MyBatis interpolation is structural with unknown
+parameter trust. Read/write is primary at an overlapping traversal sink.
+Capability variants share canonical Family identity; real absence proof must
+execute all applicable variants. TLS original bytes/identity, Secret detector
+identity, Episode/budget/opaque refs/receipts and Core-vs-Deep boundaries remain.
+Historical non-TLS raw-rule identities are not silently migrated or retargeted.
+
+Focused: 306 passed, 6 subtests passed in 460.88s (0:07:40). Full offline: 1783 passed, 9 skipped, 6 subtests passed in 2326.45s (0:38:46); skipped reasons are individually
+listed in [regression](rule-program-regression.json). Actual local MCP TLS
+inline/envelope/proof/CLOSED and recurrence PASS. Isolated offline wheel
+installation and simulated Cursor native command+real Scanner PASS.
+Wheel/sdist integrity/compliance PASS; 93 runtime Python modules and formal
+rule data byte-equal; manifest/corpus/new tests included and probe code absent.
+Fresh R0 Desktop NOT_RUN; historical actual Desktop results remain separate.
+
+No commit/push, active Runtime replacement, actual user `.codex`/Cursor change,
+model invocation, target build, dependency download or new scanner. Starting
+and current HEAD: `ee1bfd9c12493683cc313cb3628753a51ae124ac`. Prior dirty work preserved by snapshot/diff audit.
+Next recommendation is wider labelled OSS/internal FP/FN corpus and independent
+review before CORE or automatic-fix graduation; no next implementation stage
+has started. Cursor UI/continuation workarounds and new Hosts remain deferred.
+Deep/Plus/Maven environment/human trials retain their prior Pending/Planned
+state. Capability does not imply execution on the default Hook.
+
+## P0-10.1 Cursor Visible Security Feedback
+
+P0-10.1 uses documented Cursor postToolUse additional_context, not afterFileEdit fictional output or Stop followup. Retain advisory-only/no invocation authority. Presentation recurrence keys reuse existing NEW scan/family; no parallel security Episode model.
+
+See [acceptance](cursor-visible-feedback-acceptance.md) for binding, bounds, privacy, native race evidence and manual UI trial.
+
+
+## P0-9.6 — Transport capability is not policy authorization
+
+不为 AdvisoryTransportConfig 补假 path。旧 path 是 policy 文件的状态位置与 mtime；Cursor 将不同职责对象注入 config 槽位是接线错误。使用真实用户配置，新增独立 immutable transport contract，从现有 Cursor continuation capability 映射，Core 无 Cursor hardcode。
+
+AUTO_FIX decision 在 advisory-only Host 上保持，执行层返回 ADVISE / REMEDIATION_OFFERED，edit_authorized=false，不签发 grant、Ticket、confirmation token 或 continuation handoff。人工/确认 policy 亦保持原判断。优先复用已有 TaskFix resolver/固定安全计划，避免制造带自动授权的 Security Fix Context。缺 verified context、stale Finding、无能力或无可用上下文继续 inconclusive。
+
+Cursor native post-edit output 不支持本轮承诺的自动 agent context delivery；保持 schema，只在 Runtime result/recent 明确 offer，不冒充 Desktop 已展示或自动闭环。未来 generic advisory Host 可复用，其他平台实现不在本轮。
+
+
+## P0-9.5 — Digest-authenticated recovery, not guessed security baseline
+
+保留 SessionStart filesystem-only 设计。HMAC inventory 无法反推出旧源码，本轮不引入源码 vault；仅尝试 Git index/HEAD bounded blob recovery，exact HMAC 证明才使用。标准 checkout LF→CRLF recovery 只有 exact HMAC 命中才成立，扫描的是原字节，BOM 不归一化。旧内容不可恢复是明确能力边界，不能用 HEAD 干净推断旧 snapshot 安全。
+
+仅默认 managed Semgrep 的等价 targeted scan 支持本轮缺陷；unsupported provider/plugin/mixed risk 不做虚假 absence proof。版本号不足以证明同引擎，所以收集现有启动前 probe identity 并核对运行前后、rule pack/config/rule identity；不改 scanner、cache 或 Family schema。
+
+同 rule instance 匹配采用 unchanged-span/line-motion 映射，无法确认旧实例映射时 inconclusive；保留原 family multiset 和 additional_occurrences semantics。不调整 policy 对多个候选的授权，不承诺 Cursor 自动修复闭环。独立 Cursor AdvisoryTransportConfig.path 错误超出冻结范围，记录 BLOCKED_PRE_EXISTING_CURSOR_POLICY_CONFIG_PATH。
+
+
+## P0-9.4 — Cursor Event Lifecycle + Baseline Ordering
+
+D-P094：轻量 SessionStart comparison baseline 与 scanner coverage 分开；首次 scanner observation 不以未扫描 baseline 伪造 NEW/自动修复授权，沿原 first-scan unattributed safe semantics。Cursor post event 没有可靠 invocation ID；只能用 filesystem comparison + OS single-flight 实现同 snapshot 收敛，不能声称 Host authenticated exactly-once delivery。
+
+D-P094-order：pending arrival 与 snapshot publication 可跨进程观察；capture 期间已有 mutation 到达或文件不稳定即拒绝 attribution。无 Host pre-edit barrier 的迟到事件不能重建历史字节。超时只保留 bounded intent并返回retry，不引入 daemon、Stop补扫描或无限等待。Codex lifecycle保持原兼容，仅新 command transport显式选用该入口。
+
+本轮只修 Cursor normalized lifecycle / baseline publication / 跨进程 ordering；用户最新真实 Desktop 已确认 P0-9.3 claims、anchor、generation、relative roots、file containment 通过，这些代码冻结。Cursor 新 lifecycle 真实 Desktop PENDING_USER_RETEST，不执行新 Desktop E2E。focused 343 passed / 331.23s；完整 offline regression PASS：1687 passed, 9 skipped, 6 subtests passed in 2141.83s (0:35:41)；skipped 单列，不计为通过。 installed native command + managed offline Scanner PASS / 37.76s，临时 venv 借用已有依赖；Codex local MCP + managed offline Scanner 两轮 recurrence PASS / 37.39s（模拟 Host、实际 MCP/Scanner，非 Desktop）。wheel/sdist/integrity/compliance PASS，88 module bytes 对照；最终 docs 后再构建核验。不 commit/push、不改真实 .cursor/.codex、不替换活动 Runtime；前序未提交工作和文档历史保留。详见 [P0-9.4 验收](cursor-event-lifecycle-acceptance.md)。
+
+
+## P0-9.3 — Cursor workspace anchor compatibility
+
+用户新增真实 Desktop evidence 已定位：workspace_roots shape VALID，但 POSIX 形态在 Windows 非 absolute、无 drive，旧实现先把 event root 当主路由调用严格 resolver，于 PATH_SHAPE/RAW_PATH_NOT_ABSOLUTE 拒绝；部分 sessionStart 合法空列表也曾提前拒绝。这取代 P0-9.2 对历史 raw shape 无法确定的结论。2026-10-07 重新核对 [Cursor 官方 Hooks](https://cursor.com/docs/hooks)：CURSOR_PROJECT_DIR Always Present/workspace root，afterFileEdit file_path absolute。
+
+本轮仅 Cursor ingress：CURSOR_PROJECT_DIR 是 required strict canonical anchor；workspace_roots 仍 required typed/bounded string[]，empty 是 EMPTY_HOST_LIST，single native-relative 是 UNVERIFIED_RELATIVE，仅 metadata，不做 cwd/拼接/猜测/文件探测；single absolute 独立 canonicalize 并必须 MATCHED；multi-root 仍 CURSOR_MULTI_ROOT_UNSUPPORTED。anchor 缺失/invalid、来源冲突、file outside/nested/link、session cross-workspace 全部 fail closed。generation contract / CursorBindings / Core / Codex / scanner / remediation / Ticket / Exact Envelope / installer / shared resolver 不变。
+
+新增闭合 enum/bool diagnostics：cursor_workspace_anchor、cursor_project_dir_valid、workspace_roots_state、workspace_root_relative、workspace_root_corroboration、file_path_absolute、workspace_binding_reason，复用原 prefix absolute/canonicalized/hash 与现有跨进程 bounded recent SQLite；无 raw path/env/root/ID/source/command/input/output/transcript/Secret 持久化。绝对来源冲突的诊断现在分区到已验证 anchor，不向旧 event-root 路由。
+
+新增 25 cases；targeted 124 passed / 80.24 s，focused 254 passed / 261.39 s；full 1672 passed, 9 skipped, 6 subtests passed in 2110.34s (0:35:10)；离线 wheel/sdist/package integrity/compliance PASS。真实 Desktop PENDING_USER_RETEST，本轮不进行新 Desktop E2E；Cursor live continuation 仍 Pending。后续阶段仍 Planned。详情与最终证据见 [P0-9.3 验收](cursor-workspace-anchor-acceptance.md)。不 commit/push，不修改真实 .cursor/.codex，不替换活动 Runtime；前序未提交工作和文档历史保留。
+
+
+## P0-9.2 — Cursor real SessionStart / workspace resolution
+
+用户新增真实 Desktop 证据明确 sessionStart generation_id 是空字符串、后续 generation 有效；旧 common nonempty 校验因此拒绝 SessionStart。本轮按事件修正：sessionStart 以合法 session_id=conversation_id+workspace 建立 baseline，absent/exact-empty generation 标 NOT_YET_AVAILABLE；wrong type/oversized/control/Unicode/whitespace-only 仍拒绝，post/stop 仍要求有效非空 generation。signed CursorBindings 增加 bounded generation hashes：OBSERVED/UNCHANGED/UPDATED；合法新消息不视为 replay，cross-workspace session 仍拒绝；generation 不是 invocation/authorization。兼容旧三-key state，新 state 的旧 reader 会 fail closed，不与旧活动 Runtime 共享 candidate state。
+
+真实 workspace 旧记录在 WORKSPACE_ROOTS 前 canonical identity 为 null；旧 generic code 对应 raw path admission/directory handling，不能归因于 generation 或 env source comparison。历史 raw path shape 没有留存，精确 predicate 仍 UNDETERMINED_FROM_RETAINED_DIAGNOSTICS。Project F 给定标准 Windows root 的 native/slash/case/trailing/subdir 只读 probe 全部 OK、同 canonical identity、没有 ownership 错误；不等于重构历史 claim。新增 Cursor-only preflight 分 path/filesystem/boundary/Git/shared resolver；先无 safe.directory override 只读 probe，dubious ownership 精确拒绝、不得 fallback，不修改 Git trust；共享 resolver/Git/Core/Codex 不变。event root primary+env independent corroboration，no cwd fallback；FILE_URI 明确 reject，nested/outside/link/session mismatch 保持 fail closed。
+
+新增 safe path-shape/Git/status/step/reason 与 generation observation diagnostics，沿现有跨进程 bounded recent SQLite，不保存 raw path/ID/command/tool_input/source/output/transcript/Git stderr/Secret。新增 37 cases；targeted 124 passed，首轮仅两项新测试 state 属性断言错误已修正；最终 focused 265 passed；full offline PASS：1647 passed / 9 skipped / 6 subtests passed（skipped 单列）；native installed command/Scanner PASS 46.99s、Codex MCP regression PASS 40.18s，结果见 [P0-9.2 验收](cursor-session-workspace-acceptance.md)。package integrity/compliance PASS；真实 Desktop PENDING_USER_RETEST，continuation 原 Pending。无 commit/push/真实 .cursor/.codex 修改/活动 Runtime 替换/新 Desktop E2E；前序未提交与文档历史完整保留，本轮后停止。
+
+
+## P0-9.1 — Cursor schema / workspace compatibility
+
+Hook delivery 四事件已按用户真实 Desktop 证据 VERIFIED；本轮不重新调查 launcher，不运行新 Desktop E2E。旧代码没有 UUID/hex 校验，也未用 process cwd 做 root：它使用 event workspace_roots 并互证 CURSOR_PROJECT_DIR。原 identity 校验的 `${` 模板限制不适合 native opaque 字符串，已移除；保留非空/原始长度 500/类型/控制字符/Unicode 边界。null workspace_roots 在旧 shape guard 漏判现已 fail closed；0/multi-root 不猜 root。canonical resolver、conversation binding、filesystem digest、Core/Scanner/Policy/Ticket/Envelope/Codex 均不变。
+
+新增安全诊断区分 generation 类型/存在/裁剪长度/原因，root count/shape，workspace source、env corroboration、canonical hashes、resolution stage、file containment。source mismatch / nested file-root mismatch 使用 Cursor 专属 fixed reason；先解析到 root 的拒绝可在该 root diagnostic 分区查询，无注册/扫描/授权。无 raw ID/path/command/edits/source/transcript/secret 持久化。Project F root/src/Java 子目录只读解析同 identity；历史失败行缺少具体 generation/source 元数据，精确真实原因仍 UNDETERMINED_FROM_RETAINED_DIAGNOSTICS，不伪称 UUID/cwd 根因。空 generation 仍拒绝，不绕过 claims。
+
+新增 28 cases；首轮 targeted 112 passed / 74.97s。最终 focused 243 passed；full offline PASS：1610 passed / 9 skipped / 6 subtests passed，skipped 单列，结果见 [验收](cursor-schema-compatibility-acceptance.md)。真实 Desktop compatibility PENDING_NEXT_USER_RETEST，Cursor continuation 保持 Pending；不 commit/push/修改真实 .cursor 或 .codex/替换活动 Runtime。前序成果保留，不扩展后续阶段。
+
+
+## P0-9 — Cursor Host Adapter v1
+
+P0-7/P0-8 已按用户新增的真实 Codex Desktop TLS 验收封版（USER_REPORTED_DESKTOP_VERIFIED），与本轮 local fixture 分开。P0-9 当前 IMPLEMENTED / LOCAL VERIFIED，真实 Cursor Desktop PENDING。仅四个官方事件：sessionStart / afterFileEdit / afterShellExecution / stop → CursorHostEventAdapter → P0-8 NormalizedHostEvent → 原公共 dispatch / HookCoordinator；不复制 Scanner/Policy/Family/remediation。严格 canonical root/file containment、conversation/root 跨进程绑定、事件专属 claims 保留 fail closed；单本地 root，远程/multi-root 不猜。官方所选事件没有可靠 invocation ID，capability=false，序列仅本地记账；真实 digest / cooldown / single-flight 收敛，不宣称精确 Host replay authentication。SessionStart 复用 bounded real-scanner baseline capture，Host 参数默认 codex 向后兼容，重复启动保留原比较点。
+
+Cursor native command Hook 不具备 Codex MCP 同连接 Ticket continuation；post-edit 无官方 Agent context 输出，Stop followup 本轮不自动启用。复用原 RemediationService report_only 作为 transport 能力上限，不写用户 policy、不授予源码写入；明确 PENDING_CURSOR_CONTINUATION_CAPABILITY，当前不宣称自动 AUTO_FIX/receipt/CLOSED 同等闭环。Codex 本地 MCP TLS 两轮 recurrence 原 Ticket/Envelope/receipt 流程继续 PASS。common capabilities 为有限 bool，Cursor transport 能力为有限 dataclass，capability != timing/authorization。Deep/其他 Host/Scanner/Ticket/新规则未扩展。
+
+Global setup cursor --scope global 生成用户 hooks.json 的 installed absolute Python/venv/frozen command，不植入 repo/src/PYTHONPATH；签名 ownership exact merge，保留用户 command/prompt Hook、未知设置及 MCP bytes，healthy setup/repair 不重写，remove 只删自有内容。Recent 使用既有跨进程 SQLite journal，32/workspace、1024 total，新增闭集 Cursor schema/normalized 字段；不存 raw command/source/output/edits/transcript/secret/token/identity。候选 wheel 临时 venv 的真实 Windows command（带空格路径）+ managed offline Scanner local trial PASS / 40.06s；独立 CLI 查询、普通 delta/same bytes/TLS finding/模拟 Host 手工最小修复复扫/Stop/lifecycle 均通过，非实际 Desktop或自动 continuation。Codex local MCP trial PASS / 36.70s。新增 34 cases；最终 focused 215 passed / 208.65s。完整 offline 回归 PASS：1582 passed / 9 skipped / 6 subtests passed；skipped 单列于 regression artifact。wheel/sdist integrity + compliance PASS，87 module byte 对照；最终文档后已复核包；详见 package artifact。
+
+[官方契约与映射设计](cursor-host-adapter-design.md)，[验收与下一次 Desktop 步骤](cursor-host-adapter-acceptance.md)，[Cursor installed local trial](cursor-host-adapter-local-trial.json)，[Codex regression trial](cursor-host-adapter-codex-trial.json)。前序 453 incoming 文件全部保留，无删除；Core/Codex Hook definition AST 不变；不 commit/push/替换活动 Runtime/修改真实 .cursor 或 .codex，三位试用及独立 Ground Truth 保留 Pending/未执行。后续阶段继续 Planned，本轮完成后停止。
+
+
+## Core P0-8 — Host Event Normalization v1
+
+P0-7 Global Codex Desktop E2E 根据用户提供的真实验收已 VERIFIED、封版；此结论与历史本地证据及本轮模拟 Host 分开记录。当前交付为增量控制流抽象：Codex Raw → CodexEventAdapter → NormalizedHostEvent / VerifiedHostContext → 公共 dispatch → 原 HookCoordinator / remediation / continuation。事件使用 SESSION_START / WORKSPACE_ACTIVITY / SESSION_STOP；operation 使用 READ_ONLY / DIRECT_FILE_MUTATION / POSSIBLE_WORKSPACE_MUTATION / UNKNOWN。strict claims、workspace/session/replay、原始 opaque refs 和签名命名空间不变；binding consistency 不等于 Host authentication。Core 用 normalized semantics 和真实 filesystem digest 判断扫描，mutation hint 不是证明。baseline/snapshot 发布顺序、Family/Episode、Ticket/Envelope、真实 scanner receipt 不变。Capabilities 是有限 bool 声明，不是执行时机或权限。默认 Core 不进入 build/test/Deep。Codex MCP schema/输出、Global Hook definition、setup/status/repair/uninstall 兼容；recent journal 增加闭集 normalized 字段，原 Codex ABI 保留。Session 原值仅在内部 context 私有字段中短暂保留以兼容旧命名空间，禁止序列化或持久化整份 context，诊断只用安全投影。Focused：182 passed in 170.80s (0:02:50)；full offline：1548 passed, 9 skipped, 6 subtests passed in 1804.88s (0:30:04)，零失败，skipped 单列不计 PASS。wheel/sdist integrity/compliance PASS。本地 stdio MCP + 真实离线 Scanner 的 TLS recurrence 两轮 PASS（模拟 Host，非 Desktop）。 [设计与验收](host-event-normalization-acceptance.md)，[最终回归及跳过原因](host-event-normalization-regression.json)。下一 Host 可复用安全 Core，但仍需自己的真实 claims/schema、输出/continuation 及 transport/install wiring；当前 GlobalWorkspaces 仍是 Codex transport router，不声称已有通用 installer。Cursor/Claude/Gemini/Copilot normalized adapters 仍 Planned，未实现、未验收。前序未提交成果完整保留；未 commit/push，未修改真实 .codex，未替换活动 Runtime，未执行新 Desktop E2E。本轮完成后停止。
+
+## Core P0-7.3.3 — Real PostToolUse reconciliation
+
+Project C 只读证据：SessionStart 比较点已经是 2400（摘要与当前及 2400 variant 匹配，与 2300 variant 不匹配）；目标 mtime 09:21:52 UTC，基线发布 10:27:13 UTC，10:30 PostToolUse 比较的是相同内容。旧 changed_file_count 是 Git dirty inventory，并非本次 delta，不能将该历史 NO_CHANGE 断言成 digest 漏检。修正 adapter 无条件 mutation=true；新增 bounded tracked/dirty raw-byte HMAC 比较和准确 delta count，保持 Git dirty 列表；重复 SessionStart/reconnect 保留当前 session 比较点。缺 pre-edit snapshot 的 lazy bootstrap 明确无法归因，不伪造 NO_CHANGE。新诊断跨进程 recent 可读，无源码/命令/原身份/Secret。Scanner/claims/workspace binding/remediation/Ticket/Envelope/rules/Deep 不改，Git 配置不改。旧 snapshot 保持可读，无历史 bytes 重建。最终 focused：281 passed in 293.87s (0:04:53)；full offline：1523 passed, 9 skipped, 6 subtests passed in 1838.52s (0:30:38)，零失败，skipped 单列不计 PASS。wheel/sdist integrity/compliance PASS / 4.58s。 [验收与生命周期](mutation-reconciliation-acceptance.md)，[最终回归及跳过原因](mutation-reconciliation-regression.json)。前序未提交工作完整保留；未 commit/push/替换活动 Runtime/修改真实 .codex 或 Project C 源码，Desktop 新候选试用 Pending，P0-8 未开始。
+
+## Core P0-7.3.2 decision
+
+The real Project C failure was an installed-runtime quality gate applied again while verifying an already enrolled DEV launcher, not a Windows cwd inequality. Separate read-only signed enrollment verification from new setup/repair opt-in, retaining HMAC/phase/current exact fingerprints. Do not allow workspace mismatch, unowned/stale config or replay. Do not retrofit historical package/source integrity into a launcher manifest that never attested it. Record fixed rejection phase/reason and hashed identity relations, rather than flattening every exception into a path mismatch. No scanner/remediation/Deep expansion. [Evidence](workspace-binding-acceptance.md).
+
+## Core P0-7.3.1 decision
+
+Synchronous Hook diagnostics cannot answer a later independent CLI query, especially before workspace admission. Persist a separate bounded SQLite observation projection, not an authority receipt or a process-memory ring. Commit ingress before claim validation, keep unsafe/unattributed requests explicitly unbound, and share one journal through nested Global dispatch. Real orchestration boundaries and the existing execution ledger distinguish trigger from invocation/completion. Diagnostic failures cannot retry the original handler, weaken claims or block mandatory safety behavior. Query is read-only; no transcript or arbitrary exception text is retained. [Details](recent-hook-acceptance.md).
+
+## P0-7.2 decision
+
+Bash is a valid Codex PostToolUse mutation channel, so excluding it from the matcher was a coverage bug. Classification is a fast path only; snapshot/content digest remains authoritative. `tool_input` is optional and never persisted. Read-only commands are skipped to protect Core latency; ambiguous commands are scanned fail-soft rather than trusted.
+
+## Core P0-7.1 — Codex host-owned Hook state compatibility
+
+仅修复配置兼容性，feature/runtime-mvp / ee1bfd9c12493683cc313cb3628753a51ae124ac 不变。不 commit/push、不替换活动 Runtime、不读写真实用户 CODEX_HOME；前序 dirty 保留，PROJECT_CONTEXT 未读写，P0-8 未开始。
+
+已确认根因：_config 将 TOML hooks.state dict 当 event list；base/global 后续重复 Hook 检查也直接遍历所有 hooks 值。按当前官方 HooksToml / HookStateToml schema，仅对 TOML 的 state 建立明确 metadata 分支；每条 state 是 object，enabled 为 bool、trusted_hash 为 string。官方未封闭 state object 的扩展字段，保留其值；未知其它 hooks dict 不获得豁免。独立 hooks.json 保持 event-only 校验。真正 event groups/handlers、command/server/tool/input/timeout/statusMessage 校验与签名 ownership 冲突检查仍 fail closed。Runtime 不使用这些 host trust values 决定自有 ownership 或修改 trust。
+
+只建立 event-only view，不改变原 parsed document；现有 signed managed block/CAS 合并保留 TOML 原字节，uninstall 恢复原 user bytes。state 与 node_repl、用户 inline/JSON Hook、未知 top-level 设置共存；setup/repair 两次稳定且无无意义重写。两种实际定义来源仍按既有 duplicate 检查处理；state 不算 event source。[详细验收及官方来源](codex-hook-state-acceptance.md)。
+
+新增 25 cases；focused 160 passed / 121.85s；最终 full offline：1414 passed, 9 skipped, 6 subtests passed in 1853.57s (0:30:53)（runner 1854.15s），9 skipped 单列不计 PASS。[回归](codex-hook-state-regression.json)。wheel/sdist integrity + licenses/notices compliance PASS，[package](codex-hook-state-package.json)。temporary venv 强制安装本轮 wheel，确认 module origin 在其 site-packages，借用已有依赖、无网络下载；实际 CLI setup→setup→repair→repair→status→doctor→uninstall 全 PASS，实际 Codex CLI 0.159.2 正常解析脱敏 state 且同时发现 node_repl/ai_security_runtime。[安装验收](codex-hook-state-installed-trial.json)。修复前隔离结构 fixture 为 CONFIG_INVALID，修复后 MCP/Hook CONFIGURED；不是实际 Desktop Hook trial。
+
+现有两份产品模块仅 narrow compatibility hunks；新增 test/fixture + MANIFEST fixture include。router/remediation/Ticket/Scanner/Deep/CET 与 incoming 字节相同；[前序工作区保留审计](codex-hook-state-workspace-audit.json)。真实 Desktop 验收仍 Pending，三位试用待验收、独立 Ground Truth 未执行，未扩大本轮范围。
+
+
+## Global integration ownership / global capability / trust 不代授
+
+仅 Core P0-7 Global Runtime Integration / Install Once。继续 feature/runtime-mvp / ee1bfd9c12493683cc313cb3628753a51ae124ac；414 incoming 文件已快照，前序 P0-1…P0-6.1 dirty 完整保留，PROJECT_CONTEXT 未读写。不 commit/push、不替换活动 Runtime、不修改真实用户 CODEX_HOME、不运行 Desktop trial。
+
+用户新增真实验收将 P0-6/P0-6.1 更新为 USER_REPORTED_ACTUAL_DESKTOP_PASS：prepare=0、read=1、search=0、exact envelope MATCHED / outside=false，真实 Scanner proof 后 resolved/CLOSED/RETURN_TO_HOST；cycle≈65.9s、Host/Agent窗口≈51.6s。本轮不重跑或优化该 latency。
+
+官方支持 user-level hooks/config/MCP；匹配 user/project Hooks 累加执行，项目 trust 与用户 Hook trust 分开，trust 由 Codex 对精确定义 hash 管理。Runtime 没有可靠官方 trust-state 查询，不读取/修改内部 DB。实际 Codex CLI 0.159.2 已在 temporary CODEX_HOME 中确认全局 MCP list/get。Hook discovery/trust reuse/真实 cwd event delivery 的 Desktop gate 保留 PENDING_ACTUAL_DESKTOP，不能由 fixture hash 稳定推断 PASS。[完整验收与官方来源](global-integration-acceptance.md)。
+
+GlobalCodexIntegration 复用既有 HMAC ownership、exact fingerprints、bounded parser、preservation/CAS/rollback，只改变配置目的地与 launch scope。默认用户级 CODEX_HOME/config.toml + hooks.json；三份 released product_hooks 定义不改、所有 workspace 使用 ${cwd}。默认不生成项目 .codex。installed Python -I module 或 frozen launcher；无永久 repo/src/PYTHONPATH 配置。DEV 显式 opt-in，且 CLI + 实际 MCP 的 global_runtime_integration=v0.1 / integration_scope=GLOBAL / 路由 schema 握手必须通过；同版本旧 Runtime 不可假装全局支持。没有 updater。
+
+GlobalWorkspaces 仅 transport router，复用现有 workspace-bound MCP/HookCoordinator/RemediationService。每 canonical root 独立 DB、Hook state/key、baseline、Family/Episode、receipts、live tickets/triage；opaque refs 原样转交。不按 refs 反推 root、不使用 last workspace/单个已登记 root 作为默认。全局 workspace 请求必须明确 workspace_path（或原 scan path alias），即使只有 A 已登记也不能猜 Host 未切换到 B；缺少 claim 拒绝。global-only ref tools 增补 workspace_path；项目工具原 schema 保持。一个 session 不可换 root；16 roots / 64 sessions budget 不驱逐已有 live authority。静态 Scanner cache 保持既有安全进程生命周期，不缓存/共用 proof。显式 manual MCP scan 保留原完整 ScannerRegistry；Core Hook 与初次比较基线只用 SAST/Secret registry。
+
+Git cwd→最近 repo root（含 subdir/nested），非 Git→bounded name-only project layout/source recognition。拒绝 home/drive/system/state/CODEX_HOME、UNC、traversal/template、symlink/junction ancestors。非 Git source inventory 有界，支持 advisory Hook checks，不升级 Git-dependent AUTO_FIX proof。当前非 Git inventory 并非 Git dirty diff，此限制如实保留。
+
+SessionStart → NEW_WORKSPACE / INITIALIZING → READY 或 DEGRADED/ERROR。两线程 in-process bounded quick baseline，非 daemon/Scanner worker；复用既有 bounded tracked/untracked source inventory 与 coverage/byte recheck，在同一 workspace lock 内发布当前 session 比较点，防止 clean tracked 旧风险被普通编辑误归为 NEW。超预算/失败/partial/moving source 不发布基线。普通 Edit 仍增量，不调用 Full Scan API、不 build/Functional。初始化仅 hashes + safe Hook projection，初次 Finding/source packet 不存 DB。READY 是比较基线/连接观察，不是安全证明。尚未 ready 或 startup Hook 未交付，first edit fail-soft/inconclusive，不假造 NEW/AUTO_FIX；需要可用基线后后续事件收敛。重连新建 live contexts，不恢复 Ticket authority。
+
+只检查当前 root→cwd active project .codex layers。证明 Runtime ownership 才迁移/移除旧 entries，mixed user handler 与 unrelated config 保留；未知 related entries、改名 Runtime launcher/MCP/Hook alias conflict，不能按名字删除。新遇到旧项目可 LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR，需要显式 repair --path，不遍历整盘。已 admit child 也继续检查新出现的子目录 duplicate。Global uninstall 只删自有全局配置，不删 workspace history。旧安全历史留在原 namespace，不搬运历史 receipt/grant、不重解 opaque refs；旧引用 stale 时需取得当前 workspace 新结果。
+
+默认 CLI setup/status/doctor/repair/uninstall。旧 setup codex --path、setup --scope project、integration ... codex 保留；doctor --project 保留原 Scanner/project doctor（原测试明确加 --project），--path 的既有 project doctor 行为兼容。setup --scope global --path 指定迁移来源。仅 readiness 未观察不制造 repair 要求。
+
+Core 仍 incremental scan → policy → AUTO_FIX → real targeted security recheck → return。Hook 名称/claims/Ticket/envelope/receipt/Episode/risk policy/cache/timing 不重定义，Deep API 兼容保留但不自动调用。无新 Scanner、第二规则、Persistent Scanner、Functional扩展、Sandbox/CET、商业权限或云服务。
+
+最终 explicit-routing focused PASS：253 passed / 290.34s；新增 64 cases。[最终完整回归](global-integration-regression.json) PASS：1389 passed / 9 skipped / 6 subtests passed / 1821.36s（30:21）。Skipped 单列：3个需显式开启的 managed performance tests，6个旧 real E2E 的 binaries 前提未满足；不冒充 PASS。focused 有1条既有依赖 lifespan forward-reference warning，无失败。产品/测试/验收脚本137文件的final freeze在完整运行后仍一致。[SDK](global-integration-sdk-final.json) PASS / 119.99s：真实 offline Scanner 的 A1/B1/A2 recurrence 都 resolved/CLOSED/RETURN_TO_HOST、prepare=0、Stop ALLOW_STOP；A refs在B拒绝、多root缺claim拒绝，单A已登记缺claim也拒绝；每次initial Hook Semgrep/Gitleaks各1调用。初始baseline DB不存scan/Finding packet、fixture连接及临时目录清理通过。单 root implicit fallback 收紧前 full 1388 passed / 9 skipped / 6 subtests / 1958.99s，这是修正前结果，不能替代最终回归。baseline专项 94 passed / 88.07s。最终 package/wheel/sdist integrity + licenses/notices compliance PASS，78 Python源 bytes 对照，6.30s。[package](global-integration-package.json)。temporary clean venv 使用已有 deps --no-index --no-deps --system-site-packages；Runtime wheel 强制放入临时 venv 并校验真实 module origin，不能误验基础环境同版本旧包。不是第三方依赖完全空白安装，也不是 Desktop/model trial。没有 network/model/target build/raw-ref report persistence。
+
+历史初轮：26-case 用例的结果解析 helper 把 SDK text list 当 dict，修正测试 helper；握手 mock 漏 get_findings 和 SDK report 读取不存在 scanner_runs，均仅修 fixture。三个审查期间的 full run 主动中止，不记 PASS；最终结果从 frozen delivery source 获取。最新 SDK 增加初次 DB 空表检查后未关闭 fixture SQLite 导致 Windows cleanup 失败，已显式关闭并重验，不放宽验收。日志保留，不以文档覆盖失败。
+
+用户 Desktop 下一步：自行加载交付包后 setup一次 → review user Hook → reconnect → clean Project A bootstrap/编辑 → Project B不setup、确认同定义不重复review与独立状态 → disposable TLS inline fix真实安全闭环 → old owned project repair/重复setup/uninstall验证preservation。本轮绝不代用户执行这些动作。[步骤和限制](global-integration-acceptance.md)。
+
+三位独立试用仍 Pending；Ground Truth UNREVIEWED/null；Maven PENDING_ENVIRONMENT_PREREQUISITES；其它未授权阶段 Planned。本轮 gate 完成后停止。
+
+
+
+## Core P0-6.1: preserve exactness with enumerated original-byte results
+
+仅 Core P0-6.1 Post-edit Exact Target Verification correctness bugfix。继续 feature/runtime-mvp / ee1bfd9c12493683cc313cb3628753a51ae124ac，168 incoming 文件已保存快照，P0-1…P0-6 前序 dirty 完整保留；不 commit/push/install/替换活动 Runtime，不运行新 Desktop E2E。
+
+根因：原 FastFix.removal 从 raw UTF-8 bytes 计算整行 range/segment/preimage/canonical postimage SHA，但 Agent Ticket 只保留整文件 preimage 和唯一 postimage SHA。post_failure 只接受“删除风险整行、保留后续空行”的唯一结果；真实 Desktop patch 删除风险整行及其后一个空行，所以 Scanner 已观察风险消失仍无法授权 canonical proof。只读读取已有试验记录：新增/删除均 8-space statement + 1 empty line，记录无其它 changed lines；当前文件 UTF-8 BOM / MIXED EOL。完整旧 Ticket/raw preimage 未捕获，[forensic](inline-exactness-forensic.json) 中 preimage/expected SHA 与 offset **明确为重建假设**，不冒充原凭据。未发消息、未使用旧 opaque refs、未编辑或持久化真实目标源码。这是历史取证，不是新 Desktop E2E。
+
+没有证据表明原 raw-byte helper 存在 decode→newline normalize→encode、BOM 删除、字符/byte offset、pre/postimage 混用或错误 snapshot 来源。具体 mismatch 是 following-empty-line cleanup；设计过窄而不是取消 whole-file hash 本身。构造现在复核 original file/segment/canonical result SHA 来保证同一 preimage。
+
+新 signed edit_envelope = 原 risk physical line + 至多一个已存在的、真正空的紧邻 LF/CRLF line。不含业务代码/注释/indented blank/第二空行。预枚举 ≤3 exact byte variants：REMOVE_LINE（旧结果）、REMOVE_STATEMENT（只移除 statement，原缩进/尾部/EOL/后空行精确保留）、REMOVE_LINE_AND_EMPTY_LINE（只在原已有该空行时）。签入 range、statement range、原 segment/statement SHA、原字节总长、prefix/suffix SHA、EOL/BOM、variant segment length/SHA/whole-result SHA。所有结果从原 bytes 得到；无 post-edit normalize/fuzzy/diff/formatter tolerance/语义等价推断。新缩进/空格、whole-file EOL/BOM 改动均拒绝。
+
+Post-edit 比较原长度定位的 prefix 与右锚定 suffix SHA，验证 envelope 内长度/segment SHA 为预枚举结果，再验证该 variant whole-file SHA；外部 byte-for-byte preservation 保持。原 HMAC、workspace/task/remediation/Episode/grant/scan/snapshot、policy/TTL/attempt、source/preservation/scope guards 原样执行。成功后仍走原当前 snapshot + TaskFix/Verification **真实原规则 Scanner recheck**，签名 receipt 才能 CLOSED；Ticket MATCHED + scanner FAILED/UNAVAILABLE 仍 INCONCLUSIVE。原 Fast Fix 单结果 contract 不变、legacy 无 envelope Ticket 保留旧严格 SHA 分支。已有旧客户端 prepare/Context hint/fallback 不变；正常 inline prepare RPC 仍 0。
+
+非敏感 exact_target_verification diagnostics：MATCHED/REJECTED、subreason、expected preimage/current/canonical SHA、expected envelope length/actual result length/deleted bytes、prefix/suffix/outside changed、expected/actual EOL/BOM/encoding、accepted variant、preservation guard bool。无源码、Secret、byte diff、模型内容。顶层兼容 TICKET_TARGET_NOT_EXACT，子原因 TARGET_PREIMAGE_NOT_REMOVED / TARGET_RESULT_MISMATCH / OUTSIDE_EDIT_ENVELOPE_CHANGED / LINE_ENDING_IDENTITY_MISMATCH / ENCODING_IDENTITY_MISMATCH / TARGET_RANGE_DRIFT / RESULT_HASH_MISMATCH；原 ticket-binding/scope/clock/expiry reason 不改。
+
+产品 hunk 仅 agent_fix_ticket.py + 新 agent_fix_envelope.py；新增 tests/test_agent_fix_envelope.py（48 cases）、scripts/inline_exactness_acceptance.py，MANIFEST 加一行及文档/安全报告。Security Context、Fast Fix、Hook schema/MCP names/4 claims、remediation/receipt/Family/Episode、timing、scanner/cache、Deep/Functional/BOM/CET 文件与 incoming **字节相同**。不增加 prepare RPC、新规则、daemon/bridge/build/Deep。普通 Agent 编辑仍是 post-validation，未观测 edit-and-restore ABA 不可证明，没有原子编辑承诺。
+
+
+
+## Core P0-6: Inline preparation and reliable handoff
+
+仅 Core P0-6 Inline Prepared Agent Fix Ticket / Reliable Handoff。继续 `feature/runtime-mvp` / `ee1bfd9c12493683cc313cb3628753a51ae124ac`，165 个 incoming 文件已快照；前序 P0-1…P0-5 dirty 保留。P0-5 wheel SHA `fa1a1e90ab5df6b9d2a46a2ef8b66cceb53922a07d2c1286d36a7cbc4658ef3e` 校验后仅提取源码作 A/B，不安装。用户提供 Episode 8 的 cycle 90854.049ms、continuation wait 61355.587ms、prepare 1133.092ms、约 12 次编辑前 Agent calls / 1 read / 0 search / 1693 context bytes，标 `USER_REPORTED_ACTUAL_DESKTOP`；本轮未自行复现 Desktop。
+
+先完成 [prepare A/B 安全职责分析](inline-ticket-safety.md)：所有 POLICY_AUTO TLS **preparation** 必需项可在原 workspace 锁内完成，包括 workspace/Episode/grant/授权/预算/成员/origin scan/snapshot/source/scope、TaskFix bounded evidence、prepared attestation 与提交依赖。B 是 USER_CONFIRMED 的用户选择及实际编辑/后续 scanner receipt，不从 initial Hook 推断。原 `_prepare` 完整执行，不删检查。P0-5 历史将 prepare 保守保留为独立 RPC；本轮在此窄 eligibility 内复用同一函数到 Hook 事务，不改变 generic/confirmed prepare 或安全 proof。
+
+只在 connected MCP Hook（可信 embedding 可显式 opt in）、POLICY_AUTO / SAFE_DETERMINISTIC_FIX / AGENT_FIX / Fast Host capability unavailable / 唯一 `ai-security.java.trust-all-hostname`、attempt 1、当前 scan/Episode/grant/snapshot/target 且唯一整行可精确删除时签发 Ticket。命令 adapter 默认保留原 prepare。正常窄路径为 Hook → 原 prepare 检查在 Hook 内完成 → structured Ticket + Context → Host read/edit → post-edit incremental scanner + 原规则 targeted real recheck → 签名 receipt / CLOSED / RETURN_TO_HOST；无额外 prepare MCP。没有 Runtime source writer、模型调用、原子编辑桥、Scanner worker、新规则、Deep/Functional/build/test/Sandbox/CET/Plus/Pro。
+
+`agent-fix-ticket-v1` 正式字段位于 `structuredContent.remediation.agent_fix_ticket`：version/mode/fix_path、workspace_id、episode_id、grant_id、原 task_ref/remediation_ref、finding_id/origin_scan_id、security_context_ref、snapshot_digest/scope_hash、allowed_target_paths/rule_id、authorization_kind、attempt_count/max_attempts、prepared_attestation、connection-scoped 900s expiry、精确 removal operation、原文件/预期结果 SHA、ordinary Agent post-validation edit contract、real-scanner success/CLOSED/RETURN_TO_HOST 及 production UNKNOWN / no Deep。上限 4096 canonical bytes；Context 仍独立解释 What/Where/Why/建议/范围/成功条件，不成为 credential。inline Context 的 `prepare_required=false` 仅描述已签发 Ticket；原 refs 不解析重建、不改字，informational context ref 对当前小对象重新计算，不是 bearer grant。
+
+原 authorization、2-attempt budget、membership、source/preservation、receipt binding、真实 scanner proof 保留。inline 额外要求 whole-file expected result bytes，连接内 ≤32 Ticket + 单调 TTL + policy revision binding。磁盘仅存签名 attestation HMAC/状态/固定原因，绝不恢复 live authorization；重启丢 Ticket/prepared，不伪造延续。unexpected target、额外文件、expiry、wrong binding、lost attestation 不能 CLOSED；观察到 stale 后持久拒绝，不被后续 manual-recovery Hook 漂白。未编辑且原 freshness 仍有效时，可用**原两个 refs**走 legacy prepare 重新检查并替换未消费/过期 preparation；可不传 hint，旧 Host 也可传当前 inline Context ref，Runtime 在完整原检查内从当前事实重建这个 informational 对象（只差 prepared flag），不是从 hint 接受授权。已 drift/escalated 要刷新当前任务，不盲目重试旧授权。已签发 CLOSED security proof 不被 Ticket expiry/重连或 Deep unavailable 降级。
+
+没有 Host 原子编辑锁，未观测的 edit-and-restore ABA 无法证明，旧 prepare 同样无法检测；不声称阻止每次外部写入或证明模型读了哪份 Ticket。可观测的异常编辑被当前字节/snapshot/其它文件 preservation 和编辑后 scanner 阶段拒绝。完整 machine Ticket 不依赖 prose：测试删除或截断文本后仍从原 structuredContent 完成闭环。官方 [Codex Hooks](https://learn.chatgpt.com/docs/hooks) 于 2026-10-05 实际读取，说明 MCP 与 command Hook 输出契约一致、大输出可 spill/truncate；没有 arbitrary structuredContent 独立向模型展示的官方保证。保留正式 SDK 字段，同时 documented additionalContext 只投影完整同一 Ticket/Context 与短固定说明，去掉重复 refs/报告/scanner diagnostics。**SDK 完整性 PASS 不等于 Desktop 模型一定见到完整对象**，其 gate 仍 Pending；不改 config/schema/四个输入 claims，不猜官方字段。
+
+observability：agent_fix_ticket_version/mode、prepare_task_fix_required、Runtime 工具函数入口计数（当前 grant/当前连接）、handoff_recovery_required、structured_handoff_complete、inline_prepare_reason、ticket_stale_reason/ticket_status；Host retry/read/search/model CPU 未观测仍 null。P0-3 timing 保留：inline_prepare_started/finished 在 initial runtime 内；独立 inline_host_edit_window 为 response-ready→post-edit Hook，混合 Host/Agent/transport，不叫模型 CPU。正常 inline 不制造 prepare MCP/Host received 端点；旧 prepare windows 为 null，不重复相加。recurrence 独立新 Episode/grant/scan/Ticket；相同字节的 snapshot digest 可以相等，隔离靠新身份，绝不伪造 hash。
+
+Fresh Desktop P0-6自然续行/模型看到完整Ticket、p95/p99、三位真实试用仍 Pending；Ground Truth UNREVIEWED/null；Maven PENDING_ENVIRONMENT_PREREQUISITES；Fast Host atomic bridge PENDING_HOST_ATOMIC_EDIT_BRIDGE。其它阶段继续 Planned。当前无需继续压缩 Security Context；先验证本轮 Ticket 自然交接，不能把协议减少一次 RPC 宣称模型已少12次调用。
+
+下次人工 Core E2E（本轮未执行）：用户自行安排加载本轮 Runtime 后，新建隔离 Java 项目与 fresh Codex chat；普通安全编辑建立 baseline，再只引入 standalone always-true hostname override。确认初次 Hook 的 INLINE_PREPARED、完整两个原 refs/attestation/context/target、prepare_required=false、工具调用计数0；Agent只read该target和删除该行、保留所有其它字节。不主动扫描/prepare/Deep/build。确认post Hook真实Scanner原规则proof、matched task/grant receipt、CLOSED/RETURN_TO_HOST、计数仍0和inline cycle窗口。再引入同family核对新Episode/Ticket/scan/grant、旧ref拒绝。遇到缺失/截断/stale字段停止，不从路径重建引用；记录实际Host工具数及wall-clock，若仍恢复summary则保留失败事实。
+
+
+
+## Core P0-5: Agent Fix Context Compression
+
+仅Core P0-5 Agent Fix Context Compression，继续feature/runtime-mvp/ee1bfd9c12493683cc313cb3628753a51ae124ac与前序全部dirty；162文件incoming快照，P0-4 wheel SHA85576795657bba49bd1380bc1471097630e8f57cb7ed80f1de976f14b712accc只读校验/提取为本地A/B baseline，无安装。Fast Fix文件原bytes保留，PENDING_HOST_ATOMIC_EDIT_BRIDGE；不扩第二条规则、不新增Scanner/daemon/Functional/BOM/CET/Sandbox/Plus/Pro。Runtime仍不写项目源码，Host编辑。
+
+初次Hook携带短context与informational security_fix_context_ref；prepare/verify/Stop handoff仍原两个task/remediation opaque values逐字保留，不改参数字典或重记continuation。仅保留context的Host可在prepare_task_fix调用额外传可选security_context_ref，其值为原context ref；不能让所有旧调用/verify/Deep继承未知参数。接口向后兼容：无hint（包括Stop fallback）返回INLINE compact context；匹配hint时在原ref/snapshot/source/preservation/budget门禁内重建并核对，REUSE_HOOK_CONTEXT仅回指事实，不重复整段信息；不匹配REFRESH_REQUIRED且无prepared attestation。hint单独不能授权，没有remediation grant时固定拒绝；context/ref不持久化，不成为新grant或缓存proof。所有generic selected-task以及USER_CONFIRMED preparation保留旧完整接口；legacy host_protocol.instructions保留短Core结束语，不重复guidance。POLICY_AUTO packet的旧报告/代码excerpts不再输出，bounded_evidence只保留UNTRUSTED_CODE locator兼容标记，不是source packet。
+
+压缩重复信息，不删除prepare授权/新鲜度检查；风险Hook+prepare+post-edit仍3Runtime MCP。保留原post-edit+original-rule实扫，不合并proof。短自然语言只指向协议，Hook stopReason/systemMessage不再重复整段guidance；prepare不返回通用TLS分析/代码报告/回归任务。用户确认分支长说明保留，因为本轮不改变其审批语义。
+
+真实managed Scanner+actual stdio MCP；Host是SIMULATED_WINDOWS_NATIVE_EDIT_FIXTURE，无LLM、无sleep、offline。相同facts+guidance投影8203→4825bytes（减少41.18%），非整个Hook wire payload；final与focused并行负载，修正前串行报告另存agent-context-core-before-review-correction.json；1699bytes为新context本身，legacy不存在该schema故null。MCP主流程仍3=风险Hook/prepare执行前门禁/修复后Hook；额外Host fixture edit RPC单列1，不隐藏成0；Scanner每cycle仍3SAST+2Secret。before cycles23391.335/21004.801ms，after22553.257/22981.665ms。有限样本不证明wall改善，不声称reasoning加速或Host动作减少，固定Host双方同为1read/0search。recurrence旧ref拒绝在已测cycle结束后另作诊断，不混入比较。Runtime context构造有新增绑定/成员校验成本，Scanner/运行波动也存在；未测完整归因，不将全部差值归因模型或context CPU。初轮8203→4424byte报告早于兼容修正，不替代final；并行版119.93s只单列。
+
+新增test_fix_context.py 11functions/21cases；已有host orchestration及Code Mode契约测试只将smart_auto长prose断言替换为context/自动授权/不重复编辑/实扫等协议语义断言，ask_before_fix与其它旧tests保留。final focused PASS：205passed/822.16s（wrapper823.30s）；final full offline PASS：1240 passed, 9 skipped, 6 subtests passed in 1991.19s (0:33:11)（wrapper 1992.56s）；9 skipped单列BF，不计PASS。第二轮全量早期发现Code Mode旧测试要求stopReason重复完整guidance，单测1failed/4passed/21.99s；仅将该smart-auto文字断言改为精简协议语义，保留completed-edit/授权/两原refs/confirmed/Stop/ABI检查，产品代码未变。第二轮focused/full分别383.65/384.07s中止return130，不计PASS；修正后该模块5passed/19.71s。第三轮focused发现新增context把VALID AI review误判为Scanner过期，既有receipt单例1failed/3.76s；修正仅删除新增review-status条件，原grant/snapshot/source/ref与receipt校验未改。第三轮focused/full分别1139.69/1139.58s中止return130，不计PASS。随后context+receipt 47passed/1failed/316.60s为新fixture伪造VALID但缺ai_review时错误期待授权；已改为断言原TaskFix拒绝且不建立prepared，既有receipt测试原文保留。第四轮full200.13s中止return130，不计PASS。最终focused聚焦直接受影响7模块/205cases，先通过再跑full；新增仍21cases，完整1249收集/9skipped。final MCP A/B PASS/118.06s；原Fast/recurrence/fallback compatibility PASS/112.33s；package integrity/compliance PASS/7.28s，107Runtime文件bytes核对，dist/agent-context-final，无安装。初轮3failed/104passed为新测试过宽source子串及既有_fail无status断言错误，已修；诊断1failed/1passed，v2 context19passed/104.71s。后发现legacy instructions字段缺失、prepare arguments新增hint泄漏到旧verify/Deep/Stop消费者；已修正原两个args与短legacy字段。隔离诊断18passed/1failed/22.15s；失效门禁focused/full在631.58/631.65s中止return130，不计PASS；兼容复核129passed/457.00s。首轮MCP/package/Fast evidence另存initial；并行负载A/B另存concurrent，修正前串行证据另存；final与focused并行重测。产品/测试/脚本158文件冻结。
+
+不扩SQLi/SSRF等CONTEXTUAL_TECHNICAL_FIX：其根因/数据流/业务条件不是这条规则的确定事实；没有真实LLM A/B证据，不推出推广结论。
+
+## Core P0-4: Deterministic Fast Fix Path
+
+2026-10-05实际读取[OpenAI官方Hooks](https://learn.chatgpt.com/docs/hooks)：MCP Hook调用已连接server并遵循Hook输出协议，PostToolUse的additionalContext/continue:false提供模型可见反馈；PreToolUse updatedInput只能重写已排队工具。未发现PostToolUse响应能直接启动原生edit、检查当前Episode并原子CAS的官方契约。现有Codex Runtime integration也只输出反馈、四个metadata claims与Agent handoff，apply_patch无whole-file digest CAS参数。因此默认Codex严格保持AGENT_FIX/FAST_FIX_HOST_CAPABILITY_UNAVAILABLE；未实现、未宣称Codex machine-executable或无LLM apply。
+
+不在Runtime实现patch writer，也不将结构化文本当成Codex原生调用指令。先交付单规则规划/校验/Host admission vertical slice；当前Host limitation是实际发布边界，默认仍Agent Fix。测试中使用单独Host fixture的真实Windows文件句柄拒绝其他写/删除；Runtime只在句柄持有期间验证authority，Host写fixture源码；不把测试工具注册到生产server。无新CET/sandbox/执行环境。
+
+REMOVE范围比原Agent确定性source guard更窄，以整行唯一inline expression为限，保留UTF8/CRLF与所有周边bytes；不做BOM normalization、AST重写或通用patch。Plan身份是服务器保留原对象的strict JSON metadata identity；修复bool/int与int/float字典等价隐患，opaque ref字串仍逐字不解析。旧计划不持久/不复活，recurrence新Episode/grant/plan，重复claim拒绝；attempt budget仍原语义。
+
+本轮不合并Scanner窗口：现有安全projection不能替代实时canonical verifier proof；保留真实post-edit扫描及原rule复扫。模拟数据证明少一次Runtime prepare往返，不能证明Desktop Host等待已删除；首轮Agent16.676s/Fast16.775s未更快，final Agent18.547s/Fast16.806s亦仅有限顺序fixture样本，不推统计收益，不加入sleep/fake model时延。先补真实Host contract，不扩第二规则。
+
+新增test_fast_fix.py共44cases（18functions），最终focused PASS：392 passed in 1003.12s (0:16:43)（wrapper 1004.17s）；final full offline PASS：1219 passed, 9 skipped, 6 subtests passed in 1450.17s (0:24:10)（wrapper 1451.03s）；9 skipped单列如下BE，不计PASS。final local MCP + managed Scanner PASS/93.04s（无sleep，无model、network或Deep）；四个cycle均真实resolved/CLOSED，含Fast recurrence与篡改plan后的Agent fallback。final wheel/sdist/package integrity/compliance PASS/5.82s，106Runtime文件bytes一致，dist/fast-fix-final；未安装。首轮测试接线/文本拼接/CRLF断言修正、首次sdist缺脚本、为严格JSON防篡改中止的旧门禁均另列BE，不算PASS。 验收完成，停止，无commit/push/install/Desktop trial。
+
+## Core P0-3: AUTO_FIX Continuation Latency Observability
+
+保留错误Chat产生的可用观测实现，不以所有权为理由重写；使用P0-2.1已验收wheel/sdist哈希而非Git HEAD作为真实dirty基线，保存进入231文件快照。发现的架构问题为计时关联/归因：跨workspace singleton fallback、未验证ref提前标记、进程变化/完成后仍mark、shared pending、sent/edit标签、粗分项相加隐藏overlap。局部修复，不触碰Family/Episode授权/receipt/opaque ref安全语义；原_close体与11个关键函数AST保持。
+
+36170ms Desktop cycle不能由3670/2840/2880ms阶段相减就说剩余为模型时间，scanner包含于Hook且缺post-edit Hook/prepare/队列端点。采用真实Runtime边界分区与嵌套detail；跨Runtime/Host/transport窗口只能命名为混合窗口，缺直接观测则null。cycle仍单调端点差，所有point均连接内当前instance/Episode；重启不从DB/wall clock重建。观测非Core必需动作，观测失败不改变Core判断；scanner/proof失败仍不得伪装成功。
+
+rule-plan key包括workspace/pack/checksum/files/目标bytes；普通源码每次变化MISS是正确保守失效，static version/pack/config可HIT。不为漂亮cache数字移除byte binding，实际planning耗时另列BD，非本轮优化目标。
+
+Deterministic Fast Fix Path仅技术分析：当前单一JDK inline hostname rule已有scanner corroboration/source skeleton/preservation guards，是狭窄候选；未来可以考虑Host执行受约束确定性patch减少模型编辑窗口。仍需原AUTO授权/opaque refs、expected bytes/snapshot、单文件范围、原保存guard和freshScanner；歧义/自定义TLS/多安装/并发编辑fail closed到原Host协议，不能推出业务或生产正确性。新增Runtime写文件能力或Host命令协议都需独立设计，不在本轮实现，不扩展规则/扫描器/风险策略/entitlement。默认Core仍no Deep，Stop仅现有fallback。门禁完成后停止、不commit/push/部署。
+
+最终focused 348passed/782.04s；full offline 1175passed/9skipped/6subtests passed/1206.43s；本地MCP simulated Host PASS/65.10s，两Episode（direct prepare/Stop fallback）分别cycle 14353.014/15369.367ms，均真实Scanner resolved/CLOSED/RETURN_TO_HOST，functional 0、build/test/sandbox false。final wheel/sdist/package integrity/compliance PASS/4.57s，105Runtime文件bytes核对一致，独立dist/continuation-latency-final；未安装。初轮MCP/package另存initial证据，不能替代final。v1三项诊断WAIT标签冲突及中止的full如实见BD，旧断言未改。 initial_hook_response_ready具体为adapter advisory数据已就绪、尚未将新增additionalContext编码或发送；后续编码、MCP传输、队列和Host工作只能落在混合窗口，不据此单独归因。RETURN_TO_HOST端点表示Runtime返回决策，不能声称Host已经收到。 本阶段验收后停止，未实施Fast Fix Path。
+
+## Core P0-2.1: Cache Lifetime & Scanner Invocation Reduction
+
+先解决对象生命周期而不引入常驻Scanner。BB cache是对象私有，即使PID未变化也能因factory/registry重建MISS；此前Desktop没有instance诊断，不能把复现机制强行写成那一次唯一原因。runtime_instance_id稳定+cache_generation稳定用于区分当前进程内请求，重启的新identity和MISS属于预期安全边界。process缓存只保存内容验证过的准备信息，不跨workspace复用目标/配置上下文，不持久化正向扫描结果。
+
+五次process_invocations来自原Gitleaks per-target dir循环，version probe另计；Core scope包含dirty/retained/context状态，单文件编辑不代表scope只有一个文件。保留全部scope，使用受控临时镜像batch为一次，不删Secret能力或只挑Java文件。实际Desktop五个target没有原始清单，仍未知；新诊断与五文件真实fixture不混同。
+
+新增cycle是单调端点差，包含模型/Host等待/编辑而非ScannerCPU。只在当前连接观察同一Episode完整起止时OBSERVED，重连/重启UNKNOWN，绝不从旧阶段加和或持久墙钟重建。安全事实独立于性能metadata；重复verify不延长已完成cycle，recurrence不继承历史时间。既有authorization/receipt/Family/Episode/CET/Deep/Hookschema/setuprepair保持。
+
+不实现worker/daemon。最终串行对照不隐藏不利数据：cold7835.689→8115.247ms未改善，两次warm仅小幅变化；同进程registry重建7592.651→4220.139ms、五目标Gitleaks invocation总2578.249→502.758ms明确减少浪费。Semgrep invocation仍主要成本（串行bench3.35–3.88s，独立SDK2.44–2.90s），内容校验仍约0.4–0.5s，没有mtime-only/TTL降级。已有足够证据评估后续persistent设计，但没有证明支持的reuse接口、失效/隔离模型或收益；下一轮应先Desktop实例诊断与设计评审，本轮不自动启动PoC。真实managed性能tests无sleep/假scanner；MCP driver保留已存在1.1s cooldown等待，cycle约12.73s是真实本地driver、不是Desktop模型体验，也不能与不存在的旧cycle作提升对照。focused/full/realmanaged/MCP/package/compliance已PASS，跳过及原始证据见BC；门禁与记录完成后停止，不commit/push/部署。
+
+
+## Core P0-2: Scanner Hot Path Performance
+
+先测后改：真实managed baseline只有1文件21规则，反复 --version 约1.7s不是源码范围扩张，scan invocation另约2.4s。先消除重复能力probe、YAML解析和Git discovery，再让安全proof只复查原规则；不取消独立安全复扫。版本cache内容hash成本约0.3s仍保留，不用mtime-only/TTL代替安全失效。Static准备信息不是scanner结果；每次需要新的engine process、rule/file确认与原bound receipt。
+
+缓存均连接内、有界、按内容/配置/版本/环境/workspace失效；rule/config和目标内容每次验证。失败/不完整结果不能提升后次coverage，restart冷启动；recurrence新episode新refs仍真实扫描。保留当前dirty+retained candidate范围以维持Family收敛，不为缩scope引入跨事件旧result proof。只有verification原规则集合变窄，第一次风险发现保持全部适用规则。
+
+不引入worker/daemon。Priority A已证明收益；剩余约2秒以上CLI invocation含未可靠拆分的初始化/执行，只能说明边界、不能伪造Python启动/CPU时间。若未来做process reuse，需先独立隔离/失效设计，当前不做。既有Deep/API、Core no Deep、CET/BOM、setuprepair/官方Hook ABI、receipt/预算保持；没有模型、用户源码编辑/构建/依赖下载/活动Runtime替换。原测试不放宽；新性能test使用真实managedprocess，无sleep/假时延，SDK cooldown等待只属模拟Host窗口，不是性能收益。最终串行managed数据及MCP两episode已通过（safeHook5142→3533ms、resolvedHook10097→6868ms），并行负载原记录保留；不当Desktop/p95承诺。focused/full/package/compliance门禁已完成，当前成果未提交推送，停止本轮。
+
+## Core P0-1: Hot Path Policy & Integration Hardening（2026-10-04）
+
+Core Hook 结束条件是原风险的可信 scanner resolution，不是 compile/build/test 或 production correctness。默认修复后返回 Host；Functional Verification 保留为显式 Deep 请求，不能因失败/不可用/慢阻塞 Core。未请求 Deep 时 verify_task_fix 不调用 functional.finalize/discovery；Security 状态独立，不把 Deep 当 Core readiness prerequisite。Capability != Execution Timing，六种 trigger 只作元数据，不做 entitlement。
+
+耗时记录真实观测，不改变扫描/授权/风险语义。未执行为 null；auto_remediation 明确为 HOST_CONTINUATION_WINDOW_NOT_EDIT_CPU_TIME，不声称测到模型编辑 CPU 时间，不持久化用户数据、不信任 Host timestamp。先记录增量检查和 TaskFix proof recheck 双成本，不能为了速度删除必须安全动作。SDK driver 不是 Desktop 模型证据，尚未证明常开不打断目标。
+
+setup/repair 先证明所有权再迁移，不能按 server 名称、Runtime 字样或 marker alone 抢占用户配置。支持 signed v0.1→v0.2、精确旧生成器与重复 attested block/handler；CRLF 等价但健康 bytes 不变。unknown/tampered ownership、用户修改同名 MCP 或近似 Hook 继续 fail closed。旧 command 支持和官方 Hook ABI 保留，不写 Host 信任数据库。
+
+本轮未提交/推送/安装/替换活动 Runtime，无新 CI。下一次 Core Desktop 需核对 execution_timing，不能凭0.3.1确认新代码；不继续 Functional E2E。BOM/CET/执行安全模块/receipt binding 未变；旧默认自动 functional 指导由本节取代。验收见 BA。
+
+## Deep Verification protocol correctness fix（2026-10-04）
+
+SCANNER_VERIFIED_RESOLVED/CLOSED 是安全 episode 事实，不是 functional PASS；不应因 AI review 变 STALE 或功能凭据读取失败被改成 NOT_VERIFIED。用已保存原 finding scope 和 signed resolved scan 校验授权，而不放宽验证为仅检查 CLOSED。generic SECURITY_RECEIPT_REQUIRED_REFRESH 保留兼容，增加具体失效枚举与当前 snapshot validity；旧 episode/context 错误要求刷新但不能自动换对象。状态提交繁忙只允许重试同一 prepare。
+
+新 proof 唯一绑定当前 workspace/task/grant/episode/目标 scope/scan/snapshot。不通过自动新发 token 或猜 refresh 工具修复。旧格式 proof 缺少完整 binding 时，只提供现有 verify_task_fix + 原始 refs 的实际 scanner recheck handoff；该复核成功后才生成新 binding。确认授权过期/重连限制不自动续期。duplicate verify 保持有效 proof identity，避免破坏已签发 functional plan；换 proof 后原报告拒绝。task-v1/rem-v1、Family identity、episode recurrence 和每 episode 两次预算不变；新增状态向旧 Runtime 回滚会 fail closed，不能承诺旧版本读取新 binding。
+
+产品定位为 Deep Verification protocol correctness fix，已有 verification 能力保留兼容，重验证留给未来 Plus/Pro/Manual/Stop/PR/CI。本轮不向默认 Hook 热路径新增规划、执行或更强指导，不调整 BOM/CET、不安排新的 Desktop BOM/Functional E2E。完成既定定向/full offline 回归后停止，不提交推送或部署。详见 AZ。
+
+## javac UTF-8 BOM compatibility（2026-10-04）
+
+javac -encoding UTF-8 不消除源码开头 BOM，因此选择 Runtime 专用临时副本，而非修改用户源码或更换编译器/沙箱。只处理一份开头 UTF-8 BOM，所有其他字节及原成员路径不变；有 BOM 的多成员计划全部使用副本以保持 cwd 一致，无 BOM 继续原路径。对未知编码/NUL/重复 BOM fail closed / FUNCTIONAL_INCONCLUSIVE；真实语法/类型错误仍可 FAILED，baseline UNKNOWN、regression_attribution NOT_PROVEN，不推断由安全修复引起。
+
+元数据为 additive，MCP 名称/参数/引用/结果回传模型及旧 Host 执行协议不变；BOM 时 Host 必须遵循 Runtime 签发的 argv/cwd，不能改为编译用户原路径。只使旧 javac 缓存 namespace 失效，不迁移 DB/key，也不提升 COMPILE_ONLY。保留 scanner resolved 与独立 functional 状态，Runtime 无命令执行/模型/目标编辑，CET 与 Hook 不变。用户最新真实 Desktop 编排 PASS / BOM FAIL 已记录，本次 Desktop 修复复验 Pending，不替换活动 Runtime、不提交推送。见 AY。
+
+## 功能验证器发现与宿主执行编排 v0.1（2026-10-04）
+
+Runtime发现/规划/验收，AI Coding Host原生执行；扩展prepare_functional_verification/run_functional_verification/verify_task_fix，不新增平行工具或CET。默认MCP去除LocalSandbox执行选择，原内部注入executor测试保留，既有sandbox源码不修改。FUNCTIONAL_VERIFICATION_READY不是PASS；无报告调用返回计划、不启动进程。功能失败保留SCANNER_VERIFIED_RESOLVED与原顶层scanner status，不自动回滚安全修复、修改测试或重试；production_correctness永远UNKNOWN。compile成功仅COMPILE_ONLY，不等同业务测试或SAFE_TO_SHIP。
+
+Java fallback仅没有Maven/Gradle配置时使用已有javac；不安装、不猜依赖classpath、不隐式编译兄弟源码或运行annotation processors，输出项目外。既有build/scripts在有界瞬时副本执行，需要Host审阅项目代码并拒绝网络；Runtime不声称能控制宿主OS或认证报告真实性。报告闭合有界，带UNTRUSTED_HOST_EXECUTION_REPORT来源，文字只作固定分类与keyed摘要，不回显/持久化。
+
+兼容：工具名称/原refs格式不变；run新增可选execution_result，旧无报告调用不再在Runtime执行、返回Host计划；prepare默认PLANNED改FUNCTIONAL_VERIFICATION_READY，Host需按新交接走。verify原status/verification_status保留，新增functional_status与overall。schema/key/DB不迁移；cache独立namespace不误用原Runtime执行记录。Runtime版本仍0.3.1，runtime-info增加functional_host_execution=v0.1识别能力；未发布安装。Desktop与Maven真实执行Pending，不增加daemon/沙箱基础设施。详见AX。
+
+## Finding Family / Remediation Episode lifecycle（2026-10-04）
+
+稳定 family 与独立 episode/attempt 分开，修复 CLOSED family recurrence 被永久阻挡。保留原 session envelopes、flat current record、task-v1/rem-v1、max_attempts=2；增加随机 episode identity、正向 scanner resolution receipt、有界 metadata history。workspace lock 下原子写新 episode，workspace 最新 episode 查找防止跨 session 重置/旧授权复用。首次 AUTO 分配 attempt 1、确认批准前0、重试2，与原客户端含义一致。
+
+reason 迁移：不再输出混合 `FAMILY_CLOSED_OR_BUDGET_EXCEEDED`，拆为 EPISODE_ATTEMPT_BUDGET_EXCEEDED、EPISODE_ALREADY_EXISTS、EPISODE_RESOLUTION_NOT_PROVEN、REMEDIATION_FAMILY_BUDGET_EXCEEDED、EPISODE_HISTORY_BUDGET_EXCEEDED。原 ATTEMPT_LIMIT 改 episode budget enum，action仍ESCALATE。AUTO 的 SAFE_DETERMINISTIC_FIX 和确认的 USER_CONFIRMATION_MODE 保持；新增 episode_reason_code=RECURRENCE_AFTER_RESOLUTION / FIRST_OCCURRENCE，区分生命周期与策略原因，不让客户端自行构造引用。无合法“family 永久关闭”语义，不新增 FAMILY_CLOSED。
+
+无 SQLite/key migration；旧 MAC-valid rows 只读视作 #1、保留attempt。旧 CLOSED alone 不是 receipt；但其已签名 SCANNER_VERIFIED_RESOLVED + 有效安全snapshot/source/preservation guards 是旧 Runtime 已成立的正向 scanner proof，迁移保留它（hook scan ID未知），允许之后真实新scan识别复发，不迫使用户重复证明旧事实。缺少这些字段须新核查补证。变更时写新字段；损坏/歧义 fail closed，不恢复预算。当前策略仅建议时用新 OBSERVED phase 建立 recurrence episode，attempt=0，不发 token；旧 Runtime 不支持该 phase，会 fail closed，不能承诺向旧版本回滚状态兼容或以旧包验收新行为。历史达到16后明确停止，不丢历史重置。Hook prompt/Agent continuation/CET/functional credential 不扩展；真实 Desktop人工验收Pending，driver不冒充宿主模型。未经用户明确要求不 commit/push，不部署替换活动包。
+
 ## AUTO_FIX PostToolUse Code Mode Contract Fix v0.1（2026-10-04）
 
 干净起点 `feature/runtime-mvp` / `50f002deff33d0946ee99c338d700b08a739e394`。最新用户真实 Desktop：缺失首安全 Hook 后危险首有效 Hook 为 SETUP_SEED / baseline_available=true / SCANNED / NEW1 / AUTO_FIX，First-run Baseline Seed、归因、AUTO检测策略 **USER_REPORTED PASS**。之后 Script failed、未prepare/未secure edit、resolved0；Host重试危险编辑导致SESSION/NEW0/ESCALATE。**PostToolUse continuation USER_REPORTED FAIL（Code Mode decision:block contract）**；Stop未进入，Desktop **NOT TESTED**，不能写Stop FAIL。readiness/lifecycle已有真实PASS，不再调查。新transport的fresh Desktop自然继续/Stop闭环 **PENDING_ACTUAL_DESKTOP**。
@@ -468,3 +798,10 @@ SDK initialize 实际收到 instructions、工具 metadata、版本/能力和机
 Rule/file 覆盖决定能否证明消失；eq-v1 复用为 family key，并保存数量/安全坐标。不能 set-diff 家族后把第二处遗漏，不能把不同行的同家族当唯一 instance，不能在 scanner failure/删除/部分覆盖时 resolved。Secret 只存 detector/path/count/coords，未知缺席保留。Hook quick 使用变更文件完整候选，其前置适用规则规划、Raw历史指纹、风险策略和 MCP 校验保持；不调用模型，不执行构建/补丁或在线解析。
 
 短进程使用跨进程持久冷却/OS lock。首次缺 session baseline 只建立基线；Stop 强制收敛或复用，不启动 watcher。项目 Hook 配置依据当前官方 schema，配置成功不等于 Host触发成功；Codex/Cursor fresh host trial Pending，未验证产品不生成 schema。依据本轮用户明确要求及 AK 证据，ADR-016 的旧 PREREQUISITE_MISSING 仅为历史记录。
+## Core P0-7.3: propagate native event identity, do not bypass missing claims
+
+使用官方 Codex PostToolUse turn_id/tool_use_id 作为 required invocation claims，经 whole-value JSON 模板传入 MCP。permission_mode 仅描述、严格 enum，不提升权限。SessionStart/Stop 各用官方可提供的字段；Stop 不需要 tool identity。缺失/错误/重放/绑定错误都 fail closed；不通过 transcript、自然语言、workspace 推导或伪造缺失 ID。
+
+当前 live server 中保留有限 identifier hashes，拒绝 invocation 在不同 session/turn/tool/workspace 复用，也拒绝完全重复；预算满时拒绝，不通过 eviction 重新接纳。restart 不声称延续 identity 历史；已有 signed proof 保持原协议。命令 Hook 与直接嵌入 coordinator API 保留；MCP config 输入升级是显式契约变化，旧手写 definition 必须重新生成/review。
+
+拒绝诊断按 schema 字段分类，不回显未知字段名和值。实际 Desktop 历史 payload 缺失，不能将“旧配置未传 turn/tool_use_id”冒充已证明的具体拒绝原因，因为旧 validator 没有要求它们。记录 UNDETERMINED_PENDING_ACTUAL_DESKTOP_DIAGNOSTICS，使用下一轮非敏感 diagnostics 验证。无 Scanner/Family/Episode/receipt/remediation/Ticket/Deep 改动。

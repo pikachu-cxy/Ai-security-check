@@ -187,6 +187,8 @@ def main(argv: list[str] | None = None) -> int:
     doctor_parser.add_argument("--path")
     doctor_parser.add_argument("--json", action="store_true")
     doctor_parser.add_argument("--verbose", action="store_true")
+    doctor_parser.add_argument('--global', dest='global_scope', action='store_true', help='Check global Codex integration, including when --path is supplied')
+    doctor_parser.add_argument('--project', action='store_true', help='Use the legacy scanner/project doctor')
     scan_parser = sub.add_parser("scan", help="Scan code changes or the project")
     scan_parser.add_argument("--path")
     scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
@@ -209,9 +211,18 @@ def main(argv: list[str] | None = None) -> int:
     setup_parser.add_argument("--path")
     setup_parser.add_argument('--json', action='store_true')
     setup_parser.add_argument("--verbose", action="store_true")
+    setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default setup installs user-level Codex; --path retains legacy project setup')
+    setup_parser.add_argument('--dev', action='store_true', help='Explicitly acknowledge a DEV launcher; does not install source paths')
+    cursor_hook_parser = sub.add_parser('cursor-hook', help=argparse.SUPPRESS)
+    for action in ('status', 'repair', 'uninstall'):
+        global_parser = sub.add_parser(action, help='Manage the owned user-level Codex installation')
+        global_parser.add_argument('--path', help='Inspect or migrate this workspace only')
+        global_parser.add_argument('--json', action='store_true')
+        global_parser.add_argument('--dev', action='store_true')
     lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
     lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
-    lifecycle_parser.add_argument('integration', choices=['codex'])
+    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor'])
+    lifecycle_parser.add_argument('--scope', choices=['global', 'project'], default='project')
     lifecycle_parser.add_argument('--path')
     lifecycle_parser.add_argument('--json', action='store_true')
     integrations_parser = sub.add_parser("integrations", help="Inspect AI coding integrations")
@@ -228,10 +239,12 @@ def main(argv: list[str] | None = None) -> int:
     license_parser = sub.add_parser("licenses")
     license_parser.add_argument("--check-distribution", action="store_true")
     hooks_parser = sub.add_parser("hooks")
-    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc"])
+    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc", "recent"])
     hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"])
     hooks_parser.add_argument("--path")
     hooks_parser.add_argument("--json", action="store_true")
+    hooks_parser.add_argument("--limit", type=int, default=16, help="Recent diagnostics count (1–32)")
+    hooks_parser.add_argument("--unbound", action="store_true", help="Explicitly query unattributed Hook diagnostics")
     hook_parser = sub.add_parser('hook', help='Advisory local lifecycle quick check')
     hook_parser.add_argument('event', choices=['session-start','file-changed','agent-stop','host-event'])
     hook_parser.add_argument('--path')
@@ -247,8 +260,43 @@ def main(argv: list[str] | None = None) -> int:
     install_parser.add_argument("tool", nargs="?", choices=tuple(VERSIONS))
     install_parser.add_argument("--all", action="store_true")
     args = parser.parse_args(argv)
+    if args.command == 'cursor-hook':
+        from .cursor_hook import main as cursor_hook_main
+        return cursor_hook_main()
+    if ((args.command == 'setup' and args.integration == 'cursor' and args.scope == 'global')
+            or (args.command == 'integration' and args.integration == 'cursor' and args.scope == 'global')):
+        from .cursor_integration import GlobalCursorIntegration
+        try:
+            data = GlobalCursorIntegration(allow_dev=getattr(args, 'dev', False)).execute(
+                'setup' if args.command == 'setup' else args.action)
+        except (ValueError, OSError, KeyError, TypeError):
+            data = dict(integration='cursor', scope='GLOBAL', overall='BROKEN',
+                        diagnostics=['CURSOR_CONFIGURATION_REJECTED'])
+        print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / Cursor\n'+data['overall'])
+        return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'hooks' and args.action == 'recent':
+            from .recent_hooks import RecentHookStore
+            from .global_workspace import resolve_workspace
+            try:
+                if args.hook is not None or (args.unbound and args.path is not None):
+                    raise ValueError('Invalid recent diagnostic scope')
+                root = None if args.unbound else resolve_workspace(str(Path(args.path or Path.cwd()).absolute()))
+                result = RecentHookStore().recent(root, limit=args.limit, unbound=args.unbound)
+            except Exception:
+                result = dict(status='UNAVAILABLE', reason_code='RECENT_HOOK_DIAGNOSTIC_UNAVAILABLE',
+                              records=[], diagnostic_only=True, security_proof=False)
+                print(json.dumps(result, ensure_ascii=True) if args.json else 'Recent Hook diagnostics unavailable; no state changed.')
+                return 2
+            if args.json:
+                print(json.dumps(result, ensure_ascii=True))
+            else:
+                print('Recent Hook diagnostics: ' + result['status'] + ' (diagnostic only)')
+                for row in result['records']:
+                    print(f"{row['timestamp']} {row['event']} {row['last_stage']} claims={row.get('host_claim_status')} scanner={row.get('scanner_run')} id={row['diagnostic_id']}")
+                print(result['note'])
+            return 0
         if args.command == 'hook':
             try:
                 from .hook_runtime import HookCoordinator
@@ -286,6 +334,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command=='runtime-info':
             from .host_guidance import runtime_info
             info=runtime_info()
+            import os
+            if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
+                from .global_mcp import global_runtime_info
+                info = global_runtime_info()
             print(json.dumps(info,ensure_ascii=False) if args.json else '\n'.join([
                 'AI Security Runtime '+info['version'], 'Capabilities: '+info['capability_contract'],
                 *info['connection_recovery']]))
@@ -340,7 +392,7 @@ def main(argv: list[str] | None = None) -> int:
                 view=service.view(scan['scan_id'])
                 print(json.dumps(view,ensure_ascii=False) if args.json else render_triage(view))
             return 0
-        if args.command == "doctor":
+        if args.command == "doctor" and (args.project or (args.path is not None and not args.global_scope)):
             return doctor(Path(args.path) if args.path is not None else None, json_output=args.json, verbose=args.verbose)
         if args.command == "scan":
             registry = ScannerRegistry()
@@ -439,6 +491,31 @@ def main(argv: list[str] | None = None) -> int:
                 print("Environment: SECURITY_RUNTIME_WORKSPACE=" + str(workspace))
                 print("\nFor any MCP-compatible coding tool:\n1. Open MCP settings\n2. Add local stdio server\n3. Use the command and arguments above")
             return 0
+        global_action = (args.command in {'status', 'repair', 'uninstall'}
+            or (args.command == 'setup' and args.integration in {None, 'codex'}
+                and args.scope != 'project' and (args.path is None or args.scope == 'global'))
+            or (args.command == 'doctor' and not args.project and (args.path is None or args.global_scope)))
+        if global_action:
+            from .global_integration import GlobalCodexIntegration, render_global
+            from .global_workspace import resolve_workspace
+            from .integration_lifecycle import IntegrationDiagnostic
+            try:
+                workspace = args.path
+                if workspace is None:
+                    try:
+                        resolve_workspace(str(Path.cwd()))
+                        workspace = str(Path.cwd())
+                    except (ValueError, OSError):
+                        workspace = None
+                data = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False)).execute(args.command, workspace)
+            except (IntegrationDiagnostic, ValueError, OSError):
+                # Do not echo arbitrary claims or malformed config contents.
+                exc = sys.exc_info()[1]
+                reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_CONFIGURATION_REJECTED'
+                data = {'integration': 'codex', 'scope': 'GLOBAL', 'overall': 'BROKEN',
+                        'ownership': 'UNKNOWN', 'diagnostics': [reason]}
+            print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
+            return 2 if data['overall'] in {'BROKEN', 'DEGRADED'} else 0
         if args.command == 'integration' or (args.command == 'setup' and args.integration == 'codex'):
             from .integration_lifecycle import IntegrationManager, render_integration
             data = IntegrationManager().execute('setup' if args.command == 'setup' else args.action,

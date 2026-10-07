@@ -1,0 +1,562 @@
+{
+  "status": "PASS",
+  "duration_seconds": 40.06,
+  "cases": [
+    {
+      "case": "SESSION_START",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_BASELINE",
+        "reconciliation_reason": "DIGEST_MATCH",
+        "snapshot_generation": "66b9ee22704695197bf72deaae5980e500fc356665826987a1d18d90e06a6ebb",
+        "pre_snapshot_match": true,
+        "scanner_run": false,
+        "tool_use_claim_present": false,
+        "turn_claim_present": true,
+        "workspace_mutation_observed": false,
+        "content_delta_detected": false,
+        "snapshot_available": true,
+        "workspace_claim_match": true,
+        "session_claim_match": true,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "NO_CHANGE",
+        "scanner_trigger_reason": "POST_TOOL_USE_MUTATION",
+        "scanner_skipped_reason": "NO_CHANGE",
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "SESSION_START",
+        "normalized_operation_class": "UNKNOWN",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "event_schema": "cursor-sessionStart-v1",
+        "tool_name": "UNKNOWN",
+        "tool_classification": "UNKNOWN",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 0,
+        "snapshot_file_count": 0,
+        "diagnostic_id": "7af3182aa3a948a7bff8128771979f55",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "0201cd0348f541b5b8bab217a467e28e",
+        "event": "sessionStart",
+        "timestamp": "2026-10-06T14:32:38.378223+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.087
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 182.312
+          },
+          {
+            "stage": "SCANNER_TRIGGERED",
+            "elapsed_ms": 556.795
+          },
+          {
+            "stage": "SCANNER_COMPLETED",
+            "elapsed_ms": 6334.264
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 6541.008
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 6770.252
+          },
+          {
+            "stage": "MUTATION_NOT_OBSERVED",
+            "elapsed_ms": 6778.25
+          }
+        ],
+        "last_stage": "MUTATION_NOT_OBSERVED"
+      }
+    },
+    {
+      "case": "READ_ONLY",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "tool_use_claim_present": false,
+        "scanner_run": false,
+        "workspace_mutation_observed": false,
+        "session_claim_match": true,
+        "turn_claim_present": true,
+        "workspace_claim_match": true,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "NOT_SCANNED",
+        "scanner_trigger_reason": null,
+        "scanner_skipped_reason": "READ_ONLY_ACTIVITY",
+        "handler_reason": "READ_ONLY_ACTIVITY",
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "WORKSPACE_ACTIVITY",
+        "normalized_operation_class": "READ_ONLY",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "event_schema": "cursor-afterShellExecution-v1",
+        "tool_name": "Shell",
+        "tool_classification": "READ_ONLY",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 0,
+        "diagnostic_id": "bbe8e20dd4b1499cbeff8eb435037f50",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "34f69ea266f5432ba3863cc62d827e78",
+        "event": "afterShellExecution",
+        "timestamp": "2026-10-06T14:32:45.744636+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.053
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 169.718
+          },
+          {
+            "stage": "READ_ONLY_SKIPPED",
+            "elapsed_ms": 275.699
+          }
+        ],
+        "last_stage": "READ_ONLY_SKIPPED"
+      }
+    },
+    {
+      "case": "ORDINARY_DELTA",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_BASELINE",
+        "reconciliation_reason": "CONTENT_DIGEST_DELTA",
+        "snapshot_generation": "66b9ee22704695197bf72deaae5980e500fc356665826987a1d18d90e06a6ebb",
+        "content_delta_detected": true,
+        "workspace_mutation_observed": true,
+        "session_claim_match": true,
+        "snapshot_available": true,
+        "tool_use_claim_present": false,
+        "workspace_claim_match": true,
+        "scanner_run": true,
+        "pre_snapshot_match": false,
+        "turn_claim_present": true,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "SCANNED",
+        "scanner_trigger_reason": "POST_TOOL_USE_MUTATION",
+        "scanner_skipped_reason": null,
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "WORKSPACE_ACTIVITY",
+        "normalized_operation_class": "DIRECT_FILE_MUTATION",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "normalized_scanner_trigger_reason": "WORKSPACE_CONTENT_DELTA",
+        "event_schema": "cursor-afterFileEdit-v1",
+        "tool_name": "Write",
+        "tool_classification": "DIRECT_FILE_MUTATION",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 1,
+        "snapshot_file_count": 1,
+        "diagnostic_id": "32c7b864914743cb9068b1c41236a423",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "b96fb719fc60462992d4ad77fee88364",
+        "event": "afterFileEdit",
+        "timestamp": "2026-10-06T14:32:46.589056+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.057
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 226.088
+          },
+          {
+            "stage": "RECONCILIATION_STARTED",
+            "elapsed_ms": 331.258
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 559.858
+          },
+          {
+            "stage": "SCANNER_TRIGGERED",
+            "elapsed_ms": 569.024
+          },
+          {
+            "stage": "SCANNER_COMPLETED",
+            "elapsed_ms": 6740.7
+          }
+        ],
+        "last_stage": "SCANNER_COMPLETED"
+      }
+    },
+    {
+      "case": "SAME_BYTES",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_PROCESSED",
+        "reconciliation_reason": "DIGEST_MATCH",
+        "snapshot_generation": "992312307cb09f18293bd76539ccb32340dd1daad3569c4243293550f51b1adf",
+        "content_delta_detected": false,
+        "workspace_claim_match": true,
+        "pre_snapshot_match": true,
+        "session_claim_match": true,
+        "snapshot_available": true,
+        "turn_claim_present": true,
+        "tool_use_claim_present": false,
+        "scanner_run": false,
+        "workspace_mutation_observed": false,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "NO_CHANGE",
+        "scanner_trigger_reason": null,
+        "scanner_skipped_reason": "NO_CHANGE",
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "WORKSPACE_ACTIVITY",
+        "normalized_operation_class": "DIRECT_FILE_MUTATION",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "normalized_scanner_trigger_reason": null,
+        "event_schema": "cursor-afterFileEdit-v1",
+        "tool_name": "Write",
+        "tool_classification": "DIRECT_FILE_MUTATION",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 0,
+        "snapshot_file_count": 1,
+        "diagnostic_id": "ab728dad55a149859001795b1f763a67",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "f123aa77c027400697af21836d0e30ab",
+        "event": "afterFileEdit",
+        "timestamp": "2026-10-06T14:32:54.128466+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.05
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 241.458
+          },
+          {
+            "stage": "RECONCILIATION_STARTED",
+            "elapsed_ms": 348.677
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 594.271
+          },
+          {
+            "stage": "MUTATION_NOT_OBSERVED",
+            "elapsed_ms": 601.317
+          }
+        ],
+        "last_stage": "MUTATION_NOT_OBSERVED"
+      }
+    },
+    {
+      "case": "TLS_FINDING",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_PROCESSED",
+        "reconciliation_reason": "CONTENT_DIGEST_DELTA",
+        "snapshot_generation": "992312307cb09f18293bd76539ccb32340dd1daad3569c4243293550f51b1adf",
+        "pre_snapshot_match": false,
+        "scanner_run": true,
+        "snapshot_available": true,
+        "turn_claim_present": true,
+        "content_delta_detected": true,
+        "workspace_mutation_observed": true,
+        "workspace_claim_match": true,
+        "session_claim_match": true,
+        "tool_use_claim_present": false,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "SCANNED",
+        "scanner_trigger_reason": "POST_TOOL_USE_MUTATION",
+        "scanner_skipped_reason": null,
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "WORKSPACE_ACTIVITY",
+        "normalized_operation_class": "DIRECT_FILE_MUTATION",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "normalized_scanner_trigger_reason": "WORKSPACE_CONTENT_DELTA",
+        "event_schema": "cursor-afterFileEdit-v1",
+        "tool_name": "Write",
+        "tool_classification": "DIRECT_FILE_MUTATION",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 1,
+        "snapshot_file_count": 1,
+        "diagnostic_id": "435f506239014931a70b0edaab986768",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "d8dcac00e76c4133949f36de64573a78",
+        "event": "afterFileEdit",
+        "timestamp": "2026-10-06T14:32:55.378621+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.058
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 242.133
+          },
+          {
+            "stage": "RECONCILIATION_STARTED",
+            "elapsed_ms": 359.874
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 621.2
+          },
+          {
+            "stage": "SCANNER_TRIGGERED",
+            "elapsed_ms": 631.322
+          },
+          {
+            "stage": "SCANNER_COMPLETED",
+            "elapsed_ms": 6617.3
+          }
+        ],
+        "last_stage": "SCANNER_COMPLETED"
+      }
+    },
+    {
+      "case": "HOST_MANUAL_FIX_RESCAN",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_PROCESSED",
+        "reconciliation_reason": "CONTENT_DIGEST_DELTA",
+        "snapshot_generation": "4a80defa6174cd347a3bad261370e6f46d21b6c758019e4b81509d7a4d9f0692",
+        "workspace_claim_match": true,
+        "tool_use_claim_present": false,
+        "workspace_mutation_observed": true,
+        "content_delta_detected": true,
+        "session_claim_match": true,
+        "scanner_run": true,
+        "pre_snapshot_match": false,
+        "snapshot_available": true,
+        "turn_claim_present": true,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "SCANNED",
+        "scanner_trigger_reason": "POST_TOOL_USE_MUTATION",
+        "scanner_skipped_reason": null,
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "WORKSPACE_ACTIVITY",
+        "normalized_operation_class": "DIRECT_FILE_MUTATION",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "normalized_scanner_trigger_reason": "WORKSPACE_CONTENT_DELTA",
+        "event_schema": "cursor-afterFileEdit-v1",
+        "tool_name": "Write",
+        "tool_classification": "DIRECT_FILE_MUTATION",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 1,
+        "snapshot_file_count": 0,
+        "diagnostic_id": "d4ffee64cb0d4e15bd89ce00d7b90dc6",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "84d77ea3258344e08f46a9850e3b9728",
+        "event": "afterFileEdit",
+        "timestamp": "2026-10-06T14:33:02.800330+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.054
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 232.368
+          },
+          {
+            "stage": "RECONCILIATION_STARTED",
+            "elapsed_ms": 348.475
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 612.204
+          },
+          {
+            "stage": "SCANNER_TRIGGERED",
+            "elapsed_ms": 621.455
+          },
+          {
+            "stage": "SCANNER_COMPLETED",
+            "elapsed_ms": 6776.293
+          }
+        ],
+        "last_stage": "SCANNER_COMPLETED"
+      }
+    },
+    {
+      "case": "STOP_CONVERGENCE",
+      "diagnostic": {
+        "host_capabilities": {
+          "supports_session_start": true,
+          "supports_workspace_open": false,
+          "supports_native_file_edit": true,
+          "supports_shell_post_event": true,
+          "supports_tool_input": true,
+          "supports_invocation_id": false,
+          "supports_stop": true,
+          "supports_global_install": true,
+          "supports_setup_seed": false
+        },
+        "snapshot_source": "SESSION_PROCESSED",
+        "reconciliation_reason": "DIGEST_MATCH",
+        "snapshot_generation": "66b9ee22704695197bf72deaae5980e500fc356665826987a1d18d90e06a6ebb",
+        "snapshot_available": true,
+        "session_claim_match": true,
+        "tool_use_claim_present": false,
+        "turn_claim_present": true,
+        "workspace_mutation_observed": false,
+        "pre_snapshot_match": true,
+        "content_delta_detected": false,
+        "workspace_claim_match": true,
+        "scanner_run": false,
+        "missing_claims": [],
+        "invalid_claims": [],
+        "host_claim_status": "VALID",
+        "handler_status": "REUSED_LAST_RESULT",
+        "scanner_trigger_reason": null,
+        "scanner_skipped_reason": "REUSED_LAST_RESULT",
+        "handler_reason": null,
+        "host": "cursor",
+        "host_event_contract": "host-event-v1",
+        "normalized_event_kind": "SESSION_STOP",
+        "normalized_operation_class": "UNKNOWN",
+        "workspace_binding_status": "BINDING_CONSISTENT",
+        "event_schema": "cursor-stop-v1",
+        "tool_name": "UNKNOWN",
+        "tool_classification": "UNKNOWN",
+        "continuation_status": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+        "invocation_identity_status": "UNAVAILABLE_CONTENT_RECONCILIATION_ONLY",
+        "changed_file_count": 0,
+        "snapshot_file_count": 0,
+        "diagnostic_id": "d38e774022564665947f3281444885d0",
+        "workspace_hash": "99e151eeb490ccb0570cc376f17ee9478a7ccc741e3eece07cfec4ef94f6eb08",
+        "session_hash": "55d15299972dc05474a7e67f3dc0d2b3e3335b4e5cd2654d395bf04612127f4f",
+        "monotonic_scope": "a9abbb76f89b42a79fa6b72717fef62b",
+        "event": "stop",
+        "timestamp": "2026-10-06T14:33:10.453948+00:00",
+        "completed": true,
+        "stages": [
+          {
+            "stage": "HOOK_RECEIVED",
+            "elapsed_ms": 0.051
+          },
+          {
+            "stage": "CLAIMS_VALID",
+            "elapsed_ms": 181.401
+          },
+          {
+            "stage": "RECONCILIATION_COMPLETED",
+            "elapsed_ms": 517.589
+          },
+          {
+            "stage": "MUTATION_NOT_OBSERVED",
+            "elapsed_ms": 525.336
+          }
+        ],
+        "last_stage": "MUTATION_NOT_OBSERVED"
+      }
+    }
+  ],
+  "host": "SIMULATED_CURSOR",
+  "transport": "INSTALLED_NATIVE_COMMAND_STDIO",
+  "scanner": "ACTUAL_MANAGED_OFFLINE",
+  "clean_install": "PASS_BORROWED_SYSTEM_DEPENDENCIES",
+  "cross_process_recent": true,
+  "actual_desktop": "PENDING",
+  "continuation": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+  "network": false,
+  "model": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "real_user_configuration_modified": false
+}

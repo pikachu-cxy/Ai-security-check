@@ -37,7 +37,7 @@ END = '# END AI Security Runtime managed Codex v0.2\n'
 MAX_CONFIG = 262_144
 MAX_METADATA = 16_384
 REQUIRED_TOOLS = REQUIRED_GUIDANCE_TOOLS | {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event',
-    'confirm_remediation', 'prepare_functional_verification', 'run_functional_verification'}
+    'confirm_remediation'}
 
 
 def fingerprint(value) -> str:
@@ -91,7 +91,7 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
         raise IntegrationDiagnostic('RUNTIME_STALE')
     features = info.get('features', {})
     if (info.get('capability_contract') != CONTRACT or not isinstance(features, dict)
-        or any(features.get(k) != 'v0.1' for k in ('smart_auto_remediation', 'confirmation_handoff', 'functional_verification'))
+        or any(features.get(k) != 'v0.1' for k in ('smart_auto_remediation', 'confirmation_handoff'))
         or features.get('cold_start_readiness') != 'v0.3'
         or not REQUIRED_TOOLS.issubset(tools)
         or not REQUIRED_GUIDANCE_TOOLS.issubset(set(info.get('required_guidance_tools', [])))):
@@ -113,6 +113,10 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
         info = json.loads(result.stdout)
     except (ValueError, TypeError):
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
+    if env.get('SECURITY_RUNTIME_GLOBAL') == '1' and (not isinstance(info, dict)
+        or not isinstance(info.get('features'), dict)
+        or info['features'].get('global_runtime_integration') != 'v0.1'):
+        raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
 
     async def discover():
         from mcp import ClientSession, StdioServerParameters
@@ -123,7 +127,16 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
             async with stdio_client(params, errlog=errors) as (reader, writer):
                 async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=20)) as session:
                     await session.initialize()
-                    return {t.name for t in (await session.list_tools()).tools}
+                    tools = (await session.list_tools()).tools
+                    if env.get('SECURITY_RUNTIME_GLOBAL') == '1':
+                        result = await session.call_tool('get_runtime_info', {})
+                        data = result.structuredContent or json.loads(result.content[0].text)
+                        data = data.get('result', data)
+                        if (result.isError or data.get('integration_scope') != 'GLOBAL'
+                            or data.get('features', {}).get('global_runtime_integration') != 'v0.1'
+                            or not any(t.name == 'get_findings' and 'workspace_path' in t.inputSchema.get('properties', {}) for t in tools)):
+                            raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
+                    return {t.name for t in tools}
     try:
         tools = asyncio.run(asyncio.wait_for(discover(), timeout=30))
     except Exception:
@@ -132,19 +145,21 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
 
 
 def product_hooks() -> dict:
-    # Free v1 Host Hook ABI: freeze these exact definitions, including legacy
-    # version-looking status messages. Internal upgrades must not retrigger trust.
+    # Definitions are stable between explicit event-contract upgrades. P0-7.3
+    # adds invocation claims; its changed definition needs one new trust review.
     result = codex_mcp_hook_config()
     result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = 'AI Security Runtime [codex-integration-v0.2]'
     result['hooks']['SessionStart'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_readiness_event',
-        'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}', 'session_id': '${session_id}'},
+        'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}', 'session_id': '${session_id}',
+                  'permission_mode': '${permission_mode}'},
         'timeout': 30, 'statusMessage': 'AI Security Runtime [readiness-v0.3]',
     }]}]
     result['hooks']['Stop'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_stop_event',
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}',
-                  'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}'},
+                  'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}',
+                  'turn_id': '${turn_id}', 'permission_mode': '${permission_mode}'},
         'timeout': 30, 'statusMessage': 'AI Security Runtime [continuation-guard-v0.1]',
     }]}]
     return result
@@ -191,7 +206,7 @@ class CodexIntegrationAdapter:
             key = self._read(self._state_path(root, 'snapshot.key'), 32)
             if len(key) != 32 or not hmac.compare_digest(signature, hmac.new(key, self._encode(value), hashlib.sha256).hexdigest()):
                 raise ValueError()
-            if (value['integration_id'] != 'codex' or value['managed_version'] != VERSION
+            if (value['integration_id'] != 'codex' or value['managed_version'] not in {'codex-integration-v0.1', VERSION}
                 or value['workspace_hash'] != identity(os.path.normcase(str(root)))
                 or value['server'] != SERVER or value['phase'] not in {'COMMITTED', 'UPDATING'}
                 or not isinstance(value['records'], list) or not 1 <= len(value['records']) <= 2):
@@ -218,23 +233,62 @@ class CodexIntegrationAdapter:
             raise IntegrationDiagnostic('CONFIG_INVALID')
         atomic_bytes(self._state_path(root, 'ownership.json'), content)
 
-    def _config(self, root):
-        toml_path, hook_path = root / '.codex/config.toml', root / '.codex/hooks.json'
+    def _config(self, root, manifest=None):
+        if manifest is None:
+            manifest = self._manifest(root)
+        toml_path, hook_path = self._config_paths(root)
         a, b = self._read(toml_path), self._read(hook_path)
         try:
-            document = tomllib.loads(a.decode('utf-8')) if a else {}
+            owned = self._owned_blocks(a, manifest)
+            parse_a = a
+            if len(owned) > 1:
+                for found in reversed(owned):
+                    parse_a = parse_a[:found.start()] + parse_a[found.end():]
+                # Parse only after removing independently attested duplicates.
+                # An unowned same-name table still fails closed in the parser.
+                parse_a += owned[0].group()
+            document = tomllib.loads(parse_a.decode('utf-8')) if parse_a else {}
             hooks = unique_json(b) if b else {'hooks': {}}
             if not isinstance(document.get('mcp_servers', {}), dict) or not isinstance(document.get('features', {}), dict):
                 raise ValueError()
             self._validate_hooks(hooks)
-            if 'hooks' in document:
-                self._validate_hooks({'hooks': document['hooks']})
+            self._inline_hooks(document)
             for entry in document.get('mcp_servers', {}).values():
                 if not isinstance(entry, dict):
                     raise ValueError()
             return (toml_path, a, document), (hook_path, b, hooks)
+        except IntegrationDiagnostic:
+            raise
         except (ValueError, TypeError, UnicodeError, RecursionError):
             raise IntegrationDiagnostic('CONFIG_INVALID') from None
+
+    def _config_paths(self, root):
+        return root / '.codex/config.toml', root / '.codex/hooks.json'
+
+    @staticmethod
+    def _inline_hooks(document):
+        """Event-only view; Codex's TOML trust state is never a hook definition.
+
+        HooksToml.state maps opaque host keys to HookStateToml objects. Known
+        fields follow the official schema; additional state fields remain host
+        owned. No other dictionary-valued [hooks] key gets this exception.
+        The original parsed document and its on-disk bytes stay untouched.
+        """
+        hooks = document.get('hooks', {})
+        if not isinstance(hooks, dict):
+            raise ValueError()
+        if 'state' in hooks:
+            state = hooks['state']
+            if not isinstance(state, dict):
+                raise ValueError()
+            for entry in state.values():
+                if (not isinstance(entry, dict)
+                    or ('enabled' in entry and not isinstance(entry['enabled'], bool))
+                    or ('trusted_hash' in entry and not isinstance(entry['trusted_hash'], str))):
+                    raise ValueError()
+        definitions = {event: groups for event, groups in hooks.items() if event != 'state'}
+        CodexIntegrationAdapter._validate_hooks({'hooks': definitions})
+        return definitions
 
     @staticmethod
     def _validate_hooks(value):
@@ -249,6 +303,13 @@ class CodexIntegrationAdapter:
                     raise ValueError()
                 for hook in group['hooks']:
                     if not isinstance(hook, dict) or hook.get('type') not in {'command', 'mcp_tool', 'prompt', 'agent'}:
+                        raise ValueError()
+                    required = {'command': ('command',), 'mcp_tool': ('server', 'tool')}.get(hook['type'], ())
+                    if any(not isinstance(hook.get(field), str) for field in required):
+                        raise ValueError()
+                    if (('input' in hook and hook['type'] == 'mcp_tool' and not isinstance(hook['input'], dict))
+                        or ('timeout' in hook and (type(hook['timeout']) is not int or hook['timeout'] < 0))
+                        or ('statusMessage' in hook and not isinstance(hook['statusMessage'], str))):
                         raise ValueError()
 
     def _desired(self, root):
@@ -273,17 +334,23 @@ class CodexIntegrationAdapter:
         return runtime, env, server, block, hooks, record
 
     @staticmethod
-    def _owned_block(raw, manifest):
-        if BEGIN.encode() not in raw and END.encode() not in raw:
-            return None
-        pattern = re.compile(b'(?m)^' + re.escape(BEGIN.encode()) + b'.*?^' + re.escape(END.encode()), re.DOTALL)
+    def _owned_blocks(raw, manifest):
+        if raw.count(b'# BEGIN AI Security Runtime managed Codex') > 16:
+            raise IntegrationDiagnostic('CONFIG_INVALID')
+        pattern = re.compile(rb'(?m)\r?\n^# BEGIN AI Security Runtime managed Codex (v0\.[12])\r?\n'
+                             rb'.*?^# END AI Security Runtime managed Codex \1\r?\n', re.DOTALL)
         matches = list(pattern.finditer(raw))
-        if len(matches) != 1 or raw.count(BEGIN.encode()) != 1 or raw.count(END.encode()) != 1:
+        starts = len(re.findall(rb'(?m)^# BEGIN AI Security Runtime managed Codex v0\.[12]\r?$', raw))
+        ends = len(re.findall(rb'(?m)^# END AI Security Runtime managed Codex v0\.[12]\r?$', raw))
+        if starts != len(matches) or ends != len(matches):
             raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
-        found = matches[0]
-        if manifest is None or identity(found.group().decode()) not in {r['block'] for r in manifest['records']}:
-            raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
-        return found
+        for found in matches:
+            normalized = found.group().replace(b'\r\n', b'\n').decode('utf-8')
+            parsed = tomllib.loads(normalized).get('mcp_servers', {}).get(SERVER)
+            if manifest is None or not any(r['block'] == identity(normalized) and
+                    r['server'] == fingerprint(parsed) for r in manifest['records']):
+                raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+        return matches
 
     @staticmethod
     def _owned_group(event, group, manifest):
@@ -292,7 +359,14 @@ class CodexIntegrationAdapter:
     @staticmethod
     def _owned_handler(event, group, handler, manifest):
         wrapper = {**group, 'hooks': [handler]}
-        return manifest is not None and any(r['hooks'].get(event) == fingerprint(wrapper) for r in manifest['records'])
+        if manifest is None:
+            return False
+        if any(r['hooks'].get(event) == fingerprint(wrapper) for r in manifest['records']):
+            return True
+        # Exact released MCP POC shape only, anchored by the signed installation.
+        # Similar server names, custom matchers/inputs/timeouts are not ownership.
+        from .codex_mcp_hook import codex_mcp_hook_config
+        return wrapper in codex_mcp_hook_config()['hooks'].get(event, [])
 
     @staticmethod
     def _related(event, group):
@@ -313,15 +387,24 @@ class CodexIntegrationAdapter:
         no_links(exclude)
         # Linked worktrees have no directory .git; do not guess their provenance.
         marked = exclude.is_file() and marker.encode() in self._read(exclude)
-        full = marked and all(hooks.get('hooks', {}).get(e) == g for e, g in expected.items())
-        return expected if full else {}
+        present = marked and any(self._legacy_handler(e, g, h, expected)
+            for e, groups in hooks.get('hooks', {}).items() for g in groups for h in g['hooks'])
+        return expected if present else {}
+
+    @staticmethod
+    def _legacy_handler(event, group, handler, legacy):
+        return {**group, 'hooks': [handler]} in legacy.get(event, [])
 
     def _inspection(self, root, configs, manifest, desired):
         (_, raw, document), (_, _, hooks) = configs
         runtime, env, server, block, wanted, record = desired
         diagnostics = []
         current = document.get('mcp_servers', {}).get(SERVER)
-        owned = self._owned_block(raw, manifest)
+        owned = self._owned_blocks(raw, manifest)
+        if len(owned) > 1:
+            diagnostics.append('MCP_DUPLICATE_MANAGED_BLOCK')
+        if manifest and manifest['managed_version'] != VERSION:
+            diagnostics.append('MANAGED_FORMAT_UPGRADE_REQUIRED')
         if current is None:
             diagnostics.append('MCP_NOT_CONFIGURED')
         elif manifest is None or owned is None or fingerprint(current) not in {r['server'] for r in manifest['records']}:
@@ -337,10 +420,11 @@ class CodexIntegrationAdapter:
             diagnostics.append('LEGACY_HOOK_PRESENT')
         for event, groups in hooks['hooks'].items():
             for group in groups:
-                foreign = {**group, 'hooks': [h for h in group['hooks'] if not self._owned_handler(event, group, h, manifest)]}
+                foreign = {**group, 'hooks': [h for h in group['hooks'] if not self._owned_handler(event, group, h, manifest)
+                    and not self._legacy_handler(event, group, h, legacy)]}
                 if self._related(event, foreign) and group not in legacy.get(event, []):
                     diagnostics.append('POTENTIAL_DUPLICATE_HOOK')
-        for event, groups in document.get('hooks', {}).items():
+        for event, groups in self._inline_hooks(document).items():
             if any(self._related(event, group) for group in groups):
                 diagnostics.append('POTENTIAL_DUPLICATE_HOOK')
         for event, groups in wanted['hooks'].items():
@@ -350,13 +434,17 @@ class CodexIntegrationAdapter:
         return list(dict.fromkeys(diagnostics)), owned, legacy
 
     def _hook_status(self, event, hooks, wanted, manifest):
+        owned_count = sum(self._owned_handler(event, group, h, manifest)
+                          for group in hooks['hooks'].get(event, []) for h in group['hooks'])
+        if owned_count > 1:
+            return 'HOOK_DUPLICATE'
         count = sum({**group, 'hooks': [h]} == wanted['hooks'][event][0] and self._owned_handler(event, group, h, manifest)
                     for group in hooks['hooks'].get(event, []) for h in group['hooks'])
         return 'HOOK_MISSING' if count == 0 else ('HOOK_DUPLICATE' if count > 1 else 'CONFIGURED')
 
     def status(self, root: Path) -> dict:
-        configs = self._config(root)
         manifest = self._manifest(root)
+        configs = self._config(root, manifest)
         desired = self._desired(root)
         diagnostics, owned, legacy = self._inspection(root, configs, manifest, desired)
         runtime, env, *_ = desired
@@ -368,7 +456,8 @@ class CodexIntegrationAdapter:
         diagnostics.append(readiness['status']) if readiness['status'] != 'READINESS_OBSERVED' else None
         absent = not manifest and configs[0][2].get('mcp_servers', {}).get(SERVER) is None
         configured = not any(d in diagnostics for d in ('MCP_NOT_CONFIGURED', 'RUNTIME_STALE', 'RUNTIME_MISSING',
-            'WORKSPACE_BINDING_MISMATCH', 'HOOK_MISSING', 'HOOK_DUPLICATE', 'POTENTIAL_DUPLICATE_HOOK', 'LEGACY_HOOK_PRESENT', 'HOST_HOOKS_DISABLED'))
+            'WORKSPACE_BINDING_MISMATCH', 'HOOK_MISSING', 'HOOK_DUPLICATE', 'POTENTIAL_DUPLICATE_HOOK', 'LEGACY_HOOK_PRESENT', 'HOST_HOOKS_DISABLED',
+            'MCP_DUPLICATE_MANAGED_BLOCK', 'MANAGED_FORMAT_UPGRADE_REQUIRED'))
         overall = 'NOT_INSTALLED' if absent else ('READY' if configured and readiness['status'] == 'READINESS_OBSERVED'
             else ('CONFIGURED' if configured else 'DEGRADED'))
         baseline = self.baselines.status(root)
@@ -421,8 +510,8 @@ class CodexIntegrationAdapter:
         with self.store.lock(root, wait_seconds=5) as acquired:
             if not acquired:
                 raise IntegrationDiagnostic('INTEGRATION_BUSY')
-            configs = self._config(root)
             manifest = self._manifest(root)
+            configs = self._config(root, manifest)
             desired = self._desired(root)
             diagnostics, owned, legacy = self._inspection(root, configs, manifest, desired)
             if 'POTENTIAL_DUPLICATE_HOOK' in diagnostics:
@@ -433,7 +522,9 @@ class CodexIntegrationAdapter:
             else:
                 capability = None
             (a_path, a, document), (b_path, b, hooks) = configs
-            new_a = a[:owned.start()] + a[owned.end():] if owned else a
+            new_a = a
+            for found in reversed(owned):
+                new_a = new_a[:found.start()] + new_a[found.end():]
             if action != 'remove':
                 # Separating newline is part of the owned block's deterministic insertion.
                 new_a = new_a + block
@@ -443,7 +534,8 @@ class CodexIntegrationAdapter:
                 for group in groups:
                     if group in legacy.get(event, []):
                         continue
-                    handlers = [h for h in group['hooks'] if not self._owned_handler(event, group, h, manifest)]
+                    handlers = [h for h in group['hooks'] if not self._owned_handler(event, group, h, manifest)
+                                and not self._legacy_handler(event, group, h, legacy)]
                     if handlers:
                         kept.append({**group, 'hooks': handlers})
                 if kept:
@@ -455,7 +547,7 @@ class CodexIntegrationAdapter:
                     merged['hooks'].setdefault(event, []).extend(groups)
             new_b = (json.dumps(merged, ensure_ascii=True, indent=2) + '\n').encode() if merged != hooks else b
             # Existing configured bytes win over serialization: true idempotence.
-            if owned and owned.group() == block and action != 'remove':
+            if len(owned) == 1 and owned[0].group().replace(b'\r\n', b'\n') == block and action != 'remove':
                 new_a = a
             parsed = tomllib.loads(new_a.decode()) if new_a else {}
             self._validate_hooks(merged)

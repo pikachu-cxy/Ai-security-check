@@ -16,6 +16,7 @@ import time
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from codex_hook_fixture import invocation_claims
 
 SAFE='''import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
@@ -79,7 +80,7 @@ async def run(command,failure=False,mode='smart_auto'):
                 async with ClientSession(read,write,read_timeout_seconds=timedelta(seconds=180)) as client:
                     await client.initialize()
                     async def call(name,args):
-                        response=await client.call_tool(name,args)
+                        response=await client.call_tool(name,invocation_claims(name, args))
                         assert not response.isError,name
                         data=response.structuredContent or json.loads(response.content[0].text)
                         return data.get('result',data)

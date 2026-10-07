@@ -1,0 +1,65 @@
+{
+  "stage": "Core P0-7.3.3",
+  "new_test_cases": 25,
+  "focused": {
+    "status": "PASS",
+    "summary": "281 passed in 293.87s (0:04:53)",
+    "duration_seconds": 294.43,
+    "skipped": [],
+    "temporary_codex_home": true,
+    "isolated_runtime_state": true
+  },
+  "full": {
+    "status": "PASS",
+    "summary": "1523 passed, 9 skipped, 6 subtests passed in 1838.52s (0:30:38)",
+    "duration_seconds": 1839.13,
+    "skipped": [
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+    ],
+    "temporary_codex_home": true,
+    "isolated_runtime_state": true
+  },
+  "package": {
+    "status": "PASS",
+    "duration_seconds": 4.58,
+    "source_bytes_checked": 80,
+    "wheel_sha256": "b78e61e79f97d9412eefe876da4c64f871b912dea2b1167d2e961eaa4099e7f0",
+    "sdist_sha256": "d2a8ada01548bdc91db398907d99892027fe04b8c5383fc65a04df1b377b7eb9",
+    "package_integrity": "PASS",
+    "compliance": "PASS",
+    "active_runtime_replaced": false,
+    "network": false
+  },
+  "preliminary_runs_not_pass": [
+    {
+      "name": "p0733-targeted",
+      "reason": "Test helper used nonexistent nested structured key; corrected tests"
+    },
+    {
+      "name": "p0733-new-final",
+      "reason": "autocrlf fixture had non-normalized committed content; corrected fixture"
+    },
+    {
+      "name": "p0733-focused",
+      "reason": "Intermediate autocrlf override widened dirty scope; removed and corrected implementation"
+    },
+    {
+      "name": "p0733-full",
+      "reason": "Stopped exit 130 because source correction invalidated this preliminary frozen run"
+    }
+  ],
+  "real_desktop_candidate_trial": "PENDING_USER_EXECUTION",
+  "actual_project_c": "READ_ONLY_NO_SCAN_OR_SOURCE_EDIT",
+  "real_codex_home": "NOT_MODIFIED",
+  "commit": false,
+  "push": false,
+  "active_runtime_replaced": false
+}

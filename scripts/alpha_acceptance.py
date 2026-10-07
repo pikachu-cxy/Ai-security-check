@@ -55,6 +55,7 @@ async def mcp(root: Path, name: str, arguments: dict) -> dict:
 def run() -> dict:
     evidence = {"fixture": "isolated Git repo, 16-level tracked source and ignored clone cache",
                 "client_note": "Generic MCP SDK calls; no real WorkBuddy application connection is asserted"}
+    fake_token = "gh" + "p_" + ("A7c9E2g4J6m8" + "P0r3T5v7X9z1" + "B4d6F8h0K2n5")
     with tempfile.TemporaryDirectory(prefix="alpha-acceptance-") as temporary:
         base = Path(temporary)
         root = base / "project"
@@ -86,8 +87,7 @@ def run() -> dict:
         deep = root / deep_name
         deep.parent.mkdir(parents=True)
         # This hard-coded synthetic token is solely an acceptance fixture.
-        token = "ghp_" + "A7c9E2g4J6m8P0r3T5v7X9z1B4d6F8h0K2n5"
-        deep.write_text(f"import os\nos.system(input())\nTEST_ONLY_TOKEN = '{token}'\n", encoding="utf-8")
+        deep.write_text(f"import os\nos.system(input())\nTEST_ONLY_TOKEN = '{fake_token}'\n", encoding="utf-8")
         (root / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
         git(root, "switch", "-qc", "acceptance-feature")
         git(root, "add", deep_name, "requirements.txt")

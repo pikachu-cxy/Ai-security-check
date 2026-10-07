@@ -25,6 +25,11 @@ def equivalence_key(finding) -> str:
         fields = ['dependency', *identity]
     else:
         rule = details.get('rule_id')
+        # Normalized capability anchors retain eq-v1 and the historical TLS
+        # identity. Secret families retain scanner detector identity because
+        # its absence cannot be proven from a generic capability claim.
+        if category != 'secret' and details.get('capability_program_version') and details.get('capability_family_anchor'):
+            rule = details['capability_family_anchor']
         sources = row.get('scanner_sources') or []
         if not category or not isinstance(rule, str) or not rule or not sources:
             return ''

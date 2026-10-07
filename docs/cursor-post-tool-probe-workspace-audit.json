@@ -1,0 +1,24 @@
+{
+  "checks": "PASS",
+  "incoming_files": 549,
+  "changed_incoming_files": [
+    "MANIFEST.in",
+    "src/ai_security_runtime.egg-info/SOURCES.txt",
+    "src/security_runtime/cli.py",
+    "src/security_runtime/cursor_event_adapter.py",
+    "src/security_runtime/cursor_hook.py",
+    "src/security_runtime/cursor_integration.py",
+    "src/security_runtime/recent_hooks.py",
+    "tests/test_security_feedback.py"
+  ],
+  "deleted_files": [],
+  "frozen_incoming_files": 541,
+  "prior_uncommitted_work_preserved": true,
+  "scanner_attribution_finding_policy_remediation_feedback_outbox_formatter_codex_bytes_unchanged": true,
+  "cursor_binding_core_factory_ast_unchanged": true,
+  "real_user_configuration_modified": false,
+  "active_runtime_replaced": false,
+  "commit": false,
+  "push": false,
+  "desktop_probe": "NOT_EXECUTED"
+}

@@ -36,6 +36,7 @@ class Step:
     arguments: tuple[str, ...]
     config_files: tuple[str, ...]
     wrapper: bool = False
+    target_files: tuple[str, ...] = ()
 
     def public(self):
         return dict(kind=self.kind, provider=self.provider, command_id=self.command_id,
@@ -120,13 +121,94 @@ class PythonVerifier:
         exe = sys.executable if importlib.util.find_spec('pytest') and not getattr(sys,'frozen',False) else None
         return [Step('TEST','python','python-pytest',exe,('-m','pytest','-q','--no-header','tests'),configs)]
 
+    def detect_host(self, root, selected):
+        configs = tuple(n for n in ('pyproject.toml', 'pytest.ini', 'setup.cfg') if (root / n).exists())
+        for name in configs:
+            config_bytes(root, name)
+        candidates = [str(Path('tests') / ('test_' + Path(n).stem + '.py')) for n in selected]
+        related = tuple(n for n in candidates if (root / n).is_file())
+        entrances = related or (('tests',) if (root / 'tests').is_dir() else
+                               tuple(sorted(p.name for p in root.glob('test_*.py'))))
+        if not entrances:
+            return []
+        import importlib.util
+        exe = sys.executable if importlib.util.find_spec('pytest') and not getattr(sys, 'frozen', False) else None
+        return [Step('TEST', 'python', 'python-pytest', exe,
+                     ('-m', 'pytest', '-q', '--no-header', '-p', 'no:cacheprovider', *entrances), configs,
+                     target_files=selected)]
+
+
+def targets(root, names):
+    """Only Runtime-selected relative members; never shell fragments or links."""
+    result = []
+    for name in names:
+        if (not isinstance(name, str) or not name or len(name) > 1024 or
+                any(ord(c) < 32 for c in name) or '\\' in name or
+                any(c in name for c in ';|&`$<>"') or
+                Path(name).is_absolute() or '..' in Path(name).parts or name.startswith('-')):
+            raise ValueError('VERIFIER_SCOPE_REJECTED')
+        path = root / name
+        no_links(path)
+        if not path.resolve().is_relative_to(root.resolve()) or not path.is_file():
+            raise ValueError('VERIFIER_SCOPE_REJECTED')
+        result.append(Path(name).as_posix())
+    if not result or len(result) > 8:
+        raise ValueError('VERIFIER_SCOPE_REJECTED')
+    return tuple(sorted(set(result)))
+
+
+class JavacVerifier:
+    def detect(self, root, target_files):
+        selected = targets(root, target_files)
+        if not all(n.endswith('.java') for n in selected):
+            return []
+        # Output/classpath/sourcepath are supplied by the host-plan builder,
+        # using a Runtime-owned empty directory outside the project.
+        return [Step('COMPILE', 'javac', 'java-javac-target', shutil.which('javac'),
+                     ('-proc:none', '-implicit:none', '-encoding', 'UTF-8'), (),
+                     target_files=selected)]
+
+
+class GoVerifier:
+    def detect(self, root):
+        if not (root / 'go.mod').exists():
+            return []
+        config_bytes(root, 'go.mod')
+        if not any(root.rglob('*_test.go')):
+            return []
+        return [Step('TEST', 'go', 'go-test', shutil.which('go'), ('test', './...'), ('go.mod',))]
+
 
 class FunctionalVerifierRegistry:
     def __init__(self):
         self.verifiers = (MavenVerifier(), GradleVerifier(), NodeVerifier(), PythonVerifier())
 
-    def detect(self, root):
-        return [s for verifier in self.verifiers for s in verifier.detect(root)]
+    def detect(self, root, target_files=None):
+        if target_files is None:
+            # Original internal detector API remains compatible.
+            return [s for verifier in self.verifiers for s in verifier.detect(root)]
+        selected = targets(root, target_files)
+        if all(n.endswith('.java') for n in selected):
+            # Existing build metadata wins even when its tool is unavailable.
+            for verifier in (MavenVerifier(), GradleVerifier()):
+                steps = verifier.detect(root)
+                if steps:
+                    return steps
+            return JavacVerifier().detect(root, selected)
+        if all(n.endswith('.go') for n in selected):
+            steps = GoVerifier().detect(root)
+            package = sorted({str(Path(n).parent).replace('\\', '/') for n in selected})
+            if steps:
+                step = steps[0]
+                return [Step(step.kind, step.provider, step.command_id, step.executable,
+                             ('test', *('./' + n if n != '.' else '.' for n in package)), step.config_files,
+                             target_files=selected)]
+            return []
+        if all(n.endswith('.py') for n in selected):
+            return PythonVerifier().detect_host(root, selected)
+        if all(Path(n).suffix in {'.js', '.jsx', '.ts', '.tsx', '.vue'} for n in selected):
+            return NodeVerifier().detect(root)
+        return [s for verifier in (NodeVerifier(), PythonVerifier()) for s in verifier.detect(root)]
 
     def plan(self, root, steps, key):
         import hmac
@@ -139,6 +221,7 @@ class FunctionalVerifierRegistry:
                     if executable.stat().st_size>32_000_000: raise ValueError('LOCAL_TOOL_IDENTITY_BUDGET')
                     executable_hash=hashlib.sha256(executable.read_bytes()).hexdigest()
             bindings.append(dict(step=step.public(), executable=step.executable, arguments=step.arguments,
+                                 target_files=step.target_files,
                                  executable_hash=executable_hash,
                                  configs={n:hmac.new(key,config_bytes(root,n),hashlib.sha256).hexdigest()
                                           for n in step.config_files}))

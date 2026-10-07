@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "incoming_files": 465,
+  "untouched_incoming_files": 455,
+  "deleted_incoming_files": [],
+  "changed_incoming_files": [
+    "src/ai_security_runtime.egg-info/SOURCES.txt",
+    "src/security_runtime/cursor_event_adapter.py",
+    "src/security_runtime/cursor_hook.py",
+    "src/security_runtime/recent_hooks.py",
+    "docs/AI_TRIAGE_ACCEPTANCE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DECISIONS.md",
+    "docs/NEXT_STAGE.md",
+    "docs/PROJECT_STATE.md",
+    "MANIFEST.in"
+  ],
+  "frozen_files": 189,
+  "frozen_drift": [],
+  "core_codex_scanner_ticket_resolver_installer_bytes_unchanged": true,
+  "prior_document_history_byte_preserved": true,
+  "prior_uncommitted_work_preserved": true,
+  "real_user_config_modified": false,
+  "active_runtime_replaced": false,
+  "actual_desktop_trial": false,
+  "commit": false,
+  "push": false,
+  "project_context_read_or_modified": false
+}

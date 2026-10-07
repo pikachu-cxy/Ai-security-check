@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+import itertools
 from pathlib import Path
 
 import pytest
@@ -14,8 +15,11 @@ from security_runtime.mcp_server import create_server
 from test_hook_runtime import FakeRuntime, coordinator, dirty, repo, row
 
 
+_tool_calls = itertools.count()
+
 def claims(root):
-    return dict(event='PostToolUse', workspace_path=str(root), session_id='poc-session', tool_name='apply_patch')
+    return dict(event='PostToolUse', workspace_path=str(root), session_id='poc-session',
+                tool_name='apply_patch', turn_id='fixture-turn', tool_use_id=f'fixture-call-{next(_tool_calls)}')
 
 
 def binding(root):
@@ -29,11 +33,13 @@ def test_poc_config_only_posttooluse_and_metadata(capsys):
     assert config == codex_mcp_hook_config()
     assert set(config['hooks']) == {'PostToolUse'}
     group = config['hooks']['PostToolUse'][0]
-    assert group['matcher'] == '^(apply_patch|Edit|Write)$'
+    assert group['matcher'] == '^(Bash|apply_patch|Edit|Write)$'
     handler = group['hooks'][0]
     assert handler == dict(type='mcp_tool', server='ai_security_runtime', tool='handle_hook_event',
         input=dict(event='${hook_event_name}', workspace_path='${cwd}',
-                   session_id='${session_id}', tool_name='${tool_name}'),
+                   session_id='${session_id}', tool_name='${tool_name}',
+                   turn_id='${turn_id}', tool_use_id='${tool_use_id}', permission_mode='${permission_mode}',
+                   tool_input='${tool_input}'),
         timeout=120, statusMessage='AI Security Runtime [mcp-hook-poc]')
     assert 'command' not in handler
 
@@ -57,9 +63,10 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
         from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
         assert REQUIRED_GUIDANCE_TOOLS <= set(tools)
         assert set(tool.inputSchema['required']) == set(claims(repo))
-        assert set(tool.inputSchema['properties']) == set(claims(repo))
+        assert set(tool.inputSchema['properties']) == set(claims(repo)) | {'tool_input', 'permission_mode'}
         assert tool.inputSchema['additionalProperties'] is False
-        assert all(value['type'] == 'string' for value in tool.inputSchema['properties'].values())
+        assert all(value['type'] == 'string' for key, value in tool.inputSchema['properties'].items()
+                   if key not in {'tool_input', 'permission_mode'})
         assert not tool.annotations.readOnlyHint and not tool.annotations.openWorldHint
         response = await server.call_tool('handle_hook_event', claims(repo))
         data = response.structuredContent
@@ -76,7 +83,7 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize('change', [dict(event='Stop'), dict(event='FILE_CHANGED'),
     dict(session_id=''), dict(session_id='${session_id}'), dict(session_id='x'*501),
-    dict(session_id='bad\nclaim'), dict(tool_name='Bash'), dict(workspace_path='.'),
+    dict(session_id='bad\nclaim'), dict(tool_name='Other'), dict(workspace_path='.'),
     dict(workspace_path='${cwd}')])
 def test_invalid_claims_inconclusive_without_scanning(repo, tmp_path, change):
     runtime = FakeRuntime()
@@ -90,6 +97,28 @@ def test_missing_binding_cannot_scan(repo, tmp_path):
     runtime = FakeRuntime()
     result = handle_codex_hook(**claims(repo), binding=None, coordinator=coordinator(tmp_path, runtime))
     assert result['reason'] == 'WORKSPACE_BINDING_REQUIRED' and not runtime.calls
+
+
+@pytest.mark.parametrize('command', ['git status', 'Get-Content src/A.java', 'rg danger src'])
+def test_bash_read_only_skips_scanner(repo, tmp_path, command):
+    runtime = FakeRuntime()
+    result = handle_codex_hook(**(claims(repo) | {'tool_name': 'Bash', 'tool_input': {'command': command}}),
+                               binding=binding(repo), coordinator=coordinator(tmp_path, runtime))
+    assert result['status'] == 'NOT_SCANNED'
+    assert result['tool_classification'] == 'READ_ONLY'
+    assert not result['scanner_run'] and not runtime.calls
+
+
+def test_bash_mutation_and_unknown_are_scanned(repo, tmp_path):
+    for tool_input, classification in ({'command': 'Set-Content x.java value'}, 'POSSIBLE_WORKSPACE_MUTATION'), ({'command': 'make'}, 'UNKNOWN'):
+        runtime = FakeRuntime()
+        state_root = tmp_path / classification
+        state_root.mkdir()
+        dirty(repo, 'bash-change\n')
+        result = handle_codex_hook(**(claims(repo) | {'tool_name': 'Bash', 'tool_input': tool_input}),
+                                   binding=binding(repo), coordinator=coordinator(state_root, runtime))
+        assert result['tool_classification'] == classification
+        assert len(runtime.calls) == 1, result
 
 
 @pytest.mark.parametrize('foreign', ['parent', 'unc'])

@@ -7,6 +7,8 @@ import tempfile
 import time
 import shutil
 import os
+import hashlib
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Protocol
@@ -20,6 +22,7 @@ from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_
 from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
 from .rule_coverage import plan_rules
+from .rule_program import annotate as annotate_capability, aggregate as aggregate_capabilities
 from dataclasses import replace
 import yaml
 from .sast import SASTRequest, SemgrepEngineProvider
@@ -27,6 +30,7 @@ from .target import TargetDetector
 from .processes import ProcessResult, run_process, OutputLimitError
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .progress import emit, checkpoint, ScanCancelled
+from .scanner_observation import observation, metadata, span, count, add_time, invocation, scope as observe_scope, cache as cache_observed
 
 
 MAX_OUTPUT = 4_000_000
@@ -40,10 +44,11 @@ def _snapshot(context: ScanContext):
     files = TargetDetector().detect(root, list(dict.fromkeys((*context.files, *context.context_files)))).files
     with tempfile.TemporaryDirectory(prefix="security-runtime-scope-") as temporary:
         scoped = Path(temporary)
-        for name in files:
-            destination = scoped / name
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(root / name, destination)
+        with span('target_preparation'):
+            for name in files:
+                destination = scoped / name
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(root / name, destination)
         yield scoped
 
 
@@ -67,7 +72,10 @@ def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
         if local_recheck_requested():
             environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         try:
-            result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT)
+            with span('process_invocation'):
+                count('process_invocations')
+                result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT)
+            add_time('process_creation', getattr(result, 'timing_ms', {}).get('process_creation'))
         except (TimeoutError, OutputLimitError):
             scanner_process_observed()
             raise
@@ -103,13 +111,20 @@ class BaseScanner:
         return self.tool_manager.resolve(self.engine_id or self.scanner_id).version
 
     def scan(self, context: ScanContext, normalizer: FindingNormalizer) -> tuple[list[Finding], ScannerRun]:
+        with observation(context.root) as observed:
+            findings, run = self._scan_observed(context, normalizer)
+            run.scanner_diagnostics = metadata(observed)
+        return findings, run
+
+    def _scan_observed(self, context, normalizer):
         start = time.monotonic()
         def failed(status, diagnostic, version=''):
             return [], ScannerRun(self.name, version, status, round((time.monotonic()-start)*1000),
                                   error=diagnostic.error_summary, **diagnostic.to_dict())
         try:
             checkpoint()
-            resolved = self.tool_manager.ensure(self.engine_id or self.scanner_id, **({'offline': True} if local_recheck_requested() else {}))
+            with span('capability_preparation'):
+                resolved = self.tool_manager.ensure(self.engine_id or self.scanner_id, **({'offline': True} if local_recheck_requested() else {}))
         except ScanCancelled:
             raise
         except Exception as exc:
@@ -156,44 +171,118 @@ class PatternSASTScanner(BaseScanner):
         super().__init__(tool_manager)
         self.rule_packs = rule_packs or RulePackManager()
         self.engine_provider = engine_provider or SemgrepEngineProvider()
+        self._plan_cache = {}  # Immutable selection templates; fresh proof sets per invocation.
+        self._config_cache = {}
+        self._planning_lock = threading.RLock()
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
         return bool(profile.languages) and (context.mode == "release" or bool(context.files))
 
+    def _bind_preparations(self):
+        from .scanner_cache import preparation_bucket
+        provider = type(self.engine_provider)
+        bucket = preparation_bucket('sast', (provider.__module__, provider.__qualname__, self.engine_provider.engine_id))
+        with bucket.lock:
+            self._plan_cache = bucket.values.setdefault('plans', {})
+            self._config_cache = bucket.values.setdefault('configs', {})
+            self._planning_lock = bucket.lock
+
     def plan_rules(self, profile, context):
-        pack=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
-        return plan_rules(pack, context.files)
+        from .scanner_cache import workspace_scope
+        self._bind_preparations()
+        started = time.perf_counter()
+        with self._planning_lock, workspace_scope(context.root):
+            pack=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
+            root=Path(context.root).resolve()
+            signature=None
+            validated=TargetDetector().detect(root,list(context.files)).files
+            if set(validated)==set(context.files) and len(validated)<=1000:
+                if sum((root/name).stat().st_size for name in validated)<=20_000_000:
+                    signature=tuple((name,hashlib.sha256((root/name).read_bytes()).digest()) for name in validated)
+            key=(os.path.normcase(str(root)),pack.path,pack.checksum,context.files,signature)
+            hit=signature is not None and key in self._plan_cache
+            if not hit:
+                template=plan_rules(pack,context.files)
+                if len(self._plan_cache) >= 16:
+                    self._plan_cache.pop(next(iter(self._plan_cache)))
+                if signature is not None:
+                    self._plan_cache[key]=template
+            # Engine execution sets never enter a template/cache.
+            if hit:
+                template=self._plan_cache[key]
+            return replace(template, confirmed_rules=set(), scanned_files=set(), errored_files=set(),
+                unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
+                    'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
+                    'rule_plan_cache':'HIT' if hit else 'MISS',
+                    'rule_planning_ms':round((time.perf_counter()-started)*1000,3)})
 
     def scan(self, context, normalizer):
         plan=context.rule_plan or self.plan_rules(None,context)
         context=replace(context,rule_plan=plan)
         if not plan.rules:
-            return [], ScannerRun(self.name,'',RunStatus.NOT_COVERED,0,rule_coverage=plan.coverage('NOT_COVERED'))
-        findings,run=super().scan(context,normalizer)
-        run.rule_coverage=plan.coverage(run.status)
+            findings=[]
+            run=ScannerRun(self.name,'',RunStatus.NOT_COVERED,0,rule_coverage=plan.coverage('NOT_COVERED'))
+        else:
+            findings,run=super().scan(context,normalizer)
+            run.rule_coverage=plan.coverage(run.status)
+        run.scanner_diagnostics.update(plan.planning_diagnostics)
+        run.scanner_diagnostics['scope']={'target_files':len(plan.files),'rules':len(plan.rules),
+            'applicable_capabilities':plan.coverage()['applicable_capabilities'],
+            'languages':list(plan.detected_languages),'profile':'EXPLICIT_RULE_FILE_SCOPE',
+            'repository_discovery':False,'context_files':0,
+            'targets_truncated':len(plan.files)>20,
+            'relative_targets':[sanitize(name,300) for name in plan.files[:20]], 'scanner_results_reused':False}
         return findings,run
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
+        self._bind_preparations()
         plan=context.rule_plan
         rule_pack=plan.pack
-        selected_ids={r.rule_id for r in plan.rules}
-        definitions=[]
-        for relative in sorted({r.path for r in plan.rules}):
-            definitions.extend(rule for rule in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules'] if rule['id'] in selected_ids)
+        with span('rule_config_preparation'):
+            current=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
+            if (current.path,current.checksum,current.descriptor)!=(rule_pack.path,rule_pack.checksum,rule_pack.descriptor):
+                raise ValueError('Rule pack changed after planning')
+        with span('rule_config_preparation'):
+            selected_ids={r.rule_id for r in plan.rules}
+            key=(os.path.normcase(str(Path(context.root).resolve())),str(rule_pack.path),rule_pack.checksum,tuple(sorted(selected_ids)))
+            with self._planning_lock:
+                hit=key in self._config_cache
+                cache_observed('selected_config',hit)
+                if not hit:
+                    definitions=[]
+                    for relative in sorted({r.path for r in plan.rules}):
+                        definitions.extend(rule for rule in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules'] if rule['id'] in selected_ids)
+                    config_text=yaml.safe_dump({'rules':definitions},sort_keys=False)
+                    if len(config_text.encode())<=1_000_000:
+                        if len(self._config_cache) >= 16:
+                            self._config_cache.pop(next(iter(self._config_cache)))
+                        self._config_cache[key]=config_text
+                else:
+                    config_text=self._config_cache[key]
         findings=[]
         # Serialize selected execution rules, without copying source files.
         with tempfile.TemporaryDirectory(prefix='security-runtime-rules-') as temporary:
             config=Path(temporary)/'selected.yml'
-            config.write_text(yaml.safe_dump({'rules':definitions},sort_keys=False),encoding='utf-8')
+            with span('rule_config_preparation'):
+                config.write_text(config_text,encoding='utf-8')
             for offset in range(0,len(plan.files),40):
                 batch=plan.files[offset:offset+40]
                 request=SASTRequest(Path(context.root),rule_pack,batch,config)
+                invocation('SAST_SCAN', len(batch))
                 process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
                 if process.return_code not in (0,1):
                     _process_failure(process)
-                data=json.loads(process.stdout)
-                plan.observe(data,batch)
-                findings.extend(self.normalize(data,n))
+                with span('parsing_normalization'):
+                    data=json.loads(process.stdout)
+                    plan.observe(data,batch)
+                    findings.extend(self.normalize(data,n))
+                value=data.get('time',{}).get('rules_parse_time')
+                if isinstance(value,(int,float)):
+                    add_time('engine_reported_rules_parse',value*1000)
+                profiling=data.get('time',{}).get('profiling_times',{})
+                for key in ('config_time','core_time','ignores_time','total_time'):
+                    if isinstance(profiling.get(key),(int,float)):
+                        add_time('engine_reported_'+key,profiling[key]*1000)
         catalog={rule.rule_id:rule for rule in plan.rules}
         for finding in findings:
             rule_id=finding.technical_details.get('rule_id','')
@@ -206,8 +295,12 @@ class PatternSASTScanner(BaseScanner):
                 finding.technical_details.update(rule_category=record.category,cwe=list(record.cwe),
                     rule_confidence=record.confidence,rule_maturity=record.maturity,rule_severity=record.severity,
                     rule_version=record.rule_version,framework=record.framework,validation_status='NOT_VALIDATED')
+                if rule_pack.program:
+                    capability = rule_pack.program.capability(rule_id)
+                    if capability:
+                        annotate_capability(finding, capability, rule_pack.program.version, record)
             finding.equivalence_key = equivalence_key(finding)
-        return findings
+        return aggregate_capabilities(findings)
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, dict)
@@ -244,16 +337,28 @@ class GitleaksAdapter(BaseScanner):
         # Quick and feature scan changed files only. Gitleaks directory mode is
         # intentionally not used here because it would read the whole project.
         if context.mode == "release":
+            observe_scope(context.files, 'SCOPED_SNAPSHOT')
             with _snapshot(context) as scoped:
-                return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped)
-        targets = [str(Path(context.root) / f) for f in context.files]
-        return self._scan_targets(binary, targets, context, n)
+                return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped,
+                                          target_count=len(set((*context.files, *context.context_files))))
+        files = TargetDetector().detect(Path(context.root), list(dict.fromkeys(context.files))).files
+        observe_scope(files, 'FILE' if len(files) == 1 else 'SCOPED_SNAPSHOT')
+        if not files:
+            return []
+        if len(files) == 1:
+            return self._scan_targets(binary, [str(Path(context.root) / files[0])], context, n, target_count=1)
+        # Preserve the complete validated dirty scope, but pay one process start.
+        # Only an ephemeral mirror is scanned; never directory-scan the workspace.
+        with _snapshot(replace(context, files=tuple(files), context_files=())) as scoped:
+            return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped,
+                                      target_count=len(files))
 
-    def _scan_targets(self, binary, targets, context, n, snapshot_root=None):
+    def _scan_targets(self, binary, targets, context, n, snapshot_root=None, target_count=1):
         found = []
         for target in targets:
             with tempfile.TemporaryDirectory() as tmp:
                 report = str(Path(tmp) / "findings.json")
+                invocation('SECRET_SCAN', target_count)
                 process = _execute([binary, "dir", target, "--report-format", "json", "--report-path", report, "--redact=100", "--no-banner", "--exit-code", "0"], context.root, self.timeout)
                 if process.return_code != 0:
                     _process_failure(process)
@@ -261,21 +366,34 @@ class GitleaksAdapter(BaseScanner):
                     raise OutputLimitError("scanner report exceeds configured limits")
                 if not Path(report).is_file():
                     raise ValueError('Secret scanner did not produce its scoped report')
-                data = json.loads(Path(report).read_text(encoding="utf-8"))
+                with span('parsing_normalization'):
+                    data = json.loads(Path(report).read_text(encoding="utf-8"))
                 if snapshot_root is not None:
                     for item in data:
                         path = Path(item.get("File", ""))
                         if path.is_absolute():
                             item["File"] = path.resolve().relative_to(snapshot_root.resolve()).as_posix()
-                found.extend(self.normalize(data, n))
+                with span('parsing_normalization'):
+                    found.extend(self.normalize(data, n))
         return found
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, list)
         found=[]
+        # Capability metadata must never disable the independent Secret engine.
+        # No Gitleaks rules/config/allowlists are replaced by the Rule Program.
+        try:
+            program = RulePackManager().resolve().program
+        except (ValueError, OSError):
+            program = None
         for item in data:
             finding=n.make(scanner=self.name, category="secret", title=item.get("Description", "Potential secret"), description="A possible secret was found in source code.", severity="HIGH", confidence="HIGH", file_path=item.get("File", ""), line=item.get("StartLine", 1), evidence="[REDACTED_SECRET]", rule_id=item.get("RuleID", ""))
             finding.line_end=max(finding.line_start,item.get('EndLine',finding.line_start))
+            if program:
+                capability = program.capability(item.get('RuleID',''), 'gitleaks')
+                if capability:
+                    annotate_capability(finding, capability, program.version)
+                    finding.equivalence_key = equivalence_key(finding)
             found.append(finding)
         return found
 

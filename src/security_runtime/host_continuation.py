@@ -62,11 +62,11 @@ class HostContinuationGuard:
         except (ValueError, OSError, KeyError, TypeError):
             return
 
-    def _current(self, root, session, item, record, key):
+    def _current(self, root, session, item, record, key, host):
         service = self.remediation
         return (record['phase'] == 'OFFERED' and record.get('last_action') == 'AUTO_FIX'
                 and record.get('authorization_kind', 'POLICY_AUTO') == 'POLICY_AUTO'
-                and record.get('host_id') == identity('codex') and record.get('session_id') == identity(session)
+                and record.get('host_id') == identity(host) and record.get('session_id') == identity(session)
                 and record['family_key'] == item['family']
                 and record.get('last_snapshot_digest') == item['snapshot']
                 and record.get('token_hash') not in service.prepared
@@ -76,10 +76,10 @@ class HostContinuationGuard:
                 and service._snapshot(root) == item['snapshot']
                 and service._guard(root, record, key) and service._member_current(record, root))
 
-    def handle(self, root, session, stop_hook_active):
+    def handle(self, root, session, stop_hook_active, *, host='codex'):
         """No scans. Fail closed to automatic continuation, quiet in Hook text."""
         service = self.remediation
-        path = service.state.path(root, 'codex', session)
+        path = service.state.path(root, host, session)
         candidates = [item for item in list(self.handoffs.values()) if item['path'] == path]
         if not candidates:
             return allowed()
@@ -109,14 +109,14 @@ class HostContinuationGuard:
                             # This is an allow-only branch: no freshness/source
                             # reads or repeated writes are needed after exhaustion.
                             return allowed('HOST_CONTINUATION_EXHAUSTED', count=count)
-                    if not self._current(root, session, item, record, key):
+                    if not self._current(root, session, item, record, key, host):
                         continue
                     # An already-active Stop with no attempt by this guard could
                     # be another Hook's continuation. Do not join that loop.
                     if stop_hook_active and count == 0:
                         return allowed('STOP_ALREADY_ACTIVE')
                     # Recheck after membership/evidence freshness reads. No scan.
-                    if not self._current(root, session, item, record, key):
+                    if not self._current(root, session, item, record, key, host):
                         return allowed('INCONCLUSIVE')
                     if count >= MAX_CONTINUATIONS:
                         if previous['status'] != 'HOST_CONTINUATION_EXHAUSTED':
@@ -124,6 +124,8 @@ class HostContinuationGuard:
                             service._save(path, rows, key)
                         return allowed('HOST_CONTINUATION_EXHAUSTED', count=count)
                     count += 1
+                    service._observe_cycle('mark_token', record.get('token_hash'), 'host_continuation_observed',
+                                           root=root, source='STOP_GUARD')
                     record['host_continuation'] = {'binding': binding, 'attempt_count': count,
                         'status': 'CONTINUATION_REQUIRED', 'stop_hook_active': stop_hook_active}
                     service._save(path, rows, key)
@@ -139,22 +141,7 @@ class HostContinuationGuard:
 
 
 def handle_stop_event(event, workspace_path, session_id, stop_hook_active, *, binding, guard):
-    try:
-        if (any(not isinstance(v, str) or not v.strip() or len(v) > limit or '${' in v or
-                any(ord(c) < 32 for c in v) for v, limit in zip((event, workspace_path, session_id), (32, 4096, 500)))
-                or event != 'Stop' or type(stop_hook_active) is not bool):
-            return allowed('INCONCLUSIVE')
-        if binding is None:
-            return allowed('INCONCLUSIVE')
-        import os
-        root = Path(binding.root)
-        if workspace_path.startswith(('\\\\', '//')) or not Path(workspace_path).is_absolute():
-            return allowed('INCONCLUSIVE')
-        candidate = Path(os.path.abspath(workspace_path))
-        if not candidate.is_relative_to(root):
-            return allowed('INCONCLUSIVE')
-        no_links(candidate)
-        no_links(root)
-        return guard.handle(root, session_id, stop_hook_active)
-    except Exception:
-        return allowed('INCONCLUSIVE')
+    """Backward-compatible raw Codex entry point; Core uses normalized Stop."""
+    from .codex_event_adapter import handle_legacy_stop_event
+    return handle_legacy_stop_event(event, workspace_path, session_id, stop_hook_active,
+                                    binding=binding, guard=guard)

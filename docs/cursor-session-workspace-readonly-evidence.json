@@ -1,0 +1,187 @@
+{
+  "read_only": true,
+  "project_source_read_or_modified": false,
+  "canonical_relations": [
+    {
+      "kind": "ROOT",
+      "root_match": true,
+      "resolved_hash": "5cdfb485bee679e988f776d072a79941302f481f028ed257a21ef9b6814d1df9",
+      "workspace_root_is_absolute": true,
+      "workspace_root_drive_present": true,
+      "workspace_root_path_style": "WINDOWS_NATIVE",
+      "workspace_root_exists": true,
+      "workspace_root_canonicalized": true,
+      "workspace_root_git_probe_status": "OK",
+      "workspace_root_git_repo_detected": true,
+      "workspace_root_resolution_step": "COMPLETE",
+      "workspace_root_resolution_reason": null
+    },
+    {
+      "kind": "SLASHES",
+      "root_match": true,
+      "resolved_hash": "5cdfb485bee679e988f776d072a79941302f481f028ed257a21ef9b6814d1df9",
+      "workspace_root_is_absolute": true,
+      "workspace_root_drive_present": true,
+      "workspace_root_path_style": "WINDOWS_NATIVE",
+      "workspace_root_exists": true,
+      "workspace_root_canonicalized": true,
+      "workspace_root_git_probe_status": "OK",
+      "workspace_root_git_repo_detected": true,
+      "workspace_root_resolution_step": "COMPLETE",
+      "workspace_root_resolution_reason": null
+    },
+    {
+      "kind": "CASE",
+      "root_match": true,
+      "resolved_hash": "5cdfb485bee679e988f776d072a79941302f481f028ed257a21ef9b6814d1df9",
+      "workspace_root_is_absolute": true,
+      "workspace_root_drive_present": true,
+      "workspace_root_path_style": "WINDOWS_NATIVE",
+      "workspace_root_exists": true,
+      "workspace_root_canonicalized": true,
+      "workspace_root_git_probe_status": "OK",
+      "workspace_root_git_repo_detected": true,
+      "workspace_root_resolution_step": "COMPLETE",
+      "workspace_root_resolution_reason": null
+    },
+    {
+      "kind": "TRAILING",
+      "root_match": true,
+      "resolved_hash": "5cdfb485bee679e988f776d072a79941302f481f028ed257a21ef9b6814d1df9",
+      "workspace_root_is_absolute": true,
+      "workspace_root_drive_present": true,
+      "workspace_root_path_style": "WINDOWS_NATIVE",
+      "workspace_root_exists": true,
+      "workspace_root_canonicalized": true,
+      "workspace_root_git_probe_status": "OK",
+      "workspace_root_git_repo_detected": true,
+      "workspace_root_resolution_step": "COMPLETE",
+      "workspace_root_resolution_reason": null
+    },
+    {
+      "kind": "SUBDIR",
+      "root_match": true,
+      "resolved_hash": "5cdfb485bee679e988f776d072a79941302f481f028ed257a21ef9b6814d1df9",
+      "workspace_root_is_absolute": true,
+      "workspace_root_drive_present": true,
+      "workspace_root_path_style": "WINDOWS_NATIVE",
+      "workspace_root_exists": true,
+      "workspace_root_canonicalized": true,
+      "workspace_root_git_probe_status": "OK",
+      "workspace_root_git_repo_detected": true,
+      "workspace_root_resolution_step": "COMPLETE",
+      "workspace_root_resolution_reason": null
+    }
+  ],
+  "recent_safe_projection": [
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "generation_id_length": 36,
+      "generation_id_validation_reason": "VALID",
+      "cursor_workspace_resolution_stage": "WORKSPACE_ROOTS",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterFileEdit",
+      "host_claim_status": "REJECTED",
+      "generation_id_length": 36,
+      "generation_id_validation_reason": "VALID",
+      "cursor_workspace_resolution_stage": "WORKSPACE_ROOTS",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "generation_id_length": 36,
+      "generation_id_validation_reason": "VALID",
+      "cursor_workspace_resolution_stage": "WORKSPACE_ROOTS",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterFileEdit",
+      "host_claim_status": "REJECTED",
+      "generation_id_length": 36,
+      "generation_id_validation_reason": "VALID",
+      "cursor_workspace_resolution_stage": "WORKSPACE_ROOTS",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "sessionStart",
+      "host_claim_status": "INVALID",
+      "generation_id_length": 0,
+      "generation_id_validation_reason": "EMPTY"
+    },
+    {
+      "event": "afterShellExecution",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterShellExecution",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterShellExecution",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterFileEdit",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "sessionStart",
+      "host_claim_status": "INVALID"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "sessionStart",
+      "host_claim_status": "INVALID"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterShellExecution",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "stop",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "afterFileEdit",
+      "host_claim_status": "REJECTED",
+      "workspace_rejection_reason": "WORKSPACE_CANONICALIZATION_MISMATCH"
+    },
+    {
+      "event": "sessionStart",
+      "host_claim_status": "INVALID"
+    },
+    {
+      "event": "sessionStart",
+      "host_claim_status": "INVALID"
+    }
+  ]
+}

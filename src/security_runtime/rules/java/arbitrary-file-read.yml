@@ -1,0 +1,97 @@
+rules:
+- id: ai-security.java.arbitrary-file-read
+  languages:
+  - java
+  severity: ERROR
+  message: 'arbitrary-file-read risk: review the declared source, sink and local dataflow.'
+  mode: taint
+  pattern-sources:
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam $TYPE
+        $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody $TYPE
+        $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...) $TYPE
+        $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable $TYPE
+        $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable(...)
+        $TYPE $INPUT, ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern: new java.io.FileInputStream($PATH)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.readAllBytes($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.readString($PATH, ...)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.newInputStream($PATH, ...)
+    - focus-metavariable: $PATH
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.1.0
+    language: java
+    category: arbitrary-file-read
+    cwe:
+    - CWE-200
+    confidence: HIGH
+    maturity: BETA
+    framework: JDK
+    license: Apache-2.0
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/200.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-07'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''
+  pattern-sanitizers:
+  - patterns:
+    - pattern-inside: "$RET $METHOD(...) {\n ...\n Path $BASE = Paths.get(\"...\").toAbsolutePath().normalize();\n\
+        \ ...\n Path $P = $BASE.resolve($INPUT).normalize();\n ...\n if (!$P.startsWith($BASE)) { throw\
+        \ $EX; }\n ...\n}"
+    - pattern: if (!$P.startsWith($BASE)) { throw $EX; }
+    - focus-metavariable: $P
+    exact: true
+    by-side-effect: true

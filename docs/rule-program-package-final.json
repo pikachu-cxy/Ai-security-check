@@ -1,0 +1,18 @@
+{
+  "status": "PASS",
+  "mode": "final",
+  "wheel": "dist\\rule-program-final\\ai_security_runtime-0.3.1-py3-none-any.whl",
+  "sdist": "dist\\rule-program-final\\ai_security_runtime-0.3.1.tar.gz",
+  "wheel_sha256": "a53fa520a9869a056e4d799d597e33e89bd0bef66965d3f8a3c4ec4788b2bb1f",
+  "sdist_sha256": "85c614cc0b6677b534e6048e6da61484ea8fa28a2d10225cf88fb7af6ccfe692",
+  "runtime_python_modules": 93,
+  "all_runtime_modules_byte_equal": true,
+  "all_rule_data_byte_equal": true,
+  "sdist_corpus_files": 71,
+  "package_integrity": "PASS",
+  "compliance": "PASS",
+  "fresh_build_tree": true,
+  "network": false,
+  "active_runtime_replaced": false,
+  "duration_seconds": 3.594
+}

@@ -6,3 +6,34 @@ include scripts/jeepay_triage_benchmark.py
 include scripts/rule_benchmark.py
 include scripts/progress_acceptance.py
 recursive-include tests/triage *.py *.json *.md
+recursive-include tests/performance *.py
+include scripts/scanner_hot_path_benchmark.py
+include scripts/cache_lifetime_benchmark.py
+include scripts/core_hot_path_acceptance.py
+include scripts/remediation_episode_acceptance.py
+include scripts/fast_fix_acceptance.py
+include scripts/agent_context_acceptance.py
+include scripts/inline_ticket_acceptance.py
+include scripts/inline_exactness_acceptance.py
+include scripts/global_integration_acceptance.py
+include scripts/codex_hook_fixture.py
+recursive-include tests/fixtures/codex *.toml
+include tests/test_recent_hook_diagnostics.py
+include tests/test_global_workspace_binding.py
+include tests/test_mutation_reconciliation.py
+include tests/test_host_event_normalization.py
+include tests/test_cursor_host_adapter.py
+include tests/test_security_feedback.py
+include tests/test_cursor_schema_compatibility.py
+include tests/test_cursor_session_workspace.py
+include scripts/cursor_host_acceptance.py
+include tests/test_cursor_event_lifecycle.py
+include tests/test_first_scan_attribution.py
+include tests/test_advisory_remediation.py
+include tests/fixtures/cursor_lifecycle_process.py
+recursive-include tests/rule_program *.java *.xml *.txt *.json
+include scripts/rule_program_acceptance.py
+include tests/test_rule_program.py
+include tests/test_cursor_cleanup.py
+include docs/RULE_PROGRAM.md
+include docs/RULE_COVERAGE_MATRIX.md

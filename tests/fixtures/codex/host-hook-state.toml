@@ -1,0 +1,7 @@
+# Sanitized Codex-owned state. Opaque host keys are not Runtime ownership.
+[hooks.state."file:fixture/hooks.json:post_tool_use:0:0"]
+enabled = true
+trusted_hash = "fixture-trust-hash"
+
+[hooks.state."inline:fixture/config.toml:stop:0:0"]
+enabled = false

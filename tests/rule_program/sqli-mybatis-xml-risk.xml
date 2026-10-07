@@ -1,0 +1,1 @@
+<mapper namespace="demo.Mapper"><select id="load">SELECT name FROM users WHERE id=${id}</select></mapper>

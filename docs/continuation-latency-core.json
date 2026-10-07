@@ -1,0 +1,1908 @@
+{
+  "status": "PASS",
+  "transport": "ACTUAL_LOCAL_MCP_STDIO",
+  "scanner": "ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE",
+  "calls": [
+    {
+      "tool": "handle_hook_event",
+      "status": "BASELINE_ESTABLISHED",
+      "timing_ms": {
+        "hook_total": 8376.896,
+        "scanner": 7610.761,
+        "finding_policy": 195.006,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "NOT_APPLICABLE",
+        "reason_code": "NO_REMEDIATION_EPISODE",
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.491,
+          "total": 7610.591,
+          "workspace_discovery": 68.814,
+          "target_preparation": 83.635,
+          "rule_planning": 100.201,
+          "scanner_orchestration": 7349.293,
+          "result_normalization_policy": 0.108
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 398.954,
+              "version_probe_invocation": 3072.222,
+              "capability_preparation": 3925.279,
+              "rule_config_preparation": 126.115,
+              "process_invocation": 3294.311,
+              "process_creation": 4.67,
+              "parsing_normalization": 0.077,
+              "engine_reported_rules_parse": 2.063,
+              "engine_reported_config_time": 377.112,
+              "engine_reported_core_time": 192.071,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 638.291,
+              "scanner_total": 7348.478,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS",
+              "selected_config": "MISS"
+            },
+            "invocations": [
+              {
+                "type": "VERSION_PROBE",
+                "target_count": 0
+              },
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "MISS",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 99.123,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 23.19,
+              "version_probe_invocation": 290.461,
+              "capability_preparation": 449.836,
+              "process_invocation": 497.194,
+              "process_creation": 16.192,
+              "parsing_normalization": 0.343,
+              "scanner_total": 952.03,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS"
+            },
+            "invocations": [
+              {
+                "type": "VERSION_PROBE",
+                "target_count": 0
+              },
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 4087.306,
+        "scanner": 3414.141,
+        "finding_policy": 186.184,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "NOT_APPLICABLE",
+        "reason_code": "NO_REMEDIATION_EPISODE",
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 7.401,
+          "total": 3413.987,
+          "workspace_discovery": 61.308,
+          "target_preparation": 74.646,
+          "rule_planning": 11.138,
+          "scanner_orchestration": 3259.364,
+          "result_normalization_policy": 0.085
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 364.25,
+              "capability_preparation": 366.717,
+              "rule_config_preparation": 10.485,
+              "process_invocation": 2879.544,
+              "process_creation": 4.266,
+              "parsing_normalization": 0.066,
+              "engine_reported_rules_parse": 13.546,
+              "engine_reported_config_time": 378.584,
+              "engine_reported_core_time": 184.726,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 638.183,
+              "scanner_total": 3258.651,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 10.669,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 23.266,
+              "capability_preparation": 46.736,
+              "process_invocation": 417.409,
+              "process_creation": 16.575,
+              "parsing_normalization": 0.196,
+              "scanner_total": 467.321,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 4083.007,
+        "scanner": 3407.883,
+        "finding_policy": 179.686,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "NOT_APPLICABLE",
+        "reason_code": "NO_REMEDIATION_EPISODE",
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 7.844,
+          "total": 3407.643,
+          "workspace_discovery": 64.516,
+          "target_preparation": 77.953,
+          "rule_planning": 10.86,
+          "scanner_orchestration": 3246.149,
+          "result_normalization_policy": 0.264
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 363.568,
+              "capability_preparation": 366.023,
+              "rule_config_preparation": 10.05,
+              "process_invocation": 2867.216,
+              "process_creation": 3.622,
+              "parsing_normalization": 0.069,
+              "engine_reported_rules_parse": 9.166,
+              "engine_reported_config_time": 356.934,
+              "engine_reported_core_time": 195.285,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 615.215,
+              "scanner_total": 3245.265,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 10.416,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 22.457,
+              "capability_preparation": 45.016,
+              "process_invocation": 413.632,
+              "process_creation": 20.217,
+              "parsing_normalization": 0.172,
+              "scanner_total": 461.875,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 4136.667,
+        "scanner": 3460.809,
+        "finding_policy": 184.627,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "NOT_APPLICABLE",
+        "reason_code": "NO_REMEDIATION_EPISODE",
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 9.357,
+          "total": 3460.665,
+          "workspace_discovery": 66.894,
+          "target_preparation": 75.331,
+          "rule_planning": 11.45,
+          "scanner_orchestration": 3297.524,
+          "result_normalization_policy": 0.07
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 373.667,
+              "capability_preparation": 376.043,
+              "rule_config_preparation": 10.425,
+              "process_invocation": 2908.525,
+              "process_creation": 3.194,
+              "parsing_normalization": 0.062,
+              "engine_reported_rules_parse": 4.519,
+              "engine_reported_config_time": 366.861,
+              "engine_reported_core_time": 180.929,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 614.179,
+              "scanner_total": 3296.865,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 10.989,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 24.495,
+              "capability_preparation": 51.356,
+              "process_invocation": 412.264,
+              "process_creation": 18.924,
+              "parsing_normalization": 0.203,
+              "scanner_total": 467.769,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 4403.156,
+        "scanner": 3402.975,
+        "finding_policy": 505.308,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "IN_PROGRESS",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3897.418,
+        "auto_fix_authorization_started": 4396.3,
+        "auto_fix_authorized": 4402.67,
+        "policy_finished": 4402.738,
+        "initial_hook_response_ready": 4403.185,
+        "host_continuation_observed": null,
+        "prepare_task_fix_started": null,
+        "prepare_task_fix_finished": null,
+        "fix_edit_hook_started": null,
+        "host_edit_observed": null,
+        "security_rescan_started": null,
+        "security_rescan_finished": null,
+        "episode_closed": null,
+        "return_to_host": null,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4403.185,
+        "runtime_to_host_continuation_wait": null,
+        "continuation_to_prepare": null,
+        "prepare_fix": null,
+        "host_fix_window": null,
+        "post_edit_hook": null,
+        "security_rescan": null,
+        "close/finalization": null,
+        "unaccounted": null
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3402.975,
+        "initial_finding_policy": 505.308,
+        "auto_fix_authorization": 6.369,
+        "post_edit_scanner": null
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": null,
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "PARTIAL",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.025,
+          "total": 3402.833,
+          "workspace_discovery": 65.079,
+          "target_preparation": 78.064,
+          "rule_planning": 11.293,
+          "scanner_orchestration": 3240.185,
+          "result_normalization_policy": 0.148
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 363.226,
+              "capability_preparation": 365.438,
+              "rule_config_preparation": 9.3,
+              "process_invocation": 2862.985,
+              "process_creation": 3.067,
+              "parsing_normalization": 0.205,
+              "engine_reported_rules_parse": 14.834,
+              "engine_reported_config_time": 376.816,
+              "engine_reported_core_time": 202.393,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 651.547,
+              "scanner_total": 3239.631,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 10.819,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 22.37,
+              "capability_preparation": 43.591,
+              "process_invocation": 399.244,
+              "process_creation": 14.354,
+              "parsing_normalization": 0.167,
+              "scanner_total": 446.123,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "prepare_task_fix",
+      "status": "READY_FOR_HOST_FIX",
+      "timing_ms": {
+        "hook_total": null,
+        "scanner": null,
+        "finding_policy": null,
+        "remediation_preparation": 904.658,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "IN_PROGRESS",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3897.418,
+        "auto_fix_authorization_started": 4396.3,
+        "auto_fix_authorized": 4402.67,
+        "policy_finished": 4402.738,
+        "initial_hook_response_ready": 4403.185,
+        "host_continuation_observed": 4472.483,
+        "prepare_task_fix_started": 4472.483,
+        "prepare_task_fix_finished": 5377.138,
+        "fix_edit_hook_started": null,
+        "host_edit_observed": null,
+        "security_rescan_started": null,
+        "security_rescan_finished": null,
+        "episode_closed": null,
+        "return_to_host": null,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4403.185,
+        "runtime_to_host_continuation_wait": 69.298,
+        "continuation_to_prepare": 0.0,
+        "prepare_fix": 904.655,
+        "host_fix_window": null,
+        "post_edit_hook": null,
+        "security_rescan": null,
+        "close/finalization": null,
+        "unaccounted": null
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3402.975,
+        "initial_finding_policy": 505.308,
+        "auto_fix_authorization": 6.369,
+        "post_edit_scanner": null
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "PREPARE_REQUEST",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "PARTIAL",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 7868.135,
+        "scanner": 3446.193,
+        "finding_policy": 380.492,
+        "remediation_preparation": 904.658,
+        "auto_remediation": 1107.205,
+        "security_rescan": 3557.627
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": 14353.014,
+      "remediation_cycle_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3897.418,
+        "auto_fix_authorization_started": 4396.3,
+        "auto_fix_authorized": 4402.67,
+        "policy_finished": 4402.738,
+        "initial_hook_response_ready": 4403.185,
+        "host_continuation_observed": 4472.483,
+        "prepare_task_fix_started": 4472.483,
+        "prepare_task_fix_finished": 5377.138,
+        "fix_edit_hook_started": 6484.928,
+        "host_edit_observed": 10414.554,
+        "security_rescan_started": 10611.75,
+        "security_rescan_finished": 14169.519,
+        "episode_closed": 14352.88,
+        "return_to_host": 14353.014,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4403.185,
+        "runtime_to_host_continuation_wait": 69.298,
+        "continuation_to_prepare": 0.0,
+        "prepare_fix": 904.655,
+        "host_fix_window": 1107.79,
+        "post_edit_hook": 4126.822,
+        "security_rescan": 3557.769,
+        "close/finalization": 183.495,
+        "unaccounted": 0
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3402.975,
+        "initial_finding_policy": 505.308,
+        "auto_fix_authorization": 6.369,
+        "post_edit_scanner": 3446.193
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "PREPARE_REQUEST",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 7.331,
+          "total": 3446.065,
+          "workspace_discovery": 66.056,
+          "target_preparation": 77.703,
+          "rule_planning": 11.401,
+          "scanner_orchestration": 3283.463,
+          "result_normalization_policy": 0.07
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 371.632,
+              "capability_preparation": 374.331,
+              "rule_config_preparation": 9.562,
+              "process_invocation": 2897.032,
+              "process_creation": 3.655,
+              "parsing_normalization": 0.058,
+              "engine_reported_rules_parse": 10.087,
+              "engine_reported_config_time": 367.336,
+              "engine_reported_core_time": 198.394,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 631.845,
+              "scanner_total": 3282.729,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "HIT",
+            "rule_planning_ms": 10.934,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 23.971,
+              "capability_preparation": 47.408,
+              "process_invocation": 401.147,
+              "process_creation": 17.455,
+              "parsing_normalization": 0.18,
+              "scanner_total": 454.296,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": [
+        {
+          "timing_ms": {
+            "capability_cache_validation": 342.383,
+            "capability_preparation": 344.123,
+            "rule_config_preparation": 12.978,
+            "process_invocation": 2656.054,
+            "process_creation": 5.229,
+            "parsing_normalization": 0.052,
+            "engine_reported_rules_parse": 1.0,
+            "engine_reported_config_time": 174.114,
+            "engine_reported_core_time": 165.23,
+            "engine_reported_ignores_time": 0.0,
+            "engine_reported_total_time": 404.345,
+            "scanner_total": 3015.114,
+            "actual_scanner_execution": null
+          },
+          "counts": {
+            "process_invocations": 1
+          },
+          "cache": {
+            "version_probe": "HIT",
+            "selected_config": "MISS"
+          },
+          "invocations": [
+            {
+              "type": "SAST_SCAN",
+              "target_count": 1
+            }
+          ],
+          "invocation_count": 1,
+          "invocations_truncated": false,
+          "rule_pack_cache": "HIT",
+          "rule_plan_cache": "HIT",
+          "rule_planning_ms": 9.696,
+          "scope": {
+            "target_files": 1,
+            "rules": 1,
+            "languages": [
+              "java"
+            ],
+            "profile": "EXPLICIT_RULE_FILE_SCOPE",
+            "repository_discovery": false,
+            "context_files": 0,
+            "targets_truncated": false,
+            "relative_targets": [
+              "src/main/java/demo/CodeModeTlsService.java"
+            ],
+            "scanner_results_reused": false
+          }
+        }
+      ]
+    },
+    {
+      "tool": "verify_task_fix",
+      "status": "SCANNER_VERIFIED_RESOLVED",
+      "timing_ms": {
+        "hook_total": null,
+        "scanner": null,
+        "finding_policy": null,
+        "remediation_preparation": 904.658,
+        "auto_remediation": null,
+        "security_rescan": 3554.773
+      },
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": 14353.014,
+      "remediation_cycle_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3897.418,
+        "auto_fix_authorization_started": 4396.3,
+        "auto_fix_authorized": 4402.67,
+        "policy_finished": 4402.738,
+        "initial_hook_response_ready": 4403.185,
+        "host_continuation_observed": 4472.483,
+        "prepare_task_fix_started": 4472.483,
+        "prepare_task_fix_finished": 5377.138,
+        "fix_edit_hook_started": 6484.928,
+        "host_edit_observed": 10414.554,
+        "security_rescan_started": 10611.75,
+        "security_rescan_finished": 14169.519,
+        "episode_closed": 14352.88,
+        "return_to_host": 14353.014,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4403.185,
+        "runtime_to_host_continuation_wait": 69.298,
+        "continuation_to_prepare": 0.0,
+        "prepare_fix": 904.655,
+        "host_fix_window": 1107.79,
+        "post_edit_hook": 4126.822,
+        "security_rescan": 3557.769,
+        "close/finalization": 183.495,
+        "unaccounted": 0
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3402.975,
+        "initial_finding_policy": 505.308,
+        "auto_fix_authorization": 6.369,
+        "post_edit_scanner": 3446.193
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "PREPARE_REQUEST",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 4411.962,
+        "scanner": 3414.382,
+        "finding_policy": 516.286,
+        "remediation_preparation": null,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "IN_PROGRESS",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3895.324,
+        "auto_fix_authorization_started": 4406.127,
+        "auto_fix_authorized": 4411.555,
+        "policy_finished": 4411.619,
+        "initial_hook_response_ready": 4411.985,
+        "host_continuation_observed": null,
+        "prepare_task_fix_started": null,
+        "prepare_task_fix_finished": null,
+        "fix_edit_hook_started": null,
+        "host_edit_observed": null,
+        "security_rescan_started": null,
+        "security_rescan_finished": null,
+        "episode_closed": null,
+        "return_to_host": null,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4411.985,
+        "runtime_to_host_continuation_wait": null,
+        "continuation_to_prepare": null,
+        "prepare_fix": null,
+        "host_fix_window": null,
+        "post_edit_hook": null,
+        "security_rescan": null,
+        "close/finalization": null,
+        "unaccounted": null
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3414.382,
+        "initial_finding_policy": 516.286,
+        "auto_fix_authorization": 5.428,
+        "post_edit_scanner": null
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": null,
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "PARTIAL",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 7.41,
+          "total": 3414.238,
+          "workspace_discovery": 65.251,
+          "target_preparation": 74.644,
+          "rule_planning": 11.047,
+          "scanner_orchestration": 3255.672,
+          "result_normalization_policy": 0.167
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 363.828,
+              "capability_preparation": 366.375,
+              "rule_config_preparation": 9.028,
+              "process_invocation": 2877.256,
+              "process_creation": 4.764,
+              "parsing_normalization": 0.207,
+              "engine_reported_rules_parse": 10.384,
+              "engine_reported_config_time": 368.605,
+              "engine_reported_core_time": 192.567,
+              "engine_reported_ignores_time": 0.0,
+              "engine_reported_total_time": 625.154,
+              "scanner_total": 3255.006,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "HIT",
+            "rule_planning_ms": 10.595,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 23.099,
+              "capability_preparation": 45.962,
+              "process_invocation": 420.315,
+              "process_creation": 16.986,
+              "parsing_normalization": 0.207,
+              "scanner_total": 469.373,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "prepare_task_fix",
+      "status": null,
+      "timing_ms": {
+        "hook_total": null,
+        "scanner": null,
+        "finding_policy": null,
+        "remediation_preparation": 2.71,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": null,
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_stop_event",
+      "status": "CONTINUATION_REQUIRED",
+      "timing_ms": null,
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": null,
+      "remediation_cycle_timepoints_ms": null,
+      "remediation_cycle_breakdown_ms": null,
+      "remediation_cycle_detail_ms": null,
+      "remediation_cycle_boundary": null,
+      "remediation_cycle_breakdown_measurement": null,
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "prepare_task_fix",
+      "status": "READY_FOR_HOST_FIX",
+      "timing_ms": {
+        "hook_total": null,
+        "scanner": null,
+        "finding_policy": null,
+        "remediation_preparation": 903.465,
+        "auto_remediation": null,
+        "security_rescan": null
+      },
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": null,
+      "remediation_cycle_measurement": {
+        "status": "IN_PROGRESS",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3895.324,
+        "auto_fix_authorization_started": 4406.127,
+        "auto_fix_authorized": 4411.555,
+        "policy_finished": 4411.619,
+        "initial_hook_response_ready": 4411.985,
+        "host_continuation_observed": 5389.31,
+        "prepare_task_fix_started": 5464.627,
+        "prepare_task_fix_finished": 6368.086,
+        "fix_edit_hook_started": null,
+        "host_edit_observed": null,
+        "security_rescan_started": null,
+        "security_rescan_finished": null,
+        "episode_closed": null,
+        "return_to_host": null,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4411.985,
+        "runtime_to_host_continuation_wait": 977.325,
+        "continuation_to_prepare": 75.316,
+        "prepare_fix": 903.459,
+        "host_fix_window": null,
+        "post_edit_hook": null,
+        "security_rescan": null,
+        "close/finalization": null,
+        "unaccounted": null
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3414.382,
+        "initial_finding_policy": 516.286,
+        "auto_fix_authorization": 5.428,
+        "post_edit_scanner": null
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "STOP_GUARD",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "PARTIAL",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    },
+    {
+      "tool": "handle_hook_event",
+      "status": "SCANNED",
+      "timing_ms": {
+        "hook_total": 7897.301,
+        "scanner": 3439.059,
+        "finding_policy": 385.729,
+        "remediation_preparation": 903.465,
+        "auto_remediation": 1103.266,
+        "security_rescan": 3550.76
+      },
+      "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+      "cache_generation": 1,
+      "remediation_cycle_wall_ms": 15369.367,
+      "remediation_cycle_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3895.324,
+        "auto_fix_authorization_started": 4406.127,
+        "auto_fix_authorized": 4411.555,
+        "policy_finished": 4411.619,
+        "initial_hook_response_ready": 4411.985,
+        "host_continuation_observed": 5389.31,
+        "prepare_task_fix_started": 5464.627,
+        "prepare_task_fix_finished": 6368.086,
+        "fix_edit_hook_started": 7472.116,
+        "host_edit_observed": 11432.478,
+        "security_rescan_started": 11627.175,
+        "security_rescan_finished": 15178.115,
+        "episode_closed": 15369.201,
+        "return_to_host": 15369.367,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4411.985,
+        "runtime_to_host_continuation_wait": 977.325,
+        "continuation_to_prepare": 75.316,
+        "prepare_fix": 903.459,
+        "host_fix_window": 1104.029,
+        "post_edit_hook": 4155.059,
+        "security_rescan": 3550.94,
+        "close/finalization": 191.252,
+        "unaccounted": 0.002
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3414.382,
+        "initial_finding_policy": 516.286,
+        "auto_fix_authorization": 5.428,
+        "post_edit_scanner": 3439.059
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "STOP_GUARD",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": {
+        "timing_ms": {
+          "state_persistence": 8.115,
+          "total": 3438.916,
+          "workspace_discovery": 72.609,
+          "target_preparation": 74.337,
+          "rule_planning": 12.79,
+          "scanner_orchestration": 3270.952,
+          "result_normalization_policy": 0.072
+        },
+        "providers": {
+          "semgrep": {
+            "timing_ms": {
+              "capability_cache_validation": 378.162,
+              "capability_preparation": 381.707,
+              "rule_config_preparation": 8.554,
+              "process_invocation": 2878.047,
+              "process_creation": 4.881,
+              "parsing_normalization": 0.064,
+              "engine_reported_rules_parse": 10.723,
+              "engine_reported_config_time": 375.023,
+              "engine_reported_core_time": 196.408,
+              "engine_reported_ignores_time": 1.0,
+              "engine_reported_total_time": 636.736,
+              "scanner_total": 3270.293,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "HIT",
+            "rule_planning_ms": 12.295,
+            "scope": {
+              "target_files": 1,
+              "rules": 21,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "scanner_results_reused": false
+            }
+          },
+          "gitleaks": {
+            "timing_ms": {
+              "capability_cache_validation": 25.118,
+              "capability_preparation": 48.687,
+              "process_invocation": 420.374,
+              "process_creation": 17.038,
+              "parsing_normalization": 0.187,
+              "scanner_total": 472.739,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "src/main/java/demo/CodeModeTlsService.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        },
+        "scope": {
+          "requested_files": 1,
+          "profile_files": 1,
+          "context_files": 0,
+          "repository_discovery": false
+        },
+        "runtime_instance_id": "3e33950c44f2fc84eab7bb92d45c089f",
+        "cache_generation": 1,
+        "cache_scope": "PROCESS_LOCAL_CONTENT_VALIDATED"
+      },
+      "security_rescan_diagnostics": [
+        {
+          "timing_ms": {
+            "capability_cache_validation": 341.63,
+            "capability_preparation": 343.407,
+            "rule_config_preparation": 9.231,
+            "process_invocation": 2638.005,
+            "process_creation": 4.291,
+            "parsing_normalization": 0.052,
+            "engine_reported_rules_parse": 0.0,
+            "engine_reported_config_time": 162.807,
+            "engine_reported_core_time": 161.913,
+            "engine_reported_ignores_time": 0.0,
+            "engine_reported_total_time": 395.669,
+            "scanner_total": 2992.347,
+            "actual_scanner_execution": null
+          },
+          "counts": {
+            "process_invocations": 1
+          },
+          "cache": {
+            "version_probe": "HIT",
+            "selected_config": "HIT"
+          },
+          "invocations": [
+            {
+              "type": "SAST_SCAN",
+              "target_count": 1
+            }
+          ],
+          "invocation_count": 1,
+          "invocations_truncated": false,
+          "rule_pack_cache": "HIT",
+          "rule_plan_cache": "HIT",
+          "rule_planning_ms": 11.404,
+          "scope": {
+            "target_files": 1,
+            "rules": 1,
+            "languages": [
+              "java"
+            ],
+            "profile": "EXPLICIT_RULE_FILE_SCOPE",
+            "repository_discovery": false,
+            "context_files": 0,
+            "targets_truncated": false,
+            "relative_targets": [
+              "src/main/java/demo/CodeModeTlsService.java"
+            ],
+            "scanner_results_reused": false
+          }
+        }
+      ]
+    },
+    {
+      "tool": "verify_task_fix",
+      "status": "SCANNER_VERIFIED_RESOLVED",
+      "timing_ms": {
+        "hook_total": null,
+        "scanner": null,
+        "finding_policy": null,
+        "remediation_preparation": 903.465,
+        "auto_remediation": null,
+        "security_rescan": 3616.362
+      },
+      "runtime_instance_id": null,
+      "cache_generation": null,
+      "remediation_cycle_wall_ms": 15369.367,
+      "remediation_cycle_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "scope": "CONNECTION_MONOTONIC",
+        "definition": "FIRST_RISK_HOOK_ENTRY_TO_SCANNER_RESOLVED_CLOSED_RETURN_DECISION"
+      },
+      "remediation_cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3895.324,
+        "auto_fix_authorization_started": 4406.127,
+        "auto_fix_authorized": 4411.555,
+        "policy_finished": 4411.619,
+        "initial_hook_response_ready": 4411.985,
+        "host_continuation_observed": 5389.31,
+        "prepare_task_fix_started": 5464.627,
+        "prepare_task_fix_finished": 6368.086,
+        "fix_edit_hook_started": 7472.116,
+        "host_edit_observed": 11432.478,
+        "security_rescan_started": 11627.175,
+        "security_rescan_finished": 15178.115,
+        "episode_closed": 15369.201,
+        "return_to_host": 15369.367,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "remediation_cycle_breakdown_ms": {
+        "initial_runtime": 4411.985,
+        "runtime_to_host_continuation_wait": 977.325,
+        "continuation_to_prepare": 75.316,
+        "prepare_fix": 903.459,
+        "host_fix_window": 1104.029,
+        "post_edit_hook": 4155.059,
+        "security_rescan": 3550.94,
+        "close/finalization": 191.252,
+        "unaccounted": 0.002
+      },
+      "remediation_cycle_detail_ms": {
+        "initial_scanner": 3414.382,
+        "initial_finding_policy": 516.286,
+        "auto_fix_authorization": 5.428,
+        "post_edit_scanner": 3439.059
+      },
+      "remediation_cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "STOP_GUARD",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "remediation_cycle_breakdown_measurement": {
+        "status": "OBSERVED",
+        "reason_code": null,
+        "detail_values_additive": false,
+        "rounding_tolerance_ms": 0.01
+      },
+      "scanner_diagnostics": null,
+      "security_rescan_diagnostics": null
+    }
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "stage": "CLOSED",
+      "timing_ms": {
+        "hook_total": 7868.135,
+        "scanner": 3446.193,
+        "finding_policy": 380.492,
+        "remediation_preparation": 904.658,
+        "auto_remediation": 1107.205,
+        "security_rescan": 3557.627
+      },
+      "remediation_cycle_wall_ms": 14353.014,
+      "driver_cycle_wall_ms": 14355.451,
+      "cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3897.418,
+        "auto_fix_authorization_started": 4396.3,
+        "auto_fix_authorized": 4402.67,
+        "policy_finished": 4402.738,
+        "initial_hook_response_ready": 4403.185,
+        "host_continuation_observed": 4472.483,
+        "prepare_task_fix_started": 4472.483,
+        "prepare_task_fix_finished": 5377.138,
+        "fix_edit_hook_started": 6484.928,
+        "host_edit_observed": 10414.554,
+        "security_rescan_started": 10611.75,
+        "security_rescan_finished": 14169.519,
+        "episode_closed": 14352.88,
+        "return_to_host": 14353.014,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "cycle_breakdown_ms": {
+        "initial_runtime": 4403.185,
+        "runtime_to_host_continuation_wait": 69.298,
+        "continuation_to_prepare": 0.0,
+        "prepare_fix": 904.655,
+        "host_fix_window": 1107.79,
+        "post_edit_hook": 4126.822,
+        "security_rescan": 3557.769,
+        "close/finalization": 183.495,
+        "unaccounted": 0
+      },
+      "cycle_detail_ms": {
+        "initial_scanner": 3402.975,
+        "initial_finding_policy": 505.308,
+        "auto_fix_authorization": 6.369,
+        "post_edit_scanner": 3446.193
+      },
+      "cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "PREPARE_REQUEST",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "security": "SCANNER_VERIFIED_RESOLVED",
+      "next_action": "RETURN_TO_HOST"
+    },
+    {
+      "number": 2,
+      "stage": "CLOSED",
+      "timing_ms": {
+        "hook_total": 7897.301,
+        "scanner": 3439.059,
+        "finding_policy": 385.729,
+        "remediation_preparation": 903.465,
+        "auto_remediation": 1103.266,
+        "security_rescan": 3550.76
+      },
+      "remediation_cycle_wall_ms": 15369.367,
+      "driver_cycle_wall_ms": 15371.788,
+      "cycle_timepoints_ms": {
+        "risk_hook_started": 0.0,
+        "initial_scan_finished": 3895.324,
+        "auto_fix_authorization_started": 4406.127,
+        "auto_fix_authorized": 4411.555,
+        "policy_finished": 4411.619,
+        "initial_hook_response_ready": 4411.985,
+        "host_continuation_observed": 5389.31,
+        "prepare_task_fix_started": 5464.627,
+        "prepare_task_fix_finished": 6368.086,
+        "fix_edit_hook_started": 7472.116,
+        "host_edit_observed": 11432.478,
+        "security_rescan_started": 11627.175,
+        "security_rescan_finished": 15178.115,
+        "episode_closed": 15369.201,
+        "return_to_host": 15369.367,
+        "initial_hook_response_sent": null,
+        "host_received_advisory": null,
+        "host_fix_started": null,
+        "host_edit_completed": null
+      },
+      "cycle_breakdown_ms": {
+        "initial_runtime": 4411.985,
+        "runtime_to_host_continuation_wait": 977.325,
+        "continuation_to_prepare": 75.316,
+        "prepare_fix": 903.459,
+        "host_fix_window": 1104.029,
+        "post_edit_hook": 4155.059,
+        "security_rescan": 3550.94,
+        "close/finalization": 191.252,
+        "unaccounted": 0.002
+      },
+      "cycle_detail_ms": {
+        "initial_scanner": 3414.382,
+        "initial_finding_policy": 516.286,
+        "auto_fix_authorization": 5.428,
+        "post_edit_scanner": 3439.059
+      },
+      "cycle_boundary": {
+        "initial_runtime": "RUNTIME_ADAPTER_TO_RESPONSE_READY; includes scanner/policy",
+        "runtime_to_host_continuation_wait": "CROSS_BOUNDARY_WINDOW; Host/transport/queue components UNKNOWN",
+        "continuation_to_prepare": "CROSS_BOUNDARY_WINDOW_AFTER_STOP; not Host CPU",
+        "prepare_fix": "RUNTIME_MCP_TOOL_FUNCTION; excludes MCP transport",
+        "host_fix_window": "HOST_AGENT_AND_TRANSPORT_WINDOW; exact edit duration UNKNOWN",
+        "post_edit_hook": "RUNTIME_HOOK_PROCESSING; includes post-edit incremental scanner",
+        "security_rescan": "SCANNER_PROCESSING + RUNTIME_PROCESSING",
+        "close/finalization": "RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION",
+        "unaccounted": "UNATTRIBUTED_ENDPOINT_RESIDUAL",
+        "host_continuation_source": "STOP_GUARD",
+        "multiple_attempts_observed": false,
+        "endpoint_observation": "FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual"
+      },
+      "security": "SCANNER_VERIFIED_RESOLVED",
+      "next_action": "RETURN_TO_HOST"
+    }
+  ],
+  "actual_desktop": "PENDING_CORE_HOST_TRIAL",
+  "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+  "timing_contract": "core-hook-timing-v1",
+  "functional_calls": 0,
+  "build_test_sandbox": false,
+  "runtime_source_edit": false,
+  "network": false,
+  "model": false,
+  "raw_references_persisted": false,
+  "duration_seconds": 65.1
+}

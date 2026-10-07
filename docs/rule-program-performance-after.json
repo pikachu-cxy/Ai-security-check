@@ -1,0 +1,1333 @@
+{
+  "kind": "ACTUAL_MANAGED_SCANNER",
+  "samples": [
+    {
+      "case": "safe-cold",
+      "wall_ms": 7914.188,
+      "providers": [
+        {
+          "scanner": "semgrep",
+          "version": "1.178.0",
+          "duration_ms": 6906,
+          "finding_count": 0,
+          "rule_coverage": {
+            "engine": "semgrep",
+            "rule_pack_id": "ai-security-core",
+            "rule_pack_version": "1.1.0",
+            "rule_pack_checksum": "88be4461e7c624e094b126cda165679feb74e013ef57b813b8226c23c7318c40",
+            "detected_languages": [
+              "java"
+            ],
+            "per_language": {
+              "java": {
+                "language": "java",
+                "available_rules": 27,
+                "selected_rules": 18,
+                "executed_rules": 18,
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "executed_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "applicable_categories": [
+                  "arbitrary-file-read",
+                  "arbitrary-file-write",
+                  "command-injection",
+                  "path-traversal",
+                  "sql-injection",
+                  "ssrf",
+                  "trust-all-tls",
+                  "unsafe-deserialization",
+                  "xxe"
+                ],
+                "frameworks": [
+                  "JDK",
+                  "MyBatis",
+                  "Spring",
+                  "Spring WebFlux"
+                ],
+                "status": "EXECUTED",
+                "target_files": 1,
+                "scanned_files": 1
+              }
+            },
+            "status": "EXECUTED",
+            "total_available": 29,
+            "total_selected": 18,
+            "total_executed": 18,
+            "total_files": 1,
+            "scope_files": [
+              "A.java"
+            ],
+            "capability_program_version": "1.0.0",
+            "applicable_capabilities": 9,
+            "capabilities": [
+              {
+                "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+                "title": "TLS hostname verification disabled",
+                "maturity": "CORE",
+                "auto_fix_eligible": true,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.trust-all-hostname"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SQL_INJECTION",
+                "title": "SQL injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDBC",
+                  "Spring JDBC",
+                  "MyBatis"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.spring-jdbc"
+                ]
+              },
+              {
+                "capability_id": "JAVA_COMMAND_INJECTION",
+                "title": "Command injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SSRF",
+                "title": "SSRF",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK",
+                  "Java HttpClient",
+                  "Spring RestTemplate",
+                  "Spring WebFlux"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.http-client",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client"
+                ]
+              },
+              {
+                "capability_id": "JAVA_PATH_TRAVERSAL",
+                "title": "Path traversal",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.file-access"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_READ",
+                "title": "Arbitrary file read",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+                "title": "Arbitrary file write",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-write"
+                ]
+              },
+              {
+                "capability_id": "JAVA_XXE",
+                "title": "XML external entities",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JAXP DOM",
+                  "JAXP SAX",
+                  "StAX",
+                  "JAXP Transformer"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ]
+              },
+              {
+                "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+                "title": "Unsafe deserialization",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.object-deserialization"
+                ]
+              }
+            ],
+            "execution_evidence": "Semgrep time.rules and paths.scanned; errors/skipped rules lower coverage"
+          },
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 379.609,
+              "version_probe_invocation": 2241.878,
+              "capability_preparation": 3110.482,
+              "rule_config_preparation": 124.357,
+              "process_invocation": 3669.191,
+              "process_creation": 2.639,
+              "parsing_normalization": 0.073,
+              "engine_reported_rules_parse": 13.176,
+              "engine_reported_config_time": 519.329,
+              "engine_reported_core_time": 447.298,
+              "engine_reported_ignores_time": 0.07,
+              "engine_reported_total_time": 1036.212,
+              "scanner_total": 6906.477,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS",
+              "selected_config": "MISS"
+            },
+            "invocations": [
+              {
+                "type": "VERSION_PROBE",
+                "target_count": 0
+              },
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "MISS",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 132.365,
+            "scope": {
+              "target_files": 1,
+              "rules": 18,
+              "applicable_capabilities": 9,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "scanner_results_reused": false
+            }
+          }
+        },
+        {
+          "scanner": "gitleaks",
+          "version": "8.30.0",
+          "duration_ms": 872,
+          "finding_count": 0,
+          "rule_coverage": {},
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 25.39,
+              "version_probe_invocation": 338.968,
+              "capability_preparation": 415.672,
+              "process_invocation": 442.976,
+              "process_creation": 15.752,
+              "parsing_normalization": 11.012,
+              "scanner_total": 872.443,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "version_probe_invocations": 1,
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "MISS"
+            },
+            "invocations": [
+              {
+                "type": "VERSION_PROBE",
+                "target_count": 0
+              },
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "safe-warm",
+      "wall_ms": 4532.129,
+      "providers": [
+        {
+          "scanner": "semgrep",
+          "version": "1.178.0",
+          "duration_ms": 4012,
+          "finding_count": 0,
+          "rule_coverage": {
+            "engine": "semgrep",
+            "rule_pack_id": "ai-security-core",
+            "rule_pack_version": "1.1.0",
+            "rule_pack_checksum": "88be4461e7c624e094b126cda165679feb74e013ef57b813b8226c23c7318c40",
+            "detected_languages": [
+              "java"
+            ],
+            "per_language": {
+              "java": {
+                "language": "java",
+                "available_rules": 27,
+                "selected_rules": 18,
+                "executed_rules": 18,
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "executed_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "applicable_categories": [
+                  "arbitrary-file-read",
+                  "arbitrary-file-write",
+                  "command-injection",
+                  "path-traversal",
+                  "sql-injection",
+                  "ssrf",
+                  "trust-all-tls",
+                  "unsafe-deserialization",
+                  "xxe"
+                ],
+                "frameworks": [
+                  "JDK",
+                  "MyBatis",
+                  "Spring",
+                  "Spring WebFlux"
+                ],
+                "status": "EXECUTED",
+                "target_files": 1,
+                "scanned_files": 1
+              }
+            },
+            "status": "EXECUTED",
+            "total_available": 29,
+            "total_selected": 18,
+            "total_executed": 18,
+            "total_files": 1,
+            "scope_files": [
+              "A.java"
+            ],
+            "capability_program_version": "1.0.0",
+            "applicable_capabilities": 9,
+            "capabilities": [
+              {
+                "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+                "title": "TLS hostname verification disabled",
+                "maturity": "CORE",
+                "auto_fix_eligible": true,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.trust-all-hostname"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SQL_INJECTION",
+                "title": "SQL injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDBC",
+                  "Spring JDBC",
+                  "MyBatis"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.spring-jdbc"
+                ]
+              },
+              {
+                "capability_id": "JAVA_COMMAND_INJECTION",
+                "title": "Command injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SSRF",
+                "title": "SSRF",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK",
+                  "Java HttpClient",
+                  "Spring RestTemplate",
+                  "Spring WebFlux"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.http-client",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client"
+                ]
+              },
+              {
+                "capability_id": "JAVA_PATH_TRAVERSAL",
+                "title": "Path traversal",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.file-access"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_READ",
+                "title": "Arbitrary file read",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+                "title": "Arbitrary file write",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-write"
+                ]
+              },
+              {
+                "capability_id": "JAVA_XXE",
+                "title": "XML external entities",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JAXP DOM",
+                  "JAXP SAX",
+                  "StAX",
+                  "JAXP Transformer"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ]
+              },
+              {
+                "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+                "title": "Unsafe deserialization",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.object-deserialization"
+                ]
+              }
+            ],
+            "execution_evidence": "Semgrep time.rules and paths.scanned; errors/skipped rules lower coverage"
+          },
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 380.4,
+              "capability_preparation": 382.333,
+              "rule_config_preparation": 11.825,
+              "process_invocation": 3616.213,
+              "process_creation": 2.685,
+              "parsing_normalization": 0.063,
+              "engine_reported_rules_parse": 16.834,
+              "engine_reported_config_time": 591.768,
+              "engine_reported_core_time": 466.487,
+              "engine_reported_ignores_time": 0.083,
+              "engine_reported_total_time": 1139.33,
+              "scanner_total": 4012.303,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 11.045,
+            "scope": {
+              "target_files": 1,
+              "rules": 18,
+              "applicable_capabilities": 9,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "scanner_results_reused": false
+            }
+          }
+        },
+        {
+          "scanner": "gitleaks",
+          "version": "8.30.0",
+          "duration_ms": 508,
+          "finding_count": 0,
+          "rule_coverage": {},
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 24.283,
+              "capability_preparation": 51.227,
+              "process_invocation": 443.951,
+              "process_creation": 17.306,
+              "parsing_normalization": 10.536,
+              "scanner_total": 508.036,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "tls-risk",
+      "wall_ms": 4583.415,
+      "providers": [
+        {
+          "scanner": "semgrep",
+          "version": "1.178.0",
+          "duration_ms": 4057,
+          "finding_count": 1,
+          "rule_coverage": {
+            "engine": "semgrep",
+            "rule_pack_id": "ai-security-core",
+            "rule_pack_version": "1.1.0",
+            "rule_pack_checksum": "88be4461e7c624e094b126cda165679feb74e013ef57b813b8226c23c7318c40",
+            "detected_languages": [
+              "java"
+            ],
+            "per_language": {
+              "java": {
+                "language": "java",
+                "available_rules": 27,
+                "selected_rules": 18,
+                "executed_rules": 18,
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "executed_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "applicable_categories": [
+                  "arbitrary-file-read",
+                  "arbitrary-file-write",
+                  "command-injection",
+                  "path-traversal",
+                  "sql-injection",
+                  "ssrf",
+                  "trust-all-tls",
+                  "unsafe-deserialization",
+                  "xxe"
+                ],
+                "frameworks": [
+                  "JDK",
+                  "MyBatis",
+                  "Spring",
+                  "Spring WebFlux"
+                ],
+                "status": "EXECUTED",
+                "target_files": 1,
+                "scanned_files": 1
+              }
+            },
+            "status": "EXECUTED",
+            "total_available": 29,
+            "total_selected": 18,
+            "total_executed": 18,
+            "total_files": 1,
+            "scope_files": [
+              "A.java"
+            ],
+            "capability_program_version": "1.0.0",
+            "applicable_capabilities": 9,
+            "capabilities": [
+              {
+                "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+                "title": "TLS hostname verification disabled",
+                "maturity": "CORE",
+                "auto_fix_eligible": true,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.trust-all-hostname"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SQL_INJECTION",
+                "title": "SQL injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDBC",
+                  "Spring JDBC",
+                  "MyBatis"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.spring-jdbc"
+                ]
+              },
+              {
+                "capability_id": "JAVA_COMMAND_INJECTION",
+                "title": "Command injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SSRF",
+                "title": "SSRF",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK",
+                  "Java HttpClient",
+                  "Spring RestTemplate",
+                  "Spring WebFlux"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.http-client",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client"
+                ]
+              },
+              {
+                "capability_id": "JAVA_PATH_TRAVERSAL",
+                "title": "Path traversal",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.file-access"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_READ",
+                "title": "Arbitrary file read",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+                "title": "Arbitrary file write",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-write"
+                ]
+              },
+              {
+                "capability_id": "JAVA_XXE",
+                "title": "XML external entities",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JAXP DOM",
+                  "JAXP SAX",
+                  "StAX",
+                  "JAXP Transformer"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ]
+              },
+              {
+                "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+                "title": "Unsafe deserialization",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.object-deserialization"
+                ]
+              }
+            ],
+            "execution_evidence": "Semgrep time.rules and paths.scanned; errors/skipped rules lower coverage"
+          },
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 396.789,
+              "capability_preparation": 398.657,
+              "rule_config_preparation": 11.888,
+              "process_invocation": 3643.637,
+              "process_creation": 2.738,
+              "parsing_normalization": 0.402,
+              "engine_reported_rules_parse": 15.0,
+              "engine_reported_config_time": 511.05,
+              "engine_reported_core_time": 507.007,
+              "engine_reported_ignores_time": 0.081,
+              "engine_reported_total_time": 1094.318,
+              "scanner_total": 4056.726,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "MISS",
+            "rule_planning_ms": 11.087,
+            "scope": {
+              "target_files": 1,
+              "rules": 18,
+              "applicable_capabilities": 9,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "scanner_results_reused": false
+            }
+          }
+        },
+        {
+          "scanner": "gitleaks",
+          "version": "8.30.0",
+          "duration_ms": 515,
+          "finding_count": 0,
+          "rule_coverage": {},
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 28.837,
+              "capability_preparation": 57.126,
+              "process_invocation": 444.705,
+              "process_creation": 17.778,
+              "parsing_normalization": 10.696,
+              "scanner_total": 514.819,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "case": "fixed-rescan",
+      "wall_ms": 4534.685,
+      "providers": [
+        {
+          "scanner": "semgrep",
+          "version": "1.178.0",
+          "duration_ms": 4009,
+          "finding_count": 0,
+          "rule_coverage": {
+            "engine": "semgrep",
+            "rule_pack_id": "ai-security-core",
+            "rule_pack_version": "1.1.0",
+            "rule_pack_checksum": "88be4461e7c624e094b126cda165679feb74e013ef57b813b8226c23c7318c40",
+            "detected_languages": [
+              "java"
+            ],
+            "per_language": {
+              "java": {
+                "language": "java",
+                "available_rules": 27,
+                "selected_rules": 18,
+                "executed_rules": 18,
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "executed_rule_ids": [
+                  "ai-security.java.arbitrary-file-read",
+                  "ai-security.java.arbitrary-file-write",
+                  "ai-security.java.file-access",
+                  "ai-security.java.http-client",
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.object-deserialization",
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec",
+                  "ai-security.java.spring-jdbc",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.trust-all-hostname",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client",
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ],
+                "applicable_categories": [
+                  "arbitrary-file-read",
+                  "arbitrary-file-write",
+                  "command-injection",
+                  "path-traversal",
+                  "sql-injection",
+                  "ssrf",
+                  "trust-all-tls",
+                  "unsafe-deserialization",
+                  "xxe"
+                ],
+                "frameworks": [
+                  "JDK",
+                  "MyBatis",
+                  "Spring",
+                  "Spring WebFlux"
+                ],
+                "status": "EXECUTED",
+                "target_files": 1,
+                "scanned_files": 1
+              }
+            },
+            "status": "EXECUTED",
+            "total_available": 29,
+            "total_selected": 18,
+            "total_executed": 18,
+            "total_files": 1,
+            "scope_files": [
+              "A.java"
+            ],
+            "capability_program_version": "1.0.0",
+            "applicable_capabilities": 9,
+            "capabilities": [
+              {
+                "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+                "title": "TLS hostname verification disabled",
+                "maturity": "CORE",
+                "auto_fix_eligible": true,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.trust-all-hostname"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SQL_INJECTION",
+                "title": "SQL injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDBC",
+                  "Spring JDBC",
+                  "MyBatis"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.jdbc-statement",
+                  "ai-security.java.mybatis-annotation",
+                  "ai-security.java.spring-jdbc"
+                ]
+              },
+              {
+                "capability_id": "JAVA_COMMAND_INJECTION",
+                "title": "Command injection",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.process-builder",
+                  "ai-security.java.runtime-exec"
+                ]
+              },
+              {
+                "capability_id": "JAVA_SSRF",
+                "title": "SSRF",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK",
+                  "Java HttpClient",
+                  "Spring RestTemplate",
+                  "Spring WebFlux"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.http-client",
+                  "ai-security.java.spring-resttemplate",
+                  "ai-security.java.url-connection",
+                  "ai-security.java.web-client"
+                ]
+              },
+              {
+                "capability_id": "JAVA_PATH_TRAVERSAL",
+                "title": "Path traversal",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.file-access"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_READ",
+                "title": "Arbitrary file read",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-read"
+                ]
+              },
+              {
+                "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+                "title": "Arbitrary file write",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.arbitrary-file-write"
+                ]
+              },
+              {
+                "capability_id": "JAVA_XXE",
+                "title": "XML external entities",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JAXP DOM",
+                  "JAXP SAX",
+                  "StAX",
+                  "JAXP Transformer"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.xxe-document-builder",
+                  "ai-security.java.xxe-sax-parser",
+                  "ai-security.java.xxe-stax",
+                  "ai-security.java.xxe-transformer"
+                ]
+              },
+              {
+                "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+                "title": "Unsafe deserialization",
+                "maturity": "VALIDATED",
+                "auto_fix_eligible": false,
+                "frameworks": [
+                  "JDK"
+                ],
+                "framework_applicability": "ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN",
+                "selected_rule_ids": [
+                  "ai-security.java.object-deserialization"
+                ]
+              }
+            ],
+            "execution_evidence": "Semgrep time.rules and paths.scanned; errors/skipped rules lower coverage"
+          },
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 383.964,
+              "capability_preparation": 385.871,
+              "rule_config_preparation": 10.793,
+              "process_invocation": 3610.965,
+              "process_creation": 2.587,
+              "parsing_normalization": 0.059,
+              "engine_reported_rules_parse": 18.401,
+              "engine_reported_config_time": 535.167,
+              "engine_reported_core_time": 469.402,
+              "engine_reported_ignores_time": 0.08,
+              "engine_reported_total_time": 1082.167,
+              "scanner_total": 4009.214,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT",
+              "selected_config": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SAST_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "rule_pack_cache": "HIT",
+            "rule_plan_cache": "HIT",
+            "rule_planning_ms": 10.548,
+            "scope": {
+              "target_files": 1,
+              "rules": 18,
+              "applicable_capabilities": 9,
+              "languages": [
+                "java"
+              ],
+              "profile": "EXPLICIT_RULE_FILE_SCOPE",
+              "repository_discovery": false,
+              "context_files": 0,
+              "targets_truncated": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "scanner_results_reused": false
+            }
+          }
+        },
+        {
+          "scanner": "gitleaks",
+          "version": "8.30.0",
+          "duration_ms": 514,
+          "finding_count": 0,
+          "rule_coverage": {},
+          "diagnostics": {
+            "timing_ms": {
+              "capability_cache_validation": 23.478,
+              "capability_preparation": 47.621,
+              "process_invocation": 455.115,
+              "process_creation": 16.352,
+              "parsing_normalization": 9.209,
+              "scanner_total": 514.143,
+              "actual_scanner_execution": null
+            },
+            "counts": {
+              "process_invocations": 1
+            },
+            "cache": {
+              "version_probe": "HIT"
+            },
+            "invocations": [
+              {
+                "type": "SECRET_SCAN",
+                "target_count": 1
+              }
+            ],
+            "invocation_count": 1,
+            "invocations_truncated": false,
+            "scope": {
+              "target_files": 1,
+              "kind": "FILE",
+              "repository_discovery": false,
+              "relative_targets": [
+                "A.java"
+              ],
+              "targets_truncated": false
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "network": false,
+  "model": false,
+  "target_build": false,
+  "source_modified": "DISPOSABLE_FIXTURES_ONLY"
+}

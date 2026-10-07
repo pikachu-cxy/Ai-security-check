@@ -1,0 +1,519 @@
+{
+  "schema_version": "rule-program-v1",
+  "program_id": "ai-security-java",
+  "version": "1.0.0",
+  "rule_pack": "ai-security-core",
+  "capabilities": [
+    {
+      "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "title": "TLS hostname verification disabled",
+      "language": "java",
+      "category": "trust-all-tls",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-297"
+      ],
+      "owasp_mapping": [],
+      "maturity": "CORE",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.trust-all-hostname"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "unconditional hostname acceptance",
+        "sink": "TLS hostname verification disabled",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "EXISTING_GUARDED_FIX",
+      "auto_fix_eligible": true,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "ai-security.java.trust-all-hostname"
+    },
+    {
+      "capability_id": "HARDCODED_SECRET",
+      "title": "Hardcoded secret",
+      "language": "any",
+      "category": "secret",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-798"
+      ],
+      "owasp_mapping": [
+        "A02:2021"
+      ],
+      "maturity": "CORE",
+      "scanner_engine": "gitleaks",
+      "underlying_rule_ids": [
+        "gitleaks:*"
+      ],
+      "frameworks": [
+        "scanner-owned detectors"
+      ],
+      "evidence_contract": {
+        "basis": "SCANNER_SECRET_DETECTOR",
+        "source": "scanner-owned credential signature",
+        "sink": "Hardcoded secret",
+        "dataflow_scope": "SIGNATURE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:HARDCODED_SECRET"
+    },
+    {
+      "capability_id": "JAVA_SQL_INJECTION",
+      "title": "SQL injection",
+      "language": "java",
+      "category": "sql-injection",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-89"
+      ],
+      "owasp_mapping": [
+        "A03:2021"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.jdbc-statement",
+        "ai-security.java.spring-jdbc",
+        "ai-security.java.mybatis-annotation",
+        "ai-security.java.mybatis-xml"
+      ],
+      "frameworks": [
+        "JDBC",
+        "Spring JDBC",
+        "MyBatis"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "SQL injection",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_SQL_INJECTION"
+    },
+    {
+      "capability_id": "JAVA_COMMAND_INJECTION",
+      "title": "Command injection",
+      "language": "java",
+      "category": "command-injection",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-78"
+      ],
+      "owasp_mapping": [
+        "A03:2021"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.runtime-exec",
+        "ai-security.java.process-builder"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "Command injection",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_COMMAND_INJECTION"
+    },
+    {
+      "capability_id": "JAVA_SSRF",
+      "title": "SSRF",
+      "language": "java",
+      "category": "ssrf",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-918"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.url-connection",
+        "ai-security.java.http-client",
+        "ai-security.java.spring-resttemplate",
+        "ai-security.java.web-client"
+      ],
+      "frameworks": [
+        "JDK",
+        "Java HttpClient",
+        "Spring RestTemplate",
+        "Spring WebFlux"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "SSRF",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_SSRF"
+    },
+    {
+      "capability_id": "JAVA_PATH_TRAVERSAL",
+      "title": "Path traversal",
+      "language": "java",
+      "category": "path-traversal",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-22"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.file-access"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "Path traversal",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_PATH_TRAVERSAL"
+    },
+    {
+      "capability_id": "JAVA_ARBITRARY_FILE_READ",
+      "title": "Arbitrary file read",
+      "language": "java",
+      "category": "arbitrary-file-read",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-200"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.arbitrary-file-read"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "Arbitrary file read",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_ARBITRARY_FILE_READ"
+    },
+    {
+      "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+      "title": "Arbitrary file write",
+      "language": "java",
+      "category": "arbitrary-file-write",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-73"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.arbitrary-file-write"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "Arbitrary file write",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_ARBITRARY_FILE_WRITE"
+    },
+    {
+      "capability_id": "JAVA_XXE",
+      "title": "XML external entities",
+      "language": "java",
+      "category": "xxe",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-611"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.xxe-document-builder",
+        "ai-security.java.xxe-sax-parser",
+        "ai-security.java.xxe-stax",
+        "ai-security.java.xxe-transformer"
+      ],
+      "frameworks": [
+        "JAXP DOM",
+        "JAXP SAX",
+        "StAX",
+        "JAXP Transformer"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "XML external entities",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_XXE"
+    },
+    {
+      "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+      "title": "Unsafe deserialization",
+      "language": "java",
+      "category": "unsafe-deserialization",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-502"
+      ],
+      "owasp_mapping": [],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.object-deserialization"
+      ],
+      "frameworks": [
+        "JDK"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "declared javax/jakarta request or Spring annotated input",
+        "sink": "Unsafe deserialization",
+        "dataflow_scope": "INTRAPROCEDURAL_CE",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic corpus, not independently reviewed production ground truth.",
+          "Cross-file wrappers, reachability and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_UNSAFE_DESERIALIZATION"
+    }
+  ],
+  "legacy_rules": [
+    {
+      "rule_id": "ai-security.java.jndi-lookup",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/jndi-lookup.java"
+    },
+    {
+      "rule_id": "ai-security.java.ldap-search",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/ldap-search.java"
+    },
+    {
+      "rule_id": "ai-security.java.open-redirect",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/open-redirect.java"
+    },
+    {
+      "rule_id": "ai-security.java.security-random",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/security-random.java"
+    },
+    {
+      "rule_id": "ai-security.java.trust-all-certificates",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/trust-all-certificates.java"
+    },
+    {
+      "rule_id": "ai-security.java.weak-cipher",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/weak-cipher.java"
+    },
+    {
+      "rule_id": "ai-security.java.weak-digest",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/weak-digest.java"
+    },
+    {
+      "rule_id": "ai-security.java.xml-decoder",
+      "maturity": "EXPERIMENTAL",
+      "default_enabled": false,
+      "test_corpus": "tests/rules/java/xml-decoder.java"
+    },
+    {
+      "rule_id": "ai-security.python.command-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/python/core.py"
+    },
+    {
+      "rule_id": "ai-security.python.unsafe-eval",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/python/core.py"
+    }
+  ],
+  "overlap_policy": {
+    "primary": [
+      "JAVA_ARBITRARY_FILE_READ",
+      "JAVA_ARBITRARY_FILE_WRITE"
+    ],
+    "secondary": "JAVA_PATH_TRAVERSAL",
+    "match": "SAME_FILE_AND_SINK_RANGE",
+    "keep_rule_evidence": true
+  },
+  "profiles": {
+    "java_core_pack_v1": [
+      "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "HARDCODED_SECRET"
+    ],
+    "validated_java_pack_v1": [
+      "JAVA_SQL_INJECTION",
+      "JAVA_COMMAND_INJECTION",
+      "JAVA_SSRF",
+      "JAVA_PATH_TRAVERSAL",
+      "JAVA_ARBITRARY_FILE_READ",
+      "JAVA_ARBITRARY_FILE_WRITE",
+      "JAVA_XXE",
+      "JAVA_UNSAFE_DESERIALIZATION"
+    ]
+  }
+}

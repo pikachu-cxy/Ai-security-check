@@ -1,5 +1,6 @@
 """Reusable bounded subprocess capture. Raw output stays internal."""
 from dataclasses import dataclass
+from dataclasses import field
 import subprocess
 import threading
 import time
@@ -15,6 +16,7 @@ class ProcessResult:
     stdout: str
     stderr: str
     duration_ms: int
+    timing_ms: dict = field(default_factory=dict)
 
     @property
     def returncode(self):
@@ -28,8 +30,10 @@ class OutputLimitError(ValueError):
 def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -> ProcessResult:
     checkpoint()
     start = time.monotonic()
+    creation_started = time.perf_counter()
     proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name != 'nt')
+    creation_ms = round((time.perf_counter()-creation_started)*1000, 3)
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()
 
@@ -86,4 +90,5 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -
     if any(reader.is_alive() for reader in readers):
         raise TimeoutError("process output did not close")
     return ProcessResult(proc.returncode, *(bytes(buffer).decode('utf-8', errors='replace') for buffer in buffers),
-                         round((time.monotonic() - start) * 1000))
+                         round((time.monotonic() - start) * 1000),
+                         {'process_creation': creation_ms})

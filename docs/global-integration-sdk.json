@@ -1,0 +1,56 @@
+{
+  "actual_desktop": "NOT_RUN_USER_SCHEDULED",
+  "trust_ui": "PENDING_ACTUAL_DESKTOP",
+  "network": false,
+  "model": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "raw_references_persisted": false,
+  "temporary_codex_home": true,
+  "clean_installed_launcher": true,
+  "fresh_setup": "PASS",
+  "repeated_setup": "PASS",
+  "legacy_migration": "PASS",
+  "user_preservation": "PASS",
+  "cli_status_doctor": "PASS",
+  "local_codex_global_config_discovery": "PASS",
+  "codex_cli_version": "codex-cli 0.159.2",
+  "cross_workspace_opaque_refs": "REJECTED",
+  "shared_connection_ambiguous_request": "REJECTED",
+  "episodes": [
+    {
+      "workspace": 1,
+      "episode_number": 1,
+      "status": "SCANNER_VERIFIED_RESOLVED",
+      "phase": "CLOSED",
+      "prepare_calls": 0,
+      "reference_integrity": "ORIGINAL_VALUES_UNCHANGED",
+      "real_scanner_proof": true,
+      "functional_verification": "NOT_REQUESTED"
+    },
+    {
+      "workspace": 2,
+      "episode_number": 1,
+      "status": "SCANNER_VERIFIED_RESOLVED",
+      "phase": "CLOSED",
+      "prepare_calls": 0,
+      "reference_integrity": "ORIGINAL_VALUES_UNCHANGED",
+      "real_scanner_proof": true,
+      "functional_verification": "NOT_REQUESTED"
+    },
+    {
+      "workspace": 1,
+      "episode_number": 2,
+      "status": "SCANNER_VERIFIED_RESOLVED",
+      "phase": "CLOSED",
+      "prepare_calls": 0,
+      "reference_integrity": "ORIGINAL_VALUES_UNCHANGED",
+      "real_scanner_proof": true,
+      "functional_verification": "NOT_REQUESTED"
+    }
+  ],
+  "uninstall_owned_only": "PASS",
+  "temporary_cleanup": "ON_EXIT",
+  "status": "PASS",
+  "duration_seconds": 90.49
+}

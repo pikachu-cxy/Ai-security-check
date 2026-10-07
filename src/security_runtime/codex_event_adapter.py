@@ -1,0 +1,134 @@
+"""Codex raw claims and tool semantics; no snapshot, scanner or risk decisions."""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from .codex_host_claims import diagnostics, schema_diagnostics
+from .hook_state import identity, no_links
+from .host_events import (EventKind, HostCapabilities, NormalizedHostEvent,
+                          OperationClass, VerifiedHostContext)
+
+
+def classify_bash_command(tool_input) -> str:
+    """Classify command shape without persisting or echoing command text."""
+    if not isinstance(tool_input, dict):
+        return 'UNKNOWN'
+    command = tool_input.get('command') or tool_input.get('cmd')
+    if not isinstance(command, str) or not command.strip() or len(command) > 12000:
+        return 'UNKNOWN'
+    import re
+    readonly = re.compile(r'(^|[;&|])\s*(git\s+(status|diff|log|show|branch)\b|(?:cat|type|Get-Content|gc|ls|dir|rg|grep|findstr)\b)', re.I)
+    mutation = re.compile(r'(Set-Content|Add-Content|Out-File|>>|(?<![<>])>(?!=)|\b(?:rm|del|erase|remove-item|mv|move|rename|copy|cp|New-Item|mkdir)\b|\b(?:python|python3|node|perl|ruby)\b.*(?:open\(|write\(|unlink\(|rename\())', re.I)
+    if mutation.search(command):
+        return 'POSSIBLE_WORKSPACE_MUTATION'
+    if readonly.search(command):
+        return 'READ_ONLY'
+    return 'UNKNOWN'
+
+
+class CodexEventAdapter:
+    host = 'codex'
+    capabilities = HostCapabilities(supports_session_start=True,
+        supports_native_file_edit=True, supports_shell_post_event=True,
+        supports_tool_input=True, supports_invocation_id=True,
+        supports_stop=True, supports_global_install=True, supports_setup_seed=True)
+    from .codex_host_claims import EVENTS as mcp_events
+    events = {'SessionStart': EventKind.SESSION_START,
+              'PostToolUse': EventKind.WORKSPACE_ACTIVITY, 'Stop': EventKind.SESSION_STOP}
+
+    def validate_claims(self, arguments, expected, schema=None):
+        return (schema_diagnostics(arguments, expected, schema) if schema is not None
+                else diagnostics(arguments, expected))
+
+    def accept_invocation(self, arguments, root, diag, guard):
+        return guard.accept(arguments, root, diag)
+
+    def normalize(self, arguments, root, *, binding_diagnostics=None, legacy=False):
+        """Called only after binding/replay validation in the transport adapter.
+
+        Legacy command translation retains its previous identity requirements;
+        connected MCP always uses the full event-specific claims contract.
+        """
+        expected = arguments.get('event')
+        if expected not in self.events:
+            raise ValueError('Unsupported Codex event')
+        if not legacy and (not isinstance(binding_diagnostics, dict)
+                or binding_diagnostics.get('host_claim_status') != 'VALID'
+                or binding_diagnostics.get('workspace_claim_match') is not True
+                or binding_diagnostics.get('session_claim_match') is not True):
+            raise ValueError('Validated Codex binding required')
+        if not legacy and self.validate_claims(arguments, expected)['host_claim_status'] != 'VALID':
+            raise ValueError('Invalid Codex claims')
+        operation = OperationClass.UNKNOWN
+        if expected == 'PostToolUse':
+            tool = arguments.get('tool_name')
+            if tool not in {'Bash', 'apply_patch', 'Edit', 'Write'}:
+                raise ValueError('Unsupported Codex activity')
+            operation = (OperationClass(classify_bash_command(arguments.get('tool_input')))
+                         if tool == 'Bash' else OperationClass.DIRECT_FILE_MUTATION)
+        invocation = arguments.get('tool_use_id')
+        context = VerifiedHostContext(self.host, root, identity(os.path.normcase(str(root))),
+            identity(arguments['session_id']), identity(invocation) if invocation else None,
+            self.capabilities, arguments['session_id'])
+        return NormalizedHostEvent(self.events[expected], context, operation,
+            mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
+            stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
+
+    def bind_project(self, arguments, *, binding, guard=None, expected=None, legacy=False):
+        """Preserve the existing project cwd/adapter and invocation checks."""
+        expected = expected or arguments.get('event')
+        diag = None if legacy else self.validate_claims(arguments, expected)
+        if diag is not None and diag['host_claim_status'] != 'VALID':
+            return None, diag, 'INVALID_HOST_CLAIMS'
+        if binding is None:
+            return None, diag, 'WORKSPACE_BINDING_REQUIRED'
+        try:
+            workspace = arguments['workspace_path']
+            if not Path(workspace).is_absolute():
+                raise ValueError('Absolute cwd required')
+            root = Path(binding.root)
+            candidate = Path(os.path.abspath(workspace))
+            if not candidate.is_relative_to(root):
+                raise ValueError('Host cwd outside bound workspace')
+            no_links(candidate)
+            from .hook_adapters import CodexHookAdapter
+            CodexHookAdapter().translate(dict(hook_event_name=arguments['event'], cwd=workspace,
+                session_id=arguments['session_id'], tool_name=arguments.get('tool_name')), root)
+            reason = self.accept_invocation(arguments, root, diag, guard) if guard is not None else None
+            if reason:
+                return None, diag, reason
+            return self.normalize(arguments, root, binding_diagnostics=diag, legacy=legacy), diag, None
+        except Exception:
+            if diag is not None:
+                diag.update(host_claim_status='REJECTED', workspace_claim_match=False)
+            return None, diag, 'HOST_CLAIMS_REJECTED'
+
+    @staticmethod
+    def legacy_classification(event):
+        # Preserve the existing Codex diagnostics ABI for direct file tools.
+        return ('POSSIBLE_WORKSPACE_MUTATION' if event.operation == OperationClass.DIRECT_FILE_MUTATION
+                else event.operation.value)
+
+
+def handle_legacy_stop_event(event, workspace_path, session_id, stop_hook_active, *, binding, guard):
+    """Preserve the old standalone Stop transport contract without new authority."""
+    from .host_continuation import allowed
+    try:
+        if (any(not isinstance(v, str) or not v.strip() or len(v) > limit or '${' in v or
+                any(ord(c) < 32 for c in v) for v, limit in zip((event, workspace_path, session_id), (32, 4096, 500)))
+                or event != 'Stop' or type(stop_hook_active) is not bool):
+            return allowed('INCONCLUSIVE')
+        if binding is None:
+            return allowed('INCONCLUSIVE')
+        root = Path(binding.root)
+        if workspace_path.startswith(('\\\\', '//')) or not Path(workspace_path).is_absolute():
+            return allowed('INCONCLUSIVE')
+        candidate = Path(os.path.abspath(workspace_path))
+        if not candidate.is_relative_to(root):
+            return allowed('INCONCLUSIVE')
+        no_links(candidate)
+        no_links(root)
+        return guard.handle(root, session_id, stop_hook_active)
+    except Exception:
+        return allowed('INCONCLUSIVE')

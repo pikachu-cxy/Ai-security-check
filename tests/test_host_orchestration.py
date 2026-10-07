@@ -58,22 +58,23 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
         assert data['action'] == 'AUTO_FIX' and data['interaction'] == AUTO_INTERACTION
         assert output['continue'] is wire['continue'] is False
         assert not {'decision', 'reason'} & wire.keys()
-        assert 'AUTO_FIX is already authorized' in wire['systemMessage']
-        assert 'Do not ask the user for confirmation' in wire['systemMessage']
-        assert 'Immediately continue' in wire['systemMessage'] and len(wire['systemMessage']) < 250
-        assert wire['stopReason'].endswith(data['guidance'])
+        assert 'SECURITY_FIX_REQUIRED' in wire['systemMessage'] and len(wire['systemMessage']) < 250
+        assert 'do not repeat the edit or ask for approval' in wire['stopReason']
+        assert data['guidance'] not in wire['stopReason']
         assert data['guidance'].startswith('SECURITY_AUTO_REMEDIATION_AUTHORIZED.')
-        assert 'USER CONFIRMATION IS NOT REQUIRED' in data['guidance']
-        assert 'Do NOT ask the user whether to repair, continue, apply, keep, or approve' in data['guidance']
-        assert 'Immediately call prepare_task_fix using the supplied task_ref and remediation_ref' in data['guidance']
+        assert data['security_context_status'] == 'READY'
+        assert data['security_fix_context']['authorization']['prepare_required']
+        assert data['security_fix_context']['success']['real_scanner_recheck_required']
+        assert 'do not repeat it or ask for approval' in data['guidance']
         for forbidden in (QUESTION, 'WAIT', 'Proactively ask the user', 'confirmation_ref',
                           'POST_EDIT_REMEDIATION_CONFIRMATION', 'EXPLICIT_USER_REPLY_REQUIRED'):
             assert forbidden not in json.dumps(data, ensure_ascii=False)
         assert data['prepare']['arguments'] == data['verify']['arguments']
         assert set(data['prepare']['arguments']) == {'task_ref', 'remediation_ref'}
         assert all(data['prepare']['arguments'].values())
-        assert 'prepare_functional_verification' in data['guidance']
-        assert 'run_functional_verification' in data['guidance']
+        assert 'Return to the development task' in data['guidance']
+        assert 'prepare_functional_verification' not in data['guidance']
+        assert 'run_functional_verification' not in data['guidance']
     elif mode == 'ask_before_fix':
         assert data['action'] == 'CONFIRM_REQUIRED' and data['interaction'] == CONFIRM_INTERACTION
         assert wire['continue'] is False and wire['stopReason'] == data['guidance']

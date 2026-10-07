@@ -57,7 +57,8 @@ rules:
     - pattern-inside: $RET $METHOD(...) { ... DocumentBuilderFactory $FACTORY = DocumentBuilderFactory.newInstance();
         ... DocumentBuilder $PARSER = $FACTORY.newDocumentBuilder(); ... }
     - pattern-not-inside: $RET $METHOD(...) { ... $FACTORY.setFeature("http://apache.org/xml/features/disallow-doctype-decl",
-        true); ... }
+        true); ... DocumentBuilder $PARSER = $FACTORY.newDocumentBuilder(); ... $PARSER.parse($XML,
+        ...); ... }
     - patterns:
       - pattern: $PARSER.parse($XML, ...)
       - focus-metavariable: $XML

@@ -138,7 +138,20 @@ class WorkspaceBaselineSeeds:
     def remove(self, root):
         self.path(root).unlink(missing_ok=True)
 
-    def _capture(self, root):
+    def capture_session(self, root, session_id, *, host='codex'):
+        """Establish the same bounded comparison point for a global session.
+
+        Capture, byte recheck and publication share the workspace lock. This is
+        a comparison projection, never a remediation or security receipt.
+        """
+        if not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 500:
+            raise ValueError('Invalid baseline session')
+        from .hook_runtime import HOSTS
+        if host not in HOSTS:
+            raise ValueError('Unsupported baseline host')
+        return self._capture(root, session_id=session_id, host=host)
+
+    def _capture(self, root, *, session_id=None, host='codex'):
         from .hook_runtime import (HookCoordinator, HookSnapshot, MAX_FILES, MAX_BYTES,
             capture_snapshot, safe_path, validate_state, _git)
         from .target import TargetDetector, IGNORED
@@ -169,12 +182,22 @@ class WorkspaceBaselineSeeds:
             if not locked:
                 raise ValueError('Baseline scan busy')
             key = core.store.key(root)
-            dirty_digest, dirty_files = capture_snapshot(root, key)
+            if session_id is not None:
+                # Reconnect/duplicate SessionStart must not overwrite the last
+                # processed pre-edit comparison point with post-edit bytes.
+                previous, _ = core.store.load(core.store.path(root, host, session_id))
+                if previous and (previous['workspace_id'], previous['host'], previous['session_id']) == (
+                        identity(os.path.normcase(str(root))), host, identity(session_id)):
+                    return previous
+            captured = capture_snapshot(root, key)
+            dirty_digest, dirty_files = captured
             full_digest, scope = inventory(key)
             result = dict(status='NO_CHANGES', coverage='NONE', execution_state='NO_CHANGES',
                 scan_id=None, capabilities={}, scanner_runs=[], execution={'scanner_run': False})
             observation = core._scan_scope(result, root, scope, baseline=True)
-            if (capture_snapshot(root, key)[0] != dirty_digest or inventory(key) != (full_digest, scope)):
+            after_capture = capture_snapshot(root, key)
+            if (after_capture[0] != dirty_digest or after_capture.file_digests != captured.file_digests
+                    or inventory(key) != (full_digest, scope)):
                 raise ValueError('Baseline source changed')
             # Empty workspace is a proven empty comparison point. For nonempty
             # scope require every requested quick capability, never partial proof.
@@ -184,6 +207,9 @@ class WorkspaceBaselineSeeds:
             delta = dict(new=0, persisting=0, resolved=0, additional_occurrences=0, removed_occurrences=0, families=[])
             summary = {k: result[k] for k in ('coverage', 'execution_state', 'capabilities', 'scanner_runs')}
             summary.update(status='PRE_EXISTING_BASELINE', last_check_status=result['status'], delta=delta)
-            snapshot = asdict(HookSnapshot('hook-v1', identity(os.path.normcase(str(root))), 'codex',
-                identity('setup-seed'), dirty_digest, dirty_files, observation['families'], result['scan_id'], self.now(), summary))
-            return validate_state(snapshot)
+            snapshot = validate_state(asdict(HookSnapshot('hook-v1', identity(os.path.normcase(str(root))), host,
+                identity(session_id if session_id is not None else 'setup-seed'), dirty_digest, dirty_files,
+                observation['families'], result['scan_id'], self.now(), summary, captured.file_digests)))
+            if session_id is not None:
+                core.store.save(core.store.path(root, host, session_id), snapshot)
+            return snapshot

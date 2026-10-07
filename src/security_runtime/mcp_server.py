@@ -13,6 +13,7 @@ from .logging_utils import mcp_log_level
 from .runtime import SecurityRuntime
 from .integration_state import DogfoodEvent, IntegrationStateStore, WorkspaceBinding
 from .workspace import WorkspaceResolver
+from .functional_host import FunctionalExecutionReport
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,12 @@ def _agent_result(result) -> dict:
     }
 
 
-def create_server(runtime: SecurityRuntime | None = None):
+def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory=None,
+                  hook_coordinator=None, workspace_binding=None, global_mode=None,
+                  hook_advisory_only=False):
+    if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
+        from .global_mcp import create_global_server
+        return create_global_server()
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import server as fastmcp_server
@@ -58,39 +64,76 @@ def create_server(runtime: SecurityRuntime | None = None):
         if engine is None:
             engine = SecurityRuntime()
         return engine
-    binding = WorkspaceBinding.from_environment()
+    binding = workspace_binding or WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
     from .remediation import RemediationService
     from .hook_runtime import HookCoordinator
-    hook_coordinator = HookCoordinator(runtime)
-    remediation = RemediationService(getattr(runtime, 'store', None), hooks=hook_coordinator.store)
+    hook_coordinator = hook_coordinator or HookCoordinator(runtime)
+    # Trusted embedding only, never environment/MCP claims. Default Codex has
+    # no atomic edit bridge and cannot opt into Fast Fix through tool arguments.
+    remediation = (remediation_factory or RemediationService)(getattr(runtime, 'store', None),
+        hooks=hook_coordinator.store, registry=hook_coordinator.managed_registry())
+    if remediation_factory is None:
+        # Same connected MCP lifetime; ordinary command/embedded hosts keep the
+        # legacy prepare contract unless their trusted constructor opts in.
+        remediation.agent_tickets.enabled = True
     from .functional_verification import FunctionalVerificationService
     functional = FunctionalVerificationService(remediation)
+    # Only an explicit Deep tool request opts this connection into finalization.
+    # Core security rechecks never discover or run optional project verifiers.
+    from collections import deque
+    deep_requests = deque(maxlen=16)
+    from .codex_host_claims import CodexClaimGuard
+    codex_claim_guard = CodexClaimGuard()
+
+    def lifecycle_claims(args, expected):
+        from .codex_event_adapter import CodexEventAdapter
+        from .host_event_runtime import inconclusive
+        normalized, diag, reason = CodexEventAdapter().bind_project(args,
+            binding=binding, guard=codex_claim_guard, expected=expected)
+        if reason:
+            data = {**inconclusive(reason), **diag, 'scanner_run': False, 'scanner_skipped_reason': reason}
+            return diag, data, None
+        from .recent_hooks import observe
+        diag.update(normalized.diagnostics())
+        observe('CLAIMS_VALID', **diag)
+        return diag, None, normalized
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str) -> dict:
+    def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str,
+                          turn_id: str, tool_use_id: str, tool_input: dict | None = None,
+                          permission_mode: str | None = None) -> dict:
         """Codex MCP Hook POC: PostToolUse edits only. Untrusted metadata claims, no source/tool response/transcript. Requires SECURITY_RUNTIME_WORKSPACE binding; delegates bounded offline checks to HookCoordinator, never calls a model or edits/builds target."""
         from .codex_mcp_hook import codex_hook_output, handle_codex_hook
         from .hook_runtime import HookCoordinator
-        data = handle_codex_hook(event, workspace_path, session_id, tool_name, binding=binding,
-                                 coordinator=hook_coordinator, remediation=remediation)
+        data = handle_codex_hook(event, workspace_path, session_id, tool_name, tool_input,
+                                 binding=binding,
+                                  turn_id=turn_id, tool_use_id=tool_use_id, permission_mode=permission_mode,
+                                  claim_guard=codex_claim_guard,
+                                 coordinator=hook_coordinator, remediation=None if hook_advisory_only else remediation)
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
 
-    # This POC accepts exactly four claims. SDK validation must not echo rejected
+    # Event-specific invocation claims. SDK validation must not echo rejected
     # values (including accidentally supplied source/Secret) in errors or logs.
     hook_tool = server._tool_manager.get_tool('handle_hook_event')
     hook_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
     hook_tool.fn_metadata.arg_model.model_rebuild(force=True)
     hook_tool.parameters = hook_tool.fn_metadata.arg_model.model_json_schema()
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def handle_readiness_event(event: str, workspace_path: str, session_id: str) -> dict:
+    def handle_readiness_event(event: str, workspace_path: str, session_id: str,
+                               permission_mode: str | None = None) -> dict:
         """Observe bound Codex SessionStart readiness only. Untrusted metadata claims; no prompt/source/transcript. Writes bounded hashed integration metadata, never scans, builds, calls a model or edits target source. Ready is not safe."""
         from .integration_readiness import handle_readiness
         from .codex_mcp_hook import codex_hook_output
-        data = handle_readiness(event, workspace_path, session_id, binding=binding,
-                               tools={t.name for t in server._tool_manager.list_tools()})
+        diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
+                                               session_id=session_id, permission_mode=permission_mode), 'SessionStart')
+        data = rejected or handle_readiness(event, workspace_path, session_id, binding=binding,
+                                           tools={t.name for t in server._tool_manager.list_tools()})
+        if rejected:
+            data.update({'continue': True, 'systemMessage': 'AI Security Runtime: ' + data['reason']})
+        data = {**diag, **data}
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
 
@@ -99,14 +142,21 @@ def create_server(runtime: SecurityRuntime | None = None):
     readiness_tool.fn_metadata.arg_model.model_rebuild(force=True)
     readiness_tool.parameters = readiness_tool.fn_metadata.arg_model.model_json_schema()
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool) -> dict:
+    def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
+                          turn_id: str | None = None, permission_mode: str | None = None) -> dict:
         """Codex Stop fallback for an existing unconsumed AUTO_FIX handoff only. Untrusted bounded claims; no prompt/source/transcript/commands/ref input. Checks signed state and guards, writes a maximum-two continuation counter; never scans, prepares, edits, builds, calls a model or renews authority. Empty Hook output allows Stop."""
-        from .host_continuation import handle_stop_event as handle_stop
+        from .host_event_runtime import handle_normalized_event
         from .codex_mcp_hook import codex_hook_output
-        data = handle_stop(event, workspace_path, session_id, stop_hook_active,
-                           binding=binding, guard=remediation.continuation)
+        diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
+                                               session_id=session_id, stop_hook_active=stop_hook_active,
+                                               turn_id=turn_id, permission_mode=permission_mode), 'Stop')
+        data = rejected
+        if data is None:
+            data, _ = handle_normalized_event(normalized, coordinator=hook_coordinator,
+                                              continuation=remediation.continuation)
+        data = {**diag, **data}
         return CallToolResult(structuredContent=data, content=[TextContent(
-            type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=True))])
+            type='text', text=json.dumps({} if rejected else codex_hook_output(data), ensure_ascii=True))])
 
     stop_tool = server._tool_manager.get_tool('handle_stop_event')
     stop_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
@@ -277,14 +327,18 @@ def create_server(runtime: SecurityRuntime | None = None):
         return TriageService(runtime_engine().store).view(scan_id)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def prepare_task_fix(task_ref: str, workspace_path: str | None = None, remediation_ref: str | None = None) -> dict:
+    def prepare_task_fix(task_ref: str, workspace_path: str | None = None, remediation_ref: str | None = None,
+                         security_context_ref: str | None = None) -> dict:
         """Prepare bounded constraints/evidence for the exact displayed task. Host edits; no scanner, model, network or writes here."""
         from .task_fix import TaskFixService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
         if remediation_ref is not None:
             if binding is None:
                 return remediation._fail('WORKSPACE_BINDING_REQUIRED')
-            return remediation.prepare(remediation_ref, task_ref, bound_path(workspace_path))
+            return remediation.prepare(remediation_ref, task_ref, bound_path(workspace_path),
+                                       security_context_ref=security_context_ref)
+        if security_context_ref is not None:
+            return remediation._fail('SECURITY_FIX_CONTEXT_REQUIRES_REMEDIATION_GRANT')
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
         service = TaskFixService(ReadOnlySQLiteStore(path))
         resolved = service.tasks.resolve(task_ref, workspace_path, bound_workspace=binding.root if binding else None)
@@ -323,16 +377,22 @@ def create_server(runtime: SecurityRuntime | None = None):
     confirmation_tool.fn_metadata.arg_model.model_rebuild(force=True)
     confirmation_tool.parameters = confirmation_tool.fn_metadata.arg_model.model_json_schema()
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_functional_verification(remediation_ref: str, task_ref: str, workspace_path: str | None = None) -> dict:
         """Plan existing local verifiers only after Runtime-authorized repair has signed SCANNER_VERIFIED_RESOLVED. No shell/source/log/host status input; never runs builds in HookCoordinator."""
-        return functional.prepare(remediation_ref,task_ref,workspace_path or (binding.root if binding else None),
-                                  bound_workspace=binding.root if binding else None)
+        output = functional.prepare(remediation_ref,task_ref,workspace_path or (binding.root if binding else None),
+                                    bound_workspace=binding.root if binding else None)
+        if output.get('security_verification', {}).get('status') == 'SCANNER_VERIFIED_RESOLVED':
+            pair = (remediation_ref, task_ref)
+            if pair not in deep_requests:
+                deep_requests.append(pair)
+        return output
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def run_functional_verification(functional_ref: str) -> dict:
-        """Consume the current connection's exact bounded plan. Executes only with enforceable local isolation; otherwise NOT_AVAILABLE. Independent security/functional/production statuses, no auto-revert/retry or dependency downloads."""
-        return functional.run(functional_ref,bound_workspace=binding.root if binding else None)
+    def run_functional_verification(functional_ref: str, execution_result: FunctionalExecutionReport | None = None) -> dict:
+        """Accept bounded untrusted host execution results for the exact plan. Without a report returns the host plan; Runtime never executes target commands. No argv/shell override/source/raw logs/Secret input. Functional reports cannot alter scanner facts."""
+        return functional.run(functional_ref, execution_result=execution_result,
+                              bound_workspace=binding.root if binding else None)
 
     for name in ('prepare_functional_verification','run_functional_verification'):
         tool = server._tool_manager.get_tool(name)
@@ -348,8 +408,12 @@ def create_server(runtime: SecurityRuntime | None = None):
         if remediation_ref is not None:
             if binding is None:
                 return remediation._fail('WORKSPACE_BINDING_REQUIRED')
-            return remediation.verify(remediation_ref, task_ref, bound_path(workspace_path),
-                                      host_reported_execution=host_reported_execution)
+            root = bound_path(workspace_path)
+            checked = remediation.verify(remediation_ref, task_ref, root,
+                                         host_reported_execution=host_reported_execution)
+            if (remediation_ref, task_ref) in deep_requests:
+                return functional.finalize(remediation_ref, task_ref, Path(root), checked)
+            return checked
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
         service = TaskFixService(ReadOnlySQLiteStore(path), getattr(engine, 'registry', None))
         resolved = service.tasks.resolve(task_ref, workspace_path, bound_workspace=binding.root if binding else None)
@@ -380,6 +444,8 @@ def create_server(runtime: SecurityRuntime | None = None):
             event(DogfoodEvent(binding.integration_id, binding.root, verify_result=result["status"]), connected=True)
         return result
 
+    from .recent_hooks import install_project_observer
+    install_project_observer(server, binding)
     return server
 
 

@@ -122,6 +122,7 @@ class ScannerRun:
     coverage_notes: list[str] = field(default_factory=list)
     rule_coverage: dict = field(default_factory=dict)
     dependency_inventory: dict = field(default_factory=dict)
+    scanner_diagnostics: dict = field(default_factory=dict)
 
     def __post_init__(self):
         from .diagnostics import sanitize
@@ -150,6 +151,8 @@ class ScanResult:
     capability_results: dict[str, str] = field(default_factory=dict)
     capability_details: dict[str, Any] = field(default_factory=dict)
     rule_coverage: dict = field(default_factory=dict)
+
+    scanner_diagnostics: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

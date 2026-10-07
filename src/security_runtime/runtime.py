@@ -21,6 +21,7 @@ from .workspace import WorkspaceResolver, WorkspaceError
 from .progress import NullProgressReporter, progress_context, current_reporter, emit, checkpoint, ScanCancelled
 from .scanners import BaseScanner
 from .dependency_fallback import should_fallback, dependency_status, capability_detail
+from .scanner_observation import milliseconds
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,9 @@ class SecurityRuntime:
 
     def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None):
         start = time.monotonic()
+        observed_start = time.perf_counter()
+        stage_start = observed_start
+        observed = {'timing_ms': {'state_persistence':None,'total':None}, 'providers': {}}
         checkpoint()
         emit('SCAN_STARTED', message=f'模式：{mode}')
         scan_mode = ScanMode(mode)
@@ -60,18 +64,21 @@ class SecurityRuntime:
         workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
         root = workspace.path
         emit('WORKSPACE_DISCOVERY_COMPLETED', message=f'项目：{root.name}')
-        if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged):
+        observed['timing_ms']['workspace_discovery'] = milliseconds(stage_start)
+        stage_start = time.perf_counter()
+        if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged) and hook_scope is None:
             raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
         git = GitService(root) if workspace.is_git else None
         checkpoint()
         emit('TARGET_DISCOVERY_STARTED')
-        files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
         if hook_scope is not None:
             if scan_mode != ScanMode.QUICK or staged:
                 raise ValueError('Hook scope requires an unstaged quick check')
             # Coordinator supplies only dirty files and previously dirty files
             # reverting to HEAD. Validate through the normal target boundary.
             files = list(hook_scope)
+        else:
+            files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
         # TargetDetector validates every explicit path before any file is read.
         if scan_mode != ScanMode.RELEASE:
             manifests = set()
@@ -91,6 +98,8 @@ class SecurityRuntime:
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
         emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
+        observed['timing_ms']['target_preparation'] = milliseconds(stage_start)
+        stage_start = time.perf_counter()
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
                               tuple(name for name in profile.files if name not in files))
         normalizer = FindingNormalizer(root)
@@ -113,6 +122,8 @@ class SecurityRuntime:
         if no_changes or not files:
             selected = []
         emit('PLAN_READY', message=f'将执行 {len(selected)} 个安全引擎')
+        observed['timing_ms']['rule_planning'] = milliseconds(stage_start)
+        stage_start = time.perf_counter()
 
         def execute(scanner):
             checkpoint()
@@ -182,6 +193,8 @@ class SecurityRuntime:
             raise
         finally:
             pool.shutdown(wait=True, cancel_futures=True)
+        observed['timing_ms']['scanner_orchestration'] = milliseconds(stage_start)
+        stage_start = time.perf_counter()
         if hook_observer is not None:
             # Preserve rule/coordinate multiplicity before historical occurrence
             # fingerprints merge colliding rules on the same line. Raw remains
@@ -228,7 +241,19 @@ class SecurityRuntime:
             summary += "；Security check completed with limited coverage."
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
                             execution_state=execution_state, capability_results=capability_results, capability_details=capability_details, rule_coverage=rule_coverage)
+        observed['timing_ms']['result_normalization_policy'] = milliseconds(stage_start)
+        observed['providers'] = {run.scanner:run.scanner_diagnostics for run in runs if run.scanner_diagnostics}
+        observed['scope'] = {'requested_files':len(files),'profile_files':len(profile.files),
+            'context_files':len(context.context_files),'repository_discovery':scan_mode==ScanMode.RELEASE}
+        # Persistence time is known only after the transaction; no second write
+        # and no mutation of signed scan identities just to record a measurement.
+        result.scanner_diagnostics = observed
+        from .scanner_cache import lifetime
+        observed.update(lifetime())
+        stage_start = time.perf_counter()
         self.store.save(result)
+        observed['timing_ms']['state_persistence'] = milliseconds(stage_start)
+        observed['timing_ms']['total'] = milliseconds(observed_start)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})
         return result

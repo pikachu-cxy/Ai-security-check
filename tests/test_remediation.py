@@ -139,7 +139,7 @@ def test_retry_once_then_escalate_no_infinite_feedback(setup):
     (root / 'A.java').write_text(UNSAFE + '// attempted repair two\n')
     final = hook()
     assert final['remediation']['action'] == 'ESCALATE'
-    assert final['remediation']['reason_code'] == 'ATTEMPT_LIMIT'
+    assert final['remediation']['reason_code'] == 'EPISODE_ATTEMPT_BUDGET_EXCEEDED'
     assert 'decision' not in final and 'decision' not in hook()
     # Restart cannot reset the persistent attempt budget.
     restart = RemediationService(service.store, registry=service.registry, hooks=service.hooks)

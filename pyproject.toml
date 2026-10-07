@@ -28,7 +28,7 @@ where = ["src"]
 version = {attr = "security_runtime._version.__version__"}
 
 [tool.setuptools.package-data]
-security_runtime = ["python_downloads.json", "rules/LICENSE", "rules/catalog.json", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE"]
+security_runtime = ["python_downloads.json", "rules/LICENSE", "rules/catalog.json", "rules/capabilities.json", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE"]
 
 [tool.setuptools.data-files]
 "share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]

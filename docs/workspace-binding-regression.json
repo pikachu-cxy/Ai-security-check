@@ -1,0 +1,48 @@
+{
+  "stage": "Core P0-7.3.2",
+  "starting_head": "ee1bfd9c12493683cc313cb3628753a51ae124ac",
+  "new_cases": 28,
+  "focused": {
+    "status": "PASS",
+    "passed": 180,
+    "skipped": 0,
+    "failed": 0,
+    "subtests_passed": 0,
+    "summary": "180 passed in 263.29s (0:04:23)",
+    "runner_seconds": 264.33,
+    "skip_details": []
+  },
+  "full_offline": {
+    "status": "PASS",
+    "passed": 1498,
+    "skipped": 9,
+    "failed": 0,
+    "subtests_passed": 6,
+    "summary": "1498 passed, 9 skipped, 6 subtests passed in 2034.91s (0:33:54)",
+    "runner_seconds": 2035.65,
+    "skip_details": [
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+    ]
+  },
+  "package_integrity": "PASS",
+  "compliance": "PASS",
+  "wheel_sha256": "6cb59cec4ad2b2b7bdfdefa22166f5f74613e81ca736837c6631c7c2a1c61442",
+  "initial_focused": "75_PASS_1_NEW_TEST_EXPECTATION_CORRECTED",
+  "invalid_test_filename_run": "NO_TESTS_NOT_PASS",
+  "real_project_c": "READ_ONLY_ROOT_CONFIG_VERIFIED_NO_SCAN",
+  "real_codex_home": "READ_ONLY_BYTES_UNCHANGED",
+  "actual_desktop": "PENDING_USER_MUTATION_TRIAL",
+  "active_runtime_installed_or_replaced": false,
+  "network": false,
+  "model": false,
+  "commit": false,
+  "push": false
+}

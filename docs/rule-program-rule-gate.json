@@ -1,0 +1,129 @@
+{
+  "rule_pack": "ai-security-core",
+  "version": "1.1.0",
+  "checksum": "88be4461e7c624e094b126cda165679feb74e013ef57b813b8226c23c7318c40",
+  "rules": 29,
+  "positive": 30,
+  "negative": 33,
+  "cases": {
+    "ai-security.java.arbitrary-file-read": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.arbitrary-file-write": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.file-access": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.java.http-client": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.jdbc-statement": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.jndi-lookup": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.ldap-search": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.mybatis-annotation": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.mybatis-xml": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.object-deserialization": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.open-redirect": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.process-builder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.runtime-exec": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.java.security-random": {
+      "positive": 1,
+      "negative": 2
+    },
+    "ai-security.java.spring-jdbc": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.spring-resttemplate": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.trust-all-certificates": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.trust-all-hostname": {
+      "positive": 2,
+      "negative": 2
+    },
+    "ai-security.java.url-connection": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.weak-cipher": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.weak-digest": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.web-client": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xml-decoder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-document-builder": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-sax-parser": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-stax": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.java.xxe-transformer": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.python.command-injection": {
+      "positive": 1,
+      "negative": 1
+    },
+    "ai-security.python.unsafe-eval": {
+      "positive": 1,
+      "negative": 1
+    }
+  },
+  "engine": "1.178.0",
+  "lint": "PASS",
+  "fixtures": "PASS"
+}

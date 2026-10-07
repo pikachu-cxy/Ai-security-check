@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "duration_seconds": 4.39,
+  "bundled_source_bytes_checked": 108,
+  "wheel_sha256": "2df4dd38a103c3cd6bb5ddc26c66d8c8191e4b46094f378f16212b4e97e12c17",
+  "sdist_sha256": "7f9b47a02bc75c202b500e43e5fc5eabdff2fb807fac85cfedd5c3f9cf7f0aad",
+  "package_compliance": true,
+  "network": false,
+  "clean_install": "NOT_RUN_THIS_SCOPE",
+  "standalone": "NOT_REBUILT",
+  "active_runtime_replaced": false
+}

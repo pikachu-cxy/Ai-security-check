@@ -1,0 +1,504 @@
+{
+  "status": "PASS",
+  "kind": "ACTUAL_MANAGED_SCANNER",
+  "samples": [
+    {
+      "sample": 0,
+      "phase": "safe_edit",
+      "wall_ms": 6079.319,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 67.106
+        },
+        {
+          "phase": "version_probe",
+          "ms": 257.202
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 276.345
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 400.968
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1808.056
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1809.46
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 3899.862,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 0,
+      "phase": "risk_edit",
+      "wall_ms": 4548.906,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 68.624
+        },
+        {
+          "phase": "version_probe",
+          "ms": 265.436
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 285.965
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 374.866
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1741.148
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1742.542
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2430.743,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 0,
+      "phase": "security_rescan",
+      "wall_ms": 4327.587,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 67.543
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1683.377
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1684.378
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2476.034,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4257,
+          "error_code": "",
+          "coverage_contract": "FULL",
+          "provider": "semgrep",
+          "provider_role": "PRIMARY",
+          "engine_process_observed": true
+        }
+      ]
+    },
+    {
+      "sample": 1,
+      "phase": "safe_edit",
+      "wall_ms": 4672.122,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 66.23
+        },
+        {
+          "phase": "version_probe",
+          "ms": 250.998
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 273.0
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 356.796
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1738.274
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1739.679
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2545.692,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 1,
+      "phase": "risk_edit",
+      "wall_ms": 4545.742,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 66.325
+        },
+        {
+          "phase": "version_probe",
+          "ms": 265.525
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 286.054
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 364.622
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1711.352
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1712.66
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2450.423,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 1,
+      "phase": "security_rescan",
+      "wall_ms": 4319.427,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 67.915
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1706.166
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1707.246
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2443.017,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4249,
+          "error_code": "",
+          "coverage_contract": "FULL",
+          "provider": "semgrep",
+          "provider_role": "PRIMARY",
+          "engine_process_observed": true
+        }
+      ]
+    },
+    {
+      "sample": 2,
+      "phase": "safe_edit",
+      "wall_ms": 4448.735,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 68.861
+        },
+        {
+          "phase": "version_probe",
+          "ms": 254.546
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 275.854
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 369.8
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1692.108
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1693.626
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2380.299,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 2,
+      "phase": "risk_edit",
+      "wall_ms": 4515.182,
+      "files": 1,
+      "rules": 21,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 69.842
+        },
+        {
+          "phase": "version_probe",
+          "ms": 355.86
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 376.4
+        },
+        {
+          "phase": "gitleaks_invocation",
+          "ms": 358.715
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1724.761
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1726.095
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2404.521,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "diagnostics": {}
+    },
+    {
+      "sample": 2,
+      "phase": "security_rescan",
+      "wall_ms": 4274.56,
+      "operations": [
+        {
+          "phase": "rule_pack_validation",
+          "ms": 70.121
+        },
+        {
+          "phase": "version_probe",
+          "ms": 1692.427
+        },
+        {
+          "phase": "engine_integrity_and_version",
+          "ms": 1693.456
+        },
+        {
+          "phase": "semgrep_invocation",
+          "ms": 2410.454,
+          "confirmed_rules": 21,
+          "scanned_files": 1,
+          "engine_time_keys": [
+            "fixpoint_timeouts",
+            "matching_time",
+            "max_memory_bytes",
+            "parsing_time",
+            "prefiltering",
+            "profiling_times",
+            "rules",
+            "rules_parse_time",
+            "scanning_time",
+            "tainting_time",
+            "targets",
+            "total_bytes"
+          ],
+          "engine_reported_total_seconds": null
+        }
+      ],
+      "runs": [
+        {
+          "scanner": "semgrep",
+          "status": "SUCCESS",
+          "version": "1.178.0",
+          "duration_ms": 4202,
+          "error_code": "",
+          "coverage_contract": "FULL",
+          "provider": "semgrep",
+          "provider_role": "PRIMARY",
+          "engine_process_observed": true
+        }
+      ]
+    }
+  ],
+  "medians_ms": {
+    "safe_edit": 4672.122,
+    "risk_edit": 4545.742,
+    "security_rescan": 4319.427
+  },
+  "network": false,
+  "model": false,
+  "daemon": false,
+  "source_persisted": false
+}

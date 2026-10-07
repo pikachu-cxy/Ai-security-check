@@ -51,7 +51,7 @@ class CodexHookAdapter:
         event = CODEX_EVENTS.get(payload.get('hook_event_name'))
         if event is None:
             raise ValueError('Unsupported Codex hook event')
-        if event == HookEvent.FILE_CHANGED and payload.get('tool_name') not in {'apply_patch','Edit','Write'}:
+        if event == HookEvent.FILE_CHANGED and payload.get('tool_name') not in {'Bash','apply_patch','Edit','Write'}:
             raise ValueError('Unsupported Codex edit event')
         cwd = payload.get('cwd')
         if not isinstance(cwd,str) or WorkspaceResolver().resolve(cwd).path != workspace:
@@ -67,7 +67,7 @@ class CodexHookAdapter:
         handler = {'type':'command','command':command(workspace,self.host,'host-event'),
                    'timeout':120,'statusMessage':MARKER}
         return {'SessionStart':[{'hooks':[dict(handler)]}],
-                'PostToolUse':[{'matcher':'^(apply_patch|Edit|Write)$','hooks':[dict(handler)]}],
+                'PostToolUse':[{'matcher':'^(Bash|apply_patch|Edit|Write)$','hooks':[dict(handler)]}],
                 'Stop':[{'hooks':[dict(handler)]}]}
 
     def output(self,payload,result):
@@ -121,7 +121,17 @@ def run_host_event(payload,workspace,host,coordinator=None):
     root = WorkspaceResolver().resolve(workspace).path
     adapter = adapters[host]
     event,session = adapter.translate(payload,root)
-    result = (coordinator or HookCoordinator()).handle(event,root,host,session)
+    if host == 'codex':
+        from .codex_event_adapter import CodexEventAdapter
+        from .host_event_runtime import handle_normalized_event
+        args = dict(event=payload['hook_event_name'], workspace_path=payload['cwd'],
+                    session_id=session, tool_name=payload.get('tool_name'),
+                    tool_input=payload.get('tool_input'), stop_hook_active=payload.get('stop_hook_active', False))
+        normalized = CodexEventAdapter().normalize(args, root, legacy=True)
+        result, _ = handle_normalized_event(normalized, coordinator=coordinator or HookCoordinator())
+    else:
+        # Existing Cursor command/config support is not a normalized adapter v1.
+        result = (coordinator or HookCoordinator()).handle(event,root,host,session)
     return adapter.output(payload,result)
 
 

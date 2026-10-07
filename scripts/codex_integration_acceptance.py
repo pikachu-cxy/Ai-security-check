@@ -19,6 +19,7 @@ import tomllib
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from remediation_acceptance import SAFE, UNSAFE
+from codex_hook_fixture import invocation_claims
 
 
 async def accept(command):
@@ -73,7 +74,7 @@ async def accept(command):
                     await client.initialize()
                     async def call(name, claims):
                         called.append(name)
-                        response = await client.call_tool(name, claims)
+                        response = await client.call_tool(name, invocation_claims(name, claims))
                         assert not response.isError, name
                         data = response.structuredContent or json.loads(response.content[0].text)
                         return data.get('result', data)
@@ -123,10 +124,23 @@ async def accept(command):
                     closed_stop = await call('handle_stop_event', {**stop_claims, 'stop_hook_active': True})
                     assert closed_stop['status'] == 'ALLOW_STOP' and 'decision' not in closed_stop
                     functional = await call('prepare_functional_verification', original_refs)
+                    if functional.get('status') == 'FUNCTIONAL_VERIFICATION_READY':
+                        # This integration acceptance deliberately does not build
+                        # targets. New host plans are declined via their exact
+                        # report contract, so Runtime can clean its temp output.
+                        first = functional['plan']['steps'][0]
+                        functional = await call('run_functional_verification', {
+                            **functional['handoff']['arguments'],
+                            'execution_result': {
+                                'plan_digest': functional['plan']['plan_digest'],
+                                'network_access': 'DENIED', 'project_code_reviewed': False,
+                                'steps': [{'command_id': first['command_id'],
+                                           'execution_status': 'NOT_AVAILABLE',
+                                           'exit_code': None, 'duration_ms': 0}]}})
                     assert functional['functional_verification']['status'] == 'NOT_AVAILABLE'
                     assert functional['overall_status'] == 'SECURITY_VERIFIED_FUNCTION_UNKNOWN'
                     assert not functional.get('functional_ref') and not functional.get('handoff')
-                    assert 'verify_task_fix' not in called and 'run_functional_verification' not in called
+                    assert 'verify_task_fix' not in called
                     assert 'get_runtime_info' not in called
         status = cli(['integration', 'status', 'codex'])
         assert status['overall'] == 'READY' and status['live_connection'] == 'UNKNOWN'
@@ -141,7 +155,7 @@ async def accept(command):
             async with stdio_client(params, errlog=errors) as (reader, writer):
                 async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=180)) as client:
                     await client.initialize()
-                    response = await client.call_tool('handle_hook_event', {**claims, 'session_id': 'preexisting-fresh-session'})
+                    response = await client.call_tool('handle_hook_event', invocation_claims('handle_hook_event', {**claims, 'session_id': 'preexisting-fresh-session'}))
                     assert not response.isError
                     data = response.structuredContent or json.loads(response.content[0].text)
                     existing = data.get('result', data)
@@ -167,7 +181,8 @@ async def accept(command):
                 'stop_continuation_invoked': True, 'stop_continuation_count': 1,
                 'prepare_task_fix_called': True, 'secure_edit_applied': 'SIMULATED_HOST_ONLY',
                 'explicit_verify_deduped': True, 'functional_prepare_called': True,
-                'functional': functional['functional_verification']['status'], 'functional_run_called': False,
+                'functional': functional['functional_verification']['status'],
+                'functional_run_called': 'run_functional_verification' in called,
                 'warmup_called': False, 'target_build': False, 'network': False, 'model': False,
                 'source_edit': 'SIMULATED_HOST_ONLY', 'ground_truth': 'NOT_PERFORMED',
                 'calls': called}

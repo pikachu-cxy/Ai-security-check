@@ -38,9 +38,15 @@ class VerificationService:
                 except (ValueError, OSError):
                     pass
             budget = total <= MAX_BYTES
-        return [self._verify(root, row, scan, cache, budget) for row in findings]
+        # Recheck only originating rule families, grouped per file/provider. This
+        # invocation-local cache remains single-use, never a prior scan proof.
+        rules = {}
+        for row in findings:
+            for name in row.get('scanner_sources', []):
+                rules.setdefault((name,row.get('file_path','')),set()).add(row.get('technical_details',{}).get('rule_id',''))
+        return [self._verify(root, row, scan, cache, budget, rules) for row in findings]
 
-    def _verify(self, root, row, scan, cache, budget):
+    def _verify(self, root, row, scan, cache, budget, rules):
         result = {'finding_id': row['id'], 'status': 'INCONCLUSIVE', 'verification_status': 'INCONCLUSIVE',
                   'matched_by': None, 'original_evidence': evidence(row), 'current_evidence': [],
                   'scanner_runs': [], 'scope_files': [],
@@ -111,6 +117,14 @@ class VerificationService:
                     with local_recheck() as ledger:
                         if callable(getattr(adapter, 'plan_rules', None)):
                             plan = adapter.plan_rules(profile, context)
+                            # Preserve the full catalog/checksum identity and
+                            # require the original rule in confirmed engine proof.
+                            if type(adapter) is SemgrepAdapter:
+                                program = getattr(plan.pack, 'program', None)
+                                wanted = {rid for original in rules[(name,path)] for rid in
+                                    (program.family_rules(original) if program else (original,))}
+                                plan = replace(plan, rules=tuple(r for r in plan.rules if r.rule_id in wanted),
+                                    confirmed_rules=set(),scanned_files=set(),errored_files=set(),unscoped_error=False)
                             context = replace(context, rule_plan=plan)
                         if not adapter.supports(profile, context):
                             cache[key] = ([], None, plan, 'ORIGINAL_SCOPE_UNSUPPORTED', False)
@@ -136,7 +150,8 @@ class VerificationService:
             result['scanner_runs'].append({'scanner': name, 'status': run.status, 'version': run.version,
                 'duration_ms': run.duration_ms, 'error_code': run.error_code, 'coverage_contract': run.coverage_contract,
                 'provider': run.provider or getattr(adapter, 'engine_id', '') or adapter.scanner_id,
-                'provider_role': run.provider_role, 'engine_process_observed': process_observed})
+                'provider_role': run.provider_role, 'engine_process_observed': process_observed,
+                'scanner_diagnostics':run.scanner_diagnostics})
             if run.status != RunStatus.SUCCESS:
                 complete = False
                 provider_failure = True
@@ -174,6 +189,11 @@ class VerificationService:
                 if checksum and checksum != plan.pack.checksum:
                     compatible = False
                 covered = covered and bool(compatible) and rule in plan.confirmed_rules and path in plan.scanned_files and path not in plan.errored_files and not plan.unscoped_error
+                if getattr(plan.pack, 'program', None):
+                    required = set(plan.pack.program.family_rules(rule))
+                    applicable = {r.rule_id for r in plan.pack.catalog if r.rule_id in required and
+                        Path(path).suffix.lower() in r.target_extensions}
+                    covered = covered and bool(applicable) and applicable.issubset(plan.confirmed_rules)
             else:
                 # These JSON adapters currently attest candidates, not which
                 # original detector/checks evaluated the file. An exit code

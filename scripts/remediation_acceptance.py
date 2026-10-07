@@ -12,6 +12,7 @@ import time
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from codex_hook_fixture import invocation_claims
 
 SAFE = '''import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
@@ -51,7 +52,7 @@ async def run(command, mode='smart_auto', approve=True):
                     await client.initialize()
                     tools = {t.name:t for t in (await client.list_tools()).tools}
                     async def call(name, arguments):
-                        response = await client.call_tool(name, arguments)
+                        response = await client.call_tool(name, invocation_claims(name, arguments))
                         assert not response.isError, name
                         data = response.structuredContent or json.loads(response.content[0].text)
                         return data.get('result', data), response
@@ -219,7 +220,7 @@ async def run_cross_turn(command, approve):
                     async with ClientSession(read, write) as client:
                         await client.initialize()
                         async def call(name, arguments):
-                            response = await client.call_tool(name, arguments)
+                            response = await client.call_tool(name, invocation_claims(name, arguments))
                             assert not response.isError, name
                             data = response.structuredContent or json.loads(response.content[0].text)
                             return data.get('result', data), response

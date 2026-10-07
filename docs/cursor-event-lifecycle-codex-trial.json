@@ -1,0 +1,149 @@
+{
+  "status": "PASS",
+  "duration_seconds": 37.39,
+  "cases": [
+    {
+      "case": "lf-canonical",
+      "source": "CURRENT_P061",
+      "episodes": [
+        {
+          "number": 1,
+          "reason_code": "SCANNER_VERIFIED_RESOLVED",
+          "stage": "CLOSED",
+          "ticket_stale_reason": null,
+          "exact_target_verification": {
+            "version": "tls-remove-envelope-v1",
+            "status": "MATCHED",
+            "subreason": null,
+            "expected_preimage_sha256": "72341fca6f36e5d604a71de20ede148ec778d8dfe2fb3083ee00285cdf2c3f38",
+            "actual_current_sha256": "1599219cc663c5ec72af467b74c60c63db018053b1b21e4167b5a2a1746d8f63",
+            "expected_canonical_result_sha256": "1599219cc663c5ec72af467b74c60c63db018053b1b21e4167b5a2a1746d8f63",
+            "expected_range_length": 64,
+            "actual_result_range_length": 1,
+            "actual_deleted_bytes": 63,
+            "outside_envelope_changed": false,
+            "prefix_preserved": true,
+            "suffix_preserved": true,
+            "expected_line_ending_mode": "LF",
+            "actual_line_ending_mode": "LF",
+            "expected_bom_mode": "NONE",
+            "actual_bom_mode": "NONE",
+            "actual_encoding_mode": "UTF8",
+            "accepted_variant": "REMOVE_LINE",
+            "source_persisted": false,
+            "preservation_guard_result": true
+          },
+          "scanner_invocations": {
+            "semgrep": 2,
+            "gitleaks": 2,
+            "original_rule_recheck": 1
+          },
+          "prepare_calls": 0,
+          "runtime_mcp_calls": 2,
+          "host_fixture_rpc_calls": 1,
+          "host_target_reads": 1,
+          "host_searches": 0,
+          "diagnostic_state_rpc_after_measurement": 1,
+          "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+          "ticket_bytes": 3438,
+          "driver_wall_ms": 14325.616,
+          "timing_ms": {
+            "hook_total": 7898.151,
+            "scanner": 3400.893,
+            "finding_policy": 396.273,
+            "remediation_preparation": 1623.897,
+            "auto_remediation": 46.917,
+            "security_rescan": 3562.255
+          },
+          "remediation_cycle_wall_ms": 14298.718,
+          "remediation_cycle_breakdown_ms": {
+            "initial_runtime": 6354.676,
+            "inline_host_edit_window": 46.058,
+            "post_edit_hook": 4149.871,
+            "security_rescan": 3562.39,
+            "close/finalization": 185.723,
+            "unaccounted": 0,
+            "runtime_to_host_continuation_wait": null,
+            "continuation_to_prepare": null,
+            "prepare_fix": null,
+            "host_fix_window": null
+          }
+        },
+        {
+          "number": 2,
+          "reason_code": "SCANNER_VERIFIED_RESOLVED",
+          "stage": "CLOSED",
+          "ticket_stale_reason": null,
+          "exact_target_verification": {
+            "version": "tls-remove-envelope-v1",
+            "status": "MATCHED",
+            "subreason": null,
+            "expected_preimage_sha256": "72341fca6f36e5d604a71de20ede148ec778d8dfe2fb3083ee00285cdf2c3f38",
+            "actual_current_sha256": "1599219cc663c5ec72af467b74c60c63db018053b1b21e4167b5a2a1746d8f63",
+            "expected_canonical_result_sha256": "1599219cc663c5ec72af467b74c60c63db018053b1b21e4167b5a2a1746d8f63",
+            "expected_range_length": 64,
+            "actual_result_range_length": 1,
+            "actual_deleted_bytes": 63,
+            "outside_envelope_changed": false,
+            "prefix_preserved": true,
+            "suffix_preserved": true,
+            "expected_line_ending_mode": "LF",
+            "actual_line_ending_mode": "LF",
+            "expected_bom_mode": "NONE",
+            "actual_bom_mode": "NONE",
+            "actual_encoding_mode": "UTF8",
+            "accepted_variant": "REMOVE_LINE",
+            "source_persisted": false,
+            "preservation_guard_result": true
+          },
+          "scanner_invocations": {
+            "semgrep": 2,
+            "gitleaks": 2,
+            "original_rule_recheck": 1
+          },
+          "prepare_calls": 0,
+          "runtime_mcp_calls": 2,
+          "host_fixture_rpc_calls": 1,
+          "host_target_reads": 1,
+          "host_searches": 0,
+          "diagnostic_state_rpc_after_measurement": 1,
+          "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+          "ticket_bytes": 3438,
+          "driver_wall_ms": 15019.105,
+          "timing_ms": {
+            "hook_total": 8464.229,
+            "scanner": 3613.955,
+            "finding_policy": 411.847,
+            "remediation_preparation": 1660.265,
+            "auto_remediation": 43.068,
+            "security_rescan": 3869.092
+          },
+          "remediation_cycle_wall_ms": 14990.774,
+          "remediation_cycle_breakdown_ms": {
+            "initial_runtime": 6484.359,
+            "inline_host_edit_window": 42.27,
+            "post_edit_hook": 4389.48,
+            "security_rescan": 3869.251,
+            "close/finalization": 205.413,
+            "unaccounted": 0.001,
+            "runtime_to_host_continuation_wait": null,
+            "continuation_to_prepare": null,
+            "prepare_fix": null,
+            "host_fix_window": null
+          },
+          "old_episode_refs_rejected_after_measurement": true
+        }
+      ]
+    }
+  ],
+  "transport": "ACTUAL_LOCAL_MCP_STDIO",
+  "scanner": "ACTUAL_MANAGED_OFFLINE",
+  "host": "SIMULATED_NATIVE_EDIT",
+  "actual_desktop": "NOT_RUN_THIS_SCOPE",
+  "network": false,
+  "model": false,
+  "deep_verification": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "opaque_references_persisted": false
+}

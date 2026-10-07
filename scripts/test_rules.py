@@ -12,6 +12,7 @@ from security_runtime.toolchain import ToolManager, ToolStatus, tool_environment
 
 def expectations(root, catalog):
     expected=set();negative=set();counts={}
+    known={record.rule_id for record in catalog}
     for record in catalog:
         file=root/record.fixture
         if not file.is_file() or not file.resolve().is_relative_to(root.resolve()):
@@ -19,13 +20,19 @@ def expectations(root, catalog):
         lines=file.read_text(encoding='utf-8').splitlines()
         yes=no=0
         for index,line in enumerate(lines):
-            match=re.search(r'\b(ruleid|ok):\s*([a-zA-Z0-9_.-]+)',line)
-            if match and match[2]==record.rule_id:
+            match=re.search(r'\b(ruleid|ok):\s*([a-zA-Z0-9_.-]+(?:\s*,\s*[a-zA-Z0-9_.-]+)*)',line)
+            if match:
+                next_line=index+2
+                while next_line<=len(lines) and not lines[next_line-1].strip(): next_line+=1
+                for rid in [value.strip() for value in match[2].split(',')]:
+                    if rid in known:
+                        (expected if match[1]=='ruleid' else negative).add((rid,record.fixture,next_line))
+            if match and record.rule_id in [value.strip() for value in match[2].split(',')]:
                 next_line=index+2
                 while next_line<=len(lines) and not lines[next_line-1].strip(): next_line+=1
                 item=(record.rule_id,record.fixture,next_line)
-                if match[1]=='ruleid': expected.add(item);yes+=1
-                else: negative.add(item);no+=1
+                if match[1]=='ruleid': yes+=1
+                else: no+=1
         if not yes or not no:
             raise ValueError('Rule requires positive and negative fixtures: '+record.rule_id)
         counts[record.rule_id]={'positive':yes,'negative':no}

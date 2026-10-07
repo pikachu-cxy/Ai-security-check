@@ -24,6 +24,9 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/rulepacks.py",
             "security_runtime/rule_catalog.py",
             "security_runtime/rule_coverage.py",
+            "security_runtime/rule_program.py",
+            "security_runtime/rule_ground_truth.py",
+            "security_runtime/rules/capabilities.json",
             "security_runtime/osv.py",
             "security_runtime/dependency_fallback.py",
             "security_runtime/triage.py",
@@ -87,6 +90,16 @@ def check(wheel: Path, project: Path) -> None:
                           for file in rule_files}
         if bundled_rules != expected_rules:
             raise ValueError("Wheel contains stale or missing rule files")
+        # Program metadata is integrity-critical, not optional documentation.
+        from security_runtime.rulepacks import RulePackManager
+        from security_runtime.rule_program import validate_manifest
+        import json
+        manifest_name = 'security_runtime/rules/capabilities.json'
+        if manifest_name in names:
+            source_manifest = source_package / 'rules/capabilities.json'
+            if package.read(manifest_name) != source_manifest.read_bytes():
+                raise ValueError('Wheel Rule Program manifest differs from source')
+            validate_manifest(json.loads(package.read(manifest_name)), RulePackManager().resolve().catalog)
         missing = sorted(required - names)
         if missing:
             raise ValueError("Wheel missing required files: " + ", ".join(missing))

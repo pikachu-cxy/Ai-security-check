@@ -15,6 +15,7 @@ class SASTRulePlan:
     scanned_files: set[str] = field(default_factory=set)
     errored_files: set[str] = field(default_factory=set)
     unscoped_error: bool = False
+    planning_diagnostics: dict = field(default_factory=dict)
 
     def observe(self, data, batch):
         def relative(value):
@@ -64,12 +65,23 @@ class SASTRulePlan:
             else 'NOT_COVERED' if all(s=='NOT_COVERED' for s in states)
             else 'UNAVAILABLE' if any(s=='UNAVAILABLE' for s in states) and not any(s=='FAILED' for s in states)
             else 'PLANNED' if any(s=='PLANNED' for s in states) else 'FAILED')
+        program = getattr(self.pack, 'program', None)
+        capabilities = [c for c in program.capabilities if c.scanner_engine == 'semgrep' and
+            any(r.rule_id in c.underlying_rule_ids for r in self.rules)] if program else []
         return {'engine':'semgrep','rule_pack_id':self.pack.descriptor.rule_pack_id,
             'rule_pack_version':self.pack.descriptor.version,'rule_pack_checksum':self.pack.checksum,
             'detected_languages':list(self.detected_languages),'per_language':per_language,'status':aggregate,
             'total_available':len({r.rule_id for r in self.pack.catalog}),'total_selected':len({r.rule_id for r in self.rules}),
             'total_executed':len({rid for row in per_language.values() for rid in row['executed_rule_ids']}),
             'total_files':len(self.files),'scope_files':list(self.files),
+            'capability_program_version':program.version if program else None,
+            'applicable_capabilities':len(capabilities),
+            'capabilities':[{'capability_id':c.capability_id,'title':c.title,'maturity':c.maturity,
+                'auto_fix_eligible':c.auto_fix_eligible,
+                'frameworks':list(c.frameworks),
+                'framework_applicability':'ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN',
+                'selected_rule_ids':[r.rule_id for r in self.rules if r.rule_id in c.underlying_rule_ids]}
+                for c in capabilities],
             'execution_evidence':'Semgrep time.rules and paths.scanned; errors/skipped rules lower coverage'}
 
 
@@ -77,10 +89,15 @@ def plan_rules(pack, files):
     language_files={language:tuple(name for name in files if Path(name).suffix.lower() in extensions)
                     for language,extensions in EXTENSIONS.items()}
     language_files={language:names for language,names in language_files.items() if names}
-    # MyBatis mapper XML belongs to Java coverage only with a Java scope.
-    if 'java' in language_files:
-        language_files['java']+=tuple(name for name in files if Path(name).suffix.lower()=='.xml')
+    # An explicit mapper XML edit can have applicable framework rules even
+    # when no .java file changed. Typed mapper patterns decide the match;
+    # never expand the file scope merely to infer the repository framework.
+    xml=tuple(name for name in files if Path(name).suffix.lower()=='.xml')
+    if xml and any(r.language=='java' and '.xml' in r.target_extensions for r in pack.catalog):
+        language_files['java']=language_files.get('java',())+xml
+    program = getattr(pack, 'program', None)
     selected=tuple(rule for rule in pack.catalog if rule.language in language_files and (rule.maturity!='EXPERIMENTAL' or not pack.descriptor.bundled)
+        and (program is None or program.enabled(rule.rule_id))
         and any(Path(name).suffix.lower() in rule.target_extensions for name in language_files[rule.language]))
     targets=tuple(name for name in files if any(Path(name).suffix.lower() in rule.target_extensions for rule in selected))
     # Uncovered files are described in the plan but never passed to the engine.

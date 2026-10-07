@@ -20,7 +20,7 @@ def test_codex_official_payload_translation(repo,name,tool,expected):
 def test_codex_bound_workspace_and_tool_rejected(repo,tmp_path):
     adapter=CodexHookAdapter()
     for payload in ({'hook_event_name':'Stop','cwd':str(tmp_path),'session_id':'s'},
-                    {'hook_event_name':'PostToolUse','cwd':str(repo),'session_id':'s','tool_name':'Bash'},
+                    {'hook_event_name':'PostToolUse','cwd':str(repo),'session_id':'s','tool_name':'Unknown'},
                     {'hook_event_name':'SessionStart','cwd':str(repo),'session_id':None}):
         with pytest.raises(ValueError):adapter.translate(payload,repo)
 

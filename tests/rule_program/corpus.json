@@ -1,0 +1,1151 @@
+{
+  "schema_version": "rule-ground-truth-v1",
+  "kind": "SYNTHETIC",
+  "independent_human_ground_truth": false,
+  "cases": [
+    {
+      "case_id": "tls-lambda",
+      "file": "tls-lambda.java",
+      "expected_capability": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "tls-two-occurrences",
+      "file": "tls-two-occurrences.java",
+      "expected_capability": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "expected_occurrences": 2,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+          "count": 2,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "tls-line-movement",
+      "file": "tls-line-movement.java",
+      "expected_capability": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "tls-safe-default",
+      "file": "tls-safe-default.java",
+      "expected_capability": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "tls-safe-delegate",
+      "file": "tls-safe-delegate.java",
+      "expected_capability": "JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-execute",
+      "file": "sqli-execute.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-executequery",
+      "file": "sqli-executequery.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-executeupdate",
+      "file": "sqli-executeupdate.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-format",
+      "file": "sqli-format.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-spring-jdbc",
+      "file": "sqli-spring-jdbc.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Spring JDBC",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-parameterized",
+      "file": "sqli-parameterized.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-safe-constant",
+      "file": "sqli-safe-constant.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-two-occurrences",
+      "file": "sqli-two-occurrences.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 2,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 2,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-exec",
+      "file": "command-exec.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_COMMAND_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-builder",
+      "file": "command-builder.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_COMMAND_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-shell",
+      "file": "command-shell.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_COMMAND_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-fixed-executable",
+      "file": "command-fixed-executable.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-fixed-bounded-arg",
+      "file": "command-fixed-bounded-arg.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-url",
+      "file": "ssrf-url.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SSRF",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-httpclient",
+      "file": "ssrf-httpclient.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Java HttpClient",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SSRF",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-resttemplate",
+      "file": "ssrf-resttemplate.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Spring RestTemplate",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SSRF",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-webclient",
+      "file": "ssrf-webclient.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Spring WebFlux",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SSRF",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-safe-fixed",
+      "file": "ssrf-safe-fixed.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "ssrf-safe-allowlist",
+      "file": "ssrf-safe-allowlist.java",
+      "expected_capability": "JAVA_SSRF",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "path-delete",
+      "file": "path-delete.java",
+      "expected_capability": "JAVA_PATH_TRAVERSAL",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_PATH_TRAVERSAL",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "path-safe-constant",
+      "file": "path-safe-constant.java",
+      "expected_capability": "JAVA_PATH_TRAVERSAL",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "file-read-bytes",
+      "file": "file-read-bytes.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "file-read-stream",
+      "file": "file-read-stream.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "file-read-two",
+      "file": "file-read-two.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 2,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 2,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "file-read-safe-constant",
+      "file": "file-read-safe-constant.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "file-read-safe-containment",
+      "file": "file-read-safe-containment.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "file-write-bytes",
+      "file": "file-write-bytes.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_WRITE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "file-write-stream",
+      "file": "file-write-stream.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_WRITE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "file-write-safe-constant",
+      "file": "file-write-safe-constant.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_WRITE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "file-write-safe-containment",
+      "file": "file-write-safe-containment.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_WRITE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "path-safe-containment",
+      "file": "path-safe-containment.java",
+      "expected_capability": "JAVA_PATH_TRAVERSAL",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "path-unsafe-string-prefix",
+      "file": "path-unsafe-string-prefix.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-dom",
+      "file": "xxe-dom.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JAXP DOM",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-dom-safe",
+      "file": "xxe-dom-safe.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JAXP DOM",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-sax",
+      "file": "xxe-sax.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JAXP SAX",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-sax-safe",
+      "file": "xxe-sax-safe.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JAXP SAX",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-stax",
+      "file": "xxe-stax.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "StAX",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-stax-safe",
+      "file": "xxe-stax-safe.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "StAX",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-transformer",
+      "file": "xxe-transformer.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JAXP Transformer",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-transformer-safe",
+      "file": "xxe-transformer-safe.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JAXP Transformer",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "deserialization-request",
+      "file": "deserialization-request.java",
+      "expected_capability": "JAVA_UNSAFE_DESERIALIZATION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_UNSAFE_DESERIALIZATION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "deserialization-safe-trusted",
+      "file": "deserialization-safe-trusted.java",
+      "expected_capability": "JAVA_UNSAFE_DESERIALIZATION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "deserialization-safe-no-object",
+      "file": "deserialization-safe-no-object.java",
+      "expected_capability": "JAVA_UNSAFE_DESERIALIZATION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "secret-api",
+      "file": "secret-api.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "HARDCODED_SECRET",
+          "count": 1,
+          "evidence_basis": "SCANNER_SECRET_DETECTOR"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-token",
+      "file": "secret-token.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "HARDCODED_SECRET",
+          "count": 1,
+          "evidence_basis": "SCANNER_SECRET_DETECTOR"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-private",
+      "file": "secret-private.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "HARDCODED_SECRET",
+          "count": 1,
+          "evidence_basis": "SCANNER_SECRET_DETECTOR"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-password",
+      "file": "secret-password.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "HARDCODED_SECRET",
+          "count": 1,
+          "evidence_basis": "SCANNER_SECRET_DETECTOR"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-placeholder",
+      "file": "secret-placeholder.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-example",
+      "file": "secret-example.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-test-fixture",
+      "file": "secret-test-fixture.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "secret-env",
+      "file": "secret-env.txt",
+      "expected_capability": "HARDCODED_SECRET",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Gitleaks built-in",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": [
+        "Synthetic credential-shaped text, never a real credential."
+      ]
+    },
+    {
+      "case_id": "file-read-guard-after-access",
+      "file": "file-read-guard-after-access.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-dom-hardening-after-parser",
+      "file": "xxe-dom-hardening-after-parser.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JAXP DOM",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "xxe-transformer-hardening-after-use",
+      "file": "xxe-transformer-hardening-after-use.java",
+      "expected_capability": "JAVA_XXE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "JAXP Transformer",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_XXE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-exec-bounded-array",
+      "file": "command-exec-bounded-array.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "JDK",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-mybatis-annotation-risk",
+      "file": "sqli-mybatis-annotation-risk.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "MyBatis annotation",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-mybatis-xml-risk",
+      "file": "sqli-mybatis-xml-risk.xml",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "MyBatis XML",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-mybatis-annotation-safe",
+      "file": "sqli-mybatis-annotation-safe.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "MyBatis annotation",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-mybatis-xml-safe",
+      "file": "sqli-mybatis-xml-safe.xml",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "MyBatis XML",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-wrapper-tainted-argument",
+      "file": "sqli-wrapper-tainted-argument.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Local wrapper, tainted argument propagation",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-wrapper-fixed-argument",
+      "file": "sqli-wrapper-fixed-argument.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Local wrapper, fixed argument",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "command-jakarta-request",
+      "file": "command-jakarta-request.java",
+      "expected_capability": "JAVA_COMMAND_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Jakarta Servlet",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_COMMAND_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "sqli-spring-requestparam",
+      "file": "sqli-spring-requestparam.java",
+      "expected_capability": "JAVA_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Spring RequestParam",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "path-guard-reassignment-read",
+      "file": "fixtures/path-guard-reassignment-read.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_READ",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "CONTAINMENT_GUARD_THEN_UNTRUSTED_REASSIGNMENT",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_READ",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "path-guard-reassignment-write",
+      "file": "fixtures/path-guard-reassignment-write.java",
+      "expected_capability": "JAVA_ARBITRARY_FILE_WRITE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "CONTAINMENT_GUARD_THEN_UNTRUSTED_REASSIGNMENT",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_ARBITRARY_FILE_WRITE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [
+        "JAVA_PATH_TRAVERSAL"
+      ],
+      "limitations": []
+    },
+    {
+      "case_id": "path-guard-reassignment-delete",
+      "file": "fixtures/path-guard-reassignment-delete.java",
+      "expected_capability": "JAVA_PATH_TRAVERSAL",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "CONTAINMENT_GUARD_THEN_UNTRUSTED_REASSIGNMENT",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_PATH_TRAVERSAL",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    }
+  ]
+}

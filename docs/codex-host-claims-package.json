@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "duration_seconds": 5.53,
+  "source_bytes_checked": 79,
+  "wheel_sha256": "33f286f45ff59cc036d036ae2644b95ae6d331b2ed570efac5f7dc8e417e03dd",
+  "sdist_sha256": "3b3a07ecf3718418ed063fc2fa0b0fda2e41aa81ef0bcbd257d07e7215f33e60",
+  "package_integrity": "PASS",
+  "compliance": "PASS",
+  "active_runtime_replaced": false,
+  "network": false
+}

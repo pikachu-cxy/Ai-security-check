@@ -3,52 +3,86 @@
   "version": "1.1.0",
   "rules": [
     {
-      "rule_id": "ai-security.java.runtime-exec",
       "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "command-injection",
+      "category": "arbitrary-file-read",
       "cwe": [
-        "CWE-78"
+        "CWE-200"
       ],
-      "severity": "ERROR",
       "confidence": "HIGH",
       "maturity": "BETA",
       "framework": "JDK",
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/78.html",
-        "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Runtime.html"
+        "https://cwe.mitre.org/data/definitions/200.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
+        "created_at": "2026-10-07",
         "references": [
-          "https://cwe.mitre.org/data/definitions/78.html",
-          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Runtime.html"
+          "https://cwe.mitre.org/data/definitions/200.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
+      "rule_id": "ai-security.java.arbitrary-file-read",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
       "mode": "taint",
-      "path": "java/runtime-exec.yml",
+      "path": "java/arbitrary-file-read.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/runtime-exec.java"
+      "fixture": "tests/rules/java/arbitrary-file-read.java"
     },
     {
-      "rule_id": "ai-security.java.process-builder",
+      "language": "java",
+      "category": "arbitrary-file-write",
+      "cwe": [
+        "CWE-73"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/73.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-07",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/73.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.arbitrary-file-write",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "java/arbitrary-file-write.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/arbitrary-file-write.java"
+    },
+    {
+      "rule_id": "ai-security.java.file-access",
       "language": "java",
       "engine_languages": [
         "java"
       ],
-      "category": "command-injection",
+      "category": "path-traversal",
       "cwe": [
-        "CWE-78"
+        "CWE-22"
       ],
       "severity": "ERROR",
       "confidence": "HIGH",
@@ -57,24 +91,60 @@
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/78.html"
+        "https://cwe.mitre.org/data/definitions/22.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
         "created_at": "2026-10-01",
         "references": [
-          "https://cwe.mitre.org/data/definitions/78.html"
+          "https://cwe.mitre.org/data/definitions/22.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
       "mode": "taint",
-      "path": "java/process-builder.yml",
+      "path": "java/file-access.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/process-builder.java"
+      "fixture": "tests/rules/java/file-access.java"
+    },
+    {
+      "language": "java",
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-07",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.http-client",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "java/http-client.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/http-client.java"
     },
     {
       "rule_id": "ai-security.java.jdbc-statement",
@@ -113,40 +183,76 @@
       "fixture": "tests/rules/java/jdbc-statement.java"
     },
     {
-      "rule_id": "ai-security.java.spring-jdbc",
+      "rule_id": "ai-security.java.jndi-lookup",
       "language": "java",
       "engine_languages": [
         "java"
       ],
-      "category": "sql-injection",
+      "category": "jndi-injection",
       "cwe": [
-        "CWE-89"
+        "CWE-74"
       ],
       "severity": "ERROR",
       "confidence": "HIGH",
       "maturity": "BETA",
-      "framework": "Spring",
+      "framework": "JDK",
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/89.html"
+        "https://cwe.mitre.org/data/definitions/74.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
         "created_at": "2026-10-01",
         "references": [
-          "https://cwe.mitre.org/data/definitions/89.html"
+          "https://cwe.mitre.org/data/definitions/74.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
       "mode": "taint",
-      "path": "framework/spring-jdbc.yml",
+      "path": "java/jndi-lookup.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/spring-jdbc.java"
+      "fixture": "tests/rules/java/jndi-lookup.java"
+    },
+    {
+      "rule_id": "ai-security.java.ldap-search",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "ldap-injection",
+      "cwe": [
+        "CWE-90"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/90.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/90.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "java/ldap-search.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/ldap-search.java"
     },
     {
       "rule_id": "ai-security.java.mybatis-annotation",
@@ -225,14 +331,14 @@
       "fixture": "tests/rules/java/mybatis-xml.xml"
     },
     {
-      "rule_id": "ai-security.java.url-connection",
+      "rule_id": "ai-security.java.object-deserialization",
       "language": "java",
       "engine_languages": [
         "java"
       ],
-      "category": "ssrf",
+      "category": "unsafe-deserialization",
       "cwe": [
-        "CWE-918"
+        "CWE-502"
       ],
       "severity": "ERROR",
       "confidence": "HIGH",
@@ -241,24 +347,206 @@
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/918.html"
+        "https://cwe.mitre.org/data/definitions/502.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
         "created_at": "2026-10-01",
         "references": [
-          "https://cwe.mitre.org/data/definitions/918.html"
+          "https://cwe.mitre.org/data/definitions/502.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
       "mode": "taint",
-      "path": "java/url-connection.yml",
+      "path": "java/object-deserialization.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/url-connection.java"
+      "fixture": "tests/rules/java/object-deserialization.java"
+    },
+    {
+      "rule_id": "ai-security.java.open-redirect",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "open-redirect",
+      "cwe": [
+        "CWE-601"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Servlet",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/601.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/601.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "java/open-redirect.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/open-redirect.java"
+    },
+    {
+      "rule_id": "ai-security.java.process-builder",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "command-injection",
+      "cwe": [
+        "CWE-78"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/78.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "java/process-builder.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/process-builder.java"
+    },
+    {
+      "rule_id": "ai-security.java.runtime-exec",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "command-injection",
+      "cwe": [
+        "CWE-78"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html",
+        "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Runtime.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/78.html",
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Runtime.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "java/runtime-exec.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/runtime-exec.java"
+    },
+    {
+      "rule_id": "ai-security.java.security-random",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "insecure-random",
+      "cwe": [
+        "CWE-330"
+      ],
+      "severity": "WARNING",
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/330.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/330.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "search",
+      "path": "java/security-random.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/security-random.java"
+    },
+    {
+      "rule_id": "ai-security.java.spring-jdbc",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "sql-injection",
+      "cwe": [
+        "CWE-89"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Spring",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/89.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "framework/spring-jdbc.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/spring-jdbc.java"
     },
     {
       "rule_id": "ai-security.java.spring-resttemplate",
@@ -297,14 +585,14 @@
       "fixture": "tests/rules/java/spring-resttemplate.java"
     },
     {
-      "rule_id": "ai-security.java.file-access",
+      "rule_id": "ai-security.java.trust-all-certificates",
       "language": "java",
       "engine_languages": [
         "java"
       ],
-      "category": "path-traversal",
+      "category": "trust-all-tls",
       "cwe": [
-        "CWE-22"
+        "CWE-295"
       ],
       "severity": "ERROR",
       "confidence": "HIGH",
@@ -313,24 +601,242 @@
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/22.html"
+        "https://cwe.mitre.org/data/definitions/295.html",
+        "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
         "created_at": "2026-10-01",
         "references": [
-          "https://cwe.mitre.org/data/definitions/22.html"
+          "https://cwe.mitre.org/data/definitions/295.html",
+          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "search",
+      "path": "java/trust-all-certificates.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/trust-all-certificates.java"
+    },
+    {
+      "rule_id": "ai-security.java.trust-all-hostname",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "trust-all-tls",
+      "cwe": [
+        "CWE-295"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/295.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/295.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "search",
+      "path": "java/trust-all-hostname.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/trust-all-hostname.java"
+    },
+    {
+      "rule_id": "ai-security.java.url-connection",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
       "mode": "taint",
-      "path": "java/file-access.yml",
+      "path": "java/url-connection.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/file-access.java"
+      "fixture": "tests/rules/java/url-connection.java"
+    },
+    {
+      "rule_id": "ai-security.java.weak-cipher",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "weak-cryptography",
+      "cwe": [
+        "CWE-327"
+      ],
+      "severity": "WARNING",
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/327.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/327.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "search",
+      "path": "java/weak-cipher.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/weak-cipher.java"
+    },
+    {
+      "rule_id": "ai-security.java.weak-digest",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "weak-cryptography",
+      "cwe": [
+        "CWE-328"
+      ],
+      "severity": "WARNING",
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/328.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/328.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "search",
+      "path": "java/weak-digest.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/weak-digest.java"
+    },
+    {
+      "language": "java",
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Spring WebFlux",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-07",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.web-client",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "java/web-client.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/web-client.java"
+    },
+    {
+      "rule_id": "ai-security.java.xml-decoder",
+      "language": "java",
+      "engine_languages": [
+        "java"
+      ],
+      "category": "unsafe-deserialization",
+      "cwe": [
+        "CWE-502"
+      ],
+      "severity": "ERROR",
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JDK",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.1.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/502.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-01",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/502.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "mode": "taint",
+      "path": "java/xml-decoder.yml",
+      "target_extensions": [
+        ".java"
+      ],
+      "fixture": "tests/rules/java/xml-decoder.java"
     },
     {
       "rule_id": "ai-security.java.xxe-document-builder",
@@ -445,366 +951,40 @@
       "fixture": "tests/rules/java/xxe-stax.java"
     },
     {
-      "rule_id": "ai-security.java.object-deserialization",
       "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "unsafe-deserialization",
+      "category": "xxe",
       "cwe": [
-        "CWE-502"
+        "CWE-611"
       ],
-      "severity": "ERROR",
       "confidence": "HIGH",
       "maturity": "BETA",
       "framework": "JDK",
       "rule_pack": "ai-security-core",
       "rule_version": "1.1.0",
       "references": [
-        "https://cwe.mitre.org/data/definitions/502.html"
+        "https://cwe.mitre.org/data/definitions/611.html"
       ],
       "provenance": {
         "origin": "FIRST_PARTY",
         "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
+        "created_at": "2026-10-07",
         "references": [
-          "https://cwe.mitre.org/data/definitions/502.html"
+          "https://cwe.mitre.org/data/definitions/611.html"
         ],
         "license": "Apache-2.0",
         "derived_from": ""
       },
+      "rule_id": "ai-security.java.xxe-transformer",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
       "mode": "taint",
-      "path": "java/object-deserialization.yml",
+      "path": "java/xxe-transformer.yml",
       "target_extensions": [
         ".java"
       ],
-      "fixture": "tests/rules/java/object-deserialization.java"
-    },
-    {
-      "rule_id": "ai-security.java.xml-decoder",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "unsafe-deserialization",
-      "cwe": [
-        "CWE-502"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/502.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/502.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "taint",
-      "path": "java/xml-decoder.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/xml-decoder.java"
-    },
-    {
-      "rule_id": "ai-security.java.jndi-lookup",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "jndi-injection",
-      "cwe": [
-        "CWE-74"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/74.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/74.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "taint",
-      "path": "java/jndi-lookup.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/jndi-lookup.java"
-    },
-    {
-      "rule_id": "ai-security.java.ldap-search",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "ldap-injection",
-      "cwe": [
-        "CWE-90"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/90.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/90.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "taint",
-      "path": "java/ldap-search.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/ldap-search.java"
-    },
-    {
-      "rule_id": "ai-security.java.open-redirect",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "open-redirect",
-      "cwe": [
-        "CWE-601"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "Servlet",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/601.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/601.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "taint",
-      "path": "java/open-redirect.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/open-redirect.java"
-    },
-    {
-      "rule_id": "ai-security.java.trust-all-hostname",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "trust-all-tls",
-      "cwe": [
-        "CWE-295"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/295.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/295.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "search",
-      "path": "java/trust-all-hostname.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/trust-all-hostname.java"
-    },
-    {
-      "rule_id": "ai-security.java.trust-all-certificates",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "trust-all-tls",
-      "cwe": [
-        "CWE-295"
-      ],
-      "severity": "ERROR",
-      "confidence": "HIGH",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/295.html",
-        "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/295.html",
-          "https://docs.oracle.com/en/java/javase/21/docs/api/java.base/javax/net/ssl/X509TrustManager.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "search",
-      "path": "java/trust-all-certificates.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/trust-all-certificates.java"
-    },
-    {
-      "rule_id": "ai-security.java.weak-cipher",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "weak-cryptography",
-      "cwe": [
-        "CWE-327"
-      ],
-      "severity": "WARNING",
-      "confidence": "MEDIUM",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/327.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/327.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "search",
-      "path": "java/weak-cipher.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/weak-cipher.java"
-    },
-    {
-      "rule_id": "ai-security.java.weak-digest",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "weak-cryptography",
-      "cwe": [
-        "CWE-328"
-      ],
-      "severity": "WARNING",
-      "confidence": "MEDIUM",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/328.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/328.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "search",
-      "path": "java/weak-digest.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/weak-digest.java"
-    },
-    {
-      "rule_id": "ai-security.java.security-random",
-      "language": "java",
-      "engine_languages": [
-        "java"
-      ],
-      "category": "insecure-random",
-      "cwe": [
-        "CWE-330"
-      ],
-      "severity": "WARNING",
-      "confidence": "MEDIUM",
-      "maturity": "BETA",
-      "framework": "JDK",
-      "rule_pack": "ai-security-core",
-      "rule_version": "1.1.0",
-      "references": [
-        "https://cwe.mitre.org/data/definitions/330.html"
-      ],
-      "provenance": {
-        "origin": "FIRST_PARTY",
-        "author": "AI Security Runtime contributors",
-        "created_at": "2026-10-01",
-        "references": [
-          "https://cwe.mitre.org/data/definitions/330.html"
-        ],
-        "license": "Apache-2.0",
-        "derived_from": ""
-      },
-      "mode": "search",
-      "path": "java/security-random.yml",
-      "target_extensions": [
-        ".java"
-      ],
-      "fixture": "tests/rules/java/security-random.java"
+      "fixture": "tests/rules/java/xxe-transformer.java"
     },
     {
       "rule_id": "ai-security.python.command-injection",

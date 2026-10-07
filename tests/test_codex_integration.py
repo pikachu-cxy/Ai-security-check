@@ -344,13 +344,14 @@ def test_mcp_readiness_tool_registered_closed_input(monkeypatch, tmp_path):
     tools = asyncio.run(server.list_tools())
     tool = next(t for t in tools if t.name == 'handle_readiness_event')
     assert tool.inputSchema['additionalProperties'] is False
-    assert set(tool.inputSchema['properties']) == {'event', 'workspace_path', 'session_id'}
+    assert set(tool.inputSchema['properties']) == {'event', 'workspace_path', 'session_id', 'permission_mode'}
     implementation = server._tool_manager.get_tool('handle_readiness_event')
     with pytest.raises(ValueError):
         implementation.fn_metadata.arg_model.model_validate({'event': 'SessionStart', 'workspace_path': 'x', 'session_id': 's', 'prompt': 'secret-canary'})
 
 
-def test_hook_closed_receipt_direct_functional_without_second_verify(setup, monkeypatch):
+@pytest.mark.parametrize('javac_available', [True, False])
+def test_hook_closed_receipt_direct_functional_without_second_verify(setup, monkeypatch, javac_available):
     from security_runtime.functional_verification import FunctionalVerificationService
     root, runtime, provider, remediation, hook, grant = setup
     original = args(setup); prepare(setup)
@@ -360,10 +361,24 @@ def test_hook_closed_receipt_direct_functional_without_second_verify(setup, monk
                        'grant_id': grant['remediation']['grant_id'], 'explicit_verification_required': False}
     monkeypatch.setattr(remediation, 'verify', lambda *a, **kw: pytest.fail('duplicate explicit scanner verify'))
     assert remediation.functional_receipt(original['remediation_ref'], original['task_ref'], root)
-    output = FunctionalVerificationService(remediation).prepare(original['remediation_ref'], original['task_ref'], root, bound_workspace=root)
-    assert output['functional_verification']['status'] == 'NOT_AVAILABLE'
-    assert not output.get('functional_ref') and not output.get('handoff')
-    assert 'NOT_AVAILABLE without those fields stops functional execution' in HOST_INSTRUCTIONS
+    import shutil
+    which = shutil.which
+    monkeypatch.setattr(shutil, 'which', lambda name: ('/local/javac' if javac_available else None)
+                        if name == 'javac' else which(name))
+    service = FunctionalVerificationService(remediation)
+    output = service.prepare(original['remediation_ref'], original['task_ref'], root, bound_workspace=root)
+    if javac_available:
+        assert output['status'] == 'FUNCTIONAL_VERIFICATION_READY'
+        assert output['functional_verification']['status'] == 'PLANNED'
+        assert output['functional_ref'] and output['handoff']
+        assert output['plan']['steps'][0]['target_files'] == ['A.java']
+        assert service.executor is None and not list(root.rglob('*.class'))
+        service._cleanup_rows(service.plans)
+    else:
+        assert output['functional_verification']['status'] == 'NOT_AVAILABLE'
+        assert not output.get('functional_ref') and not output.get('handoff')
+    assert output['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert 'NOT_AVAILABLE without a handoff' in HOST_INSTRUCTIONS
 
 
 def test_inconclusive_does_not_offer_skip_or_functional_proof(setup):

@@ -1,0 +1,44 @@
+{
+  "status": "PASS",
+  "transport": "ACTUAL_LOCAL_MCP_STDIO",
+  "scanner": "ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE",
+  "episodes": [
+    {
+      "number": 1,
+      "episode_id": "bb1faf7e2c8c93be3ab27bc8903991a2a6b30ecf7076cb5c9519f4878f2ec67d",
+      "action": "AUTO_FIX",
+      "reason_code": "SAFE_DETERMINISTIC_FIX",
+      "episode_reason_code": "FIRST_OCCURRENCE",
+      "attempt_count": 1,
+      "prepare_status": "READY_FOR_HOST_FIX",
+      "resolved_families": 1,
+      "verification_status": "SCANNER_VERIFIED_RESOLVED",
+      "final_stage": "CLOSED"
+    },
+    {
+      "number": 2,
+      "episode_id": "3821cfc7419942fb3a6fbb3f8b99b7100632924fcdcdff52595529010402df72",
+      "action": "AUTO_FIX",
+      "reason_code": "SAFE_DETERMINISTIC_FIX",
+      "episode_reason_code": "RECURRENCE_AFTER_RESOLUTION",
+      "attempt_count": 1,
+      "prepare_status": "READY_FOR_HOST_FIX",
+      "resolved_families": 1,
+      "verification_status": "SCANNER_VERIFIED_RESOLVED",
+      "final_stage": "CLOSED"
+    }
+  ],
+  "same_family": true,
+  "references_distinct": true,
+  "old_grant_rejected": true,
+  "exact_reference_roundtrip": true,
+  "raw_references_persisted": false,
+  "host_edits": "SIMULATED_BY_ACCEPTANCE_DRIVER",
+  "actual_desktop": "PENDING",
+  "runtime_source_edit": false,
+  "model": false,
+  "target_build": false,
+  "network": false,
+  "functional_credential_lifecycle": "NOT_TESTED_OUT_OF_SCOPE",
+  "duration_seconds": 55.31
+}

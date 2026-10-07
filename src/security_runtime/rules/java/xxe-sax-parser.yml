@@ -57,7 +57,8 @@ rules:
     - pattern-inside: $RET $METHOD(...) { ... SAXParserFactory $FACTORY = SAXParserFactory.newInstance();
         ... SAXParser $PARSER = $FACTORY.newSAXParser(); ... }
     - pattern-not-inside: $RET $METHOD(...) { ... $FACTORY.setFeature("http://apache.org/xml/features/disallow-doctype-decl",
-        true); ... }
+        true); ... SAXParser $PARSER = $FACTORY.newSAXParser(); ... $PARSER.parse($XML,
+        ...); ... }
     - patterns:
       - pattern: $PARSER.parse($XML, ...)
       - focus-metavariable: $XML

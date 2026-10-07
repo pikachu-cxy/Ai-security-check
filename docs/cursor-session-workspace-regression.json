@@ -1,0 +1,74 @@
+{
+  "status": "PASS",
+  "new_cases": 37,
+  "targeted": {
+    "summary": "124 passed in 72.45s (0:01:12)",
+    "passed": 124,
+    "duration_seconds": 73.01
+  },
+  "focused": {
+    "summary": "265 passed in 276.26s (0:04:36)",
+    "passed": 265,
+    "duration_seconds": 277.02
+  },
+  "full": {
+    "summary": "1647 passed, 9 skipped, 6 subtests passed in 2078.85s (0:34:38)",
+    "passed": 1647,
+    "duration_seconds": 2079.44,
+    "skipped": 9,
+    "subtests_passed": 6,
+    "skipped_separately": [
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+    ]
+  },
+  "initial_targeted": {
+    "status": "FAILED_TEST_ASSERTION_ONLY",
+    "failed": 2,
+    "passed": 122,
+    "reason": "new test incorrectly accessed HookStateStore.base; corrected to CursorBindings.base"
+  },
+  "package": {
+    "status": "PASS",
+    "duration_seconds": 5.09,
+    "source_bytes_checked": 88,
+    "wheel_sha256": "73154a58c8c61e944dbbaf98a5783499e5498f6db4ec56e98b6daa168cae2cf2",
+    "sdist_sha256": "9f65efc74bec46adb4cfbd2fe3b522a5c39b9a360f27361e04581a0b9607792b",
+    "package_integrity": "PASS",
+    "compliance": "PASS",
+    "active_runtime_replaced": false,
+    "network": false
+  },
+  "native_trial": {
+    "status": "PASS",
+    "duration_seconds": 46.99,
+    "host": "SIMULATED_CURSOR",
+    "transport": "INSTALLED_NATIVE_COMMAND_STDIO",
+    "scanner": "ACTUAL_MANAGED_OFFLINE",
+    "clean_install": "PASS_BORROWED_SYSTEM_DEPENDENCIES",
+    "cross_process_recent": true,
+    "actual_desktop": "PENDING",
+    "continuation": "PENDING_CURSOR_CONTINUATION_CAPABILITY",
+    "network": false,
+    "model": false,
+    "target_build": false,
+    "active_runtime_replaced": false,
+    "real_user_configuration_modified": false
+  },
+  "codex_trial_status": "PASS",
+  "historical_session_cause": "NONEMPTY_GENERATION_REQUIRED_AT_SESSIONSTART",
+  "historical_workspace_raw_predicate": "UNDETERMINED_FROM_RETAINED_DIAGNOSTICS",
+  "project_f_known_path_git_probe": "OK",
+  "actual_cursor_desktop": "PENDING_USER_RETEST",
+  "real_user_configuration_modified": false,
+  "active_runtime_replaced": false,
+  "commit": false,
+  "push": false
+}

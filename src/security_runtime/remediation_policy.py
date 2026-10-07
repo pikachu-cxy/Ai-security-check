@@ -53,6 +53,14 @@ class RemediationConfig:
             raise ValueError('Invalid remediation mode')
         atomic_bytes(self.path, json.dumps({'remediation': {'mode': mode}}).encode())
 
+    def managed_paths(self):
+        """Policy storage locations, never a transport or workspace locator."""
+        return (self.path,)
+
+    def revision(self):
+        no_links(self.path)
+        return self.path.stat().st_mtime_ns if self.path.exists() else None
+
 
 class RemediationPolicy:
     def decide(self, *, family=None, rule=None, category='code', priority='REVIEW',
@@ -66,7 +74,7 @@ class RemediationPolicy:
             reason = 'REVIEW_REQUIRED'
         elif rule == RULE and coverage and deterministic:
             if attempts >= 2:
-                action, reason = 'ESCALATE', 'ATTEMPT_LIMIT'
+                action, reason = 'ESCALATE', 'EPISODE_ATTEMPT_BUDGET_EXCEEDED'
             elif mode == 'smart_auto':
                 action, reason = 'AUTO_FIX', 'SAFE_DETERMINISTIC_FIX'
             elif mode == 'ask_before_fix':

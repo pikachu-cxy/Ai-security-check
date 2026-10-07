@@ -256,6 +256,27 @@ def test_explicit_host_state_key_not_codex_coupled(setup):
     root, runtime, _, service, _, _ = setup
     result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'codex', 'session')
     out = service.on_hook(result, root, 's', host='generic')
+    # Host/session changes cannot create a second active episode for A.java.
+    assert out['reason_code'] == 'EPISODE_ALREADY_EXISTS'
+    assert not service.state.path(root, 'generic', 's').exists()
+    # A different family still uses the caller's generic namespace.
+    import copy
+    finding = copy.deepcopy(runtime.findings[0])
+    finding.file_path = 'B.java'
+    runtime.findings.append(finding)
+    (root / 'B.java').write_text(UNSAFE)
+    result = HookCoordinator(runtime, service.hooks, cooldown_ms=0).handle('FILE_CHANGED', root, 'generic', 's')
+    out = service.on_hook(result, root, 's', host='generic')
+    # First Hook baselines cannot attribute NEW; the next real edit can.
+    assert out['action'] == 'NONE'
+    (root / 'B.java').write_text(FIXED)
+    runtime.findings.pop()
+    baseline = HookCoordinator(runtime, service.hooks, cooldown_ms=0)
+    baseline.handle('FILE_CHANGED', root, 'generic', 's')
+    (root / 'B.java').write_text(UNSAFE)
+    runtime.findings.append(finding)
+    result = baseline.handle('FILE_CHANGED', root, 'generic', 's')
+    out = service.on_hook(result, root, 's', host='generic')
     assert out['action'] == 'CONFIRM_REQUIRED'
     assert service.state.path(root, 'generic', 's').exists()
     assert not service.state.path(root, 'codex', 's').exists()

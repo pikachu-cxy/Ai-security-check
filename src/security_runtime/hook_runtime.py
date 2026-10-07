@@ -8,6 +8,8 @@ import os
 import re
 import subprocess
 import time
+from contextlib import nullcontext
+from time import perf_counter
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 
@@ -19,6 +21,7 @@ from .models import RunStatus
 from .target import TargetDetector, IGNORED
 from .verification_policy import local_recheck
 from .workspace import WorkspaceResolver
+from .hook_timing import timings, elapsed, core_context, ExecutionTrigger
 
 HOSTS = ('codex', 'cursor', 'kiro', 'workbuddy', 'codebuddy', 'qoder', 'generic')
 MAX_FILES = 1000
@@ -54,11 +57,12 @@ class HookSnapshot:
     last_scan_id: str | None
     last_completed_at: float
     last_result: dict
+    file_digests: dict | None = None
 
 
 def validate_state(value):
     fields = set(HookSnapshot.__dataclass_fields__)
-    if not isinstance(value, dict) or set(value) != fields or value['schema_version'] != 'hook-v1':
+    if not isinstance(value, dict) or set(value) not in (fields, fields - {'file_digests'}) or value['schema_version'] != 'hook-v1':
         raise ValueError('Invalid hook snapshot')
     for key in ('workspace_id', 'session_id', 'change_digest'):
         if not re.fullmatch('[a-f0-9]{64}', value[key]):
@@ -71,6 +75,15 @@ def validate_state(value):
         raise ValueError('Hook snapshot budget exceeded')
     for name in value['changed_files']:
         safe_path(name)
+    file_digests = value.get('file_digests')
+    if file_digests is not None:
+        if (not isinstance(file_digests, dict) or len(file_digests) > MAX_FILES
+                or not set(value['changed_files']).issubset(file_digests)):
+            raise ValueError('Invalid hook file digest inventory')
+        for name, digest in file_digests.items():
+            safe_path(name)
+            if not isinstance(digest, str) or not re.fullmatch('[a-f0-9]{64}', digest):
+                raise ValueError('Invalid hook file digest')
     families = value['families']
     if not isinstance(families, dict) or len(families) > MAX_FAMILIES:
         raise ValueError('Hook family budget exceeded')
@@ -150,6 +163,14 @@ def _git(root, *args):
         return output.read()
 
 
+class CapturedSnapshot(tuple):
+    """Preserve the existing two-value capture protocol; hashes stay internal."""
+    def __new__(cls, digest, paths, file_digests):
+        value = super().__new__(cls, (digest, paths))
+        value.file_digests = file_digests
+        return value
+
+
 def capture_snapshot(root: Path, key: bytes):
     paths = set()
     for args in (('diff','--name-only','-z','--no-renames'), ('diff','--cached','--name-only','-z','--no-renames'), ('ls-files','--others','--exclude-standard','-z')):
@@ -169,6 +190,7 @@ def capture_snapshot(root: Path, key: bytes):
             header,name = entry.split(b'\t',1)
             index.setdefault(name.decode('utf-8'),[]).append(header)
     total = 0
+    file_digests = {}
     for name in paths:
         # Validate links and traversal even for removed files before reading.
         TargetDetector(max_files=MAX_FILES).detect(root,[name])
@@ -177,6 +199,7 @@ def capture_snapshot(root: Path, key: bytes):
         digest.update(json.dumps([v.decode('ascii') for v in index.get(name,[])]).encode())
         if not source.exists():
             digest.update(b'DELETED')
+            file_digests[name] = hmac.new(key, b'hook-file-deleted-v1', hashlib.sha256).hexdigest()
             continue
         if not source.is_file():
             raise ValueError('Hook snapshot path is not a file')
@@ -192,7 +215,34 @@ def capture_snapshot(root: Path, key: bytes):
                     raise ValueError('Hook snapshot file budget exceeded')
                 content_digest.update(chunk)
         digest.update(content_digest.digest())
-    return digest.hexdigest(), paths
+        file_digests[name] = content_digest.hexdigest()
+    # Git's dirty list can omit byte-only changes (e.g. autocrlf). Keep its
+    # existing scope/digest contract, and separately compare the bounded tracked
+    # inventory. This never adds unchanged tracked files to the scanner scope.
+    inventory = sorted(set(paths) | {safe_path(name) for name in index
+        if not set(PurePosixPath(name).parts) & IGNORED})
+    if len(inventory) > MAX_FILES:
+        raise ValueError('Hook comparison file budget exceeded')
+    for name in inventory:
+        if name in file_digests:
+            continue
+        TargetDetector(max_files=MAX_FILES).detect(root, [name])
+        source = root / name
+        if not source.exists():
+            file_digests[name] = hmac.new(key, b'hook-file-deleted-v1', hashlib.sha256).hexdigest()
+            continue
+        if not source.is_file():
+            raise ValueError('Hook comparison path is not a file')
+        content_digest = hmac.new(key, b'hook-file-v1', hashlib.sha256)
+        consumed = 0
+        with source.open('rb') as stream:
+            while chunk := stream.read(65536):
+                consumed += len(chunk); total += len(chunk)
+                if consumed > 1_000_000 or total > MAX_BYTES:
+                    raise ValueError('Hook comparison content budget exceeded')
+                content_digest.update(chunk)
+        file_digests[name] = content_digest.hexdigest()
+    return CapturedSnapshot(digest.hexdigest(), paths, file_digests)
 
 
 def family_multiset(findings, runs, plans):
@@ -207,7 +257,8 @@ def family_multiset(findings, runs, plans):
         details = row['technical_details']
         plan = next((plans.get(name) for name in row['scanner_sources'] if plans.get(name)), None)
         family = families.setdefault(key, {'equivalence_key':key,'category':metadata(row['category']),
-            'file_path':row['file_path'],'rule_id':metadata(details['rule_id']),
+            'file_path':row['file_path'],'rule_id':metadata(details.get('capability_family_anchor',details['rule_id'])
+                if row['category'] != 'secret' else details['rule_id']),
             'scanner_sources':[metadata(n) for n in row['scanner_sources']], 'count':0,'occurrences':[],
             'proof':{'rule_pack_checksum':plan.pack.checksum if plan else '',
                      'engine':metadata(details['engine']) if details.get('engine') else '',
@@ -232,13 +283,18 @@ def covered(family, runs, plans):
         plan = plans.get(name)
         if not run or run.status != RunStatus.SUCCESS or run.coverage_contract != 'FULL' or not plan:
             return False
-        rule = next((r for r in plan.rules if r.rule_id == family['rule_id']), None)
+        program = getattr(plan.pack, 'program', None)
+        required = program.family_rules(family['rule_id']) if program else (family['rule_id'],)
+        rules = [r for r in plan.rules if r.rule_id in required]
+        rule = rules[0] if rules else None
         proof = family['proof']
         if not rule or (proof['rule_pack_checksum'] and proof['rule_pack_checksum'] != plan.pack.checksum) or (proof['rule_version'] and proof['rule_version'] != rule.rule_version):
             return False
         if proof['engine'] and proof['engine'] != run.provider:
             return False
-        if family['rule_id'] not in plan.confirmed_rules or family['file_path'] not in plan.scanned_files or family['file_path'] in plan.errored_files or plan.unscoped_error:
+        applicable = ({r.rule_id for r in plan.pack.catalog if r.rule_id in required and
+            Path(family['file_path']).suffix.lower() in r.target_extensions} if program else set(required))
+        if not applicable or not applicable.issubset(plan.confirmed_rules) or family['file_path'] not in plan.scanned_files or family['file_path'] in plan.errored_files or plan.unscoped_error:
             return False
     return True
 
@@ -273,14 +329,30 @@ def family_delta(previous, observed, can_cover):
 
 
 class HookCoordinator:
-    def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None):
+    def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None,
+                 workspace_resolver=None, snapshot_capture=None):
         self.runtime = runtime
         self.store = store or HookStateStore()
         self.cooldown_ms = cooldown_ms
         self.clock = clock
         self.seeds = seeds
+        self.workspace_resolver = workspace_resolver
+        self.snapshot_capture = snapshot_capture or capture_snapshot
+        self._managed_registry = None
 
-    def _scan_scope(self, result, root, scope, *, baseline=False):
+    def managed_registry(self):
+        """Connection-local preparation reuse; no scanner results are retained."""
+        if self.runtime is not None and getattr(self.runtime, 'registry', None) is not None:
+            return self.runtime.registry
+        if self._managed_registry is None:
+            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
+            from .toolchain import ToolManager
+            manager = ToolManager()
+            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),GitleaksAdapter(manager)],
+                tool_manager=manager,fallback_adapters=[])
+        return self._managed_registry
+
+    def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False):
         """One quick provider/observer path for events and setup seeds."""
         observation = {'families': {}, 'runs': [], 'plans': {}}
         def observe(findings, runs, plans):
@@ -293,17 +365,13 @@ class HookCoordinator:
             return observation
         from .runtime import SecurityRuntime
         runtime = self.runtime
-        if runtime is None:
-            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
-            from .toolchain import ToolManager
-            manager = ToolManager()
+        if runtime is None or (baseline and isinstance(runtime, SecurityRuntime)):
             # Baselines persist ONLY the safe Hook projection, never Finding DB
             # snippets. Event scans keep their normal remediation records.
             class ProjectionOnlyStore:
                 def save(self, result):
                     pass
-            runtime = SecurityRuntime(ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager)],
-                tool_manager=manager, fallback_adapters=[]), store=ProjectionOnlyStore() if baseline else None)
+            runtime = SecurityRuntime(self.managed_registry(),store=ProjectionOnlyStore() if baseline else None)
         kwargs = {}
         if baseline:
             from .progress import NullProgressReporter, ScanCancelled
@@ -313,24 +381,53 @@ class HookCoordinator:
                     if time.monotonic() - self.started >= 60:
                         raise ScanCancelled()
             kwargs['progress'] = BaselineDeadline()
-        with local_recheck() as ledger:
-            scan = runtime.scan(root, 'quick', _hook_scope=tuple(scope), _hook_observer=observe, **kwargs)
+        started = perf_counter()
+        from .recent_hooks import observe as observe_recent_hook
+        observe_recent_hook('SCANNER_TRIGGERED', scanner_trigger_reason='POST_TOOL_USE_MUTATION',
+                            **{k:result[k] for k in ('scanner_invocation_count',) if k in result})
+        try:
+            from .first_scan_attribution import probe_scope
+            with local_recheck() as ledger, (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
+                scan = runtime.scan(root, 'quick', _hook_scope=tuple(scope), _hook_observer=observe, **kwargs)
+        finally:
+            result.setdefault('timing_ms', timings())['scanner'] = elapsed(started)
+            observe_recent_hook('SCANNER_TRIGGERED', scanner_run=locals().get('ledger', {}).get('engine_process_observed'))
         result.update(scan_id=scan.scan_id, coverage=scan.coverage, execution_state=scan.execution_state,
                       capabilities=dict(scan.capability_results))
         result['execution']['scanner_run'] = ledger['engine_process_observed']
         result['scanner_runs'] = [{k: getattr(r, k) for k in
             ('scanner', 'status', 'version', 'duration_ms', 'error_code', 'coverage_contract')} for r in scan.scanner_runs]
+        result['scanner_diagnostics'] = scan.scanner_diagnostics
         result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
+        observe_recent_hook('SCANNER_COMPLETED', scanner_run=result['execution']['scanner_run'])
+        if attribution_candidate and observation['families']:
+            from .first_scan_attribution import capture_detector
+            stamp = capture_detector(self.managed_registry(), observation, root)
+            observation['attribution_detector'] = stamp if stamp is not None and prepared.get('semgrep') == stamp[0] else None
         return observation
 
-    def handle(self, event, workspace=None, host='generic', session_id=None):
+    def handle_lifecycle(self, kind, workspace, host, session_id):
+        """Explicit snapshot/activity/finalization dispatch, sharing one Core.
+
+        Existing legacy callers retain their convergence contract. The bounded
+        command transport opts into this lifecycle, never into a second scanner.
+        """
+        from .host_events import EventKind
+        event = {EventKind.SESSION_START: HookEvent.SESSION_START,
+                 EventKind.WORKSPACE_ACTIVITY: HookEvent.FILE_CHANGED,
+                 EventKind.SESSION_STOP: HookEvent.AGENT_STOP}[EventKind(kind)]
+        return self.handle(event, workspace, host, session_id, _lifecycle=True)
+
+    def handle(self, event, workspace=None, host='generic', session_id=None, *, _baseline_only=False,
+               _lifecycle=False):
         start = time.monotonic()
         event = HookEvent(event)
         if event not in {HookEvent.SESSION_START,HookEvent.FILE_CHANGED,HookEvent.AGENT_STOP} or host not in HOSTS:
             raise ValueError('Unsupported advisory hook event or host')
         if session_id is not None and (not isinstance(session_id,str) or len(session_id)>500):
             raise ValueError('Invalid hook session identity')
-        root = WorkspaceResolver().resolve(workspace).path
+        root = (self.workspace_resolver(workspace) if self.workspace_resolver
+                else WorkspaceResolver().resolve(workspace).path)
         result = {'schema_version':'hook-v1','event':event.value,'host':host,'status':'BUSY',
             'workspace':str(root),'workspace_id':identity(os.path.normcase(str(root))),
             'session_id':identity(session_id or 'default'),'change_digest':None,'scan_id':None,
@@ -338,23 +435,134 @@ class HookCoordinator:
             'coverage':'UNKNOWN','execution_state':'NOT_EXECUTED','last_check_status':'NOT_EXECUTED','capabilities':{},'scanner_runs':[],
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
-        with self.store.lock(root, wait_seconds=2 if event == HookEvent.AGENT_STOP else 0) as locked:
+        pending = None
+        if _lifecycle:
+            from .recent_hooks import observe
+            route = {HookEvent.SESSION_START:'SESSION_BASELINE', HookEvent.FILE_CHANGED:'WORKSPACE_RECONCILIATION',
+                     HookEvent.AGENT_STOP:'SESSION_FINALIZATION'}[event]
+            before, recovered = self.store.load(self.store.path(root, host, session_id))
+            result.update(event_dispatch_route=route, baseline_state_before='AVAILABLE' if before else 'INVALID' if recovered else 'MISSING',
+                baseline_state_after='AVAILABLE' if before else 'INVALID' if recovered else 'MISSING',
+                baseline_publish_status='NOT_ATTEMPTED', activity_waited_for_baseline=None,
+                activity_wait_ms=0, busy_reason=None, mutation_event_dropped=False,
+                pending_mutation=False, scanner_invocation_count=0)
+            if event == HookEvent.FILE_CHANGED:
+                pending = self.store.pending_activity(root, host, session_id, mark=True)
+                result['pending_mutation'] = True
+            observe('CLAIMS_VALID', **result)
+        waiting = time.monotonic()
+        with self.store.lock(root, wait_seconds=10 if _lifecycle else 2 if event == HookEvent.AGENT_STOP else 0) as locked:
+            if _lifecycle and event == HookEvent.FILE_CHANGED:
+                result['activity_wait_ms'] = round((time.monotonic()-waiting)*1000, 3)
+                # A missing baseline at arrival plus publication while waiting is
+                # the observable baseline wait; other lock owners remain unknown.
+                current, _ = self.store.load(self.store.path(root, host, session_id))
+                result['activity_waited_for_baseline'] = (True if not before and current else
+                    False if result['activity_wait_ms'] < 20 else None)
             if locked:
-                self._handle_locked(result,event,root,host,session_id)
+                if _lifecycle and event == HookEvent.SESSION_START:
+                    self._session_baseline_locked(result, root, host, session_id)
+                elif _lifecycle and event == HookEvent.AGENT_STOP:
+                    self._session_finalize_locked(result, root, host, session_id)
+                else:
+                    self._handle_locked(result,event,root,host,session_id,baseline_only=_baseline_only,
+                                        lifecycle_activity=_lifecycle)
+                if (pending is not None and result['status'] in {'SCANNED', 'NO_CHANGE', 'NO_CHANGES', 'BASELINE_ESTABLISHED'}
+                        and result.get('first_scan_attribution_status') != 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'):
+                    result['pending_mutation'] = self.store.pending_activity(root, host, session_id, completed=pending) is not None
+            elif _lifecycle:
+                result.update(status='INCONCLUSIVE', reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
+                    busy_reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
+                    next_step='Activity is pending. Retry a workspace activity after the current transaction finishes; Stop does not scan.')
+            if _lifecycle:
+                current, _ = self.store.load(self.store.path(root, host, session_id))
+                result['baseline_state_after'] = 'AVAILABLE' if current else 'MISSING'
+                observe('HANDLER_COMPLETED', **result)
         result['duration_ms'] = round((time.monotonic()-start)*1000)
+        result.setdefault('timing_ms', timings())['hook_total'] = result['duration_ms']
+        result['execution_context'] = core_context(ExecutionTrigger.STOP if event == HookEvent.AGENT_STOP else ExecutionTrigger.HOOK)
+        from .scanner_cache import lifetime
+        result.update(lifetime())
         return result
 
-    def _handle_locked(self,result,event,root,host,session_id):
+    def _session_baseline_locked(self, result, root, host, session_id):
+        """Publish a comparison point only; it asserts no scanner coverage."""
+        from .recent_hooks import observe
+        path = self.store.path(root, host, session_id)
+        previous, recovered = self.store.load(path)
+        result['state_recovered'] = recovered
+        if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
+            result.update(status='INCONCLUSIVE', reason='BASELINE_REFERENCE_REJECTED', baseline_publish_status='FAILED')
+            return
+        if previous:
+            result.update(status='BASELINE_ESTABLISHED', baseline_available=True,
+                snapshot_available=True, baseline_publish_status='RETAINED',
+                next_step='Existing session comparison point retained; no scanner was invoked.')
+            return
+        observe('BASELINE_CAPTURE_STARTED', **result)
+        if self.store.pending_activity(root, host, session_id) is not None:
+            result.update(status='INCONCLUSIVE', reason='BASELINE_ATTRIBUTION_UNAVAILABLE',
+                baseline_publish_status='REJECTED_ACTIVITY_ORDER', pending_mutation=True)
+            return
+        try:
+            key = self.store.key(root)
+            captured = self.snapshot_capture(root, key)
+            after = self.snapshot_capture(root, key)
+            if (captured != after or getattr(captured,'file_digests',None) != getattr(after,'file_digests',None)
+                    or self.store.pending_activity(root, host, session_id) is not None):
+                result.update(status='INCONCLUSIVE', reason='BASELINE_ATTRIBUTION_UNAVAILABLE',
+                    baseline_publish_status='REJECTED_ACTIVITY_ORDER')
+                return
+            digest, files = captured
+            summary = {k:result[k] for k in ('status','last_check_status','coverage','execution_state','capabilities','scanner_runs','delta')}
+            summary['status'] = 'COMPARISON_BASELINE'
+            state = asdict(HookSnapshot('hook-v1', result['workspace_id'], host, result['session_id'],
+                digest, files, {}, None, 0, summary, getattr(captured,'file_digests',None)))
+            self.store.save(path, state)
+        except (ValueError, OSError):
+            result.update(status='INCONCLUSIVE', reason='BASELINE_CAPTURE_FAILED', baseline_publish_status='FAILED')
+            return
+        result.update(status='BASELINE_ESTABLISHED', baseline_available=True, snapshot_available=True,
+            baseline_publish_status='PUBLISHED', snapshot_source='SESSION_BASELINE',
+            snapshot_generation=identity(digest + json.dumps(state['file_digests'],sort_keys=True)),
+            scanner_trigger_reason=None, scanner_skipped_reason='SESSION_BASELINE_ONLY',
+            next_step='Filesystem comparison baseline published; security coverage is not asserted.')
+        observe('BASELINE_PUBLISHED', **result)
+
+    def _session_finalize_locked(self, result, root, host, session_id):
+        from .recent_hooks import observe
+        previous, recovered = self.store.load(self.store.path(root, host, session_id))
+        if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
+            previous = None
+            recovered = True
+        result.update(status='SESSION_FINALIZED' if previous else 'INCONCLUSIVE',
+            reason='SESSION_STOP_WITHOUT_BASELINE' if previous is None else None,
+            state_recovered=recovered, baseline_available=previous is not None,
+            snapshot_available=previous is not None,
+            pending_mutation=self.store.pending_activity(root, host, session_id) is not None,
+            scanner_trigger_reason=None, scanner_skipped_reason='SESSION_FINALIZATION_ONLY',
+            next_step='Session finalized without scanning or publishing a new baseline; pending changes require a workspace activity.')
+        observe('SESSION_FINALIZED', **result)
+
+    def _handle_locked(self,result,event,root,host,session_id,*,baseline_only=False,lifecycle_activity=False):
+        from .first_scan_attribution import diagnostics, attribute
+        result.update(diagnostics())
         path = self.store.path(root,host,session_id)
         previous,recovered = self.store.load(path)
         result['state_recovered'] = recovered
         if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
             previous = None
             result['state_recovered'] = True
-        digest,files = capture_snapshot(root,self.store.key(root))
+        captured = self.snapshot_capture(root,self.store.key(root))
+        digest,files = captured
+        current_files = getattr(captured, 'file_digests', None)
         result['change_digest'] = digest
+        # Count only the bounded snapshot identities; paths/content remain
+        # internal and are never returned through the host transport.
+        result['snapshot_file_count'] = len(files)
         seeded = False
-        if previous is None and host == 'codex':
+        from .host_event_adapters import host_capabilities
+        if previous is None and host_capabilities(host).supports_setup_seed:
             from .baseline_seed import WorkspaceBaselineSeeds
             seed, diagnostic = (self.seeds or WorkspaceBaselineSeeds()).load(root)
             result['baseline_seed_status'] = diagnostic
@@ -364,12 +572,32 @@ class HookCoordinator:
                 previous = {**seed, 'host': host, 'session_id': result['session_id'], 'last_completed_at': 0}
         result['baseline_source'] = 'SETUP_SEED' if seeded else 'SESSION' if previous else 'NONE'
         result['baseline_available'] = previous is not None
-        if previous and not seeded and digest == previous['change_digest']:
+        old_files = previous.get('file_digests') if previous else None
+        content_changed = ({name for name in set(old_files) | set(current_files)
+                            if old_files.get(name) != current_files.get(name)}
+                           if old_files is not None and current_files is not None else None)
+        match = (digest == previous['change_digest'] and not content_changed) if previous else None
+        count = len(content_changed) if content_changed is not None else 0 if match else None
+        result.update(snapshot_available=previous is not None,
+            snapshot_source='SETUP_SEED' if seeded else
+                'SESSION_BASELINE' if previous and previous['last_result']['status'] in {'PRE_EXISTING_BASELINE','COMPARISON_BASELINE'} else
+                'SESSION_PROCESSED' if previous else 'NONE',
+            snapshot_generation=identity(previous['change_digest'] + json.dumps(old_files,sort_keys=True)) if previous else None,
+            pre_snapshot_match=match, content_delta_detected=count > 0 if count is not None else None,
+            changed_file_count=count, workspace_mutation_observed=not match if match is not None else None,
+            reconciliation_reason='NO_TRUSTED_PRE_EDIT_SNAPSHOT' if previous is None else
+                'DIGEST_MATCH' if match else 'CONTENT_DIGEST_DELTA' if count else 'SNAPSHOT_DIGEST_DELTA')
+        from .recent_hooks import observe as observe_recent_hook
+        observe_recent_hook('RECONCILIATION_COMPLETED', **{k:result[k] for k in (
+            'changed_file_count', 'snapshot_file_count', 'workspace_mutation_observed', 'snapshot_available',
+            'snapshot_source', 'snapshot_generation', 'pre_snapshot_match', 'content_delta_detected', 'reconciliation_reason')})
+        if previous and not seeded and match:
+            observe_recent_hook('MUTATION_NOT_OBSERVED', workspace_mutation_observed=False, scanner_run=False)
             result.update(previous['last_result'])
             result.update(status='REUSED_LAST_RESULT' if event == HookEvent.AGENT_STOP else 'NO_CHANGE',
                           scan_id=previous['last_scan_id'],next_step='Reuse the existing advisory result; coverage limits still apply.')
             return
-        if previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
+        if not lifecycle_activity and previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
             result.update(status='DEBOUNCED',scan_id=previous['last_scan_id'],coverage=previous['last_result']['coverage'],
                           next_step='Pending changes will be checked on the next event or agent stop.')
             return
@@ -379,23 +607,57 @@ class HookCoordinator:
         # those candidate paths, not the entire setup inventory, so they persist
         # without false NEW attribution or unproven disappearance.
         retained = set(previous['changed_files']) | {f['file_path'] for f in previous['families'].values()} if previous else set()
-        scope = sorted(set(files) | retained)
+        scope = sorted(set(files) | retained | (content_changed or set()))
+        if lifecycle_activity and previous is not None and content_changed is not None:
+            scope = sorted(content_changed | {f['file_path'] for f in previous['families'].values()})
         scope = TargetDetector(max_files=MAX_FILES).detect(root,scope).files
         old = previous['families'] if previous else {}
-        observation = self._scan_scope(result, root, scope)
+        if lifecycle_activity:
+            result['scanner_invocation_count'] = 1 if scope else 0
+        comparison_only = previous is not None and previous['last_result']['status'] == 'COMPARISON_BASELINE'
+        observation = self._scan_scope(result, root, scope, baseline=baseline_only,
+                                      attribution_candidate=comparison_only)
         if not scope:
             result['scan_id'] = previous['last_scan_id'] if previous else None
         result['last_check_status'] = result['status']
-        after,_ = capture_snapshot(root,self.store.key(root))
-        if after != digest:
+        if lifecycle_activity and result['status'] in {'FAILED','PARTIAL'}:
+            # Failed/incomplete processing must leave the earlier comparison
+            # point and pending intent intact, so identical-byte retries scan.
+            return
+        after_capture = self.snapshot_capture(root,self.store.key(root))
+        after,_ = after_capture
+        if after != digest or getattr(after_capture, 'file_digests', None) != current_files:
             # Never attach a completed digest to moving source contents.
             result.update(status='PARTIAL',coverage='UNKNOWN',next_step='Workspace changed during the check; retry to converge.')
             return
+        attribution_old = None
+        if comparison_only and observation['families']:
+            attribution_old = attribute(self, root, previous, content_changed,
+                                        current_files or {}, observation, result)
+            observe_recent_hook('SCANNER_COMPLETED', **result)
+            if attribution_old is None:
+                result.update(reason='FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT',
+                    next_step='Current candidates remain reviewable; pre-edit attribution is inconclusive. No NEW attribution or snapshot advancement is authorized.')
+                return
+            # A pre-edit scan cannot attach proof to bytes changed while it ran.
+            final = self.snapshot_capture(root, self.store.key(root))
+            if final != captured or getattr(final, 'file_digests', None) != current_files:
+                result.update(first_scan_attribution_status='FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE',
+                    first_scan_attribution_reason='SOURCE_CHANGED_DURING_ATTRIBUTION',
+                    pre_existing_risk_count=None, newly_attributed_risk_count=None,
+                    reason='FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT', status='PARTIAL', coverage='UNKNOWN')
+                observe_recent_hook('SCANNER_COMPLETED', **result)
+                return
+            old = attribution_old
+        elif comparison_only or previous is None:
+            result['first_scan_attribution_status'] = ('FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
+                if observation['families'] else 'FIRST_SCAN_NO_RISK')
         can_cover = lambda family: covered(family,observation['runs'],observation['plans'])
         families,delta = family_delta(old,observation['families'],can_cover)
-        if previous is None:
+        if previous is None or comparison_only and attribution_old is None:
             delta = result['delta']
-            result['status'] = 'BASELINE_ESTABLISHED'
+            if previous is None:
+                result['status'] = 'BASELINE_ESTABLISHED'
             result['next_step'] = 'Baseline established for the current quick scope; existing candidates are not attributed to this edit.'
             if result.get('unattributed_risk_present'):
                 result['reason'] = 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT'
@@ -403,11 +665,13 @@ class HookCoordinator:
                     'Review the existing candidates; automatic remediation is not authorized by this first scan.')
         else:
             result['next_step'] = 'Review new families and added occurrences through MCP; unconfirmed absence requires a reliable recheck.'
+            if attribution_old is not None:
+                result['reason'] = result['first_scan_attribution_status']
         result['delta'] = delta
         if any(f['uncertain'] for f in families.values()) and previous:
             result['status'] = 'PARTIAL'
             result['last_check_status'] = 'PARTIAL'
         summary = {k:result[k] for k in ('status','last_check_status','coverage','execution_state','capabilities','scanner_runs','delta')}
         state = asdict(HookSnapshot('hook-v1',result['workspace_id'],host,result['session_id'],digest,files,
-            families,result['scan_id'],self.clock(),summary))
+            families,result['scan_id'],self.clock(),summary,current_files))
         self.store.save(path,state)

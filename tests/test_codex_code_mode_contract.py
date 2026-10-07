@@ -31,11 +31,14 @@ def test_auto_feedback_does_not_reject_completed_edit_and_retains_authority(setu
     assert data['action'] == 'AUTO_FIX' and data['interaction'] == AUTO_INTERACTION
     assert not {'decision', 'reason'} & wire.keys()
     assert wire['continue'] is False and wire['systemMessage']
-    assert 'The preceding edit already executed successfully.' in wire['stopReason']
-    assert 'Do not retry or repeat it.' in wire['stopReason']
-    assert 'Runtime has authorized remediation, not the original insecure edit.' in wire['stopReason']
-    assert 'Immediately call prepare_task_fix.' in wire['stopReason']
-    assert wire['stopReason'].endswith(data['guidance'])
+    assert 'The preceding edit is complete.' in wire['stopReason']
+    assert 'do not repeat the edit or ask for approval.' in wire['stopReason']
+    assert 'SECURITY_AUTO_REMEDIATION_AUTHORIZED' in wire['stopReason']
+    assert 'SECURITY_FIX_REQUIRED' in wire['stopReason']
+    assert 'remediation.prepare' in wire['stopReason']
+    assert 'security_fix_context' in wire['stopReason']
+    assert data['security_context_status'] == 'READY'
+    assert data['guidance'] not in wire['stopReason']  # Full instructions only once.
     assert len(wire['stopReason']) < 8000
     context = json.loads(wire['hookSpecificOutput']['additionalContext'])
     assert context['remediation'] == data
@@ -44,13 +47,14 @@ def test_auto_feedback_does_not_reject_completed_edit_and_retains_authority(setu
     assert data['grant_id'] and all(data['prepare']['arguments'].values())
     assert set(data['prepare']['arguments']) == {'task_ref', 'remediation_ref'}
     # Old output rejected the completed nested tool. New output delivers the
-    # same original authority guidance without that rejection, per the docs.
+    # original authority without that rejection; compact feedback points to
+    # the original prepare handoff rather than repeating its full guidance.
     old = documented_posttool_effect({'decision': 'block', 'reason': data['guidance']})
     new = documented_posttool_effect(wire)
     assert old['nested_promise_rejected'] is True
     assert new['nested_promise_rejected'] is False
     assert new['model_feedback'] == wire['stopReason']
-    assert 'prepare_task_fix' in new['model_feedback']
+    assert 'remediation.prepare' in new['model_feedback']
     assert (root / 'A.java').read_text() == UNSAFE
     assert not provider.calls and not service.prepared  # transport never fixes/executes
     assert CANARY not in json.dumps(result) and UNSAFE not in json.dumps(result)

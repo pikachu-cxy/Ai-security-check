@@ -1,0 +1,130 @@
+{
+  "status": "PASS",
+  "transport": "ACTUAL_LOCAL_MCP_STDIO",
+  "scanner": "ACTUAL_MANAGED_SEMGREP_GITLEAKS_OFFLINE",
+  "compiler_version": "javac 21.0.9",
+  "cases": [
+    {
+      "case": "A_COMPILE_PASSED",
+      "mcp_calls": [
+        {
+          "tool": "handle_hook_event",
+          "status": "BASELINE_ESTABLISHED",
+          "overall_status": null
+        },
+        {
+          "tool": "handle_hook_event",
+          "status": "SCANNED",
+          "overall_status": null
+        },
+        {
+          "tool": "prepare_task_fix",
+          "status": "READY_FOR_HOST_FIX",
+          "overall_status": null
+        },
+        {
+          "tool": "handle_hook_event",
+          "status": "SCANNED",
+          "overall_status": null
+        },
+        {
+          "tool": "prepare_functional_verification",
+          "status": "FUNCTIONAL_VERIFICATION_READY",
+          "overall_status": "SECURITY_VERIFIED_FUNCTION_UNKNOWN"
+        },
+        {
+          "tool": "run_functional_verification",
+          "status": "FUNCTIONAL_VERIFIED",
+          "overall_status": "SECURITY_AND_FUNCTIONALLY_VERIFIED"
+        },
+        {
+          "tool": "verify_task_fix",
+          "status": "SCANNER_VERIFIED_RESOLVED",
+          "overall_status": "SECURITY_AND_FUNCTIONALLY_VERIFIED"
+        }
+      ],
+      "javac_exit_code": 0,
+      "compile_duration_ms": 505,
+      "security_status": "SCANNER_VERIFIED_RESOLVED",
+      "functional_status": "PASSED",
+      "overall_status": "SECURITY_AND_FUNCTIONALLY_VERIFIED",
+      "remediation_stage": "CLOSED",
+      "coverage": "COMPILE_ONLY",
+      "original_refs_exact": true,
+      "source_unchanged_after_compile": true,
+      "class_files_in_source": false,
+      "temporary_output_removed": true
+    },
+    {
+      "case": "B_COMPILE_FAILED",
+      "mcp_calls": [
+        {
+          "tool": "handle_hook_event",
+          "status": "BASELINE_ESTABLISHED",
+          "overall_status": null
+        },
+        {
+          "tool": "handle_hook_event",
+          "status": "SCANNED",
+          "overall_status": null
+        },
+        {
+          "tool": "prepare_task_fix",
+          "status": "READY_FOR_HOST_FIX",
+          "overall_status": null
+        },
+        {
+          "tool": "handle_hook_event",
+          "status": "SCANNED",
+          "overall_status": null
+        },
+        {
+          "tool": "prepare_functional_verification",
+          "status": "FUNCTIONAL_VERIFICATION_READY",
+          "overall_status": "SECURITY_VERIFIED_FUNCTION_UNKNOWN"
+        },
+        {
+          "tool": "run_functional_verification",
+          "status": "FUNCTIONAL_FAILED",
+          "overall_status": "SECURITY_VERIFIED_FUNCTION_FAILED"
+        },
+        {
+          "tool": "verify_task_fix",
+          "status": "SCANNER_VERIFIED_RESOLVED",
+          "overall_status": "SECURITY_VERIFIED_FUNCTION_FAILED"
+        }
+      ],
+      "javac_exit_code": 1,
+      "compile_duration_ms": 693,
+      "security_status": "SCANNER_VERIFIED_RESOLVED",
+      "functional_status": "FAILED",
+      "overall_status": "SECURITY_VERIFIED_FUNCTION_FAILED",
+      "remediation_stage": "CLOSED",
+      "coverage": "NONE",
+      "original_refs_exact": true,
+      "source_unchanged_after_compile": true,
+      "class_files_in_source": false,
+      "temporary_output_removed": true
+    }
+  ],
+  "inspected_workspace": {
+    "workspace": "C:\\Users\\Administrator\\Desktop\\ai-security\\runtime-episode-e2e-clean",
+    "target": "src/main/java/demo/TlsService.java",
+    "providers": [
+      "javac"
+    ],
+    "tool_available": true,
+    "read_only": true,
+    "credential_or_reference_used": false,
+    "actual_desktop_execution": false
+  },
+  "runtime_command_execution": false,
+  "host_execution": "SIMULATED_NATIVE_HOST_DRIVER",
+  "actual_desktop": "PENDING",
+  "raw_references_persisted": false,
+  "runtime_model": false,
+  "network": false,
+  "target_original_workspace_build": false,
+  "disposable_fixture_host_compile": true,
+  "duration_seconds": 93.9
+}

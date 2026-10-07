@@ -34,6 +34,7 @@ from .plugin_api import discover_plugin_directory
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .processes import run_process
 from .progress import emit, checkpoint, ScanCancelled
+from .scanner_observation import span, cache as cache_observed, count, workspace as scan_workspace
 
 
 class ToolStatus(StrEnum):
@@ -274,6 +275,8 @@ class ToolManager:
         self.data_diagnostics: dict[str, ErrorDiagnostic] = {}
         self._engine_locks = {tool_id: threading.RLock() for tool_id in VERSIONS}
         self._lock_guard = threading.Lock()
+        self._version_cache = {}  # Process-local successful probes only, <=16.
+        self._version_cache_lock = threading.RLock()
         self.versions = dict(VERSIONS)
         self.python_engines = {"semgrep"}
         self.python_requirements = {"semgrep": (f"semgrep=={VERSIONS['semgrep']}", False, None)}
@@ -375,11 +378,78 @@ class ToolManager:
             raise DiagnosticError(ErrorDiagnostic('CONFIG_CORRUPTED', 'Invalid tool configuration.', 'Repair the local tool configuration before retrying.')) from None
         return None
 
+    def _probe_identity(self, tool_id, path):
+        """Content-keyed probe reuse, not an engine integrity check bypass."""
+        files = [path]
+        if tool_id in self.python_engines:
+            # Unknown/custom Python launch layouts are never cached.
+            runtime = path.parent.parent
+            packages = [runtime/'Lib/site-packages'] + list((runtime/'lib').glob('python*/site-packages'))
+            package = next((p/'semgrep' for p in packages if (p/'semgrep').is_dir()), None)
+            if tool_id != 'semgrep' or package is None:
+                return None
+            files.extend(p for p in package.rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix != '.pyc')
+            files.extend(p for p in path.parent.glob('*semgrep*') if p.is_file())
+            for base in packages:
+                files.extend(base.glob('semgrep-*.dist-info/METADATA'))
+            files.extend(p for p in (runtime/'python.exe', runtime/'bin/python', runtime/'pyvenv.cfg') if p.is_file())
+        if len(files) > 2000:
+            return None
+        if sum(file.stat().st_size for file in set(files)) > 512_000_000:
+            return None
+        digest = hashlib.sha256()
+        for file in sorted(set(files)):
+            if file.is_symlink() or file.is_junction():
+                return None
+            digest.update(str(file).encode());digest.update(sha256_file(file).encode())
+        # Version behavior may depend on env/config/workspace. Hash only in RAM.
+        digest.update(repr(sorted(tool_environment(path).items())).encode())
+        digest.update(str(scan_workspace() or os.getcwd()).encode())
+        return tool_id, self.versions[tool_id], str(path), digest.digest()
+
     def _version(self, tool_id: str, path: Path) -> str:
+        from .scanner_cache import preparation_bucket
+        bucket = preparation_bucket('version:' + tool_id, os.path.normcase(str(self.root.resolve())))
+        self._version_cache = bucket.values
+        self._version_cache_lock = bucket.lock
+        with self._lock_guard:
+            lock = self._engine_locks.setdefault(tool_id,threading.RLock())
+        with lock, bucket.lock:
+            try:
+                with span('capability_cache_validation'):
+                    key = self._probe_identity(tool_id, path)
+            except (OSError, ValueError):
+                key = None
+            from .first_scan_attribution import record_probe
+            record_probe(tool_id, key)
+            with bucket.lock:
+                cached = bucket.values.get(key) if key is not None else None
+            if cached is not None:
+                cache_observed('version_probe', True)
+                return cached
+            cache_observed('version_probe', False)
+            output = self._probe_version(tool_id, path)
+            if key is not None and matches_version(self.versions[tool_id], output):
+                try:
+                    unchanged = self._probe_identity(tool_id, path) == key
+                except (OSError, ValueError):
+                    unchanged = False
+                if unchanged:
+                    with bucket.lock:
+                        if len(bucket.values) >= 16:
+                            bucket.values.pop(next(iter(bucket.values)))
+                        bucket.values[key] = output
+            return output
+
+    def _probe_version(self, tool_id: str, path: Path) -> str:
         try:
             with external_tool_loader():
-                proc = run_process([str(path.resolve()), "--version"], timeout=8, max_output=16_000,
-                                   env=tool_environment(path))
+                with span('version_probe_invocation'):
+                    count('version_probe_invocations')
+                    from .scanner_observation import invocation
+                    invocation('VERSION_PROBE', 0)
+                    proc = run_process([str(path.resolve()), "--version"], timeout=8, max_output=16_000,
+                                       env=tool_environment(path))
             if proc.returncode:
                 return ""
             return sanitize((proc.stdout + proc.stderr).strip(), 160)

@@ -13,7 +13,7 @@ from security_runtime.cli import doctor
 class DoctorTests(unittest.TestCase):
     def run_doctor(self, cwd: Path, *args: str) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, "-m", "security_runtime.cli", "doctor", *args],
+            [sys.executable, "-m", "security_runtime.cli", "doctor", "--project", *args],
             cwd=cwd,
             env=dict(os.environ),
             capture_output=True,

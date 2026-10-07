@@ -1,0 +1,83 @@
+{
+  "stage": "Core P0-7.3",
+  "starting_head": "ee1bfd9c12493683cc313cb3628753a51ae124ac",
+  "focused": {
+    "passed": 419,
+    "skipped": 0,
+    "failed": 0,
+    "subtests_passed": 0,
+    "status": "PASS",
+    "summary": "419 passed in 849.26s (0:14:09)",
+    "runner_seconds": 850.02,
+    "skip_details": []
+  },
+  "full_offline": {
+    "passed": 1445,
+    "skipped": 9,
+    "failed": 0,
+    "subtests_passed": 6,
+    "status": "PASS",
+    "summary": "1445 passed, 9 skipped, 6 subtests passed in 2463.32s (0:41:03)",
+    "runner_seconds": 2464.32,
+    "skip_details": [
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+      "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+      "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+    ]
+  },
+  "claims_cases": 27,
+  "corrective_targeted": {
+    "passed": 27,
+    "skipped": 0,
+    "failed": 0,
+    "subtests_passed": 0,
+    "status": "PASS",
+    "summary": "27 passed in 35.97s",
+    "runner_seconds": 36.65,
+    "skip_details": []
+  },
+  "replay_before_bootstrap_targeted": {
+    "passed": 92,
+    "skipped": 0,
+    "failed": 0,
+    "subtests_passed": 0,
+    "status": "PASS",
+    "summary": "92 passed in 92.75s (0:01:32)",
+    "runner_seconds": 93.45,
+    "skip_details": []
+  },
+  "stop_compatibility_targeted": {
+    "passed": 27,
+    "skipped": 0,
+    "failed": 0,
+    "subtests_passed": 0,
+    "status": "PASS",
+    "summary": "27 passed in 37.74s",
+    "runner_seconds": 38.38,
+    "skip_details": []
+  },
+  "earlier_focused": {
+    "passed": 334,
+    "failed": 1,
+    "reason": "Old SessionStart schema assertion omitted optional permission_mode"
+  },
+  "interrupted_full": "NOT_COUNTED_AS_PASS",
+  "stop_compatibility_fix": "Silent rejected Stop text restored; structured rejection remains fail closed",
+  "restricted_initial_runner": "TEMP_DIRECTORY_PERMISSION_ERROR_NOT_PRODUCT_RESULT",
+  "temporary_codex_home": true,
+  "real_codex_home_accessed": false,
+  "active_runtime_replaced": false,
+  "actual_desktop": "PENDING",
+  "historical_desktop_rejected_field": "UNDETERMINED_PENDING_ACTUAL_DESKTOP_DIAGNOSTICS",
+  "package_integrity": "PASS",
+  "compliance": "PASS",
+  "real_local_stdio_mcp_scanner": "PASS",
+  "commit": false,
+  "push": false
+}

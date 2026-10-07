@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import hashlib
+import threading
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
 from .rule_catalog import RuleRecord, validate_rule, load_catalog
+from .rule_program import RuleProgram, load_program
 
 import yaml
 
@@ -55,6 +57,7 @@ class ResolvedRulePack:
     path: Path
     checksum: str
     catalog: tuple[RuleRecord, ...] = ()
+    program: RuleProgram | None = None
 
 
 class RulePackProvider(Protocol):
@@ -100,19 +103,62 @@ class BundledRulePackProvider:
 class RulePackManager:
     def __init__(self, provider: RulePackProvider | None = None):
         self.provider = provider or BundledRulePackProvider()
+        self._resolved_cache = {}  # Validated metadata only, never scan evidence.
+        self._cache_lock = threading.RLock()
+        self.cache_hit = False
+
+    @staticmethod
+    def _content_identity(path):
+        path = path.expanduser().resolve()
+        if not path.is_dir():
+            raise ValueError('Rule pack directory is missing')
+        files = sorted(path.rglob('*.yml')) + sorted(path.rglob('*.yaml'))
+        if not files or len(files) > 1000:
+            raise ValueError('Rule pack file budget exceeded')
+        files += [p for p in (path/'catalog.json',path/'capabilities.json',path/'LICENSE',path/'NOTICE') if p.is_file()]
+        digest = hashlib.sha256()
+        for file in files:
+            if file.is_symlink() or file.is_junction() or file.stat().st_size > 1_000_000:
+                raise ValueError('Invalid rule pack input')
+            digest.update(file.relative_to(path).as_posix().encode());digest.update(file.read_bytes())
+        return str(path),digest.digest()
+
+    def _cached_resolve(self, descriptor, path, **kwargs):
+        from .scanner_cache import preparation_bucket, workspace_key
+        bucket = preparation_bucket('rule_pack')
+        self._resolved_cache, self._cache_lock = bucket.values, bucket.lock
+        with self._cache_lock:
+            key = (workspace_key(), repr(descriptor), self._content_identity(path), tuple(sorted(kwargs.items())))
+            self.cache_hit = key in self._resolved_cache
+            if self.cache_hit:
+                return self._resolved_cache[key]
+            result = self._validate(descriptor,path,**kwargs)
+            if self._content_identity(path) != key[2]:
+                raise ValueError('Rule pack changed during validation')
+            size=sum(p.stat().st_size for p in (*path.rglob('*.yml'),*path.rglob('*.yaml')))
+            if len(result.catalog)<=1000 and size<=4_000_000:
+                if len(self._resolved_cache) >= 8:
+                    self._resolved_cache.pop(next(iter(self._resolved_cache)))
+                self._resolved_cache[key] = result
+            return result
 
     def discover(self) -> list[ResolvedRulePack]:
         return self.provider.discover()
 
     def resolve(self, rule_pack_id: str = "ai-security-core", *, user_path: Path | None = None) -> ResolvedRulePack:
         if user_path is None:
+            if type(self.provider) is BundledRulePackProvider:
+                if rule_pack_id != FIRST_PARTY_RULE_PACK.rule_pack_id:
+                    raise KeyError(rule_pack_id)
+                return self._cached_resolve(FIRST_PARTY_RULE_PACK,self.provider.path)
+            self.cache_hit = False  # External providers retain their lifecycle.
             return self.provider.resolve(rule_pack_id)
         descriptor = RulePackDescriptor(
             "user-provided", "User provided rules", "unversioned", "User", "User owned", "User provided",
             "", False, False, False, False, str(user_path),
             RuleProvenance("USER_PROVIDED", "User", "", (), "User provided"), False, RulePackClass.USER_PROVIDED)
         # The caller owns these rules. We validate local scope, never copy them.
-        return self._validate(descriptor, user_path, require_first_party_metadata=False)
+        return self._cached_resolve(descriptor, user_path, require_first_party_metadata=False)
 
     @staticmethod
     def _validate(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool = True) -> ResolvedRulePack:
@@ -148,4 +194,8 @@ class RulePackManager:
         if (path / 'catalog.json').is_file():
             digest.update(b'catalog.json')
             digest.update((path / 'catalog.json').read_bytes())
-        return ResolvedRulePack(descriptor, path, digest.hexdigest(), catalog)
+        program = load_program(path, catalog) if descriptor.bundled and require_first_party_metadata else None
+        if program is not None:
+            digest.update(b'capabilities.json')
+            digest.update((path / 'capabilities.json').read_bytes())
+        return ResolvedRulePack(descriptor, path, digest.hexdigest(), catalog, program)

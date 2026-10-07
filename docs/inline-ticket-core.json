@@ -1,0 +1,239 @@
+{
+  "status": "PASS",
+  "duration_seconds": 69.9,
+  "transport": "ACTUAL_LOCAL_MCP_STDIO",
+  "scanner": "ACTUAL_MANAGED_OFFLINE",
+  "host": "SIMULATED_NATIVE_EDIT_FIXTURE; NOT_DESKTOP",
+  "baseline": "HASH_VERIFIED_P05_WHEEL_SOURCE",
+  "before": {
+    "episodes": [
+      {
+        "number": 1,
+        "status": "SCANNER_VERIFIED_RESOLVED",
+        "stage": "CLOSED",
+        "runtime_mcp_calls": 3,
+        "prepare_calls": 1,
+        "host_fixture_rpc_calls": 1,
+        "simulated_host_steps": 3,
+        "host_target_reads": 1,
+        "host_searches": 0,
+        "context_bytes": 1699,
+        "ticket_bytes": 0,
+        "hook_model_context_bytes": 14056,
+        "remediation_cycle_wall_ms": 13371.98,
+        "driver_wall_ms": 13374.42,
+        "initial_timing_ms": {
+          "hook_total": 4465.79,
+          "scanner": 3230.534,
+          "finding_policy": 768.231,
+          "remediation_preparation": null,
+          "auto_remediation": null,
+          "security_rescan": null
+        },
+        "post_timing_ms": {
+          "hook_total": 7610.486,
+          "scanner": 3350.82,
+          "finding_policy": 400.333,
+          "remediation_preparation": 1219.519,
+          "auto_remediation": 14.316,
+          "security_rescan": 3367.683
+        },
+        "cycle_breakdown_ms": {
+          "initial_runtime": 4465.813,
+          "runtime_to_host_continuation_wait": 61.374,
+          "continuation_to_prepare": 0.0,
+          "prepare_fix": 1219.515,
+          "host_fix_window": 14.851,
+          "post_edit_hook": 4042.52,
+          "security_rescan": 3367.81,
+          "close/finalization": 200.097,
+          "unaccounted": 0
+        },
+        "scanner_invocations": {
+          "hook_sast": 2,
+          "hook_secret": 2,
+          "original_rule_recheck": 1
+        },
+        "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+        "structured_handoff_survived_prose_loss": false,
+        "actual_desktop_agent_steps": null,
+        "model_speedup": null
+      },
+      {
+        "number": 2,
+        "status": "SCANNER_VERIFIED_RESOLVED",
+        "stage": "CLOSED",
+        "runtime_mcp_calls": 3,
+        "prepare_calls": 1,
+        "host_fixture_rpc_calls": 1,
+        "simulated_host_steps": 3,
+        "host_target_reads": 1,
+        "host_searches": 0,
+        "context_bytes": 1699,
+        "ticket_bytes": 0,
+        "hook_model_context_bytes": 14071,
+        "remediation_cycle_wall_ms": 13365.653,
+        "driver_wall_ms": 13368.111,
+        "initial_timing_ms": {
+          "hook_total": 4463.146,
+          "scanner": 3178.874,
+          "finding_policy": 819.474,
+          "remediation_preparation": null,
+          "auto_remediation": null,
+          "security_rescan": null
+        },
+        "post_timing_ms": {
+          "hook_total": 7587.808,
+          "scanner": 3310.182,
+          "finding_policy": 412.157,
+          "remediation_preparation": 1236.013,
+          "auto_remediation": 13.084,
+          "security_rescan": 3384.763
+        },
+        "cycle_breakdown_ms": {
+          "initial_runtime": 4463.168,
+          "runtime_to_host_continuation_wait": 65.175,
+          "continuation_to_prepare": 0.0,
+          "prepare_fix": 1236.009,
+          "host_fix_window": 13.579,
+          "post_edit_hook": 3996.087,
+          "security_rescan": 3384.915,
+          "close/finalization": 206.718,
+          "unaccounted": 0.002
+        },
+        "scanner_invocations": {
+          "hook_sast": 2,
+          "hook_secret": 2,
+          "original_rule_recheck": 1
+        },
+        "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+        "structured_handoff_survived_prose_loss": false,
+        "actual_desktop_agent_steps": null,
+        "model_speedup": null
+      }
+    ]
+  },
+  "after": {
+    "episodes": [
+      {
+        "number": 1,
+        "status": "SCANNER_VERIFIED_RESOLVED",
+        "stage": "CLOSED",
+        "runtime_mcp_calls": 2,
+        "prepare_calls": 0,
+        "host_fixture_rpc_calls": 1,
+        "simulated_host_steps": 2,
+        "host_target_reads": 1,
+        "host_searches": 0,
+        "context_bytes": 1700,
+        "ticket_bytes": 2166,
+        "hook_model_context_bytes": 5264,
+        "remediation_cycle_wall_ms": 13616.619,
+        "driver_wall_ms": 13619.454,
+        "initial_timing_ms": {
+          "hook_total": 6030.756,
+          "scanner": 3082.464,
+          "finding_policy": 776.551,
+          "remediation_preparation": 1686.478,
+          "auto_remediation": null,
+          "security_rescan": null
+        },
+        "post_timing_ms": {
+          "hook_total": 7572.077,
+          "scanner": 3341.216,
+          "finding_policy": 400.383,
+          "remediation_preparation": 1686.478,
+          "auto_remediation": 14.435,
+          "security_rescan": 3361.769
+        },
+        "cycle_breakdown_ms": {
+          "initial_runtime": 6030.782,
+          "inline_host_edit_window": 13.808,
+          "post_edit_hook": 4010.539,
+          "security_rescan": 3361.934,
+          "close/finalization": 199.555,
+          "unaccounted": 0.001,
+          "runtime_to_host_continuation_wait": null,
+          "continuation_to_prepare": null,
+          "prepare_fix": null,
+          "host_fix_window": null
+        },
+        "scanner_invocations": {
+          "hook_sast": 2,
+          "hook_secret": 2,
+          "original_rule_recheck": 1
+        },
+        "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+        "structured_handoff_survived_prose_loss": true,
+        "actual_desktop_agent_steps": null,
+        "model_speedup": null
+      },
+      {
+        "number": 2,
+        "status": "SCANNER_VERIFIED_RESOLVED",
+        "stage": "CLOSED",
+        "runtime_mcp_calls": 2,
+        "prepare_calls": 0,
+        "host_fixture_rpc_calls": 1,
+        "simulated_host_steps": 2,
+        "host_target_reads": 1,
+        "host_searches": 0,
+        "context_bytes": 1700,
+        "ticket_bytes": 2166,
+        "hook_model_context_bytes": 5264,
+        "remediation_cycle_wall_ms": 13857.157,
+        "driver_wall_ms": 13859.321,
+        "initial_timing_ms": {
+          "hook_total": 6128.908,
+          "scanner": 3171.329,
+          "finding_policy": 790.499,
+          "remediation_preparation": 1693.249,
+          "auto_remediation": null,
+          "security_rescan": null
+        },
+        "post_timing_ms": {
+          "hook_total": 7712.793,
+          "scanner": 3308.657,
+          "finding_policy": 395.145,
+          "remediation_preparation": 1693.249,
+          "auto_remediation": 16.074,
+          "security_rescan": 3500.176
+        },
+        "cycle_breakdown_ms": {
+          "initial_runtime": 6128.934,
+          "inline_host_edit_window": 15.475,
+          "post_edit_hook": 4030.906,
+          "security_rescan": 3500.313,
+          "close/finalization": 181.529,
+          "unaccounted": 0,
+          "runtime_to_host_continuation_wait": null,
+          "continuation_to_prepare": null,
+          "prepare_fix": null,
+          "host_fix_window": null
+        },
+        "scanner_invocations": {
+          "hook_sast": 2,
+          "hook_secret": 2,
+          "original_rule_recheck": 1
+        },
+        "reference_integrity": "ORIGINAL_VALUES_EXACT; NO_RECONSTRUCTION",
+        "structured_handoff_survived_prose_loss": true,
+        "actual_desktop_agent_steps": null,
+        "model_speedup": null,
+        "old_episode_refs_rejected_after_measurement": true
+      }
+    ]
+  },
+  "network": false,
+  "model": false,
+  "sleep_injected": false,
+  "deep_verification": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "source_persisted": false,
+  "model_host_visibility": "UNKNOWN_PENDING_DESKTOP",
+  "native_edit_bridge_installed": false,
+  "measurement_load": "SERIAL_DRIVER_AFTER_OFFLINE_REGRESSION",
+  "source_freeze_sha256": "a910ffd476784b7d2f79d314293d6da2acb67ae14bcdb3cf7ab2ef1aedce7e4d",
+  "source_freeze_files_verified": 161
+}

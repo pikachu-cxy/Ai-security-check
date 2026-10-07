@@ -4,9 +4,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import sqlite3
 import tempfile
 import time
+import uuid
 from contextlib import contextmanager
+from contextlib import closing
 from pathlib import Path
 
 from .storage import SQLiteStore
@@ -47,6 +50,34 @@ class HookStateStore:
 
     def path(self, root: Path, host: str, session_id: str | None) -> Path:
         return self.workspace_directory(root) / (identity(host + '\0' + (session_id or 'default')) + '.json')
+
+    def pending_activity(self, root, host, session_id, *, mark=False, completed=None):
+        """Bounded reconciliation intent, not finding/proof/authorization state.
+
+        This separate SQLite transaction can record an arrival while the OS
+        workspace lock is held. Conditional completion cannot erase a newer
+        arrival. A future activity retries the real filesystem delta.
+        """
+        path = self.workspace_directory(root) / 'pending-activity.db'
+        no_links(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        sid = identity(host + '\0' + (session_id or 'default'))
+        with closing(sqlite3.connect(path, timeout=1)) as db:
+            with db:
+                db.execute('PRAGMA secure_delete=ON')
+                db.execute('CREATE TABLE IF NOT EXISTS pending_activity '
+                           '(session TEXT PRIMARY KEY, sequence TEXT NOT NULL)')
+                if mark:
+                    db.execute('BEGIN IMMEDIATE')
+                    old = db.execute('SELECT sequence FROM pending_activity WHERE session=?', (sid,)).fetchone()
+                    if old is None and db.execute('SELECT count(*) FROM pending_activity').fetchone()[0] >= MAX_SESSIONS:
+                        raise ValueError('Pending activity budget exceeded')
+                    db.execute('INSERT INTO pending_activity VALUES(?,?) ON CONFLICT(session) '
+                               'DO UPDATE SET sequence=excluded.sequence', (sid, uuid.uuid4().hex))
+                if completed is not None:
+                    db.execute('DELETE FROM pending_activity WHERE session=? AND sequence=?', (sid, completed))
+                row = db.execute('SELECT sequence FROM pending_activity WHERE session=?', (sid,)).fetchone()
+                return row[0] if row else None
 
     @contextmanager
     def lock(self, root: Path, *, wait_seconds: float = 0):

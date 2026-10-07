@@ -3,7 +3,8 @@ rules:
   languages:
   - java
   severity: ERROR
-  message: 外部输入可能控制文件访问路径，请检查目录边界。
+  message: "\u5916\u90E8\u8F93\u5165\u53EF\u80FD\u63A7\u5236\u6587\u4EF6\u8BBF\u95EE\u8DEF\u5F84\uFF0C\
+    \u8BF7\u68C0\u67E5\u76EE\u5F55\u8FB9\u754C\u3002"
   mode: taint
   pattern-sources:
   - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
@@ -23,8 +24,8 @@ rules:
   - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getReader(...)
     exact: true
   - patterns:
-    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam
-        $TYPE $INPUT, ...) { ... }
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam $TYPE
+        $INPUT, ...) { ... }
     - focus-metavariable: $INPUT
     exact: true
   - patterns:
@@ -33,18 +34,18 @@ rules:
     - focus-metavariable: $INPUT
     exact: true
   - patterns:
-    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody
-        $TYPE $INPUT, ...) { ... }
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody $TYPE
+        $INPUT, ...) { ... }
     - focus-metavariable: $INPUT
     exact: true
   - patterns:
-    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...)
-        $TYPE $INPUT, ...) { ... }
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...) $TYPE
+        $INPUT, ...) { ... }
     - focus-metavariable: $INPUT
     exact: true
   - patterns:
-    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable
-        $TYPE $INPUT, ...) { ... }
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable $TYPE
+        $INPUT, ...) { ... }
     - focus-metavariable: $INPUT
     exact: true
   - patterns:
@@ -77,6 +78,12 @@ rules:
   - patterns:
     - pattern: java.nio.file.Files.newOutputStream($PATH, ...)
     - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.delete($PATH)
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern: java.nio.file.Files.deleteIfExists($PATH)
+    - focus-metavariable: $PATH
   metadata:
     publisher: AI Security Runtime
     rule_pack: ai-security-core
@@ -98,3 +105,12 @@ rules:
       references: *id001
       license: Apache-2.0
       derived_from: ''
+  pattern-sanitizers:
+  - patterns:
+    - pattern-inside: "$RET $METHOD(...) {\n ...\n Path $BASE = Paths.get(\"...\").toAbsolutePath().normalize();\n\
+        \ ...\n Path $P = $BASE.resolve($INPUT).normalize();\n ...\n if (!$P.startsWith($BASE)) { throw\
+        \ $EX; }\n ...\n}"
+    - pattern: if (!$P.startsWith($BASE)) { throw $EX; }
+    - focus-metavariable: $P
+    exact: true
+    by-side-effect: true

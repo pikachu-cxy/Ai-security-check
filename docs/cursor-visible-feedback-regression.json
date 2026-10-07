@@ -1,0 +1,70 @@
+{
+  "status": "PASS",
+  "stage": "P0-10.1 Cursor Visible Security Feedback",
+  "acceptance": "LOCAL VERIFIED",
+  "desktop": "PENDING_ACTUAL_CURSOR_UI",
+  "new_tests": 23,
+  "tests": {
+    "targeted": {
+      "returncode": 0,
+      "duration_seconds": 108.13,
+      "targets": [
+        "tests/test_security_feedback.py"
+      ],
+      "summary": "23 passed in 107.28s (0:01:47)",
+      "passed": 23,
+      "skipped": 0,
+      "subtests_passed": 0,
+      "skip_reasons": []
+    },
+    "focused": {
+      "returncode": 0,
+      "duration_seconds": 337.32,
+      "targets": [
+        "tests/test_security_feedback.py",
+        "tests/test_cursor_host_adapter.py",
+        "tests/test_cursor_schema_compatibility.py",
+        "tests/test_cursor_event_lifecycle.py",
+        "tests/test_advisory_remediation.py",
+        "tests/test_first_scan_attribution.py",
+        "tests/test_recent_hook_diagnostics.py",
+        "tests/test_host_event_normalization.py",
+        "tests/test_codex_mcp_hook.py"
+      ],
+      "summary": "222 passed in 336.63s (0:05:36)",
+      "passed": 222,
+      "skipped": 0,
+      "subtests_passed": 0,
+      "skip_reasons": []
+    },
+    "full": {
+      "returncode": 0,
+      "duration_seconds": 2327.76,
+      "targets": [
+        "tests"
+      ],
+      "summary": "1753 passed, 9 skipped, 6 subtests passed in 2326.90s (0:38:46)",
+      "passed": 1753,
+      "skipped": 9,
+      "subtests_passed": 6,
+      "skip_reasons": [
+        "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:14: Explicit managed real Scanner benchmark environment required",
+        "SKIPPED [1] tests\\performance\\test_managed_cache_lifetime.py:38: Explicit managed real Scanner benchmark environment required",
+        "SKIPPED [1] tests\\performance\\test_managed_hot_path.py:10: Explicit managed real Scanner benchmark environment required",
+        "SKIPPED [1] tests\\test_e2e_real.py:58: real scanner binaries required",
+        "SKIPPED [1] tests\\test_e2e_real.py:80: real scanner binaries required",
+        "SKIPPED [1] tests\\test_e2e_real.py:120: real scanner binaries required",
+        "SKIPPED [1] tests\\test_e2e_real.py:154: real scanner binaries required",
+        "SKIPPED [1] tests\\test_e2e_real.py:68: real scanner binaries required",
+        "SKIPPED [1] tests\\test_e2e_real.py:38: real scanner binaries required"
+      ]
+    }
+  },
+  "network": false,
+  "model": false,
+  "target_build": false,
+  "active_runtime_replaced": false,
+  "real_user_configuration_modified": false,
+  "commit": false,
+  "push": false
+}

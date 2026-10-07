@@ -1,0 +1,45 @@
+{
+  "stage": "Core P0-7.3.2",
+  "incoming_files": 431,
+  "deleted_files": [],
+  "changed_incoming_files": [
+    "src/ai_security_runtime.egg-info/SOURCES.txt",
+    "src/security_runtime/global_integration.py",
+    "src/security_runtime/global_mcp.py",
+    "src/security_runtime/global_workspace.py",
+    "src/security_runtime/recent_hooks.py",
+    "docs/AI_TRIAGE_ACCEPTANCE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/DECISIONS.md",
+    "docs/NEXT_STAGE.md",
+    "docs/PROJECT_STATE.md",
+    "MANIFEST.in"
+  ],
+  "all_other_incoming_files_byte_identical": true,
+  "canonical_resolver_functions_ast_identical": [
+    "resolve_workspace",
+    "workspace_state",
+    "source_snapshot",
+    "write_bootstrap",
+    "read_bootstrap"
+  ],
+  "existing_global_workspace_methods_ast_identical": [
+    "__init__",
+    "_child",
+    "root",
+    "admit",
+    "validate_layers",
+    "bind_session",
+    "bootstrap",
+    "_initialize",
+    "close"
+  ],
+  "frozen_code_files": 177,
+  "frozen_code_drift": [],
+  "previous_dirty_work_preserved": true,
+  "real_codex_home": "READ_ONLY_PROBE_CONFIG_BYTES_UNCHANGED",
+  "real_project_c": "READ_ONLY_NO_SCAN_OR_SOURCE_EDIT",
+  "active_runtime_installed_or_replaced": false,
+  "commit": false,
+  "push": false
+}
