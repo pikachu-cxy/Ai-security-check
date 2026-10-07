@@ -59,7 +59,10 @@ These declarations retain existing rule files without promoting them into new ca
 - semgrep 1.178.0: SUCCESS; 21032 ms; 42 normalized findings; target files 63; applicable rules 19; invocations 2.
 - gitleaks 8.30.0: SUCCESS; 932 ms; 4 normalized findings; target files 71; applicable rules provider-owned; invocations 1.
 
-Full per-case and engine evidence: [actual corpus report](rule-program-corpus.json). Individual positive/negative declarations and all retained execution rules: [annotated rule gate](rule-program-rule-gate.json).
+The versioned corpus and annotated rule gate are test inputs/results under
+`tests/rule_program/`. Generated local acceptance output is intentionally not
+stored in `docs/`; rerun the owning acceptance scripts when fresh evidence is
+needed.
 
 ## Safe cases and proof limits
 

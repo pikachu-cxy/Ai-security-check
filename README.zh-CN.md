@@ -910,7 +910,7 @@ usage: security-check ...
 
 `tools install --all` 只准备默认主引擎；OSV 在 `tools status` 中显示 `ON_DEMAND / FALLBACK`，不影响 doctor 的默认就绪状态。`tools install osv-scanner` 可显式准备固定版本和官方 SHA-256 校验的二进制。在线 OSV 会向 deps.dev／OSV.dev 查询依赖名称与版本。离线执行必须已有引擎和 `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip` 数据，不会自动下载。调用图分析和目标构建均关闭，Runtime 不修改 Maven settings 或自动添加 mirror。
 
-验收记录：[Trivy 能力解耦](docs/TRIVY_CAPABILITY_DECOUPLING.md)、[OSV 依赖回退](docs/OSV_DEPENDENCY_FALLBACK.md)。
+扫描器职责与回退边界见[架构文档](docs/ARCHITECTURE.md)。
 
 ## Finding Triage v0.1
 
@@ -933,7 +933,7 @@ security-check summary --path <project> --json
 
 普通视图最多推荐三项，详细视图保留完整任务、每条候选/advisory、审阅状态和 Raw 入口。只读汇总不扫描、不调用 AI、不改 DB/源码；无记录仅建议首次检查。扫描覆盖与 AI 审阅覆盖分开，VALID 表示“已完成 AI 审阅”，不等于人工验证或线上可利用。建议核查 REVIEW 不会把它升级为 ACTIONABLE；0 ACTIONABLE 不表示安全。
 
-绑定项目的 MCP 可直接调用 `get_security_summary`，`details=true` 展开全部；未绑定时必须明确 `workspace_path`。后续核查/修复尚未内置。本轮三位真实开发者试用仍待验收，参见 PROJECT_STATE/NEXT_STAGE。
+绑定项目的 MCP 可直接调用 `get_security_summary`，`details=true` 展开全部；未绑定时必须明确 `workspace_path`。当前状态与限制见[项目上下文](docs/PROJECT_CONTEXT.md)。
 
 Coding Agent 可用 MCP `prepare_triage` 获取限定、脱敏的 UNTRUSTED_CODE 证据，使用自己的模型分析，再携带返回的 triage_session 调用 `submit_triage`；`get_triage` 返回独立覆盖和分组视图。
 
@@ -944,7 +944,7 @@ security-check ai configure --base-url https://provider.example/v1 --model user-
 security-check triage --latest --provider configured --allow-external-code-context --category code --severity HIGH --limit 20
 ```
 
-实际 key 只从环境变量读取。普通 scan 不调用 AI；外部代码上下文必须显式授权，无授权 fail closed。Secret 值不进入 EvidencePacket，源码与注释只作为不可信数据；FALSE_POSITIVE 需要严格明确反证，不能因 docs/example 或未搜索到 API 自动隐藏。详见 [AI Triage 验收](docs/AI_TRIAGE_ACCEPTANCE.md)。
+实际 key 只从环境变量读取。普通 scan 不调用 AI；外部代码上下文必须显式授权，无授权 fail closed。Secret 值不进入 EvidencePacket，源码与注释只作为不可信数据；FALSE_POSITIVE 需要严格明确反证，不能因 docs/example 或未搜索到 API 自动隐藏。详见[项目上下文](docs/PROJECT_CONTEXT.md)。
 
 
 继续核查 v0.1：MCP 当前11个工具。用户只说“继续第一项”或选择任务，工具准备、受限分析、提交和结果展示由宿主在既有授权内衔接；无需 UUID、搬运技术提示词或拼接工具顺序。宿主绑定**实际展示响应**中的任务引用，T01 不是跨请求身份，任务变化需刷新重新选择。Runtime 不调用宿主模型；有效审阅保留、缓存不占新分析名额、STALE 重建、FAILED 显式重试。只读版本/能力检查与连接恢复已接入，按所需能力子集校验，允许额外工具。实际宿主自然语言试用、旧聊天连接恢复和三位开发者试用仍待验收。自动补丁/目标构建/修复验证闭环是下一轮 Planned，不让用户搬运 generate_fix 提示词。
