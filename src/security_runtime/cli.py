@@ -500,7 +500,8 @@ def main(argv: list[str] | None = None) -> int:
             from .global_workspace import resolve_workspace
             from .integration_lifecycle import IntegrationDiagnostic
             try:
-                workspace = args.path
+                # Local CLI paths may be relative; MCP workspace claims remain strict.
+                workspace = str(Path(args.path).absolute()) if args.path is not None else None
                 if workspace is None:
                     try:
                         resolve_workspace(str(Path.cwd()))

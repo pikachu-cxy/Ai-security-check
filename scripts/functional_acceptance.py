@@ -9,6 +9,7 @@ from datetime import timedelta
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -60,6 +61,39 @@ public class UnsafeTlsServiceTest {
     return path
 
 
+def execute_host_plan(plan, root, sandbox):
+    """Synthetic Host execution: sandbox mount directories never touch source."""
+    from security_runtime.functional_execution import Unavailable
+    report = dict(plan_digest=plan['plan_digest'], network_access='DENIED',
+                  project_code_reviewed=True, steps=[])
+    with tempfile.TemporaryDirectory(prefix='functional-host-projection-') as temporary:
+        projection = Path(temporary) / 'project'
+        for step in plan['steps']:
+            assert Path(step['working_directory']).samefile(root)
+            observation = dict(command_id=step['command_id'], execution_status='NOT_AVAILABLE',
+                               exit_code=None, duration_ms=0)
+            if sandbox.availability() is None:
+                if not projection.exists():
+                    shutil.copytree(root, projection, ignore=shutil.ignore_patterns('.git'))
+                class HostStep:
+                    provider = step['provider']
+                    def argv(self): return step['argv']
+                try:
+                    measured = sandbox.run(projection, HostStep(), timeout=step['timeout_seconds'])
+                    observation.update(execution_status='TIMEOUT' if measured['reason']=='TIMEOUT' else
+                        'OUTPUT_LIMIT' if measured['reason'] else 'COMPLETED',
+                        exit_code=measured['exit_code'], duration_ms=measured['duration_ms'])
+                    if any(x in measured['output'].lower() for x in
+                           (b'pluginresolutionexception', b'dependencyresolutionexception')):
+                        observation['stderr_summary'] = 'PluginResolutionException: offline mode'
+                except Unavailable:
+                    pass
+            report['steps'].append(observation)
+            if observation['execution_status'] != 'COMPLETED' or observation['exit_code'] != 0:
+                break
+    return report
+
+
 async def run(command,failure=False,mode='smart_auto'):
     start=time.monotonic()
     with tempfile.TemporaryDirectory(prefix='functional-maven-') as temporary:
@@ -98,46 +132,70 @@ async def run(command,failure=False,mode='smart_auto'):
                         decision=await call('confirm_remediation',dict(hook['remediation']['confirmation']['arguments'],approve=True))
                         assert decision['status']=='AUTHORIZED'
                     else: decision=hook['remediation']; assert decision['action']=='AUTO_FIX'
+                    inline = decision.get('agent_fix_ticket', {}).get('mode') == 'INLINE_PREPARED'
                     assert decision['interaction']=={'phase':'AUTO_REMEDIATION_AUTHORIZED',
                         'user_confirmation_required':False,'must_not_ask_user':True,
-                        'must_continue_automatically':True,'next_action':'PREPARE_TASK_FIX'}
-                    assert 'USER CONFIRMATION IS NOT REQUIRED' in decision['guidance']
+                        'must_continue_automatically':True,'next_action':'READ_TARGET_AND_APPLY_TICKET' if inline else 'PREPARE_TASK_FIX'}
+                    assert ('SECURITY_AUTO_REMEDIATION_AUTHORIZED' if inline else 'USER CONFIRMATION IS NOT REQUIRED') in decision['guidance']
                     assert 'WAIT' not in decision['guidance'] and '是否允许我修复这个安全问题？' not in decision['guidance']
                     assert 'confirmation_ref' not in json.dumps(decision)
                     if mode=='smart_auto':
                         assert hook['continue'] is False and 'decision' not in hook
-                        assert 'Do not retry or repeat it.' in hook['stopReason']
-                        assert 'Do not ask the user for confirmation' in hook['systemMessage']
+                        if inline:
+                            assert 'Do not call prepare_task_fix' in hook['stopReason']
+                            assert 'AUTO_FIX already prepared' in hook['systemMessage']
+                            assert decision['prepare']['required'] is False
+                            assert decision['agent_fix_ticket']['allowed_target_paths'] == [path.relative_to(root).as_posix()]
+                            assert decision['agent_fix_ticket']['prepared_attestation'].startswith('agent-ticket-v1.')
+                        else:
+                            assert 'Do not retry or repeat it.' in hook['stopReason']
+                            assert 'Do not ask the user for confirmation' in hook['systemMessage']
                     grant=decision['prepare']['arguments']
                     rejected=await call('prepare_functional_verification',grant)
                     assert rejected['overall_status']=='SECURITY_NOT_VERIFIED'
-                    prepared=await call('prepare_task_fix',grant)
-                    assert prepared['status']=='READY_FOR_HOST_FIX'
+                    if not inline:
+                        prepared=await call('prepare_task_fix',grant)
+                        assert prepared['status']=='READY_FOR_HOST_FIX'
                     await asyncio.sleep(1.1); path.write_text(SAFE)  # simulated Host; Runtime never source-edits
                     closed=await call('handle_hook_event',claims)
                     assert closed['resolved_families']==1
                     checked=await call('verify_task_fix',grant)
                     assert checked['verification_status']=='SCANNER_VERIFIED_RESOLVED'
                     planned=await call('prepare_functional_verification',grant)
-                    assert planned['status']=='PLANNED',planned
-                    out=await call('run_functional_verification',planned['handoff']['arguments'])
+                    if planned.get('status') == 'FUNCTIONAL_VERIFICATION_READY':
+                        # Execute only through the existing enforced sandbox,
+                        # from this synthetic host driver, never inside Runtime.
+                        from security_runtime.functional_execution import LocalSandbox
+                        assert planned['plan']['runtime_executes_commands'] is False
+                        assert planned['handoff']['execution_result_required'] is True
+                        report = execute_host_plan(planned['plan'], root, LocalSandbox())
+                        out=await call('run_functional_verification',
+                            dict(planned['handoff']['arguments'], execution_result=report))
+                        run_called=True
+                    else:
+                        assert planned['functional_verification']['status']=='NOT_AVAILABLE',planned
+                        out=planned
+                        run_called=False
                     assert out['security_verification']['status']=='SCANNER_VERIFIED_RESOLVED'
                     assert path.read_text()==SAFE
-                    # Never mask a real incorrect outcome as environment Pending.
                     status=out['functional_verification']['status']
                     if status in {'PASSED','FAILED'}:
                         assert status==('FAILED' if failure else 'PASSED'),out
                         assert out['overall_status']==('SECURITY_VERIFIED_FUNCTION_FAILED' if failure else 'SECURITY_AND_FUNCTIONALLY_VERIFIED')
-                    repeat=await call('run_functional_verification',planned['handoff']['arguments'])
-                    if status in {'PASSED','FAILED'}: assert repeat['functional_verification']['reused']
+                        repeat=await call('run_functional_verification',planned['handoff']['arguments'])
+                        assert repeat['functional_verification']['reused']
+                    else:
+                        assert status=='NOT_AVAILABLE',out
+                        assert out['overall_status']=='SECURITY_VERIFIED_FUNCTION_UNKNOWN'
+                    assert not out.get('functional_ref') and not out.get('handoff')
                     assert not (root/'target').exists()
     return dict(case='B' if failure else 'A',mode=mode,transport='ACTUAL_MCP_STDIO',
                 observed_mode=info['remediation']['mode'],interaction=decision['interaction'],
-                prepare_task_fix=True,verify_task_fix=True,resolved_families=closed['resolved_families'],
-                prepare_functional_verification=True,run_functional_verification=True,
+                prepare_task_fix=not inline,inline_prepared=inline,verify_task_fix=True,resolved_families=closed['resolved_families'],
+                prepare_functional_verification=True,run_functional_verification=run_called,
                 security_verification='SCANNER_VERIFIED_RESOLVED',functional_result=out,
                 functional_acceptance='PASS' if status in {'PASSED','FAILED'} else 'PENDING_ENVIRONMENT_PREREQUISITES',
-                plan=planned['plan'],duration_ms=round((time.monotonic()-start)*1000),
+                plan=planned.get('plan'),duration_ms=round((time.monotonic()-start)*1000),
                 host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',desktop_trial='PENDING',
                 source_persisted=False,network_authorized=False,package_download=False,
                 runtime_source_edit=False,baseline='UNKNOWN',ground_truth='UNREVIEWED')

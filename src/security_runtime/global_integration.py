@@ -4,16 +4,20 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tomllib
 from pathlib import Path, PureWindowsPath
 
-from .codex_integration import (CodexIntegrationAdapter, BEGIN, END, SERVER,
-    current_runtime, fingerprint, product_hooks, MAX_CONFIG)
+from .codex_integration import (CodexIntegrationAdapter, SERVER,
+    current_runtime, fingerprint, product_hooks, unique_json, CONTRACT)
+from ._version import __version__
+from .global_toml import patch_server
 from .hook_state import identity, no_links
 from .integration_lifecycle import IntegrationDiagnostic
 from .storage import SQLiteStore
 
 GLOBAL = 'RUNTIME_MANAGED_GLOBAL'
 LEGACY = 'RUNTIME_MANAGED_LEGACY_PROJECT'
+OWNERSHIP_VERSION = 'codex-global-ownership-v0.2'
 
 
 def runtime_aliases(document):
@@ -66,6 +70,7 @@ class _DeferredBaselines:
 
 class GlobalCodexIntegration(CodexIntegrationAdapter):
     """Reuse exact ownership/CAS merge. Destination is an explicit Codex home."""
+    manifest_versions = CodexIntegrationAdapter.manifest_versions | {OWNERSHIP_VERSION}
     def __init__(self, *, home=None, directory=None, discover=None, probe=None,
                  legacy_adapter=None, allow_dev=False):
         self.home = codex_home(home)
@@ -80,6 +85,64 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
 
     def _legacy(self, root, hooks):
         return {}
+
+    def _manifest(self, root):
+        manifest = super()._manifest(root)
+        if manifest is not None:
+            if manifest.get('scope', 'GLOBAL') != 'GLOBAL':
+                raise IntegrationDiagnostic('OWNERSHIP_INVALID')
+            if manifest['managed_version'] == OWNERSHIP_VERSION and (
+                    manifest.get('scope') != 'GLOBAL' or manifest.get('ownership_model') != 2
+                    or not isinstance(manifest.get('runtime_version'), str)
+                    or not isinstance(manifest.get('capability_contract'), str)):
+                raise IntegrationDiagnostic('OWNERSHIP_INVALID')
+        return manifest
+
+    def _new_manifest(self, root, record):
+        return {**super()._new_manifest(root, record), 'managed_version': OWNERSHIP_VERSION,
+                'scope': 'GLOBAL', 'ownership_model': 2, 'runtime_version': __version__,
+                'capability_contract': CONTRACT}
+
+    def _config(self, root, manifest=None):
+        # Shared user/Host document: comments never establish Global ownership.
+        # Parse the entire document strictly, including duplicate-key rejection.
+        a_path, b_path = self._config_paths(root)
+        a, b = self._read(a_path), self._read(b_path)
+        try:
+            document = tomllib.loads(a.decode('utf-8')) if a else {}
+            hooks = unique_json(b) if b else {'hooks': {}}
+            if (not isinstance(document.get('mcp_servers', {}), dict)
+                    or not isinstance(document.get('features', {}), dict)):
+                raise ValueError()
+            if any(not isinstance(s, dict) for s in document.get('mcp_servers', {}).values()):
+                raise ValueError()
+            self._validate_hooks(hooks)
+            self._inline_hooks(document)
+            return (a_path, a, document), (b_path, b, hooks)
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            raise IntegrationDiagnostic('CONFIG_INVALID') from None
+
+    def _inspect_mcp(self, root, raw, document, manifest, server):
+        current = document.get('mcp_servers', {}).get(SERVER)
+        diagnostics = []
+        if current is None:
+            return ['MCP_NOT_CONFIGURED'], []
+        try:
+            attested = manifest is not None and fingerprint(current) in {r['server'] for r in manifest['records']}
+        except (ValueError, TypeError):
+            attested = False
+        if not attested:
+            raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+        if current != server or (manifest.get('runtime_version', __version__) != __version__
+                or manifest.get('capability_contract', CONTRACT) != CONTRACT):
+            diagnostics.append('RUNTIME_STALE')
+        if manifest['managed_version'] != OWNERSHIP_VERSION:
+            diagnostics.append('MANAGED_FORMAT_UPGRADE_REQUIRED')
+        # A semantic ownership receipt, not a byte span or marker match.
+        return diagnostics, [current]
+
+    def _patch_mcp(self, raw, document, owned, block, server, action):
+        return patch_server(raw, block, remove=action == 'remove')
 
     def _desired(self, root, *, verify_existing=False):
         runtime = self.discover()
@@ -97,11 +160,11 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                   'enabled': True, 'required': True, 'startup_timeout_sec': 60,
                   'tool_timeout_sec': 120, 'env': env}
         q = lambda s: json.dumps(s, ensure_ascii=True)
-        lines = [BEGIN.rstrip('\n'), f'[mcp_servers.{SERVER}]', 'command = ' + q(server['command']),
+        lines = [f'[mcp_servers.{SERVER}]', 'command = ' + q(server['command']),
                  'args = ' + q(server['args']), 'enabled = true', 'required = true',
                  'startup_timeout_sec = 60', 'tool_timeout_sec = 120', f'[mcp_servers.{SERVER}.env]']
         lines.extend(k + ' = ' + q(v) for k, v in env.items())
-        block = ('\n'.join(lines) + '\n' + END).encode()
+        block = ('\n'.join(lines) + '\n').encode()
         hooks = product_hooks()
         record = {'block': identity(block.decode()), 'server': fingerprint(server),
                   'hooks': {e: fingerprint(g[0]) for e, g in hooks['hooks'].items()}}
@@ -136,7 +199,9 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
         return {'integration': 'codex', 'scope': 'GLOBAL',
                 'ownership': GLOBAL if manifest else ('USER_MANAGED' if configs[0][2] or configs[1][2]['hooks'] else 'UNKNOWN'),
                 'overall': 'NOT_INSTALLED' if absent else 'DEGRADED' if diagnostics else 'CONFIGURED',
-                'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED'},
+                'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED',
+                        'ownership_state': ('OWNED_BUT_STALE' if 'RUNTIME_STALE' in diagnostics else 'OWNED_AND_CURRENT')
+                            if owned else 'NOT_INSTALLED'},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
                 'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
                 'readiness': {'status': 'WORKSPACE_BOOTSTRAP_DEFERRED',
@@ -149,7 +214,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
 
     def status(self, root=None):
         result = self.configuration_status()
-        runtime, env, *_ = self._desired(self.home)
+        manifest = self._manifest(self.home)
+        runtime, env, *_ = self._desired(self.home, verify_existing=bool(manifest and manifest['phase'] == 'COMMITTED'))
         capability = self.probe(runtime, self.home, {**os.environ, **env, 'SECURITY_RUNTIME_MCP_SELF_TEST': '1'})
         result.update(runtime={**capability, 'kind': runtime['kind']}, mode=capability['mode'])
         return result

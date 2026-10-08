@@ -132,19 +132,41 @@ async def run(command, mode='smart_auto', approve=True):
                         assert not {'decision', 'reason'} & text.keys()
                         assert 'decision' not in new
                         interaction = new['remediation']['interaction']
+                        inline = new['remediation'].get('agent_fix_ticket', {}).get('mode') == 'INLINE_PREPARED'
                         assert interaction == {'phase': 'AUTO_REMEDIATION_AUTHORIZED',
                             'user_confirmation_required': False, 'must_not_ask_user': True,
-                            'must_continue_automatically': True, 'next_action': 'PREPARE_TASK_FIX'}
-                        assert 'AUTO_FIX is already authorized' in text['systemMessage']
-                        assert 'Do not ask the user for confirmation' in text['systemMessage']
-                        assert 'USER CONFIRMATION IS NOT REQUIRED' in text['stopReason']
+                            'must_continue_automatically': True, 'next_action': 'READ_TARGET_AND_APPLY_TICKET' if inline else 'PREPARE_TASK_FIX'}
+                        if inline:
+                            assert 'AUTO_FIX already prepared' in text['systemMessage']
+                            assert 'Do not call prepare_task_fix' in text['stopReason']
+                            assert new['remediation']['prepare']['required'] is False
+                        elif new['remediation'].get('security_context_status') == 'READY':
+                            assert 'SECURITY_FIX_REQUIRED' in text['systemMessage']
+                            assert 'do not repeat the edit or ask for approval' in text['stopReason']
+                        else:
+                            assert 'AUTO_FIX is already authorized' in text['systemMessage']
+                            assert 'Do not ask the user for confirmation' in text['systemMessage']
+                            assert 'USER CONFIRMATION IS NOT REQUIRED' in text['stopReason']
+                            assert 'Do not retry or repeat it.' in text['stopReason']
                         assert '是否允许我修复这个安全问题？' not in text['stopReason'] and 'WAIT' not in text['stopReason']
-                        assert 'Do not retry or repeat it.' in text['stopReason']
                         assert 'confirmation_ref' not in json.dumps(new['remediation'])
-                    packet, _ = await call('prepare_task_fix', arguments)
-                    assert packet['status'] == 'READY_FOR_HOST_FIX'
-                    assert packet['remediation_authorization']['action'] == 'AUTO_FIX'
-                    assert not any(packet['execution'].values())
+                    inline_ticket = new['remediation'].get('agent_fix_ticket') if mode == 'smart_auto' else None
+                    if inline_ticket:
+                        assert inline_ticket['mode'] == 'INLINE_PREPARED'
+                        assert inline_ticket['allowed_target_paths'] == [path.name]
+                        assert inline_ticket['prepared_attestation'].startswith('agent-ticket-v1.')
+                        import hashlib
+                        assert inline_ticket['expected_file_sha256'] == hashlib.sha256(path.read_bytes()).hexdigest()
+                        assert inline_ticket['expected_result_sha256'] == hashlib.sha256(SAFE.replace('\n', os.linesep).encode()).hexdigest()
+                        authorization_fields = inline_ticket
+                        prepare_status = 'INLINE_PREPARED'
+                    else:
+                        packet, _ = await call('prepare_task_fix', arguments)
+                        assert packet['status'] == 'READY_FOR_HOST_FIX'
+                        assert packet['remediation_authorization']['action'] == 'AUTO_FIX'
+                        assert not any(packet['execution'].values())
+                        authorization_fields = packet['remediation_authorization']
+                        prepare_status = packet['status']
                     await asyncio.sleep(1.1)
                     # This driver plays the host editor. Runtime never edits.
                     path.write_text(SAFE)
@@ -162,11 +184,11 @@ async def run(command, mode='smart_auto', approve=True):
                     assert path.read_text() == SAFE
                     # Metadata export only; bounded fix evidence is not saved.
                     proof = dict(baseline_status=baseline['status'], new_families=new['new_families'],
-                                 action=new['remediation']['action'], attempt_count=packet['remediation_authorization']['attempt_count'],
-                                 authorization_kind=packet['remediation_authorization']['authorization_kind'],
+                                 action=new['remediation']['action'], attempt_count=authorization_fields['attempt_count'],
+                                 authorization_kind=authorization_fields['authorization_kind'],
                                  preconfirmation_grant_available=False if mode == 'ask_before_fix' else None,
-                                 hook_feedback='continue:false' if mode == 'ask_before_fix' else new['decision'],
-                                  interaction=new['remediation'].get('interaction'), prepare_status=packet['status'],
+                                 hook_feedback='continue:false',
+                                  interaction=new['remediation'].get('interaction'), prepare_status=prepare_status,
                                   observed_mode=info['remediation']['mode'],
                                  resolved_families=closed['resolved_families'],
                                  automatic_verification=closed['remediation']['verification'],

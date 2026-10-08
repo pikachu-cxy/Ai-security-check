@@ -135,16 +135,17 @@ def test_global_unknown_and_corrupt_ownership_fail_closed(installed):
         assert a.read_bytes() == before
 
 
-def test_global_attested_duplicate_repair(installed):
+def test_global_duplicate_semantic_table_rejected(installed):
     installed.execute('setup')
     a = installed.home / 'config.toml'; b = installed.home / 'hooks.json'
     a.write_bytes(a.read_bytes() * 2)
     hooks = json.loads(b.read_bytes())
     for event in hooks['hooks']: hooks['hooks'][event] *= 2
     b.write_text(json.dumps(hooks))
-    assert installed.execute('repair')['overall'] == 'CONFIGURED'
-    assert all(len(gs) == 1 for gs in json.loads(b.read_bytes())['hooks'].values())
-    assert installed.execute('repair')['operation'] == 'ALREADY_CONFIGURED'
+    before = a.read_bytes(), b.read_bytes()
+    with pytest.raises(IntegrationDiagnostic, match='CONFIG_INVALID'):
+        installed.execute('repair')
+    assert (a.read_bytes(), b.read_bytes()) == before
 
 
 def test_dev_not_implicitly_installed(installed):

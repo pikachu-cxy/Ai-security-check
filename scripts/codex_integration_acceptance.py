@@ -19,6 +19,10 @@ import tomllib
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from remediation_acceptance import SAFE, UNSAFE
+
+# Preserve the original missing-prepare Stop-guard acceptance: an ambiguous
+# comment keeps the current public fallback path, without disabling tickets.
+UNSAFE = UNSAFE.replace('-> true);', '-> true); // preserve fixture comment')
 from codex_hook_fixture import invocation_claims
 
 
@@ -97,10 +101,16 @@ async def accept(command):
                     decision = finding['remediation']
                     assert finding['new_families'] == 1 and decision['action'] == 'AUTO_FIX', finding
                     assert finding['continue'] is False and 'decision' not in finding
-                    assert finding['stopReason'].endswith(decision['guidance'])
-                    assert 'Do not retry or repeat it.' in finding['stopReason']
-                    assert 'not the original insecure edit' in finding['stopReason']
-                    assert 'prepare_task_fix' in finding['systemMessage']
+                    assert 'agent_fix_ticket' not in decision
+                    if decision.get('security_context_status') == 'READY':
+                        assert 'SECURITY_FIX_REQUIRED' in finding['stopReason']
+                        assert 'do not repeat the edit or ask for approval' in finding['stopReason']
+                        assert 'compact context and prepare handoff' in finding['systemMessage']
+                    else:
+                        assert finding['stopReason'].endswith(decision['guidance'])
+                        assert 'Do not retry or repeat it.' in finding['stopReason']
+                        assert 'not the original insecure edit' in finding['stopReason']
+                        assert 'prepare_task_fix' in finding['systemMessage']
                     original_refs = decision['prepare']['arguments']
                     # Force the observed missing-prepare state. This SDK driver
                     # consumes the Stop handoff; it is not model continuation.
@@ -149,8 +159,15 @@ async def accept(command):
         assert config.read_bytes() == original
         assert json.loads(hooks.read_bytes()) == unrelated_hook
         assert source.read_text(encoding='utf-8') == SAFE and (state / 'scans.db').exists()
-        source.write_text(UNSAFE, encoding='utf-8')  # now pre-existing, not new AI attribution
+        source.write_text(UNSAFE, encoding='utf-8')  # pre-existing in a separate installation
+        # A prior CLOSED remediation episode is deliberately persistent across
+        # uninstall. Reintroducing it in the same state tests recurrence, not
+        # first-install pre-existing risk. Keep that ledger; isolate this case.
+        env = dict(env, SECURITY_RUNTIME_STATE_DIR=str(parent / 'preexisting-state'))
         assert cli(['setup', 'codex'])['baseline']['status'] == 'READY'
+        existing_entry = tomllib.loads(config.read_text(encoding='utf-8'))['mcp_servers']['ai_security_runtime']
+        params = StdioServerParameters(command=existing_entry['command'], args=existing_entry['args'],
+            cwd=existing_entry['cwd'], env={**env, **existing_entry['env']})
         with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
             async with stdio_client(params, errlog=errors) as (reader, writer):
                 async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=180)) as client:
@@ -161,7 +178,8 @@ async def accept(command):
                     existing = data.get('result', data)
                     assert existing['baseline_source'] == 'SETUP_SEED'
                     assert existing['new_families'] == 0 and existing['persisting_families'] == 1, existing
-                    assert existing['remediation']['action'] == 'NONE'
+                    assert existing['remediation']['action'] == 'NONE', existing
+                    assert 'prepare' not in existing['remediation'] and 'confirmation' not in existing['remediation']
                     assert not {'decision', 'continue', 'stopReason'} & existing.keys()
         assert cli(['integration', 'status', 'codex'])['readiness']['status'] == 'READINESS_NOT_OBSERVED'
         assert cli(['integration', 'remove', 'codex'])['operation'] == 'REMOVED'
@@ -173,6 +191,8 @@ async def accept(command):
                 'first_edit': 'SKIPPED_UNOBSERVED_SAFE_EDIT', 'first_effective_hook': finding['status'],
                 'baseline_source': finding['baseline_source'], 'untracked_new_file': 'PASS',
                 'preexisting_persisting': existing['persisting_families'], 'preexisting_auto_fix': False,
+                'preexisting_action': existing['remediation']['action'],
+                'preexisting_reason': existing['remediation'].get('reason_code'),
                 'scanner_run': finding['scanner_run'], 'readiness': ready['readiness'],
                 'new_families': finding['new_families'], 'resolved_families': closed['resolved_families'],
                 'security_verification': receipt['status'], 'explicit_verify_called': False,

@@ -643,7 +643,7 @@ class ToolManager:
         try:
             record = json.loads((final / "metadata.json").read_text(encoding="utf-8"))
             if (record["sha256"] == entry["sha256"] and record["binary_sha256"] == sha256_file(executable)
-                    and matches_version(entry["version"], self._version("cpython", executable))):
+                    and matches_version(entry["version"], self._probe_version("cpython", executable))):
                 return executable
         except (OSError, ValueError, KeyError):
             pass
@@ -665,7 +665,9 @@ class ToolManager:
                 package.extractall(staging, filter="data")
             installed = staging / "python"
             candidate = installed / relative_exe
-            if not matches_version(entry["version"], self._version("cpython", candidate)):
+            # Bootstrap CPython is not a scanner engine. Validate its pinned
+            # version directly, without the scanner registry/version cache.
+            if not matches_version(entry["version"], self._probe_version("cpython", candidate)):
                 raise ValueError("Managed Python failed version validation")
             if not any(path.is_file() for path in installed.rglob("*LICENSE*")):
                 raise ValueError("Managed Python license inventory is missing")

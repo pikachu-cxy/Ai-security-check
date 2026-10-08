@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -145,6 +146,68 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
     return result
 
 
+def verify_global_ownership(executable: Path, root: Path, env: dict[str, str]) -> dict:
+    home = root / 'global-ownership-home'
+    home.mkdir()
+    path = home / 'config.toml'
+    original = (b'# preserve synthetic sibling bytes\nmodel="fixture"\n'
+                b'[marketplaces.fixture]\nsource="synthetic"\n'
+                b'[mcp_servers.sibling]\ncommand="synthetic"\n'
+                b'[hooks.state.fixture]\nenabled=true\ntrusted_hash="synthetic"\n')
+    path.write_bytes(original)
+    environment = {**env, 'CODEX_HOME': str(home)}
+    def cli(action):
+        return json.loads(run([str(executable), action, '--json'], cwd=root, env=environment).stdout)
+    installed = cli('setup')
+    if installed['overall'] != 'CONFIGURED' or installed['mcp']['ownership_state'] != 'OWNED_AND_CURRENT':
+        raise ValueError('Global semantic ownership install failed')
+    canonical = path.read_bytes()
+    if b'AI Security Runtime managed Codex' in canonical:
+        raise ValueError('Global install still relies on marker blocks')
+    # Reproduce real missing-END dogfood in the frozen binary, signed entry intact.
+    path.write_bytes(b'# BEGIN AI Security Runtime managed Codex v0.2\n' + canonical)
+    if cli('status')['overall'] != 'CONFIGURED':
+        raise ValueError('Global ownership depends on END marker')
+    if cli('repair')['overall'] != 'CONFIGURED' or path.read_bytes() != canonical:
+        raise ValueError('Global marker migration failed or sibling bytes changed')
+    if cli('repair')['operation'] != 'ALREADY_CONFIGURED':
+        raise ValueError('Global repair is not idempotent')
+    parsed = tomllib.loads(canonical.decode())
+    path.write_bytes(canonical.replace(b'enabled = true', b'enabled = false', 1))
+    refused = subprocess.run([str(executable), 'status', '--json'], cwd=root, env=environment,
+                             capture_output=True, text=True, encoding='utf-8', timeout=60)
+    if refused.returncode == 0 or 'MCP_CONFIGURATION_CONFLICT' not in refused.stdout:
+        raise ValueError('Global semantic tamper was not rejected')
+    path.write_bytes(canonical)
+    if cli('uninstall')['overall'] != 'NOT_INSTALLED' or path.read_bytes() != original:
+        raise ValueError('Global removal changed unrelated configuration')
+    if 'ai_security_runtime' not in parsed['mcp_servers']:
+        raise ValueError('Global MCP entry missing')
+    return {'install': 'PASS', 'missing_end': 'PASS', 'repair': 'PASS',
+            'tamper_rejection': 'PASS', 'sibling_bytes': 'PRESERVED', 'uninstall': 'PASS'}
+
+
+def verify_doctors(executable: Path, root: Path, project: Path, env: dict[str, str]) -> dict:
+    default = run([str(executable), "doctor"], cwd=root, env=env)
+    if "Global Codex" not in default.stdout:
+        raise ValueError("Standalone default doctor did not report Global Codex")
+    global_report = json.loads(run([str(executable), "doctor", "--json"], cwd=root, env=env).stdout)
+    if (global_report.get("scope") != "GLOBAL" or global_report.get("integration") != "codex"
+            or global_report.get("overall") != "NOT_INSTALLED"):
+        raise ValueError("Standalone global doctor did not report the isolated unconfigured home")
+    no_project = subprocess.run([str(executable), "doctor", "--project"], cwd=root, env=env,
+                                capture_output=True, text=True, encoding="utf-8", timeout=30)
+    if no_project.returncode != 2 or "No project detected" not in no_project.stdout + no_project.stderr:
+        raise ValueError("Standalone project doctor did not report the missing project")
+    explicit = json.loads(run([str(executable), "doctor", "--path", str(project), "--json"],
+                              cwd=root, env=env).stdout)
+    workspace = explicit.get("workspace") or {}
+    if not workspace.get("git") or not Path(workspace.get("path", "")).samefile(project):
+        raise ValueError("Standalone explicit project doctor reported the wrong workspace")
+    return {"default_global": global_report["overall"], "missing_project": "NO_PROJECT",
+            "explicit_project": explicit["status"]}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
@@ -184,8 +247,12 @@ def main() -> None:
         env = dict(os.environ, SECURITY_RUNTIME_DATA_DIR=str(data), SECURITY_RUNTIME_STATE_DIR=str(root / "state"))
         for name in ("SECURITY_RUNTIME_SEMGREP_PATH", "SECURITY_RUNTIME_GITLEAKS_PATH", "SECURITY_RUNTIME_TRIVY_PATH", "SECURITY_RUNTIME_OSV_SCANNER_PATH",
                      "SECURITY_RUNTIME_CONFIG", "SECURITY_RUNTIME_WORKSPACE", "SECURITY_RUNTIME_PLUGIN_DIR",
-                     "SECURITY_RUNTIME_TRIVY_CACHE_DIR", "TRIVY_CACHE_DIR"):
+                     "SECURITY_RUNTIME_TRIVY_CACHE_DIR", "TRIVY_CACHE_DIR", "PYTHONPATH", "PYTHONHOME",
+                     "SECURITY_RUNTIME_GLOBAL", "SECURITY_RUNTIME_CODEX_HOME"):
             env.pop(name, None)
+        # Default doctor reads global configuration; never inspect the real home.
+        env["CODEX_HOME"] = str(root / "codex-home")
+        Path(env["CODEX_HOME"]).mkdir()
         git = shutil.which("git")
         if git is None:
             raise ValueError("Git is required by the artifact verification sample")
@@ -198,13 +265,11 @@ def main() -> None:
         if version != f"AI Security Runtime {__version__}":
             raise ValueError(f"Unexpected version: {version}")
         run([str(executable), "--help"], cwd=root, env=env)
-        no_project = subprocess.run([str(executable), "doctor"], cwd=root, env=env, capture_output=True, text=True, encoding="utf-8", timeout=30)
-        if "No project detected" not in no_project.stdout + no_project.stderr:
-            raise ValueError("Standalone doctor did not report the missing project")
         project = root / "project"
         project.mkdir()
         run(["git", "init", "-q", str(project)], cwd=root, env=env)
-        run([str(executable), "doctor", "--path", str(project)], cwd=root, env=env)
+        doctors = verify_doctors(executable, root, project, env)
+        global_ownership = verify_global_ownership(executable, root, env)
         run([str(executable), "licenses", "--check-distribution"], cwd=root, env=env)
         if args.full:
             for tool in ("semgrep", "gitleaks", "trivy"):
@@ -213,6 +278,14 @@ def main() -> None:
                 parent = data / ("engines" if tool == "semgrep" else "tools") / tool
                 if not list(parent.glob("*/metadata.json")):
                     raise ValueError(f"{tool} was not installed as a managed engine")
+            reuse_paths = [path for parent in (data / "python", data / "engines" / "semgrep")
+                           for path in parent.rglob("*") if path.name in {"metadata.json", "install.json"}]
+            before_reuse = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in reuse_paths}
+            run([str(executable), "tools", "install", "semgrep"], cwd=project,
+                env=dict(env, SECURITY_RUNTIME_OFFLINE="1"), timeout=60)
+            if not before_reuse or any((path.read_bytes(), path.stat().st_mtime_ns) != saved
+                                       for path, saved in before_reuse.items()):
+                raise ValueError("Standalone second Semgrep preparation did not reuse managed installation")
             (project / "app.py").write_text("import os\nos.system(input())\n", encoding="utf-8")
             (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
             result = subprocess.run([str(executable), "scan", "--mode", "quick", "--path", str(project), "--json"],
@@ -223,6 +296,8 @@ def main() -> None:
             if not any("command-injection" in str(item.get("technical_details", {}).get("rule_id", ""))
                        for item in payload.get("findings", [])):
                 raise ValueError("First-party scanner finding missing")
+            if payload.get("coverage") != "FULL":
+                raise ValueError("Quick sample scan did not achieve FULL coverage")
             statuses = {item["scanner"]: item["status"] for item in payload["scanner_runs"]}
             if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy-vuln": "NOT_APPLICABLE", "trivy-misconfig": "NOT_APPLICABLE"}:
                 raise ValueError("Quick sample scan violated its scope: " + json.dumps(payload["scanner_runs"]))
@@ -230,7 +305,10 @@ def main() -> None:
                                           cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if release_scan.returncode not in (0, 1):
                 raise RuntimeError(f"Release sample scan failed: {release_scan.stderr[-1000:]}")
-            all_engines = json.loads(release_scan.stdout)["scanner_runs"]
+            release_payload = json.loads(release_scan.stdout)
+            if release_payload.get("coverage") != "FULL":
+                raise ValueError("Release sample scan did not achieve FULL coverage")
+            all_engines = release_payload["scanner_runs"]
             if any(item["status"] not in {"SUCCESS", "NOT_APPLICABLE"} for item in all_engines):
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))
             if not osv_preexisting and (data/'tools'/'osv-scanner').exists():
@@ -295,6 +373,10 @@ def main() -> None:
         record['hooks_offline_synthetic'] = args.hooks
         record['remediation_offline_synthetic'] = args.remediation
         record['codex_integration_offline_synthetic'] = args.codex_integration
+        record['doctor_contract'] = doctors
+        record['global_semantic_ownership'] = global_ownership
+        record['managed_semgrep_reuse'] = args.full
+        record['scan_coverage'] = {'quick': payload['coverage'], 'release': release_payload['coverage']} if args.full else {}
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")
 

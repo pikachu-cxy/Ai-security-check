@@ -167,6 +167,7 @@ def product_hooks() -> dict:
 
 class CodexIntegrationAdapter:
     integration_id = 'codex'
+    manifest_versions = {'codex-integration-v0.1', VERSION}
 
     def __init__(self, *, directory: Path | None = None, discover=None, probe=None, now=None, baseline_coordinator=None):
         self.store = HookStateStore(directory or SQLiteStore.default_path().parent / 'codex-integrations')
@@ -206,7 +207,7 @@ class CodexIntegrationAdapter:
             key = self._read(self._state_path(root, 'snapshot.key'), 32)
             if len(key) != 32 or not hmac.compare_digest(signature, hmac.new(key, self._encode(value), hashlib.sha256).hexdigest()):
                 raise ValueError()
-            if (value['integration_id'] != 'codex' or value['managed_version'] not in {'codex-integration-v0.1', VERSION}
+            if (value['integration_id'] != 'codex' or value['managed_version'] not in self.manifest_versions
                 or value['workspace_hash'] != identity(os.path.normcase(str(root)))
                 or value['server'] != SERVER or value['phase'] not in {'COMMITTED', 'UPDATING'}
                 or not isinstance(value['records'], list) or not 1 <= len(value['records']) <= 2):
@@ -239,7 +240,7 @@ class CodexIntegrationAdapter:
         toml_path, hook_path = self._config_paths(root)
         a, b = self._read(toml_path), self._read(hook_path)
         try:
-            owned = self._owned_blocks(a, manifest)
+            owned = self._owned_blocks(a, manifest, self._ownership_desired(root, manifest))
             parse_a = a
             if len(owned) > 1:
                 for found in reversed(owned):
@@ -333,8 +334,25 @@ class CodexIntegrationAdapter:
                   'hooks': {e: fingerprint(g[0]) for e, g in hooks['hooks'].items()}}
         return runtime, env, server, block, hooks, record
 
+    def _ownership_desired(self, root, manifest):
+        return self._desired(root)[2]
+
     @staticmethod
-    def _owned_blocks(raw, manifest):
+    def _validate_owned_block_semantics(document, manifest, desired):
+        # No sibling servers or unrelated TOML may become Runtime-owned during
+        # format recovery. Equality includes every field and nested env value.
+        servers = document.get('mcp_servers')
+        if (set(document) != {'mcp_servers'} or not isinstance(servers, dict)
+                or set(servers) != {SERVER} or desired is None):
+            raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+        server = servers[SERVER]
+        if (server != desired or manifest is None
+                or fingerprint(server) not in {r['server'] for r in manifest['records']}):
+            raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+        return server
+
+    @staticmethod
+    def _owned_blocks(raw, manifest, desired=None):
         if raw.count(b'# BEGIN AI Security Runtime managed Codex') > 16:
             raise IntegrationDiagnostic('CONFIG_INVALID')
         pattern = re.compile(rb'(?m)\r?\n^# BEGIN AI Security Runtime managed Codex (v0\.[12])\r?\n'
@@ -342,14 +360,23 @@ class CodexIntegrationAdapter:
         matches = list(pattern.finditer(raw))
         starts = len(re.findall(rb'(?m)^# BEGIN AI Security Runtime managed Codex v0\.[12]\r?$', raw))
         ends = len(re.findall(rb'(?m)^# END AI Security Runtime managed Codex v0\.[12]\r?$', raw))
-        if starts != len(matches) or ends != len(matches):
+        marker_starts = len(re.findall(rb'(?m)^# BEGIN AI Security Runtime managed Codex[^\r\n]*', raw))
+        marker_ends = len(re.findall(rb'(?m)^# END AI Security Runtime managed Codex[^\r\n]*', raw))
+        if starts != len(matches) or ends != len(matches) or marker_starts != starts or marker_ends != ends:
             raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
         for found in matches:
             normalized = found.group().replace(b'\r\n', b'\n').decode('utf-8')
-            parsed = tomllib.loads(normalized).get('mcp_servers', {}).get(SERVER)
-            if manifest is None or not any(r['block'] == identity(normalized) and
-                    r['server'] == fingerprint(parsed) for r in manifest['records']):
-                raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+            document = tomllib.loads(normalized)
+            parsed = document.get('mcp_servers', {}).get(SERVER)
+            exact = manifest is not None and any(r['block'] == identity(normalized) and
+                    r['server'] == fingerprint(parsed) for r in manifest['records'])
+            if not exact:
+                if len(matches) != 1:
+                    raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
+                CodexIntegrationAdapter._validate_owned_block_semantics(document, manifest, desired)
+                effective = tomllib.loads(raw.decode('utf-8')).get('mcp_servers', {}).get(SERVER)
+                if effective != parsed:
+                    raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
         return matches
 
     @staticmethod
@@ -395,12 +422,10 @@ class CodexIntegrationAdapter:
     def _legacy_handler(event, group, handler, legacy):
         return {**group, 'hooks': [handler]} in legacy.get(event, [])
 
-    def _inspection(self, root, configs, manifest, desired):
-        (_, raw, document), (_, _, hooks) = configs
-        runtime, env, server, block, wanted, record = desired
+    def _inspect_mcp(self, root, raw, document, manifest, server):
         diagnostics = []
         current = document.get('mcp_servers', {}).get(SERVER)
-        owned = self._owned_blocks(raw, manifest)
+        owned = self._owned_blocks(raw, manifest, server)
         if len(owned) > 1:
             diagnostics.append('MCP_DUPLICATE_MANAGED_BLOCK')
         if manifest and manifest['managed_version'] != VERSION:
@@ -413,6 +438,12 @@ class CodexIntegrationAdapter:
             diagnostics.append('WORKSPACE_BINDING_MISMATCH')
         elif current != server:
             diagnostics.append('RUNTIME_MISSING' if not Path(current.get('command', '')).is_file() else 'RUNTIME_STALE')
+        return diagnostics, owned
+
+    def _inspection(self, root, configs, manifest, desired):
+        (_, raw, document), (_, _, hooks) = configs
+        runtime, env, server, block, wanted, record = desired
+        diagnostics, owned = self._inspect_mcp(root, raw, document, manifest, server)
         if document.get('features', {}).get('hooks') is False:
             diagnostics.append('HOST_HOOKS_DISABLED')
         legacy = self._legacy(root, hooks)
@@ -505,6 +536,21 @@ class CodexIntegrationAdapter:
     def remove(self, root):
         return self._mutate(root, 'remove')
 
+    def _patch_mcp(self, raw, document, owned, block, server, action):
+        result = raw
+        for found in reversed(owned):
+            result = result[:found.start()] + result[found.end():]
+        if action != 'remove':
+            result += block
+        if len(owned) == 1 and owned[0].group().replace(b'\r\n', b'\n') == block and action != 'remove':
+            result = raw
+        return result
+
+    def _new_manifest(self, root, record):
+        return {'integration_id': 'codex', 'managed_version': VERSION,
+                'workspace_hash': identity(os.path.normcase(str(root))),
+                'server': SERVER, 'phase': 'COMMITTED', 'records': [record]}
+
     def _mutate(self, root, action):
         self._state_path(root, 'ownership.json')
         with self.store.lock(root, wait_seconds=5) as acquired:
@@ -522,12 +568,7 @@ class CodexIntegrationAdapter:
             else:
                 capability = None
             (a_path, a, document), (b_path, b, hooks) = configs
-            new_a = a
-            for found in reversed(owned):
-                new_a = new_a[:found.start()] + new_a[found.end():]
-            if action != 'remove':
-                # Separating newline is part of the owned block's deterministic insertion.
-                new_a = new_a + block
+            new_a = self._patch_mcp(a, document, owned, block, server, action)
             merged = copy.deepcopy(hooks)
             for event, groups in list(merged['hooks'].items()):
                 kept = []
@@ -546,9 +587,6 @@ class CodexIntegrationAdapter:
                 for event, groups in wanted['hooks'].items():
                     merged['hooks'].setdefault(event, []).extend(groups)
             new_b = (json.dumps(merged, ensure_ascii=True, indent=2) + '\n').encode() if merged != hooks else b
-            # Existing configured bytes win over serialization: true idempotence.
-            if len(owned) == 1 and owned[0].group().replace(b'\r\n', b'\n') == block and action != 'remove':
-                new_a = a
             parsed = tomllib.loads(new_a.decode()) if new_a else {}
             self._validate_hooks(merged)
             if action != 'remove' and parsed.get('mcp_servers', {}).get(SERVER) != server:
@@ -556,8 +594,7 @@ class CodexIntegrationAdapter:
             if max(len(new_a), len(new_b)) > MAX_CONFIG:
                 raise IntegrationDiagnostic('CONFIG_INVALID')
             changed = (new_a != a or new_b != b)
-            new_manifest = {'integration_id': 'codex', 'managed_version': VERSION, 'workspace_hash': identity(os.path.normcase(str(root))),
-                            'server': SERVER, 'phase': 'COMMITTED', 'records': [record]}
+            new_manifest = self._new_manifest(root, record)
             if action != 'remove' and (changed or manifest != new_manifest):
                 previous = manifest['records'][-1] if manifest else record
                 pending = {**new_manifest, 'phase': 'UPDATING', 'records': [previous] if previous == record else [previous, record]}

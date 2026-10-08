@@ -25,15 +25,11 @@ def source(line=100, vulnerable=True):
     return header + '\n' * (line - 3) + body + '\n}\n'
 
 
-def group_source(hostname=True, certificate=True):
-    host = ('(host, session) -> true' if hostname else 'HttpsURLConnection.getDefaultHostnameVerifier()')
-    check = '' if certificate else 'throw new java.security.cert.CertificateException();'
-    return ('import javax.net.ssl.*;\nimport java.security.cert.*;\nclass Fixture {\n' + '\n' * 96 +
-        f'HostnameVerifier verifier = {host};\n' +
-        'X509TrustManager trust = new X509TrustManager() {\n' +
-        f'public void checkServerTrusted(X509Certificate[] chain, String auth) throws CertificateException {{ {check} }}\n' +
-        'public void checkClientTrusted(X509Certificate[] chain, String auth) {}\n' +
-        'public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }\n};\n}\n')
+def write_task_sources(root, hostname=True, secondary=True):
+    # Independent paths have independent equivalence identities. Both fixtures
+    # use the current default-enabled CORE rule; legacy rules stay disabled.
+    (root / 'Tls.java').write_text(source(vulnerable=hostname), encoding='utf-8')
+    (root / 'OtherTls.java').write_text(source(vulnerable=secondary).replace('class Fixture', 'class OtherFixture'), encoding='utf-8')
 
 
 class FailingFixtureEngine(SemgrepEngineProvider):
@@ -50,13 +46,13 @@ async def native_sdk_acceptance(executable):
     with tempfile.TemporaryDirectory(prefix='runtime-native-fix-') as temporary:
         root = Path(temporary).resolve()
         file = root / 'Tls.java'
-        file.write_text(group_source(), encoding='utf-8')
+        write_task_sources(root)
         adapter = SemgrepAdapter()
         with local_recheck():
-            found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java',)), FindingNormalizer(root))
+            found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java', 'OtherTls.java')), FindingNormalizer(root))
         assert run.status == 'SUCCESS' and len(found) == 2, run
         store = SQLiteStore(root / 'state/scans.db')
-        scan = ScanResult('synthetic-native-task-fix', ScanMode.FEATURE, TargetDetector().detect(root, ['Tls.java']),
+        scan = ScanResult('synthetic-native-task-fix', ScanMode.FEATURE, TargetDetector().detect(root, ['Tls.java', 'OtherTls.java']),
             'COMPLETED', found, [run], 'Synthetic fixture', 'REVIEW', run.duration_ms)
         store.save(scan)
         before = store.path.read_bytes()
@@ -77,20 +73,21 @@ async def native_sdk_acceptance(executable):
                 info = await call('get_runtime_info', {})
                 assert info['features']['task_fix_verify'] == 'v0.1'
                 summary = await call('get_security_summary', {})
-                chosen = summary['recommended_tasks'][0]
-                fix = await call('prepare_task_fix', chosen['fix_handoff']['arguments'])
-                assert fix['status'] == 'READY_FOR_HOST_FIX' and not any(fix['execution'].values())
-                args = fix['verification_plan']['arguments']
-                unchanged = await call('verify_task_fix', args)
-                assert unchanged['status'] == 'STILL_PRESENT', unchanged
-                file.write_text(group_source(False, True), encoding='utf-8')
-                partial = await call('verify_task_fix', args)
-                assert partial['status'] == 'PARTIALLY_RESOLVED', partial
-                file.write_text(group_source(False, False), encoding='utf-8')
-                complete = await call('verify_task_fix', dict(args, host_reported_execution={'patch_applied':True,'tests_run':True}))
-                assert complete['status'] == 'SCANNER_VERIFIED_RESOLVED', complete
-                assert complete['host_reported_execution']['trust'] == 'UNTRUSTED_HOST_REPORT'
-                assert not complete['runtime_observed_execution']['tests_run']
+                chosen = summary['recommended_tasks']
+                assert len(chosen) == 2 and all(t['finding_count'] == 1 for t in chosen)
+                fixes = [await call('prepare_task_fix', t['fix_handoff']['arguments']) for t in chosen]
+                assert all(f['status'] == 'READY_FOR_HOST_FIX' and not any(f['execution'].values()) for f in fixes)
+                arguments = [f['verification_plan']['arguments'] for f in fixes]
+                unchanged = [await call('verify_task_fix', args) for args in arguments]
+                assert all(r['status'] == 'STILL_PRESENT' for r in unchanged), unchanged
+                write_task_sources(root, False, True)
+                partial = [await call('verify_task_fix', args) for args in arguments]
+                assert {r['status'] for r in partial} == {'SCANNER_VERIFIED_RESOLVED', 'STILL_PRESENT'}, partial
+                write_task_sources(root, False, False)
+                complete = [await call('verify_task_fix', dict(args, host_reported_execution={'patch_applied':True,'tests_run':True})) for args in arguments]
+                assert all(r['status'] == 'SCANNER_VERIFIED_RESOLVED' for r in complete), complete
+                assert all(r['host_reported_execution']['trust'] == 'UNTRUSTED_HOST_REPORT' for r in complete)
+                assert not any(r['runtime_observed_execution']['tests_run'] for r in complete)
                 assert (await call('verify_task_fix', {'task_ref':'T01'}))['status'] == 'REFRESH_REQUIRED'
         assert store.path.read_bytes() == before
         return {'transport': 'ACTUAL_SDK_STDIO', 'runtime_executable': str(Path(executable).resolve()),
@@ -129,28 +126,29 @@ def run_acceptance():
                 'original': exact, 'line_100_to_110': moved, 'minimal_fix': fixed,
                 'target_build': False, 'ground_truth': 'NOT_INDEPENDENT_HUMAN_REVIEW',
                 'target_edits': 'SYNTHETIC_HARNESS_ONLY', 'jeepay_modified': False}
-        file.write_text(group_source(), encoding='utf-8')
+        write_task_sources(root)
         with local_recheck():
-            grouped, grouped_run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java',)), FindingNormalizer(root))
+            grouped, grouped_run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java', 'OtherTls.java')), FindingNormalizer(root))
         assert len(grouped) == 2, [(f.technical_details, f.line_start) for f in grouped]
+        scan.target_profile = TargetDetector().detect(root, ['Tls.java', 'OtherTls.java'])
         scan.scan_id, scan.findings, scan.scanner_runs = 'synthetic-fix-b', grouped, [grouped_run]
         store.save(scan)
-        task = next(t for t in SecuritySummaryService(store).get(root, scan.scan_id, details=True)['tasks'] if t['topic'] == 'tls')
-        assert task['finding_count'] == 2
+        tasks = SecuritySummaryService(store).get(root, scan.scan_id, details=True)['tasks']
+        assert len(tasks) == 2 and all(t['topic'] == 'tls' and t['finding_count'] == 1 for t in tasks)
         service = TaskFixService(store, runtime.registry)
-        handoff = service.prepare(task['task_ref'], root)
-        assert not any(handoff['execution'].values())
-        file.write_text(group_source(False, True), encoding='utf-8')
-        partial = service.verify(task['task_ref'], root)
-        assert partial['status'] == 'PARTIALLY_RESOLVED', partial
-        file.write_text(group_source(False, False), encoding='utf-8')
-        complete = service.verify(task['task_ref'], root)
-        assert complete['status'] == 'SCANNER_VERIFIED_RESOLVED', complete
+        handoffs = [service.prepare(task['task_ref'], root) for task in tasks]
+        assert not any(any(h['execution'].values()) for h in handoffs)
+        write_task_sources(root, False, True)
+        partial = [service.verify(task['task_ref'], root) for task in tasks]
+        assert {r['status'] for r in partial} == {'SCANNER_VERIFIED_RESOLVED', 'STILL_PRESENT'}, partial
+        write_task_sources(root, False, False)
+        complete = [service.verify(task['task_ref'], root) for task in tasks]
+        assert all(r['status'] == 'SCANNER_VERIFIED_RESOLVED' for r in complete), complete
         broken = SemgrepAdapter(engine_provider=FailingFixtureEngine())
-        failure = TaskFixService(store, ScannerRegistry([broken])).verify(task['task_ref'], root)
-        assert failure['status'] == 'INCONCLUSIVE', failure
-        assert all(m['scanner_runs'][0]['status'] == 'FAILED' for m in failure['members'])
-        record.update(grouped_one_remaining=partial, grouped_all_fixed=complete, real_scanner_failure=failure)
+        failure = [TaskFixService(store, ScannerRegistry([broken])).verify(task['task_ref'], root) for task in tasks]
+        assert all(r['status'] == 'INCONCLUSIVE' for r in failure), failure
+        assert all(m['scanner_runs'][0]['status'] == 'FAILED' for r in failure for m in r['members'])
+        record.update(separate_tasks_one_remaining=partial, separate_tasks_all_fixed=complete, real_scanner_failure=failure)
         return record
 
 
@@ -164,4 +162,4 @@ if __name__ == '__main__':
         record['installed_native_sdk'] = asyncio.run(native_sdk_acceptance(args.executable))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
-    print('Actual local Semgrep: occurrence, line movement, minimal fix, grouped partial/all fix and process failure passed.')
+    print('Actual local Semgrep: occurrence, line movement, minimal fix, two CORE tasks, partial/all fix and process failure passed.')

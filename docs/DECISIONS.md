@@ -46,3 +46,18 @@ milestone logs remain available through Git history.
 - Reason: Cursor `postToolUse` is not a reliable observed feedback channel, and
   configuration writeability is not Desktop verification.
 - Status: Accepted.
+
+## ADR-007 — Global Codex semantic ownership
+
+- Decision: Global ownership binds only `mcp_servers.ai_security_runtime` and
+  its descendants to a signed sidecar manifest, GLOBAL scope, server identity,
+  semantic fingerprint and Runtime version/contract. Comments are not ownership
+  boundaries in the shared user-level config. Project legacy remains delimited.
+- Reason: Real Desktop restart trials lost marker comments while preserving the
+  server definition. The specific writer was not established. No assumption of
+  permanent comment preservation is part of the public configuration contract.
+- Mutation: Parse the entire TOML first, prove signed ownership, locate complete
+  structural statements, replace only the exact MCP subtree, reparse and compare
+  all unrelated semantics. Preserve sibling bytes; refuse ambiguous inline-parent
+  mutation. Retain HMAC, CAS, interrupted-write recovery and exact hook ownership.
+- Status: Accepted; post-restart Desktop stability requires separate evidence.
