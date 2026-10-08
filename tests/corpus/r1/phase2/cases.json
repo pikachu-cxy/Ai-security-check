@@ -1,0 +1,647 @@
+{
+  "schema_version": "r1-phase2-regression-v1",
+  "kind": "SYNTHETIC",
+  "independent_human_ground_truth": false,
+  "note": "Author-declared source semantics, never scanner-derived. Known safe FP characterizations retain false risk labels.",
+  "cases": [
+    {
+      "case_id": "fixed_switch_read_safe",
+      "relative_file": "fixed_switch_read_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00361",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "fixed_switch_read_risk",
+      "relative_file": "fixed_switch_read_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest00361",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "fixed_switch_nested_safe",
+      "relative_file": "fixed_switch_nested_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00135",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "fixed_switch_nested_risk",
+      "relative_file": "fixed_switch_nested_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest00135",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "inner_constant_branch_safe",
+      "relative_file": "inner_constant_branch_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest01035",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "inner_constant_branch_risk",
+      "relative_file": "inner_constant_branch_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest01035",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "helper_list_write_safe",
+      "relative_file": "helper_list_write_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest01240",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "helper_list_write_risk",
+      "relative_file": "helper_list_write_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest01240",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "helper_list_nested_safe",
+      "relative_file": "helper_list_nested_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest02111",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "helper_list_nested_risk",
+      "relative_file": "helper_list_nested_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest02111",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "sql_helper_switch_safe",
+      "relative_file": "sql_helper_switch_safe.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest01973",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "sql_helper_switch_risk",
+      "relative_file": "sql_helper_switch_risk.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest01973",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "literal_path_helper_safe",
+      "relative_file": "literal_path_helper_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "literal_path_helper_risk",
+      "relative_file": "literal_path_helper_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "literal_sql_helper_safe",
+      "relative_file": "literal_sql_helper_safe.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "literal_sql_helper_risk",
+      "relative_file": "literal_sql_helper_risk.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_dynamic_name",
+      "relative_file": "call_dynamic_name.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest00008",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_dynamic_name_bound_value",
+      "relative_file": "call_dynamic_name_bound_value.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_overload",
+      "relative_file": "call_overload.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_overload_switch_safe",
+      "relative_file": "call_overload_switch_safe.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest00191",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_overload_switch_risk",
+      "relative_file": "call_overload_switch_risk.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00191",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_constant",
+      "relative_file": "call_constant.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_bound_parameter",
+      "relative_file": "call_bound_parameter.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_reassigned_constant",
+      "relative_file": "call_reassigned_constant.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "call_other_api",
+      "relative_file": "call_other_api.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_dynamic_executable",
+      "relative_file": "builder_dynamic_executable.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_shell_payload",
+      "relative_file": "builder_shell_payload.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_windows_payload",
+      "relative_file": "builder_windows_payload.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_command_array",
+      "relative_file": "builder_command_array.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_shell",
+      "relative_file": "builder_list_shell.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "BenchmarkTest00006",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_dynamic_exec",
+      "relative_file": "builder_list_dynamic_exec.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_fixed",
+      "relative_file": "builder_fixed.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_constant_args",
+      "relative_file": "builder_constant_args.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_constant_list",
+      "relative_file": "builder_constant_list.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_fixed_data_safe",
+      "relative_file": "builder_list_fixed_data_safe.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_array_fixed_data_safe",
+      "relative_file": "builder_array_fixed_data_safe.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_clear_safe",
+      "relative_file": "builder_list_clear_safe.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_set_safe",
+      "relative_file": "builder_list_set_safe.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_remove_safe",
+      "relative_file": "builder_list_remove_safe.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_list_clear_reintroduced_risk",
+      "relative_file": "builder_list_clear_reintroduced_risk.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_bound_allowlist",
+      "relative_file": "builder_bound_allowlist.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_no_start",
+      "relative_file": "builder_no_start.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_after_start",
+      "relative_file": "builder_after_start.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_overwritten_constant",
+      "relative_file": "builder_overwritten_constant.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_reassigned_object",
+      "relative_file": "builder_reassigned_object.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_different_start",
+      "relative_file": "builder_different_start.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_overwritten_risk",
+      "relative_file": "builder_overwritten_risk.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_same_input_reintroduced",
+      "relative_file": "builder_same_input_reintroduced.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_two_starts",
+      "relative_file": "builder_two_starts.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_alias_start",
+      "relative_file": "builder_alias_start.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "builder_late_list_mutation",
+      "relative_file": "builder_late_list_mutation.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_sql_risk",
+      "relative_file": "cookie_javax_sql_risk.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_command_risk",
+      "relative_file": "cookie_javax_command_risk.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_http_risk",
+      "relative_file": "cookie_javax_http_risk.java",
+      "evaluation_group": "JAVA_SSRF",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_read_risk",
+      "relative_file": "cookie_javax_read_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_write_risk",
+      "relative_file": "cookie_javax_write_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_sql_binding_safe",
+      "relative_file": "cookie_javax_sql_binding_safe.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_server_constructed_safe",
+      "relative_file": "cookie_javax_server_constructed_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_fixed_endpoint_safe",
+      "relative_file": "cookie_javax_fixed_endpoint_safe.java",
+      "evaluation_group": "JAVA_SSRF",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_guard_safe",
+      "relative_file": "cookie_javax_guard_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_javax_guard_reassigned_risk",
+      "relative_file": "cookie_javax_guard_reassigned_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_sql_risk",
+      "relative_file": "cookie_jakarta_sql_risk.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_command_risk",
+      "relative_file": "cookie_jakarta_command_risk.java",
+      "evaluation_group": "JAVA_COMMAND_INJECTION",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_http_risk",
+      "relative_file": "cookie_jakarta_http_risk.java",
+      "evaluation_group": "JAVA_SSRF",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_read_risk",
+      "relative_file": "cookie_jakarta_read_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_write_risk",
+      "relative_file": "cookie_jakarta_write_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "BenchmarkTest00001/00077 source omission",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_sql_binding_safe",
+      "relative_file": "cookie_jakarta_sql_binding_safe.java",
+      "evaluation_group": "JAVA_SQL_INJECTION",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_server_constructed_safe",
+      "relative_file": "cookie_jakarta_server_constructed_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_fixed_endpoint_safe",
+      "relative_file": "cookie_jakarta_fixed_endpoint_safe.java",
+      "evaluation_group": "JAVA_SSRF",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_guard_safe",
+      "relative_file": "cookie_jakarta_guard_safe.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": false,
+      "disposition": "REQUIRED_REGRESSION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    },
+    {
+      "case_id": "cookie_jakarta_guard_reassigned_risk",
+      "relative_file": "cookie_jakarta_guard_reassigned_risk.java",
+      "evaluation_group": "PATH_FILE_ACCESS",
+      "reference_risk": true,
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "real_case_origin": "",
+      "source_type": "SYNTHETIC"
+    }
+  ]
+}

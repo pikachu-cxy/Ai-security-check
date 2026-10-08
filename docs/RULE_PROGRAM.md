@@ -51,8 +51,25 @@ The Rule Program is consumed by the existing Runtime Core and scanners. It does
 not add a second Finding or authorization system. Host status is documented in
 [Architecture](ARCHITECTURE.md) and [Project context](PROJECT_CONTEXT.md).
 
-## Next stage
+## R1 detection quality status
 
-R1 Detection Quality Hardening starts with real OSS/internal corpora, independent
-ground truth, FP/FN measurement, precision/recall, and evidence-based CORE
-promotion. No capability is promoted because this synthetic corpus is green.
+R1 Phase 1 corpus/evaluation and Phase 2 bounded fixes are locally complete.
+Independently labelled Benchmark samples reveal substantial analysis limitations;
+the R0 synthetic 0 FP/FN result is not production accuracy. Maturity remains
+2 CORE and 8 VALIDATED.
+
+SQLi now models single-argument Connection.prepareCall SQL templates; overloads
+remain limited. Command injection adds local ProcessBuilder.command followed by
+start, with command overwrite/reassignment handling and position-bounded command
+list propagation. Constant SQL, bound values, fixed executables and bounded
+constant/data arguments have safe regressions. No Cookie source expansion or
+broad helper trust is adopted.
+
+Cross-function, cross-file, arbitrary wrapper, builder/collection lifecycle,
+constant propagation and selected framework abstractions remain known analysis
+limitations. Array setters, alias-based starts and complex list mutations are
+outside the new bounded setter model. Known FP/FN regressions retain independent
+risk labels and explicit strict xfail reasons; they are not successful checks.
+See `tests/corpus/r1/` for inputs and reproduction instructions. Generated
+evaluation output remains ignored under `artifacts/r1/`. Release Preflight
+follows review of the release candidate; no capability is promoted here.

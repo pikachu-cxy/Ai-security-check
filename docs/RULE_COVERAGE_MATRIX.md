@@ -1,6 +1,8 @@
-# Rule Coverage Matrix — R0 candidate
+# Rule Coverage Matrix — R0 synthetic baseline and R1 limits
 
-2026-10-07. Generated from the versioned capability manifest and the actual managed offline Scanner corpus. No production accuracy claim.
+The table retains the 2026-10-07 R0 synthetic baseline from the versioned
+capability manifest and managed offline Scanner corpus. It is not current
+real-project accuracy; R1 evidence and limitations follow below.
 
 | Capability | Language | Frameworks | Rules | TP | TN | FP | FN | Maturity | Default | Auto-fix |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
@@ -73,3 +75,27 @@ Servlet/Jakarta and selected Spring input annotations, JDBC/Spring JDBC/MyBatis,
 Framework applicability is enforced by typed engine patterns within an explicitly planned language/extension scope, not guessed repository framework detection. Mapper-only edits select the XML variant. Zero applicable rules skip Semgrep.
 
 New non-Secret variants share a capability Family anchor; all applicable variants are required for absence proof. Read/write at the same sink is primary with traversal as related evidence. TLS rule bytes/identity and Secret detector families remain compatible. See [Rule Program](RULE_PROGRAM.md) for historical non-TLS identity boundaries.
+
+## R1 independently labelled sample
+
+Phase 1/2 evaluate the same 180 Benchmark cases (30 risky and 30 safe per group).
+Counts below use upstream cases, unlike the occurrence counts in the R0 table.
+
+| Group | Before TP/FP/FN/TN | After TP/FP/FN/TN |
+| --- | --- | --- |
+| SQLi | 0/1/30/29 | 1/1/29/29 |
+| Command | 2/0/28/30 | 3/0/27/30 |
+| Path/File | 1/5/29/25 | 1/5/29/25 |
+
+All groups remain **INSUFFICIENT_SAMPLE**. Six confirmed FP and substantial FN
+remain; no production accuracy or independent read/write recall is established.
+Jeepay has no independent ground truth, and there is no real-project SSRF recall
+evidence. R0 synthetic 0 FP/FN does not imply production accuracy.
+
+Accepted fixes cover single-argument prepareCall and bounded local
+ProcessBuilder.command/start. Known limitations include cross-function,
+cross-file, arbitrary wrapper, builder/collection lifecycle, constant propagation
+and selected framework abstractions. Cookie sources, callable overloads, array
+setters and complex alias/mutation flows remain limited. Maturity is unchanged:
+2 CORE, 8 VALIDATED. Versioned input labels/tests are under `tests/corpus/r1/`;
+generated findings and reports stay ignored under `artifacts/r1/`.

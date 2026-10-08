@@ -1,0 +1,19 @@
+{
+  "schema_version": "r1-control-labels-v1",
+  "source_type": "SYNTHETIC",
+  "note": "Source-reviewed author labels at exact sinks; scanner output never supplies these labels. Not real-world accuracy evidence.",
+  "cases": [
+    {"case_id":"jdbc-risk", "relative_file":"jdbc/Database.java", "evaluation_group":"JAVA_SQL_INJECTION", "sink_line":11, "reference_risk":true},
+    {"case_id":"jdbc-binding-safe", "relative_file":"jdbc/Database.java", "evaluation_group":"JAVA_SQL_INJECTION", "sink_line":24, "reference_risk":false},
+    {"case_id":"file-read-risk", "relative_file":"jdbc/Database.java", "evaluation_group":"PATH_FILE_ACCESS", "sink_line":13, "reference_risk":true},
+    {"case_id":"file-constant-safe", "relative_file":"jdbc/Database.java", "evaluation_group":"PATH_FILE_ACCESS", "sink_line":25, "reference_risk":false},
+    {"case_id":"url-risk", "relative_file":"jdbc/Database.java", "evaluation_group":"JAVA_SSRF", "sink_line":16, "reference_risk":true},
+    {"case_id":"url-constant-safe", "relative_file":"jdbc/Database.java", "evaluation_group":"JAVA_SSRF", "sink_line":26, "reference_risk":false},
+    {"case_id":"command-risk", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_COMMAND_INJECTION", "sink_line":11, "reference_risk":true},
+    {"case_id":"command-fixed-safe", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_COMMAND_INJECTION", "sink_line":21, "reference_risk":false},
+    {"case_id":"spring-jdbc-risk", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_SQL_INJECTION", "sink_line":13, "reference_risk":true},
+    {"case_id":"spring-jdbc-binding-safe", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_SQL_INJECTION", "sink_line":22, "reference_risk":false},
+    {"case_id":"spring-rest-risk", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_SSRF", "sink_line":15, "reference_risk":true},
+    {"case_id":"spring-rest-constant-safe", "relative_file":"spring-rest/Controller.java", "evaluation_group":"JAVA_SSRF", "sink_line":23, "reference_risk":false}
+  ]
+}

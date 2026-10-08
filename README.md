@@ -30,6 +30,8 @@ AI Security Runtime is a local-first security layer for AI coding workflows. It 
 
 > Developer Alpha. Current checks can find security issues, but a SAFE result is not a guarantee that a project is secure.
 
+Detection quality is being hardened against real-world and independently labelled corpora; complex interprocedural and wrapper flows remain limited.
+
 ## Rule Program v1
 
 The product speaks in capabilities rather than raw rule-file counts:
@@ -530,20 +532,19 @@ Release status is intended to communicate:
 
 A SAFE result is not a claim of absolute security.
 
-## Next stage
+## Detection quality status
 
 ```text
-R1 Detection Quality Hardening
-  → real OSS/internal corpus
-  → independent Ground Truth
-  → FP/FN measurement
-  → precision/recall
-  → evidence-based CORE promotion
+R1 Phase 1 — corpus and evaluation complete locally
+R1 Phase 2 — bounded detection fixes complete locally
+Next — v0.3.1 Release Preflight after release candidate review
 ```
 
 The R0 synthetic corpus is not a production accuracy claim. Broader corpus
 coverage and independent review are required before promoting VALIDATED
-capabilities to CORE.
+capabilities to CORE. R1 Benchmark evaluation found substantial analysis
+limitations; maturity remains 2 CORE and 8 VALIDATED. See the
+[Rule Program](docs/RULE_PROGRAM.md) for the supported scope and limitations.
 
 ---
 

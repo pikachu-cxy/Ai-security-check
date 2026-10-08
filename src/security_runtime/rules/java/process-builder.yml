@@ -53,6 +53,31 @@ rules:
     - focus-metavariable: $INPUT
     exact: true
   pattern-sinks:
+  # Only a locally initialized builder with a subsequent start is considered.
+  # A later command replacement or builder reassignment invalidates this setter.
+  - patterns:
+    - pattern-inside: 'ProcessBuilder $B = new ProcessBuilder(...); ... $B.command($COMMAND, ...); ... $B.start();'
+    - pattern: '$B.command($COMMAND, ...); ... $B.start();'
+    - pattern-not: '$B.command($COMMAND, ...); ... $B.command(...); ... $B.start();'
+    - pattern-not: '$B.command($COMMAND, ...); ... $B = ...; ... $B.start();'
+    # Array-wide taint cannot distinguish executable/shell payload from data.
+    # Keep the new setter modeling outside these array shapes.
+    - pattern-not-inside: 'String[] $COMMAND = ...; ...'
+    - pattern-not-inside: 'String[] $COMMAND; ...'
+    - pattern-not: '$B.command(new String[] {...}); ... $B.start();'
+    - focus-metavariable: $COMMAND
+  - patterns:
+    - pattern-inside: 'ProcessBuilder $B = new ProcessBuilder(...); ... $B.command("sh", "-c", $COMMAND); ... $B.start();'
+    - pattern: '$B.command("sh", "-c", $COMMAND); ... $B.start();'
+    - pattern-not: '$B.command("sh", "-c", $COMMAND); ... $B.command(...); ... $B.start();'
+    - pattern-not: '$B.command("sh", "-c", $COMMAND); ... $B = ...; ... $B.start();'
+    - focus-metavariable: $COMMAND
+  - patterns:
+    - pattern-inside: 'ProcessBuilder $B = new ProcessBuilder(...); ... $B.command("cmd.exe", "/c", $COMMAND); ... $B.start();'
+    - pattern: '$B.command("cmd.exe", "/c", $COMMAND); ... $B.start();'
+    - pattern-not: '$B.command("cmd.exe", "/c", $COMMAND); ... $B.command(...); ... $B.start();'
+    - pattern-not: '$B.command("cmd.exe", "/c", $COMMAND); ... $B = ...; ... $B.start();'
+    - focus-metavariable: $COMMAND
   - patterns:
     - pattern-inside: $RET $METHOD(...) { ... ProcessBuilder $B = new ProcessBuilder($COMMAND,
         ...); ... $B.start(); ... }
@@ -68,6 +93,30 @@ rules:
         "/c", $COMMAND); ... $B.start(); ... }
     - pattern: new ProcessBuilder("cmd.exe", "/c", $COMMAND)
     - focus-metavariable: $COMMAND
+  # Bounded mutable command-list shape from a local builder. This does not
+  # model arbitrary collections, helper calls, aliases or builder lifetimes.
+  pattern-propagators:
+  - patterns:
+    - pattern-inside: '$RET $METHOD(...) { ... java.util.List<String> $ARGS = ...; ... ProcessBuilder $B = new ProcessBuilder(); ... $B.command($ARGS); ... $B.start(); ... }'
+    - pattern: $ARGS.add($ITEM)
+    - pattern-either:
+      - pattern-inside: 'java.util.List<String> $ARGS = new java.util.ArrayList<>(); $ARGS.add($ITEM); ...'
+      - pattern-inside: 'java.util.List<String> $ARGS = new java.util.ArrayList<>(); $ARGS.add("sh"); $ARGS.add("-c"); $ARGS.add($ITEM); ...'
+      - pattern-inside: 'java.util.List<String> $ARGS = new java.util.ArrayList<>(); $ARGS.add("cmd.exe"); $ARGS.add("/c"); $ARGS.add($ITEM); ...'
+      - pattern-inside: 'java.util.List<String> $ARGS = new java.util.ArrayList<String>(); String $OS = ...; if (...) { $ARGS.add("cmd.exe"); $ARGS.add("/c"); } else { $ARGS.add("sh"); $ARGS.add("-c"); } $ARGS.add($ITEM); ...'
+    # Mutating element order/content needs a collection lifetime model. Defer it
+    # rather than treating overwritten command elements as still executable.
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.clear(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.set(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.remove(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.removeAll(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.retainAll(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.replaceAll(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.sort(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.addAll(...); ... $B.command($ARGS); ...'
+    - pattern-not-inside: '$ARGS.add($ITEM); ... $ARGS.add($INDEX, $VALUE); ... $B.command($ARGS); ...'
+    from: $ITEM
+    to: $ARGS
   metadata:
     publisher: AI Security Runtime
     rule_pack: ai-security-core

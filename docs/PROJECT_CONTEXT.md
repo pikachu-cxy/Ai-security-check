@@ -6,8 +6,8 @@ first when resuming development.
 ## Current milestone
 
 - Branch: `feature/runtime-mvp`
-- Milestone: R0 Rule Program v1 and Java High-Confidence Pack
-- Next stage: **R1 Detection Quality Hardening — Real-World Detection Corpus & Evaluation**
+- Milestone: R1 Phase 1 corpus/evaluation and Phase 2 bounded detection fixes complete locally
+- Next stage: **v0.3.1 Developer Alpha Release Preflight**, after release candidate review
 - Product: local-first security verification for AI-assisted coding. The agent
   edits; the Runtime supplies scanner-backed findings, policy, and bounded
   remediation.
@@ -65,9 +65,24 @@ unknown or inconclusive rather than being promoted to safe.
 - Hooks provide deterministic detection/enforcement; MCP provides Agent chat UX
   where the host supports it.
 
-## Next stage
+## R1 detection quality
 
-R1 starts with real OSS/internal detection corpora, independent ground truth,
-FP/FN accounting, precision/recall, and evidence-based CORE promotion. Prior
-R0 acceptance outputs are historical evidence in Git history, not current
-project state.
+Phase 1 separates upstream Benchmark labels, scanner observations, source cause
+reviews and unlabelled OSS review candidates. Phase 2 adds single-argument
+Connection.prepareCall and bounded local ProcessBuilder.command/start modeling.
+The frozen 180-case Benchmark sample changes SQLi TP/FP/FN/TN from 0/1/30/29 to
+1/1/29/29 and Command from 2/0/28/30 to 3/0/27/30; Path/File stays 1/5/29/25.
+No new FP was observed in this sample; six confirmed FP remain known limitations.
+All groups are INSUFFICIENT_SAMPLE, not production accuracy evidence. Unlabelled
+Jeepay results do not establish recall or safety.
+
+Known limits include cross-function, cross-file, arbitrary wrapper, builder and
+collection lifecycle, constant propagation and selected framework abstractions.
+Cookie source expansion was not adopted because its bounded experiment added FP.
+Maturity remains 2 CORE and 8 VALIDATED; host integration is unchanged.
+
+Versioned evaluation logic, labels and regressions are under `scripts/r1_*.py`
+and `tests/corpus/r1/`. Generated reports/scanner outputs stay ignored under
+`artifacts/r1/`. Prior R0 acceptance outputs are historical evidence, not current
+project state. Release candidate review precedes Release Preflight; no v0.3.1
+publication or tag is implied by these local results.

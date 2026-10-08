@@ -53,6 +53,13 @@ rules:
     - focus-metavariable: $INPUT
     exact: true
   pattern-sinks:
+  # SQL template construction is the boundary; binding a later value does not
+  # make an externally selected procedure name safe.
+  - patterns:
+    # The single-argument API is the proven scope for this phase. Result-set
+    # overloads remain unmodelled pending independent precision regressions.
+    - pattern: (java.sql.Connection $CONNECTION).prepareCall($SQL)
+    - focus-metavariable: $SQL
   - patterns:
     - pattern: (java.sql.Statement $STATEMENT).execute($SQL, ...)
     - focus-metavariable: $SQL

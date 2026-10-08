@@ -16,4 +16,17 @@ stmt.executeQuery();
 }
 java.sql.Connection connection;
 
+void callableRisk(HttpServletRequest request) throws Exception {
+String sql="{call "+request.getParameter("procedure")+"(?)}";
+// ruleid: ai-security.java.jdbc-statement
+CallableStatement stmt=connection.prepareCall(sql);
+stmt.setString(1,request.getParameter("value"));
+stmt.execute();
+}
+void callableBoundValue(HttpServletRequest request) throws Exception {
+// ok: ai-security.java.jdbc-statement
+CallableStatement stmt=connection.prepareCall("{call fixed_procedure(?)}");
+stmt.setString(1,request.getParameter("value"));
+stmt.execute();
+}
 }

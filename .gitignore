@@ -16,3 +16,4 @@ dist/
 .test-tmp/
 .distribution-venv/
 .test-tmp-run*/
+artifacts/r1/

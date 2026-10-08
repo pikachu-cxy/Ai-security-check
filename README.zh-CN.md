@@ -597,19 +597,18 @@ Release Status：
 
 SAFE 不代表项目绝对安全。
 
-## 下一阶段
+## 检测质量状态
 
 ```text
-R1 Detection Quality Hardening
-  → real OSS/internal corpus
-  → independent Ground Truth
-  → FP/FN measurement
-  → precision/recall
-  → evidence-based CORE promotion
+R1 Phase 1 — 语料与评估已在本地完成
+R1 Phase 2 — 有限检测修复已在本地完成
+下一阶段 — Release Candidate 审查后的 v0.3.1 Release Preflight
 ```
 
 R0 synthetic corpus 不是生产准确率结论。VALIDATED 能力在升级为 CORE 前，仍需要
-更广泛语料和独立复核。
+更广泛语料和独立复核。R1 Benchmark 评估发现大量分析限制，maturity 仍为
+2 CORE、8 VALIDATED；复杂跨函数和 wrapper 数据流仍受限。范围与限制见
+[Rule Program](docs/RULE_PROGRAM.md)。
 
 ---
 

@@ -1,0 +1,239 @@
+{
+  "schema_version": "r1-phase2-cause-review-v1",
+  "reviews": [
+    {
+      "case_id": "fixed_switch_read_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "fixed_switch_nested_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "inner_constant_branch_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "helper_list_write_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "COLLECTION_ELEMENT_SELECTION",
+      "reason": "The helper selects a fixed safe list element, but argument-to-return taint propagation does not resolve the element selection.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "helper_list_nested_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "COLLECTION_ELEMENT_SELECTION",
+      "reason": "The helper selects a fixed safe list element, but argument-to-return taint propagation does not resolve the element selection.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "sql_helper_switch_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "literal_path_helper_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "literal_sql_helper_safe",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "CONSTANT_RETURN_OR_BRANCH",
+      "reason": "Fixed branch or constant helper return remains tainted. Trusting unknown functions suppresses true unsafe helper counterparts.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "call_overload",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SINK_OVERLOAD_DEFERRED_PRECISION",
+      "reason": "Only single-argument prepareCall is adopted. Adding overloads exposed a fixed-branch FP in BenchmarkTest00191.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "call_overload_switch_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SINK_OVERLOAD_DEFERRED_PRECISION",
+      "reason": "Only single-argument prepareCall is adopted. Adding overloads exposed a fixed-branch FP in BenchmarkTest00191.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "builder_command_array",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "COMMAND_ARRAY_ELEMENT_SELECTION",
+      "reason": "Array-wide taint cannot distinguish the executable from a safe fixed executable with external data arguments; array setter modeling is deferred.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "builder_list_clear_reintroduced_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "MUTABLE_LIST_LIFETIME",
+      "reason": "Element mutation before the setter is deferred as a collection lifetime boundary, even when an unsafe executable is later reintroduced.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "builder_alias_start",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "ALIAS_FLOW",
+      "reason": "The bounded local builder pattern requires command and start on the same variable; alias resolution is unsupported.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "builder_late_list_mutation",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "MUTABLE_LIST_LIFETIME",
+      "reason": "ProcessBuilder retains the command list; mutation after command and before start is outside the bounded propagator.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_sql_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_command_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_http_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_read_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_write_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_javax_guard_reassigned_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_sql_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_command_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_http_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_read_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_write_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    },
+    {
+      "case_id": "cookie_jakarta_guard_reassigned_risk",
+      "disposition": "KNOWN_ANALYSIS_LIMITATION",
+      "taxonomy": "SOURCE_MODELING_DEFERRED_PRECISION",
+      "reason": "Client Cookie input is untrusted, but the bounded source experiment introduced two Benchmark FP cases. No Cookie source change is adopted.",
+      "review_basis": "SOURCE_SEMANTICS_AND_ISOLATED_ENGINE_EXPERIMENT",
+      "reviewer": "Codex",
+      "independent_human_review": false
+    }
+  ]
+}
