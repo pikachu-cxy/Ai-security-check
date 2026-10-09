@@ -78,14 +78,27 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 data=data.get('result',data)
                 if data['packets']:
                     packet=data['packets'][0]
+                    if packet['category']=='code' and packet['local_evidence']['evidence_status']!='EXACT':
+                        raise ValueError('Fresh standalone SAST triage evidence is not original EXACT')
                     # Explicit mock host analysis, real frozen Runtime validation.
                     value={'finding_id':packet['finding_id'],'context_hash':packet['context_hash'],
                         'verdict':'NEEDS_REVIEW','confidence':'LOW','exploitability':'UNKNOWN',
                         'reason':'Synthetic standalone host analysis; context remains unknown.','attack_path':'',
                         'evidence_refs':[{'file':packet['file'],'start_line':packet['line']['start'],'end_line':packet['line']['end'],'claim':'Scanner candidate'}],
                         'preconditions_met':[],'preconditions_unknown':['Reachability'],'recommended_action':'Review'}
-                    accepted=await client.call_tool('submit_triage',{'scan_id':payload['scan_id'],'results':[value],'triage_session':data['triage_session']})
+                    accepted=await client.call_tool('submit_triage',{'scan_id':payload['scan_id'],'results':[value],'triage_session':data['triage_session'],'compact':True})
                     if accepted.isError: raise ValueError('Standalone submit_triage failed')
+                    ack=accepted.structuredContent or json.loads(accepted.content[0].text)
+                    ack=ack.get('result',ack)
+                    if ack['accepted']!=1 or 'view' in ack: raise ValueError('Standalone compact triage contract failed')
+                listed=await client.call_tool('get_findings',{'scan_id':payload['scan_id'],'view':'summary','limit':5})
+                if listed.isError: raise ValueError('Standalone paged findings failed')
+                listing=listed.structuredContent or json.loads(listed.content[0].text)
+                listing=listing.get('result',listing)
+                if listing['items']:
+                    detail=await client.call_tool('get_findings',{'scan_id':payload['scan_id'],
+                        'finding_id':listing['items'][0]['id'],'view':'page','limit':1,'include_evidence':True})
+                    if detail.isError: raise ValueError('Standalone local evidence detail failed')
                 view=await client.call_tool('get_triage',{'scan_id':payload['scan_id']})
                 if view.isError: raise ValueError('Standalone triage view failed')
                 summary=await client.call_tool('get_security_summary',{'scan_id':payload['scan_id'],'details':True})
@@ -265,6 +278,18 @@ def main() -> None:
         if version != f"AI Security Runtime {__version__}":
             raise ValueError(f"Unexpected version: {version}")
         run([str(executable), "--help"], cwd=root, env=env)
+        skills = root / 'isolated-skills'
+        installed = json.loads(run([str(executable),'review-skill','install','--skills-dir',str(skills),'--json'],cwd=root,env=env).stdout)
+        if installed['status']!='INSTALLED': raise ValueError('Standalone companion Skill install failed')
+        skill_root = skills / 'ai-security-review'
+        workflow = (skill_root/'references/runtime-workflow.md').read_text(encoding='utf-8')
+        from security_runtime.host_guidance import HOST_INSTRUCTIONS
+        if HOST_INSTRUCTIONS not in workflow: raise ValueError('Standalone Skill canonical workflow mismatch')
+        custom = skill_root/'user-notes.txt'
+        custom.write_bytes(b'preserve user notes\r\n')
+        for action in ('status','upgrade','repair','remove'):
+            run([str(executable),'review-skill',action,'--skills-dir',str(skills),'--json'],cwd=root,env=env)
+        if custom.read_bytes()!=b'preserve user notes\r\n': raise ValueError('Standalone Skill erased user content')
         project = root / "project"
         project.mkdir()
         run(["git", "init", "-q", str(project)], cwd=root, env=env)

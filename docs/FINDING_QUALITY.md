@@ -1,5 +1,10 @@
 # Finding quality baseline (R2.1)
 
+R2.2 connects the safe local reader to existing AI triage and adds bounded MCP
+views and a companion Skill; see [Security review](SECURITY_REVIEW.md). Human
+quality labels remain separate. Full-file keyed context revisions invalidate AI
+conclusions after changes; old scan context is never promoted to original EXACT.
+
 Scanner observations, quality review decisions and existing AI validation are
 separate records. Nothing in this baseline suppresses findings, changes scanner
 coverage, authorizes fixes or invokes an LLM. The first corpus is the current

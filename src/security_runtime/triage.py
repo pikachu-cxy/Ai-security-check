@@ -29,6 +29,10 @@ def validate_schema(value,schema=RESULT_SCHEMA):
 
 class TriagePolicy:
     def apply(self,record,packet,severity):
+        if packet.get('local_evidence',{}).get('evidence_status')=='STALE':
+            record.verdict='NEEDS_REVIEW'
+            record.exploitability='UNKNOWN'
+            record.policy_notes.append('Source changed since scan; rescan before validating the original detector claim.')
         if record.verdict=='FALSE_POSITIVE':
             counter=packet['enrichment']['verified_counterevidence']
             proven=any(any(ref['file']==proof['file'] and ref['start_line']<=proof['start_line']
@@ -110,8 +114,9 @@ class TriageService:
                     record=TriageRecord(**old);record.scan_id=scan_id;record.finding_id=finding['id']
                     self.store.save_triage(record,key);cached.append(finding['id'])
                 else: packets.append(packet)
-            except (ValueError,OSError):
-                errors.append({'finding_id':finding['id'],'error':'Evidence unavailable or violates workspace/size/line bounds'})
+            except (ValueError,OSError) as exc:
+                errors.append({'finding_id':finding['id'],'error':'Evidence unavailable or violates workspace/size/line bounds',
+                    'reason':getattr(exc,'reason','FILE_MISSING' if isinstance(exc,FileNotFoundError) else 'EVIDENCE_UNAVAILABLE')})
         return {'scan_id':scan_id,'packets':packets,'cached_finding_ids':cached,'errors':errors,
             'required_output_schema':RESULT_SCHEMA,'triage_instructions':INSTRUCTIONS,'prompt_version':PROMPT_VERSION,
             'provider':{'provider_type':provider.provider_type,'provider_name':provider.provider_name,'model':provider.model},
@@ -119,7 +124,7 @@ class TriageService:
             'remaining':max(0,len(selected)-len(examined)),
             'retained_finding_ids':retained,'deferred_failed_finding_ids':deferred}
 
-    def submit(self,scan_id,results,*,provider=None):
+    def submit(self,scan_id,results,*,provider=None,compact=False):
         provider=provider or AgentNativeProvider()
         if not isinstance(results,list) or not 1<=len(results)<=self.budget.max_findings_per_batch:
             raise ValueError('Invalid triage submission batch size')
@@ -154,6 +159,15 @@ class TriageService:
         # Validate the entire batch first; invalid later items cannot partially
         # publish earlier model claims. Raw scans/findings are never written.
         for record,key in records: self.store.save_triage(record,key)
+        if compact:
+            from collections import Counter
+            return {'scan_id':scan_id, 'accepted':len(records),
+                'finding_ids':[record.finding_id for record,key in records],
+                'verdict_counts':dict(Counter(record.verdict for record,key in records)),
+                'priority_counts':dict(Counter(record.priority for record,key in records)),
+                'results_access':{'tool':'get_triage','arguments':{'scan_id':scan_id}},
+                'raw_findings_changed':False, 'scan_coverage_changed':False,
+                'quality_reviews_changed':False}
         return {'accepted':len(records),'records':[record.to_dict() for record,key in records],
             'view':self.view(scan_id)}
 

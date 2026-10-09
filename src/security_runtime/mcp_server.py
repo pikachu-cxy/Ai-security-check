@@ -174,13 +174,13 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
 
-    def register_handoff(data, task_binding=None):
+    def register_handoff(data, task_binding=None, continuation_args=None):
         expired=[key for key,value in triage_sessions.items() if time.monotonic()-value[2]>900]
         for key in expired: triage_sessions.pop(key,None)
         if len(triage_sessions)>=64: triage_sessions.pop(next(iter(triage_sessions)))
         token=secrets.token_urlsafe(32)
         triage_sessions[token]=(data['scan_id'],{p['finding_id']:p['context_hash'] for p in data['packets']},
-                                time.monotonic(),task_binding)
+                                time.monotonic(),task_binding,continuation_args)
         data['triage_session']=token
         data['triage_session_expires_in_seconds']=900
         return data
@@ -222,7 +222,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             logger.warning("dogfood_event_failed reason=%s", type(exc).__name__)
 
     @server.tool()
-    def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None) -> dict:
+    def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = False) -> dict:
         """Scan changed files in a local Git repository."""
         if mode not in {"quick", "feature"}:
             raise ValueError("mode must be quick or feature")
@@ -234,10 +234,10 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
                            mode, result.duration_ms, len(result.findings), result.coverage), connected=True)
         logger.info("scan_diff finished scan_id=%s", result.scan_id)
-        return _agent_result(result)
+        return scan_response(result, summary)
 
     @server.tool()
-    def scan_project(workspace_path: str | None = None, path: str | None = None) -> dict:
+    def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = False) -> dict:
         """Run a full local project scan."""
         if workspace_path is not None and path is not None and workspace_path != path:
             raise ValueError("Specify only one workspace path")
@@ -245,12 +245,23 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         result = runtime_engine().scan(root, "release")
         event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
                            "release", result.duration_ms, len(result.findings), result.coverage), connected=True)
-        return _agent_result(result)
+        return scan_response(result, summary)
+
+    def scan_response(result, summary):
+        data = _agent_result(result)
+        if summary:
+            data['finding_count'] = len(data.pop('findings'))
+            data['findings_access'] = {'tool':'get_findings', 'arguments':{
+                'scan_id':result.scan_id, 'view':'summary', 'limit':20}}
+        return data
 
     @server.tool()
-    def get_findings(scan_id: str, include_evidence: bool = False, finding_id: str | None = None, context_lines: int = 5) -> list[dict]:
+    def get_findings(scan_id: str, include_evidence: bool = False, finding_id: str | None = None, context_lines: int = 5,
+                     view: str = 'full', offset: int = 0, limit: int | None = None) -> list[dict] | dict:
         """List findings/review state; opt into bounded redacted local evidence, optionally for one existing scanner id. Evidence distinguishes original EXACT code from STALE/unverifiable current_context. quality.finding_id remains review-only."""
         check_scan(scan_id)
+        from .mcp_views import page_bounds, finding_summary, paged
+        page_limit = page_bounds(view, offset, limit, evidence=include_evidence)
         if not 0 <= context_lines <= 20:
             raise ValueError('Context lines must be between 0 and 20')
         from .local_evidence import LocalEvidenceService
@@ -258,8 +269,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if binding:
             event(DogfoodEvent(binding.integration_id, binding.root), connected=True)
         from .triage import TriageService
-        view=TriageService(runtime_engine().store).view(scan_id)
-        rows={row['finding_id']:row for row in view['findings']}
+        triage_view=TriageService(runtime_engine().store).view(scan_id)
+        rows={row['finding_id']:row for row in triage_view['findings']}
         from .finding_quality import FindingQualityService
         from .storage import ReadOnlySQLiteStore
         try:
@@ -267,10 +278,13 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             quality_rows = {r['scanner_finding_id']: r for r in quality['findings']}
         except ValueError:
             quality_rows = {}
+        originals = [f for f in runtime_engine().get_findings(scan_id)
+                     if finding_id is None or f['id'] == finding_id]
+        if finding_id is not None and not originals:
+            raise ValueError('Finding does not belong to this scan')
+        selected = originals if view == 'full' else originals[offset:offset+page_limit]
         found=[]
-        for finding in runtime_engine().get_findings(scan_id):
-            if finding_id is not None and finding['id'] != finding_id:
-                continue
+        for finding in selected:
             row=rows[finding['id']]
             item=_agent_finding(finding)
             if finding['id'] in quality_rows:
@@ -283,21 +297,26 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                 item.update(verdict=row['triage']['verdict'],triage_confidence=row['triage']['confidence'],exploitability=row['triage']['exploitability'])
             if local_evidence is not None:
                 item['local_evidence'] = local_evidence.detail(finding, context_lines)
-            found.append(item)
-        if finding_id is not None and not found:
-            raise ValueError('Finding does not belong to this scan')
-        return found
+            found.append(finding_summary(item) if view == 'summary' else item)
+        if view == 'full': return found
+        return paged(found, len(originals), offset, page_limit, tool='get_findings', arguments={
+            'scan_id':scan_id, 'view':view, 'include_evidence':include_evidence,
+            'finding_id':finding_id, 'context_lines':context_lines})
 
     @server.tool()
-    def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20) -> dict:
+    def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20,
+                       pending_only: bool = False, retry_failed: bool = False) -> dict:
         """Return bounded redacted UNTRUSTED_CODE evidence to this host agent; does not invoke AI."""
         check_scan(scan_id)
         from .triage import TriageService
-        data=TriageService(runtime_engine().store).prepare(scan_id,finding_ids,categories,limit)
-        return register_handoff(data)
+        data=TriageService(runtime_engine().store).prepare(scan_id,finding_ids,categories,limit,
+            pending_only=pending_only,retry_failed=retry_failed)
+        return register_handoff(data, continuation_args={'scan_id':scan_id,
+            'finding_ids':finding_ids,'categories':categories,'limit':min(limit,5),
+            'pending_only':True,'retry_failed':retry_failed})
 
     @server.tool()
-    def submit_triage(scan_id: str, results: list[dict], triage_session: str) -> dict:
+    def submit_triage(scan_id: str, results: list[dict], triage_session: str, compact: bool = False) -> dict:
         """Validate structured host analysis and evidence references; preserves every raw finding."""
         check_scan(scan_id)
         session=triage_sessions.get(triage_session)
@@ -314,11 +333,19 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             if resolved['status']!='RESOLVED':
                 raise ValueError('Task changed or reference expired; refresh get_security_summary and prepare again')
         from .triage import TriageService
-        data=TriageService(runtime_engine().store).submit(scan_id,results)
+        data=TriageService(runtime_engine().store).submit(scan_id,results,compact=compact)
         if session[3] is not None:
             data['execution']={'host_result_accepted':True,'accepted_records':data['accepted'],
                                'patch_applied':False,'target_build':False,'tests_or_scanner_recheck':False}
         for item in results: session[1].pop(item['finding_id'],None)
+        if compact:
+            data['handoff_remaining'] = len(session[1])
+            if session[3] is not None:
+                data['continuation']={'tool':'prepare_task_triage','arguments':{
+                    'task_ref':session[3][0],'workspace_path':session[3][1],
+                    'limit':5,'include_existing_reviews':False}}
+            else:
+                data['continuation']={'tool':'prepare_triage','arguments':session[4]}
         return data
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
@@ -337,7 +364,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             workspace_path, scan_id, details=details, bound_workspace=binding.root if binding else None)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 20, retry_failed: bool = False) -> dict:
+    def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 20, retry_failed: bool = False,
+                            include_existing_reviews: bool = True) -> dict:
         """Continue the displayed task using its task_ref, never T01 or user UUIDs. Host analyzes packets then submit_triage; no model invocation here."""
         from .task_triage import TaskTriageService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
@@ -347,14 +375,29 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         resolved=service.resolve(task_ref,workspace_path,bound_workspace=binding.root if binding else None)
         if resolved['status']!='RESOLVED': return resolved
         data=service.prepare(resolved,TriageService(runtime_engine().store),limit=limit,retry_failed=retry_failed)
+        if not include_existing_reviews:
+            data.pop('existing_reviews',None)
+            data['existing_reviews_truncated'] = bool(data['existing_review_count'])
         return register_handoff(data,(task_ref,resolved['workspace'])) if data['packets'] else data
 
     @server.tool()
-    def get_triage(scan_id: str) -> dict:
+    def get_triage(scan_id: str, view: str = 'full', offset: int = 0, limit: int | None = None) -> dict:
         """Independent triage coverage and grouped view; never changes scan coverage."""
         check_scan(scan_id)
         from .triage import TriageService
-        return TriageService(runtime_engine().store).view(scan_id)
+        from .mcp_views import page_bounds, paged
+        page_limit=page_bounds(view,offset,limit)
+        data=TriageService(runtime_engine().store).view(scan_id)
+        if view == 'full': return data
+        rows=data.pop('findings')
+        selected=rows[offset:offset+page_limit]
+        if view == 'summary':
+            selected=[{k:v for k,v in row.items() if k!='triage'} | {
+                'verdict':(row['triage'] or {}).get('verdict'),
+                'priority':(row['triage'] or {}).get('priority')} for row in selected]
+        data.pop('dependency_groups',None)
+        return data | paged(selected,len(rows),offset,page_limit,tool='get_triage',
+            arguments={'scan_id':scan_id,'view':view})
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def prepare_task_fix(task_ref: str, workspace_path: str | None = None, remediation_ref: str | None = None,

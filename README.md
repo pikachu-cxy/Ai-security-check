@@ -1,5 +1,11 @@
 # AI Security Runtime
 
+**R2.2 Windows local experience:** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
+Use natural language with the companion Security Review Skill and existing MCP to
+scan, review, fix an authorized task and verify with the original scanner. Explicit
+review works without Hooks; new Desktop behavior requires personal acceptance.
+This local build is not a published Release.
+
 Rule Program v1 is capability-led: 10 detection capabilities, 2 CORE and 8
 VALIDATED. It contains 19 capability-owned Semgrep variants, 29 installed
 Semgrep rules, 8 legacy Java EXPERIMENTAL rules default-off, and 2 existing

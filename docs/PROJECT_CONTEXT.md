@@ -8,8 +8,11 @@ first when resuming development.
 - Branch: `feature/runtime-mvp`
 - Milestone: R1 phases complete; Release Blocker Fix and Global Ownership v2
   passed two independent Desktop restart cycles and Windows standalone checks
-- Current stage: **R2.1 Real Project Finding Quality Baseline**; independent
-  review contract and local-only corpus, awaiting user review before R2.2
+- Current stage: **R2.2 local security review experience**; R2.1/1.1 committed
+  as an independent finding-quality/evidence baseline. Shared safe triage evidence,
+  bounded MCP views and a signed companion Skill lifecycle are implemented.
+  New Windows experience requires user Desktop acceptance; earlier Desktop gates
+  do not certify this new build's natural-language or Hook visibility.
 - Release/CI work is paused by user direction; no tag or Release is implied
 - Product: local-first security verification for AI-assisted coding. The agent
   edits; the Runtime supplies scanner-backed findings, policy, and bounded

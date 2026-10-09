@@ -1,0 +1,6 @@
+interface:
+  display_name: "AI Security Review"
+  short_description: "Review local findings, then fix and verify authorized risks"
+  default_prompt: "Use $ai-security-review to check this project's existing findings and explain the next risk task."
+policy:
+  allow_implicit_invocation: true

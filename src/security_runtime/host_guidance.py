@@ -7,6 +7,26 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix'}
 
 HOST_INSTRUCTIONS = '''AI Security Runtime developer workflow:
+Security Review Skill and explicit natural-language requests use this same workflow;
+Hook availability is not required for explicit MCP review. First read runtime info
+and the existing workspace security summary; reuse its scan instead of rescanning
+on every message. A changed original match requires a new authorized scan.
+For a new authorized scan prefer summary=true. Navigate get_findings with
+view=summary, limit=20 and returned continuation; retrieve one finding's bounded
+evidence with finding_id, include_evidence=true, view=page, limit=1.
+For the selected exact task prepare_task_triage with limit=5 and
+include_existing_reviews=false. Analyze the supplied schema/evidence, then
+submit_triage with compact=true and the unchanged scan/session/context hashes.
+Follow its continuation within the authorized task scope; complete records remain
+accessible through get_triage (view=page/summary, or legacy full).
+Raw scanner observations, HUMAN quality review decisions, AI triage validity,
+scanner coverage and fix verification are independent. None implies the others.
+local_evidence.EXACT requires a stored scan-time file revision; older scans supply
+unverifiable current context, never reconstructed original evidence. STALE files
+need rescanning. Redacted literals can hide important semantics: retain unknowns,
+never ask for credential values, invent traces or treat tests/samples as false
+positives. Source changes invalidate relevant persisted AI conclusions; re-prepare
+after interruption/reconnection, never reuse a connection-local triage_session.
 Users express ordinary intent, such as 检查这个项目 or 继续第一项/处理第一个问题.
 Do not ask users for Finding UUIDs, tool names, technical prompts, or copy/paste
 between tools. Codex setup owns startup/readiness; never require a get_runtime_info
@@ -164,6 +184,8 @@ def runtime_info(*, remediation_config=None):
                 'capability_is_not_execution_timing': True},
             'remediation': remediation,
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
+                         'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
+                         'security_review_skill': 'v1',
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',

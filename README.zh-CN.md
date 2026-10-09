@@ -1,5 +1,10 @@
 # AI Security Runtime
 
+**R2.2 Windows 本地体验：** [安装与六步清单](docs/WINDOWS_EXPERIENCE.zh-CN.md)。
+通过配套 Security Review Skill 和现有 MCP，以自然语言扫描、核查、授权修复，
+再由原扫描器验证。主动核查不依赖 Hook，新包的 Desktop 行为需要亲自验收。
+此本地构建不代表 Release 发布。
+
 Rule Program v1 以 Capability 为产品口径：10 个检测能力，其中 2 个 CORE、8 个
 VALIDATED；包含 19 个 capability-owned Semgrep variants、29 个已安装 Semgrep
 rules、8 个默认关闭的 legacy Java EXPERIMENTAL rules，以及 2 个既有 Python rules。

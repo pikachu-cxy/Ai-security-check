@@ -175,7 +175,8 @@ def test_unbound_foreign_workspace_and_foreign_session_rejected(setup, tmp_path)
 
 def test_symlink_workspace_claim_rejected(setup, tmp_path):
     link = setup[0] / 'link'; outside = tmp_path / 'outside'; outside.mkdir()
-    link.symlink_to(outside, target_is_directory=True)
+    from link_fixture import linked_directory
+    linked_directory(link,outside)
     assert stop(setup, workspace_path=str(link))['status'] == 'INCONCLUSIVE'
 
 

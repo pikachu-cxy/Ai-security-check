@@ -52,8 +52,10 @@ class WorkspaceReader:
         _no_links(self.root)
         self.root = self.root.resolve(strict=True)
 
-    def read(self, name):
+    def read(self, name, maximum=MAX_FILE_BYTES):
         """Check the opened inode before reading; recheck boundaries/revision after."""
+        if type(maximum) is not int or not 1 <= maximum <= MAX_FILE_BYTES:
+            raise ValueError('Invalid local read budget')
         name = _relative(name)
         candidate = self.root / name
         _no_links(candidate)
@@ -62,7 +64,7 @@ class WorkspaceReader:
         before = candidate.stat()
         if not stat.S_ISREG(before.st_mode):
             raise EvidenceUnavailable('NOT_REGULAR_FILE')
-        if before.st_size > MAX_FILE_BYTES:
+        if before.st_size > maximum:
             raise EvidenceUnavailable('FILE_TOO_LARGE')
         flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
         with os.fdopen(os.open(candidate, flags), 'rb') as stream:
@@ -70,14 +72,14 @@ class WorkspaceReader:
             if (not candidate.resolve(strict=True).is_relative_to(self.root)
                     or _revision(os.fstat(stream.fileno())) != _revision(before)):
                 raise EvidenceUnavailable('FILE_CHANGED_DURING_READ')
-            raw = stream.read(MAX_FILE_BYTES + 1)
+            raw = stream.read(maximum + 1)
             after = os.fstat(stream.fileno())
         _no_links(candidate)
         if (not candidate.resolve(strict=True).is_relative_to(self.root)
                 or _revision(before) != _revision(after)
                 or _revision(after) != _revision(candidate.stat())):
             raise EvidenceUnavailable('FILE_CHANGED_DURING_READ')
-        if len(raw) > MAX_FILE_BYTES:
+        if len(raw) > maximum:
             raise EvidenceUnavailable('FILE_TOO_LARGE')
         if any(byte < 32 and byte not in (9, 10, 12, 13) for byte in raw):
             raise EvidenceUnavailable('BINARY_FILE')
@@ -97,6 +99,10 @@ def snapshot_fingerprint(workspace, name):
         return dict(file_sha256=None, reason=getattr(exc, 'reason', 'FILE_UNAVAILABLE'))
 
 
+PUBLIC_LITERALS = frozenset({'MD5', 'SHA-1', 'SHA-256', 'SHA-512', 'TLS', 'SSL',
+    'HTTPS', 'http', 'https', 'UTF-8', 'UTF8', 'GET', 'POST', ''})
+
+
 def safe_source(text, secret_ranges=()):
     """Scrub literals over the whole bounded file before selecting nearby lines.
 
@@ -104,6 +110,11 @@ def safe_source(text, secret_ranges=()):
     a context window cutting through such a block must not reveal its middle.
     """
     def mask(match):
+        value = match.group(0)
+        public_api = re.search(r'\b(?:MessageDigest|SSLContext)\.getInstance\(\s*$', text[max(0,match.start()-80):match.start()])
+        if (public_api and value[:1] in ('"', "'") and value[-1:] == value[:1]
+                and value[1:-1] in PUBLIC_LITERALS):
+            return value
         return '[REDACTED_LITERAL]' + '\n' * match.group(0).count('\n')
     text = re.sub(r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)', mask, text)
     text = re.sub(r'\x22\x22\x22[\s\S]*?(?:\x22\x22\x22|\Z)|\x27\x27\x27[\s\S]*?(?:\x27\x27\x27|\Z)', mask, text)
@@ -184,7 +195,7 @@ class LocalEvidenceService:
             raise ValueError('Context lines must be between 0 and 20')
         output = dict(evidence_status='UNAVAILABLE', reason=None, locator=None,
             original_evidence=None, current_context=None, trust='UNTRUSTED_CODE',
-            redaction='Known secret ranges, credential patterns and all string literals')
+            redaction='Known secret ranges, credential patterns and literals except fixed public constants')
         try:
             locator = evidence_locator(finding)
             output['locator'] = locator

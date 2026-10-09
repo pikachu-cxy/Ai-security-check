@@ -51,6 +51,13 @@ for engine in ('semgrep', 'gitleaks', 'trivy'):
     assert (package / 'licenses' / engine / 'LICENSE').is_file()
     assert (package / 'licenses' / engine / 'NOTICE').is_file()
 assert (package / 'python_downloads.json').is_file()
+from security_runtime.review_skill import ReviewSkillManager, skill_files
+assert 'references/runtime-workflow.md' in skill_files()
+skill = ReviewSkillManager(Path.cwd()/'synthetic-home/.agents/skills',Path.cwd()/'skill-state')
+assert skill.status()['status']=='NOT_INSTALLED'
+assert skill.execute('install')['status']=='INSTALLED'
+assert skill.execute('repair')['changed'] is False
+assert skill.execute('remove')['status']=='REMOVED'
 share = Path(__import__('sys').prefix) / 'share' / 'ai-security-runtime'
 assert (share / 'THIRD_PARTY_NOTICES.md').is_file()
 assert (share / 'SOURCE_OFFER.md').is_file()

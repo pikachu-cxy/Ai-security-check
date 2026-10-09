@@ -275,9 +275,10 @@ def test_link_target_rejected(host, tmp_path):
     root, _, _, _ = host
     outside = tmp_path / 'Outside.java'
     outside.write_text('class Outside {}')
-    (root / 'Linked.java').symlink_to(outside)
+    from link_fixture import linked_file
+    linked=linked_file(root / 'Linked.java',outside)
     with pytest.raises(ValueError):
-        FunctionalVerifierRegistry().detect(root, target_files=('Linked.java',))
+        FunctionalVerifierRegistry().detect(root, target_files=(linked.relative_to(root).as_posix(),))
 
 
 @pytest.mark.parametrize('language', ['python', 'go', 'node'])

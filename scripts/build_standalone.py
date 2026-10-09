@@ -34,10 +34,14 @@ def main(output_dir: Path | None = None) -> None:
         shutil.copy2(root / name, bundle / name)
     shutil.copytree(root / "LICENSES", bundle / "LICENSES", dirs_exist_ok=True)
     inventory(bundle)
+    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md'):
+        shutil.copy2(root / 'docs' / name,bundle / name)
     source_commit = subprocess.check_output(["git", "-c", f"safe.directory={root.as_posix()}", "-C", str(root),
                                               "rev-parse", "HEAD"], text=True).strip()
+    source_dirty = bool(subprocess.check_output(['git','-C',str(root),'status','--porcelain'],text=True).strip())
     (bundle / "version.json").write_text(json.dumps({"name": "AI Security Runtime", "version": __version__,
         "format": "pyinstaller-onedir", "source_commit": source_commit,
+        "source_dirty":source_dirty, "experience_contract":"r2.2-local-review-v1",
         "managed_engines": ["semgrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}, indent=2) + "\n", encoding="utf-8")
     executable = bundle / ("security-check.exe" if os.name == "nt" else "security-check")
     subprocess.run([str(executable), "--version"], cwd=root, check=True, timeout=30)

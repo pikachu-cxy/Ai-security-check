@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "PostToolUse": [{
+      "matcher": "^(Bash|apply_patch|Edit|Write)$",
+      "hooks": [{
+        "type": "mcp_tool",
+        "server": "ai_security_runtime",
+        "tool": "handle_hook_event",
+        "input": {
+          "event": "${hook_event_name}",
+          "workspace_path": "${cwd}",
+          "session_id": "${session_id}",
+          "tool_name": "${tool_name}",
+          "turn_id": "${turn_id}",
+          "tool_use_id": "${tool_use_id}",
+          "permission_mode": "${permission_mode}",
+          "tool_input": "${tool_input}"
+        },
+        "timeout": 120,
+        "statusMessage": "AI Security Runtime [codex-integration-v0.2]"
+      }]
+    }],
+    "SessionStart": [{"hooks": [{
+      "type": "mcp_tool",
+      "server": "ai_security_runtime",
+      "tool": "handle_readiness_event",
+      "input": {
+        "event": "${hook_event_name}",
+        "workspace_path": "${cwd}",
+        "session_id": "${session_id}",
+        "permission_mode": "${permission_mode}"
+      },
+      "timeout": 30,
+      "statusMessage": "AI Security Runtime [readiness-v0.3]"
+    }]}],
+    "Stop": [{"hooks": [{
+      "type": "mcp_tool",
+      "server": "ai_security_runtime",
+      "tool": "handle_stop_event",
+      "input": {
+        "event": "${hook_event_name}",
+        "workspace_path": "${cwd}",
+        "session_id": "${session_id}",
+        "stop_hook_active": "${stop_hook_active}",
+        "turn_id": "${turn_id}",
+        "permission_mode": "${permission_mode}"
+      },
+      "timeout": 30,
+      "statusMessage": "AI Security Runtime [continuation-guard-v0.1]"
+    }]}]
+  }
+}

@@ -22,6 +22,13 @@ proof. The host model is not used to manufacture security truth.
 
 ## Interfaces
 
+The R2.2 companion AI Security Review Skill guides the existing MCP task workflow;
+its reference is generated from HOST_INSTRUCTIONS. Explicit review does not
+require a Hook. Skill lifecycle is independent of signed Global MCP/Hook ownership
+and never edits Host trust or unrelated configuration. See the
+[Windows personal acceptance checklist](WINDOWS_EXPERIENCE.md). New-build Desktop
+Skill selection and automatic Hook feedback remain separate acceptance checks.
+
 Codex Global Hook is the verified Desktop integration. Generic MCP remains an
 available explicit interface for inspection, triage, remediation preparation,
 and deep verification flows; it is not the only or primary Codex integration.
@@ -29,6 +36,10 @@ CLI is useful for setup, status, and local operation. Configuration being
 writable is not equivalent to a Desktop verification claim.
 
 ## Boundaries
+
+[The Hook definition example](continuation-hooks-example.json) is the current
+public event ABI fixture (template claims only, no user data). Its exact equality
+is frozen by existing regression tests; R2.2 does not change these definitions.
 
 Global MCP ownership uses a signed sidecar manifest and the exact semantic
 fingerprint of `mcp_servers.ai_security_runtime`, including its nested env.

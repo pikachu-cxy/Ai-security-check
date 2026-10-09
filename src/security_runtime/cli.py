@@ -154,6 +154,10 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
+    skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
+    skill_parser.add_argument('action',choices=['install','status','upgrade','repair','remove'])
+    skill_parser.add_argument('--skills-dir',type=Path,help='Explicit user Skill directory, for isolated profiles')
+    skill_parser.add_argument('--json',action='store_true')
     remediation_parser = sub.add_parser('remediation', help='User-level automatic remediation preferences')
     remediation_parser.add_argument('action', choices=['status', 'configure'])
     remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'])
@@ -331,6 +335,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError('status does not accept --mode')
             print(json.dumps({'remediation': {'mode': config.read()}, 'max_auto_fix_attempts': 2}))
             return 0
+        if args.command=='review-skill':
+            from .review_skill import ReviewSkillManager
+            data=ReviewSkillManager(args.skills_dir).execute(args.action)
+            print(json.dumps(data,ensure_ascii=False) if args.json else '\n'.join([
+                'AI Security Review: '+data['status'],data.get('path',''),data.get('reason','')]))
+            return 2 if data['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'} else 0
         if args.command=='runtime-info':
             from .host_guidance import runtime_info
             info=runtime_info()

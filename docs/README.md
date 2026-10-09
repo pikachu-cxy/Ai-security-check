@@ -5,6 +5,9 @@ acceptance output belongs in Git history, not in `docs/`.
 
 ## Start here
 
+- [R2.2 security review contract](SECURITY_REVIEW.md)
+- [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)
+
 - [Project context](PROJECT_CONTEXT.md) — the source of truth for resuming an
   AI-agent or developer session.
 - [Architecture](ARCHITECTURE.md)

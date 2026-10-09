@@ -135,7 +135,8 @@ def test_foreign_workspace_rejected(functional,tmp_path):
 def test_link_rejected(functional,tmp_path):
     root,_,executor,service=functional
     target=tmp_path/'outside'; target.write_text('secret')
-    (root/'link').symlink_to(target)
+    from link_fixture import linked_file
+    linked_file(root/'link',target)
     out=service.prepare('grant','task',root,bound_workspace=root)
     assert out['functional_verification']['status']=='INCONCLUSIVE' and not executor.calls
 
