@@ -43,6 +43,8 @@ acceptance output belongs in Git history, not in `docs/`.
 ## Extension / Development
 
 - [Extending the Runtime](EXTENDING.md)
+- [升级与扫描入口优化清单](UPGRADE_AND_SCAN_USABILITY.zh-CN.md) — pending work,
+  code-grounded gaps, acceptance gates and the next Codex development request.
 
 ## Documentation lifecycle
 

@@ -25,6 +25,16 @@ quality labels remain unchanged.
 
 ## Additive MCP options
 
+Whole-project intent invokes `scan_project` (release), changes-only intent invokes
+`scan_diff`, and explicit rescan never reuses history. Task continuation retains
+the originally displayed task_ref. Summary adds `scan_context` with mode/time,
+scope, actual files/languages, scanner execution and HMAC-bound source inventory
+freshness, including zero-finding scans and newly untracked files. Quick/Hook FULL
+is not a full-project verdict. Summary remains read-only and does not revalidate
+engines or their DBs, so `full_project_reusable` is currently conservatively false.
+Missing keys/old contexts/budget limits are UNKNOWN, not a reset or false current
+claim. A conflicting Runtime is reported as not executed, not silently replaced.
+
 | Existing tool | Options |
 |---|---|
 | scan_project / scan_diff | summary=true retains execution/coverage, omits candidates, returns findings access |

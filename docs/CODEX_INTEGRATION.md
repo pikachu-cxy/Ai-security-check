@@ -22,6 +22,15 @@ proof. The host model is not used to manufacture security truth.
 
 ## Interfaces
 
+Local upgrade development adds `upgrade diagnose/plan/apply/recover` with active
+layer inspection, explicit unknown-server approval, signed pre-write recovery
+intent and all-file CAS recovery. Invalid ownership/unknown Hook aliases remain
+blocked. Signing keys and scan state survive migration; ephemeral permissions are
+never restored. `delivery` provides stable frozen launchers, immutable build slots,
+integrity verification and signed activation/rollback. Existing connections must
+restart. Read-only diagnosis never runs a command from an unknown MCP entry.
+`trial` profiles isolate CLI testing, not actual Desktop identity or Hook trust.
+
 The R2.2 companion AI Security Review Skill guides the existing MCP task workflow;
 its reference is generated from HOST_INSTRUCTIONS. Explicit review does not
 require a Hook. Skill lifecycle is independent of signed Global MCP/Hook ownership

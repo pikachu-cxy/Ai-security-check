@@ -14,6 +14,21 @@ first when resuming development.
   New Windows experience requires user Desktop acceptance; earlier Desktop gates
   do not certify this new build's natural-language or Hook visibility.
 - Release/CI work is paused by user direction; no tag or Release is implied
+- Current local development adds bounded `upgrade diagnose/plan/apply/recover`,
+  signed cross-component CAS recovery, stable frozen delivery slots/rollback,
+  isolated `trial` profiles, whole-project Skill routing and keyed source
+  freshness, plus true Git index projections and strict/report commit gates.
+  See the [Chinese implementation handoff](UPGRADE_AND_SCAN_USABILITY.zh-CN.md).
+  Final local regression covered 2,070 cases in six disjoint groups: 2,034 passed,
+  10 skipped, 26 existing expected failures, zero unexpected failures. Native
+  two-build activation/upgrade/rollback, key retention, trial argument isolation,
+  unknown-MCP approval and real Git index gates passed. The no-Hook stdio release
+  fixture scanned four files with Semgrep/Gitleaks SUCCESS and PARTIAL coverage
+  (offline dependency database unavailable), not a repository safety verdict.
+  Desktop natural-language selection and Hook visibility remain PENDING.
+  No real user configuration, Skill, trust state or business project was migrated.
+  Read-only summary does not revalidate engine/DB identity; whole-project requests
+  conservatively rescan rather than reuse a fresh-source-only result.
 - Product: local-first security verification for AI-assisted coding. The agent
   edits; the Runtime supplies scanner-backed findings, policy, and bounded
   remediation.
@@ -67,7 +82,8 @@ detail option and private baseline export. The managed Semgrep login placeholder
 originates in upstream JSON formatting. Older snapshots without file hashes
 remain unverifiable; useful current_context is never labelled original EXACT
 evidence. New scans capture safe revision hashes and preserve scanner locations.
-R2.2 / AI Triage remains pending user review; rules and maturity are unchanged.
+R2.2 local review reuses the existing host AI triage flow; its new Desktop user
+acceptance remains pending. Rules and maturity are unchanged.
 
 ## Verified and local status
 

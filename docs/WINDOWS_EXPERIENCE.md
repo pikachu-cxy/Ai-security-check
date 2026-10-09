@@ -1,13 +1,16 @@
-# Windows local security review experience (R2.2)
+# Windows local upgrade and security review experience
 
 English | [简体中文](WINDOWS_EXPERIENCE.zh-CN.md)
 
-This is a local v0.3.1 experience build, not a published Release. Keep the entire
+This is a local v0.3.1 experience build with the `upgrade-and-scan-v1` contract,
+not a published Release. Keep the entire
 `security-check` directory; developer Python is unnecessary. Initial engine and
 advisory database preparation requires network access. `version.json` records
 the source commit and dirty-source flag. Compare `Get-FileHash <ZIP> -Algorithm
 SHA256` with the adjacent `.sha256`. Licenses, NOTICEs and source offer remain
-bundled. Extract to a permanent location; moving it requires repair.
+bundled. Compare `build_id` to distinguish different builds of the same version.
+File digests verify integrity, not publisher authenticity. Old R2.2 ZIPs lack the
+new inventory and cannot directly become version-slot candidates.
 
 ## Install or upgrade
 
@@ -19,18 +22,49 @@ Open PowerShell inside the extracted directory:
 .\security-check.exe status
 ```
 
-For a new installation run `.\security-check.exe setup --scope global`. For an
-existing installation run `.\security-check.exe repair` to use the new bundle.
-Then:
+Activate the new bundle behind a permanent launcher first. This writes only the
+explicit installation directory, not Codex configuration. Keep it outside the bundle:
 
 ```powershell
-.\security-check.exe review-skill install
-.\security-check.exe review-skill status
+$runtimeInstall = Join-Path $env:LOCALAPPDATA 'AI-Security-Runtime-install'
+.\security-check.exe delivery activate --root $runtimeInstall --bundle (Get-Location).Path --json
+$runtimeExe = Join-Path $runtimeInstall 'launcher/security-check.exe'
+& $runtimeExe delivery status --root $runtimeInstall --json
 ```
+
+Diagnose and inspect a plan before applying. Include the target project so that
+project configuration overriding the global connection is checked. The plan output
+must be a new file; plans expire after 15 minutes and require unchanged inputs:
+
+```powershell
+$reviewProject = 'C:\your-project'
+$upgradePlan = Join-Path $env:TEMP ('runtime-upgrade-' + [guid]::NewGuid() + '.json')
+& $runtimeExe upgrade diagnose --path $reviewProject --json
+& $runtimeExe upgrade plan --path $reviewProject --output $upgradePlan --json
+# Review paths and changes, then update the managed integration and Skill together.
+& $runtimeExe upgrade apply --plan $upgradePlan --json
+& $runtimeExe review-skill status
+```
+
+Unknown same-name MCP definitions require separate approval. Only after reviewing
+the exact `mcp_servers.ai_security_runtime` replacement, use
+`upgrade apply --plan $upgradePlan --approve-user-managed --json`. Invalid signatures,
+unknown related Hooks and edited managed Skill files remain blocked; keys and user
+content are not reset. `upgrade recover --json` restores an interrupted operation
+only if its recorded files/keys remain unchanged by the user. The private journal
+contains configuration recovery bytes: do not share it.
+
+For another build, activate the new bundle into the same installation root, then
+generate/apply a new plan through the stable launcher. `delivery rollback --root
+$runtimeInstall --json` switches to the verified previous build. State and keys stay
+outside version slots; rollback does not restore old authorization capabilities.
+Invalid or interrupted copies are not overwritten automatically.
 
 Fully quit and restart Desktop. In a new chat check Runtime MCP and the AI
 Security Review Skill. Review/trust Hooks when the Host asks; Runtime cannot
-approve them. Select the Skill or ask “Check this project's security risks.”
+approve them. Select the Skill or explicitly ask “Use $ai-security-review to scan
+this entire project and report security risks and actual coverage.” A generic
+security request may select another Skill; implicit matching has no priority guarantee.
 Users do not need Finding IDs.
 
 The Skill uses the user's `.agents/skills/ai-security-review`. The `review-skill`
@@ -38,6 +72,45 @@ actions `upgrade`, `repair`, `remove` and `status` manage that installation.
 User-edited managed files produce USER_MODIFIED and remain intact, as do extra
 user files and other Skills. Skill removal is independent of Runtime `uninstall`.
 Host-disabled Skills require the user to enable them; installation does not.
+
+## Isolated local trials
+
+Choose a nonexistent directory. These CLI operations do not modify your real
+configuration, Skill, state, keys, Host trust or business project:
+
+```powershell
+$runtimeTrial = Join-Path $env:TEMP ('runtime-trial-' + [guid]::NewGuid())
+.\security-check.exe trial create --root $runtimeTrial --json
+.\security-check.exe trial run --root $runtimeTrial -- runtime-info --json
+.\security-check.exe trial run --root $runtimeTrial -- setup --scope global
+.\security-check.exe trial run --root $runtimeTrial -- status --json
+```
+
+Child processes clear inherited Runtime/scanner bindings and use independent
+Codex home, Skill, state, engine data and caches, offline by default. Existing
+directories are not reused and trials are not automatically deleted. Missing
+engines/databases are reported without silently downloading them. A CLI trial
+does not establish that Desktop has loaded that isolated home. Trial setup is
+Codex-only: other editors and abbreviated options are rejected before execution.
+Use the full option names shown above.
+
+## Git commit gates
+
+Git pre-commit and Codex edit-event Hooks are separate entry points. Install explicitly:
+
+```powershell
+& $runtimeExe hooks install pre-commit --path $reviewProject --gate strict
+& $runtimeExe hooks status pre-commit --path $reviewProject
+& $runtimeExe hooks repair pre-commit --path $reviewProject --gate strict
+& $runtimeExe hooks remove pre-commit --path $reviewProject
+```
+
+The gate scans the real Git index, not working-tree replacements, without modifying
+either, including independent worktrees. Unknown Hooks are neither replaced nor
+automatically chained. `strict` returns 0 for allowed, 1 for policy-blocked, and 2
+for incomplete scans. `report` warns but permits incomplete scans. Ordinary `scan`
+exit codes remain compatible; use `--gate strict` explicitly for gate semantics.
+Staged scans support `quick` only. Removal touches only unchanged signed owned Hooks.
 
 ## Six-step experience checklist
 
@@ -54,7 +127,7 @@ Host-disabled Skills require the user to enable them; installation does not.
    ```
 2. **Scan without Hooks.** Ask: “Only in this temporary project, create a Java
    security demonstration with a trust-all HttpsURLConnection hostname verifier,
-   installed on the connection. Do not execute it. Scan and show actual coverage
+   installed on the connection. Do not execute it. Use $ai-security-review to scan and show actual coverage
    and risks.” Record scanner execution and FULL/PARTIAL reasons. FULL is not safety.
 3. **Review and resume.** Ask: “Use AI Security Review to investigate the first
    risk in batches without editing code,” then “Continue this task.” Expect
@@ -89,6 +162,12 @@ failures have explicit reasons. Raw findings, HUMAN quality reviews, AI triage,
 coverage and fix verification remain separate. Line movement can change quality
 identity; automatic semantic correlation is not implemented. The Host may send
 redacted context to its chosen model.
+
+Entire-project requests execute a new `release` scan; incremental checks use
+`quick`. `scan_context` reports actual files, languages, scanner results and source
+freshness. Read-only summaries do not revalidate engine/database proofs, so
+`full_project_reusable` remains conservatively false. A prior Hook's FULL result
+does not replace a new entire-project scan.
 
 Automated stdio and isolated scripts verify tool paths. Natural-language Skill
 selection, no-Hook Desktop review and automatic Hook visibility for this new
