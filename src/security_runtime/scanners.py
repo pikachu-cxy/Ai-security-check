@@ -27,6 +27,7 @@ from dataclasses import replace
 import yaml
 from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
+from .local_evidence import snapshot_fingerprint, scanner_evidence_metadata
 from .processes import ProcessResult, run_process, OutputLimitError
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .progress import emit, checkpoint, ScanCancelled
@@ -268,6 +269,9 @@ class PatternSASTScanner(BaseScanner):
             for offset in range(0,len(plan.files),40):
                 batch=plan.files[offset:offset+40]
                 request=SASTRequest(Path(context.root),rule_pack,batch,config)
+                # Hash bounded safe files before execution, then verify again
+                # after it. Source never enters the finding store through this.
+                before = {name: snapshot_fingerprint(context.root, name) for name in batch}
                 invocation('SAST_SCAN', len(batch))
                 process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
                 if process.return_code not in (0,1):
@@ -275,7 +279,16 @@ class PatternSASTScanner(BaseScanner):
                 with span('parsing_normalization'):
                     data=json.loads(process.stdout)
                     plan.observe(data,batch)
-                    findings.extend(self.normalize(data,n))
+                    normalized = self.normalize(data,n)
+                    after = {f.file_path: snapshot_fingerprint(context.root, f.file_path) for f in normalized}
+                    for finding in normalized:
+                        initial = before.get(finding.file_path, {})
+                        final = after[finding.file_path]
+                        valid = initial.get('file_sha256') and initial.get('file_sha256') == final['file_sha256']
+                        finding.technical_details['evidence_locator'].update(
+                            file_sha256=initial['file_sha256'] if valid else None,
+                            snapshot_reason=None if valid else initial.get('reason') or final.get('reason') or 'SCAN_FILE_CHANGED')
+                    findings.extend(normalized)
                 value=data.get('time',{}).get('rules_parse_time')
                 if isinstance(value,(int,float)):
                     add_time('engine_reported_rules_parse',value*1000)
@@ -315,6 +328,15 @@ class PatternSASTScanner(BaseScanner):
                 evidence=extra.get('lines',''),rule_id=item.get('check_id',''))
             findings.append(finding)
             finding.line_end=max(finding.line_start,item.get('end',{}).get('line',finding.line_start))
+            fingerprint = str(extra.get('fingerprint', ''))
+            import re
+            finding.technical_details['evidence_locator'] = dict(
+                start_column=item.get('start', {}).get('col'), end_column=item.get('end', {}).get('col'),
+                scanner_fingerprint=fingerprint if re.fullmatch(r'[0-9a-fA-F]{32,128}(?:_\d+)?', fingerprint) else None,
+                file_sha256=None, snapshot_reason='SCAN_TIME_HASH_NOT_CAPTURED')
+            scanner_metadata = scanner_evidence_metadata(extra, n.root)
+            if scanner_metadata:
+                finding.technical_details['scanner_evidence_metadata'] = scanner_metadata
         return findings
 
 

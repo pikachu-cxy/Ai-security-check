@@ -61,6 +61,21 @@ identity and source coordinates. Absence requires all applicable variants and a
 real scanner proof. Family/Episode recurrence is conservative; ambiguous or
 missing proof remains unresolved.
 
+R2.1 adds an independent Finding Quality view and append-only review history.
+Portable quality identity correlates observations across checkout locations;
+legacy workspace-scoped scanner/remediation identities remain authoritative
+for authorization. Human/AI/policy review labels do not alter scanner output,
+coverage, enforcement or existing AI triage. Reviews bind to a particular scan
+and observation; no model runs or automatic suppressions are part of baseline
+collection. See [Finding quality](FINDING_QUALITY.md).
+
+R2.1.1 adds locator-based, on-demand local evidence. New SAST scans retain
+bounded scan-time file hashes/coordinates, not source copies. Detail requests
+rehydrate redacted workspace context through canonical boundary/handle checks,
+strict decoding and file/line budgets. EXACT requires historical revision proof;
+STALE or unverifiable current_context is separate from original_evidence.
+Neither live evidence nor its availability changes coverage, identity or reviews.
+
 See [Rule Program](RULE_PROGRAM.md), [coverage matrix](RULE_COVERAGE_MATRIX.md),
 [Codex integration](CODEX_INTEGRATION.md), and
 [functional verification](FUNCTIONAL_VERIFICATION.md).

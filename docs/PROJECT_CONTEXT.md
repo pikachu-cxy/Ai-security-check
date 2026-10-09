@@ -6,8 +6,11 @@ first when resuming development.
 ## Current milestone
 
 - Branch: `feature/runtime-mvp`
-- Milestone: R1 Phase 1 corpus/evaluation and Phase 2 bounded detection fixes complete locally
-- Next stage: **v0.3.1 Developer Alpha Release Preflight**, after release candidate review
+- Milestone: R1 phases complete; Release Blocker Fix and Global Ownership v2
+  passed two independent Desktop restart cycles and Windows standalone checks
+- Current stage: **R2.1 Real Project Finding Quality Baseline**; independent
+  review contract and local-only corpus, awaiting user review before R2.2
+- Release/CI work is paused by user direction; no tag or Release is implied
 - Product: local-first security verification for AI-assisted coding. The agent
   edits; the Runtime supplies scanner-backed findings, policy, and bounded
   remediation.
@@ -45,6 +48,23 @@ Python rules. The synthetic corpus reports 46 TP / 28 TN / 0 FP / 0 FN; this is
 not production-grade accuracy.
 
 See [Rule Program](RULE_PROGRAM.md) and the [coverage matrix](RULE_COVERAGE_MATRIX.md).
+
+## R2.1 finding quality
+
+See [Finding quality baseline](FINDING_QUALITY.md). Raw scanner findings and
+existing AI validation remain unchanged. Portable quality IDs, six independent
+review statuses and per-rule/capability/source metrics support local review.
+Unreviewed findings are not TP; precision needs TP/FP labels and recall remains
+unknown without independent ground truth. The initial corpus is the observed
+self-dogfood scan, including intentional fixtures, not production accuracy.
+No automatic review, suppression, source fix or AI pipeline runs in R2.1.
+
+R2.1.1 exposes bounded redacted local evidence through the existing get_findings
+detail option and private baseline export. The managed Semgrep login placeholder
+originates in upstream JSON formatting. Older snapshots without file hashes
+remain unverifiable; useful current_context is never labelled original EXACT
+evidence. New scans capture safe revision hashes and preserve scanner locations.
+R2.2 / AI Triage remains pending user review; rules and maturity are unchanged.
 
 ## Verified and local status
 

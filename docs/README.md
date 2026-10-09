@@ -26,6 +26,8 @@ acceptance output belongs in Git history, not in `docs/`.
 
 - [Rule Program v1](RULE_PROGRAM.md)
 - [Rule coverage matrix](RULE_COVERAGE_MATRIX.md)
+- [Finding quality baseline](FINDING_QUALITY.md) — R2.1 independent review
+  contract, stable correlation, local corpus workflow and metrics.
 
 ## Remediation
 

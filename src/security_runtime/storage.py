@@ -38,6 +38,7 @@ class SQLiteStore:
                 db.execute("CREATE TABLE IF NOT EXISTS findings (id TEXT PRIMARY KEY, scan_id TEXT NOT NULL, data TEXT NOT NULL)")
                 db.execute('CREATE TABLE IF NOT EXISTS triage_records (id INTEGER PRIMARY KEY, scan_id TEXT NOT NULL, finding_id TEXT NOT NULL, cache_key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(scan_id,finding_id,cache_key))')
                 db.execute('CREATE INDEX IF NOT EXISTS triage_cache ON triage_records(cache_key)')
+                db.execute('CREATE TABLE IF NOT EXISTS finding_reviews (id INTEGER PRIMARY KEY, workspace TEXT NOT NULL, scan_id TEXT NOT NULL, data TEXT NOT NULL)')
 
     def _connect(self):
         return sqlite3.connect(self.path)
@@ -105,6 +106,17 @@ class SQLiteStore:
         scan = self.get_scan(row[0])
         return json.loads(row[1]), scan
 
+    def finding_reviews(self, workspace, scan_id):
+        return ReadOnlySQLiteStore(self.path).finding_reviews(workspace, scan_id)
+
+    def save_finding_reviews(self, workspace, scan_id, records):
+        # Append-only audit history. Batch is validated before this transaction;
+        # scanner scans/findings and existing AI triage records are untouched.
+        with closing(self._connect()) as db:
+            with db:
+                db.executemany('INSERT INTO finding_reviews(workspace,scan_id,data) VALUES (?,?,?)',
+                    [(workspace, scan_id, json.dumps(record)) for record in records])
+
 
 class ReadOnlySQLiteStore:
     """Existing state only: no schema migration, directory/key creation or writes."""
@@ -141,6 +153,12 @@ class ReadOnlySQLiteStore:
     def triage_records(self, scan_id):
         rows = self._rows('triage_records', 'SELECT data FROM triage_records WHERE scan_id=? ORDER BY id', (scan_id,))
         return {record['finding_id']: record for record in (json.loads(row[0]) for row in rows)}
+
+    def finding_reviews(self, workspace, scan_id):
+        rows = self._rows('finding_reviews',
+            'SELECT data FROM finding_reviews WHERE workspace=? AND scan_id=? ORDER BY id', (workspace, scan_id))
+        values = [json.loads(row[0]) for row in rows]
+        return {(r['finding_id'], r['observation_hash']): r for r in values}
 
     def evidence_key(self):
         path = self.path.parent / 'triage-evidence.key'

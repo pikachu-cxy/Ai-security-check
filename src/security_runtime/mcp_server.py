@@ -19,7 +19,16 @@ logger = logging.getLogger(__name__)
 
 
 def _agent_finding(finding: dict) -> dict:
-    return {key: finding[key] for key in ("id", "category", "severity", "confidence", "plain_title", "file_path", "line_start", "impact", "fix_advice", "technical_details", "triage_status", "verdict", "triage_confidence", "exploitability", "triage") if key in finding}
+    from .finding_quality import quality_finding
+    result = {key: finding[key] for key in ("id", "category", "severity", "confidence", "plain_title", "file_path", "line_start", "line_end", "impact", "fix_advice", "technical_details", "triage_status", "verdict", "triage_confidence", "exploitability", "triage") if key in finding}
+    try:
+        result['quality'] = quality_finding(finding)
+    except ValueError:
+        # Never drop an existing scanner observation because a derived review
+        # contract cannot safely represent its location.
+        result['quality'] = None
+        result['quality_diagnostic'] = 'INVALID_REVIEW_LOCATION'
+    return result
 
 
 def _agent_result(result) -> dict:
@@ -239,23 +248,44 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return _agent_result(result)
 
     @server.tool()
-    def get_findings(scan_id: str) -> list[dict]:
-        """Retrieve findings from a previous scan."""
+    def get_findings(scan_id: str, include_evidence: bool = False, finding_id: str | None = None, context_lines: int = 5) -> list[dict]:
+        """List findings/review state; opt into bounded redacted local evidence, optionally for one existing scanner id. Evidence distinguishes original EXACT code from STALE/unverifiable current_context. quality.finding_id remains review-only."""
         check_scan(scan_id)
+        if not 0 <= context_lines <= 20:
+            raise ValueError('Context lines must be between 0 and 20')
+        from .local_evidence import LocalEvidenceService
+        local_evidence = LocalEvidenceService(runtime_engine().store.get_scan(scan_id)) if include_evidence else None
         if binding:
             event(DogfoodEvent(binding.integration_id, binding.root), connected=True)
         from .triage import TriageService
         view=TriageService(runtime_engine().store).view(scan_id)
         rows={row['finding_id']:row for row in view['findings']}
+        from .finding_quality import FindingQualityService
+        from .storage import ReadOnlySQLiteStore
+        try:
+            quality = FindingQualityService(ReadOnlySQLiteStore(runtime_engine().store.path)).view(scan_id)
+            quality_rows = {r['scanner_finding_id']: r for r in quality['findings']}
+        except ValueError:
+            quality_rows = {}
         found=[]
         for finding in runtime_engine().get_findings(scan_id):
+            if finding_id is not None and finding['id'] != finding_id:
+                continue
             row=rows[finding['id']]
             item=_agent_finding(finding)
+            if finding['id'] in quality_rows:
+                item['quality'] = quality_rows[finding['id']]
+            else:
+                item['quality_diagnostic'] = 'QUALITY_REVIEW_UNAVAILABLE'
             item['triage_status']=row['triage_status']
             item['triage']=row['triage']
             if row['triage_status']=='VALID':
                 item.update(verdict=row['triage']['verdict'],triage_confidence=row['triage']['confidence'],exploitability=row['triage']['exploitability'])
+            if local_evidence is not None:
+                item['local_evidence'] = local_evidence.detail(finding, context_lines)
             found.append(item)
+        if finding_id is not None and not found:
+            raise ValueError('Finding does not belong to this scan')
         return found
 
     @server.tool()

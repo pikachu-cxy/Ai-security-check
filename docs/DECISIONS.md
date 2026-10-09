@@ -61,3 +61,33 @@ milestone logs remain available through Git history.
   all unrelated semantics. Preserve sibling bytes; refuse ambiguous inline-parent
   mutation. Retain HMAC, CAS, interrupted-write recovery and exact hook ownership.
 - Status: Accepted; post-restart Desktop stability requires separate evidence.
+
+## ADR-008 — Independent finding quality review
+
+- Decision: Keep scanner truth, existing AI validation and quality review
+  decisions separate. Add a portable quality ID without replacing legacy
+  workspace-scoped DB, family, episode or remediation references.
+- Review: Explicit six-state decisions with HUMAN/AI/POLICY attribution,
+  reason and UTC timestamp; append-only history scoped to workspace, scan and
+  observation digest. No automatic label inheritance, suppression or fixing.
+- Evidence: Describe only stored scanner evidence; no invented source/sink or
+  dataflow. Private real corpus outputs remain local and ignored; tests are
+  synthetic. Unreviewed is not TP; recall requires independent ground truth.
+- Status: Implemented for R2.1 baseline; user review precedes R2.2 AI triage.
+
+## ADR-009 — Local evidence rehydration without scanner truth mutation
+
+- Decision: Retain bounded locator/scan-time file hashes and rehydrate local
+  code only for explicit detail requests. Preserve original scanner placeholders
+  and real scanner metadata; do not patch engine login gating or invent traces.
+- Boundary: Canonical workspace containment, no links/junctions/alternate streams,
+  opened-file identity/revision checks, strict decode and file/context budgets.
+- Freshness: EXACT requires a captured matching full-file hash. STALE and missing
+  historical hashes cannot certify current_context as original scanner evidence.
+- Privacy: Secret findings remain redacted without source reads. Other excerpts
+  scrub credential patterns/known ranges/literals; private exports stay ignored.
+  No source/local excerpts are added to persisted Finding snapshots.
+- Compatibility: Finding IDs, review observation hashes, scanner outcomes,
+  FULL/PARTIAL semantics and Global ownership remain unchanged. Line-movement
+  correlation belongs to future Finding Episode work.
+- Status: R2.1.1 implementation; no AI triage or automatic fix is introduced.

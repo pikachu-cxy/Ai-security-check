@@ -14,8 +14,12 @@ class Scanner:
     capabilities=frozenset({Capability.CODE_SAST,Capability.SECRET_SCAN})
     def supports(self,*args): return True
     def scan(self,context,n):
-        return [n.make(scanner='semgrep',category='trust-all-tls',title='TLS candidate',description='test',severity='HIGH',confidence='HIGH',file_path='App.java',line=3,rule_id='test-tls'),
-            n.make(scanner='gitleaks',category='secret',title='Secret candidate',description='test',severity='HIGH',confidence='HIGH',file_path='config.properties',line=1,evidence='[REDACTED_SECRET]')],ScannerRun(self.name,'mock','SUCCESS',1,2)
+        findings=[n.make(scanner='semgrep',category='trust-all-tls',title='TLS candidate',description='test',severity='HIGH',confidence='HIGH',file_path='App.java',line=3,rule_id='test-tls'),
+            n.make(scanner='gitleaks',category='secret',title='Secret candidate',description='test',severity='HIGH',confidence='HIGH',file_path='config.properties',line=1,evidence='[REDACTED_SECRET]')]
+        if os.getenv('SECURITY_RUNTIME_TEST_CAPTURE_EVIDENCE') == '1':
+            from security_runtime.local_evidence import snapshot_fingerprint
+            findings[0].technical_details['evidence_locator']=snapshot_fingerprint(context.root, 'App.java')
+        return findings,ScannerRun(self.name,'mock','SUCCESS',1,2)
 
 
 if __name__=='__main__':
