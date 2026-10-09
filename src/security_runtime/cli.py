@@ -158,6 +158,26 @@ def main(argv: list[str] | None = None) -> int:
     skill_parser.add_argument('action',choices=['install','status','upgrade','repair','remove'])
     skill_parser.add_argument('--skills-dir',type=Path,help='Explicit user Skill directory, for isolated profiles')
     skill_parser.add_argument('--json',action='store_true')
+    upgrade_parser = sub.add_parser('upgrade', help='Read-only diagnosis/plan, explicit bounded apply and CAS recovery')
+    upgrade_parser.add_argument('action', choices=['diagnose', 'plan', 'apply', 'recover'])
+    upgrade_parser.add_argument('--path', type=Path)
+    upgrade_parser.add_argument('--skills-dir', type=Path)
+    upgrade_parser.add_argument('--plan', type=Path)
+    upgrade_parser.add_argument('--output', type=Path)
+    upgrade_parser.add_argument('--approve-user-managed', action='store_true')
+    upgrade_parser.add_argument('--dev', action='store_true')
+    upgrade_parser.add_argument('--probe', action='store_true', help='Probe only the current product launcher, not unknown config commands')
+    upgrade_parser.add_argument('--json', action='store_true')
+    trial_parser = sub.add_parser('trial', help='Create/status/run an explicit isolated local trial profile')
+    trial_parser.add_argument('action', choices=['create', 'status', 'run'])
+    trial_parser.add_argument('--root', required=True, type=Path)
+    trial_parser.add_argument('--executable', type=Path)
+    trial_parser.add_argument('--json', action='store_true')
+    delivery_parser = sub.add_parser('delivery', help='Activate/status/rollback a verified frozen package behind a stable launcher')
+    delivery_parser.add_argument('action', choices=['activate', 'status', 'rollback'])
+    delivery_parser.add_argument('--root', required=True, type=Path)
+    delivery_parser.add_argument('--bundle', type=Path)
+    delivery_parser.add_argument('--json', action='store_true')
     remediation_parser = sub.add_parser('remediation', help='User-level automatic remediation preferences')
     remediation_parser.add_argument('action', choices=['status', 'configure'])
     remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'])
@@ -201,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     scan_parser.add_argument("--verbose", action="store_true", help="显示本次不适用的检查")
     scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
     scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
+    scan_parser.add_argument('--gate', choices=['strict', 'report'], help='Git gate: 0 allowed, 1 policy blocked, 2 incomplete (strict)')
     mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
     config_parser = mcp_sub.add_parser("config")
@@ -247,6 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"])
     hooks_parser.add_argument("--path")
     hooks_parser.add_argument("--json", action="store_true")
+    hooks_parser.add_argument('--gate', choices=['strict', 'report'], default='strict')
     hooks_parser.add_argument("--limit", type=int, default=16, help="Recent diagnostics count (1–32)")
     hooks_parser.add_argument("--unbound", action="store_true", help="Explicitly query unattributed Hook diagnostics")
     hook_parser = sub.add_parser('hook', help='Advisory local lifecycle quick check')
@@ -263,7 +285,13 @@ def main(argv: list[str] | None = None) -> int:
     install_parser = tools_sub.add_parser("install")
     install_parser.add_argument("tool", nargs="?", choices=tuple(VERSIONS))
     install_parser.add_argument("--all", action="store_true")
-    args = parser.parse_args(argv)
+    trial_arguments = []
+    parsed_argv = list(sys.argv[1:] if argv is None else argv)
+    if parsed_argv[:1] == ['trial'] and '--' in parsed_argv:
+        split = parsed_argv.index('--')
+        trial_arguments = parsed_argv[split + 1:]
+        parsed_argv = parsed_argv[:split]
+    args = parser.parse_args(parsed_argv)
     if args.command == 'cursor-hook':
         from .cursor_hook import main as cursor_hook_main
         return cursor_hook_main()
@@ -280,6 +308,50 @@ def main(argv: list[str] | None = None) -> int:
         return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'delivery':
+            from .delivery import StableDelivery
+            delivery = StableDelivery(args.root)
+            if args.action == 'activate':
+                if args.bundle is None:
+                    raise ValueError('DELIVERY_BUNDLE_REQUIRED')
+                data = delivery.activate(args.bundle)
+            else:
+                data = delivery.rollback() if args.action == 'rollback' else delivery.status()
+            print(json.dumps(data, ensure_ascii=True))
+            return 0
+        if args.command == 'trial':
+            from .trial import TrialProfile
+            trial = TrialProfile(args.root)
+            if args.action == 'run':
+                return trial.run(trial_arguments, executable=args.executable)
+            print(json.dumps(trial.create() if args.action == 'create' else trial.status(), ensure_ascii=True))
+            return 0
+        if args.command == 'upgrade':
+            from .upgrade import InstallationUpgrade
+            from .global_integration import GlobalCodexIntegration
+            from .review_skill import ReviewSkillManager
+            from .hook_state import atomic_bytes, no_links
+            manager = InstallationUpgrade(GlobalCodexIntegration(allow_dev=args.dev), ReviewSkillManager(args.skills_dir))
+            if args.action == 'diagnose':
+                data = manager.diagnose(args.path, probe=args.probe)
+            elif args.action == 'plan':
+                data = manager.plan(args.path)
+                if args.output:
+                    no_links(args.output)
+                    if args.output.exists():
+                        raise ValueError('UPGRADE_PLAN_OUTPUT_EXISTS')
+                    atomic_bytes(args.output, json.dumps(data, ensure_ascii=True).encode())
+            elif args.action == 'recover':
+                data = manager.recover()
+            else:
+                if args.plan is None:
+                    raise ValueError('UPGRADE_PLAN_REQUIRED')
+                no_links(args.plan)
+                if args.plan.stat().st_size > 1_000_000:
+                    raise ValueError('UPGRADE_PLAN_INVALID')
+                data = manager.apply(json.loads(args.plan.read_bytes()), approve_user_managed=args.approve_user_managed)
+            print(json.dumps(data, ensure_ascii=True) if args.json else json.dumps(data, ensure_ascii=False, indent=2))
+            return 0 if not data.get('blocked') else 2
         if args.command == 'hooks' and args.action == 'recent':
             from .recent_hooks import RecentHookStore
             from .global_workspace import resolve_workspace
@@ -419,6 +491,12 @@ def main(argv: list[str] | None = None) -> int:
             except OSError:
                 pass
             print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result, verbose=args.verbose))
+            if args.gate:
+                from .hooks import gate_exit
+                code = gate_exit(result, args.gate)
+                if result.status not in {'COMPLETED', 'NO_CHANGES'}:
+                    print('Git gate: scan incomplete; ' + ('commit blocked (strict).' if code else 'commit allowed without a completed security verdict (report).'), file=sys.stderr)
+                return code
             return 0 if result.release_status != "BLOCKED" else 1
         if args.command == "tools":
             manager = ToolManager()
@@ -609,10 +687,9 @@ def main(argv: list[str] | None = None) -> int:
                 print(json.dumps(codex_mcp_hook_config(), ensure_ascii=True, indent=2))
                 return 0
             if args.hook == 'pre-commit':
-                if args.action != 'install':
-                    raise ValueError('Existing pre-commit supports install only')
-                from .hooks import install_pre_commit
-                print(install_pre_commit(Path(args.path) if args.path is not None else Path.cwd()))
+                from .hooks import GitHookManager
+                value = GitHookManager(Path(args.path) if args.path is not None else Path.cwd()).execute(args.action, args.gate)
+                print(json.dumps(value, ensure_ascii=True))
                 return 0
             from .hook_adapters import HookIntegrationRegistry
             registry = HookIntegrationRegistry()

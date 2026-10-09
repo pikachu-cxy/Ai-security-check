@@ -21,6 +21,10 @@ class RuntimeCommand:
 
 def resolve_runtime_command() -> RuntimeCommand:
     if getattr(sys, "frozen", False):
+        from .delivery import stable_command
+        stable = stable_command()
+        if stable:
+            return RuntimeCommand(stable, ('mcp',))
         installed = shutil.which("security-check")
         if installed:
             try:

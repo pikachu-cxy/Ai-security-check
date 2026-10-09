@@ -1,6 +1,6 @@
 interface:
   display_name: "AI Security Review"
-  short_description: "Review local findings, then fix and verify authorized risks"
-  default_prompt: "Use $ai-security-review to check this project's existing findings and explain the next risk task."
+  short_description: "Scan project security and report actual coverage and risks"
+  default_prompt: "Use $ai-security-review to scan this project's whole codebase with AI Security Runtime and report risks, actual scanner coverage, reviewed findings and remaining unknowns."
 policy:
   allow_implicit_invocation: true

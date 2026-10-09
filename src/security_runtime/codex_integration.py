@@ -82,6 +82,11 @@ def current_runtime() -> dict:
     if not executable.is_file():
         raise IntegrationDiagnostic('RUNTIME_MISSING')
     frozen = bool(getattr(sys, 'frozen', False))
+    if frozen:
+        from .delivery import stable_command
+        stable = stable_command(executable)
+        if stable:
+            executable = Path(stable)
     kind = 'FROZEN' if frozen else ('PYTHON_VENV' if sys.prefix != sys.base_prefix else 'SYSTEM_PYTHON')
     return {'command': str(executable), 'prefix': [] if frozen else ['-I', '-m', 'security_runtime.cli'], 'kind': kind}
 
@@ -105,6 +110,12 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
     command = [runtime['command'], *runtime['prefix']]
     try:
         result = run_process([*command, 'runtime-info', '--json'], cwd=root, env=env, timeout=30, max_output=65536)
+    except FileNotFoundError:
+        raise IntegrationDiagnostic('RUNTIME_MISSING') from None
+    except PermissionError:
+        raise IntegrationDiagnostic('RUNTIME_LAUNCH_PERMISSION_DENIED') from None
+    except TimeoutError:
+        raise IntegrationDiagnostic('RUNTIME_PROBE_TIMEOUT') from None
     except (ValueError, OSError):
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
     if result.returncode != 0:
@@ -139,8 +150,19 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
                     return {t.name for t in tools}
     try:
         tools = asyncio.run(asyncio.wait_for(discover(), timeout=30))
-    except Exception:
-        raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
+    except Exception as exc:
+        def failure(error):
+            if isinstance(error, IntegrationDiagnostic):
+                return error.code
+            if isinstance(error, TimeoutError):
+                return 'MCP_PROBE_TIMEOUT'
+            if isinstance(error, BaseExceptionGroup):
+                for child in error.exceptions:
+                    code = failure(child)
+                    if code:
+                        return code
+            return None
+        raise IntegrationDiagnostic(failure(exc) or 'MCP_PROBE_FAILED') from None
     return check_capabilities(info, tools)
 
 
@@ -174,6 +196,7 @@ class CodexIntegrationAdapter:
         self.discover = discover or current_runtime
         self.probe = probe or probe_runtime
         self.now = now or time.time
+        self.write_observer = None
         from .baseline_seed import WorkspaceBaselineSeeds
         self.baselines = WorkspaceBaselineSeeds(self, coordinator=baseline_coordinator, now=self.now)
 
@@ -232,7 +255,15 @@ class CodexIntegrationAdapter:
         content = self._encode(result)
         if len(content) > MAX_METADATA:
             raise IntegrationDiagnostic('CONFIG_INVALID')
-        atomic_bytes(self._state_path(root, 'ownership.json'), content)
+        self._write(self._state_path(root, 'ownership.json'), content)
+
+    def _write(self, path, content):
+        if self.write_observer is not None:
+            self.write_observer(path, content)
+        if content is None:
+            path.unlink(missing_ok=True)
+        else:
+            atomic_bytes(path, content)
 
     def _config(self, root, manifest=None):
         if manifest is None:
@@ -610,7 +641,7 @@ class CodexIntegrationAdapter:
                         if self._read(path) != before:
                             raise IntegrationDiagnostic('CONFIG_CHANGED_RETRY')
                         existed = path.exists()
-                        atomic_bytes(path, after)
+                        self._write(path, after)
                         written.append((path, before, after, existed))
                         if self._read(path) != after:
                             raise IntegrationDiagnostic('CONFIG_CHANGED_RETRY')
@@ -618,8 +649,10 @@ class CodexIntegrationAdapter:
                     raise IntegrationDiagnostic('CONFIG_CHANGED_RETRY')
                 if action == 'remove':
                     self.baselines.remove(root)
-                    for name in ('ownership.json', 'readiness.json', 'snapshot.key'):
-                        self._state_path(root, name).unlink(missing_ok=True)
+                    # Retain signing keys across migration; never recreate an
+                    # invalid installation's identity as an upgrade shortcut.
+                    self._write(self._state_path(root, 'ownership.json'), None)
+                    self._state_path(root, 'readiness.json').unlink(missing_ok=True)
                 elif changed or manifest != new_manifest:
                     self._save(root, new_manifest)
             except (ValueError, OSError):
@@ -627,9 +660,9 @@ class CodexIntegrationAdapter:
                 for path, before, after, existed in reversed(written):
                     if self._read(path) == after:
                         if existed:
-                            atomic_bytes(path, before)
+                            self._write(path, before)
                         else:
-                            path.unlink()
+                            self._write(path, None)
                 raise
             if action == 'remove':
                 return {'integration': 'codex', 'overall': 'NOT_INSTALLED', 'operation': 'REMOVED' if changed or manifest else 'ALREADY_REMOVED', 'diagnostics': []}

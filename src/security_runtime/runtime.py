@@ -46,13 +46,23 @@ class SecurityRuntime:
         reporter = progress or NullProgressReporter()
         with progress_context(reporter):
             try:
+                if staged:
+                    workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
+                    if not workspace.is_git:
+                        raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
+                    if mode != 'quick':
+                        raise ValueError('INDEX_SCAN_REQUIRES_QUICK_MODE')
+                    from .staged import index_projection
+                    git = GitService(workspace.path)
+                    with index_projection(git) as projection:
+                        return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer, projection)
                 return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer)
             except (KeyboardInterrupt, ScanCancelled):
                 reporter.cancel()
                 emit('SCAN_CANCELLED')
                 raise
 
-    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None):
+    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None, projection=None):
         start = time.monotonic()
         observed_start = time.perf_counter()
         stage_start = observed_start
@@ -62,13 +72,16 @@ class SecurityRuntime:
         scan_mode = ScanMode(mode)
         emit('WORKSPACE_DISCOVERY_STARTED')
         workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
-        root = workspace.path
+        root = projection or workspace.path
+        from .scan_freshness import capture, complete as complete_context
+        source_context = capture(workspace.path, self.store, mode=mode, staged=staged,
+                                 rules_path=rules_path, hook_scope=hook_scope)
         emit('WORKSPACE_DISCOVERY_COMPLETED', message=f'项目：{root.name}')
         observed['timing_ms']['workspace_discovery'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
         if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged) and hook_scope is None:
             raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
-        git = GitService(root) if workspace.is_git else None
+        git = GitService(workspace.path) if workspace.is_git else None
         checkpoint()
         emit('TARGET_DISCOVERY_STARTED')
         if hook_scope is not None:
@@ -97,12 +110,13 @@ class SecurityRuntime:
         files = [name for name in files if name in profile.files]
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
+        profile.path = str(workspace.path)
         emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
         observed['timing_ms']['target_preparation'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
                               tuple(name for name in profile.files if name not in files))
-        normalizer = FindingNormalizer(root)
+        normalizer = FindingNormalizer(root, identity_root=workspace.path)
         findings = []
         runs: list[ScannerRun] = []
         no_changes = scan_mode != ScanMode.RELEASE and not files
@@ -248,6 +262,9 @@ class SecurityRuntime:
         # Persistence time is known only after the transaction; no second write
         # and no mutation of signed scan identities just to record a measurement.
         result.scanner_diagnostics = observed
+        result.scan_context = complete_context(source_context, workspace.path, self.store)
+        if staged:
+            observed['source_kind'] = 'GIT_INDEX_PROJECTION'
         from .scanner_cache import lifetime
         observed.update(lifetime())
         stage_start = time.perf_counter()

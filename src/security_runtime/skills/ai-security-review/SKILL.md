@@ -1,6 +1,6 @@
 ---
 name: ai-security-review
-description: Use AI Security Runtime to review existing security scan findings, inspect bounded local evidence, continue a risk task, and fix and verify an authorized issue. Supports natural-language security check requests, with or without a Hook. Requires the connected ai_security_runtime MCP.
+description: Use AI Security Runtime to scan the current project or all code and report security risks and actual scanning coverage, with or without a Hook. Also review existing findings, inspect bounded local evidence, continue an exact risk task, and fix and verify an authorized issue. Requires the connected ai_security_runtime MCP; do not silently substitute another security product.
 ---
 
 # Security review
@@ -14,8 +14,19 @@ and report a stale Skill. `get_runtime_info` should advertise
 same-environment reconnect guidance before additive calls, without improvising.
 
 1. Read `get_runtime_info` and `get_security_summary` for the current workspace.
-   Reuse an existing scan. If none exists, or source changes require a fresh scan,
-   scan only within the user's authorized scope, using `summary=true`.
+   For whole-project intent use `scan_project`, which performs a release scan,
+   with `summary=true`. For changes-only intent use `scan_diff`. An explicit
+   rescan always executes a new scan. Otherwise reuse a whole-project result
+   only when `scan_context.full_project_reusable=true`: release mode, matching
+   source inventory/revision, rules/build/capabilities and completed scanner
+   proof. Quick/Hook FULL means its selected files, not the entire project.
+   Missing or unverifiable freshness requires a new authorized scan; summary
+   itself never scans. Continuing a selected task retains its original task_ref
+   and does not automatically rescan or change task ordering.
+   If this Runtime is missing or conflicted, report that it did not execute and
+   provide its bounded diagnosis/upgrade guidance; scanning does not authorize
+   editing Host configuration or removing unknown servers. Respect an explicit
+   user choice of another product. Implicit selection is not guaranteed priority.
 2. Show risks needing action, unresolved context, and intentional test/sample
    observations separately. Test/sample location never proves a false positive.
    Preserve the exact displayed task's `continuation.arguments.task_ref`.
@@ -35,7 +46,10 @@ same-environment reconnect guidance before additive calls, without improvising.
    reconnect, re-prepare; never reuse an old handoff session. After code changes,
    revalidate relevant conclusions; a changed original match needs a new scan.
    Keep raw scanner findings, HUMAN quality reviews, AI assessments and scanner
-   coverage separate. Do not infer precision, recall or safety from finding counts.
+   coverage separate. Report requested scope, actual files/languages/rules,
+   scanner execution and exclusions, then reviewed findings and unknowns.
+   Pagination bounds evidence review/display, not scanner execution scope.
+   Do not infer precision, recall or safety from finding counts.
 6. Fix only with existing user/policy authorization and the original task reference.
    Follow `prepare_task_fix`, host edits, then `verify_task_fix` with the originating
    scanner/rules. Report actual execution and inconclusive verification honestly.

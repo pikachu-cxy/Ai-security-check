@@ -9,8 +9,11 @@ from .equivalence import equivalence_key
 
 
 class FindingNormalizer:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, *, identity_root: Path | None = None):
         self.root = root.resolve()
+        # Projection paths normalize scanner coordinates; stable workspace
+        # identity keeps findings independent of a disposable index snapshot.
+        self.identity_root = (identity_root or root).resolve()
         self.redactor = SecretRedactor()
 
     def make(self, *, scanner: str, category: str, title: str, description: str, severity: str, confidence: str, file_path: str, line: int, evidence: str = "", rule_id: str = "") -> Finding:
@@ -30,7 +33,7 @@ class FindingNormalizer:
         else:
             plain, impact, advice = title or "发现潜在安全问题", self.redactor.redact(description)[:400], "检查受影响代码并修复后重新扫描。"
         discriminator = rule_id if category in {"dependency", "configuration"} else ""
-        fingerprint = hashlib.sha256(f"{self.root}|{category}|{relative}|{line}|{discriminator}".encode()).hexdigest()[:24]
+        fingerprint = hashlib.sha256(f"{self.identity_root}|{category}|{relative}|{line}|{discriminator}".encode()).hexdigest()[:24]
         finding = Finding(fingerprint, category, title, plain, self.redactor.redact(description)[:400], impact, severity.upper(), confidence.upper(), relative, line, line, self.redactor.redact(evidence)[:160], advice, [scanner], fingerprint, technical_details={"rule_id": rule_id})
         finding.equivalence_key = equivalence_key(finding)
         return finding
@@ -47,7 +50,7 @@ class FindingNormalizer:
             severity='UNKNOWN'
         finding=self.make(scanner=scanner,category='dependency',title=title or canonical,description=description,
                           severity=severity,confidence='MEDIUM',file_path=manifest,line=1,rule_id=vulnerability_id)
-        fingerprint=hashlib.sha256(f'{self.root}|dependency|{normalized_ecosystem}|{package}|{version}|{canonical}|{finding.file_path}'.encode()).hexdigest()[:24]
+        fingerprint=hashlib.sha256(f'{self.identity_root}|dependency|{normalized_ecosystem}|{package}|{version}|{canonical}|{finding.file_path}'.encode()).hexdigest()[:24]
         finding.id=finding.fingerprint=fingerprint
         finding.technical_details.update(package=package,package_version=version,installed_version=version,ecosystem=normalized_ecosystem,
             manifest=finding.file_path,vulnerability_id=vulnerability_id,canonical_vulnerability_id=canonical,

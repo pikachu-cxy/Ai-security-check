@@ -35,10 +35,19 @@ class ReviewSkillManager:
     def __init__(self, skills_dir=None, state_dir=None):
         # Current public Codex user Skill contract. Never modify config.toml.
         self.root = Path(os.path.abspath(Path(skills_dir) if skills_dir is not None
-                                         else Path.home() / '.agents' / 'skills')) / NAME
+                                         else Path(os.getenv('SECURITY_RUNTIME_SKILLS_DIR', Path.home() / '.agents' / 'skills')))) / NAME
         self.state = (Path(state_dir) if state_dir is not None else
                       SQLiteStore.default_path().parent / 'review-skills') / digest(os.path.normcase(str(self.root)).encode())
         self.expected = skill_files()
+        self.write_observer = None
+
+    def write(self, path, content):
+        if self.write_observer is not None:
+            self.write_observer(path, content)
+        if content is None:
+            path.unlink(missing_ok=True)
+        else:
+            atomic_bytes(path, content)
 
     @staticmethod
     def read(path):
@@ -99,7 +108,7 @@ class ReviewSkillManager:
             key = os.urandom(32)
             atomic_bytes(self.state / 'ownership.key', key)
         if len(key) != 32: raise ValueError('SKILL_OWNERSHIP_INVALID')
-        atomic_bytes(self.state / 'ownership.json', encode(value | {
+        self.write(self.state / 'ownership.json', encode(value | {
             'signature':hmac.new(key, encode(value), hashlib.sha256).hexdigest()}))
 
     def execute(self, action):
@@ -117,11 +126,11 @@ class ReviewSkillManager:
                     for name, raw in originals.items():
                         if raw is not None:
                             if self.read(self.root / name) != raw: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
-                            (self.root / name).unlink()
+                            self.write(self.root / name, None)
                     for directory in ('agents','references',''):
                         try: (self.root / directory).rmdir()
                         except OSError: pass  # Never remove extra user files.
-                    (self.state / 'ownership.json').unlink()
+                    self.write(self.state / 'ownership.json', None)
                 return {'skill':NAME,'status':'REMOVED','changed':bool(manifest), 'user_files_preserved':True}
             desired = {name:digest(raw) for name,raw in self.expected.items()}
             if before['status']=='INSTALLED': return before | {'action':action,'changed':False}
@@ -131,7 +140,7 @@ class ReviewSkillManager:
             self.save(value)
             for name, raw in self.expected.items():
                 if self.read(self.root / name) != originals[name]: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
-                atomic_bytes(self.root / name,raw)
+                self.write(self.root / name,raw)
                 if self.read(self.root / name) != raw: raise ValueError('SKILL_WRITE_FAILED')
             self.save(value | {'phase':'COMMITTED','previous':{}})
             return self.status() | {'action':action,'changed':True,'user_files_preserved':True}

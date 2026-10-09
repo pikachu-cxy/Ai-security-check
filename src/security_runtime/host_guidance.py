@@ -9,8 +9,18 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
 HOST_INSTRUCTIONS = '''AI Security Runtime developer workflow:
 Security Review Skill and explicit natural-language requests use this same workflow;
 Hook availability is not required for explicit MCP review. First read runtime info
-and the existing workspace security summary; reuse its scan instead of rescanning
-on every message. A changed original match requires a new authorized scan.
+and the existing workspace security summary. Whole-project requests use scan_project
+(release mode); changes-only requests use scan_diff. Explicit rescan always runs a
+new authorized scan. Otherwise a whole-project scan is reusable only when summary
+scan_context.full_project_reusable=true: source inventory/revision, rules/build,
+capabilities and completed scanner proof match. Quick/Hook FULL is selected-file
+coverage, not a whole-project audit. Unknown/stale freshness requires a new scan
+within the user's request. Continuing an exact task keeps its original task_ref;
+do not rescan or reorder on every message. Summary itself never auto-scans.
+If this product is missing/conflicted, report no execution and its diagnostic
+next step; do not silently substitute another product or edit Host configuration.
+Report requested scope, actual files/languages/rules, scanner execution/exclusions,
+reviewed findings and unknowns independently. Pagination is not scanner coverage.
 For a new authorized scan prefer summary=true. Navigate get_findings with
 view=summary, limit=20 and returned continuation; retrieve one finding's bounded
 evidence with finding_id, include_evidence=true, view=page, limit=1.
@@ -178,7 +188,9 @@ def runtime_info(*, remediation_config=None):
         # malformed contents or exception text, nor imply automation is enabled.
         remediation = {'mode': 'UNKNOWN', 'configuration_status': 'INVALID'}
     frozen = bool(getattr(sys, 'frozen', False))
+    from .build_identity import build_identity
     return {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
+            'build_identity': build_identity(),
             'execution_timing': {'supported_triggers': [t.value for t in ExecutionTrigger],
                 'default_hook_profile': 'CORE', 'deep_verification_default_hook': False,
                 'capability_is_not_execution_timing': True},

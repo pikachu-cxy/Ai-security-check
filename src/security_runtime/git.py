@@ -17,15 +17,24 @@ class GitService:
         self._run("rev-parse", "--show-toplevel")
 
     def _run(self, *args: str) -> str:
+        return self._run_bytes(*args).decode('utf-8', errors='replace').strip()
+
+    def _run_bytes(self, *args: str, maximum=4_000_000) -> bytes:
         with tempfile.TemporaryFile() as out:
-            p = subprocess.run(["git", "-c", f"safe.directory={self.safe_directory.as_posix()}", "-c", "core.quotepath=false", "-C", str(self.root), *args], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.PIPE, timeout=10, check=False)
-            if out.tell() > 4_000_000:
+            p = subprocess.run(["git", "-c", f"safe.directory={self.safe_directory.as_posix()}", "-c", "core.quotepath=false", '-c', 'core.fsmonitor=false', "-C", str(self.root), *args], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.PIPE, timeout=10, check=False)
+            if out.tell() > maximum:
                 raise GitError("Git output limit exceeded")
             out.seek(0)
-            output = out.read().decode("utf-8", errors="replace")
+            output = out.read()
         if p.returncode:
-            raise GitError(p.stderr.decode("utf-8", errors="replace").strip()[:300])
-        return output.strip()
+            raise GitError('GIT_COMMAND_FAILED')
+        return output
+
+    def _paths(self, *args):
+        try:
+            return [name.decode('utf-8') for name in self._run_bytes(*args).split(b'\0') if name]
+        except UnicodeError:
+            raise GitError('GIT_FILENAME_ENCODING_UNSUPPORTED') from None
 
     def branch(self) -> str:
         return self._run("branch", "--show-current")
@@ -35,24 +44,24 @@ class GitService:
 
     def changed_files(self, mode: str, staged: bool = False) -> list[str]:
         if mode == "release":
-            return [f for f in self._run("ls-files", "--cached", "--others", "--exclude-standard").splitlines() if not f.replace("\\", "/").startswith(".security-runtime/")]
+            return [f for f in self._paths("ls-files", "--cached", "--others", "--exclude-standard", '-z') if not f.startswith(".security-runtime/")]
         if mode == "feature":
             base = self._base()
-            committed = self._run("diff", "--name-only", "--diff-filter=ACMR", f"{base}...HEAD").splitlines()
+            committed = self._paths("diff", "--name-only", '-z', "--diff-filter=ACMR", f"{base}...HEAD")
         else:
             committed = []
-        diff_args = ["diff", "--name-only", "--diff-filter=ACMR"]
+        diff_args = ["diff", "--name-only", '-z', "--diff-filter=ACMR"]
         if staged:
             diff_args.append("--cached")
-        changed = self._run(*diff_args).splitlines()
+        changed = self._paths(*diff_args)
         if not staged:
-            changed += self._run("diff", "--cached", "--name-only", "--diff-filter=ACMR").splitlines()
-            changed += self._run("ls-files", "--others", "--exclude-standard").splitlines()
-        return sorted({f.replace("\\", "/") for f in committed + changed if not f.replace("\\", "/").startswith(".security-runtime/") and (self.root / f).is_file()})
+            changed += self._paths("diff", "--cached", "--name-only", '-z', "--diff-filter=ACMR")
+            changed += self._paths("ls-files", "--others", "--exclude-standard", '-z')
+        return sorted({f for f in committed + changed if not f.startswith(".security-runtime/") and (staged or (self.root / f).is_file())})
 
     def changed_lines(self, files: list[str], mode: str, staged: bool = False) -> dict[str, set[int]]:
         result: dict[str, set[int]] = {}
-        untracked = set(self._run("ls-files", "--others", "--exclude-standard").splitlines()) if not staged else set()
+        untracked = set(self._paths("ls-files", "--others", "--exclude-standard", '-z')) if not staged else set()
         base = self._base() if mode == "feature" else ""
         for name in files:
             lines: set[int] = set()
@@ -61,10 +70,10 @@ class GitService:
                     lines.update(range(1, sum(1 for _ in source) + 1))
             diffs = []
             if mode == "feature":
-                diffs.append(self._run("diff", "--unified=0", f"{base}...HEAD", "--", name))
+                diffs.append(self._run("diff", '--no-ext-diff', '--no-textconv', "--unified=0", f"{base}...HEAD", "--", name))
             if not staged:
-                diffs.append(self._run("diff", "--unified=0", "--", name))
-            diffs.append(self._run("diff", "--cached", "--unified=0", "--", name))
+                diffs.append(self._run("diff", '--no-ext-diff', '--no-textconv', "--unified=0", "--", name))
+            diffs.append(self._run("diff", '--no-ext-diff', '--no-textconv', "--cached", "--unified=0", "--", name))
             for diff in diffs:
                 for start, count in re.findall(r"^@@ .* \+(\d+)(?:,(\d+))? @@", diff, re.MULTILINE):
                     lines.update(range(int(start), int(start) + int(count or 1)))

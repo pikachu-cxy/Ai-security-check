@@ -4,4 +4,6 @@ from security_runtime.cli import main
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    from security_runtime.delivery import dispatch
+    dispatched = dispatch()
+    raise SystemExit(main() if dispatched is None else dispatched)

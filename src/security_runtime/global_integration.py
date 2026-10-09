@@ -99,9 +99,10 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
         return manifest
 
     def _new_manifest(self, root, record):
+        from .build_identity import build_identity
         return {**super()._new_manifest(root, record), 'managed_version': OWNERSHIP_VERSION,
                 'scope': 'GLOBAL', 'ownership_model': 2, 'runtime_version': __version__,
-                'capability_contract': CONTRACT}
+                'capability_contract': CONTRACT, 'build_id': build_identity().get('build_id')}
 
     def _config(self, root, manifest=None):
         # Shared user/Host document: comments never establish Global ownership.
@@ -135,6 +136,9 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
             raise IntegrationDiagnostic('MCP_CONFIGURATION_CONFLICT')
         if current != server or (manifest.get('runtime_version', __version__) != __version__
                 or manifest.get('capability_contract', CONTRACT) != CONTRACT):
+            diagnostics.append('RUNTIME_STALE')
+        from .build_identity import build_identity
+        if manifest.get('build_id') != build_identity().get('build_id') and 'RUNTIME_STALE' not in diagnostics:
             diagnostics.append('RUNTIME_STALE')
         if manifest['managed_version'] != OWNERSHIP_VERSION:
             diagnostics.append('MANAGED_FORMAT_UPGRADE_REQUIRED')
@@ -298,8 +302,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
 def render_global(value):
     lines = ['AI Security Runtime — Global Codex',
              'Global Runtime: ' + value.get('runtime', {}).get('status', value.get('overall', 'UNKNOWN')),
-             'Global MCP: ' + value.get('mcp', {}).get('status', 'NOT_INSTALLED'),
-             'Global Hook: ' + value.get('post_tool_hook', {}).get('status', 'NOT_INSTALLED'),
+             'Global MCP: ' + value.get('mcp', {}).get('status', 'UNKNOWN'),
+             'Global Hook: ' + value.get('post_tool_hook', {}).get('status', 'UNKNOWN'),
              'Hook trust: ' + value.get('hook_trust', 'HOST_MANAGED_UNKNOWN'),
              'Workspace: ' + value.get('workspace_readiness', {}).get('status', 'NOT_OBSERVED')]
     lines.extend(value.get('diagnostics', []))

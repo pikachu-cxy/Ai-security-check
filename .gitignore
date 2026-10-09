@@ -17,3 +17,4 @@ dist/
 .distribution-venv/
 .test-tmp-run*/
 artifacts/r1/
+artifacts/upgrade/
