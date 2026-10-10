@@ -12,9 +12,43 @@ bundled. Compare `build_id` to distinguish different builds of the same version.
 File digests verify integrity, not publisher authenticity. Old R2.2 ZIPs lack the
 new inventory and cannot directly become version-slot candidates.
 
+Release scans also support source directories extracted from ZIPs without Git.
+Recognized binary documents/images/fonts are excluded with an explicit ledger;
+their contents are not inspected. Oversized source, credential text and
+dependency files still stop discovery with a specific diagnostic. Successful
+execution does not imply comprehensive detection. First-party pack 1.2.0 includes
+40 rules (32 default-on), with 5 new Java framework variants and 6 shared
+JavaScript/TypeScript rules. Shared rules also select JSX/TSX files. Vue,
+unmodelled frameworks and cross-function flows remain outside the demonstrated
+rule scope. See [rule foundation](RULE_FOUNDATION.md) and
+[target selection](SCAN_TARGET_SELECTION.md).
+
+## Java / JS / TS experience in this build
+
+The archive name includes `rule-foundation`. The application remains 0.3.1;
+the rule pack is 1.2.0. Use `build_id` to distinguish older same-version builds.
+See [rule foundation](RULE_FOUNDATION.md) for the precise API limits.
+This build also fixes default Global Hook state persistence beyond Windows
+legacy path limits. Internal extended path spelling targets the same files;
+OS settings, logical workspace boundaries and ownership validation are unchanged.
+
+In the disposable project from the six-step checklist, ask the Agent to create
+synthetic Java NamedParameterJdbcTemplate, JavaScript child_process and
+TypeScript fetch examples without executing them. Explicitly select
+`$ai-security-review` to scan the entire project, report executed rules/files,
+candidate risks and local evidence, and leave code unchanged for review.
+
+Then authorize one synthetic fix, require the original rule re-scan and existing
+functional tests. For Hooks, establish a safe baseline before adding a risky
+edit; observe the actual advisory and safe-code re-check. A finding disappearing
+does not prove application compatibility. Desktop behavior needs user acceptance.
+
 ## Install or upgrade
 
-Open PowerShell inside the extracted directory:
+The archive is `ai-security-runtime-v0.3.1-rule-foundation-windows-x64.zip`.
+After extraction, open PowerShell in its **`security-check` subdirectory**, which
+contains `security-check.exe` and `version.json`. If PowerShell is in the outer
+extraction directory, run `Set-Location .\security-check` first:
 
 ```powershell
 .\security-check.exe --version
@@ -125,30 +159,43 @@ Staged scans support `quick` only. Removal touches only unchanged signed owned H
    New-Item -ItemType Directory -Path (Join-Path $reviewDemo '.codex') | Out-Null
    [IO.File]::WriteAllText((Join-Path $reviewDemo '.codex/config.toml'), "[features]`nhooks = false", [Text.UTF8Encoding]::new($false))
    ```
-2. **Scan without Hooks.** Ask: “Only in this temporary project, create a Java
-   security demonstration with a trust-all HttpsURLConnection hostname verifier,
-   installed on the connection. Do not execute it. Use $ai-security-review to scan and show actual coverage
-   and risks.” Record scanner execution and FULL/PARTIAL reasons. FULL is not safety.
+2. **Scan without Hooks.** Ask: “Only in this temporary project, create synthetic
+   Java NamedParameterJdbcTemplate SQL built from a servlet request parameter,
+   JavaScript inline Express request input passed to child_process.exec, and
+   TypeScript inline Express request input passed to fetch. Also create a separate
+   Java trust-all HttpsURLConnection hostname verifier installed on the connection
+   for the existing authorization workflow. Do not execute these examples. Use
+   $ai-security-review to scan all project code and show actual files, executed
+   Java/JS/TS rules, local evidence and risks. Leave code unchanged.” Record scanner
+   execution and FULL/PARTIAL reasons. FULL is not safety; new advisory rules do
+   not grant automatic repair authorization.
 3. **Review and resume.** Ask: “Use AI Security Review to investigate the first
    risk in batches without editing code,” then “Continue this task.” Expect
    redacted evidence, actionable risks and unresolved context. Sample location
    is not false-positive proof. Old scans without revision proof supply current
    context only. After reconnect, reuse valid reviews and re-prepare sessions;
    no user UUID entry should be necessary.
-4. **Authorize a fix and verify.** Ask: “Fix that task and verify with its original
-   scanner and rules.” Check task continuity, actual edits and scanner rechecks.
+4. **Authorize a fix and verify.** Select the displayed TLS hostname-verifier task
+   to retain the existing authorization demonstration. Ask: “Fix this TLS task and
+   verify with its original scanner and rules.” Check task continuity, actual edits
+   and scanner rechecks. Other Java/JS/TS candidates remain for separate review and
+   explicit repair selection.
    Only SCANNER_VERIFIED_RESOLVED establishes resolution in that rule's scope;
    show INCONCLUSIVE reasons. Code changes require relevant assessments to refresh.
    Business/deployment correctness remains unknown.
 5. **Observe automatic Hook feedback.** Set `hooks = true` in only the demo
    project config, fully restart Desktop, review/trust the current Hook and
-   confirm it is enabled. Ask: “For this isolated demonstration only, temporarily
+   confirm it is enabled. With the repaired TLS code still safe, make a harmless
+   comment edit in that file and confirm the Hook scans the baseline. Then ask:
+   “For this isolated demonstration only, temporarily
    change the verifier back to always true and install it. Do not execute network
    code.” Observe automatic feedback after the edit. Remediation mode determines
    advice/confirmation/repair. For advice only, record `remediation status`, choose
    `remediation configure --mode report_only` yourself and restore your prior mode
    afterward. Missing/untrusted/invisible feedback fails; manual scanning is not
-   a substitute.
+   a substitute. For the new JS/TS rules, separately exercise an explicitly selected
+   synthetic file through safe → risk → safe and record advisory feedback; do not
+   infer automatic repair authority from those findings.
 6. **Finish and record.** Authorize repair and verify. Record coverage, findings,
    unknowns, original-rule verification and Hook feedback. Preserve observations;
    do not automatically suppress or declare safety. No publication, tag or Release

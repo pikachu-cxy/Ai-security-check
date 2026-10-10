@@ -41,11 +41,13 @@ def test_rebuilt_registry_plan_is_fresh_without_losing_static_config(engine):
     root, _, _, adapter, _, _ = engine
     plan = adapter.plan_rules(None, context(root))
     plan.confirmed_rules.add('old-proof')
+    plan.skipped_files['A.java'] = 'too_big'
     rebuilt = SemgrepAdapter(adapter.tool_manager, rule_packs=adapter.rule_packs)
     current = rebuilt.plan_rules(None, context(root))
     assert current.planning_diagnostics['rule_pack_cache'] == 'HIT'
     assert current.planning_diagnostics['rule_plan_cache'] == 'HIT'
     assert not current.confirmed_rules and not current.scanned_files
+    assert not current.skipped_files
 
 
 def test_registry_rebuild_different_workspace_cannot_use_previous_proof(engine, tmp_path):

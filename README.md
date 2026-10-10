@@ -1,15 +1,18 @@
 # AI Security Runtime
 
-**R2.2 Windows local experience:** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
+**Windows rule-foundation experience (R2.2):** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
 Use natural language with the companion Security Review Skill and existing MCP to
 scan, review, fix an authorized task and verify with the original scanner. Explicit
 review works without Hooks; new Desktop behavior requires personal acceptance.
-This local build is not a published Release.
+Current work adds the Java/JavaScript/TypeScript rule foundation. Release and CI
+work remain paused; this local build is not a published Release.
 
 Rule Program v1 is capability-led: 10 detection capabilities, 2 CORE and 8
-VALIDATED. It contains 19 capability-owned Semgrep variants, 29 installed
-Semgrep rules, 8 legacy Java EXPERIMENTAL rules default-off, and 2 existing
-Python rules. See the [Rule Program](docs/RULE_PROGRAM.md) and [coverage matrix](docs/RULE_COVERAGE_MATRIX.md).
+VALIDATED. First-party rule pack 1.2.0 contains 24 capability-owned Java Semgrep
+variants, 40 installed Semgrep rules, 8 legacy Java EXPERIMENTAL rules default-off,
+2 existing Python rules and 6 shared JavaScript/TypeScript advisory rules.
+See the [rule foundation and limitations](docs/RULE_FOUNDATION.md),
+[Rule Program](docs/RULE_PROGRAM.md) and [coverage matrix](docs/RULE_COVERAGE_MATRIX.md).
 
 CLI scans show actual preparation and scanner states on **stderr** after a 500 ms
 delay. Final human results and JSON remain on **stdout**. Interactive terminals
@@ -43,10 +46,11 @@ Detection quality is being hardened against real-world and independently labelle
 The product speaks in capabilities rather than raw rule-file counts:
 
 - 10 detection capabilities: 2 CORE and 8 VALIDATED
-- 19 capability-owned Semgrep variants
-- 29 total installed Semgrep rules
+- 24 capability-owned Java Semgrep variants
+- 40 total installed Semgrep rules
 - 8 legacy Java EXPERIMENTAL rules, default-off
 - 2 existing Python rules
+- 6 shared JavaScript/TypeScript advisory rules, default-on
 
 The current Java capabilities are:
 
@@ -543,7 +547,8 @@ A SAFE result is not a claim of absolute security.
 ```text
 R1 Phase 1 — corpus and evaluation complete locally
 R1 Phase 2 — bounded detection fixes complete locally
-Next — v0.3.1 Release Preflight after release candidate review
+Current — Java/JS/TS rule foundation and local user experience
+Release / CI — paused; no tag or Release is implied
 ```
 
 The R0 synthetic corpus is not a production accuracy claim. Broader corpus
@@ -819,11 +824,13 @@ security-check summary --path <project> --json
 
 The default view recommends at most three follow-up tasks. Details retain every finding/advisory, review state and Raw access. The summary never scans, invokes AI, changes source/state or generates an evidence key. No history returns a first-scan suggestion. VALID means an AI review passed Runtime validation, not independent human validation or proven exploitability; recommendations never promote REVIEW to ACTIONABLE. Zero ACTIONABLE does not mean safe.
 
-A workspace-bound MCP client can call `get_security_summary` without an ID, with `details=true` for the full list. An unbound client must supply `workspace_path`. Continued investigation and repair remain Planned; the three independent developer usability trials are still pending.
+A workspace-bound MCP client can call `get_security_summary` without an ID, with `details=true` for the full list. An unbound client must supply `workspace_path`. Bounded task investigation and authorized host-agent fixes with original-scanner verification are implemented; this build's Desktop experience and independent developer usability trials remain pending.
 
 MCP host agents use `prepare_triage` for bounded, redacted UNTRUSTED_CODE evidence, analyze it with their own model, and return structured results using `submit_triage` with the returned triage_session. `get_triage` returns coverage and grouped views. Runtime does not invoke the host model.
 
 Configure a user-supplied OpenAI-compatible provider with `ai configure --base-url https://provider.example/v1 --model user-model --api-key-env SECURITY_RUNTIME_AI_KEY`. The key value is read only from the environment. External context requires `triage --latest --provider configured --allow-external-code-context`; absent consent fails closed. Normal scan never invokes AI. Secret values are redacted and repository content is untrusted data. Suppression requires explicit validated counterevidence; documentation/example placement or missing API search matches cannot suppress a candidate. See [Project context](docs/PROJECT_CONTEXT.md) for current limits.
 
 
-Task continuation v0.1: users say “continue the first task”; the host uses that **displayed response's** continuation arguments, analyzes bounded evidence, and submits results automatically within existing authorization. Users do not provide Finding UUIDs or copy technical prompts between tools. T01 is only a display number; changed or invalid task references require a refreshed selection. Runtime does not invoke the host model. Current valid reviews are retained, cache hits do not consume new analysis slots, stale evidence is rebuilt, and failed members require an explicit retry. The 11 registered MCP tools include `prepare_task_triage` and read-only `get_runtime_info`; connection checks require capabilities by subset, allowing extra tools. Actual host natural-language and three independent developer trials remain pending. Automatic patch/build/verification workflow is a later iteration.
+Task continuation v0.1: users say “continue the first task”; the host uses that **displayed response's** continuation arguments, analyzes bounded evidence, and submits results automatically within existing authorization. Users do not provide Finding UUIDs or copy technical prompts between tools. T01 is only a display number; changed or invalid task references require a refreshed selection. Runtime does not invoke the host model. Current valid reviews are retained, cache hits do not consume new analysis slots, stale evidence is rebuilt, and failed members require an explicit retry. Discover available MCP tools at runtime; connection checks require capabilities by subset and allow additional tools.
+
+For an authorized selected-task fix, the host calls `prepare_task_fix`, edits within its constraints, and calls `verify_task_fix` using the original task references. Runtime checks the original scanner/rule within the affected scope; finding disappearance alone does not prove functional compatibility. Runtime does not apply source patches or run target builds automatically. Actual Desktop natural-language behavior and independent developer trials remain pending.

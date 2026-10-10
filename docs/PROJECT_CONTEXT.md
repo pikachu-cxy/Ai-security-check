@@ -8,11 +8,25 @@ first when resuming development.
 - Branch: `feature/runtime-mvp`
 - Milestone: R1 phases complete; Release Blocker Fix and Global Ownership v2
   passed two independent Desktop restart cycles and Windows standalone checks
-- Current stage: **R2.2 local security review experience**; R2.1/1.1 committed
+- Current stage: **Java / JavaScript / TypeScript rule foundation**, built on
+  the R2.2 local security review experience. R2.1/1.1 committed
   as an independent finding-quality/evidence baseline. Shared safe triage evidence,
   bounded MCP views and a signed companion Skill lifecycle are implemented.
   New Windows experience requires user Desktop acceptance; earlier Desktop gates
   do not certify this new build's natural-language or Hook visibility.
+  Rule pack 1.2.0 adds five Java framework variants and six shared JS/TS
+  advisory rules; application version remains 0.3.1. Existing capability
+  maturity and automatic-fix eligibility remain unchanged. The bounded Hook
+  proof keeps actual detector/version receipts, and Windows state I/O handles
+  long paths without changing logical workspace boundaries. See
+  [rule foundation](RULE_FOUNDATION.md) for current scope, verification and
+  the user's Desktop acceptance checklist.
+  Current rule-foundation regression covered all 2,159 collected cases across
+  three disjoint groups: 2,109 passed, 24 environment/platform/opt-in skips,
+  26 strict expected failures, no unexpected failures or XPASS. The complete
+  40-rule synthetic gate and 36 isolated real quick/Hook/re-scans passed.
+  Compliance and installed-wheel integrity passed. Native archive receipts
+  identify each tested build; this milestone's Desktop acceptance is pending.
 - Release/CI work is paused by user direction; no tag or Release is implied
 - Current local development adds bounded `upgrade diagnose/plan/apply/recover`,
   signed cross-component CAS recovery, stable frozen delivery slots/rollback,
@@ -54,6 +68,14 @@ the verified Desktop host paths.
 
 ## Rule Program v1
 
+Current local rule foundation: `ai-security-core` 1.2.0, mapping 1.1.0 adds
+five Java framework variants and six shared JS/TS advisory rules. There are
+40 installed execution rules, 32 default-on; TypeScript selection/execution
+is separately evidenced. Existing capability IDs/maturity/automatic fixes are
+unchanged, old YAML bytes retained. See [rule foundation](RULE_FOUNDATION.md)
+and [source review](RULE_SOURCE_INVENTORY.md). Counts below describe the prior
+R0/R1 baseline; their synthetic/Benchmark quality is not transferred to new rules.
+
 The product is capability-first:
 
 `Capability → underlying scanner rules → Finding Family / Episode → Policy →
@@ -83,7 +105,15 @@ originates in upstream JSON formatting. Older snapshots without file hashes
 remain unverifiable; useful current_context is never labelled original EXACT
 evidence. New scans capture safe revision hashes and preserve scanner locations.
 R2.2 local review reuses the existing host AI triage flow; its new Desktop user
-acceptance remains pending. Rules and maturity are unchanged.
+acceptance remains pending. That review-flow milestone did not change maturity;
+the current rule additions and their limits are listed under Rule Program above.
+
+Real source-directory scan hardening separates unsupported binary documents
+from bounded scanner inputs and records exclusions. Oversized source/config
+inputs still fail closed with typed discovery diagnostics. Global integration
+status respects explicit scope without requiring a Git project. See
+[scan target selection](SCAN_TARGET_SELECTION.md); excluded documents and
+languages without applicable rules are not evidence of complete code coverage.
 
 ## Verified and local status
 

@@ -189,7 +189,7 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
         # Only risk-bearing changed files are materialized; no repo/manifests copied.
         pre_plan = replace(plan, files=tuple(targets),
             language_files={k:tuple(f for f in v if f in targets) for k,v in plan.language_files.items()},
-            confirmed_rules=set(), scanned_files=set(), errored_files=set(), unscoped_error=False)
+            confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={}, unscoped_error=False)
         adapter = next(a for a in registry.adapters if a.name == 'semgrep')
         with TemporaryDirectory(prefix='security-runtime-attribution-') as temporary:
             scoped = Path(temporary)

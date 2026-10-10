@@ -56,6 +56,7 @@ class TargetProfile:
     ecosystems: list[str] = field(default_factory=list)
     files: list[str] = field(default_factory=list)
     git_info: dict[str, str] = field(default_factory=dict)
+    skipped_files: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass

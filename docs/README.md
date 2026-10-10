@@ -27,10 +27,16 @@ acceptance output belongs in Git history, not in `docs/`.
 
 ## Detection / Rule Program
 
+- [Rule foundation](RULE_FOUNDATION.md) — Java and JavaScript/TypeScript API scope,
+  Hook measurement and the six-step local experience checklist.
+- [Rule source inventory](RULE_SOURCE_INVENTORY.md) — upstream license decisions
+  and the independent first-party implementation boundary.
 - [Rule Program v1](RULE_PROGRAM.md)
 - [Rule coverage matrix](RULE_COVERAGE_MATRIX.md)
 - [Finding quality baseline](FINDING_QUALITY.md) — R2.1 independent review
   contract, stable correlation, local corpus workflow and metrics.
+- [Scan target selection](SCAN_TARGET_SELECTION.md) — binary-document exclusions,
+  bounded discovery diagnostics and coverage boundaries.
 
 ## Remediation
 

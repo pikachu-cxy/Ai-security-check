@@ -1,14 +1,17 @@
 # AI Security Runtime
 
-**R2.2 Windows 本地体验：** [安装与六步清单](docs/WINDOWS_EXPERIENCE.zh-CN.md)。
+**Windows 规则基础体验（R2.2）：** [安装与六步清单](docs/WINDOWS_EXPERIENCE.zh-CN.md)。
 通过配套 Security Review Skill 和现有 MCP，以自然语言扫描、核查、授权修复，
 再由原扫描器验证。主动核查不依赖 Hook，新包的 Desktop 行为需要亲自验收。
+当前工作补齐 Java/JavaScript/TypeScript 规则基础。Release 与 CI 工作继续暂停，
 此本地构建不代表 Release 发布。
 
 Rule Program v1 以 Capability 为产品口径：10 个检测能力，其中 2 个 CORE、8 个
-VALIDATED；包含 19 个 capability-owned Semgrep variants、29 个已安装 Semgrep
-rules、8 个默认关闭的 legacy Java EXPERIMENTAL rules，以及 2 个既有 Python rules。
-详见 [Rule Program](docs/RULE_PROGRAM.md) 和 [覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)。
+VALIDATED；第一方规则包 1.2.0 包含 24 个 Java capability-owned Semgrep variants、
+40 个已安装 Semgrep rules、8 个默认关闭的 legacy Java EXPERIMENTAL rules、
+2 个既有 Python rules，以及 6 个共享 JavaScript/TypeScript advisory rules。
+详见 [本轮规则与体验边界](docs/RULE_FOUNDATION.md)、
+[Rule Program](docs/RULE_PROGRAM.md) 和 [覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)。
 
 扫描超过 500 ms 时，CLI 会在 **stderr** 显示实际的项目发现、引擎准备、
 下载、数据库准备和扫描状态；最终结果及 JSON 仍输出到 **stdout**。
@@ -42,10 +45,11 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 产品按 Capability 描述能力，而不是按 YAML 文件数量描述产品：
 
 - 10 个检测能力：2 个 CORE、8 个 VALIDATED
-- 19 个 capability-owned Semgrep variants
-- 29 个已安装 Semgrep rules
+- 24 个 Java capability-owned Semgrep variants
+- 40 个已安装 Semgrep rules
 - 8 个默认关闭的 legacy Java EXPERIMENTAL rules
 - 2 个既有 Python rules
+- 6 个默认启用的共享 JavaScript/TypeScript advisory rules
 
 当前 Java 能力：
 
@@ -607,7 +611,8 @@ SAFE 不代表项目绝对安全。
 ```text
 R1 Phase 1 — 语料与评估已在本地完成
 R1 Phase 2 — 有限检测修复已在本地完成
-下一阶段 — Release Candidate 审查后的 v0.3.1 Release Preflight
+当前 — Java/JS/TS 规则基础与本地用户体验
+Release / CI — 暂停，不代表创建 tag 或发布 Release
 ```
 
 R0 synthetic corpus 不是生产准确率结论。VALIDATED 能力在升级为 CORE 前，仍需要
@@ -951,4 +956,6 @@ security-check triage --latest --provider configured --allow-external-code-conte
 实际 key 只从环境变量读取。普通 scan 不调用 AI；外部代码上下文必须显式授权，无授权 fail closed。Secret 值不进入 EvidencePacket，源码与注释只作为不可信数据；FALSE_POSITIVE 需要严格明确反证，不能因 docs/example 或未搜索到 API 自动隐藏。详见[项目上下文](docs/PROJECT_CONTEXT.md)。
 
 
-继续核查 v0.1：MCP 当前11个工具。用户只说“继续第一项”或选择任务，工具准备、受限分析、提交和结果展示由宿主在既有授权内衔接；无需 UUID、搬运技术提示词或拼接工具顺序。宿主绑定**实际展示响应**中的任务引用，T01 不是跨请求身份，任务变化需刷新重新选择。Runtime 不调用宿主模型；有效审阅保留、缓存不占新分析名额、STALE 重建、FAILED 显式重试。只读版本/能力检查与连接恢复已接入，按所需能力子集校验，允许额外工具。实际宿主自然语言试用、旧聊天连接恢复和三位开发者试用仍待验收。自动补丁/目标构建/修复验证闭环是下一轮 Planned，不让用户搬运 generate_fix 提示词。
+继续核查 v0.1：用户只说“继续第一项”或选择任务，工具准备、受限分析、提交和结果展示由宿主在既有授权内衔接；无需 UUID、搬运技术提示词或拼接工具顺序。宿主绑定**实际展示响应**中的任务引用，T01 不是跨请求身份，任务变化需刷新重新选择。Runtime 不调用宿主模型；有效审阅保留、缓存不占新分析名额、STALE 重建、FAILED 显式重试。运行时发现可用 MCP 工具，连接检查按所需能力子集校验，允许额外工具。
+
+选定任务获准修复后，宿主调用 `prepare_task_fix`，遵守约束修改代码，再保留原任务引用调用 `verify_task_fix`。Runtime 用原扫描器和规则在受影响范围内重检；发现消失不等于功能兼容性已验证。Runtime 不自动应用源码补丁或运行目标构建。受限核查和授权修复验证已实现，本轮 Desktop 自然语言体验及独立开发者试用仍待验收。

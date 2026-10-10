@@ -1,0 +1,129 @@
+rules:
+- id: ai-security.java.commons-exec
+  languages:
+  - java
+  severity: ERROR
+  message: Externally influenced process command selects executable or shell syntax; use a fixed executable and
+    bounded arguments.
+  mode: taint
+  pattern-sources:
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (javax.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getParameter(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getHeader(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getInputStream(...)
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: (jakarta.servlet.http.HttpServletRequest $REQUEST).getReader(...)
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam $TYPE $INPUT, ...)
+        { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestParam(...) $TYPE $INPUT,
+        ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody $TYPE $INPUT, ...)
+        { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.RequestBody(...) $TYPE $INPUT,
+        ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable $TYPE $INPUT, ...)
+        { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - patterns:
+    - pattern-inside: $RETURN $METHOD(..., @org.springframework.web.bind.annotation.PathVariable(...) $TYPE $INPUT,
+        ...) { ... }
+    - focus-metavariable: $INPUT
+    exact: true
+    label: REQUEST_INPUT
+  - pattern: org.apache.commons.exec.CommandLine.parse($COMMAND)
+    requires: REQUEST_INPUT
+    label: EXECUTABLE_COMMAND
+    exact: true
+  - pattern: org.apache.commons.exec.CommandLine.parse($COMMAND, $MAP)
+    requires: REQUEST_INPUT
+    label: EXECUTABLE_COMMAND
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern: (org.apache.commons.exec.Executor $EXEC).execute(org.apache.commons.exec.CommandLine.parse($COMMAND),
+        ...)
+    - focus-metavariable: $COMMAND
+    requires: REQUEST_INPUT
+  - patterns:
+    - pattern: (org.apache.commons.exec.DefaultExecutor $EXEC).execute(org.apache.commons.exec.CommandLine.parse($COMMAND),
+        ...)
+    - focus-metavariable: $COMMAND
+    requires: REQUEST_INPUT
+  - patterns:
+    - pattern: (org.apache.commons.exec.Executor $EXEC).execute(org.apache.commons.exec.CommandLine.parse($COMMAND,
+        $MAP), ...)
+    - focus-metavariable: $COMMAND
+    requires: REQUEST_INPUT
+  - patterns:
+    - pattern: (org.apache.commons.exec.DefaultExecutor $EXEC).execute(org.apache.commons.exec.CommandLine.parse($COMMAND,
+        $MAP), ...)
+    - focus-metavariable: $COMMAND
+    requires: REQUEST_INPUT
+  - patterns:
+    - pattern: (org.apache.commons.exec.Executor $EXEC).execute($CMD, ...)
+    - focus-metavariable: $CMD
+    requires: EXECUTABLE_COMMAND
+  - patterns:
+    - pattern: (org.apache.commons.exec.DefaultExecutor $EXEC).execute($CMD, ...)
+    - focus-metavariable: $CMD
+    requires: EXECUTABLE_COMMAND
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.2.0
+    language: java
+    confidence: HIGH
+    maturity: BETA
+    license: Apache-2.0
+    category: command-injection
+    cwe:
+    - CWE-78
+    framework: Apache Commons Exec
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/78.html
+    - https://commons.apache.org/proper/commons-exec/apidocs/org/apache/commons/exec/CommandLine.html
+    - https://commons.apache.org/proper/commons-exec/tutorial.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-10'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''

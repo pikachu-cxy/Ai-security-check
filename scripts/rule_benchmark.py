@@ -25,8 +25,9 @@ def run(project,output):
         semgrep=next(run for run in payload['scanner_runs'] if run['scanner']=='semgrep')
         java=payload['rule_coverage']['per_language']['java']
         assert java['executed_rules']>0 and java['status'] in ('EXECUTED','PARTIAL')
-        assert payload['rule_coverage']['per_language']['javascript']['status']=='NOT_COVERED'
-        assert not any(Path(name).suffix.lower() in {'.js','.vue','.yml','.yaml','.md'} for name in payload['rule_coverage']['scope_files'])
+        js=payload['rule_coverage']['per_language']['javascript']
+        assert js['selected_rules']>0 and js['status'] in ('EXECUTED','PARTIAL')
+        assert not any(Path(name).suffix.lower() in {'.vue','.yml','.yaml','.md'} for name in payload['rule_coverage']['scope_files'])
         evidence['jeepay']={'cli':actual,'result':payload,'semgrep_duration_ms':semgrep['duration_ms'],
             'semgrep_findings':[f for f in payload['findings'] if 'semgrep' in f['scanner_sources']],
             'java_files':sum(Path(name).suffix.lower()=='.java' for name in payload['target_profile']['files'])}

@@ -38,6 +38,13 @@ assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == 'ai-security-core'
+assert pack.descriptor.version == '1.2.0'
+assert len(pack.catalog) == 40
+from security_runtime.rule_coverage import plan_rules
+for target in ('app.js', 'view.jsx', 'app.ts', 'view.tsx'):
+    plan = plan_rules(pack, [target])
+    assert plan.files == (target,) and len(plan.rules) == 6, target
+assert any(rule.rule_id == 'ai-security.java.spring-named-jdbc' for rule in pack.catalog)
 from security_runtime import task_fix, equivalence, verification, verification_policy
 from security_runtime import hook_runtime, hook_state, hook_adapters
 for module in (hook_runtime, hook_state, hook_adapters):

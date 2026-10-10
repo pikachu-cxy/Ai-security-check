@@ -28,6 +28,7 @@ MAX_FILES = 1000
 MAX_BYTES = 20_000_000
 MAX_FAMILIES = 2000
 MAX_OCCURRENCES = 10000
+MAX_PROOF_RULES = 1000
 
 
 def safe_path(value):
@@ -42,6 +43,15 @@ def safe_path(value):
 def metadata(value):
     if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.:/+@-]{1,200}', value):
         raise ValueError('Invalid hook detector metadata')
+    return value
+
+
+def _validate_rule_versions(value):
+    """Closed, bounded detector metadata; never scanner evidence or source."""
+    if not isinstance(value, dict) or len(value) > MAX_PROOF_RULES:
+        raise ValueError('Invalid hook rule version proof')
+    for detector, version in value.items():
+        metadata(detector); metadata(version)
     return value
 
 
@@ -104,11 +114,17 @@ def validate_state(value):
             if not isinstance(point, dict) or set(point) != {'line_start', 'line_end'} or any(type(n) is not int or not 0 <= n <= 10**8 for n in point.values()):
                 raise ValueError('Invalid hook coordinates')
         proof = family['proof']
-        if not isinstance(proof, dict) or set(proof) != {'rule_pack_checksum', 'engine', 'rule_version'}:
+        proof_fields = {'rule_pack_checksum', 'engine', 'rule_version'}
+        if not isinstance(proof, dict) or set(proof) not in (proof_fields, proof_fields | {'rule_versions'}):
             raise ValueError('Invalid hook proof')
-        for item in proof.values():
+        for field in proof_fields:
+            item = proof[field]
+            if not isinstance(item, str):
+                raise ValueError('Invalid hook proof metadata')
             if item:
                 metadata(item)
+        if 'rule_versions' in proof:
+            _validate_rule_versions(proof['rule_versions'])
     if count > MAX_OCCURRENCES:
         raise ValueError('Hook occurrence budget exceeded')
     result = value['last_result']
@@ -262,8 +278,32 @@ def family_multiset(findings, runs, plans):
             'scanner_sources':[metadata(n) for n in row['scanner_sources']], 'count':0,'occurrences':[],
             'proof':{'rule_pack_checksum':plan.pack.checksum if plan else '',
                      'engine':metadata(details['engine']) if details.get('engine') else '',
-                     'rule_version':metadata(details['rule_version']) if details.get('rule_version') else ''},
+                     'rule_version':metadata(details['rule_version']) if details.get('rule_version') else '',
+                     'rule_versions':{}},
             'uncertain':False})
+        detector = metadata(details['rule_id'])
+        version = metadata(details['rule_version']) if details.get('rule_version') else ''
+        engine = metadata(details['engine']) if details.get('engine') else ''
+        proof = family['proof']
+        versions = proof['rule_versions']
+        selected = [rule for rule in plan.rules if rule.rule_id == detector] if plan else []
+        # A family anchor is not an execution-rule version. Retain every actual
+        # variant even when identical coordinates collapse to one occurrence.
+        # Unknown/mixed provenance cannot be repaired by choosing the first row.
+        if row['category'] == 'secret':
+            # Secret occurrence counting is unchanged. These providers have no
+            # rule execution proof and covered() continues to reject absence.
+            pass
+        elif (not version or not engine or not selected or
+                any(rule.rule_version != version for rule in selected) or
+                proof['engine'] != engine or proof['rule_pack_checksum'] != plan.pack.checksum or
+                (detector in versions and versions[detector] != version)):
+            family['uncertain'] = True
+            versions.clear()
+        elif not family['uncertain']:
+            versions[detector] = version
+            if len(versions) > MAX_PROOF_RULES:
+                raise ValueError('Hook rule proof budget exceeded')
         point = {'line_start':int(row['line_start']), 'line_end':int(row['line_end'])}
         # Scanner repeats of the exact same coordinate do not invent another
         # occurrence; distinct coordinates survive historical fingerprint merge.
@@ -285,16 +325,38 @@ def covered(family, runs, plans):
             return False
         program = getattr(plan.pack, 'program', None)
         required = program.family_rules(family['rule_id']) if program else (family['rule_id'],)
-        rules = [r for r in plan.rules if r.rule_id in required]
-        rule = rules[0] if rules else None
+        selected = {}
+        for rule in plan.rules:
+            if rule.rule_id not in required:
+                continue
+            if rule.rule_id in selected and selected[rule.rule_id] != rule.rule_version:
+                return False
+            selected[rule.rule_id] = rule.rule_version
         proof = family['proof']
-        if not rule or (proof['rule_pack_checksum'] and proof['rule_pack_checksum'] != plan.pack.checksum) or (proof['rule_version'] and proof['rule_version'] != rule.rule_version):
+        if not selected or (proof['rule_pack_checksum'] and proof['rule_pack_checksum'] != plan.pack.checksum):
             return False
         if proof['engine'] and proof['engine'] != run.provider:
             return False
         applicable = ({r.rule_id for r in plan.pack.catalog if r.rule_id in required and
             Path(family['file_path']).suffix.lower() in r.target_extensions} if program else set(required))
-        if not applicable or not applicable.issubset(plan.confirmed_rules) or family['file_path'] not in plan.scanned_files or family['file_path'] in plan.errored_files or plan.unscoped_error:
+        if not applicable or not applicable.issubset(selected):
+            return False
+        if 'rule_versions' in proof:
+            try:
+                versions = _validate_rule_versions(proof['rule_versions'])
+            except ValueError:
+                return False
+            if (not versions or not set(versions).issubset(applicable) or
+                    any(selected[detector] != version for detector, version in versions.items())):
+                return False
+        else:
+            # Legacy snapshots lost the original variant ID. Only a uniformly
+            # versioned applicable family can prove absence without guessing.
+            if not proof['rule_version'] or {selected[detector] for detector in applicable} != {proof['rule_version']}:
+                return False
+        if not applicable.issubset(plan.confirmed_rules) or family['file_path'] not in plan.scanned_files or family['file_path'] in plan.errored_files or plan.unscoped_error:
+            return False
+        if family['file_path'] in getattr(plan, 'skipped_files', {}):
             return False
     return True
 

@@ -135,6 +135,12 @@ def test_rule_and_file_execution_evidence_required(root, kwargs):
     assert verify(root, finding(root), PlannedScanner(**kwargs))['status'] == 'INCONCLUSIVE'
 
 
+def test_reported_engine_skip_cannot_prove_resolution(root):
+    scanner = PlannedScanner()
+    scanner.plan.skipped_files = {'Tls.java': 'too_big'}
+    assert verify(root, finding(root), scanner)['status'] == 'INCONCLUSIVE'
+
+
 def test_catalog_version_mismatch_and_original_rule_missing(root):
     old = finding(root)
     old.technical_details.update(rule_pack='fixture', rule_version='2')

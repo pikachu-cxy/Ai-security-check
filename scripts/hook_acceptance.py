@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -116,7 +117,26 @@ def run_acceptance(executable=None):
         precommit=subprocess.run([cli,*prefix,'hooks','install','pre-commit','--path',str(root)],
             capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
         assert precommit.returncode==0
-        assert (root/'.git/hooks/pre-commit').read_text(encoding='utf-8')=='#!/bin/sh\nsecurity-check scan --mode quick --staged\n'
+        script=(root/'.git/hooks/pre-commit').read_text(encoding='utf-8')
+        assert script.startswith('#!/bin/sh\n# AI Security Runtime managed pre-commit v1\n')
+        command=next(line[5:] for line in script.splitlines() if line.startswith('exec '))
+        argv=shlex.split(command)
+        assert Path(argv[0]).is_absolute()
+        assert Path(argv[0]).samefile(executable or sys.executable)
+        assert argv[-7:]==['scan','--mode','quick','--staged','--gate','strict','--no-progress']
+        status=subprocess.run([cli,*prefix,'hooks','status','pre-commit','--path',str(root),'--json'],
+            capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
+        assert status.returncode==0 and json.loads(status.stdout)['policy']=='strict'
+        # Exercise Git's actual dispatcher, not only the emitted shell text.
+        # This project is disposable; no normal business source/commit is touched.
+        gate_results={}
+        for name, count, expected in (('risk_blocked',1,1),('safe_allowed',0,0)):
+            java.write_text(source(100,count),encoding='utf-8')
+            git('add','Tls.java')
+            gate=subprocess.run(['git','-C',str(root),'hook','run','pre-commit'],env=env,
+                capture_output=True,text=True,encoding='utf-8',timeout=180)
+            assert gate.returncode==expected, (gate.returncode,gate.stdout,gate.stderr)
+            gate_results[name]=gate.returncode
         versions={r['scanner']:r['version'] for r in safe['scanner_runs'] if r['version']}
         return {'fixture':'DISPOSABLE_GIT_SYNTHETIC_JAVA','transport':'INSTALLED_EXECUTABLE_CLI' if executable else 'SOURCE_COORDINATOR_AND_REAL_CLI',
             'runtime_executable':str(executable) if executable else sys.executable,'versions':versions,'records':records,
@@ -127,6 +147,7 @@ def run_acceptance(executable=None):
             'codex_stdin_adapter':adapter_result,'generated_codex_shell_command_executed':True,
             'codex_config_status':json.loads(installed.stdout)['status'],'fresh_codex_host_trial':'PENDING',
             'existing_precommit_quick_staged_compatible':True,
+            'git_precommit_dispatch':gate_results,
             'model_invocation':False,'network_query':False,'target_build':False,'jeepay_modified':False,
             'ground_truth':'UNREVIEWED_NOT_MEASURED','limitations':'Counts are finding families/observed coordinates, not proof of exact instance movement or security safety.'}
 

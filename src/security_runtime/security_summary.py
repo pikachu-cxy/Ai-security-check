@@ -132,6 +132,8 @@ class SecuritySummaryService:
                   'automatic_execution': False}
         from .scan_freshness import summary as scan_context_summary
         result['scan_context'] = scan_context_summary(scan, self.store, root)
+        from .target import selection_summary
+        result['target_selection'] = selection_summary(scan['target_profile'])
         result['task_selection_protocol'] = {
             'identity': 'task_ref', 'display_numbers': 'RESPONSE_LOCAL_ONLY',
             'instruction': '“继续第一项”对应本次 recommended_tasks 的第一项及其 continuation；不重新查询后按 T01 换对象。缺少原响应或引用失效时刷新并重新选择。',

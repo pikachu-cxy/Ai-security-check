@@ -66,6 +66,8 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                     raise ValueError("Standalone MCP scan_diff failed")
                 payload = response.structuredContent or json.loads(response.content[0].text)
                 payload = payload.get("result", payload)
+                if payload.get('target_selection', {}).get('excluded_count') != 1:
+                    raise ValueError('Standalone MCP did not retain binary document exclusion evidence')
                 if not Path(payload["workspace"]).samefile(project):
                     raise ValueError("Standalone MCP workspace binding is incorrect")
                 task_summary=await client.call_tool('get_security_summary',{'scan_id':payload['scan_id'],'details':True})
@@ -270,8 +272,12 @@ def main() -> None:
         if git is None:
             raise ValueError("Git is required by the artifact verification sample")
         system = Path(os.environ.get("SystemRoot", "C:/Windows"))
-        platform_paths = [system / "System32", system] if os.name == "nt" else [Path("/usr/bin"), Path("/bin")]
+        # The Windows root can contain the developer's py launcher. Native
+        # verification must not accidentally inherit that fallback runtime.
+        platform_paths = [system / "System32"] if os.name == "nt" else [Path("/usr/bin"), Path("/bin")]
         env["PATH"] = os.pathsep.join(map(str, [bundle, Path(git).parent, *platform_paths]))
+        if os.name == "nt" and any(shutil.which(name, path=env["PATH"]) for name in ("python", "python3", "py")):
+            raise ValueError("Developer Python must not be available on standalone verification PATH")
         env["SECURITY_RUNTIME_PLUGIN_DIR"] = str(root / "plugins")
         env["SECURITY_RUNTIME_OFFLINE"] = "0" if args.full else "1"
         version = run([str(executable), "--version"], cwd=root, env=env).stdout.strip()
@@ -293,6 +299,17 @@ def main() -> None:
         project = root / "project"
         project.mkdir()
         run(["git", "init", "-q", str(project)], cwd=root, env=env)
+        with zipfile.ZipFile(project / 'large-document.docx', 'w', compression=zipfile.ZIP_STORED) as document:
+            document.writestr('word/document.xml', b'x' * 1_100_000)
+        oversized = root / 'oversized-project'
+        oversized.mkdir()
+        (oversized / 'large.py').write_bytes(b'x' * 1_000_001)
+        rejected = subprocess.run([str(executable), 'scan', '--mode', 'release', '--path', str(oversized), '--json', '--no-progress'],
+                                  cwd=root, env=env, capture_output=True, text=True, encoding='utf-8', timeout=60)
+        rejection = json.loads(rejected.stdout)
+        if (rejected.returncode != 2 or rejection.get('reason_code') != 'TARGET_FILE_SIZE_LIMIT_EXCEEDED'
+                or rejection.get('scanner_run') is not False or rejection.get('coverage') != 'UNKNOWN'):
+            raise ValueError('Standalone oversized source did not fail closed with typed diagnostic')
         doctors = verify_doctors(executable, root, project, env)
         global_ownership = verify_global_ownership(executable, root, env)
         run([str(executable), "licenses", "--check-distribution"], cwd=root, env=env)
@@ -401,6 +418,8 @@ def main() -> None:
         record['doctor_contract'] = doctors
         record['global_semantic_ownership'] = global_ownership
         record['managed_semgrep_reuse'] = args.full
+        record['large_binary_document_exclusion'] = True
+        record['oversized_source_typed_failure'] = True
         record['scan_coverage'] = {'quick': payload['coverage'], 'release': release_payload['coverage']} if args.full else {}
         args.archive.with_name(args.archive.name + ".verification.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
         print(f"Artifact verified: {args.archive.name}; full={args.full}")

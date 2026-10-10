@@ -16,8 +16,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--platform", required=True, choices=("windows-x64", "macos-arm64", "macos-x64", "linux-x64"))
     parser.add_argument('--experience', action='store_true', help='Local R2.2 experience archive; no external publication')
+    parser.add_argument('--experience-label', help='Safe local experience suffix; requires --experience')
     parser.add_argument('--bundle', type=Path, help='Alternate standalone bundle under workspace dist')
     args = parser.parse_args()
+    if args.experience_label:
+        import re
+        if not args.experience or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,63}', args.experience_label):
+            raise ValueError('Experience label requires --experience and lowercase safe characters')
     actual = "-".join(platform_key())
     if args.platform != actual:
         raise ValueError(f"Cannot label {actual} build as {args.platform}")
@@ -32,7 +37,7 @@ def main() -> None:
         raise ValueError("Standalone executable is missing")
     release = root / "dist" / ("experience" if args.experience else "release")
     release.mkdir(parents=True, exist_ok=True)
-    stem = f"ai-security-runtime-v{__version__}" + ('-r2.2-local' if args.experience else '') + f"-{args.platform}"
+    stem = f"ai-security-runtime-v{__version__}" + ('-'+(args.experience_label or 'r2.2-local') if args.experience else '') + f"-{args.platform}"
     destination = release / (stem + (".zip" if os.name == "nt" else ".tar.gz"))
     files = sorted(path for path in bundle.rglob("*") if path.is_file())
     for file in files: no_links(file)

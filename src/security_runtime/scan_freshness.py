@@ -25,9 +25,11 @@ def source_revision(root, key):
     no_links(root)
     git = GitService(root) if (root / '.git').exists() else None
     names = git.changed_files('release') if git else None
-    files = TargetDetector().detect(root, names).files
+    profile = TargetDetector().detect(root, names, select_scan_targets=True)
+    files = profile.files
     digest = hmac.new(key, b'whole-project-source-v1' + os.path.normcase(str(root)).encode(), hashlib.sha256)
     digest.update(encode(files))
+    digest.update(encode(profile.skipped_files))
     total = 0
     for name in files:
         path = root / name
@@ -44,7 +46,8 @@ def source_revision(root, key):
             raise ValueError('SOURCE_MOVING')
         digest.update(hmac.new(key, raw, hashlib.sha256).digest())
     # Detect added files during capture as well as byte changes during reading.
-    if TargetDetector().detect(root, git.changed_files('release') if git else None).files != files:
+    after = TargetDetector().detect(root, git.changed_files('release') if git else None, select_scan_targets=True)
+    if after.files != files or after.skipped_files != profile.skipped_files:
         raise ValueError('SOURCE_INVENTORY_MOVING')
     return digest.hexdigest(), len(files)
 

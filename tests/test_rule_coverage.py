@@ -93,11 +93,11 @@ def test_human_json_mcp_same_coverage(tmp_path):
 
 def test_catalog_actual_count_and_selection():
     pack=RulePackManager().resolve()
-    assert len(pack.catalog)==29
-    assert sum(r.language=='java' for r in pack.catalog)==27
+    assert len(pack.catalog)==40
+    assert sum(r.language=='java' for r in pack.catalog)==32
     plan=plan_rules(pack,['App.java','app.js','Mapper.xml','README.md','config.yml'])
-    assert len(plan.rules)==19 and plan.files==('App.java','Mapper.xml')
-    assert plan.coverage()['per_language']['javascript']['selected_rules']==0
+    assert len(plan.rules)==30 and plan.files==('App.java','app.js','Mapper.xml')
+    assert plan.coverage()['per_language']['javascript']['selected_rules']==6
 
 
 @pytest.mark.parametrize('field',['category','cwe','maturity','provenance','confidence','references','language'])
@@ -135,7 +135,7 @@ def test_language_failure_evidence_and_counts(status):
         plan.observe({'time':{'rules':[r.rule_id for r in plan.rules]},'paths':{'scanned':['App.java']}},('App.java',))
     row=plan.coverage(status)['per_language']['java']
     assert row['status']=={'SUCCESS':'EXECUTED','FAILED':'FAILED','TIMEOUT':'FAILED','UNAVAILABLE':'UNAVAILABLE'}[status]
-    assert row['executed_rules']==(18 if status=='SUCCESS' else 0)
+    assert row['executed_rules']==(23 if status=='SUCCESS' else 0)
 
 
 def test_parse_error_and_skipped_file_lower_coverage():

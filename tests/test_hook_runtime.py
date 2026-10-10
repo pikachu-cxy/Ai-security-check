@@ -10,7 +10,7 @@ import pytest
 
 from security_runtime.equivalence import equivalence_key
 from security_runtime.findings import FindingNormalizer
-from security_runtime.hook_runtime import HookCoordinator, capture_snapshot, family_delta, family_multiset, validate_state
+from security_runtime.hook_runtime import HookCoordinator, capture_snapshot, covered, family_delta, family_multiset, validate_state
 from security_runtime.hook_state import HookStateStore
 from security_runtime.models import ScanResult, ScannerRun, TargetProfile
 from security_runtime.verification_policy import scanner_process_observed, offline_scanning
@@ -350,3 +350,133 @@ def test_snapshot_budget_failure_never_launches_scanner(repo,tmp_path,monkeypatc
     runtime=FakeRuntime();c=coordinator(tmp_path,runtime)
     with pytest.raises(ValueError):c.handle('FILE_CHANGED',repo)
     assert not runtime.calls
+
+
+def mixed_version_family(root, rule_ids=('ai-security.java.jpa-query',)):
+    """Use the actual heterogeneous SQL family without launching scanners."""
+    from security_runtime.rulepacks import RulePackManager
+    from security_runtime.rule_coverage import plan_rules
+    from security_runtime.rule_program import annotate
+    pack = RulePackManager().resolve()
+    plan = plan_rules(pack, ['A.java'])
+    findings = []
+    for detector in rule_ids:
+        finding = row(root, rule=detector, category='sql-injection')
+        record = next(rule for rule in pack.catalog if rule.rule_id == detector)
+        annotate(finding, pack.program.capability(detector), pack.program.version, record)
+        finding.technical_details['rule_version'] = record.rule_version
+        findings.append(finding)
+    run = ScannerRun('semgrep', '1.178.0', 'SUCCESS', 0, provider='semgrep')
+    plan.observe({'paths': {'scanned': ['A.java']},
+                  'time': {'rules': [rule.rule_id for rule in plan.rules]}}, ('A.java',))
+    family = next(iter(family_multiset(findings, [run], {'semgrep': plan}).values()))
+    return family, plan, run, findings
+
+
+def test_hook_new_variant_absence_uses_original_version_not_family_first(tmp_path):
+    family, plan, run, _ = mixed_version_family(tmp_path)
+    assert family['rule_id'] == 'capability:JAVA_SQL_INJECTION'
+    assert family['proof']['rule_version'] == '1.2.0'
+    assert family['proof']['rule_versions'] == {'ai-security.java.jpa-query': '1.2.0'}
+    assert next(rule for rule in plan.rules if rule.rule_id == 'ai-security.java.jdbc-statement').rule_version == '1.1.0'
+    assert covered(family, [run], {'semgrep': plan})
+    _, delta = family_delta({family['equivalence_key']: family}, {},
+                            lambda value: covered(value, [run], {'semgrep': plan}))
+    assert delta['resolved'] == 1
+
+
+def test_hook_same_coordinate_keeps_all_variant_version_receipts(tmp_path):
+    family, plan, run, _ = mixed_version_family(tmp_path, ('ai-security.java.jdbc-statement', 'ai-security.java.jpa-query'))
+    assert family['count'] == 1
+    assert family['proof']['rule_versions'] == {
+        'ai-security.java.jdbc-statement': '1.1.0', 'ai-security.java.jpa-query': '1.2.0'}
+    assert covered(family, [run], {'semgrep': plan})
+
+
+@pytest.mark.parametrize('invalid', ['unknown-detector', 'wrong-version', 'empty-proof', 'not-selected',
+                                   'not-confirmed', 'file-not-scanned', 'parser-error', 'skipped-file',
+                                   'unscoped-error', 'pack-changed', 'engine-changed', 'partial-run', 'failed-run'])
+def test_hook_variant_proof_keeps_all_existing_absence_gates(tmp_path, invalid):
+    family, plan, run, _ = mixed_version_family(tmp_path)
+    detector = 'ai-security.java.jpa-query'
+    if invalid == 'unknown-detector': family['proof']['rule_versions'] = {'unrelated.rule': '1.2.0'}
+    elif invalid == 'wrong-version': family['proof']['rule_versions'][detector] = '1.1.0'
+    elif invalid == 'empty-proof': family['proof']['rule_versions'] = {}
+    elif invalid == 'not-selected': plan.rules = tuple(rule for rule in plan.rules if rule.rule_id != detector)
+    elif invalid == 'not-confirmed': plan.confirmed_rules.remove('ai-security.java.jdbc-statement')
+    elif invalid == 'file-not-scanned': plan.scanned_files.clear()
+    elif invalid == 'parser-error': plan.errored_files.add('A.java')
+    elif invalid == 'skipped-file': plan.skipped_files['A.java'] = 'too_big'
+    elif invalid == 'unscoped-error': plan.unscoped_error = True
+    elif invalid == 'pack-changed': family['proof']['rule_pack_checksum'] = 'b' * 64
+    elif invalid == 'engine-changed': family['proof']['engine'] = 'other-engine'
+    elif invalid == 'partial-run': run.coverage_contract = 'PARTIAL'
+    else: run.status = 'FAILED'
+    assert not covered(family, [run], {'semgrep': plan})
+
+
+def test_hook_legacy_family_cannot_guess_between_heterogeneous_versions(tmp_path):
+    family, plan, run, _ = mixed_version_family(tmp_path)
+    del family['proof']['rule_versions']
+    assert not covered(family, [run], {'semgrep': plan})
+    family['proof']['rule_version'] = '1.1.0'
+    assert not covered(family, [run], {'semgrep': plan})
+
+
+def test_hook_legacy_single_version_family_remains_supported(tmp_path):
+    from security_runtime.rulepacks import RulePackManager
+    from security_runtime.rule_coverage import plan_rules
+    pack = RulePackManager().resolve()
+    plan = plan_rules(pack, ['A.java'])
+    run = ScannerRun('semgrep', '1.178.0', 'SUCCESS', 0, provider='semgrep')
+    family = {'scanner_sources': ['semgrep'], 'rule_id': 'ai-security.java.trust-all-hostname',
+              'file_path': 'A.java', 'proof': {'rule_pack_checksum': pack.checksum,
+                                           'engine': 'semgrep', 'rule_version': '1.1.0'}}
+    plan.observe({'paths': {'scanned': ['A.java']},
+                  'time': {'rules': [rule.rule_id for rule in plan.rules]}}, ('A.java',))
+    assert covered(family, [run], {'semgrep': plan})
+    family['proof']['rule_version'] = ''
+    assert not covered(family, [run], {'semgrep': plan})
+
+
+@pytest.mark.parametrize('ambiguous', ['version', 'engine', 'missing-version', 'selected-duplicate-version'])
+def test_hook_ambiguous_variant_source_never_chooses_first_version(tmp_path, ambiguous):
+    from copy import deepcopy
+    from dataclasses import replace
+    family, plan, run, findings = mixed_version_family(tmp_path)
+    duplicate = deepcopy(findings[0])
+    if ambiguous == 'version': duplicate.technical_details['rule_version'] = '1.1.0'
+    elif ambiguous == 'engine': duplicate.technical_details['engine'] = 'other-engine'
+    elif ambiguous == 'missing-version': duplicate.technical_details.pop('rule_version')
+    else:
+        original = next(rule for rule in plan.rules if rule.rule_id == 'ai-security.java.jpa-query')
+        plan.rules += (replace(original, rule_version='1.1.0'),)
+    family = next(iter(family_multiset([*findings, duplicate], [run], {'semgrep': plan}).values()))
+    assert family['uncertain'] and family['proof']['rule_versions'] == {}
+    assert not covered(family, [run], {'semgrep': plan})
+
+
+def test_hook_proof_schema_supports_legacy_and_variant_map(repo, tmp_path):
+    dirty(repo)
+    coordinator_instance = coordinator(tmp_path, FakeRuntime([row(repo)]))
+    coordinator_instance.handle('SESSION_START', repo)
+    state = json.loads(coordinator_instance.store.path(repo, 'generic', None).read_text())
+    family = next(iter(state['families'].values()))
+    assert family['proof']['rule_versions'] == {'test.rule': '0.1'}
+    validate_state(state)
+    family['proof'].pop('rule_versions')
+    validate_state(state)
+
+
+@pytest.mark.parametrize('invalid', [[], {'bad key': '1.2.0'}, {'test.rule': ''},
+                                   {'test.rule': []}, {'test.rule': 123},
+                                   {str(index): '1.2.0' for index in range(1001)}],
+                         ids=['not-map', 'bad-id', 'empty-version', 'container-version', 'number-version', 'oversized-map'])
+def test_hook_proof_schema_rejects_invalid_variant_maps(repo, tmp_path, invalid):
+    dirty(repo)
+    coordinator_instance = coordinator(tmp_path, FakeRuntime([row(repo)]))
+    coordinator_instance.handle('SESSION_START', repo)
+    state = json.loads(coordinator_instance.store.path(repo, 'generic', None).read_text())
+    next(iter(state['families'].values()))['proof']['rule_versions'] = invalid
+    with pytest.raises(ValueError, match='hook'):
+        validate_state(state)

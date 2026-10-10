@@ -1,0 +1,236 @@
+rules:
+- id: ai-security.javascript.sql-injection
+  languages:
+  - javascript
+  - typescript
+  severity: ERROR
+  message: Request input reaches SQL text. Bind values separately; review dynamic
+    identifiers and local dataflow.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., function ($REQ, $RES, ...) { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async function ($REQ, $RES, ...) { ...
+        })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $PG = require("pg"); ...
+      - pattern-inside: import * as $PG from "pg"; ...
+      - pattern-inside: import $PG from "pg"; ...
+    - pattern-inside: const $DB = new $PG.$CTOR(...); ...
+    - metavariable-regex:
+        metavariable: $CTOR
+        regex: ^(Pool|Client)$
+    - pattern-either:
+      - pattern: $DB.query($SQL, ...)
+      - pattern: $DB.execute($SQL, ...)
+    - pattern-not: $DB.query({ ... }, ...)
+    - pattern-not: $DB.execute({ ... }, ...)
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $PG = require("pg"); ...
+      - pattern-inside: import * as $PG from "pg"; ...
+      - pattern-inside: import $PG from "pg"; ...
+    - pattern-inside: const $DB = new $PG.$CTOR(...); ...
+    - metavariable-regex:
+        metavariable: $CTOR
+        regex: ^(Pool|Client)$
+    - pattern: '$DB.query({text: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const { $CTOR } = require("pg"); ...
+      - pattern-inside: import { $CTOR } from "pg"; ...
+    - pattern-inside: const $DB = new $CTOR(...); ...
+    - metavariable-regex:
+        metavariable: $CTOR
+        regex: ^(Pool|Client)$
+    - pattern-either:
+      - pattern: $DB.query($SQL, ...)
+      - pattern: $DB.execute($SQL, ...)
+    - pattern-not: $DB.query({ ... }, ...)
+    - pattern-not: $DB.execute({ ... }, ...)
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const { $CTOR } = require("pg"); ...
+      - pattern-inside: import { $CTOR } from "pg"; ...
+    - pattern-inside: const $DB = new $CTOR(...); ...
+    - metavariable-regex:
+        metavariable: $CTOR
+        regex: ^(Pool|Client)$
+    - pattern: '$DB.query({text: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql(?:2)?(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern-either:
+      - pattern: $DB.query($SQL, ...)
+      - pattern: $DB.execute($SQL, ...)
+    - pattern-not: $DB.query({ ... }, ...)
+    - pattern-not: $DB.execute({ ... }, ...)
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql(?:2)?(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern: '$DB.query({sql: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = await $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql(?:2)?(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern-either:
+      - pattern: $DB.query($SQL, ...)
+      - pattern: $DB.execute($SQL, ...)
+    - pattern-not: $DB.query({ ... }, ...)
+    - pattern-not: $DB.execute({ ... }, ...)
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = await $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql(?:2)?(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern: '$DB.query({sql: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql2(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern: '$DB.execute({sql: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $MYSQL = require($MODULE); ...
+      - pattern-inside: import * as $MYSQL from $MODULE; ...
+      - pattern-inside: import $MYSQL from $MODULE; ...
+    - pattern-inside: const $DB = await $MYSQL.$FACTORY(...); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?mysql2(?:/promise)?["']?$
+    - metavariable-regex:
+        metavariable: $FACTORY
+        regex: ^(createConnection|createPool)$
+    - pattern: '$DB.execute({sql: $SQL, ...}, ...)'
+    - focus-metavariable: $SQL
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.2.0
+    language: javascript
+    category: sql-injection
+    cwe:
+    - CWE-89
+    confidence: MEDIUM
+    maturity: BETA
+    framework: Express / node-postgres / mysql / mysql2
+    license: Apache-2.0
+    references:
+    - https://cwe.mitre.org/data/definitions/89.html
+    - https://node-postgres.com/features/queries
+    - https://github.com/sidorares/node-mysql2/tree/master/website/docs
+    - https://expressjs.com/en/api/
+    - https://github.com/sidorares/node-mysql2/blob/master/lib/base/connection.js
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-10'
+      references:
+      - https://cwe.mitre.org/data/definitions/89.html
+      - https://node-postgres.com/features/queries
+      - https://github.com/sidorares/node-mysql2/tree/master/website/docs
+      - https://expressjs.com/en/api/
+      - https://github.com/sidorares/node-mysql2/blob/master/lib/base/connection.js
+      license: Apache-2.0
+      derived_from: ''

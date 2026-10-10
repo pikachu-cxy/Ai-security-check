@@ -36,7 +36,7 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
         report["profile"] = "READY"
         try:
             files = GitService(workspace.path).changed_files("release") if workspace.is_git else None
-            profile = TargetDetector().detect(workspace.path, files)
+            profile = TargetDetector().detect(workspace.path, files, select_scan_targets=True)
         except DiscoveryLimitError:
             profile = TargetProfile(str(workspace.path))
             report["profile"] = "LIMITED"
@@ -580,6 +580,7 @@ def main(argv: list[str] | None = None) -> int:
                 print("\nFor any MCP-compatible coding tool:\n1. Open MCP settings\n2. Add local stdio server\n3. Use the command and arguments above")
             return 0
         global_action = (args.command in {'status', 'repair', 'uninstall'}
+            or (args.command == 'integration' and args.integration == 'codex' and args.scope == 'global')
             or (args.command == 'setup' and args.integration in {None, 'codex'}
                 and args.scope != 'project' and (args.path is None or args.scope == 'global'))
             or (args.command == 'doctor' and not args.project and (args.path is None or args.global_scope)))
@@ -596,11 +597,12 @@ def main(argv: list[str] | None = None) -> int:
                         workspace = str(Path.cwd())
                     except (ValueError, OSError):
                         workspace = None
-                data = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False)).execute(args.command, workspace)
+                action = ('uninstall' if args.action == 'remove' else args.action) if args.command == 'integration' else args.command
+                data = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False)).execute(action, workspace)
             except (IntegrationDiagnostic, ValueError, OSError):
                 # Do not echo arbitrary claims or malformed config contents.
                 exc = sys.exc_info()[1]
-                reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_CONFIGURATION_REJECTED'
+                reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_STATE_ACCESS_FAILED' if isinstance(exc, OSError) else 'GLOBAL_CONFIGURATION_REJECTED'
                 data = {'integration': 'codex', 'scope': 'GLOBAL', 'overall': 'BROKEN',
                         'ownership': 'UNKNOWN', 'diagnostics': [reason]}
             print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
@@ -701,6 +703,12 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("扫描已取消。", file=sys.stderr)
         return 130
+    except DiscoveryLimitError as exc:
+        if getattr(args, 'json', False):
+            print(json.dumps(exc.to_dict(), ensure_ascii=True))
+        else:
+            print(f"security-check: {exc.code}: {sanitize(str(exc))}", file=sys.stderr)
+        return 2
     except WorkspaceError as exc:
         hint = args.command
         if args.command == "setup" and args.integration:

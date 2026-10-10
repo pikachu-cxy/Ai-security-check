@@ -8,6 +8,12 @@ The product identity is the capability manifest at
 [`src/security_runtime/rules/capabilities.json`](../src/security_runtime/rules/capabilities.json).
 Catalog and YAML files are execution definitions, not the product quality measure.
 
+The current local foundation release is rule pack 1.2.0 / mapping 1.1.0:
+40 installed rules, five new Java variants and six shared JS/TS advisory rules,
+32 default-on. Capability count/maturity remain unchanged. The counts/evidence
+below retain the earlier R0/R1 baseline. New behavior, scope and synthetic
+limitations are documented in [RULE_FOUNDATION.md](RULE_FOUNDATION.md).
+
 ## Current capabilities
 
 | Capability | Maturity |

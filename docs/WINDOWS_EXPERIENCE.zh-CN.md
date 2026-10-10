@@ -9,9 +9,39 @@
 source offer 随包保留。`build_id` 区分同版本号的不同构建；包内文件摘要是完整性校验，
 不是发布者签名。旧 R2.2 ZIP 缺少新文件清单，不能直接作为版本槽候选包。
 
+Release 扫描也支持从 ZIP 解压、没有 Git 的源码目录。已识别的二进制文档、图片和
+字体会明确记录为排除项，其内容没有被检查。超限源码、凭据文本和依赖文件仍会以
+具体诊断停止发现。当前规则包 1.2.0 包含 40 条规则（32 条默认启用），新增
+Java 框架变体及六条共享 JS/TS 规则。实际覆盖取决于执行的文件和规则，不代表
+所有语言或所有漏洞都已检查；Vue SFC 和未建模调用链仍有明确限制。
+规则范围、授权审核和六步体验清单见 [RULE_FOUNDATION.md](RULE_FOUNDATION.md)。
+详见[目标选择](SCAN_TARGET_SELECTION.md)。
+
+## 本轮 Java / JS / TS 规则体验
+
+本地包名称包含 `rule-foundation`；应用仍是 0.3.1，规则包是 1.2.0，
+用 `build_id` 区分旧的同版本包。完整规则边界见 [规则基础](RULE_FOUNDATION.md)。
+本轮也修复默认 Global Hook 状态目录超过 Windows 传统路径长度时的保存问题，
+内部使用同一文件位置的长路径表示，不修改系统设置、工作区边界或 ownership 校验。
+
+安装后，在下方六步清单的隔离项目里，可以向 Agent 这样要求：
+
+> 仅在这个临时项目创建 Java NamedParameterJdbcTemplate、JavaScript
+> child_process 和 TypeScript fetch 的合成安全核查样例，不执行代码。
+> 使用 $ai-security-review 扫描全部项目代码，列出实际执行规则、文件范围、
+> 候选风险和本地证据。先不要修复。
+
+核查后明确授权修复一个合成问题，要求用原规则复扫，并运行已有功能测试。
+Hook 体验要先建立安全基线，再引入合成风险；观察自动提示，恢复安全代码后
+观察复扫。扫描器不修改代码，发现消失也不等于应用功能兼容性已验证。
+代码执行、自然语言修复质量和 Desktop 的实际 Hook 提示需要用户亲自验收。
+
 ## 安装与升级
 
-在解压文件夹打开 PowerShell：
+包名为 `ai-security-runtime-v0.3.1-rule-foundation-windows-x64.zip`。
+解压后，在其 **`security-check` 子目录**打开 PowerShell，此目录包含
+`security-check.exe` 和 `version.json`。如果当前在解压外层目录，先执行
+`Set-Location .\security-check`：
 
 ```powershell
 .\security-check.exe --version
@@ -110,24 +140,33 @@ Git pre-commit 与 Codex 编辑事件 Hook 是两种独立入口。显式安装�
    ```
 
    确认此演示项目的 Hook 已关闭、MCP 仍连接。不要改正常业务项目，不执行网络样例。
-2. **无 Hook 扫描。** 说：“只在此临时项目创建 Java 安全核查样例，使用信任所有
-   主机名的 HttpsURLConnection verifier 并安装到 connection。不执行代码。
-   使用 $ai-security-review 扫描这个项目，显示实际覆盖和风险。”记录 scanner 执行及 FULL/PARTIAL 原因。
-   FULL 不是项目安全声明。
+2. **无 Hook 扫描。** 说：“只在此临时项目创建合成样例：Java
+   NamedParameterJdbcTemplate 把 servlet 请求参数拼入 SQL；JavaScript 的内联
+   Express handler 把请求输入传给 child_process.exec；TypeScript 的内联 Express
+   handler 把请求输入传给 fetch。另建一个 Java 信任所有主机名的
+   HttpsURLConnection verifier 并安装到 connection，用于原有授权流程体验。
+   不执行样例。使用 $ai-security-review 扫描全部项目代码，列出实际文件、执行的
+   Java/JS/TS 规则、本地证据与风险，先不要修改代码。”记录 scanner 执行及
+   FULL/PARTIAL 原因。FULL 不是项目安全声明，新增 advisory 规则不授予自动修复权限。
 3. **核查与续办。** 说：“使用 AI Security Review 核查第一个风险，分批处理，不
    修改代码”，再说“继续这个任务”。观察脱敏证据、需处理风险和待确认项。
    样例位置不能证明误报；旧扫描没有版本证明时只能给当前上下文。
    断开重连后继续应复用有效评审、重新准备 session，不要求用户输入 UUID。
-4. **授权修复并验证。** 说：“修复刚才这个任务，并用原扫描器和规则验证。”
-   观察原任务保持一致、代码实际修改与 scanner 重检。只有
+4. **授权修复并验证。** 选择已展示的 TLS 主机名 verifier 任务，保留原有授权
+   流程体验。说：“修复这个 TLS 任务，并用原扫描器和规则验证。”观察原任务
+   保持一致、代码实际修改与 scanner 重检。其他 Java/JS/TS 候选需分别核查与明确
+   选择修复。只有
    SCANNER_VERIFIED_RESOLVED 表示此规则范围内解决；INCONCLUSIVE 要说明原因。
    代码变化须刷新相关结论，验证不代表业务／部署正确。
 5. **亲自验证 Hook 自动反馈。** 仅将演示项目配置改为 `hooks = true`，完全重启
-   Desktop，审核当前 Runtime Hook 并确认启用。说：“仅为隔离演示，把 verifier
+   Desktop，审核当前 Runtime Hook 并确认启用。保持已修复的 TLS 代码安全，先在
+   同一文件做无害注释修改，确认 Hook 已扫描基线。再说：“仅为隔离演示，把 verifier
    临时改回恒为 true 并安装，不运行网络代码。”观察编辑后自动出现安全反馈。
    当前 remediation 模式决定建议／确认／修复；需只看建议时，先记录
    `remediation status`，自行选择 `remediation configure --mode report_only`，
    体验后恢复原模式。未触发／未信任／不可见均记录失败，不以手动扫描代替。
+   新 JS/TS 规则可另选一个明确授权的合成文件，分别体验安全 → 风险 → 安全与
+   advisory 提示；不能从这些 Finding 推断自动修复权限。
 6. **收尾与记录。** 明确要求修复演示风险并验证，记录覆盖、Finding、未知项、
    原规则验证和 Hook 反馈。保留现场以便复盘，不自动抑制或宣布安全。
    无需发布代码、tag 或 Release；关闭演示项目，再决定下一阶段。

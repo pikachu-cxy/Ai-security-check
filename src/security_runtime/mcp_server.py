@@ -32,6 +32,7 @@ def _agent_finding(finding: dict) -> dict:
 
 
 def _agent_result(result) -> dict:
+    from .target import selection_summary
     return {
         "scan_id": result.scan_id,
         "workspace": result.target_profile.path,
@@ -47,6 +48,7 @@ def _agent_result(result) -> dict:
         "recommendation": result.release_status,
         "duration_ms": result.duration_ms,
         "scanner_runs": [asdict(run) for run in result.scanner_runs],
+        "target_selection": selection_summary(result.target_profile),
     }
 
 
@@ -230,7 +232,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             raise ValueError("Specify only one workspace path")
         logger.info("scan_diff started")
         root = bound_path(workspace_path if workspace_path is not None else path)
-        result = runtime_engine().scan(root, mode)
+        from .target import DiscoveryLimitError
+        try:
+            result = runtime_engine().scan(root, mode)
+        except DiscoveryLimitError as exc:
+            return exc.to_dict()
         event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
                            mode, result.duration_ms, len(result.findings), result.coverage), connected=True)
         logger.info("scan_diff finished scan_id=%s", result.scan_id)
@@ -242,7 +248,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if workspace_path is not None and path is not None and workspace_path != path:
             raise ValueError("Specify only one workspace path")
         root = bound_path(workspace_path if workspace_path is not None else path)
-        result = runtime_engine().scan(root, "release")
+        from .target import DiscoveryLimitError
+        try:
+            result = runtime_engine().scan(root, "release")
+        except DiscoveryLimitError as exc:
+            return exc.to_dict()
         event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
                            "release", result.duration_ms, len(result.findings), result.coverage), connected=True)
         return scan_response(result, summary)

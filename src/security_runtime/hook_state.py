@@ -22,13 +22,70 @@ def identity(value: str) -> str:
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
 
 
+def native_io_path(path: Path) -> Path:
+    """Represent the same state location for Windows IO, never its identity.
+
+    Win32's legacy path limit also applies to atomic renames. Keep logical
+    directories/root comparisons unchanged, and use an absolute extended path
+    only for filesystem operations. Do not resolve or follow links here.
+    """
+    path = Path(path)
+    if os.name != 'nt':
+        return path
+    def valid_components(parts):
+        for name in parts:
+            if name not in ('', '.', '..') and (
+                    name.endswith(('.', ' ')) or ':' in name or Path(name).is_reserved()):
+                raise ValueError('Hook state path spelling is not supported')
+    def checked_unc(tail):
+        parts = tail.split('\\')
+        if len(parts) < 2 or any(name in ('', '.', '..', '?') for name in parts[:2]):
+            raise ValueError('Hook state device paths are not supported')
+        if any(name.endswith(('.', ' ')) or ':' in name for name in parts[:2]):
+            raise ValueError('Hook state path spelling is not supported')
+        valid_components(parts[2:])
+    def validate_shape(raw):
+        if raw.startswith('\\\\.\\'):
+            raise ValueError('Hook state device paths are not supported')
+        if raw.startswith('\\\\?\\'):
+            tail = raw[4:]
+            if tail.startswith('UNC\\'):
+                checked_unc(tail[4:])
+                return
+            if len(tail) >= 3 and tail[0] in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' and tail[1:3] == ':\\':
+                valid_components(tail[3:].split('\\'))
+                return
+            raise ValueError('Hook state device paths are not supported')
+        if raw.startswith('\\\\'):
+            checked_unc(raw[2:])
+            return
+        drive, tail = os.path.splitdrive(raw)
+        if drive and (len(drive) != 2 or drive[0] not in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz' or drive[1] != ':'):
+            raise ValueError('Hook state device paths are not supported')
+        valid_components(tail.split('\\'))
+    # GetFullPathName can strip a trailing dot/space or a UNC dot server.
+    # Validate the original spelling before normalization can erase it.
+    validate_shape(str(path))
+    raw = os.path.abspath(path)
+    validate_shape(raw)
+    if raw.startswith('\\\\?\\'):
+        return Path(raw)
+    if raw.startswith('\\\\'):
+        return Path('\\\\?\\UNC\\' + raw[2:])
+    return Path('\\\\?\\' + raw)
+
+
 def no_links(path: Path) -> None:
-    if any(p.is_symlink() or p.is_junction() for p in (path, *path.parents)):
+    # Check the original lexical parents as well: normalizing '..' for native
+    # IO must not hide a linked ancestor from the existing fail-closed gate.
+    if any(native_io_path(p).is_symlink() or native_io_path(p).is_junction()
+           for p in (path, *path.parents)):
         raise ValueError('Hook state/configuration links are not supported')
 
 
 def atomic_bytes(path: Path, content: bytes) -> None:
     no_links(path)
+    path = native_io_path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, name = tempfile.mkstemp(prefix='.hook-', dir=path.parent)
     try:
@@ -46,7 +103,9 @@ class HookStateStore:
         self.directory = directory or SQLiteStore.default_path().parent / 'hooks'
 
     def workspace_directory(self, root: Path) -> Path:
-        return self.directory / identity(os.path.normcase(str(root)))
+        directory = self.directory / identity(os.path.normcase(str(root)))
+        no_links(directory)
+        return native_io_path(directory)
 
     def path(self, root: Path, host: str, session_id: str | None) -> Path:
         return self.workspace_directory(root) / (identity(host + '\0' + (session_id or 'default')) + '.json')

@@ -1,7 +1,51 @@
 {
   "rule_pack": "ai-security-core",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "rules": [
+    {
+      "language": "java",
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Apache HttpClient 4 / 5 classic",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html",
+        "https://hc.apache.org/httpcomponents-client-4.5.x/current/httpclient/apidocs/org/apache/http/client/HttpClient.html",
+        "https://hc.apache.org/components/httpcomponents-client-5.5.x/5.5.2/httpclient5/apidocs/org/apache/hc/client5/http/classic/methods/HttpGet.html",
+        "https://hc.apache.org/httpcomponents-client-4.5.x/current/httpclient/apidocs/org/apache/http/client/methods/HttpRequestBase.html",
+        "https://hc.apache.org/httpcomponents-client-5.6.x/5.6/httpclient5/apidocs/org/apache/hc/client5/http/classic/methods/HttpUriRequestBase.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html",
+          "https://hc.apache.org/httpcomponents-client-4.5.x/current/httpclient/apidocs/org/apache/http/client/HttpClient.html",
+          "https://hc.apache.org/components/httpcomponents-client-5.5.x/5.5.2/httpclient5/apidocs/org/apache/hc/client5/http/classic/methods/HttpGet.html",
+          "https://hc.apache.org/httpcomponents-client-4.5.x/current/httpclient/apidocs/org/apache/http/client/methods/HttpRequestBase.html",
+          "https://hc.apache.org/httpcomponents-client-5.6.x/5.6/httpclient5/apidocs/org/apache/hc/client5/http/classic/methods/HttpUriRequestBase.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.apache-httpclient",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/apache-httpclient.yml",
+      "fixture": "tests/rules/java/apache-httpclient.java",
+      "target_extensions": [
+        ".java"
+      ]
+    },
     {
       "language": "java",
       "category": "arbitrary-file-read",
@@ -73,6 +117,46 @@
         ".java"
       ],
       "fixture": "tests/rules/java/arbitrary-file-write.java"
+    },
+    {
+      "language": "java",
+      "category": "command-injection",
+      "cwe": [
+        "CWE-78"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Apache Commons Exec",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html",
+        "https://commons.apache.org/proper/commons-exec/apidocs/org/apache/commons/exec/CommandLine.html",
+        "https://commons.apache.org/proper/commons-exec/tutorial.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/78.html",
+          "https://commons.apache.org/proper/commons-exec/apidocs/org/apache/commons/exec/CommandLine.html",
+          "https://commons.apache.org/proper/commons-exec/tutorial.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.commons-exec",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/commons-exec.yml",
+      "fixture": "tests/rules/java/commons-exec.java",
+      "target_extensions": [
+        ".java"
+      ]
     },
     {
       "rule_id": "ai-security.java.file-access",
@@ -217,6 +301,46 @@
         ".java"
       ],
       "fixture": "tests/rules/java/jndi-lookup.java"
+    },
+    {
+      "language": "java",
+      "category": "sql-injection",
+      "cwe": [
+        "CWE-89"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "JPA / Hibernate",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html",
+        "https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/entitymanager",
+        "https://docs.jboss.org/hibernate/orm/6.1/javadocs/org/hibernate/Session.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/89.html",
+          "https://jakarta.ee/specifications/persistence/3.2/apidocs/jakarta.persistence/jakarta/persistence/entitymanager",
+          "https://docs.jboss.org/hibernate/orm/6.1/javadocs/org/hibernate/Session.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.jpa-query",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/jpa-query.yml",
+      "fixture": "tests/rules/java/jpa-query.java",
+      "target_extensions": [
+        ".java"
+      ]
     },
     {
       "rule_id": "ai-security.java.ldap-search",
@@ -549,6 +673,44 @@
       "fixture": "tests/rules/java/spring-jdbc.java"
     },
     {
+      "language": "java",
+      "category": "sql-injection",
+      "cwe": [
+        "CWE-89"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Spring JDBC named parameters",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html",
+        "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/core/namedparam/NamedParameterJdbcOperations.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/89.html",
+          "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/jdbc/core/namedparam/NamedParameterJdbcOperations.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.spring-named-jdbc",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/spring-named-jdbc.yml",
+      "fixture": "tests/rules/java/spring-named-jdbc.java",
+      "target_extensions": [
+        ".java"
+      ]
+    },
+    {
       "rule_id": "ai-security.java.spring-resttemplate",
       "language": "java",
       "engine_languages": [
@@ -583,6 +745,44 @@
         ".java"
       ],
       "fixture": "tests/rules/java/spring-resttemplate.java"
+    },
+    {
+      "language": "java",
+      "category": "arbitrary-file-write",
+      "cwe": [
+        "CWE-73"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Spring MultipartFile",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/73.html",
+        "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/multipart/MultipartFile.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/73.html",
+          "https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/web/multipart/MultipartFile.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.spring-upload-path",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/spring-upload-path.yml",
+      "fixture": "tests/rules/java/spring-upload-path.java",
+      "target_extensions": [
+        ".java"
+      ]
     },
     {
       "rule_id": "ai-security.java.trust-all-certificates",
@@ -985,6 +1185,300 @@
         ".java"
       ],
       "fixture": "tests/rules/java/xxe-transformer.java"
+    },
+    {
+      "language": "javascript",
+      "category": "arbitrary-file-read",
+      "cwe": [
+        "CWE-200"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / Node.js fs",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/200.html",
+        "https://nodejs.org/api/fs.html",
+        "https://expressjs.com/en/api/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/200.html",
+          "https://nodejs.org/api/fs.html",
+          "https://expressjs.com/en/api/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.arbitrary-file-read",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/arbitrary-file-read.yml",
+      "fixture": "tests/rules/javascript/arbitrary-file-read.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/arbitrary-file-read.ts"
+      ]
+    },
+    {
+      "language": "javascript",
+      "category": "arbitrary-file-write",
+      "cwe": [
+        "CWE-73"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / Node.js fs",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/73.html",
+        "https://nodejs.org/api/fs.html",
+        "https://expressjs.com/en/api/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/73.html",
+          "https://nodejs.org/api/fs.html",
+          "https://expressjs.com/en/api/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.arbitrary-file-write",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/arbitrary-file-write.yml",
+      "fixture": "tests/rules/javascript/arbitrary-file-write.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/arbitrary-file-write.ts"
+      ]
+    },
+    {
+      "language": "javascript",
+      "category": "command-injection",
+      "cwe": [
+        "CWE-78"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / Node.js child_process",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/78.html",
+        "https://nodejs.org/api/child_process.html",
+        "https://expressjs.com/en/api/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/78.html",
+          "https://nodejs.org/api/child_process.html",
+          "https://expressjs.com/en/api/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.command-injection",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/command-injection.yml",
+      "fixture": "tests/rules/javascript/command-injection.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/command-injection.ts"
+      ]
+    },
+    {
+      "language": "javascript",
+      "category": "path-traversal",
+      "cwe": [
+        "CWE-22"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / Node.js fs",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/22.html",
+        "https://nodejs.org/api/fs.html",
+        "https://nodejs.org/api/path.html",
+        "https://expressjs.com/en/api/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/22.html",
+          "https://nodejs.org/api/fs.html",
+          "https://nodejs.org/api/path.html",
+          "https://expressjs.com/en/api/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.path-traversal",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/path-traversal.yml",
+      "fixture": "tests/rules/javascript/path-traversal.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/path-traversal.ts"
+      ]
+    },
+    {
+      "language": "javascript",
+      "category": "sql-injection",
+      "cwe": [
+        "CWE-89"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / node-postgres / mysql / mysql2",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html",
+        "https://node-postgres.com/features/queries",
+        "https://github.com/sidorares/node-mysql2/tree/master/website/docs",
+        "https://expressjs.com/en/api/",
+        "https://github.com/sidorares/node-mysql2/blob/master/lib/base/connection.js"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/89.html",
+          "https://node-postgres.com/features/queries",
+          "https://github.com/sidorares/node-mysql2/tree/master/website/docs",
+          "https://expressjs.com/en/api/",
+          "https://github.com/sidorares/node-mysql2/blob/master/lib/base/connection.js"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.sql-injection",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/sql-injection.yml",
+      "fixture": "tests/rules/javascript/sql-injection.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/sql-injection.ts",
+        "tests/rules/javascript/sql-injection.jsx",
+        "tests/rules/javascript/sql-injection.tsx"
+      ]
+    },
+    {
+      "language": "javascript",
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Express / Node.js fetch / http / axios",
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.2.0",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html",
+        "https://nodejs.org/api/globals.html#fetch",
+        "https://nodejs.org/api/http.html",
+        "https://axios-http.com/docs/api_intro",
+        "https://expressjs.com/en/api/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html",
+          "https://nodejs.org/api/globals.html#fetch",
+          "https://nodejs.org/api/http.html",
+          "https://axios-http.com/docs/api_intro",
+          "https://expressjs.com/en/api/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.javascript.ssrf",
+      "engine_languages": [
+        "javascript",
+        "typescript"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "javascript/ssrf.yml",
+      "fixture": "tests/rules/javascript/ssrf.js",
+      "target_extensions": [
+        ".js",
+        ".jsx",
+        ".ts",
+        ".tsx"
+      ],
+      "additional_fixtures": [
+        "tests/rules/javascript/ssrf.ts"
+      ]
     },
     {
       "rule_id": "ai-security.python.command-injection",

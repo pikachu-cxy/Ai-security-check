@@ -211,7 +211,7 @@ class PatternSASTScanner(BaseScanner):
             # Engine execution sets never enter a template/cache.
             if hit:
                 template=self._plan_cache[key]
-            return replace(template, confirmed_rules=set(), scanned_files=set(), errored_files=set(),
+            return replace(template, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
                 unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
                     'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
                     'rule_plan_cache':'HIT' if hit else 'MISS',

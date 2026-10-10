@@ -35,7 +35,7 @@ def main(output_dir: Path | None = None) -> None:
         shutil.copy2(root / name, bundle / name)
     shutil.copytree(root / "LICENSES", bundle / "LICENSES", dirs_exist_ok=True)
     inventory(bundle)
-    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md'):
+    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
         shutil.copy2(root / 'docs' / name,bundle / name)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
     source_commit = git_provenance(root, 'rev-parse', 'HEAD')

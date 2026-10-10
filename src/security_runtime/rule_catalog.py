@@ -29,6 +29,16 @@ class RuleRecord:
     path: str
     target_extensions: tuple[str, ...]
     fixture: str = ''
+    additional_fixtures: tuple[str, ...] = ()
+
+
+def supports_language(record, language):
+    """A shared execution rule can cover several separately reported languages.
+
+    The canonical catalog language remains its identity, including Java-owned
+    generic mapper rules. Engine languages do not duplicate the rule ID.
+    """
+    return language == record.language or language in record.engine_languages
 
 
 def validate_rule(rule, descriptor, *, first_party=True):
@@ -46,9 +56,14 @@ def validate_rule(rule, descriptor, *, first_party=True):
     if not isinstance(md,dict) or not required.issubset(md):
         raise ValueError('Rule license or provenance metadata missing')
     if (not rule['id'].startswith('ai-security.') or md['license']!=descriptor.license
-        or md['rule_pack']!=descriptor.rule_pack_id or md['rule_version']!=descriptor.version
+        or md['rule_pack']!=descriptor.rule_pack_id
         or md['publisher']!=descriptor.publisher):
         raise ValueError('Rule license or pack identity mismatch')
+    # Pack releases can add rules without rewriting unchanged execution rules.
+    # The catalog cross-checks each rule version; scanner proof binds both the
+    # pack checksum/version and the exact execution rule version.
+    if not isinstance(md['rule_version'], str) or not re.fullmatch(r'\d{1,6}\.\d{1,6}\.\d{1,6}', md['rule_version']):
+        raise ValueError('Rule version invalid')
     if md['language'] not in LANGUAGES or not isinstance(md['category'],str) or not md['category']:
         raise ValueError('Rule language/category missing')
     if not isinstance(md['cwe'],list) or not md['cwe'] or any(not re.fullmatch(r'CWE-\d+',str(cwe)) for cwe in md['cwe']):
@@ -92,6 +107,13 @@ def load_catalog(path, descriptor, definitions, *, first_party=True):
         seen.add(value.get('rule_id'))
         for field in ('engine_languages','cwe','references','target_extensions'):
             value[field]=tuple(value[field])
+        companions=value.get('additional_fixtures', [])
+        if (not isinstance(companions, list) or len(companions)>4 or
+                any(not isinstance(name, str) or not name for name in companions)):
+            raise ValueError('Rule additional fixtures invalid')
+        if len(set(companions)) != len(companions) or value.get('fixture') in companions:
+            raise ValueError('Duplicate rule fixture')
+        value['additional_fixtures']=tuple(companions)
         record=RuleRecord(**value)
         if record.rule_id not in definitions:
             raise ValueError('Catalog rule has no execution definition')

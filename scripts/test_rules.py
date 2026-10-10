@@ -14,27 +14,27 @@ def expectations(root, catalog):
     expected=set();negative=set();counts={}
     known={record.rule_id for record in catalog}
     for record in catalog:
-        file=root/record.fixture
-        if not file.is_file() or not file.resolve().is_relative_to(root.resolve()):
-            raise ValueError('Rule fixture missing or outside repository')
-        lines=file.read_text(encoding='utf-8').splitlines()
         yes=no=0
-        for index,line in enumerate(lines):
-            match=re.search(r'\b(ruleid|ok):\s*([a-zA-Z0-9_.-]+(?:\s*,\s*[a-zA-Z0-9_.-]+)*)',line)
-            if match:
-                next_line=index+2
-                while next_line<=len(lines) and not lines[next_line-1].strip(): next_line+=1
-                for rid in [value.strip() for value in match[2].split(',')]:
-                    if rid in known:
-                        (expected if match[1]=='ruleid' else negative).add((rid,record.fixture,next_line))
-            if match and record.rule_id in [value.strip() for value in match[2].split(',')]:
-                next_line=index+2
-                while next_line<=len(lines) and not lines[next_line-1].strip(): next_line+=1
-                item=(record.rule_id,record.fixture,next_line)
-                if match[1]=='ruleid': yes+=1
-                else: no+=1
-        if not yes or not no:
-            raise ValueError('Rule requires positive and negative fixtures: '+record.rule_id)
+        for fixture in (record.fixture, *record.additional_fixtures):
+            file=root/fixture
+            if not file.is_file() or not file.resolve().is_relative_to(root.resolve()):
+                raise ValueError('Rule fixture missing or outside repository')
+            lines=file.read_text(encoding='utf-8').splitlines()
+            local_yes=local_no=0
+            for index,line in enumerate(lines):
+                match=re.search(r'\b(ruleid|ok):\s*([a-zA-Z0-9_.-]+(?:\s*,\s*[a-zA-Z0-9_.-]+)*)',line)
+                if match:
+                    next_line=index+2
+                    while next_line<=len(lines) and not lines[next_line-1].strip(): next_line+=1
+                    for rid in [value.strip() for value in match[2].split(',')]:
+                        if rid in known:
+                            (expected if match[1]=='ruleid' else negative).add((rid,fixture,next_line))
+                    if record.rule_id in [value.strip() for value in match[2].split(',')]:
+                        if match[1]=='ruleid': local_yes+=1
+                        else: local_no+=1
+            if not local_yes or not local_no:
+                raise ValueError('Rule requires positive and negative fixtures: '+record.rule_id+' '+fixture)
+            yes+=local_yes;no+=local_no
         counts[record.rule_id]={'positive':yes,'negative':no}
     return expected,negative,counts
 
@@ -58,7 +58,7 @@ def check(root=None, *, lint_only=False):
             validated=run_process([*common,'--validate'],cwd=root,env=environment,timeout=90)
             if validated.returncode!=0:
                 raise ValueError('Semgrep could not load the local pack: '+validated.stderr[-2000:])
-            files=sorted({record.fixture for record in pack.catalog})
+            files=sorted({fixture for record in pack.catalog for fixture in (record.fixture, *record.additional_fixtures)})
             result=run_process([*common,'--json','--quiet','--no-rewrite-rule-ids','--no-git-ignore',*files],
                 cwd=root,env=environment,timeout=90)
         data=json.loads(result.stdout)

@@ -1,0 +1,398 @@
+rules:
+- id: ai-security.javascript.ssrf
+  languages:
+  - javascript
+  - typescript
+  severity: ERROR
+  message: Request input controls an outbound request target. Verify the destination
+    policy, redirects and network reachability; local taint is not an exploitability
+    proof.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., function ($REQ, $RES, ...) { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async function ($REQ, $RES, ...) { ...
+        })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern: fetch($URL, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: $LIB.$FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - pattern-not: $LIB.$FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$LIB.$FUNC({hostname: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$LIB.$FUNC({host: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: $FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - pattern-not: $FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$FUNC({hostname: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$FUNC({host: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: $ALIAS($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - pattern-not: $ALIAS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$ALIAS({hostname: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$ALIAS({host: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: $FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - pattern-not: $FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$FUNC({hostname: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$FUNC({host: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: $ALIAS($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - pattern-not: $ALIAS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$ALIAS({hostname: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?https?["']?$
+    - pattern: '$ALIAS({host: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: $LIB.$FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - pattern-not: $LIB.$FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: '$LIB.$FUNC({url: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: $FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - pattern-not: $FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: '$FUNC({url: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: $ALIAS($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - pattern-not: $ALIAS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: '$ALIAS({url: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: $FUNC($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - pattern-not: $FUNC({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: '$FUNC({url: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: $ALIAS($URL, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - pattern-not: $ALIAS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?axios["']?$
+    - pattern: '$ALIAS({url: $URL, ...}, ...)'
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(get|post|put|delete|patch|request)$
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const $AXIOS = require("axios"); ...
+    - pattern: $AXIOS($URL, ...)
+    - pattern-not: $AXIOS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: const $AXIOS = require("axios"); ...
+    - pattern: '$AXIOS({url: $URL, ...}, ...)'
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import $AXIOS from "axios"; ...
+    - pattern: $AXIOS($URL, ...)
+    - pattern-not: $AXIOS({ ... }, ...)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern-inside: import $AXIOS from "axios"; ...
+    - pattern: '$AXIOS({url: $URL, ...}, ...)'
+    - focus-metavariable: $URL
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.2.0
+    language: javascript
+    category: ssrf
+    cwe:
+    - CWE-918
+    confidence: MEDIUM
+    maturity: BETA
+    framework: Express / Node.js fetch / http / axios
+    license: Apache-2.0
+    references:
+    - https://cwe.mitre.org/data/definitions/918.html
+    - https://nodejs.org/api/globals.html#fetch
+    - https://nodejs.org/api/http.html
+    - https://axios-http.com/docs/api_intro
+    - https://expressjs.com/en/api/
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-10'
+      references:
+      - https://cwe.mitre.org/data/definitions/918.html
+      - https://nodejs.org/api/globals.html#fetch
+      - https://nodejs.org/api/http.html
+      - https://axios-http.com/docs/api_intro
+      - https://expressjs.com/en/api/
+      license: Apache-2.0
+      derived_from: ''
+  pattern-sanitizers:
+  - patterns:
+    - pattern: $PREFIX + $INPUT
+    - metavariable-regex:
+        metavariable: $PREFIX
+        regex: ^["']https?://[A-Za-z0-9.-]+(?::[0-9]+)?/[^"']*["']$
+    exact: true

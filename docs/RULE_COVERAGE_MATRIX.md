@@ -4,6 +4,12 @@ The table retains the 2026-10-07 R0 synthetic baseline from the versioned
 capability manifest and managed offline Scanner corpus. It is not current
 real-project accuracy; R1 evidence and limitations follow below.
 
+Current rule pack 1.2.0 adds five Java variants and six shared JS/TS advisory
+rules (40 installed / 32 default-on). Existing capability maturity and the
+historical R0 counts below are not expanded into a JS/TS accuracy claim.
+See [current foundation and limits](RULE_FOUNDATION.md) for actual API scope;
+new exact synthetic gates and per-language execution evidence are separate.
+
 | Capability | Language | Frameworks | Rules | TP | TN | FP | FN | Maturity | Default | Auto-fix |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |
 | TLS hostname verification disabled | java | JDK | 1 | 4 | 2 | 0 | 0 | CORE | on | existing guarded TLS only |

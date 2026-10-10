@@ -124,7 +124,7 @@ class VerificationService:
                                 wanted = {rid for original in rules[(name,path)] for rid in
                                     (program.family_rules(original) if program else (original,))}
                                 plan = replace(plan, rules=tuple(r for r in plan.rules if r.rule_id in wanted),
-                                    confirmed_rules=set(),scanned_files=set(),errored_files=set(),unscoped_error=False)
+                                    confirmed_rules=set(),scanned_files=set(),errored_files=set(),skipped_files={},unscoped_error=False)
                             context = replace(context, rule_plan=plan)
                         if not adapter.supports(profile, context):
                             cache[key] = ([], None, plan, 'ORIGINAL_SCOPE_UNSUPPORTED', False)
@@ -188,7 +188,9 @@ class VerificationService:
                 checksum = details.get('rule_pack_checksum') or scan.get('rule_coverage', {}).get('rule_pack_checksum')
                 if checksum and checksum != plan.pack.checksum:
                     compatible = False
-                covered = covered and bool(compatible) and rule in plan.confirmed_rules and path in plan.scanned_files and path not in plan.errored_files and not plan.unscoped_error
+                covered = (covered and bool(compatible) and rule in plan.confirmed_rules
+                    and path in plan.scanned_files and path not in plan.errored_files
+                    and path not in getattr(plan, 'skipped_files', {}) and not plan.unscoped_error)
                 if getattr(plan.pack, 'program', None):
                     required = set(plan.pack.program.family_rules(rule))
                     applicable = {r.rule_id for r in plan.pack.catalog if r.rule_id in required and

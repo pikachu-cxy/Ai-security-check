@@ -1,7 +1,7 @@
 {
   "schema_version": "rule-program-v1",
   "program_id": "ai-security-java",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "rule_pack": "ai-security-core",
   "capabilities": [
     {
@@ -104,12 +104,17 @@
         "ai-security.java.jdbc-statement",
         "ai-security.java.spring-jdbc",
         "ai-security.java.mybatis-annotation",
-        "ai-security.java.mybatis-xml"
+        "ai-security.java.mybatis-xml",
+        "ai-security.java.jpa-query",
+        "ai-security.java.spring-named-jdbc"
       ],
       "frameworks": [
         "JDBC",
         "Spring JDBC",
-        "MyBatis"
+        "MyBatis",
+        "JPA",
+        "Hibernate",
+        "Spring NamedParameterJdbcTemplate"
       ],
       "evidence_contract": {
         "basis": "ENGINE_TAINT_MATCH",
@@ -149,10 +154,12 @@
       "scanner_engine": "semgrep",
       "underlying_rule_ids": [
         "ai-security.java.runtime-exec",
-        "ai-security.java.process-builder"
+        "ai-security.java.process-builder",
+        "ai-security.java.commons-exec"
       ],
       "frameworks": [
-        "JDK"
+        "JDK",
+        "Apache Commons Exec"
       ],
       "evidence_contract": {
         "basis": "ENGINE_TAINT_MATCH",
@@ -192,13 +199,15 @@
         "ai-security.java.url-connection",
         "ai-security.java.http-client",
         "ai-security.java.spring-resttemplate",
-        "ai-security.java.web-client"
+        "ai-security.java.web-client",
+        "ai-security.java.apache-httpclient"
       ],
       "frameworks": [
         "JDK",
         "Java HttpClient",
         "Spring RestTemplate",
-        "Spring WebFlux"
+        "Spring WebFlux",
+        "Apache HttpClient 4/5"
       ],
       "evidence_contract": {
         "basis": "ENGINE_TAINT_MATCH",
@@ -315,10 +324,12 @@
       "maturity": "VALIDATED",
       "scanner_engine": "semgrep",
       "underlying_rule_ids": [
-        "ai-security.java.arbitrary-file-write"
+        "ai-security.java.arbitrary-file-write",
+        "ai-security.java.spring-upload-path"
       ],
       "frameworks": [
-        "JDK"
+        "JDK",
+        "Spring MultipartFile"
       ],
       "evidence_contract": {
         "basis": "ENGINE_TAINT_MATCH",
@@ -489,6 +500,42 @@
       "maturity": "VALIDATED",
       "default_enabled": true,
       "test_corpus": "tests/rules/python/core.py"
+    },
+    {
+      "rule_id": "ai-security.javascript.arbitrary-file-read",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/arbitrary-file-read.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.arbitrary-file-write",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/arbitrary-file-write.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.command-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/command-injection.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.path-traversal",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/path-traversal.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.sql-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/sql-injection.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.ssrf",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/ssrf.js"
     }
   ],
   "overlap_policy": {

@@ -84,6 +84,7 @@ class SecurityRuntime:
         git = GitService(workspace.path) if workspace.is_git else None
         checkpoint()
         emit('TARGET_DISCOVERY_STARTED')
+        profile = None
         if hook_scope is not None:
             if scan_mode != ScanMode.QUICK or staged:
                 raise ValueError('Hook scope requires an unstaged quick check')
@@ -91,7 +92,11 @@ class SecurityRuntime:
             # reverting to HEAD. Validate through the normal target boundary.
             files = list(hook_scope)
         else:
-            files = git.changed_files(scan_mode, staged=staged) if workspace.is_git else TargetDetector().detect(root).files
+            if workspace.is_git:
+                files = git.changed_files(scan_mode, staged=staged)
+            else:
+                profile = TargetDetector().detect(root, select_scan_targets=True)
+                files = profile.files
         # TargetDetector validates every explicit path before any file is read.
         if scan_mode != ScanMode.RELEASE:
             manifests = set()
@@ -104,9 +109,9 @@ class SecurityRuntime:
                     path = directory / name
                     if path.is_file():
                         manifests.add(path.relative_to(root).as_posix())
-            profile = TargetDetector().detect(root, sorted(set(files) | manifests))
-        else:
-            profile = TargetDetector().detect(root, files)
+            profile = TargetDetector().detect(root, sorted(set(files) | manifests), select_scan_targets=True)
+        elif profile is None:
+            profile = TargetDetector().detect(root, files, select_scan_targets=True)
         files = [name for name in files if name in profile.files]
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}

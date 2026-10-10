@@ -1,0 +1,143 @@
+rules:
+- id: ai-security.javascript.arbitrary-file-write
+  languages:
+  - javascript
+  - typescript
+  severity: ERROR
+  message: Request input controls a file-write path. Enforce authorization and a trusted
+    filesystem boundary before writing.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async ($REQ, $RES, ...) => { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., function ($REQ, $RES, ...) { ... })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  - patterns:
+    - pattern-inside: $ROUTER.$METHOD(..., async function ($REQ, $RES, ...) { ...
+        })
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|delete|all|use)$
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $LIB = require($MODULE); ...
+      - pattern-inside: import * as $LIB from $MODULE; ...
+      - pattern-inside: import $LIB from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?fs(?:/promises)?["']?$
+    - pattern: $LIB.$FUNC($PATH, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)$
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern-inside: const { $FUNC } = require($MODULE); ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?fs(?:/promises)?["']?$
+    - pattern: $FUNC($PATH, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)$
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern-inside: 'const { $FUNC: $ALIAS } = require($MODULE); ...'
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?fs(?:/promises)?["']?$
+    - pattern: $ALIAS($PATH, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)$
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern-inside: import { $FUNC } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?fs(?:/promises)?["']?$
+    - pattern: $FUNC($PATH, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)$
+    - focus-metavariable: $PATH
+  - patterns:
+    - pattern-inside: import { $FUNC as $ALIAS } from $MODULE; ...
+    - metavariable-regex:
+        metavariable: $MODULE
+        regex: ^["']?(?:node:)?fs(?:/promises)?["']?$
+    - pattern: $ALIAS($PATH, ...)
+    - metavariable-regex:
+        metavariable: $FUNC
+        regex: ^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream)$
+    - focus-metavariable: $PATH
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.2.0
+    language: javascript
+    category: arbitrary-file-write
+    cwe:
+    - CWE-73
+    confidence: MEDIUM
+    maturity: BETA
+    framework: Express / Node.js fs
+    license: Apache-2.0
+    references:
+    - https://cwe.mitre.org/data/definitions/73.html
+    - https://nodejs.org/api/fs.html
+    - https://expressjs.com/en/api/
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-10'
+      references:
+      - https://cwe.mitre.org/data/definitions/73.html
+      - https://nodejs.org/api/fs.html
+      - https://expressjs.com/en/api/
+      license: Apache-2.0
+      derived_from: ''
