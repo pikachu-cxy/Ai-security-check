@@ -150,6 +150,11 @@ class OSVDependencyAdapter(BaseScanner):
                 # useful findings but conservatively withhold FULL coverage.
                 from .diagnostics import sanitize
                 self.notes.append('Native extraction/resolution diagnostics: '+sanitize(process.stderr,500))
+            if offline:
+                # Presence of a local archive proves availability, not that
+                # the advisory dataset is current. Complete lockfile inventory
+                # cannot promote an unverified database to FULL coverage.
+                self.notes.append('Offline vulnerability database freshness is unconfirmed; extracted package inventory does not attest current vulnerability coverage.')
             if not self.notes:
                 self.coverage='FULL'
             packages=[entry.get('package',{}) for result in data['results'] for entry in result.get('packages',[])]
@@ -160,6 +165,8 @@ class OSVDependencyAdapter(BaseScanner):
                 'per_manifest':{result['source']['path']:len(result.get('packages',[])) for result in data['results']},
                 'complete_dependency_graph_attested':False if self.coverage=='PARTIAL' else True,
                 'native_duration_ms':process.duration_ms}
+            if offline:
+                self.inventory['vulnerability_db_freshness'] = 'UNKNOWN'
             return self.normalize(data,normalizer)
 
     def normalize(self, data, normalizer):

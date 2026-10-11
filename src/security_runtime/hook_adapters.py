@@ -9,6 +9,7 @@ from typing import Protocol
 
 from .hook_runtime import HOSTS, HookCoordinator
 from .hook_state import atomic_bytes, no_links
+from .hook_user_feedback import scan_status_message
 from .hooks import HookEvent
 from .mcp_config import resolve_runtime_command
 from .workspace import WorkspaceResolver
@@ -54,7 +55,8 @@ class CodexHookAdapter:
         if event == HookEvent.FILE_CHANGED and payload.get('tool_name') not in {'Bash','apply_patch','Edit','Write'}:
             raise ValueError('Unsupported Codex edit event')
         cwd = payload.get('cwd')
-        if not isinstance(cwd,str) or WorkspaceResolver().resolve(cwd).path != workspace:
+        if not isinstance(cwd,str) or WorkspaceResolver().resolve(
+                cwd, allow_non_git_explicit=True, allow_non_git_source=True).path != workspace:
             raise ValueError('Host event does not belong to configured workspace')
         session = payload.get('session_id')
         if not isinstance(session,str) or not session or len(session)>500:
@@ -71,10 +73,7 @@ class CodexHookAdapter:
                 'Stop':[{'hooks':[dict(handler)]}]}
 
     def output(self,payload,result):
-        message = (f"AI Security Runtime advisory: {result['status']}; coverage {result['coverage']}; "
-                   f"new families {result['delta']['new']}, added occurrences {result['delta']['additional_occurrences']}, "
-                   f"resolved families {result['delta']['resolved']}. " + result['next_step'])
-        value = {'systemMessage':message}
+        value = {'systemMessage':scan_status_message(result)}
         if payload['hook_event_name'] in {'SessionStart','PostToolUse'}:
             # Small fixed metadata only. This is not a request to continue or
             # block the turn, nor an automatic MCP/model invocation.

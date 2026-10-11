@@ -43,7 +43,7 @@ class ComplianceTests(unittest.TestCase):
         pack = RulePackManager().resolve()
         self.assertEqual(pack.descriptor.rule_pack_id, "ai-security-core")
         self.assertTrue(can_bundle_rule_pack(pack.descriptor))
-        self.assertEqual(pack.descriptor.version, "1.2.0")
+        self.assertEqual(pack.descriptor.version, "1.3.0")
         forbidden = ("--config=auto", "--config=p/", "--config=r/", "semgrep.dev/registry", "semgrep-rules")
         for file in (root / "src/security_runtime").rglob("*.py"):
             text = file.read_text(encoding="utf-8")

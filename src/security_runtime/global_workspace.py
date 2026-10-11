@@ -104,24 +104,30 @@ def workspace_state(root, base=None):
 
 def source_snapshot(root, key):
     """Non-Git fallback only. No source survives this bounded snapshot call."""
-    from .hook_runtime import MAX_FILES, MAX_BYTES
+    from .hook_runtime import MAX_FILES, MAX_BYTES, CapturedSnapshot
     from .target import TargetDetector
     files = TargetDetector(max_files=MAX_FILES).detect(root).files
     digest = hmac.new(key, b'global-non-git-snapshot-v1', hashlib.sha256)
     consumed = 0
+    file_digests = {}
     for name in sorted(files):
         p = root / name
         no_links(p)
         digest.update(name.encode())
-        size = p.stat().st_size
+        before = p.stat()
+        size = before.st_size
         consumed += size
         if size > 1_000_000 or consumed > MAX_BYTES:
             raise ValueError('SNAPSHOT_BUDGET_EXCEEDED')
         raw = p.read_bytes()
-        if len(raw) != size:
+        after = p.stat()
+        if (len(raw) != size or
+                (before.st_ino, before.st_size, before.st_mtime_ns) !=
+                (after.st_ino, after.st_size, after.st_mtime_ns)):
             raise ValueError('SNAPSHOT_CHANGED')
         digest.update(hmac.new(key, raw, hashlib.sha256).digest())
-    return digest.hexdigest(), sorted(files)
+        file_digests[name] = hmac.new(key, b'hook-file-v1' + raw, hashlib.sha256).hexdigest()
+    return CapturedSnapshot(digest.hexdigest(), sorted(files), file_digests)
 
 
 def write_bootstrap(root, status, baseline_status, *, base=None):

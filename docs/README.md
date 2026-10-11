@@ -5,6 +5,12 @@ acceptance output belongs in Git history, not in `docs/`.
 
 ## Start here
 
+- [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) — current implementation,
+  source/isolated/package acceptance and pending Desktop checks.
+- [个人免费版与企业版规划](PRODUCT_ROADMAP.md) — P0/P1 scope, dependency evidence,
+  update lifecycle and organization-management boundary; planned work is not
+  implemented capability.
+
 - [R2.2 security review contract](SECURITY_REVIEW.md)
 - [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)
 

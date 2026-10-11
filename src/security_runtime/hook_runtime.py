@@ -407,18 +407,27 @@ class HookCoordinator:
         if self.runtime is not None and getattr(self.runtime, 'registry', None) is not None:
             return self.runtime.registry
         if self._managed_registry is None:
-            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
+            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+            from .osv import OSVDependencyAdapter
             from .toolchain import ToolManager
             manager = ToolManager()
-            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),GitleaksAdapter(manager)],
-                tool_manager=manager,fallback_adapters=[])
+            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),GitleaksAdapter(manager),TrivyAdapter(manager)],
+                tool_manager=manager,fallback_adapters=[OSVDependencyAdapter(manager)])
         return self._managed_registry
 
-    def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False):
+    def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False,
+                    dependency_changes=None):
         """One quick provider/observer path for events and setup seeds."""
         observation = {'families': {}, 'runs': [], 'plans': {}}
         def observe(findings, runs, plans):
-            observation.update(families=family_multiset(findings, runs, plans), runs=runs, plans=plans)
+            # Dependency presence is reviewable even when graph/data coverage
+            # is partial. It does not establish a SAST rule/file delta proof.
+            observation.update(families=family_multiset([f for f in findings if f.category != 'dependency'], runs, plans),
+                               runs=runs, plans=plans)
+            succeeded = {r.scanner for r in runs if r.status == RunStatus.SUCCESS
+                         and 'DEPENDENCY_VULN' in r.capabilities}
+            result['current_dependency_finding_ids'] = sorted({f.id for f in findings
+                if f.category == 'dependency' and set(f.scanner_sources).intersection(succeeded)})[:50]
             # Fixed diagnostic only; candidate contents never enter Hook state.
             result['unattributed_risk_present'] = any(
                 f.severity in {'HIGH', 'CRITICAL'} and f.confidence == 'HIGH' for f in findings)
@@ -435,6 +444,13 @@ class HookCoordinator:
                     pass
             runtime = SecurityRuntime(self.managed_registry(),store=ProjectionOnlyStore() if baseline else None)
         kwargs = {}
+        if baseline:
+            # Setup/session seeds establish SAST rule/file comparison evidence.
+            # Dependency presence has a separate advisory contract and must not
+            # turn an otherwise usable connection into a failed SAST baseline.
+            dependency_changes = ()
+        if dependency_changes is not None and isinstance(runtime, SecurityRuntime):
+            kwargs['_hook_dependency_changes'] = tuple(dependency_changes)
         if baseline:
             from .progress import NullProgressReporter, ScanCancelled
             class BaselineDeadline(NullProgressReporter):
@@ -461,6 +477,37 @@ class HookCoordinator:
             ('scanner', 'status', 'version', 'duration_ms', 'error_code', 'coverage_contract')} for r in scan.scanner_runs]
         result['scanner_diagnostics'] = scan.scanner_diagnostics
         result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
+        for run in scan.scanner_runs:
+            if run.status == RunStatus.SUCCESS and 'DEPENDENCY_VULN' in run.capabilities:
+                fresh = run.dependency_inventory.get('vulnerability_db_freshness')
+                if fresh == 'STALE':
+                    result['dependency_check_reason'] = 'VULNERABILITY_DB_STALE'
+                    break
+                if fresh in {'UNKNOWN', 'MISSING'}:
+                    result['dependency_check_reason'] = 'VULNERABILITY_DB_FRESHNESS_UNKNOWN'
+        dependency_ids = set(result.get('current_dependency_finding_ids', []))
+        candidates = sorted((f for f in scan.findings if f.id in dependency_ids),
+                            key=lambda f: ({'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}.get(f.severity,4), f.id))
+        if candidates:
+            from .hook_user_feedback import issue_feedback, dependency_status_message
+            items = [issue_feedback(asdict(finding), action='ADVISE') for finding in candidates[:3]]
+            if len(candidates) == 1:
+                feedback = items[0]
+            else:
+                feedback = {'version': 'security-user-feedback-v1', 'items': items,
+                    'choices': [], 'selection_required': True,
+                    'message': '\n\n'.join(f'问题 {index}：\n{item["message"]}'
+                                          for index, item in enumerate(items, 1)) +
+                               '\n请先选择要处理的具体问题，再回复“修复”或“忽略”。'}
+            note = (dependency_status_message(result) or '已检查本次读取的依赖版本，但完整依赖关系或漏洞数据的新鲜程度尚未确认。'
+                    if scan.capability_results.get('DEPENDENCY_VULN') != 'EXECUTED' else
+                    '本次依赖版本检查发现风险；实际安装情况和应用能否被利用尚未确认。')
+            feedback['message'] = note + '\n' + feedback['message']
+            feedback['finding_count'] = len(candidates)
+            if len(candidates) > len(items):
+                feedback['message'] += '本次检查还检出了其他依赖风险；请查看问题列表后逐项选择处理。'
+            result['dependency_review_finding_ids'] = [finding.id for finding in candidates[:3]]
+            result['dependency_user_feedback'] = feedback
         observe_recent_hook('SCANNER_COMPLETED', scanner_run=result['execution']['scanner_run'])
         if attribution_candidate and observation['families']:
             from .first_scan_attribution import capture_detector
@@ -672,25 +719,36 @@ class HookCoordinator:
         scope = sorted(set(files) | retained | (content_changed or set()))
         if lifecycle_activity and previous is not None and content_changed is not None:
             scope = sorted(content_changed | {f['file_path'] for f in previous['families'].values()})
-        scope = TargetDetector(max_files=MAX_FILES).detect(root,scope).files
+        from .dependency_inputs import is_dependency_input
+        detector = TargetDetector(max_files=MAX_FILES)
+        existing_scope = detector.detect(root,scope).files
+        dependency_changes = sorted(name for name in (content_changed if content_changed is not None else scope)
+                                    if is_dependency_input(name) and not set(Path(name).parts) & detector.ignored)
+        # Keep validated removed input names for selection. Providers still see
+        # only existing files in the bounded mirror, never resurrected bytes.
+        scope = sorted(set(existing_scope) | set(dependency_changes))
         old = previous['families'] if previous else {}
         if lifecycle_activity:
             result['scanner_invocation_count'] = 1 if scope else 0
         comparison_only = previous is not None and previous['last_result']['status'] == 'COMPARISON_BASELINE'
         observation = self._scan_scope(result, root, scope, baseline=baseline_only,
-                                      attribution_candidate=comparison_only)
+                                      attribution_candidate=comparison_only,
+                                      dependency_changes=dependency_changes)
         if not scope:
             result['scan_id'] = previous['last_scan_id'] if previous else None
         result['last_check_status'] = result['status']
-        if lifecycle_activity and result['status'] in {'FAILED','PARTIAL'}:
-            # Failed/incomplete processing must leave the earlier comparison
-            # point and pending intent intact, so identical-byte retries scan.
-            return
         after_capture = self.snapshot_capture(root,self.store.key(root))
         after,_ = after_capture
         if after != digest or getattr(after_capture, 'file_digests', None) != current_files:
             # Never attach a completed digest to moving source contents.
             result.update(status='PARTIAL',coverage='UNKNOWN',next_step='Workspace changed during the check; retry to converge.')
+            result.pop('current_dependency_finding_ids', None)
+            result.pop('dependency_user_feedback', None)
+            result.pop('dependency_review_finding_ids', None)
+            return
+        if lifecycle_activity and result['status'] in {'FAILED','PARTIAL'}:
+            # Presence can be reviewed, but incomplete processing must retain
+            # the previous comparison point and pending intent for a retry.
             return
         attribution_old = None
         if comparison_only and observation['families']:
@@ -698,12 +756,20 @@ class HookCoordinator:
                                         current_files or {}, observation, result)
             observe_recent_hook('SCANNER_COMPLETED', **result)
             if attribution_old is None:
+                checked = self.snapshot_capture(root, self.store.key(root))
+                if checked != captured or getattr(checked, 'file_digests', None) != current_files:
+                    result.pop('current_dependency_finding_ids', None)
+                    result.pop('dependency_user_feedback', None)
+                    result.pop('dependency_review_finding_ids', None)
                 result.update(reason='FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT',
                     next_step='Current candidates remain reviewable; pre-edit attribution is inconclusive. No NEW attribution or snapshot advancement is authorized.')
                 return
             # A pre-edit scan cannot attach proof to bytes changed while it ran.
             final = self.snapshot_capture(root, self.store.key(root))
             if final != captured or getattr(final, 'file_digests', None) != current_files:
+                result.pop('current_dependency_finding_ids', None)
+                result.pop('dependency_user_feedback', None)
+                result.pop('dependency_review_finding_ids', None)
                 result.update(first_scan_attribution_status='FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE',
                     first_scan_attribution_reason='SOURCE_CHANGED_DURING_ATTRIBUTION',
                     pre_existing_risk_count=None, newly_attributed_risk_count=None,

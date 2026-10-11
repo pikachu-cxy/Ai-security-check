@@ -17,7 +17,7 @@
           "tool_input": "${tool_input}"
         },
         "timeout": 120,
-        "statusMessage": "AI Security Runtime [codex-integration-v0.2]"
+            "statusMessage": "检查本次改动的安全风险"
       }]
     }],
     "SessionStart": [{"hooks": [{
@@ -31,7 +31,7 @@
         "permission_mode": "${permission_mode}"
       },
       "timeout": 30,
-      "statusMessage": "AI Security Runtime [readiness-v0.3]"
+            "statusMessage": "准备项目安全检查"
     }]}],
     "Stop": [{"hooks": [{
       "type": "mcp_tool",
@@ -46,7 +46,7 @@
         "permission_mode": "${permission_mode}"
       },
       "timeout": 30,
-      "statusMessage": "AI Security Runtime [continuation-guard-v0.1]"
+            "statusMessage": "检查风险处理进度"
     }]}]
   }
 }

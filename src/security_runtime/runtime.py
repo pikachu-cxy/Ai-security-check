@@ -22,6 +22,7 @@ from .progress import NullProgressReporter, progress_context, current_reporter, 
 from .scanners import BaseScanner
 from .dependency_fallback import should_fallback, dependency_status, capability_detail
 from .scanner_observation import milliseconds
+from .dependency_inputs import is_dependency_input
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,7 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None, _hook_dependency_changes=None) -> ScanResult:
         reporter = progress or NullProgressReporter()
         with progress_context(reporter):
             try:
@@ -55,14 +56,16 @@ class SecurityRuntime:
                     from .staged import index_projection
                     git = GitService(workspace.path)
                     with index_projection(git) as projection:
-                        return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer, projection)
-                return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer)
+                        return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer, projection, _hook_dependency_changes)
+                return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer,
+                                  dependency_changes=_hook_dependency_changes)
             except (KeyboardInterrupt, ScanCancelled):
                 reporter.cancel()
                 emit('SCAN_CANCELLED')
                 raise
 
-    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None, projection=None):
+    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None, projection=None,
+              dependency_changes=None):
         start = time.monotonic()
         observed_start = time.perf_counter()
         stage_start = observed_start
@@ -98,12 +101,19 @@ class SecurityRuntime:
                 profile = TargetDetector().detect(root, select_scan_targets=True)
                 files = profile.files
         # TargetDetector validates every explicit path before any file is read.
+        # Preserve removed input names for capability selection; the profile
+        # and provider snapshots continue to contain existing files only.
+        changed_files = tuple(files)
         if scan_mode != ScanMode.RELEASE:
             manifests = set()
             directories = {root} if files else set()
             if scan_mode == ScanMode.FEATURE:
                 for name in files:
                     directories.update(parent for parent in (root / name).parents if parent.is_relative_to(root))
+            elif scan_mode == ScanMode.QUICK:
+                for name in files:
+                    if is_dependency_input(name):
+                        directories.update(parent for parent in (root / name).parents if parent.is_relative_to(root))
             for directory in directories:
                 for name in set(DEPENDENCIES) | {"Dockerfile"}:
                     path = directory / name
@@ -112,6 +122,13 @@ class SecurityRuntime:
             profile = TargetDetector().detect(root, sorted(set(files) | manifests), select_scan_targets=True)
         elif profile is None:
             profile = TargetDetector().detect(root, files, select_scan_targets=True)
+        detector = TargetDetector()
+        changed_dependencies = tuple(name for name in changed_files
+            if is_dependency_input(name) and not set(Path(name).parts) & detector.ignored)
+        if dependency_changes is not None:
+            if hook_scope is None or not set(dependency_changes).issubset(changed_dependencies):
+                raise ValueError('Dependency trigger scope does not match the validated Hook scope')
+            changed_dependencies = tuple(dependency_changes)
         files = [name for name in files if name in profile.files]
         changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
         profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
@@ -120,11 +137,13 @@ class SecurityRuntime:
         observed['timing_ms']['target_preparation'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
         context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
-                              tuple(name for name in profile.files if name not in files))
+                              tuple(name for name in profile.files if name not in files),
+                              dependency_changes=changed_dependencies if scan_mode != ScanMode.RELEASE else None)
         normalizer = FindingNormalizer(root, identity_root=workspace.path)
         findings = []
         runs: list[ScannerRun] = []
-        no_changes = scan_mode != ScanMode.RELEASE and not files
+        has_targets = bool(files or changed_dependencies)
+        no_changes = scan_mode != ScanMode.RELEASE and not has_targets
         checkpoint()
         emit('PLANNING_STARTED')
         rule_plans={}
@@ -138,13 +157,31 @@ class SecurityRuntime:
                         emit('SAST_NOT_COVERED',message='代码安全未执行：当前规则包没有适用于 ' + ' / '.join(plan.detected_languages) + ' 的规则')
         _, selected = ScannerPlanner(self.registry).plan(profile, context)
         selected=[adapter for adapter in selected if adapter.name not in rule_plans or rule_plans[adapter.name].rules]
-        if no_changes or not files:
+        if no_changes or not has_targets:
             selected = []
         emit('PLAN_READY', message=f'将执行 {len(selected)} 个安全引擎')
         observed['timing_ms']['rule_planning'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
 
+        def unexpected_run(scanner, exc, started, stage):
+            # Record useful fixed diagnostics, never arbitrary exception text,
+            # commands, environment values or project/scanner output.
+            kind = type(exc).__name__ if type(exc).__module__ == 'builtins' else 'OtherException'
+            return ScannerRun(scanner.name, '', RunStatus.FAILED, int(milliseconds(started)),
+                error_code='SCANNER_FAILED', error_summary='安全检查遇到内部错误，未能完成。',
+                remediation='请查看技术诊断中的失败阶段和异常类型，修复后重新检查。',
+                diagnostic_detail=f'{stage}: {kind}', coverage_contract='NONE',
+                scanner_diagnostics={'failure': {'stage': stage, 'exception_type': kind}})
+
         def execute(scanner):
+            if scan_mode == ScanMode.QUICK and Capability.DEPENDENCY_VULN in scanner.capabilities:
+                from .verification_policy import local_recheck, local_recheck_requested
+                if not local_recheck_requested():
+                    # Keep the entire dependency chain offline, including a
+                    # selected fallback, without replacing the Hook's ledger.
+                    with local_recheck():
+                        return execute(scanner)
+            execution_started = time.perf_counter()
             checkpoint()
             if not isinstance(scanner, BaseScanner):
                 emit('SCANNER_STARTED', scanner=scanner.name, capability=tuple(scanner.capabilities))
@@ -153,10 +190,8 @@ class SecurityRuntime:
                 found, run = scanner.scan(scanner_context, normalizer)
             except ScanCancelled:
                 raise
-            except Exception:
-                found, run = [], ScannerRun(scanner.name, '', RunStatus.FAILED, 0,
-                    error_code='SCANNER_FAILED', error_summary='Scanner did not complete successfully.',
-                    remediation='Inspect local engine configuration and retry the check.')
+            except Exception as exc:
+                found, run = [], unexpected_run(scanner, exc, execution_started, 'PROVIDER_EXECUTION')
             if scan_mode != ScanMode.RELEASE and hook_scope is None and getattr(scanner, 'filter_changed_lines', False):
                 found = [f for f in found if any(f.line_start<=line<=f.line_end for line in changed_lines.get(f.file_path,set()))]
                 run.finding_count = len(found)
@@ -202,9 +237,10 @@ class SecurityRuntime:
                 except ScanCancelled:
                     raise
                 except Exception as exc:
-                    found, provider_runs = [], [ScannerRun(scanner.name, "", RunStatus.FAILED, 0,
-                        error_code="SCANNER_FAILED", error_summary="Scanner did not complete successfully.",
-                        remediation="Inspect local engine configuration and retry the check.")]
+                    found, provider_runs = [], [unexpected_run(scanner, exc, stage_start, 'PROVIDER_ORCHESTRATION')]
+                    provider_runs[0].capabilities = tuple(scanner.capabilities)
+                    provider_runs[0].provider = getattr(scanner, 'engine_id', '') or scanner.scanner_id
+                    provider_runs[0].provider_role = getattr(scanner, 'provider_role', 'PRIMARY')
                 findings.extend(found)
                 runs.extend(provider_runs)
         except (KeyboardInterrupt, ScanCancelled):
@@ -214,6 +250,15 @@ class SecurityRuntime:
             pool.shutdown(wait=True, cancel_futures=True)
         observed['timing_ms']['scanner_orchestration'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
+        wanted = requested_capabilities(profile, scan_mode, context.capability_files())
+        if Capability.DEPENDENCY_VULN in wanted and not any(
+                Capability.DEPENDENCY_VULN in run.capabilities and run.status != RunStatus.NOT_APPLICABLE for run in runs):
+            runs.append(ScannerRun('dependency-inputs', '', RunStatus.UNAVAILABLE, 0,
+                capabilities=(Capability.DEPENDENCY_VULN,), coverage_contract='NONE',
+                error_code='DEPENDENCY_SCOPE_UNAVAILABLE',
+                error_summary='依赖清单发生了变化，但当前范围没有可供检查的依赖清单或锁文件。',
+                remediation='请提供有效的依赖清单或锁文件后重新检查；删除文件不能证明已安装依赖或原风险已消除。',
+                scanner_diagnostics={'failure': {'stage': 'DEPENDENCY_SCOPE_SELECTION', 'reason': 'NO_SUPPORTED_CURRENT_INPUT'}}))
         if hook_observer is not None:
             # Preserve rule/coordinate multiplicity before historical occurrence
             # fingerprints merge colliding rules on the same line. Raw remains
@@ -226,12 +271,11 @@ class SecurityRuntime:
         complete = bool(planned_runs) and successful == len(planned_runs)
         coverage = "FULL" if complete else "PARTIAL" if successful else "MINIMAL"
         release_status = RiskEngine().assess(findings, complete)
-        wanted = requested_capabilities(profile, scan_mode, context.files)
         capability_results = {}
         for capability in (Capability.CODE_SAST, Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN, Capability.IAC_MISCONFIG):
             supporting = [run for run in planned_runs if capability in run.capabilities]
             aggregate = dependency_status(supporting) if capability == Capability.DEPENDENCY_VULN else aggregate_provider_statuses(supporting)
-            capability_results[capability] = "NOT_APPLICABLE" if not files or capability not in wanted else aggregate
+            capability_results[capability] = "NOT_APPLICABLE" if not has_targets or capability not in wanted else aggregate
         if rule_coverage and files:
             capability_results[Capability.CODE_SAST]=rule_coverage['status']
         capability_details = {cap: capability_detail([run for run in planned_runs if cap in run.capabilities], state)
@@ -251,19 +295,26 @@ class SecurityRuntime:
         if not planned_runs and rule_coverage.get('status')=='NOT_COVERED':
             execution_state='NOT_COVERED'
         summary = MESSAGES[release_status]
-        if no_changes or not files:
+        if no_changes or not has_targets:
             status = execution_state = "NO_CHANGES" if no_changes else "NOT_APPLICABLE"
             coverage = "NONE"
             release_status = "NOT_ASSESSED"
             summary = "没有需要检查的代码变更。\n本次没有执行代码安全扫描。" if no_changes else "本次没有适用的安全检查，未执行扫描。"
         elif not complete:
-            summary += "；Security check completed with limited coverage."
+            summary += "；本次只完成部分安全检查，仍有范围未确认。"
+        if Capability.DEPENDENCY_VULN in wanted:
+            state = capability_results[Capability.DEPENDENCY_VULN]
+            if state in {'UNAVAILABLE', 'FAILED'}:
+                summary += "\n依赖检查未完成，暂时无法确认本次依赖变更是否存在漏洞。"
+            elif state == 'PARTIAL':
+                summary += "\n已检查可识别的依赖版本；完整依赖关系或漏洞数据的新鲜程度尚未确认。"
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
                             execution_state=execution_state, capability_results=capability_results, capability_details=capability_details, rule_coverage=rule_coverage)
         observed['timing_ms']['result_normalization_policy'] = milliseconds(stage_start)
         observed['providers'] = {run.scanner:run.scanner_diagnostics for run in runs if run.scanner_diagnostics}
         observed['scope'] = {'requested_files':len(files),'profile_files':len(profile.files),
-            'context_files':len(context.context_files),'repository_discovery':scan_mode==ScanMode.RELEASE}
+                            'context_files':len(context.context_files),'repository_discovery':scan_mode==ScanMode.RELEASE}
+        observed['scope']['changed_dependency_inputs'] = len(changed_dependencies)
         # Persistence time is known only after the transaction; no second write
         # and no mutation of signed scan identities just to record a measurement.
         result.scanner_diagnostics = observed

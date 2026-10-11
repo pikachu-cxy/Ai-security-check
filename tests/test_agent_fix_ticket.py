@@ -109,6 +109,33 @@ def test_hook_text_projection_uses_same_ticket_not_duplicate_report(inline_setup
     assert 'already prepared' in response['guidance']
 
 
+def test_plain_hook_projection_keeps_real_issued_inline_ticket_complete(inline_setup, monkeypatch):
+    from hook_feedback_test_helpers import internal_context
+    from security_runtime.hook_reply_context import MAX_CONTEXT_BYTES, MAX_CONTEXT_CHARS
+    response = copy.deepcopy(inline_setup[-1]['remediation'])
+    response['feedback_required'] = True
+    service = inline_setup[3]
+    monkeypatch.setattr(service, 'on_hook', lambda *args, **kwargs: response)
+    before = inline_setup[0].joinpath('A.java').read_bytes()
+    result = inline_setup[4]()
+    wire = codex_hook_output(result)
+    text = wire['hookSpecificOutput']['additionalContext']
+    control = internal_context(wire)
+    assert len(text) <= MAX_CONTEXT_CHARS and len(text.encode('utf-8')) <= MAX_CONTEXT_BYTES
+    assert 'editing_allowed_from_this_context' not in control
+    assert control['remediation']['agent_fix_ticket'] == ticket(inline_setup)
+    assert control['remediation']['prepare'] == response['prepare']
+    assert control['remediation']['prepare']['required'] is False
+    assert control['remediation']['verify'] == response['verify']
+    assert control['remediation']['security_fix_context_ref'] == response['security_fix_context_ref']
+    assert 'guidance' not in control['remediation']
+    assert wire['continue'] is False and wire['stopReason'] == wire['systemMessage']
+    assert '修复确认' in wire['stopReason'] and '回复“修复”' not in wire['stopReason']
+    assert wire.get('decision') != 'block'
+    assert inline_setup[0].joinpath('A.java').read_bytes() == before
+    assert not inline_setup[2].calls
+
+
 def test_original_prepare_checks_reused_and_prepared_cannot_skip_them(inline_setup, monkeypatch):
     service = inline_setup[3]; original = service._prepare; seen = []
     def failing(*args, **kwargs):

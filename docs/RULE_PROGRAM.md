@@ -1,5 +1,9 @@
 # Rule Program v1
 
+The release counts and Java foundation evidence below preserve an earlier
+milestone. Current catalog counts, Python additions and acceptance status are
+recorded in [development progress](DEVELOPMENT_PROGRESS.md).
+
 Rule Program v1 is capability-first. It maps:
 
 `Capability → underlying scanner rules → Finding Family / Episode → Policy → remediation / proof`

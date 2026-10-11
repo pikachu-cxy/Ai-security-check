@@ -137,6 +137,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     summary['duration_ms'] = round(measured['hook_total'])
     if 'scanner_diagnostics' in result:
         summary['scanner_diagnostics'] = result['scanner_diagnostics']
+    for key in ('current_dependency_finding_ids', 'dependency_user_feedback', 'capabilities', 'dependency_check_reason'):
+        if key in result:
+            summary[key] = result[key]
     if 'reason' in result:
         summary['reason'] = result['reason']
     if 'last_check_status' in result:
@@ -145,46 +148,64 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         if key in result:
             summary[key] = result[key]
     output = CodexHookAdapter().output({'hook_event_name': 'PostToolUse'}, result)
+    if decision is None and result['execution']['scanner_run'] is True and result.get('dependency_user_feedback'):
+        # Non-Git workspaces use the advisory-only Hook. Actual dependency
+        # findings still need a readable choice, with navigation but no grant.
+        feedback = result['dependency_user_feedback']
+        message = feedback['message']
+        decision = {'action': 'ADVISE', 'reason_code': 'DEPENDENCY_RISK_REVIEW_REQUIRED',
+                    'feedback_required': False, 'user_feedback': feedback,
+                    'review_finding_ids': result.get('dependency_review_finding_ids', []),
+                    'review_continuation': {'tool': 'get_security_summary', 'arguments': {
+                        'workspace_path': str(validated_root), 'scan_id': result['scan_id'], 'details': True}}}
+        output.update({'continue': False, 'stopReason': message, 'systemMessage': message})
     if decision is not None:
         summary['remediation'] = decision
+        if decision.get('review_continuation') and decision.get('user_feedback'):
+            # Review navigation identifies only the displayed candidates. A
+            # recommended first task must never replace the user's selection.
+            decision.setdefault('review_finding_ids', result.get('dependency_review_finding_ids', []))
         if decision.get('feedback_required') is True and decision['action'] == 'AUTO_FIX':
             # PostToolUse cannot undo the edit. A blocking decision rejects the
             # nested Code Mode promise after it ran; use non-reject feedback.
-            fast = decision.get('fix_path') == 'DETERMINISTIC_FAST_FIX'
-            compact = decision.get('security_context_status') == 'READY' and not fast
-            inline = decision.get('agent_fix_ticket', {}).get('mode') == 'INLINE_PREPARED'
-            output.update({'continue': False, 'stopReason': (
-                'SECURITY_AUTO_REMEDIATION_AUTHORIZED. SECURITY_FIX_REQUIRED. '
-                'Read the structured agent_fix_ticket target, apply its minimal edit, and let Hook verify. '
-                'Do not call prepare_task_fix or recover references from prose.' if inline else
-                'SECURITY_AUTO_REMEDIATION_AUTHORIZED. SECURITY_FIX_REQUIRED. '
-                'The preceding edit is complete. Follow remediation.prepare and security_fix_context; '
-                'do not repeat the edit or ask for approval.' if compact else
-                'The preceding edit already executed successfully. Do not retry or repeat it. '
-                'Runtime has authorized remediation, not the original insecure edit. '
-                + ('Execute the authorized plan through the registered atomic Host bridge. ' if fast else
-                 'Immediately call prepare_task_fix. ') + decision['guidance'])})
-            output['systemMessage'] = ('Security Runtime: AUTO_FIX already prepared. Use agent_fix_ticket and context.' if inline else
-                'Security Runtime: SECURITY_FIX_REQUIRED; AUTO_FIX authorized. '
-                'Use the compact context and prepare handoff.' if compact else
-                'Security Runtime: AUTO_FIX is already authorized. '
-                                       'Do not ask the user for confirmation. Immediately continue with '
-                                       + ('the Runtime-issued Fast Fix Plan.' if fast else
-                                          'the Runtime-issued prepare_task_fix handoff.'))
+            # The returned grant and structured guidance still control repair;
+            # these presentation fields never issue or broaden authorization.
+            message = '已收到修复确认，正在修复这个问题；完成后会重新检查。'
+            output.update({'continue': False, 'stopReason': message, 'systemMessage': message})
         elif decision.get('feedback_required') is True and decision['action'] == 'CONFIRM_REQUIRED':
             # PostToolUse side effects already happened. Unlike block, this
             # documented feedback path does not reject the Code mode promise.
             # Asking/waiting is host guidance, not an automatic model halt.
-            output.update({'continue': False, 'stopReason': decision['guidance']})
-            output['systemMessage'] = ('Security Runtime: the file edit already executed. Do not repeat it. '
-                                       'Explain the risk and ask whether to remediate it, then wait.')
+            message = decision.get('user_feedback', {}).get('message') or (
+                '自动检查发现一个安全风险。请查看本次检查的受影响位置、可能影响和修复建议。'
+                '回复“修复”，我会修复并重新检查；回复“忽略”，本次不修复，风险记录仍保留。')
+            # User-visible Hook fields carry plain copy; the control protocol
+            # remains in additionalContext, never an implicit repair grant.
+            output.update({'continue': False, 'stopReason': message, 'systemMessage': message})
+        elif decision['action'] in {'ADVISE', 'MANUAL_ONLY', 'ESCALATE'}:
+            # Advisory and failed-recheck feedback must be understandable too.
+            # User presentation and repair authorization are separate effects.
+            output['systemMessage'] = (decision.get('user_feedback', {}).get('message') or
+                                       decision.get('user_message') or
+                                       '安全检查或修复流程尚未完成。请先核查问题详情；'
+                                       '当前结果不能证明风险已消除。')
         elif decision['action'] == 'NONE':
-            output['systemMessage'] = ('Security Runtime verified the local repair.'
+            output['systemMessage'] = ('这个问题已修复，并通过了原规则的重新检查。'
                                        if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else
-                                       'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT: high-confidence risk is present; '
-                                       'review existing candidates. No earlier baseline proves edit attribution; '
-                                       'automatic remediation is not authorized.'
-                                       if result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' else '')
+                                       decision.get('user_feedback', {}).get('message') or
+                                       '检查发现一个安全风险，但缺少改动前的检查记录，'
+                                       '暂时无法确认是否由本次改动引入。请查看问题详情后选择是否修复。'
+                                       if result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' else
+                                       output['systemMessage'] if result.get('coverage') not in {'FULL', 'NOT_APPLICABLE'} else '')
+        feedback = decision.get('user_feedback') or {}
+        if (result['execution']['scanner_run'] is True and
+                (feedback.get('choices') or feedback.get('selection_required') is True) and
+                decision['action'] in {'ADVISE', 'MANUAL_ONLY', 'ESCALATE', 'NONE'}):
+            # A repeated episode still needs a user-facing risk choice. This is
+            # the documented non-reject PostToolUse feedback route, not a grant
+            # or a request to undo/retry the edit. Cached/read-only events do not
+            # create another interruption or refresh evidence/consent.
+            output.update({'continue': False, 'stopReason': output['systemMessage']})
     # Bounded metadata only; no families, findings, file contents or scanner errors.
     if (remediation is not None and validated_root is not None and decision is not None and
             decision.get('action') in {'AUTO_FIX', 'CONFIRM_REQUIRED'}):
@@ -192,17 +213,12 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             validated_root, decision.get('episode_id'), time.perf_counter())
         decision.update(observation)
         summary.update(observation)
-    model_context = summary
-    if decision is not None and decision.get('agent_fix_ticket'):
-        # Same formal ticket, not a ref reconstructed from a report. Keep the
-        # documented text channel small; SDK structuredContent remains complete.
-        model_context = {k: summary[k] for k in ('status', 'coverage', 'scanner_run')}
-        model_context['remediation'] = {k: decision[k] for k in (
-            'action', 'reason_code', 'episode_id', 'grant_id', 'agent_fix_ticket',
-            'security_fix_context', 'security_fix_context_ref', 'agent_fix_ticket_diagnostics',
-            'next_action', 'guidance')}
-    output['hookSpecificOutput']['additionalContext'] = json.dumps(model_context, ensure_ascii=True,
-                                                                 separators=(',', ':'))
+    # The text channel is the Host's actual developer context. Put the fixed
+    # user-facing explanation first and keep operational refs separate; the
+    # complete diagnostic record remains in SDK structuredContent/local logs.
+    from .hook_reply_context import render_hook_context
+    output['hookSpecificOutput']['additionalContext'] = render_hook_context(
+        summary, decision, output.get('systemMessage', ''))
     return {**summary, **output}
 
 

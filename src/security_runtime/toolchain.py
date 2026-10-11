@@ -791,25 +791,30 @@ class ToolManager:
             shutil.rmtree(final, ignore_errors=True)
             raise
 
-    def prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False) -> ToolStatus:
+    def prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False, validate_database=None) -> ToolStatus:
         checkpoint()
         with self._database_lock:
             fresh = self.database_freshness()['status']
-            if fresh == 'FRESH' and not force:
+            if fresh == 'FRESH' and not force and (validate_database is None or validate_database(self.trivy_cache_dir() / 'db')):
                 self.data_diagnostics.pop('vulnerability_db', None)
                 return ToolStatus.READY
-            emit('DATA_PREPARING', scanner='trivy', component='vulnerability_db', reason=fresh)
-            result = self._prepare_trivy_database(binary, offline=offline, force=force)
+            emit('DATA_PREPARING', scanner='trivy', component='vulnerability_db', message=f'Database freshness: {fresh}')
+            if validate_database is None:
+                result = self._prepare_trivy_database(binary, offline=offline, force=force)
+            else:
+                result = self._prepare_trivy_database(binary, offline=offline, force=force,
+                                                      validate_database=validate_database)
         diagnostic = self.data_diagnostics.get('vulnerability_db')
         emit('DATA_READY' if result == ToolStatus.READY and diagnostic is None else 'DATA_PREPARATION_FAILED',
              scanner='trivy', component='vulnerability_db', error_code=diagnostic.error_code if diagnostic else '',
              source=diagnostic.source if diagnostic else '')
         return result
 
-    def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False) -> ToolStatus:
+    def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False, validate_database=None) -> ToolStatus:
         self.data_diagnostics.pop('vulnerability_db', None)
         available = self.database_status() == ToolStatus.READY
-        if self.database_freshness()['status'] == 'FRESH' and not force:
+        if (self.database_freshness()['status'] == 'FRESH' and not force
+                and (validate_database is None or validate_database(self.trivy_cache_dir() / 'db'))):
             return ToolStatus.READY
         if offline is None:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
@@ -836,7 +841,8 @@ class ToolManager:
                     with external_tool_loader():
                         proc = run_process([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(staging), "--quiet"],
                                            env=env, timeout=900)
-                    if proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH':
+                    if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'
+                            and (validate_database is None or validate_database(staging / 'db'))):
                         from .hook_state import HookStateStore, no_links
                         locks = HookStateStore(cache / '.update-state')
                         with locks.lock(cache, wait_seconds=5) as acquired:

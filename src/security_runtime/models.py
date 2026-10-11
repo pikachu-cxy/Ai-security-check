@@ -170,3 +170,13 @@ class ScanContext:
     rules_path: str | None = None
     context_files: tuple[str, ...] = ()
     rule_plan: Any = None
+    # Trigger inputs are distinct from existing files in the scoped snapshot.
+    # Removed manifests and retained Hook candidates must not be confused.
+    dependency_changes: tuple[str, ...] | None = None
+
+    def capability_files(self) -> tuple[str, ...]:
+        from .dependency_inputs import is_dependency_input
+        if self.dependency_changes is None:
+            return self.files
+        return tuple(dict.fromkeys((*[name for name in self.files if not is_dependency_input(name)],
+                                    *self.dependency_changes)))

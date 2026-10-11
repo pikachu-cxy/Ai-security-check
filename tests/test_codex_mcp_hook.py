@@ -13,6 +13,7 @@ from security_runtime.hook_adapters import run_host_event
 from security_runtime.integration_state import WorkspaceBinding
 from security_runtime.mcp_server import create_server
 from test_hook_runtime import FakeRuntime, coordinator, dirty, repo, row
+from hook_feedback_test_helpers import internal_context
 
 
 _tool_calls = itertools.count()
@@ -76,8 +77,9 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
         assert output == codex_hook_output(data)
         assert set(output) == {'systemMessage', 'hookSpecificOutput'}
         assert output['hookSpecificOutput']['hookEventName'] == 'PostToolUse'
-        context = json.loads(output['hookSpecificOutput']['additionalContext'])
-        assert context['status'] == data['status'] and context['duration_ms'] >= 0
+        context = internal_context(output)
+        assert context['status'] == data['status'] and 'duration_ms' not in context
+        assert data['duration_ms'] >= 0  # complete diagnostics stay structured
     asyncio.run(run())
 
 

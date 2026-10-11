@@ -65,7 +65,7 @@ def test_setup_clean_signed_projection_no_session_no_remediation(adapter, repo):
 
 
 @pytest.mark.parametrize('skip_safe_edit', [False, True])
-def test_missing_first_hook_new_untracked_file_auto_fix(adapter, repo, tmp_path, skip_safe_edit):
+def test_missing_first_hook_new_untracked_file_requires_confirmation(adapter, repo, tmp_path, skip_safe_edit):
     assert call(adapter, repo)['baseline']['status'] == 'READY'
     runtime, core, service = services(adapter, repo, tmp_path)
     source = repo / 'NewService.java'
@@ -80,7 +80,16 @@ def test_missing_first_hook_new_untracked_file_auto_fix(adapter, repo, tmp_path,
     result = hook(core, service, repo)
     assert result['baseline_source'] == ('SETUP_SEED' if skip_safe_edit else 'SESSION')
     assert result['baseline_available'] and result['scanner_run'] and result['new_families'] == 1
-    assert result['status'] != 'BASELINE_ESTABLISHED' and result['remediation']['action'] == 'AUTO_FIX'
+    assert result['status'] != 'BASELINE_ESTABLISHED'
+    pending = result['remediation']
+    assert pending['action'] == 'CONFIRM_REQUIRED' and pending['status'] == 'PENDING_CONFIRMATION'
+    assert not {'prepare', 'verify', 'remediation_ref'} & pending.keys()
+    assert not service.authorized and not service.prepared
+    assert source.read_text() == UNSAFE
+    approved = service.confirm(pending['confirmation_ref'], pending['task_ref'], repo, approve=True)
+    assert approved['status'] == 'AUTHORIZED' and approved['action'] == 'AUTO_FIX'
+    assert approved['authorization_kind'] == 'USER_CONFIRMED'
+    assert source.read_text() == UNSAFE
 
 
 def test_preexisting_tracked_finding_persists_not_new(adapter, repo, tmp_path):
@@ -250,7 +259,8 @@ def test_no_seed_high_risk_explicit_diagnostic_no_auto_fix(adapter, repo, tmp_pa
     assert result['status'] == 'BASELINE_ESTABLISHED' and not result['baseline_available']
     assert result['new_families'] == 0 and result['remediation']['action'] == 'NONE'
     assert result['reason'] == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT'
-    assert 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' in result['systemMessage']
+    assert '无法确认是否由本次改动引入' in result['systemMessage']
+    assert 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' not in result['systemMessage']
     assert 'CORRUPT_DO_NOT_ECHO' not in json.dumps(result)
 
 
@@ -260,5 +270,5 @@ def test_trust_ux_and_free_v1_exact_hook_abi(adapter, repo):
     assert 'review and allow' in text and 'HOST_MANAGED_UNKNOWN' in text
     assert 'not proof' in text and 'warm-up' in text
     # Freeze the complete generated definition, not merely tool names.
-    expected = json.loads((__import__('pathlib').Path(__file__).parents[1] / 'docs/continuation-hooks-example.json').read_text())
+    expected = json.loads((__import__('pathlib').Path(__file__).parents[1] / 'docs/continuation-hooks-example.json').read_text(encoding='utf-8'))
     assert product_hooks() == expected

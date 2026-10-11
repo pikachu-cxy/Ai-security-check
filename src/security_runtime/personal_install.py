@@ -1,7 +1,7 @@
-"""One personal setup transaction: global connection AND the companion Skill.
+"""Product installation: stable program, owned configuration, and scan readiness.
 
-The existing signed CAS journal owns all writes. This layer does not approve
-unknown configuration, Hook trust, network operations or vulnerability repairs.
+The signed CAS journal owns configuration writes. Public component preparation
+is separate: a failed download must not undo successfully committed user setup.
 """
 from __future__ import annotations
 
@@ -17,8 +17,93 @@ from .review_skill import ReviewSkillManager
 from .upgrade import InstallationUpgrade, reason
 from .delivery import verified_operation
 from .install_checks import single_capability_check
+from .install_readiness import prepare_installation_readiness, validate_readiness_receipt, CORE_TOOLS
+from .toolchain import VERSIONS
+from .progress import ScanCancelled
 
 CONTRACT = 'personal-install-v1'
+PREPARATION_TIMEOUT = 3600
+
+
+def _unavailable_readiness(*, offline):
+    return {'contract':'installation-readiness-v1', 'status':'UNAVAILABLE', 'ready':False,
+        'message':'暂时无法确认安全检查组件和漏洞数据是否已准备完成。',
+        'network_allowed':not offline,
+        'tools':{name:{'status':'BROKEN', 'version':'', 'expected_version':VERSIONS[name],
+            'ready':False} for name in CORE_TOOLS},
+        'vulnerability_db':{'status':'BROKEN', 'freshness':'UNKNOWN', 'ready':False,
+            'cached_usable':False}, 'failures':[]}
+
+
+def _prepare_child(executable, *, offline):
+    # The installed candidate owns its compatibility pins, including when an
+    # older product version is installing a newer locally validated bundle.
+    argv = [str(executable), 'prepare-installation', '--json']
+    if offline:
+        argv.append('--offline')
+    try:
+        completed = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
+            timeout=PREPARATION_TIMEOUT, check=False)
+        if len(completed.stdout) > 256_000:
+            raise ValueError()
+        receipt = json.loads(completed.stdout)
+        if (not validate_readiness_receipt(receipt)
+                or completed.returncode != (0 if receipt['ready'] else 2)
+                or offline and receipt['network_allowed']):
+            raise ValueError()
+        return receipt, None
+    except subprocess.TimeoutExpired:
+        return _unavailable_readiness(offline=offline), 'INSTALLATION_PREPARATION_TIMEOUT'
+    except OSError:
+        return _unavailable_readiness(offline=offline), 'INSTALLATION_PREPARATION_FAILED'
+    except (ValueError, TypeError, AttributeError, RecursionError):
+        return _unavailable_readiness(offline=offline), 'INSTALLATION_PREPARATION_RECEIPT_INVALID'
+
+
+def _complete_preparation(data, *, offline, progress=None, executable=None):
+    installation = data['installation']
+    installation['scan_ready'] = False
+    if installation.get('local_files_ready') is not True:
+        return data
+    diagnostic = None
+    if executable is not None:
+        report_progress(progress, 'INSTALL_TOOLS')
+        receipt, diagnostic = _prepare_child(executable, offline=offline)
+        report_progress(progress, 'VERIFY_SCAN_READINESS')
+    else:
+        try:
+            receipt = prepare_installation_readiness(progress=progress, offline=offline)
+            if not validate_readiness_receipt(receipt):
+                raise ValueError()
+        except ScanCancelled:
+            raise
+        except Exception:
+            receipt = _unavailable_readiness(offline=offline)
+            diagnostic = 'INSTALLATION_PREPARATION_FAILED'
+    data['scan_readiness'] = receipt
+    ready = receipt['ready']
+    installation.update(scan_ready=ready, status='INSTALLED' if ready else 'NOT_READY',
+        engine_preparation='MANAGED_DURING_INSTALLATION',
+        message=('产品和全局连接已安装。' + receipt['message'] +
+            '请完全退出并重启 Codex，按提示审核 Hook 信任；无需逐项目安装。') if ready else
+            ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
+            '联网后重新执行产品安装会继续准备，已有配置和可用缓存会保留。'))
+    data['overall'] = 'CONFIGURED' if ready else 'DEGRADED'
+    data.setdefault('execution', {}).update(scanner_run=False, source_modified=False,
+        component_preparation=True, network_allowed=not offline)
+    # Permission to download is not evidence that a request actually occurred.
+    # Do not keep the configuration-only receipt's misleading network=false.
+    if not offline:
+        data['execution'].pop('network_query', None)
+    else:
+        data['execution']['network_query'] = False
+    diagnostics = set(data.get('diagnostics', []))
+    if diagnostic:
+        diagnostics.add(diagnostic)
+    if not ready:
+        diagnostics.add('INSTALLATION_SCANNING_NOT_READY')
+    data['diagnostics'] = sorted(diagnostics)
+    return data
 
 
 def _blocked(manager, reasons, *, status='PREFLIGHT_BLOCKED', recovery=None):
@@ -33,7 +118,7 @@ def _blocked(manager, reasons, *, status='PREFLIGHT_BLOCKED', recovery=None):
         message = '安装中断，检测到不能安全自动撤回的状态。请先使用产品恢复入口，不要手动删除配置或 Skill。'
     return {'integration':'codex', 'scope':'GLOBAL', 'overall':'BROKEN',
         'diagnostics':sorted(set(reasons)), 'skill':skill,
-        'installation':{'contract':CONTRACT, 'status':status, 'local_files_ready':False,
+        'installation':{'contract':CONTRACT, 'status':status, 'local_files_ready':False, 'scan_ready':False,
             'message':message, 'risk_fix_authorized':False,
             'recovery_status':recovery, 'restart_required':False},
         'execution':{'scanner_run':False, 'source_modified':False, 'network_query':False}}
@@ -102,12 +187,13 @@ def _default_delivery_root():
 
 
 @verified_operation
-def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None):
-    """Portable EXE -> stable files -> the same atomic setup, in one command.
+def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False):
+    """Install or update the product, then prepare compatible scanners and data.
 
-    A normal installed Python distribution needs only setup. No remote package
-    download or public installer URL is implied by this local-package entrypoint.
+    Product packages stay local; required public scanning components are managed
+    automatically unless offline mode explicitly requests cache-only checks.
     """
+    offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
     from .delivery import StableDelivery, stable_command, package_metadata
@@ -121,15 +207,18 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         delivery_root = Path(root) if root is not None else Path(stable).parents[1] if stable else _default_delivery_root()
         with materialized_update(StableDelivery(delivery_root), update, progress=progress) as supplied:
             result = install_personal_codex(bundle=supplied, root=delivery_root,
-                workspace=workspace, allow_dev=allow_dev, progress=progress)
-            result['downloads'] = {'product': 'LOCAL_DELTA', 'network_download': False,
-                'engines': 'REUSE_VALID_CACHE_OR_PREPARE_ON_DEMAND', 'skill_and_rules': 'BUNDLED'}
+                workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline)
+            result['downloads'] = {'product': 'LOCAL_DELTA', 'product_network_download': False,
+                'engines': 'MANAGED_DURING_INSTALLATION', 'skill_and_rules': 'BUNDLED'}
             return result
     if bundle is None and (not frozen or stable is not None):
         if root is not None and (stable is None or Path(root).absolute() != Path(stable).parents[1]):
             raise IntegrationDiagnostic('INSTALL_ROOT_REQUIRES_PORTABLE_BUNDLE')
         data = setup_personal_codex(integration, workspace, progress=progress)
-        if stable is not None and data['installation']['local_files_ready']:
+        data = _complete_preparation(data, offline=offline, progress=progress)
+        data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
+            'engines':'MANAGED_DURING_INSTALLATION', 'skill_and_rules':'BUNDLED'}
+        if stable is not None and data['installation']['scan_ready']:
             report_progress(progress, 'CLEANUP')
             data['cleanup'] = StableDelivery(Path(stable).parents[1]).cleanup()
         return data
@@ -152,8 +241,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     activated = delivery.activate(supplied, progress=progress)
     # Activation verified this exact slot. Invoke it directly, avoiding an
     # unnecessary launcher hop; discover() still writes the stable command.
-    argv = [str(delivery.slot(activated['active_build']) / 'security-check.exe') if os.name == 'nt'
-        else str(delivery.slot(activated['active_build']) / 'security-check'), 'setup', 'codex', '--json']
+    installed_executable = delivery.slot(activated['active_build']) / ('security-check.exe' if os.name == 'nt' else 'security-check')
+    argv = [str(installed_executable), 'setup', 'codex', '--json']
     if workspace is not None:
         argv += ['--path', str(workspace)]
     # Execute only the just-validated fixed launcher, never a config-supplied command.
@@ -193,11 +282,12 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['installation']['local_files_ready'] = False
         data['installation']['message'] += ' 程序文件已保留在安装目录，但整体安装尚未成功；不代表可扫描。'
     data['delivery'] = activated
-    if data['installation']['local_files_ready']:
+    data = _complete_preparation(data, offline=offline, progress=progress, executable=installed_executable)
+    if data['installation']['scan_ready']:
         report_progress(progress, 'CLEANUP')
         data['cleanup'] = delivery.cleanup()
         data['delivery']['previous_build'] = delivery.pointer()['previous']
     data['downloads'] = {'product': 'LOCAL_DELTA' if update else 'LOCAL_FULL_PACKAGE',
-        'network_download': False, 'engines': 'REUSE_VALID_CACHE_OR_PREPARE_ON_DEMAND',
+        'product_network_download': False, 'engines': 'MANAGED_DURING_INSTALLATION',
         'skill_and_rules': 'BUNDLED'}
     return data

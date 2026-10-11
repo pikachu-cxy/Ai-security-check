@@ -14,6 +14,19 @@ from test_global_integration import installed, projects
 from test_delivery import bundle
 
 
+def ready_scanning_receipt():
+    versions = {'semgrep': '1.178.0', 'gitleaks': '8.30.0', 'trivy': '0.74.0'}
+    return {'contract': 'installation-readiness-v1', 'status': 'READY',
+            'ready': True, 'message': '检查工具和漏洞数据已准备完成。',
+            'network_allowed': False,
+            'tools': {name: {'status': 'READY', 'version': version,
+                             'expected_version': version, 'ready': True}
+                      for name, version in versions.items()},
+            'vulnerability_db': {'status': 'READY', 'freshness': 'FRESH',
+                                 'ready': True, 'cached_usable': True},
+            'failures': []}
+
+
 @pytest.fixture
 def skill(tmp_path):
     return ReviewSkillManager(tmp_path / 'skills', tmp_path / 'skill-state')
@@ -146,7 +159,10 @@ def test_unknown_project_not_removed_by_setup(installed, projects, skill):
 
 def test_single_install_cli_for_python_distribution(installed, monkeypatch, capsys):
     import security_runtime.global_integration as module
+    import security_runtime.personal_install as personal_module
     monkeypatch.setattr(module, 'GlobalCodexIntegration', lambda **kwargs: installed)
+    monkeypatch.setattr(personal_module, 'prepare_installation_readiness',
+                        lambda **kwargs: ready_scanning_receipt())
     assert main(['install', 'codex', '--json']) == 0
     output = capsys.readouterr()
     data = json.loads(output.out)
@@ -183,17 +199,24 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
     package, root = portable
     stages = []
     def run(argv, **kwargs):
-        assert stages[-1] == 'SETUP_CHILD'
         assert argv[0].startswith(str(root / 'versions')) and argv[0].endswith('bundle\\security-check.exe')
-        assert argv[1:] == ['setup', 'codex', '--json']
-        assert kwargs['stdin'] == subprocess.DEVNULL and kwargs['timeout'] == 120
-        return SimpleNamespace(returncode=0, stdout=json.dumps(setup_personal_codex(installed)).encode())
+        assert kwargs['stdin'] == subprocess.DEVNULL
+        if argv[1] == 'setup':
+            assert stages[-1] == 'SETUP_CHILD'
+            assert argv[1:] == ['setup', 'codex', '--json']
+            assert kwargs['timeout'] == 120
+            return SimpleNamespace(returncode=0, stdout=json.dumps(setup_personal_codex(installed)).encode())
+        assert argv[1:] == ['prepare-installation', '--json']
+        assert kwargs['timeout'] > 120
+        return SimpleNamespace(returncode=0, stdout=json.dumps(ready_scanning_receipt()).encode())
     monkeypatch.setattr(subprocess, 'run', run)
     data = install_personal_codex(bundle=package, root=root, progress=stages.append)
-    assert stages == ['PREPARE', 'PACKAGE_VERIFY', 'CHECK_CONFIG', 'PACKAGE_VERIFY',
+    assert stages[:12] == ['PREPARE', 'PACKAGE_VERIFY', 'CHECK_CONFIG', 'PACKAGE_VERIFY',
         'COPY_RUNTIME', 'VERIFY_INSTALLED', 'CAPABILITY_CHECK', 'PREPARE_LAUNCHER',
-        'VERIFY_ACTIVATION', 'SETUP_CHILD', 'VERIFY_RECEIPT', 'CLEANUP']
+        'VERIFY_ACTIVATION', 'SETUP_CHILD', 'VERIFY_RECEIPT', 'INSTALL_TOOLS']
+    assert stages[-1] == 'CLEANUP'
     assert data['delivery']['status'] == 'ACTIVATED' and data['installation']['local_files_ready']
+    assert data['installation']['scan_ready']
 
 
 @pytest.mark.parametrize('receipt', [b'not json', b'{"installation":[]}', b'{"installation":null}',

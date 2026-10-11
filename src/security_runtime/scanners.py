@@ -10,12 +10,13 @@ import os
 import hashlib
 import threading
 from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Protocol
 
 from .findings import FindingNormalizer
 from .equivalence import equivalence_key
-from .verification_policy import offline_scanning, local_recheck_requested, scanner_process_observed
+from .verification_policy import offline_scanning, local_recheck, local_recheck_requested, scanner_process_observed
 from .models import Finding, RunStatus, ScanContext, ScannerRun, TargetProfile
 from .capabilities import Capability
 from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_loader
@@ -27,6 +28,7 @@ from dataclasses import replace
 import yaml
 from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
+from .dependency_inputs import is_dependency_input
 from .local_evidence import snapshot_fingerprint, scanner_evidence_metadata
 from .processes import ProcessResult, run_process, OutputLimitError
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
@@ -36,6 +38,7 @@ from .scanner_observation import observation, metadata, span, count, add_time, i
 
 MAX_OUTPUT = 4_000_000
 logger = logging.getLogger(__name__)
+_trivy_inventory = ContextVar('trivy_inventory', default=None)
 
 
 @contextmanager
@@ -114,14 +117,23 @@ class BaseScanner:
     def scan(self, context: ScanContext, normalizer: FindingNormalizer) -> tuple[list[Finding], ScannerRun]:
         with observation(context.root) as observed:
             findings, run = self._scan_observed(context, normalizer)
-            run.scanner_diagnostics = metadata(observed)
+            run.scanner_diagnostics = {**metadata(observed), **run.scanner_diagnostics}
         return findings, run
 
     def _scan_observed(self, context, normalizer):
         start = time.monotonic()
+        stage = 'ENGINE_PREPARATION'
         def failed(status, diagnostic, version=''):
             return [], ScannerRun(self.name, version, status, round((time.monotonic()-start)*1000),
-                                  error=diagnostic.error_summary, **diagnostic.to_dict())
+                                  error=diagnostic.error_summary, coverage_contract='NONE', **diagnostic.to_dict())
+        def unexpected(status, exc, version=''):
+            kind = type(exc).__name__ if type(exc) in {TypeError, AttributeError, RuntimeError, AssertionError, ImportError, NameError, OverflowError} else 'UNKNOWN_EXCEPTION'
+            findings, run = failed(status, ErrorDiagnostic(
+                'SCANNER_FAILED', 'Scanner did not complete successfully.',
+                'Inspect local engine configuration and retry the check.',
+                diagnostic_detail=f'Stage: {stage}; exception type: {kind}.'), version)
+            run.scanner_diagnostics = {'failure': {'stage': stage, 'exception_type': kind}}
+            return findings, run
         try:
             checkpoint()
             with span('capability_preparation'):
@@ -130,15 +142,20 @@ class BaseScanner:
             raise
         except Exception as exc:
             logger.warning("scanner_engine_unavailable scanner=%s reason=%s", self.scanner_id, type(exc).__name__)
-            return failed(RunStatus.UNAVAILABLE, classify_network_error(exc))
+            diagnostic = classify_network_error(exc)
+            if diagnostic.error_code == 'SCANNER_FAILED':
+                return unexpected(RunStatus.UNAVAILABLE, exc)
+            return failed(RunStatus.UNAVAILABLE, diagnostic)
         if resolved.status != ToolStatus.READY:
             diagnostic = resolved.diagnostic if getattr(resolved, 'diagnostic', None) else classify_network_error(resolved.detail, offline=resolved.status == ToolStatus.OFFLINE, fallback='ENGINE_UNAVAILABLE')
             return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
         try:
+            stage = 'DATA_PREPARATION'
             if self._prepare(resolved.path) != ToolStatus.READY:
                 diagnostic = getattr(self.tool_manager, 'data_diagnostics', {}).get('vulnerability_db') or ErrorDiagnostic('VULNERABILITY_DB_UNAVAILABLE', 'Local vulnerability database is unavailable.', 'Run security-check tools install trivy to prepare engine data.')
                 return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
             checkpoint()
+            stage = 'SCANNER_EXECUTION'
             emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
             findings = self._scan(resolved.path, context, normalizer)
             return findings, ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
@@ -152,6 +169,10 @@ class BaseScanner:
             return failed(RunStatus.FAILED, ErrorDiagnostic('SCANNER_OUTPUT_OR_CONFIG_ERROR', sanitize(str(exc), 200), 'Check local rules/configuration and retry.'), resolved.version)
         except (OSError, KeyError) as exc:
             return failed(RunStatus.FAILED, classify_network_error(exc, fallback='LOCAL_IO_ERROR'), resolved.version)
+        except Exception as exc:
+            # Keep fixed internal diagnostics without reflecting arbitrary
+            # exception text, paths, commands, environment or source material.
+            return unexpected(RunStatus.FAILED, exc, resolved.version)
 
     def _scan(self, binary: str, context: ScanContext, normalizer: FindingNormalizer) -> list[Finding]:
         raise NotImplementedError
@@ -433,12 +454,34 @@ class TrivyAdapter(BaseScanner):
         return self.tool_manager.prepare_trivy_database(binary, **({'offline': True} if local_recheck_requested() else {}))
 
     def scan(self, context, normalizer):
-        found,run=super().scan(context,normalizer)
-        if self.checks=='vuln' and offline_scanning() and run.status==RunStatus.SUCCESS:
+        if self.checks != 'vuln':
+            return super().scan(context, normalizer)
+        state = {'inventory': {}, 'notes': [], 'coverage': 'PARTIAL'}
+        token = _trivy_inventory.set(state)
+        try:
+            # Incremental dependency checks never download engines/databases
+            # or resolve packages over the network, including a manual QUICK.
+            if context.mode == 'quick' and not local_recheck_requested():
+                with local_recheck():
+                    found, run = super().scan(context, normalizer)
+                was_offline = True
+            else:
+                was_offline = offline_scanning()
+                found, run = super().scan(context, normalizer)
+        finally:
+            _trivy_inventory.reset(token)
+        run.dependency_inventory = state['inventory']
+        if run.status == RunStatus.SUCCESS:
+            run.coverage_contract = state['coverage']
+            run.coverage_notes = state['notes']
+        else:
+            run.coverage_contract = 'NONE'
+        if was_offline and run.status==RunStatus.SUCCESS:
             run.coverage_contract='PARTIAL'
-            run.coverage_notes=['Offline Trivy extraction does not attest a complete resolved dependency graph.']
+            run.coverage_notes.append('Offline Trivy extraction does not attest a complete resolved dependency graph.')
         if self.checks == 'vuln' and run.status == RunStatus.SUCCESS:
             fresh = self.tool_manager.database_freshness()['status']
+            run.dependency_inventory['vulnerability_db_freshness'] = fresh if fresh in {'FRESH', 'STALE', 'UNKNOWN', 'MISSING'} else 'UNKNOWN'
             if fresh != 'FRESH':
                 run.coverage_contract = 'PARTIAL'
                 run.coverage_notes = [*(run.coverage_notes or []),
@@ -446,23 +489,85 @@ class TrivyAdapter(BaseScanner):
         return found,run
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
-        relevant = any(Path(f).name in {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "pom.xml", "build.gradle", "go.mod"} for f in context.files)
-        return context.mode in {"feature", "release"} and relevant
+        relevant = any(is_dependency_input(f) for f in (*context.files, *context.context_files))
+        return context.mode in {"quick", "feature", "release"} and relevant
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
+        if self.checks == 'vuln':
+            dependency_scope = tuple(dict.fromkeys(f for f in (*context.files, *context.context_files) if is_dependency_input(f)))
+            if not dependency_scope:
+                raise DiagnosticError(ErrorDiagnostic('DEPENDENCY_SCOPE_UNSUPPORTED',
+                    'No supported dependency inventory is in the planned scope.',
+                    'Provide a supported manifest or lockfile.'))
+            # Only the declared dependency inputs reach this directory engine.
+            # Source, project scanner config, and other files stay outside it.
+            context = replace(context, files=dependency_scope, context_files=())
+            observe_scope(dependency_scope, 'SCOPED_SNAPSHOT')
         with _snapshot(context) as scoped:
             args=[binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update"]
+            if self.checks == 'vuln':
+                args.append('--list-all-pkgs')
             if offline_scanning():
                 args.append('--offline-scan')
+            if self.checks == 'vuln':
+                invocation('DEPENDENCY_SCAN', len(set((*context.files, *context.context_files))))
             process = _execute([*args,str(scoped)], str(scoped), self.timeout)
             if process.return_code != 0:
                 _process_failure(process)
             data = json.loads(process.stdout)
+            if not isinstance(data, dict) or not isinstance(data.get('Results', []), list):
+                raise ValueError('Dependency scanner returned an invalid result structure')
             for result in data.get("Results", []):
                 target = Path(result.get("Target", ""))
                 if target.is_absolute():
                     result["Target"] = target.resolve().relative_to(scoped.resolve()).as_posix()
+            if self.checks == 'vuln':
+                state = _trivy_inventory.get()
+                if state is not None:
+                    state.update(self._dependency_inventory(data, context, process.duration_ms))
+                    if any(level in process.stderr for level in ('WARN', 'ERROR')):
+                        state['coverage'] = 'PARTIAL'
+                        state['notes'].append('Dependency extraction/resolution warnings prevent confirmation of complete inventory coverage.')
             return self.normalize(data, n)
+
+    @staticmethod
+    def _dependency_inventory(data, context, duration_ms):
+        planned = {f for f in (*context.files, *context.context_files) if is_dependency_input(f)}
+        lockfiles = {'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'poetry.lock', 'Pipfile.lock', 'gradle.lockfile', 'buildscript-gradle.lockfile'}
+        packages = []
+        observed = set()
+        per_manifest = {}
+        notes = []
+        for result in data.get('Results', []):
+            target = str(result.get('Target', '')).replace('\\', '/')
+            if target not in planned:
+                continue
+            extracted = result.get('Packages')
+            if not isinstance(extracted, list) or not extracted:
+                continue
+            observed.add(target)
+            per_manifest[target] = len(extracted)
+            for package in extracted:
+                if isinstance(package, dict):
+                    fields = (result.get('Type', ''), package.get('Name', ''), package.get('Version', ''))
+                    packages.append(tuple(value if isinstance(value, str) else '' for value in fields))
+                else:
+                    packages.append(('', '', ''))
+        if observed != planned or not planned:
+            notes.append('One or more planned dependency inputs produced no package inventory confirmation; empty findings do not attest dependency safety.')
+        if any(not all(package) for package in packages):
+            notes.append('One or more extracted packages have an unconfirmed name, version or ecosystem.')
+        if any(Path(name).name not in lockfiles for name in planned):
+            notes.append('Manifest inventory confirms extracted declared versions only; a complete transitive or installed dependency graph is not attested.')
+        coverage = 'PARTIAL' if notes else 'FULL'
+        return {'coverage': coverage, 'notes': notes, 'inventory': {
+            'package_occurrences': len(packages),
+            'unique_packages': len(set(packages)),
+            'confirmed_package_occurrences': sum(bool(all(package)) for package in packages),
+            'confirmed_manifests': len(observed), 'planned_manifests': len(planned),
+            'per_manifest': per_manifest, 'complete_dependency_graph_attested': False,
+            'native_duration_ms': duration_ms,
+        }}
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
         assert isinstance(data, dict)

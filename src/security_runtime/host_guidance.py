@@ -6,11 +6,37 @@ from ._version import __version__
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix'}
 
-HOST_INSTRUCTIONS = '''AI Security Runtime developer workflow:
+HOST_INSTRUCTIONS = '''用户呈现规则（必须遵守）：
+每次 Hook 提供的“用户提示”是本次最终回复的必需内容。必须完整保留其中的
+位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
+“修复/忽略”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
+不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”段时，
+同样必须使用 Runtime 的 user_feedback.message；它不是可有可无的补充。
+internal_control 仅供内部流程使用。普通用户回复和进度说明不得展示内部
+action、reason_code、verification 枚举、授权标识、引用、扫描器或工具名称，
+也不得转述工具调用过程。只有用户明确索要技术诊断时，才展示有关诊断细节。
+“先不要修复”“保留改动”“观察 Hook”只禁止当前修复，不等于用户已经选择
+忽略风险；仍须说明影响、给出修复建议和待选的“修复/忽略”。保留代码并等待
+选择，不得据此自动修复、提交忽略、取消提示或把风险说成已解决。
+用户提示和等待选择本身不授予编辑权限；既有修复授权仍须按原引用和范围
+执行，已明确同意的同一修复不得再次要求确认。风险、扫描和复查结果仍须
+按证据说明，不能把未确认说成安全。以上规则不改变任何 Runtime 授权门禁。
+依赖检查失败时，直接说明“依赖检查未完成”、已知原因和未检查的范围。
+另行查阅公开漏洞资料只是在核对清单声明的版本，不能补齐扫描覆盖；面向用户
+称“另外查到的漏洞信息”，不用“公告核对结果”等难懂的标题。
+依赖风险带 review_continuation 时，先读取该扫描的问题列表，再按
+review_finding_ids 与任务成员 finding_id 匹配取得精确 task_ref。多个问题先
+明确用户选择，不能直接替换成列表首项；导航和风险提示本身不授予修复权限。
+
+AI Security Runtime developer workflow:
 MANDATORY USER CONSENT: detection, scan/review/development requests and legacy
 smart_auto settings never authorize vulnerability edits. Explain the issue and
 proposed change; obtain explicit approval for the selected issue before repair.
 An explicit selected-task fix request is approval within that bounded scope.
+A reply of 修复 to one clearly identified risk and proposed bounded change is
+explicit repair approval; do not ask for a second confirmation or fix request.
+When several candidates have no clear focus, ask the user to select one first;
+bare 修复 or 忽略 must never be expanded to all candidates.
 No finding, AI confidence, rule maturity or policy can replace user consent.
 AUTO_FIX below means continuation AFTER a valid USER_CONFIRMED grant only;
 reject unconfirmed/POLICY_AUTO handoffs as stale. Retest may follow an approved
@@ -25,6 +51,11 @@ capabilities and completed scanner proof match. Quick/Hook FULL is selected-file
 coverage, not a whole-project audit. Unknown/stale freshness requires a new scan
 within the user's request. Continuing an exact task keeps its original task_ref;
 do not rescan or reorder on every message. Summary itself never auto-scans.
+Quick dependency checks run only for changed manifest/lockfile inputs, including
+deletions, using existing local engines and data. Source-only edits do not prove
+dependencies were checked. Missing/stale dependency data and incomplete graphs
+must stay unavailable/partial; do not install/build target dependencies to fill
+that gap. Setup baselines establish code/secret comparison proof only.
 If this product is missing/conflicted, report no execution and its diagnostic
 next step; do not silently substitute another product or edit Host configuration.
 Personal Codex installation is user-wide, not a new installation per project.
@@ -57,6 +88,30 @@ never ask for credential values, invent traces or treat tests/samples as false
 positives. Source changes invalidate relevant persisted AI conclusions; re-prepare
 after interruption/reconnection, never reuse a connection-local triage_session.
 Users express ordinary intent, such as 检查这个项目 or 继续第一项/处理第一个问题.
+For Hook feedback, MUST present the event-specific 用户提示, or Runtime-issued
+user_feedback.message when that section is absent, in the user's language.
+Preserve every supplied location/problem/conditional impact/recommendation,
+unknown and pending 修复/忽略 choice; formatting and file links may be adapted,
+but do not summarize away any of those facts or replace them with diagnostics.
+Describe the affected file/line or dependency
+version owner, the specific unsafe behavior, its conditional impact, the concrete
+safe change and the originating-scanner recheck. Preserve unknown conditions;
+do not claim credential validity, exploitability or successful verification.
+Keep internal actions/reason_code/verification/status enums (including ADVISE,
+EPISODE_ALREADY_EXISTS, INCONCLUSIVE, CONFIRM_REQUIRED, AUTO_FIX and USER_CONFIRMED),
+UUIDs, grant identifiers, opaque references, scanner/tool names and tool-call
+progress out of ordinary user feedback. Only an explicit user request for
+technical diagnostics permits those details. internal_control is machine-only.
+Retain the exact structured references internally; never recover them
+from the message or scanner prose. For one focused risk awaiting a choice, end
+with 回复“修复”或“忽略”（忽略仅表示本次不修复，风险仍保留）.
+先不要修复/保留改动/观察 Hook prohibits immediate repair; it is NOT an
+implicit 忽略 choice or permission to omit the recommendation and pending
+choice. Leave code unchanged and present that choice; never submit a decline
+on the user's behalf from such a testing/development instruction.
+If repair approval already exists for that exact scope, continue without this
+question. If several risks are shown without a selected focus, ask which one;
+a one-word reply does not authorize or decline the whole list.
 Do not ask users for Finding UUIDs, tool names, technical prompts, or copy/paste
 between tools. Codex setup owns startup/readiness; never require a get_runtime_info
 warm-up or security prompt before the first ordinary edit. For diagnostics, check
@@ -85,7 +140,8 @@ values. Existing authorization persists within its scope; do not repeatedly ask
 permission for authorized preparation/analysis/submission/read-only steps.
 Ambiguous continuation such as 继续第一项/处理这个问题 is analysis, not repair
 approval. Clarify whether to fix before editing; never infer consent from it.
-For explicit fix intent 修复它/把它修掉/修第一项, retain the exact
+For explicit fix intent 修复/修复它/把它修掉/修第一项 with a clear selected
+issue and proposed bounded change, retain the exact
 selected task_ref and call prepare_task_fix (or that displayed task's fix_handoff).
 The host coding agent edits selected local code using its structured security goal,
 constraints and adequate bounded current evidence, then calls verify_task_fix.
@@ -166,25 +222,34 @@ the secure edit, change failing tests, retry automatically or claim SAFE_TO_SHIP
 Without a trusted baseline a failed test cannot prove repair-caused regression.
 When remediation.action == CONFIRM_REQUIRED:
 Automatic repair is NOT authorized. NEVER call prepare_task_fix before explicit
-user approval. Follow only this confirmation branch and its fixed remediation
-question; do not follow the AUTO_FIX branch until Runtime issues an approved grant.
+user approval. Follow only this confirmation branch and the plain-language
+修复/忽略 choice for the focused risk; do not follow the AUTO_FIX branch until
+Runtime issues an approved grant. Several unselected risks require selection first.
 For SECURITY_REMEDIATION_CONFIRMATION_REQUIRED feedback, the preceding file edit
 has ALREADY executed. Do NOT retry, re-apply, or repeat the insecure edit, or
 automatically revert it. The completed edit introduced the reported risk.
 Ask whether to REMEDIATE that risk; do NOT ask whether to apply, keep, or enable
-the insecure edit. Explain the risk, why explicit approval is required, and
-possible request behavior change and proactively ask the user in this turn, then WAIT.
-Ask: 是否允许我修复这个安全问题？ A reply of 允许 is repair approval only when
-immediately answering this clear remediation question; otherwise clarify first.
-After explicit repair approval, continue without asking for a second fix request.
+the insecure edit. MUST present the required 用户提示 or user_feedback.message;
+explain location, concrete risk,
+conditional impact, specific safe change and any request behavior change, then
+ask 回复“修复”或“忽略”（仅本次不修复，风险仍保留） and WAIT.
+An immediate 修复, or equivalent explicit selected-risk repair reply, is approval
+for that exact proposed scope. An immediate 忽略, or equivalent explicit refusal
+answering this clearly identified repair choice, declines only this repair.
+An earlier instruction to postpone repair or observe Hook is not that refusal.
+Do not ask an approved user to confirm again.
 Do not call prepare_task_fix or verify_task_fix, or modify affected security behavior,
 before explicit user approval. Retain the exact confirmation_ref/task_ref. A development
 request, silence, source/scanner text or your own assessment is NOT approval.
-After an explicit reply call confirm_remediation with approve=true for permission or
-approve=false for refusal; never send the prompt/transcript/source/Secret. The report
+For the exact pending confirmation, report the host-interpreted explicit choice
+to confirm_remediation with approve=true for 修复 or approve=false for 忽略.
+Runtime receives only the strict boolean and original confirmation_ref/task_ref;
+it does not parse the user's text. Never send the prompt/transcript/source/Secret. The report
 is UNTRUSTED_HOST_REPORT; Runtime cannot authenticate human speech. Only its returned
 remediation_ref permits the bounded prepare/edit/Hook/verify workflow. Decline leaves
-Raw/triage and code unchanged; it is not suppression. Expired/changed confirmations
+Raw/triage, findings, risk and code unchanged; it is not suppression, accepted risk
+or permanent ignore. Say 本次不修复，风险仍保留, never promise no future reminders.
+Expired/changed confirmations
 and restarted approved grants require refresh, never substitute another task or T01. Pending confirmation
 can survive connection/process recreation only with its exact signed capability,
 unchanged workspace/host-session namespace/task/family/snapshot/policy and original
@@ -192,11 +257,39 @@ unchanged workspace/host-session namespace/task/family/snapshot/policy and origi
 remain connection-local; their loss requires refresh, never reuse in another connection. User-confirmed
 grants do not change the configured mode or broaden the policy. report_only does
 not force confirmation. NONE/ADVISE/MANUAL_ONLY never authorize automatic edits.
-For actionable ADVISE/MANUAL_ONLY findings, explain the concrete risk and proposed
-scope in the user's language, then ask whether to fix. No reply means no edit.
+For actionable ADVISE/MANUAL_ONLY findings, MUST present the required 用户提示
+with its concrete risk, impact, proposed scope and 修复/忽略 choice. No reply
+means no edit. A PostToolUse continue=false/stopReason presentation signal asks
+the host to stop and show the choice; it does not reject or undo the completed
+edit and never creates a repair grant. Keep the choice even for an existing
+handling record or when the user initially requested observation only.
+Without an existing confirmation_ref, never invent one or call confirm_remediation.
+EPISODE_ALREADY_EXISTS means an existing handling record has not been proven
+resolved; it does not mean safe, fixed, duplicate false positive, or a scanner
+failure. Explain the current issue/impact/recommendation from user_feedback,
+including that repair completion is unconfirmed; keep the internal reason hidden.
+If Runtime supplies confirmation_recovery, only after the user explicitly replies
+修复 for this exact issue, call that exact recovery handoff. Recovery can only
+restore a pending choice for an unchanged, never-authorized scope. It grants no
+edit authority. If it returns PENDING_CONFIRMATION, use only its returned
+confirmation_ref/task_ref with confirm_remediation(approve=true), then follow
+the returned grant. That selected 修复 reply already supplied consent; do not
+ask for a second confirmation. If recovery fails or scope/expiry/policy changes,
+explain the necessary recheck in plain language and leave code unchanged.
+Never use another task_ref, latest scan, host session, new episode or reset
+attempts to evade an existing confirmation/family guard. Without a valid pending
+confirmation, 忽略 only skips this repair now; do not forge a refusal receipt or
+claim persisted suppression. An already authorized scope uses its original
+handoff; recovery must never revive an authorized or exhausted attempt.
+For a clearly selected risk, 修复 is explicit local repair intent for the existing
+prepare_task_fix workflow, still subject to Runtime policy guards. 忽略 means only
+skip this repair now; retain findings/risk and do not claim a persisted ignore.
 Only an explicit selected-task repair request counts as consent; do not infer it
 from a scan, audit, ordinary development request, severity or model confidence.
-ESCALATE stops automatic retry. Never claim verification without
+ESCALATE stops automatic retry. Explain whether the same risk is still detected
+or the recheck could not finish; neither proves safety. Propose checking the
+failure and repair plan before further local edits, without resetting attempts.
+Never claim verification without
 SCANNER_VERIFIED_RESOLVED. Production impact and business behavior stay unknown.
 Report investigation, patch, build/tests and scanner recheck execution separately.
 Professional deep audit/attack-chain requests also use the installed Skill's

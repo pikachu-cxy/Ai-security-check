@@ -4,6 +4,7 @@ import subprocess
 import re
 import tempfile
 from pathlib import Path
+from .dependency_inputs import is_dependency_input
 
 
 class GitError(RuntimeError):
@@ -47,17 +48,20 @@ class GitService:
             return [f for f in self._paths("ls-files", "--cached", "--others", "--exclude-standard", '-z') if not f.startswith(".security-runtime/")]
         if mode == "feature":
             base = self._base()
-            committed = self._paths("diff", "--name-only", '-z', "--diff-filter=ACMR", f"{base}...HEAD")
+            committed = self._paths("diff", "--name-only", '-z', '--no-renames', "--diff-filter=ACMRD", f"{base}...HEAD")
         else:
             committed = []
-        diff_args = ["diff", "--name-only", '-z', "--diff-filter=ACMR"]
+        diff_args = ["diff", "--name-only", '-z', '--no-renames', "--diff-filter=ACMRD"]
         if staged:
             diff_args.append("--cached")
         changed = self._paths(*diff_args)
+        deleted_from_index = set(self._paths('diff', '--cached', '--name-only', '-z', '--no-renames', '--diff-filter=D')) if staged else set()
         if not staged:
-            changed += self._paths("diff", "--cached", "--name-only", '-z', "--diff-filter=ACMR")
+            changed += self._paths("diff", "--cached", "--name-only", '-z', '--no-renames', "--diff-filter=ACMRD")
             changed += self._paths("ls-files", "--others", "--exclude-standard", '-z')
-        return sorted({f for f in committed + changed if not f.startswith(".security-runtime/") and (staged or (self.root / f).is_file())})
+        return sorted({f for f in committed + changed if not f.startswith(".security-runtime/")
+                       and (is_dependency_input(f) or
+                            (f not in deleted_from_index and (staged or (self.root / f).is_file())))})
 
     def changed_lines(self, files: list[str], mode: str, staged: bool = False) -> dict[str, set[int]]:
         result: dict[str, set[int]] = {}

@@ -1,15 +1,19 @@
 # AI Security Runtime
 
+当前状态与下一步：[开发进度](docs/DEVELOPMENT_PROGRESS.md) ·
+[个人免费版与企业版规划](docs/PRODUCT_ROADMAP.md)。进度文档分别记录源码实现、隔离
+验证、当前原生包验收与待完成的真实桌面体验，不把规划写成已实现功能。
+
 **Windows 规则基础体验（R2.2）：** [安装与六步清单](docs/WINDOWS_EXPERIENCE.zh-CN.md)。
 通过配套 Security Review Skill 和现有 MCP，以自然语言扫描、核查、授权修复，
 再由原扫描器验证。主动核查不依赖 Hook，新包的 Desktop 行为需要亲自验收。
 当前工作补齐 Java/JavaScript/TypeScript 规则基础。Release 与 CI 工作继续暂停，
 此本地构建不代表 Release 发布。
 
-Rule Program v1 以 Capability 为产品口径：10 个检测能力，其中 2 个 CORE、8 个
-VALIDATED；第一方规则包 1.2.0 包含 24 个 Java capability-owned Semgrep variants、
-40 个已安装 Semgrep rules、8 个默认关闭的 legacy Java EXPERIMENTAL rules、
-2 个既有 Python rules，以及 6 个共享 JavaScript/TypeScript advisory rules。
+Rule Program v1 以 Capability 为产品口径：25 个检测能力，其中 2 个 CORE、23 个
+VALIDATED；第一方规则包 1.3.0 包含 55 个 Semgrep rules，其中 47 个默认启用，
+包括 15 个 Python rules 和 6 个共享 JavaScript/TypeScript advisory rules；
+另有 8 个 legacy Java EXPERIMENTAL rules 默认关闭。
 详见 [本轮规则与体验边界](docs/RULE_FOUNDATION.md)、
 [Rule Program](docs/RULE_PROGRAM.md) 和 [覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)。
 
@@ -44,14 +48,14 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 
 产品按 Capability 描述能力，而不是按 YAML 文件数量描述产品：
 
-- 10 个检测能力：2 个 CORE、8 个 VALIDATED
-- 24 个 Java capability-owned Semgrep variants
-- 40 个已安装 Semgrep rules
+- 25 个检测能力：2 个 CORE、23 个 VALIDATED
+- 规则包 1.3.0：55 条已安装 SAST 规则，47 条默认开启
 - 8 个默认关闭的 legacy Java EXPERIMENTAL rules
-- 2 个既有 Python rules
+- 15 条 Python 规则
 - 6 个默认启用的共享 JavaScript/TypeScript advisory rules
 
-当前 Java 能力：
+以下 Java 基础能力表是当前目录的一个子集；最新源码数量与待补能力见
+[开发进度](docs/DEVELOPMENT_PROGRESS.md)：
 
 | 能力 | 成熟度 |
 | --- | --- |
@@ -94,15 +98,35 @@ winget install --id PikachuCXY.AISecurityRuntime -e
 brew install pikachu-cxy/tap/ai-security-runtime
 ```
 
-Standalone Runtime 自带运行环境。第一次扫描会按需准备独立的 Semgrep、
-Gitleaks、Trivy 和数据库，不要求用户安装 Python、pip 或 venv。
-项目扫描仍使用 Git，请进入自己的 Git 项目后执行：
+Standalone Runtime 自带运行环境。Codex 安装和升级会统一准备兼容的检查工具、
+随产品发布的规则和当前可用的漏洞数据，不要求用户安装 Python、pip 或 venv。
+进入自己的 Git 项目后执行：
 
 ```text
 security-check --version
 security-check doctor
 security-check scan --mode quick
 ```
+
+### Codex 安装与升级
+
+首次安装、更新产品或重试未完成的准备，都使用同一个入口。更新时使用新产品包中的程序：
+
+```powershell
+security-check install codex
+```
+
+产品会协同安装全局连接和 Skill，检查随包发布的规则，准备经过产品验证的默认工具版本，并更新缺失或过期的漏洞数据。兼容且有效的本地缓存会复用；工具不会盲目升级到第三方的最新版本。准备内容保存在产品的用户级目录中，不会安装受保护项目的依赖或运行项目代码。可选的备用检查工具仍按需准备。
+
+“配置已安装”和“检查已就绪”分别验收。下载或验证失败时，程序会明确说明保护尚未就绪，并返回非零退出码（2）；已经安装的连接和 Skill 可以保留。处理提示中的网络或缓存问题后，重新运行 `security-check install codex` 即可，不需要日常分别维护内部工具。安装完成后，仍需重启宿主加载连接，并按宿主提示审核 Hook 信任。
+
+离线安装使用：
+
+```powershell
+security-check install codex --offline
+```
+
+离线模式只验证并复用本机兼容的工具、规则和未过期的漏洞数据；缺失、损坏或过期时会明确说明准备未完成。`security-check setup codex` 只配置连接和 Skill，不下载工具，也不证明检查已就绪。快速依赖检查和自动 Hook 继续使用本地离线数据。当前版本在安装、升级或重跑安装时刷新漏洞数据，尚未提供后台定期更新服务。
 
 ### 第 3 步：进入你的项目开始使用
 
@@ -120,7 +144,7 @@ security-check doctor
 security-check scan --mode quick
 ```
 
-第一次扫描可能会自动准备 Gitleaks、Trivy 等安全工具。
+Codex 用户在安装或升级时统一准备检查工具和漏洞数据；其他允许联网的手动扫描也可以按计划准备所需工具。
 
 你不需要自己下载安装这些 Scanner。
 
@@ -208,7 +232,7 @@ security-check doctor
 security-check scan --mode quick
 ```
 
-扫描只准备本次计划选中的工具。quick 无变更时不下载任何引擎；quick 不准备 Trivy 或漏洞数据库。下载内容在执行前校验，不需要修改系统 PATH。
+Codex 安装会提前统一准备默认工具和漏洞数据；其他允许联网的扫描流程只准备本次计划选中的工具。quick 无变更时不下载任何引擎；仅修改普通源码时，不重复执行依赖检查。新增、修改或删除依赖清单／锁文件时，quick 会使用本地工具和漏洞数据检查受影响范围内当前的依赖输入。依赖工具或数据缺失、过期时，会明确提示检查未完成；Codex 用户可重跑产品安装统一刷新。允许下载的工具准备流程会在执行前校验内容，不需要修改系统 PATH。
 
 一次正常的测试应该能够：
 
@@ -231,9 +255,13 @@ security-check scan --mode feature
 security-check scan --mode release
 ```
 
-- **quick**：扫描当前修改和未跟踪文件，适合开发过程中快速检查。
-- **feature**：扫描当前分支相对 main/master 的差异以及本地修改。
+- **quick**：扫描当前修改和未跟踪文件；依赖清单或锁文件发生变化时，也检查相关依赖。
+- **feature**：扫描当前分支相对 main/master 的差异以及本地修改；同样按依赖输入变化触发依赖检查。
 - **release**：扫描项目中已跟踪和未跟踪文件，适合更完整的发布前检查。
+
+自动 Hook 也按依赖输入变化触发检查。它保持本地离线执行，不会自动安装项目依赖、运行包管理器或构建项目。所需本地工具或漏洞数据缺失时，会明确提示依赖检查未完成；这不表示依赖没有漏洞。普通 CLI 的 quick、feature 和 staged 仍要求 Git，自动 Hook 的普通源码目录支持保持不变。
+
+依赖输入包括 Python 的 `requirements.txt`、`pyproject.toml`、`poetry.lock`、`Pipfile.lock`，JavaScript 的 `package.json`、`package-lock.json`、`pnpm-lock.yaml`、`yarn.lock`，Java 的 `pom.xml`、`build.gradle`、`build.gradle.kts`、Gradle 锁文件，以及 Go 的 `go.mod`、`go.sum`。文件被识别不代表已经获得完整依赖图；具体覆盖以检查器返回的有效依赖清单为准。删除清单会触发重新评估剩余输入，不会据此宣称运行环境中的依赖已移除。
 
 ---
 
@@ -522,6 +550,8 @@ security-check mcp config --copy
 
 ### 托管安全工具
 
+Codex 用户通过 `security-check install codex` 统一安装或更新产品。以下底层命令用于诊断或高级组件管理：
+
 ```bash
 security-check tools status
 security-check tools install --all
@@ -616,8 +646,8 @@ Release / CI — 暂停，不代表创建 tag 或发布 Release
 ```
 
 R0 synthetic corpus 不是生产准确率结论。VALIDATED 能力在升级为 CORE 前，仍需要
-更广泛语料和独立复核。R1 Benchmark 评估发现大量分析限制，maturity 仍为
-2 CORE、8 VALIDATED；复杂跨函数和 wrapper 数据流仍受限。范围与限制见
+更广泛语料和独立复核。R1 Benchmark 评估发现大量分析限制，不能把其结果直接用于
+当前 2 CORE、23 VALIDATED 能力的质量结论；复杂跨函数和 wrapper 数据流仍受限。范围与限制见
 [Rule Program](docs/RULE_PROGRAM.md)。
 
 ---
@@ -660,7 +690,7 @@ security-check doctor --path <project>
 
 ### 某个 Scanner 不可用
 
-正常扫描会自动准备需要的 Managed Tools。
+Codex 用户重新运行 `security-check install codex`，即可统一准备默认工具和漏洞数据。允许联网的手动扫描也可按计划准备工具；自动 Hook 和快速依赖检查只复用本机数据。
 
 查看状态：
 
@@ -668,7 +698,7 @@ security-check doctor --path <project>
 security-check tools status
 ```
 
-手动准备全部工具：
+高级组件诊断可单独准备工具：
 
 ```bash
 security-check tools install --all

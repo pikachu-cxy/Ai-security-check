@@ -53,18 +53,20 @@ class GlobalWorkspaces:
     def _child(root, directory, binding):
         from .mcp_server import create_server
         from .runtime import SecurityRuntime
-        from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
+        from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+        from .osv import OSVDependencyAdapter
         from .toolchain import ToolManager
         from .storage import SQLiteStore
         from .hook_runtime import HookCoordinator
         from .remediation import RemediationService
         from .remediation_policy import RemediationConfig
         manager = ToolManager()
-        registry = ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager)],
-                                   tool_manager=manager, fallback_adapters=[])
+        registry = ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager), TrivyAdapter(manager)],
+                                   tool_manager=manager, fallback_adapters=[OSVDependencyAdapter(manager)])
         store = SQLiteStore(directory / 'scans.db')
         # Explicit manual MCP operations retain the existing full registry.
-        # Only Core Hook execution uses the bounded SAST/Secret registry.
+        # Hook dependency checks are selected only for changed dependency inputs
+        # and remain offline, without preparing tools/data or building targets.
         runtime = SecurityRuntime(ScannerRegistry(tool_manager=manager), store)
         hook_runtime = SecurityRuntime(registry, store)
         is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git
@@ -194,15 +196,19 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
     if claims is not None:
         data.update(claims)
         data['scanner_skipped_reason'] = reason
-    text = {'continue': True, 'systemMessage': 'AI Security Runtime: ' + reason + '. Readiness is not a security verdict.'}
+    from .integration_readiness import readiness_message
+    message = {
+        'WORKSPACE_INITIALIZING': readiness_message('INITIALIZING'),
+        'WORKSPACE_DEGRADED': readiness_message('DEGRADED'),
+        'WORKSPACE_ERROR': readiness_message('ERROR'),
+        'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE': '缺少改动前的检查记录，暂时无法确定风险是否由本次改动引入。当前结果不能证明改动安全。',
+    }.get(reason, '本次安全检查未完成，暂时无法确认改动是否安全。建议先检查工具连接和项目设置。')
+    text = {'continue': True, 'systemMessage': message}
     if recovery is not None:
         data['configuration_recovery'] = recovery
         text['systemMessage'] += ' ' + recovery['message']
         if recovery.get('question'):
             text['systemMessage'] += ' ' + recovery['question']
-    if claims is not None and claims['host_claim_status'] != 'VALID':
-        text['systemMessage'] += (' Missing: ' + ','.join(claims['missing_claims'])
-                                 + '; invalid: ' + ','.join(claims['invalid_claims']) + '.')
     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(text))])
 
 
@@ -328,12 +334,13 @@ def create_global_server(*, workspaces=None):
                             reconciliation_reason='NO_TRUSTED_PRE_EDIT_SNAPSHOT')
                 readiness = pool.bootstrap(root, arguments['session_id'])
                 if normalized.kind == EventKind.SESSION_START:
+                    from .integration_readiness import readiness_message
                     data = {'status': readiness['status'], 'readiness_status': 'READINESS_OBSERVED',
                             'workspace_id': identity(os.path.normcase(str(root))),
                             'workspace_readiness': readiness, 'security_proof': False}
                     data.update(claim_diag)
                     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps({
-                        'continue': True, 'systemMessage': 'AI Security Runtime workspace: ' + readiness['status'] + '. No security verdict.'}))])
+                        'continue': True, 'systemMessage': readiness_message(readiness['status'])}))])
                 if readiness['status'] != 'READY':
                     # SessionStart may be missed while MCP is connecting. A
                     # mutation Hook can retry the bounded bootstrap; if it is

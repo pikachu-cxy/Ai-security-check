@@ -1,5 +1,10 @@
 # Java / JavaScript / TypeScript rule foundation
 
+This document preserves the earlier Java foundation milestone and its evidence.
+Its release counts are historical; current catalog counts and acceptance status
+are recorded in the source repository's
+[development progress](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/DEVELOPMENT_PROGRESS.md).
+
 This is a local experience milestone, not a Release or production-accuracy
 claim. Runtime application version remains 0.3.1. The independent
 `ai-security-core` rule pack is 1.2.0 and Rule Program mapping is 1.1.0.

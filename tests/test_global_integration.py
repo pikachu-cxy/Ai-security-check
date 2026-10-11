@@ -364,6 +364,55 @@ def test_legacy_format_upgrade_uses_shared_ownership(installed):
     assert installed.execute('repair')['operation'] == 'ALREADY_CONFIGURED'
 
 
+@pytest.mark.parametrize('scope', ['global', 'project'])
+def test_signed_english_hook_labels_upgrade_without_losing_ownership(installed, projects, monkeypatch, scope):
+    """Old signed label fingerprints remain owned during the explicit upgrade."""
+    from security_runtime import codex_integration, global_integration
+    previous = copy.deepcopy(product_hooks())
+    labels = {
+        'PostToolUse': 'AI Security Runtime [codex-integration-v0.2]',
+        'SessionStart': 'AI Security Runtime [readiness-v0.3]',
+        'Stop': 'AI Security Runtime [continuation-guard-v0.1]',
+    }
+    for event, label in labels.items():
+        previous['hooks'][event][0]['hooks'][0]['statusMessage'] = label
+    root = projects[0]
+    owner = installed if scope == 'global' else installed.legacy_adapter
+    owner_root = installed.home if scope == 'global' else root
+    with monkeypatch.context() as old_code:
+        old_code.setattr(codex_integration, 'product_hooks', lambda: copy.deepcopy(previous))
+        old_code.setattr(global_integration, 'product_hooks', lambda: copy.deepcopy(previous))
+        if scope == 'global':
+            installed.execute('setup', root)
+        else:
+            installed.legacy_adapter.setup(root)
+    key_path = owner._state_path(owner_root, 'snapshot.key')
+    signed_identity = key_path.read_bytes()
+    hook_path = owner._config_paths(owner_root)[1] if scope == 'global' else root / '.codex/hooks.json'
+    document = json.loads(hook_path.read_bytes())
+    extra = {'type': 'command', 'command': 'user hook keep'}
+    document['hooks']['Stop'][0]['hooks'].append(extra)
+    hook_path.write_text(json.dumps(document), encoding='utf-8')
+
+    if scope == 'global':
+        status = installed.configuration_status()
+        assert status['ownership'] == GLOBAL
+        assert status['overall'] == 'DEGRADED' and 'HOOK_MISSING' in status['diagnostics']
+        assert 'POTENTIAL_DUPLICATE_HOOK' not in status['diagnostics']
+    upgraded = installed.execute('repair', root)
+    assert upgraded['overall'] == 'CONFIGURED'
+    assert key_path.read_bytes() == signed_identity
+    current = json.loads((installed.home / 'hooks.json').read_bytes())
+    for event, groups in product_hooks()['hooks'].items():
+        assert sum(group == groups[0] for group in current['hooks'][event]) == 1
+    if scope == 'global':
+        assert any(extra in group['hooks'] for group in current['hooks']['Stop'])
+    else:
+        assert upgraded['migration']['status'] == 'MIGRATED'
+        assert json.loads(hook_path.read_bytes())['hooks']['Stop'][0]['hooks'] == [extra]
+    assert installed.execute('repair', root)['operation'] == 'ALREADY_CONFIGURED'
+
+
 def test_subdirectory_user_override_preserved(installed, projects):
     sub = projects[0] / 'src'; folder = sub / '.codex'; folder.mkdir()
     (folder / 'config.toml').write_text('[mcp_servers.user]\ncommand="user"\n')
@@ -544,7 +593,8 @@ def test_manual_runtime_keeps_full_registry_while_hook_stays_core(installed, pro
         from security_runtime.scanners import ScannerRegistry
         assert manual_names == {a.name for a in ScannerRegistry().adapters}
         assert len(manual_names) > len(hook_names)
-        assert hook_names == {'semgrep', 'gitleaks'}
+        assert hook_names == {'semgrep', 'gitleaks', 'trivy-vuln'}
+        assert {a.name for a in core.runtime.registry.fallback_adapters} == {'osv-scanner'}
         assert instances[0].store.path == core.runtime.store.path
         assert child._tool_manager.get_tool('scan_project') is not None
     finally: pool.close()

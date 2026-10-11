@@ -108,8 +108,14 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
 def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
     """Only our own executable is probed, never an arbitrary config command."""
     command = [runtime['command'], *runtime['prefix']]
+    # Global first-install/status probes may precede creating validated Codex
+    # home. Keep project workspace and mismatched destination failures intact.
+    missing_global_home = (not root.exists() and root.is_absolute()
+        and env.get('SECURITY_RUNTIME_GLOBAL') == '1'
+        and env.get('SECURITY_RUNTIME_CODEX_HOME') == str(root))
+    probe_cwd = Path(runtime['command']).absolute().parent if missing_global_home else root
     try:
-        result = run_process([*command, 'runtime-info', '--json'], cwd=root, env=env, timeout=30, max_output=65536)
+        result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=30, max_output=65536)
     except FileNotFoundError:
         raise IntegrationDiagnostic('RUNTIME_MISSING') from None
     except PermissionError:
@@ -134,7 +140,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
         from mcp.client.stdio import stdio_client
         # Never route child errors/config contents to CLI output or logs.
         with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
-            params = StdioServerParameters(command=runtime['command'], args=[*runtime['prefix'], 'mcp'], env=env, cwd=str(root))
+            params = StdioServerParameters(command=runtime['command'], args=[*runtime['prefix'], 'mcp'], env=env, cwd=str(probe_cwd))
             async with stdio_client(params, errlog=errors) as (reader, writer):
                 async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=20)) as session:
                     await session.initialize()
@@ -167,22 +173,22 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
 
 
 def product_hooks() -> dict:
-    # Definitions are stable between explicit event-contract upgrades. P0-7.3
-    # adds invocation claims; its changed definition needs one new trust review.
+    # User-visible labels are part of the owned definition fingerprint. Upgrades
+    # retain prior signed records and require the Host's normal trust review.
     result = codex_mcp_hook_config()
-    result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = 'AI Security Runtime [codex-integration-v0.2]'
+    result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = '检查本次改动的安全风险'
     result['hooks']['SessionStart'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_readiness_event',
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}', 'session_id': '${session_id}',
                   'permission_mode': '${permission_mode}'},
-        'timeout': 30, 'statusMessage': 'AI Security Runtime [readiness-v0.3]',
+        'timeout': 30, 'statusMessage': '准备项目安全检查',
     }]}]
     result['hooks']['Stop'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_stop_event',
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}',
                   'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}',
                   'turn_id': '${turn_id}', 'permission_mode': '${permission_mode}'},
-        'timeout': 30, 'statusMessage': 'AI Security Runtime [continuation-guard-v0.1]',
+        'timeout': 30, 'statusMessage': '检查风险处理进度',
     }]}]
     return result
 

@@ -9,7 +9,7 @@ class ScannerPlanner:
 
     def plan(self, profile: TargetProfile, context: ScanContext) -> tuple[ScanPlan, list[ScannerAdapter]]:
         available = {capability for adapter in self.registry.adapters for capability in adapter.capabilities}
-        wanted = requested_capabilities(profile, context.mode, context.files, available)
+        wanted = requested_capabilities(profile, context.mode, context.capability_files(), available)
         capabilities = CapabilityRegistry(self.registry)
         selected = [adapter for adapter in self.registry.adapters
                     if getattr(adapter,'provider_role','PRIMARY') != 'FALLBACK'

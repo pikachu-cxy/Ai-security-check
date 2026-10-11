@@ -253,9 +253,74 @@ def test_reconnected_closed_remediation_preserves_security_but_cycle_unknown(set
     resolve(setup)
     from security_runtime.remediation import RemediationService
     service = setup[3]
+    path = service.state.path(setup[0], 'codex', 'session')
+    saved = path.read_bytes()
+    scanner_calls = len(setup[2].calls)
     reconnected = RemediationService(service.store, registry=service.registry, hooks=service.hooks)
     values = args(setup)
     output = reconnected.verify(values['remediation_ref'], values['task_ref'], setup[0])
-    assert output['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert output['verification_status'] == 'SCANNER_VERIFIED_RESOLVED', output.get('reason_code')
     assert output['remediation_cycle_measurement']['status'] == 'UNKNOWN'
     assert output['remediation_cycle_wall_ms'] is None
+    assert output['proof_source'] == 'SAVED_SCANNER_PROOF'
+    assert not any(output['runtime_observed_execution'].values())
+    assert not reconnected.authorized and not reconnected.prepared
+    assert path.read_bytes() == saved and len(setup[2].calls) == scanner_calls
+
+
+@pytest.mark.parametrize('changed,reason', [
+    ('workspace_id', 'RECEIPT_WORKSPACE_ID_MISMATCH'),
+    ('episode_id', 'RECEIPT_EPISODE_ID_MISMATCH'),
+    ('task_ref_hash', 'RECEIPT_TASK_REF_HASH_MISMATCH'),
+    ('scope_hash', 'RECEIPT_SCOPE_MISMATCH'),
+    ('resolved_scan_hash', 'RECEIPT_RESOLVED_SCAN_MISMATCH'),
+    ('snapshot', 'RECEIPT_SNAPSHOT_MISMATCH'),
+    ('scan_missing', 'RESOLVED_SCAN_NOT_FOUND'),
+    ('source', 'SOURCE_OR_PRESERVATION_CHANGED')])
+def test_reconnected_closed_proof_rejects_changed_provenance_without_new_authority(setup, changed, reason):
+    from security_runtime.remediation import RemediationService
+    resolve(setup)
+    root, _, provider, service, _, _ = setup
+    path = service.state.path(root, 'codex', 'session')
+    key = service.state.key(root)
+    rows = service._read(path, key)
+    record = next(iter(rows.values()))
+    if changed == 'snapshot':
+        record['resolution']['snapshot_digest'] = '0' * 64
+    elif changed == 'scan_missing':
+        record['resolution']['hook_scan_id'] = 'scan-missing'
+    elif changed == 'source':
+        root.joinpath('A.java').write_text(FIXED.replace('1000', '9999'))
+    else:
+        record['resolution']['binding'][changed] = '0' * 64
+    service._save(path, rows, key)
+    saved, calls = path.read_bytes(), len(provider.calls)
+    reconnected = RemediationService(service.store, registry=service.registry, hooks=service.hooks)
+    values = args(setup)
+    output = reconnected.verify(values['remediation_ref'], values['task_ref'], root)
+    assert output['verification_status'] == 'INCONCLUSIVE'
+    assert output['reason_code'] == reason
+    assert not reconnected.authorized and not reconnected.prepared
+    assert path.read_bytes() == saved and len(provider.calls) == calls
+
+
+@pytest.mark.parametrize('claims', [{'tests_run': 'yes'}, {'unapproved_command': True}])
+def test_saved_proof_keeps_host_report_validation(setup, claims):
+    resolve(setup)
+    values = args(setup)
+    output = setup[3].verify(values['remediation_ref'], values['task_ref'], setup[0],
+                             host_reported_execution=claims)
+    assert output['verification_status'] == 'INCONCLUSIVE'
+    assert output['reason_code'] == 'REMEDIATION_VERIFICATION_INCONCLUSIVE'
+
+
+def test_saved_proof_separates_host_claims_from_actual_execution(setup):
+    resolve(setup)
+    values = args(setup)
+    claims = {'patch_applied': True, 'target_build': True, 'tests_run': True}
+    output = setup[3].verify(values['remediation_ref'], values['task_ref'], setup[0],
+                             host_reported_execution=claims)
+    assert output['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert output['host_reported_execution']['claims'] == claims
+    assert output['host_reported_execution']['trust'] == 'UNTRUSTED_HOST_REPORT'
+    assert not any(output['runtime_observed_execution'].values())

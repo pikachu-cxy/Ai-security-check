@@ -12,7 +12,7 @@ def test_ambiguous_continuation_is_not_repair_approval():
     from security_runtime.review_skill import skill_files
     assert 'is analysis, not repair' in HOST_INSTRUCTIONS
     assert 'approval. Clarify whether to fix before editing' in HOST_INSTRUCTIONS
-    assert 'For explicit fix intent 修复它/把它修掉/修第一项' in HOST_INSTRUCTIONS
+    assert 'For explicit fix intent 修复/修复它/把它修掉/修第一项' in HOST_INSTRUCTIONS
     skill = skill_files()['SKILL.md'].decode('utf-8')
     assert "'处理这个问题' is not repair approval" in skill
     assert 'Silence is never approval' in skill

@@ -271,8 +271,8 @@ def test_help_and_version(capsys):
     with pytest.raises(SystemExit) as exit_info:
         main(["--help"])
     assert exit_info.value.code == 0
-    help_text = capsys.readouterr().out
-    for text in ("Check Runtime", "Scan code changes", "AI coding tool", "MCP server", "Manage security engines"):
+    help_text = ' '.join(capsys.readouterr().out.split())
+    for text in ("Check Runtime", "Scan code changes", "AI coding integrations", "MCP server", "Manage security engines"):
         assert text in help_text
     with pytest.raises(SystemExit) as exit_info:
         main(["--version"])

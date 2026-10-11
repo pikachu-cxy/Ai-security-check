@@ -45,6 +45,49 @@ does not prove application compatibility. Desktop behavior needs user acceptance
 
 ## Install or upgrade
 
+### One product operation for Codex
+
+In the trusted new package's `security-check` directory, use the same command
+for an initial installation, product upgrade or preparation retry:
+
+```powershell
+.\security-check.exe install codex
+```
+
+The command installs the Runtime, global connection and companion Skill,
+verifies bundled rules, prepares product-tested default engine versions and
+refreshes missing or expired vulnerability data. Valid compatible caches are
+reused; optional fallback engines remain on demand. Preparation uses the
+Runtime's per-user storage and does not install dependencies or execute code
+from the protected project.
+
+Configuration and scanning readiness are separate. If tools or data cannot be
+prepared, the installed configuration and previous usable cache remain, but the
+command reports protection is not ready and returns nonzero exit code 2. Resolve
+the reported problem and repeat `install codex`. Plain `setup codex` only
+configures the connection and Skill; it does not download engines or establish
+scanning readiness.
+
+```powershell
+.\security-check.exe install codex --offline
+```
+
+Offline installation only verifies and reuses compatible local engines, bundled
+rules and unexpired vulnerability data. Missing, damaged or expired assets are
+reported as incomplete preparation. This release refreshes data during product
+installation or a repeated install; background periodic data updates are not
+implemented. Quick dependency checks and automatic Hooks remain offline.
+Successful preparation does not mean a project was scanned, a repair was
+authorized or Desktop loaded its connection. Download permission and isolated
+tests are not proof of actual downloads on the deployment machine. Fully quit
+and restart Codex, and review Hook trust when the host asks.
+
+### Historical manual migration and advanced steps
+
+The `rule-foundation` package below is a historical build. Use `install codex`
+above for current packages; these lower-level delivery and configuration steps
+do not perform the complete product preparation operation.
+
 The archive is `ai-security-runtime-v0.3.1-rule-foundation-windows-x64.zip`.
 After extraction, open PowerShell in its **`security-check` subdirectory**, which
 contains `security-check.exe` and `version.json`. If PowerShell is in the outer

@@ -12,7 +12,8 @@ from security_runtime.personal_install import CONTRACT
 
 def receipt(ready=True):
     return {'overall': 'CONFIGURED' if ready else 'BROKEN',
-            'installation': {'contract': CONTRACT, 'local_files_ready': ready}}
+            'installation': {'contract': CONTRACT, 'local_files_ready': ready,
+                             'scan_ready': ready}}
 
 
 def test_start_is_flushed_before_installation_work(monkeypatch, capsys):

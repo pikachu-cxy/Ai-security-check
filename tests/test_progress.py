@@ -158,7 +158,7 @@ def test_data_preparation_events(tmp_path,state):
 def test_ready_database_quiet(tmp_path):
     manager=ToolManager(root=tmp_path)
     events=[]
-    with patch.object(manager,'database_status',return_value='READY'),progress_context(ProgressReporter(events.append)):
+    with patch.object(manager,'database_freshness',return_value={'status':'FRESH'}),progress_context(ProgressReporter(events.append)):
         assert manager.prepare_trivy_database('trivy')=='READY'
     assert events==[]
 
@@ -306,7 +306,7 @@ def test_cli_keyboard_interrupt_no_traceback(capsys):
     with patch('security_runtime.cli.SecurityRuntime.scan',side_effect=KeyboardInterrupt()),patch('security_runtime.cli.configure_logging'):
         assert main(['scan','--no-progress'])==130
     output=capsys.readouterr()
-    assert output.out=='' and '扫描已取消' in output.err and 'Traceback' not in output.err
+    assert output.out=='' and '操作已取消' in output.err and 'Traceback' not in output.err
 
 
 def test_ctrl_c_interrupts_waiting_cli_worker(tmp_path,capsys):
@@ -326,7 +326,7 @@ def test_ctrl_c_interrupts_waiting_cli_worker(tmp_path,capsys):
             timer.cancel();timer.join(timeout=1)
     assert time.monotonic()-start<2
     output=capsys.readouterr()
-    assert '扫描已取消' in output.err and 'Traceback' not in output.err and output.out==''
+    assert '操作已取消' in output.err and 'Traceback' not in output.err and output.out==''
 
 
 def test_download_completion_restores_preparation_heartbeat():

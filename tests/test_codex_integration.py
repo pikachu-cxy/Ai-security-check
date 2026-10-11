@@ -88,7 +88,7 @@ def test_setup_never_resets_mode(adapter, repo, mode):
     from security_runtime.remediation_policy import RemediationConfig
     preferences = RemediationConfig(); preferences.write(mode)
     before = preferences.path.read_bytes()
-    assert call(adapter, repo)['mode'] == mode
+    assert call(adapter, repo)['mode'] == ('ask_before_fix' if mode == 'smart_auto' else mode)
     assert preferences.path.read_bytes() == before
 
 
@@ -102,7 +102,7 @@ def test_status_readonly_missing_configured_observed_stale(adapter, repo):
     assert output['cold_start_host_trial'] == 'PENDING_ACTUAL_DESKTOP'
     raw = json.dumps(output)
     assert str(repo) not in raw and str(adapter.store.directory) not in raw
-    assert 'security scan' in observe(adapter, repo)['systemMessage']
+    assert '连接成功不代表项目已经通过安全检查' in observe(adapter, repo)['systemMessage']
     adapter.now = lambda: time.time() + 901
     assert call(adapter, repo, 'status')['readiness']['status'] == 'READINESS_STALE'
 

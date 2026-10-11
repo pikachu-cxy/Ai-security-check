@@ -12,6 +12,17 @@ from .hook_state import atomic_bytes, identity, no_links
 from .integration_lifecycle import IntegrationDiagnostic
 
 
+def readiness_message(status):
+    """Fixed user copy; lifecycle metadata never becomes a security verdict."""
+    messages = {
+        'INITIALIZING': '正在准备安全检查，结果尚未就绪。完成前，暂时无法确认本次改动是否安全。',
+        'READY': '安全检查工具已连接。连接成功不代表项目已经通过安全检查。',
+        'DEGRADED': '安全检查暂时无法完整开展，当前结果不能证明改动安全。建议先检查工具连接和配置。',
+        'ERROR': '安全检查准备失败，暂时无法确认本次改动是否安全。建议先检查工具连接和配置。',
+    }
+    return messages.get(status, '尚未确认安全检查工具已连接，当前结果不能证明改动安全。建议先检查工具连接和配置。')
+
+
 def handle_readiness(event, workspace_path, session_id, *, binding, tools, adapter=None):
     result = {'status': 'INCONCLUSIVE', 'host': 'codex', 'readiness': 'NOT_OBSERVED',
               'execution': {'scan': False, 'scanner_run': False, 'model': False, 'source_modified': False,
@@ -72,7 +83,6 @@ def handle_readiness(event, workspace_path, session_id, *, binding, tools, adapt
         result['diagnostic'] = exc.code
     except (ValueError, OSError, TypeError, KeyError, UnicodeError):
         result['diagnostic'] = 'READINESS_INCONCLUSIVE'
-    message = ('AI Security Runtime connection readiness observed. This is not a security scan.'
-               if result['status'] == 'READY' else 'AI Security Runtime readiness was not observed; integration repair may be needed.')
+    message = readiness_message(result['status'])
     result.update(systemMessage=message, hookSpecificOutput={'hookEventName': 'SessionStart', 'additionalContext': message})
     return result

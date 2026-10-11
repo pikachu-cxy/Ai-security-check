@@ -3,6 +3,11 @@
 This is the long-term handoff document for the AI Security Runtime. Read it
 first when resuming development.
 
+For the current public status and future priorities, start with
+[development progress](DEVELOPMENT_PROGRESS.md) and [product roadmap](PRODUCT_ROADMAP.md).
+The milestone receipts below describe their respective historical source/build
+scope; they do not certify the latest installation package or Desktop behavior.
+
 ## Current milestone
 
 - Installation efficiency and retention milestone (2026-10-11): personal setup

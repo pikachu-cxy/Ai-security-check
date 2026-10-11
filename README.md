@@ -1,5 +1,10 @@
 # AI Security Runtime
 
+Current status and next steps: [development progress](docs/DEVELOPMENT_PROGRESS.md)
+and [personal/free and enterprise roadmap](docs/PRODUCT_ROADMAP.md).
+The progress document distinguishes source implementation, isolated checks,
+current package acceptance and pending Desktop trials.
+
 **Windows rule-foundation experience (R2.2):** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
 Use natural language with the companion Security Review Skill and existing MCP to
 scan, review, fix an authorized task and verify with the original scanner. Explicit
@@ -7,10 +12,11 @@ review works without Hooks; new Desktop behavior requires personal acceptance.
 Current work adds the Java/JavaScript/TypeScript rule foundation. Release and CI
 work remain paused; this local build is not a published Release.
 
-Rule Program v1 is capability-led: 10 detection capabilities, 2 CORE and 8
-VALIDATED. First-party rule pack 1.2.0 contains 24 capability-owned Java Semgrep
-variants, 40 installed Semgrep rules, 8 legacy Java EXPERIMENTAL rules default-off,
-2 existing Python rules and 6 shared JavaScript/TypeScript advisory rules.
+Rule Program v1 is capability-led: 25 detection capabilities, 2 CORE and 23
+VALIDATED. First-party rule pack 1.3.0 contains 55 installed Semgrep rules,
+47 default-on, including 15 Python rules and 6 shared JavaScript/TypeScript rules.
+The 8 legacy Java EXPERIMENTAL rules remain default-off. These counts describe
+source coverage, not production accuracy or current Desktop acceptance.
 See the [rule foundation and limitations](docs/RULE_FOUNDATION.md),
 [Rule Program](docs/RULE_PROGRAM.md) and [coverage matrix](docs/RULE_COVERAGE_MATRIX.md).
 
@@ -45,14 +51,15 @@ Detection quality is being hardened against real-world and independently labelle
 
 The product speaks in capabilities rather than raw rule-file counts:
 
-- 10 detection capabilities: 2 CORE and 8 VALIDATED
-- 24 capability-owned Java Semgrep variants
-- 40 total installed Semgrep rules
+- 25 detection capabilities: 2 CORE and 23 VALIDATED
+- 55 total installed Semgrep rules in pack 1.3.0; 47 default-on
 - 8 legacy Java EXPERIMENTAL rules, default-off
-- 2 existing Python rules
+- 15 Python rules
 - 6 shared JavaScript/TypeScript advisory rules, default-on
 
-The current Java capabilities are:
+The historical Java foundation below is a subset of the current capability
+catalog; current source counts and known gaps are recorded in
+[development progress](docs/DEVELOPMENT_PROGRESS.md):
 
 | Capability | Maturity |
 | --- | --- |
@@ -97,9 +104,10 @@ winget install --id PikachuCXY.AISecurityRuntime -e
 brew install pikachu-cxy/tap/ai-security-runtime
 ```
 
-The standalone Runtime includes its Python runtime. On the first scan it prepares
-Semgrep in an isolated managed environment and downloads Gitleaks and Trivy as
-needed. No system Python, pip or venv is required. Run inside your Git project:
+The standalone Runtime includes its Python runtime. Codex installation and
+upgrades prepare the compatible security engines, bundled rules and current
+vulnerability data in one product operation. No system Python, pip or venv is
+required. Run inside your Git project:
 
 ```bash
 security-check --version
@@ -107,11 +115,48 @@ security-check doctor
 security-check scan --mode quick
 security-check setup cursor
 security-check setup workbuddy
-security-check setup codex --path .
+security-check install codex
 ```
 
 For Codex, see [setup and integration details](docs/CODEX_INTEGRATION.md). The
 current Global Runtime Integration status is **DESKTOP VERIFIED**.
+
+### Install or upgrade Codex protection
+
+Run the same command from the new Runtime package for an initial installation,
+upgrade, or preparation retry:
+
+```bash
+security-check install codex
+```
+
+The command installs the global connection and companion Skill, verifies the
+bundled rule pack, prepares the default engines at product-tested versions, and
+refreshes missing or expired vulnerability data. Valid compatible caches are
+reused; engines do not blindly follow the latest third-party release. Tool and
+data preparation stays in the Runtime's per-user storage and does not install
+dependencies or execute code from the protected project. Optional fallback
+engines remain on demand.
+
+Installation distinguishes configured files from scanning readiness. If a
+download or verification fails, configuration may already be installed, but the
+product reports that protection is not ready and exits with code 2. Retry
+`security-check install codex` after resolving the reported connection or cache
+problem; individual tool commands are advanced diagnostics, not a normal
+installation step. A completed install still requires the host to reload its
+connection and accept its own Hook trust prompt.
+
+```bash
+security-check install codex --offline
+```
+
+Offline installation only verifies and reuses local compatible engines, rules
+and unexpired vulnerability data. Missing, damaged or expired assets remain an
+explicit incomplete preparation result. `security-check setup codex` only
+configures the connection and Skill; it does not download tools or establish
+scanning readiness. Quick dependency checks and automatic Hooks remain offline.
+This release refreshes data during product installation or a repeated install;
+it does not yet provide a background data-update scheduler.
 
 ## 2. Run your first CLI scan
 
@@ -142,7 +187,7 @@ Then scan:
 security-check scan --mode quick
 ```
 
-Only engines selected by the scan plan are prepared. A quick scan with no changes downloads nothing; quick scans do not prepare Trivy or its database. Downloads are verified before use and do not require a system-wide PATH change.
+Codex installation prepares the default tools and vulnerability data before use. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against the remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; Codex users retry the product installation to refresh them. Downloads in permitted preparation flows are verified before use and do not require a system-wide PATH change.
 
 A successful test should:
 
@@ -165,9 +210,13 @@ security-check scan --mode feature
 security-check scan --mode release
 ```
 
-- **quick** — changed and untracked files; intended for fast development feedback.
-- **feature** — branch diff against main/master plus local changes.
+- **quick** — changed and untracked files; changed dependency manifests/lockfiles also trigger scoped dependency checks.
+- **feature** — branch diff against main/master plus local changes, with the same change-triggered dependency checks.
 - **release** — tracked and untracked project files for broader release review.
+
+Automatic Hooks also check changed dependency inputs, using local offline tools and data. They never install the target project's dependencies, run its package manager or build it. Missing local tools/data leave dependency coverage incomplete; they do not establish that dependencies are safe. CLI quick, feature and staged scans still require Git; automatic Hooks retain their existing source-directory support.
+
+Dependency discovery and planning share the recognized Python, JavaScript, Maven/Gradle and Go manifest/lockfile names. Filename recognition does not attest a complete resolved dependency graph: provider inventory and coverage evidence remain authoritative. Removing an input requests reevaluation of the remaining inventory; it does not prove that installed/runtime dependencies were removed.
 
 ---
 
@@ -454,6 +503,10 @@ security-check mcp config --copy
 
 ### Managed security tools
 
+Codex users install or update the product with `security-check install codex`.
+These lower-level commands are available for diagnostics and advanced tool
+management:
+
 ```bash
 security-check tools status
 security-check tools install --all
@@ -554,7 +607,8 @@ Release / CI — paused; no tag or Release is implied
 The R0 synthetic corpus is not a production accuracy claim. Broader corpus
 coverage and independent review are required before promoting VALIDATED
 capabilities to CORE. R1 Benchmark evaluation found substantial analysis
-limitations; maturity remains 2 CORE and 8 VALIDATED. See the
+limitations; those R1 results do not graduate the current 2 CORE and 23 VALIDATED
+capabilities. See the
 [Rule Program](docs/RULE_PROGRAM.md) for the supported scope and limitations.
 
 ---
@@ -599,7 +653,10 @@ security-check doctor --path <project>
 
 ### A scanner is missing
 
-Normal scans attempt to prepare required managed tools automatically.
+For Codex protection, repeat `security-check install codex` to prepare the
+product's default engines and vulnerability data together. Online manual scan
+flows can also prepare tools required by their scan plan; automatic Hooks and
+quick dependency checks only reuse local assets.
 
 Check status:
 
@@ -607,7 +664,7 @@ Check status:
 security-check tools status
 ```
 
-Prepare them explicitly:
+For advanced component diagnosis, prepare them explicitly:
 
 ```bash
 security-check tools install --all

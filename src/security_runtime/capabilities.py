@@ -4,6 +4,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 from .models import ScanMode, TargetProfile
+from .dependency_inputs import is_dependency_input
 
 
 class Capability(StrEnum):
@@ -31,13 +32,20 @@ DYNAMIC_CAPABILITIES = {Capability.MCP_SECURITY_DYNAMIC, Capability.AGENT_DYNAMI
 
 def requested_capabilities(profile: TargetProfile, mode: ScanMode, files: tuple[str, ...],
                            available: set[Capability] | None = None) -> set[Capability]:
+    """Select capabilities from validated changes, including deleted inputs.
+
+    In quick/feature mode ``files`` is the original changed-file inventory, not
+    every manifest discovered for context. This keeps source-only edits cheap
+    while retaining dependency checks when a deleted lockfile has disappeared
+    from the current target profile.
+    """
     result = set()
     if profile.languages:
         result.add(Capability.CODE_SAST)
     if files or mode == ScanMode.RELEASE:
         result.add(Capability.SECRET_SCAN)
-    manifest_names = {"requirements.txt", "pyproject.toml", "package.json", "package-lock.json", "Dockerfile", "pom.xml", "go.mod"}
-    if (mode == ScanMode.RELEASE and profile.ecosystems) or (mode == ScanMode.FEATURE and any(name.rsplit("/", 1)[-1] in manifest_names - {"Dockerfile"} for name in files)):
+    if ((mode == ScanMode.RELEASE and (profile.ecosystems or any(is_dependency_input(name) for name in files)))
+            or (mode in {ScanMode.QUICK, ScanMode.FEATURE} and any(is_dependency_input(name) for name in files))):
         result.add(Capability.DEPENDENCY_VULN)
     if mode != ScanMode.QUICK and any(name.rsplit("/", 1)[-1] == "Dockerfile" or name.endswith((".tf", ".yaml", ".yml")) for name in files):
         result.add(Capability.IAC_MISCONFIG)

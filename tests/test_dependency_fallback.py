@@ -174,7 +174,47 @@ def test_offline_reuses_installed_engine_and_local_data_without_network_flags(tm
         return ProcessResult(0,json.dumps(inventory()),'',1)
     with patch('security_runtime.osv.run_process',side_effect=execute),patch('urllib.request.urlopen',side_effect=AssertionError('network attempted')):
         _,run=adapter.scan(context,n)
-    assert run.status=='SUCCESS' and run.coverage_contract=='FULL'
+    assert run.status=='SUCCESS' and run.coverage_contract=='PARTIAL'
+    assert run.dependency_inventory['vulnerability_db_freshness']=='UNKNOWN'
+    assert run.dependency_inventory['complete_dependency_graph_attested'] is False
+    assert any('freshness is unconfirmed' in note for note in run.coverage_notes)
+
+
+def test_quick_fallback_stays_offline_and_unknown_database_never_counts_full(tmp_path, monkeypatch):
+    (tmp_path/'package-lock.json').write_text('{}')
+    manager=ToolManager(root=tmp_path/'managed')
+    prepared=[]
+    def ensure(tool, **kwargs):
+        prepared.append((tool, kwargs))
+        return ResolvedTool(tool,'2.6.0','osv-scanner',None,ToolStatus.READY)
+    manager.ensure=ensure
+    db=manager.root/'data/osv/osv-scalibr/npm/all.zip'
+    db.parent.mkdir(parents=True)
+    db.touch()
+    primary=Adapter('trivy-vuln',Capability.DEPENDENCY_VULN,status='UNAVAILABLE',code='ENGINE_UNAVAILABLE')
+    fallback=OSVDependencyAdapter(manager)
+    registry=ScannerRegistry([Adapter('code',Capability.CODE_SAST), Adapter('gitleaks',Capability.SECRET_SCAN), primary],
+        tool_manager=manager,fallback_adapters=[fallback])
+    runtime=SecurityRuntime(registry,SQLiteStore(tmp_path/'.security-runtime/test.db'))
+    calls=[]
+    def execute(args, **kwargs):
+        calls.append(args)
+        assert '--offline' in args and '--no-resolve' in args
+        assert '--download-offline-databases' not in args
+        assert kwargs['env']['SECURITY_RUNTIME_OFFLINE']=='1'
+        return ProcessResult(0,json.dumps(inventory()),'',1)
+    with patch('security_runtime.osv.run_process',side_effect=execute), \
+            patch.object(manager.provider,'download',side_effect=AssertionError('download attempted')), \
+            patch('urllib.request.urlopen',side_effect=AssertionError('network attempted')):
+        result=runtime.scan(tmp_path,'quick',_hook_scope=['package-lock.json'])
+    assert len(calls)==1 and primary.calls==1
+    assert prepared==[('osv-scanner',{'offline':True})]
+    run=next(run for run in result.scanner_runs if run.scanner=='osv-scanner')
+    assert run.status=='SUCCESS' and run.coverage_contract=='PARTIAL'
+    assert run.dependency_inventory['package_occurrences']==1
+    assert run.dependency_inventory['vulnerability_db_freshness']=='UNKNOWN'
+    assert run.dependency_inventory['complete_dependency_graph_attested'] is False
+    assert result.capability_results['DEPENDENCY_VULN']=='PARTIAL'
 
 
 def test_offline_installed_without_database_never_queries(tmp_path,monkeypatch):

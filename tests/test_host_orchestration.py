@@ -16,6 +16,7 @@ from security_runtime.mcp_server import create_server
 from security_runtime.remediation import RemediationService
 from security_runtime.remediation_policy import RemediationConfig
 from security_runtime.storage import SQLiteStore
+from hook_feedback_test_helpers import assert_operational_context
 
 AUTO_INTERACTION = {
     'phase': 'AUTO_REMEDIATION_AUTHORIZED', 'user_confirmation_required': False,
@@ -24,7 +25,7 @@ AUTO_INTERACTION = {
 CONFIRM_INTERACTION = {
     'phase': 'POST_EDIT_REMEDIATION_CONFIRMATION', 'edit_already_applied': True,
     'requested_user_decision': 'REMEDIATE_SECURITY_FINDING', 'must_not_retry_previous_edit': True}
-QUESTION = '是否允许我修复这个安全问题？'
+QUESTION = '回复“修复”'
 
 
 def invoke(server):
@@ -49,7 +50,7 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
         remediation=fresh)
     data = output['remediation']; mode = service.config.read()
     wire = codex_hook_output(output)
-    assert json.loads(wire['hookSpecificOutput']['additionalContext'])['remediation'] == data
+    context = assert_operational_context(wire, data)
     assert (root / 'A.java').read_bytes() == before and not provider.calls
     assert not fresh.prepared and not fresh.authorized
     assert not {'decision', 'continue', 'systemMessage', 'stopReason'} & data.keys()
@@ -58,8 +59,9 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
         assert data['action'] == 'AUTO_FIX' and data['interaction'] == AUTO_INTERACTION
         assert output['continue'] is wire['continue'] is False
         assert not {'decision', 'reason'} & wire.keys()
-        assert 'SECURITY_FIX_REQUIRED' in wire['systemMessage'] and len(wire['systemMessage']) < 250
-        assert 'do not repeat the edit or ask for approval' in wire['stopReason']
+        assert '修复确认' in wire['systemMessage'] and len(wire['systemMessage']) < 250
+        assert wire['systemMessage'] == wire['stopReason']
+        assert 'SECURITY_FIX_REQUIRED' not in wire['systemMessage']
         assert data['guidance'] not in wire['stopReason']
         assert data['guidance'].startswith('SECURITY_AUTO_REMEDIATION_AUTHORIZED.')
         assert data['security_context_status'] == 'READY'
@@ -77,7 +79,7 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
         assert 'run_functional_verification' not in data['guidance']
     elif mode == 'ask_before_fix':
         assert data['action'] == 'CONFIRM_REQUIRED' and data['interaction'] == CONFIRM_INTERACTION
-        assert wire['continue'] is False and wire['stopReason'] == data['guidance']
+        assert wire['continue'] is False and wire['stopReason'] == data['user_feedback']['message']
         assert not {'decision', 'reason'} & wire.keys()
         assert QUESTION in data['guidance'] and 'WAIT' in data['guidance']
         assert not {'prepare', 'verify', 'remediation_ref'} & data.keys()
@@ -86,7 +88,14 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
     else:
         assert data['action'] == 'ADVISE'
         assert not {'interaction', 'prepare', 'verify', 'confirmation_ref'} & data.keys()
-        assert not {'decision', 'continue', 'stopReason'} & wire.keys()
+        if output['status'] == 'SCANNED' and output.get('last_check_status') == 'SCANNED':
+            assert wire['continue'] is False
+            assert wire['stopReason'] == wire['systemMessage'] == data['user_feedback']['message']
+            assert QUESTION in wire['stopReason'] and '回复“忽略”' in wire['stopReason']
+        else:
+            assert not {'continue', 'stopReason'} & wire.keys()
+        assert 'decision' not in wire and 'reason' not in wire
+        assert not {'prepare', 'verify', 'confirmation_ref', 'remediation_ref', 'grant_id'} & context.keys()
 
 
 @pytest.mark.parametrize('setup', ['ask_before_fix'], indirect=True)

@@ -33,20 +33,27 @@ def diagnostic(setup, values=None):
     return setup[3].functional_receipt_diagnostics(values['remediation_ref'], values['task_ref'], setup[0])
 
 
-def test_resolved_proof_not_rejected_by_stale_ai_review(setup):
+def test_resolved_proof_not_rejected_by_stale_ai_review(setup, monkeypatch):
     root, runtime, provider, service, hook, _ = setup
     references = dict(args(setup))
     scan_id = record(setup)['origin_scan_id']
     triage = TriageService(runtime.store)
     packet = triage.prepare(scan_id)['packets'][0]
-    triage.submit(scan_id, [dict(finding_id=packet['finding_id'], context_hash=packet['context_hash'],
-        verdict='NEEDS_REVIEW', confidence='HIGH', exploitability='UNKNOWN', reason='Production unknown',
-        attack_path='', evidence_refs=[], preconditions_met=[], preconditions_unknown=['Production usage'],
-        recommended_action='Review')])
-    assert prepare(setup)['status'] == 'READY_FOR_HOST_FIX'
-    (root / 'A.java').write_text(FIXED)
-    runtime.findings = provider.findings = []
-    assert hook()['remediation']['reason_code'] == 'SCANNER_VERIFIED_RESOLVED'
+    # Model a review of the original source whose publication arrives after
+    # the explicitly approved repair has been scanned and closed. Publishing
+    # an active review before prepare would correctly invalidate that grant.
+    pending_reviews = []
+    save_review = runtime.store.save_triage
+    with monkeypatch.context() as delayed:
+        delayed.setattr(runtime.store, 'save_triage', lambda row, key: pending_reviews.append((row, key)))
+        triage.submit(scan_id, [dict(finding_id=packet['finding_id'], context_hash=packet['context_hash'],
+            verdict='NEEDS_REVIEW', confidence='HIGH', exploitability='UNKNOWN', reason='Production unknown',
+            attack_path='', evidence_refs=[], preconditions_met=[], preconditions_unknown=['Production usage'],
+            recommended_action='Review')])
+        resolve(setup)
+    assert len(pending_reviews) == 1
+    for row, key in pending_reviews:
+        save_review(row, key)
     assert triage.view(scan_id, persist_stale=False)['findings'][0]['triage_status'] == 'STALE'
     functional = FunctionalVerificationService(service)
     out = functional.prepare(references['remediation_ref'], references['task_ref'], root, bound_workspace=root)
@@ -74,7 +81,7 @@ def test_first_resolution_commits_bound_proof_before_functional_handoff(setup):
     closed = resolve(setup)
     proof = record(setup)['resolution']
     out = planned(setup[3], args(setup), setup[0])
-    assert out['status'] == 'FUNCTIONAL_VERIFICATION_READY'
+    assert out['status'] == 'FUNCTIONAL_VERIFICATION_READY', out.get('functional_verification')
     public = out['plan']['security_receipt']
     assert public['episode_id'] == record(setup)['episode_id']
     assert public['grant_id'] == setup[-1]['remediation']['grant_id']
@@ -85,13 +92,19 @@ def test_first_resolution_commits_bound_proof_before_functional_handoff(setup):
     assert out['plan']['target_files'] == ['A.java']
 
 
-def test_current_episode_receipt_survives_auto_restart_without_reset(setup):
+def test_current_episode_proof_survives_restart_without_restoring_execution_consent(setup):
     resolve(setup)
     old = record(setup)
     restarted = RemediationService(setup[3].store, registry=setup[3].registry, hooks=setup[3].hooks)
     out = planned(restarted, args(setup), setup[0])
-    assert out['status'] == 'FUNCTIONAL_VERIFICATION_READY'
-    assert out['plan']['security_receipt']['episode_id'] == old['episode_id']
+    assert old['authorization_kind'] == 'USER_CONFIRMED'
+    assert out['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert out['functional_verification']['receipt_reason_code'] == 'CONFIRMED_CONNECTION_NOT_AUTHORIZED'
+    assert 'plan' not in out and 'handoff' not in out
+    values = args(setup)
+    verified = restarted.verify(values['remediation_ref'], values['task_ref'], setup[0])
+    assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert verified['security_receipt']['episode_id'] == old['episode_id']
     assert record(setup)['attempt_count'] == old['attempt_count'] == 1
     assert not restarted.prepared and not restarted.authorized
 
@@ -292,6 +305,7 @@ def test_receipt_does_not_bypass_policy_change(setup):
     resolve(setup)
     setup[3].config.write('ask_before_fix')
     out = planned(setup[3], args(setup), setup[0])
-    assert out['functional_verification']['receipt_reason_code'] == 'REMEDIATION_POLICY_CHANGED'
+    # Writing the same mode changes the bound policy revision, not its name.
+    assert out['functional_verification']['receipt_reason_code'] == 'CONFIRMATION_POLICY_OR_DEADLINE_CHANGED'
     assert out['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
     assert 'plan' not in out

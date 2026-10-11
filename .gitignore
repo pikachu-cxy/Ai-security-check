@@ -18,3 +18,5 @@ dist/
 .test-tmp-run*/
 artifacts/r1/
 artifacts/upgrade/
+# Local acceptance receipts, scanner reports, runtime state and copied bundles.
+/artifacts/

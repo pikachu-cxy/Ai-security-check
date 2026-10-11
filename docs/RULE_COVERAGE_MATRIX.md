@@ -1,5 +1,9 @@
 # Rule Coverage Matrix — R0 synthetic baseline and R1 limits
 
+This is historical Java foundation evidence, not the full current capability
+catalog. Current source counts and acceptance status are recorded in
+[development progress](DEVELOPMENT_PROGRESS.md).
+
 The table retains the 2026-10-07 R0 synthetic baseline from the versioned
 capability manifest and managed offline Scanner corpus. It is not current
 real-project accuracy; R1 evidence and limitations follow below.

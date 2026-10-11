@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import sys
 import tomllib
@@ -241,7 +242,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
     install_parser.add_argument('--path', help='Optional project conflict check; never a project installation')
     install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
+    install_parser.add_argument('--offline', action='store_true', help='Verify existing components and data without downloading')
     install_parser.add_argument('--json', action='store_true')
+    preparation_parser = sub.add_parser('prepare-installation', help=argparse.SUPPRESS)
+    preparation_parser.add_argument('--json', action='store_true')
+    preparation_parser.add_argument('--offline', action='store_true')
     setup_parser = sub.add_parser("setup", help="Configure Codex globally and install its companion Skill together")
     setup_parser.add_argument("integration", nargs="?", choices=["codex", "cursor", "workbuddy"])
     setup_parser.add_argument("--path")
@@ -322,25 +327,31 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'prepare-installation':
+            from .install_readiness import prepare_installation_readiness
+            data = prepare_installation_readiness(offline=args.offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
+            print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
+            return 0 if data['ready'] else 2
         if args.command == 'install':
             from .install_progress import InstallationProgress
             with installation_progress or InstallationProgress() as progress:
                 from .personal_install import install_personal_codex
-                from .global_integration import render_global
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
-                        allow_dev=args.dev, progress=progress, update=args.update)
+                        allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline)
                 except (ValueError, OSError, TypeError, RecursionError) as exc:
                     code = exc.code if isinstance(exc, IntegrationDiagnostic) else 'INSTALL_PATH_OR_STATE_INVALID'
                     data = {'integration':'codex', 'scope':'GLOBAL', 'overall':'BROKEN', 'diagnostics':[code],
                         'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
-                            'local_files_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
+                            'local_files_ready':False, 'scan_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
-                progress.finish(data['installation']['local_files_ready'])
-            print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
-            return 0 if data['installation']['local_files_ready'] else 2
+                ready = (data['installation'].get('local_files_ready') is True
+                    and data['installation'].get('scan_ready') is True)
+                progress.finish(ready)
+            print(json.dumps(data, ensure_ascii=True) if args.json else data['installation']['message'])
+            return 0 if ready else 2
         if args.command == 'delivery':
             if args.action == 'make-update':
                 from .delta_delivery import make_update
@@ -435,7 +446,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 return 0  # Findings and scanner limitations are advisory.
             except Exception:
                 # Do not echo untrusted stdin, paths or exception source text.
-                print(json.dumps({'status':'FAILED','error_code':'HOOK_RUNTIME_FAILED','systemMessage':'AI Security Runtime hook could not complete. Retry the local advisory check.'}))
+                print(json.dumps({'status':'FAILED','error_code':'HOOK_RUNTIME_FAILED','systemMessage':'本次安全检查未完成，暂时无法确认改动是否安全。建议检查工具状态后重新检查。'}))
                 return 2
         if args.command == 'remediation':
             from .remediation_policy import RemediationConfig
@@ -458,7 +469,6 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command=='runtime-info':
             from .host_guidance import runtime_info
             info=runtime_info()
-            import os
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
                 from .global_mcp import global_runtime_info
                 info = global_runtime_info()
@@ -467,7 +477,6 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 *info['connection_recovery']]))
             return 0
         if args.command=='summary':
-            import os
             from .security_summary import SecuritySummaryService
             from .human import render_security_summary
             bound=os.getenv('SECURITY_RUNTIME_WORKSPACE')
