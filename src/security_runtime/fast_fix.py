@@ -23,7 +23,8 @@ HOST_CONTRACT = 'ATOMIC_BOUND_EDIT_V1'
 TTL = 900
 MAX_PLANS = 32
 GUIDANCE = (
-    'SECURITY_AUTO_REMEDIATION_AUTHORIZED. The attached Fast Fix Plan is already authorized. '
+    'SECURITY_AUTO_REMEDIATION_AUTHORIZED. The user already approved this exact repair. '
+    'The attached Fast Fix Plan is already authorized within that consent. '
     'The registered Host bridge must validate this original plan with Runtime while holding '
     'its atomic target-edit exclusion, then remove only the exact authorized byte range. '
     'Do not call prepare_task_fix, infer another patch, ask for confirmation, or repeat the unsafe edit. '
@@ -114,9 +115,9 @@ class FastFixPlans:
             'host_edit_contract_required':HOST_CONTRACT,'host_fast_edit_observed':False}}
 
     def offer(self, output, root, record, key):
-        # Only the already committed original POLICY_AUTO grant may be extended.
-        if (output.get('action')!='AUTO_FIX' or output.get('reason_code')!='SAFE_DETERMINISTIC_FIX'
-                or record.get('authorization_kind','POLICY_AUTO')!='POLICY_AUTO'):
+        # Acceleration consumes an existing human-approved grant; never consent.
+        if (output.get('action')!='AUTO_FIX' or output.get('reason_code')!='USER_APPROVED_REPAIR'
+                or record.get('authorization_kind')!='USER_CONFIRMED'):
             output.update(self.fallback('FAST_FIX_POLICY_NOT_ELIGIBLE')); return
         service=self.service
         if self.host_contract!=HOST_CONTRACT:

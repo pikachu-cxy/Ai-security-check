@@ -17,6 +17,7 @@ from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
+GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance'}
 LIMIT = 16
 MAX_SESSIONS = 64
 
@@ -185,7 +186,7 @@ class _NoProjectSeed:
         return None, 'GLOBAL_SESSION_BASELINE'
 
 
-def _advisory(reason, readiness=None, claims=None):
+def _advisory(reason, readiness=None, claims=None, recovery=None):
     from mcp.types import CallToolResult, TextContent
     data = {'status': 'INCONCLUSIVE', 'reason_code': reason, 'coverage': 'UNKNOWN',
             'scanner_run': False, 'workspace_readiness': readiness or {'status': 'DEGRADED'},
@@ -194,6 +195,11 @@ def _advisory(reason, readiness=None, claims=None):
         data.update(claims)
         data['scanner_skipped_reason'] = reason
     text = {'continue': True, 'systemMessage': 'AI Security Runtime: ' + reason + '. Readiness is not a security verdict.'}
+    if recovery is not None:
+        data['configuration_recovery'] = recovery
+        text['systemMessage'] += ' ' + recovery['message']
+        if recovery.get('question'):
+            text['systemMessage'] += ' ' + recovery['question']
     if claims is not None and claims['host_claim_status'] != 'VALID':
         text['systemMessage'] += (' Missing: ' + ','.join(claims['missing_claims'])
                                  + '; invalid: ' + ','.join(claims['invalid_claims']) + '.')
@@ -221,7 +227,7 @@ def create_global_server(*, workspaces=None):
         for tool in infos.values():
             schema = json.loads(json.dumps(tool.parameters))
             schema['additionalProperties'] = False
-            if tool.name not in HOOKS and tool.name != 'get_runtime_info' and 'workspace_path' not in schema['properties']:
+            if tool.name not in HOOKS and tool.name not in GLOBAL_READS and 'workspace_path' not in schema['properties']:
                 schema['properties']['workspace_path'] = {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None,
                     'description': 'Required for global workspace routing, including a single admitted workspace. Never inferred from an opaque ref.'}
             description = tool.description
@@ -248,6 +254,10 @@ def create_global_server(*, workspaces=None):
         if name == 'get_runtime_info':
             info = global_runtime_info()
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
+        if name == 'get_professional_guidance':
+            from .professional_guidance import get_professional_guidance
+            guide = get_professional_guidance()
+            return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
         handler_entered = False
         binding_stage = 'RESOLVING_ROOT'
         try:
@@ -381,7 +391,16 @@ def create_global_server(*, workspaces=None):
                     claim_diag['session_claim_match'] = False
                 elif claim_diag['workspace_claim_match'] is None:
                     claim_diag['workspace_claim_match'] = False
-            return _advisory(reason if reason in allowed else 'WORKSPACE_OR_REFERENCE_REJECTED', claims=claim_diag)
+            recovery = None
+            if not handler_entered and binding_stage in {'VALIDATING_CONFIGURATION', 'ADMITTING_WORKSPACE'}:
+                from .integration_recovery import CONFIGURATION_REASONS, configuration_recovery
+                if reason in CONFIGURATION_REASONS:
+                    try:
+                        recovery = configuration_recovery(pool.integration, claim or root, reason=reason)
+                    except (ValueError, OSError, TypeError, RecursionError):
+                        pass
+            return _advisory(reason if reason in allowed else 'WORKSPACE_OR_REFERENCE_REJECTED', claims=claim_diag,
+                             recovery=recovery)
 
     # Preserve the public FastMCP helpers for deterministic local tests as well
     # as the actual low-level stdio handlers. Project registry remains untouched.

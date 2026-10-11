@@ -365,6 +365,17 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return runtime_info(remediation_config=remediation.config)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_professional_guidance() -> dict:
+        """Read product-owned versioned deep-audit guidance. No workspace/source/URL input, network, scan, repair permission or writes. Ordinary Hooks do not invoke this tool."""
+        from .professional_guidance import get_professional_guidance as load_guidance
+        return load_guidance()
+
+    guidance_tool = server._tool_manager.get_tool('get_professional_guidance')
+    guidance_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+    guidance_tool.fn_metadata.arg_model.model_rebuild(force=True)
+    guidance_tool.parameters = guidance_tool.fn_metadata.arg_model.model_json_schema()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_security_summary(workspace_path: str | None = None, scan_id: str | None = None, details: bool = False) -> dict:
         """Read workspace tasks without scans, AI or writes. User 'continue first' selects that response's recommended_tasks[0].continuation; never resolve T01 against a new summary."""
         from .security_summary import SecuritySummaryService

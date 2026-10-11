@@ -178,6 +178,13 @@ def render_security_summary(result):
            '来源：扫描器候选 + 已接受的 AI 审阅；宿主补充核查未导入。']
     lines.append('检查状态：'+'；'.join(CAPABILITY_LABELS.get(cap,cap)+' '+STATES.get(state,state)
                                       for cap,state in result['capability_results'].items()))
+    if result.get('dependency_health'):
+        lines.append('依赖检查：'+result['dependency_health']['message'])
+    if result.get('rule_coverage'):
+        rule=result['rule_coverage']
+        lines.append(f"本次 SAST 规则：可用 {rule.get('total_available',0)}，选中 {rule.get('total_selected',0)}，执行 {rule.get('total_executed',0)}；不等于完整 OWASP 覆盖。")
+    if result.get('review_progress',{}).get('pending'):
+        lines.append('这是候选复核进度，尚未完成深度审计；剩余候选及未覆盖区域须继续检查。')
     tasks=result['tasks'] if result['details'] else result['recommended_tasks']
     lines+=['','完整任务列表' if result['details'] else f"建议先跟进以下 {len(tasks)} 项（共 {result['task_count']} 个任务；未展开项仍保留）"]
     if not tasks: lines.append('当前没有推荐任务；请结合扫描覆盖与完整 Raw 复核，不能据此判定安全。')

@@ -270,7 +270,7 @@ def test_doctor_prerequisites_and_separate_data(tmp_path, capsys):
     with patch('security_runtime.cli.ToolManager', return_value=manager):
         assert doctor(tmp_path, json_output=True) == 0
     report = json.loads(capsys.readouterr().out)
-    assert report['trivy_data'] == {'vulnerability_db': 'READY', 'java_db': 'MISSING', 'checks': 'UNKNOWN'}
+    assert report['trivy_data'] == {'vulnerability_db': 'READY', 'vulnerability_db_freshness': 'UNKNOWN', 'java_db': 'MISSING', 'checks': 'UNKNOWN'}
     assert 'does not guarantee' in report['message']
     with patch('security_runtime.cli.ToolManager', return_value=manager):
         doctor(tmp_path, verbose=True)

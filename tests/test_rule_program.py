@@ -44,10 +44,10 @@ def test_manifest_fails_closed(bad):
 
 
 def test_manifest_version_deterministic_mapping_and_safe_defaults():
-    assert len(CAPABILITIES)==10
+    assert len(CAPABILITIES)==25
     assert sum(c.maturity=='CORE' for c in CAPABILITIES)==2
-    assert sum(c.maturity=='VALIDATED' for c in CAPABILITIES)==8
-    assert [c.capability_id for c in CAPABILITIES if c.auto_fix_eligible]==['JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED']
+    assert sum(c.maturity=='VALIDATED' for c in CAPABILITIES)==23
+    assert not any(c.auto_fix_eligible for c in CAPABILITIES)
     assert PACK.program.family_rules('capability:JAVA_SSRF')==PACK.program.capability('ai-security.java.url-connection').underlying_rule_ids
     assert all(not r['default_enabled'] for r in PACK.program.legacy_rules if r['maturity']=='EXPERIMENTAL')
     assert RulePackManager().resolve().checksum==PACK.checksum
@@ -145,10 +145,10 @@ def test_zero_applicable_language_and_maturity_planning():
     javascript=plan_rules(PACK,['main.js','main.ts'])
     assert len(javascript.rules)==6 and javascript.files==('main.js','main.ts')
     python=plan_rules(PACK,['main.py'])
-    assert all(r.language=='python' for r in python.rules) and len(python.rules)==2
+    assert all(r.language=='python' for r in python.rules) and len(python.rules)==15
     java=plan_rules(PACK,['A.java','other.js'])
     assert java.files==('A.java','other.js')
-    assert java.coverage()['applicable_capabilities']==9
+    assert java.coverage()['applicable_capabilities']==11
     assert not any(r.rule_id.endswith('weak-digest') for r in java.rules)
 
 

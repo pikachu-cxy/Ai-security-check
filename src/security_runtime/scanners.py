@@ -437,6 +437,12 @@ class TrivyAdapter(BaseScanner):
         if self.checks=='vuln' and offline_scanning() and run.status==RunStatus.SUCCESS:
             run.coverage_contract='PARTIAL'
             run.coverage_notes=['Offline Trivy extraction does not attest a complete resolved dependency graph.']
+        if self.checks == 'vuln' and run.status == RunStatus.SUCCESS:
+            fresh = self.tool_manager.database_freshness()['status']
+            if fresh != 'FRESH':
+                run.coverage_contract = 'PARTIAL'
+                run.coverage_notes = [*(run.coverage_notes or []),
+                    'VULNERABILITY_DB_STALE: 漏洞库更新未完成或新鲜度无法确认；本次使用缓存数据，不能代表最新漏洞覆盖。']
         return found,run
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:

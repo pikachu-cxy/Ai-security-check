@@ -74,7 +74,7 @@ def test_untrusted_hint_never_skips_preparation_or_attests(setup,bad):
     data=args(setup)
     output=setup[3].prepare(data['remediation_ref'],data['task_ref'],setup[0],security_context_ref=bad)
     assert output['reason_code']=='SECURITY_FIX_CONTEXT_REFRESH_REQUIRED'
-    assert not setup[3].prepared and record(setup)['phase']=='OFFERED'
+    assert not setup[3].prepared and record(setup)['phase']=='AUTHORIZED'
     assert not record(setup)['resolution']
 
 

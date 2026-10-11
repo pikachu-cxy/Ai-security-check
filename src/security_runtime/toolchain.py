@@ -269,10 +269,12 @@ class OfficialReleaseProvider:
 
 
 class ToolManager:
-    def __init__(self, root: Path | None = None, provider: ToolSourceProvider | None = None):
+    def __init__(self, root: Path | None = None, provider: ToolSourceProvider | None = None, *, now=None):
         self.root = root if root is not None else default_data_root()
         self.provider = provider or OfficialReleaseProvider()
         self.data_diagnostics: dict[str, ErrorDiagnostic] = {}
+        self.now = now or (lambda: datetime.now(timezone.utc))
+        self._database_lock = threading.RLock()
         self._engine_locks = {tool_id: threading.RLock() for tool_id in VERSIONS}
         self._lock_guard = threading.Lock()
         self._version_cache = {}  # Process-local successful probes only, <=16.
@@ -357,9 +359,34 @@ class ToolManager:
         directory = self.trivy_cache_dir() / "db"
         return ToolStatus.READY if (directory / "trivy.db").is_file() and (directory / "metadata.json").is_file() else ToolStatus.MISSING
 
+    def database_freshness(self, directory=None) -> dict:
+        """Presence is not freshness. Honor expiry and bound metadata validity."""
+        directory = Path(directory) if directory is not None else self.trivy_cache_dir() / 'db'
+        if not (directory / 'trivy.db').is_file():
+            return {'status': 'MISSING'}
+        try:
+            path = directory / 'metadata.json'
+            if path.stat().st_size > 64_000:
+                raise ValueError()
+            metadata = json.loads(path.read_bytes())
+            def timestamp(name):
+                value = datetime.fromisoformat(metadata[name].replace('Z', '+00:00'))
+                if value.tzinfo is None:
+                    raise ValueError()
+                return value.astimezone(timezone.utc)
+            updated, expiry = timestamp('UpdatedAt'), timestamp('NextUpdate')
+            now = self.now()
+            if expiry <= updated or updated > now:
+                raise ValueError()
+            return {'status': 'FRESH' if now < expiry else 'STALE',
+                    'updated_at': updated.isoformat(), 'next_update': expiry.isoformat()}
+        except (OSError, ValueError, TypeError, KeyError, AttributeError):
+            return {'status': 'UNKNOWN', 'reason': 'DATABASE_TIMESTAMP_INVALID'}
+
     def trivy_data_statuses(self) -> dict[str, str]:
         java = self.trivy_cache_dir() / 'java-db'
         return {'vulnerability_db': self.database_status(),
+                'vulnerability_db_freshness': self.database_freshness()['status'],
                 'java_db': 'READY' if (java / 'trivy-java.db').is_file() and (java / 'metadata.json').is_file() else 'MISSING',
                 # Do not infer completed misconfiguration scanning from a log
                 # or from the binary alone. Embedded-policy availability varies.
@@ -764,27 +791,34 @@ class ToolManager:
             shutil.rmtree(final, ignore_errors=True)
             raise
 
-    def prepare_trivy_database(self, binary: str, *, offline: bool | None = None) -> ToolStatus:
+    def prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False) -> ToolStatus:
         checkpoint()
-        if self.database_status() == ToolStatus.READY:
-            return self._prepare_trivy_database(binary, offline=offline)
-        emit('DATA_PREPARING', scanner='trivy', component='vulnerability_db')
-        result = self._prepare_trivy_database(binary, offline=offline)
+        with self._database_lock:
+            fresh = self.database_freshness()['status']
+            if fresh == 'FRESH' and not force:
+                self.data_diagnostics.pop('vulnerability_db', None)
+                return ToolStatus.READY
+            emit('DATA_PREPARING', scanner='trivy', component='vulnerability_db', reason=fresh)
+            result = self._prepare_trivy_database(binary, offline=offline, force=force)
         diagnostic = self.data_diagnostics.get('vulnerability_db')
-        emit('DATA_READY' if result == ToolStatus.READY else 'DATA_PREPARATION_FAILED',
+        emit('DATA_READY' if result == ToolStatus.READY and diagnostic is None else 'DATA_PREPARATION_FAILED',
              scanner='trivy', component='vulnerability_db', error_code=diagnostic.error_code if diagnostic else '',
              source=diagnostic.source if diagnostic else '')
         return result
 
-    def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None) -> ToolStatus:
+    def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False) -> ToolStatus:
         self.data_diagnostics.pop('vulnerability_db', None)
-        if self.database_status() == ToolStatus.READY:
+        available = self.database_status() == ToolStatus.READY
+        if self.database_freshness()['status'] == 'FRESH' and not force:
             return ToolStatus.READY
         if offline is None:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
         if offline:
-            self.data_diagnostics['vulnerability_db'] = classify_network_error(offline=True)
-            return ToolStatus.OFFLINE
+            self.data_diagnostics['vulnerability_db'] = (ErrorDiagnostic('VULNERABILITY_DB_STALE',
+                'Offline scan uses a cached database whose freshness is not current.',
+                'Reconnect and refresh vulnerability data before treating the result as current.')
+                if available else classify_network_error(offline=True))
+            return ToolStatus.READY if available else ToolStatus.OFFLINE
         cache = self.trivy_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)
         # Public vulnerability DB downloads must not depend on the user's
@@ -795,12 +829,32 @@ class ToolManager:
         env["DOCKER_CONFIG"] = str(docker_config)
         for attempt in range(2):
             try:
-                with external_tool_loader():
-                    proc = run_process([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(cache), "--quiet"],
-                                       env=env, timeout=900)
-                if proc.returncode == 0 and self.database_status() == ToolStatus.READY:
-                    self.data_diagnostics.pop('vulnerability_db', None)
-                    return ToolStatus.READY
+                # Download to a separate cache. A failed update cannot destroy
+                # the previous usable database. No target project is executed.
+                with tempfile.TemporaryDirectory(prefix='db-update-', dir=cache) as temporary:
+                    staging = Path(temporary)
+                    with external_tool_loader():
+                        proc = run_process([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(staging), "--quiet"],
+                                           env=env, timeout=900)
+                    if proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH':
+                        from .hook_state import HookStateStore, no_links
+                        locks = HookStateStore(cache / '.update-state')
+                        with locks.lock(cache, wait_seconds=5) as acquired:
+                            if not acquired:
+                                raise ValueError('Database update busy')
+                            final = cache / 'db'
+                            no_links(final)
+                            backup = staging / 'previous-db'
+                            if final.exists():
+                                os.replace(final, backup)
+                            try:
+                                os.replace(staging / 'db', final)
+                            except OSError:
+                                if backup.exists():
+                                    os.replace(backup, final)
+                                raise
+                        self.data_diagnostics.pop('vulnerability_db', None)
+                        return ToolStatus.READY
                 diagnostic = classify_network_error(stderr=proc.stderr, return_code=proc.returncode, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
             except (OSError, TimeoutError, ValueError) as exc:
                 diagnostic = classify_network_error(exc, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
@@ -810,6 +864,13 @@ class ToolManager:
                 break
             if attempt == 0:
                 time.sleep(2)
+        if available and self.database_status() == ToolStatus.READY:
+            original = self.data_diagnostics.get('vulnerability_db')
+            self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic('VULNERABILITY_DB_STALE',
+                'Database refresh failed; scanning uses the previous cached vulnerability data.',
+                'Retry the data update online; current vulnerability coverage is incomplete.',
+                source=original.source if original else '')
+            return ToolStatus.READY
         return ToolStatus.BROKEN
 
     def statuses(self) -> dict[str, ResolvedTool]:

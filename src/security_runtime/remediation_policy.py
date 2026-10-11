@@ -1,4 +1,4 @@
-"""Deterministic, opt-out local repair authorization; not AI triage policy."""
+"""Detection never authorizes repair; explicit user consent is mandatory."""
 from dataclasses import asdict, dataclass
 import json
 from pathlib import Path
@@ -18,7 +18,7 @@ class RemediationDecision:
     finding_family: str | None = None
     category: str = 'code'
     finding_policy: str = 'REVIEW'
-    policy_source: str = 'REMEDIATION_POLICY_V1'
+    policy_source: str = 'REMEDIATION_POLICY_V2_USER_CONSENT'
     max_attempts: int = 2
     verification_required: bool = True
 
@@ -34,7 +34,7 @@ class RemediationConfig:
     def read(self):
         no_links(self.path)
         if not self.path.exists():
-            return 'smart_auto'
+            return 'ask_before_fix'
         if self.path.stat().st_size > 4096:
             raise ValueError('Invalid remediation configuration')
         with self.path.open('rb') as stream:
@@ -46,12 +46,15 @@ class RemediationConfig:
                 not isinstance(data['remediation'], dict) or set(data['remediation']) != {'mode'} or
                 data['remediation']['mode'] not in MODES):
             raise ValueError('Invalid remediation configuration')
-        return data['remediation']['mode']
+        mode = data['remediation']['mode']
+        # Read legacy preferences without rewriting any global user state.
+        return 'ask_before_fix' if mode == 'smart_auto' else mode
 
     def write(self, mode):
         if mode not in MODES:
             raise ValueError('Invalid remediation mode')
-        atomic_bytes(self.path, json.dumps({'remediation': {'mode': mode}}).encode())
+        effective = 'ask_before_fix' if mode == 'smart_auto' else mode
+        atomic_bytes(self.path, json.dumps({'remediation': {'mode': effective}}).encode())
 
     def managed_paths(self):
         """Policy storage locations, never a transport or workspace locator."""
@@ -64,7 +67,7 @@ class RemediationConfig:
 
 class RemediationPolicy:
     def decide(self, *, family=None, rule=None, category='code', priority='REVIEW',
-               coverage=False, deterministic=False, mode='smart_auto', attempts=0):
+               coverage=False, deterministic=False, mode='ask_before_fix', attempts=0):
         action, reason = 'ADVISE', 'NOT_ELIGIBLE'
         if priority in {'SUPPRESSED', 'BEST_PRACTICE'}:
             action, reason = 'NONE', 'QUIET_POLICY'
@@ -75,10 +78,8 @@ class RemediationPolicy:
         elif rule == RULE and coverage and deterministic:
             if attempts >= 2:
                 action, reason = 'ESCALATE', 'EPISODE_ATTEMPT_BUDGET_EXCEEDED'
-            elif mode == 'smart_auto':
-                action, reason = 'AUTO_FIX', 'SAFE_DETERMINISTIC_FIX'
-            elif mode == 'ask_before_fix':
-                action, reason = 'CONFIRM_REQUIRED', 'USER_CONFIRMATION_MODE'
+            elif mode in {'smart_auto', 'ask_before_fix'}:
+                action, reason = 'CONFIRM_REQUIRED', 'EXPLICIT_USER_CONSENT_REQUIRED'
             else:
                 reason = 'REPORT_ONLY_MODE'
         return RemediationDecision(action, reason, family, category, priority)

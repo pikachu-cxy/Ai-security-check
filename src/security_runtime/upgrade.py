@@ -53,9 +53,10 @@ def reason(exc):
 
 
 class InstallationUpgrade:
-    def __init__(self, integration=None, skill=None, *, now=None):
+    def __init__(self, integration=None, skill=None, *, now=None, manage_skill=True):
         self.integration = integration or GlobalCodexIntegration()
         self.skill = skill or ReviewSkillManager()
+        self.manage_skill = manage_skill
         self.now = now or time.time
         self.locks = HookStateStore(SQLiteStore.default_path().parent / 'installation-upgrades')
         self.directory = self.locks.workspace_directory(self.integration.home)
@@ -96,7 +97,7 @@ class InstallationUpgrade:
                 else:
                     row.update(ownership='USER_MANAGED' if document or hooks['hooks'] else 'NOT_INSTALLED',
                                action='INSTALL' if scope == 'GLOBAL' else 'PRESERVE')
-            except (ValueError, OSError) as exc:
+            except (ValueError, OSError, TypeError, RecursionError) as exc:
                 row.update(diagnostics=[reason(exc)], action='USER_REVIEW_REQUIRED')
             rows.append(row)
         return rows
@@ -146,12 +147,15 @@ class InstallationUpgrade:
         for adapter, root in adapters:
             paths.extend(adapter._config_paths(root))
             paths.append(adapter._state_path(root, 'ownership.json'))
-        paths.extend(self.skill.root / name for name in self.skill.expected)
-        paths.append(self.skill.state / 'ownership.json')
+        if self.manage_skill:
+            paths.extend(self.skill.root / name for name in self.skill.expected)
+            paths.append(self.skill.state / 'ownership.json')
         return sorted(set(paths), key=str)
 
     def signing_keys(self, workspace):
-        paths = [self.integration._state_path(self.integration.home, 'snapshot.key'), self.skill.state / 'ownership.key']
+        paths = [self.integration._state_path(self.integration.home, 'snapshot.key')]
+        if self.manage_skill:
+            paths.append(self.skill.state / 'ownership.key')
         if workspace is not None:
             paths += [self.integration.legacy_adapter._state_path(p, 'snapshot.key')
                       for p in self.integration.project_layers(workspace)]
@@ -174,20 +178,25 @@ class InstallationUpgrade:
                 else:
                     steps.append({'kind': 'MIGRATE_OWNED', 'layer': row['layer'], 'scope': row['scope'],
                                   'subtree': 'mcp_servers.' + SERVER, 'hooks': 'SIGNED_HANDLERS_ONLY'})
-        skill_status = self.skill.status()['status']
-        if skill_status in {'USER_MANAGED', 'USER_MODIFIED', 'OWNERSHIP_CONFLICT'}:
-            blocked.append('SKILL_USER_CONTENT_PRESERVED')
+        if self.manage_skill:
+            skill_status = self.skill.status()['status']
+            if skill_status in {'USER_MANAGED', 'USER_MODIFIED', 'OWNERSHIP_CONFLICT'}:
+                blocked.append('SKILL_USER_CONTENT_PRESERVED')
         steps.append({'kind': 'REPAIR_GLOBAL', 'layer': str(self.integration.home), 'scope': 'GLOBAL',
                       'subtree': 'mcp_servers.' + SERVER, 'hooks': 'SIGNED_HANDLERS_ONLY'})
-        steps.append({'kind': 'UPGRADE_SKILL', 'layer': str(self.skill.root), 'scope': 'USER',
-                      'files': sorted(self.skill.expected)})
+        if self.manage_skill:
+            steps.append({'kind': 'UPGRADE_SKILL', 'layer': str(self.skill.root), 'scope': 'USER',
+                          'files': sorted(self.skill.expected)})
+        from .host_guidance import runtime_info
         value = {'contract': CONTRACT, 'issued_at': self.now() if issued_at is None else issued_at,
                  'expires_after_seconds': TTL, 'workspace': str(Path(workspace).absolute()) if workspace is not None else None,
                  'home': str(self.integration.home), 'skill_root': str(self.skill.root),
-                 'build_identity': self.diagnose()['build'], 'steps': steps, 'blocked': sorted(set(blocked)),
+                 'build_identity': runtime_info()['build_identity'], 'steps': steps, 'blocked': sorted(set(blocked)),
                  'files': [{'path': str(p), 'revision': revision(read(p))} for p in self.paths(workspace)],
                  'recovery': 'SIGNED_LOCAL_JOURNAL_CAS_ROLLBACK; KEYS_AND_SCAN_STATE_PRESERVED',
                  'reconnect_required': True}
+        if not self.manage_skill:
+            value['manage_skill'] = False
         return value | {'plan_id': revision(encode(value))}
 
     def _save(self, journal):
@@ -221,7 +230,8 @@ class InstallationUpgrade:
         except (ValueError, OSError, KeyError, TypeError, RecursionError):
             raise IntegrationDiagnostic('UPGRADE_JOURNAL_INVALID') from None
 
-    def apply(self, plan, *, approve_user_managed=False):
+    def apply(self, plan, *, approve_user_managed=False, progress=None):
+        from .install_progress import report_progress
         if not isinstance(plan, dict) or not isinstance(plan.get('workspace'), (str, type(None))):
             raise IntegrationDiagnostic('UPGRADE_PLAN_INVALID')
         workspace = plan.get('workspace')
@@ -244,7 +254,7 @@ class InstallationUpgrade:
             journal = {'contract': CONTRACT, 'home': str(self.integration.home), 'plan_id': plan['plan_id'],
                        'phase': 'RUNNING', 'completed_steps': [], 'writes': {},
                        'keys': self.signing_keys(workspace),
-                       'created_skill_root': str(self.skill.root) if not self.skill.root.exists() else None}
+                       'created_skill_root': str(self.skill.root) if self.manage_skill and not self.skill.root.exists() else None}
             self._save(journal)
 
             def observe(path, after):
@@ -265,7 +275,9 @@ class InstallationUpgrade:
                 self._save(journal)
                 allowed[name] = revision(after)
 
-            adapters = (self.integration, self.integration.legacy_adapter, self.skill)
+            adapters = (self.integration, self.integration.legacy_adapter)
+            if self.manage_skill:
+                adapters += (self.skill,)
             originals = [getattr(a, 'write_observer', None) for a in adapters]
             try:
                 for adapter in adapters:
@@ -280,12 +292,15 @@ class InstallationUpgrade:
                         observe(path, raw)
                         atomic_bytes(path, raw)
                     elif step['kind'] == 'MIGRATE_OWNED':
+                        report_progress(progress, 'MIGRATE_CONFIG')
                         self.integration.legacy_adapter.remove(Path(step['layer']))
                     elif step['kind'] == 'REPAIR_GLOBAL':
+                        report_progress(progress, 'GLOBAL_CONFIG')
                         result = self.integration._mutate(self.integration.home, 'repair')
                         if result['overall'] != 'CONFIGURED':
                             raise IntegrationDiagnostic('UPGRADE_GLOBAL_NOT_READY')
                     else:
+                        report_progress(progress, 'SKILL')
                         result = self.skill.execute('upgrade')
                         if result['status'] != 'INSTALLED':
                             raise IntegrationDiagnostic('UPGRADE_SKILL_NOT_READY')

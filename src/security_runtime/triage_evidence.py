@@ -28,6 +28,7 @@ class EvidenceBuilder:
         self._file_sizes={}
         self.revision_key=revision_key
         self.secret_ranges={}
+        self._dependency_context=None
         for finding in scan['findings']:
             if category(finding)=='secret':
                 self.secret_ranges.setdefault(finding['file_path'],[]).append(
@@ -179,6 +180,19 @@ class EvidenceBuilder:
                             detail['directness']='DIRECT'
                 except ET.ParseError: pass
             enrichment.update(detail)
+            from .dependency_context import DependencyContext
+            if self._dependency_context is None:
+                self._dependency_context = DependencyContext(self)
+            enrichment['dependency_context'] = self._dependency_context.describe(finding)
+            declarations = enrichment['dependency_context']['declaration']
+            references = [declarations.get('declaration'), declarations.get('edit_location'),
+                          *enrichment['dependency_context']['usage']['references']]
+            for reference in references:
+                if not reference or len(related) >= self.budget.max_related_files: continue
+                file, line = reference['file'], reference['line']
+                source = self.read(file)
+                related.append(self.excerpt(file, source, max(1,line-2), min(len(source),line+2),
+                                            'bounded_dependency_declaration_or_api_reference'))
             questions=['Which exploitation preconditions are known from the advisory?',
                 'Does supplied context prove affected API/feature use? Absence in bounded context is not non-reachability.',
                 'Separate affected version matching from exploitability.']
@@ -216,7 +230,10 @@ class EvidenceBuilder:
         packet=clean(packet)
         if self.revision_key:
             revisions=[]
-            for name in sorted({item['file'] for item in packet['context']+packet['related_evidence']}):
+            revision_files = {item['file'] for item in packet['context']+packet['related_evidence']}
+            if kind == 'dependency':
+                revision_files |= self._dependency_context.revision_files(finding)
+            for name in sorted(revision_files):
                 # Full-file keyed revisions catch changes outside excerpts without
                 # exposing a guessable hash of a short redacted credential.
                 revisions.append(hmac.new(self.revision_key,encoded([name,self._file_hashes[name]]),hashlib.sha256).hexdigest())

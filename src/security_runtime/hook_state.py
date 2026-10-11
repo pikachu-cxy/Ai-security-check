@@ -8,6 +8,7 @@ import sqlite3
 import tempfile
 import time
 import uuid
+import stat
 from contextlib import contextmanager
 from contextlib import closing
 from pathlib import Path
@@ -16,6 +17,7 @@ from .storage import SQLiteStore
 
 MAX_STATE_BYTES = 2_000_000
 MAX_SESSIONS = 64
+_is_reserved = getattr(os.path, 'isreserved', lambda name: Path(name).is_reserved())
 
 
 def identity(value: str) -> str:
@@ -35,7 +37,7 @@ def native_io_path(path: Path) -> Path:
     def valid_components(parts):
         for name in parts:
             if name not in ('', '.', '..') and (
-                    name.endswith(('.', ' ')) or ':' in name or Path(name).is_reserved()):
+                    name.endswith(('.', ' ')) or ':' in name or _is_reserved(name)):
                 raise ValueError('Hook state path spelling is not supported')
     def checked_unc(tail):
         parts = tail.split('\\')
@@ -78,9 +80,14 @@ def native_io_path(path: Path) -> Path:
 def no_links(path: Path) -> None:
     # Check the original lexical parents as well: normalizing '..' for native
     # IO must not hide a linked ancestor from the existing fail-closed gate.
-    if any(native_io_path(p).is_symlink() or native_io_path(p).is_junction()
-           for p in (path, *path.parents)):
-        raise ValueError('Hook state/configuration links are not supported')
+    for p in (path, *path.parents):
+        native = native_io_path(p)
+        try:
+            info = native.lstat()
+        except FileNotFoundError:
+            continue
+        if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+            raise ValueError('Hook state/configuration links are not supported')
 
 
 def atomic_bytes(path: Path, content: bytes) -> None:

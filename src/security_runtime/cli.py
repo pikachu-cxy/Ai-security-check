@@ -143,7 +143,7 @@ def render(result, *, verbose=False) -> str:
     return render_scan(result, verbose=verbose)
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     # Windows redirected streams may otherwise use cp1252/cp936. MCP JSON and
     # CLI status symbols are UTF-8 on every delivery format.
     for stream in (sys.stdout, sys.stderr):
@@ -174,13 +174,16 @@ def main(argv: list[str] | None = None) -> int:
     trial_parser.add_argument('--executable', type=Path)
     trial_parser.add_argument('--json', action='store_true')
     delivery_parser = sub.add_parser('delivery', help='Activate/status/rollback a verified frozen package behind a stable launcher')
-    delivery_parser.add_argument('action', choices=['activate', 'status', 'rollback'])
-    delivery_parser.add_argument('--root', required=True, type=Path)
+    delivery_parser.add_argument('action', choices=['activate', 'status', 'rollback', 'cleanup', 'make-update'])
+    delivery_parser.add_argument('--root', type=Path)
     delivery_parser.add_argument('--bundle', type=Path)
+    delivery_parser.add_argument('--base', type=Path)
+    delivery_parser.add_argument('--output', type=Path)
     delivery_parser.add_argument('--json', action='store_true')
-    remediation_parser = sub.add_parser('remediation', help='User-level automatic remediation preferences')
+    remediation_parser = sub.add_parser('remediation', help='User-level consent/reporting preferences; fixes require explicit approval')
     remediation_parser.add_argument('action', choices=['status', 'configure'])
-    remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'])
+    remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'],
+                                    help='smart_auto is a legacy alias for ask_before_fix; no mode grants unconfirmed edits')
     summary_parser=sub.add_parser('summary',help='Read developer tasks for this workspace; never scans or invokes AI')
     summary_parser.add_argument('--path')
     summary_parser.add_argument('--scan')
@@ -231,12 +234,20 @@ def main(argv: list[str] | None = None) -> int:
     config_format.add_argument("--toml", action="store_true")
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
-    setup_parser = sub.add_parser("setup", help="Configure an AI coding tool connection")
+    install_parser = sub.add_parser('install', help='Install personal Codex Runtime, global connection and professional Skill together')
+    install_parser.add_argument('integration', nargs='?', choices=['codex'], default='codex')
+    install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
+    install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
+    install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
+    install_parser.add_argument('--path', help='Optional project conflict check; never a project installation')
+    install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
+    install_parser.add_argument('--json', action='store_true')
+    setup_parser = sub.add_parser("setup", help="Configure Codex globally and install its companion Skill together")
     setup_parser.add_argument("integration", nargs="?", choices=["codex", "cursor", "workbuddy"])
     setup_parser.add_argument("--path")
     setup_parser.add_argument('--json', action='store_true')
     setup_parser.add_argument("--verbose", action="store_true")
-    setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default setup installs user-level Codex; --path retains legacy project setup')
+    setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default Codex setup is global, including --path; project scope is explicit legacy/development opt-in')
     setup_parser.add_argument('--dev', action='store_true', help='Explicitly acknowledge a DEV launcher; does not install source paths')
     cursor_hook_parser = sub.add_parser('cursor-hook', help=argparse.SUPPRESS)
     for action in ('status', 'repair', 'uninstall'):
@@ -244,6 +255,9 @@ def main(argv: list[str] | None = None) -> int:
         global_parser.add_argument('--path', help='Inspect or migrate this workspace only')
         global_parser.add_argument('--json', action='store_true')
         global_parser.add_argument('--dev', action='store_true')
+        if action == 'repair':
+            global_parser.add_argument('--approve-user-managed', action='store_true',
+                help='Explicitly approve backup/removal of the diagnosed same-name MCP subtree; never approve unknown Hooks or invalid ownership')
     lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
     lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
     lifecycle_parser.add_argument('integration', choices=['codex', 'cursor'])
@@ -308,15 +322,42 @@ def main(argv: list[str] | None = None) -> int:
         return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'install':
+            from .install_progress import InstallationProgress
+            with installation_progress or InstallationProgress() as progress:
+                from .personal_install import install_personal_codex
+                from .global_integration import render_global
+                from .integration_lifecycle import IntegrationDiagnostic
+                try:
+                    data = install_personal_codex(bundle=args.bundle, root=args.root,
+                        workspace=str(Path(args.path).absolute()) if args.path else None,
+                        allow_dev=args.dev, progress=progress, update=args.update)
+                except (ValueError, OSError, TypeError, RecursionError) as exc:
+                    code = exc.code if isinstance(exc, IntegrationDiagnostic) else 'INSTALL_PATH_OR_STATE_INVALID'
+                    data = {'integration':'codex', 'scope':'GLOBAL', 'overall':'BROKEN', 'diagnostics':[code],
+                        'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
+                            'local_files_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
+                            'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
+                progress.finish(data['installation']['local_files_ready'])
+            print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
+            return 0 if data['installation']['local_files_ready'] else 2
         if args.command == 'delivery':
+            if args.action == 'make-update':
+                from .delta_delivery import make_update
+                if args.base is None or args.bundle is None or args.output is None:
+                    raise ValueError('DELTA_BASE_BUNDLE_OUTPUT_REQUIRED')
+                print(json.dumps(make_update(args.base, args.bundle, args.output), ensure_ascii=True))
+                return 0
             from .delivery import StableDelivery
+            if args.root is None:
+                raise ValueError('DELIVERY_ROOT_REQUIRED')
             delivery = StableDelivery(args.root)
             if args.action == 'activate':
                 if args.bundle is None:
                     raise ValueError('DELIVERY_BUNDLE_REQUIRED')
                 data = delivery.activate(args.bundle)
             else:
-                data = delivery.rollback() if args.action == 'rollback' else delivery.status()
+                data = delivery.rollback() if args.action == 'rollback' else delivery.cleanup() if args.action == 'cleanup' else delivery.status()
             print(json.dumps(data, ensure_ascii=True))
             return 0
         if args.command == 'trial':
@@ -405,7 +446,8 @@ def main(argv: list[str] | None = None) -> int:
                 config.write(args.mode)
             elif args.mode is not None:
                 raise ValueError('status does not accept --mode')
-            print(json.dumps({'remediation': {'mode': config.read()}, 'max_auto_fix_attempts': 2}))
+            print(json.dumps({'remediation': {'mode': config.read(), 'user_consent_required': True,
+                'automatic_fix_without_user_consent': False}, 'max_auto_fix_attempts': 2}))
             return 0
         if args.command=='review-skill':
             from .review_skill import ReviewSkillManager
@@ -582,29 +624,56 @@ def main(argv: list[str] | None = None) -> int:
         global_action = (args.command in {'status', 'repair', 'uninstall'}
             or (args.command == 'integration' and args.integration == 'codex' and args.scope == 'global')
             or (args.command == 'setup' and args.integration in {None, 'codex'}
-                and args.scope != 'project' and (args.path is None or args.scope == 'global'))
+                and args.scope != 'project')
             or (args.command == 'doctor' and not args.project and (args.path is None or args.global_scope)))
         if global_action:
-            from .global_integration import GlobalCodexIntegration, render_global
-            from .global_workspace import resolve_workspace
-            from .integration_lifecycle import IntegrationDiagnostic
-            try:
-                # Local CLI paths may be relative; MCP workspace claims remain strict.
-                workspace = str(Path(args.path).absolute()) if args.path is not None else None
-                if workspace is None:
+            from contextlib import nullcontext
+            from .install_progress import InstallationProgress
+            action = ('uninstall' if args.action == 'remove' else args.action) if args.command == 'integration' else args.command
+            reporter = (installation_progress or InstallationProgress()) if action == 'setup' else nullcontext(None)
+            with reporter as progress:
+                from .global_integration import GlobalCodexIntegration, render_global
+                from .global_workspace import resolve_workspace
+                from .integration_lifecycle import IntegrationDiagnostic
+                from .integration_recovery import configuration_recovery, repair_connection
+                adapter = None
+                workspace = None
+                try:
+                    if progress is not None:
+                        progress('PREPARE')
+                    adapter = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False))
+                    # Local CLI paths may be relative; MCP workspace claims remain strict.
+                    workspace = str(Path(args.path).absolute()) if args.path is not None else None
+                    if workspace is None:
+                        try:
+                            resolve_workspace(str(Path.cwd()))
+                            workspace = str(Path.cwd())
+                        except (ValueError, OSError):
+                            workspace = None
+                    if action == 'repair':
+                        data = repair_connection(adapter, workspace,
+                            approve_user_managed=getattr(args, 'approve_user_managed', False))
+                    elif action == 'setup':
+                        from .personal_install import setup_personal_codex
+                        data = setup_personal_codex(adapter, workspace, progress=progress)
+                    else:
+                        data = adapter.execute(action, workspace)
+                    if data['overall'] == 'DEGRADED':
+                        data['configuration_recovery'] = configuration_recovery(adapter, workspace,
+                            reason=next(iter(data.get('diagnostics', [])), None))
+                except (IntegrationDiagnostic, ValueError, OSError, TypeError, RecursionError):
+                    # Do not echo arbitrary claims or malformed config contents.
+                    exc = sys.exc_info()[1]
+                    reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_STATE_ACCESS_FAILED' if isinstance(exc, OSError) else 'GLOBAL_CONFIGURATION_REJECTED'
+                    data = {'integration': 'codex', 'scope': 'GLOBAL', 'overall': 'BROKEN',
+                            'ownership': 'UNKNOWN', 'diagnostics': [reason]}
                     try:
-                        resolve_workspace(str(Path.cwd()))
-                        workspace = str(Path.cwd())
-                    except (ValueError, OSError):
-                        workspace = None
-                action = ('uninstall' if args.action == 'remove' else args.action) if args.command == 'integration' else args.command
-                data = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False)).execute(action, workspace)
-            except (IntegrationDiagnostic, ValueError, OSError):
-                # Do not echo arbitrary claims or malformed config contents.
-                exc = sys.exc_info()[1]
-                reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_STATE_ACCESS_FAILED' if isinstance(exc, OSError) else 'GLOBAL_CONFIGURATION_REJECTED'
-                data = {'integration': 'codex', 'scope': 'GLOBAL', 'overall': 'BROKEN',
-                        'ownership': 'UNKNOWN', 'diagnostics': [reason]}
+                        if adapter is not None:
+                            data['configuration_recovery'] = configuration_recovery(adapter, workspace, reason=reason)
+                    except (ValueError, OSError, TypeError, RecursionError):
+                        pass  # Never reflect an invalid workspace/configuration claim.
+                if progress is not None:
+                    progress.finish(data.get('installation', {}).get('local_files_ready') is True)
             print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
             return 2 if data['overall'] in {'BROKEN', 'DEGRADED'} else 0
         if args.command == 'integration' or (args.command == 'setup' and args.integration == 'codex'):
@@ -701,7 +770,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(result,ensure_ascii=True) if args.json else json.dumps(result,ensure_ascii=False,indent=2))
             return 0
     except KeyboardInterrupt:
-        print("扫描已取消。", file=sys.stderr)
+        print("安装已取消，未确认完成。" if args.command in {'install', 'setup'} else "操作已取消。", file=sys.stderr, flush=True)
         return 130
     except DiscoveryLimitError as exc:
         if getattr(args, 'json', False):

@@ -134,6 +134,20 @@ class SecuritySummaryService:
         result['scan_context'] = scan_context_summary(scan, self.store, root)
         from .target import selection_summary
         result['target_selection'] = selection_summary(scan['target_profile'])
+        result['rule_coverage'] = {key:value for key,value in scan.get('rule_coverage',{}).items()
+                                   if key != 'scope_files'}
+        pending = sum(t['review_states'][state] for t in tasks for state in ('UNTRIAGED','FAILED','STALE'))
+        result['review_progress'] = {'phase':'CANDIDATE_REVIEW_PENDING' if pending else 'CANDIDATE_REVIEW_COMPLETE',
+            'reviewed':coverage['triaged'], 'pending':pending, 'not_eligible':coverage['not_eligible'],
+            'deep_audit_completion':'NOT_ATTESTED', 'is_security_clearance':False}
+        dependency = scan.get('capability_details',{}).get('DEPENDENCY_VULN',{})
+        fallback = dependency.get('provider_role') == 'FALLBACK'
+        degraded = fallback and dependency.get('status') in {'EXECUTED','PARTIAL'}
+        result['dependency_health'] = {'status':'FALLBACK_SUCCEEDED_WITH_LIMITS' if degraded else dependency.get('status','NOT_EXECUTED'),
+            'message':'主依赖引擎受阻，回退引擎已提供结果；依赖图仍可能不完整，并非全部依赖扫描失败。' if degraded else
+                      '以原扫描的依赖执行状态和图覆盖为准；扫描器成功不等于调用链已验证。',
+            'complete_graph_verified':dependency.get('inventory', {}).get('complete_dependency_graph_attested') is True,
+            'automatic_retry':False}
         result['task_selection_protocol'] = {
             'identity': 'task_ref', 'display_numbers': 'RESPONSE_LOCAL_ONLY',
             'instruction': '“继续第一项”对应本次 recommended_tasks 的第一项及其 continuation；不重新查询后按 T01 换对象。缺少原响应或引用失效时刷新并重新选择。',

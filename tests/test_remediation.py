@@ -79,7 +79,24 @@ def setup(repo, tmp_path, request):
     provider.findings = [finding]
     (repo / 'A.java').write_text(UNSAFE)
     grant = hook()
+    service._test_consent_policy_revision = service.config.revision()
+    if not hasattr(request, 'param'):
+        # Lifecycle tests begin AFTER a synthetic explicit human approval.
+        # Parametrized confirmation/report tests retain the pending response.
+        grant = approve_hook(service, repo, grant)
     return repo, runtime, provider, service, hook, grant
+
+
+def approve_hook(service, root, result):
+    pending = result['remediation']
+    if pending['action'] == 'CONFIRM_REQUIRED':
+        assert 'prepare' not in pending and not service.prepared
+        result['remediation'] = service.confirm(pending['confirmation_ref'], pending['task_ref'], root, approve=True)
+        assert result['remediation']['authorization_kind'] == 'USER_CONFIRMED', result['remediation']
+        for key in ('stopReason', 'systemMessage', 'hookSpecificOutput'):
+            result.pop(key, None)
+        result.update(codex_hook_output(result))
+    return result
 
 
 def args(setup):
@@ -99,7 +116,8 @@ def test_new_grant_and_readonly_existing_prepare(setup):
     assert grant['remediation']['finding_policy'] == 'ACTIONABLE'
     assert grant['remediation']['policy_source'] == 'DETERMINISTIC_LOCAL_TLS_INVARIANT'
     assert grant['remediation']['production_reachability'] == 'UNKNOWN'
-    assert 'SECURITY_AUTO_REMEDIATION_AUTHORIZED' in codex_hook_output(grant)['stopReason']
+    assert grant['remediation']['authorization_kind'] == 'USER_CONFIRMED'
+    assert grant['remediation']['reason_code'] == 'USER_APPROVED_REPAIR'
     before = {p: p.read_bytes() for p in service.state.directory.rglob('*') if p.is_file()}
     packet = prepare(setup)
     assert packet['status'] == 'READY_FOR_HOST_FIX'
@@ -213,7 +231,7 @@ def test_no_source_secret_prompt_or_raw_token_in_state(setup):
 
 
 @pytest.mark.parametrize('priority,category,mode,expected', [
-    ('ACTIONABLE','code','smart_auto','AUTO_FIX'),
+    ('ACTIONABLE','code','smart_auto','CONFIRM_REQUIRED'),
     ('REVIEW','code','smart_auto','ADVISE'),
     ('SUPPRESSED','code','smart_auto','NONE'),
     ('BEST_PRACTICE','iac','smart_auto','NONE'),
@@ -238,9 +256,9 @@ def test_missing_eligibility_fail_closed(field, value):
 @pytest.mark.parametrize('mode', ['smart_auto','report_only','ask_before_fix'])
 def test_user_config(mode, tmp_path):
     c = RemediationConfig(tmp_path / 'remediation.json')
-    assert c.read() == 'smart_auto'
+    assert c.read() == 'ask_before_fix'
     c.write(mode)
-    assert c.read() == mode
+    assert c.read() == ('ask_before_fix' if mode == 'smart_auto' else mode)
     c.path.write_text('{"remediation":{"mode":"smart_auto","source":"' + CANARY + '"}}')
     with pytest.raises(ValueError, match='Invalid remediation'): c.read()
 
@@ -271,7 +289,7 @@ def test_readonly_preference_cli(tmp_path, monkeypatch, capsys):
     from security_runtime.cli import main
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path))
     assert main(['remediation', 'status']) == 0
-    assert json.loads(capsys.readouterr().out)['remediation']['mode'] == 'smart_auto'
+    assert json.loads(capsys.readouterr().out)['remediation']['mode'] == 'ask_before_fix'
     assert not (tmp_path / 'remediation.json').exists()
     assert main(['remediation','configure','--mode','report_only']) == 0
     assert main(['remediation','status']) == 0
@@ -344,7 +362,7 @@ def test_connection_restart_after_prepare_fails_closed(setup):
     data = args(setup)
     (root / 'A.java').write_text(FIXED)
     runtime.findings = provider.findings = []
-    assert restart.verify(data['remediation_ref'], data['task_ref'], root)['reason_code'] == 'PREPARATION_REQUIRED'
+    assert restart.verify(data['remediation_ref'], data['task_ref'], root)['reason_code'] == 'SOURCE_PRESERVATION_NOT_PROVEN'
 
 
 def test_new_hook_best_practice_is_quiet(setup, tmp_path):

@@ -1,7 +1,7 @@
 {
   "schema_version": "rule-program-v1",
   "program_id": "ai-security-java",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "rule_pack": "ai-security-core",
   "capabilities": [
     {
@@ -35,8 +35,8 @@
           "Cross-file wrappers, reachability and deployment exploitability are not established."
         ]
       },
-      "remediation_mode": "EXISTING_GUARDED_FIX",
-      "auto_fix_eligible": true,
+      "remediation_mode": "USER_AUTHORIZED_HOST_FIX",
+      "auto_fix_eligible": false,
       "default_enabled": true,
       "test_corpus": {
         "manifest": "tests/rule_program/corpus.json",
@@ -438,6 +438,636 @@
         "kind": "SYNTHETIC"
       },
       "family_anchor": "capability:JAVA_UNSAFE_DESERIALIZATION"
+    },
+    {
+      "capability_id": "PYTHON_SQL_INJECTION",
+      "title": "不可信输入拼接到 SQL 查询",
+      "language": "python",
+      "category": "sql-injection",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-89"
+      ],
+      "owasp_mapping": [
+        "A05:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.sql-injection"
+      ],
+      "frameworks": [
+        "Flask / Django / DB-API"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "sql-injection",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_SQL_INJECTION"
+    },
+    {
+      "capability_id": "PYTHON_SSRF",
+      "title": "不可信地址进入服务器 HTTP 请求",
+      "language": "python",
+      "category": "ssrf",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-918"
+      ],
+      "owasp_mapping": [
+        "A01:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.ssrf"
+      ],
+      "frameworks": [
+        "Flask / Django / Requests / HTTPX"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "ssrf",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_SSRF"
+    },
+    {
+      "capability_id": "PYTHON_PATH_TRAVERSAL",
+      "title": "不可信路径进入文件读取",
+      "language": "python",
+      "category": "path-traversal",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-22"
+      ],
+      "owasp_mapping": [
+        "A01:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.path-traversal"
+      ],
+      "frameworks": [
+        "Flask / Django / Python"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "path-traversal",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_PATH_TRAVERSAL"
+    },
+    {
+      "capability_id": "PYTHON_UNTRUSTED_PICKLE",
+      "title": "不可信数据交给 pickle 反序列化",
+      "language": "python",
+      "category": "unsafe-deserialization",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-502"
+      ],
+      "owasp_mapping": [
+        "A08:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.pickle-untrusted"
+      ],
+      "frameworks": [
+        "Flask / Django / pickle"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "unsafe-deserialization",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_UNTRUSTED_PICKLE"
+    },
+    {
+      "capability_id": "PYTHON_UNSAFE_YAML",
+      "title": "YAML 使用可构造任意对象的加载器",
+      "language": "python",
+      "category": "unsafe-deserialization",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-502"
+      ],
+      "owasp_mapping": [
+        "A08:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.unsafe-yaml"
+      ],
+      "frameworks": [
+        "PyYAML"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "unsafe-deserialization",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_UNSAFE_YAML"
+    },
+    {
+      "capability_id": "PYTHON_TLS_VERIFICATION_DISABLED",
+      "title": "Python HTTP 客户端关闭 TLS 证书校验",
+      "language": "python",
+      "category": "trust-all-tls",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-295"
+      ],
+      "owasp_mapping": [
+        "A04:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.tls-verification-disabled"
+      ],
+      "frameworks": [
+        "Requests / HTTPX"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "trust-all-tls",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_TLS_VERIFICATION_DISABLED"
+    },
+    {
+      "capability_id": "PYTHON_FLASK_DEBUG",
+      "title": "Flask 启用了调试服务器",
+      "language": "python",
+      "category": "security-misconfiguration",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-489"
+      ],
+      "owasp_mapping": [
+        "A02:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.flask-debug"
+      ],
+      "frameworks": [
+        "Flask"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "security-misconfiguration",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_FLASK_DEBUG"
+    },
+    {
+      "capability_id": "PYTHON_DJANGO_CSRF_EXEMPT",
+      "title": "Django 视图显式豁免 CSRF 校验",
+      "language": "python",
+      "category": "csrf",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-352"
+      ],
+      "owasp_mapping": [
+        "A01:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.django-csrf-exempt"
+      ],
+      "frameworks": [
+        "Django"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "csrf",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_DJANGO_CSRF_EXEMPT"
+    },
+    {
+      "capability_id": "PYTHON_UNESCAPED_HTML",
+      "title": "不可信输入被标记为安全 HTML",
+      "language": "python",
+      "category": "xss",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-79"
+      ],
+      "owasp_mapping": [
+        "A05:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.unescaped-html"
+      ],
+      "frameworks": [
+        "Flask / Django / MarkupSafe"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "xss",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_UNESCAPED_HTML"
+    },
+    {
+      "capability_id": "PYTHON_JWT_SIGNATURE_DISABLED",
+      "title": "JWT 解码显式关闭签名验证",
+      "language": "python",
+      "category": "authentication-bypass",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-347"
+      ],
+      "owasp_mapping": [
+        "A07:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.jwt-signature-disabled"
+      ],
+      "frameworks": [
+        "PyJWT"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "authentication-bypass",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_JWT_SIGNATURE_DISABLED"
+    },
+    {
+      "capability_id": "PYTHON_XML_EXTERNAL_ENTITIES",
+      "title": "XML 解析器显式启用实体展开",
+      "language": "python",
+      "category": "xxe",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-611"
+      ],
+      "owasp_mapping": [
+        "A02:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.lxml-external-entities"
+      ],
+      "frameworks": [
+        "lxml"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "xxe",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_XML_EXTERNAL_ENTITIES"
+    },
+    {
+      "capability_id": "PYTHON_WEAK_PASSWORD_HASH",
+      "title": "Django 显式使用 MD5 密码哈希",
+      "language": "python",
+      "category": "weak-password-hash",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-916"
+      ],
+      "owasp_mapping": [
+        "A04:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.django-md5-password"
+      ],
+      "frameworks": [
+        "Django"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "weak-password-hash",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_WEAK_PASSWORD_HASH"
+    },
+    {
+      "capability_id": "PYTHON_TEMPLATE_INJECTION",
+      "title": "不可信输入被当作模板源码",
+      "language": "python",
+      "category": "template-injection",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-1336"
+      ],
+      "owasp_mapping": [
+        "A05:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.python.template-injection"
+      ],
+      "frameworks": [
+        "Flask"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "template-injection",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:PYTHON_TEMPLATE_INJECTION"
+    },
+    {
+      "capability_id": "JAVA_SERVLET_XSS",
+      "title": "不可信输入直接输出到 Servlet 响应",
+      "language": "java",
+      "category": "xss",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-79"
+      ],
+      "owasp_mapping": [
+        "A05:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.servlet-xss"
+      ],
+      "frameworks": [
+        "Servlet"
+      ],
+      "evidence_contract": {
+        "basis": "ENGINE_TAINT_MATCH",
+        "source": "MODELED_WEB_OR_CLI_INPUT",
+        "sink": "xss",
+        "dataflow_scope": "INTRAPROCEDURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_SERVLET_XSS"
+    },
+    {
+      "capability_id": "JAVA_SPRING_CSRF_DISABLED",
+      "title": "Spring Security 显式关闭 CSRF 校验",
+      "language": "java",
+      "category": "csrf",
+      "severity": "HIGH",
+      "cwe": [
+        "CWE-352"
+      ],
+      "owasp_mapping": [
+        "A01:2025"
+      ],
+      "maturity": "VALIDATED",
+      "scanner_engine": "semgrep",
+      "underlying_rule_ids": [
+        "ai-security.java.spring-csrf-disabled"
+      ],
+      "frameworks": [
+        "Spring Security"
+      ],
+      "evidence_contract": {
+        "basis": "STRUCTURAL_MATCH",
+        "source": "EXPLICIT_UNSAFE_API_OR_SETTING",
+        "sink": "csrf",
+        "dataflow_scope": "STRUCTURAL",
+        "location": "scanner coordinates",
+        "rule_identity": "underlying_rule_id retained",
+        "confidence": "HIGH",
+        "limitations": [
+          "Synthetic positive/negative fixtures, not independent production ground truth.",
+          "Interprocedural propagation, effective shared controls and deployment exploitability are not established."
+        ]
+      },
+      "remediation_mode": "GUIDANCE_ONLY",
+      "auto_fix_eligible": false,
+      "default_enabled": true,
+      "test_corpus": {
+        "manifest": "tests/rule_program/corpus.json",
+        "kind": "SYNTHETIC"
+      },
+      "family_anchor": "capability:JAVA_SPRING_CSRF_DISABLED"
     }
   ],
   "legacy_rules": [
@@ -560,7 +1190,24 @@
       "JAVA_ARBITRARY_FILE_READ",
       "JAVA_ARBITRARY_FILE_WRITE",
       "JAVA_XXE",
-      "JAVA_UNSAFE_DESERIALIZATION"
+      "JAVA_UNSAFE_DESERIALIZATION",
+      "JAVA_SERVLET_XSS",
+      "JAVA_SPRING_CSRF_DISABLED"
+    ],
+    "validated_python_pack_v1": [
+      "PYTHON_SQL_INJECTION",
+      "PYTHON_SSRF",
+      "PYTHON_PATH_TRAVERSAL",
+      "PYTHON_UNTRUSTED_PICKLE",
+      "PYTHON_UNSAFE_YAML",
+      "PYTHON_TLS_VERIFICATION_DISABLED",
+      "PYTHON_FLASK_DEBUG",
+      "PYTHON_DJANGO_CSRF_EXEMPT",
+      "PYTHON_UNESCAPED_HTML",
+      "PYTHON_JWT_SIGNATURE_DISABLED",
+      "PYTHON_XML_EXTERNAL_ENTITIES",
+      "PYTHON_WEAK_PASSWORD_HASH",
+      "PYTHON_TEMPLATE_INJECTION"
     ]
   }
 }

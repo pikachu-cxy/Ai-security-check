@@ -1,4 +1,4 @@
-"""Bounded Stop fallback for an existing, unconsumed POLICY_AUTO handoff.
+"""Bounded Stop fallback for an existing, human-approved repair handoff.
 
 Opaque references stay connection-local. Signed records remain authoritative;
 this guard neither issues authority nor performs preparation or verification.
@@ -18,7 +18,7 @@ MAX_HANDOFFS = 32
 CONTINUATION_WINDOW = 900  # guard eligibility only; never renew a repair grant
 GUIDANCE = (
     'SECURITY_AUTO_REMEDIATION_CONTINUATION_REQUIRED. '
-    'Runtime has already authorized this exact bounded repair. User confirmation is not required. '
+    'The user already approved this exact bounded repair. Do not infer consent for another issue. '
     'The authorized workflow is incomplete. Immediately call prepare_task_fix with the existing '
     'Runtime-issued handoff below. Do not ask the user for approval. Do not repeat the insecure edit. '
     'Follow the existing preparation and security verification protocol; no additional repair authority is issued. ')
@@ -38,7 +38,7 @@ class HostContinuationGuard:
 
     def remember(self, path, record, snapshot, arguments):
         """Retain the exact issued handoff, never reconstruct a bearer token."""
-        if record.get('authorization_kind', 'POLICY_AUTO') != 'POLICY_AUTO':
+        if record.get('authorization_kind') != 'USER_CONFIRMED':
             return
         # This optional fallback cannot interfere with normal grant issuance.
         try:
@@ -48,7 +48,7 @@ class HostContinuationGuard:
                 return
             key = key_path.read_bytes()
             mode, policy = self.remediation._policy_binding(key)
-            if mode != 'smart_auto' or len(json.dumps(arguments)) > 4096:
+            if mode != 'ask_before_fix' or len(json.dumps(arguments)) > 4096:
                 return
             now = time.monotonic()
             for token, item in list(self.handoffs.items()):
@@ -64,8 +64,8 @@ class HostContinuationGuard:
 
     def _current(self, root, session, item, record, key, host):
         service = self.remediation
-        return (record['phase'] == 'OFFERED' and record.get('last_action') == 'AUTO_FIX'
-                and record.get('authorization_kind', 'POLICY_AUTO') == 'POLICY_AUTO'
+        return (record['phase'] == 'AUTHORIZED' and record.get('last_action') == 'AUTO_FIX'
+                and record.get('authorization_kind') == 'USER_CONFIRMED'
                 and record.get('host_id') == identity(host) and record.get('session_id') == identity(session)
                 and record['family_key'] == item['family']
                 and record.get('last_snapshot_digest') == item['snapshot']
@@ -90,7 +90,7 @@ class HostContinuationGuard:
                 for item in candidates:
                     args = item['arguments']
                     current_path, key, rows, record = service._reference(root, args['remediation_ref'], args['task_ref'])
-                    if (current_path != path or len(key) != 32 or record['phase'] != 'OFFERED'
+                    if (current_path != path or len(key) != 32 or record['phase'] != 'AUTHORIZED'
                             or record.get('token_hash') in service.prepared):
                         continue
                     binding = digest(key, json.dumps([record['token_hash'], item['snapshot'], item['policy'],

@@ -55,6 +55,19 @@ def test_cycle_breakdown_partitions_wall_clock_and_classifies_boundaries(tmp_pat
     assert result['remediation_cycle_boundary']['security_rescan'].startswith('SCANNER_PROCESSING')
 
 
+def test_consent_wait_is_not_host_edit_duration_or_retry(tmp_path):
+    cycles = RemediationCycles(clock=lambda: 113.0)
+    cycles.start(tmp_path, 'consent', 100.0, points={'initial_hook_response_ready':101.0,
+        'consent_handoff_ready':110.0, 'fix_edit_hook_started':111.0,
+        'security_rescan_started':111.5, 'security_rescan_finished':112.0},
+        fix_path='DETERMINISTIC_FAST_FIX')
+    cycles.bind_grant(tmp_path, 'consent', 'confirmed-token')
+    result = cycles.result(tmp_path, 'consent', complete=True)
+    assert result['remediation_cycle_breakdown_ms']['host_fast_apply_window'] == 1000.0
+    assert result['remediation_cycle_breakdown_ms']['unaccounted'] == 9000.0
+    assert not result['remediation_cycle_boundary']['multiple_attempts_observed']
+
+
 def test_missing_cycle_timepoints_are_unknown_not_invented(tmp_path):
     now = [110.0]
     cycles = RemediationCycles(clock=lambda: now[0])

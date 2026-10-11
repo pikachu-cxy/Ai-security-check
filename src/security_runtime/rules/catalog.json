@@ -1,6 +1,6 @@
 {
   "rule_pack": "ai-security-core",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "rules": [
     {
       "language": "java",
@@ -1551,6 +1551,576 @@
         ".py"
       ],
       "fixture": "tests/rules/python/core.py"
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "sql-injection",
+      "cwe": [
+        "CWE-89"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask / Django / DB-API",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/89.html",
+        "https://docs.djangoproject.com/en/5.2/topics/security/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/89.html",
+          "https://docs.djangoproject.com/en/5.2/topics/security/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.sql-injection",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-sql-injection.yml",
+      "fixture": "tests/rules/python/sql-injection.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "ssrf",
+      "cwe": [
+        "CWE-918"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask / Django / Requests / HTTPX",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/918.html",
+        "https://requests.readthedocs.io/en/latest/user/advanced/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/918.html",
+          "https://requests.readthedocs.io/en/latest/user/advanced/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.ssrf",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-ssrf.yml",
+      "fixture": "tests/rules/python/ssrf.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "path-traversal",
+      "cwe": [
+        "CWE-22"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask / Django / Python",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/22.html",
+        "https://docs.python.org/3/library/functions.html#open"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/22.html",
+          "https://docs.python.org/3/library/functions.html#open"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.path-traversal",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-path-traversal.yml",
+      "fixture": "tests/rules/python/path-traversal.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "unsafe-deserialization",
+      "cwe": [
+        "CWE-502"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask / Django / pickle",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/502.html",
+        "https://docs.python.org/3/library/pickle.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/502.html",
+          "https://docs.python.org/3/library/pickle.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.pickle-untrusted",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-pickle-untrusted.yml",
+      "fixture": "tests/rules/python/pickle-untrusted.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "unsafe-deserialization",
+      "cwe": [
+        "CWE-502"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "PyYAML",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/502.html",
+        "https://pyyaml.org/wiki/PyYAMLDocumentation"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/502.html",
+          "https://pyyaml.org/wiki/PyYAMLDocumentation"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.unsafe-yaml",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-unsafe-yaml.yml",
+      "fixture": "tests/rules/python/unsafe-yaml.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "trust-all-tls",
+      "cwe": [
+        "CWE-295"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Requests / HTTPX",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/295.html",
+        "https://requests.readthedocs.io/en/latest/user/advanced/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/295.html",
+          "https://requests.readthedocs.io/en/latest/user/advanced/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.tls-verification-disabled",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-tls-verification-disabled.yml",
+      "fixture": "tests/rules/python/tls-verification-disabled.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "security-misconfiguration",
+      "cwe": [
+        "CWE-489"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/489.html",
+        "https://flask.palletsprojects.com/en/stable/debugging/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/489.html",
+          "https://flask.palletsprojects.com/en/stable/debugging/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.flask-debug",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-flask-debug.yml",
+      "fixture": "tests/rules/python/flask-debug.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "csrf",
+      "cwe": [
+        "CWE-352"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Django",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/352.html",
+        "https://docs.djangoproject.com/en/5.2/ref/csrf/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/352.html",
+          "https://docs.djangoproject.com/en/5.2/ref/csrf/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.django-csrf-exempt",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-django-csrf-exempt.yml",
+      "fixture": "tests/rules/python/django-csrf-exempt.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "xss",
+      "cwe": [
+        "CWE-79"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask / Django / MarkupSafe",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/79.html",
+        "https://docs.djangoproject.com/en/5.2/topics/security/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/79.html",
+          "https://docs.djangoproject.com/en/5.2/topics/security/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.unescaped-html",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-unescaped-html.yml",
+      "fixture": "tests/rules/python/unescaped-html.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "authentication-bypass",
+      "cwe": [
+        "CWE-347"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "PyJWT",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/347.html",
+        "https://pyjwt.readthedocs.io/en/stable/usage.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/347.html",
+          "https://pyjwt.readthedocs.io/en/stable/usage.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.jwt-signature-disabled",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-jwt-signature-disabled.yml",
+      "fixture": "tests/rules/python/jwt-signature-disabled.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "xxe",
+      "cwe": [
+        "CWE-611"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "lxml",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/611.html",
+        "https://lxml.de/FAQ.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/611.html",
+          "https://lxml.de/FAQ.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.lxml-external-entities",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-lxml-external-entities.yml",
+      "fixture": "tests/rules/python/lxml-external-entities.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "weak-password-hash",
+      "cwe": [
+        "CWE-916"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Django",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/916.html",
+        "https://docs.djangoproject.com/en/5.2/topics/auth/passwords/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/916.html",
+          "https://docs.djangoproject.com/en/5.2/topics/auth/passwords/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.django-md5-password",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/python-django-md5-password.yml",
+      "fixture": "tests/rules/python/django-md5-password.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "python",
+      "category": "template-injection",
+      "cwe": [
+        "CWE-1336"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Flask",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/1336.html",
+        "https://flask.palletsprojects.com/en/stable/templating/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/1336.html",
+          "https://flask.palletsprojects.com/en/stable/templating/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.template-injection",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/python-template-injection.yml",
+      "fixture": "tests/rules/python/template-injection.py",
+      "target_extensions": [
+        ".py"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "java",
+      "category": "xss",
+      "cwe": [
+        "CWE-79"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Servlet",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/79.html",
+        "https://owasp.org/www-community/attacks/xss/"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/79.html",
+          "https://owasp.org/www-community/attacks/xss/"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.servlet-xss",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "taint",
+      "path": "framework/java-servlet-xss.yml",
+      "fixture": "tests/rules/java/servlet-xss.java",
+      "target_extensions": [
+        ".java"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.0",
+      "language": "java",
+      "category": "csrf",
+      "cwe": [
+        "CWE-352"
+      ],
+      "confidence": "HIGH",
+      "maturity": "BETA",
+      "framework": "Spring Security",
+      "references": [
+        "https://cwe.mitre.org/data/definitions/352.html",
+        "https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-10",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/352.html",
+          "https://docs.spring.io/spring-security/reference/servlet/exploits/csrf.html"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.java.spring-csrf-disabled",
+      "engine_languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "mode": "search",
+      "path": "framework/java-spring-csrf-disabled.yml",
+      "fixture": "tests/rules/java/spring-csrf-disabled.java",
+      "target_extensions": [
+        ".java"
+      ]
     }
   ]
 }

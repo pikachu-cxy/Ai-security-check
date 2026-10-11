@@ -110,9 +110,9 @@ def test_confirmation_and_report_only_cannot_continue(setup):
     assert codex_hook_output(stop(setup)) == {} and not setup[3].prepared
 
 
-def test_user_confirmed_grant_excluded_even_when_action_auto(setup):
+def test_old_policy_auto_grant_excluded_even_when_action_auto(setup):
     service, path, key, rows, record = state(setup)
-    record.update(authorization_kind='USER_CONFIRMED', phase='AUTHORIZED')
+    record.update(authorization_kind='POLICY_AUTO', phase='OFFERED')
     service._save(path, rows, key)
     assert codex_hook_output(stop(setup)) == {}
 

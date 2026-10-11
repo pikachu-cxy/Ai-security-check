@@ -42,7 +42,9 @@ def projects(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def installed(projects, tmp_path):
+def installed(projects, tmp_path, monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setenv('SECURITY_RUNTIME_SKILLS_DIR', str(tmp_path / 'skills'))
     probe = lambda *args: check_capabilities(runtime_info(), REQUIRED_TOOLS)
     old = CodexIntegrationAdapter(directory=tmp_path / 'state/legacy', probe=probe,
         baseline_coordinator=HookCoordinator(FakeRuntime(), HookStateStore(tmp_path / 'state/legacy-hooks')))

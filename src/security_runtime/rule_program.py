@@ -104,9 +104,8 @@ def validate_manifest(data, catalog):
         if row['maturity'] == 'EXPERIMENTAL' and row['default_enabled']:
             raise ValueError('Experimental capability cannot enter default protection')
         # A manifest cannot graduate a second automatic fixer by assertion.
-        if row['auto_fix_eligible'] and (cid != 'JAVA_TLS_HOSTNAME_VERIFICATION_DISABLED' or
-                row['maturity'] not in {'CORE','AUTO_FIX_ELIGIBLE'} or row['underlying_rule_ids'] != ['ai-security.java.trust-all-hostname']):
-            raise ValueError('Automatic fix requires existing guarded TLS graduation')
+        if row['auto_fix_eligible']:
+            raise ValueError('Automatic fix without explicit user consent is prohibited')
         if row['maturity'] == 'AUTO_FIX_ELIGIBLE' and not row['auto_fix_eligible']:
             raise ValueError('Automatic fix maturity requires separate eligibility')
         evidence = row['evidence_contract']
@@ -153,7 +152,11 @@ def validate_manifest(data, catalog):
     profiles = data['profiles']
     expected_core = [c.capability_id for c in capabilities if c.language in {'java','any'} and c.maturity in {'CORE','AUTO_FIX_ELIGIBLE'}]
     expected_validated = [c.capability_id for c in capabilities if c.language == 'java' and c.maturity == 'VALIDATED']
-    if profiles != {'java_core_pack_v1':expected_core,'validated_java_pack_v1':expected_validated}:
+    expected_profiles = {'java_core_pack_v1':expected_core,'validated_java_pack_v1':expected_validated}
+    python = [c.capability_id for c in capabilities if c.language == 'python' and c.maturity == 'VALIDATED']
+    if python:
+        expected_profiles['validated_python_pack_v1'] = python
+    if profiles != expected_profiles:
         raise ValueError('Rule Program profiles must keep maturity tiers separate')
     return RuleProgram(data['version'], tuple(capabilities), tuple(legacy))
 

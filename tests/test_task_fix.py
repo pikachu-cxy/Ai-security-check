@@ -43,6 +43,8 @@ def test_prepare_structured_tls_readonly_even_without_state_key(sample):
             patch('security_runtime.processes.run_process', side_effect=AssertionError('execution forbidden')):
         out = service(sample).prepare(task(sample)['task_ref'], sample[0])
     assert out['status'] == 'READY_FOR_HOST_FIX'
+    assert out['authorization_requirements']['user_consent_required']
+    assert out['authorization_requirements']['preparation_is_not_user_consent']
     assert out['affected_finding_count'] == 2
     assert '证书' in out['security_goal'] and '主机名' in out['security_goal']
     assert any('trust-all' in c['requirement'] for c in out['fix_constraints'])

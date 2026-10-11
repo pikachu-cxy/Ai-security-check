@@ -86,7 +86,7 @@ def test_structured_ticket_survives_prose_loss_and_closes(inline_setup, prose):
         for key in codex_hook_output(wire): wire.pop(key, None)
         wire['remediation'].pop('guidance')
     else:
-        wire['stopReason'] = '...'; wire['hookSpecificOutput']['additionalContext'] = '...'
+        wire['stopReason'] = '...'; wire.setdefault('hookSpecificOutput', {})['additionalContext'] = '...'
     t = wire['remediation']['agent_fix_ticket']
     assert t['remediation_ref'] == ticket(data)['remediation_ref']
     checked = fix(data)
@@ -100,12 +100,13 @@ def test_structured_ticket_survives_prose_loss_and_closes(inline_setup, prose):
 
 
 def test_hook_text_projection_uses_same_ticket_not_duplicate_report(inline_setup):
-    hook = inline_setup[-1]; projected = json.loads(hook['hookSpecificOutput']['additionalContext'])
-    assert projected['remediation']['agent_fix_ticket'] == ticket(inline_setup)
-    assert projected['remediation']['security_fix_context'] == hook['remediation']['security_fix_context']
-    assert 'scanner_diagnostics' not in projected and 'prepare' not in projected['remediation']
-    assert len(hook['hookSpecificOutput']['additionalContext'].encode()) < 7000
-    assert 'already prepared' in hook['systemMessage']
+    # The new ticket comes from the explicit confirmation response, not the
+    # pre-consent Hook text. Structured consent response remains source-free.
+    response = inline_setup[-1]['remediation']
+    assert response['agent_fix_ticket'] == ticket(inline_setup)
+    assert response['authorization_kind'] == 'USER_CONFIRMED'
+    assert len(encoded(response['agent_fix_ticket'])) <= MAX_BYTES
+    assert 'already prepared' in response['guidance']
 
 
 def test_original_prepare_checks_reused_and_prepared_cannot_skip_them(inline_setup, monkeypatch):
@@ -191,7 +192,7 @@ def test_recurrence_new_ticket_and_old_refs_rejected(inline_setup):
     assert rejected['verification_status'] == 'INCONCLUSIVE'
     with pytest.raises(ValueError, match='REMEDIATION_EPISODE_SUPERSEDED'):
         data[3]._reference(data[0], first['remediation_ref'], first['task_ref'])
-    assert record(data)['phase'] == 'OFFERED'
+    assert record(data)['phase'] == 'AUTHORIZED'
     assert fix(data)['remediation']['reason_code'] == 'SCANNER_VERIFIED_RESOLVED'
 
 
@@ -210,7 +211,7 @@ def test_wrong_workspace_and_wrong_opaque_refs_fail_closed(inline_setup, tmp_pat
                             (t['remediation_ref'] + '0', t['task_ref'], data[0]),
                             (t['remediation_ref'], t['task_ref'] + '0', data[0])]:
         assert data[3].verify(ref, task, root)['verification_status'] == 'INCONCLUSIVE'
-    assert record(data)['phase'] == 'OFFERED'
+    assert record(data)['phase'] == 'AUTHORIZED'
 
 
 def test_no_deep_calls_and_nonoverlapping_monotonic_cycle(inline_setup, monkeypatch):
@@ -264,7 +265,8 @@ def test_ambiguous_whole_line_keeps_legacy_prepare(inline_setup):
     fix(data)
     data[0].joinpath('A.java').write_text(UNSAFE.replace('-> true);', '-> true); // preserve this comment'))
     data[1].findings = data[2].findings = [finding]
-    out = data[4]()['remediation']
+    from test_remediation import approve_hook
+    out = approve_hook(data[3], data[0], data[4]())['remediation']
     assert out['action'] == 'AUTO_FIX' and 'agent_fix_ticket' not in out
     assert out['agent_fix_ticket_diagnostics']['prepare_task_fix_required']
     args = out['prepare']['arguments']

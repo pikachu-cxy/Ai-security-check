@@ -157,8 +157,12 @@ def test_mode_observation_is_actual_readonly_and_bounded(tmp_path, monkeypatch, 
         assert server._tool_manager.get_tool('get_runtime_info').annotations.readOnlyHint
         data = invoke(server)
     invalid = mode in {'invalid', 'secret-json', 'oversize'}
-    assert data['remediation'] == {'mode': 'UNKNOWN' if invalid else mode or 'smart_auto',
-                                    'configuration_status': 'INVALID' if invalid else 'VALID'}
+    effective = 'ask_before_fix' if mode in (None, 'smart_auto') else mode
+    expected = {'mode': 'UNKNOWN' if invalid else effective,
+                'configuration_status': 'INVALID' if invalid else 'VALID'}
+    if not invalid:
+        expected.update(automatic_fix_without_user_consent=False, user_consent_required=True)
+    assert data['remediation'] == expected
     assert data['features']['smart_auto_remediation'] == data['features']['functional_verification'] == 'v0.1'
     assert data['capability_contract'] == 'developer-guidance-v0.3'
     assert not any(data['execution'].values())
@@ -173,7 +177,7 @@ def test_mcp_info_reads_its_service_config_not_other_environment_state(setup, tm
     (other / 'remediation.json').write_text(json.dumps({'remediation': {'mode': 'report_only'}}))
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(other))
     server = create_server(setup[1])
-    assert invoke(server)['remediation']['mode'] == 'smart_auto'
+    assert invoke(server)['remediation']['mode'] == 'ask_before_fix'
     setup[3].config.write('ask_before_fix')
     assert invoke(server)['remediation']['mode'] == 'ask_before_fix'
     assert runtime_info()['remediation']['mode'] == 'report_only'

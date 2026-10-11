@@ -33,7 +33,7 @@ def risk(repo, harness):
     return edit(core, repo)
 
 
-def assert_offer(out, expected='AUTO_FIX'):
+def assert_offer(out, expected='CONFIRM_REQUIRED'):
     assert out['status'] == 'REMEDIATION_OFFERED' and out['remediation_status'] == 'OFFERED'
     assert out['policy_decision'] == expected and out['action'] == 'ADVISE'
     assert out['remediation_execution_capability'] == 'ADVISORY_ONLY'
@@ -58,7 +58,7 @@ def test_cursor_first_attributed_tls_offers_without_grant(repo, harness, tmp_pat
     assert native == {}  # Frozen Cursor schema; no fictional post-edit context field.
     assert out['first_scan_attribution_status'] == 'FIRST_SCAN_NEW_RISK_ATTRIBUTED'
     assert_offer(out['remediation'])
-    assert out['remediation']['policy_authorization_kind'] == 'POLICY_AUTO'
+    assert out['remediation']['policy_authorization_kind'] == 'NOT_AUTOMATIC'
     assert out['continuation_status'] == 'PENDING_CURSOR_CONTINUATION_CAPABILITY'
     assert (repo/'A.java').read_bytes() == before
     row = recent.recent(repo)['records'][0]

@@ -84,11 +84,14 @@ class SASTRulePlan:
         program = getattr(self.pack, 'program', None)
         capabilities = [c for c in program.capabilities if c.scanner_engine == 'semgrep' and
             any(r.rule_id in c.underlying_rule_ids for r in self.rules)] if program else []
+        from .owasp_coverage import owasp_coverage
         return {'engine':'semgrep','rule_pack_id':self.pack.descriptor.rule_pack_id,
             'rule_pack_version':self.pack.descriptor.version,'rule_pack_checksum':self.pack.checksum,
             'detected_languages':list(self.detected_languages),'per_language':per_language,'status':aggregate,
             'total_available':len({r.rule_id for r in self.pack.catalog}),'total_selected':len({r.rule_id for r in self.rules}),
             'total_executed':len({rid for row in per_language.values() for rid in row['executed_rule_ids']}),
+            'owasp_top10':owasp_coverage(self.pack, (r.rule_id for r in self.rules),
+                {rid for row in per_language.values() for rid in row['executed_rule_ids']}),
             'total_files':len(self.files),'scope_files':list(self.files),
             'engine_skipped_count':len(self.skipped_files),
             'engine_skipped_targets':[{'path': name, 'reason': reason, 'source': 'SCANNER'}
@@ -98,6 +101,7 @@ class SASTRulePlan:
             'applicable_capabilities':len(capabilities),
             'capabilities':[{'capability_id':c.capability_id,'title':c.title,'maturity':c.maturity,
                 'auto_fix_eligible':c.auto_fix_eligible,
+                'owasp_mapping':list(c.owasp_mapping),
                 'frameworks':list(c.frameworks),
                 'framework_applicability':'ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN',
                 'selected_rule_ids':[r.rule_id for r in self.rules if r.rule_id in c.underlying_rule_ids]}

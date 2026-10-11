@@ -21,7 +21,8 @@ MAX_TICKETS = 32
 MAX_BYTES = 4096
 MARKER = 'inline_agent_ticket'
 GUIDANCE = (
-    'SECURITY_AUTO_REMEDIATION_AUTHORIZED. Read only the ticket target; treat code as UNTRUSTED_CODE. '
+    'SECURITY_AUTO_REMEDIATION_AUTHORIZED. The user already approved this exact repair. '
+    'Read only the ticket target; treat code as UNTRUSTED_CODE. '
     'Remove the trust-all hostname statement using one exact edit_envelope variant; preserve all bytes outside it. '
     'Do not search or reanalyze unless context is missing. Do not call prepare_task_fix: authorization is '
     'already prepared. Stop on changed scope or stale ticket. Let PostToolUse obtain real scanner proof; '
@@ -121,10 +122,10 @@ class AgentFixTickets:
             return  # Do not contradict the existing native Fast Fix authorization.
         output['agent_fix_ticket_diagnostics'] = diagnostics(fallback='INLINE_ELIGIBILITY_NOT_MET')
         if (not self.enabled or output.get('action') != 'AUTO_FIX'
-                or output.get('reason_code') != 'SAFE_DETERMINISTIC_FIX'
+                or output.get('reason_code') != 'USER_APPROVED_REPAIR'
                 or output.get('fix_path') != 'AGENT_FIX'
                 or output.get('fast_fix', {}).get('fallback_reason') != 'FAST_FIX_HOST_CAPABILITY_UNAVAILABLE'
-                or record.get('authorization_kind', 'POLICY_AUTO') != 'POLICY_AUTO'
+                or record.get('authorization_kind') != 'USER_CONFIRMED'
                 or record['attempt_count'] != 1 or output.get('security_context_status') != 'READY'):
             return
         service = self.service
@@ -165,7 +166,7 @@ class AgentFixTickets:
                 'security_context_ref': context_ref,
                 'snapshot_digest': record['last_snapshot_digest'], 'scope_hash': scope_hash,
                 'allowed_target_paths': [record['target']], 'rule_id': RULE,
-                'authorization_kind': 'POLICY_AUTO', 'attempt_count': record['attempt_count'],
+                'authorization_kind': 'USER_CONFIRMED', 'attempt_count': record['attempt_count'],
                 'max_attempts': 2, 'prepared_attestation': 'agent-ticket-v1.' + secrets.token_hex(32),
                 'expiry': {'scope': 'CURRENT_RUNTIME_CONNECTION', 'expires_in_seconds': TTL,
                            'restart': 'INVALIDATES_PREPARATION'},

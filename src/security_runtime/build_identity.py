@@ -14,7 +14,7 @@ from .hook_state import no_links
 STATE_SCHEMA = 'runtime-state-v1'
 
 
-def git_provenance(root, *arguments):
+def git_provenance(root, *arguments, timeout=5):
     # In a Windows stdio MCP process, inherited protocol handles and PIPE
     # reader joins can outlive a Git timeout. Use no protocol stdin and bounded
     # file output; also avoid optional index writes and executable fsmonitors.
@@ -22,7 +22,7 @@ def git_provenance(root, *arguments):
         result = subprocess.run(['git', '--no-optional-locks', '-c', f'safe.directory={root.as_posix()}',
                                  '-c', 'core.fsmonitor=false', '-C', str(root), *arguments],
                                 stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.DEVNULL,
-                                timeout=5, check=False)
+                                timeout=timeout, check=False)
         if result.returncode or output.tell() > 262_144:
             raise ValueError('DEV_PROVENANCE_UNAVAILABLE')
         output.seek(0)

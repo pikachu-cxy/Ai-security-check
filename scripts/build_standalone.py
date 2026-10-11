@@ -35,11 +35,23 @@ def main(output_dir: Path | None = None) -> None:
         shutil.copy2(root / name, bundle / name)
     shutil.copytree(root / "LICENSES", bundle / "LICENSES", dirs_exist_ok=True)
     inventory(bundle)
-    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
+    if os.name == 'nt':
+        # Reviewed native source; the installed launcher no longer duplicates
+        # the full Python Runtime. GCC is a build dependency, not a user dependency.
+        compiler = shutil.which('gcc')
+        if not compiler:
+            raise ValueError('Windows native launcher requires GCC on the build host')
+        tiny = bundle / '_launcher/security-launcher.exe'
+        tiny.parent.mkdir(exist_ok=True)
+        subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
+            str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
+    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
         shutil.copy2(root / 'docs' / name,bundle / name)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
-    source_commit = git_provenance(root, 'rev-parse', 'HEAD')
-    source_dirty = bool(git_provenance(root, 'status', '--porcelain'))
+    # Local builds may contend with scanners/antivirus. Runtime probes retain
+    # their short default; packaging still fails rather than inventing provenance.
+    source_commit = git_provenance(root, 'rev-parse', 'HEAD', timeout=30)
+    source_dirty = bool(git_provenance(root, 'status', '--porcelain', timeout=30))
     from security_runtime.delivery import CONTRACT, encode, file_digest, package_metadata
     files = {p.relative_to(bundle).as_posix(): file_digest(p) for p in sorted(bundle.rglob('*'))
              if p.is_file() and p != bundle / 'version.json'}

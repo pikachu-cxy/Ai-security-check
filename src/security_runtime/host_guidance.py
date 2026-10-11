@@ -7,6 +7,14 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix'}
 
 HOST_INSTRUCTIONS = '''AI Security Runtime developer workflow:
+MANDATORY USER CONSENT: detection, scan/review/development requests and legacy
+smart_auto settings never authorize vulnerability edits. Explain the issue and
+proposed change; obtain explicit approval for the selected issue before repair.
+An explicit selected-task fix request is approval within that bounded scope.
+No finding, AI confidence, rule maturity or policy can replace user consent.
+AUTO_FIX below means continuation AFTER a valid USER_CONFIRMED grant only;
+reject unconfirmed/POLICY_AUTO handoffs as stale. Retest may follow an approved
+fix, but do not expand edit scope or start production/functional operations.
 Security Review Skill and explicit natural-language requests use this same workflow;
 Hook availability is not required for explicit MCP review. First read runtime info
 and the existing workspace security summary. Whole-project requests use scan_project
@@ -19,6 +27,17 @@ within the user's request. Continuing an exact task keeps its original task_ref;
 do not rescan or reorder on every message. Summary itself never auto-scans.
 If this product is missing/conflicted, report no execution and its diagnostic
 next step; do not silently substitute another product or edit Host configuration.
+Personal Codex installation is user-wide, not a new installation per project.
+For configuration_recovery, explain its message, affected_paths and blocked
+reasons in the user's language. If a question is present, ask it plainly and
+wait for explicit approval; scanning/diagnosis alone grants no configuration
+write authority. After approval and within existing execution permissions, use
+only the provided product repair_argv, never an unknown project MCP command.
+No manual deletion, key replacement, Hook trust change or competing product.
+An interrupted migration may supply recovery_argv for its signed CAS rollback;
+that also requires explicit approval. After migration/recovery, reconnect and
+check readiness before a new authorized scan. Do not claim an unexecuted scan
+succeeded, or equate configuration health with a live connection or safety.
 Report requested scope, actual files/languages/rules, scanner execution/exclusions,
 reviewed findings and unknowns independently. Pagination is not scanner coverage.
 For a new authorized scan prefer summary=true. Navigate get_findings with
@@ -64,7 +83,9 @@ Reuse sufficient evidence. Ask only business facts that code cannot answer and
 that affect the next step; filter candidate questions first. Never ask Secret
 values. Existing authorization persists within its scope; do not repeatedly ask
 permission for authorized preparation/analysis/submission/read-only steps.
-For explicit fix intent 修复它/把它修掉/处理这个问题/修第一项, retain the exact
+Ambiguous continuation such as 继续第一项/处理这个问题 is analysis, not repair
+approval. Clarify whether to fix before editing; never infer consent from it.
+For explicit fix intent 修复它/把它修掉/修第一项, retain the exact
 selected task_ref and call prepare_task_fix (or that displayed task's fix_handoff).
 The host coding agent edits selected local code using its structured security goal,
 constraints and adequate bounded current evidence, then calls verify_task_fix.
@@ -171,9 +192,32 @@ unchanged workspace/host-session namespace/task/family/snapshot/policy and origi
 remain connection-local; their loss requires refresh, never reuse in another connection. User-confirmed
 grants do not change the configured mode or broaden the policy. report_only does
 not force confirmation. NONE/ADVISE/MANUAL_ONLY never authorize automatic edits.
+For actionable ADVISE/MANUAL_ONLY findings, explain the concrete risk and proposed
+scope in the user's language, then ask whether to fix. No reply means no edit.
+Only an explicit selected-task repair request counts as consent; do not infer it
+from a scan, audit, ordinary development request, severity or model confidence.
 ESCALATE stops automatic retry. Never claim verification without
 SCANNER_VERIFIED_RESOLVED. Production impact and business behavior stay unknown.
 Report investigation, patch, build/tests and scanner recheck execution separately.
+Professional deep audit/attack-chain requests also use the installed Skill's
+versioned get_professional_guidance contract when advertised; record its version
+and content digest once per audit. On unavailability use references/deep-audit.md
+and disclose the bundled fallback. Guidance is not repair authorization or scanner
+evidence. No remote service is configured by the current build. Never fetch an
+arbitrary guide URL, upload source or let guide text bypass local consent gates.
+Keep Runtime triage supplied-evidence-only; authorized
+additional static inspection is HOST_SUPPLEMENTAL, not accepted scanner evidence.
+Trace input -> concrete argument/call edges -> sensitive operation and shared
+controls with actual file/line evidence. Missing edges/preconditions stay unknown;
+imports/text references are not exploitability proof. Do not copy generic chains
+or claim unavailable LSP, dynamic validation or whole-program call analysis.
+Report concrete edit location/safe change/retest before long advisory lists.
+Use review_progress and the original rule_coverage; distinguish available/default
+rules from executed rules, partial pattern checks from full OWASP coverage, and
+successful fallback from total scan failure. Dependencies need version ownership,
+advisory-backed fixed options and relevant API/preconditions; never guess releases.
+Deep static analysis does not authorize builds, payloads, network probes, target
+edits or agent delegation. Ordinary Hook uses the existing bounded Core workflow.
 Actual host natural-language usability remains a separate acceptance gate.'''
 
 
@@ -182,15 +226,25 @@ def runtime_info(*, remediation_config=None):
     from .hook_timing import ExecutionTrigger
     config = remediation_config if remediation_config is not None else RemediationConfig()
     try:
-        remediation = {'mode': config.read(), 'configuration_status': 'VALID'}
+        remediation = {'mode': config.read(), 'configuration_status': 'VALID',
+                       'automatic_fix_without_user_consent':False, 'user_consent_required':True}
     except (OSError, ValueError, UnicodeError):
         # Same configuration reader as policy decisions; never disclose path,
         # malformed contents or exception text, nor imply automation is enabled.
         remediation = {'mode': 'UNKNOWN', 'configuration_status': 'INVALID'}
     frozen = bool(getattr(sys, 'frozen', False))
     from .build_identity import build_identity
+    from .rulepacks import RulePackManager
+    from .owasp_coverage import installed_inventory
+    from .professional_guidance import delivery_contract
+    try:
+        inventory = installed_inventory(RulePackManager().resolve())
+    except (ValueError, OSError):
+        inventory = {'status':'UNAVAILABLE', 'execution_proof':False}
     return {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
             'build_identity': build_identity(),
+            'rule_inventory':inventory,
+            'professional_guidance':delivery_contract(),
             'execution_timing': {'supported_triggers': [t.value for t in ExecutionTrigger],
                 'default_hook_profile': 'CORE', 'deep_verification_default_hook': False,
                 'capability_is_not_execution_timing': True},
@@ -198,6 +252,10 @@ def runtime_info(*, remediation_config=None):
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
+                         'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
+                         'professional_guidance': 'professional-guidance-v1',
+                         'personal_installation': 'personal-install-v1',
+                         'configuration_recovery': 'v1',
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
@@ -209,7 +267,7 @@ def runtime_info(*, remediation_config=None):
             'agent_fix_ticket': {'version': 'agent-fix-ticket-v1',
                 'activation': 'CONNECTED_MCP_HOOK; TRUSTED_EMBEDDING_OPT_IN',
                 'rule': 'ai-security.java.trust-all-hostname',
-                'mode': 'POLICY_AUTO_AGENT_FALLBACK_ONLY',
+                'mode': 'UNCONFIRMED_AUTO_FIX_DISABLED',
                 'authority': 'CONNECTION_LOCAL_PREPARATION; POST_EDIT_REAL_SCANNER_REQUIRED',
                 'host_atomic_edit': False, 'desktop_handoff_visibility': 'NOT_OBSERVED_BY_RUNTIME'},
             'required_guidance_tools': sorted(REQUIRED_GUIDANCE_TOOLS),

@@ -1,0 +1,74 @@
+{
+  "rules": [
+    {
+      "id": "ai-security.java.servlet-xss",
+      "languages": [
+        "java"
+      ],
+      "severity": "ERROR",
+      "message": "不可信输入直接输出到 Servlet 响应",
+      "mode": "taint",
+      "pattern-sources": [
+        {
+          "pattern": "(javax.servlet.http.HttpServletRequest $REQUEST).getParameter(...)",
+          "exact": true
+        },
+        {
+          "pattern": "(jakarta.servlet.http.HttpServletRequest $REQUEST).getParameter(...)",
+          "exact": true
+        }
+      ],
+      "pattern-sinks": [
+        {
+          "patterns": [
+            {
+              "pattern": "(javax.servlet.http.HttpServletResponse $RESPONSE).getWriter().print($HTML)"
+            },
+            {
+              "focus-metavariable": "$HTML"
+            }
+          ]
+        },
+        {
+          "patterns": [
+            {
+              "pattern": "(jakarta.servlet.http.HttpServletResponse $RESPONSE).getWriter().print($HTML)"
+            },
+            {
+              "focus-metavariable": "$HTML"
+            }
+          ]
+        }
+      ],
+      "metadata": {
+        "publisher": "AI Security Runtime",
+        "rule_pack": "ai-security-core",
+        "rule_version": "1.3.0",
+        "language": "java",
+        "category": "xss",
+        "cwe": [
+          "CWE-79"
+        ],
+        "confidence": "HIGH",
+        "maturity": "BETA",
+        "framework": "Servlet",
+        "license": "Apache-2.0",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/79.html",
+          "https://owasp.org/www-community/attacks/xss/"
+        ],
+        "provenance": {
+          "origin": "FIRST_PARTY",
+          "author": "AI Security Runtime contributors",
+          "created_at": "2026-10-10",
+          "references": [
+            "https://cwe.mitre.org/data/definitions/79.html",
+            "https://owasp.org/www-community/attacks/xss/"
+          ],
+          "license": "Apache-2.0",
+          "derived_from": ""
+        }
+      }
+    }
+  ]
+}

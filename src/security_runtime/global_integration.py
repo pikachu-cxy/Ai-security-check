@@ -220,7 +220,14 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
         result = self.configuration_status()
         manifest = self._manifest(self.home)
         runtime, env, *_ = self._desired(self.home, verify_existing=bool(manifest and manifest['phase'] == 'COMMITTED'))
-        capability = self.probe(runtime, self.home, {**os.environ, **env, 'SECURITY_RUNTIME_MCP_SELF_TEST': '1'})
+        try:
+            capability = self.probe(runtime, self.home, {**os.environ, **env, 'SECURITY_RUNTIME_MCP_SELF_TEST': '1'})
+        except IntegrationDiagnostic as exc:
+            # A failed live probe must not erase valid ownership/configuration
+            # diagnostics; configured and connected are independent observations.
+            capability = {'status': exc.code, 'mode': 'UNKNOWN'}
+            result['diagnostics'] = list(dict.fromkeys([*result['diagnostics'], exc.code]))
+            result['overall'] = 'DEGRADED'
         result.update(runtime={**capability, 'kind': runtime['kind']}, mode=capability['mode'])
         return result
 
@@ -307,6 +314,28 @@ def render_global(value):
              'Hook trust: ' + value.get('hook_trust', 'HOST_MANAGED_UNKNOWN'),
              'Workspace: ' + value.get('workspace_readiness', {}).get('status', 'NOT_OBSERVED')]
     lines.extend(value.get('diagnostics', []))
+    if value.get('skill'):
+        lines.append('专业 Skill：' + value['skill'].get('status', 'UNKNOWN'))
+    if value.get('installation'):
+        lines.append(value['installation']['message'])
+    recovery = value.get('configuration_recovery')
+    if recovery:
+        lines.append(recovery['message'])
+        for row in recovery['issues']:
+            lines.extend('配置位置：' + path for path in row['affected_paths'])
+            lines.extend(row['explanations'])
+        lines.extend(recovery['blocker_explanations'])
+        if recovery.get('question'):
+            lines.append(recovery['question'])
+        if recovery.get('repair_command'):
+            lines.append('确认后执行：' + recovery['repair_command'])
+        if recovery.get('recovery_argv'):
+            from .integration_recovery import display_command
+            lines.append('确认后恢复：' + display_command(recovery['recovery_argv']))
+    if value.get('recovery_record'):
+        lines.append('配置已备份，恢复记录：' + value['recovery_record'])
+    if value.get('reconnect_required'):
+        lines.append('请重启 Codex 或重新连接安全工具，再继续扫描。无需在每个项目安装。')
     if value.get('operation') in {'CONFIGURED', 'REPAIRED'}:
         lines.append('Restart Codex, review the user-level Hook in /hooks, then open a project. READY is not a safety verdict.')
     return '\n'.join(lines)

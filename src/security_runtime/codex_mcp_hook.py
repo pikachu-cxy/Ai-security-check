@@ -187,7 +187,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                                        if result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' else '')
     # Bounded metadata only; no families, findings, file contents or scanner errors.
     if (remediation is not None and validated_root is not None and decision is not None and
-            decision.get('action') == 'AUTO_FIX'):
+            decision.get('action') in {'AUTO_FIX', 'CONFIRM_REQUIRED'}):
         observation = remediation.mark_initial_hook_response_ready(
             validated_root, decision.get('episode_id'), time.perf_counter())
         decision.update(observation)

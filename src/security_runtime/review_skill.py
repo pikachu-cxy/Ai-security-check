@@ -14,6 +14,7 @@ from .storage import SQLiteStore
 NAME = 'ai-security-review'
 CONTRACT = 'security-review-skill-v1'
 MAX_BYTES = 256_000
+BASE_FILES = {'SKILL.md', 'agents/openai.yaml', 'references/runtime-workflow.md'}
 
 
 def encode(value):
@@ -27,7 +28,8 @@ def digest(content):
 def skill_files():
     from .host_guidance import HOST_INSTRUCTIONS
     source = Path(__file__).parent / 'skills' / NAME
-    return {name: (source / name).read_bytes() for name in ('SKILL.md', 'agents/openai.yaml')} | {
+    return {name: (source / name).read_bytes() for name in (
+        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md')} | {
         'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')}
 
 
@@ -71,7 +73,7 @@ class ReviewSkillManager:
             if (value['contract'] != CONTRACT or value['scope'] != 'USER'
                     or value['skill'] != NAME or value['root_identity'] != self.state.name
                     or value['phase'] not in {'COMMITTED', 'UPDATING'}
-                    or set(value['files']) != set(self.expected)
+                    or not BASE_FILES <= set(value['files']) <= set(self.expected)
                     or set(value.get('previous', {})) - set(self.expected)): raise ValueError()
             for content_hash in [*value['files'].values(), *value.get('previous', {}).values()]:
                 if not isinstance(content_hash, str) or len(content_hash) != 64 or any(c not in '0123456789abcdef' for c in content_hash): raise ValueError()
@@ -92,6 +94,10 @@ class ReviewSkillManager:
                     raw = self.read(self.root / name)
                     if raw is None: missing.append(name)
                     elif digest(raw) not in {content_hash, manifest.get('previous', {}).get(name)}:
+                        modified.append(name)
+                # Adding a shipped file must not adopt content outside old ownership.
+                for name in set(self.expected) - set(manifest['files']):
+                    if self.read(self.root / name) is not None:
                         modified.append(name)
                 state = ('USER_MODIFIED' if modified else 'REPAIR_REQUIRED' if missing or manifest['phase']=='UPDATING'
                          else 'INSTALLED' if manifest['files']=={n:digest(b) for n,b in self.expected.items()}
@@ -123,7 +129,8 @@ class ReviewSkillManager:
             originals = {name:self.read(self.root / name) for name in self.expected}
             if action == 'remove':
                 if manifest:
-                    for name, raw in originals.items():
+                    for name in manifest['files']:
+                        raw = originals[name]
                         if raw is not None:
                             if self.read(self.root / name) != raw: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
                             self.write(self.root / name, None)

@@ -132,7 +132,8 @@ def test_hook_closes_only_current_envelope_and_real_proof(inline_setup,eol,bom,v
     if bom: raw=b'\xef\xbb\xbf'+raw
     data[0].joinpath('A.java').write_bytes(raw)
     data[1].findings=data[2].findings=[Finding(**original_finding)]
-    grant=data[4]()['remediation'];t=grant['agent_fix_ticket']
+    from test_remediation import approve_hook
+    grant=approve_hook(data[3], data[0], data[4]())['remediation'];t=grant['agent_fix_ticket']
     env=t['edit_envelope'];left,right=env['byte_range']['start'],env['byte_range']['end']
     result=raw.replace(STATEMENT,b'',1) if variant=='statement' else raw[:left]+raw[right:]
     data[0].joinpath('A.java').write_bytes(result);data[1].findings=data[2].findings=[]

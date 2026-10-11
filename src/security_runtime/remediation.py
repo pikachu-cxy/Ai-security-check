@@ -63,7 +63,7 @@ CONFIRMATION_GUIDANCE = (
 CONFIRMED_GUIDANCE = GUIDANCE.replace(
     'Runtime has already authorized this exact bounded security repair.',
     'The user has already approved and Runtime has authorized this exact bounded security repair.')
-POLICY_VERSION = 'confirmation-v1/local-jdk-hostname-v1'
+POLICY_VERSION = 'confirmation-v2/user-consent-required/local-jdk-hostname-v1'
 CONFIRMATION_TTL = 900
 MAX_EPISODES = 16
 RECEIPT_BINDING_FIELDS = {'version', 'workspace_id', 'episode_id', 'task_ref_hash', 'grant_id',
@@ -372,6 +372,8 @@ class RemediationService:
     def _grant(self, path, record, snapshot):
         if not self.transport.supports_agent_continuation:
             raise ValueError('AGENT_CONTINUATION_UNAVAILABLE')
+        if record.get('authorization_kind') != 'USER_CONFIRMED':
+            raise ValueError('EXPLICIT_USER_CONSENT_REQUIRED')
         token = 'rem-v1.' + path.stem + '.' + identity(record['family_key']) + '.' + secrets.token_hex(24)
         # Only normal policy-authorized issuance starts a different grant.
         # Stop itself can never reset this counter or issue a retry.
@@ -386,6 +388,7 @@ class RemediationService:
         self.continuation.remember(path, record, snapshot, args)
         return dict(self.policy.decide(family=record['family_key'], rule=RULE, priority='ACTIONABLE',
                                       coverage=True, deterministic=True).to_dict(),
+                    action='AUTO_FIX', reason_code='USER_APPROVED_REPAIR',
                     policy_source='DETERMINISTIC_LOCAL_TLS_INVARIANT', attempt_count=record['attempt_count'],
                     **self._episode_fields(record),
                     episode_reason_code='RECURRENCE_AFTER_RESOLUTION' if record['episode_number'] > 1 else 'FIRST_OCCURRENCE',
@@ -410,7 +413,7 @@ class RemediationService:
         if not self.transport.supports_agent_continuation:
             return False
         if record.get('authorization_kind') != 'USER_CONFIRMED':
-            return self.config.read() == 'smart_auto'
+            return False  # Old policy-auto grants cannot survive this product policy.
         deadline = self.authorized.get(record.get('token_hash'), 0)
         return (time.monotonic() < deadline and self._confirmation_remaining(record) > 0 and
                 self._policy_binding(key)[1] == record['policy_binding'])
@@ -477,6 +480,7 @@ class RemediationService:
         return dict(self.policy.decide(family=record['family_key'], rule=RULE, priority='ACTIONABLE',
                     coverage=True, deterministic=True, mode=mode).to_dict(),
                     status='PENDING_CONFIRMATION', feedback_required=True, guidance=CONFIRMATION_GUIDANCE,
+                    attempt_count=0,
                     **self._episode_fields(record),
                     episode_reason_code='RECURRENCE_AFTER_RESOLUTION' if record['episode_number'] > 1 else 'FIRST_OCCURRENCE',
                     interaction={'phase': 'POST_EDIT_REMEDIATION_CONFIRMATION',
@@ -530,7 +534,7 @@ class RemediationService:
         measured['finding_policy'] = round(max(0, elapsed(start) - (measured['security_rescan'] or 0)
                                               - inline_ms), 3)
         points['policy_finished'] = time.perf_counter()
-        if output.get('action') == 'AUTO_FIX' and output.get('episode_id'):
+        if output.get('action') in {'AUTO_FIX', 'CONFIRM_REQUIRED'} and output.get('episode_id'):
             authorization_ms = ((points['auto_fix_authorized'] - points['auto_fix_authorization_started']) * 1000
                                 if all(k in points for k in ('auto_fix_authorized', 'auto_fix_authorization_started')) else None)
             self._observe_cycle('start', Path(root), output['episode_id'], event_started,
@@ -917,6 +921,7 @@ class RemediationService:
 
     def confirm(self, ref, task_ref, root, *, approve):
         """Consume explicit host-reported user choice; never accept a prompt or infer consent."""
+        consent_started = time.perf_counter()
         try:
             if type(approve) is not bool:
                 return self._fail('EXPLICIT_BOOLEAN_CHOICE_REQUIRED')
@@ -958,6 +963,25 @@ class RemediationService:
                     output.update(status='AUTHORIZED', feedback_required=False,
                                   approval_trust='UNTRUSTED_HOST_REPORT', expires_in_seconds=max(0, int(deadline-time.monotonic())))
                 self._save(path, rows, key)
+                if approve:
+                    # Only explicit consent reaches this preparation-only path.
+                    # Neither the Runtime nor a plan/ticket writes project code.
+                    self._observe_cycle('bind_grant', root, record['episode_id'], record['token_hash'])
+                    self._observe_cycle('mark', root, record['episode_id'], 'auto_fix_authorization_started', consent_started)
+                    self._observe_cycle('mark', root, record['episode_id'], 'auto_fix_authorized')
+                    self.fast_fix.offer(output, root, record, key)
+                    from .fix_context import attach
+                    attach(self, output, root, record)
+                    measured = timings(); points = {}
+                    self.agent_tickets.offer(output, root, record, key, path, rows, measured, points)
+                    self._observe_cycle('set_fix_path', root, record['episode_id'], output.get('fix_path', 'AGENT_FIX'))
+                    if output.get('fix_path') == 'DETERMINISTIC_FAST_FIX':
+                        self._observe_cycle('mark', root, record['episode_id'], 'fast_fix_plan_ready')
+                    elif output.get('agent_fix_ticket'):
+                        self._observe_cycle('set_inline', root, record['episode_id'])
+                        for point, at in points.items():
+                            self._observe_cycle('mark', root, record['episode_id'], point, at)
+                    self._observe_cycle('mark', root, record['episode_id'], 'consent_handoff_ready')
                 return output
         except ConfirmationReferenceError as error:
             return self._confirmation_fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED', error.diagnostic)
@@ -1036,7 +1060,7 @@ class RemediationService:
             packet = self._fix().prepare(task_ref, root, bound_workspace=root)
             if packet['status'] != 'READY_FOR_HOST_FIX':
                 return packet
-            compact = record.get('authorization_kind', 'POLICY_AUTO') == 'POLICY_AUTO'
+            compact = record.get('authorization_kind') == 'USER_CONFIRMED'
             if compact:
                 from .fix_context import build, compact_packet
                 context, context_ref, diagnostics = build(self, root, record,

@@ -1146,6 +1146,456 @@
       ],
       "related_capabilities": [],
       "limitations": []
+    },
+    {
+      "case_id": "python-sql-injection-risk",
+      "file": "python-sql-injection-risk.py",
+      "expected_capability": "PYTHON_SQL_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask / Django / DB-API",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_SQL_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-sql-injection-safe",
+      "file": "python-sql-injection-safe.py",
+      "expected_capability": "PYTHON_SQL_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask / Django / DB-API",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-ssrf-risk",
+      "file": "python-ssrf-risk.py",
+      "expected_capability": "PYTHON_SSRF",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask / Django / Requests / HTTPX",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_SSRF",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-ssrf-safe",
+      "file": "python-ssrf-safe.py",
+      "expected_capability": "PYTHON_SSRF",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask / Django / Requests / HTTPX",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-path-traversal-risk",
+      "file": "python-path-traversal-risk.py",
+      "expected_capability": "PYTHON_PATH_TRAVERSAL",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask / Django / Python",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_PATH_TRAVERSAL",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-path-traversal-safe",
+      "file": "python-path-traversal-safe.py",
+      "expected_capability": "PYTHON_PATH_TRAVERSAL",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask / Django / Python",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-pickle-untrusted-risk",
+      "file": "python-pickle-untrusted-risk.py",
+      "expected_capability": "PYTHON_UNTRUSTED_PICKLE",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask / Django / pickle",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_UNTRUSTED_PICKLE",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-pickle-untrusted-safe",
+      "file": "python-pickle-untrusted-safe.py",
+      "expected_capability": "PYTHON_UNTRUSTED_PICKLE",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask / Django / pickle",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-unsafe-yaml-risk",
+      "file": "python-unsafe-yaml-risk.py",
+      "expected_capability": "PYTHON_UNSAFE_YAML",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "PyYAML",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_UNSAFE_YAML",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-unsafe-yaml-safe",
+      "file": "python-unsafe-yaml-safe.py",
+      "expected_capability": "PYTHON_UNSAFE_YAML",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "PyYAML",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-tls-verification-disabled-risk",
+      "file": "python-tls-verification-disabled-risk.py",
+      "expected_capability": "PYTHON_TLS_VERIFICATION_DISABLED",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Requests / HTTPX",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_TLS_VERIFICATION_DISABLED",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-tls-verification-disabled-safe",
+      "file": "python-tls-verification-disabled-safe.py",
+      "expected_capability": "PYTHON_TLS_VERIFICATION_DISABLED",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Requests / HTTPX",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-flask-debug-risk",
+      "file": "python-flask-debug-risk.py",
+      "expected_capability": "PYTHON_FLASK_DEBUG",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_FLASK_DEBUG",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-flask-debug-safe",
+      "file": "python-flask-debug-safe.py",
+      "expected_capability": "PYTHON_FLASK_DEBUG",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-django-csrf-exempt-risk",
+      "file": "python-django-csrf-exempt-risk.py",
+      "expected_capability": "PYTHON_DJANGO_CSRF_EXEMPT",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Django",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_DJANGO_CSRF_EXEMPT",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-django-csrf-exempt-safe",
+      "file": "python-django-csrf-exempt-safe.py",
+      "expected_capability": "PYTHON_DJANGO_CSRF_EXEMPT",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Django",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-unescaped-html-risk",
+      "file": "python-unescaped-html-risk.py",
+      "expected_capability": "PYTHON_UNESCAPED_HTML",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask / Django / MarkupSafe",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_UNESCAPED_HTML",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-unescaped-html-safe",
+      "file": "python-unescaped-html-safe.py",
+      "expected_capability": "PYTHON_UNESCAPED_HTML",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask / Django / MarkupSafe",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-jwt-signature-disabled-risk",
+      "file": "python-jwt-signature-disabled-risk.py",
+      "expected_capability": "PYTHON_JWT_SIGNATURE_DISABLED",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "PyJWT",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_JWT_SIGNATURE_DISABLED",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-jwt-signature-disabled-safe",
+      "file": "python-jwt-signature-disabled-safe.py",
+      "expected_capability": "PYTHON_JWT_SIGNATURE_DISABLED",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "PyJWT",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-lxml-external-entities-risk",
+      "file": "python-lxml-external-entities-risk.py",
+      "expected_capability": "PYTHON_XML_EXTERNAL_ENTITIES",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "lxml",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_XML_EXTERNAL_ENTITIES",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-lxml-external-entities-safe",
+      "file": "python-lxml-external-entities-safe.py",
+      "expected_capability": "PYTHON_XML_EXTERNAL_ENTITIES",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "lxml",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-django-md5-password-risk",
+      "file": "python-django-md5-password-risk.py",
+      "expected_capability": "PYTHON_WEAK_PASSWORD_HASH",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Django",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_WEAK_PASSWORD_HASH",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-django-md5-password-safe",
+      "file": "python-django-md5-password-safe.py",
+      "expected_capability": "PYTHON_WEAK_PASSWORD_HASH",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Django",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-template-injection-risk",
+      "file": "python-template-injection-risk.py",
+      "expected_capability": "PYTHON_TEMPLATE_INJECTION",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Flask",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "PYTHON_TEMPLATE_INJECTION",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "python-template-injection-safe",
+      "file": "python-template-injection-safe.py",
+      "expected_capability": "PYTHON_TEMPLATE_INJECTION",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Flask",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "java-servlet-xss-risk",
+      "file": "java-servlet-xss-risk.java",
+      "expected_capability": "JAVA_SERVLET_XSS",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Servlet",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SERVLET_XSS",
+          "count": 1,
+          "evidence_basis": "ENGINE_TAINT_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "java-servlet-xss-safe",
+      "file": "java-servlet-xss-safe.java",
+      "expected_capability": "JAVA_SERVLET_XSS",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Servlet",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "java-spring-csrf-disabled-risk",
+      "file": "java-spring-csrf-disabled-risk.java",
+      "expected_capability": "JAVA_SPRING_CSRF_DISABLED",
+      "expected_occurrences": 1,
+      "risk": true,
+      "variant": "Spring Security",
+      "origin": "SYNTHETIC",
+      "expected": [
+        {
+          "capability_id": "JAVA_SPRING_CSRF_DISABLED",
+          "count": 1,
+          "evidence_basis": "STRUCTURAL_MATCH"
+        }
+      ],
+      "related_capabilities": [],
+      "limitations": []
+    },
+    {
+      "case_id": "java-spring-csrf-disabled-safe",
+      "file": "java-spring-csrf-disabled-safe.java",
+      "expected_capability": "JAVA_SPRING_CSRF_DISABLED",
+      "expected_occurrences": 0,
+      "risk": false,
+      "variant": "Spring Security",
+      "origin": "SYNTHETIC",
+      "expected": [],
+      "related_capabilities": [],
+      "limitations": []
     }
   ]
 }

@@ -36,7 +36,12 @@ def recur(setup):
     finding = Finding(**scan['findings'][0])
     setup[1].findings = setup[2].findings = [finding]
     setup[0].joinpath('A.java').write_text(UNSAFE)
-    return setup[4]()
+    result = setup[4]()
+    if (setup[-1]['remediation'].get('authorization_kind') == 'USER_CONFIRMED' and
+            setup[3].config.revision() == setup[3]._test_consent_policy_revision):
+        from test_remediation import approve_hook
+        return approve_hook(setup[3], setup[0], result)
+    return result
 
 
 def test_first_episode_allocates_first_bounded_attempt(setup):
@@ -91,7 +96,7 @@ def test_resolved_then_same_family_recurrence_new_episode_and_refs(setup):
     second = record(setup)
     assert out['action'] == 'AUTO_FIX'
     assert out['episode_reason_code'] == 'RECURRENCE_AFTER_RESOLUTION'
-    assert out['reason_code'] == 'SAFE_DETERMINISTIC_FIX'
+    assert out['reason_code'] == 'USER_APPROVED_REPAIR'
     assert first['family_key'] == second['family_key']
     assert first['episode_id'] != second['episode_id'] and second['episode_number'] == 2
     assert second['attempt_count'] == 1 and second['resolution'] is None
@@ -251,7 +256,8 @@ def test_workspace_lifecycle_and_budget_are_isolated(setup, tmp_path):
     runtime.findings = provider.findings = [finding]
     other.joinpath('A.java').write_text(UNSAFE)
     out = hook()['remediation']
-    assert out['action'] == 'AUTO_FIX' and out['episode_number'] == 1 and out['attempt_count'] == 1
+    assert out['action'] == 'CONFIRM_REQUIRED' and out['episode_number'] == 1 and out['attempt_count'] == 0
+    assert not new_service.authorized and 'prepare' not in out
     assert new_service.state.path(other, 'codex', 'session') != service.state.path(setup[0], 'codex', 'session')
     old = args(setup)
     assert new_service.prepare(old['remediation_ref'], old['task_ref'], other)['reason_code'] == 'REPAIR_GRANT_REJECTED'
@@ -273,7 +279,8 @@ def test_resolved_family_can_recur_in_new_session_old_authority_is_rejected(setu
     setup[1].findings = setup[2].findings = [Finding(**scan['findings'][0])]
     root.joinpath('A.java').write_text(UNSAFE)
     out = hook()['remediation']
-    assert out['action'] == 'AUTO_FIX' and out['episode_number'] == 2
+    assert out['action'] == 'CONFIRM_REQUIRED' and out['episode_number'] == 2
+    assert 'prepare' not in out  # A new session/episode cannot inherit consent.
     assert setup[3].prepare(old['remediation_ref'], old['task_ref'], root)['reason_code'] == 'REPAIR_GRANT_REJECTED'
     assert setup[3].functional_receipt(old['remediation_ref'], old['task_ref'], root) is None
     assert setup[3].task_gate(old['task_ref'], root)['reason_code'] == 'REMEDIATION_EPISODE_SUPERSEDED'

@@ -1,0 +1,42 @@
+{
+  "rules": [
+    {
+      "id": "ai-security.python.django-csrf-exempt",
+      "languages": [
+        "python"
+      ],
+      "severity": "ERROR",
+      "message": "Django 视图显式豁免 CSRF 校验",
+      "pattern": "@django.views.decorators.csrf.csrf_exempt\ndef $F(...):\n    ...",
+      "metadata": {
+        "publisher": "AI Security Runtime",
+        "rule_pack": "ai-security-core",
+        "rule_version": "1.3.0",
+        "language": "python",
+        "category": "csrf",
+        "cwe": [
+          "CWE-352"
+        ],
+        "confidence": "HIGH",
+        "maturity": "BETA",
+        "framework": "Django",
+        "license": "Apache-2.0",
+        "references": [
+          "https://cwe.mitre.org/data/definitions/352.html",
+          "https://docs.djangoproject.com/en/5.2/ref/csrf/"
+        ],
+        "provenance": {
+          "origin": "FIRST_PARTY",
+          "author": "AI Security Runtime contributors",
+          "created_at": "2026-10-10",
+          "references": [
+            "https://cwe.mitre.org/data/definitions/352.html",
+            "https://docs.djangoproject.com/en/5.2/ref/csrf/"
+          ],
+          "license": "Apache-2.0",
+          "derived_from": ""
+        }
+      }
+    }
+  ]
+}

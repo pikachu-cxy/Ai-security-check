@@ -74,7 +74,7 @@ class RulePackUpdateProvider(RulePackProvider, Protocol):
 
 
 FIRST_PARTY_RULE_PACK = RulePackDescriptor(
-    "ai-security-core", "AI Security Runtime Core Rules", "1.2.0", "AI Security Runtime",
+    "ai-security-core", "AI Security Runtime Core Rules", "1.3.0", "AI Security Runtime",
     "Copyright AI Security Runtime contributors", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0",
     True, True, True, True, "bundled local package",
     RuleProvenance("FIRST_PARTY", "AI Security Runtime contributors", "2026-09-29",

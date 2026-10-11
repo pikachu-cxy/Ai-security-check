@@ -2,7 +2,16 @@
 
 ## Current status
 
+Local source changes from 2026-10-11 require explicit user approval for every
+vulnerability repair, including TLS. The default is ask_before_fix; legacy
+smart_auto is only a compatibility alias. Old POLICY_AUTO grants cannot authorize
+edits. Confirmed preparation/tickets can reuse the existing scanner-proof loop;
+new findings/episodes require a fresh decision. The installed global Runtime and
+new-build Desktop acceptance are not updated or certified by source tests.
+
 **Codex Global Runtime Integration = DESKTOP VERIFIED** on the observed path.
+
+The verification above describes the historical build, not this new consent flow.
 
 ```text
 AI edit
@@ -10,6 +19,7 @@ AI edit
 → mutation reconciliation
 → Scanner
 → Finding / Policy
+→ explicit user approval (required by current source)
 → INLINE_PREPARED remediation
 → Exact Edit Envelope
 → real Scanner proof
@@ -21,6 +31,26 @@ binding, scanner evidence, policy, bounded edits, receipts, and the post-edit
 proof. The host model is not used to manufacture security truth.
 
 ## Interfaces
+
+Personal-version setup is user-wide by default, including `setup codex --path
+<workspace>`. The path identifies a workspace to inspect, not a second installation.
+Only an explicit `--scope project` retains the legacy/development setup. Project
+scan state, evidence and ephemeral repair capabilities remain isolated without
+per-project user setup. Codex's general trusted-project configuration precedence
+is a Host contract; Runtime does not change other tools' settings or Host trust.
+
+Configuration rejection now includes bounded `configuration_recovery` guidance:
+Chinese explanation, affected configuration paths, blockers and an installed
+product `repair_argv`. Diagnosis/scanning never grants write authorization. After
+explicit approval, `repair --path <workspace> --approve-user-managed` migrates only
+the diagnosed same-name MCP subtree through the signed pre-write journal/CAS
+workflow. Plain `repair` can migrate attested legacy entries, but never adopts an
+unknown entry. Unknown Hooks and invalid ownership still block migration. Repair
+does not install or overwrite the companion Skill. Interrupted operations provide
+signed recovery guidance instead of endlessly suggesting the same repair. Status
+preserves configuration/ownership evidence when an MCP probe fails; configured,
+connected and scanner execution are separate observations. This source change is
+not evidence that an existing installed bundle or Desktop connection was updated.
 
 Local upgrade development adds `upgrade diagnose/plan/apply/recover` with active
 layer inspection, explicit unknown-server approval, signed pre-write recovery

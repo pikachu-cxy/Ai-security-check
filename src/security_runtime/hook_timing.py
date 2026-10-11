@@ -28,7 +28,7 @@ CYCLE_POINTS = (
     'security_rescan_started',
     'security_rescan_finished', 'episode_closed', 'return_to_host',
     'fast_fix_plan_ready', 'fast_fix_apply_authorized', 'host_fast_edit_observed',
-    'inline_prepare_started', 'inline_prepare_finished')
+    'inline_prepare_started', 'inline_prepare_finished', 'consent_handoff_ready')
 
 CYCLE_SEGMENTS = {
     'initial_runtime': ('risk_hook_started', 'initial_hook_response_ready'),
@@ -117,7 +117,7 @@ class RemediationCycles:
                 # A validated retry may rotate a grant, never restart this Episode.
                 entry = self.entries[key]
                 if entry['instance'] == self._instance() and entry['end'] is None:
-                    if entry.get('token_hash') != token_hash:
+                    if entry.get('token_hash') is not None and entry.get('token_hash') != token_hash:
                         entry['retried'] = True
                     entry['token_hash'] = token_hash
                 return
@@ -132,6 +132,13 @@ class RemediationCycles:
                 rechecks=0, retried=False,
                 detail={name: round(value, 3) for name, value in (detail or {}).items()
                         if name in DETAILS and self._number(value)})
+
+    def bind_grant(self, root, episode, token_hash):
+        """Observe confirmation without renewing start time or granting authority."""
+        with self.lock:
+            entry = self.entries.get(self.key(root, episode))
+            if entry and entry['instance'] == self._instance() and entry['end'] is None:
+                entry['token_hash'] = token_hash
 
     def _put(self, entry, point, at, source=None):
         now = self._now()
@@ -198,6 +205,9 @@ class RemediationCycles:
         values, intervals = {}, []
         invalid = False
         for name, (left, right) in segments.items():
+            if (name in {'inline_host_edit_window', 'host_fast_apply_window'} and
+                    'consent_handoff_ready' in points):
+                left = 'consent_handoff_ready'  # Never include waiting for consent in an edit window.
             values[name] = None
             if name == 'close/finalization' and (entry['retried'] or entry['rechecks'] > 1):
                 continue  # Later Host/retry work cannot be called Runtime finalization.
@@ -260,6 +270,7 @@ class RemediationCycles:
                             'security_rescan': 'SCANNER_PROCESSING + RUNTIME_PROCESSING',
                             'close/finalization': 'RUNTIME_PROOF_GUARDS_AND_STATE_COMMIT_TO_RETURN_DECISION',
                             'unaccounted': 'UNATTRIBUTED_ENDPOINT_RESIDUAL',
+                            'user_consent_wait': 'INCLUDED_IN_WALL; NOT_EDIT_CPU; may remain in unaccounted',
                             'host_continuation_source': entry['continuation_source'],
                             'multiple_attempts_observed': entry['retried'] or entry['rechecks'] > 1,
                             'endpoint_observation': 'FIRST_VALID_PREPARE_AND_FIRST_RECHECK; retries remain in residual',
