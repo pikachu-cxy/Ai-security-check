@@ -1,6 +1,6 @@
 # 换电脑继续开发
 
-更新日期：2026-10-12。开发分支：`feature/runtime-mvp`。
+更新日期：2026-10-13（2026-10-12 开发批次跨天完成）。开发分支：`feature/runtime-mvp`。
 仓库：<https://github.com/pikachu-cxy/Ai-security-check>。
 先读本文，再读 [开发进度](DEVELOPMENT_PROGRESS.md)、
 [近期顺序](NEXT_DEVELOPMENT_PLAN.zh-CN.md) 和 [收尾验收](RUNTIME_CLOSEOUT_CHECK.zh-CN.md)。
@@ -126,7 +126,7 @@ if ($LASTEXITCODE -ne 0) { throw '构建失败' }
 和代理入口仍列在后续规划。可继续进行已准备好的源码开发，真实依赖覆盖保持未验证。
 不要删除配置、Skill 或旧缓存来处理网络失败。
 
-## 明天继续的顺序和通过标准
+## 到公司后继续的顺序和通过标准
 
 1. 安装本批对应的新包并完全重启。在 Jeepay 或同规模独立 Git 项目实际修改安全注释，
    观察正常自动检查和结束检查。不得手动调用 Hook，也不得补发“继续”来替代自动验收。
