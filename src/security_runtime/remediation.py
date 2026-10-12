@@ -558,7 +558,7 @@ class RemediationService:
 
     def _advisory_feedback(self, output, result, root):
         """Present current saved candidates without granting or resetting a repair."""
-        from .hook_user_feedback import issue_feedback, dependency_status_message
+        from .hook_user_feedback import issue_feedback, dependency_status_message, code_scope_notice
         scan_id = result.get('scan_id')
         if not isinstance(scan_id, str) or not re.fullmatch(r'[A-Za-z0-9-]{1,100}', scan_id):
             return None
@@ -620,7 +620,10 @@ class RemediationService:
                             f'{item["problem"]}\n{item["impact"]}\n建议：{item["recommendation"]}'
                             for index, item in enumerate(items, 1)) +
                             '\n请先选择要处理的具体问题，再回复“修复”或“忽略”。'}
-        if result.get('coverage') != 'FULL':
+        scope_notice = code_scope_notice(result)
+        if scope_notice:
+            feedback['message'] += '\n' + scope_notice
+        elif result.get('coverage') != 'FULL':
             feedback['message'] += '\n本次只完成了部分检查，其他风险可能尚未被发现。'
         if unattributed:
             feedback['message'] += ('\n缺少改动前的有效检查记录，暂时无法确认是否由本次改动引入。'
@@ -1091,8 +1094,16 @@ class RemediationService:
                                 episode_reason_code='RECURRENCE_AFTER_RESOLUTION', feedback_required=False,
                                 task_ref=task['task_ref'], fix_handoff=task['fix_handoff'])
                 if decision.action != 'NONE':
-                    fallback = fallback or dict(decision.to_dict(), feedback_required=False,
-                                                task_ref=task['task_ref'], fix_handoff=task['fix_handoff'])
+                    if rule == 'ai-security.javascript.dynamic-function' and fallback is None:
+                        # Dynamic code needs a semantic replacement, unlike the
+                        # TLS one-line invariant. Reuse the selected task flow;
+                        # do not mint a TLS grant/receipt or assume consent.
+                        from .remediation_transport import advisory_offer
+                        fallback = advisory_offer(self, root, task, finding, decision, snapshot, False)
+                        fallback.update(task_ref=task['task_ref'], fix_handoff=task['fix_handoff'])
+                    else:
+                        fallback = fallback or dict(decision.to_dict(), feedback_required=False,
+                                                    task_ref=task['task_ref'], fix_handoff=task['fix_handoff'])
             return fallback or {'action': 'NONE', 'reason_code': 'QUIET_POLICY', 'feedback_required': False}
 
     def _reference(self, root, ref, task_ref, *, confirmation=False):

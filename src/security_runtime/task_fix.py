@@ -5,8 +5,23 @@ from .triage_evidence import EvidenceBuilder, encoded
 from .verification import VerificationService, MAX_MEMBERS, MAX_FILES, MAX_BYTES
 
 EXECUTION = {'patch_applied': False, 'target_build': False, 'tests_run': False, 'scanner_recheck': False}
+DYNAMIC_FUNCTION_RULE = 'ai-security.javascript.dynamic-function'
 
 PLANS = {
+    'dynamic-function': {
+        'security_goal': '消除将动态输入作为 JavaScript 执行的行为，保留已确认的业务功能；算术用途需保留已约定的正常算术功能。',
+        'root_cause': '原规则记录了动态内容进入 Function 构造器或 eval；外部入口可达性及该 API 是否为原生函数尚未确认。',
+        'constraints': ['不得改用 eval、字符串定时器或其他动态代码执行方式。',
+            '不删除规则、忽略命中或只过滤攻击样例来伪装修复。',
+            '先明确支持的算术语法；受限解析器不能保证保留任意 JavaScript 表达式语义。',
+            '算术方案仅适用于已确认的算术用途；其他用途需选择对应安全 API，不擅自收窄业务范围。',
+            '保留原返回类型、正常算术结果及错误处理、响应格式；不修改其他业务路径。'],
+        'changes': ['核查选定位置的输入和用途；算术用途优先复用已有受限解析器，或用仅解析数字、括号和约定运算符的实现替换动态执行。',
+            '对不支持的语法和非法输入明确拒绝，不通过代码生成计算；语法范围收窄需向用户说明。'],
+        'regression': ['重新执行原 provider、原规则和原文件的检查；移动行号或改用等价动态构造不能当作修复。',
+            '宿主实际运行正常算术、运算优先级、括号、负数和小数用例，并检查原返回类型。',
+            '检查错误输入、非有限结果、超预算输入及 JavaScript 调用/属性访问被拒绝，未执行代码；检查原错误响应及响应格式。',
+            '安全复查与实际功能测试分别报告；原规则未再命中不证明功能兼容或生产安全。']},
     'tls': {
         'security_goal': '恢复正常的服务器证书链与主机名校验。',
         'root_cause': '扫描规则指出存在绕过证书或主机名校验的实现；是否安装到实际连接及生产使用仍需证据。',
@@ -43,12 +58,21 @@ PLANS = {
         'regression': ['若存在本地测试体系，覆盖原危险输入或实现及正常业务路径；没有执行就明确保留未验证。']}}
 
 
+def select_fix_plan(topic, members):
+    """Closed rule-specific copy; source, scanner prose and AI cannot choose a plan."""
+    if members and all(member.get('technical_details', {}).get('rule_id') == DYNAMIC_FUNCTION_RULE
+                       for member in members):
+        return PLANS['dynamic-function']
+    return PLANS.get(topic, PLANS['code'])
+
+
 class TaskFixService:
-    def __init__(self, store, registry=None):
+    def __init__(self, store, registry=None, hooks=None):
         from .storage import ReadOnlySQLiteStore
         self.store = ReadOnlySQLiteStore(store.path)
         self.registry = registry
         self.tasks = TaskTriageService(store)
+        self.hooks = hooks
 
     def _resolve(self, ref, workspace, bound):
         resolved = self.tasks.resolve(ref, workspace, bound_workspace=bound)
@@ -67,7 +91,7 @@ class TaskFixService:
         if scan is None:
             return resolved
         task = resolved['task']
-        plan = PLANS.get(task['topic'], PLANS['code'])
+        plan = select_fix_plan(task['topic'], members)
         bounded = len(members) <= MAX_MEMBERS
         packets, errors = [], []
         try:
@@ -128,6 +152,15 @@ class TaskFixService:
             'execution': dict(EXECUTION), 'runtime_observed_execution': dict(EXECUTION),
             'host_reported_execution': {'status': 'NOT_REPORTED'}, 'automatic_execution': False}
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)
+        if plan is PLANS['dynamic-function']:
+            from .arithmetic_regression import build_arithmetic_regression_plan
+            out['optional_functional_regression'] = {
+                'applies_when': 'HOST_CONFIRMED_ARITHMETIC_BUSINESS_CONTRACT',
+                **build_arithmetic_regression_plan(),
+                'task_ref': task_ref,
+                'source_copies': 'HOST_PRESERVES_DISTINCT_BEFORE_AND_AFTER_MODULES',
+                'authorization': 'EXPLICIT_SELECTED_TASK_FIX_INTENT_REQUIRED',
+            }
         if task['topic'] == 'dependency':
             from .dependency_context import remediation_options
             # Evidence/text is redacted by the same bounded builder.
@@ -158,6 +191,11 @@ class TaskFixService:
         if self.registry is None:
             from .scanners import ScannerRegistry
             self.registry = ScannerRegistry()
+        from .hook_state import HookStateStore
+        from .risk_closure import RiskClosureService
+        hooks = self.hooks or HookStateStore(self.store.path.parent / 'hooks')
+        closure = RiskClosureService(hooks)
+        activity_epoch = closure.generation(resolved['workspace'])
         results = VerificationService(self.registry).verify_many(resolved['workspace'], members, scan)
         states = {r['verification_status'] for r in results}
         attempted = any(r['runtime_observed_execution']['scanner_recheck_attempted'] for r in results)
@@ -182,5 +220,38 @@ class TaskFixService:
             'production_verification': 'NOT_PERFORMED', 'automatic_execution': False,
             'next_steps': ['仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。',
                 '扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。']}
+        if members and all(member.get('technical_details', {}).get('rule_id') == DYNAMIC_FUNCTION_RULE
+                           for member in members):
+            # The scanner fact and any host testing claim remain separate. A
+            # successful security recheck does not imply arithmetic compatibility.
+            if state == 'SCANNER_VERIFIED_RESOLVED':
+                message = ('原动态代码执行规则已重新检查选定文件，未再检出原风险。'
+                           '这仅确认本次规则支持的调用形式和文件范围的复查结果，未覆盖所有别名或间接动态执行；'
+                           '正常算术、输入兼容性和响应格式仍需实际功能测试确认。')
+                choices = []
+            elif state == 'STILL_PRESENT':
+                message = ('重新检查后，动态代码执行风险仍然存在；尚未完成修复。'
+                           '请核查选定代码，改用受限算术解析并再次复查，不能通过改行号或换一种动态执行方式消除提示。')
+                choices = ['继续修复']
+            else:
+                message = ('原动态代码执行风险的复查未能确认完成，不能认定风险已经消除。'
+                           '请先核查原规则、文件和检查能力，再继续验证；正常算术和响应格式的测试结果需要另行确认。')
+                choices = []
+            out['user_feedback'] = {'version': 'security-user-feedback-v1', 'message': message,
+                'choices': choices, 'scope': 'ORIGINAL_PROVIDER_RULE_FILE_ONLY',
+                'functional_verification': 'NOT_PROVEN_BY_SCANNER'}
+        elif members and all(member.get('category') == 'secret' for member in members):
+            from .hook_user_feedback import secret_verification_feedback
+            out['user_feedback'] = secret_verification_feedback(results)
+        if any(member.get('category') == 'secret' for member in members):
+            from .hook_state import HookStateStore
+            from .risk_closure import RiskClosureService
+            hooks = self.hooks or HookStateStore(self.store.path.parent / 'hooks')
+            out['persistent_closure'] = closure.record(resolved['workspace'], members, results,
+                source='MANUAL_INDEPENDENT_RECHECK', expected_activity=activity_epoch)
+            if out['persistent_closure']['status'] in {'NEW_ACTIVITY', 'BUSY'}:
+                out.update(status='INCONCLUSIVE', verification_status='INCONCLUSIVE', current_version=False)
+                out['user_feedback'] = {'message': '检查未完成：复查期间出现新的待检事件或工作区正忙，持续记录尚未确认关闭；请恢复原任务复查。', 'choices': []}
+            out['verification_source'] = 'MANUAL_INDEPENDENT_RECHECK'
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)
         return out if again['status'] == 'RESOLVED' else again

@@ -68,12 +68,22 @@ class HookSnapshot:
     last_completed_at: float
     last_result: dict
     file_digests: dict | None = None
+    unproven_sast_files: list[str] | None = None
 
 
 def validate_state(value):
     fields = set(HookSnapshot.__dataclass_fields__)
-    if not isinstance(value, dict) or set(value) not in (fields, fields - {'file_digests'}) or value['schema_version'] != 'hook-v1':
+    if (not isinstance(value, dict) or not fields - {'file_digests', 'unproven_sast_files'} <= set(value) <= fields
+            or value['schema_version'] != 'hook-v1'):
         raise ValueError('Invalid hook snapshot')
+    gaps = value.get('unproven_sast_files')
+    if gaps is not None:
+        if not isinstance(gaps, list) or len(gaps) > MAX_FILES:
+            raise ValueError('Invalid baseline code gaps')
+        for name in gaps:
+            safe_path(name)
+        if len(set(gaps)) != len(gaps):
+            raise ValueError('Invalid baseline code gaps')
     for key in ('workspace_id', 'session_id', 'change_digest'):
         if not re.fullmatch('[a-f0-9]{64}', value[key]):
             raise ValueError('Invalid hook snapshot identity')
@@ -128,8 +138,16 @@ def validate_state(value):
     if count > MAX_OCCURRENCES:
         raise ValueError('Hook occurrence budget exceeded')
     result = value['last_result']
-    if not isinstance(result, dict) or set(result) != {'status', 'last_check_status', 'coverage', 'execution_state', 'capabilities', 'scanner_runs', 'delta'}:
+    result_fields = {'status', 'last_check_status', 'coverage', 'execution_state', 'capabilities', 'scanner_runs', 'delta'}
+    if (not isinstance(result, dict) or not result_fields <= set(result) <=
+            result_fields | {'baseline_comparison_usable', 'deferred_code_providers'}
+            or 'baseline_comparison_usable' in result and type(result['baseline_comparison_usable']) is not bool):
         raise ValueError('Invalid hook result')
+    deferred = result.get('deferred_code_providers', [])
+    if not isinstance(deferred, list) or len(deferred) > 20 or len(set(deferred)) != len(deferred):
+        raise ValueError('Invalid deferred provider scope')
+    for provider in deferred:
+        metadata(provider)
     for k in ('status', 'last_check_status', 'coverage', 'execution_state'):
         metadata(result[k])
     # The output serializer never reflects unknown state fields. Validate even
@@ -181,9 +199,10 @@ def _git(root, *args):
 
 class CapturedSnapshot(tuple):
     """Preserve the existing two-value capture protocol; hashes stay internal."""
-    def __new__(cls, digest, paths, file_digests):
+    def __new__(cls, digest, paths, file_digests, target_selection=None):
         value = super().__new__(cls, (digest, paths))
         value.file_digests = file_digests
+        value.target_selection = target_selection
         return value
 
 
@@ -205,11 +224,21 @@ def capture_snapshot(root: Path, key: bytes):
         if entry and b'\t' in entry:
             header,name = entry.split(b'\t',1)
             index.setdefault(name.decode('utf-8'),[]).append(header)
+    inventory = sorted(set(paths) | {safe_path(name) for name in index
+        if not set(PurePosixPath(name).parts) & IGNORED})
+    if len(inventory) > MAX_FILES:
+        raise ValueError('Hook comparison file budget exceeded')
+    # Use the same extension + magic-byte policy as scans, including boundary
+    # validation before exclusion. A document renamed to text becomes eligible
+    # on the next capture and therefore produces a content delta.
+    profile = TargetDetector(max_files=MAX_FILES).detect(root, inventory, select_scan_targets=True)
+    excluded = {row['path'] for row in profile.skipped_files}
+    paths = [name for name in paths if name not in excluded]
+    inventory = [name for name in inventory if name not in excluded]
     total = 0
     file_digests = {}
     for name in paths:
         # Validate links and traversal even for removed files before reading.
-        TargetDetector(max_files=MAX_FILES).detect(root,[name])
         source = root / name
         digest.update(json.dumps(name).encode())
         digest.update(json.dumps([v.decode('ascii') for v in index.get(name,[])]).encode())
@@ -235,14 +264,9 @@ def capture_snapshot(root: Path, key: bytes):
     # Git's dirty list can omit byte-only changes (e.g. autocrlf). Keep its
     # existing scope/digest contract, and separately compare the bounded tracked
     # inventory. This never adds unchanged tracked files to the scanner scope.
-    inventory = sorted(set(paths) | {safe_path(name) for name in index
-        if not set(PurePosixPath(name).parts) & IGNORED})
-    if len(inventory) > MAX_FILES:
-        raise ValueError('Hook comparison file budget exceeded')
     for name in inventory:
         if name in file_digests:
             continue
-        TargetDetector(max_files=MAX_FILES).detect(root, [name])
         source = root / name
         if not source.exists():
             file_digests[name] = hmac.new(key, b'hook-file-deleted-v1', hashlib.sha256).hexdigest()
@@ -258,7 +282,8 @@ def capture_snapshot(root: Path, key: bytes):
                     raise ValueError('Hook comparison content budget exceeded')
                 content_digest.update(chunk)
         file_digests[name] = content_digest.hexdigest()
-    return CapturedSnapshot(digest.hexdigest(), paths, file_digests)
+    from .target import selection_summary
+    return CapturedSnapshot(digest.hexdigest(), paths, file_digests, selection_summary(profile))
 
 
 def family_multiset(findings, runs, plans):
@@ -291,9 +316,12 @@ def family_multiset(findings, runs, plans):
         # variant even when identical coordinates collapse to one occurrence.
         # Unknown/mixed provenance cannot be repaired by choosing the first row.
         if row['category'] == 'secret':
-            # Secret occurrence counting is unchanged. These providers have no
-            # rule execution proof and covered() continues to reject absence.
-            pass
+            # Count presence independently; only the bound default-detector
+            # identity can later be paired with a fresh rule/file receipt.
+            checksum = details.get('rule_pack_checksum', '')
+            if engine == 'gitleaks' and version and checksum:
+                proof['rule_pack_checksum'] = metadata(checksum)
+                versions[detector] = version
         elif (not version or not engine or not selected or
                 any(rule.rule_version != version for rule in selected) or
                 proof['engine'] != engine or proof['rule_pack_checksum'] != plan.pack.checksum or
@@ -316,10 +344,18 @@ def family_multiset(findings, runs, plans):
 
 
 def covered(family, runs, plans):
-    # Only explicit first-party rule/file execution evidence proves absence.
-    # Secret detector execution lists are not available: never false-resolve.
+    # A success/zero count alone never proves absence. Secret receipts also
+    # bind unchanged default detector configuration and reject observed skips.
     for name in family['scanner_sources']:
         run = next((r for r in runs if r.scanner == name), None)
+        if name == 'gitleaks':
+            from .secret_coverage import covers
+            proof = family['proof']
+            if not run or not covers(run, {'rule_id': family['rule_id'],
+                    'engine': proof.get('engine'), 'rule_version': proof.get('rule_version'),
+                    'rule_pack_checksum': proof.get('rule_pack_checksum')}, family['file_path']):
+                return False
+            continue
         plan = plans.get(name)
         if not run or run.status != RunStatus.SUCCESS or run.coverage_contract != 'FULL' or not plan:
             return False
@@ -408,15 +444,16 @@ class HookCoordinator:
             return self.runtime.registry
         if self._managed_registry is None:
             from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+            from .dynamic_function import NativeFunctionScanner
             from .osv import OSVDependencyAdapter
             from .toolchain import ToolManager
             manager = ToolManager()
-            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),GitleaksAdapter(manager),TrivyAdapter(manager)],
+            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),NativeFunctionScanner(),GitleaksAdapter(manager),TrivyAdapter(manager)],
                 tool_manager=manager,fallback_adapters=[OSVDependencyAdapter(manager)])
         return self._managed_registry
 
     def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False,
-                    dependency_changes=None):
+                    dependency_changes=None, previous_families=None):
         """One quick provider/observer path for events and setup seeds."""
         observation = {'families': {}, 'runs': [], 'plans': {}}
         def observe(findings, runs, plans):
@@ -443,6 +480,32 @@ class HookCoordinator:
                 def save(self, result):
                     pass
             runtime = SecurityRuntime(self.managed_registry(),store=ProjectionOnlyStore() if baseline else None)
+        # Immediate dynamic-code advice uses the same provider as its later
+        # verification. Full scans and other retained code risks keep Semgrep.
+        if not baseline and isinstance(runtime, SecurityRuntime):
+            from .dynamic_function import NativeFunctionScanner, quick_function_candidate_scope
+            from .scanners import ScannerRegistry, SemgrepAdapter
+            from .capabilities import Capability
+            prior = list((previous_families or {}).values())
+            native = any(type(a) is NativeFunctionScanner for a in runtime.registry.adapters)
+            other_code = any(Capability.CODE_SAST in a.capabilities and
+                             type(a) not in {NativeFunctionScanner, SemgrepAdapter}
+                             for a in runtime.registry.adapters)
+            other_family = any(any(source != NativeFunctionScanner.scanner_id for source in f['scanner_sources'])
+                               and f['category'] != 'secret' for f in prior)
+            if native and not other_code and not other_family:
+                choice = quick_function_candidate_scope(root, scope, has_native_family=any(
+                    NativeFunctionScanner.scanner_id in f['scanner_sources'] for f in prior))
+                if choice['eligible']:
+                    registry = ScannerRegistry([a for a in runtime.registry.adapters if type(a) is not SemgrepAdapter],
+                        tool_manager=runtime.registry.tool_manager,
+                        fallback_adapters=runtime.registry.fallback_adapters)
+                    registry.code_scope_notice = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
+                        '其他代码安全规则尚未执行，需要完整扫描确认。')
+                    runtime = SecurityRuntime(registry, store=runtime.store)
+                    result.update(scan_scope_notice=registry.code_scope_notice,
+                                  code_check_scope='CANONICAL_DYNAMIC_CODE_ONLY',
+                                  deferred_code_providers=['semgrep'])
         kwargs = {}
         if baseline:
             # Setup/session seeds establish SAST rule/file comparison evidence.
@@ -465,18 +528,26 @@ class HookCoordinator:
                             **{k:result[k] for k in ('scanner_invocation_count',) if k in result})
         try:
             from .first_scan_attribution import probe_scope
-            with local_recheck() as ledger, (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
+            from .scanners import baseline_sast_batches
+            with local_recheck() as ledger, baseline_sast_batches(baseline), (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
                 scan = runtime.scan(root, 'quick', _hook_scope=tuple(scope), _hook_observer=observe, **kwargs)
         finally:
             result.setdefault('timing_ms', timings())['scanner'] = elapsed(started)
             observe_recent_hook('SCANNER_TRIGGERED', scanner_run=locals().get('ledger', {}).get('engine_process_observed'))
         result.update(scan_id=scan.scan_id, coverage=scan.coverage, execution_state=scan.execution_state,
                       capabilities=dict(scan.capability_results))
-        result['execution']['scanner_run'] = ledger['engine_process_observed']
+        result['execution']['engine_process_observed'] = ledger['engine_process_observed']
+        result['execution']['scanner_run'] = ledger['engine_process_observed'] or any(
+            r.status == RunStatus.SUCCESS and r.scanner_diagnostics.get('local_read_observed') is True
+            for r in scan.scanner_runs)
         result['scanner_runs'] = [{k: getattr(r, k) for k in
             ('scanner', 'status', 'version', 'duration_ms', 'error_code', 'coverage_contract')} for r in scan.scanner_runs]
         result['scanner_diagnostics'] = scan.scanner_diagnostics
         result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
+        from .baseline_coverage import comparison_usable, unproven_files
+        result['baseline_comparison_usable'] = comparison_usable(result, observation)
+        if baseline:
+            result['baseline_unproven_sast_files'] = unproven_files(observation)
         for run in scan.scanner_runs:
             if run.status == RunStatus.SUCCESS and 'DEPENDENCY_VULN' in run.capabilities:
                 fresh = run.dependency_inventory.get('vulnerability_db_freshness')
@@ -510,9 +581,9 @@ class HookCoordinator:
             result['dependency_user_feedback'] = feedback
         observe_recent_hook('SCANNER_COMPLETED', scanner_run=result['execution']['scanner_run'])
         if attribution_candidate and observation['families']:
-            from .first_scan_attribution import capture_detector
+            from .first_scan_attribution import capture_detector, detector_observed
             stamp = capture_detector(self.managed_registry(), observation, root)
-            observation['attribution_detector'] = stamp if stamp is not None and prepared.get('semgrep') == stamp[0] else None
+            observation['attribution_detector'] = stamp if detector_observed(stamp, observation, prepared) else None
         return observation
 
     def handle_lifecycle(self, kind, workspace, host, session_id):
@@ -663,6 +734,8 @@ class HookCoordinator:
             previous = None
             result['state_recovered'] = True
         captured = self.snapshot_capture(root,self.store.key(root))
+        if getattr(captured, 'target_selection', None) is not None:
+            result['target_selection'] = captured.target_selection
         digest,files = captured
         current_files = getattr(captured, 'file_digests', None)
         result['change_digest'] = digest
@@ -682,6 +755,10 @@ class HookCoordinator:
         result['baseline_source'] = 'SETUP_SEED' if seeded else 'SESSION' if previous else 'NONE'
         result['baseline_available'] = previous is not None
         old_files = previous.get('file_digests') if previous else None
+        if previous:
+            from .risk_closure import RiskClosureService
+            previous['families'], previous['last_result']['delta'] = RiskClosureService(self.store).overlay(
+                root, previous['families'], previous['last_result']['delta'])
         content_changed = ({name for name in set(old_files) | set(current_files)
                             if old_files.get(name) != current_files.get(name)}
                            if old_files is not None and current_files is not None else None)
@@ -705,6 +782,16 @@ class HookCoordinator:
             result.update(previous['last_result'])
             result.update(status='REUSED_LAST_RESULT' if event == HookEvent.AGENT_STOP else 'NO_CHANGE',
                           scan_id=previous['last_scan_id'],next_step='Reuse the existing advisory result; coverage limits still apply.')
+            from .closeout_state import CloseoutStateStore
+            jobs = CloseoutStateStore(self.store.workspace_directory(root) / 'closeout.db', lambda: self.store.key(root))
+            job = jobs.latest(result['workspace_id'], identity(host + '\0' + (session_id or 'default')))
+            awaiting_proof = any(r['status'] == 'UNCONFIRMED_ABSENCE' for r in result['delta']['families'])
+            if (self.store.pending_activity(root, host, session_id) is not None or awaiting_proof or
+                    result.get('deferred_code_providers') or
+                    job and job['status'] != 'COMPLETED'):
+                result.update(status='CLOSEOUT_PENDING', next_step='Continue the existing Runtime closeout plan through MCP.')
+                if job:
+                    result['closeout_ref'] = job['closeout_ref']
             return
         if not lifecycle_activity and previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
             result.update(status='DEBOUNCED',scan_id=previous['last_scan_id'],coverage=previous['last_result']['coverage'],
@@ -721,7 +808,7 @@ class HookCoordinator:
             scope = sorted(content_changed | {f['file_path'] for f in previous['families'].values()})
         from .dependency_inputs import is_dependency_input
         detector = TargetDetector(max_files=MAX_FILES)
-        existing_scope = detector.detect(root,scope).files
+        existing_scope = detector.detect(root,scope,select_scan_targets=True).files
         dependency_changes = sorted(name for name in (content_changed if content_changed is not None else scope)
                                     if is_dependency_input(name) and not set(Path(name).parts) & detector.ignored)
         # Keep validated removed input names for selection. Providers still see
@@ -733,7 +820,7 @@ class HookCoordinator:
         comparison_only = previous is not None and previous['last_result']['status'] == 'COMPARISON_BASELINE'
         observation = self._scan_scope(result, root, scope, baseline=baseline_only,
                                       attribution_candidate=comparison_only,
-                                      dependency_changes=dependency_changes)
+                                      dependency_changes=dependency_changes, previous_families=old)
         if not scope:
             result['scan_id'] = previous['last_scan_id'] if previous else None
         result['last_check_status'] = result['status']
@@ -782,6 +869,23 @@ class HookCoordinator:
                 if observation['families'] else 'FIRST_SCAN_NO_RISK')
         can_cover = lambda family: covered(family,observation['runs'],observation['plans'])
         families,delta = family_delta(old,observation['families'],can_cover)
+        # Partial pre-edit parsing/unsupported code cannot prove NEW attribution
+        # even if a later edit makes that file parseable. Keep presence reviewable
+        # without an automatic-repair trigger. Secret coverage is independent.
+        gaps = set(previous.get('unproven_sast_files') or []) if previous else set()
+        unattributed = 0
+        for row in delta['families']:
+            if row['file_path'] in gaps and row['category'] != 'secret':
+                row['count_certainty'] = 'OBSERVED_LOWER_BOUND'
+                if row['status'] == 'NEW_FAMILY':
+                    row['status'] = 'UNATTRIBUTED_FAMILY'
+                    delta['new'] -= 1
+                    unattributed += 1
+                elif row['previous_count'] and row['current_count'] > row['previous_count']:
+                    delta['additional_occurrences'] -= row['current_count'] - row['previous_count']
+        if unattributed:
+            result.update(status='PARTIAL', last_check_status='PARTIAL',
+                          reason='BASELINE_CODE_COVERAGE_GAP', unattributed_code_risk_count=unattributed)
         if previous is None or comparison_only and attribution_old is None:
             delta = result['delta']
             if previous is None:
@@ -796,10 +900,17 @@ class HookCoordinator:
             if attribution_old is not None:
                 result['reason'] = result['first_scan_attribution_status']
         result['delta'] = delta
+        if unattributed:
+            result['next_step'] = 'Review current risks; incomplete pre-edit code coverage cannot prove these risks were introduced by this edit.'
         if any(f['uncertain'] for f in families.values()) and previous:
             result['status'] = 'PARTIAL'
             result['last_check_status'] = 'PARTIAL'
         summary = {k:result[k] for k in ('status','last_check_status','coverage','execution_state','capabilities','scanner_runs','delta')}
+        if 'baseline_comparison_usable' in result:
+            summary['baseline_comparison_usable'] = result['baseline_comparison_usable']
+        if 'deferred_code_providers' in result:
+            summary['deferred_code_providers'] = result['deferred_code_providers']
         state = asdict(HookSnapshot('hook-v1',result['workspace_id'],host,result['session_id'],digest,files,
-            families,result['scan_id'],self.clock(),summary,current_files))
+            families,result['scan_id'],self.clock(),summary,current_files,
+            result.get('baseline_unproven_sast_files') if baseline_only else sorted(gaps) if previous else None))
         self.store.save(path,state)

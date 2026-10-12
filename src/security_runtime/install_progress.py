@@ -33,6 +33,15 @@ STAGES = {
     'DELTA_APPLY': '正在复用未变化的程序文件，准备增量升级。',
 }
 
+PREPARATION_STAGES = frozenset({'INSTALL_TOOLS', 'INSTALL_DATA', 'VERIFY_SCAN_READINESS'})
+STAGE_PREFIX = 'AI_SECURITY_INSTALL_STAGE:'
+
+
+def child_preparation_progress(stage):
+    """Private, fixed-token transport; never forward scanner or config output."""
+    if stage in PREPARATION_STAGES:
+        print(STAGE_PREFIX + stage, file=sys.stderr, flush=True)
+
 
 def report_progress(progress, stage):
     if progress is not None:

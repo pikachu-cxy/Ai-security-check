@@ -113,15 +113,17 @@ def test_portable_prepares_with_new_validated_slot_after_configuration(installed
     def run(argv, **kwargs):
         calls.append((list(argv), dict(kwargs)))
         assert str(root / "versions") in argv[0]
-        assert kwargs["stdin"] is subprocess.DEVNULL
         if argv[1:4] == ["setup", "codex", "--json"]:
+            assert kwargs["stdin"] is subprocess.DEVNULL
             assert kwargs["timeout"] == 120
             return SimpleNamespace(returncode=0, stdout=json.dumps(personal.setup_personal_codex(installed)).encode(), stderr=b"")
         assert argv[1:] == ["prepare-installation", "--json", "--offline"]
         assert kwargs["timeout"] > 120
+        assert kwargs['env']['SECURITY_RUNTIME_INSTALL_PROGRESS'] == '1'
         return SimpleNamespace(returncode=0, stdout=json.dumps(response).encode(), stderr=b"PRIVATE-SCANNER-OUTPUT")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(personal, 'run_process', run)
     data = personal.install_personal_codex(bundle=package, root=root, progress=stages.append, offline=True)
     assert len(calls) == 2 and calls[0][0][0] == calls[1][0][0]
     assert data["installation"]["local_files_ready"] and data["installation"]["scan_ready"]
@@ -148,6 +150,7 @@ def test_preparation_failure_after_portable_setup_is_degraded_and_keeps_configur
                                stdout=output, stderr=b"PRIVATE-PREPARE-OUTPUT")
 
     monkeypatch.setattr(subprocess, "run", run)
+    monkeypatch.setattr(personal, 'run_process', run)
     data = personal.install_personal_codex(bundle=package, root=root, offline=True)
     assert data["overall"] == "DEGRADED"
     assert data["installation"]["local_files_ready"] is True

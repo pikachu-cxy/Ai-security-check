@@ -35,6 +35,7 @@ STATUS = {'UNKNOWN', 'VALID', 'INVALID', 'REJECTED', 'INCONCLUSIVE', 'NOT_SCANNE
           'NO_CHANGES', 'REUSED_LAST_RESULT', 'DEBOUNCED', 'BUSY', 'READY', 'INITIALIZING',
            'DEGRADED', 'ERROR', 'ALLOW_STOP', 'CONTINUE_SECURITY_FIX'}
 STATUS |= {'SESSION_FINALIZED'}
+STATUS |= {'CLOSEOUT_PENDING', 'CLOSEOUT_REQUIRED', 'ALLOW_STOP_PENDING'}
 REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQUIRED',
            'WORKSPACE_OR_REFERENCE_REJECTED', 'WORKSPACE_CLAIM_REQUIRED',
            'GLOBAL_CONFIGURATION_NOT_READY', 'LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR',
@@ -82,6 +83,9 @@ def workspace_hash(root):
 def safe_fields(values):
     """Closed enums/field names: neither exception text nor arbitrary metadata."""
     result = {}
+    build = values.get('runtime_build_id')
+    if isinstance(build, str) and len(build) == 64 and all(c in '0123456789abcdef' for c in build):
+        result['runtime_build_id'] = build
     for key, allowed in (
             ('policy_decision', {'NONE', 'ADVISE', 'AUTO_FIX', 'CONFIRM_REQUIRED', 'MANUAL_ONLY', 'ESCALATE'}),
             ('remediation_execution_capability', {'ADVISORY_ONLY', 'AGENT_CONTINUATION', 'UNAVAILABLE'}),

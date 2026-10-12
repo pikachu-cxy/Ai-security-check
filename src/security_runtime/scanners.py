@@ -6,6 +6,7 @@ import logging
 import tempfile
 import time
 import shutil
+import subprocess
 import os
 import hashlib
 import threading
@@ -39,6 +40,35 @@ from .scanner_observation import observation, metadata, span, count, add_time, i
 MAX_OUTPUT = 4_000_000
 logger = logging.getLogger(__name__)
 _trivy_inventory = ContextVar('trivy_inventory', default=None)
+_sast_batch_limit = ContextVar('sast_batch_limit', default=40)
+_executing_engine = ContextVar('executing_scanner_engine', default=None)
+
+
+@contextmanager
+def baseline_sast_batches(enabled):
+    """Reduce baseline engine startups without changing normal edit batches."""
+    token = _sast_batch_limit.set(128 if enabled else 40)
+    try:
+        yield
+    finally:
+        _sast_batch_limit.reset(token)
+
+
+def sast_batches(files):
+    # Reserve space for the executable, options/config and Windows' quoting.
+    # Count UTF-16 units; non-ASCII paths are not an unlimited argv budget.
+    batch, units = [], 0
+    for name in files:
+        cost = len(subprocess.list2cmdline([name]).encode('utf-16-le')) // 2 + 1
+        if cost > 16_000:
+            raise ValueError('SAST target argument budget exceeded')
+        if batch and (len(batch) >= _sast_batch_limit.get() or units + cost > 16_000):
+            yield tuple(batch)
+            batch, units = [], 0
+        batch.append(name)
+        units += cost
+    if batch:
+        yield tuple(batch)
 
 
 @contextmanager
@@ -157,7 +187,11 @@ class BaseScanner:
             checkpoint()
             stage = 'SCANNER_EXECUTION'
             emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
-            findings = self._scan(resolved.path, context, normalizer)
+            token = _executing_engine.set((self.name, resolved.version, resolved.path))
+            try:
+                findings = self._scan(resolved.path, context, normalizer)
+            finally:
+                _executing_engine.reset(token)
             return findings, ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
         except DiagnosticError as exc:
             return failed(RunStatus.FAILED, exc.diagnostic, resolved.version)
@@ -287,8 +321,7 @@ class PatternSASTScanner(BaseScanner):
             config=Path(temporary)/'selected.yml'
             with span('rule_config_preparation'):
                 config.write_text(config_text,encoding='utf-8')
-            for offset in range(0,len(plan.files),40):
-                batch=plan.files[offset:offset+40]
+            for batch in sast_batches(plan.files):
                 request=SASTRequest(Path(context.root),rule_pack,batch,config)
                 # Hash bounded safe files before execution, then verify again
                 # after it. Source never enters the finding store through this.
@@ -373,51 +406,100 @@ class GitleaksAdapter(BaseScanner):
     filter_changed_lines = True
     timeout = 30
 
+    def scan(self, context, normalizer):
+        from .secret_coverage import capture
+        with capture() as receipt:
+            findings, run = super().scan(context, normalizer)
+        run.provider = 'gitleaks'
+        run.scanner_diagnostics['secret_coverage'] = receipt
+        return findings, run
+
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
         return context.mode == "release" or bool(context.files)
 
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         # Quick and feature scan changed files only. Gitleaks directory mode is
         # intentionally not used here because it would read the whole project.
-        if context.mode == "release":
-            observe_scope(context.files, 'SCOPED_SNAPSHOT')
-            with _snapshot(context) as scoped:
-                return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped,
-                                          target_count=len(set((*context.files, *context.context_files))))
-        files = TargetDetector().detect(Path(context.root), list(dict.fromkeys(context.files))).files
+        names = (*context.files, *context.context_files) if context.mode == 'release' else context.files
+        files = TargetDetector().detect(Path(context.root), list(dict.fromkeys(names))).files
         observe_scope(files, 'FILE' if len(files) == 1 else 'SCOPED_SNAPSHOT')
         if not files:
             return []
-        if len(files) == 1:
-            return self._scan_targets(binary, [str(Path(context.root) / files[0])], context, n, target_count=1)
         # Preserve the complete validated dirty scope, but pay one process start.
-        # Only an ephemeral mirror is scanned; never directory-scan the workspace.
+        # Single-file scans also use immutable scoped bytes. Only an ephemeral
+        # mirror is scanned; never directory-scan the workspace.
         with _snapshot(replace(context, files=tuple(files), context_files=())) as scoped:
             return self._scan_targets(binary, [str(scoped)], context, n, snapshot_root=scoped,
                                       target_count=len(files))
 
     def _scan_targets(self, binary, targets, context, n, snapshot_root=None, target_count=1):
+        from .secret_coverage import build_receipt, digest, identity, parse_report, publish, text_file, trace_complete, trace_summary
         found = []
         for target in targets:
+            scoped = Path(target)
+            inputs = [scoped] if scoped.is_file() else sorted(p for p in scoped.rglob('*') if p.is_file())
+            names = {p.relative_to(snapshot_root).as_posix(): p for p in inputs} if snapshot_root else {
+                p.relative_to(Path(context.root)).as_posix(): p for p in inputs}
+            sizes = {name: path.stat().st_size for name, path in names.items()}
+            default_config = (not os.getenv('GITLEAKS_CONFIG') and not os.getenv('GITLEAKS_CONFIG_TOML') and
+                not (scoped / '.gitleaks.toml').exists() and not (Path(context.root) / '.gitleaks.toml').exists() and
+                not (Path(context.root) / '.gitleaksignore').exists())
+            # Trace is bounded and stays in memory. Never enable it for custom
+            # config: upstream may print config content at debug level.
+            trace = (default_config and len(names) <= 20 and sum(sizes.values()) <= 2_000_000 and
+                     all(text_file(path) for path in names.values()))
+            # Large baselines still carry detector identity for observed hits,
+            # without repeatedly hashing all source bytes or claiming file proof.
+            before = {name: digest(path) for name, path in names.items()} if trace else {}
+            source_matches = trace and all(digest(Path(context.root) / name) == revision for name, revision in before.items())
+            engine_before = digest(binary)
             with tempfile.TemporaryDirectory() as tmp:
                 report = str(Path(tmp) / "findings.json")
                 invocation('SECRET_SCAN', target_count)
-                process = _execute([binary, "dir", target, "--report-format", "json", "--report-path", report, "--redact=100", "--no-banner", "--exit-code", "0"], context.root, self.timeout)
+                process = _execute([binary, "dir", target, "--report-format", "sarif", "--report-path", report,
+                    "--redact=100", "--no-banner", "--no-color", "--log-level", 'trace' if trace else 'info',
+                    "--max-decode-depth", "5",
+                    "--exit-code", "0"], context.root, self.timeout)
                 if process.return_code != 0:
-                    _process_failure(process)
+                    # Trace may contain source-bearing fields even with redact.
+                    # Never reflect raw Secret scanner stderr in diagnostics.
+                    raise DiagnosticError(ErrorDiagnostic('SECRET_SCANNER_FAILED',
+                        'Secret scanner did not complete successfully.', 'Inspect local engine configuration and retry.'))
                 if Path(report).exists() and Path(report).stat().st_size > MAX_OUTPUT:
                     raise OutputLimitError("scanner report exceeds configured limits")
                 if not Path(report).is_file():
                     raise ValueError('Secret scanner did not produce its scoped report')
                 with span('parsing_normalization'):
                     data = json.loads(Path(report).read_text(encoding="utf-8"))
+                    data, rules, reported_version, engine = parse_report(data)
+                executing = _executing_engine.get()
+                # Upstream SARIF metadata may have a static report version.
+                # Bind the actual ToolManager-probed executable/version instead.
+                version = executing[1] if executing and executing[0] == self.name and executing[2] == binary else ''
+                stable = source_matches and engine_before == digest(binary) and all(
+                    digest(path) == before[name] and digest(Path(context.root) / name) == before[name]
+                    for name, path in names.items())
+                config_stable = (not os.getenv('GITLEAKS_CONFIG') and not os.getenv('GITLEAKS_CONFIG_TOML') and
+                    not (scoped / '.gitleaks.toml').exists() and not (Path(context.root) / '.gitleaks.toml').exists() and
+                    not (Path(context.root) / '.gitleaksignore').exists())
+                receipt = build_receipt(binary, version, rules, before,
+                    default_config=default_config and config_stable and engine == 'gitleaks' and engine_before == digest(binary),
+                    complete=trace and stable and trace_complete(process.stderr, sizes))
+                receipt['execution_summary'] = trace_summary(process.stderr, sizes)
+                receipt['execution_summary']['stable_source'] = stable
+                receipt['execution_summary']['reported_engine_matches'] = engine == 'gitleaks'
+                receipt['execution_summary']['report_version_matches_execution'] = reported_version == version
+                publish(receipt)
                 if snapshot_root is not None:
                     for item in data:
                         path = Path(item.get("File", ""))
                         if path.is_absolute():
                             item["File"] = path.resolve().relative_to(snapshot_root.resolve()).as_posix()
                 with span('parsing_normalization'):
-                    found.extend(self.normalize(data, n))
+                    normalized = self.normalize(data, n)
+                    for finding in normalized:
+                        finding.technical_details.update(identity(receipt, finding.technical_details['rule_id']))
+                    found.extend(normalized)
         return found
 
     def normalize(self, data: object, n: FindingNormalizer) -> list[Finding]:
@@ -607,12 +689,13 @@ class ScannerRegistry:
     def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None, *, fallback_adapters=None):
         self.tool_manager = tool_manager or ToolManager()
         from .osv import OSVDependencyAdapter
+        from .dynamic_function import NativeFunctionScanner
         self.fallback_adapters = fallback_adapters if fallback_adapters is not None else ([OSVDependencyAdapter(self.tool_manager)] if adapters is None else [])
-        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []
-        used_ids = {"semgrep", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
+        used_ids = {"semgrep", "native-js-function", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
         for entry in importlib.metadata.entry_points(group=SCANNER_ENTRY_POINT):
             try:
                 loaded = entry.load()

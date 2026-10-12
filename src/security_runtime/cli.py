@@ -329,7 +329,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         configure_logging(mcp=args.command == "mcp")
         if args.command == 'prepare-installation':
             from .install_readiness import prepare_installation_readiness
-            data = prepare_installation_readiness(offline=args.offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
+            from .install_progress import child_preparation_progress
+            progress = child_preparation_progress if os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1' else None
+            data = prepare_installation_readiness(progress=progress,
+                offline=args.offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
             print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
             return 0 if data['ready'] else 2
         if args.command == 'install':

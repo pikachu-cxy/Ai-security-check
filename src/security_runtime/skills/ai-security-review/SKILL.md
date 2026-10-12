@@ -5,6 +5,19 @@ description: Use AI Security Runtime for project security scans, professional de
 
 # Security review
 
+## Runtime 收尾检查
+
+Stop 安排收尾后，执行 Runtime 的 `execution_plan`，使用普通 MCP 的
+`run_closeout_check`；重连后用 `get_closeout_status` 恢复同一 `closeout_ref`。
+不要另建扫描或修复流程，不自行宣布完成，也不扩大已有修复授权。
+显示实际 `user_feedback`，逐原规则保留证据；相同文件、结果和原因可以合并数量。
+分别说明“已确认关闭”“未再检出但待确认”“检查未完成”，零发现不得写 SAFE。
+检查完成、覆盖完整与风险修复完成分别表达；Vue/TypeScript 的部分代码覆盖
+不否定有完整原凭据检测器、规则、文件和当前版本证明的关闭结果。
+文件变化使旧关闭证明失效。同步 Hook、Hook 调度的收尾补查、用户手动独立
+复查分别记录，手动结果不得冒充自动验收。锁忙、预算耗尽或新编辑时保留任务，
+报告尚未完成，不不断新建任务或循环扫描。收尾计划不授予修复权限。
+
 用户呈现规则（必须遵守）：每次 Hook 的“用户提示”必须出现在最终回复中，
 完整保留位置、具体问题、条件性影响、修复建议、未确认事项和待选的
 “修复/忽略”。可以调整换行或文件链接，不得只摘取标题、数量或内部状态。

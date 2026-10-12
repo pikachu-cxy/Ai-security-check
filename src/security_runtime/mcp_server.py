@@ -75,6 +75,13 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if engine is None:
             engine = SecurityRuntime()
         return engine
+    closeout_engine = None
+    def closeout_service():
+        nonlocal closeout_engine
+        from .closeout import CloseoutService
+        if closeout_engine is None:
+            closeout_engine = CloseoutService(runtime_engine(), hook_coordinator.store)
+        return closeout_engine
     binding = workspace_binding or WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
@@ -123,6 +130,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                                   turn_id=turn_id, tool_use_id=tool_use_id, permission_mode=permission_mode,
                                   claim_guard=codex_claim_guard,
                                  coordinator=hook_coordinator, remediation=None if hook_advisory_only else remediation)
+        from .build_identity import build_identity
+        data['runtime_build_id'] = build_identity().get('build_id')
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=False))])
 
@@ -155,7 +164,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
                           turn_id: str | None = None, permission_mode: str | None = None) -> dict:
-        """Codex Stop fallback for an existing unconsumed AUTO_FIX handoff only. Untrusted bounded claims; no prompt/source/transcript/commands/ref input. Checks signed state and guards, writes a maximum-two continuation counter; never scans, prepares, edits, builds, calls a model or renews authority. Empty Hook output allows Stop."""
+        """Arbitrate Codex Stop: preserve an existing authorized repair continuation first, otherwise persist a version-bound Runtime closeout plan for ordinary MCP execution. Validate bounded host claims and signed state; write bounded dispatch counters but never run scans, edit source, build, call a model or renew repair authority. Repeated or active Stop cannot create an unbounded continuation loop."""
         from .host_event_runtime import handle_normalized_event
         from .codex_mcp_hook import codex_hook_output
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
@@ -165,7 +174,15 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if data is None:
             data, _ = handle_normalized_event(normalized, coordinator=hook_coordinator,
                                               continuation=remediation.continuation)
+            # Approved repair continuations take precedence; closeout grants no repair authority.
+            if data.get('decision') != 'block' and data.get('status') != 'INCONCLUSIVE':
+                try:
+                    data.update(closeout_service().stop(normalized.context.workspace, 'codex', session_id, stop_hook_active))
+                except Exception:
+                    data.update(status='ALLOW_STOP_PENDING', systemMessage='收尾检查尚未完成，当前结果不能确认关闭；请稍后恢复补查。')
         data = {**diag, **data}
+        from .build_identity import build_identity
+        data['runtime_build_id'] = build_identity().get('build_id')
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps({} if rejected else codex_hook_output(data), ensure_ascii=True))])
 
@@ -197,6 +214,28 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if resolved != Path(binding.root):
             raise ValueError("Requested workspace is outside this MCP connection")
         return binding.root
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def prepare_closeout_check(workspace_path: str | None = None, files: list[str] | None = None,
+                               source_scan_id: str | None = None) -> dict:
+        """Persist an explicit offline Core closeout plan. No edit, build, model or repair grant."""
+        return closeout_service().prepare(bound_path(workspace_path), files, source_scan_id=source_scan_id)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def run_closeout_check(closeout_ref: str, workspace_path: str | None = None) -> dict:
+        """Execute saved Runtime plan with generation/lease/version receipts; no edits or grants."""
+        return closeout_service().run(closeout_ref, bound_path(workspace_path))
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_closeout_status(closeout_ref: str, workspace_path: str | None = None) -> dict:
+        """Read saved closeout and current version validity; never scan or declare safety."""
+        from .storage import ReadOnlySQLiteStore, SQLiteStore
+        from .closeout import CloseoutService
+        from .scanners import ScannerRegistry
+        from types import SimpleNamespace
+        reader = engine or SimpleNamespace(store=ReadOnlySQLiteStore(SQLiteStore.default_path()),
+                                          registry=ScannerRegistry())
+        return CloseoutService(reader, hook_coordinator.store).get(closeout_ref, bound_path(workspace_path))
 
     def check_scan(scan_id: str) -> None:
         if binding is None:
@@ -381,7 +420,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         from .security_summary import SecuritySummaryService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
-        return SecuritySummaryService(ReadOnlySQLiteStore(path)).get(
+        return SecuritySummaryService(ReadOnlySQLiteStore(path), hooks=hook_coordinator.store).get(
             workspace_path, scan_id, details=details, bound_workspace=binding.root if binding else None)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
@@ -537,7 +576,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                 return functional.finalize(remediation_ref, task_ref, Path(root), checked)
             return checked
         path = engine.store.path if engine is not None else SQLiteStore.default_path()
-        service = TaskFixService(ReadOnlySQLiteStore(path), getattr(engine, 'registry', None))
+        service = TaskFixService(ReadOnlySQLiteStore(path), getattr(engine, 'registry', None), hooks=hook_coordinator.store)
         resolved = service.tasks.resolve(task_ref, workspace_path, bound_workspace=binding.root if binding else None)
         if resolved['status'] != 'RESOLVED':
             return resolved

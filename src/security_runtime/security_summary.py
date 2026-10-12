@@ -11,6 +11,7 @@ from .triage import TriageService
 from .triage_evidence import EvidenceBuilder, encoded
 from .triage_models import category, dependency_groups
 from .workspace import WorkspaceResolver
+from .risk import NO_FINDINGS_MESSAGE, presentation_status
 
 TLS_RULES = {'ai-security.java.trust-all-hostname', 'ai-security.java.trust-all-certificates'}
 SEVERITIES = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'UNKNOWN': 1}
@@ -63,8 +64,9 @@ def _workspace(value):
 
 
 class SecuritySummaryService:
-    def __init__(self, store: ReadOnlySQLiteStore | None = None):
+    def __init__(self, store: ReadOnlySQLiteStore | None = None, hooks=None):
         self.store = ReadOnlySQLiteStore(store.path) if store is not None else ReadOnlySQLiteStore()
+        self.hooks = hooks
 
     def get(self, workspace_path=None, scan_id=None, *, details=False, bound_workspace=None):
         if type(details) is not bool:
@@ -103,12 +105,27 @@ class SecuritySummaryService:
                 return {key: safe(item) for key, item in value.items()}
             return value
         tasks = self._tasks(scan, rows, safe)
+        from .hook_state import HookStateStore
+        from .risk_closure import RiskClosureService
+        from .equivalence import equivalence_key
+        closure = RiskClosureService(self.hooks or HookStateStore(self.store.path.parent / 'hooks'))
+        facts = closure.statuses(root)
+        closed = {r['equivalence_key'] for r in facts if r['status'] == 'CONFIRMED_CLOSED'}
+        by_id = {f['id']: f for f in scan['findings']}
+        for task in tasks:
+            if task['topic'] == 'secret':
+                states = ['CONFIRMED_CLOSED' if equivalence_key(by_id[m['finding_id']]) in closed
+                          else 'UNCONFIRMED' for m in task['members']]
+                task['current_closure'] = 'CONFIRMED_CLOSED' if all(s == 'CONFIRMED_CLOSED' for s in states) else 'UNCONFIRMED'
+                for member, state in zip(task['members'], states):
+                    member['current_closure'] = state
         coverage = dict(view['triage_coverage'])
         coverage['not_eligible'] = sum(category(f) not in {'code', 'secret', 'dependency'} for f in scan['findings'])
         coverage['eligible_untriaged'] = sum(row['triage_status'] == 'UNTRIAGED' and row['category'] in
                                             {'code', 'secret', 'dependency'} for row in rows.values())
-        candidates = [task for task in tasks if any(task['priority_counts'][key] for key in ('ACTIONABLE', 'REVIEW', 'UNTRIAGED'))
-                      or task['review_states']['NOT_ELIGIBLE']]
+        candidates = [task for task in tasks if task.get('current_closure') != 'CONFIRMED_CLOSED' and
+                      (any(task['priority_counts'][key] for key in ('ACTIONABLE', 'REVIEW', 'UNTRIAGED'))
+                      or task['review_states']['NOT_ELIGIBLE'])]
         recommended = [task for task in candidates if task['priority_counts']['ACTIONABLE']][:3]
         topics = {task['topic'] for task in recommended}
         for task in candidates:
@@ -122,16 +139,21 @@ class SecuritySummaryService:
                 break
             if task not in recommended:
                 recommended.append(task)
+        release_status = presentation_status(scan['release_status'], finding_count=len(scan['findings']),
+            status=scan['status'], execution_state=scan.get('execution_state'), coverage=scan.get('coverage'))
         result = {'status': 'AVAILABLE', 'workspace': str(root), 'details': details,
                   'scan_coverage': view['scan_coverage'], 'capability_results': view['capability_results'],
-                  'release_status': scan['release_status'], 'triage_coverage': coverage,
+                  'release_status': release_status, 'triage_coverage': coverage,
                   'task_count': len(tasks), 'recommended_tasks': recommended,
                   'sources': {'scanner_candidates': 'SCANNER', 'accepted_ai_reviews': 'RUNTIME_ACCEPTED_AI_REVIEW',
                               'host_supplemental': 'NOT_IMPORTED'},
-                  'notice': 'VALID 表示记录通过 Runtime 校验，非人工验证、漏洞复现或线上可利用证明。0 个优先处理项不表示安全。',
+                  'notice': (NO_FINDINGS_MESSAGE if release_status == 'NO_FINDINGS' else
+                             'VALID 表示记录通过 Runtime 校验，非人工验证、漏洞复现或线上可利用证明。0 个优先处理项不表示安全。'),
                   'automatic_execution': False}
         from .scan_freshness import summary as scan_context_summary
         result['scan_context'] = scan_context_summary(scan, self.store, root)
+        result['current_credential_closure'] = facts
+        result['historical_scan_unchanged'] = True
         from .target import selection_summary
         result['target_selection'] = selection_summary(scan['target_profile'])
         result['rule_coverage'] = {key:value for key,value in scan.get('rule_coverage',{}).items()

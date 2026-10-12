@@ -200,8 +200,8 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
     stages = []
     def run(argv, **kwargs):
         assert argv[0].startswith(str(root / 'versions')) and argv[0].endswith('bundle\\security-check.exe')
-        assert kwargs['stdin'] == subprocess.DEVNULL
         if argv[1] == 'setup':
+            assert kwargs['stdin'] == subprocess.DEVNULL
             assert stages[-1] == 'SETUP_CHILD'
             assert argv[1:] == ['setup', 'codex', '--json']
             assert kwargs['timeout'] == 120
@@ -210,6 +210,7 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
         assert kwargs['timeout'] > 120
         return SimpleNamespace(returncode=0, stdout=json.dumps(ready_scanning_receipt()).encode())
     monkeypatch.setattr(subprocess, 'run', run)
+    monkeypatch.setattr('security_runtime.personal_install.run_process', run)
     data = install_personal_codex(bundle=package, root=root, progress=stages.append)
     assert stages[:12] == ['PREPARE', 'PACKAGE_VERIFY', 'CHECK_CONFIG', 'PACKAGE_VERIFY',
         'COPY_RUNTIME', 'VERIFY_INSTALLED', 'CAPABILITY_CHECK', 'PREPARE_LAUNCHER',

@@ -27,7 +27,7 @@ class OutputLimitError(ValueError):
     pass
 
 
-def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -> ProcessResult:
+def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None) -> ProcessResult:
     checkpoint()
     start = time.monotonic()
     creation_started = time.perf_counter()
@@ -37,7 +37,9 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()
 
-    def consume(stream, buffer):
+    def consume(stream, buffer, callback=None):
+        pending = b''
+        discarded = False
         try:
             while chunk := stream.read1(4096):
                 remaining = max_output - len(buffer)
@@ -45,10 +47,25 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000) -
                 if len(chunk) > remaining:
                     overflow.set()
                     # Drain and discard until the parent kills the process.
+                if callback is not None:
+                    pending += chunk
+                    while b'\n' in pending:
+                        line, _, pending = pending.partition(b'\n')
+                        if not discarded and len(line) <= 256:
+                            try:
+                                callback(line.decode('utf-8', errors='replace').rstrip('\r'))
+                            except Exception:
+                                # Presentation failures cannot invalidate a receipt.
+                                pass
+                        discarded = False
+                    if len(pending) > 256:
+                        pending = b''
+                        discarded = True
         finally:
             stream.close()
 
-    readers = [threading.Thread(target=consume, args=(stream, buffers[index]), daemon=True)
+    readers = [threading.Thread(target=consume,
+               args=(stream, buffers[index], on_stderr_line if index == 1 else None), daemon=True)
                for index, stream in enumerate((proc.stdout, proc.stderr))]
     for reader in readers:
         reader.start()

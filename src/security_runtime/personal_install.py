@@ -12,7 +12,8 @@ import subprocess
 import sys
 
 from .integration_lifecycle import IntegrationDiagnostic
-from .install_progress import report_progress
+from .install_progress import report_progress, PREPARATION_STAGES, STAGE_PREFIX
+from .processes import run_process
 from .review_skill import ReviewSkillManager
 from .upgrade import InstallationUpgrade, reason
 from .delivery import verified_operation
@@ -35,15 +36,24 @@ def _unavailable_readiness(*, offline):
             'cached_usable':False}, 'failures':[]}
 
 
-def _prepare_child(executable, *, offline):
+def _prepare_child(executable, *, offline, progress=None):
     # The installed candidate owns its compatibility pins, including when an
     # older product version is installing a newer locally validated bundle.
     argv = [str(executable), 'prepare-installation', '--json']
     if offline:
         argv.append('--offline')
+    environment = dict(os.environ, SECURITY_RUNTIME_INSTALL_PROGRESS='1')
+    last_stage = None
+    def relay(line):
+        nonlocal last_stage
+        if line.startswith(STAGE_PREFIX):
+            stage = line[len(STAGE_PREFIX):]
+            if stage in PREPARATION_STAGES and stage != last_stage:
+                report_progress(progress, stage)
+                last_stage = stage
     try:
-        completed = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
-            timeout=PREPARATION_TIMEOUT, check=False)
+        completed = run_process(argv, env=environment, timeout=PREPARATION_TIMEOUT,
+            max_output=256_000, on_stderr_line=relay)
         if len(completed.stdout) > 256_000:
             raise ValueError()
         receipt = json.loads(completed.stdout)
@@ -52,7 +62,7 @@ def _prepare_child(executable, *, offline):
                 or offline and receipt['network_allowed']):
             raise ValueError()
         return receipt, None
-    except subprocess.TimeoutExpired:
+    except (subprocess.TimeoutExpired, TimeoutError):
         return _unavailable_readiness(offline=offline), 'INSTALLATION_PREPARATION_TIMEOUT'
     except OSError:
         return _unavailable_readiness(offline=offline), 'INSTALLATION_PREPARATION_FAILED'
@@ -68,7 +78,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     diagnostic = None
     if executable is not None:
         report_progress(progress, 'INSTALL_TOOLS')
-        receipt, diagnostic = _prepare_child(executable, offline=offline)
+        receipt, diagnostic = _prepare_child(executable, offline=offline, progress=progress)
         report_progress(progress, 'VERIFY_SCAN_READINESS')
     else:
         try:

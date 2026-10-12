@@ -6,6 +6,8 @@ from PyInstaller.utils.hooks import collect_data_files, copy_metadata
 root = Path(SPECPATH).resolve().parents[1]
 package = root / "src" / "security_runtime"
 datas = collect_data_files("security_runtime")
+# Native rule identity includes its implementation bytes, including in PYZ builds.
+datas += [(str(package / "dynamic_function.py"), "security_runtime")]
 datas += [(str(root / name), "security_runtime") for name in ("LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md")]
 datas += copy_metadata("ai-security-runtime")
 hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server"]

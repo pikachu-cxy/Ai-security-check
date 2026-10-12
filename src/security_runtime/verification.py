@@ -175,14 +175,18 @@ class VerificationService:
                     result['current_evidence'].append(evidence(current))
             covered = run.status == RunStatus.SUCCESS and run.coverage_contract == 'FULL' and (process_observed or
                 type(adapter) not in {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter})
-            if plan is not None:
+            if type(adapter) is GitleaksAdapter:
+                from .secret_coverage import covers
+                covered = covered and covers(run, row.get('technical_details', {}), path, root=root)
+            elif plan is not None:
                 rule = row.get('technical_details', {}).get('rule_id')
                 selected = next((r for r in plan.rules if r.rule_id == rule), None)
                 details = row.get('technical_details', {})
                 compatible = selected and all(not details.get(k) or details[k] == value for k, value in (
                     ('rule_pack', plan.pack.descriptor.rule_pack_id), ('rule_pack_version', plan.pack.descriptor.version),
                     ('rule_version', selected.rule_version)))
-                engine_id = getattr(getattr(adapter, 'engine_provider', None), 'engine_id', '')
+                engine_id = (getattr(getattr(adapter, 'engine_provider', None), 'engine_id', '')
+                             or getattr(adapter, 'engine_id', '') or adapter.scanner_id)
                 if details.get('engine') and details['engine'] != engine_id:
                     compatible = False
                 checksum = details.get('rule_pack_checksum') or scan.get('rule_coverage', {}).get('rule_pack_checksum')

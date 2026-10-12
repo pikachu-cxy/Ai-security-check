@@ -31,6 +31,31 @@ Semgrep-reported skipped targets also reduce applicable-rule execution proof,
 even when the target occurs in `paths.scanned`. Bounded skip reasons appear in
 rule coverage; raw scanner details are not copied into this diagnostic.
 
+## Hook comparison baselines
+
+Git and ordinary-folder Hook snapshots now use this same binary document policy.
+They retain bounded exclusion diagnostics, and a document changed into plain
+text becomes eligible again. Relevant oversized text still prevents capture.
+
+A comparison baseline may be READY while its code coverage remains PARTIAL or
+NOT_COVERED: recognized inputs such as Vue components have no applicable rules.
+This is allowed only when every selected rule and supported target has explicit
+successful engine evidence and every other requested quick capability completed.
+Localized parser gaps are retained per file: later risks in those paths have
+unconfirmed edit attribution and cannot trigger automatic repair. Unscoped errors,
+engine skips, missing rule execution, failed or
+unavailable tools, moving source and resource limits still prevent readiness.
+Readiness exposes baseline coverage/capabilities and security_proof=false.
+Unsupported files cannot establish risk absence or automatic repair authority.
+Vue SFC code analysis remains unsupported; this change restores supported-file
+checks without relabeling the whole project as fully covered.
+
+Baseline SAST batches admit at most 128 selected files with a 16,000 UTF-16-unit
+target-argument budget. Normal edit batches retain the 40-file cap. This reduces
+engine startup overhead while preserving exact target scope, per-file/rule
+evidence, output bounds and the 60-second baseline deadline. Deadline failures
+report BASELINE_DEADLINE_EXCEEDED rather than an ambiguous coverage failure.
+
 ## Failure contract
 
 An oversized admitted input returns `TARGET_FILE_SIZE_LIMIT_EXCEEDED` and a

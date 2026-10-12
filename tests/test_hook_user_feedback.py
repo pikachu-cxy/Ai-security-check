@@ -13,6 +13,55 @@ def tls_finding():
             'technical_details': {'rule_id': 'ai-security.java.trust-all-hostname'}}
 
 
+def dynamic_function_finding():
+    return {'file_path': 'src/securityBench/services/expressionEvaluator.ts', 'line_start': 4,
+            'category': 'code-injection',
+            'technical_details': {'rule_id': 'ai-security.javascript.dynamic-function',
+                                  'dangerous_api': 'Function'}}
+
+
+def test_dynamic_function_copy_explains_location_execution_and_arithmetic_tradeoff():
+    feedback = issue_feedback(dynamic_function_finding())
+    assert feedback['location'] == {'file': 'src/securityBench/services/expressionEvaluator.ts', 'line': 4}
+    for text in ('new Function', '当作 JavaScript 代码', '如果外部输入能到达这里',
+                 '生成的函数被调用', '实际入口是否可到达', '原生构造器尚未确认',
+                 '受限解析器', '不能改用 eval', '收窄可接受的语法',
+                 '不能保证保留任意 JavaScript 表达式', '正常算术', '响应格式',
+                 '回复“修复”', '回复“忽略”'):
+        assert text in feedback['message']
+    assert feedback['choices'] == ['修复', '忽略']
+    assert '系统命令' not in feedback['message']
+
+
+def test_dynamic_function_prompt_cannot_import_untrusted_remediation_advice():
+    finding = dynamic_function_finding()
+    finding.update(title='PRIVATE_CANARY', description='PRIVATE_CANARY', fix_advice='PRIVATE_CANARY')
+    finding['technical_details'].update(dangerous_api='PRIVATE_CANARY', dynamic_inputs=['PRIVATE_CANARY'])
+    feedback = issue_feedback(finding)
+    assert 'PRIVATE_CANARY' not in json.dumps(feedback, ensure_ascii=False)
+    assert feedback['choices'] == ['修复', '忽略']
+
+
+def test_eval_candidate_is_explained_without_function_generation_claim():
+    finding = dynamic_function_finding()
+    finding['technical_details']['dangerous_api'] = 'eval'
+    feedback = issue_feedback(finding)
+    assert '传给 eval' in feedback['problem']
+    assert '生成的函数被调用' not in feedback['impact']
+    assert 'eval 是否为原生函数尚未确认' in feedback['impact']
+
+
+def test_dynamic_only_scan_scope_is_visible_and_arbitrary_notice_is_not_reflected():
+    feedback = scan_status_message({'status': 'SCANNED', 'coverage': 'SCOPED',
+        'code_check_scope': 'CANONICAL_DYNAMIC_CODE_ONLY', 'scan_scope_notice': 'PRIVATE_CANARY'})
+    assert '只覆盖这些文件中的动态 Function / eval 调用' in feedback
+    assert '其他代码安全规则尚未执行' in feedback
+    assert 'PRIVATE_CANARY' not in feedback
+    unknown = scan_status_message({'status': 'SCANNED', 'coverage': 'SCOPED',
+        'code_check_scope': 'PRIVATE_CANARY', 'scan_scope_notice': 'PRIVATE_CANARY'})
+    assert 'PRIVATE_CANARY' not in unknown
+
+
 def test_recurrent_hostname_risk_explains_impact_and_user_choices():
     output = issue_feedback(tls_finding(), reason='EPISODE_ALREADY_EXISTS')
     assert output['location'] == {'file': 'HookTlsProbe20261011.java', 'line': 9}

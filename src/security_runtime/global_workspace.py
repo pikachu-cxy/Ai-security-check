@@ -80,7 +80,9 @@ def resolve_workspace(value, *, excluded=()):
         for parent in (candidate, *list(candidate.parents)[:12]):
             if resolver._unsafe(parent):
                 break
-            if any((parent / name).is_file() for name in markers) or (parent / 'src').is_dir():
+            related_src = (parent / 'src').is_dir() and (
+                parent == candidate or candidate.is_relative_to(parent / 'src'))
+            if any((parent / name).is_file() for name in markers) or related_src:
                 no_links(parent)
                 root = parent
                 break
@@ -106,7 +108,8 @@ def source_snapshot(root, key):
     """Non-Git fallback only. No source survives this bounded snapshot call."""
     from .hook_runtime import MAX_FILES, MAX_BYTES, CapturedSnapshot
     from .target import TargetDetector
-    files = TargetDetector(max_files=MAX_FILES).detect(root).files
+    profile = TargetDetector(max_files=MAX_FILES).detect(root, select_scan_targets=True)
+    files = profile.files
     digest = hmac.new(key, b'global-non-git-snapshot-v1', hashlib.sha256)
     consumed = 0
     file_digests = {}
@@ -127,7 +130,8 @@ def source_snapshot(root, key):
             raise ValueError('SNAPSHOT_CHANGED')
         digest.update(hmac.new(key, raw, hashlib.sha256).digest())
         file_digests[name] = hmac.new(key, b'hook-file-v1' + raw, hashlib.sha256).hexdigest()
-    return CapturedSnapshot(digest.hexdigest(), sorted(files), file_digests)
+    from .target import selection_summary
+    return CapturedSnapshot(digest.hexdigest(), sorted(files), file_digests, selection_summary(profile))
 
 
 def write_bootstrap(root, status, baseline_status, *, base=None):

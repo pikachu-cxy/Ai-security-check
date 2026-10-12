@@ -6,7 +6,17 @@ from ._version import __version__
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix'}
 
-HOST_INSTRUCTIONS = '''用户呈现规则（必须遵守）：
+HOST_INSTRUCTIONS = '''Runtime 收尾检查：
+Stop 给出 closeout_ref 和 execution_plan 时，通过普通 MCP 执行 run_closeout_check；
+只执行 Runtime 生成的计划，不另起扫描或修复流程。get_closeout_status 可在重连后恢复。
+收尾任务没有修复授权。保留已有用户选择和授权边界，不自行修改、忽略风险或扩大授权。
+显示 Runtime 的实际 user_feedback；分别表达检查完成、覆盖完整和风险关闭。
+已确认关闭只适用于对应原检测器、原规则、原文件和当前内容版本；零发现不得称安全。
+代码（包括 Vue/TypeScript）部分覆盖与凭据关闭分别说明。
+同步 Hook 快检、Hook 调度的 MCP 收尾、用户手动独立复查分别标明；不能把手动复查称自动通过。
+Stop 预算耗尽、锁忙或新编辑时说明尚未完成，保留 closeout_ref；不要不断新增任务或循环扫描。
+
+用户呈现规则（必须遵守）：
 每次 Hook 提供的“用户提示”是本次最终回复的必需内容。必须完整保留其中的
 位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
 “修复/忽略”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
@@ -350,6 +360,11 @@ def runtime_info(*, remediation_config=None):
                          'personal_installation': 'personal-install-v1',
                          'configuration_recovery': 'v1',
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
+                         'secret_rule_file_recheck': 'gitleaks-rule-file-v1; DEFAULT_CONFIG_BOUNDED_SCOPE',
+                         'task_closeout': 'closeout-state-v1; GENERATION_LEASE_VERSION_BOUND',
+                         'persistent_credential_closure': 'PER_ORIGINAL_DETECTOR_RULE_FILE_VERSION',
+                          'dynamic_function_check': 'native-js-function-v1; CANONICAL_DYNAMIC_CODE_ONLY',
+                          'arithmetic_host_regression': 'arithmetic-regression-v1; OPTIONAL_CONFIRMED_CONTRACT',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
                           'functional_verification': 'v0.1',

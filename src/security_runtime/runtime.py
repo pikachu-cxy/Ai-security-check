@@ -38,6 +38,24 @@ def aggregate_provider_statuses(runs: list[ScannerRun]) -> str:
     return "UNAVAILABLE" if all(run.status == RunStatus.UNAVAILABLE for run in runs) else "FAILED"
 
 
+def combined_rule_coverage(runs: list[ScannerRun]) -> dict:
+    """Keep each provider's rule identity; a successful extra check cannot mask failure."""
+    providers = {run.scanner: run.rule_coverage for run in runs if run.rule_coverage}
+    if not providers:
+        return {}
+    result = dict(next(iter(providers.values())))
+    if len(providers) == 1:
+        return result
+    result['providers'] = providers
+    states = [item['status'] for item in providers.values()]
+    result['status'] = ('EXECUTED' if all(state in {'EXECUTED', 'NOT_APPLICABLE'} for state in states)
+                        else 'PARTIAL' if any(state in {'EXECUTED', 'PARTIAL'} for state in states)
+                        else result['status'])
+    result['total_provider_selected'] = sum(item.get('total_selected', 0) for item in providers.values())
+    result['total_provider_executed'] = sum(item.get('total_executed', 0) for item in providers.values())
+    return result
+
+
 class SecurityRuntime:
     def __init__(self, registry: ScannerRegistry | None = None, store: ScanStore | None = None):
         self.registry = registry or ScannerRegistry()
@@ -265,7 +283,7 @@ class SecurityRuntime:
             # unchanged; the hook observer projects safe family metadata only.
             hook_observer(findings, runs, rule_plans)
         findings = deduplicate(findings)
-        rule_coverage=next((run.rule_coverage for run in runs if run.rule_coverage),{})
+        rule_coverage = combined_rule_coverage(runs)
         planned_runs = [run for run in runs if run.status not in {RunStatus.SKIPPED, RunStatus.NOT_APPLICABLE, RunStatus.NOT_COVERED}]
         successful = sum(run.status == RunStatus.SUCCESS for run in planned_runs)
         complete = bool(planned_runs) and successful == len(planned_runs)
@@ -308,6 +326,13 @@ class SecurityRuntime:
                 summary += "\n依赖检查未完成，暂时无法确认本次依赖变更是否存在漏洞。"
             elif state == 'PARTIAL':
                 summary += "\n已检查可识别的依赖版本；完整依赖关系或漏洞数据的新鲜程度尚未确认。"
+        scope_notice = getattr(self.registry, 'code_scope_notice', '')
+        if scope_notice:
+            summary += '\n' + scope_notice
+            if complete:
+                coverage = 'SCOPED'
+            rule_coverage = dict(rule_coverage, coverage_scope='CANONICAL_DYNAMIC_CODE_ONLY',
+                                 deferred_providers=['semgrep'], scope_notice=scope_notice)
         result = ScanResult(str(uuid.uuid4()), scan_mode, profile, status, findings, runs, summary, release_status, round((time.monotonic()-start)*1000), coverage,
                             execution_state=execution_state, capability_results=capability_results, capability_details=capability_details, rule_coverage=rule_coverage)
         observed['timing_ms']['result_normalization_policy'] = milliseconds(stage_start)
@@ -319,6 +344,8 @@ class SecurityRuntime:
         # and no mutation of signed scan identities just to record a measurement.
         result.scanner_diagnostics = observed
         result.scan_context = complete_context(source_context, workspace.path, self.store)
+        result.scan_context.update(input_files=list(context.files), context_files=list(context.context_files),
+                                   dependency_changes=list(context.dependency_changes or ()))
         if staged:
             observed['source_kind'] = 'GIT_INDEX_PROJECTION'
         from .scanner_cache import lifetime

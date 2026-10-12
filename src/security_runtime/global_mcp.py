@@ -54,6 +54,7 @@ class GlobalWorkspaces:
         from .mcp_server import create_server
         from .runtime import SecurityRuntime
         from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+        from .dynamic_function import NativeFunctionScanner
         from .osv import OSVDependencyAdapter
         from .toolchain import ToolManager
         from .storage import SQLiteStore
@@ -61,7 +62,7 @@ class GlobalWorkspaces:
         from .remediation import RemediationService
         from .remediation_policy import RemediationConfig
         manager = ToolManager()
-        registry = ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager), TrivyAdapter(manager)],
+        registry = ScannerRegistry([SemgrepAdapter(manager), NativeFunctionScanner(), GitleaksAdapter(manager), TrivyAdapter(manager)],
                                    tool_manager=manager, fallback_adapters=[OSVDependencyAdapter(manager)])
         store = SQLiteStore(directory / 'scans.db')
         # Explicit manual MCP operations retain the existing full registry.
@@ -157,7 +158,8 @@ class GlobalWorkspaces:
         from .baseline_seed import WorkspaceBaselineSeeds
         from .progress import ScanCancelled
         try:
-            if WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git:
+            is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git
+            if is_git:
                 # A clean tracked file may already contain a risk. Dirty-only
                 # initialization would misattribute that risk to a later edit.
                 snapshot = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core).capture_session(root, session)
@@ -167,11 +169,23 @@ class GlobalWorkspaces:
                 result = core.handle(HookEvent.SESSION_START, root, 'codex', session, _baseline_only=True)
                 persisted, _ = core.store.load(core.store.path(root, 'codex', session))
                 valid = persisted is not None and persisted['change_digest'] == result.get('change_digest')
-                status = 'READY' if valid and result.get('coverage') in {'FULL', 'SCOPED', 'NONE'} else 'DEGRADED'
+                status = 'READY' if valid and (result.get('baseline_comparison_usable') is True
+                    or result.get('baseline_comparison_usable') is None and result.get('coverage') in {'FULL', 'SCOPED'}
+                    or result.get('coverage') == 'NONE' and not result.get('scanner_runs')) else 'DEGRADED'
             write_bootstrap(root, status, result['status'], base=self.base)
+            gaps = (snapshot if is_git else persisted or {}).get('unproven_sast_files') or []
             return {'status': status, 'baseline_status': result['status'],
+                    'baseline_coverage': result['coverage'],
+                    'baseline_capabilities': result['capabilities'],
+                    'baseline_unproven_code_file_count': len(gaps),
+                    'baseline_unproven_code_files': gaps[:20],
+                    'baseline_code_gaps_truncated': len(gaps) > 20,
+                    'target_selection': getattr(core.snapshot_capture(root, core.store.key(root)), 'target_selection', None),
                     'security_proof': False, 'initial_scope': 'BOUNDED_QUICK_BASELINE'}
-        except (ValueError, OSError, ScanCancelled):
+        except ScanCancelled:
+            write_bootstrap(root, 'DEGRADED', 'BASELINE_DEADLINE_EXCEEDED', base=self.base)
+            return {'status': 'DEGRADED', 'reason_code': 'BASELINE_DEADLINE_EXCEEDED', 'security_proof': False}
+        except (ValueError, OSError):
             write_bootstrap(root, 'DEGRADED', 'BASELINE_CHECK_INCONCLUSIVE', base=self.base)
             return {'status': 'DEGRADED', 'reason_code': 'BASELINE_CHECK_INCONCLUSIVE', 'security_proof': False}
         except Exception:

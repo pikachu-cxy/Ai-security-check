@@ -60,8 +60,11 @@ def render_scan(result, *, verbose=False):
         return f'AI Security Check\n\n{result.summary}\n状态：{result.execution_state}\n耗时：{result.duration_ms} ms' + '\n'.join(exclusions)
     from .triage_models import category, dependency_groups, iac_classification
     raw=[finding.__dict__ for finding in result.findings]
-    lines = ['AI Security Check', '', '检查完成。', f'发现 {len(result.findings)} 个候选安全问题。',
-        '部分问题需要结合代码和运行环境进一步确认。', '']
+    lines = ['AI Security Check', '',
+        '检查完成。' if result.status == 'COMPLETED' else '检查尚未完整完成。',
+        f'发现 {len(result.findings)} 个候选安全问题。',
+        ('部分问题需要结合代码和运行环境进一步确认。' if result.findings else
+         '结果仅表示本次已执行规则的匹配情况，不能证明项目安全。'), '']
     lines += exclusions
     for key,label in [('code','代码安全'),('secret','敏感信息'),('dependency','依赖漏洞'),('iac','配置安全')]:
         count=sum(category(f)==key for f in raw)
@@ -78,7 +81,11 @@ def render_scan(result, *, verbose=False):
             lines.append('配置分类：'+iac_classification(finding.__dict__))
         lines += [finding.severity, finding.plain_title, f'位置：{finding.file_path}:{finding.line_start}',
                   '为什么危险：' + finding.impact, '建议：' + finding.fix_advice, '']
-    summary = result.summary.replace('；Security check completed with limited coverage.', '。部分安全检查未能完成，结果覆盖不完整。')
+    from .risk import MESSAGES, presentation_status
+    assessment = presentation_status(result.release_status, finding_count=len(result.findings),
+        status=result.status, execution_state=result.execution_state, coverage=result.coverage)
+    summary = (MESSAGES[assessment] if result.release_status == 'SAFE' and assessment in MESSAGES else
+               result.summary.replace('；Security check completed with limited coverage.', '。部分安全检查未能完成，结果覆盖不完整。'))
     lines += ['结果：', summary, f'覆盖范围：{result.coverage}（仅针对计划文件和检查）',
               f'耗时：{result.duration_ms} ms', '', '安全检查']
     for state in ('EXECUTED', 'PARTIAL', 'FAILED', 'UNAVAILABLE', 'NOT_COVERED', 'NOT_APPLICABLE'):
@@ -170,7 +177,13 @@ def render_security_summary(result):
         return '\n'.join(['开发者安全任务',result['message'],f'可选下一步：{command}',
                           '尚未执行扫描；首次扫描可能需要准备引擎和联网解析依赖。'])
     c=result['triage_coverage']
-    lines=['开发者安全任务',f"扫描覆盖：{result['scan_coverage']}；原扫描发布状态：{result['release_status']}",
+    from .risk import presentation_status
+    assessment = presentation_status(result['release_status'], finding_count=c['total_candidates'],
+        status='COMPLETED' if result['scan_coverage'] in {'FULL', 'SCOPED'} else 'PARTIAL',
+        execution_state='EXECUTED', coverage=result['scan_coverage'])
+    assessment_label = {'NO_FINDINGS': '本次执行规则未发现候选问题', 'NOT_ASSESSED': '本次未作安全评估',
+                        'REVIEW': '仍需确认', 'BLOCKED': '建议先处理问题'}.get(assessment, assessment)
+    lines=['开发者安全任务',f"扫描覆盖：{result['scan_coverage']}；检查结论：{assessment_label}",
            f"原始候选 {c['total_candidates']}；已完成 AI 审阅 {c['triaged']}/{c['eligible_for_triage']} 个适用候选。",
            f"适用候选未审阅 {c['eligible_untriaged']}；审阅失败 {c['failed']}；过期/无法核对 {c['stale']}；不适用 AI {c['not_eligible']}（含 IaC）。",
            f"优先处理 {c['actionable']}；待复核 {c['review']}；低优先级 {c['lower_priority']}；降噪 {c['suppressed']}。",
@@ -187,7 +200,10 @@ def render_security_summary(result):
         lines.append('这是候选复核进度，尚未完成深度审计；剩余候选及未覆盖区域须继续检查。')
     tasks=result['tasks'] if result['details'] else result['recommended_tasks']
     lines+=['','完整任务列表' if result['details'] else f"建议先跟进以下 {len(tasks)} 项（共 {result['task_count']} 个任务；未展开项仍保留）"]
-    if not tasks: lines.append('当前没有推荐任务；请结合扫描覆盖与完整 Raw 复核，不能据此判定安全。')
+    if not tasks:
+        lines.append('本次已执行规则范围内未发现候选安全问题；这不能证明项目安全。' if
+                     assessment == 'NO_FINDINGS' and c['total_candidates'] == 0 else
+                     '当前没有推荐任务；请结合扫描覆盖与完整 Raw 复核，不能据此判定安全。')
     for task in tasks:
         s=task['review_states']
         basis=' '.join(task['basis']) if result['details'] else (

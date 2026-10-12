@@ -5,11 +5,18 @@ acceptance output belongs in Git history, not in `docs/`.
 
 ## Start here
 
+- [最新首版开发接续计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) — consolidated decisions
+  from the two current product conversations, completed work, next batches and pilot gates.
+- [Runtime 收尾检查交付状态](RUNTIME_CLOSEOUT_CHECK.zh-CN.md) — current implementation,
+  version-bound credential closure and independently recorded acceptance levels.
 - [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) — current implementation,
   source/isolated/package acceptance and pending Desktop checks.
 - [个人免费版与企业版规划](PRODUCT_ROADMAP.md) — P0/P1 scope, dependency evidence,
   update lifecycle and organization-management boundary; planned work is not
   implemented capability.
+- [第一版受邀试用开发清单](PILOT_V1_CHECKLIST.zh-CN.md) — concrete P0 tasks,
+  source and acceptance gaps, completion criteria, and work deferred until after
+  a small Windows/Codex/Git pilot.
 
 - [R2.2 security review contract](SECURITY_REVIEW.md)
 - [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)

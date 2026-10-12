@@ -14,7 +14,8 @@ from security_runtime._version import __version__
 from dependency_notices import inventory
 
 
-def main(output_dir: Path | None = None) -> None:
+def main(output_dir: Path | None = None, work_dir: Path | None = None,
+         launcher_bundle: Path | None = None) -> None:
     root = Path(__file__).resolve().parents[1]
     output = root / "dist" / "standalone" if output_dir is None else root / output_dir
     from security_runtime.hook_state import no_links
@@ -22,8 +23,25 @@ def main(output_dir: Path | None = None) -> None:
     output = output.resolve()
     if not output.is_relative_to(root / 'dist'):
         raise ValueError('Standalone output must remain inside workspace dist')
-    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
-                    "--distpath", str(output), "--workpath", str(root / "build" / "pyinstaller"),
+    work = root / 'build' / 'pyinstaller' if work_dir is None else root / work_dir
+    no_links(work.absolute())
+    work = work.resolve()
+    if not work.is_relative_to(root / 'build'):
+        raise ValueError('Standalone work directory must remain inside workspace build')
+    if work_dir is not None and (work.exists() or output.exists()):
+        raise ValueError('Isolated build requires fresh work and output directories')
+    launcher_source = None
+    if launcher_bundle is not None:
+        from security_runtime.delivery import package_metadata
+        # Reuse only an explicitly chosen, fully checksum-verified local bundle.
+        # Use when launcher.c has not changed; never silently reuse an old binary.
+        package_metadata(launcher_bundle)
+        launcher_source = launcher_bundle / '_launcher' / 'security-launcher.exe'
+        if not launcher_source.is_file():
+            raise ValueError('Verified launcher source is missing')
+    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm",
+                    *(["--clean"] if work_dir is None else []),
+                    "--distpath", str(output), "--workpath", str(work),
                     str(root / "distribution" / "build" / "security-check.spec")],
                    cwd=root, check=True)
     bundle = output / "security-check"
@@ -38,13 +56,16 @@ def main(output_dir: Path | None = None) -> None:
     if os.name == 'nt':
         # Reviewed native source; the installed launcher no longer duplicates
         # the full Python Runtime. GCC is a build dependency, not a user dependency.
-        compiler = shutil.which('gcc')
-        if not compiler:
-            raise ValueError('Windows native launcher requires GCC on the build host')
         tiny = bundle / '_launcher/security-launcher.exe'
         tiny.parent.mkdir(exist_ok=True)
-        subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
-            str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
+        if launcher_source is not None:
+            shutil.copy2(launcher_source, tiny)
+        else:
+            compiler = shutil.which('gcc')
+            if not compiler:
+                raise ValueError('Windows native launcher requires GCC on the build host')
+            subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
+                str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
     for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
         shutil.copy2(root / 'docs' / name,bundle / name)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
@@ -72,4 +93,7 @@ def main(output_dir: Path | None = None) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-dir', type=Path, help='Alternate workspace dist directory; avoid replacing a running bundle')
-    main(parser.parse_args().output_dir)
+    parser.add_argument('--work-dir', type=Path, help='Fresh workspace build directory; omit --clean and preserve existing build sites')
+    parser.add_argument('--launcher-bundle', type=Path, help='Explicit checksum-verified local bundle supplying an unchanged native launcher')
+    args = parser.parse_args()
+    main(args.output_dir, args.work_dir, args.launcher_bundle)

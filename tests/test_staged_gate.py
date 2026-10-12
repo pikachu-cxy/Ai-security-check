@@ -86,7 +86,8 @@ def test_nul_safe_newline_filename(repo):
 
 
 @pytest.mark.parametrize('status,execution,release,policy,expected', [
-    ('COMPLETED','EXECUTED','SAFE','strict',0), ('COMPLETED','EXECUTED','BLOCKED','report',1),
+    ('COMPLETED','EXECUTED','SAFE','strict',0), ('COMPLETED','EXECUTED','NO_FINDINGS','strict',0),
+    ('COMPLETED','EXECUTED','BLOCKED','report',1),
     ('PARTIAL','UNAVAILABLE','REVIEW','strict',2), ('PARTIAL','UNAVAILABLE','REVIEW','report',0),
     ('NO_CHANGES','NO_CHANGES','NOT_ASSESSED','strict',0)])
 def test_gate_exit_contract(status, execution, release, policy, expected):

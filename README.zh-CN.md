@@ -42,7 +42,7 @@ AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运�
 - **CLI**：不依赖任何 AI Coding 工具，可独立使用，也适合后续接入 CI/CD。
 - **不虚报安全**：如果部分扫描能力不可用，会降低 Coverage，而不是把项目误判为安全。
 
-> 当前为 Developer Alpha。SAFE 仅表示已执行检查在所述范围内未发现阻断项，不代表项目绝对安全。
+> 当前为 Developer Alpha。NO_FINDINGS 仅表示已执行规则在所述范围内未发现候选问题，不能证明项目安全。
 
 ## Rule Program v1
 
@@ -630,11 +630,11 @@ CLI JSON / MCP 包含 `execution_state`、`coverage_scope: PLANNED_FILES` 和
 
 Release Status：
 
-- **SAFE**：已经执行的检查在所述范围内未发现策略阻断项。
+- **NO_FINDINGS**：已执行规则在所述范围内未发现候选安全问题。
 - **REVIEW**：建议进行人工或 Agent 复核。
 - **BLOCKED**：当前策略发现需要阻断的问题。
 
-SAFE 不代表项目绝对安全。
+NO_FINDINGS 不能证明项目安全。历史 SAFE 记录在呈现时也使用上述范围表述。
 
 ## 检测质量状态
 

@@ -33,14 +33,14 @@ def advisory_offer(service, root, task, finding, decision, snapshot, determinist
     """Project the existing task fix plan, without preparing an edit credential."""
     from .equivalence import equivalence_key
     from .hook_state import identity
-    from .task_fix import PLANS
+    from .task_fix import select_fix_plan
     resolved, scan, members = service._fix()._resolve(task['task_ref'], root, root)
     if (scan is None or resolved['status'] != 'RESOLVED' or
             len(members) != 1 or members[0]['id'] != finding['id'] or
             equivalence_key(members[0]) != decision.finding_family or
             service._snapshot(root) != snapshot):
         raise ValueError('ADVISORY_CONTEXT_NOT_CURRENT')
-    plan = PLANS.get(task['topic'], PLANS['code'])
+    plan = select_fix_plan(task['topic'], members)
     context = {
         'version': 'advisory-task-fix-v1',
         'task_ref': task['task_ref'],  # Existing opaque locator, NOT an edit grant.

@@ -43,7 +43,7 @@ AI Security Runtime is a local-first security layer for AI coding workflows. It 
 - **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
 - **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
 
-> Developer Alpha. Current checks can find security issues, but a SAFE result is not a guarantee that a project is secure.
+> Developer Alpha. NO_FINDINGS means no candidate was found within the executed rules and scope; it does not prove the project is secure.
 
 Detection quality is being hardened against real-world and independently labelled corpora; complex interprocedural and wrapper flows remain limited.
 
@@ -589,11 +589,11 @@ unavailability; ordinary output groups these checks separately.
 
 Release status is intended to communicate:
 
-- **SAFE** — the executed checks found no policy blocker within the stated scope.
+- **NO_FINDINGS** — the executed rules found no candidate within the stated scope.
 - **REVIEW** — human or agent review is recommended.
 - **BLOCKED** — the current policy found a release-blocking issue.
 
-A SAFE result is not a claim of absolute security.
+NO_FINDINGS does not prove project security. Historical SAFE records use this scoped wording when displayed.
 
 ## Detection quality status
 

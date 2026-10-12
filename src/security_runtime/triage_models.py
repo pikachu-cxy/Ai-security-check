@@ -107,6 +107,12 @@ def category(finding):
     if value == 'secret': return 'secret'
     if value == 'dependency': return 'dependency'
     if value == 'configuration': return 'iac'
+    # Admit the fixed first-party candidate into the same bounded code-review
+    # and selected-task fix flow; arbitrary provider/category prose stays out.
+    if (finding.get('scanner_sources') == ['native-js-function'] and
+            finding.get('technical_details', {}).get('rule_id') == 'ai-security.javascript.dynamic-function' and
+            value == 'code-injection'):
+        return 'code'
     return 'code' if 'semgrep' in finding.get('scanner_sources',[]) else 'unsupported'
 
 

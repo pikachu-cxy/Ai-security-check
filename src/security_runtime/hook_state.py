@@ -126,8 +126,18 @@ class HookStateStore:
         """
         path = self.workspace_directory(root) / 'pending-activity.db'
         no_links(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
         sid = identity(host + '\0' + (session_id or 'default'))
+        if not mark and completed is None:
+            if not path.is_file():
+                return None
+            from .closeout_state import readonly_uri
+            with closing(sqlite3.connect(readonly_uri(path), uri=True)) as db:
+                db.execute('PRAGMA query_only=ON')
+                if not db.execute("SELECT 1 FROM sqlite_master WHERE name='pending_activity'").fetchone():
+                    return None
+                row = db.execute('SELECT sequence FROM pending_activity WHERE session=?', (sid,)).fetchone()
+                return row[0] if row else None
+        path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(path, timeout=1)) as db:
             with db:
                 db.execute('PRAGMA secure_delete=ON')

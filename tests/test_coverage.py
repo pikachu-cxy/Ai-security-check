@@ -32,7 +32,7 @@ class CoverageTests(unittest.TestCase):
             subprocess.run(["git", "init", "-q", "-b", "main", str(root)], check=True)
             (root / "app.py").write_text("print(1)")
             cases = [
-                ((RunStatus.SUCCESS, RunStatus.SUCCESS), "FULL", "COMPLETED", "SAFE"),
+                ((RunStatus.SUCCESS, RunStatus.SUCCESS), "FULL", "COMPLETED", "NO_FINDINGS"),
                 ((RunStatus.SUCCESS, RunStatus.UNAVAILABLE), "PARTIAL", "PARTIAL", "REVIEW"),
                 ((RunStatus.UNAVAILABLE, RunStatus.UNAVAILABLE), "MINIMAL", "PARTIAL", "REVIEW"),
             ]

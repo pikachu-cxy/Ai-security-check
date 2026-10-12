@@ -32,7 +32,9 @@ class FindingNormalizer:
             plain, impact, advice = "用户输入可能被用于执行系统命令", "攻击者可能通过构造输入执行服务器命令。", "避免拼接命令；使用安全 API 并验证输入。"
         else:
             plain, impact, advice = title or "发现潜在安全问题", self.redactor.redact(description)[:400], "检查受影响代码并修复后重新扫描。"
-        discriminator = rule_id if category in {"dependency", "configuration"} else ""
+        # Preserve each originating Secret detector through scan persistence.
+        # Old scan IDs/fingerprints are never rewritten; eq-v1 remains stable.
+        discriminator = rule_id if category in {"dependency", "configuration", "secret"} else ""
         fingerprint = hashlib.sha256(f"{self.identity_root}|{category}|{relative}|{line}|{discriminator}".encode()).hexdigest()[:24]
         finding = Finding(fingerprint, category, title, plain, self.redactor.redact(description)[:400], impact, severity.upper(), confidence.upper(), relative, line, line, self.redactor.redact(evidence)[:160], advice, [scanner], fingerprint, technical_details={"rule_id": rule_id})
         finding.equivalence_key = equivalence_key(finding)

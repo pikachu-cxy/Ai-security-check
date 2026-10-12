@@ -15,6 +15,20 @@ _TLS_HOSTNAME = (
     '建议修复：删除这行绕过校验的代码，恢复默认检查，再重新检查。恢复后，证书域名不匹配的连接会被拒绝。',
 )
 
+_DYNAMIC_FUNCTION_RULE = 'ai-security.javascript.dynamic-function'
+_DYNAMIC_FUNCTION = (
+    '输入可能被当成 JavaScript 执行',
+    '这行代码把动态内容传给 Function 构造器（包括 new Function），生成的函数会把这些内容当作 JavaScript 代码。',
+    '如果外部输入能到达这里且生成的函数被调用，攻击者可能在应用权限范围内执行非预期代码、读取或修改数据；实际入口是否可到达、Function 是否为原生构造器尚未确认。',
+    '建议修复：核查输入来源；算术计算应改用仅允许数字、括号和已约定运算符的受限解析器，不能改用 eval 或其他动态执行方式。解析器会收窄可接受的语法，不能保证保留任意 JavaScript 表达式；修改后复查风险，并测试正常算术、错误输入和响应格式。',
+)
+_DYNAMIC_EVAL = (
+    _DYNAMIC_FUNCTION[0],
+    '这行代码把动态内容传给 eval，这些内容可能被直接当作 JavaScript 代码执行。',
+    '如果外部输入能到达这里且 eval 为原生函数，攻击者可能在应用权限范围内执行非预期代码、读取或修改数据；实际入口是否可到达、eval 是否为原生函数尚未确认。',
+    _DYNAMIC_FUNCTION[3],
+)
+
 _COPY = {
     'command-injection': (
         '外部输入可能被当成系统命令',
@@ -105,6 +119,14 @@ _ATTEMPT_REASONS = frozenset({
     'EPISODE_ATTEMPT_BUDGET_EXCEEDED', 'REMEDIATION_ESCALATED',
 })
 _QUESTION = '回复“修复”，我会进一步处理并重新检查；回复“忽略”，本次不修复，风险记录仍保留。'
+_DYNAMIC_ONLY_NOTICE = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
+                        '其他代码安全规则尚未执行，需要完整扫描确认。')
+
+
+def code_scope_notice(result: dict) -> str:
+    """Translate the fixed Runtime scope enum; never reflect arbitrary notice text."""
+    return (_DYNAMIC_ONLY_NOTICE if isinstance(result, dict) and
+            result.get('code_check_scope') == 'CANONICAL_DYNAMIC_CODE_ONLY' else '')
 
 
 def _dependency_copy(details: dict) -> tuple:
@@ -175,6 +197,8 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
     category = finding.get('category')
     copy = (_dependency_copy(details) if category == 'dependency' else
             _TLS_HOSTNAME if rule == 'ai-security.java.trust-all-hostname' else
+            (_DYNAMIC_EVAL if details.get('dangerous_api') == 'eval' else _DYNAMIC_FUNCTION)
+            if rule == _DYNAMIC_FUNCTION_RULE else
             _COPY.get(category, _UNKNOWN) if isinstance(category, str) else _UNKNOWN)
     title, problem, impact, recommendation = copy
     original = evidence_scope == 'ORIGINAL_FINDING'
@@ -257,7 +281,7 @@ def _base_scan_status_message(result: dict) -> str:
     if status in {'FAILED', 'INCONCLUSIVE'}:
         return '本次安全检查未能给出完整结果；尚未确认修复成功，不代表风险已消除。请重新检查。'
     if status == 'PARTIAL' or (status == 'SCANNED' and coverage in {'PARTIAL', 'UNKNOWN'}):
-        return '本次只完成部分安全检查，仍有范围未确认；不能据此确认没有风险或风险已经解决。请重新检查未覆盖的范围。'
+        return '本次只完成部分安全检查，仍有范围未确认；具体问题的复查结果单独列示，不能据此确认没有风险或认定整个项目安全。请重新检查未覆盖的范围。'
     if status == 'SCANNED' and coverage == 'FULL':
         if new is not None and persisting is not None:
             if new or persisting or (additional is not None and additional > 0):
@@ -316,5 +340,58 @@ def dependency_status_message(result: dict) -> str:
 
 def scan_status_message(result: dict) -> str:
     message = _base_scan_status_message(result)
+    scope_notice = code_scope_notice(result)
+    if scope_notice:
+        message += '\n' + scope_notice
     dependency = dependency_status_message(result)
-    return message + ('\n' + dependency if dependency else '')
+    verification = rule_delta_message(result)
+    return message + ('\n' + verification if verification else '') + ('\n' + dependency if dependency else '')
+
+
+def rule_delta_message(result: dict) -> str:
+    """Distinguish confirmed absence from missing proof, even in a partial scan."""
+    delta = result.get('delta', {}) if isinstance(result, dict) else {}
+    families = delta.get('families', []) if isinstance(delta, dict) else []
+    lines = []
+    groups = {}
+    for family in families if isinstance(families, list) else []:
+        if not isinstance(family, dict):
+            continue
+        location = _location(family)
+        if not location['file']:
+            continue
+        key = (location['file'], family.get('status'), family.get('count_certainty'))
+        groups[key] = groups.get(key, 0) + 1
+    for (file, status, _), count in list(groups.items())[:20]:
+        where = f'`{file}`'
+        if status == 'RESOLVED_FAMILY':
+            lines.append(f'复查结果：{where} 的 {count} 条原规则提示已确认关闭，已从持续风险记录中关闭；结论仅覆盖对应规则与当前文件版本。')
+        elif status == 'UNCONFIRMED_ABSENCE':
+            lines.append(f'复查结果：{where} 当前未再检出 {count} 条原提示，但缺少与原记录一致的规则或文件覆盖证明，关闭确认尚未完成，仍保留待确认记录。')
+    return '\n'.join(lines)
+
+
+def secret_verification_feedback(results: list[dict]) -> dict:
+    lines = []
+    groups = {}
+    for result in results[:20]:
+        location = _location(result.get('original_evidence', {}))
+        where = f"`{location['file']}`" if location['file'] else '选定文件'
+        state = result.get('verification_status')
+        if state == 'SCANNER_VERIFIED_RESOLVED':
+            text = f'复查完成：{where} 已按原凭据检测规则重新检查，未再检出原提示，对应规则提示已确认关闭。'
+        elif state == 'STILL_PRESENT':
+            text = f'复查完成：{where} 仍检出原凭据提示；请继续检查并移除代码中的凭据格式文本，然后再次复查。'
+        elif result.get('scanner_runs') and all(r.get('status') == 'SUCCESS' for r in result['scanner_runs']) and not result.get('current_evidence'):
+            text = f'复查已执行：{where} 当前未再检出原提示，但缺少与原记录一致的规则或文件覆盖证明，暂未确认关闭，风险记录仍保留待确认。'
+        else:
+            text = f'检查未完成：{where} 尚不能确认原提示是否消除；请核查检查能力和原文件范围后再次复查，风险记录仍保留。'
+        # Group by outcome and reason, preserving mixed outcomes separately.
+        key = (text, result.get('reason', ''))
+        groups[key] = groups.get(key, 0) + 1
+    for (text, _), count in groups.items():
+        lines.append(text + (f'（{count} 条原规则提示）' if count > 1 else ''))
+    lines.append('复查只确认本次代码提示；密钥是否有效、是否已撤销及历史泄露是否处理，需要另行确认，不能据此认定项目安全。')
+    return {'version': 'security-user-feedback-v1', 'message': '\n'.join(dict.fromkeys(lines)),
+        'choices': [], 'scope': 'ORIGINAL_PROVIDER_RULE_FILE_ONLY',
+        'functional_verification': 'NOT_PROVEN_BY_SCANNER'}

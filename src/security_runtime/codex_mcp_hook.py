@@ -81,6 +81,16 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             observe('CLAIMS_VALID', tool_classification=classification, **(claim_diag or {}))
             try:
                 from .host_event_runtime import handle_normalized_event
+                if classification != 'READ_ONLY':
+                    active_coordinator = coordinator or HookCoordinator()
+                    active_coordinator.store.pending_activity(validated_root, 'codex', session_id, mark=True)
+                    from .closeout_state import CloseoutStateStore
+                    from .hook_state import identity
+                    jobs = CloseoutStateStore(active_coordinator.store.workspace_directory(validated_root) / 'closeout.db',
+                                             lambda: active_coordinator.store.key(validated_root))
+                    previous_job = jobs.latest(identity(os.path.normcase(str(validated_root))), identity('codex\0' + session_id))
+                    if previous_job and previous_job['status'] != 'COMPLETED':
+                        jobs.mark_pending(previous_job['closeout_ref'], previous_job['workspace_id'])
                 result, decision = handle_normalized_event(normalized,
                     coordinator=coordinator or HookCoordinator(), remediation=remediation,
                     started=started)
@@ -113,6 +123,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                    removed_occurrences=delta['removed_occurrences'],
                    reused=result['status'] in {'NO_CHANGE', 'REUSED_LAST_RESULT'},
                      debounced=result['status'] == 'DEBOUNCED')
+    summary['check_source'] = 'SYNCHRONOUS_HOOK_CHECK'
     if normalized is not None:
         summary.update(normalized.diagnostics())
     if claim_diag is not None:
@@ -137,7 +148,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     summary['duration_ms'] = round(measured['hook_total'])
     if 'scanner_diagnostics' in result:
         summary['scanner_diagnostics'] = result['scanner_diagnostics']
-    for key in ('current_dependency_finding_ids', 'dependency_user_feedback', 'capabilities', 'dependency_check_reason'):
+    for key in ('current_dependency_finding_ids', 'dependency_user_feedback', 'capabilities', 'dependency_check_reason', 'target_selection', 'unattributed_code_risk_count',
+                'code_check_scope', 'scan_scope_notice', 'deferred_code_providers'):
         if key in result:
             summary[key] = result[key]
     if 'reason' in result:

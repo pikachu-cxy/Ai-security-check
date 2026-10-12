@@ -114,6 +114,19 @@ def detector_stamp(registry, plan, version, workspace):
 
 
 def capture_detector(registry, observed, workspace):
+    families = observed.get('families') or {}
+    if families and all(f.get('scanner_sources') == ['native-js-function'] for f in families.values()):
+        from .hook_runtime import covered
+        plan = observed['plans'].get('native-js-function')
+        run = next((r for r in observed['runs'] if r.scanner == 'native-js-function'), None)
+        if (plan is None or run is None or run.status != 'SUCCESS' or run.provider != 'native-js-function'
+                or run.scanner_diagnostics.get('local_read_observed') is not True
+                or any(not covered(f, observed['runs'], observed['plans']) for f in families.values())):
+            return None
+        try:
+            return native_detector_stamp(registry, plan, run.version, workspace)
+        except (ValueError, OSError, AttributeError):
+            return None
     plan = observed['plans'].get('semgrep')
     run = next((r for r in observed['runs'] if r.scanner == 'semgrep'), None)
     if plan is None or run is None:
@@ -122,6 +135,35 @@ def capture_detector(registry, observed, workspace):
         return detector_stamp(registry, plan, run.version, workspace)
     except (ValueError, OSError, AttributeError):
         return None
+
+
+def native_detector_stamp(registry, plan, version, workspace):
+    """Strict in-process provider/rule identity, revalidated from real bytes."""
+    from .dynamic_function import NativeFunctionScanner, NativeFunctionRulePlan, rule_pack, VERSION
+    adapter = next((a for a in registry.adapters if type(a) is NativeFunctionScanner), None)
+    if (adapter is None or type(plan) is not NativeFunctionRulePlan or version != VERSION
+            or adapter.scan.__func__ is not NativeFunctionScanner.scan
+            or adapter.plan_rules.__func__ is not NativeFunctionScanner.plan_rules
+            or adapter._finding.__func__ is not NativeFunctionScanner._finding):
+        return None
+    pack = rule_pack()  # Missing implementation never produces an empty stamp.
+    if (not plan.pack.descriptor.bundled or (pack.path, pack.checksum, pack.descriptor, pack.catalog) !=
+            (plan.pack.path, plan.pack.checksum, plan.pack.descriptor, plan.pack.catalog)
+            or plan.rules != pack.catalog):
+        return None
+    return (('NATIVE_BUILTIN', adapter.engine_id, pack.checksum), version, pack.checksum,
+            tuple(sorted((r.rule_id, r.rule_version) for r in plan.rules)))
+
+
+def detector_observed(stamp, observation, prepared):
+    """Current actual scan evidence; native execution is not an engine process."""
+    if stamp is None:
+        return False
+    if isinstance(stamp[0], tuple) and stamp[0][:2] == ('NATIVE_BUILTIN', 'native-js-function'):
+        run = next((r for r in observation['runs'] if r.scanner == 'native-js-function'), None)
+        return bool(run and run.status == 'SUCCESS' and run.provider == 'native-js-function' and
+                    run.scanner_diagnostics.get('local_read_observed') is True)
+    return prepared.get('semgrep') == stamp[0]
 
 
 def matched_occurrences(old, new, before, after):
@@ -163,9 +205,11 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
             raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
         if len(targets) > MAX_TARGETS:
             raise ValueError('ATTRIBUTION_BUDGET_EXCEEDED')
-        plan = observation['plans'].get('semgrep')
+        native = bool(risks) and all(f['scanner_sources'] == ['native-js-function'] for f in risks.values())
+        provider_name = 'native-js-function' if native else 'semgrep'
+        plan = observation['plans'].get(provider_name)
         stamp = observation.get('attribution_detector')
-        if (stamp is None or any(f['scanner_sources'] != ['semgrep'] or
+        if (plan is None or stamp is None or any(f['scanner_sources'] != [provider_name] or
                 not covered(f, observation['runs'], observation['plans']) for f in risks.values())):
             raise ValueError('DETECTOR_NOT_EQUIVALENT')
         registry = core.managed_registry()
@@ -176,10 +220,16 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
         if any(name not in old_digests or name not in current_digests for name in targets):
             raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
         before, after, total = {}, {}, 0
+        if native:
+            from .local_evidence import WorkspaceReader
+            reader = WorkspaceReader(root)
         for name in targets:
             before[name] = recover_bytes(root, name, old_digests[name], key)
-            with (root / name).open('rb') as source:
-                after[name] = source.read(MAX_FILE + 1)
+            if native:
+                after[name], _ = reader.read(name, maximum=MAX_FILE)
+            else:
+                with (root / name).open('rb') as source:
+                    after[name] = source.read(MAX_FILE + 1)
             total += len(before[name]) + len(after[name])
             if len(after[name]) > MAX_FILE or total > MAX_TOTAL:
                 raise ValueError('ATTRIBUTION_BUDGET_EXCEEDED')
@@ -187,10 +237,13 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
             raise ValueError('SOURCE_CHANGED_DURING_ATTRIBUTION')
         # Reuse the current selected rule/config set and normalization implementation.
         # Only risk-bearing changed files are materialized; no repo/manifests copied.
-        pre_plan = replace(plan, files=tuple(targets),
-            language_files={k:tuple(f for f in v if f in targets) for k,v in plan.language_files.items()},
-            confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={}, unscoped_error=False)
-        adapter = next(a for a in registry.adapters if a.name == 'semgrep')
+        reset = dict(files=tuple(targets), confirmed_rules=set(), scanned_files=set(),
+                     errored_files=set(), skipped_files={}, unscoped_error=False)
+        if not native:
+            reset['language_files'] = {k:tuple(f for f in v if f in targets) for k,v in plan.language_files.items()}
+        pre_plan = replace(plan, **reset)
+        adapter = next(a for a in registry.adapters if a.name == provider_name)
+        stamp_detector = native_detector_stamp if native else detector_stamp
         with TemporaryDirectory(prefix='security-runtime-attribution-') as temporary:
             scoped = Path(temporary)
             for name, content in before.items():
@@ -198,26 +251,35 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 destination.write_bytes(content)
             context = ScanContext(str(scoped), ScanMode.QUICK, tuple(targets), rule_plan=pre_plan)
-            expected_pre = detector_stamp(registry, plan, stamp[1], scoped)
+            expected_pre = stamp_detector(registry, plan, stamp[1], scoped)
             if expected_pre is None or expected_pre[1:] != stamp[1:]:
                 raise ValueError('DETECTOR_NOT_EQUIVALENT')
             if 'scanner_invocation_count' in result:
                 result['scanner_invocation_count'] += 1
             with local_recheck() as ledger, probe_scope() as prepared:
                 findings, run = adapter.scan(context, FindingNormalizer(scoped))
-            result['pre_edit_targeted_scan_run'] = ledger['engine_process_observed']
+            local_read = native and run.scanner_diagnostics.get('local_read_observed') is True
+            result['pre_edit_targeted_scan_run'] = ledger['engine_process_observed'] or local_read
             result['pre_edit_targeted_scan_count'] = int(result['pre_edit_targeted_scan_run'])
-            if (prepared.get('semgrep') != expected_pre[0] or
-                    detector_stamp(registry, plan, run.version, scoped) != expected_pre):
+            if ((not native and prepared.get('semgrep') != expected_pre[0]) or
+                    stamp_detector(registry, plan, run.version, scoped) != expected_pre):
                 raise ValueError('DETECTOR_NOT_EQUIVALENT')
-            run.provider = adapter.engine_provider.engine_id
-            pre = {'families': family_multiset(findings, [run], {'semgrep':pre_plan}),
-                   'runs':[run], 'plans':{'semgrep':pre_plan}}
+            if not native:
+                run.provider = adapter.engine_provider.engine_id
+            if native and run.provider != adapter.engine_id:
+                raise ValueError('DETECTOR_NOT_EQUIVALENT')
+            pre = {'families': family_multiset(findings, [run], {provider_name:pre_plan}),
+                   'runs':[run], 'plans':{provider_name:pre_plan}}
         if (run.status != RunStatus.SUCCESS or not result['pre_edit_targeted_scan_run'] or
                 run.version != stamp[1]):
             raise ValueError('PRE_EDIT_SCAN_INCOMPLETE')
         if capture_detector(registry, observation, root) != stamp:
             raise ValueError('DETECTOR_NOT_EQUIVALENT')
+        if native:
+            for name in targets:
+                current, _ = reader.read(name, maximum=MAX_FILE)
+                if file_digest(key, current) != current_digests[name]:
+                    raise ValueError('SOURCE_CHANGED_DURING_ATTRIBUTION')
         result['attribution_scanner_equivalent'] = True
         existing, new = 0, 0
         for family_key, family in risks.items():

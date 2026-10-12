@@ -164,7 +164,7 @@ class WorkspaceBaselineSeeds:
             names = [n for n in names if not set(Path(n).parts) & IGNORED]
             if len(names) > MAX_FILES:
                 raise ValueError('Baseline file budget exceeded')
-            files = TargetDetector(max_files=MAX_FILES).detect(root, names).files
+            files = TargetDetector(max_files=MAX_FILES).detect(root, names, select_scan_targets=True).files
             digest = hmac.new(key, b'workspace-baseline-inventory-v1', hashlib.sha256)
             size = 0
             for name in files:
@@ -199,17 +199,19 @@ class WorkspaceBaselineSeeds:
             if (after_capture[0] != dirty_digest or after_capture.file_digests != captured.file_digests
                     or inventory(key) != (full_digest, scope)):
                 raise ValueError('Baseline source changed')
-            # Empty workspace is a proven empty comparison point. For nonempty
-            # scope require every requested quick capability, never partial proof.
-            if scope and (result['status'] != 'SCANNED' or result['coverage'] not in {'FULL', 'SCOPED'}
-                    or any(v not in {'EXECUTED', 'NOT_APPLICABLE'} for v in result['capabilities'].values())):
+            # A comparison point can retain explicit unsupported-code gaps.
+            # Failed/missing engine evidence still prevents publication; no
+            # partial coverage is upgraded into security proof.
+            from .baseline_coverage import comparison_usable, unproven_files
+            if scope and not comparison_usable(result, observation):
                 raise ValueError('Baseline coverage insufficient')
             delta = dict(new=0, persisting=0, resolved=0, additional_occurrences=0, removed_occurrences=0, families=[])
             summary = {k: result[k] for k in ('coverage', 'execution_state', 'capabilities', 'scanner_runs')}
             summary.update(status='PRE_EXISTING_BASELINE', last_check_status=result['status'], delta=delta)
             snapshot = validate_state(asdict(HookSnapshot('hook-v1', identity(os.path.normcase(str(root))), host,
                 identity(session_id if session_id is not None else 'setup-seed'), dirty_digest, dirty_files,
-                observation['families'], result['scan_id'], self.now(), summary, captured.file_digests)))
+                observation['families'], result['scan_id'], self.now(), summary, captured.file_digests,
+                unproven_files(observation))))
             if session_id is not None:
                 core.store.save(core.store.path(root, host, session_id), snapshot)
             return snapshot
