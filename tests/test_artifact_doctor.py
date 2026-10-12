@@ -1,10 +1,33 @@
 """Exercise the archive verifier's doctor contract against the real CLI."""
 import os
+import json
 import subprocess
 import sys
 from pathlib import Path
 
 from scripts import verify_artifact
+
+
+def test_verifier_skill_install_cannot_reuse_inherited_real_paths(tmp_path):
+    root = tmp_path / 'acceptance'
+    root.mkdir()
+    real = tmp_path / 'unrelated-profile'
+    real.mkdir()
+    sentinel = real / 'preserve.txt'
+    sentinel.write_bytes(b'unrelated user content')
+    inherited = dict(os.environ, CODEX_HOME=str(real),
+        SECURITY_RUNTIME_CODEX_HOME=str(real), SECURITY_RUNTIME_SKILLS_DIR=str(real / 'skills'),
+        SECURITY_RUNTIME_STATE_DIR=str(real / 'state'), SECURITY_RUNTIME_GLOBAL='1',
+        SECURITY_RUNTIME_TRIAL_ROOT=str(real))
+    env = verify_artifact.verification_environment(root, root / 'data', full=False, inherited=inherited)
+    response = subprocess.run([sys.executable, '-m', 'security_runtime.cli', 'review-skill',
+        'install', '--json'], env=env, cwd=root, capture_output=True, text=True, encoding='utf-8')
+    assert response.returncode == 0, response.stderr
+    assert Path(json.loads(response.stdout)['path']).is_relative_to(root)
+    assert (root / 'global-skills/ai-security-review/SKILL.md').is_file()
+    assert sentinel.read_bytes() == b'unrelated user content'
+    assert list(real.iterdir()) == [sentinel]
+    assert 'SECURITY_RUNTIME_GLOBAL' not in env and 'SECURITY_RUNTIME_TRIAL_ROOT' not in env
 
 
 def test_verifier_separates_global_and_project_doctors(tmp_path, monkeypatch):

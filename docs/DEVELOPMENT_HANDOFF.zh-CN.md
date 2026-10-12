@@ -56,8 +56,25 @@ git log -1 --oneline
 
 ## 准备开发环境和复验
 
+如果公司无法访问 GitHub，可将本机 `dist/company-handoff-20261012-r1` 经允许的方式
+带过去。其中 `source.bundle` 是本分支完整 Git 源码；程序 ZIP 与校验文件是本批本地
+候选，未附带检查器、数据库或开发依赖。进入允许的开发目录，离线克隆源码后恢复远程：
+
+```powershell
+git clone --branch feature/runtime-mvp 'C:\approved-transfer\source.bundle' Ai-security-check
+if ($LASTEXITCODE -ne 0) { throw '离线源码克隆失败' }
+Set-Location .\Ai-security-check
+git remote set-url origin https://github.com/pikachu-cxy/Ai-security-check.git
+git log -1 --oneline
+```
+
+把示例中的传输路径换成实际位置；联网恢复后仍向同一 GitHub 分支推送。已有源码和
+程序包不等于开发依赖、检查工具与漏洞数据都已准备完成，后续安装按实际结果核验。
+
 需要 Git、Python 3.12 和可用的开发依赖下载源；独立程序打包还需 Windows GCC，或者
 下文所述经过校验的现有完整程序包。按公司允许的方式准备这些依赖。
+项目支持 Python 3.12 及以上，本批实际开发/打包使用 3.13.9；复现同一开发环境时将
+下方 `py -3.12` 改为 `py -3.13`。运行时自己管理的检查器环境独立于此开发环境。
 
 ```powershell
 py -3.12 -m venv .venv

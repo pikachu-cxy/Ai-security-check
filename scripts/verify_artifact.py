@@ -161,6 +161,19 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
     return result
 
 
+def verification_environment(root: Path, data: Path, *, full: bool, inherited=None) -> dict[str, str]:
+    """Keep configuration, Skill and state in the disposable acceptance root."""
+    inherited = os.environ if inherited is None else inherited
+    env = {key: value for key, value in inherited.items()
+           if not key.upper().startswith(('SECURITY_RUNTIME_', 'SEMGREP_', 'GITLEAKS_', 'TRIVY_', 'OSV_'))
+           and key.upper() not in {'CODEX_HOME', 'PYTHONPATH', 'PYTHONHOME'}}
+    env.update(SECURITY_RUNTIME_DATA_DIR=str(data), SECURITY_RUNTIME_STATE_DIR=str(root / 'state'),
+               CODEX_HOME=str(root / 'codex-home'), SECURITY_RUNTIME_CODEX_HOME=str(root / 'codex-home'),
+               SECURITY_RUNTIME_SKILLS_DIR=str(root / 'global-skills'),
+               SECURITY_RUNTIME_PLUGIN_DIR=str(root / 'plugins'), SECURITY_RUNTIME_OFFLINE='0' if full else '1')
+    return env
+
+
 def verify_global_ownership(executable: Path, root: Path, env: dict[str, str]) -> dict:
     home = root / 'global-ownership-home'
     home.mkdir()
@@ -170,7 +183,8 @@ def verify_global_ownership(executable: Path, root: Path, env: dict[str, str]) -
                 b'[mcp_servers.sibling]\ncommand="synthetic"\n'
                 b'[hooks.state.fixture]\nenabled=true\ntrusted_hash="synthetic"\n')
     path.write_bytes(original)
-    environment = {**env, 'CODEX_HOME': str(home)}
+    environment = {**env, 'CODEX_HOME': str(home), 'SECURITY_RUNTIME_CODEX_HOME': str(home),
+                   'SECURITY_RUNTIME_SKILLS_DIR': str(home / 'skills')}
     def cli(action):
         return json.loads(run([str(executable), action, '--json'], cwd=root, env=environment).stdout)
     installed = cli('setup')
@@ -185,7 +199,13 @@ def verify_global_ownership(executable: Path, root: Path, env: dict[str, str]) -
         raise ValueError('Global ownership depends on END marker')
     if cli('repair')['overall'] != 'CONFIGURED' or path.read_bytes() != canonical:
         raise ValueError('Global marker migration failed or sibling bytes changed')
-    if cli('repair')['operation'] != 'ALREADY_CONFIGURED':
+    owned_files = [path, home / 'hooks.json', home / 'skills/ai-security-review/SKILL.md']
+    before_repeat = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in owned_files if p.is_file()}
+    repeated = cli('repair')
+    # The public repair route now returns a transaction receipt. Check its
+    # behavior, not the older adapter-only ALREADY_CONFIGURED operation label.
+    if (repeated['overall'] != 'CONFIGURED' or
+            before_repeat != {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in before_repeat}):
         raise ValueError('Global repair is not idempotent')
     parsed = tomllib.loads(canonical.decode())
     path.write_bytes(canonical.replace(b'enabled = true', b'enabled = false', 1))
@@ -259,14 +279,8 @@ def main() -> None:
             raise ValueError("Forbidden content in artifact")
         data = args.data_dir.resolve() if args.data_dir else root / "user-data"
         osv_preexisting = (data/'tools'/'osv-scanner').exists()
-        env = dict(os.environ, SECURITY_RUNTIME_DATA_DIR=str(data), SECURITY_RUNTIME_STATE_DIR=str(root / "state"))
-        for name in ("SECURITY_RUNTIME_SEMGREP_PATH", "SECURITY_RUNTIME_GITLEAKS_PATH", "SECURITY_RUNTIME_TRIVY_PATH", "SECURITY_RUNTIME_OSV_SCANNER_PATH",
-                     "SECURITY_RUNTIME_CONFIG", "SECURITY_RUNTIME_WORKSPACE", "SECURITY_RUNTIME_PLUGIN_DIR",
-                     "SECURITY_RUNTIME_TRIVY_CACHE_DIR", "TRIVY_CACHE_DIR", "PYTHONPATH", "PYTHONHOME",
-                     "SECURITY_RUNTIME_GLOBAL", "SECURITY_RUNTIME_CODEX_HOME"):
-            env.pop(name, None)
-        # Default doctor reads global configuration; never inspect the real home.
-        env["CODEX_HOME"] = str(root / "codex-home")
+        env = verification_environment(root, data, full=args.full)
+        # Default doctor and setup must never inspect the real config or Skill.
         Path(env["CODEX_HOME"]).mkdir()
         git = shutil.which("git")
         if git is None:
@@ -278,8 +292,6 @@ def main() -> None:
         env["PATH"] = os.pathsep.join(map(str, [bundle, Path(git).parent, *platform_paths]))
         if os.name == "nt" and any(shutil.which(name, path=env["PATH"]) for name in ("python", "python3", "py")):
             raise ValueError("Developer Python must not be available on standalone verification PATH")
-        env["SECURITY_RUNTIME_PLUGIN_DIR"] = str(root / "plugins")
-        env["SECURITY_RUNTIME_OFFLINE"] = "0" if args.full else "1"
         version = run([str(executable), "--version"], cwd=root, env=env).stdout.strip()
         if version != f"AI Security Runtime {__version__}":
             raise ValueError(f"Unexpected version: {version}")
