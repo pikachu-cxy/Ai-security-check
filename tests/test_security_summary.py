@@ -191,6 +191,25 @@ def test_dependency_group_keeps_each_advisory_and_review_state(sample):
     assert data['capability_details']['DEPENDENCY_VULN']['coverage']=='PARTIAL'
 
 
+def test_dependency_report_and_review_keep_upstream_upgrade_evidence(sample):
+    _, scan, store = sample
+    details = scan.findings[4].technical_details
+    details.update(fixed_version_text='1.2.3, 2.0.0', fixed_versions=['1.2.3', '2.0.0'],
+        remediation_evidence=[{'source': 'Trivy', 'advisory': 'CVE-2026-1111',
+            'scanner_sources': ['trivy-vuln'], 'fixed_versions': ['1.2.3', '2.0.0'],
+            'fixed_version_text': '1.2.3, 2.0.0', 'affected_ranges': []}])
+    store.save(scan)
+    task = next(t for t in summary(sample, details=True)['tasks'] if t['topic'] == 'dependency')
+    advisory = next(m['advisory'] for m in task['members']
+        if m['finding_id'] == scan.findings[4].id)
+    assert advisory['fixed_version_text'] == '1.2.3, 2.0.0'
+    assert advisory['remediation_evidence'][0]['source'] == 'Trivy'
+    packet = TriageService(store).prepare(scan.scan_id,
+        finding_ids=[scan.findings[4].id])['packets'][0]
+    assert packet['enrichment']['fixed_versions'] == ['1.2.3', '2.0.0']
+    assert packet['enrichment']['remediation_evidence'][0]['advisory'] == 'CVE-2026-1111'
+
+
 @pytest.mark.parametrize('field,value',[('ecosystem','npm'),('package','org.demo:other'),('package_version','2.0'),('manifest','other.xml')])
 def test_dependency_group_does_not_cross_identity(sample,field,value):
     _, scan, store=sample

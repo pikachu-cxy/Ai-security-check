@@ -71,6 +71,25 @@ class HookSnapshot:
     unproven_sast_files: list[str] | None = None
 
 
+def incremental_scope(previous, dirty_files, content_changed, *, checked_files=()):
+    """Prefer measured byte changes over the cumulative Git dirty inventory.
+
+    Retain original findings for their existing proof-based recheck. Failed,
+    partial, deferred and legacy observations keep the conservative inventory;
+    this optimization must not forget an unfinished provider's input files.
+    checked_files is the preceding real scan's scope for a closeout, not a
+    claim that those files or the whole project are safe.
+    """
+    families = {f['file_path'] for f in previous['families'].values()} if previous else set()
+    changed = set(content_changed or ())
+    if (previous is None or content_changed is None or
+            previous['last_result']['status'] in {'FAILED', 'PARTIAL'} or
+            previous['last_result'].get('deferred_code_providers')):
+        retained = set(previous['changed_files']) if previous else set()
+        return sorted(set(dirty_files) | retained | families | changed | set(checked_files))
+    return sorted(changed | families | set(checked_files))
+
+
 def validate_state(value):
     fields = set(HookSnapshot.__dataclass_fields__)
     if (not isinstance(value, dict) or not fields - {'file_digests', 'unproven_sast_files'} <= set(value) <= fields
@@ -616,6 +635,11 @@ class HookCoordinator:
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
         pending = None
+        if not _lifecycle and event == HookEvent.FILE_CHANGED:
+            # MCP transport registers arrival before reconciliation so a busy
+            # or failed check cannot lose it. Clear only this observed sequence
+            # after a completed byte comparison/check; newer arrivals survive.
+            pending = self.store.pending_activity(root, host, session_id)
         if _lifecycle:
             from .recent_hooks import observe
             route = {HookEvent.SESSION_START:'SESSION_BASELINE', HookEvent.FILE_CHANGED:'WORKSPACE_RECONCILIATION',
@@ -786,7 +810,8 @@ class HookCoordinator:
             jobs = CloseoutStateStore(self.store.workspace_directory(root) / 'closeout.db', lambda: self.store.key(root))
             job = jobs.latest(result['workspace_id'], identity(host + '\0' + (session_id or 'default')))
             awaiting_proof = any(r['status'] == 'UNCONFIRMED_ABSENCE' for r in result['delta']['families'])
-            if (self.store.pending_activity(root, host, session_id) is not None or awaiting_proof or
+            if ((self.store.pending_activity(root, host, session_id) is not None and
+                    (content_changed is None or previous['last_result']['status'] in {'FAILED', 'PARTIAL'})) or awaiting_proof or
                     result.get('deferred_code_providers') or
                     job and job['status'] != 'COMPLETED'):
                 result.update(status='CLOSEOUT_PENDING', next_step='Continue the existing Runtime closeout plan through MCP.')
@@ -802,10 +827,7 @@ class HookCoordinator:
         # Seed inventories can include findings in tracked clean files. Recheck
         # those candidate paths, not the entire setup inventory, so they persist
         # without false NEW attribution or unproven disappearance.
-        retained = set(previous['changed_files']) | {f['file_path'] for f in previous['families'].values()} if previous else set()
-        scope = sorted(set(files) | retained | (content_changed or set()))
-        if lifecycle_activity and previous is not None and content_changed is not None:
-            scope = sorted(content_changed | {f['file_path'] for f in previous['families'].values()})
+        scope = incremental_scope(previous, files, content_changed)
         from .dependency_inputs import is_dependency_input
         detector = TargetDetector(max_files=MAX_FILES)
         existing_scope = detector.detect(root,scope,select_scan_targets=True).files

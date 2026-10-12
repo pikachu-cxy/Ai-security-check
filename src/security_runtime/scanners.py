@@ -656,10 +656,17 @@ class TrivyAdapter(BaseScanner):
         found = []
         for result in data.get("Results", []):
             for item in result.get("Vulnerabilities", []) if self.checks == "vuln" else []:
-                found.append(n.dependency(scanner=self.name, package=item.get('PkgName',''), version=item.get('InstalledVersion',''),
+                finding = n.dependency(scanner=self.name, package=item.get('PkgName',''), version=item.get('InstalledVersion',''),
                     ecosystem=result.get('Type',''), manifest=result.get('Target',''), vulnerability_id=item.get('VulnerabilityID',''),
                     aliases=item.get('Aliases',[]), severity=item.get('Severity','UNKNOWN'), title=item.get('Title') or 'Vulnerable dependency',
-                    description=item.get('Description') or item.get('Title',''), source='Trivy'))
+                    description=item.get('Description') or item.get('Title',''), source='Trivy')
+                from .diagnostics import sanitize
+                from .findings import FIXED_VERSION
+                fixed_text = sanitize(item.get('FixedVersion', ''), 500)
+                finding.technical_details.update(fixed_version_text=fixed_text,
+                    fixed_versions=sorted({v.strip() for v in fixed_text.split(',')
+                        if FIXED_VERSION.fullmatch(v.strip())})[:40])
+                found.append(finding)
             for item in result.get("Misconfigurations", []) if self.checks == "misconfig" else []:
                 found.append(n.make(scanner=self.name, category="configuration", title=item.get("Title", "Configuration issue"), description=item.get("Description", ""), severity=item.get("Severity", "MEDIUM"), confidence="MEDIUM", file_path=result.get("Target", ""), line=item.get("CauseMetadata", {}).get("StartLine", 1), rule_id=item.get("ID", "")))
         return found

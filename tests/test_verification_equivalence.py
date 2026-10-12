@@ -118,6 +118,53 @@ def test_dependency_reuses_canonical_identity(root):
     assert equivalence_key(a) != equivalence_key(b)
 
 
+@pytest.mark.parametrize('current_id,aliases', [
+    ('CVE-2026-1234', []), ('GHSA-fixture', ['CVE-2026-1234'])])
+def test_dependency_upgrade_still_affected_is_not_resolved(root, current_id, aliases):
+    (root / 'pom.xml').write_text('<project/>')
+    normalizer = FindingNormalizer(root)
+    old = normalizer.dependency(scanner='fixture', package='a:b', version='1.0',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id='CVE-2026-1234')
+    current = normalizer.dependency(scanner='fixture', package='a:b', version='1.1',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id=current_id, aliases=aliases)
+    assert old.fingerprint != current.fingerprint
+    assert old.equivalence_key != current.equivalence_key
+    out = VerificationService(ScannerRegistry([LocalScanner([current])])).verify_many(
+        root, [asdict(old)], {'target_profile': {'files': ['pom.xml']}})[0]
+    assert out['verification_status'] == 'STILL_PRESENT'
+    assert out['matched_by'] == 'dependency_advisory'
+
+
+@pytest.mark.parametrize('package,advisory,coverage,expected', [
+    ('a:b', 'CVE-2026-9999', 'FULL', 'SCANNER_VERIFIED_RESOLVED'),
+    ('other:package', 'CVE-2026-1234', 'FULL', 'SCANNER_VERIFIED_RESOLVED'),
+    ('a:b', 'CVE-2026-9999', 'PARTIAL', 'INCONCLUSIVE')])
+def test_dependency_recheck_keeps_package_advisory_and_coverage_boundaries(
+        root, package, advisory, coverage, expected):
+    (root / 'pom.xml').write_text('<project/>')
+    normalizer = FindingNormalizer(root)
+    old = normalizer.dependency(scanner='fixture', package='a:b', version='1.0',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id='CVE-2026-1234')
+    current = normalizer.dependency(scanner='fixture', package=package, version='2.0',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id=advisory)
+    out = VerificationService(ScannerRegistry([LocalScanner([current], coverage=coverage)])).verify_many(
+        root, [asdict(old)], {'target_profile': {'files': ['pom.xml']}})[0]
+    assert out['verification_status'] == expected
+
+
+def test_dependency_recheck_missing_current_identity_cannot_prove_absence(root):
+    (root / 'pom.xml').write_text('<project/>')
+    normalizer = FindingNormalizer(root)
+    old = normalizer.dependency(scanner='fixture', package='a:b', version='1.0',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id='CVE-2026-1234')
+    incomplete = normalizer.dependency(scanner='fixture', package='a:b', version='1.1',
+        ecosystem='maven', manifest='pom.xml', vulnerability_id='')
+    out = VerificationService(ScannerRegistry([LocalScanner([incomplete])])).verify_many(
+        root, [asdict(old)], {'target_profile': {'files': ['pom.xml']}})[0]
+    assert out['verification_status'] == 'INCONCLUSIVE'
+    assert 'DEPENDENCY_ADVISORY_IDENTITY_MISSING' in out['reason']
+
+
 class PlannedScanner(LocalScanner):
     def __init__(self, *, confirmation=True, scanned=True, error=False, selected=True):
         super().__init__()

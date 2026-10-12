@@ -10,6 +10,23 @@ scope; they do not certify the latest installation package or Desktop behavior.
 
 ## Current milestone
 
+- Ordered continuation/incremental/dependency batch (2026-10-12): read
+  [Chinese development handoff](DEVELOPMENT_HANDOFF.zh-CN.md) first when moving
+  machines. Stop emits only documented decision/reason with the original bounded
+  MCP plan. Trusted content deltas select changed/original-finding files; closeout
+  additionally retains the preceding actual scan scope. Failed/partial/deferred
+  and legacy observations retain conservative inputs. Zero-delta reconciliation
+  clears only its captured activity sequence, preserving later arrivals.
+  Dependency normalization/merge preserves advisory-specific upstream fix options
+  and constraints through report/triage/fix preparation. Verification matches the
+  same package/advisory across version changes; missing identity cannot prove
+  absence. Final related source group: 239 passed. Result/functional/receipt group:
+  145 passed (overlapping groups, not a full-suite claim). New-candidate Desktop
+  automatic continuation, Jeepay latency, real dependency upgrades and paired
+  framework functional tests remain pending. Historical/manual/native-MCP results
+  must not be promoted to those acceptance gates. Push and package receipts are
+  recorded in DEVELOPMENT_PROGRESS.md; builds/caches/chat do not migrate via Git.
+
 - Installation efficiency and retention milestone (2026-10-11): personal setup
   reuses a successful capability probe only within the transaction; runtime,
   signed active pointer, environment and package identity changes invalidate it.

@@ -8,7 +8,7 @@ from time import perf_counter
 
 from .closeout_state import CloseoutStateStore, digest
 from .hook_state import HookStateStore, identity
-from .hook_runtime import safe_path, capture_snapshot
+from .hook_runtime import safe_path, capture_snapshot, incremental_scope
 from .risk_closure import RiskClosureService, family_row
 from .secret_coverage import digest as file_digest
 from .target import TargetDetector
@@ -72,14 +72,17 @@ class CloseoutService:
             revisions[name] = file_digest(path)
         return digest(self.hooks.key(root), revisions)
 
-    def _plan(self, root, scope, members, deferred):
+    def _plan(self, root, scope, members, deferred, exclusions=()):
         # No code/config changes can reuse an older provider plan.
         from .rulepacks import RulePackManager
-        return digest(self.hooks.key(root), {'scope': scope, 'members': members, 'deferred': deferred,
+        plan = {'scope': scope, 'members': members, 'deferred': deferred,
             'build': self.build['build_id'], 'rules': RulePackManager().resolve().checksum,
             'credential_protection_present': [(root / name).exists() for name in ('.gitleaks.toml', '.gitleaksignore')] +
                 [bool(os.getenv(name)) for name in ('GITLEAKS_CONFIG', 'GITLEAKS_CONFIG_TOML')],
-            'providers': [a.name for a in self.runtime.registry.adapters]})
+            'providers': [a.name for a in self.runtime.registry.adapters]}
+        if exclusions:
+            plan['scope_exclusions'] = exclusions
+        return digest(self.hooks.key(root), plan)
 
     def prepare(self, workspace, files=None, *, host=None, session=None, source_scan_id=None,
                 source='MANUAL_CLOSEOUT', pending=None):
@@ -98,18 +101,25 @@ class CloseoutService:
             if Path(scan['target_profile']['path']).resolve() != root:
                 raise ValueError('Source scan does not belong to this workspace')
             deferred = sorted(set(deferred) | set(scan.get('rule_coverage', {}).get('deferred_providers', [])))
-        if files is None:
+        automatic_scope = files is None
+        if automatic_scope:
             if host and session:
                 if WorkspaceResolver().resolve(root, allow_non_git_explicit=True).is_git:
                     captured = capture_snapshot(root, self.hooks.key(root))
                 else:
                     from .global_workspace import source_snapshot
                     captured = source_snapshot(root, self.hooks.key(root))
-                state_files = set(state.get('changed_files', [])) if state else set()
-                before = state.get('file_digests', {}) if state else {}
-                changed = {name for name in set(before) | set(captured.file_digests)
-                           if before.get(name) != captured.file_digests.get(name)}
-                files = sorted(set(captured[1]) | state_files | changed | {f['file_path'] for f in families.values()})
+                before = state.get('file_digests') if state else None
+                changed = ({name for name in set(before) | set(captured.file_digests)
+                            if before.get(name) != captured.file_digests.get(name)}
+                           if before is not None else None)
+                # Recheck the actual preceding scan, current byte changes and
+                # original findings, not every file staged before this task.
+                # Missing scan evidence retains the legacy conservative scope.
+                checked = (scan.get('scan_context', {}).get('input_files', scan['target_profile']['files'])
+                           if scan else state.get('changed_files', []) if state else [])
+                files = incremental_scope(state, captured[1], changed, checked_files=checked)
+                files = sorted(set(files) | {f['file_path'] for f in families.values()})
             elif scan:
                 files = scan.get('scan_context', {}).get('input_files', scan['target_profile']['files'])
             else:
@@ -117,17 +127,39 @@ class CloseoutService:
         if not isinstance(files, list) or len(files) > MAX_FILES:
             raise ValueError('Closeout scope budget exceeded')
         scope = sorted({safe_path(name) for name in files})
+        exclusions = []
+        if automatic_scope:
+            # Git snapshots include environment files. Keep the closeout's
+            # existing boundary, but make that limitation explicit instead of
+            # aborting every Stop before its completion record can be saved.
+            from .hook_state import no_links
+            for name in scope:
+                if Path(name).name.startswith('.env'):
+                    no_links(root / name)
+                    exclusions.append({'file_path': name,
+                                       'reason': 'ENVIRONMENT_FILE_OUTSIDE_CLOSEOUT_SCOPE'})
+            excluded_paths = {row['file_path'] for row in exclusions}
+            scope = [name for name in scope if name not in excluded_paths]
+        else:
+            excluded_paths = set()
         if not families and scan:
             # Manual closeouts also retain every original Secret detector.
             from .risk_closure import original_family
             families = {equivalence_key(row): original_family(row) for row in scan['findings']
-                        if row['category'] == 'secret' and row['file_path'] in scope}
-        members = [family_row(f) for f in families.values() if f['category'] == 'secret']
+                        if row['category'] == 'secret' and row['file_path'] in set(scope) | excluded_paths}
+        members = [family_row(f) for f in families.values()
+                   if f['category'] == 'secret' and f['file_path'] not in excluded_paths]
+        excluded_recheck = [{'file_path': f['file_path'], 'rule_id': f['rule_id'],
+                             'detector': f['scanner_sources'],
+                             'reason': 'ENVIRONMENT_FILE_OUTSIDE_CLOSEOUT_SCOPE'}
+                            for f in families.values()
+                            if f['category'] == 'secret' and f['file_path'] in excluded_paths]
         revision = self._revision(root, scope)
-        plan = self._plan(root, scope, members, deferred)
+        plan = self._plan(root, scope, members, deferred, exclusions)
         session_key = identity(host + '\0' + session) if host and session else None
         details = dict(members=members, source=source, host=host, session=session,
-                       session_key=session_key, pending_sequence=pending)
+                       session_key=session_key, pending_sequence=pending,
+                       scope_exclusions=exclusions, excluded_recheck=excluded_recheck)
         store = self._store(root)
         previous = store.latest(self._workspace(root), session_key) if session_key else None
         if previous and previous['status'] in {'PENDING', 'RUNNING', 'NEEDS_RETRY'}:
@@ -142,7 +174,8 @@ class CloseoutService:
 
     def _present(self, root, job):
         current = (self._revision(root, job['scope_files']) == job['prepared_revision'] and
-                   self._plan(root, job['scope_files'], job['details']['members'], job['deferred_providers']) == job['plan_fingerprint'])
+                   self._plan(root, job['scope_files'], job['details']['members'], job['deferred_providers'],
+                              job['details'].get('scope_exclusions', ())) == job['plan_fingerprint'])
         details = job['details']
         pending = self.hooks.pending_activity(root, details['host'], details['session']) if details.get('session_key') else None
         pending_new = pending is not None and pending != details['pending_sequence']
@@ -154,12 +187,15 @@ class CloseoutService:
         return {k: job[k] for k in ('closeout_ref', 'generation', 'status', 'coverage', 'attempts', 'reason', 'receipt')} | {
             'workspace': str(root), 'current_version': current, 'pending_new_events': pending_new,
             'source': job['details']['source'], 'scope_files': job['scope_files'],
+            'scope_exclusions': details.get('scope_exclusions', []),
+            'excluded_recheck': details.get('excluded_recheck', []),
             'deferred_providers': job['deferred_providers'],
             'pending_deferred_providers': job['deferred_providers'] if job['status'] != 'COMPLETED' or not current else [],
             'original_recheck_scope': [{'file_path': m['file_path'], 'detector': m['scanner_sources'],
                                  'rule_id': m['technical_details']['rule_id']} for m in job['details']['members']],
             'pending_recheck': [{'file_path': m['file_path'], 'rule_id': m['technical_details']['rule_id'],
-                                'detector': m['scanner_sources']} for m in details['members'] if m['id'] not in resolved],
+                                 'detector': m['scanner_sources']} for m in details['members'] if m['id'] not in resolved] +
+                               details.get('excluded_recheck', []),
             'execution_plan': {'tool': 'run_closeout_check', 'arguments': {
                 'closeout_ref': job['closeout_ref'], 'workspace_path': str(root)}},
             'repair_authority': 'NONE', 'historical_scans': 'UNCHANGED'}
@@ -189,7 +225,8 @@ class CloseoutService:
             if not acquired:
                 return self._present(root, job) | {'status': 'BUSY', 'reason': 'WORKSPACE_LOCK_BUSY'}
             revision = self._revision(root, job['scope_files'])
-            plan = self._plan(root, job['scope_files'], job['details']['members'], job['deferred_providers'])
+            exclusions = job['details'].get('scope_exclusions', [])
+            plan = self._plan(root, job['scope_files'], job['details']['members'], job['deferred_providers'], exclusions)
             if job['attempts'] >= MAX_ATTEMPTS and job['status'] != 'COMPLETED':
                 return self._present(root, job) | {'reason': 'CLOSEOUT_BUDGET_EXHAUSTED', 'automatic_retry': False}
             job, owner = store.claim(ref, self._workspace(root), revision, plan, recover=True)
@@ -227,17 +264,20 @@ class CloseoutService:
                 # operational failure/new edits require retry, bounded by budget.
                 status = 'COMPLETED' if fresh and not failed else 'NEEDS_RETRY'
                 coverage = str(scan.coverage) if fresh else 'UNKNOWN'
+                if exclusions and coverage in {'FULL', 'SCOPED'}:
+                    coverage = 'PARTIAL'
                 receipt = {'contract': 'closeout-receipt-v1', 'generation': job['generation'],
                     'closeout_ref': ref, 'source': details['source'], 'scope_revision_before': revision,
                     'scope_revision_after': after, 'current_version': fresh, 'scan_id': scan_id,
                     'scan_hash': digest(self.hooks.key(root), self.runtime.store.get_scan(scan_id)),
                     'plan_fingerprint': plan, 'build_identity': self.build,
                     'check_completed': status == 'COMPLETED', 'coverage': coverage,
+                    'scope_exclusions': exclusions,
                     'risk_verification': results, 'timing_ms': {'closeout': round((perf_counter()-started)*1000, 3),
                         'closure_confirmation': verify_ms, 'user_prompt_latency': None},
-                    'credential_closure_complete': bool(results) and all(r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED' for r in results),
+                    'credential_closure_complete': bool(results) and not exclusions and all(r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED' for r in results),
                     'risk_fix_scope': 'ORIGINAL_CREDENTIAL_RULE_FILE_ONLY',
-                    'risk_fix_complete': bool(results) and not scan.findings and all(r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED' for r in results)}
+                    'risk_fix_complete': bool(results) and not exclusions and not scan.findings and all(r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED' for r in results)}
                 reason = None if status == 'COMPLETED' else 'SOURCE_OR_EVENT_CHANGED' if not fresh else 'PROVIDER_INCOMPLETE'
                 saved, accepted = store.finish(ref, self._workspace(root), job['generation'], owner,
                     status=status, coverage=coverage, reason=reason, receipt=receipt, scan_id=scan_id)
@@ -249,7 +289,7 @@ class CloseoutService:
                         r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED' for m, r in zip(members, results))
                     fresh = (persisted['status'] == 'SAVED' and persisted['confirmed'] == expected and
                         self._revision(root, job['scope_files']) == revision and
-                        self._plan(root, job['scope_files'], members, job['deferred_providers']) == plan and
+                        self._plan(root, job['scope_files'], members, job['deferred_providers'], exclusions) == plan and
                         self.closures.generation(root) == activity_epoch and
                         store.get(ref, self._workspace(root))['generation'] == job['generation'])
                     if not fresh:
@@ -271,6 +311,11 @@ class CloseoutService:
                     feedback['message'] += '\n收尾检查未完成：仍有失败或缺少执行回执的检查，待检任务已保留。'
                 if scan.coverage != 'FULL':
                     feedback['message'] += '\n本次检查的代码覆盖仍为部分或受限范围；Vue/TypeScript 等未完整覆盖的代码需另行检查。凭据关闭结论只适用于取得完整证明的原规则与当前文件版本。'
+                if exclusions:
+                    names = '、'.join(row['file_path'] for row in exclusions[:10])
+                    feedback['message'] += ('\n以下环境配置文件未纳入本次结束检查：' + names +
+                        (f' 等 {len(exclusions)} 个文件' if len(exclusions) > 10 else '') +
+                        '。这些文件中的原有风险保持未确认；检查完成不代表项目已无风险。')
                 return self._present(root, saved) | {'user_feedback': feedback,
                     'execution_accepted': accepted, 'code_coverage': scan.rule_coverage,
                     'risk_status': 'CONFIRMED_CLOSED' if fresh and receipt['risk_fix_complete'] else 'UNCONFIRMED_OR_PRESENT'}
@@ -296,10 +341,14 @@ class CloseoutService:
             return {'status': 'ALLOW_STOP_PENDING', 'closeout': job,
                     'systemMessage': '收尾检查尚未完成，待检任务已保留；本次停止不会认定风险已关闭。'}
         return {'status': 'CLOSEOUT_REQUIRED', 'closeout': job, 'decision': 'block',
-            'reason': '收尾检查已安排。请执行 Runtime 给出的补查计划，并只按实际检查结果向用户说明。\n' +
-                      __import__('json').dumps(job['execution_plan'], ensure_ascii=False),
-            'hookSpecificOutput': {'hookEventName': 'Stop', 'additionalContext':
-                '执行 run_closeout_check 后显示凭据逐规则状态、代码覆盖限制；不得自行宣布项目安全或修改源文件。'}}
+            # Stop supports decision/reason, not a hookSpecificOutput Stop
+            # variant. An unsupported variant can make the Host reject the
+            # entire response, including the continuation decision.
+            'reason': '结束检查已安排。现在通过普通 MCP 执行以下原始计划，不需要用户再次发送“继续”。'
+                      '该计划不授予修复权限，不得修改源文件或另建检查任务。'
+                      '执行后按实际 user_feedback 说明检查是否完成、原问题复查和覆盖限制；'
+                      '不得自行宣布项目安全。\n' +
+                      __import__('json').dumps(job['execution_plan'], ensure_ascii=False)}
 
 
 from .equivalence import equivalence_key

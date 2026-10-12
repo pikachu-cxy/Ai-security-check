@@ -13,6 +13,21 @@ MAX_FILES = 20
 MAX_BYTES = 2_000_000
 
 
+def same_dependency_advisory(original, current):
+    """A version change is not remediation if this package/advisory persists."""
+    if original.get('category') != 'dependency' or current.get('category') != 'dependency':
+        return False
+    old, new = original.get('technical_details') or {}, current.get('technical_details') or {}
+    if any(not old.get(key) or old.get(key) != new.get(key) for key in ('ecosystem', 'package')):
+        return False
+    def ids(details):
+        aliases = details.get('aliases', [])
+        aliases = aliases[:100] if isinstance(aliases, list) else []
+        return {value for value in [details.get('canonical_vulnerability_id'),
+            details.get('vulnerability_id'), *aliases] if isinstance(value, str) and value}
+    return bool(ids(old) & ids(new))
+
+
 def evidence(row):
     """Detector coordinates only. In particular no Secret value or digest."""
     return {key: row.get(key) for key in ('file_path', 'line_start', 'line_end', 'scanner_sources')} | {
@@ -164,11 +179,17 @@ class VerificationService:
                 current_key = equivalence_key(current)
                 if current.get('file_path') != path:
                     continue
+                if (row.get('category') == current.get('category') == 'dependency'
+                        and not current_key):
+                    complete = False
+                    reasons.append('DEPENDENCY_ADVISORY_IDENTITY_MISSING')
                 # The historical fingerprint can collide between code rules;
                 # known different rule families never match that collision.
                 known_different = original_key and current_key and original_key != current_key
                 matched = ('fingerprint' if current.get('fingerprint') == row.get('fingerprint') and not known_different
                            else 'equivalence_key' if original_key and original_key == current_key else None)
+                if not matched and same_dependency_advisory(origin_row, current):
+                    matched = 'dependency_advisory'
                 if matched:
                     result.update(status='STILL_PRESENT', verification_status='STILL_PRESENT', matched_by=matched,
                                   reason='ORIGINAL_OR_EQUIVALENT_FINDING_OBSERVED')

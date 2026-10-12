@@ -4,6 +4,7 @@ Current status and next steps: [development progress](docs/DEVELOPMENT_PROGRESS.
 and [personal/free and enterprise roadmap](docs/PRODUCT_ROADMAP.md).
 The progress document distinguishes source implementation, isolated checks,
 current package acceptance and pending Desktop trials.
+Moving machines: [development handoff](docs/DEVELOPMENT_HANDOFF.zh-CN.md).
 
 **Windows rule-foundation experience (R2.2):** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
 Use natural language with the companion Security Review Skill and existing MCP to
@@ -37,7 +38,8 @@ stops external engine processes. Library and MCP calls do not enable CLI progres
 AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through the CLI, verified host integrations, and Generic MCP.
 
 - **Local-first:** project source stays on your machine by default.
-- **Codex:** Global Runtime Integration is **DESKTOP VERIFIED**.
+- **Codex:** historical detection paths are Desktop verified; automatic Stop
+  continuation on the current candidate still requires separate acceptance.
 - **Cursor:** detection and advisory remediation are **DESKTOP VERIFIED** on the observed path.
 - **Generic MCP:** remains available for MCP-compatible clients.
 - **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
@@ -119,7 +121,7 @@ security-check install codex
 ```
 
 For Codex, see [setup and integration details](docs/CODEX_INTEGRATION.md). The
-current Global Runtime Integration status is **DESKTOP VERIFIED**.
+current candidate's Desktop acceptance is recorded separately in development progress.
 
 ### Install or upgrade Codex protection
 

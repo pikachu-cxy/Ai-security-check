@@ -6,6 +6,8 @@ import posixpath
 import re
 from xml.parsers import expat
 
+from .findings import FIXED_VERSION, dependency_remediation_evidence
+
 MAX_POMS = 100
 MAX_POM_BYTES = 2_000_000
 MAX_SOURCE_BYTES = 1_000_000
@@ -232,9 +234,13 @@ def remediation_options(findings, evidence=()):
         md = finding.get('technical_details', {})
         raw = md.get('fixed_versions')
         raw = raw[:40] if isinstance(raw, (list, tuple)) else []
-        fixed = [v for v in raw if isinstance(v,str) and VERSION.fullmatch(v)][:20]
+        fixed = sorted({v for v in raw if isinstance(v,str) and FIXED_VERSION.fullmatch(v)})[:20]
+        upstream = dependency_remediation_evidence(finding)
+        has_constraints = any(row['fixed_version_text'] for row in upstream)
         rows.append({'finding_id':finding['id'], 'advisory':md.get('canonical_vulnerability_id') or md.get('vulnerability_id'),
-            'fixed_options':fixed, 'status':'ADVISORY_OPTIONS_REQUIRE_COMPATIBILITY_REVIEW' if fixed else 'FIXED_VERSION_NOT_PROVIDED'})
+            'fixed_options':fixed, 'upstream_evidence':upstream,
+            'status':'ADVISORY_OPTIONS_REQUIRE_COMPATIBILITY_REVIEW' if fixed else
+                'ADVISORY_CONSTRAINTS_REQUIRE_COMPATIBILITY_REVIEW' if has_constraints else 'FIXED_VERSION_NOT_PROVIDED'})
     owners = [p['enrichment']['dependency_context']['declaration'] for p in evidence
               if p.get('enrichment',{}).get('dependency_context')]
     return {'advisories':rows, 'declarations':owners[:20],

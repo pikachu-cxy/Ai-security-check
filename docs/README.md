@@ -5,6 +5,9 @@ acceptance output belongs in Git history, not in `docs/`.
 
 ## Start here
 
+- [换电脑继续开发](DEVELOPMENT_HANDOFF.zh-CN.md) — branch sync, reproducible
+  development environment/build/install, completed source fixes and tomorrow's gates.
+
 - [最新首版开发接续计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) — consolidated decisions
   from the two current product conversations, completed work, next batches and pilot gates.
 - [Runtime 收尾检查交付状态](RUNTIME_CLOSEOUT_CHECK.zh-CN.md) — current implementation,

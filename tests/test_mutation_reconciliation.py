@@ -74,6 +74,22 @@ def test_restored_content_no_change(repo,tmp_path):
     assert edit(core,repo)['status']=='NO_CHANGE' and not runtime.calls
 
 
+def test_zero_delta_cannot_clear_later_arriving_activity(repo, tmp_path):
+    core, runtime = start(repo, tmp_path)
+    first = core.store.pending_activity(repo, 'codex', 's', mark=True)
+    capture = core.snapshot_capture
+    later = []
+    def concurrent_arrival(*args):
+        snapshot = capture(*args)
+        later.append(core.store.pending_activity(repo, 'codex', 's', mark=True))
+        return snapshot
+    core.snapshot_capture = concurrent_arrival
+    out = core.handle('FILE_CHANGED', repo, 'codex', 's')
+    assert out['status'] == 'NO_CHANGE' and not runtime.calls
+    assert later and later[0] != first
+    assert core.store.pending_activity(repo, 'codex', 's') == later[0]
+
+
 def test_multifile_count_excludes_unchanged_dirty_file(repo,tmp_path):
     (repo/'B.java').write_bytes(b'class B {}')
     core,runtime=start(repo,tmp_path)
@@ -84,6 +100,38 @@ def test_multifile_count_excludes_unchanged_dirty_file(repo,tmp_path):
     (repo/'C.java').write_bytes(b'class C {}')
     out=edit(core,repo)
     assert out['snapshot_file_count']==3 and out['changed_file_count']==2
+
+
+def test_byte_delta_does_not_rescan_unchanged_staged_inventory(repo, tmp_path):
+    for index in range(24):
+        (repo / f'Unchanged{index}.java').write_text(f'class Unchanged{index} {{}}')
+    subprocess.run(['git', '-C', str(repo), 'add', '.'], check=True)
+    core, runtime = start(repo, tmp_path)
+    (repo / 'A.java').write_text('class A { int n = 2; }')
+    out = edit(core, repo)
+    assert out['changed_file_count'] == 1
+    assert runtime.calls == [('A.java',)]
+    (repo / 'Unchanged0.java').write_text('class Unchanged0 { int n; }')
+    edit(core, repo)
+    assert runtime.calls[-1] == ('Unchanged0.java',)
+
+
+@pytest.mark.parametrize('incomplete', ['PARTIAL', 'FAILED', 'deferred', 'legacy'])
+def test_incremental_scope_retains_unfinished_or_legacy_inventory(repo, tmp_path, incomplete):
+    (repo / 'B.java').write_text('class B {}')
+    core, runtime = start(repo, tmp_path)
+    path = core.store.path(repo, 'codex', 's')
+    state = json.loads(path.read_bytes())
+    if incomplete == 'legacy':
+        state.pop('file_digests')
+    elif incomplete == 'deferred':
+        state['last_result']['deferred_code_providers'] = ['semgrep']
+    else:
+        state['last_result']['status'] = incomplete
+    core.store.save(path, state)
+    (repo / 'A.java').write_text('class A { int n = 3; }')
+    edit(core, repo)
+    assert set(runtime.calls[-1]) == {'A.java', 'B.java'}
 
 
 @pytest.mark.parametrize('prefix,newline',[(b'',b'\n'),(b'',b'\r\n'),(b'\xef\xbb\xbf',b'\r\n')])

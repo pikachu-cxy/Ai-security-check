@@ -3,6 +3,7 @@
 当前状态与下一步：[开发进度](docs/DEVELOPMENT_PROGRESS.md) ·
 [个人免费版与企业版规划](docs/PRODUCT_ROADMAP.md)。进度文档分别记录源码实现、隔离
 验证、当前原生包验收与待完成的真实桌面体验，不把规划写成已实现功能。
+换电脑继续开发见 [分支同步、构建安装与接续步骤](docs/DEVELOPMENT_HANDOFF.zh-CN.md)。
 
 **Windows 规则基础体验（R2.2）：** [安装与六步清单](docs/WINDOWS_EXPERIENCE.zh-CN.md)。
 通过配套 Security Review Skill 和现有 MCP，以自然语言扫描、核查、授权修复，
@@ -36,7 +37,7 @@ VALIDATED；第一方规则包 1.3.0 包含 55 个 Semgrep rules，其中 47 个
 AI Security Runtime 是一个面向 AI Coding 工作流的本地优先安全运行时。它可以检查 AI 编程 Agent 生成或修改的代码，并通过 **CLI** 和 **MCP** 向开发者与 AI Coding 工具提供统一的安全能力。
 
 - **本地优先**：项目源码默认保留在本机。
-- **Codex**：Global Runtime Integration = **DESKTOP VERIFIED**。
+- **Codex**：历史检测路径已在桌面实测；当前候选的 Stop 自动继续执行仍需单独验收。
 - **Cursor**：Detection Runtime 与 Advisory Remediation = **DESKTOP VERIFIED**（观察路径）。
 - **通用 MCP**：仍作为可用的 MCP 接口保留。
 - **CLI**：不依赖任何 AI Coding 工具，可独立使用，也适合后续接入 CI/CD。

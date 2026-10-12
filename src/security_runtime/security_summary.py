@@ -240,7 +240,8 @@ class SecuritySummaryService:
                                 'classification': row.get('classification'),
                                 'ai_review': safe(row['triage']),
                                 'advisory': safe({key: md.get(key) for key in ('canonical_vulnerability_id', 'vulnerability_id',
-                                            'aliases', 'affected_ranges', 'fixed_versions')}) if topic == 'dependency' else None})
+                                            'aliases', 'affected_ranges', 'fixed_versions',
+                                            'fixed_version_text', 'remediation_evidence')}) if topic == 'dependency' else None})
             title, impact, unknown, next_step = self._guidance(topic, safe(group))
             why = [f'扫描器记录了 {len(ids)} 条关联候选；候选仍需结合实际用途判断。']
             if topic == 'tls' and len(ids) > 1:

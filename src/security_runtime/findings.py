@@ -1,11 +1,53 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import re
 from pathlib import Path
 
 from .models import Finding
 from .redactor import SecretRedactor
 from .equivalence import equivalence_key
+
+
+FIXED_VERSION = re.compile(r'v?[0-9][A-Za-z0-9_.+!~:\-]{0,118}\Z')
+
+
+def dependency_remediation_evidence(row):
+    """Bound advisory provenance; never interpret constraints as exact releases."""
+    from .diagnostics import sanitize
+    row = row if isinstance(row, dict) else vars(row)
+    details = row.get('technical_details') or {}
+    records = details.get('remediation_evidence')
+    if not isinstance(records, list) or not records:
+        records = [dict(details, scanner_sources=row.get('scanner_sources', []))]
+    out = []
+    for record in records[:20]:
+        if not isinstance(record, dict):
+            continue
+        versions = record.get('fixed_versions', [])
+        versions = versions[:40] if isinstance(versions, (list, tuple)) else []
+        ranges = record.get('affected_ranges', [])
+        ranges = ranges[:20] if isinstance(ranges, list) else []
+        bounded_ranges = []
+        for value in ranges:
+            if not isinstance(value, dict):
+                continue
+            events = value.get('events', [])
+            events = events[:40] if isinstance(events, list) else []
+            bounded_ranges.append({'type': sanitize(value.get('type', ''), 30),
+                'events': [{key: sanitize(event[key], 100) for key in
+                    ('introduced', 'fixed', 'last_affected', 'limit') if key in event}
+                    for event in events if isinstance(event, dict)]})
+        sources = record.get('scanner_sources', [])
+        sources = sources[:10] if isinstance(sources, list) else []
+        out.append({'scanner_sources': [sanitize(v, 100) for v in sources if isinstance(v, str)],
+            'source': sanitize(record.get('source', ''), 100),
+            'advisory': sanitize(record.get('advisory') or record.get('vulnerability_id', ''), 100),
+            'fixed_version_text': sanitize(record.get('fixed_version_text', ''), 500),
+            'fixed_versions': sorted({v for v in versions if isinstance(v, str) and FIXED_VERSION.fullmatch(v)}),
+            'affected_ranges': bounded_ranges})
+    return out
 
 
 class FindingNormalizer:
@@ -69,6 +111,14 @@ def deduplicate(findings: list[Finding]) -> list[Finding]:
             old.scanner_sources = sorted(set(old.scanner_sources + finding.scanner_sources))
             old.equivalence_key = equivalence_key(old)
             if old.category=='dependency':
+                records = dependency_remediation_evidence(old) + dependency_remediation_evidence(finding)
+                unique = {json.dumps(record, sort_keys=True): record for record in records}
+                old.technical_details['remediation_evidence'] = [unique[key] for key in sorted(unique)][:20]
+                old.technical_details['fixed_versions'] = sorted({v for record in unique.values()
+                    for v in record['fixed_versions']})[:40]
+                ranges = {json.dumps(value, sort_keys=True): value for record in unique.values()
+                    for value in record['affected_ranges']}
+                old.technical_details['affected_ranges'] = [ranges[key] for key in sorted(ranges)][:20]
                 old.technical_details['aliases']=sorted(set(old.technical_details.get('aliases',[])+finding.technical_details.get('aliases',[])))
                 order={'UNKNOWN':0,'LOW':1,'MEDIUM':2,'HIGH':3,'CRITICAL':4}
                 if order.get(finding.severity,0)>order.get(old.severity,0):

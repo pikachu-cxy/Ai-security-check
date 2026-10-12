@@ -164,7 +164,8 @@ class EvidenceBuilder:
                 'Could this credential be real or used in production? Values are redacted; do not guess validity.']
         elif kind=='dependency':
             detail={key:md.get(key) for key in ('package','package_version','ecosystem','manifest',
-                'vulnerability_id','canonical_vulnerability_id','aliases','affected_ranges','fixed_versions')}
+                'vulnerability_id','canonical_vulnerability_id','aliases','affected_ranges','fixed_versions',
+                'fixed_version_text','remediation_evidence')}
             detail.update(directness='UNKNOWN',provider=md.get('source',''),
                 original_severity=finding['severity'],advisory_title=finding['title'],
                 advisory_summary=finding['description'],

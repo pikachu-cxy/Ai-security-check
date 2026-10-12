@@ -99,6 +99,31 @@ def closeout_fixture(secret_engine, tmp_path):
     return CloseoutService(runtime, hooks), findings, run
 
 
+@pytest.mark.parametrize('unfinished', [False, True])
+def test_automatic_closeout_uses_last_actual_scope_and_preserves_unfinished_inputs(
+        secret_engine, tmp_path, unfinished):
+    from security_runtime.hook_runtime import capture_snapshot
+    service, _, _ = closeout_fixture(secret_engine, tmp_path)
+    root, path, _, _, _ = secret_engine
+    for index in range(24):
+        (root / f'unchanged{index}.ts').write_text('// previously staged fixture\n')
+    subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
+    captured = capture_snapshot(root, service.hooks.key(root))
+    state_path = service.hooks.path(root, 'codex', 'session')
+    state, _ = service.hooks.load(state_path)
+    state.update(file_digests=captured.file_digests, change_digest=captured[0], changed_files=captured[1])
+    if unfinished:
+        state['last_result']['status'] = 'PARTIAL'
+    service.hooks.save(state_path, state)
+    path.write_text('// new safe fixture content\n')
+    job = service.prepare(root, host='codex', session='session', source='HOOK_SCHEDULED_CLOSEOUT')
+    assert len(job['original_recheck_scope']) == 2
+    if unfinished:
+        assert len(job['scope_files']) == 25
+    else:
+        assert job['scope_files'] == ['fixture.ts']
+
+
 def test_other_batch_file_skip_gets_original_file_proof_and_readonly_converges(secret_engine, tmp_path, monkeypatch):
     from security_runtime.hook_runtime import HookCoordinator
     from security_runtime.hooks import HookEvent
@@ -219,6 +244,27 @@ def test_stop_budget_reconnect_busy_and_partial_code_coverage(secret_engine, tmp
     assert result['coverage'] in {'PARTIAL', 'SCOPED'}
     assert result['receipt']['risk_fix_complete']
     assert 'decision' not in reopened.stop(root, 'codex', 'session', False)
+
+
+def test_closeout_stop_uses_documented_continuation_wire_shape(secret_engine, tmp_path):
+    """Stop has no hook-specific additionalContext variant in Codex's contract.
+
+    A valid internal job is insufficient when the Host rejects its wire output.
+    Synthetic protocol regression only, not a real desktop continuation test.
+    """
+    from security_runtime.codex_mcp_hook import codex_hook_output
+    service, _, _ = closeout_fixture(secret_engine, tmp_path)
+    root = secret_engine[0]
+    result = service.stop(root, 'codex', 'session', False)
+    wire = codex_hook_output(result)
+    assert set(wire) == {'decision', 'reason'}
+    assert wire['decision'] == 'block'
+    handoff = json.loads(wire['reason'][wire['reason'].index('{'):])
+    assert handoff == result['closeout']['execution_plan']
+    assert handoff['arguments']['closeout_ref'] == result['closeout']['closeout_ref']
+    assert 'run_closeout_check' in wire['reason']
+    assert '修复权限' in wire['reason']
+    assert 'continue' not in wire
 
 
 def test_budget_exhaustion_retains_job_without_unlimited_execution(secret_engine, tmp_path):
@@ -380,3 +426,65 @@ def test_expired_closure_preserves_current_positive_detection(secret_engine, tmp
     retained, delta = service.overlay(root, families, {'families': rows})
     assert len(retained) == 2
     assert all(r['status'] == 'PERSISTING' and r['current_count'] == 1 for r in delta['families'])
+
+
+@pytest.mark.parametrize('environment_path', ['.env', '.env.local', 'config/.env.production'])
+def test_automatic_closeout_records_environment_exclusions_without_blocking(secret_engine, tmp_path, environment_path):
+    service, _, _ = closeout_fixture(secret_engine, tmp_path)
+    root = secret_engine[0]
+    environment = root / environment_path
+    environment.parent.mkdir(exist_ok=True)
+    environment.write_text('PUBLIC_FIXTURE_ONLY=example\n', encoding='utf-8')
+    first = service.stop(root, 'codex', 'session', False)
+    job = first['closeout']
+    assert first['decision'] == 'block'
+    assert environment_path not in job['scope_files']
+    assert job['scope_exclusions'] == [{'file_path': environment_path,
+                                       'reason': 'ENVIRONMENT_FILE_OUTSIDE_CLOSEOUT_SCOPE'}]
+    result = service.run(job['closeout_ref'], root)
+    assert result['status'] == 'COMPLETED', result
+    assert result['coverage'] == 'PARTIAL'
+    assert not result['receipt']['risk_fix_complete']
+    assert not result['receipt']['credential_closure_complete']
+    assert environment_path in result['user_feedback']['message']
+    assert environment.read_text(encoding='utf-8') == 'PUBLIC_FIXTURE_ONLY=example\n'
+    repeated = service.stop(root, 'codex', 'session', False)
+    assert repeated['status'] == 'ALLOW_STOP'
+    assert repeated['closeout']['closeout_ref'] == job['closeout_ref']
+
+
+def test_excluded_environment_finding_keeps_original_risk_unconfirmed(secret_engine, tmp_path, monkeypatch):
+    from security_runtime.risk_closure import original_family
+    from security_runtime.verification import VerificationService
+    service, findings, _ = closeout_fixture(secret_engine, tmp_path)
+    root = secret_engine[0]
+    (root / '.env').write_text('PUBLIC_FIXTURE_ONLY=example\n', encoding='utf-8')
+    state_path = service.hooks.path(root, 'codex', 'session')
+    snapshot, _ = service.hooks.load(state_path)
+    excluded = original_family(asdict(findings[0]) | {'file_path': '.env'})
+    snapshot['families'][excluded['equivalence_key']] = excluded
+    service.hooks.save(state_path, snapshot)
+    original_verify = VerificationService.verify_many
+    def eligible_only(self, workspace, members, context):
+        assert all(m['file_path'] != '.env' for m in members)
+        return original_verify(self, workspace, members, context)
+    monkeypatch.setattr(VerificationService, 'verify_many', eligible_only)
+    job = service.prepare(root, host='codex', session='session', source='HOOK_SCHEDULED_CLOSEOUT')
+    result = service.run(job['closeout_ref'], root)
+    assert result['status'] == 'COMPLETED', result
+    assert result['risk_status'] == 'UNCONFIRMED_OR_PRESENT'
+    assert any(row['file_path'] == '.env' and row['rule_id'] == excluded['rule_id']
+               for row in result['pending_recheck'])
+    persisted, _ = service.hooks.load(state_path)
+    remaining, _ = service.closures.overlay(root, persisted['families'], persisted['last_result']['delta'])
+    assert excluded['equivalence_key'] in remaining
+    assert not result['receipt']['credential_closure_complete']
+
+
+def test_explicit_environment_closeout_remains_rejected(secret_engine, tmp_path):
+    service, _, _ = closeout_fixture(secret_engine, tmp_path)
+    root = secret_engine[0]
+    (root / '.env').write_text('PUBLIC_FIXTURE_ONLY=example\n', encoding='utf-8')
+    with pytest.raises(ValueError, match='Environment files are outside this closeout request'):
+        service.prepare(root, ['.env'])
+    assert not service._store(root).path.exists()
