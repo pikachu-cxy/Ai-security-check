@@ -84,6 +84,21 @@ def test_default_no_blind_retry_and_failure_preserves_old_cache(database, monkey
     assert [e['event'] for e in events] == ['DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_FAILED']
 
 
+def test_extended_budget_is_used_by_one_attempt_without_a_hidden_five_minute_cap(database, monkeypatch):
+    manager, _, _, _ = database
+    calls = []
+    def execute(args, **kwargs):
+        calls.append((args, kwargs))
+        return ProcessResult(1, '', 'unexpected EOF', 1)
+    monkeypatch.setattr('security_runtime.toolchain.run_process', execute)
+    with preparation_budget(600):
+        manager.prepare_trivy_database('trivy.exe')
+    assert len(calls) == 1
+    args, options = calls[0]
+    assert 590 < options['timeout'] <= 600
+    assert 590 < float(args[args.index('--timeout') + 1].removesuffix('s')) <= 600
+
+
 def test_explicit_retry_reports_attempt_then_success_and_activates_only_valid_data(database, monkeypatch):
     manager, cache, before, write = database
     calls, events = [], []

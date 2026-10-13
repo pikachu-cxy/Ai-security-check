@@ -20,7 +20,7 @@
 在项目根目录 `C:\Users\24170\Desktop\AI-security-check`，将 `$bundle` 指向本批报告记录的新目录，避免使用旧会话中的变量：
 
 ```powershell
-$bundle = (Resolve-Path 'dist/install-flow-20261013-r1/security-check').Path
+$bundle = (Resolve-Path 'dist/install-flow-20261013-r2/security-check').Path
 $exe = Join-Path $bundle 'security-check.exe'
 & $exe runtime-info --json
 & $exe install codex --bundle $bundle --json
@@ -39,8 +39,8 @@ $LASTEXITCODE
 ## 开发者隔离验收
 
 ```powershell
-& $python scripts/install_flow_acceptance.py --bundle $bundle --output artifacts/install-flow-20261013/frozen-r1
-& $python scripts/closeout_mcp_acceptance.py --executable "$bundle/security-check.exe" --engine-root artifacts/closeout-20261012/mcp-engines --output artifacts/install-flow-20261013/mcp-r1
+& $python scripts/install_flow_acceptance.py --bundle $bundle --output artifacts/install-flow-20261013/frozen-r2
+& $python scripts/closeout_mcp_acceptance.py --executable "$bundle/security-check.exe" --engine-root artifacts/closeout-20261012/mcp-engines --output artifacts/install-flow-20261013/mcp-r2
 ```
 
 第一项使用隔离的中文/空格目录、真实安装包与普通 MCP，验证程序安装和未就绪拆分、重复安装幂等、只读检查以及包身份；不触碰真实宿主配置。可额外传入 `--tool-root` 和 `--cached-db`，复制公开旧漏洞库到隔离缓存并执行限时真实网络诊断。短预算诊断未完成不算完整在线准备通过；成功、失败、缓存保留和耗时须按真实输出记录。

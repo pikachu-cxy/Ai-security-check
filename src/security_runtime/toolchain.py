@@ -880,7 +880,7 @@ class ToolManager:
                         budget.report(dict(event='DOWNLOAD_PROGRESS', component='vulnerability_db',
                             received_bytes=counts[0], total_bytes=counts[1], attempt=attempt + 1, max_attempts=max_attempts))
             try:
-                seconds = bounded_timeout(300 if budget else 900)
+                seconds = bounded_timeout(budget.seconds if budget else 900)
                 if budget:
                     if attempt:
                         budget.report(dict(event='DOWNLOAD_RETRY', component='vulnerability_db', attempt=attempt + 1, max_attempts=max_attempts))
