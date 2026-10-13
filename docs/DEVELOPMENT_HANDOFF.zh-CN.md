@@ -10,6 +10,11 @@
 不要照旧通过重装来刷新数据。新构建、回归和隔离验收以开发进度中的本批记录为准；
 完整本地操作见 [安装验收](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
 
+本批最终包为 `dist/install-flow-20261013-r3/security-check`，构建 `e09cf28b…`，
+冻结源码 `8bd960b…`。279 项相关回归、最终包隔离安装/普通 MCP/ZIP 基础检查通过；
+真实组件下载有传输量和校验，完整漏洞库在线准备及真实桌面自动 Hook 尚未通过。
+程序 ZIP 和缓存不随 Git 同步；另一台电脑按下文构建源码，或通过允许的方式带本地 ZIP。
+
 ## 本批源码已完成
 
 1. 修正 Codex Stop 输出，只使用官方规定的继续执行决定和说明，携带原结束检查计划。
@@ -78,8 +83,8 @@ git log -1 --oneline
 
 需要 Git、Python 3.12 和可用的开发依赖下载源；独立程序打包还需 Windows GCC，或者
 下文所述经过校验的现有完整程序包。按公司允许的方式准备这些依赖。
-项目支持 Python 3.12 及以上，本批实际开发/打包使用 3.13.9；复现同一开发环境时将
-下方 `py -3.12` 改为 `py -3.13`。运行时自己管理的检查器环境独立于此开发环境。
+项目支持 Python 3.12 及以上，安装优化批次实际开发/打包使用 Python 3.12.10；此前
+2026-10-12 批次使用 3.13.9。运行时自己管理的检查器环境独立于此开发环境。
 
 ```powershell
 py -3.12 -m venv .venv
@@ -98,8 +103,13 @@ if ($LASTEXITCODE -ne 0) { throw '回归失败，先核对失败证据' }
 ## 构建并安装当前源码
 
 源码拉取不会自动替换已经安装或正在连接的 Runtime。先构建新的独立目录：
+打包前使用普通安装保留完整许可证元数据，并移除测试用的 `PYTHONPATH=src`；开发可编辑
+安装的元数据不能代替构建许可清单。本批曾由这项检查拒绝构建，失败目录保留。
 
 ```powershell
+Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue
+.\.venv\Scripts\python.exe -m pip install --no-deps --force-reinstall .
+if ($LASTEXITCODE -ne 0) { throw '构建用安装失败' }
 $tag = 'dev-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 .\.venv\Scripts\python.exe .\scripts\build_standalone.py --output-dir "dist/$tag" --work-dir "build/$tag"
 if ($LASTEXITCODE -ne 0) { throw '构建失败，不能安装旧目录冒充当前源码' }

@@ -22,9 +22,48 @@
 普通 MCP 两条原凭据规则分别关闭，重连幂等、新编辑失效通过；代码覆盖仍为部分。
 ZIP 基础验收通过，未启用全扫描器发行验收。
 
-最终独立目录为 `dist/install-flow-20261013-r3/security-check`；修正验收脚本的实际 MCP
-字段并补齐失败回执保存，更新短目录步骤后再冻结。本轮不替换正在连接的全局 Runtime，
-真实桌面自动链路仍尚未通过，用户聊天提示延迟未测得。完整操作见 [安装步骤](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
+最终独立目录为 `dist/install-flow-20261013-r3/security-check`。冻结源码：
+`8bd960b30a448b0b7b72265c7589135717d9a889`，工作区干净，`source_dirty=false`。
+Runtime 0.3.2；构建标识：
+`e09cf28b570db433bf61b55e67e9d28221d2af282fd05079e6989142fb6e102a`。
+Python 3.12.10 / PyInstaller 6.22.3；322 个包文件摘要核对通过。
+修正验收脚本的实际 MCP 字段、补齐失败回执保存并更新短目录步骤后重新冻结。
+
+本地 ZIP：`dist/experience/ai-security-runtime-v0.3.2-install-flow-20261013-r3-windows-x64.zip`。
+SHA-256：`dbcb72eb317fbceeda657ca68acb52fca020aad12a2ac5f572faf0c231ef91b0`。
+
+| 最终 r3 验收 | 实际结果 | 边界 |
+| --- | --- | --- |
+| 真实隔离安装 | 首次 18.140 秒；重复 10.172 秒；首条进度 0.234 秒 | 本地安装完成、扫描缺失分别表达；不等待联网；配置/Hook/Skill 字节与修改时间幂等 |
+| 只读就绪核对 | 5.594 秒；未就绪返回 2 | 未安装检查器和过期库继续显示真实状态，无网络下载 |
+| 真实普通 MCP | 24 项工具、Runtime 身份和专业指导校验通过 | 通过安装后的固定启动器执行，不等于实际宿主加载 |
+| 凭据收尾普通 MCP | 两条原规则分别关闭，重连复用，新编辑使旧证明失效 | 收尾 5.943 秒，关闭确认 0.478 秒；代码覆盖为部分；人工独立复查和手动收尾，不是自动 Hook |
+| 真实公开组件下载 | 官方 Gitleaks 8.12 MiB 的实际传输量与校验通过 | 同一 r3 包、隔离缺失组件场景；无伪造百分比 |
+| 真实数据准备失败恢复 | 120 秒总预算内，约 44.313 秒返回无进展；过期旧库 SHA-256 不变 | 三组件已就绪，漏洞库停在 `mirror.gcr.io`；整体未就绪返回 2；完整在线准备尚未通过 |
+| ZIP 基础验收 | 通过 | 入口、冻结 MCP、隔离归属/配置、完整性及篡改拒绝；未启用全扫描器发行验收 |
+| 真实桌面自动链路 | 尚未通过 | 未替换全局安装，没有真实同步 Hook 或自动 Stop 耗时；用户聊天提示延迟未测得 |
+
+当前会话真实 MCP 仍为 `be0d4367…`；既有安装指针为 `69b4bc6a…`，旧版本仍保留。
+未采集新包的真实宿主 Hook 执行，不能将安装指针或隔离 MCP 写成真实 Hook 构建已匹配。
+原始验收保存在本机 `artifacts/if-r5/result.json`、
+`artifacts/install-flow-20261013/mcp-r3/results.json`、`r3-engine-result.json` / `r3-engine-progress.txt`
+及 `artifacts/install-diagnosis-20261013/regression-final.xml`；ZIP 验证 JSON 在归档旁。
+这些原始输出和程序包不随 Git 同步，GitHub 同步源码、测试、归纳结果及接续规划。
+完整本地操作见 [安装步骤](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
+
+本批修改共 29 个文件：
+
+| 范围 | 文件 |
+| --- | --- |
+| Runtime（8） | `cli.py`、`diagnostics.py`、`install_progress.py`、`install_readiness.py`、`personal_install.py`、新增 `preparation_budget.py`、`processes.py`、`toolchain.py`，均位于 `src/security_runtime/` |
+| 构建/真实验收（2） | `scripts/build_standalone.py`、新增 `scripts/install_flow_acceptance.py` |
+| 回归（7） | `tests/test_diagnostics.py`、`test_install_readiness.py`、新增 `test_install_split_flow.py`、`test_install_stage_transport.py`、`test_personal_install.py`、`test_personal_install_readiness.py`、新增 `test_preparation_download.py` |
+| 文档（12） | 两份根 README；`docs/` 下开发交接、开发进度、安装验收、近期开发计划、个人安装指南、产品规划、项目上下文、文档索引及两份 Windows 体验说明 |
+
+优化前原组 5 个回归失败，延长预算追加用例修前 1 个失败；修后最终相关组 279 项通过。
+覆盖默认安装不下载、分开退出码、CR 实时进度、超时/无进展终止、默认不重试、显式有限
+重试、预算共用、锁忙、取消和进程清理、旧库保留及无效新库不激活。
+诊断夹具同步修正为当前有效引擎文件与 SARIF 格式，没有改变生产扫描规则。
 
 验收暴露既有 Windows 路径限制：深层安装版本槽缺失包文件、深层 TEMP 下 Semgrep
 返回失败；短路径复验通过。失败现场保留，后续应补路径预检与明确恢复提示。
