@@ -131,15 +131,17 @@ It installs the program, global connection and Skill, and checks existing caches
 security-check install codex
 ```
 
-Prepare scanners and public data separately; retry preparation without reinstalling:
+Installation automatically starts detached preparation and returns without waiting
+for downloads. No prerequisite command is needed. Optional progress/status viewing:
 
 ```bash
-security-check prepare-scanners
-security-check prepare-scanners --status --json
+security-check preparation watch
+security-check preparation status --json
 ```
 
 Preparation reuses compatible caches and product-pinned engines. It never installs
-project dependencies or executes project code. The default total budget is 300 seconds;
+project dependencies or executes project code. The initial budget is 300 seconds;
+real byte progress may extend it up to the absolute 1800-second limit;
 database transfers stop after 30 seconds without byte progress. Whole-download retries
 are disabled by default. Explicit `--timeout 600 --idle-timeout 60 --retries 1`
 permits one extra attempt within the same total budget. Progress comes from observed
@@ -159,8 +161,11 @@ security-check install codex --offline
 Installation always checks caches without downloads. `prepare-scanners --offline`
 or `--status` checks existing components/data only. Missing, damaged or expired
 assets remain incomplete. `setup codex` configures the connection and Skill only.
-Quick dependency checks and automatic Hooks remain offline. There is no background
-data-update scheduler. See the [installation acceptance guide](docs/INSTALL_FLOW_ACCEPTANCE.zh-CN.md).
+Quick dependency checks and automatic Hooks remain offline. While preparation runs,
+scans use available local components and retain missing checks in saved closeouts.
+The worker resumes registered closeouts through ordinary MCP, with current-version
+and generation checks. This is install-triggered preparation, not a periodic update
+scheduler. See the [background acceptance guide](docs/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md).
 
 ## 2. Run your first CLI scan
 
@@ -191,7 +196,7 @@ Then scan:
 security-check scan --mode quick
 ```
 
-Codex users run `prepare-scanners` separately to prepare default tools and vulnerability data. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; retry preparation without reinstalling. Downloads are verified before use and do not require a system-wide PATH change.
+Codex installation prepares default tools and vulnerability data automatically in the background. While it runs, scans only reuse available local components, and saved closeouts retain missing checks for automatic continuation. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; retry background preparation without reinstalling. Downloads are verified before use and do not require a system-wide PATH change.
 
 A successful test should:
 
@@ -507,7 +512,7 @@ security-check mcp config --copy
 
 ### Managed security tools
 
-Codex users install or update the program with `security-check install codex` and prepare scanning with `security-check prepare-scanners`.
+Codex users install or update with `security-check install codex`; preparation starts automatically in the background.
 These lower-level commands are available for diagnostics and advanced tool
 management:
 
@@ -657,8 +662,8 @@ security-check doctor --path <project>
 
 ### A scanner is missing
 
-For Codex protection, run `security-check prepare-scanners` to prepare the
-product's default engines and vulnerability data together. Online manual scan
+Codex installation automatically prepares default engines and vulnerability data.
+Use `security-check preparation retry` after a failed attempt. Online manual scan
 flows can also prepare tools required by their scan plan; automatic Hooks and
 quick dependency checks only reuse local assets.
 

@@ -43,6 +43,9 @@ def projects(tmp_path, monkeypatch):
 
 @pytest.fixture
 def installed(projects, tmp_path, monkeypatch):
+    # Installation unit fixtures never start real detached download processes.
+    monkeypatch.setattr('security_runtime.personal_install.start_background_preparation',
+        lambda *args, **kwargs: {'status': 'QUEUED', 'ready': False})
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setenv('SECURITY_RUNTIME_SKILLS_DIR', str(tmp_path / 'skills'))
     probe = lambda *args: check_capabilities(runtime_info(), REQUIRED_TOOLS)
@@ -593,7 +596,7 @@ def test_manual_runtime_keeps_full_registry_while_hook_stays_core(installed, pro
         from security_runtime.scanners import ScannerRegistry
         assert manual_names == {a.name for a in ScannerRegistry().adapters}
         assert len(manual_names) > len(hook_names)
-        assert hook_names == {'semgrep', 'gitleaks', 'trivy-vuln'}
+        assert hook_names == {'semgrep', 'native-js-function', 'gitleaks', 'trivy-vuln'}
         assert {a.name for a in core.runtime.registry.fallback_adapters} == {'osv-scanner'}
         assert instances[0].store.path == core.runtime.store.path
         assert child._tool_manager.get_tool('scan_project') is not None

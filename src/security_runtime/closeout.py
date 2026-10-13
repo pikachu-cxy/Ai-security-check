@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict
 import os
+import sqlite3
 from pathlib import Path
 from time import perf_counter
 
@@ -170,7 +171,18 @@ class CloseoutService:
         else:
             job = store.prepare(self._workspace(root), scope, revision, plan, source_scan_id=source_scan_id,
                                 deferred=deferred, details=details)
-        return self._present(root, job)
+        result = self._present(root, job)
+        from .background_preparation import PreparationStore, current_preparation
+        preparation = current_preparation()
+        if preparation['status'] in {'QUEUED', 'PREPARING', 'RESUMING'} and not (job['status'] == 'COMPLETED' and result['current_version']):
+            try:
+                queued = PreparationStore().enqueue(root, job['closeout_ref'], self.hooks,
+                    self.build['build_id'], self.runtime.store.path.parent, job['generation'])
+                result['waiting_for_preparation'] = queued and not preparation.get('ready')
+                result['background_registered'] = queued
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                result['background_registered'] = False
+        return result
 
     def _present(self, root, job):
         current = (self._revision(root, job['scope_files']) == job['prepared_revision'] and
@@ -184,7 +196,10 @@ class CloseoutService:
             current = current and job['receipt']['generation'] == job['generation'] and job['receipt']['current_version']
         resolved = {r['finding_id'] for r in (job.get('receipt') or {}).get('risk_verification', [])
                     if current and r['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'}
+        from .background_preparation import current_preparation
+        preparation = current_preparation()
         return {k: job[k] for k in ('closeout_ref', 'generation', 'status', 'coverage', 'attempts', 'reason', 'receipt')} | {
+            'background_preparation': preparation,
             'workspace': str(root), 'current_version': current, 'pending_new_events': pending_new,
             'source': job['details']['source'], 'scope_files': job['scope_files'],
             'scope_exclusions': details.get('scope_exclusions', []),
@@ -213,6 +228,16 @@ class CloseoutService:
         job = store.get(ref, self._workspace(root))
         if job is None:
             raise ValueError('Closeout does not belong to this workspace')
+        from .background_preparation import current_preparation, PreparationStore, preparation_message
+        preparation = current_preparation()
+        if preparation['status'] in {'QUEUED', 'PREPARING'} and not preparation.get('ready'):
+            try:
+                registered = PreparationStore().enqueue(root, ref, self.hooks, self.build['build_id'], self.runtime.store.path.parent, job['generation'])
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                registered = False
+            return self._present(root, job) | {'waiting_for_preparation': True, 'background_registered': registered,
+                'reason': 'WAITING_FOR_SCAN_PREPARATION', 'automatic_retry': False,
+                'user_feedback': {'message': preparation_message(preparation) + ' 缺失项保留待检；准备完成后接续原任务。', 'choices': []}}
         details = job['details']
         if details.get('session_key'):
             pending = self.hooks.pending_activity(root, details['host'], details['session'])
@@ -267,6 +292,7 @@ class CloseoutService:
                 if exclusions and coverage in {'FULL', 'SCOPED'}:
                     coverage = 'PARTIAL'
                 receipt = {'contract': 'closeout-receipt-v1', 'generation': job['generation'],
+                    'execution_origin': 'BACKGROUND_PREPARATION_MCP' if os.getenv('SECURITY_RUNTIME_BACKGROUND_RESUME') == '1' else 'HOST_MCP',
                     'closeout_ref': ref, 'source': details['source'], 'scope_revision_before': revision,
                     'scope_revision_after': after, 'current_version': fresh, 'scan_id': scan_id,
                     'scan_hash': digest(self.hooks.key(root), self.runtime.store.get_scan(scan_id)),
@@ -337,6 +363,10 @@ class CloseoutService:
         job = self.prepare(root, host=host, session=session, source='HOOK_SCHEDULED_CLOSEOUT')
         if job['status'] == 'COMPLETED' and job['current_version']:
             return {'status': 'ALLOW_STOP', 'closeout': job}
+        if job.get('waiting_for_preparation'):
+            from .background_preparation import preparation_message
+            return {'status': 'ALLOW_STOP_PENDING', 'closeout': job,
+                'systemMessage': preparation_message(job['background_preparation']) + ' 可用组件继续检查；缺失项保留待检，不阻塞编码。'}
         if active or job['attempts'] >= MAX_ATTEMPTS or not store.dispatch(job['closeout_ref'], self._workspace(root)):
             return {'status': 'ALLOW_STOP_PENDING', 'closeout': job,
                     'systemMessage': '收尾检查尚未完成，待检任务已保留；本次停止不会认定风险已关闭。'}

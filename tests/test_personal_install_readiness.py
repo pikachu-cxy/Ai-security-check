@@ -180,7 +180,7 @@ def test_install_cli_truthfully_reports_scan_readiness_in_one_json_receipt(monke
     assert json.loads(output.out) == data and len(output.out.splitlines()) == 1
     assert calls[0]["offline"] is True
     if not ready:
-        assert "检查尚未准备完成" in output.err
+        assert "扫描能力准备状态" in output.err
         assert "本地安装完成" in output.err
     assert "READY" not in output.err and "PARTIAL" not in output.err
 

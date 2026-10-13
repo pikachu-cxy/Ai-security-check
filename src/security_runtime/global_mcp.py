@@ -17,7 +17,7 @@ from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
-GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance'}
+GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance', 'get_scan_preparation_status'}
 LIMIT = 16
 MAX_SESSIONS = 64
 
@@ -278,6 +278,11 @@ def create_global_server(*, workspaces=None):
             from .professional_guidance import get_professional_guidance
             guide = get_professional_guidance()
             return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
+        if name == 'get_scan_preparation_status':
+            from .background_preparation import current_preparation, preparation_message
+            value = current_preparation()
+            value['message'] = preparation_message(value)
+            return CallToolResult(structuredContent=value, content=[TextContent(type='text', text=json.dumps(value))])
         handler_entered = False
         binding_stage = 'RESOLVING_ROOT'
         try:

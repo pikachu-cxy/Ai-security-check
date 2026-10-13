@@ -3,7 +3,9 @@ from __future__ import annotations
 import time
 import uuid
 import logging
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
+from contextlib import nullcontext
 from contextvars import copy_context
 from dataclasses import replace
 from pathlib import Path
@@ -62,8 +64,12 @@ class SecurityRuntime:
         self.store = store or SQLiteStore()
 
     def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None, _hook_dependency_changes=None) -> ScanResult:
+        from .background_preparation import current_preparation, ACTIVE
+        from .verification_policy import local_recheck
+        preparation = current_preparation()
+        preparing = preparation['status'] in ACTIVE and not preparation.get('ready')
         reporter = progress or NullProgressReporter()
-        with progress_context(reporter):
+        with progress_context(reporter), (local_recheck() if preparing else nullcontext()):
             try:
                 if staged:
                     workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
@@ -75,8 +81,25 @@ class SecurityRuntime:
                     git = GitService(workspace.path)
                     with index_projection(git) as projection:
                         return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer, projection, _hook_dependency_changes)
-                return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer,
-                                  dependency_changes=_hook_dependency_changes)
+                result = self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer,
+                                    dependency_changes=_hook_dependency_changes)
+                if preparing:
+                    from .background_preparation import preparation_message
+                    result.background_preparation = preparation | {'message': preparation_message(preparation),
+                        'execution_policy': 'AVAILABLE_LOCAL_COMPONENTS_ONLY', 'missing_checks': 'PENDING'}
+                    if _hook_scope is None and mode == 'quick' and not staged and not rules_path:
+                        from .closeout import CloseoutService
+                        try:
+                            job = CloseoutService(self).prepare(result.target_profile.path, source_scan_id=result.scan_id,
+                                source='MANUAL_QUICK_PREPARATION_PENDING')
+                            result.background_preparation['closeout_ref'] = job['closeout_ref']
+                            result.background_preparation['background_registered'] = job.get('background_registered', False)
+                        except (ValueError, OSError, sqlite3.DatabaseError):
+                            # Registration limits/errors must never discard the
+                            # already persisted available-component results.
+                            result.background_preparation.update(background_registered=False,
+                                pending_source_scan_id=result.scan_id, pending_reason='CLOSEOUT_REGISTRATION_INCOMPLETE')
+                return result
             except (KeyboardInterrupt, ScanCancelled):
                 reporter.cancel()
                 emit('SCAN_CANCELLED')

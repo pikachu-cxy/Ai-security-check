@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "purpose": "Static isolated manual Hook demonstrations; never run the sample applications.",
+  "projects": [
+    {
+      "language": "java",
+      "cases": [
+        {
+          "id": "01",
+          "title": "关闭主机名校验",
+          "file": "src/TlsDemo.java",
+          "expected_rule": "ai-security.java.trust-all-hostname",
+          "basis": "tests/rule_program/tls-lambda.java",
+          "safe": "import javax.net.ssl.HttpsURLConnection;\n\nclass TlsDemo {\n    void configure(HttpsURLConnection connection) {\n        connection.setConnectTimeout(1000);\n    }\n}\n",
+          "risky": "import javax.net.ssl.HttpsURLConnection;\n\nclass TlsDemo {\n    void configure(HttpsURLConnection connection) {\n        connection.setConnectTimeout(1000);\n        connection.setHostnameVerifier((hostname, session) -> true);\n    }\n}\n",
+          "restore_note": "删除绕过校验的行，恢复默认检查。"
+        },
+        {
+          "id": "02",
+          "title": "SQL 文本拼接",
+          "file": "src/UserLookup.java",
+          "expected_rule": "ai-security.java.jdbc-statement",
+          "basis": "tests/rule_program/sqli-executequery.java",
+          "safe": "import javax.servlet.http.HttpServletRequest;\nimport java.sql.Connection;\nimport java.sql.PreparedStatement;\nimport java.sql.Statement;\n\nclass UserLookup {\n    void lookup(HttpServletRequest request, Statement statement,\n                Connection connection) throws Exception {\n        PreparedStatement query = connection.prepareStatement(\"SELECT name FROM users WHERE id=?\");\n        query.setString(1, request.getParameter(\"id\"));\n        query.executeQuery();\n    }\n}\n",
+          "risky": "import javax.servlet.http.HttpServletRequest;\nimport java.sql.Connection;\nimport java.sql.PreparedStatement;\nimport java.sql.Statement;\n\nclass UserLookup {\n    void lookup(HttpServletRequest request, Statement statement,\n                Connection connection) throws Exception {\n        String id = request.getParameter(\"id\");\n        statement.executeQuery(\"SELECT name FROM users WHERE id=\" + id);\n    }\n}\n",
+          "restore_note": "恢复固定 SQL 和 PreparedStatement 参数绑定。"
+        }
+      ]
+    },
+    {
+      "language": "python",
+      "cases": [
+        {
+          "id": "01",
+          "title": "关闭证书校验",
+          "file": "src/http_client.py",
+          "expected_rule": "ai-security.python.tls-verification-disabled",
+          "basis": "tests/rules/python/tls-verification-disabled.py",
+          "safe": "import requests\n\n\ndef fetch_document():\n    return requests.get(\"https://example.invalid\", verify=True)\n",
+          "risky": "import requests\n\n\ndef fetch_document():\n    return requests.get(\"https://example.invalid\", verify=False)\n",
+          "restore_note": "恢复 verify=True 或默认检查。"
+        },
+        {
+          "id": "02",
+          "title": "SQL 文本拼接",
+          "file": "src/user_lookup.py",
+          "expected_rule": "ai-security.python.sql-injection",
+          "basis": "tests/rules/python/sql-injection.py",
+          "safe": "import flask\n\n\ndef lookup(cursor):\n    value = flask.request.args.get(\"id\")\n    cursor.execute(\"SELECT name FROM users WHERE id=%s\", (value,))\n",
+          "risky": "import flask\n\n\ndef lookup(cursor):\n    value = flask.request.args.get(\"id\")\n    cursor.execute(\"SELECT name FROM users WHERE id=\" + value)\n",
+          "restore_note": "%s 是此 fixture 的形式，真实驱动的占位符可能不同，例如 SQLite 使用 ?。"
+        }
+      ]
+    },
+    {
+      "language": "javascript",
+      "cases": [
+        {
+          "id": "01",
+          "title": "动态 JavaScript 执行",
+          "file": "src/expressionEvaluator.js",
+          "expected_rule": "ai-security.javascript.dynamic-function",
+          "basis": "tests/test_dynamic_function.py",
+          "safe": "export function evaluateExpression(expression) {\n    return Number(expression);\n}\n",
+          "risky": "export function evaluateExpression(expression) {\n    const compute = new Function(`return (${expression});`);\n    return compute();\n}\n",
+          "restore_note": "Number 只做数值转换，不承诺保留任意表达式功能；真实修复需确认语法并验证。"
+        },
+        {
+          "id": "02",
+          "title": "SQL 文本拼接",
+          "file": "src/users.js",
+          "expected_rule": "ai-security.javascript.sql-injection",
+          "basis": "tests/rules/javascript/sql-injection.js",
+          "safe": "const express = require(\"express\");\nconst pg = require(\"pg\");\nconst app = express();\nconst pool = new pg.Pool({});\n\napp.get(\"/users\", (req, res) => {\n    const name = req.query.name;\n    pool.query(\"SELECT id FROM users WHERE name=$1\", [name]);\n});\n",
+          "risky": "const express = require(\"express\");\nconst pg = require(\"pg\");\nconst app = express();\nconst pool = new pg.Pool({});\n\napp.get(\"/users\", (req, res) => {\n    const name = req.query.name;\n    pool.query(\"SELECT id FROM users WHERE name='\" + name + \"'\");\n});\n",
+          "restore_note": "使用固定 SQL 和独立参数，不连接数据库。"
+        }
+      ]
+    },
+    {
+      "language": "typescript",
+      "cases": [
+        {
+          "id": "01",
+          "title": "动态 JavaScript 执行",
+          "file": "src/expressionEvaluator.ts",
+          "expected_rule": "ai-security.javascript.dynamic-function",
+          "basis": "tests/test_dynamic_function.py",
+          "safe": "export function evaluateExpression(expression: string): number {\n    return Number(expression);\n}\n",
+          "risky": "export function evaluateExpression(expression: string): unknown {\n    const compute = new Function(`return (${expression});`);\n    return compute();\n}\n",
+          "restore_note": "Number 只做数值转换，不承诺保留任意表达式功能；真实修复需确认语法并验证。"
+        },
+        {
+          "id": "02",
+          "title": "SQL 文本拼接",
+          "file": "src/users.ts",
+          "expected_rule": "ai-security.javascript.sql-injection",
+          "basis": "tests/rules/javascript/sql-injection.ts",
+          "safe": "const express = require(\"express\");\nconst pg = require(\"pg\");\nconst app = express();\nconst pool = new pg.Pool({});\n\napp.get(\"/users\", (req: any, res: any) => {\n    const name = req.query.name;\n    pool.query(\"SELECT id FROM users WHERE name=$1\", [name]);\n});\n",
+          "risky": "const express = require(\"express\");\nconst pg = require(\"pg\");\nconst app = express();\nconst pool = new pg.Pool({});\n\napp.get(\"/users\", (req: any, res: any) => {\n    const name = req.query.name;\n    pool.query(\"SELECT id FROM users WHERE name='\" + name + \"'\");\n});\n",
+          "restore_note": "使用固定 SQL 和独立参数，不连接数据库。"
+        }
+      ]
+    }
+  ]
+}
+

@@ -244,6 +244,12 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
     install_parser.add_argument('--offline', action='store_true', help='Verify existing components and data without downloading')
     install_parser.add_argument('--json', action='store_true')
+    background_parser = sub.add_parser('preparation', help='View automatic background preparation or retry it without reinstalling')
+    background_parser.add_argument('action', choices=['status', 'watch', 'retry'], default='status', nargs='?')
+    background_parser.add_argument('--json', action='store_true')
+    worker_parser = sub.add_parser('preparation-worker', help=argparse.SUPPRESS)
+    worker_parser.add_argument('--job', required=True)
+    worker_parser.add_argument('--ticket', required=True)
     for preparation_command in ('prepare-scanners', 'prepare-installation'):
         preparation_parser = sub.add_parser(preparation_command,
             help='Prepare scanners and public vulnerability data independently of installation' if preparation_command == 'prepare-scanners' else argparse.SUPPRESS)
@@ -335,6 +341,15 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'preparation-worker':
+            from .background_preparation import run_worker
+            return run_worker(args.job, args.ticket)
+        if args.command == 'preparation':
+            from .background_preparation import current_preparation, start_background_preparation, watch_preparation, preparation_message
+            data = (start_background_preparation() if args.action == 'retry' else
+                    watch_preparation() if args.action == 'watch' else current_preparation())
+            print(json.dumps(data, ensure_ascii=True) if args.json else preparation_message(data))
+            return 0 if data.get('ready') or data['status'] in {'QUEUED', 'PREPARING', 'RESUMING'} else 2
         if args.command in {'prepare-installation', 'prepare-scanners'}:
             from .install_readiness import prepare_installation_readiness
             from .install_progress import child_preparation_progress, InstallationProgress

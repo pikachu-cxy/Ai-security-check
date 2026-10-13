@@ -358,6 +358,7 @@ def runtime_info(*, remediation_config=None):
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',
                          'personal_installation': 'personal-install-v1',
+                         'background_scan_preparation': 'background-preparation-v1; AVAILABLE_LOCAL_CHECKS_AND_SAVED_CLOSEOUT_MCP',
                          'configuration_recovery': 'v1',
                          'task_fix_verify': 'v0.1', 'finding_equivalence': 'eq-v1',
                          'secret_rule_file_recheck': 'gitleaks-rule-file-v1; DEFAULT_CONFIG_BOUNDED_SCOPE',

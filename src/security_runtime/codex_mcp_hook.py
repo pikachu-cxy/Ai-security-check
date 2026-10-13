@@ -149,7 +149,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     if 'scanner_diagnostics' in result:
         summary['scanner_diagnostics'] = result['scanner_diagnostics']
     for key in ('current_dependency_finding_ids', 'dependency_user_feedback', 'capabilities', 'dependency_check_reason', 'target_selection', 'unattributed_code_risk_count',
-                'code_check_scope', 'scan_scope_notice', 'deferred_code_providers'):
+                'code_check_scope', 'scan_scope_notice', 'deferred_code_providers', 'background_preparation'):
         if key in result:
             summary[key] = result[key]
     if 'reason' in result:
@@ -231,6 +231,10 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     from .hook_reply_context import render_hook_context
     output['hookSpecificOutput']['additionalContext'] = render_hook_context(
         summary, decision, output.get('systemMessage', ''))
+    if result.get('background_preparation'):
+        note = result['background_preparation']['message'] + ' 可用组件按本次实际结果说明；缺失项保留待检，不代表安全。'
+        output['systemMessage'] = (output.get('systemMessage', '') + '\n' + note).strip()
+        output['hookSpecificOutput']['additionalContext'] += '\n' + note
     return {**summary, **output}
 
 

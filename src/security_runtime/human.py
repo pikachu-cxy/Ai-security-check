@@ -48,6 +48,7 @@ def diagnostic_zh(data, *, retry=''):
 def render_scan(result, *, verbose=False):
     from .target import selection_summary
     selection = selection_summary(result.target_profile)
+    preparation_note = getattr(result, 'background_preparation', {}).get('message', '')
     exclusions = []
     if selection['excluded_count']:
         exclusions = ['', f"文件范围：{selection['selected_files']} 个目标；排除 {selection['excluded_count']} 个不支持的二进制文档。",
@@ -57,7 +58,7 @@ def render_scan(result, *, verbose=False):
             if selection['exclusions_truncated']:
                 exclusions.append('完整排除记录见 CLI JSON 扫描快照。')
     if result.execution_state in {'NO_CHANGES', 'NOT_APPLICABLE'}:
-        return f'AI Security Check\n\n{result.summary}\n状态：{result.execution_state}\n耗时：{result.duration_ms} ms' + '\n'.join(exclusions)
+        return f'AI Security Check\n\n{result.summary}\n状态：{result.execution_state}\n耗时：{result.duration_ms} ms' + '\n'.join(exclusions) + ('\n'+preparation_note if preparation_note else '')
     from .triage_models import category, dependency_groups, iac_classification
     raw=[finding.__dict__ for finding in result.findings]
     lines = ['AI Security Check', '',
@@ -66,6 +67,8 @@ def render_scan(result, *, verbose=False):
         ('部分问题需要结合代码和运行环境进一步确认。' if result.findings else
          '结果仅表示本次已执行规则的匹配情况，不能证明项目安全。'), '']
     lines += exclusions
+    if preparation_note:
+        lines += [preparation_note, '可用组件继续检查；缺失项保留待检，后台准备完成后接续原收尾任务。']
     for key,label in [('code','代码安全'),('secret','敏感信息'),('dependency','依赖漏洞'),('iac','配置安全')]:
         count=sum(category(f)==key for f in raw)
         if count or verbose: lines.append(f'{label}：{count}')
@@ -130,7 +133,7 @@ def render_scan(result, *, verbose=False):
                     for cap in run.capabilities if result.capability_results.get(cap) in {'PARTIAL', 'FAILED', 'UNAVAILABLE'}]
         if affected:
             lines += [f'{run.scanner} 未完成，因此：', *['- ' + label for label in affected]]
-        if run.error_code:
+        if run.error_code and not preparation_note:
             retry = f'security-check tools install {run.scanner}' if run.status == 'UNAVAILABLE' and run.scanner in {'semgrep', 'gitleaks', 'trivy'} else f'security-check scan --mode {result.mode}'
             lines.append(diagnostic_zh(asdict(run), retry=retry))
     return '\n'.join(lines)

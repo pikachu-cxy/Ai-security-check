@@ -23,7 +23,8 @@ def test_default_install_only_checks_cache_and_keeps_program_installed(installed
     assert data['installation']['scan_ready'] is False
     assert data['overall'] == 'DEGRADED'
     assert data['execution']['network_query'] is False
-    assert 'prepare-scanners' in data['installation']['message']
+    assert '后台准备' in data['installation']['message']
+    assert data['background_preparation']['status'] == 'QUEUED'
 
 
 def test_install_exit_success_is_distinct_from_scan_readiness(monkeypatch, capsys):
@@ -33,7 +34,7 @@ def test_install_exit_success_is_distinct_from_scan_readiness(monkeypatch, capsy
     assert main(['install', 'codex', '--json']) == 0
     output = capsys.readouterr()
     assert json.loads(output.out)['installation']['scan_ready'] is False
-    assert '依赖检查尚未准备完成' in output.err
+    assert '扫描能力准备状态' in output.err
 
 
 def test_download_context_deadline_is_classified_as_timeout():

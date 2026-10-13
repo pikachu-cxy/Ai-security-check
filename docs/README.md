@@ -22,6 +22,10 @@ acceptance output belongs in Git history, not in `docs/`.
 - [第一版受邀试用开发清单](PILOT_V1_CHECKLIST.zh-CN.md) — concrete P0 tasks,
   source and acceptance gaps, completion criteria, and work deferred until after
   a small Windows/Codex/Git pilot.
+- [核心链路本地手动测试](MANUAL_CORE_TEST.zh-CN.md) — isolated Java/Python/JS/TS
+  demos, real Hook and Stop observations, and manual multi-file context review.
+- [开发任务结束安全核查方案](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md) — task boundaries,
+  static results plus bounded context, quick review workflow and quiet feedback.
 
 - [R2.2 security review contract](SECURITY_REVIEW.md)
 - [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)

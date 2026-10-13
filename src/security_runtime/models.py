@@ -156,6 +156,7 @@ class ScanResult:
     scanner_diagnostics: dict = field(default_factory=dict)
 
     scan_context: dict = field(default_factory=dict)
+    background_preparation: dict = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

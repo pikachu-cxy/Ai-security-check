@@ -42,6 +42,7 @@ def _agent_result(result) -> dict:
         "capability_results": result.capability_results,
         "capability_details": result.capability_details,
         "rule_coverage": {key:value for key,value in result.rule_coverage.items() if key!='scope_files'},
+        "background_preparation": result.background_preparation,
         "coverage": result.coverage,
         "summary": result.summary,
         "findings": [_agent_finding(f.__dict__) for f in result.findings],
@@ -408,6 +409,13 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         """Read product-owned versioned deep-audit guidance. No workspace/source/URL input, network, scan, repair permission or writes. Ordinary Hooks do not invoke this tool."""
         from .professional_guidance import get_professional_guidance as load_guidance
         return load_guidance()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_scan_preparation_status() -> dict:
+        """Read background progress, actual ETA and receipt; no download or scan. Readiness is separate from risk/coverage."""
+        from .background_preparation import current_preparation, preparation_message
+        value = current_preparation()
+        return value | {'message': preparation_message(value)}
 
     guidance_tool = server._tool_manager.get_tool('get_professional_guidance')
     guidance_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)

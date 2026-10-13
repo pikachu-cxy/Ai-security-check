@@ -33,6 +33,7 @@ STAGES = {
     'SELF_CHECK': '正在自检全局配置和 Skill。',
     'VERIFY_RECEIPT': '正在核对安装结果。',
     'CHECK_SCAN_CACHE': '正在核对已有扫描组件和漏洞库；本次安装不等待联网下载。',
+    'START_BACKGROUND': '正在启动后台扫描能力准备；安装不会等待下载，无需手动执行前置命令。',
     'INSTALL_TOOLS': '正在自动准备安全检查组件和漏洞数据；已有有效缓存会继续使用，首次准备可能需要下载。',
     'INSTALL_DATA': '正在更新漏洞数据，已有可用数据会在新数据准备完成前保留。',
     'VERIFY_SCAN_READINESS': '正在确认代码、密钥和依赖检查是否已准备完成，并检查漏洞数据有效期。',
@@ -383,7 +384,7 @@ class InstallationProgress:
                     '扫描能力尚未全部准备完成；程序、配置和原有可用缓存已保留。')
                 return
             if succeeded and not scan_ready:
-                self._write('本地安装完成；代码、密钥或依赖检查尚未准备完成。请运行 prepare-scanners 单独准备，不必重新安装程序。')
+                self._write('本地安装完成；扫描能力准备状态见下方回执，后台进度可用 preparation watch 查看。')
                 return
             self._write('本地安装完成。请完全退出并重启 Codex，按提示审核 Hook 信任；扫描能力以实际扫描结果为准。'
                         if succeeded else '安装未完成。请查看下方诊断；不要删除配置或 Skill，也不要将本次安装视为成功。')

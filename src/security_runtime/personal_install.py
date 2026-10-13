@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from .install_checks import single_capability_check
 from .install_readiness import prepare_installation_readiness, validate_readiness_receipt, CORE_TOOLS
 from .toolchain import VERSIONS
 from .progress import ScanCancelled
+from .background_preparation import start_background_preparation, preparation_message
 
 CONTRACT = 'personal-install-v1'
 PREPARATION_TIMEOUT = 45  # Cache checks only; installation never waits for downloads.
@@ -86,7 +88,8 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     if installation.get('local_files_ready') is not True:
         return data
     diagnostic = None
-    offline = True  # Explicit preparation is a separate command, regardless of install flags.
+    requested_offline = offline
+    offline = True  # Installer checks caches; downloads belong to its detached worker.
     if executable is not None:
         report_progress(progress, 'CHECK_SCAN_CACHE')
         receipt, diagnostic = _prepare_child(executable, offline=offline, progress=progress)
@@ -104,11 +107,26 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     data['scan_readiness'] = receipt
     ready = receipt['ready']
     installation.update(scan_ready=ready, status='INSTALLED',
-        engine_preparation='EXPLICIT_PREPARE_SCANNERS; INSTALL_CACHE_CHECK_ONLY',
+        engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
             '请完全退出并重启 Codex，按提示审核 Hook 信任；无需逐项目安装。') if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
-            '请运行 security-check prepare-scanners 单独准备；已有配置和可用缓存会保留。'))
+            '已有配置和可用缓存会保留。'))
+    if not requested_offline:
+        report_progress(progress, 'START_BACKGROUND')
+        try:
+            background = start_background_preparation(executable)
+        except (ValueError, OSError, TypeError, sqlite3.DatabaseError):
+            background = {'status': 'FAILED', 'ready': False, 'reason': 'WORKER_START_FAILED'}
+        data['background_preparation'] = background
+        if not ready:
+            installation['message'] += preparation_message(background)
+        if background['status'] == 'FAILED':
+            diagnostic = 'BACKGROUND_PREPARATION_START_FAILED'
+    else:
+        data['background_preparation'] = {'status': 'OFFLINE', 'ready': False}
+        if not ready:
+            installation['message'] += '本次为离线安装，未启动下载；联网后重新安装会自动准备。'
     data['overall'] = 'CONFIGURED' if ready else 'DEGRADED'
     data.setdefault('execution', {}).update(scanner_run=False, source_modified=False,
         component_preparation=False, network_allowed=False)
@@ -209,7 +227,7 @@ def _default_delivery_root():
 
 @verified_operation
 def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False):
-    """Install program/configuration and inspect caches without network preparation."""
+    """Install/check caches, then start detached preparation without waiting for it."""
     offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
@@ -226,7 +244,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
             result = install_personal_codex(bundle=supplied, root=delivery_root,
                 workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline)
             result['downloads'] = {'product': 'LOCAL_DELTA', 'product_network_download': False,
-                'engines': 'EXPLICIT_PREPARE_SCANNERS', 'skill_and_rules': 'BUNDLED'}
+                'engines': 'AUTOMATIC_BACKGROUND', 'skill_and_rules': 'BUNDLED'}
             return result
     if bundle is None and (not frozen or stable is not None):
         if root is not None and (stable is None or Path(root).absolute() != Path(stable).parents[1]):
@@ -234,7 +252,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data = setup_personal_codex(integration, workspace, progress=progress)
         data = _complete_preparation(data, offline=offline, progress=progress)
         data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
-            'engines':'EXPLICIT_PREPARE_SCANNERS', 'skill_and_rules':'BUNDLED'}
+            'engines':'AUTOMATIC_BACKGROUND', 'skill_and_rules':'BUNDLED'}
         if stable is not None and data['installation']['scan_ready']:
             report_progress(progress, 'CLEANUP')
             data['cleanup'] = StableDelivery(Path(stable).parents[1]).cleanup()
@@ -305,6 +323,6 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['cleanup'] = delivery.cleanup()
         data['delivery']['previous_build'] = delivery.pointer()['previous']
     data['downloads'] = {'product': 'LOCAL_DELTA' if update else 'LOCAL_FULL_PACKAGE',
-        'product_network_download': False, 'engines': 'EXPLICIT_PREPARE_SCANNERS',
+        'product_network_download': False, 'engines': 'AUTOMATIC_BACKGROUND',
         'skill_and_rules': 'BUNDLED'}
     return data

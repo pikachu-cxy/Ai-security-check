@@ -634,6 +634,10 @@ class HookCoordinator:
             'coverage':'UNKNOWN','execution_state':'NOT_EXECUTED','last_check_status':'NOT_EXECUTED','capabilities':{},'scanner_runs':[],
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
+        from .background_preparation import current_preparation, preparation_message, ACTIVE
+        preparation = current_preparation()
+        if preparation['status'] in ACTIVE and not preparation.get('ready'):
+            result['background_preparation'] = preparation | {'message': preparation_message(preparation)}
         pending = None
         if not _lifecycle and event == HookEvent.FILE_CHANGED:
             # MCP transport registers arrival before reconciliation so a busy

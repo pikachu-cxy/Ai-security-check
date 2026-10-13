@@ -5,8 +5,16 @@
 先读本文，再读 [开发进度](DEVELOPMENT_PROGRESS.md)、
 [近期顺序](NEXT_DEVELOPMENT_PLAN.zh-CN.md) 和 [收尾验收](RUNTIME_CLOSEOUT_CHECK.zh-CN.md)。
 
-2026-10-13 新增安装流程优化：`install codex` 不等待网络准备；随后运行
-`prepare-scanners`。安装成功与扫描就绪分别核对，旧库过期保持未就绪。
+2026-10-13 最新安装流程：`install codex` 不等待网络下载，成功后自动启动后台准备，
+普通用户不需要执行前置命令。准备期间 Hook/扫描只用可用组件，原收尾任务保留缺失项；
+后台通过普通 MCP 自动接续登记的任务并核对最新版本。安装成功与扫描就绪分别核对。
+本批操作及验收见 [后台准备](BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md)。
+最新后台准备包为 `dist/background-prep-20261013-r2/security-check`，构建 `41b98a66041f…`，
+源码 `c0cfd7bb…`，`source_dirty=false`。同包真实在线后台准备、全局普通MCP自动接续、
+新编辑使旧回执失效和新鲜缓存复用已通过；真实桌面Hook/Stop仍尚未通过。
+下面保留此前独立准备包的历史验收记录，不再要求新包用户执行前置下载命令。
+用户已明确确认同步本批31份源码/测试/规划文件至上述私有仓库的开发分支；
+同步使用已连接账号，保留远端历史并核对文件树；本地构建包、缓存和原始日志不随Git拉取。
 不要照旧通过重装来刷新数据。新构建、回归和隔离验收以开发进度中的本批记录为准；
 完整本地操作见 [安装验收](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
 
