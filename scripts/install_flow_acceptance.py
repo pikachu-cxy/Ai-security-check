@@ -78,6 +78,8 @@ def main(bundle, output, tool_root=None, cached_db=None):
     config.write_bytes(original)
     first, install = execute([str(bundle / 'security-check.exe'), 'install', 'codex',
         '--root', str(program), '--json'], profile, env)
+    (output / 'install-receipt.json').write_text(json.dumps(dict(receipt=first, execution=install),
+        ensure_ascii=False, indent=2), encoding='utf-8')
     assert install['exit_code'] == 0 and first['installation']['local_files_ready']
     assert not first['installation']['scan_ready'] and first['installation']['status'] == 'INSTALLED'
     assert first['execution']['network_query'] is False
@@ -95,7 +97,7 @@ def main(bundle, output, tool_root=None, cached_db=None):
     assert validate_readiness_receipt(status)
     mcp = asyncio.run(asyncio.wait_for(mcp_identity(launcher,
         dict(env, SECURITY_RUNTIME_GLOBAL='1', SECURITY_RUNTIME_INTEGRATION='codex')), timeout=60))
-    assert mcp['runtime_info']['build_id'] == metadata['build_id']
+    assert mcp['runtime_info']['build_identity']['build_id'] == metadata['build_id']
     result = dict(status='PASS', build_id=metadata['build_id'], source_commit=metadata['source_commit'],
         install=install, repeated_install=repeated, status_check=inspected, mcp=mcp,
         real_global_installation_modified=False, desktop_automatic_hook='尚未通过；本脚本没有宿主 Hook 事件')
@@ -115,9 +117,14 @@ def main(bundle, output, tool_root=None, cached_db=None):
         assert all(c['ready'] for c in checked['tools'].values())
         assert checked['vulnerability_db']['cached_usable'] and not checked['ready']
         prepared, probe = execute([str(launcher), 'prepare-scanners', '--timeout', '20', '--json'], profile, online, timeout=40)
+        (output / 'public-probe.json').write_text(json.dumps(dict(receipt=prepared, execution=probe),
+            ensure_ascii=False, indent=2), encoding='utf-8')
         assert validate_readiness_receipt(prepared) and prepared['preparation']['attempts'] <= 1
         assert probe['elapsed_seconds'] < 35
-        assert any('下载进度' in item['message'] for item in probe['stderr_feedback'])
+        progress_observed = any('下载进度' in item['message'] for item in probe['stderr_feedback'])
+        # Registry/TLS failure before the body starts has no transfer count.
+        # Preserve this as an explicit unmeasured progress result, not fake bytes.
+        assert progress_observed or (not prepared['ready'] and prepared['preparation']['error_code'])
         after = {p.name: sha256_file(p) for p in (cache / 'db').iterdir() if p.is_file()}
         if not prepared['ready']:
             assert probe['exit_code'] == 2 and prepared['vulnerability_db']['cached_usable']
@@ -126,7 +133,8 @@ def main(bundle, output, tool_root=None, cached_db=None):
             assert probe['exit_code'] == 0 and prepared['vulnerability_db']['freshness'] == 'FRESH'
         assert before == {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in owned}
         result['public_data_probe'] = dict(receipt=prepared, execution=probe,
-            isolated_cached_database_preserved=after == old, full_online_preparation_passed=prepared['ready'])
+            isolated_cached_database_preserved=after == old, full_online_preparation_passed=prepared['ready'],
+            real_download_progress_observed=progress_observed)
     (output / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps({k: result[k] for k in ('status', 'build_id', 'source_commit', 'real_global_installation_modified')}, ensure_ascii=False))
 
