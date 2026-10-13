@@ -6,6 +6,9 @@ import threading
 import time
 import json
 import re
+import os
+import shutil
+import unicodedata
 from collections import deque
 
 
@@ -159,8 +162,86 @@ class InstallationProgress:
         self._output_available = True
         self.preparation = preparation
         self._last_download = None
+        try:
+            self._interactive = bool(self.stream.isatty())
+        except (AttributeError, OSError, ValueError):
+            self._interactive = False
+        self._line_width = 0
+        self._download_active = False
+        self._download_label = '漏洞库'
+        self._download_counts = None
+
+    @staticmethod
+    def _cells(text):
+        return sum(2 if unicodedata.east_asian_width(char) in 'WF' else 1 for char in text)
+
+    def _columns(self):
+        try:
+            return max(1, os.get_terminal_size(self.stream.fileno()).columns - 1)
+        except (AttributeError, OSError, ValueError):
+            return max(1, shutil.get_terminal_size(fallback=(80, 24)).columns - 1)
+
+    def _replace_line(self, message):
+        if not self._output_available:
+            return
+        columns = self._columns()
+        text, cells = '', 0
+        for char in '[安装] ' + message:
+            width = self._cells(char)
+            if cells + width > columns:
+                break
+            text += char
+            cells += width
+        try:
+            padding = max(0, min(self._line_width, columns) - cells)
+            self.stream.write('\r' + text + ' ' * padding)
+            self.stream.flush()
+            self._line_width = cells + padding
+        except (OSError, UnicodeError, ValueError):
+            self._output_available = False
+
+    def _finish_line(self):
+        if self._line_width:
+            try:
+                if self._output_available:
+                    self.stream.write('\n')
+                    self.stream.flush()
+            except (OSError, UnicodeError, ValueError):
+                self._output_available = False
+            self._line_width = 0
+
+    def _download_text(self, *, waiting=False):
+        if self._download_counts is None:
+            elapsed = int(max(0, self.clock() - self._started))
+            return f'{self._download_label}下载 [等待实际进度] 已用时 {elapsed} 秒'
+        received, total = self._download_counts
+        prefix = f'{self._download_label}下载进度 '
+        suffix = f' {received / total * 100:.1f}% {received / 1048576:.2f}/{total / 1048576:.2f} MiB'
+        if waiting:
+            suffix += ' 等待新进度'
+        columns = self._columns() if self._interactive else 79
+        if self._cells('[安装] ' + prefix + suffix) + 5 > columns:
+            # Keep the actual percentage visible when Chinese labels leave little room.
+            prefix = self._download_label + ' '
+            suffix = f' {received / total * 100:.1f}%'
+        width = min(20, max(3, columns - self._cells('[安装] ' + prefix + suffix) - 2))
+        filled = min(width, received * width // total)
+        return prefix + '[' + '#' * filled + '-' * (width - filled) + ']' + suffix
+
+    def _end_download(self):
+        if self._download_active:
+            if self._download_counts is not None:
+                if self._interactive:
+                    self._replace_line(self._download_text())
+                else:
+                    # A pipe/log cannot replace a row: keep only its final real snapshot.
+                    self._write(self._download_text())
+            self._download_active = False
+            self._download_counts = None
+        self._finish_line()
 
     def _write(self, message):
+        self._finish_line()
         if self._output_available:
             try:
                 print('[安装] ' + message, file=self.stream, flush=True)
@@ -188,14 +269,22 @@ class InstallationProgress:
                     kind = event['event']
                     label = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查', 'vulnerability_db': '漏洞库'}[event['component']]
                     if kind == 'DOWNLOAD_PROGRESS':
+                        self._download_active = True
+                        self._download_label = label
+                        self._download_counts = event['received_bytes'], event['total_bytes']
+                        self._last_change = now
                         if self._last_download is not None and now - self._last_download < 1:
                             return
                         self._last_download = now
-                        received, total = event['received_bytes'], event['total_bytes']
-                        self._write(f'{label}下载进度：{received / 1048576:.2f} / {total / 1048576:.2f} MiB（{received / total * 100:.1f}%）。')
-                    elif kind == 'DOWNLOAD_STARTED':
+                        if self._interactive:
+                            self._replace_line(self._download_text())
+                        return
+                    self._end_download()
+                    if kind == 'DOWNLOAD_STARTED':
                         self._last_download = None
                         self._stage = 'INSTALL_DATA'
+                        self._download_active = True
+                        self._download_label = label
                         source = {'ghcr.io': '官方发布源', 'mirror.gcr.io': '官方镜像源'}.get(event.get('source'), '当前来源')
                         self._write(f"正在从{source}下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 轮；剩余预算最多 {event.get('timeout_seconds', 0)} 秒。")
                     elif kind == 'DOWNLOAD_FALLBACK':
@@ -212,6 +301,8 @@ class InstallationProgress:
                     elif kind == 'DOWNLOAD_FAILED':
                         why = _ERROR_TEXT.get(event.get('error_code'), '下载或数据校验未完成')
                         self._write(why + '。原有可用缓存已保留；扫描能力仍以最后核对结果为准。')
+                        if event.get('error_code') == 'PREPARATION_BUDGET_EXHAUSTED':
+                            self._write('慢速网络可运行 prepare-scanners --timeout 900 延长准备时间；会重新下载，不必重新安装程序。')
                     elif kind == 'DOWNLOAD_COMPLETE':
                         self._write('漏洞库已下载并通过校验，已更新本地缓存。')
                     elif kind == 'COMPONENT_STARTED':
@@ -228,6 +319,7 @@ class InstallationProgress:
                     return
                 self._stage = stage
                 self._last_change = self.clock()
+                self._end_download()
                 self._write(STAGES[stage])
 
     def _heartbeat(self):
@@ -236,7 +328,13 @@ class InstallationProgress:
             if (not self._stop.is_set() and self._started is not None
                     and now - self._last_change >= self.interval):
                 elapsed = int(max(0, now - self._started))
-                self._write(f'已用时 {elapsed} 秒；仍在等待当前步骤完成：{STAGES[self._stage]}')
+                if self._download_active:
+                    if self._interactive:
+                        self._replace_line(self._download_text(waiting=True))
+                elif self._interactive:
+                    self._replace_line(f'已用时 {elapsed} 秒；仍在等待当前步骤完成：{STAGES[self._stage]}')
+                else:
+                    self._write(f'已用时 {elapsed} 秒；仍在等待当前步骤完成：{STAGES[self._stage]}')
 
     def _wait(self):
         while not self._stop.wait(self.interval):
@@ -246,6 +344,8 @@ class InstallationProgress:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=1)
+        with self._lock:
+            self._end_download()
 
     def finish(self, succeeded, *, scan_ready=True):
         self.close()

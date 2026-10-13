@@ -15,13 +15,17 @@
 
 数据来自现有 Trivy 下载器和官方来源，不另建漏洞库下载或扫描流程。实时界面只接收固定类型、原组件身份、有限数值和脱敏原因；未知进度不伪造百分比。JSON stdout 保持单个回执，stderr 展示真实传输量、尝试、剩余预算和失败原因。默认无断点续传，重试会明确说明重新下载。
 Windows 无CR/LF的连续进度也按有界字节流解析，跨块拼接不重复计数；原始日志不进入用户反馈。
+交互终端使用同一行进度条，显示实际传输量和百分比，不逐秒新增行；等待新进度时保留
+已有计数，阶段、换源、失败、取消与最后结果另行显示。窄窗口缩短为原百分比与进度条。
+输出到文件或管道时只保存每次传输最后取得的真实进度，不写终端控制字符，也不逐秒刷日志。
+父子程序之间的固定事件协议保持逐行 JSON，stdout 最终回执保持独立。
 
 ## 本地安装步骤
 
 在项目根目录 `C:\Users\24170\Desktop\AI-security-check`，将 `$bundle` 指向本批报告记录的新目录，避免使用旧会话中的变量：
 
 ```powershell
-$bundle = (Resolve-Path 'dist/db-online-20261013-r2/security-check').Path
+$bundle = (Resolve-Path 'dist/db-bar-20261013-r1/security-check').Path
 $exe = Join-Path $bundle 'security-check.exe'
 & $exe runtime-info --json
 & $exe install codex --bundle $bundle --json
@@ -35,6 +39,11 @@ $LASTEXITCODE
 
 核对报告中的完整 build_id。安装返回 0 时仍检查 `installation.local_files_ready` 和 `installation.scan_ready`；后者为 false 时先查看各组件和漏洞库日期。下载未完成可稍后只重跑 `prepare-scanners`，不必复制程序或重装连接。按 Ctrl+C 取消准备；已有配置和可用旧库应保留，未确认的数据继续显示未就绪。
 
+若下载量持续增长但 300 秒耗尽，可运行 `prepare-scanners --timeout 900` 延长本次预算。
+2026-10-13 用户真实安装中已下载 78.43/126.98 MiB（61.8%）后预算耗尽，三个检查组件
+兼容但旧库仍过期，整体未就绪。这次约0.26 MiB/s的传输不能用此前隔离80秒成功代替。
+当前没有断点续传，重试会重新下载；进度条改善显示，不保证下载速度或完成时间。
+
 准备后完全退出并重启 Codex，审核宿主 Hook 信任；通过普通 MCP `get_runtime_info` 核对运行包身份。源码、CLI 和隔离 MCP 通过不能替代这个桌面步骤。真实自动 Stop 收尾验收仍按 [收尾验收](RUNTIME_CLOSEOUT_CHECK.zh-CN.md) 单独记录，人工续发消息不算自动通过。
 
 ## 开发者隔离验收
@@ -46,7 +55,7 @@ $LASTEXITCODE
 $env:TEMP = Join-Path $env:LOCALAPPDATA 'Temp'
 $env:TMP = $env:TEMP
 & $python scripts/install_flow_acceptance.py --bundle $bundle --output artifacts/if-new
-& $python scripts/closeout_mcp_acceptance.py --executable "$bundle/security-check.exe" --engine-root artifacts/closeout-20261012/mcp-engines --output artifacts/db-online-20261013/mcp-r2
+& $python scripts/closeout_mcp_acceptance.py --executable "$bundle/security-check.exe" --engine-root artifacts/closeout-20261012/mcp-engines --output artifacts/db-bar-20261013/mcp-r1
 ```
 
 第一项使用隔离的中文/空格目录、真实安装包与普通 MCP，验证程序安装和未就绪拆分、重复安装幂等、只读检查以及包身份；不触碰真实宿主配置。可额外传入 `--tool-root` 和 `--cached-db`，复制公开旧漏洞库到隔离缓存并执行限时真实网络诊断。短预算诊断未完成不算完整在线准备通过；成功、失败、缓存保留和耗时须按真实输出记录。

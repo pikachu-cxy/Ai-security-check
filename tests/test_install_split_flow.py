@@ -47,6 +47,7 @@ def test_download_progress_is_numeric_and_private_text_is_never_forwarded():
     progress = InstallationProgress(stream=stream)
     progress({'event': 'DOWNLOAD_PROGRESS', 'component': 'vulnerability_db',
         'received_bytes': 10_485_760, 'total_bytes': 104_857_600, 'attempt': 1, 'max_attempts': 1})
+    progress.close()  # A redirected stream keeps one final real progress snapshot.
     text = stream.getvalue()
     assert '10.00' in text and '100.00' in text and '10.0%' in text
     progress({'event': 'DOWNLOAD_PROGRESS', 'component': 'vulnerability_db',
