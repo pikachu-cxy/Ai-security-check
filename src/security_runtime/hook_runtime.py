@@ -474,6 +474,8 @@ class HookCoordinator:
     def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False,
                     dependency_changes=None, previous_families=None):
         """One quick provider/observer path for events and setup seeds."""
+        result['hook_scope_files'] = sorted(scope)
+        result['hook_recheck_files'] = sorted({f['file_path'] for f in (previous_families or {}).values()})
         observation = {'families': {}, 'runs': [], 'plans': {}}
         def observe(findings, runs, plans):
             # Dependency presence is reviewable even when graph/data coverage
@@ -484,6 +486,11 @@ class HookCoordinator:
                          and 'DEPENDENCY_VULN' in r.capabilities}
             result['current_dependency_finding_ids'] = sorted({f.id for f in findings
                 if f.category == 'dependency' and set(f.scanner_sources).intersection(succeeded)})[:50]
+            result['hook_current_dependency_files'] = sorted({safe_path(f.file_path) for f in findings
+                if f.category == 'dependency' and set(f.scanner_sources).intersection(succeeded)})
+            result['hook_recheck_files'] = sorted(set(result['hook_recheck_files']) |
+                {f['file_path'] for f in observation['families'].values()} |
+                set(result['hook_current_dependency_files']))
             # Fixed diagnostic only; candidate contents never enter Hook state.
             result['unattributed_risk_present'] = any(
                 f.severity in {'HIGH', 'CRITICAL'} and f.confidence == 'HIGH' for f in findings)
@@ -755,6 +762,17 @@ class HookCoordinator:
     def _handle_locked(self,result,event,root,host,session_id,*,baseline_only=False,lifecycle_activity=False):
         from .first_scan_attribution import diagnostics, attribute
         result.update(diagnostics())
+        # A verified task snapshot makes each observed source revision a check
+        # boundary. The unchanged-byte reuse guard below still applies; only
+        # the legacy time-based debounce is bypassed during actual development.
+        from .task_security_state import TaskSecurityStore
+        import sqlite3
+        try:
+            task = TaskSecurityStore(self.store, root).get(active=True) if event == HookEvent.FILE_CHANGED else None
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            task = None
+        if task:
+            result.update(security_task_ref=task['task_ref'], task_edit_check_policy='EVERY_OBSERVED_MUTATION')
         path = self.store.path(root,host,session_id)
         previous,recovered = self.store.load(path)
         result['state_recovered'] = recovered
@@ -822,7 +840,7 @@ class HookCoordinator:
                 if job:
                     result['closeout_ref'] = job['closeout_ref']
             return
-        if not lifecycle_activity and previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
+        if not task and not lifecycle_activity and previous and not seeded and event == HookEvent.FILE_CHANGED and 0 <= self.clock()-previous['last_completed_at'] < self.cooldown_ms/1000:
             result.update(status='DEBOUNCED',scan_id=previous['last_scan_id'],coverage=previous['last_result']['coverage'],
                           next_step='Pending changes will be checked on the next event or agent stop.')
             return
@@ -895,6 +913,8 @@ class HookCoordinator:
                 if observation['families'] else 'FIRST_SCAN_NO_RISK')
         can_cover = lambda family: covered(family,observation['runs'],observation['plans'])
         families,delta = family_delta(old,observation['families'],can_cover)
+        result['hook_recheck_files'] = sorted({f['file_path'] for f in families.values()} |
+                                            set(result.get('hook_current_dependency_files', ())))
         # Partial pre-edit parsing/unsupported code cannot prove NEW attribution
         # even if a later edit makes that file parseable. Keep presence reviewable
         # without an automatic-repair trigger. Secret coverage is independent.

@@ -240,8 +240,12 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None) -> dict:
-        """Read 1-80 sanitized lines of task source (current or signed preimage for a deleted file). At most 10 related files, 40 unique reads and 64KB cumulative packet/context. Returns evidence_id bound to path/range/hash/version. No .env content, links, path escapes, external commands or network."""
-        return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line)
+        """Read a sanitized task-source window (current or signed preimage for a deleted file). At most 80 lines per response: larger requested ranges return has_more/next_read for the same task/session/path/version. Follow next_read within the unchanged 10-related-file, 40-unique-read and 64KB cumulative budgets. Unread requested ranges require PARTIAL; pagination never rescans or resets budgets. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Returns evidence_id bound to actual path/range/hash/version. No .env content, links, path escapes, external commands or network."""
+        from .task_security import TaskContextError
+        try:
+            return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line)
+        except TaskContextError as exc:
+            return exc.response(task_ref, review_session)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_task_security_review(task_ref: str, review_session: str, findings: list[dict],

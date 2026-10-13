@@ -16,7 +16,7 @@ import uuid
 
 from .hook_state import HookStateStore, identity
 from .git import GitError, GitService
-from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source
+from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source, MAX_LINE_CHARS
 from .redactor import SecretRedactor
 from .task_security_state import CONTRACT, TaskSecurityStore
 from .target import DEPENDENCIES, EXTENSIONS, IGNORED
@@ -33,7 +33,57 @@ MAX_RELATED = 10
 MAX_CONTEXT = 64_000
 MAX_DIFF_LINES = 2000
 MAX_CONTEXT_READS = 40
+MAX_CONTEXT_WINDOW_LINES = 80
 REVIEW_TTL = 900
+
+
+class TaskContextError(ValueError):
+    """A bounded context request problem, not a workspace readiness failure."""
+    def __init__(self, reason_code, message, *, recoverable=True, guidance, details=None):
+        super().__init__(message)
+        self.reason_code = reason_code
+        self.recoverable = recoverable
+        self.guidance = guidance
+        self.details = details or {}
+
+    def response(self, task_ref, review_session):
+        return dict(status='CONTEXT_REQUEST_REJECTED', task_ref=task_ref,
+                    review_session=review_session, reason_code=self.reason_code,
+                    message=str(self), recoverable=self.recoverable, guidance=self.guidance,
+                    details=self.details, scanner_run=False, repair_authorized=False)
+
+
+def _merge_spans(spans):
+    merged = []
+    for low, high in sorted(spans):
+        if merged and low <= merged[-1][1] + 1:
+            merged[-1][1] = max(high, merged[-1][1])
+        else:
+            merged.append([low, high])
+    return merged
+
+
+def _unread_context(record):
+    """Only Runtime-issued windows satisfy a requested current-version span."""
+    missing = []
+    for request in record.get('context_requests', {}).values():
+        spans = request['spans']
+        evidence = [e for e in record['evidence'].values()
+                    if all(e[k] == request[k] for k in ('path', 'file_sha256', 'location_version'))]
+        covered = _merge_spans([[e['start_line'], e['end_line']] for e in evidence])
+        for low, high in spans:
+            cursor = low
+            for start, end in covered:
+                if end < cursor or start > high:
+                    continue
+                if start > cursor:
+                    missing.append(dict(path=request['path'], start_line=cursor, end_line=min(high, start-1)))
+                cursor = max(cursor, end+1)
+                if cursor > high:
+                    break
+            if cursor <= high:
+                missing.append(dict(path=request['path'], start_line=cursor, end_line=high))
+    return missing
 
 
 def hash_bytes(raw):
@@ -118,7 +168,7 @@ def capture(root, *, known_paths=None, priority_paths=()):
     reported; unavailable/truncated inventory cannot attest a full task.
     """
     reader = WorkspaceReader(root)
-    hashes, texts, limitations = {}, {}, []
+    hashes, texts, limitations, text_truncations = {}, {}, [], {}
     total, text_total = 0, 0
     ignored = IGNORED | {v.strip() for v in os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '').split(',') if v.strip()}
     inventory, dirty, complete, inventory_limits = _inventory(root, ignored)
@@ -151,6 +201,9 @@ def capture(root, *, known_paths=None, priority_paths=()):
             total += len(raw)
             if _environment(name):
                 continue
+            truncated_lines = [i for i, line in enumerate(text.splitlines(), 1) if len(line)>MAX_LINE_CHARS]
+            if truncated_lines:
+                text_truncations[name] = {'line_count': len(truncated_lines), 'lines': truncated_lines[:20]}
             lines = safe_source(text)
             cost = len(json.dumps(lines, ensure_ascii=True).encode())
             if cost + text_total <= MAX_PREIMAGE_BYTES:
@@ -158,7 +211,8 @@ def capture(root, *, known_paths=None, priority_paths=()):
                 text_total += cost
         except (OSError, EvidenceUnavailable, UnicodeError) as exc:
             limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
-    return dict(hashes=hashes, texts=texts, limitations=limitations[:100], inventory=inventory,
+    return dict(hashes=hashes, texts=texts, text_truncations=text_truncations,
+                limitations=limitations[:100], inventory=inventory,
                 inventory_complete=complete,
                 read_priority=ordered[:MAX_FILES])
 
@@ -204,6 +258,34 @@ def finding_view(f):
         if key in f:
             result[key] = SecretRedactor().redact(str(f[key]))[:1200]
     result['scanner_sources'] = f.get('scanner_sources', [])[:10]
+    return result
+
+
+def _coverage_gaps(limitations):
+    labels = {'SOURCE_LINE_CHAR_BUDGET': '源码单行超出显示预算',
+              'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '文件修改检查保留路径的当前源码不可用',
+              'TASK_HOOK_FINAL_SCOPE_BUDGET': '文件修改检查保留路径超出最终扫描范围预算',
+              'TASK_HOOK_LEDGER_SCOPE_INCOMPLETE': '部分文件修改检查记录或保留路径超出记录预算',
+              'TASK_HOOK_RECORDING_FAILED': '部分文件修改检查结果未能保存，相关路径的完整核查仍待确认',
+              'TASK_HOOK_FAILED_PATHS_UNKNOWN': '部分文件修改检查记录失败，失败路径未知或不完整',
+              'TASK_HOOK_FAILURE_MARKER_UNVERIFIED': '文件修改检查失败记录无法核验，失败路径未知',
+              'TASK_STATIC_SCOPE_EXCLUDED': '部分任务改动未进入静态检查范围',
+              'TASK_CONTEXT_SCOPE_EXCLUDED': '部分任务改动超出上下文文件预算',
+              'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE': '开始版本或脱敏源码超出文本预算',
+              'DIFF_BYTE_BUDGET': '部分任务差异超出字节预算',
+              'DIFF_LINE_BUDGET': '部分任务差异超出行数预算',
+              'INITIAL_PACKET_BUDGET': '初始任务上下文超出返回预算'}
+    result = []
+    for limitation in limitations[:10]:
+        message = labels.get(limitation.get('reason'), '部分任务源码或盘点不可用')
+        paths = ([limitation['path']] if limitation.get('path') else limitation.get('paths', []))
+        if paths:
+            message += '：'+ '、'.join(str(p) for p in paths[:5])
+            if len(paths)>5:
+                message += f' 等 {len(paths)} 个记录路径'
+        if limitation.get('count'):
+            message += f"（{limitation['count']} 项）"
+        result.append(message[:500])
     return result
 
 
@@ -257,6 +339,10 @@ class TaskSecurityService:
             return self._view(record)
 
     def _fresh(self, root, record):
+        if record.get('finished_hook_revision'):
+            revision, _, _ = self._hook_inputs(root, record)
+            if revision != record['finished_hook_revision']:
+                return False
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                           priority_paths=record['end'].get('read_priority', ()))
         if current['limitations'] != record['end']['limitations']:
@@ -265,27 +351,84 @@ class TaskSecurityService:
                 and current.get('inventory') == record['end'].get('inventory', sorted(record['end']['hashes']))
                 and current['inventory_complete'] == record['end'].get('inventory_complete', not record['end']['limitations']))
 
+    def _hook_inputs(self, root, record):
+        """A bounded scope revision, excluding review/read bookkeeping."""
+        marker, marker_error = None, None
+        try:
+            marker = self.store(root).get_hook_failure(record['task_ref'])
+        except (OSError, ValueError):
+            marker_error = 'TASK_HOOK_FAILURE_MARKER_UNVERIFIED'
+        keys = ('hook_checks', 'hook_recheck_files', 'hook_pending_scope_files',
+                'hook_checks_omitted', 'hook_recheck_paths_omitted', 'hook_pending_paths_omitted')
+        inputs = dict(ledger={key: record.get(key) for key in keys},
+                      marker=marker, marker_error=marker_error)
+        return digest_value(inputs), marker, marker_error
+
     def finish(self, workspace, ref):
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
             record = self.load(root, ref)
-            if record['phase'] == 'NO_CHANGES':
-                return self.get(workspace, ref)
             end = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                           priority_paths=record.get('end', {}).get('read_priority', ()))
-            if record.get('end') and end['hashes'] == record['end']['hashes'] and end['limitations'] == record['end']['limitations'] and end['inventory'] == record['end'].get('inventory', sorted(record['end']['hashes'])) and record['phase'] != 'STATIC_RUNNING':
+            hook_revision, marker, marker_error = self._hook_inputs(root, record)
+            if (record.get('end') and end['hashes'] == record['end']['hashes']
+                    and end['limitations'] == record['end']['limitations']
+                    and end['inventory'] == record['end'].get('inventory', sorted(record['end']['hashes']))
+                    and record['phase'] != 'STATIC_RUNNING'
+                    and record.get('finished_hook_revision') == hook_revision):
                 return self._view(record)
             before = record['baseline']['hashes']
             changes, unknown = task_changes(root, record['baseline'], end)
+            for key in ('packet', 'review_session', 'review_deadline', 'skip_reason'):
+                record.pop(key, None)
             record.update(end=end, changes=changes, review=None, evidence={}, related_files=[], context_bytes=0,
+                          context_requests={}, context_gaps=[],
+                          finished_hook_revision=hook_revision,
                           unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
+            # Hook checks may have found a pre-existing risk outside the final
+            # net diff, or left an edited/reverted file pending. Re-evaluate
+            # those CURRENT sources; historical alerts are never replayed as
+            # evidence about this version.
+            hook_paths, hook_excluded = set(), []
+            marker_paths = (marker or {}).get('scope_files', [])
+            if marker_error:
+                record['limitations'].append({'reason': marker_error})
+            if marker:
+                record['limitations'].append({'reason': 'TASK_HOOK_RECORDING_FAILED',
+                    'count': marker['failure_count'], 'paths': marker_paths[:100]})
+                if not marker_paths or marker.get('scope_paths_omitted'):
+                    record['limitations'].append({'reason': 'TASK_HOOK_FAILED_PATHS_UNKNOWN',
+                        'count': marker.get('scope_paths_omitted', 0)})
+            record['hook_recording_failure'] = dict(present=bool(marker), verified=not marker_error,
+                failure_count=(marker or {}).get('failure_count', 0),
+                failure_paths_unknown=bool(marker_error or (marker and (not marker_paths or marker.get('scope_paths_omitted')))))
+            for value in set(record.get('hook_recheck_files', [])) | set(record.get('hook_pending_scope_files', [])) | set(marker_paths):
+                try:
+                    name = _relative(value)
+                    if not _supported(name) or _environment(name) or name not in end['hashes']:
+                        hook_excluded.append(name)
+                    else:
+                        hook_paths.add(name)
+                except (ValueError, EvidenceUnavailable):
+                    hook_excluded.append('[REJECTED_HOOK_PATH]')
+            record['hook_final_recheck_files'] = sorted(hook_paths)
+            if hook_excluded:
+                record['limitations'].append({'reason': 'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE',
+                                             'count': len(hook_excluded), 'paths': hook_excluded[:100]})
+            omitted = {key: record[key] for key in ('hook_recheck_paths_omitted', 'hook_pending_paths_omitted',
+                                                   'hook_checks_omitted') if record.get(key)}
+            if omitted:
+                record['limitations'].append({'reason': 'TASK_HOOK_LEDGER_SCOPE_INCOMPLETE', 'omitted': omitted})
             if unknown:
                 record['limitations'].append({'reason': 'TASK_CHANGE_COMPARISON_UNAVAILABLE', 'count': len(unknown), 'paths': unknown[:100]})
-            if not changes:
+            if not changes and not hook_paths:
                 if unknown or record['limitations']:
-                    record.update(phase='INCOMPLETE', skip_reason='文件盘点或开始版本不完整，无法证明本次没有代码改动。')
+                    message = ('部分文件修改检查记录失败或无法核验，失败路径未知；不能确认本次任务安全核查已完成。'
+                               if record['hook_recording_failure']['failure_paths_unknown'] else
+                               '文件盘点、开始版本或文件修改检查的保留范围不完整，无法确认本次检查范围。')
+                    record.update(phase='INCOMPLETE', skip_reason=message)
                     record['baseline']['texts'] = {}
                     record['end']['texts'] = {}
                     return self._view(self.store(root).save(record))
@@ -294,11 +437,15 @@ class TaskSecurityService:
             if record['static_attempts'] >= 2:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
                 return self._view(self.store(root).save(record))
-            eligible = [v['path'] for v in changes if not _environment(v['path'])]
+            eligible = sorted(set(v['path'] for v in changes if not _environment(v['path'])) | hook_paths)
             scope = eligible[:MAX_STATIC_CHANGED]
             exclusions = [v['path'] for v in changes if _environment(v['path']) or v['path'] not in scope]
             if exclusions:
                 record['limitations'].append({'reason': 'TASK_STATIC_SCOPE_EXCLUDED', 'count': len(exclusions), 'paths': exclusions[:MAX_CHANGED]})
+            hook_over_budget = sorted(hook_paths-set(scope))
+            if hook_over_budget:
+                record['limitations'].append({'reason': 'TASK_HOOK_FINAL_SCOPE_BUDGET',
+                                             'count': len(hook_over_budget), 'paths': hook_over_budget[:100]})
             if len(changes) > MAX_CHANGED:
                 record['limitations'].append({'reason': 'TASK_CONTEXT_SCOPE_EXCLUDED', 'count': len(changes)-MAX_CHANGED,
                                              'paths': [v['path'] for v in changes[MAX_CHANGED:MAX_CHANGED*2]]})
@@ -323,6 +470,12 @@ class TaskSecurityService:
                 record['static'] = dict(status='NOT_EXECUTED', coverage='UNKNOWN', scope_files=[], findings=[], reason='NO_ELIGIBLE_STATIC_FILES')
             record['static']['duration_ms'] = round((time.perf_counter()-started)*1000)
             record['phase'] = 'READY' if self._fresh(root, record) else 'STALE'
+            if (record['phase'] == 'READY' and not changes and not record['limitations']
+                    and not record['static']['findings'] and record['static']['coverage'] in {'FULL', 'SCOPED'}
+                    and record['static']['status'] in {'SUCCESS', 'COMPLETED'}):
+                record['phase'] = 'NO_CHANGES'
+                record['baseline']['texts'] = {}
+                record['end']['texts'] = {}
             record = self.store(root).save(record)
             view = self._view(record)
             view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'} for r in record['static'].get('scanner_runs', []))
@@ -337,7 +490,7 @@ class TaskSecurityService:
             if record['phase'] == 'NO_CHANGES':
                 return self._view(record)
             if record['phase'] not in {'READY', 'REVIEWING', 'COMPLETE'} or not self._fresh(root, record):
-                return {'status': 'STALE', 'task_ref': ref, 'review_required': False, 'message': '代码版本已变化或基础检查未完成；保留缺口，不循环扫描。'}
+                return {'status': 'STALE', 'task_ref': ref, 'review_required': False, 'message': '代码版本或文件修改检查范围已变化，或基础检查未完成；保留缺口，不循环扫描。'}
             if record['phase'] == 'COMPLETE':
                 return self._view(record)
             if record.get('packet') and self.now() <= record.get('review_deadline', 0):
@@ -350,6 +503,12 @@ class TaskSecurityService:
                 name = change['path']
                 if _environment(name):
                     continue
+                before_truncation = record['baseline'].get('text_truncations', {}).get(name, {})
+                after_truncation = record['end'].get('text_truncations', {}).get(name, {})
+                if before_truncation or after_truncation:
+                    record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
+                        before_line_count=before_truncation.get('line_count', 0),
+                        after_line_count=after_truncation.get('line_count', 0)))
                 old = record['baseline']['texts'].get(name)
                 new = record['end']['texts'].get(name)
                 if change['change'] == 'ADDED':
@@ -387,6 +546,7 @@ class TaskSecurityService:
                                          validation='STRUCTURE_AND_SOURCE_VERSION_ONLY; HOST_CANDIDATES_NOT_SCANNER_PROOF'),
                 budget=dict(changed_files=MAX_CHANGED, static_changed_files=MAX_STATIC_CHANGED,
                             related_files=MAX_RELATED, context_reads=MAX_CONTEXT_READS,
+                            context_window_lines=MAX_CONTEXT_WINDOW_LINES,
                             total_context_bytes=MAX_CONTEXT, expires_in_seconds=REVIEW_TTL))
             changed_dirs = {str(Path(c['path']).parent) for c in record['changes']}
             candidates = [p for p in record['end']['hashes'] if p not in {c['path'] for c in record['changes']} and not _environment(p)]
@@ -411,7 +571,7 @@ class TaskSecurityService:
         if record['phase'] != 'REVIEWING' or session != record.get('review_session') or self.now() > record['review_deadline']:
             raise ValueError('Review session unavailable or expired; no automatic restart')
         if not self._fresh(root, record):
-            raise ValueError('Task source changed; submitted evidence is stale')
+            raise ValueError('Task source or Hook scope changed; submitted evidence is stale')
         return record
 
     def read(self, workspace, ref, session, path, start_line=1, end_line=80):
@@ -420,46 +580,100 @@ class TaskSecurityService:
             if not acquired:
                 return {'status': 'BUSY'}
             record = self._session(root, ref, session)
-            name = _relative(path)
+            try:
+                name = _relative(path)
+            except (ValueError, EvidenceUnavailable):
+                raise TaskContextError('TASK_CONTEXT_PATH_REJECTED', 'Source path rejected',
+                    guidance='Use a relative source path from this task packet; do not escape the workspace.') from None
             deleted = any(c['path'] == name and c['change'] == 'DELETED' for c in record['changes'][:MAX_CHANGED])
+            if not _supported(name):
+                raise TaskContextError('TASK_CONTEXT_FILE_UNSUPPORTED', 'File type is outside task source context',
+                    guidance='Use task changes or related_candidates. This source contract excludes documentation; if it is needed for the conclusion, submit PARTIAL and identify the gap.')
             if (name not in record['end']['hashes'] and not deleted) or _environment(name):
-                raise ValueError('Path is outside the task inventory or excluded from model context')
-            if type(start_line) is not int or type(end_line) is not int or not 1 <= start_line <= end_line or end_line-start_line >= 80:
-                raise ValueError('Request 1 to 80 source lines')
+                raise TaskContextError('TASK_CONTEXT_PATH_EXCLUDED', 'Path is outside the task inventory or excluded from model context',
+                    guidance='Use an allowed task source path. Environment content stays excluded; do not widen the task scope.')
+            if type(start_line) is not int or type(end_line) is not int or not 1 <= start_line <= end_line <= 2_147_483_647:
+                raise TaskContextError('TASK_CONTEXT_RANGE_INVALID', 'Invalid source range',
+                    guidance='Use integer source lines with 1 <= start_line <= end_line. Keep this task and review session; no new scan is required.',
+                    details={'max_window_lines': MAX_CONTEXT_WINDOW_LINES})
             changed = {c['path'] for c in record['changes'][:MAX_CHANGED]}
             if name not in changed and name not in record['related_files'] and len(record['related_files']) >= MAX_RELATED:
-                raise ValueError('Related source file budget exceeded')
+                self._context_gap(root, record, 'TASK_CONTEXT_RELATED_FILE_BUDGET', name)
+                raise TaskContextError('TASK_CONTEXT_RELATED_FILE_BUDGET', 'Related source file budget exceeded', recoverable=False,
+                    guidance='Keep existing evidence and submit PARTIAL with the unread path; do not create a new task or session to reset budgets.')
             if deleted:
                 lines = record['baseline']['texts'].get(name)
                 if lines is None:
-                    raise ValueError('Deleted source preimage unavailable')
+                    self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
+                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Deleted source preimage unavailable', recoverable=False,
+                        guidance='Submit PARTIAL with the unavailable preimage; do not substitute current code or a later baseline.')
                 file_hash = record['baseline']['hashes'][name]
                 location_version = 'BEFORE_DELETION'
             else:
-                raw, text = WorkspaceReader(root).read(name)
+                try:
+                    raw, text = WorkspaceReader(root).read(name)
+                except (OSError, EvidenceUnavailable, UnicodeError):
+                    self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
+                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Task source context unavailable', recoverable=False,
+                        guidance='Submit PARTIAL with the missing source; link and source-size guards remain in force.') from None
                 if hash_bytes(raw) != record['end']['hashes'][name]:
                     raise ValueError('Source changed during context read')
                 lines = safe_source(text)
                 file_hash = hash_bytes(raw)
                 location_version = 'CURRENT_TASK_END'
             if start_line > len(lines):
-                raise ValueError('Source range unavailable')
-            high = min(end_line, len(lines))
+                raise TaskContextError('TASK_CONTEXT_RANGE_UNAVAILABLE', 'Source range unavailable',
+                    guidance='Use a range within total_lines, keeping this task and review session; no new scan is required.',
+                    details={'total_lines': len(lines), 'max_window_lines': MAX_CONTEXT_WINDOW_LINES})
+            requested_high = min(end_line, len(lines))
+            high = min(requested_high, start_line+MAX_CONTEXT_WINDOW_LINES-1)
             eid = 'te1-'+digest_value([ref, session, name, file_hash, start_line, high, location_version])[:32]
             packet = dict(evidence_id=eid, path=name, file_sha256=file_hash, location_version=location_version, start_line=start_line, end_line=high,
+                          total_lines=len(lines), requested_range=dict(start_line=start_line, end_line=end_line),
+                          returned_range=dict(start_line=start_line, end_line=high),
+                          max_window_lines=MAX_CONTEXT_WINDOW_LINES, has_more=high<requested_high,
+                          next_read=(dict(task_ref=ref, review_session=session, file_path=name,
+                                          start_line=high+1, end_line=requested_high, workspace_path=str(root))
+                                     if high<requested_high else None),
                           numbered_lines=[f'{i}: {lines[i-1]}' for i in range(start_line, high+1)], trust='UNTRUSTED_CODE')
+            truncation_snapshot = record['baseline'] if deleted else record['end']
+            truncated = truncation_snapshot.get('text_truncations', {}).get(name)
+            packet['line_truncation'] = dict(max_line_chars=MAX_LINE_CHARS,
+                file_line_truncation_count=truncated['line_count'] if truncated else 0,
+                known_truncated_lines=[i for i in (truncated or {}).get('lines', []) if start_line<=i<=high],
+                complete_line_text=not truncated)
+            if truncated and not any(v.get('path') == name and v.get('reason') == 'SOURCE_LINE_CHAR_BUDGET'
+                                     for v in record['limitations']):
+                record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
+                                                  line_count=truncated['line_count']))
+            request_key = digest_value([name, file_hash, location_version])
+            requests = record.setdefault('context_requests', {})
+            request = requests.setdefault(request_key, dict(path=name, file_sha256=file_hash,
+                                                            location_version=location_version, spans=[]))
+            request['spans'] = _merge_spans([*request['spans'], [start_line, requested_high]])
             if eid not in record['evidence']:
                 if len(record['evidence']) >= MAX_CONTEXT_READS:
-                    raise ValueError('Task context read budget exceeded')
+                    self._context_gap(root, record, 'TASK_CONTEXT_READ_BUDGET', name)
+                    raise TaskContextError('TASK_CONTEXT_READ_BUDGET', 'Task context read budget exceeded', recoverable=False,
+                        guidance='Submit PARTIAL with unread ranges. Pagination does not reset the read, byte or session budgets.')
                 cost = len(json.dumps(packet, ensure_ascii=False).encode())
                 if record['context_bytes'] + cost > MAX_CONTEXT:
-                    raise ValueError('Task model context byte budget exceeded')
+                    self._context_gap(root, record, 'TASK_CONTEXT_BYTE_BUDGET', name)
+                    raise TaskContextError('TASK_CONTEXT_BYTE_BUDGET', 'Task model context byte budget exceeded', recoverable=False,
+                        guidance='Submit PARTIAL with unread ranges; do not restart a task, rescan or widen the context budget.')
                 record['evidence'][eid] = {k: packet[k] for k in ('path','file_sha256','location_version','start_line','end_line')}
                 record['context_bytes'] += cost
                 if name not in changed and name not in record['related_files']:
                     record['related_files'].append(name)
-                self.store(root).save(record)
+            self.store(root).save(record)
             return packet
+
+    def _context_gap(self, root, record, reason_code, path):
+        gap = dict(reason=reason_code, path=path)
+        gaps = record.setdefault('context_gaps', [])
+        if gap not in gaps and len(gaps) < MAX_CONTEXT_READS:
+            gaps.append(gap)
+        self.store(root).save(record)
 
     def submit(self, workspace, ref, session, findings, coverage, limitations):
         root = self.root(workspace)
@@ -509,8 +723,20 @@ class TaskSecurityService:
             if len(record['changes']) > 1 and not record['related_files']:
                 coverage = 'PARTIAL'
                 clean_limitations.append('未读取未改动的关联文件；跨文件控制和调用上下文未充分核查。')
+            unread = _unread_context(record)
+            if unread:
+                coverage = 'PARTIAL'
+                # Bound display, but preserve all spans in the signed record.
+                clean_limitations.append('已请求的源码范围尚未读完：'+
+                    '；'.join(f"{v['path']}:{v['start_line']}-{v['end_line']}" for v in unread[:10])+
+                    (f'；另有 {len(unread)-10} 个范围' if len(unread)>10 else '')+'。')
+            if record.get('context_gaps'):
+                coverage = 'PARTIAL'
+                clean_limitations.append('源码上下文受限：'+
+                    '；'.join(f"{v['path']} ({v['reason']})" for v in record['context_gaps'][:10])+'。')
             if record['limitations']:
                 coverage = 'PARTIAL'
+                clean_limitations.extend(_coverage_gaps(record['limitations']))
             record.update(phase='COMPLETE', review=dict(source='HOST_TASK_REVIEW', coverage=coverage,
                 findings=accepted, limitations=clean_limitations, model_invocation='HOST_ONLY_NOT_OBSERVED_BY_RUNTIME',
                 validation='STRUCTURE_AND_SOURCE_VERSION_ONLY', method_sha256=record['packet']['quick_skill']['sha256'],
@@ -536,7 +762,7 @@ class TaskSecurityService:
             result['static']['has_more'] = finding_offset+finding_limit < len(record['static']['findings'])
         result['current_version'] = current
         if current is False:
-            result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码已变化，旧结论不能用于当前版本。')
+            result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码版本或检查范围已变化，旧记录不能用于当前任务范围。')
         return result
 
     def skip(self, workspace, ref, reason):
@@ -565,6 +791,17 @@ class TaskSecurityService:
             unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
+        result['file_hook_checks'] = dict(check_count=len(record.get('hook_checks', [])),
+            omitted_check_count=record.get('hook_checks_omitted', 0),
+            current_recheck_files=record.get('hook_final_recheck_files', [])[:100],
+            current_recheck_file_count=len(record.get('hook_final_recheck_files', [])),
+            findings_source='FINAL_CURRENT_STATIC_CHECK; HISTORICAL_HOOK_ALERTS_NOT_REPLAYED',
+            recording_failure=record.get('hook_recording_failure'))
+        unread = _unread_context(record)
+        result['context_read_coverage'] = dict(unread_range_count=len(unread), unread_ranges=unread[:100],
+            gaps=record.get('context_gaps', []), used_reads=len(record.get('evidence', {})),
+            max_reads=MAX_CONTEXT_READS, used_bytes=record.get('context_bytes', 0), max_bytes=MAX_CONTEXT,
+            max_window_lines=MAX_CONTEXT_WINDOW_LINES)
         if record.get('static'):
             static = record['static']
             result['static'] = {key: static[key] for key in ('scan_id','status','coverage','scope_files','actual_files','duration_ms','reason','capability_results') if key in static}
@@ -576,20 +813,33 @@ class TaskSecurityService:
             result['development_summary'] = '' if not result['limitations'] else '本次没有观察到可检查的文件改动；部分文件未能建立比较记录。'
         elif phase == 'INCOMPLETE':
             result['development_summary'] = '本次任务安全核查未完成：'+record.get('skip_reason', '上下文核查会话已过期。')+' 已有检查记录保留，不认定风险已消除。'
-            for f in record.get('static', {}).get('findings', [])[:3]:
+            pending = record.get('static', {}).get('findings', [])
+            for f in pending[:3]:
                 result['development_summary'] += f"\n- 已有静态提示：{f['file_path']}:{f['line_start']}，{f.get('plain_title') or f['title']}。可能影响：{f['impact']} 建议：{f['fix_advice']} 实际运行条件尚未确认。"
+            if len(pending)>3:
+                result['development_summary'] += f'\n另有 {len(pending)-3} 项静态提示保留在本次核查记录中。'
+            if pending:
+                result['development_summary'] += '\n请选择具体风险后回复“修复”或“忽略”；忽略保留风险记录，未授权的风险不会自动修改。'
         elif phase == 'COMPLETE':
             static = record['static']
             review = record['review']
             total = len(static['findings']) + len(review['findings'])
+            complete_static = (static['status'] in {'SUCCESS', 'COMPLETED'}
+                               and static['coverage'] in {'FULL', 'SCOPED'})
             prefix = f"安全核查：本任务有 {len(record['changes'])} 个改动文件，提交静态检查 {len(static.get('scope_files', []))} 个文件"
+            if record.get('hook_final_recheck_files'):
+                prefix += f"（包含文件修改检查保留的 {len(record['hook_final_recheck_files'])} 个当前文件）"
             if total:
                 prefix += f'，保留 {total} 项待核实风险。'
+            elif not complete_static:
+                prefix += '，静态检查未完成或覆盖有限，当前风险尚待核实。'
+            elif review['coverage'] == 'PARTIAL' or record['limitations']:
+                prefix += '，上下文核查覆盖有限，当前风险尚待核实。'
             else:
                 prefix += '，本次未发现安全线索。'
             lines = [prefix]
-            # Full results stay accessible; summary is bounded and carries the
-            # condition/unknowns rather than presenting host claims as facts.
+            # Aggregate final findings once with a bounded default summary;
+            # full records stay accessible and candidates retain uncertainty.
             combined = [(f, '静态检查提示') for f in static['findings']] + [(f, '上下文核查线索') for f in review['findings']]
             order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}
             combined.sort(key=lambda v: order.get(v[0]['severity'], 4))
@@ -601,12 +851,22 @@ class TaskSecurityService:
                 if source == '上下文核查线索':
                     text += ' 条件：'+('；'.join(f['preconditions']) or '实际可达性未确认')
                     text += ' 未确认：'+('；'.join(f['unknowns']) or '尚未运行验证')
+                    text += ' 反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的防护')
+                else:
+                    text += ' 实际运行条件尚未确认。'
                 lines.append(text)
             if total > 3:
                 lines.append(f'另有 {total-3} 项已保留在本次核查记录中。')
-            if static['coverage'] not in {'FULL','SCOPED'} or review['coverage'] == 'PARTIAL' or record['limitations']:
+            if not complete_static and record.get('hook_final_recheck_files'):
+                names = record['hook_final_recheck_files']
+                lines.append('文件修改检查保留范围的当前风险尚待核实：'+ '、'.join(names[:5])+
+                             (f' 等 {len(names)} 个文件' if len(names)>5 else '')+
+                             '；本次最终检查不足以证明先前提示已消除。')
+            if not complete_static or review['coverage'] == 'PARTIAL' or record['limitations']:
                 lines.append('覆盖有限：'+('；'.join(review['limitations'][:5]) or '静态能力或任务上下文有未完成范围。'))
             lines.append('仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为；风险尚未修复。' if total else '仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为。')
+            if total:
+                lines.append('请选择具体风险后回复“修复”或“忽略”；忽略保留风险记录，未授权的风险不会自动修改。')
             result['development_summary'] = '\n'.join(lines)
         else:
             result['development_summary'] = ''

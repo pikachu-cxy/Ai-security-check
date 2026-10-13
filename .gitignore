@@ -16,6 +16,8 @@ dist/
 .test-tmp/
 .distribution-venv/
 .test-tmp-run*/
+.test-tmp-context*/
+.test-tmp-task-context/
 artifacts/r1/
 artifacts/upgrade/
 # Local acceptance receipts, scanner reports, runtime state and copied bundles.

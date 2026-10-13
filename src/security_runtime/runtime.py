@@ -65,11 +65,11 @@ class SecurityRuntime:
 
     def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None, _hook_dependency_changes=None) -> ScanResult:
         from .background_preparation import current_preparation, ACTIVE
-        from .verification_policy import local_recheck
+        from .verification_policy import local_recheck, local_recheck_requested
         preparation = current_preparation()
         preparing = preparation['status'] in ACTIVE and not preparation.get('ready')
         reporter = progress or NullProgressReporter()
-        with progress_context(reporter), (local_recheck() if preparing else nullcontext()):
+        with progress_context(reporter), (local_recheck() if preparing and not local_recheck_requested() else nullcontext()):
             try:
                 if staged:
                     workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)

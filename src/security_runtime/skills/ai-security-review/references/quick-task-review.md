@@ -24,6 +24,12 @@ Stay within the packet's file, byte and session budgets. Use one bounded reasoni
 pass and one counterevidence check, reusing sufficient context. No repository-wide
 audit, installs, target execution, network requests or automatic scan retry loop.
 BUSY/expired/stale/unavailable results become a concise gap in the dev summary.
+`CONTEXT_REQUEST_REJECTED` is a bounded request error, not a connection failure.
+For `recoverable=true`, correct its parameters in the same task/session using the
+fixed guidance; do not restart the task or rerun static checks. Documentation
+outside the source inventory does not become readable by retrying its path. If
+unsupported context is material to a conclusion, disclose it as PARTIAL. For a
+read/file/byte budget rejection, retain existing evidence and submit PARTIAL.
 Use `finish_security_task(skip_review_reason=<actual gap>)` to close an unfinished
 review without another scan and without falsely claiming completion; prior results
 remain in the task record. This permits the next development task to start fresh.
@@ -31,6 +37,21 @@ Do not stall development or invent completion. Runtime budgets input/context and
 static attempts; it does not observe or enforce the host model's inference time.
 
 ## What to inspect
+
+Build the task-end working context from the exact starting baseline, actual task
+changes, static results and the smallest necessary current source windows, not
+the whole conversation. Summaries and `related_candidates` are navigation only.
+Obtain current-version evidence for the critical input, permission/ownership
+control, dangerous sink and strongest counterevidence; a summary cannot replace
+those source locations. Prioritizing a window does not attest that lower-priority
+paths were reviewed. Keep omitted material paths and conditions explicit.
+
+Literal redaction can make a literal-only edit invisible in the sanitized diff.
+A changed raw file hash still means MODIFIED; never call it an unchanged file or
+skip its task check. Preserve unknown literal semantics and use PARTIAL when the
+missing value is necessary for the judgment; do not reconstruct hidden values.
+AST/call-graph indexes and separate batched review sessions are future product
+work, not capabilities or budget resets supplied by this method.
 
 Read sanitized diffs and actual static findings/coverage. Prioritize changed
 entrypoints, permissions, data access, outbound requests, file/command execution,
@@ -44,6 +65,19 @@ or middleware too, using `related_candidates` for navigation; these names alone
 are not proof of a relationship. Return precise Runtime-issued evidence references.
 Do not assume a sink is reachable solely because a scanner matched it. Static-zero
 alerts do not skip authorization, cross-file trust boundaries or business controls.
+
+Each context response contains at most `budget.context_window_lines` (80) source
+lines. A hundreds-line request is paged, not skipped: inspect `total_lines`,
+`requested_range`, `returned_range`, `has_more` and Runtime-issued `next_read`.
+Follow `next_read` in the same task, review session, file and code version until
+the requested window is complete. The evidence id covers only `returned_range`;
+the first page never proves the full requested range was read. Pages count toward
+the existing 40 unique reads and 64KB cumulative packet/context budget; duplicate
+issued windows do not reset the budget. Prefer necessary changed/control/sink
+windows over reading every file. Known unread continuations or exhausted budgets
+require PARTIAL and the missing paths/ranges; do not silently omit them, invent
+evidence, create a replacement session or claim full review. Static tools inspect
+their actual eligible file scope independently of the 80-line model window.
 
 For a potential issue, check the strongest counterexample: route middleware,
 ownership filtering, safe API, earlier validation, non-public entrypoint or test-only
@@ -81,3 +115,7 @@ display raw JSON, internal refs, hook plans or scan progress in chat. Do not add
 a second “钩子反馈” reply or ask the user to continue. Zero findings is not a
 project-safety claim. Review grants no repair authority; a separately approved
 selected issue still uses the existing bounded fix-and-retest workflow.
+When risks remain, end the combined task summary with one instruction to select
+a specific risk and reply 修复 or 忽略. Ignoring retains the risk record and does
+not mean resolution; do not ask for a choice during each edit or infer a repair
+grant from the original development request.
