@@ -175,7 +175,7 @@ def test_changed_and_context_budgets_are_enforced(service):
     for i in range(MAX_CHANGED+1):
         (root/f'file{i:02}.ts').write_text('export const value = 5;\n')
     result = s.finish(root, ref)
-    assert result['changed_file_count'] == MAX_CHANGED+1 and len(runtime.calls[0]) == MAX_CHANGED
+    assert result['changed_file_count'] == MAX_CHANGED+1 and len(runtime.calls[0]) == MAX_CHANGED+1
     assert result['limitations']
     packet = s.prepare(root, ref)
     record = s.load(root, ref)

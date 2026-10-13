@@ -5,8 +5,11 @@
 最新任务核查已替代普通 Stop 调度：先读 [任务核查验收](TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)。
 改文件静态 Hook 保留；当前真正待验的是宿主自动任务编排与速度，不是恢复每次聊天收尾。
 本批最终包 `dist/task-security-20261013-r4/security-check`，构建 `16f299bb…`，本机已安装。
-本轮先提交并同步任务核查、手测样例及当前进度，再修复临时目录占用任务盘点预算的问题。
-修复前保存与修复后提交分开保留，准确同步状态以本轮分支历史和最新进度为准；旧连接仍需重连。
+修复前快照已同步为 `67a6517`。任务盘点现按Git忽略规则自动确定项目文件，保留真实任务
+开始字节并优先纳入新文件；23项任务回归及161项关联回归通过，另2项跳过。
+最新独立候选 `dist/task-inventory-20261013-r2/security-check`，构建 `fcff4c7a…`，已在旧临时
+文件项目和真实647文件仓库验证自动范围。未切换全局安装；加载该候选后再继续匿名手测。
+实现、范围及记录见 [自动任务范围验收](TASK_INVENTORY_ACCEPTANCE.zh-CN.md)，同本批修复同步。
 先读本文，再读 [开发进度](DEVELOPMENT_PROGRESS.md)、
 [近期顺序](NEXT_DEVELOPMENT_PLAN.zh-CN.md) 和 [收尾验收](RUNTIME_CLOSEOUT_CHECK.zh-CN.md)。
 

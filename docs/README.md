@@ -28,6 +28,9 @@ acceptance output belongs in Git history, not in `docs/`.
   static results plus bounded context, quick review workflow and quiet feedback.
 - [任务核查与静默结束验收](TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md) — current implementation,
   native MCP/Hook measurements and pending real Desktop/Agent checks.
+- [自动任务文件范围修复与验收](TASK_INVENTORY_ACCEPTANCE.zh-CN.md) — Git ignore-aware inventory,
+  new-file coverage, bounded context and native automatic-scope verification.
+- [订单详情上下文手测](BLIND_ORDER_CONTEXT_TEST.zh-CN.md) — anonymous paired projects and ordinary development prompts.
 
 - [R2.2 security review contract](SECURITY_REVIEW.md)
 - [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)

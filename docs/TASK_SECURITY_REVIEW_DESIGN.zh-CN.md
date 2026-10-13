@@ -14,7 +14,9 @@
 接口为 `begin_security_task`、`finish_security_task`、`prepare_task_security_review`、
 `read_task_review_context`、`submit_task_security_review` 和 `get_task_security_review`。
 修改前保存实际工作区内容哈希及有限脱敏前像，包含既有脏文件；删除文件可返回签名前像。
-任务静态范围最多20个改动文件，关联上下文最多10个文件、40个读取窗口，累计64,000字节。
+Git盘点遵循项目忽略规则，名称清单与读取成功的哈希分开，优先读取实际新文件及已有脏文件。
+任务静态范围最多1000个改动文件，AI改动上下文最多20个，关联最多10个文件、40个读取窗口，累计64,000字节。
+不完整快照不能证明新增、删除或无改动；最新范围验收见 [自动任务范围](TASK_INVENTORY_ACCEPTANCE.zh-CN.md)。
 同版本结束不重扫；源码变化时静态尝试最多2次。未完成核查用 `skip_review_reason` 保留缺口
 并结束，不要求用户“继续”。模型由当前宿主执行，Runtime 只校验候选结构、证据及版本。
 

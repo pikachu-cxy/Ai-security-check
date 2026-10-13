@@ -10,10 +10,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import subprocess
 import time
 import uuid
 
 from .hook_state import HookStateStore, identity
+from .git import GitError, GitService
 from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source
 from .redactor import SecretRedactor
 from .task_security_state import CONTRACT, TaskSecurityStore
@@ -24,6 +26,9 @@ MAX_FILES = 1000
 MAX_READ_BYTES = 20_000_000
 MAX_PREIMAGE_BYTES = 512_000
 MAX_CHANGED = 20
+MAX_STATIC_CHANGED = 1000
+MAX_INVENTORY_PATHS = 20_000
+MAX_INVENTORY_NAME_BYTES = 256_000
 MAX_RELATED = 10
 MAX_CONTEXT = 64_000
 MAX_DIFF_LINES = 2000
@@ -48,14 +53,65 @@ def method():
 def _supported(name):
     path = Path(name)
     return (path.suffix.lower() in set(EXTENSIONS) | {'.mjs', '.cjs', '.mts', '.cts', '.yaml', '.yml', '.json', '.xml', '.properties', '.toml', '.tf'}
-            or path.name in set(DEPENDENCIES) | {'Dockerfile', '.env'} or path.name.startswith('.env.'))
+            or path.name in set(DEPENDENCIES) | {'Dockerfile', '.env', '.gitignore'} or path.name.startswith('.env.'))
 
 
 def _environment(name):
     return Path(name).name == '.env' or Path(name).name.startswith('.env.')
 
 
-def capture(root):
+def _inventory(root, ignored):
+    """Use Git's project boundary and ignore policy, never recursively walk Git output."""
+    limitations, dirty = [], []
+    if (root / '.git').exists():
+        try:
+            git = GitService(root)
+            if git.top_level() != root.resolve():
+                raise GitError('TASK_GIT_ROOT_MISMATCH')
+            names = git._paths('ls-files', '--cached', '--others', '--exclude-standard', '-z')
+            dirty = git.changed_files('quick')
+        except (GitError, OSError, subprocess.TimeoutExpired):
+            return [], [], False, [{'reason': 'GIT_INVENTORY_UNAVAILABLE'}]
+    else:
+        names = []
+        started, visited = time.monotonic(), 0
+        def onerror(error):
+            limitations.append({'reason': 'INVENTORY_DIRECTORY_UNAVAILABLE'})
+        for directory, dirs, files in os.walk(root, followlinks=False, onerror=onerror):
+            visited += 1
+            depth = len(Path(directory).relative_to(root).parts)
+            dirs[:] = sorted(d for d in dirs if d not in ignored
+                             and d != '.test-tmp' and not d.startswith('.test-tmp-'))
+            for d in list(dirs):
+                path = Path(directory) / d
+                if path.is_symlink() or path.is_junction() or depth >= 12:
+                    limitations.append({'path': path.relative_to(root).as_posix(), 'reason': 'LINK_OR_DEPTH_EXCLUDED'})
+                    dirs.remove(d)
+            if visited > 2000 or time.monotonic() - started > 5:
+                limitations.append({'reason': 'INVENTORY_TIME_OR_DIRECTORY_BUDGET'})
+                break
+            names.extend((Path(directory) / filename).relative_to(root).as_posix() for filename in files)
+            if len(names) > MAX_INVENTORY_PATHS:
+                limitations.append({'reason': 'INVENTORY_PATH_BUDGET'})
+                break
+    selected = set()
+    for name in names:
+        try:
+            name = _relative(name)
+            if not _supported(name) or set(Path(name).parts) & ignored:
+                continue
+            # Missing tracked files are real deletions, not read failures. lstat
+            # does not follow a link; WorkspaceReader validates every actual read.
+            (root / name).lstat()
+            selected.add(name)
+        except FileNotFoundError:
+            continue
+        except (OSError, EvidenceUnavailable) as exc:
+            limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
+    return sorted(selected), dirty, not limitations, limitations[:100]
+
+
+def capture(root, *, known_paths=None, priority_paths=()):
     """Hash the actual workspace (including pre-existing dirty/new files).
 
     Retain only sanitized text, never raw source/credentials. All budgets are
@@ -63,42 +119,74 @@ def capture(root):
     """
     reader = WorkspaceReader(root)
     hashes, texts, limitations = {}, {}, []
-    total, text_total, visited = 0, 0, 0
+    total, text_total = 0, 0
     ignored = IGNORED | {v.strip() for v in os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '').split(',') if v.strip()}
+    inventory, dirty, complete, inventory_limits = _inventory(root, ignored)
+    limitations.extend(inventory_limits)
+    known = set(known_paths) if known_paths is not None else None
+    added = [p for p in inventory if known is not None and p not in known]
+    priority = list(dict.fromkeys([*priority_paths, *added, *sorted(dirty)]))
+    inventory_set = set(inventory)
+    priority = [p for p in priority if p in inventory_set]
+    ordered = list(dict.fromkeys([*priority, *inventory]))
+    name_bytes = sum(len(p.encode('utf-8')) for p in ordered)
+    if len(ordered) > MAX_INVENTORY_PATHS or name_bytes > MAX_INVENTORY_NAME_BYTES:
+        complete = False
+        limitations.append({'reason': 'INVENTORY_PATH_BUDGET'})
+        selected, cost = [], 0
+        for name in ordered[:MAX_INVENTORY_PATHS]:
+            cost += len(name.encode('utf-8'))
+            if cost > MAX_INVENTORY_NAME_BYTES:
+                break
+            selected.append(name)
+        inventory, ordered = sorted(selected), selected
     started = time.monotonic()
-    for directory, dirs, files in os.walk(root, followlinks=False):
-        visited += 1
-        depth = len(Path(directory).relative_to(root).parts)
-        dirs[:] = sorted(d for d in dirs if d not in ignored)
-        for d in list(dirs):
-            path = Path(directory) / d
-            if path.is_symlink() or path.is_junction() or depth >= 12:
-                limitations.append({'path': path.relative_to(root).as_posix(), 'reason': 'LINK_OR_DEPTH_EXCLUDED'})
-                dirs.remove(d)
-        if visited > 2000 or time.monotonic() - started > 5:
-            limitations.append({'reason': 'INVENTORY_TIME_OR_DIRECTORY_BUDGET'})
+    for name in ordered:
+        if len(hashes) >= MAX_FILES or total >= MAX_READ_BYTES or time.monotonic() - started > 5:
+            limitations.append({'reason': 'INVENTORY_READ_BUDGET'})
             break
-        for filename in sorted(files):
-            name = (Path(directory)/filename).relative_to(root).as_posix()
-            if not _supported(name):
+        try:
+            raw, text = reader.read(name, maximum=min(1_000_000, MAX_READ_BYTES-total))
+            hashes[name] = hash_bytes(raw)
+            total += len(raw)
+            if _environment(name):
                 continue
-            if len(hashes) >= MAX_FILES or total >= MAX_READ_BYTES:
-                limitations.append({'reason': 'INVENTORY_FILE_OR_BYTE_BUDGET'})
-                return dict(hashes=hashes, texts=texts, limitations=limitations[:100])
-            try:
-                raw, text = reader.read(name, maximum=min(1_000_000, MAX_READ_BYTES-total))
-                hashes[name] = hash_bytes(raw)
-                total += len(raw)
-                if _environment(name):
-                    continue
-                lines = safe_source(text)
-                cost = len(json.dumps(lines, ensure_ascii=True).encode())
-                if cost + text_total <= MAX_PREIMAGE_BYTES:
-                    texts[name] = lines
-                    text_total += cost
-            except (OSError, EvidenceUnavailable, UnicodeError) as exc:
-                limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
-    return dict(hashes=hashes, texts=texts, limitations=limitations[:100])
+            lines = safe_source(text)
+            cost = len(json.dumps(lines, ensure_ascii=True).encode())
+            if cost + text_total <= MAX_PREIMAGE_BYTES:
+                texts[name] = lines
+                text_total += cost
+        except (OSError, EvidenceUnavailable, UnicodeError) as exc:
+            limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
+    return dict(hashes=hashes, texts=texts, limitations=limitations[:100], inventory=inventory,
+                inventory_complete=complete,
+                read_priority=ordered[:MAX_FILES])
+
+
+def task_changes(root, baseline, end):
+    """Absent hashes in a partial snapshot never prove an addition or deletion."""
+    before, after = baseline['hashes'], end['hashes']
+    before_names = set(baseline.get('inventory', before))
+    after_names = set(end.get('inventory', after))
+    before_complete = baseline.get('inventory_complete', not baseline['limitations'])
+    after_complete = end.get('inventory_complete', not end['limitations'])
+    changes, unknown = [], []
+    for name in sorted(before_names | after_names):
+        if name not in before_names:
+            if before_complete:
+                changes.append(dict(path=name, change='ADDED'))
+            else:
+                unknown.append(name)
+        elif name not in after_names:
+            if after_complete and not os.path.lexists(root / name):
+                changes.append(dict(path=name, change='DELETED'))
+            else:
+                unknown.append(name)
+        elif name not in before or name not in after:
+            unknown.append(name)
+        elif before[name] != after[name]:
+            changes.append(dict(path=name, change='MODIFIED'))
+    return changes, unknown
 
 
 def _clean(value, limit=1000):
@@ -169,10 +257,13 @@ class TaskSecurityService:
             return self._view(record)
 
     def _fresh(self, root, record):
-        current = capture(root)
+        current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
+                          priority_paths=record['end'].get('read_priority', ()))
         if current['limitations'] != record['end']['limitations']:
             return False
-        return current['hashes'] == record['end']['hashes']
+        return (current['hashes'] == record['end']['hashes']
+                and current.get('inventory') == record['end'].get('inventory', sorted(record['end']['hashes']))
+                and current['inventory_complete'] == record['end'].get('inventory_complete', not record['end']['limitations']))
 
     def finish(self, workspace, ref):
         root = self.root(workspace)
@@ -182,24 +273,35 @@ class TaskSecurityService:
             record = self.load(root, ref)
             if record['phase'] == 'NO_CHANGES':
                 return self.get(workspace, ref)
-            end = capture(root)
-            if record.get('end') and end['hashes'] == record['end']['hashes'] and end['limitations'] == record['end']['limitations'] and record['phase'] != 'STATIC_RUNNING':
+            end = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
+                          priority_paths=record.get('end', {}).get('read_priority', ()))
+            if record.get('end') and end['hashes'] == record['end']['hashes'] and end['limitations'] == record['end']['limitations'] and end['inventory'] == record['end'].get('inventory', sorted(record['end']['hashes'])) and record['phase'] != 'STATIC_RUNNING':
                 return self._view(record)
             before = record['baseline']['hashes']
-            changes = [dict(path=p, change='DELETED' if p not in end['hashes'] else 'ADDED' if p not in before else 'MODIFIED')
-                       for p in sorted(set(before) | set(end['hashes'])) if before.get(p) != end['hashes'].get(p)]
+            changes, unknown = task_changes(root, record['baseline'], end)
             record.update(end=end, changes=changes, review=None, evidence={}, related_files=[], context_bytes=0,
-                          limitations=record['baseline']['limitations']+end['limitations'])
+                          unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
+            if unknown:
+                record['limitations'].append({'reason': 'TASK_CHANGE_COMPARISON_UNAVAILABLE', 'count': len(unknown), 'paths': unknown[:100]})
             if not changes:
+                if unknown or record['limitations']:
+                    record.update(phase='INCOMPLETE', skip_reason='文件盘点或开始版本不完整，无法证明本次没有代码改动。')
+                    record['baseline']['texts'] = {}
+                    record['end']['texts'] = {}
+                    return self._view(self.store(root).save(record))
                 record.update(phase='NO_CHANGES', baseline=dict(hashes=before, texts={}, limitations=record['baseline']['limitations']))
                 return self._view(self.store(root).save(record))
             if record['static_attempts'] >= 2:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
                 return self._view(self.store(root).save(record))
-            scope = [v['path'] for v in changes[:MAX_CHANGED] if not _environment(v['path'])]
-            exclusions = [v['path'] for v in changes if _environment(v['path']) or v not in changes[:MAX_CHANGED]]
+            eligible = [v['path'] for v in changes if not _environment(v['path'])]
+            scope = eligible[:MAX_STATIC_CHANGED]
+            exclusions = [v['path'] for v in changes if _environment(v['path']) or v['path'] not in scope]
             if exclusions:
-                record['limitations'].append({'reason': 'TASK_STATIC_SCOPE_EXCLUDED', 'paths': exclusions})
+                record['limitations'].append({'reason': 'TASK_STATIC_SCOPE_EXCLUDED', 'count': len(exclusions), 'paths': exclusions[:MAX_CHANGED]})
+            if len(changes) > MAX_CHANGED:
+                record['limitations'].append({'reason': 'TASK_CONTEXT_SCOPE_EXCLUDED', 'count': len(changes)-MAX_CHANGED,
+                                             'paths': [v['path'] for v in changes[MAX_CHANGED:MAX_CHANGED*2]]})
             record.update(phase='STATIC_RUNNING', static_attempts=record['static_attempts']+1)
             record = self.store(root).save(record)
             started = time.perf_counter()
@@ -273,7 +375,8 @@ class TaskSecurityService:
                             file_path=f['file_path'], line_start=f['line_start']) for f in static['findings'][:30]]
             packet = dict(status='REVIEW_REQUIRED', task_ref=ref, review_required=True,
                 static=dict(scan_id=static.get('scan_id'), status=static['status'], coverage=static['coverage'],
-                    duration_ms=static.get('duration_ms'), scope_files=static.get('scope_files', []),
+                    duration_ms=static.get('duration_ms'), scope_files=static.get('scope_files', [])[:MAX_CHANGED],
+                    scope_file_count=len(static.get('scope_files', [])), scope_truncated=len(static.get('scope_files', []))>MAX_CHANGED,
                     finding_count=len(static['findings']), findings=findings, capability_results=static.get('capability_results', {})),
                 changes=record['changes'], diffs=diffs, related_candidates=[],
                 quick_skill=guide, limitations=record['limitations'],
@@ -282,7 +385,8 @@ class TaskSecurityService:
                                          coverage='REVIEWED or PARTIAL', limitations='list[str], including unreviewed paths and missing context',
                                          evidence='Runtime-issued ids only; primary location must be a changed file',
                                          validation='STRUCTURE_AND_SOURCE_VERSION_ONLY; HOST_CANDIDATES_NOT_SCANNER_PROOF'),
-                budget=dict(changed_files=MAX_CHANGED, related_files=MAX_RELATED, context_reads=MAX_CONTEXT_READS,
+                budget=dict(changed_files=MAX_CHANGED, static_changed_files=MAX_STATIC_CHANGED,
+                            related_files=MAX_RELATED, context_reads=MAX_CONTEXT_READS,
                             total_context_bytes=MAX_CONTEXT, expires_in_seconds=REVIEW_TTL))
             changed_dirs = {str(Path(c['path']).parent) for c in record['changes']}
             candidates = [p for p in record['end']['hashes'] if p not in {c['path'] for c in record['changes']} and not _environment(p)]
@@ -458,6 +562,7 @@ class TaskSecurityService:
         result = dict(status=phase, task_ref=record['task_ref'], scanner_run=False,
             review_required=phase in {'READY','REVIEWING'}, changes=record.get('changes', [])[:MAX_CHANGED],
             changed_file_count=len(record.get('changes', [])), change_scope_truncated=len(record.get('changes', []))>MAX_CHANGED,
+            unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
         if record.get('static'):
