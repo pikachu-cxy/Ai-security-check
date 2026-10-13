@@ -33,9 +33,11 @@ class ProcessIdleTimeout(TimeoutError):
 
 
 def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None,
-                idle_timeout=None, activity_clock=None, on_stderr_chunk=None) -> ProcessResult:
+                idle_timeout=None, activity_clock=None, on_stderr_chunk=None, remaining_callback=None) -> ProcessResult:
     checkpoint()
-    timeout = bounded_timeout(timeout)
+    # A dynamic preparation deadline may grow, but the process's static ceiling
+    # remains absolute. Ordinary scans retain their original timeout contract.
+    timeout = bounded_timeout(timeout, hard=remaining_callback is not None)
     start = time.monotonic()
     creation_started = time.perf_counter()
     proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
@@ -92,7 +94,8 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
             if overflow.is_set():
                 failure = OutputLimitError("scanner output limit exceeded")
                 break
-            if time.monotonic() - start >= timeout:
+            if (time.monotonic() - start >= timeout
+                    or remaining_callback is not None and remaining_callback() <= 0):
                 failure = TimeoutError("process timed out")
                 break
             if (idle_timeout is not None and activity_clock is not None

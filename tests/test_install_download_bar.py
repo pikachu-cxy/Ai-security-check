@@ -93,8 +93,6 @@ def test_chinese_progress_fits_columns_and_clears_shorter_row(monkeypatch, colum
         assert cells(current) <= columns - 1 and cells(previous) <= columns - 1
         assert cells(current) >= cells(previous)
         assert '100.0%' in current
-        if columns == 80:
-            assert current.endswith(' ')
 
 
 def test_fallback_failure_and_cancel_end_row_without_false_success():
@@ -159,7 +157,7 @@ def test_component_completion_ends_row_and_next_download_starts_fresh():
         now[0] += 2
         progress(dict(event(received=3), component='trivy'))
         assert '\n[安装] 密钥检查组件已准备完成' in stream.getvalue()
-        assert '依赖检查下载进度' in stream.getvalue().split('\r')[-1]
+        assert '依赖检查' in stream.getvalue().split('\r')[-1]
         assert '3.0%' in stream.getvalue().split('\r')[-1]
 
 
@@ -172,6 +170,56 @@ def test_budget_exhaustion_explains_bounded_retry_without_false_readiness():
     text = stream.getvalue()
     assert 'prepare-scanners --timeout 900' in text and '会重新下载' in text
     assert '不必重新安装' in text and '扫描能力准备完成' not in text
+
+
+def test_eta_follows_real_deltas_and_stale_rate_is_removed_without_countdown(monkeypatch):
+    monkeypatch.setattr(shutil, 'get_terminal_size', lambda **kw: os.terminal_size((120, 24)))
+    stream, now = Terminal(), [0.0]
+    with InstallationProgress(stream=stream, clock=lambda: now[0]) as progress:
+        progress(event('DOWNLOAD_STARTED'))
+        progress(event(received=0))
+        assert '估算中' in stream.getvalue().split('\r')[-1]
+        now[0] = 4
+        progress(event(received=40))
+        long_line = stream.getvalue().split('\r')[-1]
+        assert '10.00 MiB/s' in long_line and '预计剩余6秒' in long_line
+        now[0] = 16
+        progress._heartbeat()
+        short_line = stream.getvalue().split('\r')[-1]
+        assert '估算中' in short_line and '等待新进度' in short_line
+        assert 'MiB/s' not in short_line and '预计剩余' not in short_line
+        cells = lambda line: sum(2 if unicodedata.east_asian_width(c) in 'WF' else 1 for c in line)
+        assert short_line.endswith(' ') and cells(short_line) >= cells(long_line)
+
+
+def test_standard_terminal_keeps_rate_and_eta_visible(monkeypatch):
+    monkeypatch.setattr(shutil, 'get_terminal_size', lambda **kw: os.terminal_size((80, 24)))
+    stream, now = Terminal(), [0.0]
+    with InstallationProgress(stream=stream, clock=lambda: now[0]) as progress:
+        progress(event(received=0, total=127))
+        now[0] = 10
+        progress(event(received=3, total=127))
+        line = stream.getvalue().split('\r')[-1]
+        assert '0.30 MiB/s' in line and '预计剩余6分54秒' in line
+        assert '3.00/127.00 MiB' in line and '[' in line
+
+
+def test_adaptive_policy_explains_estimate_and_absolute_limit_once():
+    stream = io.StringIO()
+    with InstallationProgress(stream=stream, preparation=True, adaptive=True,
+            initial_seconds=300, max_wait_seconds=1800):
+        pass
+    assert stream.getvalue().count('按真实进度自动续等') == 1
+    assert '初始等待 300 秒' in stream.getvalue() and '最长 1800 秒' in stream.getvalue()
+
+
+def test_adaptive_limit_failure_does_not_offer_a_shorter_initial_budget_as_a_fix():
+    stream = io.StringIO()
+    with InstallationProgress(stream=stream, preparation=True, adaptive=True) as progress:
+        progress(event('DOWNLOAD_FAILED', error_code='PREPARATION_BUDGET_EXHAUSTED'))
+        progress.finish(False)
+    assert '检查下载网络后重试' in stream.getvalue()
+    assert '--timeout 900' not in stream.getvalue() and '扫描能力准备完成' not in stream.getvalue()
 
 
 @pytest.mark.parametrize('terminal', [True, False])

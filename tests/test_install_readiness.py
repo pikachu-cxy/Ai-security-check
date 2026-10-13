@@ -448,7 +448,7 @@ def test_real_manager_offline_path_has_no_preparation_side_effect(tmp_path, monk
     assert receipt['status'] == 'UNAVAILABLE'
     assert not manager.root.exists()
     assert (project / 'requirements.txt').read_bytes() == before
-    assert list(inspect.signature(prepare_installation_readiness).parameters) == ['progress', 'manager', 'offline', 'timeout_seconds', 'retries', 'idle_seconds']
+    assert list(inspect.signature(prepare_installation_readiness).parameters) == ['progress', 'manager', 'offline', 'timeout_seconds', 'retries', 'idle_seconds', 'adaptive', 'max_wait_seconds']
     assert_valid(receipt)
 
 

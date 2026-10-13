@@ -279,9 +279,13 @@ class OfficialReleaseProvider:
                         raise ValueError('Release asset exceeds 200 MB')
                     digest.update(value)
                     output.write(value)
-                    if budget and total_size:
-                        budget.report(dict(event='DOWNLOAD_PROGRESS', component=manifest.tool_id,
-                            received_bytes=size, total_bytes=total_size))
+                    if budget:
+                        # A missing Content-Length cannot invent a percentage or
+                        # ETA; actual chunks still permit a bounded active wait.
+                        budget.observe_transfer(manifest.tool_id, size, total_size or None)
+                        if total_size:
+                            budget.report(dict(event='DOWNLOAD_PROGRESS', component=manifest.tool_id,
+                                received_bytes=size, total_bytes=total_size))
         finally:
             stop.set()
             reader.join(timeout=.1)
@@ -912,9 +916,10 @@ class ToolManager:
                     else:
                         budget.report(dict(event='DOWNLOAD_FALLBACK', component='vulnerability_db', source=source_host))
                 previous_attempt = attempt
+                process_seconds = budget.hard_remaining() if budget and budget.adaptive else seconds
                 if budget:
                     budget.report(dict(event='DOWNLOAD_STARTED', component='vulnerability_db', attempt=attempt + 1,
-                        source=source_host, max_attempts=max_attempts, timeout_seconds=max(1, int(seconds))))
+                        source=source_host, max_attempts=max_attempts, timeout_seconds=max(1, int(process_seconds))))
                 # Download to a separate cache. A failed update cannot destroy
                 # the previous usable database. No target project is executed.
                 with tempfile.TemporaryDirectory(prefix='db-update-', dir=cache) as temporary:
@@ -923,14 +928,17 @@ class ToolManager:
                         command = [str(Path(binary).resolve()), 'image', '--download-db-only', '--cache-dir', str(staging),
                             '--db-repository', repository]
                         if budget:
-                            command += ['--timeout', f'{seconds:.3f}s', '--no-progress=false']
+                            # Trivy cannot revise its native deadline later.
+                            # The parent enforces the live, progress-based wait.
+                            command += ['--timeout', f'{process_seconds:.3f}s', '--no-progress=false']
                         else:
                             command.append('--quiet')
-                        proc = run_process(command, env=env, cwd=staging, timeout=seconds,
+                        proc = run_process(command, env=env, cwd=staging, timeout=process_seconds,
                             on_stderr_line=transfer if budget else None,
                             on_stderr_chunk=transfer_chunk if budget else None,
                             idle_timeout=budget.idle_seconds if budget else None,
-                            activity_clock=lambda: time.monotonic() if validating[0] else observed[0])
+                            activity_clock=lambda: time.monotonic() if validating[0] else observed[0],
+                            **({'remaining_callback': budget.remaining} if budget and budget.adaptive else {}))
                     if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'
                             and (validate_database is None or validate_database(staging / 'db'))):
                         from .hook_state import no_links

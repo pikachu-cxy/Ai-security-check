@@ -9,7 +9,9 @@ import re
 import os
 import shutil
 import unicodedata
+import math
 from collections import deque
+from .download_estimate import DownloadEstimate
 
 
 STAGES = {
@@ -149,7 +151,8 @@ class InstallationProgress:
     Output errors cannot interrupt a configuration transaction. Only fixed text
     is printed: no config, child output, source, path or exception is reflected.
     """
-    def __init__(self, *, stream=None, interval=5.0, clock=time.monotonic, preparation=False):
+    def __init__(self, *, stream=None, interval=5.0, clock=time.monotonic, preparation=False,
+                 adaptive=False, initial_seconds=300, max_wait_seconds=1800):
         self.stream = sys.stderr if stream is None else stream
         self.interval = interval
         self.clock = clock
@@ -170,6 +173,10 @@ class InstallationProgress:
         self._download_active = False
         self._download_label = '漏洞库'
         self._download_counts = None
+        self._download_estimate = DownloadEstimate()
+        self._adaptive_policy = ((initial_seconds, max_wait_seconds) if adaptive is True
+            and type(initial_seconds) is int and type(max_wait_seconds) is int
+            and 1 <= initial_seconds <= max_wait_seconds <= 1800 else None)
 
     @staticmethod
     def _cells(text):
@@ -217,13 +224,26 @@ class InstallationProgress:
         received, total = self._download_counts
         prefix = f'{self._download_label}下载进度 '
         suffix = f' {received / total * 100:.1f}% {received / 1048576:.2f}/{total / 1048576:.2f} MiB'
+        estimate = self._download_estimate.estimate(self.clock())
+        if estimate is None:
+            suffix += ' 估算中'
+        else:
+            seconds = estimate['remaining_seconds']
+            remaining = f'{seconds // 60}分{seconds % 60:02d}秒' if seconds >= 60 else f'{seconds}秒'
+            suffix += f" {estimate['bytes_per_second'] / 1048576:.2f} MiB/s 预计剩余{remaining}"
         if waiting:
             suffix += ' 等待新进度'
         columns = self._columns() if self._interactive else 79
-        if self._cells('[安装] ' + prefix + suffix) + 5 > columns:
-            # Keep the actual percentage visible when Chinese labels leave little room.
+        if self._interactive and self._cells('[安装] ' + prefix + suffix) + 5 > columns:
             prefix = self._download_label + ' '
+        if self._cells('[安装] ' + prefix + suffix) + 5 > columns:
+            # Keep percentage and an approximate ETA visible in small windows.
+            prefix = '下载 '
             suffix = f' {received / total * 100:.1f}%'
+            if estimate is not None:
+                suffix += f' ~{math.ceil(seconds / 60)}m' if seconds >= 60 else f' ~{seconds}s'
+            if waiting:
+                suffix += ' 等待'
         width = min(20, max(3, columns - self._cells('[安装] ' + prefix + suffix) - 2))
         filled = min(width, received * width // total)
         return prefix + '[' + '#' * filled + '-' * (width - filled) + ']' + suffix
@@ -238,6 +258,7 @@ class InstallationProgress:
                     self._write(self._download_text())
             self._download_active = False
             self._download_counts = None
+            self._download_estimate.reset()
         self._finish_line()
 
     def _write(self, message):
@@ -254,6 +275,9 @@ class InstallationProgress:
             self._started = self.clock()
             self._last_change = self._started
             self._write('开始准备扫描能力；程序安装和已有配置将保留。' if self.preparation else STAGES['START'])
+            if self.preparation and self._adaptive_policy:
+                initial, maximum = self._adaptive_policy
+                self._write(f'初始等待 {initial} 秒；按真实进度自动续等，最长 {maximum} 秒。剩余下载时间随实际网速估算。')
             self._thread = threading.Thread(target=self._wait, name='install-progress', daemon=True)
             self._thread.start()
         return self
@@ -272,6 +296,7 @@ class InstallationProgress:
                         self._download_active = True
                         self._download_label = label
                         self._download_counts = event['received_bytes'], event['total_bytes']
+                        self._download_estimate.update(*self._download_counts, now)
                         self._last_change = now
                         if self._last_download is not None and now - self._last_download < 1:
                             return
@@ -286,7 +311,7 @@ class InstallationProgress:
                         self._download_active = True
                         self._download_label = label
                         source = {'ghcr.io': '官方发布源', 'mirror.gcr.io': '官方镜像源'}.get(event.get('source'), '当前来源')
-                        self._write(f"正在从{source}下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 轮；剩余预算最多 {event.get('timeout_seconds', 0)} 秒。")
+                        self._write(f"正在从{source}下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 轮；最长剩余等待 {event.get('timeout_seconds', 0)} 秒。")
                     elif kind == 'DOWNLOAD_FALLBACK':
                         self._last_download = None
                         self._stage = 'INSTALL_DATA'
@@ -302,7 +327,10 @@ class InstallationProgress:
                         why = _ERROR_TEXT.get(event.get('error_code'), '下载或数据校验未完成')
                         self._write(why + '。原有可用缓存已保留；扫描能力仍以最后核对结果为准。')
                         if event.get('error_code') == 'PREPARATION_BUDGET_EXHAUSTED':
-                            self._write('慢速网络可运行 prepare-scanners --timeout 900 延长准备时间；会重新下载，不必重新安装程序。')
+                            if self._adaptive_policy:
+                                self._write('本次等待已结束，可检查下载网络后重试 prepare-scanners；会重新下载，不必重新安装程序。')
+                            else:
+                                self._write('慢速网络可运行 prepare-scanners --timeout 900 延长准备时间；会重新下载，不必重新安装程序。')
                     elif kind == 'DOWNLOAD_COMPLETE':
                         self._write('漏洞库已下载并通过校验，已更新本地缓存。')
                     elif kind == 'COMPONENT_STARTED':

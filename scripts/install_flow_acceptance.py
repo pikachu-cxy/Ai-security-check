@@ -69,7 +69,7 @@ async def mcp_identity(executable, env):
             return {'tools': len(tools.tools), 'runtime_info': info, 'guidance_verified': True}
 
 
-def main(bundle, output, tool_root=None, cached_db=None, prepare_timeout=20, require_ready=False):
+def main(bundle, output, tool_root=None, cached_db=None, prepare_timeout=20, require_ready=False, max_wait=None):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     profile = output / 'profile with spaces 中文'
@@ -120,12 +120,16 @@ def main(bundle, output, tool_root=None, cached_db=None, prepare_timeout=20, req
         checked, check = execute([str(launcher), 'prepare-scanners', '--status', '--json'], profile, online)
         assert all(c['ready'] for c in checked['tools'].values())
         assert checked['vulnerability_db']['cached_usable'] and not checked['ready']
-        prepared, probe = execute([str(launcher), 'prepare-scanners', '--timeout', str(prepare_timeout), '--json'],
-            profile, online, timeout=prepare_timeout + 20, feedback_path=output / 'preparation-progress.jsonl')
+        ceiling = (1800 if require_ready else prepare_timeout) if max_wait is None else max_wait
+        options = ['--max-wait', str(ceiling)] if require_ready else ['--fixed-timeout']
+        if not require_ready:
+            ceiling = prepare_timeout
+        prepared, probe = execute([str(launcher), 'prepare-scanners', '--timeout', str(prepare_timeout), *options, '--json'],
+            profile, online, timeout=ceiling + 20, feedback_path=output / 'preparation-progress.jsonl')
         (output / 'public-probe.json').write_text(json.dumps(dict(receipt=prepared, execution=probe),
             ensure_ascii=False, indent=2), encoding='utf-8')
         assert validate_readiness_receipt(prepared) and prepared['preparation']['attempts'] <= 1
-        assert probe['elapsed_seconds'] < prepare_timeout + 15
+        assert probe['elapsed_seconds'] < ceiling + 15
         progress_observed = any('下载进度' in item['message'] for item in probe['stderr_feedback'])
         # Registry/TLS failure before the body starts has no transfer count.
         # Preserve this as an explicit unmeasured progress result, not fake bytes.
@@ -157,10 +161,13 @@ if __name__ == '__main__':
     parser.add_argument('--tool-root', type=Path)
     parser.add_argument('--cached-db', type=Path)
     parser.add_argument('--prepare-timeout', type=int, default=20)
+    parser.add_argument('--max-wait', type=int, help='Absolute online ceiling; full readiness uses adaptive waiting')
     parser.add_argument('--require-ready', action='store_true')
     args = parser.parse_args()
     if bool(args.tool_root) != bool(args.cached_db):
         parser.error('--tool-root and --cached-db must be supplied together')
     if not 1 <= args.prepare_timeout <= 1800 or args.require_ready and args.tool_root is None:
         parser.error('A valid preparation budget and public-data inputs are required for full readiness')
-    main(args.bundle.resolve(), args.output, args.tool_root, args.cached_db, args.prepare_timeout, args.require_ready)
+    if args.max_wait is not None and not args.prepare_timeout <= args.max_wait <= 1800:
+        parser.error('The absolute wait must be between the initial timeout and 1800 seconds')
+    main(args.bundle.resolve(), args.output, args.tool_root, args.cached_db, args.prepare_timeout, args.require_ready, args.max_wait)

@@ -277,7 +277,8 @@ def _receipt(tools, database, failures, *, offline):
 
 
 def prepare_installation_readiness(*, progress=None, manager=None, offline=False,
-                                   timeout_seconds=300, retries=0, idle_seconds=30):
+                                   timeout_seconds=300, retries=0, idle_seconds=30,
+                                   adaptive=False, max_wait_seconds=None):
     """Reuse compatible tools; repair missing tools and refresh public data online.
 
     Explicit offline mode is resolve-only, including Python-based engines: even
@@ -285,13 +286,15 @@ def prepare_installation_readiness(*, progress=None, manager=None, offline=False
     Cancellation remains cancellation; other failures are independently recorded
     with fixed stages and exception types, never exception text or source paths.
     """
-    with preparation_budget(timeout_seconds, retries, idle_seconds, progress) as budget, _quiet_preparation_logs():
+    with preparation_budget(timeout_seconds, retries, idle_seconds, progress,
+            adaptive=adaptive, max_wait_seconds=max_wait_seconds) as budget, _quiet_preparation_logs():
         receipt = _prepare_installation_readiness(progress=progress, manager=manager, offline=offline)
         receipt['preparation'] = {'budget_seconds': timeout_seconds,
             'elapsed_ms': round((time.monotonic() - budget.started) * 1000),
             'max_attempts': 1 + retries, 'attempts': budget.attempts,
             'error_code': budget.error_code, 'source': budget.source,
-            'source_attempts': budget.source_attempts, 'sources_attempted': list(budget.sources_attempted)}
+            'source_attempts': budget.source_attempts, 'sources_attempted': list(budget.sources_attempted),
+            'adaptive': budget.adaptive, 'max_wait_seconds': budget.max_wait_seconds}
         return receipt
 
 
@@ -400,7 +403,7 @@ def _validate_readiness_receipt(value):
         from .install_progress import validate_preparation_event
         prepared = value['preparation']
         base = {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
-        if (not isinstance(prepared, dict) or not base <= set(prepared) or set(prepared) - base - {'source_attempts', 'sources_attempted'}
+        if (not isinstance(prepared, dict) or not base <= set(prepared) or set(prepared) - base - {'source_attempts', 'sources_attempted', 'adaptive', 'max_wait_seconds'}
                 or type(prepared['budget_seconds']) is not int or not 1 <= prepared['budget_seconds'] <= 1800
                 or type(prepared['elapsed_ms']) is not int or not 0 <= prepared['elapsed_ms'] <= 3_600_000
                 or type(prepared['attempts']) is not int or not 0 <= prepared['attempts'] <= prepared['max_attempts']
@@ -408,6 +411,12 @@ def _validate_readiness_receipt(value):
                     attempt=max(1, prepared['attempts']), max_attempts=prepared['max_attempts'],
                     error_code=prepared['error_code'], source=prepared['source'])) is None):
             return False
+        if 'adaptive' in prepared or 'max_wait_seconds' in prepared:
+            maximum, adaptive = prepared.get('max_wait_seconds'), prepared.get('adaptive')
+            if (type(adaptive) is not bool or type(maximum) is not int
+                    or not prepared['budget_seconds'] <= maximum <= 1800
+                    or not adaptive and maximum != prepared['budget_seconds']):
+                return False
         if 'source_attempts' in prepared or 'sources_attempted' in prepared:
             sources, count = prepared.get('sources_attempted'), prepared.get('source_attempts')
             if (type(count) is not int or not 0 <= count <= 2 * prepared['max_attempts']

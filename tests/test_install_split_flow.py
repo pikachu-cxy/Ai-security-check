@@ -66,14 +66,38 @@ def test_public_preparation_status_never_downloads(monkeypatch, capsys):
 def test_internal_preparation_receipt_keeps_old_parent_compatibility(monkeypatch, capsys, command):
     data = readiness(ready=True)
     data['preparation'] = dict(budget_seconds=300, elapsed_ms=1, max_attempts=1,
-        attempts=1, error_code='', source='ghcr.io', source_attempts=1, sources_attempted=['ghcr.io'])
+        attempts=1, error_code='', source='ghcr.io', source_attempts=1, sources_attempted=['ghcr.io'],
+        adaptive=True, max_wait_seconds=1800)
     mock_prepare(monkeypatch, data)
     assert main([command, '--json']) == 0
     result = json.loads(capsys.readouterr().out)['preparation']
     assert ('sources_attempted' in result) == (command == 'prepare-scanners')
     assert ('source_attempts' in result) == (command == 'prepare-scanners')
+    assert ('adaptive' in result) == (command == 'prepare-scanners')
+    assert ('max_wait_seconds' in result) == (command == 'prepare-scanners')
     if command == 'prepare-installation':
         assert set(result) == {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+
+
+@pytest.mark.parametrize('options,adaptive,maximum', [([], True, 1800),
+    (['--max-wait', '600'], True, 600), (['--fixed-timeout'], False, 300),
+    (['--status'], False, 300), (['--offline'], False, 300)])
+def test_public_preparation_adaptive_policy(monkeypatch, capsys, options, adaptive, maximum):
+    monkeypatch.delenv('SECURITY_RUNTIME_OFFLINE', raising=False)
+    calls = mock_prepare(monkeypatch, readiness(ready=True))
+    assert main(['prepare-scanners', '--json', *options]) == 0
+    assert calls[0]['adaptive'] is adaptive and calls[0]['max_wait_seconds'] == maximum
+    assert json.loads(capsys.readouterr().out)['ready'] is True
+
+
+@pytest.mark.parametrize('options', [['--timeout', '300', '--max-wait', '299'],
+    ['--max-wait', '1801'], ['--max-wait', '0']])
+def test_public_preparation_rejects_invalid_global_ceiling(monkeypatch, capsys, options):
+    calls = mock_prepare(monkeypatch, readiness())
+    with pytest.raises(SystemExit) as stopped:
+        main(['prepare-scanners', *options])
+    assert stopped.value.code == 2 and not calls
+    capsys.readouterr()
 
 
 @pytest.mark.parametrize('payload', [None, [], {'event': []}, {'event': 'DOWNLOAD_FAILED',

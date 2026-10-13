@@ -10,7 +10,41 @@
 不要照旧通过重装来刷新数据。新构建、回归和隔离验收以开发进度中的本批记录为准；
 完整本地操作见 [安装验收](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
 
-最新漏洞库在线准备包为 `dist/db-online-20261013-r2/security-check`，Runtime 0.3.2。
+最新下载进度条包为 `dist/db-bar-20261013-r1/security-check`，Runtime 0.3.2。
+构建为 `7e66ac4a44f430f8e15b7162484346470034867494ce5e6e6e4b295a821a17d4`，
+冻结源码为 `6c6258713da0ec4364e111f57f68b1642a6100af`，`source_dirty=false`。
+本批相关回归 123 项通过，耗时 13.61 秒；新增 15 项覆盖 30/80 列窗口、组件切换、
+原位行清除、心跳、换源、失败和取消，以及独立 JSON 回执，不是全量套件通过声明。
+本地 ZIP 为 `dist/experience/ai-security-runtime-v0.3.2-db-bar-20261013-r1-windows-x64.zip`，
+SHA-256 为 `ffc6604ad95a2f1fffda7f88f5796dd47a77b1b399f7d0c1d6c85b16563e721b`。
+交互终端原位更新同一行进度条与等待提示；文件或管道只保留每次传输最后取得的真实
+快照。阶段、换源、失败、取消和最终结果另行显示；父子逐行 JSON 协议保持原样。
+传输达到 100% 后仍须等待解压、有效期与数据库校验，不能提前宣布 READY。
+
+新包的真实 Windows 终端隔离在线准备通过，手动指定 900 秒预算，493.969 秒完成；
+GHCR 一次来源调用，退出 0，最终 READY/FRESH。已确认 `stderr_is_terminal=true` 与
+CR 原位刷新、不逐次新增进度行；原全局旧库 SHA-256 前后相同。
+证据为本机 `artifacts/bt1/result.json` 与 `terminal-output.txt`；工具曾截断部分输出，
+不把已捕获的进度片段数量当作完整帧计数。这是手动指定预算的真实在线准备，尚不是自动续等验收。
+新包 ZIP 基础验收通过，`full=false`，未执行全检查器发行验收。同包隔离安装通过：
+首次 17.719 秒、重复 10.234 秒、首条反馈 0.297 秒；只读未就绪检查 5.609 秒。
+普通 MCP 的 24 项工具、构建身份及专业指导核对通过（`guidanceVerified=true`）；
+这些结果不代表真实 Codex 自动 Hook 链路通过，也不代表整库在线准备已完成。
+上述普通 MCP 与 ZIP 结果和真实终端整库结果分别记录，不推定为自动 Hook 通过。
+
+用户追加要求：进度条显示按真实传输速度变化的预计剩余时间；下载确实仍有进展时可
+自动续等，但保留无进展超时与绝对 `max_wait` 上限。ETA 与受限自动续等正在开发，
+后续冻结 `db-bar` r2 新包再分别做回归与真实在线验收；不能把 r1 的手动 900 秒成功
+记为这项新能力通过，也不改变 r1 已记录的构建身份。
+
+用户提供的上一 r2 包真实全局安装日志显示：程序已安装成功，漏洞库在 300 秒预算内
+持续增长至 `78.43 / 126.98 MiB`（61.8%），随后预算耗尽；三个组件 READY，旧库 STALE，
+整体 `ready=false`。该次平均报告传输约 0.26 MiB/s，网络分段原因未证实，不能把此前
+隔离环境 80 秒成功记为用户本机成功。保留旧缓存与配置，不必重装；可在已安装程序
+上运行 `prepare-scanners --timeout 900` 后核对状态。当前无断点续传，此次会重新下载，
+更大预算不保证必然就绪，失败仍须保留原状态和诊断。
+
+上一漏洞库在线准备包为 `dist/db-online-20261013-r2/security-check`，Runtime 0.3.2。
 构建为 `34b117a79cc93e4aa6e3281bd4f0ed52efcf3534a858ac0babb2446cea25e548`，
 冻结源码为 `25efd39abaf29bd0a7e155415cc93afec0de3c84`，`source_dirty=false`。
 相关回归 298 项通过，耗时 115.86 秒，不是全量套件通过声明。
@@ -21,7 +55,7 @@ SHA-256 为 `a252f3ff6ca16f33b1ae479eb85c13572fc41a04017e0a17328a4fe9e275dc00`�
 Runtime 整库在线准备 80.157 秒通过，GHCR 单次取得 126.98 MiB 压缩数据；
 `trivy.db` 为 1,607,704,576 字节，schema 2 与 bbolt 校验通过，有效期至
 `2026-10-14T01:09:18Z`。准备退出 0，三个默认检查组件兼容、数据库新鲜。
-隔离目录中的旧库在新库通过校验后才切换；原全局旧库摘要不变，全局安装未修改。
+当次隔离目录中的旧库在新库通过校验后才切换；原全局旧库摘要不变，隔离验收未修改全局安装。
 普通冻结 MCP 的 24 项工具、包身份与专业指导通过；两个原凭据规则分别关闭，
 收尾 6.107 秒、关闭确认 0.507 秒，重连复用及新编辑失效通过，代码覆盖仍为部分。
 这属于人工独立复查和手动收尾，不是实际 Codex 自动 Hook；ZIP 仅基础验收通过，
@@ -143,7 +177,7 @@ if ($LASTEXITCODE -ne 0) { throw '构建失败，不能安装旧目录冒充当�
 $bundle = Join-Path (Get-Location).Path "dist/$tag/security-check"
 & "$bundle/security-check.exe" install codex --bundle $bundle
 if ($LASTEXITCODE -ne 0) { throw '本地安装未完成，先处理程序或配置诊断' }
-& "$bundle/security-check.exe" prepare-scanners --timeout 300
+& "$bundle/security-check.exe" prepare-scanners --timeout 900
 if ($LASTEXITCODE -ne 0) { Write-Host '扫描准备尚未完成；按诊断稍后重跑 prepare-scanners，已有配置和缓存保留' }
 & "$bundle/security-check.exe" prepare-scanners --status --json
 ```

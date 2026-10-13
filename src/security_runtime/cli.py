@@ -250,7 +250,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         preparation_parser.add_argument('--json', action='store_true')
         preparation_parser.add_argument('--offline', action='store_true')
         preparation_parser.add_argument('--status', action='store_true', help='Read-only check of existing tools and data; no downloads')
-        preparation_parser.add_argument('--timeout', type=int, default=300, help='Total preparation budget in seconds (1-1800)')
+        preparation_parser.add_argument('--timeout', type=int, default=300, help='Initial wait in seconds; observed transfer progress may extend it (1-1800)')
+        preparation_parser.add_argument('--max-wait', type=int, default=1800, help='Absolute shared preparation ceiling in seconds; at least --timeout (1-1800)')
+        preparation_parser.add_argument('--fixed-timeout', action='store_true', help='Keep --timeout as a fixed deadline without automatic continuation')
         preparation_parser.add_argument('--retries', type=int, choices=(0, 1), default=0, help='Explicit extra download attempts; all attempts share the budget')
         preparation_parser.add_argument('--idle-timeout', type=int, default=30, help='Stop database download after this many seconds without byte progress (1-300)')
     setup_parser = sub.add_parser("setup", help="Configure Codex globally and install its companion Skill together")
@@ -336,21 +338,24 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command in {'prepare-installation', 'prepare-scanners'}:
             from .install_readiness import prepare_installation_readiness
             from .install_progress import child_preparation_progress, InstallationProgress
-            if not 1 <= args.timeout <= 1800 or not 1 <= args.idle_timeout <= 300:
-                parser.error('Preparation timeout must be 1-1800 and idle timeout 1-300 seconds')
+            if not 1 <= args.timeout <= args.max_wait <= 1800 or not 1 <= args.idle_timeout <= 300:
+                parser.error('Preparation timeout and max wait must be 1-1800, max wait at least timeout, and idle timeout 1-300 seconds')
             offline = args.offline or args.status or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1'
-            kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout)
+            adaptive = args.command == 'prepare-scanners' and not args.fixed_timeout and not offline
+            kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout,
+                adaptive=adaptive, max_wait_seconds=args.max_wait if adaptive else args.timeout)
             if os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1':
                 data = prepare_installation_readiness(progress=child_preparation_progress, **kwargs)
             else:
-                with InstallationProgress(preparation=True) as progress:
+                with InstallationProgress(preparation=True, adaptive=adaptive,
+                        initial_seconds=args.timeout, max_wait_seconds=args.max_wait if adaptive else args.timeout) as progress:
                     data = prepare_installation_readiness(progress=progress, **kwargs)
                     progress.finish(data['ready'])
             if args.command == 'prepare-installation' and isinstance(data.get('preparation'), dict):
                 # Old installed parents require the exact legacy receipt fields.
                 # Public prepare-scanners retains the richer source trail.
-                data['preparation'].pop('source_attempts', None)
-                data['preparation'].pop('sources_attempted', None)
+                base = {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+                data['preparation'] = {key: value for key, value in data['preparation'].items() if key in base}
             print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
             return 0 if data['ready'] else 2
         if args.command == 'install':
