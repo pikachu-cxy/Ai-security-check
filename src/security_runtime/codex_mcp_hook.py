@@ -235,10 +235,43 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         note = result['background_preparation']['message'] + ' 可用组件按本次实际结果说明；缺失项保留待检，不代表安全。'
         output['systemMessage'] = (output.get('systemMessage', '') + '\n' + note).strip()
         output['hookSpecificOutput']['additionalContext'] += '\n' + note
+    if result['execution']['scanner_run'] and validated_root is not None and not (decision and decision.get('action') == 'AUTO_FIX'):
+        # A registered development task keeps its per-edit static checks, but
+        # collects risk choices for the final summary rather than interrupting
+        # the implementation after each file. This does not grant repair.
+        from .task_security_state import TaskSecurityStore
+        import sqlite3
+        try:
+            task = TaskSecurityStore((coordinator or active_coordinator).store, validated_root).get(active=True)
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            task = None
+        if task and output.get('systemMessage'):
+            summary['security_task_ref'] = task['task_ref']
+            output.pop('systemMessage', None)
+            output.pop('stopReason', None)
+            output['continue'] = True
+            output['hookSpecificOutput']['additionalContext'] += (
+                '\n当前是已登记的开发任务。保留本次静态检查和风险记录，继续用户已授权的开发工作；'
+                '在任务结束安全核查后把风险与选择合并进开发总结，不另发钩子反馈或要求用户继续。'
+                '本次检查没有授予修复权限，未经明确批准不得修复安全风险。')
+    # Read-only/cached checks are useful diagnostics, not chat messages. Keep
+    # actual risk feedback and an explicitly approved fix handoff intact.
+    authorized = bool(decision and decision.get('action') == 'AUTO_FIX' and decision.get('feedback_required'))
+    if not result['execution']['scanner_run'] and not authorized:
+        output = {}
+    elif not output.get('systemMessage') and not authorized and not summary.get('security_task_ref'):
+        output = {}
+    elif not decision and not result.get('dependency_user_feedback') and result.get('coverage') in {'FULL', 'NOT_APPLICABLE'} and not delta['new'] and not delta['additional_occurrences']:
+        output = {}
     return {**summary, **output}
 
 
 def codex_hook_output(result: dict) -> dict:
     """The documented Hook output shape for the MCP text content channel."""
-    return {key: result[key] for key in ('systemMessage', 'hookSpecificOutput', 'decision', 'reason',
-                                        'continue', 'stopReason') if key in result}
+    output = {key: result[key] for key in ('systemMessage', 'hookSpecificOutput', 'decision',
+                                         'continue', 'stopReason') if key in result and result[key] != ''}
+    # Diagnostic reason enums belong in structuredContent only. A reason is a
+    # wire field exclusively for an actual continuation decision.
+    if result.get('decision') == 'block' and 'reason' in result:
+        output['reason'] = result['reason']
+    return output

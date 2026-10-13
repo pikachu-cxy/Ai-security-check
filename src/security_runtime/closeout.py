@@ -353,32 +353,18 @@ class CloseoutService:
                 return self._present(root, saved)
 
     def stop(self, workspace, host, session, active):
+        """Observe existing state only. A chat ending is not a development task.
+
+        Explicit closeouts remain resumable; Stop neither prepares nor dispatches
+        them. In particular, pending edits must not create a new model turn.
+        """
         root = self._root(workspace)
         store = self._store(root)
         previous = store.latest(self._workspace(root), identity(host + '\0' + session))
-        if (previous and previous['status'] == 'COMPLETED' and
-                self.hooks.pending_activity(root, host, session) is None and
-                self._present(root, previous)['current_version']):
-            return {'status': 'ALLOW_STOP', 'closeout': self._present(root, previous)}
-        job = self.prepare(root, host=host, session=session, source='HOOK_SCHEDULED_CLOSEOUT')
-        if job['status'] == 'COMPLETED' and job['current_version']:
-            return {'status': 'ALLOW_STOP', 'closeout': job}
-        if job.get('waiting_for_preparation'):
-            from .background_preparation import preparation_message
-            return {'status': 'ALLOW_STOP_PENDING', 'closeout': job,
-                'systemMessage': preparation_message(job['background_preparation']) + ' 可用组件继续检查；缺失项保留待检，不阻塞编码。'}
-        if active or job['attempts'] >= MAX_ATTEMPTS or not store.dispatch(job['closeout_ref'], self._workspace(root)):
-            return {'status': 'ALLOW_STOP_PENDING', 'closeout': job,
-                    'systemMessage': '收尾检查尚未完成，待检任务已保留；本次停止不会认定风险已关闭。'}
-        return {'status': 'CLOSEOUT_REQUIRED', 'closeout': job, 'decision': 'block',
-            # Stop supports decision/reason, not a hookSpecificOutput Stop
-            # variant. An unsupported variant can make the Host reject the
-            # entire response, including the continuation decision.
-            'reason': '结束检查已安排。现在通过普通 MCP 执行以下原始计划，不需要用户再次发送“继续”。'
-                      '该计划不授予修复权限，不得修改源文件或另建检查任务。'
-                      '执行后按实际 user_feedback 说明检查是否完成、原问题复查和覆盖限制；'
-                      '不得自行宣布项目安全。\n' +
-                      __import__('json').dumps(job['execution_plan'], ensure_ascii=False)}
+        pending = self.hooks.pending_activity(root, host, session) is not None
+        return {'status': 'ALLOW_STOP_PENDING' if pending or (previous and previous['status'] != 'COMPLETED') else 'ALLOW_STOP',
+                'closeout_ref': previous['closeout_ref'] if previous else None,
+                'check_source': 'QUIET_STOP_OBSERVATION', 'scanner_run': False}
 
 
 from .equivalence import equivalence_key

@@ -4,24 +4,38 @@ import sys
 from ._version import __version__
 
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
-                         'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix'}
+                         'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix',
+                         'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+                         'read_task_review_context', 'submit_task_security_review', 'get_task_security_review'}
 
-HOST_INSTRUCTIONS = '''Runtime 收尾检查：
-Stop 给出 closeout_ref 和 execution_plan 时，通过普通 MCP 执行 run_closeout_check；
-只执行 Runtime 生成的计划，不另起扫描或修复流程。get_closeout_status 可在重连后恢复。
-收尾任务没有修复授权。保留已有用户选择和授权边界，不自行修改、忽略风险或扩大授权。
-显示 Runtime 的实际 user_feedback；分别表达检查完成、覆盖完整和风险关闭。
-已确认关闭只适用于对应原检测器、原规则、原文件和当前内容版本；零发现不得称安全。
-代码（包括 Vue/TypeScript）部分覆盖与凭据关闭分别说明。
-同步 Hook 快检、Hook 调度的 MCP 收尾、用户手动独立复查分别标明；不能把手动复查称自动通过。
-Stop 预算耗尽、锁忙或新编辑时说明尚未完成，保留 closeout_ref；不要不断新增任务或循环扫描。
+HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
+普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
+实际修改源代码/配置的开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
+现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
+已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
+完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
+不调用模型核查、不添加安全段落。有实际改动时调用 prepare_task_security_review，
+即使静态扫描零发现，也按返回的 quick_skill 阅读必要改动和未改动的关联代码上下文，
+通过 read_task_review_context 取得精确证据，再 submit_task_security_review。
+此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
+把 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
+普通回复不显示原始计划、内部引用或独立“钩子反馈”。改文件 Hook 的静态检查保留。
+遵守文件、上下文和尝试预算；锁忙、过期、版本变化或不可用时说明缺口并结束，
+不循环补查、不断新建任务或要求用户“继续”。Runtime 不调用宿主模型。
+无法完成核查时，用 finish_security_task 的 skip_review_reason 记录实际原因并结束
+当前核查；它保留已有结果，不运行额外扫描，不把未完成包装成通过。
+未在编辑前建立基线时，不能伪造任务范围；保留任务核查未完成的限制。
+主机提交的上下文分析只是候选风险；Runtime 只校验结构和版本，不能冒充规则证明。
+任务检查不授予修复权限。保留已有用户选择，不自行修改、忽略风险或扩大授权。
+旧的明确收尾计划仍可通过原 run_closeout_check/get_closeout_status 恢复；普通 Stop
+不安排或派发收尾。检查完成、实际覆盖与风险修复分别表达，零发现不得称项目安全。
 
 用户呈现规则（必须遵守）：
 每次 Hook 提供的“用户提示”是本次最终回复的必需内容。必须完整保留其中的
 位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
 “修复/忽略”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
-不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”段时，
-同样必须使用 Runtime 的 user_feedback.message；它不是可有可无的补充。
+不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”或非空风险
+内容时不添加通用检查消息；任务核查内容合并到开发总结，不单独刷回复。
 internal_control 仅供内部流程使用。普通用户回复和进度说明不得展示内部
 action、reason_code、verification 枚举、授权标识、引用、扫描器或工具名称，
 也不得转述工具调用过程。只有用户明确索要技术诊断时，才展示有关诊断细节。
@@ -51,8 +65,9 @@ No finding, AI confidence, rule maturity or policy can replace user consent.
 AUTO_FIX below means continuation AFTER a valid USER_CONFIRMED grant only;
 reject unconfirmed/POLICY_AUTO handoffs as stale. Retest may follow an approved
 fix, but do not expand edit scope or start production/functional operations.
-Security Review Skill and explicit natural-language requests use this same workflow;
-Hook availability is not required for explicit MCP review. First read runtime info
+Explicit security scans/audits and selected-risk analysis use this same workflow;
+ordinary development task completion uses only the task workflow above, without
+adding a project scan/triage workflow. Hook availability is not required for explicit MCP review. First read runtime info
 and the existing workspace security summary. Whole-project requests use scan_project
 (release mode); changes-only requests use scan_diff. Explicit rescan always runs a
 new authorized scan. Otherwise a whole-project scan is reusable only when summary
@@ -355,6 +370,8 @@ def runtime_info(*, remediation_config=None):
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
+                         'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
+                         'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',
                          'personal_installation': 'personal-install-v1',

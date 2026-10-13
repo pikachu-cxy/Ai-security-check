@@ -25,6 +25,22 @@ def invoke(server, args):
     return structured(asyncio.run(server.call_tool('handle_hook_event', args)))
 
 
+def test_global_stop_never_bootstraps_or_scans_and_rejection_is_quiet(connected, projects, monkeypatch):
+    server, pool, runtimes = connected
+    root = projects[0]
+    monkeypatch.setattr(pool, 'bootstrap', lambda *a, **k: pytest.fail('ordinary Stop cannot bootstrap'))
+    monkeypatch.setattr(runtimes[root], 'scan', lambda *a, **k: pytest.fail('ordinary Stop cannot scan'))
+    for i in range(5):
+        response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop', workspace_path=str(root),
+                    session_id='s', stop_hook_active=False, turn_id=f'chat-{i}')))
+        assert structured(response)['status'] == 'ALLOW_STOP'
+        assert json.loads(response.content[0].text) == {}
+    response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop', workspace_path='${cwd}',
+                  session_id='s', stop_hook_active=False)))
+    assert structured(response)['status'] == 'INCONCLUSIVE'
+    assert json.loads(response.content[0].text) == {}
+
+
 @pytest.fixture
 def connected(installed, projects, tmp_path):
     runtimes = {}

@@ -391,7 +391,8 @@ def secret_verification_feedback(results: list[dict]) -> dict:
         groups[key] = groups.get(key, 0) + 1
     for (text, _), count in groups.items():
         lines.append(text + (f'（{count} 条原规则提示）' if count > 1 else ''))
-    lines.append('复查只确认本次代码提示；密钥是否有效、是否已撤销及历史泄露是否处理，需要另行确认，不能据此认定项目安全。')
+    if results:
+        lines.append('复查只确认本次代码提示；密钥是否有效、是否已撤销及历史泄露是否处理，需要另行确认，不能据此认定项目安全。')
     return {'version': 'security-user-feedback-v1', 'message': '\n'.join(dict.fromkeys(lines)),
         'choices': [], 'scope': 'ORIGINAL_PROVIDER_RULE_FILE_ONLY',
         'functional_verification': 'NOT_PROVEN_BY_SCANNER'}

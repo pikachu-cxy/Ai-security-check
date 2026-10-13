@@ -338,7 +338,7 @@ def create_global_server(*, workspaces=None):
                                   and normalized.operation == OperationClass.READ_ONLY)
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     observe('CLAIMS_VALID', tool_classification=classification, **normalized.diagnostics())
-            if name in HOOKS and not read_only_hook:
+            if name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP:
                 binding_stage = 'BOOTSTRAPPING'
                 claim_diag['workspace_binding_stage'] = binding_stage
                 pre_snapshot_missing = False
@@ -430,6 +430,16 @@ def create_global_server(*, workspaces=None):
 
     # Preserve the public FastMCP helpers for deterministic local tests as well
     # as the actual low-level stdio handlers. Project registry remains untouched.
+    routed_call = call
+    async def quiet_stop_call(name, arguments):
+        result = await routed_call(name, arguments)
+        if name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block':
+            # Validation/admission failures are diagnostics too. A broken or
+            # unready connection must not add a warning to every ordinary chat.
+            return CallToolResult(structuredContent=result.structuredContent,
+                                  content=[TextContent(type='text', text='{}')])
+        return result
+    call = quiet_stop_call
     from .recent_hooks import instrument
     call = instrument(call, schemas={name: tool.parameters for name, tool in infos.items()},
                       resolve_root=lambda arguments: pool.root(arguments.get('workspace_path'))

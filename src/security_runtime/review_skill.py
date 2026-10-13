@@ -29,7 +29,7 @@ def skill_files():
     from .host_guidance import HOST_INSTRUCTIONS
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
-        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md')} | {
+        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review.md')} | {
         'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')}
 
 

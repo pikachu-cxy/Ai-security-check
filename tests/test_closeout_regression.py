@@ -228,13 +228,14 @@ def test_stop_budget_reconnect_busy_and_partial_code_coverage(secret_engine, tmp
     from security_runtime.closeout import CloseoutService
     service, _, _ = closeout_fixture(secret_engine, tmp_path)
     root = secret_engine[0]
+    job = service.prepare(root, host='codex', session='session')
     first = service.stop(root, 'codex', 'session', False)
     second = service.stop(root, 'codex', 'session', False)
-    assert first['closeout']['closeout_ref'] == second['closeout']['closeout_ref']
-    assert first['decision'] == second['decision'] == 'block'
+    assert first['closeout_ref'] == second['closeout_ref'] == job['closeout_ref']
+    assert 'decision' not in first and 'systemMessage' not in first
     assert 'decision' not in service.stop(root, 'codex', 'session', False)
     assert 'decision' not in service.stop(root, 'codex', 'session', True)
-    ref = first['closeout']['closeout_ref']
+    ref = job['closeout_ref']
     with service.hooks.lock(root) as acquired:
         assert acquired
         assert service.run(ref, root)['status'] == 'BUSY'
@@ -246,25 +247,17 @@ def test_stop_budget_reconnect_busy_and_partial_code_coverage(secret_engine, tmp
     assert 'decision' not in reopened.stop(root, 'codex', 'session', False)
 
 
-def test_closeout_stop_uses_documented_continuation_wire_shape(secret_engine, tmp_path):
-    """Stop has no hook-specific additionalContext variant in Codex's contract.
-
-    A valid internal job is insufficient when the Host rejects its wire output.
-    Synthetic protocol regression only, not a real desktop continuation test.
-    """
+def test_closeout_stop_is_quiet_and_does_not_prepare_or_dispatch(secret_engine, tmp_path, monkeypatch):
+    """An ordinary chat end is neither a scan request nor a continuation."""
     from security_runtime.codex_mcp_hook import codex_hook_output
     service, _, _ = closeout_fixture(secret_engine, tmp_path)
     root = secret_engine[0]
-    result = service.stop(root, 'codex', 'session', False)
-    wire = codex_hook_output(result)
-    assert set(wire) == {'decision', 'reason'}
-    assert wire['decision'] == 'block'
-    handoff = json.loads(wire['reason'][wire['reason'].index('{'):])
-    assert handoff == result['closeout']['execution_plan']
-    assert handoff['arguments']['closeout_ref'] == result['closeout']['closeout_ref']
-    assert 'run_closeout_check' in wire['reason']
-    assert '修复权限' in wire['reason']
-    assert 'continue' not in wire
+    monkeypatch.setattr(service, 'prepare', lambda *a, **k: pytest.fail('Stop must not create a plan'))
+    monkeypatch.setattr(service, '_present', lambda *a, **k: pytest.fail('Stop must not recapture source'))
+    for active in [False, True] * 5:
+        result = service.stop(root, 'codex', 'session', active)
+        assert codex_hook_output(result) == {}
+        assert result['scanner_run'] is False
 
 
 def test_budget_exhaustion_retains_job_without_unlimited_execution(secret_engine, tmp_path):
@@ -435,9 +428,8 @@ def test_automatic_closeout_records_environment_exclusions_without_blocking(secr
     environment = root / environment_path
     environment.parent.mkdir(exist_ok=True)
     environment.write_text('PUBLIC_FIXTURE_ONLY=example\n', encoding='utf-8')
-    first = service.stop(root, 'codex', 'session', False)
-    job = first['closeout']
-    assert first['decision'] == 'block'
+    job = service.prepare(root, host='codex', session='session')
+    assert 'decision' not in service.stop(root, 'codex', 'session', False)
     assert environment_path not in job['scope_files']
     assert job['scope_exclusions'] == [{'file_path': environment_path,
                                        'reason': 'ENVIRONMENT_FILE_OUTSIDE_CLOSEOUT_SCOPE'}]
@@ -450,7 +442,7 @@ def test_automatic_closeout_records_environment_exclusions_without_blocking(secr
     assert environment.read_text(encoding='utf-8') == 'PUBLIC_FIXTURE_ONLY=example\n'
     repeated = service.stop(root, 'codex', 'session', False)
     assert repeated['status'] == 'ALLOW_STOP'
-    assert repeated['closeout']['closeout_ref'] == job['closeout_ref']
+    assert repeated['closeout_ref'] == job['closeout_ref']
 
 
 def test_excluded_environment_finding_keeps_original_risk_unconfirmed(secret_engine, tmp_path, monkeypatch):

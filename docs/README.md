@@ -26,6 +26,8 @@ acceptance output belongs in Git history, not in `docs/`.
   demos, real Hook and Stop observations, and manual multi-file context review.
 - [开发任务结束安全核查方案](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md) — task boundaries,
   static results plus bounded context, quick review workflow and quiet feedback.
+- [任务核查与静默结束验收](TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md) — current implementation,
+  native MCP/Hook measurements and pending real Desktop/Agent checks.
 
 - [R2.2 security review contract](SECURITY_REVIEW.md)
 - [Windows experience](WINDOWS_EXPERIENCE.md) / [中文体验](WINDOWS_EXPERIENCE.zh-CN.md)

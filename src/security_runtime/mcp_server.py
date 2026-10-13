@@ -165,7 +165,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
                           turn_id: str | None = None, permission_mode: str | None = None) -> dict:
-        """Arbitrate Codex Stop: preserve an existing authorized repair continuation first, otherwise persist a version-bound Runtime closeout plan for ordinary MCP execution. Validate bounded host claims and signed state; write bounded dispatch counters but never run scans, edit source, build, call a model or renew repair authority. Repeated or active Stop cannot create an unbounded continuation loop."""
+        """Quiet Codex Stop. Preserve only an existing user-approved repair continuation. Never prepare/dispatch a scan or task review from a chat ending."""
         from .host_event_runtime import handle_normalized_event
         from .codex_mcp_hook import codex_hook_output
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
@@ -175,12 +175,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if data is None:
             data, _ = handle_normalized_event(normalized, coordinator=hook_coordinator,
                                               continuation=remediation.continuation)
-            # Approved repair continuations take precedence; closeout grants no repair authority.
-            if data.get('decision') != 'block' and data.get('status') != 'INCONCLUSIVE':
-                try:
-                    data.update(closeout_service().stop(normalized.context.workspace, 'codex', session_id, stop_hook_active))
-                except Exception:
-                    data.update(status='ALLOW_STOP_PENDING', systemMessage='收尾检查尚未完成，当前结果不能确认关闭；请稍后恢复补查。')
+            # No runtime construction, workspace inventory or new closeout on
+            # ordinary chat. Explicit tools still resume signed pending work.
         data = {**diag, **data}
         from .build_identity import build_identity
         data['runtime_build_id'] = build_identity().get('build_id')
@@ -215,6 +211,55 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if resolved != Path(binding.root):
             raise ValueError("Requested workspace is outside this MCP connection")
         return binding.root
+
+    task_engine = None
+    def task_service():
+        nonlocal task_engine
+        from .task_security import TaskSecurityService
+        if task_engine is None:
+            task_engine = TaskSecurityService(runtime_engine, hook_coordinator.store)
+        return task_engine
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def begin_security_task(task_key: str, workspace_path: str | None = None) -> dict:
+        """Before the first source/config edit of an actual development task, snapshot the current workspace (including existing dirty files). Unique task_key per task, no prompt/source. No scan/model/build/edit. Never call for ordinary chat or restart after editing to fake a baseline."""
+        return task_service().begin(bound_path(workspace_path), task_key)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def finish_security_task(task_ref: str, workspace_path: str | None = None, skip_review_reason: str | None = None) -> dict:
+        """Before the development summary, compare against the exact task baseline. No actual changes: no checks/message. Actual changes: one bounded static check of task scope, then prepare_task_security_review even with zero scanner alerts. No repairs, model, target builds or Stop continuation."""
+        if skip_review_reason is not None:
+            return task_service().skip(bound_path(workspace_path), task_ref, skip_review_reason)
+        return task_service().finish(bound_path(workspace_path), task_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def prepare_task_security_review(task_ref: str, workspace_path: str | None = None) -> dict:
+        """Obtain sanitized task diff, actual static findings/coverage and canonical quick Skill. Host agent reasons before its final development summary; zero static alerts still require context review. Returns bounded source-version-bound review session, never a repair grant."""
+        return task_service().prepare(bound_path(workspace_path), task_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def read_task_review_context(task_ref: str, review_session: str, file_path: str,
+                                 start_line: int = 1, end_line: int = 80, workspace_path: str | None = None) -> dict:
+        """Read 1-80 sanitized lines of task source (current or signed preimage for a deleted file). At most 10 related files, 40 unique reads and 64KB cumulative packet/context. Returns evidence_id bound to path/range/hash/version. No .env content, links, path escapes, external commands or network."""
+        return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def submit_task_security_review(task_ref: str, review_session: str, findings: list[dict],
+                                    coverage: str, limitations: list[str], workspace_path: str | None = None) -> dict:
+        """Submit host reasoning with Runtime-issued evidence. See packet submission_contract. Accepts only current task versions, bounded candidates and explicit limitations; validates structure/version, never proves exploitability or scanner coverage. Merge development_summary into normal dev response; do not ask user to continue."""
+        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
+        """Read same task result after reconnect with current-source freshness. Never rescans or invokes a model; host candidates and real scanner evidence stay distinct. No automatic repair authority."""
+        return task_service().get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
+
+    for task_tool_name in ('begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review'):
+        task_tool = server._tool_manager.get_tool(task_tool_name)
+        task_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+        task_tool.fn_metadata.arg_model.model_rebuild(force=True)
+        task_tool.parameters = task_tool.fn_metadata.arg_model.model_json_schema()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_closeout_check(workspace_path: str | None = None, files: list[str] | None = None,

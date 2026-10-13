@@ -75,10 +75,7 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
         assert data['new_families'] == 0 and len(runtime.calls) == 1
         output = json.loads(response.content[0].text)
         assert output == codex_hook_output(data)
-        assert set(output) == {'systemMessage', 'hookSpecificOutput'}
-        assert output['hookSpecificOutput']['hookEventName'] == 'PostToolUse'
-        context = internal_context(output)
-        assert context['status'] == data['status'] and 'duration_ms' not in context
+        assert output == {}  # benign baseline check has no chat feedback
         assert data['duration_ms'] >= 0  # complete diagnostics stay structured
     asyncio.run(run())
 

@@ -1,27 +1,31 @@
 ---
 name: ai-security-review
-description: Use AI Security Runtime for project security scans, professional deep audits and evidence-backed attack-chain analysis, with or without a Hook. Report actionable fixes and actual coverage; continue exact risk tasks and fix and retest authorized issues. Requires connected ai_security_runtime MCP; never silently substitute another security product.
+description: Use AI Security Runtime to check source/config development tasks before their final summary, or for requested security scans, audits and authorized fixes. Combine task changes, local static checks and bounded code reasoning. Ordinary chat and read-only questions do not start scans. Requires connected ai_security_runtime MCP.
 ---
 
 # Security review
 
-## Runtime 收尾检查
+Choose one workflow by intent. Source/config development tasks use the quick task
+reference below; they do not also run the project-scan/triage workflow. Ordinary
+chat uses neither workflow. Requested security audits and selected-risk fixes use
+the existing scan/review/fix workflow, retaining their original scope and authority.
 
-Stop 安排收尾后，执行 Runtime 的 `execution_plan`，使用普通 MCP 的
-`run_closeout_check`；重连后用 `get_closeout_status` 恢复同一 `closeout_ref`。
-不要另建扫描或修复流程，不自行宣布完成，也不扩大已有修复授权。
-显示实际 `user_feedback`，逐原规则保留证据；相同文件、结果和原因可以合并数量。
-分别说明“已确认关闭”“未再检出但待确认”“检查未完成”，零发现不得写 SAFE。
-检查完成、覆盖完整与风险修复完成分别表达；Vue/TypeScript 的部分代码覆盖
-不否定有完整原凭据检测器、规则、文件和当前版本证明的关闭结果。
-文件变化使旧关闭证明失效。同步 Hook、Hook 调度的收尾补查、用户手动独立
-复查分别记录，手动结果不得冒充自动验收。锁忙、预算耗尽或新编辑时保留任务，
-报告尚未完成，不不断新建任务或循环扫描。收尾计划不授予修复权限。
+## 开发任务安全核查
+
+实际开发任务按 [快速任务核查](references/quick-task-review.md) 执行：首次
+编辑前记录基线，开发完成后比较实际改动，静态扫描后由当前 Agent 核查改动
+及必要关联上下文，即使静态零发现也核查。结果合并进正常开发总结，不要
+用户反复发“继续”，不要等 Stop 后另起回复。普通聊天、只读和无改动任务
+不开始扫描或模型核查。改文件时的 Hook 静态扫描保留。
+Runtime 只校验宿主候选的结构、证据引用和代码版本，不证明模型分析或可利用性。
+预算不足、锁忙或版本变化就说明缺口，不循环补查或伪造完成。
+旧的明确收尾任务仍可按原 `execution_plan` 恢复，不从普通 Stop 自动派发。
+任务核查不授权修复，检查完成、实际覆盖和风险修复分别表达。
 
 用户呈现规则（必须遵守）：每次 Hook 的“用户提示”必须出现在最终回复中，
 完整保留位置、具体问题、条件性影响、修复建议、未确认事项和待选的
 “修复/忽略”。可以调整换行或文件链接，不得只摘取标题、数量或内部状态。
-没有该段时，同样必须呈现 Runtime 的 `user_feedback.message`。
+没有非空风险内容时不添加通用检查消息；任务结果合并进开发总结。
 `internal_control` 仅供内部流程使用；普通回复和进度说明不展示内部动作、
 原因、验证枚举、授权标识、引用、扫描器或工具名称，也不转述工具调用过程。
 只有用户明确要求技术诊断时，才展示有关诊断细节。
@@ -48,7 +52,7 @@ any vulnerability edit. Silence is never approval.
 Reject unconfirmed/POLICY_AUTO handoffs; AUTO_FIX continuation is valid only
 after an explicit USER_CONFIRMED grant. Never expand the approved scope.
 
-Read [the Runtime workflow](references/runtime-workflow.md) first. It is generated
+For requested scans and selected-risk work, read [the Runtime workflow](references/runtime-workflow.md) first. It is generated
 from the same HOST_INSTRUCTIONS supplied by MCP, not an independent policy.
 Live Host/workspace-specific additions refine this reference. If the advertised
 review contract is incompatible or instructions conflict, use live instructions
@@ -68,6 +72,8 @@ is bundled; this stable entrypoint reserves future verified remote delivery.
 An ordinary scan stays a Runtime scan plus evidence review; an ordinary Hook
 does not start a repository-wide deep audit. All modes share task references,
 fix authorization and the originating-scanner retest workflow.
+
+## Requested scans and selected risk workflows
 
 1. Read `get_runtime_info` and `get_security_summary` for the current workspace.
    For whole-project intent use `scan_project`, which performs a release scan,
