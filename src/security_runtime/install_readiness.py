@@ -290,7 +290,8 @@ def prepare_installation_readiness(*, progress=None, manager=None, offline=False
         receipt['preparation'] = {'budget_seconds': timeout_seconds,
             'elapsed_ms': round((time.monotonic() - budget.started) * 1000),
             'max_attempts': 1 + retries, 'attempts': budget.attempts,
-            'error_code': budget.error_code, 'source': budget.source}
+            'error_code': budget.error_code, 'source': budget.source,
+            'source_attempts': budget.source_attempts, 'sources_attempted': list(budget.sources_attempted)}
         return receipt
 
 
@@ -398,7 +399,8 @@ def _validate_readiness_receipt(value):
     if 'preparation' in value:
         from .install_progress import validate_preparation_event
         prepared = value['preparation']
-        if (not isinstance(prepared, dict) or set(prepared) != {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+        base = {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+        if (not isinstance(prepared, dict) or not base <= set(prepared) or set(prepared) - base - {'source_attempts', 'sources_attempted'}
                 or type(prepared['budget_seconds']) is not int or not 1 <= prepared['budget_seconds'] <= 1800
                 or type(prepared['elapsed_ms']) is not int or not 0 <= prepared['elapsed_ms'] <= 3_600_000
                 or type(prepared['attempts']) is not int or not 0 <= prepared['attempts'] <= prepared['max_attempts']
@@ -406,6 +408,14 @@ def _validate_readiness_receipt(value):
                     attempt=max(1, prepared['attempts']), max_attempts=prepared['max_attempts'],
                     error_code=prepared['error_code'], source=prepared['source'])) is None):
             return False
+        if 'source_attempts' in prepared or 'sources_attempted' in prepared:
+            sources, count = prepared.get('sources_attempted'), prepared.get('source_attempts')
+            if (type(count) is not int or not 0 <= count <= 2 * prepared['max_attempts']
+                    or not isinstance(sources, list) or len(sources) > 2
+                    or any(not isinstance(s, str) or s not in {'ghcr.io', 'mirror.gcr.io'} for s in sources)
+                    or len(set(sources)) != len(sources) or count < len(sources)
+                    or bool(count) != bool(sources)):
+                return False
     if (value['contract'] != CONTRACT or value['status'] not in {'READY', 'PARTIAL', 'UNAVAILABLE'}
             or type(value['ready']) is not bool or type(value['network_allowed']) is not bool
             or not isinstance(value['message'], str) or len(value['message']) > 1_000):

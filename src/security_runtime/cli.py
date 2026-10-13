@@ -346,6 +346,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 with InstallationProgress(preparation=True) as progress:
                     data = prepare_installation_readiness(progress=progress, **kwargs)
                     progress.finish(data['ready'])
+            if args.command == 'prepare-installation' and isinstance(data.get('preparation'), dict):
+                # Old installed parents require the exact legacy receipt fields.
+                # Public prepare-scanners retains the richer source trail.
+                data['preparation'].pop('source_attempts', None)
+                data['preparation'].pop('sources_attempted', None)
             print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
             return 0 if data['ready'] else 2
         if args.command == 'install':

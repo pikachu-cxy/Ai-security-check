@@ -113,6 +113,9 @@ _ASSETS = {
     ("trivy", "macos", "arm64"): ("trivy_0.74.0_macOS-ARM64.tar.gz", "1caada5e0e2091909357c7525d3aa76f4b660b13821bc143b190c7483e31cc11"),
 }
 VERSIONS = {name: descriptor.version for name, descriptor in BUILTIN_ENGINES.items()}
+# Canonical publisher first. Each CLI invocation selects exactly one reviewed
+# official repository so Runtime can switch sources after a bounded failure.
+TRIVY_DATABASE_REPOSITORIES = ('ghcr.io/aquasecurity/trivy-db:2', 'mirror.gcr.io/aquasec/trivy-db:2')
 HOMEPAGES = {name: descriptor.homepage for name, descriptor in BUILTIN_ENGINES.items()}
 LICENSES = {name: descriptor.license for name, descriptor in BUILTIN_ENGINES.items()}
 logger = logging.getLogger(__name__)
@@ -831,7 +834,8 @@ class ToolManager:
 
     def _prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False, validate_database=None) -> ToolStatus:
         self.data_diagnostics.pop('vulnerability_db', None)
-        available = self.database_status() == ToolStatus.READY
+        available = (self.database_status() == ToolStatus.READY
+            and (validate_database is None or validate_database(self.trivy_cache_dir() / 'db')))
         if (self.database_freshness()['status'] == 'FRESH' and not force
                 and (validate_database is None or validate_database(self.trivy_cache_dir() / 'db'))):
             return ToolStatus.READY
@@ -865,41 +869,62 @@ class ToolManager:
 
     def _download_trivy_database(self, binary, cache, env, available, validate_database):
         budget = current_budget()
-        max_attempts = 1 + budget.retries if budget else 2
-        for attempt in range(max_attempts):
+        # Retry means another round, not silently repeating the same blocked
+        # first repository. Legacy updates retain at most two invocations.
+        max_attempts = 1 + budget.retries if budget else 1
+        plans = [(attempt, repository) for attempt in range(max_attempts) for repository in TRIVY_DATABASE_REPOSITORIES]
+        blocked_sources = set()
+        previous_attempt = None
+        for attempt, repository in plans:
+            if repository in blocked_sources:
+                continue
+            source_host = repository.split('/', 1)[0]
             observed = [time.monotonic(), -1]
-            download_source = ['']
+            validating = [False]
             def transfer(line):
-                source = re.search(r'Downloading artifact.*repo="([A-Za-z0-9.-]+)(?:/|:)', line)
-                if source:
-                    download_source[0] = source[1]
                 counts = parse_download_progress(line)
                 if counts and counts[0] > observed[1]:
                     observed[:] = [time.monotonic(), counts[0]]
                     if budget:
                         budget.report(dict(event='DOWNLOAD_PROGRESS', component='vulnerability_db',
-                            received_bytes=counts[0], total_bytes=counts[1], attempt=attempt + 1, max_attempts=max_attempts))
+                            received_bytes=counts[0], total_bytes=counts[1], source=source_host,
+                            attempt=attempt + 1, max_attempts=max_attempts))
+                    # Trivy reports rounded compressed-byte counts and then
+                    # extracts locally. This only relaxes network idle; process
+                    # deadline, successful exit and candidate validation remain.
+                    if not validating[0] and counts[0] == counts[1]:
+                        validating[0] = True
+                        if budget:
+                            budget.report(dict(event='DOWNLOAD_VALIDATING', component='vulnerability_db', source=source_host))
             try:
                 seconds = bounded_timeout(budget.seconds if budget else 900)
+                if budget and previous_attempt is not None:
+                    if attempt != previous_attempt:
+                        budget.report(dict(event='DOWNLOAD_RETRY', component='vulnerability_db',
+                            source=source_host, attempt=attempt + 1, max_attempts=max_attempts))
+                        time.sleep(bounded_timeout(2))
+                        seconds = bounded_timeout(budget.seconds)
+                    else:
+                        budget.report(dict(event='DOWNLOAD_FALLBACK', component='vulnerability_db', source=source_host))
+                previous_attempt = attempt
                 if budget:
-                    if attempt:
-                        budget.report(dict(event='DOWNLOAD_RETRY', component='vulnerability_db', attempt=attempt + 1, max_attempts=max_attempts))
                     budget.report(dict(event='DOWNLOAD_STARTED', component='vulnerability_db', attempt=attempt + 1,
-                        max_attempts=max_attempts, timeout_seconds=max(1, int(seconds))))
+                        source=source_host, max_attempts=max_attempts, timeout_seconds=max(1, int(seconds))))
                 # Download to a separate cache. A failed update cannot destroy
                 # the previous usable database. No target project is executed.
                 with tempfile.TemporaryDirectory(prefix='db-update-', dir=cache) as temporary:
                     staging = Path(temporary)
                     with external_tool_loader():
-                        command = [str(Path(binary).resolve()), 'image', '--download-db-only', '--cache-dir', str(staging)]
+                        command = [str(Path(binary).resolve()), 'image', '--download-db-only', '--cache-dir', str(staging),
+                            '--db-repository', repository]
                         if budget:
-                            command += ['--timeout', f'{seconds:.3f}s']
+                            command += ['--timeout', f'{seconds:.3f}s', '--no-progress=false']
                         else:
                             command.append('--quiet')
-                        proc = run_process(command, env=env, timeout=seconds,
+                        proc = run_process(command, env=env, cwd=staging, timeout=seconds,
                             on_stderr_line=transfer if budget else None,
                             idle_timeout=budget.idle_seconds if budget else None,
-                            activity_clock=lambda: observed[0])
+                            activity_clock=lambda: time.monotonic() if validating[0] else observed[0])
                     if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'
                             and (validate_database is None or validate_database(staging / 'db'))):
                         from .hook_state import no_links
@@ -917,25 +942,31 @@ class ToolManager:
                             raise
                         self.data_diagnostics.pop('vulnerability_db', None)
                         if budget:
-                            budget.report(dict(event='DOWNLOAD_COMPLETE', component='vulnerability_db', attempt=attempt + 1, max_attempts=max_attempts))
+                            budget.report(dict(event='DOWNLOAD_COMPLETE', component='vulnerability_db', source=source_host,
+                                attempt=attempt + 1, max_attempts=max_attempts))
                         return ToolStatus.READY
-                diagnostic = classify_network_error(stderr=proc.stderr, return_code=proc.returncode, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
+                diagnostic = (ErrorDiagnostic('VULNERABILITY_DB_VALIDATION_FAILED',
+                    'Downloaded database failed schema, freshness or readability validation.',
+                    'Keep the previous cache and retry preparation from a supported source.')
+                    if proc.returncode == 0 else classify_network_error(stderr=proc.stderr, return_code=proc.returncode,
+                        fallback='VULNERABILITY_DB_PREPARATION_FAILED'))
             except (OSError, TimeoutError, ValueError) as exc:
                 diagnostic = classify_network_error(exc, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
                 if isinstance(exc, ProcessIdleTimeout):
-                    diagnostic = ErrorDiagnostic('DOWNLOAD_STALLED', 'Download made no byte progress.', 'Retry preparation when the connection is stable.')
+                    diagnostic = ErrorDiagnostic('DOWNLOAD_STALLED', 'No verifiable transfer progress was observed within the wait limit.',
+                        'Try the remaining official source within the preparation budget.')
             self.data_diagnostics['vulnerability_db'] = diagnostic
             if budget:
                 error_code = 'PREPARATION_BUDGET_EXHAUSTED' if budget.remaining() <= 0 else diagnostic.error_code
                 budget.report(dict(event='DOWNLOAD_FAILED', component='vulnerability_db', error_code=error_code,
-                    source=download_source[0] or diagnostic.source, attempt=attempt + 1, max_attempts=max_attempts))
-            logger.warning("trivy_database_prepare_failed attempt=%s category=%s source=%s", attempt + 1, diagnostic.error_code, diagnostic.source)
-            if diagnostic.error_code in {'HTTP_429', 'HTTP_401', 'HTTP_403', 'HTTP_404', 'OFFLINE_MODE', 'CHECKSUM_MISMATCH'} or budget and budget.remaining() <= 0:
+                    source=source_host, attempt=attempt + 1, max_attempts=max_attempts))
+            logger.warning("trivy_database_prepare_failed attempt=%s category=%s source=%s", attempt + 1, diagnostic.error_code, source_host)
+            if diagnostic.error_code in {'HTTP_401', 'HTTP_403', 'HTTP_404', 'HTTP_429', 'CHECKSUM_MISMATCH'}:
+                blocked_sources.add(repository)
+            if diagnostic.error_code == 'OFFLINE_MODE' or budget and budget.remaining() <= 0:
                 break
-            if attempt + 1 < max_attempts:
-                delay = bounded_timeout(2)
-                time.sleep(delay)
-        if available and self.database_status() == ToolStatus.READY:
+        if (available and self.database_status() == ToolStatus.READY
+                and (validate_database is None or validate_database(cache / 'db'))):
             original = self.data_diagnostics.get('vulnerability_db')
             self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic('VULNERABILITY_DB_STALE',
                 'Database refresh failed; scanning uses the previous cached vulnerability data.',

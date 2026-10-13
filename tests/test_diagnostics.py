@@ -298,11 +298,13 @@ def test_scanner_structured_process_failures(tmp_path, error, code, status):
     assert not findings and run.error_code == code and run.status == status
 
 
-def test_db_preparation_structured_429_no_retry(tmp_path):
+def test_db_preparation_structured_429_switches_source_without_same_source_retry(tmp_path):
     manager = ToolManager(root=tmp_path)
     with patch('security_runtime.toolchain.run_process', return_value=ProcessResult(1, '', 'GET https://ghcr.io/v2/db: 429\nRetry-After: 50', 1)) as execute, patch('security_runtime.toolchain.time.sleep') as sleep:
         assert manager.prepare_trivy_database('trivy', offline=False) == ToolStatus.BROKEN
-    assert execute.call_count == 1 and not sleep.called
+    assert execute.call_count == 2 and not sleep.called
+    sources = [call.args[0][call.args[0].index('--db-repository') + 1] for call in execute.call_args_list]
+    assert len(set(sources)) == 2
     assert manager.data_diagnostics['vulnerability_db'].error_code == 'HTTP_429'
     assert manager.data_diagnostics['vulnerability_db'].retry_after_seconds == 50
 

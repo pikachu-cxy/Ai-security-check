@@ -16,7 +16,7 @@ from security_runtime.toolchain import VERSIONS, sha256_file
 from security_runtime.trial import TrialProfile, isolated_environment
 
 
-def execute(command, root, env, timeout=150):
+def execute(command, root, env, timeout=150, feedback_path=None):
     started = time.monotonic()
     feedback = []
     captured = []
@@ -25,8 +25,12 @@ def execute(command, root, env, timeout=150):
         def observe():
             while line := process.stderr.readline(8192):
                 if len(feedback) < 1000:
-                    feedback.append({'elapsed_seconds': round(time.monotonic() - started, 3),
-                        'message': line.decode('utf-8', errors='replace').strip()})
+                    item = {'elapsed_seconds': round(time.monotonic() - started, 3),
+                        'message': line.decode('utf-8', errors='replace').strip()}
+                    feedback.append(item)
+                    if feedback_path is not None:
+                        with feedback_path.open('a', encoding='utf-8') as log:
+                            log.write(json.dumps(item, ensure_ascii=False) + '\n')
         thread = threading.Thread(target=observe, daemon=True)
         reader = threading.Thread(target=lambda: captured.append(process.stdout.read(256_001)), daemon=True)
         thread.start()
@@ -65,7 +69,7 @@ async def mcp_identity(executable, env):
             return {'tools': len(tools.tools), 'runtime_info': info, 'guidance_verified': True}
 
 
-def main(bundle, output, tool_root=None, cached_db=None):
+def main(bundle, output, tool_root=None, cached_db=None, prepare_timeout=20, require_ready=False):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     profile = output / 'profile with spaces 中文'
@@ -116,16 +120,19 @@ def main(bundle, output, tool_root=None, cached_db=None):
         checked, check = execute([str(launcher), 'prepare-scanners', '--status', '--json'], profile, online)
         assert all(c['ready'] for c in checked['tools'].values())
         assert checked['vulnerability_db']['cached_usable'] and not checked['ready']
-        prepared, probe = execute([str(launcher), 'prepare-scanners', '--timeout', '20', '--json'], profile, online, timeout=40)
+        prepared, probe = execute([str(launcher), 'prepare-scanners', '--timeout', str(prepare_timeout), '--json'],
+            profile, online, timeout=prepare_timeout + 20, feedback_path=output / 'preparation-progress.jsonl')
         (output / 'public-probe.json').write_text(json.dumps(dict(receipt=prepared, execution=probe),
             ensure_ascii=False, indent=2), encoding='utf-8')
         assert validate_readiness_receipt(prepared) and prepared['preparation']['attempts'] <= 1
-        assert probe['elapsed_seconds'] < 35
+        assert probe['elapsed_seconds'] < prepare_timeout + 15
         progress_observed = any('下载进度' in item['message'] for item in probe['stderr_feedback'])
         # Registry/TLS failure before the body starts has no transfer count.
         # Preserve this as an explicit unmeasured progress result, not fake bytes.
         assert progress_observed or (not prepared['ready'] and prepared['preparation']['error_code'])
         after = {p.name: sha256_file(p) for p in (cache / 'db').iterdir() if p.is_file()}
+        original_after = {p.name: sha256_file(p) for p in cached_db.iterdir() if p.is_file()}
+        assert original_after == old, 'The original public cache must remain unchanged'
         if not prepared['ready']:
             assert probe['exit_code'] == 2 and prepared['vulnerability_db']['cached_usable']
             assert after == old
@@ -134,8 +141,10 @@ def main(bundle, output, tool_root=None, cached_db=None):
         assert before == {str(p): (p.read_bytes(), p.stat().st_mtime_ns) for p in owned}
         result['public_data_probe'] = dict(receipt=prepared, execution=probe,
             isolated_cached_database_preserved=after == old, full_online_preparation_passed=prepared['ready'],
-            real_download_progress_observed=progress_observed)
+            real_download_progress_observed=progress_observed, original_cached_database_preserved=True)
     (output / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
+    if require_ready:
+        assert result.get('public_data_probe', {}).get('full_online_preparation_passed') is True, 'Full online preparation did not pass'
     print(json.dumps({k: result[k] for k in ('status', 'build_id', 'source_commit', 'real_global_installation_modified')}, ensure_ascii=False))
 
 
@@ -145,7 +154,11 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--tool-root', type=Path)
     parser.add_argument('--cached-db', type=Path)
+    parser.add_argument('--prepare-timeout', type=int, default=20)
+    parser.add_argument('--require-ready', action='store_true')
     args = parser.parse_args()
     if bool(args.tool_root) != bool(args.cached_db):
         parser.error('--tool-root and --cached-db must be supplied together')
-    main(args.bundle.resolve(), args.output, args.tool_root, args.cached_db)
+    if not 1 <= args.prepare_timeout <= 1800 or args.require_ready and args.tool_root is None:
+        parser.error('A valid preparation budget and public-data inputs are required for full readiness')
+    main(args.bundle.resolve(), args.output, args.tool_root, args.cached_db, args.prepare_timeout, args.require_ready)

@@ -61,6 +61,20 @@ def test_public_preparation_status_never_downloads(monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out)['ready'] is False
 
 
+@pytest.mark.parametrize('command', ['prepare-scanners', 'prepare-installation'])
+def test_internal_preparation_receipt_keeps_old_parent_compatibility(monkeypatch, capsys, command):
+    data = readiness(ready=True)
+    data['preparation'] = dict(budget_seconds=300, elapsed_ms=1, max_attempts=1,
+        attempts=1, error_code='', source='ghcr.io', source_attempts=1, sources_attempted=['ghcr.io'])
+    mock_prepare(monkeypatch, data)
+    assert main([command, '--json']) == 0
+    result = json.loads(capsys.readouterr().out)['preparation']
+    assert ('sources_attempted' in result) == (command == 'prepare-scanners')
+    assert ('source_attempts' in result) == (command == 'prepare-scanners')
+    if command == 'prepare-installation':
+        assert set(result) == {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+
+
 @pytest.mark.parametrize('payload', [None, [], {'event': []}, {'event': 'DOWNLOAD_FAILED',
     'component': 'vulnerability_db', 'error_code': []}, {'event': 'DOWNLOAD_PROGRESS',
     'component': 'vulnerability_db', 'received_bytes': True, 'total_bytes': 1}])

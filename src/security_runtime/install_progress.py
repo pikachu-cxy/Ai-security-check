@@ -30,6 +30,7 @@ STAGES = {
     'INSTALL_TOOLS': '正在自动准备安全检查组件和漏洞数据；已有有效缓存会继续使用，首次准备可能需要下载。',
     'INSTALL_DATA': '正在更新漏洞数据，已有可用数据会在新数据准备完成前保留。',
     'VERIFY_SCAN_READINESS': '正在确认代码、密钥和依赖检查是否已准备完成，并检查漏洞数据有效期。',
+    'VERIFY_DOWNLOADED_DATA': '传输接近完成，正在等待解压和数据校验结果；尚未确认就绪。',
     'RECOVERY': '正在检查并安全恢复本次中断的安装。',
     'CLEANUP': '正在清理已停用的旧版本；使用中的文件和用户内容会保留。',
     'DELTA_VERIFY': '正在校验增量升级包及本地基础版本。',
@@ -39,20 +40,21 @@ STAGES = {
 PREPARATION_STAGES = frozenset({'INSTALL_TOOLS', 'INSTALL_DATA', 'VERIFY_SCAN_READINESS'})
 STAGE_PREFIX = 'AI_SECURITY_INSTALL_STAGE:'
 EVENT_PREFIX = 'AI_SECURITY_PREPARATION_EVENT:'
-_EVENTS = {'DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_RETRY', 'DOWNLOAD_FAILED', 'DOWNLOAD_COMPLETE',
+_EVENTS = {'DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_RETRY', 'DOWNLOAD_FAILED', 'DOWNLOAD_COMPLETE', 'DOWNLOAD_FALLBACK', 'DOWNLOAD_VALIDATING',
     'COMPONENT_STARTED', 'COMPONENT_COMPLETE', 'COMPONENT_FAILED'}
 _ERRORS = {'', 'NETWORK_TIMEOUT', 'DOWNLOAD_STALLED', 'PREPARATION_BUDGET_EXHAUSTED',
     'TLS_ERROR', 'DNS_RESOLUTION_FAILED', 'CONNECTION_REFUSED', 'PROXY_CONNECTION_FAILED',
     'DOWNLOAD_INTERRUPTED', 'UNKNOWN_NETWORK_ERROR', 'HTTP_401', 'HTTP_403', 'HTTP_404',
     'HTTP_429', 'HTTP_5XX', 'VULNERABILITY_DB_PREPARATION_FAILED', 'CHECKSUM_MISMATCH', 'DOWNLOAD_BUSY',
     'ENGINE_UNAVAILABLE', 'DOWNLOAD_FAILED', 'PYTHON_PACKAGE_PREPARATION_FAILED', 'OFFLINE_MODE',
-    'CONFIG_CORRUPTED', 'VERSION_MISMATCH', 'LICENSE_BLOCKED'}
-_ERROR_TEXT = {'NETWORK_TIMEOUT': '下载超时', 'DOWNLOAD_STALLED': '下载长时间没有进展',
+    'CONFIG_CORRUPTED', 'VERSION_MISMATCH', 'LICENSE_BLOCKED', 'VULNERABILITY_DB_VALIDATION_FAILED'}
+_ERROR_TEXT = {'NETWORK_TIMEOUT': '下载超时', 'DOWNLOAD_STALLED': '下载阶段超过无可验证进度等待上限',
     'PREPARATION_BUDGET_EXHAUSTED': '本次准备时间预算已耗尽', 'TLS_ERROR': '安全连接校验失败',
     'DNS_RESOLUTION_FAILED': '下载地址无法解析', 'CONNECTION_REFUSED': '服务器拒绝连接',
     'PROXY_CONNECTION_FAILED': '代理连接失败', 'DOWNLOAD_INTERRUPTED': '传输中断',
     'HTTP_429': '服务器限制请求频率', 'HTTP_401': '下载源要求授权', 'HTTP_403': '下载源拒绝访问',
-    'HTTP_404': '下载资源不存在', 'CHECKSUM_MISMATCH': '下载内容校验失败', 'DOWNLOAD_BUSY': '另一个进程正在更新漏洞库'}
+    'HTTP_404': '下载资源不存在', 'CHECKSUM_MISMATCH': '下载内容校验失败', 'DOWNLOAD_BUSY': '另一个进程正在更新漏洞库',
+    'VULNERABILITY_DB_VALIDATION_FAILED': '下载数据未通过版本、有效期或数据库校验'}
 
 
 def parse_download_progress(line):
@@ -163,7 +165,18 @@ class InstallationProgress:
                         received, total = event['received_bytes'], event['total_bytes']
                         self._write(f'{label}下载进度：{received / 1048576:.2f} / {total / 1048576:.2f} MiB（{received / total * 100:.1f}%）。')
                     elif kind == 'DOWNLOAD_STARTED':
-                        self._write(f"正在下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 次尝试；剩余预算最多 {event.get('timeout_seconds', 0)} 秒。")
+                        self._last_download = None
+                        self._stage = 'INSTALL_DATA'
+                        source = {'ghcr.io': '官方发布源', 'mirror.gcr.io': '官方镜像源'}.get(event.get('source'), '当前来源')
+                        self._write(f"正在从{source}下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 轮；剩余预算最多 {event.get('timeout_seconds', 0)} 秒。")
+                    elif kind == 'DOWNLOAD_FALLBACK':
+                        self._last_download = None
+                        self._stage = 'INSTALL_DATA'
+                        source = {'ghcr.io': '官方发布源', 'mirror.gcr.io': '官方镜像源'}.get(event.get('source'), '备用来源')
+                        self._write('本来源未完成，正在切换到' + source + '；共用剩余总预算。')
+                    elif kind == 'DOWNLOAD_VALIDATING':
+                        self._stage = 'VERIFY_DOWNLOADED_DATA'
+                        self._write(STAGES[self._stage])
                     elif kind == 'DOWNLOAD_RETRY':
                         self._last_download = None
                         self._write('正在按指定重试次数重新下载；上次未完成的数据不能作为有效缓存。')

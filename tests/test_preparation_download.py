@@ -70,30 +70,33 @@ def test_default_no_blind_retry_and_failure_preserves_old_cache(database, monkey
     manager, cache, before, _ = database
     calls, events = [], []
     def execute(args, **kwargs):
-        calls.append((args, kwargs))
+        calls.append((args, {key: value for key, value in kwargs.items() if key != 'env'}))
         kwargs['on_stderr_line']('10.00 MiB / 100.00 MiB [>] 10%')
         return ProcessResult(1, '', 'failed to download artifact from mirror.gcr.io/aquasec/trivy-db:2: context deadline exceeded', 1)
     monkeypatch.setattr('security_runtime.toolchain.run_process', execute)
     with preparation_budget(30, progress=events.append) as budget:
         assert manager.prepare_trivy_database('trivy.exe') == ToolStatus.READY  # Cached usability only.
-        assert budget.attempts == 1 and budget.error_code == 'NETWORK_TIMEOUT'
-    assert len(calls) == 1 and '--quiet' not in calls[0][0] and '--timeout' in calls[0][0]
+        assert budget.attempts == 1 and budget.source_attempts == 2 and budget.error_code == 'NETWORK_TIMEOUT'
+    assert len(calls) == 2 and '--quiet' not in calls[0][0] and '--timeout' in calls[0][0]
+    sources = [args[args.index('--db-repository') + 1] for args, _ in calls]
+    assert len(set(sources)) == 2  # No blind retry of the same source in one round.
     assert 0 < calls[0][1]['timeout'] <= 30
     assert {p.name: p.read_bytes() for p in (cache / 'db').iterdir()} == before
     assert manager.database_freshness()['status'] == 'STALE'
-    assert [e['event'] for e in events] == ['DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_FAILED']
+    assert [e['event'] for e in events] == ['DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_FAILED',
+        'DOWNLOAD_FALLBACK', 'DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_FAILED']
 
 
 def test_extended_budget_is_used_by_one_attempt_without_a_hidden_five_minute_cap(database, monkeypatch):
     manager, _, _, _ = database
     calls = []
     def execute(args, **kwargs):
-        calls.append((args, kwargs))
+        calls.append((args, {key: value for key, value in kwargs.items() if key != 'env'}))
         return ProcessResult(1, '', 'unexpected EOF', 1)
     monkeypatch.setattr('security_runtime.toolchain.run_process', execute)
     with preparation_budget(600):
         manager.prepare_trivy_database('trivy.exe')
-    assert len(calls) == 1
+    assert len(calls) == 2
     args, options = calls[0]
     assert 590 < options['timeout'] <= 600
     assert 590 < float(args[args.index('--timeout') + 1].removesuffix('s')) <= 600
@@ -104,7 +107,7 @@ def test_explicit_retry_reports_attempt_then_success_and_activates_only_valid_da
     calls, events = [], []
     def execute(args, **kwargs):
         calls.append(args)
-        if len(calls) == 1:
+        if len(calls) <= 2:
             return ProcessResult(1, '', 'unexpected EOF', 1)
         write(__import__('pathlib').Path(args[args.index('--cache-dir') + 1]) / 'db', fresh=True)
         return ProcessResult(0, '', '', 1)
@@ -112,7 +115,7 @@ def test_explicit_retry_reports_attempt_then_success_and_activates_only_valid_da
     monkeypatch.setattr('security_runtime.toolchain.time.sleep', lambda _: None)
     with preparation_budget(30, retries=1, progress=events.append) as budget:
         assert manager.prepare_trivy_database('trivy.exe', validate_database=lambda _: True) == ToolStatus.READY
-        assert budget.attempts == 2 and not budget.error_code
+        assert budget.attempts == 2 and budget.source_attempts == 3 and not budget.error_code
     assert manager.database_freshness()['status'] == 'FRESH'
     assert any(e['event'] == 'DOWNLOAD_RETRY' and e['attempt'] == 2 for e in events)
     assert events[-1]['event'] == 'DOWNLOAD_COMPLETE'

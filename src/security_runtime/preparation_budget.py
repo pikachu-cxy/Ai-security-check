@@ -1,7 +1,7 @@
 """A command-local preparation budget; scan execution remains independent."""
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 
 
@@ -15,6 +15,8 @@ class PreparationBudget:
     attempts: int = 0
     error_code: str = ''
     source: str = ''
+    source_attempts: int = 0
+    sources_attempted: list[str] = field(default_factory=list)
 
     def remaining(self):
         return max(0., self.seconds - (time.monotonic() - self.started))
@@ -25,10 +27,14 @@ class PreparationBudget:
         if safe is None:
             return
         self.attempts = max(self.attempts, safe.get('attempt', 0))
+        if safe['event'] == 'DOWNLOAD_STARTED' and safe['component'] == 'vulnerability_db' and safe.get('source'):
+            self.source_attempts += 1
+            if safe['source'] not in self.sources_attempted:
+                self.sources_attempted.append(safe['source'])
         if safe['event'] in {'DOWNLOAD_FAILED', 'COMPONENT_FAILED'}:
             self.error_code, self.source = safe.get('error_code', ''), safe.get('source', '')
         elif safe['event'] == 'DOWNLOAD_COMPLETE':
-            self.error_code = self.source = ''
+            self.error_code, self.source = '', safe.get('source', '')
         try:
             report_progress(self.progress, safe)
         except Exception:
