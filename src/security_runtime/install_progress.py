@@ -6,6 +6,7 @@ import threading
 import time
 import json
 import re
+from collections import deque
 
 
 STAGES = {
@@ -69,6 +70,34 @@ def parse_download_progress(line):
     received = int(float(match[1]) * units[match[2]])
     total = int(float(match[3]) * units[match[4]])
     return (received, total) if 0 <= received <= total <= 8_000_000_000 and total > 0 else None
+
+
+class DownloadProgressParser:
+    """Bounded numeric frames, including Windows pb output without newlines.
+
+    Only counts leave this parser. Fragments, bars and arbitrary raw logs are
+    never forwarded. A source-specific instance prevents cross-source replay.
+    """
+    _frame = re.compile(rb'(?<![\d.+\-eE])(\d{1,16}(?:\.\d{1,8})?)\s+(?:B|KiB|MiB|GiB)\s*/\s*'
+        rb'\d{1,16}(?:\.\d{1,8})?\s+(?:B|KiB|MiB|GiB)\s+\[')
+
+    def __init__(self):
+        self._pending = b''
+
+    def feed(self, chunk):
+        if not isinstance(chunk, (bytes, bytearray)):
+            return []
+        counts = deque(maxlen=256)
+        for offset in range(0, len(chunk), 4096):
+            data = self._pending + bytes(chunk[offset:offset + 4096])
+            consumed = 0
+            for match in self._frame.finditer(data):
+                parsed = parse_download_progress(match.group().decode('ascii'))
+                if parsed is not None:
+                    counts.append(parsed)
+                consumed = match.end()
+            self._pending = data[consumed:][-256:]
+        return list(counts)
 
 
 def validate_preparation_event(value):

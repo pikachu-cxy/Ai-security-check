@@ -34,7 +34,7 @@ from .plugin_api import discover_plugin_directory
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .processes import run_process, ProcessIdleTimeout
 from .preparation_budget import current_budget, bounded_timeout
-from .install_progress import parse_download_progress
+from .install_progress import parse_download_progress, DownloadProgressParser
 from .progress import emit, checkpoint, ScanCancelled
 from .scanner_observation import span, cache as cache_observed, count, workspace as scan_workspace
 
@@ -881,8 +881,8 @@ class ToolManager:
             source_host = repository.split('/', 1)[0]
             observed = [time.monotonic(), -1]
             validating = [False]
-            def transfer(line):
-                counts = parse_download_progress(line)
+            progress_parser = DownloadProgressParser()
+            def receive_counts(counts):
                 if counts and counts[0] > observed[1]:
                     observed[:] = [time.monotonic(), counts[0]]
                     if budget:
@@ -896,6 +896,11 @@ class ToolManager:
                         validating[0] = True
                         if budget:
                             budget.report(dict(event='DOWNLOAD_VALIDATING', component='vulnerability_db', source=source_host))
+            def transfer(line):
+                receive_counts(parse_download_progress(line))
+            def transfer_chunk(chunk):
+                for counts in progress_parser.feed(chunk):
+                    receive_counts(counts)
             try:
                 seconds = bounded_timeout(budget.seconds if budget else 900)
                 if budget and previous_attempt is not None:
@@ -923,6 +928,7 @@ class ToolManager:
                             command.append('--quiet')
                         proc = run_process(command, env=env, cwd=staging, timeout=seconds,
                             on_stderr_line=transfer if budget else None,
+                            on_stderr_chunk=transfer_chunk if budget else None,
                             idle_timeout=budget.idle_seconds if budget else None,
                             activity_clock=lambda: time.monotonic() if validating[0] else observed[0])
                     if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'

@@ -33,7 +33,7 @@ class ProcessIdleTimeout(TimeoutError):
 
 
 def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None,
-                idle_timeout=None, activity_clock=None) -> ProcessResult:
+                idle_timeout=None, activity_clock=None, on_stderr_chunk=None) -> ProcessResult:
     checkpoint()
     timeout = bounded_timeout(timeout)
     start = time.monotonic()
@@ -44,7 +44,7 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()
 
-    def consume(stream, buffer, callback=None):
+    def consume(stream, buffer, callback=None, chunk_callback=None):
         pending = b''
         discarded = False
         try:
@@ -54,6 +54,12 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
                 if len(chunk) > remaining:
                     overflow.set()
                     # Drain and discard until the parent kills the process.
+                if chunk_callback is not None:
+                    try:
+                        chunk_callback(chunk)
+                    except Exception:
+                        # Numeric observation failures cannot echo raw output.
+                        pass
                 if callback is not None:
                     pending += chunk
                     while b'\n' in pending or b'\r' in pending:
@@ -74,7 +80,8 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
             stream.close()
 
     readers = [threading.Thread(target=consume,
-               args=(stream, buffers[index], on_stderr_line if index == 1 else None), daemon=True)
+               args=(stream, buffers[index], on_stderr_line if index == 1 else None,
+                   on_stderr_chunk if index == 1 else None), daemon=True)
                for index, stream in enumerate((proc.stdout, proc.stderr))]
     for reader in readers:
         reader.start()

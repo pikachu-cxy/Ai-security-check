@@ -142,6 +142,8 @@ def main(bundle, output, tool_root=None, cached_db=None, prepare_timeout=20, req
         result['public_data_probe'] = dict(receipt=prepared, execution=probe,
             isolated_cached_database_preserved=after == old, full_online_preparation_passed=prepared['ready'],
             real_download_progress_observed=progress_observed, original_cached_database_preserved=True)
+    if require_ready and result.get('public_data_probe', {}).get('full_online_preparation_passed') is not True:
+        result['status'] = 'FAIL'
     (output / 'result.json').write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
     if require_ready:
         assert result.get('public_data_probe', {}).get('full_online_preparation_passed') is True, 'Full online preparation did not pass'
