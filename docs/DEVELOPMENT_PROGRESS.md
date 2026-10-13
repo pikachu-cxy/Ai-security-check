@@ -25,9 +25,38 @@ ETA、真实本地子进程跨初始预算、固定模式、无进展、最长�
 复验同一源码后300项通过，原失败XML保留。此前预算分组一次旧portable invalid-json
 失败，独立复查和最终合并均通过，单次原因未单独证实，未为该用例改写安装代码。
 
-即将冻结的独立候选为 `dist/db-bar-20261013-r2/security-check`；完整身份、同包真实
-自动续等和安装/MCP/ZIP结果将在验收后补齐。上一r1的493.969秒成功属于手动900秒，
-不能当成新候选自适应通过。原全局缓存与旧现场保留。
+独立候选为 `dist/db-bar-20261013-r2/security-check`，Runtime0.3.2，
+构建 `141cf5c0eaa9d10d27fa16222b8a693153093abb136ced6a8603a8495a040c3d`；
+冻结源码 `57f49bfe3be359ca5f01e223e4a5d709fb6eb1f3`，`source_dirty=false`。
+ZIP `dist/experience/ai-security-runtime-v0.3.2-db-bar-20261013-r2-windows-x64.zip`；
+SHA-256 `5aeb03a2a6ebaa717098dc4dd94e21d46e59ad9d166ebcb407335396bf9e9f9a`。
+同包本地安装19.828秒、重复9.687秒、首反馈0.265秒；只读未就绪核对5.485秒，
+配置/Hook/Skill字节与修改时间幂等。普通MCP 24项工具、同包身份及专业指导摘要通过，
+ZIP基础验收通过，未启用全扫描器发行验收。
+同包真实Windows终端自动续等通过：初始60秒、绝对上限900秒，实际533.766秒完成，
+明确跨过初始限制，`adaptive=true`；GHCR一次源调用，退出0，三组件和新库最终READY/FRESH。
+捕获499帧可见进度，下载区换行LF为0，ETA随近期网速变化，本次捕获无截断。
+原全局缓存SHA-256前后相同，全局安装未改；更新的是隔离副本。
+新库1,607,704,576字节、schema2，上游更新时间 `2026-10-13T01:09:18.36500669Z`，
+下次更新 `2026-10-14T01:09:18.36500625Z`，实际下载 `2026-10-13T06:34:46.5022507Z`。
+上游metadata未重写，100%后等待进程成功、新有效期和bbolt检查才切换缓存。
+同包暖缓存只读READY核对5.469秒，再次默认自适应准备5.437秒、源调用0，未再次下载；
+旧内部离线入口5.235秒退出0，仍精确6字段，验证文件 `artifacts/bt2/warm-result.json`。
+
+真实证据为本机 `artifacts/bt2/result.json`、`terminal-output.txt`，
+`artifacts/bi2/result.json`，`artifacts/db-bar-20261013/regression-adaptive-final.xml`，
+及ZIP旁验证文件。权限失败保存在 `regression-sandbox-failed.xml`，预算修前/分组证据在
+`artifacts/db-online-20261013/adaptive-budget-before.xml`、`adaptive-budget-after.xml`、
+`adaptive-budget-targeted.xml`；不删除失败现场，也不把模拟响应或本地子进程当真实在线验收。
+
+本批相对上一GitHub交付修改17文件：Runtime7份（含新增 `download_estimate.py`）、
+安装验收脚本1份、测试5份（新增预算/ETA/终端进度三份）、安装及接续文档4份。
+后续纯文档提交只补验收，不改变冻结代码身份。源码、测试及脱敏结论同步GitHub，
+ZIP、漏洞库、原始日志和用户配置仅在本地。旧包、旧缓存、基线和人工测试docx保持。
+
+上一r1的493.969秒成功属于手动900秒，用户旧db-online-r2的300秒61.8%失败继续保留。
+此次新包隔离成功不表示用户全局已准备完成；按新包安装、准备及只读回执独立核对。
+无缓存新机器全组件下载、无代理网络和真实Codex自动Hook尚未验收，用户聊天提示延迟未测得。
 
 ### 2026-10-13 单行下载进度与用户慢速网络复验批次
 
