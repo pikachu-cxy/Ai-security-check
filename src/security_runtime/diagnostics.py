@@ -143,7 +143,7 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
         code, summary = 'DNS_RESOLUTION_FAILED', 'Remote source hostname could not be resolved.'
     elif isinstance(cause, ConnectionRefusedError) or 'connection refused' in lower or 'actively refused' in lower:
         code, summary = 'CONNECTION_REFUSED', 'Remote source refused the connection.'
-    elif isinstance(cause, TimeoutError) or any(word in lower for word in ('timed out', 'timeout', 'connection attempt failed', 'did not properly respond')):
+    elif isinstance(cause, TimeoutError) or any(word in lower for word in ('timed out', 'timeout', 'context deadline exceeded', 'connection attempt failed', 'did not properly respond')):
         code, summary = 'NETWORK_TIMEOUT', 'Connection timed out while contacting the remote source.'
     elif isinstance(cause, (IncompleteRead, ConnectionResetError)) or any(word in lower for word in ('incomplete read', 'incompleteread', 'connection reset', 'unexpected eof', 'download interrupted')):
         code, summary = 'DOWNLOAD_INTERRUPTED', 'Remote download was interrupted before completion.'

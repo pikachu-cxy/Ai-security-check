@@ -13,10 +13,12 @@ from pathlib import Path
 import re
 import struct
 import threading
+import time
 
 from .install_progress import report_progress
 from .progress import ScanCancelled, checkpoint
 from .toolchain import ToolManager, ToolStatus, VERSIONS
+from .preparation_budget import preparation_budget, current_budget
 
 
 CONTRACT = 'installation-readiness-v1'
@@ -199,6 +201,7 @@ def _validate_database_directory(directory):
 
 def _database(manager, failures, stage):
     status, freshness = ToolStatus.BROKEN.value, 'UNKNOWN'
+    value = None
     try:
         checkpoint()
         status = _status(manager.database_status())
@@ -225,9 +228,19 @@ def _database(manager, failures, stage):
         except Exception as exc:
             status = ToolStatus.BROKEN.value
             _failure(failures, stage, 'vulnerability_db', exc)
-    return {'status': status, 'freshness': freshness,
-        'ready': status == ToolStatus.READY and freshness == 'FRESH',
-        'cached_usable': status == ToolStatus.READY}
+    result = {'status': status, 'freshness': freshness,
+        'ready': status == ToolStatus.READY and freshness == 'FRESH', 'cached_usable': status == ToolStatus.READY}
+    if isinstance(value, dict):
+        from datetime import datetime
+        for name in ('updated_at', 'next_update'):
+            stamp = value.get(name)
+            if isinstance(stamp, str) and len(stamp) <= 80:
+                try:
+                    datetime.fromisoformat(stamp)
+                    result[name] = stamp
+                except ValueError:
+                    pass
+    return result
 
 
 def _message(tools, database, *, offline, ready):
@@ -250,7 +263,7 @@ def _message(tools, database, *, offline, ready):
         if database['cached_usable']:
             notes.append('已有漏洞数据已保留，依赖检查的覆盖可能不完整。')
     if offline:
-        notes.append('当前离线，无法补齐所需组件或更新漏洞数据。')
+        notes.append('本次仅核对本地组件和缓存，未下载组件或更新漏洞数据。')
     return '安全检查尚未全部准备完成。' + ''.join(notes)
 
 
@@ -263,7 +276,8 @@ def _receipt(tools, database, failures, *, offline):
         'failures': failures}
 
 
-def prepare_installation_readiness(*, progress=None, manager=None, offline=False):
+def prepare_installation_readiness(*, progress=None, manager=None, offline=False,
+                                   timeout_seconds=300, retries=0, idle_seconds=30):
     """Reuse compatible tools; repair missing tools and refresh public data online.
 
     Explicit offline mode is resolve-only, including Python-based engines: even
@@ -271,8 +285,13 @@ def prepare_installation_readiness(*, progress=None, manager=None, offline=False
     Cancellation remains cancellation; other failures are independently recorded
     with fixed stages and exception types, never exception text or source paths.
     """
-    with _quiet_preparation_logs():
-        return _prepare_installation_readiness(progress=progress, manager=manager, offline=offline)
+    with preparation_budget(timeout_seconds, retries, idle_seconds, progress) as budget, _quiet_preparation_logs():
+        receipt = _prepare_installation_readiness(progress=progress, manager=manager, offline=offline)
+        receipt['preparation'] = {'budget_seconds': timeout_seconds,
+            'elapsed_ms': round((time.monotonic() - budget.started) * 1000),
+            'max_attempts': 1 + retries, 'attempts': budget.attempts,
+            'error_code': budget.error_code, 'source': budget.source}
+        return receipt
 
 
 def _prepare_installation_readiness(*, progress=None, manager=None, offline=False):
@@ -313,6 +332,9 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except Exception as exc:
             _failure(failures, 'INSTALL_TOOLS', name, exc)
         if not _component(current, expected)['ready'] and not offline:
+            budget = current_budget()
+            if budget:
+                budget.report(dict(event='COMPONENT_STARTED', component=name))
             try:
                 checkpoint()
                 current = manager.ensure(name, offline=False)
@@ -320,6 +342,13 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
                 raise
             except Exception as exc:
                 _failure(failures, 'INSTALL_TOOLS', name, exc)
+            if budget:
+                diagnostic = getattr(current, 'diagnostic', None)
+                code = getattr(diagnostic, 'error_code', '') or 'ENGINE_UNAVAILABLE'
+                if budget.remaining() <= 0:
+                    code = 'PREPARATION_BUDGET_EXHAUSTED'
+                budget.report(dict(event='COMPONENT_COMPLETE' if _component(current, expected)['ready'] else 'COMPONENT_FAILED',
+                    component=name, error_code='' if _component(current, expected)['ready'] else code))
         tools[name] = _component(current, expected)
         resolved[name] = current
 
@@ -342,7 +371,8 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
     for name in CORE_TOOLS:
         try:
             checkpoint()
-            current = manager.resolve(name)
+            budget = current_budget()
+            current = resolved[name] if budget and budget.remaining() <= 0 else manager.resolve(name)
         except ScanCancelled:
             raise
         except Exception as exc:
@@ -362,9 +392,20 @@ def validate_readiness_receipt(value):
 
 
 def _validate_readiness_receipt(value):
-    if not isinstance(value, dict) or set(value) != {'contract', 'status', 'ready',
-            'message', 'network_allowed', 'tools', 'vulnerability_db', 'failures'}:
+    required = {'contract', 'status', 'ready', 'message', 'network_allowed', 'tools', 'vulnerability_db', 'failures'}
+    if not isinstance(value, dict) or not required <= set(value) or set(value) - required - {'preparation'}:
         return False
+    if 'preparation' in value:
+        from .install_progress import validate_preparation_event
+        prepared = value['preparation']
+        if (not isinstance(prepared, dict) or set(prepared) != {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
+                or type(prepared['budget_seconds']) is not int or not 1 <= prepared['budget_seconds'] <= 1800
+                or type(prepared['elapsed_ms']) is not int or not 0 <= prepared['elapsed_ms'] <= 3_600_000
+                or type(prepared['attempts']) is not int or not 0 <= prepared['attempts'] <= prepared['max_attempts']
+                or validate_preparation_event(dict(event='DOWNLOAD_FAILED', component='vulnerability_db',
+                    attempt=max(1, prepared['attempts']), max_attempts=prepared['max_attempts'],
+                    error_code=prepared['error_code'], source=prepared['source'])) is None):
+            return False
     if (value['contract'] != CONTRACT or value['status'] not in {'READY', 'PARTIAL', 'UNAVAILABLE'}
             or type(value['ready']) is not bool or type(value['network_allowed']) is not bool
             or not isinstance(value['message'], str) or len(value['message']) > 1_000):
@@ -385,8 +426,14 @@ def _validate_readiness_receipt(value):
         if component['ready'] != expected_ready or component['status'] == 'READY' and not expected_ready:
             return False
     database = value['vulnerability_db']
-    if not isinstance(database, dict) or set(database) != {'status', 'freshness', 'ready', 'cached_usable'}:
+    database_fields = {'status', 'freshness', 'ready', 'cached_usable'}
+    if not isinstance(database, dict) or not database_fields <= set(database) or set(database) - database_fields - {'updated_at', 'next_update'}:
         return False
+    from datetime import datetime
+    for stamp in (database[name] for name in ('updated_at', 'next_update') if name in database):
+        if not isinstance(stamp, str) or len(stamp) > 80:
+            return False
+        datetime.fromisoformat(stamp)
     if (database['status'] not in _TOOL_STATUSES or database['freshness'] not in _FRESHNESS
             or type(database['ready']) is not bool or type(database['cached_usable']) is not bool
             or database['cached_usable'] != (database['status'] == 'READY')

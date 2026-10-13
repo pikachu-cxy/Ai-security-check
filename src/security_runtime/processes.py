@@ -6,6 +6,7 @@ import threading
 import time
 import os
 import signal
+from .preparation_budget import bounded_timeout
 
 from .progress import checkpoint
 
@@ -27,8 +28,14 @@ class OutputLimitError(ValueError):
     pass
 
 
-def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None) -> ProcessResult:
+class ProcessIdleTimeout(TimeoutError):
+    pass
+
+
+def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None,
+                idle_timeout=None, activity_clock=None) -> ProcessResult:
     checkpoint()
+    timeout = bounded_timeout(timeout)
     start = time.monotonic()
     creation_started = time.perf_counter()
     proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
@@ -49,9 +56,11 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
                     # Drain and discard until the parent kills the process.
                 if callback is not None:
                     pending += chunk
-                    while b'\n' in pending:
-                        line, _, pending = pending.partition(b'\n')
-                        if not discarded and len(line) <= 256:
+                    while b'\n' in pending or b'\r' in pending:
+                        endings = [index for index in (pending.find(b'\n'), pending.find(b'\r')) if index >= 0]
+                        index = min(endings)
+                        line, pending = pending[:index], pending[index + 1:]
+                        if line and not discarded and len(line) <= 256:
                             try:
                                 callback(line.decode('utf-8', errors='replace').rstrip('\r'))
                             except Exception:
@@ -78,6 +87,10 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
                 break
             if time.monotonic() - start >= timeout:
                 failure = TimeoutError("process timed out")
+                break
+            if (idle_timeout is not None and activity_clock is not None
+                    and time.monotonic() - activity_clock() >= idle_timeout):
+                failure = ProcessIdleTimeout('download made no progress')
                 break
             time.sleep(.01)
     finally:

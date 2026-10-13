@@ -169,7 +169,7 @@ def test_offline_path_never_calls_installers_or_downloaders(freshness):
     assert receipt['ready'] is False
     assert receipt['network_allowed'] is False
     assert not any(call[0] in {'ensure', 'prepare_trivy_database'} for call in manager.calls)
-    assert '当前离线' in receipt['message']
+    assert '仅核对本地组件和缓存' in receipt['message']
     assert_valid(receipt)
 
 
@@ -448,7 +448,7 @@ def test_real_manager_offline_path_has_no_preparation_side_effect(tmp_path, monk
     assert receipt['status'] == 'UNAVAILABLE'
     assert not manager.root.exists()
     assert (project / 'requirements.txt').read_bytes() == before
-    assert list(inspect.signature(prepare_installation_readiness).parameters) == ['progress', 'manager', 'offline']
+    assert list(inspect.signature(prepare_installation_readiness).parameters) == ['progress', 'manager', 'offline', 'timeout_seconds', 'retries', 'idle_seconds']
     assert_valid(receipt)
 
 

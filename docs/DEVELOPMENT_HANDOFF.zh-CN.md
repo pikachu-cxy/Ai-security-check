@@ -5,6 +5,11 @@
 先读本文，再读 [开发进度](DEVELOPMENT_PROGRESS.md)、
 [近期顺序](NEXT_DEVELOPMENT_PLAN.zh-CN.md) 和 [收尾验收](RUNTIME_CLOSEOUT_CHECK.zh-CN.md)。
 
+2026-10-13 新增安装流程优化：`install codex` 不等待网络准备；随后运行
+`prepare-scanners`。安装成功与扫描就绪分别核对，旧库过期保持未就绪。
+不要照旧通过重装来刷新数据。新构建、回归和隔离验收以开发进度中的本批记录为准；
+完整本地操作见 [安装验收](INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
+
 ## 本批源码已完成
 
 1. 修正 Codex Stop 输出，只使用官方规定的继续执行决定和说明，携带原结束检查计划。
@@ -100,7 +105,10 @@ $tag = 'dev-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
 if ($LASTEXITCODE -ne 0) { throw '构建失败，不能安装旧目录冒充当前源码' }
 $bundle = Join-Path (Get-Location).Path "dist/$tag/security-check"
 & "$bundle/security-check.exe" install codex --bundle $bundle
-if ($LASTEXITCODE -ne 0) { throw '安装准备尚未完成，按诊断处理后重试同一入口' }
+if ($LASTEXITCODE -ne 0) { throw '本地安装未完成，先处理程序或配置诊断' }
+& "$bundle/security-check.exe" prepare-scanners --timeout 300
+if ($LASTEXITCODE -ne 0) { Write-Host '扫描准备尚未完成；按诊断稍后重跑 prepare-scanners，已有配置和缓存保留' }
+& "$bundle/security-check.exe" prepare-scanners --status --json
 ```
 
 没有 GCC 时，可以从自己保存的完整、已验证程序包复用启动器，但必须确认

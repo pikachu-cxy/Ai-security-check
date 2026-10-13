@@ -107,8 +107,7 @@ brew install pikachu-cxy/tap/ai-security-runtime
 ```
 
 The standalone Runtime includes its Python runtime. Codex installation and
-upgrades prepare the compatible security engines, bundled rules and current
-vulnerability data in one product operation. No system Python, pip or venv is
+upgrades install the program separately from scanner/data preparation. No system Python, pip or venv is
 required. Run inside your Git project:
 
 ```bash
@@ -125,40 +124,43 @@ current candidate's Desktop acceptance is recorded separately in development pro
 
 ### Install or upgrade Codex protection
 
-Run the same command from the new Runtime package for an initial installation,
-upgrade, or preparation retry:
+Run this command from the new Runtime package for an initial installation or upgrade.
+It installs the program, global connection and Skill, and checks existing caches without waiting for downloads:
 
 ```bash
 security-check install codex
 ```
 
-The command installs the global connection and companion Skill, verifies the
-bundled rule pack, prepares the default engines at product-tested versions, and
-refreshes missing or expired vulnerability data. Valid compatible caches are
-reused; engines do not blindly follow the latest third-party release. Tool and
-data preparation stays in the Runtime's per-user storage and does not install
-dependencies or execute code from the protected project. Optional fallback
-engines remain on demand.
+Prepare scanners and public data separately; retry preparation without reinstalling:
 
-Installation distinguishes configured files from scanning readiness. If a
-download or verification fails, configuration may already be installed, but the
-product reports that protection is not ready and exits with code 2. Retry
-`security-check install codex` after resolving the reported connection or cache
-problem; individual tool commands are advanced diagnostics, not a normal
-installation step. A completed install still requires the host to reload its
-connection and accept its own Hook trust prompt.
+```bash
+security-check prepare-scanners
+security-check prepare-scanners --status --json
+```
+
+Preparation reuses compatible caches and product-pinned engines. It never installs
+project dependencies or executes project code. The default total budget is 300 seconds;
+database transfers stop after 30 seconds without byte progress. Whole-download retries
+are disabled by default. Explicit `--timeout 600 --idle-timeout 60 --retries 1`
+permits one extra attempt within the same total budget. Progress comes from observed
+transfer counts; no resumable-download capability is claimed.
+
+An installation exit code of 0 proves local program/configuration installation;
+`scan_ready` is a separate result. Preparation exits 2 when incomplete, or 130
+when cancelled. It retains usable older data and configuration, reports expired
+data as incomplete, and never equates program installation with scanning readiness.
+JSON stdout remains a single receipt; bounded download feedback goes to stderr.
+Restart the host after installation and accept its Hook trust prompt.
 
 ```bash
 security-check install codex --offline
 ```
 
-Offline installation only verifies and reuses local compatible engines, rules
-and unexpired vulnerability data. Missing, damaged or expired assets remain an
-explicit incomplete preparation result. `security-check setup codex` only
-configures the connection and Skill; it does not download tools or establish
-scanning readiness. Quick dependency checks and automatic Hooks remain offline.
-This release refreshes data during product installation or a repeated install;
-it does not yet provide a background data-update scheduler.
+Installation always checks caches without downloads. `prepare-scanners --offline`
+or `--status` checks existing components/data only. Missing, damaged or expired
+assets remain incomplete. `setup codex` configures the connection and Skill only.
+Quick dependency checks and automatic Hooks remain offline. There is no background
+data-update scheduler. See the [installation acceptance guide](docs/INSTALL_FLOW_ACCEPTANCE.zh-CN.md).
 
 ## 2. Run your first CLI scan
 
@@ -189,7 +191,7 @@ Then scan:
 security-check scan --mode quick
 ```
 
-Codex installation prepares the default tools and vulnerability data before use. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against the remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; Codex users retry the product installation to refresh them. Downloads in permitted preparation flows are verified before use and do not require a system-wide PATH change.
+Codex users run `prepare-scanners` separately to prepare default tools and vulnerability data. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; retry preparation without reinstalling. Downloads are verified before use and do not require a system-wide PATH change.
 
 A successful test should:
 
@@ -505,7 +507,7 @@ security-check mcp config --copy
 
 ### Managed security tools
 
-Codex users install or update the product with `security-check install codex`.
+Codex users install or update the program with `security-check install codex` and prepare scanning with `security-check prepare-scanners`.
 These lower-level commands are available for diagnostics and advanced tool
 management:
 
@@ -655,7 +657,7 @@ security-check doctor --path <project>
 
 ### A scanner is missing
 
-For Codex protection, repeat `security-check install codex` to prepare the
+For Codex protection, run `security-check prepare-scanners` to prepare the
 product's default engines and vulnerability data together. Online manual scan
 flows can also prepare tools required by their scan plan; automatic Hooks and
 quick dependency checks only reuse local assets.

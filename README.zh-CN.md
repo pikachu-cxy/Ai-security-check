@@ -99,8 +99,8 @@ winget install --id PikachuCXY.AISecurityRuntime -e
 brew install pikachu-cxy/tap/ai-security-runtime
 ```
 
-Standalone Runtime 自带运行环境。Codex 安装和升级会统一准备兼容的检查工具、
-随产品发布的规则和当前可用的漏洞数据，不要求用户安装 Python、pip 或 venv。
+Standalone Runtime 自带运行环境。Codex 程序安装和扫描能力准备分开执行，
+不要求用户安装 Python、pip 或 venv。
 进入自己的 Git 项目后执行：
 
 ```text
@@ -111,15 +111,22 @@ security-check scan --mode quick
 
 ### Codex 安装与升级
 
-首次安装、更新产品或重试未完成的准备，都使用同一个入口。更新时使用新产品包中的程序：
+首次安装或更新时使用新产品包中的程序；此步骤只安装程序、全局连接与 Skill，并核对已有缓存，不等待联网下载：
 
 ```powershell
 security-check install codex
 ```
 
-产品会协同安装全局连接和 Skill，检查随包发布的规则，准备经过产品验证的默认工具版本，并更新缺失或过期的漏洞数据。兼容且有效的本地缓存会复用；工具不会盲目升级到第三方的最新版本。准备内容保存在产品的用户级目录中，不会安装受保护项目的依赖或运行项目代码。可选的备用检查工具仍按需准备。
+然后单独准备扫描能力，或在数据过期、下载失败后重试此步骤：
 
-“配置已安装”和“检查已就绪”分别验收。下载或验证失败时，程序会明确说明保护尚未就绪，并返回非零退出码（2）；已经安装的连接和 Skill 可以保留。处理提示中的网络或缓存问题后，重新运行 `security-check install codex` 即可，不需要日常分别维护内部工具。安装完成后，仍需重启宿主加载连接，并按宿主提示审核 Hook 信任。
+```powershell
+security-check prepare-scanners
+security-check prepare-scanners --status --json
+```
+
+准备入口复用兼容缓存，补齐经过产品验证的工具版本并更新漏洞库，不会安装受保护项目的依赖或运行项目代码。默认总预算 300 秒，数据库连续 30 秒没有实际传输进展会停止；默认不自动重下整包。下载进度来自检查器实际报告的传输量，无法取得时只展示阶段。需要时可显式设置 `--timeout 600 --idle-timeout 60 --retries 1`；所有尝试共用总预算，没有断点续传承诺。
+
+`install codex` 返回 0 只表示本地程序和连接安装通过，回执的 `scan_ready` 单独表示扫描就绪。`prepare-scanners` 在检查未全部就绪时返回 2，取消返回 130；原有可用缓存和配置保留。过期库可保留，但不会显示成最新或完整就绪。JSON 回执的漏洞库日期、准备预算、尝试次数与错误归因独立保存；下载反馈写 stderr，stdout 保持单个 JSON。安装后仍需重启宿主加载连接并审核 Hook 信任。
 
 离线安装使用：
 
@@ -127,7 +134,7 @@ security-check install codex
 security-check install codex --offline
 ```
 
-离线模式只验证并复用本机兼容的工具、规则和未过期的漏洞数据；缺失、损坏或过期时会明确说明准备未完成。`security-check setup codex` 只配置连接和 Skill，不下载工具，也不证明检查已就绪。快速依赖检查和自动 Hook 继续使用本地离线数据。当前版本在安装、升级或重跑安装时刷新漏洞数据，尚未提供后台定期更新服务。
+安装本身不下载扫描器；`prepare-scanners --offline` 或 `--status` 只核对本地组件与缓存，缺失、损坏或过期时仍显示未就绪。`setup codex` 保持仅配置连接和 Skill。自动 Hook 和快速依赖检查继续复用本地数据，尚无后台定期更新服务。详见 [安装验收](docs/INSTALL_FLOW_ACCEPTANCE.zh-CN.md)。
 
 ### 第 3 步：进入你的项目开始使用
 
@@ -145,7 +152,7 @@ security-check doctor
 security-check scan --mode quick
 ```
 
-Codex 用户在安装或升级时统一准备检查工具和漏洞数据；其他允许联网的手动扫描也可以按计划准备所需工具。
+Codex 用户安装或升级程序后，用 `prepare-scanners` 准备检查工具和漏洞数据；其他允许联网的手动扫描仍可按计划准备所需工具。
 
 你不需要自己下载安装这些 Scanner。
 
@@ -233,7 +240,7 @@ security-check doctor
 security-check scan --mode quick
 ```
 
-Codex 安装会提前统一准备默认工具和漏洞数据；其他允许联网的扫描流程只准备本次计划选中的工具。quick 无变更时不下载任何引擎；仅修改普通源码时，不重复执行依赖检查。新增、修改或删除依赖清单／锁文件时，quick 会使用本地工具和漏洞数据检查受影响范围内当前的依赖输入。依赖工具或数据缺失、过期时，会明确提示检查未完成；Codex 用户可重跑产品安装统一刷新。允许下载的工具准备流程会在执行前校验内容，不需要修改系统 PATH。
+Codex 用户通过 `prepare-scanners` 准备默认工具和漏洞数据；其他允许联网的扫描流程只准备本次计划选中的工具。quick 无变更时不下载任何引擎；仅修改普通源码时，不重复执行依赖检查。新增、修改或删除依赖清单／锁文件时，quick 使用本地工具和漏洞数据检查受影响范围内当前的依赖输入。依赖工具或数据缺失、过期时仍提示未完成；单独重跑准备入口即可刷新。下载内容在执行前校验，不需要修改系统 PATH。
 
 一次正常的测试应该能够：
 
@@ -551,7 +558,7 @@ security-check mcp config --copy
 
 ### 托管安全工具
 
-Codex 用户通过 `security-check install codex` 统一安装或更新产品。以下底层命令用于诊断或高级组件管理：
+Codex 用户用 `security-check install codex` 安装或更新程序，用 `security-check prepare-scanners` 单独准备扫描能力。以下底层命令用于诊断或高级组件管理：
 
 ```bash
 security-check tools status
@@ -691,7 +698,7 @@ security-check doctor --path <project>
 
 ### 某个 Scanner 不可用
 
-Codex 用户重新运行 `security-check install codex`，即可统一准备默认工具和漏洞数据。允许联网的手动扫描也可按计划准备工具；自动 Hook 和快速依赖检查只复用本机数据。
+Codex 用户运行 `security-check prepare-scanners` 准备默认工具和漏洞数据，无需重装程序。允许联网的手动扫描仍可按既有计划准备工具；自动 Hook 和快速依赖检查只复用本机数据。
 
 查看状态：
 

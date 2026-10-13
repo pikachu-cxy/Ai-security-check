@@ -4,6 +4,8 @@ from __future__ import annotations
 import sys
 import threading
 import time
+import json
+import re
 
 
 STAGES = {
@@ -24,6 +26,7 @@ STAGES = {
     'SKILL': '正在安装或更新专业 Skill。',
     'SELF_CHECK': '正在自检全局配置和 Skill。',
     'VERIFY_RECEIPT': '正在核对安装结果。',
+    'CHECK_SCAN_CACHE': '正在核对已有扫描组件和漏洞库；本次安装不等待联网下载。',
     'INSTALL_TOOLS': '正在自动准备安全检查组件和漏洞数据；已有有效缓存会继续使用，首次准备可能需要下载。',
     'INSTALL_DATA': '正在更新漏洞数据，已有可用数据会在新数据准备完成前保留。',
     'VERIFY_SCAN_READINESS': '正在确认代码、密钥和依赖检查是否已准备完成，并检查漏洞数据有效期。',
@@ -35,11 +38,68 @@ STAGES = {
 
 PREPARATION_STAGES = frozenset({'INSTALL_TOOLS', 'INSTALL_DATA', 'VERIFY_SCAN_READINESS'})
 STAGE_PREFIX = 'AI_SECURITY_INSTALL_STAGE:'
+EVENT_PREFIX = 'AI_SECURITY_PREPARATION_EVENT:'
+_EVENTS = {'DOWNLOAD_STARTED', 'DOWNLOAD_PROGRESS', 'DOWNLOAD_RETRY', 'DOWNLOAD_FAILED', 'DOWNLOAD_COMPLETE',
+    'COMPONENT_STARTED', 'COMPONENT_COMPLETE', 'COMPONENT_FAILED'}
+_ERRORS = {'', 'NETWORK_TIMEOUT', 'DOWNLOAD_STALLED', 'PREPARATION_BUDGET_EXHAUSTED',
+    'TLS_ERROR', 'DNS_RESOLUTION_FAILED', 'CONNECTION_REFUSED', 'PROXY_CONNECTION_FAILED',
+    'DOWNLOAD_INTERRUPTED', 'UNKNOWN_NETWORK_ERROR', 'HTTP_401', 'HTTP_403', 'HTTP_404',
+    'HTTP_429', 'HTTP_5XX', 'VULNERABILITY_DB_PREPARATION_FAILED', 'CHECKSUM_MISMATCH', 'DOWNLOAD_BUSY',
+    'ENGINE_UNAVAILABLE', 'DOWNLOAD_FAILED', 'PYTHON_PACKAGE_PREPARATION_FAILED', 'OFFLINE_MODE',
+    'CONFIG_CORRUPTED', 'VERSION_MISMATCH', 'LICENSE_BLOCKED'}
+_ERROR_TEXT = {'NETWORK_TIMEOUT': '下载超时', 'DOWNLOAD_STALLED': '下载长时间没有进展',
+    'PREPARATION_BUDGET_EXHAUSTED': '本次准备时间预算已耗尽', 'TLS_ERROR': '安全连接校验失败',
+    'DNS_RESOLUTION_FAILED': '下载地址无法解析', 'CONNECTION_REFUSED': '服务器拒绝连接',
+    'PROXY_CONNECTION_FAILED': '代理连接失败', 'DOWNLOAD_INTERRUPTED': '传输中断',
+    'HTTP_429': '服务器限制请求频率', 'HTTP_401': '下载源要求授权', 'HTTP_403': '下载源拒绝访问',
+    'HTTP_404': '下载资源不存在', 'CHECKSUM_MISMATCH': '下载内容校验失败', 'DOWNLOAD_BUSY': '另一个进程正在更新漏洞库'}
+
+
+def parse_download_progress(line):
+    """Trivy's reported transfer counts; bars and raw logs never reach the UI."""
+    if not isinstance(line, str) or len(line) > 256:
+        return None
+    clean = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', line).strip()
+    match = re.match(r'^(\d+(?:\.\d+)?)\s+(B|KiB|MiB|GiB)\s*/\s*(\d+(?:\.\d+)?)\s+(B|KiB|MiB|GiB)\s+\[', clean)
+    if not match:
+        return None
+    units = {'B': 1, 'KiB': 1024, 'MiB': 1048576, 'GiB': 1073741824}
+    received = int(float(match[1]) * units[match[2]])
+    total = int(float(match[3]) * units[match[4]])
+    return (received, total) if 0 <= received <= total <= 8_000_000_000 and total > 0 else None
+
+
+def validate_preparation_event(value):
+    """Accept fixed identities and bounded numbers, never arbitrary child text."""
+    if not isinstance(value, dict) or set(value) - {'event', 'component', 'attempt', 'max_attempts',
+            'received_bytes', 'total_bytes', 'timeout_seconds', 'error_code', 'source'}:
+        return None
+    if (not isinstance(value.get('event'), str) or not isinstance(value.get('component'), str)
+            or value['event'] not in _EVENTS or value['component'] not in {'semgrep', 'gitleaks', 'trivy', 'vulnerability_db'}):
+        return None
+    for name in ('attempt', 'max_attempts', 'received_bytes', 'total_bytes', 'timeout_seconds'):
+        if name in value and (type(value[name]) is not int or not 0 <= value[name] <= 8_000_000_000):
+            return None
+    if (not 1 <= value.get('attempt', 1) <= value.get('max_attempts', 1) <= 2
+            or not 0 <= value.get('timeout_seconds', 0) <= 1800
+            or value.get('received_bytes', 0) > value.get('total_bytes', 8_000_000_000)
+            or not isinstance(value.get('error_code', ''), str) or value.get('error_code', '') not in _ERRORS):
+        return None
+    source = value.get('source', '')
+    if not isinstance(source, str) or len(source) > 200 or source and not re.fullmatch(r'[A-Za-z0-9.-]+', source):
+        return None
+    if value['event'] == 'DOWNLOAD_PROGRESS' and (value.get('total_bytes', 0) <= 0 or 'received_bytes' not in value):
+        return None
+    return dict(value)
 
 
 def child_preparation_progress(stage):
     """Private, fixed-token transport; never forward scanner or config output."""
-    if stage in PREPARATION_STAGES:
+    if isinstance(stage, dict):
+        safe = validate_preparation_event(stage)
+        if safe is not None:
+            print(EVENT_PREFIX + json.dumps(safe, separators=(',', ':')), file=sys.stderr, flush=True)
+    elif stage in PREPARATION_STAGES:
         print(STAGE_PREFIX + stage, file=sys.stderr, flush=True)
 
 
@@ -55,7 +115,7 @@ class InstallationProgress:
     Output errors cannot interrupt a configuration transaction. Only fixed text
     is printed: no config, child output, source, path or exception is reflected.
     """
-    def __init__(self, *, stream=None, interval=5.0, clock=time.monotonic):
+    def __init__(self, *, stream=None, interval=5.0, clock=time.monotonic, preparation=False):
         self.stream = sys.stderr if stream is None else stream
         self.interval = interval
         self.clock = clock
@@ -66,6 +126,8 @@ class InstallationProgress:
         self._stage = 'START'
         self._last_change = None
         self._output_available = True
+        self.preparation = preparation
+        self._last_download = None
 
     def _write(self, message):
         if self._output_available:
@@ -79,7 +141,7 @@ class InstallationProgress:
         if self._started is None:
             self._started = self.clock()
             self._last_change = self._started
-            self._write(STAGES['START'])
+            self._write('开始准备扫描能力；程序安装和已有配置将保留。' if self.preparation else STAGES['START'])
             self._thread = threading.Thread(target=self._wait, name='install-progress', daemon=True)
             self._thread.start()
         return self
@@ -87,6 +149,41 @@ class InstallationProgress:
     def __call__(self, stage):
         with self._lock:
             if not self._stop.is_set():
+                if isinstance(stage, dict):
+                    event = validate_preparation_event(stage)
+                    if event is None:
+                        return
+                    now = self.clock()
+                    kind = event['event']
+                    label = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查', 'vulnerability_db': '漏洞库'}[event['component']]
+                    if kind == 'DOWNLOAD_PROGRESS':
+                        if self._last_download is not None and now - self._last_download < 1:
+                            return
+                        self._last_download = now
+                        received, total = event['received_bytes'], event['total_bytes']
+                        self._write(f'{label}下载进度：{received / 1048576:.2f} / {total / 1048576:.2f} MiB（{received / total * 100:.1f}%）。')
+                    elif kind == 'DOWNLOAD_STARTED':
+                        self._write(f"正在下载漏洞库，第 {event.get('attempt', 1)} / {event.get('max_attempts', 1)} 次尝试；剩余预算最多 {event.get('timeout_seconds', 0)} 秒。")
+                    elif kind == 'DOWNLOAD_RETRY':
+                        self._last_download = None
+                        self._write('正在按指定重试次数重新下载；上次未完成的数据不能作为有效缓存。')
+                    elif kind == 'DOWNLOAD_FAILED':
+                        why = _ERROR_TEXT.get(event.get('error_code'), '下载或数据校验未完成')
+                        self._write(why + '。原有可用缓存已保留；扫描能力仍以最后核对结果为准。')
+                    elif kind == 'DOWNLOAD_COMPLETE':
+                        self._write('漏洞库已下载并通过校验，已更新本地缓存。')
+                    elif kind == 'COMPONENT_STARTED':
+                        self._write(label + '组件正在准备；仅下载进度已被实际取得时才显示传输量。')
+                    elif kind == 'COMPONENT_COMPLETE':
+                        self._write(label + '组件已准备完成。')
+                    elif kind == 'COMPONENT_FAILED':
+                        self._write(label + '组件尚未准备完成；' + _ERROR_TEXT.get(event.get('error_code'), '组件下载或验证未完成') + '。')
+                    self._last_change = now
+                    return
+                if stage not in STAGES:
+                    return
+                if stage == self._stage:
+                    return
                 self._stage = stage
                 self._last_change = self.clock()
                 self._write(STAGES[stage])
@@ -108,9 +205,16 @@ class InstallationProgress:
         if self._thread is not None:
             self._thread.join(timeout=1)
 
-    def finish(self, succeeded):
+    def finish(self, succeeded, *, scan_ready=True):
         self.close()
         with self._lock:
+            if self.preparation:
+                self._write('扫描能力准备完成，漏洞数据在有效期内。' if succeeded else
+                    '扫描能力尚未全部准备完成；程序、配置和原有可用缓存已保留。')
+                return
+            if succeeded and not scan_ready:
+                self._write('本地安装完成；代码、密钥或依赖检查尚未准备完成。请运行 prepare-scanners 单独准备，不必重新安装程序。')
+                return
             self._write('本地安装完成。请完全退出并重启 Codex，按提示审核 Hook 信任；扫描能力以实际扫描结果为准。'
                         if succeeded else '安装未完成。请查看下方诊断；不要删除配置或 Skill，也不要将本次安装视为成功。')
 
@@ -118,6 +222,9 @@ class InstallationProgress:
         self.close()
         if exc_type is not None:
             with self._lock:
+                if self.preparation:
+                    self._write('扫描能力准备已取消，未确认就绪；程序、配置和原有可用缓存保留。')
+                    return
                 self._write('安装已取消，未确认完成。若已写入部分配置，请先使用产品恢复入口。'
                             if issubclass(exc_type, KeyboardInterrupt) else
                             '安装未完成。请查看诊断；现有状态可能需要通过产品恢复入口核对。')

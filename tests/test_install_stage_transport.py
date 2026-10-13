@@ -20,7 +20,7 @@ def test_fixed_stage_tokens_only_and_receipt_remains_authoritative(monkeypatch):
         return SimpleNamespace(returncode=2, stdout=json.dumps(readiness(ready=False, freshness='STALE')))
     monkeypatch.setattr(personal, 'run_process', child)
     receipt, diagnostic = personal._prepare_child('validated-executable', offline=True, progress=stages.append)
-    assert stages == ['INSTALL_DATA', 'VERIFY_SCAN_READINESS']
+    assert stages == ['CHECK_SCAN_CACHE', 'VERIFY_SCAN_READINESS']
     assert receipt['ready'] is False and diagnostic is None
     assert 'private' not in json.dumps(receipt)
 

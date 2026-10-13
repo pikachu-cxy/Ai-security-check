@@ -32,7 +32,9 @@ from .engines import BUILTIN_ENGINES, ON_DEMAND_ENGINES
 from .licensing import LicenseMetadata, LicensePolicy, MANAGED_PYTHON_LICENSE
 from .plugin_api import discover_plugin_directory
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
-from .processes import run_process
+from .processes import run_process, ProcessIdleTimeout
+from .preparation_budget import current_budget, bounded_timeout
+from .install_progress import parse_download_progress
 from .progress import emit, checkpoint, ScanCancelled
 from .scanner_observation import span, cache as cache_observed, count, workspace as scan_workspace
 
@@ -221,6 +223,10 @@ class OfficialReleaseProvider:
         # the destination. Cancellation closes/unlinks it immediately.
         chunks = queue.Queue(maxsize=2)
         stop = threading.Event()
+        network_timeout = bounded_timeout(60)
+        budget = current_budget()
+        total_size = 0
+        last_chunk = time.monotonic()
         def send(kind, value=None):
             while not stop.is_set():
                 try:
@@ -230,11 +236,14 @@ class OfficialReleaseProvider:
                     continue
         def receive():
             try:
-                with urllib.request.urlopen(request, timeout=60) as response:
+                with urllib.request.urlopen(request, timeout=network_timeout) as response:
                     if not response.url.startswith('https://'):
                         raise ValueError('Insecure release redirect')
+                    declared = getattr(response, 'headers', {}).get('Content-Length', '')
+                    if str(declared).isdigit() and 0 < int(declared) <= 200_000_000:
+                        send('total', int(declared))
                     while not stop.is_set():
-                        chunk = response.read(1024 * 1024)
+                        chunk = response.read(64 * 1024)
                         if not chunk:
                             break
                         send('chunk', chunk)
@@ -247,6 +256,9 @@ class OfficialReleaseProvider:
             with destination.open('wb') as output:
                 while True:
                     checkpoint()
+                    bounded_timeout(60)
+                    if budget and time.monotonic() - last_chunk >= budget.idle_seconds:
+                        raise ProcessIdleTimeout('release download made no progress')
                     try:
                         kind, value = chunks.get(timeout=.1)
                     except queue.Empty:
@@ -255,11 +267,18 @@ class OfficialReleaseProvider:
                         break
                     if kind == 'error':
                         raise value
+                    if kind == 'total':
+                        total_size = value
+                        continue
                     size += len(value)
+                    last_chunk = time.monotonic()
                     if size > 200_000_000:
                         raise ValueError('Release asset exceeds 200 MB')
                     digest.update(value)
                     output.write(value)
+                    if budget and total_size:
+                        budget.report(dict(event='DOWNLOAD_PROGRESS', component=manifest.tool_id,
+                            received_bytes=size, total_bytes=total_size))
         finally:
             stop.set()
             reader.join(timeout=.1)
@@ -832,44 +851,90 @@ class ToolManager:
         docker_config.mkdir(exist_ok=True)
         env = tool_environment(Path(binary))
         env["DOCKER_CONFIG"] = str(docker_config)
-        for attempt in range(2):
+        from .hook_state import HookStateStore
+        locks = HookStateStore(cache / '.update-state')
+        with locks.lock(cache, wait_seconds=0) as acquired:
+            if not acquired:
+                self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic('DOWNLOAD_BUSY',
+                    'Another process is updating the public database.', 'Retry preparation after it completes.')
+                budget = current_budget()
+                if budget:
+                    budget.report(dict(event='DOWNLOAD_FAILED', component='vulnerability_db', error_code='DOWNLOAD_BUSY'))
+                return ToolStatus.READY if available else ToolStatus.BROKEN
+            return self._download_trivy_database(binary, cache, env, available, validate_database)
+
+    def _download_trivy_database(self, binary, cache, env, available, validate_database):
+        budget = current_budget()
+        max_attempts = 1 + budget.retries if budget else 2
+        for attempt in range(max_attempts):
+            observed = [time.monotonic(), -1]
+            download_source = ['']
+            def transfer(line):
+                source = re.search(r'Downloading artifact.*repo="([A-Za-z0-9.-]+)(?:/|:)', line)
+                if source:
+                    download_source[0] = source[1]
+                counts = parse_download_progress(line)
+                if counts and counts[0] > observed[1]:
+                    observed[:] = [time.monotonic(), counts[0]]
+                    if budget:
+                        budget.report(dict(event='DOWNLOAD_PROGRESS', component='vulnerability_db',
+                            received_bytes=counts[0], total_bytes=counts[1], attempt=attempt + 1, max_attempts=max_attempts))
             try:
+                seconds = bounded_timeout(300 if budget else 900)
+                if budget:
+                    if attempt:
+                        budget.report(dict(event='DOWNLOAD_RETRY', component='vulnerability_db', attempt=attempt + 1, max_attempts=max_attempts))
+                    budget.report(dict(event='DOWNLOAD_STARTED', component='vulnerability_db', attempt=attempt + 1,
+                        max_attempts=max_attempts, timeout_seconds=max(1, int(seconds))))
                 # Download to a separate cache. A failed update cannot destroy
                 # the previous usable database. No target project is executed.
                 with tempfile.TemporaryDirectory(prefix='db-update-', dir=cache) as temporary:
                     staging = Path(temporary)
                     with external_tool_loader():
-                        proc = run_process([str(Path(binary).resolve()), "image", "--download-db-only", "--cache-dir", str(staging), "--quiet"],
-                                           env=env, timeout=900)
+                        command = [str(Path(binary).resolve()), 'image', '--download-db-only', '--cache-dir', str(staging)]
+                        if budget:
+                            command += ['--timeout', f'{seconds:.3f}s']
+                        else:
+                            command.append('--quiet')
+                        proc = run_process(command, env=env, timeout=seconds,
+                            on_stderr_line=transfer if budget else None,
+                            idle_timeout=budget.idle_seconds if budget else None,
+                            activity_clock=lambda: observed[0])
                     if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'
                             and (validate_database is None or validate_database(staging / 'db'))):
-                        from .hook_state import HookStateStore, no_links
-                        locks = HookStateStore(cache / '.update-state')
-                        with locks.lock(cache, wait_seconds=5) as acquired:
-                            if not acquired:
-                                raise ValueError('Database update busy')
-                            final = cache / 'db'
-                            no_links(final)
-                            backup = staging / 'previous-db'
-                            if final.exists():
-                                os.replace(final, backup)
-                            try:
-                                os.replace(staging / 'db', final)
-                            except OSError:
-                                if backup.exists():
-                                    os.replace(backup, final)
-                                raise
+                        from .hook_state import no_links
+                        bounded_timeout(5)
+                        final = cache / 'db'
+                        no_links(final)
+                        backup = staging / 'previous-db'
+                        if final.exists():
+                            os.replace(final, backup)
+                        try:
+                            os.replace(staging / 'db', final)
+                        except OSError:
+                            if backup.exists():
+                                os.replace(backup, final)
+                            raise
                         self.data_diagnostics.pop('vulnerability_db', None)
+                        if budget:
+                            budget.report(dict(event='DOWNLOAD_COMPLETE', component='vulnerability_db', attempt=attempt + 1, max_attempts=max_attempts))
                         return ToolStatus.READY
                 diagnostic = classify_network_error(stderr=proc.stderr, return_code=proc.returncode, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
             except (OSError, TimeoutError, ValueError) as exc:
                 diagnostic = classify_network_error(exc, fallback='VULNERABILITY_DB_PREPARATION_FAILED')
+                if isinstance(exc, ProcessIdleTimeout):
+                    diagnostic = ErrorDiagnostic('DOWNLOAD_STALLED', 'Download made no byte progress.', 'Retry preparation when the connection is stable.')
             self.data_diagnostics['vulnerability_db'] = diagnostic
+            if budget:
+                error_code = 'PREPARATION_BUDGET_EXHAUSTED' if budget.remaining() <= 0 else diagnostic.error_code
+                budget.report(dict(event='DOWNLOAD_FAILED', component='vulnerability_db', error_code=error_code,
+                    source=download_source[0] or diagnostic.source, attempt=attempt + 1, max_attempts=max_attempts))
             logger.warning("trivy_database_prepare_failed attempt=%s category=%s source=%s", attempt + 1, diagnostic.error_code, diagnostic.source)
-            if diagnostic.error_code in {'HTTP_429', 'HTTP_401', 'HTTP_403', 'HTTP_404', 'OFFLINE_MODE'}:
+            if diagnostic.error_code in {'HTTP_429', 'HTTP_401', 'HTTP_403', 'HTTP_404', 'OFFLINE_MODE', 'CHECKSUM_MISMATCH'} or budget and budget.remaining() <= 0:
                 break
-            if attempt == 0:
-                time.sleep(2)
+            if attempt + 1 < max_attempts:
+                delay = bounded_timeout(2)
+                time.sleep(delay)
         if available and self.database_status() == ToolStatus.READY:
             original = self.data_diagnostics.get('vulnerability_db')
             self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic('VULNERABILITY_DB_STALE',

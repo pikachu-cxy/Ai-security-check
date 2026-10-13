@@ -54,7 +54,7 @@ def test_python_install_prepares_once_after_successful_configuration(installed, 
     monkeypatch.setattr(module, "GlobalCodexIntegration", lambda **kwargs: installed)
     calls = mock_prepare(monkeypatch, readiness())
     data = personal.install_personal_codex(offline=offline)
-    assert len(calls) == 1 and calls[0]["offline"] is offline
+    assert len(calls) == 1 and calls[0]["offline"] is True
     assert data["installation"]["local_files_ready"] is True
     assert data["installation"]["scan_ready"] is True
     assert data["scan_readiness"]["status"] == "READY"
@@ -118,7 +118,7 @@ def test_portable_prepares_with_new_validated_slot_after_configuration(installed
             assert kwargs["timeout"] == 120
             return SimpleNamespace(returncode=0, stdout=json.dumps(personal.setup_personal_codex(installed)).encode(), stderr=b"")
         assert argv[1:] == ["prepare-installation", "--json", "--offline"]
-        assert kwargs["timeout"] > 120
+        assert kwargs["timeout"] == 45
         assert kwargs['env']['SECURITY_RUNTIME_INSTALL_PROGRESS'] == '1'
         return SimpleNamespace(returncode=0, stdout=json.dumps(response).encode(), stderr=b"PRIVATE-SCANNER-OUTPUT")
 
@@ -175,13 +175,13 @@ def test_install_cli_truthfully_reports_scan_readiness_in_one_json_receipt(monke
         return copy.deepcopy(data)
 
     monkeypatch.setattr(personal, "install_personal_codex", install)
-    assert main(["install", "codex", "--json", "--offline"]) == (0 if ready else 2)
+    assert main(["install", "codex", "--json", "--offline"]) == 0
     output = capsys.readouterr()
     assert json.loads(output.out) == data and len(output.out.splitlines()) == 1
     assert calls[0]["offline"] is True
     if not ready:
-        assert "检查准备未完成" in output.err or "检查尚未就绪" in output.err or "安装未完成" in output.err
-        assert "本地安装完成" not in output.err
+        assert "检查尚未准备完成" in output.err
+        assert "本地安装完成" in output.err
     assert "READY" not in output.err and "PARTIAL" not in output.err
 
 
@@ -213,7 +213,7 @@ def test_plain_installation_feedback_does_not_show_component_enums(monkeypatch, 
                 "message": "产品配置已保存。漏洞数据已过期，本次更新未完成。重新运行产品安装即可重试。"},
             "scan_readiness": readiness(ready=False, freshness="STALE")}
     monkeypatch.setattr(personal, "install_personal_codex", lambda **kwargs: copy.deepcopy(data))
-    assert main(["install", "codex", "--offline"]) == 2
+    assert main(["install", "codex", "--offline"]) == 0
     output = capsys.readouterr()
     assert data["installation"]["message"] in output.out
     assert all(term not in output.out + output.err for term in ("DEGRADED", "NOT_READY", "STALE", "PARTIAL"))

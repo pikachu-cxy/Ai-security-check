@@ -66,7 +66,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
                 raise ValueError('Windows native launcher requires GCC on the build host')
             subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
                 str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
-    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
+    for name in ('WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md','INSTALL_FLOW_ACCEPTANCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
         shutil.copy2(root / 'docs' / name,bundle / name)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
     # Local builds may contend with scanners/antivirus. Runtime probes retain

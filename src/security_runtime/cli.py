@@ -244,9 +244,15 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
     install_parser.add_argument('--offline', action='store_true', help='Verify existing components and data without downloading')
     install_parser.add_argument('--json', action='store_true')
-    preparation_parser = sub.add_parser('prepare-installation', help=argparse.SUPPRESS)
-    preparation_parser.add_argument('--json', action='store_true')
-    preparation_parser.add_argument('--offline', action='store_true')
+    for preparation_command in ('prepare-scanners', 'prepare-installation'):
+        preparation_parser = sub.add_parser(preparation_command,
+            help='Prepare scanners and public vulnerability data independently of installation' if preparation_command == 'prepare-scanners' else argparse.SUPPRESS)
+        preparation_parser.add_argument('--json', action='store_true')
+        preparation_parser.add_argument('--offline', action='store_true')
+        preparation_parser.add_argument('--status', action='store_true', help='Read-only check of existing tools and data; no downloads')
+        preparation_parser.add_argument('--timeout', type=int, default=300, help='Total preparation budget in seconds (1-1800)')
+        preparation_parser.add_argument('--retries', type=int, choices=(0, 1), default=0, help='Explicit extra download attempts; all attempts share the budget')
+        preparation_parser.add_argument('--idle-timeout', type=int, default=30, help='Stop database download after this many seconds without byte progress (1-300)')
     setup_parser = sub.add_parser("setup", help="Configure Codex globally and install its companion Skill together")
     setup_parser.add_argument("integration", nargs="?", choices=["codex", "cursor", "workbuddy"])
     setup_parser.add_argument("--path")
@@ -327,12 +333,19 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 2 if data['overall'] == 'BROKEN' else 0
     try:
         configure_logging(mcp=args.command == "mcp")
-        if args.command == 'prepare-installation':
+        if args.command in {'prepare-installation', 'prepare-scanners'}:
             from .install_readiness import prepare_installation_readiness
-            from .install_progress import child_preparation_progress
-            progress = child_preparation_progress if os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1' else None
-            data = prepare_installation_readiness(progress=progress,
-                offline=args.offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
+            from .install_progress import child_preparation_progress, InstallationProgress
+            if not 1 <= args.timeout <= 1800 or not 1 <= args.idle_timeout <= 300:
+                parser.error('Preparation timeout must be 1-1800 and idle timeout 1-300 seconds')
+            offline = args.offline or args.status or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1'
+            kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout)
+            if os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1':
+                data = prepare_installation_readiness(progress=child_preparation_progress, **kwargs)
+            else:
+                with InstallationProgress(preparation=True) as progress:
+                    data = prepare_installation_readiness(progress=progress, **kwargs)
+                    progress.finish(data['ready'])
             print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
             return 0 if data['ready'] else 2
         if args.command == 'install':
@@ -350,9 +363,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                         'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
                             'local_files_ready':False, 'scan_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
-                ready = (data['installation'].get('local_files_ready') is True
-                    and data['installation'].get('scan_ready') is True)
-                progress.finish(ready)
+                ready = data['installation'].get('local_files_ready') is True
+                progress.finish(ready, scan_ready=data['installation'].get('scan_ready') is True)
             print(json.dumps(data, ensure_ascii=True) if args.json else data['installation']['message'])
             return 0 if ready else 2
         if args.command == 'delivery':
@@ -782,7 +794,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             print(json.dumps(result,ensure_ascii=True) if args.json else json.dumps(result,ensure_ascii=False,indent=2))
             return 0
     except KeyboardInterrupt:
-        print("安装已取消，未确认完成。" if args.command in {'install', 'setup'} else "操作已取消。", file=sys.stderr, flush=True)
+        message = '扫描能力准备已取消，未确认就绪。' if args.command in {'prepare-installation', 'prepare-scanners'} else '安装已取消，未确认完成。' if args.command in {'install', 'setup'} else '操作已取消。'
+        print(message, file=sys.stderr, flush=True)
         return 130
     except DiscoveryLimitError as exc:
         if getattr(args, 'json', False):

@@ -206,15 +206,15 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
             assert argv[1:] == ['setup', 'codex', '--json']
             assert kwargs['timeout'] == 120
             return SimpleNamespace(returncode=0, stdout=json.dumps(setup_personal_codex(installed)).encode())
-        assert argv[1:] == ['prepare-installation', '--json']
-        assert kwargs['timeout'] > 120
+        assert argv[1:] == ['prepare-installation', '--json', '--offline']
+        assert kwargs['timeout'] == 45
         return SimpleNamespace(returncode=0, stdout=json.dumps(ready_scanning_receipt()).encode())
     monkeypatch.setattr(subprocess, 'run', run)
     monkeypatch.setattr('security_runtime.personal_install.run_process', run)
     data = install_personal_codex(bundle=package, root=root, progress=stages.append)
     assert stages[:12] == ['PREPARE', 'PACKAGE_VERIFY', 'CHECK_CONFIG', 'PACKAGE_VERIFY',
         'COPY_RUNTIME', 'VERIFY_INSTALLED', 'CAPABILITY_CHECK', 'PREPARE_LAUNCHER',
-        'VERIFY_ACTIVATION', 'SETUP_CHILD', 'VERIFY_RECEIPT', 'INSTALL_TOOLS']
+        'VERIFY_ACTIVATION', 'SETUP_CHILD', 'VERIFY_RECEIPT', 'CHECK_SCAN_CACHE']
     assert stages[-1] == 'CLEANUP'
     assert data['delivery']['status'] == 'ACTIVATED' and data['installation']['local_files_ready']
     assert data['installation']['scan_ready']

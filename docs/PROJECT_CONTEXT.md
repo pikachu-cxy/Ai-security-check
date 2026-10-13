@@ -10,6 +10,12 @@ scope; they do not certify the latest installation package or Desktop behavior.
 
 ## Current milestone
 
+- Installation flow (2026-10-13): `install codex` installs program/configuration and checks
+  caches without network preparation. `prepare-scanners` independently prepares components
+  and data with a shared time budget, real progress and explicit retries. Local install success
+  is separate from scanning readiness; expired cached data remains incomplete. Read
+  [installation acceptance](INSTALL_FLOW_ACCEPTANCE.zh-CN.md) and current development progress.
+
 - Ordered continuation/incremental/dependency batch (2026-10-12): read
   [Chinese development handoff](DEVELOPMENT_HANDOFF.zh-CN.md) first when moving
   machines. Stop emits only documented decision/reason with the original bounded

@@ -12,7 +12,7 @@ import subprocess
 import sys
 
 from .integration_lifecycle import IntegrationDiagnostic
-from .install_progress import report_progress, PREPARATION_STAGES, STAGE_PREFIX
+from .install_progress import report_progress, PREPARATION_STAGES, STAGE_PREFIX, EVENT_PREFIX, validate_preparation_event
 from .processes import run_process
 from .review_skill import ReviewSkillManager
 from .upgrade import InstallationUpgrade, reason
@@ -23,7 +23,7 @@ from .toolchain import VERSIONS
 from .progress import ScanCancelled
 
 CONTRACT = 'personal-install-v1'
-PREPARATION_TIMEOUT = 3600
+PREPARATION_TIMEOUT = 45  # Cache checks only; installation never waits for downloads.
 
 
 def _unavailable_readiness(*, offline):
@@ -46,9 +46,19 @@ def _prepare_child(executable, *, offline, progress=None):
     last_stage = None
     def relay(line):
         nonlocal last_stage
+        if line.startswith(EVENT_PREFIX):
+            try:
+                event = validate_preparation_event(json.loads(line[len(EVENT_PREFIX):]))
+                if event is not None:
+                    report_progress(progress, event)
+            except (ValueError, TypeError, RecursionError):
+                pass
+            return
         if line.startswith(STAGE_PREFIX):
             stage = line[len(STAGE_PREFIX):]
-            if stage in PREPARATION_STAGES and stage != last_stage:
+            if offline and stage in {'INSTALL_TOOLS', 'INSTALL_DATA'}:
+                stage = 'CHECK_SCAN_CACHE'
+            if stage in {*PREPARATION_STAGES, 'CHECK_SCAN_CACHE'} and stage != last_stage:
                 report_progress(progress, stage)
                 last_stage = stage
     try:
@@ -76,8 +86,9 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     if installation.get('local_files_ready') is not True:
         return data
     diagnostic = None
+    offline = True  # Explicit preparation is a separate command, regardless of install flags.
     if executable is not None:
-        report_progress(progress, 'INSTALL_TOOLS')
+        report_progress(progress, 'CHECK_SCAN_CACHE')
         receipt, diagnostic = _prepare_child(executable, offline=offline, progress=progress)
         report_progress(progress, 'VERIFY_SCAN_READINESS')
     else:
@@ -92,15 +103,15 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
             diagnostic = 'INSTALLATION_PREPARATION_FAILED'
     data['scan_readiness'] = receipt
     ready = receipt['ready']
-    installation.update(scan_ready=ready, status='INSTALLED' if ready else 'NOT_READY',
-        engine_preparation='MANAGED_DURING_INSTALLATION',
+    installation.update(scan_ready=ready, status='INSTALLED',
+        engine_preparation='EXPLICIT_PREPARE_SCANNERS; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
             '请完全退出并重启 Codex，按提示审核 Hook 信任；无需逐项目安装。') if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
-            '联网后重新执行产品安装会继续准备，已有配置和可用缓存会保留。'))
+            '请运行 security-check prepare-scanners 单独准备；已有配置和可用缓存会保留。'))
     data['overall'] = 'CONFIGURED' if ready else 'DEGRADED'
     data.setdefault('execution', {}).update(scanner_run=False, source_modified=False,
-        component_preparation=True, network_allowed=not offline)
+        component_preparation=False, network_allowed=False)
     # Permission to download is not evidence that a request actually occurred.
     # Do not keep the configuration-only receipt's misleading network=false.
     if not offline:
@@ -198,11 +209,7 @@ def _default_delivery_root():
 
 @verified_operation
 def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False):
-    """Install or update the product, then prepare compatible scanners and data.
-
-    Product packages stay local; required public scanning components are managed
-    automatically unless offline mode explicitly requests cache-only checks.
-    """
+    """Install program/configuration and inspect caches without network preparation."""
     offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
@@ -219,7 +226,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
             result = install_personal_codex(bundle=supplied, root=delivery_root,
                 workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline)
             result['downloads'] = {'product': 'LOCAL_DELTA', 'product_network_download': False,
-                'engines': 'MANAGED_DURING_INSTALLATION', 'skill_and_rules': 'BUNDLED'}
+                'engines': 'EXPLICIT_PREPARE_SCANNERS', 'skill_and_rules': 'BUNDLED'}
             return result
     if bundle is None and (not frozen or stable is not None):
         if root is not None and (stable is None or Path(root).absolute() != Path(stable).parents[1]):
@@ -227,7 +234,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data = setup_personal_codex(integration, workspace, progress=progress)
         data = _complete_preparation(data, offline=offline, progress=progress)
         data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
-            'engines':'MANAGED_DURING_INSTALLATION', 'skill_and_rules':'BUNDLED'}
+            'engines':'EXPLICIT_PREPARE_SCANNERS', 'skill_and_rules':'BUNDLED'}
         if stable is not None and data['installation']['scan_ready']:
             report_progress(progress, 'CLEANUP')
             data['cleanup'] = StableDelivery(Path(stable).parents[1]).cleanup()
@@ -298,6 +305,6 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['cleanup'] = delivery.cleanup()
         data['delivery']['previous_build'] = delivery.pointer()['previous']
     data['downloads'] = {'product': 'LOCAL_DELTA' if update else 'LOCAL_FULL_PACKAGE',
-        'product_network_download': False, 'engines': 'MANAGED_DURING_INSTALLATION',
+        'product_network_download': False, 'engines': 'EXPLICIT_PREPARE_SCANNERS',
         'skill_and_rules': 'BUNDLED'}
     return data

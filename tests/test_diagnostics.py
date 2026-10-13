@@ -132,7 +132,13 @@ def test_provider_aggregation(statuses, expected):
 
 def mock_registry(root):
     manager = ToolManager(root=root / 'managed')
-    manager.ensure = lambda tool: ResolvedTool(tool, 'mock', tool, None, ToolStatus.READY)
+    # Current credential execution evidence hashes the selected executable.
+    # Keep this synthetic engine identity inside the excluded test state.
+    binaries = root / '.security-runtime' / 'mock-engines'
+    binaries.mkdir(parents=True)
+    for tool in ('semgrep', 'gitleaks', 'trivy'):
+        (binaries / tool).write_bytes(b'Synthetic mock engine; never executed')
+    manager.ensure = lambda tool: ResolvedTool(tool, 'mock', str(binaries / tool), None, ToolStatus.READY)
     manager.prepare_trivy_database = lambda binary: ToolStatus.READY
     registry = ScannerRegistry(tool_manager=manager, fallback_adapters=[])
     def execute(args, cwd, timeout):
@@ -142,12 +148,15 @@ def mock_registry(root):
             scope=args[args.index('--no-git-ignore')+1:]
             return ProcessResult(0, json.dumps({'results':[], 'errors':[], 'paths':{'scanned':scope},
                 'time':{'rules':[rule['id'] for rule in config['rules']]}}), '', 1)
-        if args[0] == 'gitleaks':
+        if Path(args[0]).name == 'gitleaks':
             report = Path(args[args.index('--report-path') + 1])
-            report.write_text(json.dumps([{'Description': 'Synthetic secret', 'File': 'application.yml',
-                                         'StartLine': 1, 'RuleID': 'synthetic-test'}]))
+            report.write_text(json.dumps({'version': '2.1.0', 'runs': [{
+                'tool': {'driver': {'name': 'gitleaks', 'version': 'mock', 'rules': [{'id': 'synthetic-test'}]}},
+                'results': [{'ruleId': 'synthetic-test', 'message': {'text': 'Synthetic secret'},
+                    'locations': [{'physicalLocation': {'artifactLocation': {'uri': 'application.yml'},
+                        'region': {'startLine': 1, 'endLine': 1}}}]}]}]}))
             return ProcessResult(0, '', '', 1)
-        assert args[0] == 'trivy'
+        assert Path(args[0]).name == 'trivy'
         if args[args.index('--scanners')+1] == 'misconfig':
             return ProcessResult(0, json.dumps({'Results': []}), '', 1)
         return ProcessResult(1, '', MAVEN_FAILURE, 1)

@@ -14,6 +14,8 @@ acceptance output belongs in Git history, not in `docs/`.
   version-bound credential closure and independently recorded acceptance levels.
 - [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) — current implementation,
   source/isolated/package acceptance and pending Desktop checks.
+- [安装与扫描能力准备验收](INSTALL_FLOW_ACCEPTANCE.zh-CN.md) — separate installation,
+  live transfer feedback, bounded preparation, retained cache and local acceptance steps.
 - [个人免费版与企业版规划](PRODUCT_ROADMAP.md) — P0/P1 scope, dependency evidence,
   update lifecycle and organization-management boundary; planned work is not
   implemented capability.
