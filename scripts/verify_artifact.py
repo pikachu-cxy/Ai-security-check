@@ -295,13 +295,32 @@ def verify_doctors(executable: Path, root: Path, project: Path, env: dict[str, s
             "explicit_project": explicit["status"]}
 
 
+def verify_hook_acceptances(executable, root, env, archive, *, hooks, git_pre_commit, codex_integration):
+    """Keep optional Git dispatch separate from the core Codex acceptance chain."""
+    if hooks or git_pre_commit:
+        script = Path(__file__).with_name('hook_acceptance.py').resolve()
+        evidence = archive.resolve().with_name(archive.name + '.hooks.json')
+        command = [sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)]
+        if git_pre_commit:
+            command.append('--git-pre-commit')
+        run(command, cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=360 if git_pre_commit else 180)
+    if codex_integration:
+        script = Path(__file__).with_name('codex_integration_acceptance.py').resolve()
+        evidence = archive.resolve().with_name(archive.name + '.codex-integration.json')
+        run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
+            cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
+    return {'git_precommit': {'status': 'PASS' if git_pre_commit else 'SKIPPED',
+        'reason': None if git_pre_commit else 'Optional advanced Git hook acceptance was not requested'}}
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--full", action="store_true", help="Prepare real managed engines and run a real sample scan")
     parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
     parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
-    parser.add_argument('--hooks', action='store_true', help='Also exercise offline native Hook CLI with actual local engines')
+    parser.add_argument('--hooks', action='store_true', help='Exercise Codex lifecycle Hook CLI with actual local engines; excludes optional Git pre-commit')
+    parser.add_argument('--git-pre-commit', action='store_true', help='Opt in to advanced Git pre-commit acceptance (not a core trial gate)')
     parser.add_argument('--remediation', action='store_true', help='Also exercise report, explicit user choice and MCP repair/verification with simulated host edits')
     parser.add_argument('--codex-integration', action='store_true', help='Exercise disposable owned Codex lifecycle and fresh MCP readiness without warmup')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
@@ -312,6 +331,8 @@ def main() -> None:
         parser.error('--fix-verify requires --full for local managed Semgrep availability')
     if args.hooks and not args.full:
         parser.error('--hooks requires --full for local managed engines')
+    if args.git_pre_commit and not args.full:
+        parser.error('--git-pre-commit requires --full for local managed engines')
     if args.remediation and not args.full:
         parser.error('--remediation requires --full for local managed engines')
     if args.codex_integration and not args.full:
@@ -458,23 +479,17 @@ def main() -> None:
             functional_evidence = args.archive.resolve().with_name(args.archive.name + '.functional.json')
             run([sys.executable,str(functional_script),'--runtime',str(executable),'--output',str(functional_evidence)],
                 cwd=root,env=dict(env,SECURITY_RUNTIME_OFFLINE='1'),timeout=480)
-        if args.hooks:
-            script = Path(__file__).with_name('hook_acceptance.py').resolve()
-            evidence = args.archive.resolve().with_name(args.archive.name + '.hooks.json')
-            run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
-                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
-        if args.codex_integration:
-            script = Path(__file__).with_name('codex_integration_acceptance.py').resolve()
-            evidence = args.archive.resolve().with_name(args.archive.name + '.codex-integration.json')
-            run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
-                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
+        hook_checks = verify_hook_acceptances(executable, root, env, args.archive,
+            hooks=args.hooks, git_pre_commit=args.git_pre_commit, codex_integration=args.codex_integration)
         record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
         record['osv_offline_fallback']=args.osv_fallback
         record['fix_verify_offline_synthetic'] = args.fix_verify
-        record['hooks_offline_synthetic'] = args.hooks
+        record['hooks_offline_synthetic'] = args.hooks or args.git_pre_commit
+        record['git_precommit_offline_synthetic'] = args.git_pre_commit
+        record['git_precommit_acceptance'] = hook_checks['git_precommit']
         record['remediation_offline_synthetic'] = args.remediation
         record['codex_integration_offline_synthetic'] = args.codex_integration
         record['doctor_contract'] = doctors

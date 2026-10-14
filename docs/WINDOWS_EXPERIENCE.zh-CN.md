@@ -218,9 +218,9 @@ $runtimeTrial = Join-Path $env:TEMP ('runtime-trial-' + [guid]::NewGuid())
 不会偷偷联网安装。试用 setup 只支持 Codex；其他编辑器入口和缩写参数会在执行前拒绝，
 请使用完整参数名。CLI 试用不代表 Desktop 已加载这个隔离 home；桌面验证仍须另行完成。
 
-## Git 提交门禁
+## 高级可选：Git 提交门禁（默认隐藏）
 
-Git pre-commit 与 Codex 编辑事件 Hook 是两种独立入口。显式安装到选定 Git 项目：
+Git pre-commit 是默认不启用、帮助中隐藏的高级可选能力，安装和升级不会自动删除已有 Git Hook。试用主流程在开发任务结束后给安全反馈，不要求 git commit；Codex 生命周期 Hook、MCP、Skill、明确选择修复／暂不处理和修复后复验继续保留。需要提交门禁时，可显式安装到选定 Git 项目：
 
 ```powershell
 & $runtimeExe hooks install pre-commit --path $reviewProject --gate strict

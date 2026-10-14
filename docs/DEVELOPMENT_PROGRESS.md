@@ -1,5 +1,18 @@
 # 开发进度与验收状态
 
+
+## 2026-10-14：0.3.3 Developer Alpha 候选准备
+
+独立只读复核未发现已审阅 Git Hook 补丁的阻断问题。再次核对远端开发分支未变更、0.3.3 未占用后，更新唯一版本源、当前 README／试用安装示例及候选发行说明，并补版本一致性回归。Windows 本机版本与本批定向组 97 通过、2 跳过（Windows 换行文件名、符号链接权限）；保持真实桌面待验。随后按授权提交、普通快进推送开发分支取得同提交 CI；发布仍由主任务待验收后协调，不覆盖 0.3.2。Windows 优先／Mac 独立补发仅记录后续方向，未修改三平台流程。
+
+## 2026-10-14：Git pre-commit 隐藏可选，核心试用验收拆分
+
+基准 ace0746fef99f7dd740c11a0ee6aa85a04c37deb，独立开发分支 trial/optional-git-precommit。默认安装原已只接入 Codex 生命周期 Hook、MCP、Skill；本批回归确认不创建 Git pre-commit、不改变已有 Hook。常规 CLI 帮助隐藏 Git 入口，显式 install/status/repair/remove 与 strict/report 参数保留。任务结束检查、明确选择修复或暂不处理、修复后复验及 Git diff/元数据用途保留，不要求 git commit 才给安全反馈。
+
+`verify_artifact.py --hooks` 继续执行 Codex 生命周期检查；只有显式 `--git-pre-commit` 才执行 Git 提交分派。两份回执增加 PASS/SKIPPED 与原因，未请求的 Git 验收不会被写成通过；跳过后继续运行 `--codex-integration`，默认原生 CI 命令无需删除任何 Codex 检查。
+
+Windows 本机定向回归：86 通过、2 跳过（Windows 换行文件名限制、目录符号链接权限不可用），覆盖安装保留、CLI 兼容、验收顺序、Git staged 门禁、Windows shell、Codex MCP/Hook。最初受限夹具权限失败，首轮本机空项目夹具在 Git 仓库内导致 1 失败，改用仓库外任务目录后同组通过。源码回归通过不等于新原生包或真实 Codex 桌面验收通过；本批未构建包、替换真实安装、推送或发布，真实桌面仍待验。维持 Developer Alpha 试用定位，后续发布由主任务审阅协调。
+
 更新日期：2026-10-14。本文记录当前可核对的实现和验收边界；未来工作见
 [产品规划](PRODUCT_ROADMAP.md)，实现约束见 [架构决策](DECISIONS.md)。
 当前仍是个人版 Developer Alpha，本地构建和源码提交不等于正式发行或真实桌面验收。

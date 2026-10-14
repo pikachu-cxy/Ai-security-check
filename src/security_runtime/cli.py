@@ -296,9 +296,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     stats_parser.add_argument("--days", type=int, default=7)
     license_parser = sub.add_parser("licenses")
     license_parser.add_argument("--check-distribution", action="store_true")
-    hooks_parser = sub.add_parser("hooks")
+    hooks_parser = sub.add_parser("hooks", help="Manage AI host lifecycle Hooks and diagnostics")
     hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc", "recent"])
-    hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"])
+    hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"],
+        metavar="{codex,cursor,kiro,workbuddy,codebuddy,qoder}")
     hooks_parser.add_argument("--path")
     hooks_parser.add_argument("--json", action="store_true")
     hooks_parser.add_argument('--gate', choices=['strict', 'report'], default='strict')

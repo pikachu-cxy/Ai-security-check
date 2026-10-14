@@ -6,15 +6,17 @@
 
 首版支持 **Windows x64、Mac Apple Silicon、Mac Intel**。Linux 发行与验收暂缓。
 
+0.3.3 为本批候选试用版本，发布状态以 Releases 实际资产为准；本批范围见[候选发行说明](docs/RELEASE_NOTES.v0.3.3.zh-CN.md)。
+
 ## 1. 在 Releases 下载完整包
 
 打开 [Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)，选择试用版本，在 **Assets** 下载对应安装包和同名 `.sha256` 文件。
 
-| 系统 | v0.3.2 安装包 |
+| 系统 | v0.3.3 安装包 |
 | --- | --- |
-| Windows x64 | `ai-security-runtime-v0.3.2-windows-x64.zip` |
-| Mac：Apple Silicon（M1/M2/M3/M4 等） | `ai-security-runtime-v0.3.2-macos-arm64.tar.gz` |
-| Mac：Intel | `ai-security-runtime-v0.3.2-macos-x64.tar.gz` |
+| Windows x64 | `ai-security-runtime-v0.3.3-windows-x64.zip` |
+| Mac：Apple Silicon（M1/M2/M3/M4 等） | `ai-security-runtime-v0.3.3-macos-arm64.tar.gz` |
+| Mac：Intel | `ai-security-runtime-v0.3.3-macos-x64.tar.gz` |
 
 新版本的文件名随 Release 改变。Mac 运行 `uname -m`，`arm64` 选 ARM 包，`x86_64` 选 Intel 包。不要把 GitHub 的 **Source code** 压缩包当安装包；不要只复制可执行文件。若 Assets 没有对应包，该版本还未完成发布。
 
@@ -32,10 +34,10 @@ macOS CI 与试用者真机验收分别记录；维护者暂时没有 Mac 真机
 ### Windows：PowerShell
 
 ```powershell
-$archive = Join-Path $env:USERPROFILE 'Downloads\ai-security-runtime-v0.3.2-windows-x64.zip'
+$archive = Join-Path $env:USERPROFILE 'Downloads\ai-security-runtime-v0.3.3-windows-x64.zip'
 Get-FileHash -Algorithm SHA256 -LiteralPath $archive
 # 与下载的同名 .sha256 文件核对。
-$destination = Join-Path $env:USERPROFILE 'Downloads\AI-Security-Runtime-v0.3.2'
+$destination = Join-Path $env:USERPROFILE 'Downloads\AI-Security-Runtime-v0.3.3'
 Expand-Archive -LiteralPath $archive -DestinationPath $destination
 $bundle = Join-Path $destination 'security-check'
 $exe = Join-Path $bundle 'security-check.exe'
@@ -51,11 +53,11 @@ $exe = Join-Path $bundle 'security-check.exe'
 
 ```bash
 cd "$HOME/Downloads"
-shasum -a 256 ai-security-runtime-v0.3.2-macos-arm64.tar.gz
+shasum -a 256 ai-security-runtime-v0.3.3-macos-arm64.tar.gz
 # 与下载的同名 .sha256 文件核对。
-mkdir AI-Security-Runtime-v0.3.2
-tar -xzf ai-security-runtime-v0.3.2-macos-arm64.tar.gz -C AI-Security-Runtime-v0.3.2
-bundle="$HOME/Downloads/AI-Security-Runtime-v0.3.2/security-check"
+mkdir AI-Security-Runtime-v0.3.3
+tar -xzf ai-security-runtime-v0.3.3-macos-arm64.tar.gz -C AI-Security-Runtime-v0.3.3
+bundle="$HOME/Downloads/AI-Security-Runtime-v0.3.3/security-check"
 exe="$bundle/security-check"
 "$exe" --version
 "$exe" install codex --bundle "$bundle" --json
@@ -74,6 +76,8 @@ exe="$bundle/security-check"
 完全重新打开 Codex，在实际项目目录创建新聊天并确认 MCP 连接可用，发普通需求，例如：
 
 > 在现有订单模块新增订单详情接口，复用服务和仓储，增加必要测试，完成后总结改动、验证结果和需要我决定的事项。
+
+任务结束即可获得安全反馈，不要求 `git commit`。默认安装保留 Codex 生命周期 Hook、MCP 和 Skill；Git 提交 Hook 是默认关闭、常规帮助隐藏的高级可选能力，已有 Git Hook 保留。
 
 无需增加“使用 ai-security 扫描”。有待处理问题时，回复应显示 **有 N 项风险需要你决定**，说明代码依据、当前防护、触发条件和未知范围，并单独给出 **修复／暂不处理**。
 

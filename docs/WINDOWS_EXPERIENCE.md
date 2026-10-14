@@ -181,9 +181,9 @@ does not establish that Desktop has loaded that isolated home. Trial setup is
 Codex-only: other editors and abbreviated options are rejected before execution.
 Use the full option names shown above.
 
-## Git commit gates
+## Advanced optional Git commit gate (hidden by default)
 
-Git pre-commit and Codex edit-event Hooks are separate entry points. Install explicitly:
+Git pre-commit is an advanced opt-in capability, hidden from normal CLI help and disabled by default. Installation and upgrades preserve existing Git Hooks. The trial provides task-end security feedback without requiring a git commit; Codex lifecycle Hooks, MCP, Skill, explicit fix/defer choice and re-verification remain enabled. Install explicitly when needed:
 
 ```powershell
 & $runtimeExe hooks install pre-commit --path $reviewProject --gate strict

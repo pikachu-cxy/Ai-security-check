@@ -27,7 +27,7 @@ def source(line=100,count=0):
     return 'import javax.net.ssl.*;\nclass Fixture {\n' + '\n'*(line-3) + body + '\n}\n'
 
 
-def run_acceptance(executable=None):
+def run_acceptance(executable=None, *, git_pre_commit=False):
     with tempfile.TemporaryDirectory(prefix='runtime-hook-fixture-') as temporary:
         folder=Path(temporary).resolve(); root=folder/'project with spaces & data';root.mkdir()
         state=folder/'runtime-state'
@@ -114,29 +114,31 @@ def run_acceptance(executable=None):
         assert configured.returncode==0,configured.stdout+configured.stderr
         assert 'systemMessage' in json.loads(configured.stdout)
         assert 'fixture_private_credential' not in configured.stdout+configured.stderr
-        precommit=subprocess.run([cli,*prefix,'hooks','install','pre-commit','--path',str(root)],
-            capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
-        assert precommit.returncode==0
-        script=(root/'.git/hooks/pre-commit').read_text(encoding='utf-8')
-        assert script.startswith('#!/bin/sh\n# AI Security Runtime managed pre-commit v1\n')
-        command=next(line[5:] for line in script.splitlines() if line.startswith('exec '))
-        argv=shlex.split(command)
-        assert Path(argv[0]).is_absolute()
-        assert Path(argv[0]).samefile(executable or sys.executable)
-        assert argv[-7:]==['scan','--mode','quick','--staged','--gate','strict','--no-progress']
-        status=subprocess.run([cli,*prefix,'hooks','status','pre-commit','--path',str(root),'--json'],
-            capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
-        assert status.returncode==0 and json.loads(status.stdout)['policy']=='strict'
-        # Exercise Git's actual dispatcher, not only the emitted shell text.
-        # This project is disposable; no normal business source/commit is touched.
-        gate_results={}
-        for name, count, expected in (('risk_blocked',1,1),('safe_allowed',0,0)):
-            java.write_text(source(100,count),encoding='utf-8')
-            git('add','Tls.java')
-            gate=subprocess.run(['git','-C',str(root),'hook','run','pre-commit'],env=env,
-                capture_output=True,text=True,encoding='utf-8',timeout=180)
-            assert gate.returncode==expected, (gate.returncode,gate.stdout,gate.stderr)
-            gate_results[name]=gate.returncode
+        gate_results = {}
+        if git_pre_commit:
+            precommit=subprocess.run([cli,*prefix,'hooks','install','pre-commit','--path',str(root)],
+                capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
+            assert precommit.returncode==0
+            script=(root/'.git/hooks/pre-commit').read_text(encoding='utf-8')
+            assert script.startswith('#!/bin/sh\n# AI Security Runtime managed pre-commit v1\n')
+            command=next(line[5:] for line in script.splitlines() if line.startswith('exec '))
+            argv=shlex.split(command)
+            assert Path(argv[0]).is_absolute()
+            assert Path(argv[0]).samefile(executable or sys.executable)
+            assert argv[-7:]==['scan','--mode','quick','--staged','--gate','strict','--no-progress']
+            status=subprocess.run([cli,*prefix,'hooks','status','pre-commit','--path',str(root),'--json'],
+                capture_output=True,text=True,encoding='utf-8',env=env,timeout=30)
+            assert status.returncode==0 and json.loads(status.stdout)['policy']=='strict'
+            # Exercise Git's actual dispatcher, not only the emitted shell text.
+            # This project is disposable; no normal business source/commit is touched.
+            gate_results={}
+            for name, count, expected in (('risk_blocked',1,1),('safe_allowed',0,0)):
+                java.write_text(source(100,count),encoding='utf-8')
+                git('add','Tls.java')
+                gate=subprocess.run(['git','-C',str(root),'hook','run','pre-commit'],env=env,
+                    capture_output=True,text=True,encoding='utf-8',timeout=180)
+                assert gate.returncode==expected, (gate.returncode,gate.stdout,gate.stderr)
+                gate_results[name]=gate.returncode
         versions={r['scanner']:r['version'] for r in safe['scanner_runs'] if r['version']}
         return {'fixture':'DISPOSABLE_GIT_SYNTHETIC_JAVA','transport':'INSTALLED_EXECUTABLE_CLI' if executable else 'SOURCE_COORDINATOR_AND_REAL_CLI',
             'runtime_executable':str(executable) if executable else sys.executable,'versions':versions,'records':records,
@@ -146,7 +148,9 @@ def run_acceptance(executable=None):
                 'stop_after_rapid_change_ms':converged['wall_duration_ms']},
             'codex_stdin_adapter':adapter_result,'generated_codex_shell_command_executed':True,
             'codex_config_status':json.loads(installed.stdout)['status'],'fresh_codex_host_trial':'PENDING',
-            'existing_precommit_quick_staged_compatible':True,
+            'existing_precommit_quick_staged_compatible':True if git_pre_commit else None,
+            'git_precommit_acceptance':{'status':'PASS' if git_pre_commit else 'SKIPPED',
+                'reason':None if git_pre_commit else 'Optional advanced Git hook acceptance was not requested'},
             'git_precommit_dispatch':gate_results,
             'model_invocation':False,'network_query':False,'target_build':False,'jeepay_modified':False,
             'ground_truth':'UNREVIEWED_NOT_MEASURED','limitations':'Counts are finding families/observed coordinates, not proof of exact instance movement or security safety.'}
@@ -154,9 +158,11 @@ def run_acceptance(executable=None):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--executable',type=Path)
+    parser.add_argument('--git-pre-commit', action='store_true', help='Opt in to advanced Git pre-commit installation and actual dispatcher checks')
     args=parser.parse_args()
     os.environ['SECURITY_RUNTIME_OFFLINE']='1'
-    record=run_acceptance(args.executable)
+    record=run_acceptance(args.executable, git_pre_commit=args.git_pre_commit)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(record,ensure_ascii=False,indent=2),encoding='utf-8')
+    print('Git pre-commit acceptance: ' + record['git_precommit_acceptance']['status'])
     print('Real offline quick lifecycle: baseline/safe/new/moved/1-to-2/2-to-1/resolved/reused/NO_CHANGE and Codex stdin passed.')

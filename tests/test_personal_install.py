@@ -49,6 +49,23 @@ def test_first_setup_installs_global_and_skill_without_project_writes(installed,
     assert not any(data['execution'].values())
 
 
+@pytest.mark.parametrize('existing', [False, True])
+def test_default_setup_leaves_optional_git_hook_untouched(installed, projects, skill, existing):
+    hook = projects[0] / '.git/hooks/pre-commit'
+    if existing:
+        hook.write_bytes(b'#!/bin/sh\n# user installed hook\nexit 0\n')
+    before = (hook.read_bytes(), hook.stat().st_mtime_ns) if existing else None
+    data = setup_personal_codex(installed, projects[0], skill=skill)
+    assert data['overall'] == 'CONFIGURED'
+    assert (installed.home / 'hooks.json').is_file()
+    assert (installed.home / 'config.toml').is_file()
+    assert (skill.root / 'SKILL.md').is_file()
+    if existing:
+        assert (hook.read_bytes(), hook.stat().st_mtime_ns) == before
+    else:
+        assert not hook.exists()
+
+
 def test_repeat_install_is_idempotent_preserves_user_files(installed, skill):
     installed.home.mkdir()
     original = b'# keep this comment\nmodel="custom"\n[mcp_servers.other]\ncommand="other"\n'

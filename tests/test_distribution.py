@@ -35,6 +35,16 @@ def test_runtime_version_and_semgrep_delivery(capsys):
     assert FIRST_PARTY_RULE_PACK.license == "Apache-2.0"
 
 
+def test_current_install_examples_follow_single_version_source():
+    root = Path(__file__).resolve().parents[1]
+    readme = (root / 'README.md').read_text(encoding='utf-8')
+    guide = (root / 'docs/PILOT_INSTALL_AND_USE.zh-CN.md').read_text(encoding='utf-8')
+    for platform, extension in [('windows-x64', '.zip'), ('macos-arm64', '.tar.gz'), ('macos-x64', '.tar.gz')]:
+        assert f'ai-security-runtime-v{__version__}-{platform}{extension}' in readme
+    assert f'ai-security-runtime-v{__version__}-macos-arm64.tar.gz' in guide
+    assert 'Developer Alpha' in readme
+
+
 def test_generators_require_real_versioned_release_metadata(tmp_path):
     archive_names = {"windows-x64": ".zip", "macos-arm64": ".tar.gz", "macos-x64": ".tar.gz"}
     data = {"version": __version__, "artifacts": {

@@ -4,6 +4,14 @@
 
 本计划汇总本项目会话“查找 Qoder L2 技术资料”和“规划产品首版安全扫描范围”的最新用户要求、规划结论及当前实现。只整理产品决策和开发状态，不上传完整聊天、个人配置或业务扫描原始数据。具体任务依据见 [第一版受邀试用开发清单](PILOT_V1_CHECKLIST.zh-CN.md)，长期范围见 [产品规划](PRODUCT_ROADMAP.md)。后续开发优先按本文的当前状态与顺序续办，旧文档中已经修复的断点不再从零开发。
 
+## 本批试用范围调整：Git pre-commit 隐藏可选
+
+本批准备 0.3.3 Developer Alpha 候选，先取得同提交 CI 证据再协调发布。后续方向为 Windows 优先、Mac 独立验收通过后补发；本批仅记录，不修改现有三平台发布流程。
+
+基准为 ace0746fef99f7dd740c11a0ee6aa85a04c37deb。默认安装继续接入 Codex 生命周期 Hook、MCP、Skill；任务结束检查、用户选择修复／暂不处理及修复后复验保留。Git 元数据与 diff 仍用于任务检查，安全反馈不等待提交。Git pre-commit 默认不启用、常规帮助隐藏，显式兼容入口仍可用，不自动删除用户已有 Hook。
+
+原生核心门禁继续传 `--hooks --codex-integration`，`--hooks` 只验 Codex 生命周期；Git 分派验收须额外显式传 `--git-pre-commit`。默认回执将该项标记 `SKIPPED` 并记录原因，不能称全量 Git 验收通过。可直接运行 `scripts/hook_acceptance.py --git-pre-commit --output <证据路径>` 检查高级入口。真实 Codex 桌面试用与源码回归、原生 CI 分开记录。本批只交付隔离源码与定向回归，后续同提交原生门禁和桌面验收仍按实际证据推进。
+
 ## 当前已经实现
 
 用户收敛首版为Windows+Mac；Linux发行与验收暂缓。先完成本批共享契约/遗留确认验收修订的同提交Windows/Mac门禁及三份原生包验证，再发布到Releases。维护任务使用Ubuntu不等于Linux产品发行。
