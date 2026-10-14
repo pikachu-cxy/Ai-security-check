@@ -202,6 +202,17 @@ def verify_sample_scan(payload, *, dependency=False):
             raise ValueError('Declared dependency inventory or fresh vulnerability data not verified')
 
 
+def windows_git_shell_paths(git: Path) -> list[Path]:
+    """Keep Git's bundled shell for hook dispatch, without developer Python."""
+    git = git.resolve(strict=True)
+    for home in list(git.parents)[:3]:
+        for relative in ('bin/sh.exe', 'usr/bin/sh.exe'):
+            shell = home / relative
+            if shell.is_file():
+                return [shell.parent]
+    raise ValueError('Git for Windows shell is required by native hook verification')
+
+
 def verification_environment(root: Path, data: Path, *, full: bool, inherited=None) -> dict[str, str]:
     """Keep configuration, Skill and state in the disposable acceptance root."""
     inherited = os.environ if inherited is None else inherited
@@ -330,6 +341,8 @@ def main() -> None:
         # The Windows root can contain the developer's py launcher. Native
         # verification must not accidentally inherit that fallback runtime.
         platform_paths = [system / "System32"] if os.name == "nt" else [Path("/usr/bin"), Path("/bin")]
+        if os.name == 'nt':
+            platform_paths = [*windows_git_shell_paths(Path(git)), *platform_paths]
         env["PATH"] = os.pathsep.join(map(str, [bundle, Path(git).parent, *platform_paths]))
         if os.name == "nt" and any(shutil.which(name, path=env["PATH"]) for name in ("python", "python3", "py")):
             raise ValueError("Developer Python must not be available on standalone verification PATH")

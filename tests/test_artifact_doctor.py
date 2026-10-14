@@ -4,10 +4,37 @@ import json
 import subprocess
 import sys
 import copy
+import shutil
 import pytest
 from pathlib import Path
 
 from scripts import verify_artifact
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Real Git for Windows dispatcher')
+@pytest.mark.parametrize('native', [False, True])
+def test_native_verification_git_shell_runs_hook_without_python(tmp_path, native):
+    executable = shutil.which('git')
+    assert executable
+    git = Path(executable)
+    if native:
+        candidates = [parent / 'mingw64/bin/git.exe' for parent in list(git.resolve().parents)[:3]]
+        git = next((path for path in candidates if path.is_file()), None)
+        if git is None:
+            pytest.skip('Native Git for Windows executable not present')
+    paths = [git.parent, *verify_artifact.windows_git_shell_paths(git),
+             Path(os.environ['SystemRoot']) / 'System32']
+    env = dict(os.environ, PATH=os.pathsep.join(map(str, paths)))
+    assert not any(shutil.which(name, path=env['PATH']) for name in ('python', 'python3', 'py'))
+    root = tmp_path / 'project with spaces & data'
+    root.mkdir()
+    subprocess.run([str(git), '-C', str(root), 'init', '-q'], env=env, check=True,
+                   capture_output=True, timeout=15)
+    hook = root / '.git/hooks/pre-commit'
+    hook.write_bytes(b'#!/bin/sh\nexit 7\n')
+    result = subprocess.run([str(git), '-C', str(root), 'hook', 'run', 'pre-commit'],
+                            env=env, capture_output=True, timeout=15)
+    assert result.returncode == 7, result.stderr.decode(errors='replace')
 
 
 def declared_sample():
