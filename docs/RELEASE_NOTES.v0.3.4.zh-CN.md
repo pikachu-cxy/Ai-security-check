@@ -10,6 +10,8 @@
 
 版本来源、实际 Runtime 源码哈希和本次成功状态随新正例记录；旧输出不能冒充本次结果。证据范围及限制见 PERFORMANCE_RESULTS.zh-CN.md、PERFORMANCE_REVISION.zh-CN.md。SCA、真实 Java/TypeScript、整体模型与桌面体验仍未验收；不扩展 Go、不更新 OSV。
 
-Git pre-commit 仍为隐藏、默认关闭的可选项。Codex 生命周期 Hook、MCP、Skill、任务结束检查、用户选择修复/忽略与复验保留。未改分平台发布架构或统一安装器。
+后续新版本的发布说明首屏给出 Windows x64、Mac Apple Silicon、Mac Intel 平台安装包直链与校验入口。公开资产收敛为九项：三个平台包、三个同名校验文件、完整校验清单、机器 manifest 和一个证据 ZIP。原生/专项 JSON、安装指南及包管理元数据逐字节保存在证据 ZIP 内；原始 CI artifacts、完整原生验收与旧公开发布保持不变。下载区示例和夹具测试不等于真实新包在线发布验收。
 
-现有工作流允许独立分支 Runtime tests/Compliance 和 PR Package integrity；Standalone 仅在开发分支 push 或被调用时运行。此独立候选没有完整三平台原生构建证据，不修改工作流绕行，不创建标签或发布。
+Git pre-commit 仍为隐藏、默认关闭的可选项。Codex 生命周期 Hook、MCP、Skill、任务结束检查、用户选择修复/忽略与复验保留。发布工作流仅调整资产 staging/说明与上传集合，验证依赖、三平台矩阵和门禁顺序保留；未改分平台发布架构或统一安装器。
+
+现有工作流允许独立分支 Runtime tests/Compliance 和 PR Package integrity；Standalone 仅在开发分支 push 或被调用时运行。此本地组合候选没有完整三平台原生构建证据，不修改触发条件绕行，不创建标签或发布。当前 PR #1 的远端 SHA 保持不变，待其 CI 与组合复核后再统一协调。
