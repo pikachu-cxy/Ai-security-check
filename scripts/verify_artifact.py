@@ -291,7 +291,7 @@ def main() -> None:
     parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
     parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
     parser.add_argument('--hooks', action='store_true', help='Also exercise offline native Hook CLI with actual local engines')
-    parser.add_argument('--remediation', action='store_true', help='Also exercise native smart-auto MCP repair/verification with simulated host edits')
+    parser.add_argument('--remediation', action='store_true', help='Also exercise report, explicit user choice and MCP repair/verification with simulated host edits')
     parser.add_argument('--codex-integration', action='store_true', help='Exercise disposable owned Codex lifecycle and fresh MCP readiness without warmup')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()

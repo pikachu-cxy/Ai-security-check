@@ -51,29 +51,7 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
     assert not fresh.prepared and not fresh.authorized
     assert not {'decision', 'continue', 'systemMessage', 'stopReason'} & data.keys()
     assert CANARY not in json.dumps(output) and UNSAFE not in json.dumps(output)
-    if mode == 'smart_auto':
-        assert data['action'] == 'AUTO_FIX' and data['interaction'] == AUTO_INTERACTION
-        assert output['continue'] is wire['continue'] is False
-        assert not {'decision', 'reason'} & wire.keys()
-        assert '修复确认' in wire['systemMessage'] and len(wire['systemMessage']) < 250
-        assert wire['systemMessage'] == wire['stopReason']
-        assert 'SECURITY_FIX_REQUIRED' not in wire['systemMessage']
-        assert data['guidance'] not in wire['stopReason']
-        assert data['guidance'].startswith('SECURITY_AUTO_REMEDIATION_AUTHORIZED.')
-        assert data['security_context_status'] == 'READY'
-        assert data['security_fix_context']['authorization']['prepare_required']
-        assert data['security_fix_context']['success']['real_scanner_recheck_required']
-        assert 'do not repeat it or ask for approval' in data['guidance']
-        for forbidden in (QUESTION, 'WAIT', 'Proactively ask the user', 'confirmation_ref',
-                          'POST_EDIT_REMEDIATION_CONFIRMATION', 'EXPLICIT_USER_REPLY_REQUIRED'):
-            assert forbidden not in json.dumps(data, ensure_ascii=False)
-        assert data['prepare']['arguments'] == data['verify']['arguments']
-        assert set(data['prepare']['arguments']) == {'task_ref', 'remediation_ref'}
-        assert all(data['prepare']['arguments'].values())
-        assert 'Return to the development task' in data['guidance']
-        assert 'prepare_functional_verification' not in data['guidance']
-        assert 'run_functional_verification' not in data['guidance']
-    elif mode == 'ask_before_fix':
+    if mode == 'ask_before_fix':
         assert data['action'] == 'CONFIRM_REQUIRED' and data['interaction'] == CONFIRM_INTERACTION
         assert wire['continue'] is False and wire['stopReason'] == data['user_feedback']['message']
         assert not {'decision', 'reason'} & wire.keys()

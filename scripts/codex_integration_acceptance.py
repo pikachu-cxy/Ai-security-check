@@ -46,6 +46,10 @@ async def accept(command):
         hooks.write_text(json.dumps(unrelated_hook), encoding='utf-8')
 
         def cli(argv):
+            # This driver exercises project integration only. Default setup is
+            # now global; never point an acceptance run at the user's settings.
+            if argv[:2] == ['setup', 'codex']:
+                argv = [*argv, '--scope', 'project']
             response = subprocess.run([*command, *argv, '--path', str(root), '--json'], cwd=parent,
                                       env=env, capture_output=True, timeout=90)
             assert response.returncode == 0, 'CLI lifecycle failed (raw output withheld)'
@@ -99,18 +103,17 @@ async def accept(command):
                     assert finding['baseline_available'] and finding['baseline_source'] == 'SETUP_SEED'
                     assert finding['status'] != 'BASELINE_ESTABLISHED' and finding['scanner_run']
                     decision = finding['remediation']
-                    assert finding['new_families'] == 1 and decision['action'] == 'AUTO_FIX', finding
+                    assert finding['new_families'] == 1 and decision['action'] == 'CONFIRM_REQUIRED', finding
                     assert finding['continue'] is False and 'decision' not in finding
                     assert 'agent_fix_ticket' not in decision
-                    if decision.get('security_context_status') == 'READY':
-                        assert 'SECURITY_FIX_REQUIRED' in finding['stopReason']
-                        assert 'do not repeat the edit or ask for approval' in finding['stopReason']
-                        assert 'compact context and prepare handoff' in finding['systemMessage']
-                    else:
-                        assert finding['stopReason'].endswith(decision['guidance'])
-                        assert 'Do not retry or repeat it.' in finding['stopReason']
-                        assert 'not the original insecure edit' in finding['stopReason']
-                        assert 'prepare_task_fix' in finding['systemMessage']
+                    assert finding['stopReason'] == decision['user_feedback']['message']
+                    assert 'prepare' not in decision and source.read_text() == UNSAFE
+                    pending_stop = await call('handle_stop_event', stop_claims)
+                    assert pending_stop['status'] == 'ALLOW_STOP' and 'decision' not in pending_stop
+                    # Simulated explicit host-reported consent, not a Desktop human reply.
+                    decision = await call('confirm_remediation', dict(decision['confirmation']['arguments'], approve=True))
+                    assert decision['status'] == 'AUTHORIZED'
+                    assert decision['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
                     original_refs = decision['prepare']['arguments']
                     # Force the observed missing-prepare state. This SDK driver
                     # consumes the Stop handoff; it is not model continuation.

@@ -1,4 +1,4 @@
-# Smart Auto-Remediation
+# User-approved vulnerability remediation
 
 As of the 2026-10-11 local source change, ALL vulnerability repairs require
 explicit user approval. The title and AUTO_FIX enum are retained for compatibility;

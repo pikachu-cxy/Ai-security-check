@@ -2,6 +2,12 @@
 
 English | [简体中文](WINDOWS_EXPERIENCE.zh-CN.md)
 
+For current installation, use [README](../README.md). Every vulnerability repair
+requires a clear report and explicit user choice. Legacy `smart_auto` settings
+normalize to `ask_before_fix`; `AUTO_FIX` only continues an already approved,
+bounded repair. Detection and ordinary development requests cannot grant consent.
+The older build records below are historical, not the current release guide.
+
 This is a local v0.3.1 experience build with the `upgrade-and-scan-v1` contract,
 not a published Release. Keep the entire
 `security-check` directory; developer Python is unnecessary. Initial engine and

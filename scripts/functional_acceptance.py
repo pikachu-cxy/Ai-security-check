@@ -9,7 +9,6 @@ from datetime import timedelta
 import json
 import os
 from pathlib import Path
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -66,35 +65,35 @@ def execute_host_plan(plan, root, sandbox):
     from security_runtime.functional_execution import Unavailable
     report = dict(plan_digest=plan['plan_digest'], network_access='DENIED',
                   project_code_reviewed=True, steps=[])
-    with tempfile.TemporaryDirectory(prefix='functional-host-projection-') as temporary:
-        projection = Path(temporary) / 'project'
-        for step in plan['steps']:
-            assert Path(step['working_directory']).samefile(root)
-            observation = dict(command_id=step['command_id'], execution_status='NOT_AVAILABLE',
-                               exit_code=None, duration_ms=0)
-            if sandbox.availability() is None:
-                if not projection.exists():
-                    shutil.copytree(root, projection, ignore=shutil.ignore_patterns('.git'))
-                class HostStep:
-                    provider = step['provider']
-                    def argv(self): return step['argv']
-                try:
-                    measured = sandbox.run(projection, HostStep(), timeout=step['timeout_seconds'])
-                    observation.update(execution_status='TIMEOUT' if measured['reason']=='TIMEOUT' else
-                        'OUTPUT_LIMIT' if measured['reason'] else 'COMPLETED',
-                        exit_code=measured['exit_code'], duration_ms=measured['duration_ms'])
-                    if any(x in measured['output'].lower() for x in
-                           (b'pluginresolutionexception', b'dependencyresolutionexception')):
-                        observation['stderr_summary'] = 'PluginResolutionException: offline mode'
-                except Unavailable:
-                    pass
-            report['steps'].append(observation)
-            if observation['execution_status'] != 'COMPLETED' or observation['exit_code'] != 0:
-                break
+    assert plan['temporary_projection'] is True
+    for step in plan['steps']:
+        projection = Path(step['working_directory']).resolve(strict=True)
+        assert not projection.samefile(root)
+        observation = dict(command_id=step['command_id'], execution_status='NOT_AVAILABLE',
+                           exit_code=None, duration_ms=0)
+        if sandbox.availability() is None:
+            class HostStep:
+                provider = step['provider']
+                def argv(self): return step['argv']
+            try:
+                measured = sandbox.run(projection, HostStep(), timeout=step['timeout_seconds'])
+                observation.update(execution_status='TIMEOUT' if measured['reason']=='TIMEOUT' else
+                    'OUTPUT_LIMIT' if measured['reason'] else 'COMPLETED',
+                    exit_code=measured['exit_code'], duration_ms=measured['duration_ms'])
+                if any(x in measured['output'].lower() for x in
+                       (b'pluginresolutionexception', b'dependencyresolutionexception')):
+                    observation['stderr_summary'] = 'PluginResolutionException: offline mode'
+            except Unavailable:
+                pass
+        report['steps'].append(observation)
+        if observation['execution_status'] != 'COMPLETED' or observation['exit_code'] != 0:
+            break
     return report
 
 
-async def run(command,failure=False,mode='smart_auto'):
+async def run(command,failure=False,mode='ask_before_fix'):
+    requested_mode=mode
+    mode='ask_before_fix' if mode=='smart_auto' else mode
     start=time.monotonic()
     with tempfile.TemporaryDirectory(prefix='functional-maven-') as temporary:
         parent=Path(temporary).resolve(); root=parent/'project'; root.mkdir()
@@ -105,7 +104,7 @@ async def run(command,failure=False,mode='smart_auto'):
         subprocess.run(['git','-C',str(root),'add','pom.xml','src/test'],check=True,capture_output=True)
         subprocess.run(['git','-C',str(root),'commit','-m','disposable local tests'],check=True,capture_output=True)
         state=parent/'state'; state.mkdir()
-        (state/'remediation.json').write_text(json.dumps({'remediation':{'mode':mode}}))
+        (state/'remediation.json').write_text(json.dumps({'remediation':{'mode':requested_mode}}))
         env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(root),SECURITY_RUNTIME_STATE_DIR=str(state),
                  SECURITY_RUNTIME_OFFLINE='1',SECURITY_RUNTIME_MCP_SELF_TEST='1',PYTHONUTF8='1')
         params=StdioServerParameters(command=command[0],args=[*command[1:],'mcp'],env=env,cwd=root)
@@ -120,7 +119,8 @@ async def run(command,failure=False,mode='smart_auto'):
                         return data.get('result',data)
                     info=await call('get_runtime_info',{})
                     assert info['features']['functional_verification']=='v0.1'
-                    assert info['remediation']=={'mode':mode,'configuration_status':'VALID'}
+                    assert info['remediation']['mode']==mode
+                    assert info['remediation']['configuration_status']=='VALID'
                     assert str(state) not in json.dumps(info)
                     claims=dict(event='PostToolUse',workspace_path=str(root),session_id='functional-maven',tool_name='apply_patch')
                     baseline=await call('handle_hook_event',claims)
@@ -128,28 +128,16 @@ async def run(command,failure=False,mode='smart_auto'):
                     await asyncio.sleep(1.1); path.write_text(UNSAFE)
                     hook=await call('handle_hook_event',claims)
                     assert hook['new_families']==1,hook
-                    if mode=='ask_before_fix':
-                        decision=await call('confirm_remediation',dict(hook['remediation']['confirmation']['arguments'],approve=True))
-                        assert decision['status']=='AUTHORIZED'
-                    else: decision=hook['remediation']; assert decision['action']=='AUTO_FIX'
-                    inline = decision.get('agent_fix_ticket', {}).get('mode') == 'INLINE_PREPARED'
-                    assert decision['interaction']=={'phase':'AUTO_REMEDIATION_AUTHORIZED',
-                        'user_confirmation_required':False,'must_not_ask_user':True,
-                        'must_continue_automatically':True,'next_action':'READ_TARGET_AND_APPLY_TICKET' if inline else 'PREPARE_TASK_FIX'}
-                    assert ('SECURITY_AUTO_REMEDIATION_AUTHORIZED' if inline else 'USER CONFIRMATION IS NOT REQUIRED') in decision['guidance']
-                    assert 'WAIT' not in decision['guidance'] and '是否允许我修复这个安全问题？' not in decision['guidance']
-                    assert 'confirmation_ref' not in json.dumps(decision)
-                    if mode=='smart_auto':
-                        assert hook['continue'] is False and 'decision' not in hook
-                        if inline:
-                            assert 'Do not call prepare_task_fix' in hook['stopReason']
-                            assert 'AUTO_FIX already prepared' in hook['systemMessage']
-                            assert decision['prepare']['required'] is False
-                            assert decision['agent_fix_ticket']['allowed_target_paths'] == [path.relative_to(root).as_posix()]
-                            assert decision['agent_fix_ticket']['prepared_attestation'].startswith('agent-ticket-v1.')
-                        else:
-                            assert 'Do not retry or repeat it.' in hook['stopReason']
-                            assert 'Do not ask the user for confirmation' in hook['systemMessage']
+                    pending=hook['remediation']
+                    assert pending['action']=='CONFIRM_REQUIRED'
+                    assert 'prepare' not in pending and 'agent_fix_ticket' not in pending
+                    assert path.read_text()==UNSAFE
+                    decision=await call('confirm_remediation',dict(pending['confirmation']['arguments'],approve=True))
+                    assert decision['status']=='AUTHORIZED'
+                    assert decision['authorization_kind']=='USER_CONFIRMED'
+                    assert decision['approval_trust']=='UNTRUSTED_HOST_REPORT'
+                    assert 'already approved' in decision['guidance']
+                    inline=False
                     grant=decision['prepare']['arguments']
                     rejected=await call('prepare_functional_verification',grant)
                     assert rejected['overall_status']=='SECURITY_NOT_VERIFIED'
@@ -189,7 +177,7 @@ async def run(command,failure=False,mode='smart_auto'):
                         assert out['overall_status']=='SECURITY_VERIFIED_FUNCTION_UNKNOWN'
                     assert not out.get('functional_ref') and not out.get('handoff')
                     assert not (root/'target').exists()
-    return dict(case='B' if failure else 'A',mode=mode,transport='ACTUAL_MCP_STDIO',
+    return dict(case='B' if failure else 'A',mode=requested_mode,effective_mode=mode,transport='ACTUAL_MCP_STDIO',
                 observed_mode=info['remediation']['mode'],interaction=decision['interaction'],
                 prepare_task_fix=not inline,inline_prepared=inline,verify_task_fix=True,resolved_families=closed['resolved_families'],
                 prepare_functional_verification=True,run_functional_verification=run_called,
@@ -202,7 +190,7 @@ async def run(command,failure=False,mode='smart_auto'):
 
 
 async def run_all(command):
-    return {'A':await run(command),'B':await run(command,True),'confirmed':await run(command,False,'ask_before_fix')}
+    return {'A':await run(command),'B':await run(command,True),'legacy_alias':await run(command,False,'smart_auto')}
 
 
 def main():

@@ -1,4 +1,4 @@
-"""Compact, source-free facts for the existing policy-authorized TLS Agent fix.
+"""Compact, source-free facts for the existing user-approved TLS Agent fix.
 
 Context identity is informational, never an edit credential. Original grant,
 snapshot, preparation and scanner proof gates remain authoritative.

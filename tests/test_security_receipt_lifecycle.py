@@ -77,6 +77,13 @@ def test_old_scan_cannot_masquerade_as_resolved_receipt(setup):
     assert diagnostic(setup)['reason_code'] == 'RESOLVED_SCAN_IS_ORIGIN_SCAN'
 
 
+def test_legacy_policy_auto_cannot_authorize_functional_receipt(setup):
+    resolve(setup)
+    references = dict(args(setup))
+    mutate(setup, lambda row: row.update(authorization_kind='POLICY_AUTO'))
+    assert diagnostic(setup, references)['reason_code'] == 'EXPLICIT_USER_CONSENT_REQUIRED'
+
+
 def test_first_resolution_commits_bound_proof_before_functional_handoff(setup):
     closed = resolve(setup)
     proof = record(setup)['resolution']

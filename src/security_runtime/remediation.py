@@ -21,9 +21,9 @@ from .task_fix import TaskFixService
 from .triage_models import category as finding_category, iac_classification
 from .hook_timing import timings, elapsed, core_context
 
-GUIDANCE = ('SECURITY_AUTO_REMEDIATION_AUTHORIZED. '
-            'Runtime has already authorized this exact bounded security repair. '
-            'USER CONFIRMATION IS NOT REQUIRED. '
+CONFIRMED_GUIDANCE = ('SECURITY_AUTO_REMEDIATION_AUTHORIZED. '
+            'The user has already approved and Runtime has authorized this exact bounded security repair. '
+            'USER CONFIRMATION IS NOT REQUIRED again for this approved scope. '
             'Do NOT ask the user whether to repair, continue, apply, keep, or approve this fix. '
             'Immediately call prepare_task_fix using the supplied task_ref and remediation_ref, '
             'perform only the authorized minimal edit, allow PostToolUse to recheck, '
@@ -68,9 +68,6 @@ CONFIRMATION_GUIDANCE = (
     'question; otherwise clarify the decision before reporting approval. Do not require a second fix request. '
     'Use only the returned remediation_ref to prepare, edit and verify; an invalid reference requires refresh. '
     'Do not transmit a user prompt, transcript, source or Secret to the confirmation tool.')
-CONFIRMED_GUIDANCE = GUIDANCE.replace(
-    'Runtime has already authorized this exact bounded security repair.',
-    'The user has already approved and Runtime has authorized this exact bounded security repair.')
 POLICY_VERSION = 'confirmation-v2/user-consent-required/local-jdk-hostname-v1'
 CONFIRMATION_TTL = 900
 MAX_EPISODES = 16
@@ -421,15 +418,13 @@ class RemediationService:
         if record.get('authorization_kind') != 'USER_CONFIRMED':
             raise ValueError('EXPLICIT_USER_CONSENT_REQUIRED')
         token = 'rem-v1.' + path.stem + '.' + identity(record['family_key']) + '.' + secrets.token_hex(24)
-        # Only normal policy-authorized issuance starts a different grant.
+        # Only explicitly user-approved issuance starts a different grant.
         # Stop itself can never reset this counter or issue a retry.
         record.pop('host_continuation', None)
         record.update(token_hash=identity(token), last_snapshot_digest=snapshot,
                       last_action='AUTO_FIX', phase='OFFERED', last_verification='NOT_VERIFIED')
-        confirmed = record.get('authorization_kind') == 'USER_CONFIRMED'
-        if confirmed:
-            record['phase'] = 'AUTHORIZED'
-            self.authorized[record['token_hash']] = record['connection_deadline']
+        record['phase'] = 'AUTHORIZED'
+        self.authorized[record['token_hash']] = record['connection_deadline']
         args = {'task_ref': record['task_ref'], 'remediation_ref': token}
         self.continuation.remember(path, record, snapshot, args)
         return dict(self.policy.decide(family=record['family_key'], rule=RULE, priority='ACTIONABLE',
@@ -438,9 +433,9 @@ class RemediationService:
                     policy_source='DETERMINISTIC_LOCAL_TLS_INVARIANT', attempt_count=record['attempt_count'],
                     **self._episode_fields(record),
                     episode_reason_code='RECURRENCE_AFTER_RESOLUTION' if record['episode_number'] > 1 else 'FIRST_OCCURRENCE',
-                    authorization_kind=record.get('authorization_kind', 'POLICY_AUTO'),
+                    authorization_kind='USER_CONFIRMED',
                     grant_id=record['token_hash'],
-                    feedback_required=True, guidance=CONFIRMED_GUIDANCE if confirmed else GUIDANCE,
+                    feedback_required=True, guidance=CONFIRMED_GUIDANCE,
                     interaction={'phase': 'AUTO_REMEDIATION_AUTHORIZED',
                                  'user_confirmation_required': False,
                                  'must_not_ask_user': True,
@@ -1327,8 +1322,8 @@ class RemediationService:
             self._observe_cycle('set_fix_path', root, record['episode_id'], 'AGENT_FIX')
             packet['remediation_authorization'] = {'action': 'AUTO_FIX', 'attempt_count': record['attempt_count'],
                                                   **self._episode_fields(record),
-                                                  'max_attempts': 2, 'guidance': CONFIRMED_GUIDANCE if record.get('authorization_kind') == 'USER_CONFIRMED' else GUIDANCE,
-                                                  'authorization_kind': record.get('authorization_kind', 'POLICY_AUTO')}
+                                                  'max_attempts': 2, 'guidance': CONFIRMED_GUIDANCE,
+                                                  'authorization_kind': 'USER_CONFIRMED'}
             packet['host_protocol']['instructions'] = packet['remediation_authorization']['guidance']
             packet['verification_plan']['arguments']['remediation_ref'] = ref
             return compact_packet(packet, context, context_ref, diagnostics,
@@ -1440,7 +1435,9 @@ class RemediationService:
             binding = proof.get('binding')
             if record.get('last_verification') != 'SCANNER_VERIFIED_RESOLVED':
                 raise SecurityReceiptError('LATEST_SECURITY_CHECK_NOT_RESOLVED')
-            if self.config.read() != ('ask_before_fix' if record.get('authorization_kind') == 'USER_CONFIRMED' else 'smart_auto'):
+            if record.get('authorization_kind') != 'USER_CONFIRMED':
+                raise SecurityReceiptError('EXPLICIT_USER_CONSENT_REQUIRED')
+            if self.config.read() != 'ask_before_fix':
                 raise SecurityReceiptError('REMEDIATION_POLICY_CHANGED')
             if record.get('authorization_kind') == 'USER_CONFIRMED':
                 if self._confirmation_remaining(record) <= 0:
