@@ -68,7 +68,7 @@ def execute_host_plan(plan, root, sandbox):
     assert plan['temporary_projection'] is True
     for step in plan['steps']:
         projection = Path(step['working_directory']).resolve(strict=True)
-        assert not projection.samefile(root)
+        assert not projection.samefile(root) and not projection.is_relative_to(root.resolve())
         observation = dict(command_id=step['command_id'], execution_status='NOT_AVAILABLE',
                            exit_code=None, duration_ms=0)
         if sandbox.availability() is None:

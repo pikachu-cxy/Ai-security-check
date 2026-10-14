@@ -25,12 +25,12 @@ def generate(manifest: Path, output: Path) -> None:
         raise ValueError("Release version mismatch")
     arm_url, arm_sha = artifact(data, "macos-arm64")
     x64_url, x64_sha = artifact(data, "macos-x64")
-    linux_url, linux_sha = artifact(data, "linux-x64")
     content = f'''class AiSecurityRuntime < Formula
   desc "Local security runtime for AI coding agents"
   homepage "https://github.com/pikachu-cxy/Ai-security-check"
   version "{__version__}"
   license :cannot_represent
+  depends_on :macos
 
   on_macos do
     on_arm do
@@ -41,11 +41,6 @@ def generate(manifest: Path, output: Path) -> None:
       url "{x64_url}"
       sha256 "{x64_sha}"
     end
-  end
-  on_linux do
-    depends_on arch: :x86_64
-    url "{linux_url}"
-    sha256 "{linux_sha}"
   end
 
   def install

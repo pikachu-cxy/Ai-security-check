@@ -12,6 +12,7 @@ import time
 from fast_fix_acceptance import native_target_edit
 from remediation_episode_acceptance import SAFE, UNSAFE
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import approve_reported_risk
 
 
 def canonical(value):
@@ -83,7 +84,7 @@ async def trial(mode, baseline):
                 async with ClientSession(read,write) as client:
                     await client.initialize(); calls=[]
                     async def call(name, arguments):
-                        assert name in {'handle_hook_event','prepare_task_fix','fixture_host_edit'}
+                        assert name in {'handle_hook_event','confirm_remediation','prepare_task_fix','fixture_host_edit'}
                         response = await client.call_tool(name,invocation_claims(name, arguments))
                         assert not response.isError, name
                         if mode == 'after' and name == 'handle_hook_event':
@@ -104,7 +105,8 @@ async def trial(mode, baseline):
                     previous = None
                     for number in range(1,3):
                         target.write_bytes(unsafe.encode()); offset=len(calls); start=time.perf_counter()
-                        hook=await call('handle_hook_event',claims); grant=hook['remediation']
+                        hook=await call('handle_hook_event',claims)
+                        grant=await approve_reported_risk(call,hook['remediation'],target)
                         assert grant['action']=='AUTO_FIX' and grant['episode_number']==number
                         assert grant['fix_path']=='AGENT_FIX'
                         context=grant['security_fix_context']

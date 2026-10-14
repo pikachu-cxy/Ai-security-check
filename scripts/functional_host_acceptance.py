@@ -13,6 +13,7 @@ import time
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import approve_reported_risk
 
 SAFE = '''package demo;
 import javax.net.ssl.HttpsURLConnection;
@@ -63,7 +64,7 @@ async def case(broken):
                     await asyncio.sleep(1.1)
                     path.write_text(unsafe)
                     detected = await call('handle_hook_event', claims)
-                    assert detected['remediation']['action'] == 'AUTO_FIX', detected
+                    detected['remediation'] = await approve_reported_risk(call, detected['remediation'], path)
                     arguments = dict(detected['remediation']['prepare']['arguments'])
                     assert (await call('prepare_task_fix', arguments))['status'] == 'READY_FOR_HOST_FIX'
                     await asyncio.sleep(1.1)

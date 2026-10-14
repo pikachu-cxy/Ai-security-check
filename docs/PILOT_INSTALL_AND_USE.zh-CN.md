@@ -4,6 +4,8 @@
 本批 Windows 本机验收与 macOS CI/真机验收分开记录；没有 Mac 真机，macOS 包必须以同提交 CI 构建和对应架构回执为准。不能用 Windows 包改名作为 Mac 包。
 维护者确认旧GitHub作业因私有仓库Actions额度耗尽而未执行；2026-10-14仓库改为公开后，标准runner重新开始执行。Mac ARM/Intel在包完整性校验阶段暴露PyInstaller符号链接兼容问题，本批补齐包内相对链接清单、越界拒绝、复制保留与安全解包；发布验证也区分源码快速检查与声明依赖的部分图覆盖。修复提交仍须实际CI通过后才分发Mac包，真机验收待试用者完成。
 
+首版发行范围为Windows x64、Mac Apple Silicon与Mac Intel；Linux发行和验收暂缓。
+
 ## 选择模式和安装包
 
 | 模式 | 内容 | 适用 |

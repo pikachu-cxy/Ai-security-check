@@ -36,7 +36,7 @@ def test_runtime_version_and_semgrep_delivery(capsys):
 
 
 def test_generators_require_real_versioned_release_metadata(tmp_path):
-    archive_names = {"windows-x64": ".zip", "macos-arm64": ".tar.gz", "macos-x64": ".tar.gz", "linux-x64": ".tar.gz"}
+    archive_names = {"windows-x64": ".zip", "macos-arm64": ".tar.gz", "macos-x64": ".tar.gz"}
     data = {"version": __version__, "artifacts": {
         platform: {"url": f"https://github.com/pikachu-cxy/Ai-security-check/releases/download/v{__version__}/ai-security-runtime-v{__version__}-{platform}{extension}",
                    "sha256": "a" * 64} for platform, extension in archive_names.items()}}
@@ -44,7 +44,9 @@ def test_generators_require_real_versioned_release_metadata(tmp_path):
     manifest.write_text(json.dumps(data), encoding="utf-8")
     formula = tmp_path / "Formula" / "ai-security-runtime.rb"
     generate_homebrew(manifest, formula)
-    assert formula.read_text(encoding="utf-8").count('sha256 "' + "a" * 64 + '"') == 3
+    assert formula.read_text(encoding="utf-8").count('sha256 "' + "a" * 64 + '"') == 2
+    assert 'depends_on :macos' in formula.read_text(encoding="utf-8")
+    assert 'on_linux' not in formula.read_text(encoding="utf-8")
     assert "bin.install_symlink" in formula.read_text(encoding="utf-8")
     winget = tmp_path / "winget"
     generate_winget(manifest, winget)
@@ -53,7 +55,7 @@ def test_generators_require_real_versioned_release_metadata(tmp_path):
     assert installer["NestedInstallerFiles"][0]["RelativeFilePath"] == "security-check\\security-check.exe"
     assert installer["Installers"][0]["InstallerSha256"] == "A" * 64
     validate(manifest, winget, formula, archives=False)
-    data["artifacts"].pop("linux-x64")
+    data["artifacts"].pop("macos-x64")
     manifest.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(KeyError):
         generate_homebrew(manifest, formula)

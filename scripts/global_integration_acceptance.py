@@ -20,6 +20,7 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from remediation_episode_acceptance import SAFE, UNSAFE
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import approve_reported_risk
 
 
 def command(argv, cwd, env):
@@ -139,7 +140,8 @@ async def trial(args):
                         claims = {'event': 'PostToolUse', 'workspace_path': str(root / 'src'), 'session_id': session, 'tool_name': 'apply_patch'}
                         target.write_bytes(UNSAFE.encode())
                         hook = await call('handle_hook_event', claims)
-                        grant = hook['remediation']; ticket = grant['agent_fix_ticket']
+                        grant = await approve_reported_risk(call, hook['remediation'], target)
+                        ticket = grant['agent_fix_ticket']
                         assert grant['action'] == 'AUTO_FIX' and ticket['mode'] == 'INLINE_PREPARED'
                         assert grant['episode_number'] == number
                         assert ticket['task_ref'] == grant['prepare']['arguments']['task_ref']

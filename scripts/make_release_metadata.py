@@ -1,4 +1,4 @@
-"""Create checksum and URL metadata only from all four verified artifacts."""
+"""Create metadata from verified Windows and both Mac architecture artifacts."""
 from __future__ import annotations
 
 import hashlib
@@ -8,7 +8,7 @@ from pathlib import Path
 
 from security_runtime._version import __version__
 
-PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64", "linux-x64")
+PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
 REPOSITORY = "pikachu-cxy/Ai-security-check"
 
 

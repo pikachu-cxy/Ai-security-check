@@ -12,6 +12,11 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from remediation_episode_acceptance import SAFE, UNSAFE
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import assert_closed_scanner_proof
+
+# Exercise explicit prepare/Stop fallback. A comment prevents inline tickets;
+# already prepared tickets correctly do not request another prepare handoff.
+UNSAFE = UNSAFE.replace('-> true);', '-> true); // preserve fixture comment')
 
 
 async def run():
@@ -31,7 +36,7 @@ async def run():
                 async with ClientSession(read,write) as client:
                     await client.initialize()
                     async def call(name,arguments):
-                        assert name in {'handle_hook_event','prepare_task_fix','verify_task_fix','handle_stop_event'}
+                        assert name in {'handle_hook_event','confirm_remediation','prepare_task_fix','verify_task_fix','handle_stop_event'}
                         response=await client.call_tool(name,invocation_claims(name, arguments))
                         assert not response.isError,name
                         data=response.structuredContent or json.loads(response.content[0].text)
@@ -68,7 +73,12 @@ async def run():
                         path.write_text(UNSAFE,encoding='utf-8')
                         cycle_started=time.perf_counter()
                         detected=await call('handle_hook_event',claims)
-                        grant=detected['remediation']
+                        pending=detected['remediation']
+                        assert pending['action']=='CONFIRM_REQUIRED' and 'prepare' not in pending
+                        assert path.read_text()==UNSAFE
+                        # Simulated explicit user choice, renewed for recurrence.
+                        grant=await call('confirm_remediation',dict(pending['confirmation']['arguments'],approve=True))
+                        assert grant['authorization_kind']=='USER_CONFIRMED'
                         assert grant['action']=='AUTO_FIX' and grant['episode_number']==number
                         assert 'prepare_functional_verification' not in grant['guidance']
                         assert detected['runtime_instance_id']==safe['runtime_instance_id']
@@ -108,7 +118,7 @@ async def run():
                         assert all(v is not None and v>=0 for v in closed['timing_ms'].values())
                         checked=await call('verify_task_fix',values)
                         assert checked['verification_status']=='SCANNER_VERIFIED_RESOLVED'
-                        assert checked['runtime_observed_execution']['engine_process_observed']
+                        assert_closed_scanner_proof(closed, checked, values, grant['grant_id'])
                         assert 'functional_status' not in checked
                         assert checked['remediation_cycle_wall_ms']==closed['remediation_cycle_wall_ms']
                         assert checked['remediation_cycle_timepoints_ms']==points

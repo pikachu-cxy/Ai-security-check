@@ -4,6 +4,8 @@
 
 当前为 **Developer Alpha 试用版**，主要试用宿主是 Codex。源码在本机检查，首次准备扫描组件和漏洞数据需要联网。原生安装包自带 Python，**无需安装 Python、pip 或 venv**，也不会安装你的项目依赖或启动项目服务。
 
+首版支持 **Windows x64、Mac Apple Silicon、Mac Intel**。Linux 发行与验收暂缓。
+
 ## 1. 在 Releases 下载完整包
 
 打开 [Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)，选择试用版本，在 **Assets** 下载对应安装包和同名 `.sha256` 文件。

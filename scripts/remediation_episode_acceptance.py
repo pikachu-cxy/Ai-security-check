@@ -12,6 +12,7 @@ import time
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import assert_closed_scanner_proof
 
 SAFE = '''import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
@@ -61,7 +62,12 @@ async def run():
                         await asyncio.sleep(1.1)
                         path.write_text(UNSAFE)  # Host simulation, never Runtime.
                         detected = await call('handle_hook_event', claims)
-                        grant = detected['remediation']
+                        pending = detected['remediation']
+                        assert pending['action'] == 'CONFIRM_REQUIRED' and 'prepare' not in pending
+                        assert path.read_text() == UNSAFE
+                        # Simulated explicit user choice for each new episode.
+                        grant = await call('confirm_remediation', dict(pending['confirmation']['arguments'], approve=True))
+                        assert grant['authorization_kind'] == 'USER_CONFIRMED'
                         assert grant['action'] == 'AUTO_FIX', detected
                         assert grant['episode_number'] == number and grant['attempt_count'] == 1
                         # References are copied exactly, never decoded/reconstructed.
@@ -99,7 +105,7 @@ async def run():
                         assert cycle_points['initial_hook_response_sent'] is None
                         verified = await call('verify_task_fix', arguments)
                         assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
-                        assert verified['runtime_observed_execution']['engine_process_observed']
+                        assert_closed_scanner_proof(closed, verified, arguments, grant['grant_id'])
                         episodes.append(dict(number=number, episode_id=grant['episode_id'],
                                              action=grant['action'], reason_code=grant['reason_code'],
                                              episode_reason_code=grant['episode_reason_code'],

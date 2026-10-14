@@ -27,6 +27,34 @@ UNSAFE = SAFE.replace('  connection.setConnectTimeout',
                       '  connection.setHostnameVerifier((hostname, session) -> true);\n  connection.setConnectTimeout')
 
 
+def assert_closed_scanner_proof(closed, verified, arguments, grant_id):
+    """A real original-rule recheck followed by reuse of its matching proof."""
+    remediation = closed['remediation']
+    assert remediation['verification']['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert remediation['verification']['runtime_observed_execution']['engine_process_observed']
+    receipt = remediation['security_verification']
+    assert receipt['status'] == 'SCANNER_VERIFIED_RESOLVED' and receipt['phase'] == 'CLOSED'
+    assert receipt['task_ref'] == arguments['task_ref'] and receipt['grant_id'] == grant_id
+    assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    assert verified['proof_source'] == 'SAVED_SCANNER_PROOF'
+    assert verified['security_receipt']['grant_id'] == grant_id
+    assert verified['runtime_observed_execution']['engine_process_observed'] is False
+
+
+async def approve_reported_risk(call, pending, source):
+    """Synthetic host choice only; never claim a Desktop human interaction."""
+    before = source.read_bytes()
+    assert pending['action'] == 'CONFIRM_REQUIRED', 'Legacy unconfirmed repair is unsupported'
+    assert not {'prepare', 'fast_fix_plan', 'agent_fix_ticket'} & pending.keys()
+    message = pending['user_feedback']['message']
+    assert '修复' in message and '忽略' in message
+    grant = await call('confirm_remediation', dict(pending['confirmation']['arguments'], approve=True))
+    assert grant['authorization_kind'] == 'USER_CONFIRMED'
+    assert grant['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
+    assert source.read_bytes() == before
+    return grant
+
+
 async def run(command, mode='ask_before_fix', approve=True):
     requested_mode = mode
     mode = 'ask_before_fix' if mode == 'smart_auto' else mode
@@ -141,10 +169,7 @@ async def run(command, mode='ask_before_fix', approve=True):
                     assert closed['remediation']['verification']['verification_status'] == 'SCANNER_VERIFIED_RESOLVED', closed
                     assert 'decision' not in closed
                     verified, _ = await call('verify_task_fix', arguments)
-                    assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED', verified
-                    # The Hook already ran the original scanner. Explicit verification
-                    # may reuse its matched receipt rather than launch a second process.
-                    assert closed['remediation']['verification']['runtime_observed_execution']['engine_process_observed']
+                    assert_closed_scanner_proof(closed, verified, arguments, authorization['grant_id'])
                     await asyncio.sleep(1.1)
                     (root / 'Other.java').write_text('class Other {}\n')
                     later, _ = await call('handle_hook_event', claims)
@@ -257,11 +282,11 @@ async def run_cross_turn(command, approve):
                 assert closed['resolved_families'] == 1
                 assert closed['remediation']['verification']['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
                 verified, _ = await call_b('verify_task_fix', grant)
-                assert verified['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
-                assert verified['runtime_observed_execution']['engine_process_observed']
+                assert_closed_scanner_proof(closed, verified, grant, out['grant_id'])
                 proof.update(prepare_status=prepared['status'], resolved_families=1,
                              verification_status=verified['verification_status'],
-                             observed_execution=verified['runtime_observed_execution'])
+                             observed_execution=closed['remediation']['verification']['runtime_observed_execution'],
+                             explicit_verification_reused_proof=verified['proof_source'])
             else:
                 await asyncio.sleep(1.1)
                 (root / 'Other.java').write_text('class Other {}\n')

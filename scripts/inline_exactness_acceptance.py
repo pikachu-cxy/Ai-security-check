@@ -16,6 +16,7 @@ import time
 from fast_fix_acceptance import native_target_edit
 from remediation_episode_acceptance import SAFE, UNSAFE
 from codex_hook_fixture import invocation_claims
+from remediation_acceptance import approve_reported_risk
 
 STATEMENT = b'connection.setHostnameVerifier((hostname, session) -> true);'
 
@@ -111,7 +112,8 @@ async def trial(case, source, *, before=False, recurrence=False):
                     previous=None
                     for number in range(1,3 if recurrence else 2):
                         target.write_bytes(raw);offset=len(calls);started=time.perf_counter()
-                        hook=await call('handle_hook_event',claims);grant=hook['remediation']
+                        hook=await call('handle_hook_event',claims)
+                        grant=await approve_reported_risk(call,hook['remediation'],target)
                         assert grant['action']=='AUTO_FIX' and grant['episode_number']==number
                         ticket=grant['agent_fix_ticket'];args={k:ticket[k] for k in ('task_ref','remediation_ref')}
                         assert args==grant['prepare']['arguments']

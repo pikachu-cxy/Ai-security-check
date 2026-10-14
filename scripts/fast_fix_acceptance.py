@@ -131,7 +131,7 @@ async def trial(mode):
                 async with ClientSession(read,write) as client:
                     await client.initialize()
                     async def call(tool,arguments,*,record=True):
-                        assert tool in {'handle_hook_event','prepare_task_fix','fixture_host_edit'}
+                        assert tool in {'handle_hook_event','confirm_remediation','prepare_task_fix','fixture_host_edit'}
                         response=await client.call_tool(tool,invocation_claims(tool, arguments))
                         assert not response.isError,tool
                         data=response.structuredContent or json.loads(response.content[0].text)
@@ -145,7 +145,14 @@ async def trial(mode):
                     for number in range(1,4 if mode=='fast' else 2):
                         target.write_bytes(UNSAFE.encode())
                         start=time.perf_counter();offset=len(calls)
-                        found=await call('handle_hook_event',claims);grant=found['remediation']
+                        found=await call('handle_hook_event',claims)
+                        pending=found['remediation']
+                        assert pending['action']=='CONFIRM_REQUIRED'
+                        assert not {'prepare','fast_fix_plan','agent_fix_ticket'} & pending.keys()
+                        assert target.read_bytes()==UNSAFE.encode()
+                        # Simulated explicit user approval for this exact episode.
+                        grant=await call('confirm_remediation',dict(pending['confirmation']['arguments'],approve=True))
+                        assert grant['authorization_kind']=='USER_CONFIRMED'
                         assert grant['action']=='AUTO_FIX' and grant['episode_number']==number
                         fast=mode=='fast' and number!=3
                         if mode=='fast':
