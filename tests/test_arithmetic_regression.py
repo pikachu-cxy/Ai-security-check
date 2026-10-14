@@ -2,13 +2,14 @@
 import hashlib
 import json
 from pathlib import Path
-import shutil
+import os
 import subprocess
 from unittest.mock import patch
 
 import pytest
 
 from security_runtime.arithmetic_regression import build_arithmetic_regression_plan
+from scripts.node_host_preflight import probe_node, node_environment
 
 UNSAFE = '''export function evaluateExpression(expression: string): unknown {
   return new Function(`return (${expression});`)();
@@ -47,15 +48,19 @@ def plan(modules):
     return build_arithmetic_regression_plan(*modules, arithmetic_contract_confirmed=True)
 
 
-def run_host(value):
-    node = shutil.which('node')
-    if not node:
-        pytest.skip('Node 24 is required for actual host-template execution')
-    version = subprocess.run([node, '--version'], capture_output=True, text=True, timeout=5, check=True)
-    if not version.stdout.startswith('v24.'):
-        pytest.skip('The fixed template requires Node 24')
+@pytest.fixture(scope='session')
+def node_host():
+    # A single actual probe per pytest session; CI pins the exact version.
+    return probe_node(expected_version=os.getenv('SECURITY_RUNTIME_CI_NODE_VERSION'))
+
+
+def run_host(value, node_host):
+    node = node_host['executable']
+    if hashlib.sha256(Path(node).read_bytes()).hexdigest() != node_host['executable_sha256']:
+        raise RuntimeError('NODE_HOST_EXECUTABLE_CHANGED')
     argv = [node, *value['command']['argv'][1:]]
-    executed = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=30, check=False)
+    executed = subprocess.run(argv, shell=False, env=node_environment(), capture_output=True,
+        text=True, timeout=value['command']['timeout_seconds'], check=False)
     return executed, json.loads(executed.stdout)
 
 
@@ -99,9 +104,9 @@ def test_module_scope_rejects_relative_same_and_oversized_paths(modules):
         plan(modules)
 
 
-def test_real_host_execution_preserves_values_json_and_blocks_fixed_marker(modules):
+def test_real_host_execution_preserves_values_json_and_blocks_fixed_marker(modules, node_host):
     value = plan(modules)
-    executed, report = run_host(value)
+    executed, report = run_host(value, node_host)
     assert executed.returncode == 0, report
     assert report['status'] == 'ARITHMETIC_REGRESSION_PASSED'
     assert len(report['comparisons']) == 32
@@ -120,20 +125,29 @@ def test_real_host_execution_preserves_values_json_and_blocks_fixed_marker(modul
     assert report['http_server_executed'] is False
     assert report['network_access'] == 'UNKNOWN'
     assert report['production_correctness'] == 'UNKNOWN'
+    evidence_dir = os.getenv('SECURITY_RUNTIME_HOST_REPORT_DIR')
+    if evidence_dir:
+        target = Path(evidence_dir)
+        target.mkdir(parents=True, exist_ok=True)
+        (target/'arithmetic-host-positive.json').write_text(json.dumps(dict(
+            status='ACTUAL_HOST_FIXTURE_PASSED', node_host=node_host,
+            process_exit_code=executed.returncode, report=report,
+            scope='Reviewed first-party fixed TS fixtures only; no application/server execution'),
+            indent=2), encoding='utf-8')
 
 
 @pytest.mark.parametrize('bad_after', [UNSAFE,
     RESTRICTED_FIXTURE.replace('return new Function', "expression = expression.replace('3 * 4', '3 * 5'); return new Function")])
-def test_zero_or_changed_functional_results_cannot_pass_host_template(modules, bad_after):
+def test_zero_or_changed_functional_results_cannot_pass_host_template(modules, bad_after, node_host):
     modules[1].write_text(bad_after)
-    executed, report = run_host(plan(modules))
+    executed, report = run_host(plan(modules), node_host)
     assert executed.returncode == 1
     assert report['status'] == 'ARITHMETIC_REGRESSION_FAILED'
     assert report['after']['passed'] is False
 
 
 @pytest.mark.parametrize('operation', ['write', 'child_process'])
-def test_target_worker_cannot_write_or_launch_child_processes(modules, operation):
+def test_target_worker_cannot_write_or_launch_child_processes(modules, operation, node_host):
     sentinel = modules[1].parent / 'must-not-exist.txt'
     if operation == 'write':
         prefix = "import { writeFileSync } from 'node:fs';\n" + \
@@ -141,7 +155,7 @@ def test_target_worker_cannot_write_or_launch_child_processes(modules, operation
     else:
         prefix = "import { spawnSync } from 'node:child_process';\nspawnSync(process.execPath, ['--version']);\n"
     modules[1].write_text(prefix + RESTRICTED_FIXTURE)
-    executed, report = run_host(plan(modules))
+    executed, report = run_host(plan(modules), node_host)
     assert executed.returncode == 2
     assert report['status'] == 'ARITHMETIC_REGRESSION_INCONCLUSIVE'
     assert report['after']['status'] == 'WORKER_INCONCLUSIVE'
