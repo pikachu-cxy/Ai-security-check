@@ -1,5 +1,9 @@
 """A usable sandbox must not create mount directories in the source fixture."""
 from pathlib import Path
+import json
+import os
+import subprocess
+import sys
 
 import pytest
 
@@ -49,3 +53,24 @@ def test_host_driver_rejects_execution_in_live_source(tmp_path, monkeypatch, chi
     step = dict(working_directory=str(working))
     with pytest.raises(AssertionError):
         execute_host_plan(dict(plan_digest='fixture', steps=[step], temporary_projection=True), root, None)
+
+
+def test_functional_receipt_survives_ascii_redirected_stdout(tmp_path):
+    scripts = Path(__file__).resolve().parents[1] / 'scripts'
+    receipt = tmp_path / 'receipt.json'
+    # Exercise real console encoding without scanners or project execution.
+    code = """import sys
+import functional_acceptance as driver
+async def fixture(command):
+    return {'A': {'message': '\\u98ce\\u9669\\u9700\\u7528\\u6237\\u9009\\u62e9'}}
+driver.run_all = fixture
+sys.argv = ['fixture', '--output', sys.argv[1]]
+driver.main()
+"""
+    env = dict(os.environ, PYTHONPATH=str(scripts), PYTHONIOENCODING='ascii', PYTHONUTF8='0')
+    result = subprocess.run([sys.executable, '-c', code, str(receipt)], env=env,
+                            capture_output=True, timeout=20)
+    assert result.returncode == 0, result.stderr.decode('ascii', errors='replace')
+    wire = json.loads(result.stdout.decode('ascii'))
+    assert wire['A']['message'] == '风险需用户选择'
+    assert json.loads(receipt.read_text(encoding='utf-8')) == wire

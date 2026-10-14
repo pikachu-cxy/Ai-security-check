@@ -203,7 +203,9 @@ def main():
     record=asyncio.run(run_all(command))
     data=json.dumps(record,indent=2,ensure_ascii=False)+'\n'
     if args.output: args.output.write_text(data,encoding='utf-8')
-    print(data)
+    # Machine stdout must also work on redirected English Windows consoles.
+    # The saved human-readable receipt remains UTF-8 with Chinese intact.
+    print(json.dumps(record,indent=2,ensure_ascii=True))
     if args.require_functional_pass and any(v['functional_acceptance']!='PASS' for v in record.values()):
         raise SystemExit(2)
 

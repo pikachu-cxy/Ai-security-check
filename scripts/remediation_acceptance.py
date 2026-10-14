@@ -199,11 +199,21 @@ async def run(command, mode='ask_before_fix', approve=True):
                 schemas={name:tools[name].inputSchema for name in ('handle_hook_event','confirm_remediation','prepare_task_fix','verify_task_fix')})
 
 
+async def measured_case(coroutine, *, timeout):
+    started = time.monotonic()
+    result = await asyncio.wait_for(coroutine, timeout=timeout)
+    result['case_wall_ms'] = round((time.monotonic() - started) * 1000)
+    result['case_wall_measurement'] = 'ACTUAL_DRIVER_WITH_STDIO_CLOSE_NOT_DESKTOP_LATENCY'
+    return result
+
+
 async def run_all(command):
-    record = await run(command)
-    record['legacy_alias_approval'] = await run(command, 'smart_auto')
-    record['confirmation_decline'] = await run(command, 'ask_before_fix', approve=False)
-    record['report_only'] = await run(command, 'report_only')
+    # Four independent cold-server/scanner cases; bound each one rather than
+    # mistake their aggregate wall time for one product repair timeout.
+    record = await measured_case(run(command), timeout=120)
+    record['legacy_alias_approval'] = await measured_case(run(command, 'smart_auto'), timeout=120)
+    record['confirmation_decline'] = await measured_case(run(command, 'ask_before_fix', approve=False), timeout=120)
+    record['report_only'] = await measured_case(run(command, 'report_only'), timeout=120)
     return record
 
 
@@ -312,7 +322,8 @@ async def run_cross_turn(command, approve):
 
 
 async def run_cross_turn_all(command):
-    return {'approval': await run_cross_turn(command, True), 'decline': await run_cross_turn(command, False)}
+    return {'approval': await measured_case(run_cross_turn(command, True), timeout=180),
+            'decline': await measured_case(run_cross_turn(command, False), timeout=180)}
 
 
 if __name__ == '__main__':

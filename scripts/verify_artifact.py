@@ -434,11 +434,11 @@ def main() -> None:
             script = Path(__file__).with_name('remediation_acceptance.py').resolve()
             evidence = args.archive.resolve().with_name(args.archive.name + '.remediation.json')
             run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
-                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=600)
             restart_evidence = args.archive.resolve().with_name(args.archive.name + '.confirmation-restart.json')
             run([sys.executable, str(script), '--runtime', str(executable), '--cross-turn-only',
                  '--output', str(restart_evidence)],
-                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
             # Existing artifact gate only: no new CI workflow/enterprise policy.
             # Unsupported isolation yields explicit Pending, never functional PASS.
             functional_script = Path(__file__).with_name('functional_acceptance.py').resolve()
