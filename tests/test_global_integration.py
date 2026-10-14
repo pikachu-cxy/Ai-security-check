@@ -548,6 +548,8 @@ def test_global_and_project_tool_schemas_are_backward_compatible(installed, tmp_
 
 @pytest.mark.parametrize('failure', ['old-cli', 'old-mcp', 'wrong-scope', 'wrong-schema', None])
 def test_global_deployment_checks_actual_transport_capability(installed, monkeypatch, failure):
+    # This case tests CLI/MCP capability validation, not a missing working directory.
+    installed.home.mkdir()
     from contextlib import asynccontextmanager
     from types import SimpleNamespace
     from security_runtime.global_mcp import global_runtime_info
