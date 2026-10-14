@@ -44,8 +44,8 @@ if ($LASTEXITCODE -ne 0) { throw '安装未完成：保留回执，不删除其�
 终端在收到的文件目录执行（替换成实际文件名）：
 ```bash
 uname -m
-shasum -a 256 ai-security-runtime-v0.3.3-macos-arm64.tar.gz
-tar -xzf ai-security-runtime-v0.3.3-macos-arm64.tar.gz
+shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz
+tar -xzf ai-security-runtime-v0.3.4-macos-arm64.tar.gz
 cd security-check
 bundle="$(pwd)"
 exe="$bundle/security-check"
