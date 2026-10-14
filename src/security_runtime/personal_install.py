@@ -284,7 +284,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     report_progress(progress, 'SETUP_CHILD')
     try:
         completed = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
-            timeout=120, check=False)
+            timeout=120, check=False,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     except (OSError, subprocess.TimeoutExpired) as exc:
         code = 'INSTALLED_SETUP_TIMEOUT' if isinstance(exc, subprocess.TimeoutExpired) else 'INSTALLED_SETUP_FAILED'
         data = _blocked(manager, [code], status='NOT_READY')

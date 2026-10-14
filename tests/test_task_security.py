@@ -402,7 +402,7 @@ def test_task_summary_has_one_selected_risk_choice_and_bounded_risk_list(service
     findings = [dict(candidate(sink['evidence_id'], control['evidence_id']), title=f'风险 {i}') for i in range(4)]
     result = s.submit(root, ref, session, findings, 'REVIEWED', [])
     summary = result['development_summary']
-    assert summary.count('请选择具体风险') == 1 and '“修复”或“忽略”' in summary
+    assert summary.count('请选择具体风险') == 1 and '**修复** ／ **暂不处理**' in summary
     assert summary.count('上下文核查线索：') == 3 and '另有 1 项' in summary
     assert '反证：' in summary and '未确认：' in summary and '条件：' in summary
     assert len(result['host_review']['findings']) == 4 and result['repair_authorized'] is False

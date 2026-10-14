@@ -89,13 +89,28 @@ do not infer hidden route, SQL or configuration values. No active exploit requir
 ## Submit and summarize
 
 Submit at most ten evidence-backed host candidates using `submit_task_security_review`.
-Each candidate has exactly: title, category, severity, primary_evidence,
+Each candidate requires: title, category, severity, primary_evidence,
 evidence_refs, impact, preconditions, unknowns, counterevidence, fix_advice.
 Do not resubmit an already reported static alert as a new context candidate.
 Explain additional context with the existing alert in the development summary;
 reserve host candidates for distinct risks supported by task context.
-primary_evidence must point to the changed location; evidence_refs should include
-the relevant input/control/sink and counterevidence locations when available.
+For TASK_CHANGED (the default), primary_evidence points to the changed location.
+For an evidence-backed RELATED_EXISTING risk, primary_evidence may point to a
+current, read unchanged related file. Set risk_scope=RELATED_EXISTING, provide
+task_evidence for an issued changed-file window in evidence_refs, and supply
+current_protections, preconditions and unknowns. evidence_refs must connect the
+task's input/call/control to the related operation and its strongest counterevidence.
+The Runtime checks those locations and versions, not whether the call chain is true.
+
+A new entrypoint's protection does not prove an unchanged shared service or
+repository is safe for other callers. Register a surviving conditional related
+risk as a finding with its actual location; never hide it solely in limitations,
+"later advice" or "needs a decision" prose. State the concrete missing control,
+conditional impact, current protection and unknown callers/deployment. Do not
+claim that the protected new entrypoint remains vulnerable. Do not invent other
+callers or register generic hardening without concrete code evidence. A risk
+fully excluded by controls on all relevant observed paths is not a finding.
+Missing context alone remains a coverage limitation, not an invented risk.
 For deletions, context can be the signed sanitized preimage; its location_version
 is BEFORE_DELETION and the user explanation must identify the removed code.
 Use HIGH/CRITICAL only with concrete reachability and impact evidence; otherwise
@@ -116,6 +131,21 @@ a second “钩子反馈” reply or ask the user to continue. Zero findings is 
 project-safety claim. Review grants no repair authority; a separately approved
 selected issue still uses the existing bounded fix-and-retest workflow.
 When risks remain, end the combined task summary with one instruction to select
-a specific risk and reply 修复 or 忽略. Ignoring retains the risk record and does
+a specific risk and reply 修复 or 暂不处理. Explicit 忽略 remains a compatible
+wording for deferral. Deferral retains the risk record and does
 not mean resolution; do not ask for a choice during each edit or infer a repair
 grant from the original development request.
+Preserve every risk's code basis, current protections, preconditions, unknown
+scope and concrete fix advice in the final summary. Instructions to leave a
+module unchanged prohibit editing it; they do not suppress its risk or choices.
+When a risk needs a decision, preserve the Runtime's bold standalone decision
+heading (for example **有 1 项关联风险需要你决定。**) before the explanation.
+Put **修复** ／ **暂不处理** on a separate paragraph, keeping both options bold.
+Do not flatten them into an ordinary paragraph or bury them after implementation
+details. Keep the retention/consent explanation separate. No decision heading
+or processing choices are added for zero risks, no-change or read-only replies.
+Choices are proposals only: no consent or persisted deferral exists until the
+user selects that exact risk. Never pass a task-review candidate id to the
+scanner-finding repair API or invent a repair grant. For a selected context-only
+risk, use the user's explicit bounded edit authorization in a new development
+task and recheck it; existing scanner findings retain their original fix workflow.

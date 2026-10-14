@@ -30,6 +30,15 @@ MAX_STATIC_CHANGED = 1000
 MAX_INVENTORY_PATHS = 20_000
 MAX_INVENTORY_NAME_BYTES = 256_000
 MAX_RELATED = 10
+
+RISK_CHOICE_PROMPT = ('请选择具体风险后回复：**修复** ／ **暂不处理**。\n\n'
+                      '暂不处理仅表示本次不修复，风险记录保留；未授权的风险不会自动修改。')
+
+
+def _risk_heading(total, related=0):
+    label = '关联风险' if related == total else '安全风险'
+    detail = f'（其中 {related} 项关联风险）' if 0 < related < total else ''
+    return f'**有 {total} 项{label}需要你决定{detail}。**'
 MAX_CONTEXT = 64_000
 MAX_DIFF_LINES = 2000
 MAX_CONTEXT_READS = 40
@@ -541,6 +550,8 @@ class TaskSecurityService:
                 quick_skill=guide, limitations=record['limitations'],
                 trust='UNTRUSTED_CODE_AND_SCANNER_DATA', redaction='LITERALS_AND_CREDENTIALS_MASKED; RETAIN_SEMANTIC_UNKNOWNS',
                 submission_contract=dict(findings='list[max10]: title,category,severity,primary_evidence,evidence_refs,impact,preconditions,unknowns,counterevidence,fix_advice',
+                                         optional_candidate_fields='risk_scope: TASK_CHANGED or RELATED_EXISTING; task_evidence: issued changed-file evidence; current_protections: list[str]',
+                                         related_existing_risk='Primary evidence may locate a read unchanged related file only with task_evidence in evidence_refs, conditions, unknowns and explicit current_protections. Register surviving conditional risks as findings, never only as limitations or later advice.',
                                          coverage='REVIEWED or PARTIAL', limitations='list[str], including unreviewed paths and missing context',
                                          evidence='Runtime-issued ids only; primary location must be a changed file',
                                          validation='STRUCTURE_AND_SOURCE_VERSION_ONLY; HOST_CANDIDATES_NOT_SCANNER_PROOF'),
@@ -692,18 +703,35 @@ class TaskSecurityService:
             if coverage == 'PARTIAL' and not clean_limitations:
                 raise ValueError('Partial review must identify a limitation')
             fields = {'title','category','severity','primary_evidence','evidence_refs','impact','preconditions','unknowns','counterevidence','fix_advice'}
+            optional_fields = {'risk_scope', 'task_evidence', 'current_protections'}
             accepted = []
             changed = {v['path'] for v in record['changes'][:MAX_CHANGED]}
             for candidate in findings:
-                if not isinstance(candidate, dict) or set(candidate) != fields:
+                if not isinstance(candidate, dict) or not fields <= set(candidate) or set(candidate) - fields - optional_fields:
                     raise ValueError('Use the task candidate schema; scanner proof and authority fields are forbidden')
                 refs = candidate['evidence_refs']
                 primary = candidate['primary_evidence']
                 if not isinstance(refs, list) or not 1 <= len(refs) <= 10 or any(not isinstance(e, str) or e not in record['evidence'] for e in refs) or not isinstance(primary, str) or primary not in refs:
                     raise ValueError('Every candidate needs Runtime-issued evidence')
                 location = record['evidence'][primary]
-                if location['path'] not in changed:
+                risk_scope = candidate.get('risk_scope', 'TASK_CHANGED')
+                if risk_scope not in {'TASK_CHANGED', 'RELATED_EXISTING'}:
+                    raise ValueError('Invalid task risk scope')
+                task_evidence = candidate.get('task_evidence', primary)
+                if (not isinstance(task_evidence, str) or task_evidence not in refs
+                        or record['evidence'][task_evidence]['path'] not in changed):
+                    raise ValueError('Every risk needs issued task-changed evidence in evidence_refs')
+                if risk_scope == 'TASK_CHANGED' and location['path'] not in changed:
                     raise ValueError('Primary evidence must locate a task-changed file')
+                if risk_scope == 'RELATED_EXISTING' and (location['path'] not in record['related_files']
+                        or location['path'] in changed or location['location_version'] != 'CURRENT_TASK_END'):
+                    raise ValueError('Existing risk must locate current read related evidence')
+                protections = candidate.get('current_protections', candidate['counterevidence'])
+                if not isinstance(protections, list) or len(protections) > 10:
+                    raise ValueError('Invalid current protections')
+                if risk_scope == 'RELATED_EXISTING' and (not candidate.get('preconditions')
+                        or not candidate.get('unknowns') or 'current_protections' not in candidate):
+                    raise ValueError('Conditional existing risk requires conditions, unknowns and current protections')
                 if candidate['severity'] not in {'LOW','MEDIUM','HIGH','CRITICAL'}:
                     raise ValueError('Invalid candidate severity')
                 item = {k: _clean(candidate[k], 1200) for k in ('title','category','impact','fix_advice')}
@@ -713,6 +741,10 @@ class TaskSecurityService:
                         raise ValueError('Invalid candidate conditions or counterevidence')
                     item[field] = [_clean(v, 500) for v in values]
                 item.update(id='tc1-'+digest_value([ref, candidate])[:32], severity=candidate['severity'],
+                    risk_scope=risk_scope, task_evidence=task_evidence,
+                    current_protections=[_clean(v, 500) for v in protections],
+                    evidence_locations=[dict(evidence_ref=e, **{k: record['evidence'][e][k]
+                        for k in ('path', 'start_line', 'end_line', 'location_version')}) for e in dict.fromkeys(refs)],
                     file_path=location['path'], line_start=location['start_line'], line_end=location['end_line'],
                     location_version=location['location_version'],
                     evidence_refs=list(dict.fromkeys(refs)), source='HOST_TASK_REVIEW', validation='STRUCTURE_AND_VERSION_VALIDATED',
@@ -763,6 +795,7 @@ class TaskSecurityService:
         result['current_version'] = current
         if current is False:
             result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码版本或检查范围已变化，旧记录不能用于当前任务范围。')
+            result['risk_choices'] = []
         return result
 
     def skip(self, workspace, ref, reason):
@@ -791,6 +824,9 @@ class TaskSecurityService:
             unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
+        result['risk_choices'] = [dict(finding_id=f['id'], title=f['title'],
+            options=['修复', '暂不处理'], deferred_keeps_risk=True, repair_authorized=False)
+            for f in (record.get('review') or {}).get('findings', [])]
         result['file_hook_checks'] = dict(check_count=len(record.get('hook_checks', [])),
             omitted_check_count=record.get('hook_checks_omitted', 0),
             current_recheck_files=record.get('hook_final_recheck_files', [])[:100],
@@ -819,7 +855,8 @@ class TaskSecurityService:
             if len(pending)>3:
                 result['development_summary'] += f'\n另有 {len(pending)-3} 项静态提示保留在本次核查记录中。'
             if pending:
-                result['development_summary'] += '\n请选择具体风险后回复“修复”或“忽略”；忽略保留风险记录，未授权的风险不会自动修改。'
+                result['development_summary'] = (_risk_heading(len(pending))+'\n\n'
+                    +result['development_summary']+'\n\n'+RISK_CHOICE_PROMPT)
         elif phase == 'COMPLETE':
             static = record['static']
             review = record['review']
@@ -838,6 +875,9 @@ class TaskSecurityService:
             else:
                 prefix += '，本次未发现安全线索。'
             lines = [prefix]
+            if total:
+                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in review['findings'])
+                lines = [_risk_heading(total, related), '', prefix, '']
             # Aggregate final findings once with a bounded default summary;
             # full records stay accessible and candidates retain uncertainty.
             combined = [(f, '静态检查提示') for f in static['findings']] + [(f, '上下文核查线索') for f in review['findings']]
@@ -849,9 +889,14 @@ class TaskSecurityService:
                 if f.get('location_version') == 'BEFORE_DELETION':
                     text += ' 位置对应删除前的代码。'
                 if source == '上下文核查线索':
+                    text += ' 风险范围：'+('关联代码中的现有条件性风险，不等于新增入口仍有漏洞。' if f.get('risk_scope') == 'RELATED_EXISTING' else '本次改动相关路径。')
+                    locations = f.get('evidence_locations', [])
+                    if locations:
+                        text += ' 代码依据：'+' → '.join(f"{v['path']}:{v['start_line']}-{v['end_line']}" for v in locations)
                     text += ' 条件：'+('；'.join(f['preconditions']) or '实际可达性未确认')
                     text += ' 未确认：'+('；'.join(f['unknowns']) or '尚未运行验证')
-                    text += ' 反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的防护')
+                    text += ' 当前防护：'+('；'.join(f.get('current_protections', f['counterevidence'])) or '未观察到相关防护；不代表不存在')
+                    text += ' 反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的反证')
                 else:
                     text += ' 实际运行条件尚未确认。'
                 lines.append(text)
@@ -866,7 +911,7 @@ class TaskSecurityService:
                 lines.append('覆盖有限：'+('；'.join(review['limitations'][:5]) or '静态能力或任务上下文有未完成范围。'))
             lines.append('仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为；风险尚未修复。' if total else '仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为。')
             if total:
-                lines.append('请选择具体风险后回复“修复”或“忽略”；忽略保留风险记录，未授权的风险不会自动修改。')
+                lines.extend(['', RISK_CHOICE_PROMPT])
             result['development_summary'] = '\n'.join(lines)
         else:
             result['development_summary'] = ''

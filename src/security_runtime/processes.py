@@ -40,8 +40,12 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
     timeout = bounded_timeout(timeout, hard=remaining_callback is not None)
     start = time.monotonic()
     creation_started = time.perf_counter()
+    # Captured engine helpers must not create a Windows console, even when
+    # launched by the detached preparation worker. Pipes still carry progress.
+    creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
     proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=os.name != 'nt')
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            creationflags=creationflags, start_new_session=os.name != 'nt')
     creation_ms = round((time.perf_counter()-creation_started)*1000, 3)
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()
@@ -110,7 +114,8 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
                 taskkill = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe')
                 try:
                     subprocess.run([taskkill, '/PID', str(proc.pid), '/T', '/F'],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=3)
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                   creationflags=subprocess.CREATE_NO_WINDOW, timeout=3)
                 except (OSError, subprocess.TimeoutExpired):
                     pass
                 if proc.poll() is None:
