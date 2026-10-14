@@ -17,7 +17,6 @@ jobs:
     env:
       SECURITY_RUNTIME_OFFLINE: '1'
       SECURITY_RUNTIME_CI_NODE_VERSION: '24.16.0'
-      SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
     steps:
       - uses: actions/checkout@v4
       - name: Use runner-owned temporary directory
@@ -46,6 +45,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test,scanner-test]"
       - name: Run Runtime tests
+        env:
+          SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
         run: python -m pytest -q --basetemp="${{ runner.temp }}/runtime-tests"
       - name: Retain actual arithmetic host execution evidence
         if: always()

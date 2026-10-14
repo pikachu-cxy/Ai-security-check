@@ -65,6 +65,10 @@ def test_ci_pins_node_and_records_preflight_before_full_tests():
     preflight=next(i for i,s in enumerate(steps) if 'node_host_preflight.py' in s.get('run',''))
     tests=next(i for i,s in enumerate(steps) if 'python -m pytest' in s.get('run',''))
     assert setup < preflight < tests
+    # runner context is allowed in step env, not jobs.<job_id>.env.
+    assert all('runner.' not in str(value) for value in job['env'].values())
+    assert 'SECURITY_RUNTIME_HOST_REPORT_DIR' not in job['env']
+    assert steps[tests]['env']['SECURITY_RUNTIME_HOST_REPORT_DIR']=='${{ runner.temp }}/arithmetic-host-evidence'
     assert all(not s.get('continue-on-error',False) for s in steps)
     artifact=next(s for s in steps if s.get('with',{}).get('name')=='arithmetic-host-evidence-${{ matrix.os }}')
     assert artifact['with']['if-no-files-found']=='error'

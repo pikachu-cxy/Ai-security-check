@@ -31,3 +31,7 @@ src/security_runtime及固定模板字节均未改：宿主执行仍为计划内
 实际宿主证据 node-fix-host-evidence/arithmetic-host-positive.json：ACTUAL_HOST_FIXTURE_PASSED，Node24.16.0，进程exit0，ARITHMETIC_REGRESSION_PASSED，32项比较，修复前受控标记1/后0；没有HTTP server执行。测试只运行仓库内已审阅的固定自有TS夹具，未执行公司/用户业务应用或其他不可信项目。
 
 这是本地候选证据，不是远端Windows/macOS、新原生包或最终发行通过。交独立复核后，仍需同新提交完整CI及适用发行门槛；0.3.3公开版本不改，也没有继续重跑旧失败流水线。
+
+## workflow上下文位置修正
+
+远端候选8a0df5a4d4b1b5931269399df6afacd56b302d2c的Runtime run38620035606在runner开始前立即失败，jobs API返回0个job；其他Compliance及Package integrity通过不能替代Runtime门槛。发现本候选错误地把runner.temp放在job级env，此前YAML解析回归没有验证上下文可用位置。[GitHub官方上下文表](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability)明确job env不允许runner，step env允许。此次只将SECURITY_RUNTIME_HOST_REPORT_DIR移入Run Runtime tests步骤的env，补充位置断言；Node版本、预检、实际宿主执行、artifact、生产预算和发行门槛均保留。未读取到远端validation annotation原文，根因依据失败阶段与已确认的非法上下文位置；最终仍需修正提交的远端runner通过。
