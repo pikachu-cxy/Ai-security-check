@@ -16,9 +16,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       SECURITY_RUNTIME_OFFLINE: '1'
-      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@v4
+      - name: Use runner-owned temporary directory
+        shell: bash
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
