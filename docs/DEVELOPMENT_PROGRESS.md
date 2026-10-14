@@ -8,6 +8,12 @@
 
 ### 2026-10-14 Releases安装入口与完整CI接续
 
+后续实跑：9a871867工作流恢复执行，Windows/Linux wheel校验与合规通过；Mac ARM、Windows、Linux原生包完成解包/启动/组件准备及主扫描，旧OSV离线合成库验收却仍要求EXECUTED/FULL而失败。现要求实际OSV SUCCESS、明确备用身份、目标清单/包提取、UNKNOWN库新鲜度与PARTIAL范围；主引擎缺失必须明确，不以本地ZIP存在证明最新漏洞覆盖。7项契约回归通过；真实原生重放与全量CI仍待最新候选。Mac Intel同门禁未提前记通过。
+
+用户已完成GitHub浏览器登录；Release增加可手动触发入口，复用原有完整测试/合规/wheel/四平台原生验证。全部通过后才创建版本标签，必须与当前验证提交一致；不移动旧标签、不覆盖公开Release，先传完整草稿附件再发布，保留预发布标记与安装指南。当前尚未完成发布。
+
+runner.temp误放job级env的工作流解析失败记录保留，已移到步骤通过RUNNER_TEMP初始化。任务两次静态收尾已用完，后续OSV验收脚本/测试修订尚未新增整任务静态/上下文回执；7项测试不是安全证明。最终任务明确保留该缺口，不重新建任务或扩大预算。
+
 用户明确选择在GitHub Releases下载试用包，并要求重写README指引。本批主README统一中文：系统/架构选包与SHA256、Codex自动接入、后台下载与FRESH就绪、普通需求使用、独立stdio MCP、更新/卸载与反馈。中文旧README改为指向统一入口；Release流程附带INSTALL.zh-CN.md和完整试用指南，不宣称winget/Homebrew已经外部上架。
 
 cbb860eb的Mac ARM/Intel已生成并归档原生包，验收仍因/var系统临时目录链接被严格父目录校验拒绝。候选将验证根目录规范到真实路径，CI使用runner自有临时目录；同时接受Python样例中不适用的native-js-function，但仍严格检查其他引擎、范围和声明依赖证据。保持产品配置/状态的链接拒绝规则。

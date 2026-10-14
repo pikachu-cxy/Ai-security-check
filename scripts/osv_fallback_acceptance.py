@@ -16,6 +16,23 @@ from pathlib import Path
 from security_runtime.toolchain import ToolManager, ToolStatus
 
 
+def assert_offline_fallback(payload):
+    assert payload['capability_results']['DEPENDENCY_VULN'] == 'PARTIAL', 'Offline test data must retain partial coverage'
+    details = payload['capability_details']['DEPENDENCY_VULN']
+    assert details['active_provider'] == 'osv-scanner' and details['provider_role'] == 'FALLBACK'
+    assert details['coverage'] == 'PARTIAL'
+    runs = {run['scanner']: run for run in payload['scanner_runs']}
+    assert runs['trivy-vuln']['status'] == 'UNAVAILABLE', 'Primary engine must be explicitly unavailable'
+    fallback = runs['osv-scanner']
+    assert fallback['status'] == 'SUCCESS' and fallback['coverage_contract'] == 'PARTIAL'
+    inventory = fallback['dependency_inventory']
+    assert inventory['vulnerability_db_freshness'] == 'UNKNOWN', 'A local test archive is not freshness proof'
+    assert inventory['complete_dependency_graph_attested'] is False
+    assert inventory['planned_manifests'] == inventory['confirmed_manifests'] == 1
+    assert inventory['confirmed_package_occurrences'] >= 1, 'Missing extraction is not a passed fallback'
+    assert any('freshness is unconfirmed' in note for note in fallback['coverage_notes'])
+
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument('--executable',type=Path)
@@ -50,12 +67,7 @@ def main():
                 cwd=project,env=environment,capture_output=True,text=True,encoding='utf-8',timeout=60)
             assert scan.returncode==0,scan.stderr
             payload=json.loads(scan.stdout)
-            assert payload['capability_results']['DEPENDENCY_VULN']=='EXECUTED',payload
-            assert payload['capability_details']['DEPENDENCY_VULN']['active_provider']=='osv-scanner'
-            assert payload['capability_details']['DEPENDENCY_VULN']['provider_role']=='FALLBACK'
-            assert payload['capability_details']['DEPENDENCY_VULN']['coverage']=='FULL'
-            assert next(run for run in payload['scanner_runs'] if run['scanner']=='trivy-vuln')['status']=='UNAVAILABLE'
-            assert any(run['scanner']=='osv-scanner' and run['status']=='SUCCESS' for run in payload['scanner_runs'])
+            assert_offline_fallback(payload)
             if progress and scan.stderr:
                 assert '已选择依赖回退' in scan.stderr and '依赖回退完成' in scan.stderr,scan.stderr
             elif not progress:
@@ -76,8 +88,7 @@ def main():
                         assert not response.isError
                         data=response.structuredContent or json.loads(response.content[0].text)
                         data=data.get('result',data)
-                        assert data['capability_results']['DEPENDENCY_VULN']=='EXECUTED'
-                        assert data['capability_details']['DEPENDENCY_VULN']['provider_role']=='FALLBACK'
+                        assert_offline_fallback(data)
                 stderr.seek(0)
                 assert not stderr.read(),'MCP emitted unexpected stderr'
                 return data

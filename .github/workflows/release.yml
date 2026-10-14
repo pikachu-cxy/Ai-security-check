@@ -1,6 +1,7 @@
 name: Developer Alpha release
 
 on:
+  workflow_dispatch:
   push:
     tags: ['v*']
 
@@ -18,7 +19,7 @@ jobs:
       - name: Validate tag against the single version source
         env:
           PYTHONPATH: src
-        run: python -c 'import os; from security_runtime._version import __version__; assert os.environ["GITHUB_REF_NAME"] == "v" + __version__'
+        run: python -c 'import os; from security_runtime._version import __version__; assert os.environ["GITHUB_EVENT_NAME"] == "workflow_dispatch" or os.environ["GITHUB_REF_NAME"] == "v" + __version__'
   tests:
     needs: version
     uses: ./.github/workflows/tests.yml
@@ -60,10 +61,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" --json isDraft > release-state.json 2>/dev/null; then
+          RELEASE_TAG=$(python -c 'from security_runtime._version import __version__; print("v" + __version__)')
+          if tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
+            tag_type=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq '.object.type')
+            if [ "$tag_type" = tag ]; then
+              tag_object=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object" --jq '.object.sha')
+            fi
+            test "$tag_object" = "$GITHUB_SHA" || { echo 'Release tag points to another commit'; exit 1; }
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$RELEASE_TAG" -f sha="$GITHUB_SHA"
+          fi
+          if gh release view "$RELEASE_TAG" --json isDraft > release-state.json 2>/dev/null; then
             python -c 'import json; assert json.load(open("release-state.json"))["isDraft"], "Refusing to overwrite a published release"'
           else
-            gh release create "$GITHUB_REF_NAME" --verify-tag --draft --prerelease --title "AI Security Runtime $GITHUB_REF_NAME" --generate-notes
+            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "AI Security Runtime $RELEASE_TAG" --generate-notes
           fi
-          gh release upload "$GITHUB_REF_NAME" dist/release/* distribution/homebrew/Formula/*.rb distribution/winget/*.yaml --clobber
-          gh release edit "$GITHUB_REF_NAME" --draft=false
+          gh release upload "$RELEASE_TAG" dist/release/* distribution/homebrew/Formula/*.rb distribution/winget/*.yaml --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
