@@ -17,6 +17,23 @@ def node_file(tmp_path):
     return str(path)
 
 
+@pytest.fixture(params=['native', 'cp1252'])
+def source_default_encoding(request, monkeypatch):
+    if request.param == 'cp1252':
+        original_read_text = Path.read_text
+        def cp1252_read_text(path, encoding=None, errors=None):
+            return original_read_text(path, encoding=encoding or 'cp1252', errors=errors)
+        # Override only omitted read_text encodings, even when Python UTF-8 mode is enabled.
+        monkeypatch.setattr(Path, 'read_text', cp1252_read_text)
+        # Verify the simulated default reproduces the exact former decoding failure.
+        source=Path(__file__).parents[1]/'src/security_runtime/arithmetic_regression.py'
+        with pytest.raises(UnicodeDecodeError) as caught:
+            source.read_text()
+        assert caught.value.encoding == 'charmap'
+        assert caught.value.object[caught.value.start] == 0x8d
+    return request.param
+
+
 def test_timeout_remains_failure_without_retry(node_file,monkeypatch):
     run=Mock(side_effect=subprocess.TimeoutExpired([node_file,'--version'],host.PROBE_TIMEOUT_SECONDS))
     monkeypatch.setattr(host.subprocess,'run',run)
@@ -55,9 +72,9 @@ def test_nonzero_probe_fails(node_file,monkeypatch):
     with pytest.raises(subprocess.CalledProcessError): host.probe_node(executable=node_file)
 
 
-def test_ci_pins_node_and_records_preflight_before_full_tests():
+def test_ci_pins_node_and_records_preflight_before_full_tests(source_default_encoding):
     root=Path(__file__).parents[1]
-    workflow=yaml.safe_load((root/'.github/workflows/tests.yml').read_text())
+    workflow=yaml.safe_load((root/'.github/workflows/tests.yml').read_text(encoding='utf-8'))
     job=workflow['jobs']['tests']
     assert job['env']['SECURITY_RUNTIME_CI_NODE_VERSION']=='24.16.0'
     steps=job['steps']; setup=next(i for i,s in enumerate(steps) if s.get('uses')=='actions/setup-node@v4')
@@ -72,20 +89,20 @@ def test_ci_pins_node_and_records_preflight_before_full_tests():
     assert all(not s.get('continue-on-error',False) for s in steps)
     artifact=next(s for s in steps if s.get('with',{}).get('name')=='arithmetic-host-evidence-${{ matrix.os }}')
     assert artifact['with']['if-no-files-found']=='error'
-    source=(root/'tests/test_arithmetic_regression.py').read_text()
+    source=(root/'tests/test_arithmetic_regression.py').read_text(encoding='utf-8')
     assert "@pytest.fixture(scope='session')" in source and 'pytest.skip' not in source
 
 
-def test_probe_does_not_modify_product_host_or_worker_budgets():
+def test_probe_does_not_modify_product_host_or_worker_budgets(source_default_encoding):
     root=Path(__file__).parents[1]
-    runtime=(root/'src/security_runtime/arithmetic_regression.py').read_text()
-    template=(root/'src/security_runtime/assets/arithmetic_regression.mjs').read_text()
+    runtime=(root/'src/security_runtime/arithmetic_regression.py').read_text(encoding='utf-8')
+    template=(root/'src/security_runtime/assets/arithmetic_regression.mjs').read_text(encoding='utf-8')
     assert "'timeout_seconds': 30" in runtime and "'worker_timeout_seconds': 10" in runtime
     assert 'timeout: 10000' in template
 
 
 def test_cli_requires_current_success_receipt(tmp_path):
-    output=tmp_path/'old.json'; output.write_text('{}')
+    output=tmp_path/'old.json'; output.write_text('{}',encoding='utf-8')
     result=subprocess.run([sys.executable,str(Path(host.__file__)), '--expected-version','24.16.0',
         '--output',str(output)],capture_output=True,timeout=10)
-    assert result.returncode != 0 and output.read_text()=='{}'
+    assert result.returncode != 0 and output.read_text(encoding='utf-8')=='{}'
