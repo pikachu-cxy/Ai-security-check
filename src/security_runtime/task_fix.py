@@ -1,4 +1,5 @@
 """Precise task handoff: the host edits, local originating scanners verify."""
+from pathlib import Path
 from .task_triage import TaskTriageService
 from .security_summary import task_reference
 from .triage_evidence import EvidenceBuilder, encoded
@@ -196,6 +197,17 @@ class TaskFixService:
         hooks = self.hooks or HookStateStore(self.store.path.parent / 'hooks')
         closure = RiskClosureService(hooks)
         activity_epoch = closure.generation(resolved['workspace'])
+        from .task_risk_ledger import TaskRiskLedger, current_hashes
+        ledger = TaskRiskLedger(hooks, Path(resolved['workspace']))
+        from .task_security_state import TaskSecurityStore
+        legacy = TaskSecurityStore(hooks, Path(resolved['workspace'])).for_scan(resolved['scan_id'])
+        if legacy:
+            with hooks.lock(Path(resolved['workspace'])) as acquired:
+                if not acquired:
+                    return dict(status='BUSY', task_ref=task_ref, verification_status='INCONCLUSIVE')
+                for record in legacy:
+                    ledger.register(record)
+        before = current_hashes(resolved['workspace'], ledger.paths_for_scan(resolved['scan_id'], {r['id'] for r in members}))
         results = VerificationService(self.registry).verify_many(resolved['workspace'], members, scan)
         states = {r['verification_status'] for r in results}
         attempted = any(r['runtime_observed_execution']['scanner_recheck_attempted'] for r in results)
@@ -220,6 +232,21 @@ class TaskFixService:
             'production_verification': 'NOT_PERFORMED', 'automatic_execution': False,
             'next_steps': ['仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。',
                 '扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。']}
+        out['risk_ledger_recording'] = ledger.record_native(resolved['scan_id'], results, before)
+        if out['risk_ledger_recording']['status'] in {'BUSY','STALE'}:
+            state = 'INCONCLUSIVE'
+            out.update(status=state, verification_status=state, current_version=False,
+                       reason='RISK_LEDGER_CURRENT_VERSION_NOT_CONFIRMED')
+        if members and all(member.get('category') == 'dependency' for member in members):
+            scopes = [r.get('dependency_verification') for r in results]
+            out['dependency_verification'] = dict(members=scopes, complete_dependency_graph_verified=False,
+                installed_package_verified=False, package_integrity_verified=False)
+            fresh = [r.get('current_dependency_state', {}).get('database_freshness', 'UNKNOWN') for r in results]
+            message = ('指定声明版本的原依赖漏洞已逐项复查，当前未再检出；完整依赖图、实际安装和包完整性仍未验证。'
+                       if state == 'SCANNER_VERIFIED_RESOLVED' else
+                       '依赖修复复查未能确认完成；按各项当前检查、包清单和数据新鲜度说明原因，不沿用原扫描的过期提示。')
+            out['user_feedback'] = dict(message=message, scope='DECLARED_PACKAGE_ADVISORY',
+                original_scan_coverage_unchanged=True, current_database_status=fresh)
         if members and all(member.get('technical_details', {}).get('rule_id') == DYNAMIC_FUNCTION_RULE
                            for member in members):
             # The scanner fact and any host testing claim remain separate. A

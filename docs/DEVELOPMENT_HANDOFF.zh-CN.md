@@ -3,6 +3,12 @@
 更新日期：2026-10-14。开发分支：`feature/runtime-mvp`。
 仓库：<https://github.com/pikachu-cxy/Ai-security-check>。
 
+## 最新接续：闭环修复与受邀试用
+
+先读[开发进度](DEVELOPMENT_PROGRESS.md)的最新闭环条目及[试用指南](PILOT_INSTALL_AND_USE.zh-CN.md)。四项缺口已补：漏首次收尾有界补齐、依赖声明版本原公告验证与完整图分开、原风险id逐项签名台账、长测试按需前后版本/变更范围导航。最终147项组合回归通过，之前90项定向回归有重叠。Windows原生隔离重放13项闭合为7原规则+6宿主代码复核，防护对照0项，206行测试读完；仅MCP连接和真实检查也通过。固定分析不代替新聊天或Mac真机。
+
+同提交干净Windows包验证后，再做1人完整试用，扩3–4人前补Mac ARM/Intel构建与真机。仅MCP模式不安装Hook/Skill，配置绑定明确项目。上一提交GitHub作业执行前失败，无Mac包或可用日志；原因未确认，Mac待验。历史手测和旧包限制不追溯修改。详细下一步见[NEXT_DEVELOPMENT_PLAN](NEXT_DEVELOPMENT_PLAN.zh-CN.md)。
+
 最新接续先读 [全链路可靠性手测](FULL_CHAIN_RELIABILITY_TEST.zh-CN.md)：本批同步所有当前源码、测试及脱敏文档，从同步提交构建dist/fullchain-20261014-r1/security-check作为干净候选。用户将亲自重新卸载接入、正常联网安装并在两个综合workbench里做单任务多风险测试；22项目生成器已验证，实际链路及多风险准确率尚待用户手测。合成凭据/答案/缓存/构建包不随Git拉取。下面保留历史批次，不以历史通过替代综合任务验收。
 
 最新本机激活候选已更新为 dist/risk-emphasis-20261014-r1/security-check（552de5dc…），包含加粗独立风险标题和处理选项；7项相关回归及两场景原生MCP验收通过。配套Skill已升级，重启宿主后新任务使用该格式。依赖库仍过期，未启动下载，旧候选及记录保留。

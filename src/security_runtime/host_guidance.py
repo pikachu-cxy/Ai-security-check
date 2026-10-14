@@ -15,6 +15,8 @@ HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
 不调用模型核查、不添加安全段落。有实际改动时调用 prepare_task_security_review，
+prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任务末检查；真实
+版本过期或终止的任务不自动重启。不要把漏调用首次检查解释为版本冲突后直接跳过。
 即使静态扫描零发现，也按返回的 quick_skill 阅读必要改动和未改动的关联代码上下文，
 通过 read_task_review_context 取得精确证据，再 submit_task_security_review。
 此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
@@ -55,6 +57,11 @@ action、reason_code、verification 枚举、授权标识、引用、扫描器�
 执行，已明确同意的同一修复不得再次要求确认。风险、扫描和复查结果仍须
 按证据说明，不能把未确认说成安全。以上规则不改变任何 Runtime 授权门禁。
 依赖检查失败时，直接说明“依赖检查未完成”、已知原因和未检查的范围。
+依赖复查按当前数据新鲜度和返回的验证范围说明：指定清单版本的指定漏洞可以
+复查消除，完整依赖图、实际安装和完整性仍未知。不得沿用首次扫描的过期提示。
+修复后通过 get_task_risk_ledger 核对原任务全部风险的逐项状态。上下文修复通过
+submit_task_security_review 的 risk_resolutions 绑定原风险和新的实际代码证据；
+这是宿主代码复核，不是规则证明或修复授权。新任务零发现不能代替原风险逐项关闭。
 另行查阅公开漏洞资料只是在核对清单声明的版本，不能补齐扫描覆盖；面向用户
 称“另外查到的漏洞信息”，不用“公告核对结果”等难懂的标题。
 依赖风险带 review_continuation 时，先读取该扫描的问题列表，再按
@@ -380,6 +387,7 @@ def runtime_info(*, remediation_config=None):
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
+                         'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',

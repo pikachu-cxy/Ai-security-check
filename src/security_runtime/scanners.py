@@ -648,6 +648,11 @@ class TrivyAdapter(BaseScanner):
             'confirmed_package_occurrences': sum(bool(all(package)) for package in packages),
             'confirmed_manifests': len(observed), 'planned_manifests': len(planned),
             'per_manifest': per_manifest, 'complete_dependency_graph_attested': False,
+            'package_coordinates': [dict(manifest=str(result.get('Target', '')).replace('\\', '/'),
+                ecosystem=str(result.get('Type', '')), package=p.get('Name', ''), version=p.get('Version', ''))
+                for result in data.get('Results', []) if str(result.get('Target', '')).replace('\\', '/') in observed
+                for p in result.get('Packages', []) if isinstance(p, dict)][:2000],
+            'inventory_truncated': len(packages) > 2000,
             'native_duration_ms': duration_ms,
         }}
 

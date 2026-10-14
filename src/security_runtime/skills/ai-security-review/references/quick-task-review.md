@@ -17,6 +17,8 @@ Existing explicit vulnerability fixes use their original repair workflow/grant.
 At completion call `finish_security_task`. NO_CHANGES requires no model review
 and no security paragraph. Real changes require `prepare_task_security_review`,
 including when static findings are empty. Do this BEFORE the normal final reply,
+If that first call was omitted, `prepare_task_security_review` finishes an ACTIVE
+task once under the same guards. Actual STALE/BUSY/terminal tasks are not restarted.
 without a new user “继续” request. A Stop event is not a task-completion signal.
 Keep file-edit Hook static checks enabled; do not replace them with this review.
 
@@ -52,6 +54,11 @@ skip its task check. Preserve unknown literal semantics and use PARTIAL when the
 missing value is necessary for the judgment; do not reconstruct hidden values.
 AST/call-graph indexes and separate batched review sessions are future product
 work, not capabilities or budget resets supplied by this method.
+Long test diffs may be ON_DEMAND: read issued current windows instead of duplicating
+the full tests in the packet. Use source_version=BEFORE_TASK for signed preimages
+when comparison matters. Historical text cannot locate a current candidate. Follow
+next_read within the same unchanged budgets; neither navigation nor a first page
+attests full source coverage.
 
 Read sanitized diffs and actual static findings/coverage. Prioritize changed
 entrypoints, permissions, data access, outbound requests, file/command execution,
@@ -149,3 +156,15 @@ user selects that exact risk. Never pass a task-review candidate id to the
 scanner-finding repair API or invent a repair grant. For a selected context-only
 risk, use the user's explicit bounded edit authorization in a new development
 task and recheck it; existing scanner findings retain their original fix workflow.
+
+After selected repairs read get_task_risk_ledger using the ORIGINAL task_ref.
+Report an outcome for every original id; a new empty review does not close them.
+For host candidates submit risk_resolutions with original_task_ref,finding_id,
+evidence_refs,outcome,rationale,tests. Re-read all required_source_paths and current
+change evidence. Outcomes: CODE_REVIEWED_RESOLVED, STILL_PRESENT, INCONCLUSIVE.
+Host code conclusions and test reports are not native scanner execution proof.
+Scanner findings use original prepare_task_fix/verify_task_fix; source changes
+invalidate old closures. For dependencies preserve DECLARED_PACKAGE_ADVISORY scope
+separately from complete graph/install/integrity. Cite CURRENT recheck/freshness;
+do not repeat old stale-database text after fresh-data rechecks. Missing inventory,
+stale data or incomplete evidence remains unverified; no automatic repair authority.

@@ -90,6 +90,18 @@ class TaskSecurityStore:
                        (value['task_ref'], value['task_key'], value['phase'], value['created_at'], raw.decode(), digest(self.key(), value)))
             return value
 
+    def for_scan(self, scan_id):
+        """Bounded read-only migration lookup, retaining signed legacy facts."""
+        no_links(self.path)
+        if not self.path.is_file():
+            return []
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            rows = db.execute('SELECT data,mac FROM security_tasks ORDER BY rowid DESC LIMIT 32').fetchall()
+        values = [self.decode(row) for row in rows]
+        return [v for v in values if v and self.now()-v['created_at'] <= TTL
+                and v.get('end') and (v.get('static') or {}).get('scan_id') == scan_id]
+
     def _hook_failure_path(self, ref):
         if not isinstance(ref, str) or not REF.fullmatch(ref):
             raise ValueError('Invalid task reference')

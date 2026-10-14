@@ -239,27 +239,34 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
-                                 start_line: int = 1, end_line: int = 80, workspace_path: str | None = None) -> dict:
+                                 start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
+                                 source_version: str = 'CURRENT') -> dict:
         """Read a sanitized task-source window (current or signed preimage for a deleted file). At most 80 lines per response: larger requested ranges return has_more/next_read for the same task/session/path/version. Follow next_read within the unchanged 10-related-file, 40-unique-read and 64KB cumulative budgets. Unread requested ranges require PARTIAL; pagination never rescans or resets budgets. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Returns evidence_id bound to actual path/range/hash/version. No .env content, links, path escapes, external commands or network."""
         from .task_security import TaskContextError
         try:
-            return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line)
+            return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
         except TaskContextError as exc:
             return exc.response(task_ref, review_session)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_task_security_review(task_ref: str, review_session: str, findings: list[dict],
-                                    coverage: str, limitations: list[str], workspace_path: str | None = None) -> dict:
+                                    coverage: str, limitations: list[str], workspace_path: str | None = None,
+                                    risk_resolutions: list[dict] | None = None) -> dict:
         """Submit host reasoning with Runtime-issued evidence. See packet submission_contract. Accepts only current task versions, bounded candidates and explicit limitations; validates structure/version, never proves exploitability or scanner coverage. Merge development_summary into normal dev response; do not ask user to continue."""
-        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations)
+        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
         """Read same task result after reconnect with current-source freshness. Never rescans or invokes a model; host candidates and real scanner evidence stay distinct. No automatic repair authority."""
         return task_service().get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
 
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_task_risk_ledger(task_ref: str, workspace_path: str | None = None, offset: int = 0, limit: int = 30) -> dict:
+        """Read per-original-finding outcomes and current-source freshness. No scan, edits or repair authority. Native checks and host code review remain distinct; use exact original task_ref."""
+        return task_service().risk_ledger(bound_path(workspace_path), task_ref, offset, limit)
+
     for task_tool_name in ('begin_security_task', 'finish_security_task', 'prepare_task_security_review',
-                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review'):
+                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger'):
         task_tool = server._tool_manager.get_tool(task_tool_name)
         task_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
         task_tool.fn_metadata.arg_model.model_rebuild(force=True)

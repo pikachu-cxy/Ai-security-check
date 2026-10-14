@@ -35,6 +35,30 @@ def evidence(row):
         'equivalence_key': equivalence_key(row), 'trust': 'SCANNER_COORDINATES_ONLY'}
 
 
+def declared_dependency_proof(row, run, path, process_observed):
+    """Exact package/advisory absence, independent of full graph coverage."""
+    inventory = run.dependency_inventory
+    details = row.get('technical_details') or {}
+    if (row.get('category') != 'dependency' or run.status != RunStatus.SUCCESS or not process_observed
+            or inventory.get('vulnerability_db_freshness') != 'FRESH'
+            or inventory.get('inventory_truncated', True)
+            or path not in inventory.get('per_manifest', {})
+            or any('warnings' in note.lower() for note in run.coverage_notes)
+            or not details.get('ecosystem') or not details.get('package')
+            or not (details.get('canonical_vulnerability_id') or details.get('vulnerability_id'))):
+        return None
+    coordinates = [p for p in inventory.get('package_coordinates', [])
+                   if p.get('manifest') == path and p.get('ecosystem') == details['ecosystem']
+                   and p.get('package') == details['package']]
+    if not coordinates or any(not isinstance(p.get('version'), str) or not p['version'] for p in coordinates):
+        return None
+    return dict(scope='DECLARED_PACKAGE_ADVISORY', manifest=path, package=details['package'],
+                ecosystem=details['ecosystem'], versions=sorted({p['version'] for p in coordinates}),
+                advisory=details.get('canonical_vulnerability_id') or details['vulnerability_id'],
+                database_freshness='FRESH', complete_dependency_graph_verified=False,
+                installed_package_verified=False, package_integrity_verified=False)
+
+
 class VerificationService:
     def __init__(self, registry):
         self.registry = registry
@@ -196,6 +220,18 @@ class VerificationService:
                     result['current_evidence'].append(evidence(current))
             covered = run.status == RunStatus.SUCCESS and run.coverage_contract == 'FULL' and (process_observed or
                 type(adapter) not in {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter})
+            if type(adapter) is TrivyAdapter and row.get('category') == 'dependency':
+                result['current_dependency_state'] = dict(
+                    database_freshness=run.dependency_inventory.get('vulnerability_db_freshness', 'UNKNOWN'),
+                    coverage_contract=run.coverage_contract, coverage_notes=run.coverage_notes,
+                    complete_dependency_graph_verified=False)
+                proof = declared_dependency_proof(row, run, path, process_observed)
+                if proof:
+                    covered = True
+                    result['dependency_verification'] = proof
+                    result['verification_scope'] = proof['scope']
+                else:
+                    reasons.append('DEPENDENCY_PACKAGE_INVENTORY_OR_FRESH_DATABASE_NOT_PROVEN')
             if type(adapter) is GitleaksAdapter:
                 from .secret_coverage import covers
                 covered = covered and covers(run, row.get('technical_details', {}), path, root=root)
@@ -245,6 +281,8 @@ class VerificationService:
             reasons.append('RELIABLE_RULE_IDENTITY_MISSING')
         if complete:
             result.update(status='RESOLVED', verification_status='SCANNER_VERIFIED_RESOLVED',
-                          reason='ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT')
+                          reason=('CURRENT_DECLARED_PACKAGE_ADVISORY_RECHECKED_WITH_FRESH_DATABASE'
+                                  if result.get('dependency_verification') else
+                                  'ALL_ORIGINATING_PROVIDERS_RECHECKED_ORIGINAL_RULE_FILE_SCOPE_WITHOUT_EQUIVALENT'))
             return result
         return inconclusive(';'.join(dict.fromkeys(reasons)) or 'ORIGINAL_RULE_FILE_COVERAGE_NOT_PROVEN')

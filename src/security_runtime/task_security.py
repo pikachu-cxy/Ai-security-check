@@ -486,12 +486,25 @@ class TaskSecurityService:
                 record['baseline']['texts'] = {}
                 record['end']['texts'] = {}
             record = self.store(root).save(record)
+            from .task_risk_ledger import TaskRiskLedger
+            TaskRiskLedger(self.hooks, root).register(record)
             view = self._view(record)
             view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'} for r in record['static'].get('scanner_runs', []))
             return view
 
     def prepare(self, workspace, ref):
         root = self.root(workspace)
+        # Only the never-finished ACTIVE task may perform its first closeout.
+        # Release/no lock here: finish owns the normal lock and attempt guard.
+        initial = self.load(root, ref)
+        if initial['phase'] == 'STATIC_RUNNING':
+            return dict(status='BUSY', task_ref=ref, scanner_run=False, message='任务末检查正在进行，保留原任务；不要重复检查。')
+        if initial['phase'] == 'INCOMPLETE':
+            return self._view(initial)
+        if initial['phase'] == 'ACTIVE':
+            finished = self.finish(workspace, ref)
+            if finished['status'] not in {'READY', 'NO_CHANGES'}:
+                return finished
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'task_ref': ref}
@@ -528,6 +541,18 @@ class TaskSecurityService:
                     diffs.append({'path': name, 'change': change['change'], 'availability': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
                     record['limitations'].append({'path': name, 'reason': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
                     continue
+                # Long tests are retrieved as issued windows, rather than
+                # duplicating their entire added text in both diff and reads.
+                if ('tests' in Path(name).parts or Path(name).name.startswith('test_')) and len(old)+len(new) > 80:
+                    spans = _merge_spans([[max(1,j1-2), min(len(new),max(j1+1,j2)+3)]
+                        for tag,i1,i2,j1,j2 in difflib.SequenceMatcher(None,old,new).get_opcodes()
+                        if tag != 'equal' and new])
+                    diffs.append(dict(path=name, change=change['change'], availability='ON_DEMAND',
+                        before_lines=len(old), after_lines=len(new),
+                        changed_current_ranges=spans, trust='NAVIGATION_ONLY_NOT_REVIEW_PROOF',
+                        context_read=dict(file_path=name, start_line=1, end_line=max(1,len(new))),
+                        before_read=(dict(file_path=name, start_line=1, end_line=len(old), source_version='BEFORE_TASK') if old else None)))
+                    continue
                 lines = list(difflib.unified_diff(old, new, fromfile='before/'+name, tofile='after/'+name, lineterm=''))
                 selected = lines[:remaining]
                 item = dict(path=name, change=change['change'], diff='\n'.join(selected), truncated=len(selected)<len(lines))
@@ -563,6 +588,12 @@ class TaskSecurityService:
             candidates = [p for p in record['end']['hashes'] if p not in {c['path'] for c in record['changes']} and not _environment(p)]
             candidates.sort(key=lambda p: (not any(v in p.lower() for v in ('auth','route','service','repository','permission','middleware')), str(Path(p).parent) not in changed_dirs, p))
             packet['related_candidates'] = candidates[:100]
+            packet['risk_resolution_contract'] = dict(tool='get_task_risk_ledger',
+                submission='risk_resolutions: original_task_ref,finding_id,evidence_refs,outcome,rationale,tests',
+                outcomes=['CODE_REVIEWED_RESOLVED','STILL_PRESENT','INCONCLUSIVE'],
+                evidence='Re-read every required_source_path; current change evidence required. Host outcomes are not scanner proof.',
+                test_report='Host reported only; no Runtime execution attestation.',
+                context='Long test diffs are ON_DEMAND; read current windows and signed BEFORE_TASK only when needed. Budgets unchanged.')
             cost = len(json.dumps(packet, ensure_ascii=False).encode())
             if cost > 40_000:
                 packet['diffs'] = []
@@ -585,12 +616,14 @@ class TaskSecurityService:
             raise ValueError('Task source or Hook scope changed; submitted evidence is stale')
         return record
 
-    def read(self, workspace, ref, session, path, start_line=1, end_line=80):
+    def read(self, workspace, ref, session, path, start_line=1, end_line=80, source_version='CURRENT'):
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY'}
             record = self._session(root, ref, session)
+            if source_version not in {'CURRENT', 'BEFORE_TASK'}:
+                raise ValueError('Invalid source version')
             try:
                 name = _relative(path)
             except (ValueError, EvidenceUnavailable):
@@ -612,14 +645,14 @@ class TaskSecurityService:
                 self._context_gap(root, record, 'TASK_CONTEXT_RELATED_FILE_BUDGET', name)
                 raise TaskContextError('TASK_CONTEXT_RELATED_FILE_BUDGET', 'Related source file budget exceeded', recoverable=False,
                     guidance='Keep existing evidence and submit PARTIAL with the unread path; do not create a new task or session to reset budgets.')
-            if deleted:
+            if deleted or source_version == 'BEFORE_TASK':
                 lines = record['baseline']['texts'].get(name)
                 if lines is None:
                     self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
                     raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Deleted source preimage unavailable', recoverable=False,
                         guidance='Submit PARTIAL with the unavailable preimage; do not substitute current code or a later baseline.')
                 file_hash = record['baseline']['hashes'][name]
-                location_version = 'BEFORE_DELETION'
+                location_version = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
             else:
                 try:
                     raw, text = WorkspaceReader(root).read(name)
@@ -644,10 +677,10 @@ class TaskSecurityService:
                           returned_range=dict(start_line=start_line, end_line=high),
                           max_window_lines=MAX_CONTEXT_WINDOW_LINES, has_more=high<requested_high,
                           next_read=(dict(task_ref=ref, review_session=session, file_path=name,
-                                          start_line=high+1, end_line=requested_high, workspace_path=str(root))
+                                          start_line=high+1, end_line=requested_high, source_version=source_version, workspace_path=str(root))
                                      if high<requested_high else None),
                           numbered_lines=[f'{i}: {lines[i-1]}' for i in range(start_line, high+1)], trust='UNTRUSTED_CODE')
-            truncation_snapshot = record['baseline'] if deleted else record['end']
+            truncation_snapshot = record['baseline'] if deleted or source_version == 'BEFORE_TASK' else record['end']
             truncated = truncation_snapshot.get('text_truncations', {}).get(name)
             packet['line_truncation'] = dict(max_line_chars=MAX_LINE_CHARS,
                 file_line_truncation_count=truncated['line_count'] if truncated else 0,
@@ -686,7 +719,7 @@ class TaskSecurityService:
             gaps.append(gap)
         self.store(root).save(record)
 
-    def submit(self, workspace, ref, session, findings, coverage, limitations):
+    def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None):
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
             if not acquired:
@@ -714,6 +747,8 @@ class TaskSecurityService:
                 if not isinstance(refs, list) or not 1 <= len(refs) <= 10 or any(not isinstance(e, str) or e not in record['evidence'] for e in refs) or not isinstance(primary, str) or primary not in refs:
                     raise ValueError('Every candidate needs Runtime-issued evidence')
                 location = record['evidence'][primary]
+                if location['location_version'] == 'BEFORE_TASK':
+                    raise ValueError('Historical evidence cannot locate a current risk')
                 risk_scope = candidate.get('risk_scope', 'TASK_CHANGED')
                 if risk_scope not in {'TASK_CHANGED', 'RELATED_EXISTING'}:
                     raise ValueError('Invalid task risk scope')
@@ -769,6 +804,16 @@ class TaskSecurityService:
             if record['limitations']:
                 coverage = 'PARTIAL'
                 clean_limitations.extend(_coverage_gaps(record['limitations']))
+            from .task_risk_ledger import TaskRiskLedger
+            ledger = TaskRiskLedger(self.hooks, root)
+            for item in risk_resolutions or []:
+                if not isinstance(item, dict) or not isinstance(item.get('original_task_ref'), str):
+                    raise ValueError('Invalid original risk reference')
+                original_record = self.load(root, item['original_task_ref'])
+                if not original_record.get('end'):
+                    raise ValueError('Original task was never checked')
+                ledger.register(original_record)
+            updates = ledger.validate_host(record, risk_resolutions or [], coverage)
             record.update(phase='COMPLETE', review=dict(source='HOST_TASK_REVIEW', coverage=coverage,
                 findings=accepted, limitations=clean_limitations, model_invocation='HOST_ONLY_NOT_OBSERVED_BY_RUNTIME',
                 validation='STRUCTURE_AND_SOURCE_VERSION_ONLY', method_sha256=record['packet']['quick_skill']['sha256'],
@@ -779,6 +824,8 @@ class TaskSecurityService:
             record['end']['texts'] = {}
             record.pop('packet', None)
             record = self.store(root).save(record)
+            ledger.register(record)
+            ledger.record_host(updates)
             return self._view(record)
 
     def get(self, workspace, ref, finding_offset=0, finding_limit=20):
@@ -793,10 +840,17 @@ class TaskSecurityService:
             result['static']['finding_offset'] = finding_offset
             result['static']['has_more'] = finding_offset+finding_limit < len(record['static']['findings'])
         result['current_version'] = current
+        result['risk_ledger'] = self.risk_ledger(workspace, ref)
         if current is False:
             result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码版本或检查范围已变化，旧记录不能用于当前任务范围。')
             result['risk_choices'] = []
         return result
+
+    def risk_ledger(self, workspace, ref, offset=0, limit=30):
+        root = self.root(workspace)
+        original = self.load(root, ref)  # Same signed workspace/ref admission; never infer a root.
+        from .task_risk_ledger import TaskRiskLedger
+        return TaskRiskLedger(self.hooks, root).view(ref, offset, limit, original)
 
     def skip(self, workspace, ref, reason):
         """Finish with an explicit coverage gap, never a fabricated host pass.

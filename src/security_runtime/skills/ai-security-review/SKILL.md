@@ -18,6 +18,8 @@ the existing scan/review/fix workflow, retaining their original scope and author
 用户反复发“继续”，不要等 Stop 后另起回复。普通聊天、只读和无改动任务
 不开始扫描或模型核查。改文件时的 Hook 静态扫描保留。
 Runtime 只校验宿主候选的结构、证据引用和代码版本，不证明模型分析或可利用性。
+修复后用 get_task_risk_ledger 查看原风险逐项状态，遵循 quick-task-review 的
+risk_resolutions 契约；宿主代码复核、原规则复查和完整依赖图验证分别报告。
 预算不足、锁忙或版本变化就说明缺口，不循环补查或伪造完成。
 旧的明确收尾任务仍可按原 `execution_plan` 恢复，不从普通 Stop 自动派发。
 任务核查不授权修复，检查完成、实际覆盖和风险修复分别表达。
