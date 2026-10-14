@@ -16,6 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       SECURITY_RUNTIME_OFFLINE: '1'
+      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,6 +29,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[test,scanner-test]"
       - name: Run Runtime tests
-        run: python -m pytest -q
+        run: python -m pytest -q --basetemp="${{ runner.temp }}/runtime-tests"
       - name: First-party rule quality gate
         run: python scripts/test_rules.py

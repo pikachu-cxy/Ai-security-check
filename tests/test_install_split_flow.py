@@ -13,6 +13,7 @@ from test_personal_install_readiness import readiness, mock_prepare
 
 
 def test_default_install_only_checks_cache_and_keeps_program_installed(installed, monkeypatch):
+    monkeypatch.delenv('SECURITY_RUNTIME_OFFLINE', raising=False)
     import security_runtime.global_integration as module
     monkeypatch.setattr(module, 'GlobalCodexIntegration', lambda **kw: installed)
     calls = mock_prepare(monkeypatch, readiness(ready=False, freshness='STALE'))

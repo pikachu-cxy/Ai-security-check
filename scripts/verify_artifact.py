@@ -182,6 +182,8 @@ def verify_sample_scan(payload, *, dependency=False):
                 'trivy-vuln': 'SUCCESS' if dependency else 'NOT_APPLICABLE',
                 'trivy-misconfig': 'NOT_APPLICABLE'}
     runs = {item['scanner']: item for item in payload['scanner_runs']}
+    if 'native-js-function' in runs:
+        expected['native-js-function'] = 'NOT_APPLICABLE'
     if {name: item['status'] for name, item in runs.items()} != expected:
         raise ValueError('Sample scan has unexpected engine execution: ' + json.dumps(payload['scanner_runs']))
     if payload.get('coverage') != ('PARTIAL' if dependency else 'FULL'):
@@ -304,7 +306,7 @@ def main() -> None:
     if args.codex_integration and not args.full:
         parser.error('--codex-integration requires --full for local managed engines')
     with tempfile.TemporaryDirectory(prefix="ai-security-release-") as temporary:
-        root = Path(temporary)
+        root = Path(temporary).resolve()
         extract(args.archive, root)
         bundle = root / "security-check"
         executable = bundle / ("security-check.exe" if os.name == "nt" else "security-check")

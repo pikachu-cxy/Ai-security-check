@@ -87,6 +87,27 @@ def setup(repo, tmp_path, request):
     return repo, runtime, provider, service, hook, grant
 
 
+def fresh_transport_hook(values, directory, tool_name):
+    """Establish a distinct safe baseline before testing a newly introduced risk."""
+    root, runtime, provider, service, _, _ = values
+    hooks = HookStateStore(directory / 'transport-hooks')
+    core = HookCoordinator(runtime, hooks, cooldown_ms=0)
+    fresh = RemediationService(service.store, registry=service.registry, hooks=hooks,
+        config=service.config, directory=directory / 'fresh')
+    original, findings = (root / 'A.java').read_bytes(), runtime.findings
+    (root / 'A.java').write_text(FIXED)
+    runtime.findings = []
+    baseline = handle_codex_hook('PostToolUse', str(root), 'session', tool_name,
+        binding=workspace_binding(root), coordinator=core, remediation=fresh)
+    assert baseline['status'] == 'BASELINE_ESTABLISHED'
+    (root / 'A.java').write_bytes(original)
+    runtime.findings = findings
+    output = handle_codex_hook('PostToolUse', str(root), 'session', tool_name,
+        binding=workspace_binding(root), coordinator=core, remediation=fresh)
+    assert output['scanner_run'] is True and output['new_families'] > 0
+    return fresh, output
+
+
 def approve_hook(service, root, result):
     pending = result['remediation']
     if pending['action'] == 'CONFIRM_REQUIRED':

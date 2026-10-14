@@ -114,6 +114,8 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
         and env.get('SECURITY_RUNTIME_GLOBAL') == '1'
         and env.get('SECURITY_RUNTIME_CODEX_HOME') == str(root))
     probe_cwd = Path(runtime['command']).absolute().parent if missing_global_home else root
+    if not probe_cwd.is_dir():
+        raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
     try:
         result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=30, max_output=65536)
     except FileNotFoundError:

@@ -48,6 +48,7 @@ def test_status_is_readonly_and_does_not_create_state(tmp_path):
 
 
 def test_install_returns_after_schedule_and_offline_never_schedules(installed, monkeypatch):
+    monkeypatch.delenv('SECURITY_RUNTIME_OFFLINE', raising=False)
     import security_runtime.personal_install as personal
     monkeypatch.setattr('security_runtime.global_integration.GlobalCodexIntegration', lambda **kw: installed)
     mock_prepare(monkeypatch, readiness(ready=False, freshness='STALE'))

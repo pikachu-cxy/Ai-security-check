@@ -226,7 +226,7 @@ def test_no_findings_without_seed_remains_quiet(adapter, repo, tmp_path):
     runtime, core, service = services(adapter, repo, tmp_path)
     (repo / 'A.java').write_text(FIXED)
     result = hook(core, service, repo)
-    assert result['new_families'] == 0 and result['systemMessage'] == '' and 'reason' not in result
+    assert result['new_families'] == 0 and not result.get('systemMessage') and 'reason' not in result
 
 
 def test_seed_state_link_rejected_without_target_write(adapter, repo, tmp_path):

@@ -2,6 +2,7 @@
 import json
 import subprocess
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -12,6 +13,7 @@ from security_runtime.review_skill import ReviewSkillManager
 from security_runtime.upgrade import InstallationUpgrade
 from test_global_integration import installed, projects
 from test_delivery import bundle
+from security_runtime.delivery import EXE
 
 
 def ready_scanning_receipt():
@@ -199,7 +201,8 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
     package, root = portable
     stages = []
     def run(argv, **kwargs):
-        assert argv[0].startswith(str(root / 'versions')) and argv[0].endswith('bundle\\security-check.exe')
+        assert Path(argv[0]).is_relative_to(root / 'versions') and Path(argv[0]).name == EXE
+        assert Path(argv[0]).parent.name == 'bundle'
         if argv[1] == 'setup':
             assert kwargs['stdin'] == subprocess.DEVNULL
             assert stages[-1] == 'SETUP_CHILD'
@@ -228,7 +231,7 @@ def test_invalid_setup_receipt_never_reports_success(portable, monkeypatch, rece
     data = install_personal_codex(bundle=package, root=root)
     assert data['overall'] == 'BROKEN' and not data['installation']['local_files_ready']
     assert data['diagnostics'] == ['INSTALLED_SETUP_RECEIPT_INVALID']
-    assert (root / 'launcher/security-check.exe').is_file()
+    assert (root / 'launcher' / EXE).is_file()
 
 
 @pytest.mark.parametrize('exception,code', [(OSError('private error'), 'INSTALLED_SETUP_FAILED'),
@@ -241,7 +244,7 @@ def test_child_failure_preserves_files_without_false_success(portable, monkeypat
     data = install_personal_codex(bundle=package, root=root)
     assert data['diagnostics'] == [code] and not data['installation']['local_files_ready']
     assert 'private' not in json.dumps(data)
-    assert (root / 'launcher/security-check.exe').exists()
+    assert (root / 'launcher' / EXE).exists()
 
 
 def test_portable_preflight_skill_conflict_does_not_activate(portable):

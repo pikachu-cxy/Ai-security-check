@@ -366,9 +366,9 @@ class SecurityRuntime:
         # Persistence time is known only after the transaction; no second write
         # and no mutation of signed scan identities just to record a measurement.
         result.scanner_diagnostics = observed
+        source_context.update(input_files=list(context.files), context_files=list(context.context_files),
+                              dependency_changes=list(context.dependency_changes or ()))
         result.scan_context = complete_context(source_context, workspace.path, self.store)
-        result.scan_context.update(input_files=list(context.files), context_files=list(context.context_files),
-                                   dependency_changes=list(context.dependency_changes or ()))
         if staged:
             observed['source_kind'] = 'GIT_INDEX_PROJECTION'
         from .scanner_cache import lifetime

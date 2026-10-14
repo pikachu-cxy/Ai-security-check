@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from test_remediation import setup, UNSAFE, FIXED, CANARY
+from test_remediation import setup, UNSAFE, FIXED, CANARY, fresh_transport_hook
 from test_hook_runtime import repo
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
@@ -68,11 +68,7 @@ def test_completed_host_edit_requests_repair_without_rejecting_or_repeating(setu
     # tool alias, without trusting tool_input or persisting it.
     root, runtime, provider, service, _, _ = setup
     before = (root / 'A.java').read_bytes()
-    fresh = RemediationService(service.store, registry=service.registry, hooks=service.hooks,
-                               config=service.config, directory=tmp_path / 'fresh')
-    output = handle_codex_hook('PostToolUse', str(root), 'session', tool_name,
-        binding=workspace_binding(root),
-        coordinator=HookCoordinator(runtime, service.hooks, cooldown_ms=0), remediation=fresh)
+    fresh, output = fresh_transport_hook(setup, tmp_path, tool_name)
     data = output['remediation']
     assert data['action'] == 'CONFIRM_REQUIRED'
     assert data['interaction'] == {

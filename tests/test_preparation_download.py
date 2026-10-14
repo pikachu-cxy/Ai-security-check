@@ -17,6 +17,8 @@ from test_install_readiness import bolt_database
 
 @pytest.fixture
 def database(tmp_path, monkeypatch):
+    # These tests explicitly simulate an online download through a mocked process.
+    monkeypatch.delenv('SECURITY_RUNTIME_OFFLINE', raising=False)
     cache = tmp_path / 'cache'
     monkeypatch.setenv('SECURITY_RUNTIME_TRIVY_CACHE_DIR', str(cache))
     now = datetime(2026, 10, 13, 4, tzinfo=timezone.utc)

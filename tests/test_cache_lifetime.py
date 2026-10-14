@@ -129,8 +129,10 @@ def secret_engine(tmp_path, monkeypatch):
         file = root/name; file.parent.mkdir(parents=True, exist_ok=True); file.write_text('private synthetic fixture\n')
     (root/'unrelated.txt').write_text('must never enter scoped mirror')
     adapter = GitleaksAdapter()
+    executable = tmp_path / 'gitleaks-fixture'
+    executable.write_bytes(b'fixture binary identity; execution is mocked')
     monkeypatch.setattr(adapter.tool_manager, 'ensure', lambda *a, **kw:
-                        ResolvedTool('gitleaks', '8.30.0', 'gitleaks', None, ToolStatus.READY))
+                        ResolvedTool('gitleaks', '8.30.0', str(executable), None, ToolStatus.READY))
     calls = []; mode = {'value': 'success'}
     def execute(argv, cwd, timeout):
         target = Path(argv[2]); calls.append((target, tuple(sorted(
@@ -140,8 +142,12 @@ def secret_engine(tmp_path, monkeypatch):
             return ProcessResult(2, '', '', 1)
         if mode['value'] == 'missing':
             return ProcessResult(0, '', '', 1)
-        report.write_text(json.dumps([{'File': str(target/'src/A.java') if target.is_dir() else str(target),
-                                      'RuleID': 'synthetic-secret', 'StartLine': 1, 'Secret': 'private-raw-canary'}]))
+        location = str(target/'src/A.java') if target.is_dir() else str(target)
+        report.write_text(json.dumps({'version': '2.1.0', 'runs': [{
+            'tool': {'driver': {'name': 'gitleaks', 'semanticVersion': '8.30.0',
+                              'rules': [{'id': 'synthetic-secret'}]}},
+            'results': [{'ruleId': 'synthetic-secret', 'locations': [{'physicalLocation': {
+                'artifactLocation': {'uri': location}, 'region': {'startLine': 1}}}]}]}]}))
         return ProcessResult(0, '', '', 1)
     monkeypatch.setattr('security_runtime.scanners._execute', execute)
     return root, files, adapter, calls, mode

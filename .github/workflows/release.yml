@@ -52,6 +52,10 @@ jobs:
       - run: python scripts/update_homebrew_formula.py --manifest dist/release/release-manifest.json
       - run: python scripts/generate_winget_manifest.py --manifest dist/release/release-manifest.json
       - run: python scripts/validate_manager_metadata.py --manifest dist/release/release-manifest.json
+      - name: Include pilot installation guide
+        run: |
+          cp README.md dist/release/INSTALL.zh-CN.md
+          cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
       - name: Upload complete release as draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}

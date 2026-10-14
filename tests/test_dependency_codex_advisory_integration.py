@@ -172,7 +172,7 @@ def test_cached_or_readonly_event_does_not_reask_dependency_choice(source_sdk, r
     assert len(provider.calls) == 1 and data['scanner_run'] is False
     assert not {'continue', 'stopReason'} & wire.keys()
     assert 'remediation' not in data
-    assert '回复“修复”' not in wire['systemMessage'] and '回复“忽略”' not in wire['systemMessage']
+    assert '回复“修复”' not in wire.get('systemMessage', '') and '回复“忽略”' not in wire.get('systemMessage', '')
     assert_no_authority(source_sdk, data)
 
 

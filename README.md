@@ -1,902 +1,133 @@
 # AI Security Runtime
 
-Current status and next steps: [development progress](docs/DEVELOPMENT_PROGRESS.md)
-and [personal/free and enterprise roadmap](docs/PRODUCT_ROADMAP.md).
-The progress document distinguishes source implementation, isolated checks,
-current package acceptance and pending Desktop trials.
-Moving machines: [development handoff](docs/DEVELOPMENT_HANDOFF.zh-CN.md).
+在 AI 编程聊天中检查本次开发改动，结合静态检查与 Agent 对关联代码的分析，说明风险依据、当前防护和未知范围。你决定 **修复** 或 **暂不处理**；Agent 修改代码，Runtime 复查原问题并记录逐项结果。
 
-**Windows rule-foundation experience (R2.2):** [installation and six-step checklist](docs/WINDOWS_EXPERIENCE.md).
-Use natural language with the companion Security Review Skill and existing MCP to
-scan, review, fix an authorized task and verify with the original scanner. Explicit
-review works without Hooks; new Desktop behavior requires personal acceptance.
-Current work adds the Java/JavaScript/TypeScript rule foundation. Release and CI
-work remain paused; this local build is not a published Release.
+当前为 **Developer Alpha 试用版**，主要试用宿主是 Codex。源码在本机检查，首次准备扫描组件和漏洞数据需要联网。原生安装包自带 Python，**无需安装 Python、pip 或 venv**，也不会安装你的项目依赖或启动项目服务。
 
-Rule Program v1 is capability-led: 25 detection capabilities, 2 CORE and 23
-VALIDATED. First-party rule pack 1.3.0 contains 55 installed Semgrep rules,
-47 default-on, including 15 Python rules and 6 shared JavaScript/TypeScript rules.
-The 8 legacy Java EXPERIMENTAL rules remain default-off. These counts describe
-source coverage, not production accuracy or current Desktop acceptance.
-See the [rule foundation and limitations](docs/RULE_FOUNDATION.md),
-[Rule Program](docs/RULE_PROGRAM.md) and [coverage matrix](docs/RULE_COVERAGE_MATRIX.md).
+## 1. 在 Releases 下载完整包
 
-CLI scans show actual preparation and scanner states on **stderr** after a 500 ms
-delay. Final human results and JSON remain on **stdout**. Interactive terminals
-refresh elapsed time every second; redirected logs receive a heartbeat every
-10 seconds. Short scans stay quiet. Progress never predicts percentages.
+打开 [Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)，选择试用版本，在 **Assets** 下载对应安装包和同名 `.sha256` 文件。
 
-Use `security-check scan --mode release --json --no-progress` for a quiet script
-result, or `--verbose` to include capabilities that do not apply. Human scan
-results are Chinese; JSON enums remain unchanged. Ctrl+C cancels the scan and
-stops external engine processes. Library and MCP calls do not enable CLI progress.
-
-**English** | [简体中文](README.zh-CN.md)
-
-> **Agent writes. Security Runtime verifies.**
-
-AI Security Runtime is a local-first security layer for AI coding workflows. It checks the code an AI agent writes and exposes the same security capabilities through the CLI, verified host integrations, and Generic MCP.
-
-- **Local-first:** project source stays on your machine by default.
-- **Codex:** historical detection paths are Desktop verified; automatic Stop
-  continuation on the current candidate still requires separate acceptance.
-- **Cursor:** detection and advisory remediation are **DESKTOP VERIFIED** on the observed path.
-- **Generic MCP:** remains available for MCP-compatible clients.
-- **CLI:** works without any AI coding tool and is suitable for local scripts and future CI/CD use.
-- **Fail clearly:** missing scanners reduce coverage instead of claiming the project is safe.
-
-> Developer Alpha. NO_FINDINGS means no candidate was found within the executed rules and scope; it does not prove the project is secure.
-
-Detection quality is being hardened against real-world and independently labelled corpora; complex interprocedural and wrapper flows remain limited.
-
-## Rule Program v1
-
-The product speaks in capabilities rather than raw rule-file counts:
-
-- 25 detection capabilities: 2 CORE and 23 VALIDATED
-- 55 total installed Semgrep rules in pack 1.3.0; 47 default-on
-- 8 legacy Java EXPERIMENTAL rules, default-off
-- 15 Python rules
-- 6 shared JavaScript/TypeScript advisory rules, default-on
-
-The historical Java foundation below is a subset of the current capability
-catalog; current source counts and known gaps are recorded in
-[development progress](docs/DEVELOPMENT_PROGRESS.md):
-
-| Capability | Maturity |
+| 系统 | v0.3.2 安装包 |
 | --- | --- |
-| TLS Hostname Verification Disabled | CORE |
-| Hardcoded Secret | CORE |
-| SQL Injection | VALIDATED |
-| Command Injection | VALIDATED |
-| SSRF | VALIDATED |
-| Path Traversal | VALIDATED |
-| Arbitrary File Read | VALIDATED |
-| Arbitrary File Write | VALIDATED |
-| XXE | VALIDATED |
-| Unsafe Deserialization | VALIDATED |
+| Windows x64 | `ai-security-runtime-v0.3.2-windows-x64.zip` |
+| Mac：Apple Silicon（M1/M2/M3/M4 等） | `ai-security-runtime-v0.3.2-macos-arm64.tar.gz` |
+| Mac：Intel | `ai-security-runtime-v0.3.2-macos-x64.tar.gz` |
 
-```text
-Capability → underlying scanner rules → Finding Family / Episode
-           → Policy → remediation / proof
-```
+新版本的文件名随 Release 改变。Mac 运行 `uname -m`，`arm64` 选 ARM 包，`x86_64` 选 Intel 包。不要把 GitHub 的 **Source code** 压缩包当安装包；不要只复制可执行文件。若 Assets 没有对应包，该版本还未完成发布。
 
-The synthetic R0 corpus reports 46 TP / 28 TN / 0 FP / 0 FN. This is not
-production-grade accuracy.
+## 2. 选择使用方式
 
-See [Rule Program v1](docs/RULE_PROGRAM.md) and the [coverage matrix](docs/RULE_COVERAGE_MATRIX.md)
-for the detailed mapping, acceptance evidence, and limitations.
+- **Codex 自动接入**：安装 MCP、Hook 和配套 Skill；发普通开发需求后检查，不用点名产品。继续第 3 节。
+- **独立仅 MCP**：作为聊天内主动调用的工具，不安装 Hook 或 Skill。解压包后跳到第 5 节。
 
----
+macOS CI 与试用者真机验收分别记录；维护者暂时没有 Mac 真机。[当前验收与限制](docs/DEVELOPMENT_PROGRESS.md)以实际回执为准。
 
-## Installation
+## 3. 安装并等待检查组件就绪
 
-Package-manager installation is being prepared for the next Developer Alpha release.
-These commands are not available until the GitHub assets and external listings are published.
+先完全退出 Codex。以下假设安装包在用户“下载”目录，命令报错时先处理错误再继续。
 
-### Windows
+### Windows：PowerShell
 
 ```powershell
-winget install --id PikachuCXY.AISecurityRuntime -e
+$archive = Join-Path $env:USERPROFILE 'Downloads\ai-security-runtime-v0.3.2-windows-x64.zip'
+Get-FileHash -Algorithm SHA256 -LiteralPath $archive
+# 与下载的同名 .sha256 文件核对。
+$destination = Join-Path $env:USERPROFILE 'Downloads\AI-Security-Runtime-v0.3.2'
+Expand-Archive -LiteralPath $archive -DestinationPath $destination
+$bundle = Join-Path $destination 'security-check'
+$exe = Join-Path $bundle 'security-check.exe'
+& $exe --version
+& $exe install codex --bundle $bundle --json
+& $exe preparation watch
+& $exe prepare-scanners --status --json
 ```
 
-### macOS / Linux x64
+### Mac：终端
+
+以下以 ARM 包为例，Intel 将 `macos-arm64` 换成 `macos-x64`。
 
 ```bash
-brew install pikachu-cxy/tap/ai-security-runtime
+cd "$HOME/Downloads"
+shasum -a 256 ai-security-runtime-v0.3.2-macos-arm64.tar.gz
+# 与下载的同名 .sha256 文件核对。
+mkdir AI-Security-Runtime-v0.3.2
+tar -xzf ai-security-runtime-v0.3.2-macos-arm64.tar.gz -C AI-Security-Runtime-v0.3.2
+bundle="$HOME/Downloads/AI-Security-Runtime-v0.3.2/security-check"
+exe="$bundle/security-check"
+"$exe" --version
+"$exe" install codex --bundle "$bundle" --json
+"$exe" preparation watch
+"$exe" prepare-scanners --status --json
 ```
 
-The standalone Runtime includes its Python runtime. Codex installation and
-upgrades install the program separately from scanner/data preparation. No system Python, pip or venv is
-required. Run inside your Git project:
+解压目标目录已存在时请换新目录，避免覆盖正在使用的程序。若 macOS 阻止运行，核对来源、校验值和系统提示后保存诊断联系维护者。当前没有 Apple 开发者签名／公证承诺，不要关闭系统安全检查。
 
-```bash
-security-check --version
-security-check doctor
-security-check scan --mode quick
-security-check setup cursor
-security-check setup workbuddy
-security-check install codex
-```
+**程序安装完成 ≠ 安全检查已准备完成。** 安装默认启动后台准备并先返回；等组件及整体 `ready=true`、漏洞库 `FRESH` 后再测试依赖漏洞。仍在下载时，依赖检查未完成。
 
-For Codex, see [setup and integration details](docs/CODEX_INTEGRATION.md). The
-current candidate's Desktop acceptance is recorded separately in development progress.
+准备失败或需要更新库：Windows 运行 `& $exe prepare-scanners`，Mac 运行 `"$exe" prepare-scanners`，完成后用 `prepare-scanners --status --json` 核对状态。当前没有持续定时更新服务，后续仍需核对新鲜度。无需重装项目依赖。
 
-### Install or upgrade Codex protection
+## 4. 在 Codex 正常开发
 
-Run this command from the new Runtime package for an initial installation or upgrade.
-It installs the program, global connection and Skill, and checks existing caches without waiting for downloads:
+完全重新打开 Codex，在实际项目目录创建新聊天并确认 MCP 连接可用，发普通需求，例如：
 
-```bash
-security-check install codex
-```
+> 在现有订单模块新增订单详情接口，复用服务和仓储，增加必要测试，完成后总结改动、验证结果和需要我决定的事项。
 
-Installation automatically starts detached preparation and returns without waiting
-for downloads. No prerequisite command is needed. Optional progress/status viewing:
+无需增加“使用 ai-security 扫描”。有待处理问题时，回复应显示 **有 N 项风险需要你决定**，说明代码依据、当前防护、触发条件和未知范围，并单独给出 **修复／暂不处理**。
 
-```bash
-security-check preparation watch
-security-check preparation status --json
-```
+多个问题请选择具体项；要批量修复，明确回复“修复本轮全部已登记风险”。暂不处理保留记录，不代表风险消除。修复总结应逐项区分复查通过、仍存在和验证未完成；规则复查与 Agent 代码复核的依据不同。
 
-Preparation reuses compatible caches and product-pinned engines. It never installs
-project dependencies or executes project code. The initial budget is 300 seconds;
-real byte progress may extend it up to the absolute 1800-second limit;
-database transfers stop after 30 seconds without byte progress. Whole-download retries
-are disabled by default. Explicit `--timeout 600 --idle-timeout 60 --retries 1`
-permits one extra attempt within the same total budget. Progress comes from observed
-transfer counts; no resumable-download capability is claimed.
-
-An installation exit code of 0 proves local program/configuration installation;
-`scan_ready` is a separate result. Preparation exits 2 when incomplete, or 130
-when cancelled. It retains usable older data and configuration, reports expired
-data as incomplete, and never equates program installation with scanning readiness.
-JSON stdout remains a single receipt; bounded download feedback goes to stderr.
-Restart the host after installation and accept its Hook trust prompt.
-
-```bash
-security-check install codex --offline
-```
-
-Installation always checks caches without downloads. `prepare-scanners --offline`
-or `--status` checks existing components/data only. Missing, damaged or expired
-assets remain incomplete. `setup codex` configures the connection and Skill only.
-Quick dependency checks and automatic Hooks remain offline. While preparation runs,
-scans use available local components and retain missing checks in saved closeouts.
-The worker resumes registered closeouts through ordinary MCP, with current-version
-and generation checks. This is install-triggered preparation, not a periodic update
-scheduler. See the [background acceptance guide](docs/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md).
-
-## 2. Run your first CLI scan
-
-Run AI Security Runtime **inside a Git project**.
-
-For a safe first test, copy the included intentionally vulnerable sample into a temporary Git repository.
-
-### Windows PowerShell
-
-From the `Ai-security-check` directory:
+需要确认自动检查时，读取当前项目最近 Hook 诊断：
 
 ```powershell
-New-Item -ItemType Directory -Force ..\security-runtime-demo | Out-Null
-Copy-Item -Recurse .\samples\vulnerable-python\* ..\security-runtime-demo\
-cd ..\security-runtime-demo
-git init
+& $exe hooks recent --path 'C:\Projects\your-project' --limit 32 --json
 ```
 
-Check the environment:
+Mac 使用 `"$exe" hooks recent --path "$HOME/Projects/your-project" --limit 32 --json`。核对项目、时间和实际执行状态；没有记录时继续核对状态目录和保留期限，不能直接断言没有触发。详见[试用指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)。
 
-```bash
-security-check doctor
-```
+## 5. 独立仅 MCP 模式
 
-Then scan:
-
-```bash
-security-check scan --mode quick
-```
-
-Codex installation prepares default tools and vulnerability data automatically in the background. While it runs, scans only reuse available local components, and saved closeouts retain missing checks for automatic continuation. Other permitted online scan flows prepare only engines selected by the scan plan. A quick scan with no changes downloads nothing. Source-only edits do not repeat dependency checks; added, changed or removed manifests/lockfiles request local offline dependency checks against remaining inputs in the affected scope. Missing or expired dependency assets produce incomplete coverage; retry background preparation without reinstalling. Downloads are verified before use and do not require a system-wide PATH change.
-
-A successful test should:
-
-1. identify the current workspace;
-2. run the available local security engines;
-3. report findings from the intentionally vulnerable sample;
-4. show scan coverage such as `FULL` or `PARTIAL`.
-
-Machine-readable output is available with:
-
-```bash
-security-check scan --mode quick --json
-```
-
-### Scan modes
-
-```bash
-security-check scan --mode quick
-security-check scan --mode feature
-security-check scan --mode release
-```
-
-- **quick** — changed and untracked files; changed dependency manifests/lockfiles also trigger scoped dependency checks.
-- **feature** — branch diff against main/master plus local changes, with the same change-triggered dependency checks.
-- **release** — tracked and untracked project files for broader release review.
-
-Automatic Hooks also check changed dependency inputs, using local offline tools and data. They never install the target project's dependencies, run its package manager or build it. Missing local tools/data leave dependency coverage incomplete; they do not establish that dependencies are safe. CLI quick, feature and staged scans still require Git; automatic Hooks retain their existing source-directory support.
-
-Dependency discovery and planning share the recognized Python, JavaScript, Maven/Gradle and Go manifest/lockfile names. Filename recognition does not attest a complete resolved dependency graph: provider inventory and coverage evidence remain authoritative. Removing an input requests reevaluation of the remaining inventory; it does not prove that installed/runtime dependencies were removed.
-
----
-
-# Connect an AI coding tool
-
-AI Security Runtime exposes these MCP tools:
-
-- `scan_diff`
-- `scan_project`
-- `get_findings`
-- `generate_fix`
-- `verify`
-
-`generate_fix` returns a coding task; it does not silently edit source code.
-
-The recommended workflow is:
-
-```text
-AI edits code
-    ↓
-scan_diff
-    ↓
-Finding
-    ↓
-AI fixes code
-    ↓
-verify
-    ↓
-RESOLVED
-```
-
----
-
-## Cursor — production status and setup
-
-Inside the Git project you want to protect:
-
-```bash
-security-check setup cursor
-```
-
-Expected result:
-
-```text
-AI Security Runtime
-
-Workspace
-✓ <your-project>
-
-Connecting Cursor...
-✓ Cursor configuration written
-✓ Runtime MCP self-test passed
-○ Cursor client connection not confirmed yet
-Restart Cursor to load the project connection.
-
-Code stays local.
-```
-
-The Runtime can manage a project-level connection in:
-
-```text
-.cursor/mcp.json
-```
-
-It preserves existing MCP servers and only manages its own `ai-security-runtime` entry.
-
-Restart Cursor if requested.
-
-Then ask Cursor:
-
-> Use AI Security Runtime to scan the current Git diff. Show me the findings. If there are security issues, fix them and call verify afterwards.
-
-The current production Cursor events are:
-
-```text
-sessionStart
-afterFileEdit
-afterShellExecution
-stop
-```
-
-Current status:
-
-```text
-Detection Runtime       = DESKTOP VERIFIED
-First-Scan Attribution   = DESKTOP VERIFIED
-Finding / Policy         = DESKTOP VERIFIED
-Advisory Remediation     = DESKTOP VERIFIED
-Native Chat Feedback     = HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH
-Automatic Continuation   = PENDING_HOST_CAPABILITY
-```
-
-`postToolUse` and `additional_context` are not part of the current production
-Cursor path. A configuration file being written is not itself Desktop verification.
-
-Check integration state:
-
-```bash
-security-check integrations
-```
-
----
-
-## WorkBuddy — one-command setup
-
-Inside the Git project:
-
-```bash
-security-check setup workbuddy
-```
-
-The Runtime manages the project-level WorkBuddy MCP configuration and preserves other MCP entries.
-
-Setup writes `<project>/.workbuddy/mcp.json`, as documented in the
-[WorkBuddy MCP guide](https://www.codebuddy.ai/docs/zh/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide).
-Some desktop versions expose `%USERPROFILE%/.workbuddy-ai/mcp.json` in their UI.
-The Runtime does not assume that writing a project config proves that your desktop
-version loaded it. If your version uses the global UI, use `security-check mcp
-config --json` and register the generated workspace-bound entry there. Use a
-separate entry/server session per workspace; do not reuse one project's binding
-for another project. Automatic global registration is not implemented in this alpha.
-
-`integrations` shows the configuration path, configuration status, Runtime
-self-test, and last real MCP invocation separately. `NEEDS_RESTART` means that
-configuration and self-test succeeded but a host tool invocation is still pending.
-Only an actual tool invocation records `CONNECTED`; Runtime self-tests do not.
-This records MCP traffic attributed by the configured integration identifier,
-not a probe of the application's UI.
-
-New Runtime-owned project config files use a reversible block in `.git/info/exclude`.
-Shared `.gitignore` and pre-existing mixed user config remain untouched.
-
-Restart WorkBuddy if requested.
-
-Then ask WorkBuddy:
-
-> Use AI Security Runtime to scan the current Git diff and show me the security findings.
-
-After confirming `scan_diff` works, test:
-
-> Fix the reported issue and use AI Security Runtime to verify the fix.
-
-Check status with:
-
-```bash
-security-check integrations
-```
-
----
-
-## Codex Global Runtime Integration
-
-Codex Global Runtime Integration = **DESKTOP VERIFIED**.
-
-The verified core chain is:
-
-```text
-AI edit
-  → Global Hook
-  → mutation reconciliation
-  → Scanner
-  → Finding / Policy
-  → INLINE_PREPARED remediation
-  → Exact Edit Envelope
-  → real Scanner proof
-  → CLOSED
-```
-
-Generic MCP remains available as an interface for Codex and other MCP clients,
-but it is not the only or primary Codex integration path.
-
-Run this from the Git project you want to protect:
-
-```bash
-security-check mcp config --toml
-```
-
-For JSON-based MCP clients:
-
-```bash
-security-check mcp config --json
-```
-
-On Windows you can copy the generated JSON directly:
-
-```bash
-security-check mcp config --copy
-```
-
-The generated configuration contains:
-
-- the absolute Runtime command;
-- `mcp` arguments;
-- the bound project workspace;
-- the integration identifier.
-
-Paste the generated configuration into the MCP settings of the coding tool, restart/reload that tool if necessary, and ask:
-
-> Use AI Security Runtime to scan the current Git diff.
-
-A Generic MCP integration is considered working only when the client can see and call the Runtime tools, not merely when the configuration text exists.
-
-### No MCP support?
-
-If a coding agent can execute shell commands but cannot connect to MCP, use the universal CLI fallback:
-
-```bash
-security-check scan --mode quick --json
-```
-
----
-
-# Recommended acceptance checklist
-
-Use the same temporary vulnerable Git project for all clients.
-
-| Test | Pass condition |
-| --- | --- |
-| CLI install | `security-check --help` works |
-| Environment | `security-check doctor` identifies the correct workspace |
-| CLI scan | `security-check scan --mode quick` returns real findings |
-| JSON | `--json` returns parseable machine-readable output |
-| Cursor | `security-check setup cursor` succeeds and Cursor can call `scan_diff` |
-| WorkBuddy | `security-check setup workbuddy` succeeds and WorkBuddy can call `scan_diff` |
-| Codex Global Runtime | Global Hook → reconciliation → Scanner → Policy → proof → CLOSED |
-| Generic MCP | generated configuration allows the client to call Runtime tools |
-| Fix loop | finding → agent fix → `verify` → `RESOLVED` |
-| Workspace isolation | another repository does not reuse findings from the previous repository |
-| Repeated setup | running setup repeatedly does not duplicate or damage MCP config |
-| Offline reuse | already installed local tools continue to work when downloads are disabled |
-| Partial coverage | one unavailable scanner does not stop the remaining scanners |
-
-If you need to inspect details:
-
-```bash
-security-check doctor --verbose
-security-check integrations --verbose
-security-check tools status
-```
-
----
-
-# Useful commands
-
-### Environment
-
-```bash
-security-check doctor
-security-check doctor --json
-security-check doctor --verbose
-```
-
-### Scanning
-
-```bash
-security-check scan --mode quick
-security-check scan --mode feature
-security-check scan --mode release
-security-check scan --mode quick --json
-```
-
-### AI coding integrations
-
-```bash
-security-check setup
-security-check setup cursor
-security-check setup workbuddy
-
-security-check integrations
-security-check integrations --verbose
-security-check integrations repair
-security-check integrations remove cursor
-security-check integrations remove workbuddy
-```
-
-### Generic MCP
-
-```bash
-security-check mcp config
-security-check mcp config --json
-security-check mcp config --toml
-security-check mcp config --copy
-```
-
-### Managed security tools
-
-Codex users install or update with `security-check install codex`; preparation starts automatically in the background.
-These lower-level commands are available for diagnostics and advanced tool
-management:
-
-```bash
-security-check tools status
-security-check tools install --all
-```
-
-### Local usage statistics
-
-```bash
-security-check stats
-```
-
-### Git pre-commit hook
-
-```bash
-security-check hooks install pre-commit
-```
-
-### License / distribution check
-
-```bash
-security-check licenses
-security-check licenses --check-distribution
-```
-
----
-
-# What runs locally?
-
-Current built-in security capabilities are backed by:
-
-- **Semgrep** — pattern-based code security using the local first-party `ai-security-core` rule pack.
-- **Gitleaks** — secret detection.
-- **Trivy** — independent dependency vulnerability (`vuln`) and IaC (`misconfig`) providers.
-- **OSV-Scanner 2.6.0** — optional dependency fallback, prepared only after an eligible primary failure.
-
-The Runtime chooses engines by security capability and normalizes results into one finding model.
-
-Semgrep community/registry rules are **not** downloaded or bundled by default. The default Semgrep scan uses only this project's independently authored local rule pack.
-
-Gitleaks, Trivy and the on-demand OSV-Scanner are resolved in this order:
-
-```text
-Explicit path
-    ↓
-Runtime-managed copy
-    ↓
-Compatible system PATH copy
-    ↓
-Automatic managed install
-```
-
-Offline mode disables new downloads but still allows already installed compatible local tools.
-
-To disable downloads:
-
-```text
-SECURITY_RUNTIME_OFFLINE=1
-```
-
----
-
-# Coverage and result meaning
-
-AI Security Runtime does not treat missing scanners as a clean security result.
-
-Scan output includes coverage:
-
-- **NONE / NO_CHANGES** — no changed files to check; no security scan executed,
-  and recommendation is **NOT_ASSESSED**.
-- **FULL** — applicable planned code and secret checks succeeded on the selected
-  files. This describes the plan, not every security capability or every project file.
-- **SCOPED** — applicable checks succeeded, but code security was not applicable
-  (for example, a secret-only file change).
-- **PARTIAL** — some applicable checks failed or were unavailable.
-- **MINIMAL** — no applicable check succeeded.
-
-JSON/MCP expose `execution_state`, `coverage_scope: PLANNED_FILES`, and individual
-`capability_results`. `NOT_APPLICABLE` is distinct from engine failure or
-unavailability; ordinary output groups these checks separately.
-
-Release status is intended to communicate:
-
-- **NO_FINDINGS** — the executed rules found no candidate within the stated scope.
-- **REVIEW** — human or agent review is recommended.
-- **BLOCKED** — the current policy found a release-blocking issue.
-
-NO_FINDINGS does not prove project security. Historical SAFE records use this scoped wording when displayed.
-
-## Detection quality status
-
-```text
-R1 Phase 1 — corpus and evaluation complete locally
-R1 Phase 2 — bounded detection fixes complete locally
-Current — Java/JS/TS rule foundation and local user experience
-Release / CI — paused; no tag or Release is implied
-```
-
-The R0 synthetic corpus is not a production accuracy claim. Broader corpus
-coverage and independent review are required before promoting VALIDATED
-capabilities to CORE. R1 Benchmark evaluation found substantial analysis
-limitations; those R1 results do not graduate the current 2 CORE and 23 VALIDATED
-capabilities. See the
-[Rule Program](docs/RULE_PROGRAM.md) for the supported scope and limitations.
-
----
-
-# Workspace safety
-
-The CLI, MCP server, Cursor, WorkBuddy, and pre-commit hook use the same workspace resolver.
-
-The Runtime rejects unsafe broad roots such as:
-
-- the user home directory;
-- a drive root;
-- Windows system directories.
-
-Git projects use changed files for quick/feature and `git ls-files --cached --others
---exclude-standard` for release. Explicit scoped lists may contain files deeper
-than 12 levels; depth/directory limits apply to recursive non-Git discovery.
-Path escape, symlink/junction, file-count and file-size safeguards still apply.
-Single-finding verification profiles only its affected file and uses its originating
-scanners. Doctor reports profiling limits without hiding tool/workspace diagnostics.
-
-MCP logs go to stderr so stdout remains available for the stdio protocol.
-
----
-
-# Troubleshooting
-
-### `No project detected`
-
-Run the command inside a Git repository:
-
-```bash
-git init
-security-check doctor
-```
-
-Or explicitly inspect a project:
-
-```bash
-security-check doctor --path <project>
-```
-
-### A scanner is missing
-
-Codex installation automatically prepares default engines and vulnerability data.
-Use `security-check preparation retry` after a failed attempt. Online manual scan
-flows can also prepare tools required by their scan plan; automatic Hooks and
-quick dependency checks only reuse local assets.
-
-Check status:
-
-```bash
-security-check tools status
-```
-
-For advanced component diagnosis, prepare them explicitly:
-
-```bash
-security-check tools install --all
-```
-
-### Cursor / WorkBuddy configuration changed after reinstalling the Runtime
-
-Repair the managed connection:
-
-```bash
-security-check integrations repair
-```
-
-### Need detailed integration information
-
-```bash
-security-check integrations --verbose
-security-check doctor --verbose
-```
-
-### Remove a native project connection
-
-```bash
-security-check integrations remove cursor
-security-check integrations remove workbuddy
-```
-
-Only the `ai-security-runtime` entry managed by this project is removed.
-
----
-
-# Local state and privacy
-
-Scan history and integration state use a user-level local state directory.
-
-On Windows, managed Runtime data is stored under:
-
-```text
-%LOCALAPPDATA%\AI-Security-Runtime
-```
-
-The product does not require an AI API key for CLI scanning.
-
-Dogfood/usage state must not store full source code, secrets, private file contents, or full prompts.
-
----
-
-# CI / automation
-
-The CLI is the universal automation interface and can later be used in Jenkins, GitHub Actions, GitLab CI, or other pipelines.
-
-A simple machine-readable invocation is:
-
-```bash
-security-check scan --mode release --json
-```
-
-The repository itself currently uses three GitHub Actions checks:
-
-- **Runtime tests** — Windows and Ubuntu test suite.
-- **Compliance** — engine license metadata, first-party rule provenance, forbidden rule sources, notices.
-- **Package integrity** — builds and verifies the source/wheel distribution.
-
-Version tags run these as sequential release gates before four native standalone builds.
-Distribution changes on the feature branch also run Windows x64, Ubuntu 22.04 x64,
-macOS arm64 and macOS x64 verification: first managed scanner preparation, quick
-and release sample scans, plugin discovery, and a real MCP SDK stdio session.
-
----
-
-# Licensing
-
-AI Security Runtime follows a **closed-core, open-ecosystem** model:
-
-- Runtime Core, risk/policy engines, and future advanced rules/intelligence: **Proprietary**.
-- Public Plugin API and the current base `ai-security-core` rule pack: **Apache-2.0**.
-- Semgrep, Gitleaks, Trivy, and other third-party components retain their own licenses.
-
-Free use does not mean open source. Unless a component is explicitly marked Apache-2.0, the Runtime is governed by the root `LICENSE` and `EULA.md`.
-
-See [Licensing model](LICENSING.md).
-
----
-
-# Rule and license boundaries
-
-Engine licenses and rule-pack licenses are tracked separately.
-
-The Runtime does not bundle or automatically fetch Semgrep Community/Registry Rules.
-
-User-provided local rules can be used with:
-
-```bash
-security-check scan --rules <directory>
-```
-
-See:
-
-- [Third-party notices](THIRD_PARTY_NOTICES.md)
-- [Source availability notice](SOURCE_OFFER.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Extension guide](docs/EXTENDING.md)
-
----
-
-## Current Developer Alpha support
-
-| Interface | Status |
-| --- | --- |
-| CLI | Supported |
-| Cursor | Detection / Attribution / Finding-Policy / Advisory Remediation — DESKTOP VERIFIED; native feedback unavailable on observed path |
-| WorkBuddy | Project setup available; Desktop invocation verified separately |
-| Generic stdio MCP | Available interface |
-| Codex | Global Runtime Integration — DESKTOP VERIFIED; Generic MCP also available |
-| Other MCP coding tools | Generic MCP |
-| Git pre-commit | Supported |
-| CI/CD | CLI foundation available |
-
-The product goal is simple:
-
-> **Native where valuable. Generic MCP everywhere else. CLI as the universal fallback.**
-
-## Development / Contributing
-
-The following source installation is for developers.
-
-### Source checkout
-
-### Requirements
-
-- Windows, Linux, or macOS
-- Python **3.12+**
-- Git
-
-The current Developer Alpha lives on the `feature/runtime-mvp` branch.
-
-### 1. Install
-
-#### Windows PowerShell
+解压完整包并设置上面的 `exe`，**跳过 `install codex`**。先准备组件，再为已有本地 Git 项目生成配置。
 
 ```powershell
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-
-python -m pip install --upgrade pip
-pip install -e ".[test,scanner-test,build-standalone]"
+# Windows
+$project = 'C:\Projects\your-project'
+& $exe prepare-scanners
+& $exe prepare-scanners --status --json
+& $exe mcp config --path $project --toml
+# 使用 mcpServers JSON 的客户端：将 --toml 换成 --json。
 ```
-
-#### Linux / macOS
 
 ```bash
-git clone -b feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-cd Ai-security-check
-
-python3.12 -m venv .venv
-source .venv/bin/activate
-
-python -m pip install --upgrade pip
-pip install -e ".[test,scanner-test,build-standalone]"
+# Mac
+project="$HOME/Projects/your-project"
+"$exe" prepare-scanners
+"$exe" prepare-scanners --status --json
+"$exe" mcp config --path "$project" --toml
 ```
 
-Confirm the CLI is installed:
+将生成的 `ai_security_runtime` 小节合并到 Codex 用户目录 `.codex/config.toml`，保留其他服务和设置。重启／重连后，在该项目聊天中发：
 
-```bash
-security-check --help
-```
+> 使用已连接的安全检查工具检查当前项目，只报告问题，不修改代码；说明实际检查范围，以及依赖数据和上下文尚未确认的部分。
 
----
+此模式支持能启动**本地 stdio**进程的客户端，普通浏览器远程聊天不能直接启动本机程序。自动调用取决于客户端 Agent 的行为。配置绑定具体项目；换项目或移动程序目录后重新生成。[配置说明与官方参考](docs/PILOT_INSTALL_AND_USE.zh-CN.md#仅mcp模式windowsmacos)。
 
+## 6. 升级、卸载与反馈
 
-See [distribution staging](distribution/README.md) for native builds, verification, and the first external publication steps.
+升级：下载新 Release 完整包，退出 Codex，用新包重复安装步骤，重启后核对版本和构建身份；源码拉取不等于程序升级。
 
-## Scan failures and source directories
+卸载自动接入：Windows 运行 `& $exe uninstall codex --json`，Mac 运行 `"$exe" uninstall codex --json`。移除受管理接入和 Skill，保留程序数据与检查历史。仅 MCP 模式移除自己添加的配置小节即可。
 
-`doctor` reports local prerequisites using `READY` / `MISSING`. READY means required local engine prerequisites are available; actual project scans may still need project-specific or remote dependency resolution. It does not guarantee that a project scan succeeds.
+反馈到 [Issues](https://github.com/pikachu-cxy/Ai-security-check/issues)：提供系统／架构、Release 和构建身份、失败步骤、耗时、组件／库状态、首次风险提示和逐项复查结果。分享前去除私有代码、真实密钥和个人路径。
 
-`doctor --verbose` and `tools status` report Trivy vulnerability DB and Java DB separately. Java DB is `MISSING` or `READY` based on local files; checks availability is `UNKNOWN`. This release does not automatically prepare Java DB or checks data. A Maven repository HTTP 429 is reported as `MAVEN_RATE_LIMITED`, independently of local database readiness.
+## 检查范围与开发资料
 
-Release scans also accept a source directory without Git: `security-check scan --path <directory> --mode release`. In a safely recognized source directory, `doctor` and release scans can use the current directory. Quick, feature and staged scans require Git and suggest release scanning instead. Git projects use Git file lists; ordinary directories use bounded discovery with file, directory, depth, size and ignored-directory limits. Home, drive/system roots and symlinks/junctions remain protected.
+支持 Java、Python、JavaScript／TypeScript 的已安装规则子集、密钥检测、可识别依赖版本和有界关联代码分析。没有发现问题不证明项目安全；未支持输入、缺失组件、上下文预算和未知部署条件须保留。声明版本的原公告复查通过，不代表完整依赖图或实际部署安全。
 
-Each scanner failure includes `error_code`, `error_summary`, `remediation`, optional `retry_after_seconds`, and bounded sanitized `diagnostic_detail`. CLI JSON and MCP carry the same fields. Raw stdout/stderr remain internal, bounded, and absent from scan history and MCP responses. URLs are reduced to hosts; credentials and authorization values are redacted; proxy output only says configured/not configured.
+- [详细安装使用指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)
+- [开发进度与限制](docs/DEVELOPMENT_PROGRESS.md)、[下一步计划](docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)
+- [规则范围](docs/RULE_FOUNDATION.md)、[覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)
+- [开发交接](docs/DEVELOPMENT_HANDOFF.zh-CN.md)
+- [许可说明](LICENSING.md)、[使用条款](EULA.md)、[第三方声明](THIRD_PARTY_NOTICES.md)
 
-Dependency capability reports `EXECUTED` when at least one successful provider satisfies its FULL planned-inventory coverage contract, preserving failed primary history and fallback identity. Direct manifest/POM results without graph completeness proof remain `PARTIAL`. Other capabilities report `EXECUTED` when their planned required providers succeed, `PARTIAL` when success is mixed with failure/unavailability/timeout, `FAILED` when no provider succeeds and execution fails, `UNAVAILABLE` when providers cannot execute, and `NOT_APPLICABLE` for checks outside the scan scope. Findings from completed checks remain valid under partial coverage; additional issues may remain undetected. Failed preparation gives a retry command such as `security-check tools install gitleaks`. Maven rate limits suggest a local cache, mirror or later retry. Runtime never automatically runs the target project's Maven/Gradle/npm/pip/go build or dependency commands.
-
-## Dependency providers and fallback
-
-Gitleaks independently satisfies default SECRET_SCAN. Trivy dependency failures do not affect its separate IaC process. Eligible dependency failures (including Maven 429, network timeout, DNS/proxy failure, HTTP 5xx, resolution failure or engine unavailability) select OSV-Scanner; integrity, boundary, configuration and invariant failures are exposed without automatic fallback. JSON and MCP include `capability_details` and role/coverage metadata for every executed provider.
-
-`tools install --all` prepares the primary engines. OSV remains `ON_DEMAND / FALLBACK` in `tools status`; `doctor --verbose` reports its availability without requiring it for readiness or downloading it. `tools install osv-scanner` explicitly prepares the pinned official, checksum-verified release. OSV online scans query deps.dev/OSV.dev using dependency identity information. Offline scanning requires both a locally compatible engine and ecosystem databases at `<data-dir>/data/osv/osv-scalibr/<ecosystem>/all.zip`; Runtime does not download them in offline mode. Call analysis and target builds are disabled. Maven POM extraction/resolution remains PARTIAL because complete transitive/test dependency coverage is not attested.
-
-See [Architecture](docs/ARCHITECTURE.md) for scanner ownership and fallback boundaries.
-
-## Finding Triage v0.1
-
-Scanner results are candidates. Raw Findings are preserved, with independent TriageRecords and separate scan/triage coverage. IaC receives deterministic rule-ID classification in this version.
-
-```text
-security-check scan --mode release
-security-check triage --latest
-security-check triage --latest --prepare --category code --limit 20
-security-check triage --latest --raw
-```
-
-Start with the current project's read-only developer task summary, without looking up a scan UUID:
-
-```bash
-security-check summary --path <project>
-security-check summary --path <project> --details
-security-check summary --path <project> --json
-```
-
-The default view recommends at most three follow-up tasks. Details retain every finding/advisory, review state and Raw access. The summary never scans, invokes AI, changes source/state or generates an evidence key. No history returns a first-scan suggestion. VALID means an AI review passed Runtime validation, not independent human validation or proven exploitability; recommendations never promote REVIEW to ACTIONABLE. Zero ACTIONABLE does not mean safe.
-
-A workspace-bound MCP client can call `get_security_summary` without an ID, with `details=true` for the full list. An unbound client must supply `workspace_path`. Bounded task investigation and authorized host-agent fixes with original-scanner verification are implemented; this build's Desktop experience and independent developer usability trials remain pending.
-
-MCP host agents use `prepare_triage` for bounded, redacted UNTRUSTED_CODE evidence, analyze it with their own model, and return structured results using `submit_triage` with the returned triage_session. `get_triage` returns coverage and grouped views. Runtime does not invoke the host model.
-
-Configure a user-supplied OpenAI-compatible provider with `ai configure --base-url https://provider.example/v1 --model user-model --api-key-env SECURITY_RUNTIME_AI_KEY`. The key value is read only from the environment. External context requires `triage --latest --provider configured --allow-external-code-context`; absent consent fails closed. Normal scan never invokes AI. Secret values are redacted and repository content is untrusted data. Suppression requires explicit validated counterevidence; documentation/example placement or missing API search matches cannot suppress a candidate. See [Project context](docs/PROJECT_CONTEXT.md) for current limits.
-
-
-Task continuation v0.1: users say “continue the first task”; the host uses that **displayed response's** continuation arguments, analyzes bounded evidence, and submits results automatically within existing authorization. Users do not provide Finding UUIDs or copy technical prompts between tools. T01 is only a display number; changed or invalid task references require a refreshed selection. Runtime does not invoke the host model. Current valid reviews are retained, cache hits do not consume new analysis slots, stale evidence is rebuilt, and failed members require an explicit retry. Discover available MCP tools at runtime; connection checks require capabilities by subset and allow additional tools.
-
-For an authorized selected-task fix, the host calls `prepare_task_fix`, edits within its constraints, and calls `verify_task_fix` using the original task references. Runtime checks the original scanner/rule within the affected scope; finding disappearance alone does not prove functional compatibility. Runtime does not apply source patches or run target builds automatically. Actual Desktop natural-language behavior and independent developer trials remain pending.
+当前安装入口为 Releases 完整包，Homebrew／winget 外部上架不作为试用安装前提。

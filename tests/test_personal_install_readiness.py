@@ -14,6 +14,7 @@ import pytest
 from security_runtime.cli import main
 import security_runtime.personal_install as personal
 from test_personal_install import portable, installed, projects, skill
+from security_runtime.delivery import EXE
 
 
 def readiness(*, ready=True, freshness="FRESH", version="0.74.0"):
@@ -157,7 +158,7 @@ def test_preparation_failure_after_portable_setup_is_degraded_and_keeps_configur
     assert data["installation"]["scan_ready"] is False
     assert data["scan_readiness"]["status"] != "READY"
     assert (installed.home / "config.toml").is_file()
-    assert (root / "launcher/security-check.exe").is_file()
+    assert (root / 'launcher' / EXE).is_file()
     assert data["installation"]["status"] not in {"ROLLED_BACK", "RECOVERY_REQUIRED"}
     assert "PRIVATE-PREPARE-OUTPUT" not in json.dumps(data)
 

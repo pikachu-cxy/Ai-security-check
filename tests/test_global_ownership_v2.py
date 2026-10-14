@@ -9,6 +9,7 @@ from security_runtime.codex_integration import SERVER, BEGIN, END
 from security_runtime.global_integration import OWNERSHIP_VERSION
 from security_runtime.global_toml import foreign_semantics
 from security_runtime.integration_lifecycle import IntegrationDiagnostic
+from security_runtime._version import __version__
 
 
 def install(adapter):
@@ -32,7 +33,7 @@ def test_global_v2_install_signed_binding(installed):
     assert manifest['managed_version'] == OWNERSHIP_VERSION
     assert manifest['scope'] == 'GLOBAL' and manifest['ownership_model'] == 2
     assert manifest['server'] == SERVER
-    assert manifest['runtime_version'] == '0.3.1'
+    assert manifest['runtime_version'] == __version__
     assert manifest['capability_contract']
     assert installed.configuration_status()['mcp']['ownership_state'] == 'OWNED_AND_CURRENT'
 

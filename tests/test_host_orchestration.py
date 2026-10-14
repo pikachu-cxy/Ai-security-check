@@ -7,7 +7,7 @@ import json
 import pytest
 
 from test_hook_runtime import repo
-from test_remediation import setup, UNSAFE, CANARY
+from test_remediation import setup, UNSAFE, CANARY, fresh_transport_hook
 from test_codex_mcp_hook import binding as workspace_binding
 from security_runtime.codex_mcp_hook import handle_codex_hook, codex_hook_output
 from security_runtime.hook_runtime import HookCoordinator
@@ -43,11 +43,7 @@ def invoke(server):
 def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
     root, runtime, provider, service, _, _ = setup
     before = (root / 'A.java').read_bytes()
-    fresh = RemediationService(service.store, registry=service.registry, hooks=service.hooks,
-                               config=service.config, directory=tmp_path / 'fresh')
-    output = handle_codex_hook('PostToolUse', str(root), 'session', tool_name,
-        binding=workspace_binding(root), coordinator=HookCoordinator(runtime, service.hooks, cooldown_ms=0),
-        remediation=fresh)
+    fresh, output = fresh_transport_hook(setup, tmp_path, tool_name)
     data = output['remediation']; mode = service.config.read()
     wire = codex_hook_output(output)
     context = assert_operational_context(wire, data)
