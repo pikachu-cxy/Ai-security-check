@@ -147,11 +147,26 @@ def extract(archive: Path, root: Path) -> None:
             package.extractall(root)
     else:
         with tarfile.open(archive, "r:gz") as package:
+            from security_runtime.delivery import bundle_link_name
+            seen, total = set(), 0
             for member in package.getmembers():
-                target = (root / member.name).resolve()
-                if not target.is_relative_to(root.resolve()) or member.issym() or member.islnk():
+                from pathlib import PurePosixPath
+                name = PurePosixPath(member.name)
+                if (name.is_absolute() or '..' in name.parts or name.as_posix() != member.name
+                        or name.parts[0] != 'security-check' or member.name in seen
+                        or any(c in member.name for c in ('\\', ':', '\x00'))
+                        or not (member.isfile() or member.isdir() or member.issym())):
                     raise ValueError("Unsafe archive member")
-            package.extractall(root)
+                seen.add(member.name)
+                total += member.size
+                if len(seen) > 20_000 or total > 2_000_000_000:
+                    raise ValueError('Archive exceeds package limits')
+                if member.issym():
+                    bundle_link_name('/'.join(name.parts[1:]), member.linkname)
+            # Python's data filter also checks actual parent/link containment at IO.
+            package.extractall(root, filter='data')
+    from security_runtime.delivery import package_metadata
+    package_metadata(root / 'security-check')
 
 
 def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60) -> subprocess.CompletedProcess:
@@ -159,6 +174,30 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
     if result.returncode:
         raise RuntimeError(f"{command[1:]} failed ({result.returncode}): {result.stderr[-1000:]} {result.stdout[-1000:]}")
     return result
+
+
+def verify_sample_scan(payload, *, dependency=False):
+    """Engine execution and declared inventory are separate from graph completeness."""
+    expected = {'semgrep': 'SUCCESS', 'gitleaks': 'SUCCESS',
+                'trivy-vuln': 'SUCCESS' if dependency else 'NOT_APPLICABLE',
+                'trivy-misconfig': 'NOT_APPLICABLE'}
+    runs = {item['scanner']: item for item in payload['scanner_runs']}
+    if {name: item['status'] for name, item in runs.items()} != expected:
+        raise ValueError('Sample scan has unexpected engine execution: ' + json.dumps(payload['scanner_runs']))
+    if payload.get('coverage') != ('PARTIAL' if dependency else 'FULL'):
+        raise ValueError('Sample scan has unexpected declared scope: ' + str(payload.get('coverage')))
+    if dependency:
+        run = runs['trivy-vuln']
+        inventory = run.get('dependency_inventory', {})
+        coordinates = inventory.get('package_coordinates', [])
+        if (run.get('coverage_contract') != 'PARTIAL' or not run.get('coverage_notes')
+                or inventory.get('vulnerability_db_freshness') != 'FRESH'
+                or inventory.get('complete_dependency_graph_attested') is not False
+                or inventory.get('inventory_truncated') is not False
+                or not any(p.get('manifest') == 'requirements.txt' and p.get('package') == 'requests'
+                           and p.get('version') == '2.31.0' and p.get('ecosystem') == 'pip'
+                           for p in coordinates)):
+            raise ValueError('Declared dependency inventory or fresh vulnerability data not verified')
 
 
 def verification_environment(root: Path, data: Path, *, full: bool, inherited=None) -> dict[str, str]:
@@ -341,7 +380,6 @@ def main() -> None:
                                        for path, saved in before_reuse.items()):
                 raise ValueError("Standalone second Semgrep preparation did not reuse managed installation")
             (project / "app.py").write_text("import os\nos.system(input())\n", encoding="utf-8")
-            (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
             result = subprocess.run([str(executable), "scan", "--mode", "quick", "--path", str(project), "--json"],
                                     cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if result.returncode not in (0, 1):
@@ -350,18 +388,15 @@ def main() -> None:
             if not any("command-injection" in str(item.get("technical_details", {}).get("rule_id", ""))
                        for item in payload.get("findings", [])):
                 raise ValueError("First-party scanner finding missing")
-            if payload.get("coverage") != "FULL":
-                raise ValueError("Quick sample scan did not achieve FULL coverage")
-            statuses = {item["scanner"]: item["status"] for item in payload["scanner_runs"]}
-            if statuses != {"semgrep": "SUCCESS", "gitleaks": "SUCCESS", "trivy-vuln": "NOT_APPLICABLE", "trivy-misconfig": "NOT_APPLICABLE"}:
-                raise ValueError("Quick sample scan violated its scope: " + json.dumps(payload["scanner_runs"]))
+            verify_sample_scan(payload)
+            # Dependency manifests are a distinct release check, not a source-only QUICK.
+            (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
             release_scan = subprocess.run([str(executable), "scan", "--mode", "release", "--path", str(project), "--json"],
                                           cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
             if release_scan.returncode not in (0, 1):
                 raise RuntimeError(f"Release sample scan failed: {release_scan.stderr[-1000:]}")
             release_payload = json.loads(release_scan.stdout)
-            if release_payload.get("coverage") != "FULL":
-                raise ValueError("Release sample scan did not achieve FULL coverage")
+            verify_sample_scan(release_payload, dependency=True)
             all_engines = release_payload["scanner_runs"]
             if any(item["status"] not in {"SUCCESS", "NOT_APPLICABLE"} for item in all_engines):
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))

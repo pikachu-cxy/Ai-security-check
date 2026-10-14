@@ -6,6 +6,7 @@ import os
 import tarfile
 import zipfile
 import hashlib
+import stat
 from pathlib import Path
 
 from security_runtime._version import __version__
@@ -39,16 +40,18 @@ def main() -> None:
     release.mkdir(parents=True, exist_ok=True)
     stem = f"ai-security-runtime-v{__version__}" + ('-'+(args.experience_label or 'r2.2-local') if args.experience else '') + f"-{args.platform}"
     destination = release / (stem + (".zip" if os.name == "nt" else ".tar.gz"))
-    files = sorted(path for path in bundle.rglob("*") if path.is_file())
-    for file in files: no_links(file)
+    from security_runtime.delivery import package_metadata, package_inventory
+    metadata = package_metadata(bundle)
+    entries = package_inventory(bundle, allow_internal_links=bool(metadata.get('links')))
+    files = [bundle / row[0] for row in entries if stat.S_ISREG(row[1])]
     if os.name == "nt":
         with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
             for file in files:
                 archive.write(file, (Path("security-check") / file.relative_to(bundle)).as_posix())
     else:
-        with tarfile.open(destination, "w:gz", dereference=True) as archive:
-            for file in files:
-                archive.add(file, arcname=(Path("security-check") / file.relative_to(bundle)).as_posix(), recursive=False)
+        with tarfile.open(destination, "w:gz", dereference=False) as archive:
+            for row in entries:
+                archive.add(bundle / row[0], arcname='security-check/' + row[0], recursive=False)
     checksum = hashlib.sha256(destination.read_bytes()).hexdigest()
     destination.with_suffix(destination.suffix+'.sha256').write_text(checksum+'  '+destination.name+'\n',encoding='utf-8')
     print(destination)

@@ -15,6 +15,7 @@ import sys
 import tempfile
 import stat
 import copy
+import posixpath
 from contextvars import ContextVar
 from contextlib import contextmanager
 from functools import wraps
@@ -83,7 +84,20 @@ def verified_operation(function):
     return run
 
 
-def package_inventory(bundle):
+def bundle_link_name(name, target):
+    """Only relative links inside the frozen dependency directory are allowed."""
+    if (not isinstance(name, str) or not isinstance(target, str) or not target
+            or not name.startswith('_internal/') or target.startswith('/')
+            or any(c in name + target for c in ('\\', ':', '\x00', '\n', '\r'))
+            or PurePosixPath(name).as_posix() != name or '..' in PurePosixPath(name).parts):
+        raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
+    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), target))
+    if not resolved.startswith('_internal/'):
+        raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
+    return resolved
+
+
+def package_inventory(bundle, *, allow_internal_links=False):
     """One bounded no-follow tree walk, instead of rechecking every ancestor."""
     no_links(bundle)
     rows, total = [], 0
@@ -93,12 +107,28 @@ def package_inventory(bundle):
         with os.scandir(directory) as entries:
             for entry in entries:
                 info = entry.stat(follow_symlinks=False)
-                if (entry.is_symlink() or getattr(info, 'st_file_attributes', 0) & 0x400
+                path = Path(entry.path)
+                name = path.relative_to(bundle).as_posix()
+                link = ''
+                if entry.is_symlink():
+                    if not allow_internal_links or os.name == 'nt':
+                        raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
+                    link = os.readlink(path)
+                    bundle_link_name(name, link)
+                    # Lexical and final containment are both needed for link chains.
+                    try:
+                        target = path.resolve(strict=True)
+                    except (OSError, RuntimeError):
+                        raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID') from None
+                    if (not target.is_relative_to(bundle / '_internal')
+                            or not (target.is_file() or target.is_dir())):
+                        raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
+                    no_links(target)
+                elif (getattr(info, 'st_file_attributes', 0) & 0x400
                         or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))):
                     raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
-                path = Path(entry.path)
-                rows.append((path.relative_to(bundle).as_posix(), info.st_mode, info.st_dev,
-                    info.st_ino, info.st_size, info.st_mtime_ns, _change_time(path, info)))
+                rows.append((name, info.st_mode, info.st_dev,
+                    info.st_ino, info.st_size, info.st_mtime_ns, _change_time(path, info), link))
                 if stat.S_ISDIR(info.st_mode):
                     pending.append(path)
                 else:
@@ -130,17 +160,13 @@ def package_metadata(bundle, *, _retry=True):
     no_links(bundle)
     path = bundle / 'version.json'
     try:
-        inventory = package_inventory(bundle)
-        cache = _verification_cache.get()
-        cached = cache.get(str(bundle)) if cache is not None else None
-        if cached and cached[0] == inventory:
-            return copy.deepcopy(cached[1])
         no_links(path)
         if path.stat().st_size > 2_000_000:
             raise ValueError()
         value = json.loads(path.read_bytes())
         identity = value.pop('build_id')
         files = value['files']
+        links = value.get('links', {})
         if (not is_digest(identity) or hashlib.sha256(encode(value)).hexdigest() != identity
             or value['format'] != 'pyinstaller-onedir' or value['state_schema'] != STATE_SCHEMA
             or value['capability_contract'] != 'developer-guidance-v0.3'
@@ -148,7 +174,17 @@ def package_metadata(bundle, *, _retry=True):
             or not isinstance(value['source_commit'], str) or len(value['source_commit']) != 40
             or not isinstance(value['version'], str) or not isinstance(value['experience_contract'], str)
             or not isinstance(files, dict) or not 1 <= len(files) <= 10_000 or EXE not in files
-            or not {'LICENSE', 'THIRD_PARTY_NOTICES.md', 'SOURCE_OFFER.md'}.issubset(files)):
+            or not {'LICENSE', 'THIRD_PARTY_NOTICES.md', 'SOURCE_OFFER.md'}.issubset(files)
+            or not isinstance(links, dict) or len(links) > 2_000
+            or (links and value.get('bundle_link_contract') != 'internal-relative-v1')):
+            raise ValueError()
+        inventory = package_inventory(bundle, allow_internal_links=bool(links))
+        cache = _verification_cache.get()
+        cached = cache.get(str(bundle)) if cache is not None else None
+        if cached and cached[0] == inventory:
+            return copy.deepcopy(cached[1])
+        actual_links = {r[0]: r[7] for r in inventory if stat.S_ISLNK(r[1])}
+        if actual_links != links:
             raise ValueError()
         actual = {r[0] for r in inventory if stat.S_ISREG(r[1])}
         for name, digest in files.items():
@@ -167,7 +203,7 @@ def package_metadata(bundle, *, _retry=True):
                 raise ValueError()
         if actual != set(files) | {'version.json'}:
             raise ValueError()
-        if package_inventory(bundle) != inventory:
+        if package_inventory(bundle, allow_internal_links=bool(links)) != inventory:
             if _retry:
                 if cache is not None:
                     cache.pop(str(bundle), None)
@@ -284,7 +320,7 @@ class StableDelivery:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 # An interrupted copy stays inactive; explicit retry must not
                 # overwrite a potentially running/externally modified slot.
-                shutil.copytree(bundle, target)
+                shutil.copytree(bundle, target, symlinks=True)
             report_progress(progress, 'VERIFY_INSTALLED')
             if package_metadata(target) != metadata:
                 raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
@@ -308,7 +344,7 @@ class StableDelivery:
                     atomic_bytes(launcher / 'launcher.json', encode({'contract': 'native-launcher-v1',
                         'sha256': metadata['files']['_launcher/security-launcher.exe']}))
             if not launcher.exists():
-                shutil.copytree(target, launcher)
+                shutil.copytree(target, launcher, symlinks=True)
             # The bootstrap bundle is immutable. Future upgrades never replace
             # its EXE; dispatch validates and invokes only signed version slots.
             launcher_metadata(launcher)

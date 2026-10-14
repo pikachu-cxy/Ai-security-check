@@ -3,9 +3,43 @@ import os
 import json
 import subprocess
 import sys
+import copy
+import pytest
 from pathlib import Path
 
 from scripts import verify_artifact
+
+
+def declared_sample():
+    return {'coverage': 'PARTIAL', 'scanner_runs': [
+        {'scanner': 'semgrep', 'status': 'SUCCESS'},
+        {'scanner': 'gitleaks', 'status': 'SUCCESS'},
+        {'scanner': 'trivy-misconfig', 'status': 'NOT_APPLICABLE'},
+        {'scanner': 'trivy-vuln', 'status': 'SUCCESS', 'coverage_contract': 'PARTIAL',
+         'coverage_notes': ['Declared versions only, transitive graph unknown'],
+         'dependency_inventory': {'vulnerability_db_freshness': 'FRESH',
+             'complete_dependency_graph_attested': False, 'inventory_truncated': False,
+             'package_coordinates': [{'manifest': 'requirements.txt', 'ecosystem': 'pip',
+                                      'package': 'requests', 'version': '2.31.0'}]}}]}
+
+
+def test_artifact_gate_accepts_successful_declared_inventory_with_partial_graph():
+    verify_artifact.verify_sample_scan(declared_sample(), dependency=True)
+
+
+@pytest.mark.parametrize('change', ['failed', 'stale', 'missing', 'truncated', 'full', 'wrong_version'])
+def test_artifact_gate_rejects_incomplete_or_misrepresented_dependency_check(change):
+    value = copy.deepcopy(declared_sample())
+    run = value['scanner_runs'][-1]
+    inventory = run['dependency_inventory']
+    if change == 'failed': run['status'] = 'FAILED'
+    elif change == 'stale': inventory['vulnerability_db_freshness'] = 'STALE'
+    elif change == 'missing': inventory['package_coordinates'] = []
+    elif change == 'truncated': inventory['inventory_truncated'] = True
+    elif change == 'full': value['coverage'] = 'FULL'
+    else: inventory['package_coordinates'][0]['version'] = '2.32.5'
+    with pytest.raises(ValueError):
+        verify_artifact.verify_sample_scan(value, dependency=True)
 
 
 def test_verifier_skill_install_cannot_reuse_inherited_real_paths(tmp_path):

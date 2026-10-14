@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import stat
 from pathlib import Path
 
 from security_runtime._version import __version__
@@ -73,15 +74,19 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
     # their short default; packaging still fails rather than inventing provenance.
     source_commit = git_provenance(root, 'rev-parse', 'HEAD', timeout=30)
     source_dirty = bool(git_provenance(root, 'status', '--porcelain', timeout=30))
-    from security_runtime.delivery import CONTRACT, encode, file_digest, package_metadata
-    files = {p.relative_to(bundle).as_posix(): file_digest(p) for p in sorted(bundle.rglob('*'))
-             if p.is_file() and p != bundle / 'version.json'}
+    from security_runtime.delivery import CONTRACT, encode, file_digest, package_metadata, package_inventory
+    entries = package_inventory(bundle, allow_internal_links=os.name != 'nt')
+    files = {r[0]: file_digest(bundle / r[0]) for r in entries
+             if stat.S_ISREG(r[1]) and r[0] != 'version.json'}
+    links = {r[0]: r[7] for r in entries if stat.S_ISLNK(r[1])}
     metadata = {"name": "AI Security Runtime", "version": __version__,
         "format": "pyinstaller-onedir", "source_commit": source_commit,
         "source_dirty":source_dirty, "experience_contract":"upgrade-and-scan-v1",
         "state_schema": STATE_SCHEMA, "capability_contract": "developer-guidance-v0.3",
         "launcher_contract": CONTRACT, "files": files,
         "managed_engines": ["semgrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}
+    if links:
+        metadata.update(links=links, bundle_link_contract='internal-relative-v1')
     metadata['build_id'] = hashlib.sha256(encode(metadata)).hexdigest()
     (bundle / "version.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     package_metadata(bundle)

@@ -7,7 +7,7 @@
 
 先读[开发进度](DEVELOPMENT_PROGRESS.md)的最新闭环条目及[试用指南](PILOT_INSTALL_AND_USE.zh-CN.md)。四项缺口已补：漏首次收尾有界补齐、依赖声明版本原公告验证与完整图分开、原风险id逐项签名台账、长测试按需前后版本/变更范围导航。最终147项组合回归通过，之前90项定向回归有重叠。Windows原生隔离重放13项闭合为7原规则+6宿主代码复核，防护对照0项，206行测试读完；仅MCP连接和真实检查也通过。固定分析不代替新聊天或Mac真机。
 
-同提交干净Windows包验证后，再做1人完整试用，扩3–4人前补Mac ARM/Intel构建与真机。仅MCP模式不安装Hook/Skill，配置绑定明确项目。上一提交GitHub作业执行前失败，无Mac包或可用日志；原因未确认，Mac待验。历史手测和旧包限制不追溯修改。详细下一步见[NEXT_DEVELOPMENT_PLAN](NEXT_DEVELOPMENT_PLAN.zh-CN.md)。
+f40185e4干净Windows包已完成双场景验证，再做1人完整试用，扩3–4人前补Mac ARM/Intel发行验证与真机。仅MCP模式不安装Hook/Skill，配置绑定明确项目。旧CI因私有额度耗尽未执行；仓库公开后Mac实际执行，暴露原生框架链接兼容问题，本批修复包清单/复制/解包并对齐声明依赖覆盖断言，本地29项通过、9项POSIX待CI。只以实际成功回执改变发行状态。历史手测和旧包限制不追溯修改。详细下一步见[NEXT_DEVELOPMENT_PLAN](NEXT_DEVELOPMENT_PLAN.zh-CN.md)。
 
 最新接续先读 [全链路可靠性手测](FULL_CHAIN_RELIABILITY_TEST.zh-CN.md)：本批同步所有当前源码、测试及脱敏文档，从同步提交构建dist/fullchain-20261014-r1/security-check作为干净候选。用户将亲自重新卸载接入、正常联网安装并在两个综合workbench里做单任务多风险测试；22项目生成器已验证，实际链路及多风险准确率尚待用户手测。合成凭据/答案/缓存/构建包不随Git拉取。下面保留历史批次，不以历史通过替代综合任务验收。
 
