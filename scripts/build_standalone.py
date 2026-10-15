@@ -15,6 +15,26 @@ from security_runtime._version import __version__
 from dependency_notices import inventory
 
 
+STANDALONE_DOCUMENTS = (
+    'docs/PILOT_INSTALL_AND_USE.zh-CN.md',
+    'docs/guides/WINDOWS_EXPERIENCE.md',
+    'docs/guides/WINDOWS_EXPERIENCE.zh-CN.md',
+    'docs/guides/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md',
+    'docs/archive/2026-10/INSTALL_FLOW_ACCEPTANCE.zh-CN.md',
+    'docs/archive/2026-10/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md',
+    'docs/design/SCAN_TARGET_SELECTION.md',
+    'docs/design/RULE_FOUNDATION.md',
+    'docs/design/RULE_SOURCE_INVENTORY.md',
+)
+
+
+def copy_standalone_documents(root: Path, bundle: Path) -> None:
+    # Repository organization may change; installed document names stay stable.
+    for relative_path in STANDALONE_DOCUMENTS:
+        source = root / relative_path
+        shutil.copy2(source, bundle / source.name)
+
+
 def main(output_dir: Path | None = None, work_dir: Path | None = None,
          launcher_bundle: Path | None = None) -> None:
     root = Path(__file__).resolve().parents[1]
@@ -67,8 +87,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
                 raise ValueError('Windows native launcher requires GCC on the build host')
             subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
                 str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
-    for name in ('PILOT_INSTALL_AND_USE.zh-CN.md','WINDOWS_EXPERIENCE.md','WINDOWS_EXPERIENCE.zh-CN.md','PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md','INSTALL_FLOW_ACCEPTANCE.zh-CN.md','BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md','SCAN_TARGET_SELECTION.md','RULE_FOUNDATION.md','RULE_SOURCE_INVENTORY.md'):
-        shutil.copy2(root / 'docs' / name,bundle / name)
+    copy_standalone_documents(root, bundle)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
     # Local builds may contend with scanners/antivirus. Runtime probes retain
     # their short default; packaging still fails rather than inventing provenance.
