@@ -170,11 +170,13 @@ def _inventory(root, ignored):
     return sorted(selected), dirty, not limitations, limitations[:100]
 
 
-def capture(root, *, known_paths=None, priority_paths=()):
+def capture(root, *, known_paths=None, priority_paths=(), include_text=True):
     """Hash the actual workspace (including pre-existing dirty/new files).
 
     Retain only sanitized text, never raw source/credentials. All budgets are
     reported; unavailable/truncated inventory cannot attest a full task.
+    Freshness-only callers may omit text preparation, but must still inventory
+    and safely read/hash every current file with the same source guards.
     """
     reader = WorkspaceReader(root)
     hashes, texts, limitations, text_truncations = {}, {}, [], {}
@@ -208,7 +210,7 @@ def capture(root, *, known_paths=None, priority_paths=()):
             raw, text = reader.read(name, maximum=min(1_000_000, MAX_READ_BYTES-total))
             hashes[name] = hash_bytes(raw)
             total += len(raw)
-            if _environment(name):
+            if not include_text or _environment(name):
                 continue
             truncated_lines = [i for i, line in enumerate(text.splitlines(), 1) if len(line)>MAX_LINE_CHARS]
             if truncated_lines:
@@ -353,7 +355,7 @@ class TaskSecurityService:
             if revision != record['finished_hook_revision']:
                 return False
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
-                          priority_paths=record['end'].get('read_priority', ()))
+                          priority_paths=record['end'].get('read_priority', ()), include_text=False)
         if current['limitations'] != record['end']['limitations']:
             return False
         return (current['hashes'] == record['end']['hashes']
@@ -660,10 +662,10 @@ class TaskSecurityService:
                     self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
                     raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Task source context unavailable', recoverable=False,
                         guidance='Submit PARTIAL with the missing source; link and source-size guards remain in force.') from None
-                if hash_bytes(raw) != record['end']['hashes'][name]:
+                file_hash = hash_bytes(raw)
+                if file_hash != record['end']['hashes'][name]:
                     raise ValueError('Source changed during context read')
                 lines = safe_source(text)
-                file_hash = hash_bytes(raw)
                 location_version = 'CURRENT_TASK_END'
             if start_line > len(lines):
                 raise TaskContextError('TASK_CONTEXT_RANGE_UNAVAILABLE', 'Source range unavailable',

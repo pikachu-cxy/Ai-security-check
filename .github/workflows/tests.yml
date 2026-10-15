@@ -16,6 +16,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       SECURITY_RUNTIME_OFFLINE: '1'
+      SECURITY_RUNTIME_CI_NODE_VERSION: '24.16.0'
     steps:
       - uses: actions/checkout@v4
       - name: Use runner-owned temporary directory
@@ -26,11 +27,33 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
+      - name: Pin the supported arithmetic host runtime
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24.16.0'
+          check-latest: false
+      - name: Fail early if the pinned Node host is unavailable
+        run: python scripts/node_host_preflight.py --expected-version 24.16.0 --output "${{ runner.temp }}/node-host-preflight.json"
+      - name: Retain actual Node host prerequisite receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-host-preflight-${{ matrix.os }}
+          path: ${{ runner.temp }}/node-host-preflight.json
+          if-no-files-found: error
       - name: Install Runtime and test dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[test,scanner-test]"
       - name: Run Runtime tests
+        env:
+          SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
         run: python -m pytest -q --basetemp="${{ runner.temp }}/runtime-tests"
+      - name: Retain actual arithmetic host execution evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arithmetic-host-evidence-${{ matrix.os }}
+          path: ${{ runner.temp }}/arithmetic-host-evidence/arithmetic-host-positive.json
+          if-no-files-found: error
       - name: First-party rule quality gate
         run: python scripts/test_rules.py

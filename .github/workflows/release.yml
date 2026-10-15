@@ -57,6 +57,8 @@ jobs:
         run: |
           cp README.md dist/release/INSTALL.zh-CN.md
           cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
+      - name: Stage platform downloads and bundled acceptance evidence
+        run: python scripts/prepare_release_assets.py
       - name: Upload complete release as draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,7 +76,7 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft > release-state.json 2>/dev/null; then
             python -c 'import json; assert json.load(open("release-state.json"))["isDraft"], "Refusing to overwrite a published release"'
           else
-            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "AI Security Runtime $RELEASE_TAG" --generate-notes
+            gh release create "$RELEASE_TAG" --verify-tag --draft --prerelease --title "AI Security Runtime $RELEASE_TAG" --notes-file dist/release-notes.md
           fi
-          gh release upload "$RELEASE_TAG" dist/release/* distribution/homebrew/Formula/*.rb distribution/winget/*.yaml --clobber
-          gh release edit "$RELEASE_TAG" --draft=false
+          gh release upload "$RELEASE_TAG" dist/public-release/* --clobber
+          gh release edit "$RELEASE_TAG" --notes-file dist/release-notes.md --draft=false
