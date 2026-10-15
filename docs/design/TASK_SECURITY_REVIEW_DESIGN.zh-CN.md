@@ -16,13 +16,13 @@
 修改前保存实际工作区内容哈希及有限脱敏前像，包含既有脏文件；删除文件可返回签名前像。
 Git盘点遵循项目忽略规则，名称清单与读取成功的哈希分开，优先读取实际新文件及已有脏文件。
 任务静态范围最多1000个改动文件，AI改动上下文最多20个，关联最多10个文件、40个读取窗口，累计64,000字节。
-不完整快照不能证明新增、删除或无改动；最新范围验收见 [自动任务范围](TASK_INVENTORY_ACCEPTANCE.zh-CN.md)。
+不完整快照不能证明新增、删除或无改动；最新范围验收见 [自动任务范围](../archive/2026-10/TASK_INVENTORY_ACCEPTANCE.zh-CN.md)。
 同版本结束不重扫；源码变化时静态尝试最多2次。未完成核查用 `skip_review_reason` 保留缺口
 并结束，不要求用户“继续”。模型由当前宿主执行，Runtime 只校验候选结构、证据及版本。
 
 真实本地包的普通MCP和Hook接口测试已跑过四类语言，原风险可检出，重复结束为空反馈，
 无改动不扫描。真实桌面事件派发及 Agent 自动遵循 Skill 编排仍须本机手测，不能以模拟
-候选提交声称AI核查准确率已验证。具体复现和耗时见 [任务核查验收](TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)。
+候选提交声称AI核查准确率已验证。具体复现和耗时见 [任务核查验收](../archive/2026-10/TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)。
 
 ## 产品边界和触发方式
 
@@ -119,7 +119,7 @@ Qoder 官方将轻量扫描描述为任务临近完成时建议启动，用户�
 | summary 与任务选择 | 优先任务、完整列表、本地续办 | 增加候选来源、证据层级和通知去重 |
 | task_fix 与验证 | 具体问题授权、受限编辑及原扫描器复验 | 规则外问题有独立复核和相关功能验证结论 |
 
-当前 [triage_models](../src/security_runtime/triage_models.py) 明确只验证已有发现，因此不能直接移除限制、把任意模型文字提交为原扫描器事实。[closeout](../src/security_runtime/closeout.py) 目前恢复的范围也不能代替整个开发任务的开始到结束差异。
+当前 [triage_models](../../src/security_runtime/triage_models.py) 明确只验证已有发现，因此不能直接移除限制、把任意模型文字提交为原扫描器事实。[closeout](../../src/security_runtime/closeout.py) 目前恢复的范围也不能代替整个开发任务的开始到结束差异。
 
 ## 新增接口与结果契约
 
@@ -175,7 +175,7 @@ Stop 仅做有界兜底：无有效开发任务时空返回；任务有待检部
 
 ## 相关文档
 
-- [核心链路手动测试](MANUAL_CORE_TEST.zh-CN.md)
-- [当前接续计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)
-- [第一版受邀试用清单](PILOT_V1_CHECKLIST.zh-CN.md)
+- [核心链路手动测试](../guides/MANUAL_CORE_TEST.zh-CN.md)
+- [当前接续计划](../NEXT_DEVELOPMENT_PLAN.zh-CN.md)
+- [第一版受邀试用清单](../PILOT_V1_CHECKLIST.zh-CN.md)
 

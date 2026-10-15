@@ -293,7 +293,8 @@ def test_router_never_uses_last_workspace_or_decodes_refs(installed, projects, t
         result = asyncio.run(server.call_tool('prepare_task_fix', {'task_ref': str(projects[0]), 'workspace_path': str(projects[1])}))
         assert result.structuredContent['status'] == 'INCONCLUSIVE'
         tools = asyncio.run(server.list_tools())
-        assert 'workspace_path' in next(t for t in tools if t.name == 'run_functional_verification').inputSchema['properties']
+        assert not {'prepare_functional_verification', 'run_functional_verification'} & {t.name for t in tools}
+        assert 'workspace_path' in next(t for t in tools if t.name == 'get_findings').inputSchema['properties']
         assert set(next(t for t in tools if t.name == 'handle_hook_event').inputSchema['properties']) == {'event','workspace_path','session_id','tool_name','tool_input','turn_id','tool_use_id','permission_mode'}
     finally: pool.close()
 
@@ -534,14 +535,15 @@ def test_user_disabled_hooks_preserved_and_not_claimed_ready(installed):
 def test_global_and_project_tool_schemas_are_backward_compatible(installed, tmp_path, projects):
     from security_runtime.mcp_server import create_server
     project = create_server(global_mode=False)
-    before = copy.deepcopy(project._tool_manager.get_tool('run_functional_verification').parameters)
+    before = copy.deepcopy(project._tool_manager.get_tool('get_findings').parameters)
     pool = pool_fixture(installed, tmp_path)
     try:
         global_server = create_global_server(workspaces=pool)
         schemas = {t.name: t.inputSchema for t in asyncio.run(global_server.list_tools())}
-        assert 'workspace_path' in schemas['run_functional_verification']['properties']
+        assert not {'prepare_functional_verification', 'run_functional_verification'} & schemas.keys()
+        assert 'workspace_path' in schemas['get_findings']['properties']
         assert 'workspace_path' not in before['properties']
-        assert project._tool_manager.get_tool('run_functional_verification').parameters == before
+        assert project._tool_manager.get_tool('get_findings').parameters == before
         assert schemas['handle_hook_event']['properties'] == project._tool_manager.get_tool('handle_hook_event').parameters['properties']
     finally: pool.close()
 

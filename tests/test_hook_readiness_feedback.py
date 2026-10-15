@@ -83,6 +83,9 @@ def test_global_session_start_copy_preserves_readiness_without_status_echo(conne
     server, pool, runtimes = connected
     readiness = {'status': status, 'security_proof': False, 'baseline_status': 'BASELINE_ESTABLISHED'}
     monkeypatch.setattr(pool, 'bootstrap', lambda *args: readiness)
+    async def waited(*args):
+        return readiness
+    monkeypatch.setattr(pool, 'wait_for_bootstrap', waited)
     root = projects[0]
     before = len(runtimes[root].calls)
     output = asyncio.run(server.call_tool('handle_readiness_event', {
@@ -93,6 +96,13 @@ def test_global_session_start_copy_preserves_readiness_without_status_echo(conne
     assert output.structuredContent['workspace_readiness'] == readiness
     assert output.structuredContent['security_proof'] is False
     assert output.structuredContent['host_claim_status'] == 'VALID'
+    payload = json.loads(output.content[0].text)
+    if status != 'READY':
+        assert payload['hookSpecificOutput']['hookEventName'] == 'SessionStart'
+        assert message in payload['hookSpecificOutput']['additionalContext']
+        assert '普通聊天' in payload['hookSpecificOutput']['additionalContext']
+    else:
+        assert 'hookSpecificOutput' not in payload
     assert len(runtimes[root].calls) == before
     assert str(root) not in message
     if status == 'READY':
@@ -117,6 +127,13 @@ def test_global_mutation_waiting_copy_preserves_guard_and_no_scan(connected, pro
     assert output.structuredContent['source_modified'] is False
     assert output.structuredContent['host_claim_status'] == 'VALID'
     assert before == (target.read_bytes(), len(runtimes[root].calls))
+    payload = json.loads(output.content[0].text)
+    assert payload['hookSpecificOutput']['hookEventName'] == 'PostToolUse'
+    assert '本次操作已结束，但自动安全检查未完成' in public_text(output)
+    assert public_text(output) == output.structuredContent['user_feedback']['message']
+    assert public_text(output) in payload['hookSpecificOutput']['additionalContext']
+    assert '必须说明' in payload['hookSpecificOutput']['additionalContext']
+    assert payload['continue'] is True
 
 
 def test_invalid_sdk_claims_use_plain_copy_without_source_or_missing_names(connected, projects):

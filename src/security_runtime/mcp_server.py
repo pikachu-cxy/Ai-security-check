@@ -55,7 +55,7 @@ def _agent_result(result) -> dict:
 
 def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory=None,
                   hook_coordinator=None, workspace_binding=None, global_mode=None,
-                  hook_advisory_only=False):
+                  hook_advisory_only=False, include_functional_verification=False):
     if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
         from .global_mcp import create_global_server
         return create_global_server()
@@ -98,7 +98,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         # legacy prepare contract unless their trusted constructor opts in.
         remediation.agent_tickets.enabled = True
     from .functional_verification import FunctionalVerificationService
-    functional = FunctionalVerificationService(remediation)
+    # Trusted internal embedding only; personal MCP discovery hides these tools.
+    # Enabling discovery never supplies repair or project-execution authority.
+    functional = FunctionalVerificationService(remediation) if include_functional_verification else None
     # Only an explicit Deep tool request opts this connection into finalization.
     # Core security rechecks never discover or run optional project verifiers.
     from collections import deque
@@ -458,7 +460,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def get_runtime_info() -> dict:
         """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
         from .host_guidance import runtime_info
-        return runtime_info(remediation_config=remediation.config)
+        return runtime_info(remediation_config=remediation.config,
+                            include_functional_verification=include_functional_verification)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_professional_guidance() -> dict:
@@ -602,28 +605,29 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     recovery_tool.fn_metadata.arg_model.model_rebuild(force=True)
     recovery_tool.parameters = recovery_tool.fn_metadata.arg_model.model_json_schema()
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def prepare_functional_verification(remediation_ref: str, task_ref: str, workspace_path: str | None = None) -> dict:
-        """Plan existing local verifiers only after Runtime-authorized repair has signed SCANNER_VERIFIED_RESOLVED. No shell/source/log/host status input; never runs builds in HookCoordinator."""
-        output = functional.prepare(remediation_ref,task_ref,workspace_path or (binding.root if binding else None),
-                                    bound_workspace=binding.root if binding else None)
-        if output.get('security_verification', {}).get('status') == 'SCANNER_VERIFIED_RESOLVED':
-            pair = (remediation_ref, task_ref)
-            if pair not in deep_requests:
-                deep_requests.append(pair)
-        return output
+    if include_functional_verification:
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        def prepare_functional_verification(remediation_ref: str, task_ref: str, workspace_path: str | None = None) -> dict:
+            """Plan existing local verifiers only after Runtime-authorized repair has signed SCANNER_VERIFIED_RESOLVED. No shell/source/log/host status input; never runs builds in HookCoordinator."""
+            output = functional.prepare(remediation_ref,task_ref,workspace_path or (binding.root if binding else None),
+                                        bound_workspace=binding.root if binding else None)
+            if output.get('security_verification', {}).get('status') == 'SCANNER_VERIFIED_RESOLVED':
+                pair = (remediation_ref, task_ref)
+                if pair not in deep_requests:
+                    deep_requests.append(pair)
+            return output
 
-    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def run_functional_verification(functional_ref: str, execution_result: FunctionalExecutionReport | None = None) -> dict:
-        """Accept bounded untrusted host execution results for the exact plan. Without a report returns the host plan; Runtime never executes target commands. No argv/shell override/source/raw logs/Secret input. Functional reports cannot alter scanner facts."""
-        return functional.run(functional_ref, execution_result=execution_result,
-                              bound_workspace=binding.root if binding else None)
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        def run_functional_verification(functional_ref: str, execution_result: FunctionalExecutionReport | None = None) -> dict:
+            """Accept bounded untrusted host execution results for the exact plan. Without a report returns the host plan; Runtime never executes target commands. No argv/shell override/source/raw logs/Secret input. Functional reports cannot alter scanner facts."""
+            return functional.run(functional_ref, execution_result=execution_result,
+                                  bound_workspace=binding.root if binding else None)
 
-    for name in ('prepare_functional_verification','run_functional_verification'):
-        tool = server._tool_manager.get_tool(name)
-        tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-        tool.fn_metadata.arg_model.model_rebuild(force=True)
-        tool.parameters = tool.fn_metadata.arg_model.model_json_schema()
+        for name in ('prepare_functional_verification','run_functional_verification'):
+            tool = server._tool_manager.get_tool(name)
+            tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
+            tool.fn_metadata.arg_model.model_rebuild(force=True)
+            tool.parameters = tool.fn_metadata.arg_model.model_json_schema()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:

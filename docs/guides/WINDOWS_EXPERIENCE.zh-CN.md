@@ -93,13 +93,13 @@ Release 扫描也支持从 ZIP 解压、没有 Git 的源码目录。已识别�
 具体诊断停止发现。当前规则包 1.2.0 包含 40 条规则（32 条默认启用），新增
 Java 框架变体及六条共享 JS/TS 规则。实际覆盖取决于执行的文件和规则，不代表
 所有语言或所有漏洞都已检查；Vue SFC 和未建模调用链仍有明确限制。
-规则范围、授权审核和六步体验清单见 [RULE_FOUNDATION.md](RULE_FOUNDATION.md)。
-详见[目标选择](SCAN_TARGET_SELECTION.md)。
+规则范围、授权审核和六步体验清单见 [RULE_FOUNDATION.md](../design/RULE_FOUNDATION.md)。
+详见[目标选择](../design/SCAN_TARGET_SELECTION.md)。
 
 ## 本轮 Java / JS / TS 规则体验
 
 本地包名称包含 `rule-foundation`；应用仍是 0.3.1，规则包是 1.2.0，
-用 `build_id` 区分旧的同版本包。完整规则边界见 [规则基础](RULE_FOUNDATION.md)。
+用 `build_id` 区分旧的同版本包。完整规则边界见 [规则基础](../design/RULE_FOUNDATION.md)。
 本轮也修复默认 Global Hook 状态目录超过 Windows 传统路径长度时的保存问题，
 内部使用同一文件位置的长路径表示，不修改系统设置、工作区边界或 ownership 校验。
 

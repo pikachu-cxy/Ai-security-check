@@ -99,10 +99,12 @@ def test_timing_persistence_contains_no_source_or_new_authority(setup):
 
 def test_missing_deep_capability_is_not_a_core_readiness_failure():
     info = runtime_info()
-    info['features'].pop('functional_verification')
-    info['features'].pop('functional_host_execution')
+    assert not {'functional_verification', 'functional_host_execution',
+                'arithmetic_host_regression', 'post_fix_functional_prompt'} & info['features'].keys()
+    assert not info.get('optional_guidance_tools')
     assert check_capabilities(info, REQUIRED_TOOLS)['status'] == 'OK'
-    assert 'Only a separate explicit Deep Verification request' in HOST_INSTRUCTIONS
+    assert '执行功能验证' not in HOST_INSTRUCTIONS
+    assert 'prepare_functional_verification' not in HOST_INSTRUCTIONS
 
 
 def test_core_mcp_verify_does_not_finalize_optional_deep(setup, monkeypatch):
@@ -125,5 +127,6 @@ def test_core_mcp_verify_does_not_finalize_optional_deep(setup, monkeypatch):
                         {'security_verification': {'status': 'SCANNER_VERIFIED_RESOLVED'}})
     monkeypatch.setattr(FunctionalVerificationService, 'finalize', lambda self, r, t, p, checked:
                         dict(checked, explicitly_requested_deep=True))
-    server._tool_manager.get_tool('prepare_functional_verification').fn(**values, workspace_path=str(root))
-    assert server._tool_manager.get_tool('verify_task_fix').fn(**values, workspace_path=str(root))['explicitly_requested_deep']
+    internal = create_server(runtime, include_functional_verification=True)
+    internal._tool_manager.get_tool('prepare_functional_verification').fn(**values, workspace_path=str(root))
+    assert internal._tool_manager.get_tool('verify_task_fix').fn(**values, workspace_path=str(root))['explicitly_requested_deep']

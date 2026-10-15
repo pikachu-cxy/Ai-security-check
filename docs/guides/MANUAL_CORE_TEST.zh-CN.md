@@ -2,7 +2,7 @@
 
 更新日期：2026-10-13。
 
-本批开始不再从普通 Stop 安排结束扫描。请先按 [任务核查验收](TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)
+本批开始不再从普通 Stop 安排结束扫描。请先按 [任务核查验收](../archive/2026-10/TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)
 核对新版安装与任务边界；下文原 Stop 接续记录作为历史诊断保留。改文件的静态 Hook 继续保留，
 任务级结果应合并进开发总结。下方未加载/已加载的速度对照仍需真实桌面测试。
 
@@ -40,7 +40,7 @@
 | 专门的快速语义 Skill | 尚无；当前只有通用 ai-security-review 和专业深审参考 |
 | 人工要求跨文件静态核查 | 可明确请求通用 Skill 的宿主补充分析；不冒充 Runtime 扫描器发现 |
 
-依据：[接续计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)、[收尾范围](../src/security_runtime/closeout.py)、[候选复核契约](../src/security_runtime/triage_models.py)、[当前 Skill](../src/security_runtime/skills/ai-security-review/SKILL.md)。
+依据：[接续计划](../NEXT_DEVELOPMENT_PLAN.zh-CN.md)、[收尾范围](../../src/security_runtime/closeout.py)、[候选复核契约](../../src/security_runtime/triage_models.py)、[当前 Skill](../../src/security_runtime/skills/ai-security-review/SKILL.md)。
 
 Java/Python quick 会选择适用的默认启用规则，包含已验证规则，并非只跑成熟度为 CORE 的规则。JS/TS 动态 Function/eval 可能走专门快速路径，延后其他代码规则；收尾应补查，结果需说明实际范围。
 
@@ -91,7 +91,7 @@ $lab = Join-Path $repo '.tools\manual-hook-lab-20261013'
 | javascript | 动态 new Function，src/expressionEvaluator.js | 内联 Express 和 pg SQL，src/users.js |
 | typescript | 动态 new Function，src/expressionEvaluator.ts | 带类型回调的 SQL，src/users.ts |
 
-变体沿用现有规则样例支持的形状，预期规则见 CASE_INDEX.md 和 [变体数据](../samples/manual-hook-lab/cases.json)。静态检查无需安装 Servlet、Requests、Flask、Express 或 pg。
+变体沿用现有规则样例支持的形状，预期规则见 CASE_INDEX.md 和 [变体数据](../../samples/manual-hook-lab/cases.json)。静态检查无需安装 Servlet、Requests、Flask、Express 或 pg。
 
 每次只测试一项，由 Agent 正常编辑。例如 Java 案例 01：
 
@@ -203,5 +203,5 @@ $project = Join-Path $lab 'java'
 
 手动能命中而 Hook 未执行，排查接入；手动也未命中，检查规则执行、输入/API 形状、解析和覆盖。跨文件封装未命中保留未知。
 
-[规则验收](../scripts/test_rules.py)、[模拟开发事件](../scripts/hook_development_simulation.py)、[普通 MCP 收尾验收](../scripts/closeout_mcp_acceptance.py) 和 [动态表达式验收](../scripts/new_function_acceptance.py) 可作对照，其来源不等于真实桌面自动触发。
+[规则验收](../../scripts/test_rules.py)、[模拟开发事件](../../scripts/hook_development_simulation.py)、[普通 MCP 收尾验收](../../scripts/closeout_mcp_acceptance.py) 和 [动态表达式验收](../../scripts/new_function_acceptance.py) 可作对照，其来源不等于真实桌面自动触发。
 

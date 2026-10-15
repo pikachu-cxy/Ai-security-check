@@ -146,13 +146,35 @@ def test_mode_observation_is_actual_readonly_and_bounded(tmp_path, monkeypatch, 
     if not invalid:
         expected.update(automatic_fix_without_user_consent=False, user_consent_required=True)
     assert data['remediation'] == expected
-    assert data['features']['smart_auto_remediation'] == data['features']['functional_verification'] == 'v0.1'
+    assert data['features']['smart_auto_remediation'] == 'v0.1'
+    assert not {'functional_verification', 'functional_host_execution',
+                'arithmetic_host_regression', 'post_fix_functional_prompt'} & data['features'].keys()
+    assert not data.get('optional_guidance_tools')
     assert data['capability_contract'] == 'developer-guidance-v0.3'
     assert not any(data['execution'].values())
     serialized = json.dumps(data)
     assert CANARY not in serialized and str(state) not in serialized and 'private-state-canary' not in serialized
     assert before == {p: p.read_bytes() for p in tmp_path.rglob('*') if p.is_file()}
     if mode is None: assert not state.exists()
+
+
+@pytest.mark.parametrize('explicit_default', [False, True])
+def test_personal_mcp_discovery_and_info_hide_functional_entrypoints(tmp_path, monkeypatch, explicit_default):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
+    kwargs = {'include_functional_verification': False} if explicit_default else {}
+    server = create_server(**kwargs)
+    names = {tool.name for tool in asyncio.run(server.list_tools())}
+    assert {'prepare_task_fix', 'verify_task_fix'} <= names
+    assert not {'prepare_functional_verification', 'run_functional_verification'} & names
+    instructions = server._mcp_server.instructions
+    for hidden in ('functional_verification_offer', 'prepare_functional_verification',
+                   'run_functional_verification', '执行功能验证', 'one-time functional verification offer'):
+        assert hidden not in instructions
+    data = invoke(server)
+    assert not {'functional_verification', 'functional_host_execution',
+                'arithmetic_host_regression', 'post_fix_functional_prompt'} & data['features'].keys()
+    assert not data.get('optional_guidance_tools')
+    assert not any(data['execution'].values())
 
 
 def test_mcp_info_reads_its_service_config_not_other_environment_state(setup, tmp_path, monkeypatch):

@@ -17,7 +17,7 @@
 安装成功后自动启动隐藏后台准备，不占用安装等待，也不要求普通用户执行前置命令。
 默认初始 300 秒、按真实进度续等、最长 1800 秒和 30 秒无进展限制。
 准备期间使用可用组件，缺失项登记原收尾任务，完成后自动通过普通 MCP 接续并核对最新版本。
-进度可选用 `preparation watch` 查看；[本批验收步骤](BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md)。
+进度可选用 `preparation watch` 查看；[本批验收步骤](../archive/2026-10/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md)。
 
 `personal-install-v1` 回执把本地文件就绪、宿主连接、引擎准备、扫描和修复授权分开。
 `install codex` 在本地程序、全局配置自检和 Skill 安装通过后返回 0；

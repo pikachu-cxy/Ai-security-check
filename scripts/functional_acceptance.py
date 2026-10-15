@@ -118,7 +118,10 @@ async def run(command,failure=False,mode='ask_before_fix'):
                         data=response.structuredContent or json.loads(response.content[0].text)
                         return data.get('result',data)
                     info=await call('get_runtime_info',{})
-                    assert info['features']['functional_verification']=='v0.1'
+                    functional_available=info['features'].get('functional_verification')=='v0.1'
+                    exposed={tool.name for tool in (await client.list_tools()).tools}
+                    functional_tools={'prepare_functional_verification','run_functional_verification'}
+                    assert (functional_tools <= exposed if functional_available else not functional_tools & exposed)
                     assert info['remediation']['mode']==mode
                     assert info['remediation']['configuration_status']=='VALID'
                     assert str(state) not in json.dumps(info)
@@ -139,8 +142,9 @@ async def run(command,failure=False,mode='ask_before_fix'):
                     assert 'already approved' in decision['guidance']
                     inline=False
                     grant=decision['prepare']['arguments']
-                    rejected=await call('prepare_functional_verification',grant)
-                    assert rejected['overall_status']=='SECURITY_NOT_VERIFIED'
+                    if functional_available:
+                        rejected=await call('prepare_functional_verification',grant)
+                        assert rejected['overall_status']=='SECURITY_NOT_VERIFIED'
                     if not inline:
                         prepared=await call('prepare_task_fix',grant)
                         assert prepared['status']=='READY_FOR_HOST_FIX'
@@ -149,6 +153,21 @@ async def run(command,failure=False,mode='ask_before_fix'):
                     assert closed['resolved_families']==1
                     checked=await call('verify_task_fix',grant)
                     assert checked['verification_status']=='SCANNER_VERIFIED_RESOLVED'
+                    if not functional_available:
+                        assert 'functional_verification_offer' not in checked
+                        assert path.read_text()==SAFE and not (root/'target').exists()
+                        return dict(case='B' if failure else 'A',mode=requested_mode,effective_mode=mode,
+                            transport='ACTUAL_MCP_STDIO',observed_mode=info['remediation']['mode'],
+                            interaction=decision['interaction'],prepare_task_fix=not inline,
+                            inline_prepared=inline,verify_task_fix=True,resolved_families=closed['resolved_families'],
+                            prepare_functional_verification=False,run_functional_verification=False,
+                            security_verification='SCANNER_VERIFIED_RESOLVED',
+                            functional_acceptance='SKIPPED_HIDDEN_PERSONAL_FEATURE',
+                            functional_result={'status':'NOT_RUN','reason':'HIDDEN_PERSONAL_FEATURE'},
+                            plan=None,duration_ms=round((time.monotonic()-start)*1000),
+                            host_edits='SIMULATED_BY_ACCEPTANCE_DRIVER',desktop_trial='PENDING',
+                            source_persisted=False,network_authorized=False,package_download=False,
+                            runtime_source_edit=False,baseline='UNKNOWN',ground_truth='UNREVIEWED')
                     planned=await call('prepare_functional_verification',grant)
                     if planned.get('status') == 'FUNCTIONAL_VERIFICATION_READY':
                         # Execute only through the existing enforced sandbox,

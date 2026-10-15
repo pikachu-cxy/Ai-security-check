@@ -447,7 +447,9 @@ def family_delta(previous, observed, can_cover):
 
 class HookCoordinator:
     def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None,
-                 workspace_resolver=None, snapshot_capture=None):
+                 workspace_resolver=None, snapshot_capture=None, activity_wait_seconds=0):
+        if type(activity_wait_seconds) not in (int, float) or not 0 <= activity_wait_seconds <= 10:
+            raise ValueError('Invalid activity wait budget')
         self.runtime = runtime
         self.store = store or HookStateStore()
         self.cooldown_ms = cooldown_ms
@@ -455,6 +457,7 @@ class HookCoordinator:
         self.seeds = seeds
         self.workspace_resolver = workspace_resolver
         self.snapshot_capture = snapshot_capture or capture_snapshot
+        self.activity_wait_seconds = activity_wait_seconds
         self._managed_registry = None
 
     def managed_registry(self):
@@ -666,7 +669,12 @@ class HookCoordinator:
                 result['pending_mutation'] = True
             observe('CLAIMS_VALID', **result)
         waiting = time.monotonic()
-        with self.store.lock(root, wait_seconds=10 if _lifecycle else 2 if event == HookEvent.AGENT_STOP else 0) as locked:
+        wait_seconds = (10 if _lifecycle else 2 if event == HookEvent.AGENT_STOP else
+                        self.activity_wait_seconds if event == HookEvent.FILE_CHANGED else 0)
+        with self.store.lock(root, wait_seconds=wait_seconds) as locked:
+            if not _lifecycle and event == HookEvent.FILE_CHANGED:
+                result.update(activity_wait_ms=round((time.monotonic()-waiting)*1000, 3),
+                              pending_mutation=pending is not None)
             if _lifecycle and event == HookEvent.FILE_CHANGED:
                 result['activity_wait_ms'] = round((time.monotonic()-waiting)*1000, 3)
                 # A missing baseline at arrival plus publication while waiting is
@@ -689,6 +697,9 @@ class HookCoordinator:
                 result.update(status='INCONCLUSIVE', reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
                     busy_reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
                     next_step='Activity is pending. Retry a workspace activity after the current transaction finishes; Stop does not scan.')
+            elif event == HookEvent.FILE_CHANGED:
+                result.update(reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT', busy_reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
+                    next_step='Activity remains pending; the security check did not run. Stop does not scan.')
             if _lifecycle:
                 current, _ = self.store.load(self.store.path(root, host, session_id))
                 result['baseline_state_after'] = 'AVAILABLE' if current else 'MISSING'

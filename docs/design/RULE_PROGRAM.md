@@ -2,14 +2,14 @@
 
 The release counts and Java foundation evidence below preserve an earlier
 milestone. Current catalog counts, Python additions and acceptance status are
-recorded in [development progress](DEVELOPMENT_PROGRESS.md).
+recorded in [development progress](../DEVELOPMENT_PROGRESS.md).
 
 Rule Program v1 is capability-first. It maps:
 
 `Capability → underlying scanner rules → Finding Family / Episode → Policy → remediation / proof`
 
 The product identity is the capability manifest at
-[`src/security_runtime/rules/capabilities.json`](../src/security_runtime/rules/capabilities.json).
+[`src/security_runtime/rules/capabilities.json`](../../src/security_runtime/rules/capabilities.json).
 Catalog and YAML files are execution definitions, not the product quality measure.
 
 The current local foundation release is rule pack 1.2.0 / mapping 1.1.0:
@@ -59,7 +59,7 @@ exploitability, and gadget reachability are outside this program.
 
 The Rule Program is consumed by the existing Runtime Core and scanners. It does
 not add a second Finding or authorization system. Host status is documented in
-[Architecture](ARCHITECTURE.md) and [Project context](PROJECT_CONTEXT.md).
+[Architecture](../ARCHITECTURE.md) and [Project context](../PROJECT_CONTEXT.md).
 
 ## R1 detection quality status
 

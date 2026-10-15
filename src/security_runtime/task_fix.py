@@ -20,8 +20,8 @@ PLANS = {
         'changes': ['核查选定位置的输入和用途；算术用途优先复用已有受限解析器，或用仅解析数字、括号和约定运算符的实现替换动态执行。',
             '对不支持的语法和非法输入明确拒绝，不通过代码生成计算；语法范围收窄需向用户说明。'],
         'regression': ['重新执行原 provider、原规则和原文件的检查；移动行号或改用等价动态构造不能当作修复。',
-            '宿主实际运行正常算术、运算优先级、括号、负数和小数用例，并检查原返回类型。',
-            '检查错误输入、非有限结果、超预算输入及 JavaScript 调用/属性访问被拒绝，未执行代码；检查原错误响应及响应格式。',
+            '如用户另行要求测试，可在现有执行权限内检查正常算术、运算优先级、括号、负数和小数用例及原返回类型。',
+            '测试建议包括错误输入、非有限结果、超预算输入及 JavaScript 调用/属性访问被拒绝，未执行代码；原错误响应及响应格式。',
             '安全复查与实际功能测试分别报告；原规则未再命中不证明功能兼容或生产安全。']},
     'tls': {
         'security_goal': '恢复正常的服务器证书链与主机名校验。',
@@ -153,15 +153,6 @@ class TaskFixService:
             'execution': dict(EXECUTION), 'runtime_observed_execution': dict(EXECUTION),
             'host_reported_execution': {'status': 'NOT_REPORTED'}, 'automatic_execution': False}
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)
-        if plan is PLANS['dynamic-function']:
-            from .arithmetic_regression import build_arithmetic_regression_plan
-            out['optional_functional_regression'] = {
-                'applies_when': 'HOST_CONFIRMED_ARITHMETIC_BUSINESS_CONTRACT',
-                **build_arithmetic_regression_plan(),
-                'task_ref': task_ref,
-                'source_copies': 'HOST_PRESERVES_DISTINCT_BEFORE_AND_AFTER_MODULES',
-                'authorization': 'EXPLICIT_SELECTED_TASK_FIX_INTENT_REQUIRED',
-            }
         if task['topic'] == 'dependency':
             from .dependency_context import remediation_options
             # Evidence/text is redacted by the same bounded builder.
@@ -281,4 +272,7 @@ class TaskFixService:
                 out['user_feedback'] = {'message': '检查未完成：复查期间出现新的待检事件或工作区正忙，持续记录尚未确认关闭；请恢复原任务复查。', 'choices': []}
             out['verification_source'] = 'MANUAL_INDEPENDENT_RECHECK'
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)
+        if again['status'] == 'RESOLVED' and out['verification_status'] == 'SCANNER_VERIFIED_RESOLVED':
+            from .functional_feedback import pending_feedback
+            out.update(pending_feedback())
         return out if again['status'] == 'RESOLVED' else again

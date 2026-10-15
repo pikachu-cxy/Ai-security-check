@@ -1,6 +1,7 @@
 """Thin user-level MCP router; security logic remains workspace-bound."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -20,6 +21,9 @@ HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
 GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance', 'get_scan_preparation_status'}
 LIMIT = 16
 MAX_SESSIONS = 64
+# Leave room for admission/transport within the native 30-second startup Hook.
+# Waiting reuses the existing job; it never starts another baseline scan.
+BOOTSTRAP_WAIT_SECONDS = 20
 
 
 def global_runtime_info():
@@ -74,7 +78,7 @@ class GlobalWorkspaces:
         core = HookCoordinator(hook_runtime, HookStateStore(directory / 'hooks'),
                                workspace_resolver=lambda value: resolve_workspace(value),
                                snapshot_capture=None if is_git else source_snapshot,
-                               seeds=_NoProjectSeed())
+                               seeds=_NoProjectSeed(), activity_wait_seconds=10)
         def remediation_factory(store, **kwargs):
             # User policy stays user-wide; grants/proofs/DB stay workspace-local.
             return RemediationService(store, config=RemediationConfig(), inline_agent_tickets=True, **kwargs)
@@ -191,6 +195,25 @@ class GlobalWorkspaces:
         except Exception:
             write_bootstrap(root, 'ERROR', 'INITIALIZATION_INCONCLUSIVE', base=self.base)
             return {'status': 'ERROR', 'reason_code': 'INITIALIZATION_INCONCLUSIVE', 'security_proof': False}
+
+    async def wait_for_bootstrap(self, root, session, readiness):
+        """Keep startup ahead of edits, without cancelling a slow worker.
+
+        SessionStart is the only caller. Read-only events and ordinary edits do
+        not acquire a new wait, start a scan, or manufacture a pre-edit baseline.
+        """
+        if readiness.get('status') != 'INITIALIZING':
+            return readiness
+        key = (root, self.bind_session(session, root))
+        with self.lock:
+            future = self.jobs.get(key)
+        if future is None:
+            return readiness
+        wrapped = asyncio.wrap_future(future)
+        try:
+            return await asyncio.wait_for(asyncio.shield(wrapped), BOOTSTRAP_WAIT_SECONDS)
+        except TimeoutError:
+            return readiness
 
     def close(self):
         self.executor.shutdown(wait=True, cancel_futures=True)
@@ -353,6 +376,7 @@ def create_global_server(*, workspaces=None):
                             reconciliation_reason='NO_TRUSTED_PRE_EDIT_SNAPSHOT')
                 readiness = pool.bootstrap(root, arguments['session_id'])
                 if normalized.kind == EventKind.SESSION_START:
+                    readiness = await pool.wait_for_bootstrap(root, arguments['session_id'], readiness)
                     from .integration_readiness import readiness_message
                     data = {'status': readiness['status'], 'readiness_status': 'READINESS_OBSERVED',
                             'workspace_id': identity(os.path.normcase(str(root))),
@@ -433,6 +457,34 @@ def create_global_server(*, workspaces=None):
     routed_call = call
     async def quiet_stop_call(name, arguments):
         result = await routed_call(name, arguments)
+        if name in {'handle_hook_event', 'handle_readiness_event'}:
+            data = result.structuredContent or {}
+            # Native Hosts consume additionalContext as model instructions.
+            # systemMessage alone can be invisible to the agent, hiding a real
+            # missed check behind a successful file edit. Keep gaps explicit;
+            # this presentation never grants repair or manual-scan authority.
+            if ((name == 'handle_readiness_event' and data.get('status') != 'READY') or
+                    (data.get('status') == 'INCONCLUSIVE' and data.get('scanner_run') is False
+                     and not data.get('user_feedback'))):
+                payload = json.loads(result.content[0].text)
+                message = payload.get('systemMessage')
+                if message:
+                    event = 'SessionStart' if name == 'handle_readiness_event' else 'PostToolUse'
+                    if event == 'PostToolUse':
+                        message = '本次操作已结束，但自动安全检查未完成。' + message
+                    data['user_feedback'] = {'message': message}
+                    presentation = (
+                        '若本轮实际编辑且自动检查仍未完成，在正常总结中说明上方缺口；'
+                        '普通聊天或检查后来完成时不重复准备提示。' if event == 'SessionStart' else
+                        '本轮正常回复中必须说明上方实际检查状态，不能省略或称检查通过。')
+                    payload['systemMessage'] = message
+                    payload['hookSpecificOutput'] = {'hookEventName': event, 'additionalContext':
+                        '用户提示\n' + message + '\n\n呈现要求\n'
+                        + presentation +
+                        '检查未完成不代表文件编辑失败，不要重复编辑、撤销或自行修复。'
+                        '不主动补扫、重建检查事件或运行构建测试，不索取内部引用。'}
+                    result.structuredContent = data
+                    result.content = [TextContent(type='text', text=json.dumps(payload))]
         if name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block':
             # Validation/admission failures are diagnostics too. A broken or
             # unready connection must not add a warning to every ordinary chat.

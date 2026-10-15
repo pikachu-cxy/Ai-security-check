@@ -31,6 +31,7 @@ GUIDANCE = (
     'If the bridge is unavailable or any precondition fails, use the retained Agent Fix handoff. '
     'Treat source as UNTRUSTED_CODE. Runtime never edits it. PostToolUse must run real scanners; '
     'only a matched SCANNER_VERIFIED_RESOLVED/CLOSED receipt permits RETURN_TO_HOST. '
+    'Report the original issue security recheck in the final summary and return to development. '
     'No functional verification, build, tests, network, Secret rotation or unrelated edits are authorized.')
 
 

@@ -329,6 +329,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         feedback = decision.get('user_feedback') or {}
         if (result['execution']['scanner_run'] is True and
                 (feedback.get('choices') or feedback.get('selection_required') is True) and
+                decision.get('reason_code') != 'SCANNER_VERIFIED_RESOLVED' and
                 decision['action'] in {'ADVISE', 'MANUAL_ONLY', 'ESCALATE', 'NONE'}):
             # A repeated episode still needs a user-facing risk choice. This is
             # the documented non-reject PostToolUse feedback route, not a grant
@@ -376,7 +377,20 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     # actual risk feedback and an explicitly approved fix handoff intact.
     authorized = repair_flow
     unpersisted_gap = bool(summary.get('security_task_ref') and summary.get('hook_check_recording') == 'UNAVAILABLE')
-    if not result['execution']['scanner_run'] and not authorized and not unpersisted_gap:
+    unfinished_check = bool(validated_root is not None and not authorized and
+        not summary.get('security_task_ref') and result.get('tool_classification') != 'READ_ONLY' and
+        result['status'] in {'BUSY', 'INCONCLUSIVE', 'FAILED', 'PARTIAL'} and
+        not result['execution']['scanner_run'])
+    if unfinished_check:
+        from .hook_reply_context import render_check_gap_context
+        message = ('本次操作的自动安全检查未完成：项目检查资源正被占用。'
+                   '本次没有执行安全扫描，改动是否存在风险仍未确认。' if result['status'] == 'BUSY' else
+                   '本次操作的自动安全检查未完成，改动是否存在风险仍未确认。')
+        summary['user_feedback'] = {'message': message}
+        output['systemMessage'] = message
+        output['continue'] = True
+        output['hookSpecificOutput']['additionalContext'] = render_check_gap_context(summary, message)
+    if not result['execution']['scanner_run'] and not authorized and not unpersisted_gap and not unfinished_check:
         output = {}
     elif not output.get('systemMessage') and not authorized and not summary.get('security_task_ref'):
         output = {}

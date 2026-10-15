@@ -65,7 +65,7 @@ The R2.2 companion AI Security Review Skill guides the existing MCP task workflo
 its reference is generated from HOST_INSTRUCTIONS. Explicit review does not
 require a Hook. Skill lifecycle is independent of signed Global MCP/Hook ownership
 and never edits Host trust or unrelated configuration. See the
-[Windows personal acceptance checklist](WINDOWS_EXPERIENCE.md). New-build Desktop
+[Windows personal acceptance checklist](../guides/WINDOWS_EXPERIENCE.md). New-build Desktop
 Skill selection and automatic Hook feedback remain separate acceptance checks.
 
 Codex Global Hook is the verified Desktop integration. Generic MCP remains an
@@ -76,7 +76,7 @@ writable is not equivalent to a Desktop verification claim.
 
 ## Boundaries
 
-[The Hook definition example](continuation-hooks-example.json) is the current
+[The Hook definition example](../continuation-hooks-example.json) is the current
 public event ABI fixture (template claims only, no user data). Its exact equality
 is frozen by existing regression tests; R2.2 does not change these definitions.
 
@@ -105,5 +105,5 @@ Runtime neither reads internal trust policy nor synthesizes trust approval.
 
 Core does not default to build/test, broad functional verification, or model
 invocation. Missing scanner or proof evidence is reported as unknown or
-inconclusive. See [Architecture](ARCHITECTURE.md), [Project context](PROJECT_CONTEXT.md),
+inconclusive. See [Architecture](../ARCHITECTURE.md), [Project context](../PROJECT_CONTEXT.md),
 and [Smart auto-remediation](SMART_AUTO_REMEDIATION.md).

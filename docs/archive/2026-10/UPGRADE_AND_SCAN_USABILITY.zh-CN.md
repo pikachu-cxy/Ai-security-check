@@ -50,7 +50,7 @@ Gitleaks SUCCESS，覆盖为 PARTIAL（离线依赖数据库不可用），不�
 Desktop 普通提示词选 Skill、显式无 Hook 全库体验及 Hook 可见性仍为 PENDING；
 不继承旧 PASS。用户最短验收：重启确认当前 Runtime/Skill，关闭演示项目 Hook 后
 显式请求整库扫描并核对覆盖，审核信任并启用演示 Hook 后观察编辑自动反馈。
-完整六步核查/续办/修复验证见 [Windows 体验说明](WINDOWS_EXPERIENCE.zh-CN.md)。
+完整六步核查/续办/修复验证见 [Windows 体验说明](../../guides/WINDOWS_EXPERIENCE.zh-CN.md)。
 P2 规则扩展、Release/CI、真实用户配置迁移不在本次执行范围。
 
 ## 开发前基线与代码依据（保留用于对照）
@@ -71,23 +71,23 @@ P2 规则扩展、Release/CI、真实用户配置迁移不在本次执行范围�
 
 主要代码入口：
 
-- [全局安装](../src/security_runtime/global_integration.py)、
-  [签名归属与探测](../src/security_runtime/codex_integration.py)、
-  [TOML 有界修改](../src/security_runtime/global_toml.py)。
-- [全局工作区路由](../src/security_runtime/global_mcp.py)、
-  [工作区与 bootstrap](../src/security_runtime/global_workspace.py)、
-  [状态存储](../src/security_runtime/storage.py)。
-- [Skill](../src/security_runtime/skills/ai-security-review/SKILL.md)、
-  [界面元数据](../src/security_runtime/skills/ai-security-review/agents/openai.yaml)、
-  [Skill 安装管理](../src/security_runtime/review_skill.py)、
-  [规范工作流](../src/security_runtime/host_guidance.py)。
-- [MCP 扫描工具](../src/security_runtime/mcp_server.py)、
-  [已有扫描摘要](../src/security_runtime/security_summary.py)、
-  [扫描主流程](../src/security_runtime/runtime.py)。
-- [Git Hook](../src/security_runtime/hooks.py)、
-  [暂存文件选择](../src/security_runtime/git.py)、
-  [扫描器内容来源](../src/security_runtime/scanners.py)、
-  [CLI 退出码](../src/security_runtime/cli.py)。
+- [全局安装](../../../src/security_runtime/global_integration.py)、
+  [签名归属与探测](../../../src/security_runtime/codex_integration.py)、
+  [TOML 有界修改](../../../src/security_runtime/global_toml.py)。
+- [全局工作区路由](../../../src/security_runtime/global_mcp.py)、
+  [工作区与 bootstrap](../../../src/security_runtime/global_workspace.py)、
+  [状态存储](../../../src/security_runtime/storage.py)。
+- [Skill](../../../src/security_runtime/skills/ai-security-review/SKILL.md)、
+  [界面元数据](../../../src/security_runtime/skills/ai-security-review/agents/openai.yaml)、
+  [Skill 安装管理](../../../src/security_runtime/review_skill.py)、
+  [规范工作流](../../../src/security_runtime/host_guidance.py)。
+- [MCP 扫描工具](../../../src/security_runtime/mcp_server.py)、
+  [已有扫描摘要](../../../src/security_runtime/security_summary.py)、
+  [扫描主流程](../../../src/security_runtime/runtime.py)。
+- [Git Hook](../../../src/security_runtime/hooks.py)、
+  [暂存文件选择](../../../src/security_runtime/git.py)、
+  [扫描器内容来源](../../../src/security_runtime/scanners.py)、
+  [CLI 退出码](../../../src/security_runtime/cli.py)。
 
 ## 用户试用暴露的问题
 

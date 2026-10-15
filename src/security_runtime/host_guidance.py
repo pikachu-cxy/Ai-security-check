@@ -243,24 +243,20 @@ or explicit verify_task_fix returns SCANNER_VERIFIED_RESOLVED, END Core remediat
 and return to the original development task. Do not automatically invoke functional
 verification, build/tests, full scan, security regression, sandbox or deep audit.
 Security verification does not depend on functional verification availability.
-Only a separate explicit Deep Verification request may call
-prepare_functional_verification with the same task_ref/remediation_ref. Runtime
-revalidates the signed CLOSED original grant and source/snapshot/policy guards.
-For FUNCTIONAL_VERIFICATION_READY with functional_ref and handoff, execute only
-the returned fixed argv/cwd/scope using your native execution capability. Enforce
-timeout/output/network restrictions and review existing project scripts/wrappers
-before execution. If unavailable, report NOT_AVAILABLE; do not install/download,
-invent commands, widen scope or retry. Do not interpolate shell strings. Submit
-the original plan_digest and bounded redacted execution_result via the exact
-run_functional_verification handoff, then call verify_task_fix with the original
-references. Host reports are UNTRUSTED_HOST_EXECUTION_REPORT; Runtime does not run
-target commands or prove production behavior. NOT_AVAILABLE without a handoff
-stops functional execution. Functional checks do not run in HookCoordinator or
-ordinary edits. Missing optional Deep tools must not block the Core Hook workflow.
-Keep security and functional statuses separate, plus production correctness UNKNOWN.
-NOT_AVAILABLE is not PASS. A functional failure requires human review: do not revert
-the secure edit, change failing tests, retry automatically or claim SAFE_TO_SHIP.
-Without a trusted baseline a failed test cannot prove repair-caused regression.
+After a matched successful repair, report the original issue's security recheck
+in the normal development summary and return to the user's development task.
+Personal mode hides optional project verification: do not advertise or recommend
+it, append a test choice, or infer business compatibility from the security proof.
+Only a separate explicit Deep Verification request may use retained internal
+verifiers in an embedding that enables them. It never renews repair authority.
+Execute only the fixed authorized plan within its timeout/output/network scope;
+review project scripts first. Do not install/download, invent commands, widen
+scope or retry automatically. NOT_AVAILABLE without a handoff stops execution.
+Host reports remain untrusted, and missing optional tools do not block Core.
+Keep security proof, actual build/test results and production correctness separate.
+NOT_AVAILABLE is not PASS. Without a trusted baseline a failed test cannot prove
+repair-caused regression; do not revert the secure edit, change failing tests or
+claim SAFE_TO_SHIP to force a passing result.
 When remediation.action == CONFIRM_REQUIRED:
 Automatic repair is NOT authorized. NEVER call prepare_task_fix before explicit
 user approval. Follow only this confirmation branch and the plain-language
@@ -355,7 +351,7 @@ edits or agent delegation. Ordinary Hook uses the existing bounded Core workflow
 Actual host natural-language usability remains a separate acceptance gate.'''
 
 
-def runtime_info(*, remediation_config=None):
+def runtime_info(*, remediation_config=None, include_functional_verification=False):
     from .remediation_policy import RemediationConfig
     from .hook_timing import ExecutionTrigger
     config = remediation_config if remediation_config is not None else RemediationConfig()
@@ -375,7 +371,7 @@ def runtime_info(*, remediation_config=None):
         inventory = installed_inventory(RulePackManager().resolve())
     except (ValueError, OSError):
         inventory = {'status':'UNAVAILABLE', 'execution_proof':False}
-    return {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
+    info = {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
             'build_identity': build_identity(),
             'rule_inventory':inventory,
             'professional_guidance':delivery_contract(),
@@ -399,11 +395,8 @@ def runtime_info(*, remediation_config=None):
                          'task_closeout': 'closeout-state-v1; GENERATION_LEASE_VERSION_BOUND',
                          'persistent_credential_closure': 'PER_ORIGINAL_DETECTOR_RULE_FILE_VERSION',
                           'dynamic_function_check': 'native-js-function-v1; CANONICAL_DYNAMIC_CODE_ONLY',
-                          'arithmetic_host_regression': 'arithmetic-regression-v1; OPTIONAL_CONFIRMED_CONTRACT',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
-                          'functional_verification': 'v0.1',
-                          'functional_host_execution': 'v0.1',
                            'codex_integration': 'v0.2', 'cold_start_readiness': 'v0.3',
                            'auto_remediation_continuation_guard': 'v0.1',
                           'runtime_source_editing': 'NOT_IMPLEMENTED'},
@@ -414,7 +407,7 @@ def runtime_info(*, remediation_config=None):
                 'authority': 'CONNECTION_LOCAL_PREPARATION; POST_EDIT_REAL_SCANNER_REQUIRED',
                 'host_atomic_edit': False, 'desktop_handoff_visibility': 'NOT_OBSERVED_BY_RUNTIME'},
             'required_guidance_tools': sorted(REQUIRED_GUIDANCE_TOOLS),
-            'optional_guidance_tools': ['prepare_functional_verification','run_functional_verification'],
+            'optional_guidance_tools': [],
             'tool_check': 'REQUIRED_SUBSET_NOT_EXACT_COUNT',
             'runtime_executable': sys.executable,
             'same_environment_check': {'executable': sys.executable,
@@ -427,3 +420,8 @@ def runtime_info(*, remediation_config=None):
                 '若同一环境也缺能力，更新配置指向的 Runtime 安装/原生包后重连；Git 提交并不自动更新所有已安装包。'],
             'execution': {'scan': False, 'model': False, 'patch': False, 'target_build': False,
                           'tests_or_scanner_recheck': False}, 'automatic_execution': False}
+    if include_functional_verification:
+        info['features'].update(functional_verification='v0.1', functional_host_execution='v0.1',
+            arithmetic_host_regression='arithmetic-regression-v1; OPTIONAL_CONFIRMED_CONTRACT')
+        info['optional_guidance_tools'] = ['prepare_functional_verification', 'run_functional_verification']
+    return info

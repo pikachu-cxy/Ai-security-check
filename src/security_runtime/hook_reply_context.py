@@ -41,6 +41,7 @@ REMEDIATION_FIELDS = (
     'security_fix_context_ref', 'security_context_status', 'verification',
     'verification_status', 'verification_required', 'security_verification', 'next_action', 'expires_in_seconds',
     'review_continuation', 'review_finding_ids',
+    'verification_summary',
 )
 VERIFICATION_FIELDS = ('status', 'verification_status', 'reason_code', 'task_ref',
                        'scan_id', 'binding', 'phase', 'next_action')
@@ -74,6 +75,10 @@ def _control(summary: dict, decision: dict | None) -> dict:
     if isinstance(decision, dict):
         control['remediation'] = {field: copy.deepcopy(decision[field])
                                   for field in REMEDIATION_FIELDS if field in decision}
+        if isinstance(control['remediation'].get('verification_summary'), dict):
+            control['remediation']['verification_summary'] = {
+                field: value for field, value in control['remediation']['verification_summary'].items()
+                if field == 'security'}
         if isinstance(decision.get('verification'), dict):
             control['remediation']['verification'] = {
                 field: copy.deepcopy(decision['verification'][field])
@@ -95,6 +100,12 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
     presentation = PRESENTATION_RULES
     if isinstance(decision, dict) and decision.get('review_continuation'):
         presentation += DEPENDENCY_PRESENTATION_RULES
+    if isinstance(decision, dict) and decision.get('reason_code') == 'SCANNER_VERIFIED_RESOLVED':
+        presentation = (
+            '将原问题安全复查结果合并到本轮正常总结中，不暂停原开发任务。'
+            '不追加测试推荐、执行选择或新的修复确认，不安排构建或测试。'
+            '安全复查只说明原问题的复查结果，不推断业务兼容性或生产安全。'
+            '不展示内部状态、工具名或令牌。')
     prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
     control = _control(summary, decision)
     rendered = prefix + _encode(control)
@@ -125,9 +136,19 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
     navigation = ('action', 'reason_code', 'status', 'task_ref', 'confirmation_ref',
                   'remediation_ref', 'episode_id', 'grant_id', 'authorization_kind',
                   'security_fix_context_ref', 'confirmation', 'confirmation_recovery',
-                  'prepare', 'verify', 'fix_handoff', 'review_continuation', 'review_finding_ids')
+                  'prepare', 'verify', 'fix_handoff', 'review_continuation', 'review_finding_ids',
+                  'verification_summary')
     control['remediation'] = {field: remediation[field] for field in navigation if field in remediation}
     control.update(context_budget_status='ORIGINAL_CONTROL_REQUIRED',
                    editing_allowed_from_this_context=False,
                    original_control_location='ORIGINAL_MCP_STRUCTURED_CONTENT')
     return prefix + _encode(control)
+
+
+def render_check_gap_context(summary: dict, message: str) -> str:
+    """An uncompleted check is user feedback, never a repair choice or grant."""
+    return ('用户提示\n' + message + '\n\n呈现要求\n'
+            '本轮正常回复中必须说明上方检查未完成的缺口，不能省略或声称通过。'
+            '工具操作已结束，不因检查未完成而重复编辑、撤销代码或自行修复。'
+            '不得伪造检查结果、补发生命周期事件或自动运行构建和测试；不要求用户提供内部引用。'
+            + CONTROL_DELIMITER + _encode(_control(summary, None)))

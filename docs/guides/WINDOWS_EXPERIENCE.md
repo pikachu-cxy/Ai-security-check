@@ -2,7 +2,7 @@
 
 English | [简体中文](WINDOWS_EXPERIENCE.zh-CN.md)
 
-For current installation, use [README](../README.md). Every vulnerability repair
+For current installation, use [README](../../README.md). Every vulnerability repair
 requires a clear report and explicit user choice. Legacy `smart_auto` settings
 normalize to `ask_before_fix`; `AUTO_FIX` only continues an already approved,
 bounded repair. Detection and ordinary development requests cannot grant consent.
@@ -26,14 +26,14 @@ execution does not imply comprehensive detection. First-party pack 1.2.0 include
 40 rules (32 default-on), with 5 new Java framework variants and 6 shared
 JavaScript/TypeScript rules. Shared rules also select JSX/TSX files. Vue,
 unmodelled frameworks and cross-function flows remain outside the demonstrated
-rule scope. See [rule foundation](RULE_FOUNDATION.md) and
-[target selection](SCAN_TARGET_SELECTION.md).
+rule scope. See [rule foundation](../design/RULE_FOUNDATION.md) and
+[target selection](../design/SCAN_TARGET_SELECTION.md).
 
 ## Java / JS / TS experience in this build
 
 The archive name includes `rule-foundation`. The application remains 0.3.1;
 the rule pack is 1.2.0. Use `build_id` to distinguish older same-version builds.
-See [rule foundation](RULE_FOUNDATION.md) for the precise API limits.
+See [rule foundation](../design/RULE_FOUNDATION.md) for the precise API limits.
 This build also fixes default Global Hook state persistence beyond Windows
 legacy path limits. Internal extended path spelling targets the same files;
 OS settings, logical workspace boundaries and ownership validation are unchanged.

@@ -50,7 +50,7 @@ def dynamic_task(tmp_path):
     return root, target, scanner, result, store, task, service
 
 
-def test_real_dynamic_finding_gets_bounded_arithmetic_plan_without_edit_authority(dynamic_task):
+def test_real_dynamic_finding_keeps_security_plan_without_optional_test_offer(dynamic_task):
     root, target, _, result, _, task, service = dynamic_task
     original = target.read_bytes()
     prompt = issue_feedback(result.findings[0].__dict__)
@@ -68,11 +68,7 @@ def test_real_dynamic_finding_gets_bounded_arithmetic_plan_without_edit_authorit
                for item in packet['fix_constraints'])
     assert packet['verification_plan']['arguments']['task_ref'] == task['task_ref']
     assert any('响应格式' in item for item in packet['regression_requirements'])
-    functional = packet['optional_functional_regression']
-    assert functional['task_ref'] == task['task_ref']
-    assert functional['status'] == 'ARITHMETIC_CONTRACT_CONFIRMATION_REQUIRED'
-    assert functional['runtime_executes_target_code'] is False
-    assert 'command' not in functional
+    assert 'optional_functional_regression' not in packet
 
 
 def test_new_function_retest_preserves_presence_after_line_move(dynamic_task):
@@ -100,6 +96,7 @@ def test_safe_replacement_uses_original_detector_and_does_not_claim_functional_s
     assert out['user_feedback']['functional_verification'] == 'NOT_PROVEN_BY_SCANNER'
     assert '仍需实际功能测试确认' in out['user_feedback']['message']
     assert out['user_feedback']['choices'] == []
+    assert not {'functional_verification_offer', 'functional_verification'} & out.keys()
 
 
 def test_replacing_function_with_eval_cannot_pass_same_dynamic_rule_retest(dynamic_task):

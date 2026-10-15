@@ -319,7 +319,7 @@ def test_mcp_report_schema_closed_no_cet(monkeypatch, tmp_path):
     from security_runtime.mcp_server import create_server
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
     monkeypatch.setattr('security_runtime.functional_execution.LocalSandbox.availability', lambda *a: pytest.fail('CET/sandbox requested'))
-    tool = create_server()._tool_manager.get_tool('run_functional_verification')
+    tool = create_server(include_functional_verification=True)._tool_manager.get_tool('run_functional_verification')
     assert set(tool.parameters['properties']) == {'functional_ref', 'execution_result'}
     assert tool.parameters['additionalProperties'] is False
     for definition in tool.parameters['$defs'].values():

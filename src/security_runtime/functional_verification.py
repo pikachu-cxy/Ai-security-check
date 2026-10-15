@@ -16,6 +16,7 @@ from .functional_execution import Unavailable, TIMEOUT, TOTAL_TIMEOUT, ISOLATION
 from .functional_verifiers import FunctionalVerifierRegistry, VERSION
 from .hook_state import atomic_bytes, identity, no_links
 from .functional_host import FunctionalExecutionReport
+from .functional_feedback import result_feedback
 
 MAX_FILES = 200
 MAX_BYTES = 2_000_000
@@ -69,14 +70,14 @@ def result(status, steps=(), *, security='SCANNER_VERIFIED_RESOLVED', reason=Non
              'PARTIAL':'SECURITY_VERIFIED_FUNCTION_PARTIAL',
              'FAILED':'SECURITY_VERIFIED_FUNCTION_FAILED'}.get(status,'SECURITY_VERIFIED_FUNCTION_UNKNOWN')
     if security != 'SCANNER_VERIFIED_RESOLVED': overall='SECURITY_NOT_VERIFIED'
-    return dict(security_verification={'status':security},
+    return result_feedback(dict(security_verification={'status':security},
                 functional_verification=dict(status=status,coverage=coverage,steps=list(steps),
                     baseline='UNKNOWN',regression_attribution='NOT_PROVEN',reason_code=reason,reused=reused),
                 overall_status=overall, action='REVIEW_REQUIRED' if status=='FAILED' else 'NONE',
                 production_correctness='UNKNOWN',
                 guidance=('安全问题已消除，但功能验证失败。无可信修复前基线，不能证明由本次修复造成；'
                           '需要人工检查，不自动恢复漏洞代码、修改失败测试或循环重试。' if status=='FAILED' else
-                          '安全验证与功能验证独立；结果仅覆盖列出的本地验证，不证明生产业务正确或 SAFE_TO_SHIP。'))
+                          '安全验证与功能验证独立；结果仅覆盖列出的本地验证，不证明生产业务正确或 SAFE_TO_SHIP。')))
 
 
 class FunctionalVerificationService:
@@ -107,7 +108,7 @@ class FunctionalVerificationService:
         if steps and all(s.get('provider') == 'javac' for s in steps):
             out['functional_verification'].update(
                 source_handling=steps[0]['source_handling'], source_modified=False)
-        return out
+        return result_feedback(out)
 
     @staticmethod
     def _artifact_inventory(path):
@@ -274,10 +275,10 @@ class FunctionalVerificationService:
             cached = cache.get(self._host_cache_id(root, before, base, receipt))
             if cached and cached['result']['functional_verification']['status'] in {'PASSED', 'FAILED', 'PARTIAL'}:
                 out = cached['result']
-                return dict(out, functional_verification=dict(out['functional_verification'], reused=True),
+                return result_feedback(dict(out, functional_verification=dict(out['functional_verification'], reused=True),
                             next_action='VERIFY_TASK_FIX_WITH_ORIGINAL_REFERENCES',
                             handoff={'tool': 'verify_task_fix', 'arguments': {
-                                'remediation_ref': ref, 'task_ref': task_ref, 'workspace_path': str(root)}})
+                        'remediation_ref': ref, 'task_ref': task_ref, 'workspace_path': str(root)}}))
             self._expire_host_plans()
             if len(self.plans) >= MAX_PLANS:
                 return self._host_result('INCONCLUSIVE', reason='PLAN_BUDGET_EXCEEDED')
@@ -412,7 +413,7 @@ class FunctionalVerificationService:
                 if report is None:
                     if 'completed' in row:
                         old = row['completed']
-                        return dict(old, functional_verification=dict(old['functional_verification'], reused=True))
+                        return result_feedback(dict(old, functional_verification=dict(old['functional_verification'], reused=True)))
                     return dict(self._host_result('PLANNED'), status='FUNCTIONAL_VERIFICATION_READY',
                                 next_action='HOST_EXECUTE_PLAN_THEN_REPORT', plan=row['plan'],
                                 functional_ref=functional_ref)
@@ -426,7 +427,7 @@ class FunctionalVerificationService:
                     if hmac.new(key, report.model_dump_json().encode(), hashlib.sha256).hexdigest() != row['accepted_report_hash']:
                         return self._host_result('INCONCLUSIVE', reason='HOST_RESULT_ALREADY_CONSUMED')
                     old = row['completed']
-                    return dict(old, functional_verification=dict(old['functional_verification'], reused=True))
+                    return result_feedback(dict(old, functional_verification=dict(old['functional_verification'], reused=True)))
                 wanted = [s.command_id for s in steps]
                 supplied = [s.command_id for s in report.steps]
                 if supplied != wanted[:len(supplied)]:
@@ -546,7 +547,7 @@ class FunctionalVerificationService:
             merged = dict(security_result, **{k: v for k, v in out.items() if k != 'status'})
             merged.update(functional_status=out['status'],
                           remediation_stage=receipt.get('stage', 'CLOSED') if receipt else 'CLOSED')
-            return merged
+            return result_feedback(merged)
         except Exception:
             out = self._host_result('INCONCLUSIVE', reason='FUNCTIONAL_RESULT_REJECTED_REFRESH')
             out['security_verification']['status'] = 'SCANNER_VERIFIED_RESOLVED'
@@ -635,7 +636,7 @@ class FunctionalVerificationService:
                 path,cache=self._cache(root,key)
                 if cache_id in cache:
                     out=cache[cache_id]['result']
-                    return dict(out,functional_verification=dict(out['functional_verification'],reused=True))
+                    return result_feedback(dict(out,functional_verification=dict(out['functional_verification'],reused=True)))
                 reason=self.executor.availability()
                 if reason:
                     return result('NOT_AVAILABLE',[dict(kind=s.kind,provider=s.provider,command_id=s.command_id,

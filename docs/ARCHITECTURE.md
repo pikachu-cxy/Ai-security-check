@@ -45,9 +45,20 @@ Feedback is `HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH`; Automatic
 Continuation is `PENDING_HOST_CAPABILITY`. The observed path does not rely on
 `postToolUse` or `additional_context` as a production feedback channel.
 
-Generic MCP and CLI are supported interfaces. WorkBuddy and other hosts remain
-capability-specific and must not be described as Desktop-verified merely because
-configuration can be written.
+Generic MCP and CLI are supported interfaces. WorkBuddy has project MCP
+configuration and stdio/client regression coverage, but this is not proof of a
+real WorkBuddy Desktop workflow or a native lifecycle adapter. Qoder and
+CodeBuddy currently have neutral manual Hook commands, without a registered
+native event adapter or dedicated installer. Their CLI host names are not a
+support or Desktop-verification claim.
+
+The existing Codex and limited Cursor observations remain scoped to their
+recorded paths; a fresh candidate, another entry point or a new host needs its
+own evidence. Native chat feedback, authorization continuation and transport
+availability are verified separately. Personal integrations do not advertise
+optional functional verification or automatically execute project builds/tests.
+See [Host support and next-stage acceptance](HOST_SUPPORT.md) for the current
+matrix, official platform references, shared adapter boundary and per-host gates.
 
 ## Rule and finding model
 
@@ -67,7 +78,7 @@ legacy workspace-scoped scanner/remediation identities remain authoritative
 for authorization. Human/AI/policy review labels do not alter scanner output,
 coverage, enforcement or existing AI triage. Reviews bind to a particular scan
 and observation; no model runs or automatic suppressions are part of baseline
-collection. See [Finding quality](FINDING_QUALITY.md).
+collection. See [Finding quality](design/FINDING_QUALITY.md).
 
 R2.1.1 adds locator-based, on-demand local evidence. New SAST scans retain
 bounded scan-time file hashes/coordinates, not source copies. Detail requests
@@ -76,6 +87,6 @@ strict decoding and file/line budgets. EXACT requires historical revision proof;
 STALE or unverifiable current_context is separate from original_evidence.
 Neither live evidence nor its availability changes coverage, identity or reviews.
 
-See [Rule Program](RULE_PROGRAM.md), [coverage matrix](RULE_COVERAGE_MATRIX.md),
-[Codex integration](CODEX_INTEGRATION.md), and
+See [Rule Program](design/RULE_PROGRAM.md), [coverage matrix](design/RULE_COVERAGE_MATRIX.md),
+[Codex integration](design/CODEX_INTEGRATION.md), and
 [functional verification](FUNCTIONAL_VERIFICATION.md).

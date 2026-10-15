@@ -69,7 +69,7 @@ Get-FileHash -Algorithm SHA256 -LiteralPath .\ai-security-runtime-v0.3.4-windows
 Mac 使用 `shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz`，Intel 将文件名中的 `macos-arm64` 换为 `macos-x64`。不一致时不要安装。
 
 - [详细安装、准备状态、重试、升级和卸载](docs/PILOT_INSTALL_AND_USE.zh-CN.md)：需要诊断时核对组件整体 `ready=true` 与漏洞库 `FRESH`；仍在下载时依赖检查未完成。升级使用新 Release 的完整包重复安装，再重启核对构建身份。
-- [离线安装、缓存与本地差分包](docs/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md#安装缓存与增量升级)：离线只复用已有可用缓存，不能从零准备缺失组件。当前没有在线产品自动下载更新器，也没有漏洞库持续定时刷新服务。
+- [离线安装、缓存与本地差分包](docs/guides/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md#安装缓存与增量升级)：离线只复用已有可用缓存，不能从零准备缺失组件。当前没有在线产品自动下载更新器，也没有漏洞库持续定时刷新服务。
 - [Hook 诊断与使用反馈](docs/PILOT_INSTALL_AND_USE.zh-CN.md#接入与自动检查诊断)：确认项目、时间和执行状态；没有记录不能直接断言没有触发。
 
 卸载接入和 Skill 保留程序数据与检查历史。遇到未知配置冲突时保留诊断，按详细指南处理，不手动删除其它服务。
@@ -91,8 +91,17 @@ Mac 使用 `shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz`，Intel
 
 - [详细安装使用指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)
 - [开发进度与限制](docs/DEVELOPMENT_PROGRESS.md)、[下一步计划](docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)
-- [规则范围](docs/RULE_FOUNDATION.md)、[覆盖矩阵](docs/RULE_COVERAGE_MATRIX.md)
+- [规则范围](docs/design/RULE_FOUNDATION.md)、[覆盖矩阵](docs/design/RULE_COVERAGE_MATRIX.md)
 - [开发交接](docs/DEVELOPMENT_HANDOFF.zh-CN.md)
 - [许可说明](LICENSING.md)、[使用条款](EULA.md)、[第三方声明](THIRD_PARTY_NOTICES.md)
 
 安装入口为 Releases 完整包，Homebrew／winget 外部上架不作为试用安装前提。
+
+## 项目文档
+
+- [文档导航](docs/README.md)：当前状态、使用指南、设计与历史记录。
+- [开发进度](docs/DEVELOPMENT_PROGRESS.md)与[近期计划](docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)。
+- [Cursor、Qoder、WorkBuddy / CodeBuddy 接入](docs/HOST_SUPPORT.md)。
+- [个人版与企业版规划](docs/PRODUCT_ROADMAP.md)、[功能验证的企业研发项](docs/FUNCTIONAL_VERIFICATION.md)。
+
+当前源码中的功能验证默认入口已隐藏；已发布安装包与本次未重新打包的源码分别记录。

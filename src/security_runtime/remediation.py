@@ -37,6 +37,8 @@ CONFIRMED_GUIDANCE = ('SECURITY_AUTO_REMEDIATION_AUTHORIZED. '
             'Allow PostToolUse to recheck; its matched CLOSED resolution receipt is sufficient. '
             'Only SCANNER_VERIFIED_RESOLVED permits a scanner-resolution claim. '
             'After that result END the Core remediation and return to the original development task. '
+    'Report only the original issue security recheck in the normal final summary; '
+            'wait for an explicit functional-verification request before executing its continuation. '
             'Do not automatically start functional verification, build, tests, full scans, security regression '
             'or sandbox. Deep Verification requires a separate explicit request; it is not part of this grant. '
             'No network, Secret rotation or unrelated edits are authorized.')
@@ -365,6 +367,11 @@ class RemediationService:
                       last_snapshot_digest=snapshot, resolution={
                           'status': 'SCANNER_VERIFIED_RESOLVED', 'snapshot_digest': snapshot,
                           'hook_scan_id': hook_scan_id, 'binding': binding})
+
+    def _functional_offer(self, record, arguments=None, *, notify=True, workspace=None):
+        """Compatibility seam: personal repair completion only reports security."""
+        from .functional_feedback import pending_feedback
+        return pending_feedback()
 
     @staticmethod
     def _episode_fields(record):
@@ -848,11 +855,13 @@ class RemediationService:
                         self._close(record, snapshot, result['scan_id'], root=root, key=key)
                         self.prepared.discard(record.get('token_hash'))
                         self.authorized.pop(record.get('token_hash'), None)
+                        functional_offer = self._functional_offer(record, workspace=root)
                         self._save(owner, owner_rows, key)
                         return {'action': 'NONE', 'reason_code': 'SCANNER_VERIFIED_RESOLVED',
                                 'feedback_required': False, 'finding_family': family,
                                 **self._episode_fields(record), 'attempt_count': record['attempt_count'],
-                                'verification': checked}
+                                'verification': checked,
+                                **functional_offer}
             for record in rows.values():
                 if not self.transport.supports_agent_continuation:
                     continue  # An advisory transport cannot resume a historical edit grant.
@@ -912,6 +921,7 @@ class RemediationService:
                               'security_verification': {'status': state, 'phase': 'CLOSED',
                                   'task_ref': record['task_ref'], 'grant_id': record['token_hash'],
                                    'explicit_verification_required': False}}
+                    output.update(self._functional_offer(record, workspace=root))
                     if self.fast_fix.current(record):
                         output.update(fix_path='DETERMINISTIC_FAST_FIX', fast_fix={
                             'status':'FAST_FIX_SCANNER_VERIFIED','eligible':True,'fallback_reason':None,
@@ -1370,7 +1380,9 @@ class RemediationService:
                         automatic_execution=False, production_verification='NOT_PERFORMED',
                         security_receipt=dict(receipt['binding'], resolved_scan_id=receipt['resolved_scan_id'],
                             snapshot_digest=receipt['snapshot_digest']),
-                        **self._cycle_result(root, record['episode_id'], complete=True))
+                        **self._cycle_result(root, record['episode_id'], complete=True),
+                        **self._functional_offer(record, {'task_ref': task_ref,
+                            'remediation_ref': ref, 'workspace_path': str(root)}, notify=False))
                 ticket_failure = self.agent_tickets.post_failure(root, record, key)
                 if ticket_failure:
                     self.agent_tickets.mark_stale(record, ticket_failure)
@@ -1395,6 +1407,8 @@ class RemediationService:
                 if checked.get('verification_status') == 'SCANNER_VERIFIED_RESOLVED':
                     self._close(record, snapshot, root=root, key=key)
                     self.prepared.discard(record['token_hash'])
+                    checked.update(self._functional_offer(record, {'task_ref': task_ref,
+                        'remediation_ref': ref, 'workspace_path': str(root)}))
                 self._save(path, rows, key)
                 if checked.get('verification_status') == 'SCANNER_VERIFIED_RESOLVED':
                     self._observe_cycle('mark', root, record['episode_id'], 'episode_closed')

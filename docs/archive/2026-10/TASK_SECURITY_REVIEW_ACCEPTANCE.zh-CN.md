@@ -84,4 +84,4 @@ AI语义准确率、真实桌面事件派发或Agent自动遵循Skill的证明�
 4. 同需求、同初始代码、同模型，分别做未加载产品和加载产品两轮开发，分开记录首次回复、
    功能完成、静态等待、AI核查和最终回复。仅不主动要求扫描不能算未加载组。
 
-详见 [核心链路手测](MANUAL_CORE_TEST.zh-CN.md) 与 [实现约束](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)。
+详见 [核心链路手测](../../guides/MANUAL_CORE_TEST.zh-CN.md) 与 [实现约束](../../design/TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)。

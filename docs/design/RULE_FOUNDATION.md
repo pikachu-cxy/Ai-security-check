@@ -100,8 +100,8 @@ boundaries, full SHA256 names, link rejection and signed receipts remain unchang
 This also supports the default nested Global state layout under Windows legacy
 path limits; no operating-system setting is changed.
 
-Follow [Windows Chinese instructions](WINDOWS_EXPERIENCE.zh-CN.md) or
-[English instructions](WINDOWS_EXPERIENCE.md) to activate/diagnose/plan/apply a
+Follow [Windows Chinese instructions](../guides/WINDOWS_EXPERIENCE.zh-CN.md) or
+[English instructions](../guides/WINDOWS_EXPERIENCE.md) to activate/diagnose/plan/apply a
 local package. Do not overwrite Codex config by hand. Existing modified user
 configuration and Skill files remain subject to ownership/upgrade checks.
 

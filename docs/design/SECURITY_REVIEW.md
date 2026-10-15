@@ -66,5 +66,5 @@ updates retain signed old/new hashes for repair. Status is read-only.
 Skill lifecycle is independent of Global MCP/Hook ownership. It never edits shared
 Codex config, sibling MCPs, marketplaces, plugins or Host trust. Host activation
 is separate from installation. Skill guidance is not authorization, suppression
-or final security authority. See the [Windows checklist](WINDOWS_EXPERIENCE.md).
+or final security authority. See the [Windows checklist](../guides/WINDOWS_EXPERIENCE.md).
 SDK protocol tests, real frozen scanner gates and Desktop acceptance are distinct.

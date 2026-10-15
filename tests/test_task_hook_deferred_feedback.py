@@ -247,7 +247,9 @@ def test_explicit_approved_repair_and_verification_survive_task_deferral(develop
     verified = hook()
     assert verified['remediation']['reason_code'] == 'SCANNER_VERIFIED_RESOLVED'
     assert verified['remediation']['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
-    assert verified['systemMessage'] and '修复' in verified['systemMessage']
+    assert '原规则的重新检查' in verified['systemMessage']
+    assert 'functional_verification_offer' not in verified['remediation']
+    assert '执行功能验证' not in verified['systemMessage']
 
 
 def test_ledger_limit_keeps_recent_observations_and_discloses_omissions(repo, tmp_path, monkeypatch):

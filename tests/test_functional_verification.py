@@ -277,17 +277,26 @@ def test_real_bounded_transport(tmp_path,mode):
     assert out['reason']=={'output':'OUTPUT_LIMIT','timeout':'TIMEOUT','pass':None}[mode]
 
 
-def test_mcp_closed_schema_and_optional_discovery(monkeypatch,tmp_path):
+def test_mcp_closed_schema_and_internal_opt_in_discovery(monkeypatch,tmp_path):
+    import asyncio
     from security_runtime.mcp_server import create_server
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR',str(tmp_path/'state'))
-    server=create_server()
+    server=create_server(include_functional_verification=True)
     for name,fields in [('prepare_functional_verification',{'remediation_ref','task_ref','workspace_path'}),
                         ('run_functional_verification',{'functional_ref', 'execution_result'})]:
         schema=server._tool_manager.get_tool(name).parameters
         assert set(schema['properties'])==fields and schema['additionalProperties'] is False
-    info=runtime_info()
+    info=runtime_info(include_functional_verification=True)
     assert info['features']['functional_verification']=='v0.1'
-    assert REQUIRED_GUIDANCE_TOOLS <= set(t.name for t in server._tool_manager.list_tools())
+    assert info['features']['functional_host_execution']=='v0.1'
+    assert 'arithmetic_host_regression' in info['features']
+    assert 'post_fix_functional_prompt' not in info['features']
+    names={t.name for t in asyncio.run(server.list_tools())}
+    assert REQUIRED_GUIDANCE_TOOLS <= names
+    assert set(info['optional_guidance_tools']) <= names
+    reported=server._tool_manager.get_tool('get_runtime_info').fn()
+    assert reported['features']['functional_verification']=='v0.1'
+    assert 'post_fix_functional_prompt' not in reported['features']
 
 
 @pytest.mark.parametrize('field',['argv','network_allowed','shell','source','host_reported_execution'])
@@ -296,7 +305,7 @@ def test_mcp_rejects_execution_claims_without_echo(tmp_path,monkeypatch,field):
     from security_runtime.mcp_server import create_server
     from mcp.server.fastmcp.exceptions import ToolError
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR',str(tmp_path/'state'))
-    tool=create_server()._tool_manager.get_tool('run_functional_verification')
+    tool=create_server(include_functional_verification=True)._tool_manager.get_tool('run_functional_verification')
     with pytest.raises(ToolError) as error:
         asyncio.run(tool.run({'functional_ref':'bad',field:'raw_secret_canary_value'}))
     assert 'raw_secret_canary_value' not in str(error.value)
