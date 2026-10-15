@@ -235,8 +235,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     config_format.add_argument("--toml", action="store_true")
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
-    install_parser = sub.add_parser('install', help='Install personal Codex Runtime, global connection and professional Skill together')
-    install_parser.add_argument('integration', nargs='?', choices=['codex'], default='codex')
+    install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
+    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
     install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
     install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
@@ -269,6 +269,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default Codex setup is global, including --path; project scope is explicit legacy/development opt-in')
     setup_parser.add_argument('--dev', action='store_true', help='Explicitly acknowledge a DEV launcher; does not install source paths')
     cursor_hook_parser = sub.add_parser('cursor-hook', help=argparse.SUPPRESS)
+    cursor_hook_parser.add_argument('--automatic', action='store_true', help=argparse.SUPPRESS)
     for action in ('status', 'repair', 'uninstall'):
         global_parser = sub.add_parser(action, help='Manage the owned user-level Codex installation')
         global_parser.add_argument('--path', help='Inspect or migrate this workspace only')
@@ -328,18 +329,19 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     args = parser.parse_args(parsed_argv)
     if args.command == 'cursor-hook':
         from .cursor_hook import main as cursor_hook_main
-        return cursor_hook_main()
+        return cursor_hook_main(automatic=args.automatic)
     if ((args.command == 'setup' and args.integration == 'cursor' and args.scope == 'global')
             or (args.command == 'integration' and args.integration == 'cursor' and args.scope == 'global')):
-        from .cursor_integration import GlobalCursorIntegration
+        from .cursor_connector import CursorConnectorInstallation, setup_personal_cursor, cursor_reason
         try:
-            data = GlobalCursorIntegration(allow_dev=getattr(args, 'dev', False)).execute(
-                'setup' if args.command == 'setup' else args.action)
-        except (ValueError, OSError, KeyError, TypeError):
+            integration = CursorConnectorInstallation(allow_dev=getattr(args, 'dev', False))
+            data = (setup_personal_cursor(integration, args.path) if args.command == 'setup'
+                    else integration.execute(args.action, args.path))
+        except (ValueError, OSError, KeyError, TypeError) as exc:
             data = dict(integration='cursor', scope='GLOBAL', overall='BROKEN',
-                        diagnostics=['CURSOR_CONFIGURATION_REJECTED'])
+                        diagnostics=[cursor_reason(exc)])
         print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / Cursor\n'+data['overall'])
-        return 2 if data['overall'] == 'BROKEN' else 0
+        return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
         configure_logging(mcp=args.command == "mcp")
         if args.command == 'preparation-worker':
@@ -380,12 +382,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 from .personal_install import install_personal_codex
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
+                    host_kwargs = {'_host': 'cursor'} if args.integration == 'cursor' else {}
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
-                        allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline)
+                        allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
                 except (ValueError, OSError, TypeError, RecursionError) as exc:
                     code = exc.code if isinstance(exc, IntegrationDiagnostic) else 'INSTALL_PATH_OR_STATE_INVALID'
-                    data = {'integration':'codex', 'scope':'GLOBAL', 'overall':'BROKEN', 'diagnostics':[code],
+                    data = {'integration':args.integration, 'scope':'GLOBAL', 'overall':'BROKEN', 'diagnostics':[code],
                         'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
                             'local_files_ready':False, 'scan_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}

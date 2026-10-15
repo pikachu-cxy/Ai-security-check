@@ -25,11 +25,12 @@ def cursor_home(value=None):
     return path
 
 
-PRODUCTION_EVENTS = tuple(e for e in EVENTS if e != "postToolUse")
+PRODUCTION_EVENTS = ('sessionStart', 'afterFileEdit', 'afterShellExecution', 'stop')
+AUTOMATIC_EVENTS = (*PRODUCTION_EVENTS, 'preToolUse', 'postToolUse')
 
 
-def launcher(runtime):
-    args = [runtime['command'], *runtime['prefix'], 'cursor-hook']
+def launcher(runtime, *, automatic=False):
+    args = [runtime['command'], *runtime['prefix'], 'cursor-hook', *(['--automatic'] if automatic else [])]
     if os.name == 'nt':
         if any(any(c in value for c in '%!"\r\n') for value in args):
             raise ValueError('UNSAFE_LAUNCHER_PATH')
@@ -38,11 +39,13 @@ def launcher(runtime):
 
 
 class GlobalCursorIntegration:
-    def __init__(self, *, home=None, directory=None, discover=None, allow_dev=False):
+    def __init__(self, *, home=None, directory=None, discover=None, allow_dev=False, automatic=False):
         self.home = cursor_home(home)
         self.store = HookStateStore(directory or SQLiteStore.default_path().parent / 'cursor-integrations')
         self.discover = discover or installed_runtime
         self.allow_dev = allow_dev
+        self.automatic = automatic
+        self.write_observer = None
 
     def _load(self):
         path = self.home / 'hooks.json'
@@ -77,7 +80,7 @@ class GlobalCursorIntegration:
         no_links(key_path)
         key = key_path.read_bytes()
         if (len(key) != 32 or set(value) != {'version', 'records'} or value['version'] != 'cursor-global-v1'
-                or not isinstance(value['records'], dict) or set(value['records']) not in (set(EVENTS), set(EVENTS)-{'postToolUse'})
+                or not isinstance(value['records'], dict) or set(value['records']) not in (set(AUTOMATIC_EVENTS), set(PRODUCTION_EVENTS), set(PRODUCTION_EVENTS)|{'postToolUse'})
                 or not hmac.compare_digest(signature, hmac.new(key, encode(value), hashlib.sha256).hexdigest())):
             raise ValueError('OWNERSHIP_INVALID')
         return path, value
@@ -96,10 +99,11 @@ class GlobalCursorIntegration:
         runtime = self.discover()
         if runtime['kind'] == 'DEV' and not self.allow_dev and action in {'setup', 'repair'} and manifest is None:
             raise ValueError('INSTALLED_RUNTIME_REQUIRED')
-        cmd = launcher(runtime)
+        cmd = launcher(runtime, automatic=self.automatic)
+        events = AUTOMATIC_EVENTS if self.automatic else PRODUCTION_EVENTS
         # Only the four observed reliable event surfaces are installed.
         expected = {e: {'command': cmd, 'type': 'command', 'timeout': 120,
-                       **({'loop_limit': 1} if e == 'stop' else {})} for e in PRODUCTION_EVENTS}
+                       **({'loop_limit': 1} if e == 'stop' else {})} for e in events}
         actual = {}
         if manifest:
             for event, record in manifest['records'].items():
@@ -112,7 +116,7 @@ class GlobalCursorIntegration:
             for group in groups:
                 if 'cursor-hook' in group.get('command', '') and group not in actual.get(event, []):
                     raise ValueError('UNOWNED_RUNTIME_HOOK')
-        configured = manifest is not None and set(manifest['records']) == set(PRODUCTION_EVENTS) and all(actual.get(e) == [expected[e]] for e in PRODUCTION_EVENTS)
+        configured = manifest is not None and set(manifest['records']) == set(events) and all(actual.get(e) == [expected[e]] for e in events)
         report = dict(integration='cursor', scope='GLOBAL', overall='CONFIGURED' if configured else 'NOT_INSTALLED' if not manifest else 'NEEDS_REPAIR',
             implementation='IMPLEMENTED', config_path=str(path), fresh_host_trial='PENDING_ACTUAL_CURSOR_DESKTOP',
             continuation_status='PENDING_CURSOR_CONTINUATION_CAPABILITY', mcp_status='UNCHANGED', changed=False,
@@ -137,14 +141,22 @@ class GlobalCursorIntegration:
             if (path.read_bytes() if path.exists() else None) != original:
                 raise ValueError('CONFIGURATION_CHANGED')
             if changed:
+                if self.write_observer:
+                    self.write_observer(path, desired)
                 atomic_bytes(path, desired)
+            if (manifest_path.read_bytes() if manifest_path.exists() else None) != before_manifest:
+                raise ValueError('CONFIGURATION_CHANGED')
             if action == 'remove':
+                if self.write_observer:
+                    self.write_observer(manifest_path, None)
                 manifest_path.unlink(missing_ok=True)
             else:
                 new = dict(version='cursor-global-v1', records=expected)
                 key = self.store.key(self.home)
                 signed = encode({**new, 'signature': hmac.new(key, encode(new), hashlib.sha256).hexdigest()})
                 if signed != before_manifest:
+                    if self.write_observer:
+                        self.write_observer(manifest_path, signed)
                     atomic_bytes(manifest_path, signed)
         except Exception:
             # Roll back our write only if no external editor changed it.

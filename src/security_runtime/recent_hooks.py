@@ -28,13 +28,15 @@ STAGES |= {'BASELINE_CAPTURE_STARTED', 'BASELINE_PUBLISHED', 'SESSION_FINALIZED'
 CLAIM_FIELDS = {'event', 'workspace_path', 'session_id', 'turn_id', 'tool_use_id',
                 'tool_name', 'permission_mode', 'tool_input', 'stop_hook_active',
                 'input_shape', 'unexpected_fields'}
-CURSOR_EVENTS = {'sessionStart', 'afterFileEdit', 'afterShellExecution', 'stop', 'postToolUse'}
+CURSOR_EVENTS = {'sessionStart', 'afterFileEdit', 'afterShellExecution', 'stop', 'preToolUse', 'postToolUse'}
 CLAIM_FIELDS |= {'conversation_id', 'generation_id', 'hook_event_name', 'workspace_roots', 'file_path', 'command', 'status', 'loop_count'}
 STATUS = {'UNKNOWN', 'VALID', 'INVALID', 'REJECTED', 'INCONCLUSIVE', 'NOT_SCANNED',
           'SCANNED', 'FAILED', 'PARTIAL', 'COMPLETED', 'BASELINE_ESTABLISHED', 'NO_CHANGE',
           'NO_CHANGES', 'REUSED_LAST_RESULT', 'DEBOUNCED', 'BUSY', 'READY', 'INITIALIZING',
            'DEGRADED', 'ERROR', 'ALLOW_STOP', 'CONTINUE_SECURITY_FIX'}
 STATUS |= {'SESSION_FINALIZED'}
+STATUS |= {'BASELINE_CAPTURED', 'BASELINE_PARTIAL', 'BASELINE_UNAVAILABLE',
+           'READ_ONLY_OR_UNSUPPORTED', 'DELIVERED', 'NOT_APPLICABLE', 'FOLLOWUP'}
 STATUS |= {'CLOSEOUT_PENDING', 'CLOSEOUT_REQUIRED', 'ALLOW_STOP_PENDING'}
 REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQUIRED',
            'WORKSPACE_OR_REFERENCE_REJECTED', 'WORKSPACE_CLAIM_REQUIRED',
@@ -48,6 +50,7 @@ REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQ
             'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE'}
 REASONS |= {'READ_ONLY_ACTIVITY', 'WORKSPACE_CONTENT_DELTA'}
 REASONS |= {'CURSOR_REMOTE_NOT_SUPPORTED'}
+REASONS |= {'CURSOR_AUTOMATIC_TASK_UNAVAILABLE'}
 REASONS |= {'SESSION_STOP_WITHOUT_BASELINE', 'SESSION_BASELINE_ONLY', 'SESSION_FINALIZATION_ONLY',
             'BASELINE_ATTRIBUTION_UNAVAILABLE', 'BASELINE_CAPTURE_FAILED', 'BASELINE_REFERENCE_REJECTED',
             'WORKSPACE_SINGLE_FLIGHT_TIMEOUT'}
@@ -63,6 +66,7 @@ BOOL_FIELDS = {'workspace_claim_match', 'session_claim_match', 'turn_claim_prese
                'workspace_sources_match', 'generation_id_present', 'generation_id_type_valid',
                'generation_id_shape_valid', 'file_path_containment', 'file_path_absolute',
                'cursor_project_dir_valid', 'workspace_root_relative'}
+BOOL_FIELDS |= {'cursor_task_begin_tool'}
 BOOL_FIELDS |= {'activity_waited_for_baseline', 'mutation_event_dropped', 'pending_mutation'}
 BOOL_FIELDS |= {'first_scan_attribution_attempted', 'pre_edit_targeted_scan_run', 'attribution_scanner_equivalent'}
 BOOL_FIELDS |= {'agent_continuation_available'}
@@ -136,6 +140,7 @@ def safe_fields(values):
                          ('generation_id_validation_reason', {'MISSING', 'INVALID_TYPE', 'EMPTY', 'OVERSIZED', 'CONTROL_CHARACTER', 'INVALID_UNICODE', 'VALID', 'NOT_YET_AVAILABLE'}),
                          ('generation_state', {'NOT_YET_AVAILABLE', 'AVAILABLE', 'INVALID'}),
                          ('generation_binding_status', {'NOT_YET_AVAILABLE', 'OBSERVED', 'UNCHANGED', 'UPDATED', 'RETAINED'}),
+                         ('tool_use_id_state', {'NOT_APPLICABLE', 'MISSING', 'NULL', 'EMPTY', 'VALID', 'INVALID'}),
                          ('workspace_roots_validation_reason', {'MISSING', 'INVALID_TYPE', 'EMPTY_ROOTS', 'EMPTY_HOST_LIST', 'MULTI_ROOT_UNSUPPORTED', 'INVALID_ROOT', 'VALID'}),
                          ('snapshot_source', {'NONE', 'SESSION_BASELINE', 'SESSION_PROCESSED', 'SETUP_SEED', 'LAZY_BOOTSTRAP'}),
                          ('event_dispatch_route', {'SESSION_BASELINE', 'WORKSPACE_RECONCILIATION', 'SESSION_FINALIZATION'}),

@@ -8,6 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_NAMES = {
+    'CURSOR_INSTALL_AND_TEST.zh-CN.md',
     'PILOT_INSTALL_AND_USE.zh-CN.md',
     'WINDOWS_EXPERIENCE.md',
     'WINDOWS_EXPERIENCE.zh-CN.md',

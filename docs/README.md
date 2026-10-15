@@ -10,6 +10,7 @@
 | 当前完成了什么、还有哪些缺口 | [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) |
 | 下一阶段先做什么 | [近期开发计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) |
 | Cursor、Qoder、WorkBuddy / CodeBuddy 接入 | [宿主支持与接入计划](HOST_SUPPORT.md) |
+| Cursor 自动连接器的本地安装和验证 | [安装与测试](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md) · [开发测试计划](CURSOR_INTEGRATION_PLAN.zh-CN.md) · [Hook 实测](CURSOR_HOOK_FEASIBILITY.zh-CN.md) |
 | 个人版和企业版怎么分工 | [产品规划](PRODUCT_ROADMAP.md) |
 | 功能验证为什么隐藏、企业版准备怎么做 | [功能验证状态与企业研发](FUNCTIONAL_VERIFICATION.md) |
 | 换电脑或新聊天继续开发 | [开发交接](DEVELOPMENT_HANDOFF.zh-CN.md) → [项目上下文](PROJECT_CONTEXT.md) |

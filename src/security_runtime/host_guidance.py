@@ -11,6 +11,8 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
 HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
 实际修改源代码/配置的开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
+若当前连接器明确提供同步的编辑前自动任务准备，则沿用 Hook 交付的原 task_ref，不另起任务；
+没有该能力的宿主仍在首次编辑前显式开始任务。编辑后缺少基线时说明缺口，不能补建冒充编辑前状态。
 现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、

@@ -16,6 +16,7 @@ from dependency_notices import inventory
 
 
 STANDALONE_DOCUMENTS = (
+    'docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md',
     'docs/PILOT_INSTALL_AND_USE.zh-CN.md',
     'docs/guides/WINDOWS_EXPERIENCE.md',
     'docs/guides/WINDOWS_EXPERIENCE.zh-CN.md',
