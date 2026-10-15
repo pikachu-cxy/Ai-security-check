@@ -6,6 +6,8 @@
 
 首版发行范围为Windows x64、Mac Apple Silicon与Mac Intel；Linux发行和验收暂缓。
 
+当前公开下载版为 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)，对应源码提交 `88fe6db9d9b1b4e0b5bbce689c3f79d7b0134727`。日常安装可先按 [README 三步入口](../README.md#安装到-codex三步)操作；下面保留完整校验、状态与诊断步骤。原生完整包会自动定位自身目录，因此 README 的 `install codex` 可省略 `--bundle`，不加 `--json` 时显示中文安装结果。
+
 ## 选择模式和安装包
 
 | 模式 | 内容 | 适用 |
@@ -90,6 +92,22 @@ project="$HOME/Projects/your-project"
 这个提示词是纯MCP主动调用验收；自动接入的开发盲测使用普通需求，不点名产品。
 换项目时重生成绑定该项目的配置；不要把一个项目的引用交给另一个项目。工具列出成功不等于扫描运行，核对实际检查回执。
 Codex的stdio配置形态和MCP使用方式参考[官方文档](https://learn.chatgpt.com/docs/extend/mcp?surface=cli)。不同客户端的配置入口按客户端文档；本批主要验收Codex。
+
+## 接入与自动检查诊断
+
+重启后先确认 MCP 已连接，再只读取连接的版本、source_commit 和 build_id，与包内 version.json 核对；这一步不扫描。普通开发任务完成后，应能看到实际检查结果或明确的未完成说明。需要进一步确认自动检查时，在前面已经设置好 `$exe` 的终端读取当前项目的最近 Hook 诊断：
+
+```powershell
+& $exe hooks recent --path 'C:\Projects\your-project' --limit 32 --json
+```
+
+```bash
+"$exe" hooks recent --path "$HOME/Projects/your-project" --limit 32 --json
+```
+
+替换为实际项目路径，核对项目、时间和实际执行状态。没有记录时还要核对状态目录和保留期限，不能直接断言没有触发。Codex 生命周期 Hook 与 Git 提交 Hook 不同；Git 提交 Hook 默认关闭、常规帮助隐藏，默认安装保留已有 Git Hook。
+
+离线和缓存说明见[个人安装指南](PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md#安装缓存与增量升级)。当前没有在线产品自动下载更新器，也没有漏洞库持续定时刷新服务；不要把计划中的云端更新能力当作可用功能。
 
 ## 升级、重试和卸载
 

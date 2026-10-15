@@ -2,129 +2,88 @@
 
 在 AI 编程聊天中检查本次开发改动，结合静态检查与 Agent 对关联代码的分析，说明风险依据、当前防护和未知范围。你决定 **修复** 或 **暂不处理**；Agent 修改代码，Runtime 复查原问题并记录逐项结果。
 
-当前为 **Developer Alpha 试用版**，主要试用宿主是 Codex。源码在本机检查，首次准备扫描组件和漏洞数据需要联网。原生安装包自带 Python，**无需安装 Python、pip 或 venv**，也不会安装你的项目依赖或启动项目服务。
+当前为 **Developer Alpha 试用版**，主要试用宿主是 Codex。源码在本机检查，首次准备扫描组件和漏洞数据需要联网。完整安装包自带 Python，**无需安装 Python、pip 或 venv**，也不会安装你的项目依赖或启动项目服务。
 
-首版支持 **Windows x64、Mac Apple Silicon、Mac Intel**。Linux 发行与验收暂缓。
+## 安装到 Codex：三步
 
-0.3.4 为独立优化分支的候选试用版本，尚未发布；下面安装包名称用于候选验收，不表示已有资产。发布状态以 Releases 为准；本批范围见[候选发行说明](docs/RELEASE_NOTES.v0.3.4.zh-CN.md)。
+### 1. 下载并解压完整包
 
-## 1. 在 Releases 下载完整包
+当前发布版为 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)。按系统下载：
 
-打开 [Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)，选择试用版本，在 **Assets** 下载对应安装包和同名 `.sha256` 文件。
-
-| 系统 | v0.3.4 安装包 |
+| 系统 | 下载完整包 |
 | --- | --- |
-| Windows x64 | `ai-security-runtime-v0.3.4-windows-x64.zip` |
-| Mac：Apple Silicon（M1/M2/M3/M4 等） | `ai-security-runtime-v0.3.4-macos-arm64.tar.gz` |
-| Mac：Intel | `ai-security-runtime-v0.3.4-macos-x64.tar.gz` |
+| **Windows x64（优先试用）** | [ai-security-runtime-v0.3.4-windows-x64.zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.4/ai-security-runtime-v0.3.4-windows-x64.zip) |
+| Mac：Apple Silicon（M1/M2/M3/M4 等） | [ai-security-runtime-v0.3.4-macos-arm64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.4/ai-security-runtime-v0.3.4-macos-arm64.tar.gz) |
+| Mac：Intel | [ai-security-runtime-v0.3.4-macos-x64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.4/ai-security-runtime-v0.3.4-macos-x64.tar.gz) |
 
-新版本的文件名随 Release 改变。Mac 运行 `uname -m`，`arm64` 选 ARM 包，`x86_64` 选 Intel 包。不要把 GitHub 的 **Source code** 压缩包当安装包；不要只复制可执行文件。若 Assets 没有对应包，该版本还未完成发布。
+解压到一个新文件夹，保留完整的 `security-check` 子目录；不要下载 GitHub 的 **Source code** 包或只复制可执行文件。[SHA256 校验方法见下方](#下载校验与详细操作)。Mac 不确定芯片型号时查看“关于本机”。Linux 暂不发行。
 
-## 2. 选择使用方式
+### 2. 退出 Codex，执行两条命令
 
-- **Codex 自动接入**：安装 MCP、Hook 和配套 Skill；发普通开发需求后检查，不用点名产品。继续第 3 节。
-- **独立仅 MCP**：作为聊天内主动调用的工具，不安装 Hook 或 Skill。解压包后跳到第 5 节。
-
-macOS CI 与试用者真机验收分别记录；维护者暂时没有 Mac 真机。[当前验收与限制](docs/DEVELOPMENT_PROGRESS.md)以实际回执为准。
-
-## 3. 安装并等待检查组件就绪
-
-先完全退出 Codex。以下假设安装包在用户“下载”目录，命令报错时先处理错误再继续。
-
-### Windows：PowerShell
+在**包含 `security-check` 子目录的解压文件夹**中打开普通 PowerShell，逐条执行；任何一步失败就停止，按[详细指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md#升级重试和卸载)处理。
 
 ```powershell
-$archive = Join-Path $env:USERPROFILE 'Downloads\ai-security-runtime-v0.3.4-windows-x64.zip'
-Get-FileHash -Algorithm SHA256 -LiteralPath $archive
-# 与下载的同名 .sha256 文件核对。
-$destination = Join-Path $env:USERPROFILE 'Downloads\AI-Security-Runtime-v0.3.4'
-Expand-Archive -LiteralPath $archive -DestinationPath $destination
-$bundle = Join-Path $destination 'security-check'
-$exe = Join-Path $bundle 'security-check.exe'
-& $exe --version
-& $exe install codex --bundle $bundle --json
-& $exe preparation watch
-& $exe prepare-scanners --status --json
+.\security-check\security-check.exe install codex
+.\security-check\security-check.exe preparation watch
 ```
 
-### Mac：终端
+第一条安装 MCP、Codex 生命周期 Hook 和配套 Skill，并自动在后台准备检查组件；第二条等待准备结果。看到 **“扫描能力已准备完成”** 再继续，下载中或失败都不表示检查已就绪。
 
-以下以 ARM 包为例，Intel 将 `macos-arm64` 换成 `macos-x64`。
+<details>
+<summary>Mac：解压后使用这两条命令</summary>
+
+完全退出 Codex，在包含 `security-check` 子目录的解压文件夹打开终端，逐条执行：
 
 ```bash
-cd "$HOME/Downloads"
-shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz
-# 与下载的同名 .sha256 文件核对。
-mkdir AI-Security-Runtime-v0.3.4
-tar -xzf ai-security-runtime-v0.3.4-macos-arm64.tar.gz -C AI-Security-Runtime-v0.3.4
-bundle="$HOME/Downloads/AI-Security-Runtime-v0.3.4/security-check"
-exe="$bundle/security-check"
-"$exe" --version
-"$exe" install codex --bundle "$bundle" --json
-"$exe" preparation watch
-"$exe" prepare-scanners --status --json
+./security-check/security-check install codex
+./security-check/security-check preparation watch
 ```
 
-解压目标目录已存在时请换新目录，避免覆盖正在使用的程序。若 macOS 阻止运行，核对来源、校验值和系统提示后保存诊断联系维护者。当前没有 Apple 开发者签名／公证承诺，不要关闭系统安全检查。
+Apple Silicon 与 Intel 使用相同命令，下载包按上表选择。若系统阻止运行，保存提示并参考[Mac 详细步骤](docs/PILOT_INSTALL_AND_USE.zh-CN.md#macoscodex自动接入真机待验)；当前没有 Apple 开发者签名／公证承诺，不要关闭系统安全检查。macOS CI 与试用者真机验收分别记录，维护者暂无 Mac 真机，平台限制见[开发进度](docs/DEVELOPMENT_PROGRESS.md)。
 
-**程序安装完成 ≠ 安全检查已准备完成。** 安装默认启动后台准备并先返回；等组件及整体 `ready=true`、漏洞库 `FRESH` 后再测试依赖漏洞。仍在下载时，依赖检查未完成。
+</details>
 
-准备失败或需要更新库：Windows 运行 `& $exe prepare-scanners`，Mac 运行 `"$exe" prepare-scanners`，完成后用 `prepare-scanners --status --json` 核对状态。当前没有持续定时更新服务，后续仍需核对新鲜度。无需重装项目依赖。
+### 3. 重启 Codex，确认接入
 
-## 4. 在 Codex 正常开发
+完全重新打开 Codex，在实际项目目录创建新聊天，先发：
 
-完全重新打开 Codex，在实际项目目录创建新聊天并确认 MCP 连接可用，发普通需求，例如：
+> 请只核对已连接的 ai_security_runtime 的版本和构建身份，不扫描、不修改代码。
 
-> 在现有订单模块新增订单详情接口，复用服务和仓储，增加必要测试，完成后总结改动、验证结果和需要我决定的事项。
+确认 MCP 已连接，返回版本为 **0.3.4**，构建身份与解压包的 `security-check/version.json` 一致。连接成功只代表已接入；发一个普通开发需求后，最终回复应说明实际安全核查结果或未完成的范围，不能把“工具已列出”当作检查已运行。
 
-任务结束即可获得安全反馈，不要求 `git commit`。默认安装保留 Codex 生命周期 Hook、MCP 和 Skill；Git 提交 Hook 是默认关闭、常规帮助隐藏的高级可选能力，已有 Git Hook 保留。
+之后正常提开发需求，无需额外说“使用 ai-security 扫描”，也不要求 `git commit`。有风险时，查看依据、防护、触发条件和未知范围，再选择 **修复／暂不处理**。多个问题要指明具体项；批量修复需明确说“修复本轮全部已登记风险”。暂不处理保留记录，修复后逐项区分复查通过、仍存在和验证未完成。
 
-无需增加“使用 ai-security 扫描”。有待处理问题时，回复应显示 **有 N 项风险需要你决定**，说明代码依据、当前防护、触发条件和未知范围，并单独给出 **修复／暂不处理**。
+Git 提交 Hook **默认关闭、常规帮助隐藏**；默认安装保留已有 Git Hook。
 
-多个问题请选择具体项；要批量修复，明确回复“修复本轮全部已登记风险”。暂不处理保留记录，不代表风险消除。修复总结应逐项区分复查通过、仍存在和验证未完成；规则复查与 Agent 代码复核的依据不同。
+## 下载校验与详细操作
 
-需要确认自动检查时，读取当前项目最近 Hook 诊断：
+<details>
+<summary>校验下载包（安装前）、升级、卸载、离线和故障排查</summary>
+
+安装前下载 [v0.3.4 SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.4/SHA256SUMS.txt)，在下载目录计算对应压缩包的 SHA256，与清单中同名文件核对：
 
 ```powershell
-& $exe hooks recent --path 'C:\Projects\your-project' --limit 32 --json
+Get-FileHash -Algorithm SHA256 -LiteralPath .\ai-security-runtime-v0.3.4-windows-x64.zip
 ```
 
-Mac 使用 `"$exe" hooks recent --path "$HOME/Projects/your-project" --limit 32 --json`。核对项目、时间和实际执行状态；没有记录时继续核对状态目录和保留期限，不能直接断言没有触发。详见[试用指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)。
+Mac 使用 `shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz`，Intel 将文件名中的 `macos-arm64` 换为 `macos-x64`。不一致时不要安装。
 
-## 5. 独立仅 MCP 模式
+- [详细安装、准备状态、重试、升级和卸载](docs/PILOT_INSTALL_AND_USE.zh-CN.md)：需要诊断时核对组件整体 `ready=true` 与漏洞库 `FRESH`；仍在下载时依赖检查未完成。升级使用新 Release 的完整包重复安装，再重启核对构建身份。
+- [离线安装、缓存与本地差分包](docs/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md#安装缓存与增量升级)：离线只复用已有可用缓存，不能从零准备缺失组件。当前没有在线产品自动下载更新器，也没有漏洞库持续定时刷新服务。
+- [Hook 诊断与使用反馈](docs/PILOT_INSTALL_AND_USE.zh-CN.md#接入与自动检查诊断)：确认项目、时间和执行状态；没有记录不能直接断言没有触发。
 
-解压完整包并设置上面的 `exe`，**跳过 `install codex`**。先准备组件，再为已有本地 Git 项目生成配置。
+卸载接入和 Skill 保留程序数据与检查历史。遇到未知配置冲突时保留诊断，按详细指南处理，不手动删除其它服务。
 
-```powershell
-# Windows
-$project = 'C:\Projects\your-project'
-& $exe prepare-scanners
-& $exe prepare-scanners --status --json
-& $exe mcp config --path $project --toml
-# 使用 mcpServers JSON 的客户端：将 --toml 换成 --json。
-```
+</details>
 
-```bash
-# Mac
-project="$HOME/Projects/your-project"
-"$exe" prepare-scanners
-"$exe" prepare-scanners --status --json
-"$exe" mcp config --path "$project" --toml
-```
+<details>
+<summary>其它客户端／仅 MCP 接入（按需）</summary>
 
-将生成的 `ai_security_runtime` 小节合并到 Codex 用户目录 `.codex/config.toml`，保留其他服务和设置。重启／重连后，在该项目聊天中发：
+如只需主动调用工具，或客户端使用本地 stdio MCP，请看[仅 MCP 模式](docs/PILOT_INSTALL_AND_USE.zh-CN.md#仅mcp模式windowsmacos)：跳过 `install codex`，准备组件后生成项目配置，合并进客户端并重连。此模式不安装 Hook 或 Skill；普通浏览器远程聊天不能直接启动本机程序，自动调用取决于客户端行为。本批主要验收 Codex，其它客户端不承诺相同自动核查体验。
 
-> 使用已连接的安全检查工具检查当前项目，只报告问题，不修改代码；说明实际检查范围，以及依赖数据和上下文尚未确认的部分。
+</details>
 
-此模式支持能启动**本地 stdio**进程的客户端，普通浏览器远程聊天不能直接启动本机程序。自动调用取决于客户端 Agent 的行为。配置绑定具体项目；换项目或移动程序目录后重新生成。[配置说明与官方参考](docs/PILOT_INSTALL_AND_USE.zh-CN.md#仅mcp模式windowsmacos)。
-
-## 6. 升级、卸载与反馈
-
-升级：下载新 Release 完整包，退出 Codex，用新包重复安装步骤，重启后核对版本和构建身份；源码拉取不等于程序升级。
-
-卸载自动接入：Windows 运行 `& $exe uninstall codex --json`，Mac 运行 `"$exe" uninstall codex --json`。移除受管理接入和 Skill，保留程序数据与检查历史。仅 MCP 模式移除自己添加的配置小节即可。
-
-反馈到 [Issues](https://github.com/pikachu-cxy/Ai-security-check/issues)：提供系统／架构、Release 和构建身份、失败步骤、耗时、组件／库状态、首次风险提示和逐项复查结果。分享前去除私有代码、真实密钥和个人路径。
+反馈到 [Issues](https://github.com/pikachu-cxy/Ai-security-check/issues)：提供系统／架构、版本和构建身份、失败步骤及准备状态。分享前去除私有代码、真实密钥和个人路径。
 
 ## 检查范围与开发资料
 
@@ -136,4 +95,4 @@ project="$HOME/Projects/your-project"
 - [开发交接](docs/DEVELOPMENT_HANDOFF.zh-CN.md)
 - [许可说明](LICENSING.md)、[使用条款](EULA.md)、[第三方声明](THIRD_PARTY_NOTICES.md)
 
-当前安装入口为 Releases 完整包，Homebrew／winget 外部上架不作为试用安装前提。
+安装入口为 Releases 完整包，Homebrew／winget 外部上架不作为试用安装前提。
