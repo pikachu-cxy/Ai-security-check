@@ -35,6 +35,10 @@
 回执：`artifacts/worktree-admission-smoke-20261016/receipt.json`；重跑入口：
 `scripts/verify_worktree_admission.py --workspace <托管仓库绝对路径> --output <新目录>`。
 必须通过进程内 `PYTHONPATH` 绑定实验版 `src`，不修改全局配置。
+输出目录须在被测仓库之外，因为验收进程把任务状态放在输出目录中；项目内部状态
+边界仍会拒绝这种布局。已提交的托管实验版随后也以自身源码再次通过相同 stdio 验收，
+建立 728 个文件的基线并正常无改动结束；记录为
+`artifacts/worktree-admission-managed-final-outside-20261016/receipt.json`。
 
 真实 Git 边界回归已覆盖合法项目及子目录、伪造/损坏元数据、状态目录、明确排除、
 嵌套仓库、环境覆盖和链接，Windows 文件符号链接 fixture 的权限限制单独保留。
