@@ -8,6 +8,13 @@ The MCP packet carries this exact version and digest. Follow live tool contracts
 ## Task boundary and cost
 
 Before the first edit call `begin_security_task` with a unique short task key.
+Pass the `session_ref` supplied by the real SessionStart Hook. It is internal
+session routing, never repair authority or authenticated native-host identity.
+For an automatic pre-edit task, pass its session_ref to finish_security_task;
+prepare/read/submit also accept it after reconnect. Keep the exact original ref.
+Without that context, tasks stay connection-scoped; never infer the current
+conversation from the last or only observed Hook. Other sessions' active tasks
+do not block a new independent task and must never be joined or closed.
 When the connected host explicitly advertises automatic synchronous pre-edit
 task preparation, let that Hook capture the baseline and reuse the exact
 task_ref it delivers; do not create a second task. A missing Hook baseline after
@@ -15,7 +22,7 @@ editing is a coverage gap, never permission to reconstruct an earlier baseline.
 Keep that task_ref across all edits, tests and intermediate conversation for this
 development task. The baseline includes existing dirty files; never substitute
 Git HEAD, the latest Hook result or a baseline taken after editing. An existing
-active task must be resumed/finished; do not silently join an unrelated task.
+task must be resumed/finished only by its own session; do not join unrelated work.
 Existing explicit vulnerability fixes use their original repair workflow/grant.
 
 At completion call `finish_security_task`. NO_CHANGES requires no model review

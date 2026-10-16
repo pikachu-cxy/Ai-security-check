@@ -48,3 +48,26 @@ def test_missing_execution_proof_cannot_be_scored_as_clean():
     assert module.execution_observed({'time':{'rules':['python.id']}},rules,['entry.py'])
     assert not module.execution_observed({'time':{'rules':['java.id']}},rules,['entry.py'])
     assert not module.execution_observed({},rules,['entry.py'])
+
+
+def test_typescript_selection_uses_declared_cwe_and_keeps_shared_identity(tmp_path):
+    snapshot = tmp_path / 'default.yml'
+    shared = rule('shared.ssrf', 'CWE-918: SSRF', 'javascript')
+    shared['languages'].append('typescript')
+    snapshot.write_text(yaml.safe_dump({'rules': [shared, rule('sql', 'CWE-89: SQL')]}))
+    module = evaluator()
+    definitions, inventory, categories = module.select_rules(tmp_path, 'typescript', snapshot, ['ssrf'])
+    assert [row['id'] for row in definitions] == ['shared.ssrf']
+    assert categories == {'shared.ssrf': {'ssrf'}}
+    assert inventory[0]['languages'] == ['javascript', 'typescript']
+    assert module.execution_observed({'time': {'rules': ['shared.ssrf']}}, definitions, ['route.ts'])
+    assert not module.execution_observed({'time': {'rules': []}}, definitions, ['route.ts'])
+
+
+def test_official_language_alias_is_not_silently_excluded(tmp_path):
+    snapshot = tmp_path / 'default.yml'
+    snapshot.write_text(yaml.safe_dump({'rules': [rule('ts.path', 'CWE-22: path', 'ts')]}))
+    module = evaluator()
+    definitions, _, _ = module.select_rules(tmp_path, 'typescript', snapshot)
+    assert [row['id'] for row in definitions] == ['ts.path']
+    assert module.execution_observed({'time': {'rules': ['ts.path']}}, definitions, ['route.ts'])

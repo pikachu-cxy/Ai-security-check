@@ -1,6 +1,7 @@
 """Context-sensitive, source-only Python AST interpreter for a bounded API subset."""
 import ast
 import copy
+import re
 from pathlib import Path
 
 from .flow_core import UNKNOWN, Analysis, Limit, Value, binary, constant, join, truth
@@ -18,17 +19,18 @@ class PythonFlow:
         self.file = ''
         self.current_module = ''
         self.loop_frames = []
+        self.dynamic_flask_path = False
 
     def module(self, name, file=None):
         if name in self.environments:
             return self.environments[name]
         if file is None:
             stem = name.replace('.', '/')
-            file = next((p for p in (stem + '.py', stem + '/__init__.py') if (self.a.root / p).is_file()), None)
+            file = next((p for p in (stem + '.py', stem + '/__init__.py') if self.a.exists(p)), None)
         if file is None:
             return None
         try:
-            tree = ast.parse(self.a.read(file), filename=file)
+            tree = self.a.parse(file, 'python', lambda text: ast.parse(text, filename=file))
         except (SyntaxError, UnicodeError, RecursionError):
             self.a.gaps.add((file, 'PYTHON_PARSE_UNSUPPORTED'))
             return {}
@@ -73,6 +75,11 @@ class PythonFlow:
         if obj.kind == 'request' and name in {'data', 'query_string'}:
             value = self.a.source(self.file, self.line)
             return Value(taint=value.taint, kind='bytes')
+        if obj.kind == 'request' and name == 'path' and not self.dynamic_flask_path:
+            self.a.gaps.add((self.file, 'FLASK_DYNAMIC_PATH_CONTEXT_UNRESOLVED'))
+            return Value(kind='str')
+        if obj.kind == 'request' and name in {'path', 'full_path', 'url'}:
+            return Value(taint=self.a.source(self.file, self.line).taint, kind='str')
         if obj.kind == 'object':
             if isinstance(obj.data, dict) and name in obj.data:
                 return obj.data[name]
@@ -166,6 +173,19 @@ class PythonFlow:
                     try: return constant(getattr(obj.data,method)(args[0].data))
                     except ValueError: return Value()
                 return Value(kind='number')
+            if method in {'split', 'rsplit'}:
+                if (len(args) > 2 or set(kwargs) - {'sep', 'maxsplit'} or
+                        args and 'sep' in kwargs or len(args) > 1 and 'maxsplit' in kwargs):
+                    return Value()
+                separator = args[0].data if args else kwargs.get('sep', constant(None)).data
+                maximum = args[1].data if len(args) > 1 else kwargs.get('maxsplit', constant(-1)).data
+                if ((separator is None or isinstance(separator, str) and separator) and
+                        type(maximum) is int):
+                    if isinstance(obj.data, str):
+                        parts = getattr(obj.data, method)(separator, maximum)
+                        if len(parts) <= 32: return Value([constant(part) for part in parts], kind='sequence')
+                    elif obj.kind == 'str' and obj.taint:
+                        return Value(taint=obj.taint, kind='input-sequence')
             if isinstance(obj.data, str) and method in {'startswith', 'endswith'} and args and isinstance(args[0].data, str):
                 return constant(obj.data.startswith(args[0].data) if method == 'startswith' else obj.data.endswith(args[0].data))
         return Value()
@@ -201,11 +221,20 @@ class PythonFlow:
             env[node.args.kwarg.arg] = Value({k:v for k,v in kwargs.items() if k not in names}, kind='mapping')
         self.a.depth += 1
         old_frames,self.loop_frames = self.loop_frames,[]
+        old_path_context = self.dynamic_flask_path
+        # Static routes have fixed path segments. Carry a declared dynamic-route
+        # context through resolved helper calls, and restore it between entries.
+        self.dynamic_flask_path = old_path_context or any(
+            isinstance(d, ast.Call) and isinstance(d.func, ast.Attribute) and d.func.attr == 'route'
+            and d.args and isinstance(d.args[0], ast.Constant) and isinstance(d.args[0].value, str)
+            and re.search(r'<(?:[A-Za-z_][\w]*(?:\([^<>]*\))?:)?[A-Za-z_][\w]*>', d.args[0].value)
+            for d in node.decorator_list)
         try:
             returned, _ = self.block(node.body, env)
             return self.a.through(join(*returned), old, line, callee=(self.file, node.lineno))
         finally:
             self.loop_frames = old_frames
+            self.dynamic_flask_path = old_path_context
             self.a.depth -= 1
             self.file, self.current_module = old, old_module
             self.a.calls.pop()

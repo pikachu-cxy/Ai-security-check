@@ -200,7 +200,9 @@ def test_mcp_begin_prepares_same_key_before_call_and_edit(repo,tmp_path,name):
     core=coordinator(tmp_path,FakeRuntime())
     bridge=CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation')
     key='host-generated-unique-key'
-    before=tool(repo,tmp_path,core,name,workspace_path=str(repo),task_key=key)[1]
+    from security_runtime.task_ownership import issue_session_ref
+    token=issue_session_ref(core.store,repo,'cursor','private-cursor-conversation')
+    before=tool(repo,tmp_path,core,name,workspace_path=str(repo),task_key=key,session_ref=token)[1]
     assert before['status']=='BASELINE_CAPTURED' and not core.runtime.calls
     manual=bridge.tasks.begin(str(repo),key)
     assert manual['status']=='ACTIVE' and manual['task_ref']==before['task_ref']
@@ -234,10 +236,11 @@ def test_mcp_preparation_never_adopts_existing_manual_or_other_server(repo,tmp_p
     bridge=CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation')
     assert tool(repo,tmp_path,core,'MCP:other:begin_security_task',
         workspace_path=str(repo),task_key='key')[1]['status']=='READ_ONLY_OR_UNSUPPORTED'
-    ref=bridge.tasks.begin(str(repo),'key')['task_ref']
+    from security_runtime.task_security import TaskSecurityService
+    ref=TaskSecurityService(core.runtime,core.store).begin(str(repo),'key')['task_ref']
     result=tool(repo,tmp_path,core,'MCP:begin_security_task',workspace_path=str(repo),task_key='key')[1]
-    assert result['status']=='INCONCLUSIVE'
-    assert 'connector_owner' not in bridge.tasks.load(repo,ref)
+    assert result['status']=='MCP_PREPARATION_DELEGATED'
+    assert 'connector_owner' not in TaskSecurityService(core.runtime,core.store).load(repo,ref)
     assert not core.runtime.calls
 
 
@@ -282,7 +285,8 @@ def test_other_session_and_manual_task_not_joined(repo,tmp_path):
     first=tool(repo,tmp_path,core)[1]['task_ref']
     result=ingress(repo,tmp_path,core,'preToolUse',tool_name='Write',tool_use_id='x',
                    conversation_id='other-conversation')[1]
-    assert result['status']=='INCONCLUSIVE' and core.runtime.calls==[]
+    assert result['status']=='BASELINE_CAPTURED' and core.runtime.calls==[]
+    assert result['task_ref']!=first
     assert first == CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation').current()['task_ref']
 
 

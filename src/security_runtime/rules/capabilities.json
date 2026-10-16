@@ -1166,6 +1166,12 @@
       "maturity": "VALIDATED",
       "default_enabled": true,
       "test_corpus": "tests/rules/javascript/ssrf.js"
+    },
+    {
+      "rule_id": "ai-security.python.path-commonprefix-stat-lookup",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/python/path-commonprefix.py"
     }
   ],
   "overlap_policy": {

@@ -50,6 +50,7 @@ from .task_hook_activity import (MAX_TASK_HOOK_CHECKS, _bounded_task_paths,
 def _record_task_hook(hooks, root, result, decision):
     # Keep the existing embedding budget knob while sharing ledger semantics.
     return _shared_record_task_hook(hooks, root, result, decision,
+                                    expected_task_ref=result.get('security_task_ref'),
                                     max_checks=MAX_TASK_HOOK_CHECKS)
 
 

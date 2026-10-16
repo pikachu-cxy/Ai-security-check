@@ -56,7 +56,9 @@ def test_session_start_waits_for_pre_edit_publication(installed, projects, tmp_p
         assert snapshot['last_result']['status'] == 'PRE_EXISTING_BASELINE'
         assert (root / 'src/A.java').read_bytes() == original
         assert calls == [root]
-        assert 'hookSpecificOutput' not in json.loads(response.content[0].text)
+        payload=json.loads(response.content[0].text)
+        assert response.structuredContent['task_session_ref'] in payload['hookSpecificOutput']['additionalContext']
+        assert response.structuredContent['task_session_ref'] not in payload['systemMessage']
         assert pool.bootstrap(root, 'startup')['status'] == 'READY'
         assert calls == [root]
     finally:
@@ -75,7 +77,10 @@ def test_startup_timeout_keeps_worker_and_exposes_gap(installed, projects, tmp_p
         assert response.structuredContent['security_proof'] is False
         payload = json.loads(response.content[0].text)
         assert payload['hookSpecificOutput']['hookEventName'] == 'SessionStart'
-        assert '若本轮实际编辑' in payload['hookSpecificOutput']['additionalContext']
+        context=payload['hookSpecificOutput']['additionalContext']
+        assert '仅当本轮实际修改了源代码或配置' in context
+        assert '总结时仍未完成' in context and '不能称检查通过' in context
+        assert '普通聊天' in context and '其他轮次不重复沿用' in context
         assert payload['continue'] is True
         future = pool.jobs[(root, pool.bind_session('startup', root))]
         assert not future.cancelled()
@@ -103,7 +108,8 @@ def test_startup_failure_is_explicit_without_retry_or_raw_exception(installed, p
         response = asyncio.run(server.call_tool('handle_readiness_event', startup(root)))
         assert response.structuredContent['status'] == 'DEGRADED'
         payload = json.loads(response.content[0].text)
-        assert '不能证明' in payload['systemMessage']
+        assert '初始准备未完成' in payload['systemMessage']
+        assert '暂时无法确认本次改动的检查结果' in payload['systemMessage']
         assert payload['systemMessage'] in payload['hookSpecificOutput']['additionalContext']
         assert response.structuredContent['security_proof'] is False
         assert calls == [root]

@@ -12,6 +12,10 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
 HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
 实际修改源代码/配置的开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
+SessionStart 交付 session_ref 时，在 begin_security_task 传入；自动编辑前 Hook 交付原任务时，
+在 finish_security_task 传入其 session_ref。它只绑定会话，不授予修复权限，不展示给用户。
+并行会话分别开始自己的任务，不借用或结束他人的任务；不能按最近活动任务猜测归属。
+断线后沿用原 task_ref 和有效 session_ref；缺少绑定或原记录就说明缺口，不从编辑后补基线。
 若当前连接器明确提供同步的编辑前自动任务准备，则沿用 Hook 交付的原 task_ref，不另起任务；
 没有该能力的宿主仍在首次编辑前显式开始任务。编辑后缺少基线时说明缺口，不能补建冒充编辑前状态。
 现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
@@ -387,6 +391,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
+                         'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
@@ -399,7 +404,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'task_closeout': 'closeout-state-v1; GENERATION_LEASE_VERSION_BOUND',
                          'persistent_credential_closure': 'PER_ORIGINAL_DETECTOR_RULE_FILE_VERSION',
                           'dynamic_function_check': 'native-js-function-v1; CANONICAL_DYNAMIC_CODE_ONLY',
-                         'bounded_dataflow': 'v1.3; JAVA8_PYTHON_LOCAL_AST; BOUNDED_REQUEST_LOOPS_AND_CONSTANT_MATCH; SQL_AND_PYTHON_CROSS_FILE_PATH_AND_IO_CODECS_STREAMS; FEATURE_RELEASE; NOT_WHOLE_PROGRAM',
+                         'bounded_dataflow': 'v1.5; REVALIDATED_PROCESS_MEMORY_CACHE; RETAINED_BATCH_REVERSE_DEPENDENCIES; FEATURE_SOFT_BUDGET_3S_RELEASE_30S; JAVA8_PYTHON_LOCAL_AST; SQL_AND_JAVA_PYTHON_CROSS_FILE_PATH_AND_PYTHON_IO_CODECS_STREAMS; FEATURE_RELEASE; NOT_WHOLE_PROGRAM',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
                            'codex_integration': 'v0.2', 'cold_start_readiness': 'v0.3',

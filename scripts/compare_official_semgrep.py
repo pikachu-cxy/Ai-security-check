@@ -1,8 +1,9 @@
 """Offline CE comparison of an immutable corpus with a pinned public rules checkout.
 
 Third-party rules stay outside the distributable product. No target code executes.
-The selection is all Java/Python rules declaring CWE-22/23/36/73/89, not a hand-picked
-subset. This is the public CE repository, not Registry auto or commercial Code.
+Selection includes every rule declaring a requested CWE group in the frozen cohort's
+languages, with shared IDs counted once. Supports a public checkout or a retained
+Registry snapshot; this does not evaluate commercial Semgrep Code.
 """
 from __future__ import annotations
 
@@ -19,25 +20,38 @@ import time
 
 import yaml
 
-from rule_quality_evaluation import metrics, source, write
+from rule_quality_evaluation import GROUPS, metrics, source, write
+
+CWE_GROUPS = {'22': 'pathtraver', '23': 'pathtraver', '36': 'pathtraver', '73': 'pathtraver',
+              '89': 'sqli', '77': 'cmdi', '78': 'cmdi', '79': 'xss', '94': 'codeinj',
+              '95': 'codeinj', '502': 'deserialization', '611': 'xxe', '918': 'ssrf'}
+LANGUAGE_EXTENSIONS = {'java': {'.java'}, 'python': {'.py'},
+                      'javascript': {'.js', '.jsx'}, 'typescript': {'.ts', '.tsx'}}
+LANGUAGE_ALIASES = {'js': 'javascript', 'ts': 'typescript', 'py': 'python', 'python3': 'python'}
+
+
+def language_name(name):
+    return LANGUAGE_ALIASES.get(name.lower(), name.lower())
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def select_rules(checkout, language, registry_file=None):
+def select_rules(checkout, language, registry_file=None, selected_groups=None):
+    selected_groups = set(selected_groups or ('sqli', 'pathtraver'))
     definitions, inventory, categories = [], [], {}
     paths = [registry_file] if registry_file else sorted((checkout / language).rglob('*'))
     for path in paths:
         if not registry_file and path.suffix not in {'.yaml', '.yml'}: continue
         for original in (yaml.safe_load(path.read_text(encoding='utf-8')) or {}).get('rules', []):
-            if language not in original.get('languages', []): continue
+            if language not in {language_name(lang) for lang in original.get('languages', [])}: continue
             metadata = original.get('metadata', {})
             cwes = metadata.get('cwe', [])
             if isinstance(cwes, str): cwes = [cwes]
-            groups = {('sqli' if match.group(1) == '89' else 'pathtraver')
-                      for text in cwes if (match := re.match(r'CWE-(22|23|36|73|89)\b', str(text)))}
+            groups = {CWE_GROUPS[match.group(1)] for text in cwes
+                      if (match := re.match(r'CWE-(\d+)\b', str(text))) and
+                      match.group(1) in CWE_GROUPS} & selected_groups
             if not groups: continue
             relative = path.name if registry_file else path.relative_to(checkout).as_posix()
             identifier = original['id'] if registry_file else relative.removesuffix(path.suffix).replace('/', '.') + '.' + original['id']
@@ -54,7 +68,7 @@ def select_rules(checkout, language, registry_file=None):
 def execution_observed(data, definitions, batch):
     extensions={Path(name).suffix for name in batch}
     required={r['id'] for r in definitions if any(
-        ext in extensions for lang,ext in [('java','.java'),('python','.py')] if lang in r['languages'])}
+        extensions & LANGUAGE_EXTENSIONS.get(language_name(lang), set()) for lang in r['languages'])}
     executed=data.get('time',{}).get('rules',[])
     return bool(required) and required <= {r for r in executed if isinstance(r,str)}
 
@@ -76,15 +90,32 @@ def run(args):
     if not registry_file and subprocess.check_output(['git','-C',str(checkout),'status','--porcelain'],timeout=30).strip():
         raise ValueError('Public checkout is modified')
     definitions, inventory, categories = [], [], {}
-    for lang in (['java','python'] if language=='unlabelled' else [language]):
-        rules, items, groups = select_rules(checkout,lang,registry_file)
-        definitions.extend(rules); inventory.extend(items); categories.update(groups)
+    selected_groups = getattr(args, 'groups', None) or ['sqli', 'pathtraver']
+    languages = ([lang for lang, extensions in LANGUAGE_EXTENSIONS.items()
+                  if any(Path(name).suffix in extensions for name in names)]
+                 if language == 'unlabelled' else [language])
+    for lang in languages:
+        try:
+            rules, items, groups = select_rules(checkout,lang,registry_file,selected_groups)
+        except ValueError as error:
+            if str(error) != 'No applicable public rules': raise
+            continue
+        for rule, item in zip(rules, items):
+            identifier = rule['id']
+            if identifier in categories:
+                if next(r for r in definitions if r['id'] == identifier) != rule:
+                    raise ValueError('Conflicting shared-language rule identity')
+                categories[identifier].update(groups[identifier])
+                continue
+            definitions.append(rule); inventory.append(item); categories[identifier] = groups[identifier]
+    if not definitions: raise ValueError('No applicable public rules for frozen cohort')
     config = output/'selected-public-rules.yml'
     config.write_text('# Local evaluation copy; original rule bodies/notices retained. IDs qualified only.\n'+
                       '# Licenses and retained notices: see rules-inventory.json and upstream files.\n'+
                       yaml.safe_dump({'rules':definitions},sort_keys=False),encoding='utf-8')
     write(output/'rules-inventory.json', {'repository':args.source_url or ('https://semgrep.dev/c/p/default' if registry_file else 'https://github.com/semgrep/semgrep-rules'),
-        'commit':revision,'selection':'ALL_CWE_22_23_36_73_89_IN_JAVA_PYTHON','rules':inventory,
+        'commit':revision,'selection':{'groups':selected_groups,'languages':languages,
+            'policy':'ALL_MATCHING_DECLARED_CWE_RULES; SHARED_LANGUAGE_IDS_COUNTED_ONCE'},'rules':inventory,
         'engine':'Semgrep CE','engine_version':importlib.metadata.version('semgrep'),
         'config_sha256':sha(config),'license':'SEE_EACH_RULE_METADATA' if registry_file else (checkout/'LICENSE').read_text(encoding='utf-8'),
         'upstream_missed':(yaml.safe_load(registry_file.read_text(encoding='utf-8')) or {}).get('missed') if registry_file else None})
@@ -97,7 +128,8 @@ def run(args):
     for start in range(0,len(names),80):
         batch = names[start:start+80]
         command=[str(args.executable.resolve()),'scan','--config',str(config),'--json','--time','--quiet',
-                 '--metrics','off','--disable-version-check','--no-rewrite-rule-ids','--no-git-ignore',*batch]
+                 '--metrics','off','--disable-version-check','--no-rewrite-rule-ids',
+                 '--jobs',str(getattr(args,'jobs',2)),'--no-git-ignore',*batch]
         before=time.monotonic()
         result=subprocess.run(command,cwd=root,env=env,capture_output=True,timeout=180)
         elapsed=round((time.monotonic()-before)*1000)
@@ -147,6 +179,8 @@ if __name__=='__main__':
     selection.add_argument('--registry-file',type=Path)
     parser.add_argument('--baseline',type=Path,required=True)
     parser.add_argument('--source-url',help='Original source identity for an independently licensed checkout')
+    parser.add_argument('--groups',nargs='+',choices=tuple(GROUPS),default=['sqli','pathtraver'])
+    parser.add_argument('--jobs',type=int,choices=range(1,5),default=2)
     parser.add_argument('--executable',type=Path,required=True)
     parser.add_argument('--output',type=Path,required=True)
     raise SystemExit(run(parser.parse_args()))

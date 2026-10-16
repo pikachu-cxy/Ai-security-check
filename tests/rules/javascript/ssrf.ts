@@ -1,8 +1,40 @@
 // Synthetic outbound-target examples, not a reachability/exploitability proof.
+import { type Request, type Response } from "express";
 const express = require("express");
 const https = require("node:https");
 const axios = require("axios");
 const app = express();
+const legacyRequest = require("request");
+
+export function typedProxyFactory() {
+  return (incoming: Request, outgoing: Response) => {
+    // ruleid: ai-security.javascript.ssrf
+    legacyRequest.get(incoming.body.url);
+    // ruleid: ai-security.javascript.ssrf
+    fetch(incoming.query.url);
+    // ok: ai-security.javascript.ssrf
+    legacyRequest.get("https://fixed.example/status");
+    // ok: ai-security.javascript.ssrf
+    fetch("https://fixed.example/search?q=" + encodeURIComponent(incoming.query.q));
+  };
+}
+
+export async function typedNamedProxy(incoming: Request, outgoing: Response) {
+  // ruleid: ai-security.javascript.ssrf
+  await fetch(incoming.body.url);
+}
+
+type LocalRequest = { body: { url: string } };
+function localDataConsumer(incoming: LocalRequest) {
+  // ok: ai-security.javascript.ssrf
+  legacyRequest.get(incoming.body.url);
+}
+
+function typedClientShadow(incoming: Request, outgoing: Response) {
+  const ordinaryClient = { get(value: unknown) { return value; } };
+  // ok: ai-security.javascript.ssrf
+  ordinaryClient.get(incoming.body.url);
+}
 app.get("/proxy", async (req: any, res: any) => {
   // ruleid: ai-security.javascript.ssrf
   await fetch(req.query.url);

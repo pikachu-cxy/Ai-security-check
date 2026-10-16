@@ -779,7 +779,7 @@ class HookCoordinator:
         from .task_security_state import TaskSecurityStore
         import sqlite3
         try:
-            task = TaskSecurityStore(self.store, root).get(active=True) if event == HookEvent.FILE_CHANGED else None
+            task = TaskSecurityStore(self.store, root).for_hook(host,result['session_id']) if event == HookEvent.FILE_CHANGED else None
         except (ValueError, OSError, sqlite3.DatabaseError):
             task = None
         if task:

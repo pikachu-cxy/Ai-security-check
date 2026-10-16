@@ -82,6 +82,23 @@ rules:
       - pattern: $REQ.cookies
       - pattern: $REQ.get(...)
     exact: true
+  - patterns:
+    - pattern-either:
+      - pattern-inside: 'import { Request } from "express"; ...'
+      - pattern-inside: 'import type { Request } from "express"; ...'
+    - pattern-either:
+      - pattern-inside: '($REQ: Request, ...) => { ... }'
+      - pattern-inside: 'async ($REQ: Request, ...) => { ... }'
+      - pattern-inside: 'function $HANDLER($REQ: Request, ...) { ... }'
+      - pattern-inside: 'async function $HANDLER($REQ: Request, ...) { ... }'
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
   pattern-sinks:
   - patterns:
     - pattern: fetch($URL, ...)
@@ -387,17 +404,27 @@ rules:
     - pattern-inside: import $NEEDLE from "needle"; ...
     - pattern: $NEEDLE.get($URL, ...)
     - focus-metavariable: $URL
+  - patterns:
+    - pattern-either:
+      - pattern-inside: const $CLIENT = require("request"); ...
+      - pattern-inside: import $CLIENT from "request"; ...
+    - pattern: $CLIENT.$METHOD($URL, ...)
+    - metavariable-regex:
+        metavariable: $METHOD
+        regex: ^(get|post|put|patch|head|delete)$
+    - pattern-not: $CLIENT.$METHOD({ ... }, ...)
+    - focus-metavariable: $URL
   metadata:
     publisher: AI Security Runtime
     rule_pack: ai-security-core
-    rule_version: 1.3.1
+    rule_version: 1.3.2
     language: javascript
     category: ssrf
     cwe:
     - CWE-918
     confidence: MEDIUM
     maturity: BETA
-    framework: Express / Node.js fetch / http / axios / needle
+    framework: Express typed handlers / Node.js fetch / http / axios / needle / request
     license: Apache-2.0
     references:
     - https://cwe.mitre.org/data/definitions/918.html

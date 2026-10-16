@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import copy
 import hashlib
 from pathlib import Path
+import time
 
 
 class _Unknown:
@@ -97,9 +98,18 @@ class Analysis:
     total_bytes: int = 0
     calls: list = field(default_factory=list)
     targets: set = field(default_factory=set)
+    probes: dict = field(default_factory=dict)
+    parse_cache: object = None
+    parse_identity: str = ''
+    parse_hits: int = 0
+    parse_misses: int = 0
+    deadline: float | None = None
+    shared_probes: dict | None = None
 
     def tick(self):
         self.steps += 1
+        if self.deadline is not None and self.steps % 128 == 0 and time.monotonic() > self.deadline:
+            raise Limit('TIME_BUDGET')
         if self.steps > self.max_steps:
             raise Limit('STEP_BUDGET')
 
@@ -122,6 +132,29 @@ class Analysis:
             self.total_bytes += len(raw)
         self.hashes[name] = digest
         return raw.decode('utf-8-sig')
+
+    def exists(self, name):
+        relative = Path(name)
+        if relative.is_absolute() or '..' in relative.parts: raise Limit('UNSAFE_CONTEXT_PATH')
+        if len(self.probes) >= 20_000 and name not in self.probes: raise Limit('RESOLUTION_BUDGET')
+        # A scan-wide snapshot is revalidated before any result is returned.
+        # Avoid thousands of repeated negative SDK/import probes per batch.
+        snapshot = self.shared_probes if self.shared_probes is not None else self.probes
+        present = snapshot[name] if name in snapshot else (self.root / relative).is_file()
+        snapshot[name] = present
+        self.probes[name] = present
+        return present
+
+    def parse(self, name, language, parser):
+        text = self.read(name)
+        if self.parse_cache is None:
+            self.parse_misses += 1
+            return parser(text)
+        key = (str(self.root), self.parse_identity, language, name, self.hashes[name])
+        tree, hit = self.parse_cache.parse(key, text, parser)
+        if hit: self.parse_hits += 1
+        else: self.parse_misses += 1
+        return tree
 
     def source(self, file, line):
         return Value(taint=((file, line, 'SOURCE'),))
@@ -146,6 +179,8 @@ class Analysis:
 
     def stable(self):
         try:
+            if any((self.root / name).is_file() != present for name, present in self.probes.items()):
+                return False
             for name, digest in self.hashes.items():
                 path = self.root / name
                 if (not path.resolve().is_relative_to(self.root) or

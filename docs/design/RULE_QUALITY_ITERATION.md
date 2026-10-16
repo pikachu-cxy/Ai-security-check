@@ -9,6 +9,8 @@
 循环退出、Python 流 API 子集及官方默认规则的同源对照见
 [第 4 轮优化与 Semgrep 对照](DATAFLOW_ROUND4_SEMGREP_20261016.md)。
 
+后续规则与官方对照见[第 6 轮报告](DATAFLOW_ROUND6_20261016.md)，当前增量缓存候选见[第 7 轮报告](DATAFLOW_ROUND7_INCREMENTAL_20261016.md)。下文保留本文件原始轮次的范围与结果，不作为当前规则数量。
+
 ## 本轮采用的改进
 
 - Python SQL 注入：增加 Flask Cookie、Header 的显式输入建模；绑定参数值仍与 SQL 模板分开。

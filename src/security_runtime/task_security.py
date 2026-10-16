@@ -317,7 +317,8 @@ def _coverage_gaps(limitations):
               'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE': '开始版本或脱敏源码超出文本预算',
               'DIFF_BYTE_BUDGET': '部分任务差异超出字节预算',
               'DIFF_LINE_BUDGET': '部分任务差异超出行数预算',
-              'INITIAL_PACKET_BUDGET': '初始任务上下文超出返回预算'}
+              'INITIAL_PACKET_BUDGET': '初始任务上下文超出返回预算',
+              'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE': '同一工作区的任务时间窗重叠，改动归属未能独立确认'}
     result = []
     for limitation in limitations[:10]:
         message = labels.get(limitation.get('reason'), '部分任务源码或盘点不可用')
@@ -333,10 +334,21 @@ def _coverage_gaps(limitations):
 
 
 class TaskSecurityService:
-    def __init__(self, runtime, hooks=None, *, now=time.time):
+    def __init__(self, runtime, hooks=None, *, now=time.time, owner=None):
         self.runtime = runtime
         self.hooks = hooks or HookStateStore()
         self.now = now
+        self.owner = owner
+
+    def _owner(self):
+        from .task_ownership import valid_owner
+        owner=self.owner() if callable(self.owner) else self.owner
+        if owner is not None and not valid_owner(owner): raise ValueError('Invalid task owner')
+        return owner
+
+    @staticmethod
+    def key(task_key, owner=None):
+        return identity(task_key if owner is None else task_key+'\x00'+json.dumps(owner,sort_keys=True))
 
     def root(self, workspace):
         return WorkspaceResolver().resolve(workspace, allow_non_git_explicit=True).path
@@ -344,19 +356,22 @@ class TaskSecurityService:
     def store(self, root):
         return TaskSecurityStore(self.hooks, root, now=self.now)
 
-    def load(self, root, ref):
+    def load(self, root, ref, *, read_only=False):
         record = self.store(root).get(ref)
         if not record:
             raise ValueError('Task is unavailable or expired; never infer a baseline after editing')
+        from .task_ownership import record_owner
+        owner=self._owner()
+        if not read_only and owner is not None and record_owner(record)!=owner:
+            raise ValueError('Task belongs to another session or an earlier unbound connection')
         return record
 
     def begin(self, workspace, task_key, *, _owner=None):
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
-        if _owner is not None and (not isinstance(_owner, dict)
-                or set(_owner) != {'host', 'session'} or _owner['host'] != 'cursor'
-                or not isinstance(_owner['session'], str) or len(_owner['session']) != 64
-                or any(c not in '0123456789abcdef' for c in _owner['session'])):
+        from .task_ownership import valid_owner, record_owner, writer_identity, writer_gone
+        owner=self._owner() if _owner is None else _owner
+        if owner is not None and not valid_owner(owner):
             raise ValueError('Invalid connector owner')
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
@@ -364,10 +379,19 @@ class TaskSecurityService:
                 return {'status': 'BUSY', 'scanner_run': False}
             self.hooks.key(root)
             store = self.store(root)
-            existing = store.get(task_key=identity(task_key))
+            # Expiration alone never establishes a dead owner. Keep all evidence
+            # and risks; only a confirmed ended writer plus an expired lease retires.
+            for old in store.records(active=True):
+                if old.get('lease_until',float('inf'))<self.now() and writer_gone(old.get('writer')):
+                    old.update(phase='INCOMPLETE',skip_reason='原任务运行进程已结束，检查未完成；历史风险与检查记录保留。')
+                    old['baseline']['texts']={}
+                    if old.get('end'): old['end']['texts']={}
+                    old.pop('packet',None)
+                    store.save(old)
+            existing = store.get(task_key=self.key(task_key,owner))
             if existing:
                 return self._view(existing)
-            active = store.get(active=True)
+            active = store.get(active=True,owner=owner)
             if active and active['phase'] == 'REVIEWING' and self.now() > active['review_deadline']:
                 active.update(phase='INCOMPLETE')
                 active['baseline']['texts'] = {}
@@ -375,14 +399,18 @@ class TaskSecurityService:
                 active.pop('packet', None)
                 store.save(active)
                 active = None
-            if active:
+            if active and owner is None:
                 # Avoid silently joining another editing task. The host may
                 # resume the exact ref, or finish it, then begin the next one.
-                return dict(status='ACTIVE_TASK_EXISTS', task_ref=active['task_ref'], scanner_run=False)
+                return dict(status='ACTIVE_TASK_EXISTS', scanner_run=False)
             baseline = capture(root)
-            record = dict(contract=CONTRACT, task_ref='ts1-'+uuid.uuid4().hex, task_key=identity(task_key),
+            record = dict(contract=CONTRACT, task_ref='ts1-'+uuid.uuid4().hex, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=self.now(),
-                baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT')
+                baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
+                # A short-lived command Hook is not the conversation's owner process.
+                # Its normal exit can never prove that the editing task ended.
+                writer=writer_identity() if _owner is None else None)
+            if owner is not None: record['task_owner']=owner
             if _owner is not None:
                 record['connector_owner'] = _owner
             record = store.save(record, new=True)
@@ -431,12 +459,20 @@ class TaskSecurityService:
                 return self._view(record)
             before = record['baseline']['hashes']
             changes, unknown = task_changes(root, record['baseline'], end)
+            # Independent tasks may share a checkout, never each other's verdict.
+            # Conservatively retain a gap if editing intervals overlap; do not
+            # infer exclusive attribution from a whole-workspace snapshot.
+            overlaps=[v for v in self.store(root).records() if v['task_ref']!=record['task_ref'] and
+                      v.get('closed_at',float('inf'))>record['created_at'] and v['created_at']<=self.now()]
             for key in ('packet', 'review_session', 'review_deadline', 'skip_reason'):
                 record.pop(key, None)
             record.update(end=end, changes=changes, review=None, evidence={}, related_files=[], context_bytes=0,
                           context_requests={}, context_gaps=[],
                           finished_hook_revision=hook_revision,
                           unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
+            if changes and overlaps:
+                record['limitations'].append({'reason':'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE',
+                    'count':len(overlaps)})
             # Hook checks may have found a pre-existing risk outside the final
             # net diff, or left an edited/reverted file pending. Re-evaluate
             # those CURRENT sources; historical alerts are never replayed as
@@ -873,7 +909,7 @@ class TaskSecurityService:
         if type(finding_offset) is not int or type(finding_limit) is not int or finding_offset < 0 or not 1 <= finding_limit <= 30:
             raise ValueError('Invalid result page')
         root = self.root(workspace)
-        record = self.load(root, ref)
+        record = self.load(root, ref,read_only=True)
         current = self._fresh(root, record) if record.get('end') else None
         result = self._view(record)
         if record.get('static'):
@@ -889,7 +925,7 @@ class TaskSecurityService:
 
     def risk_ledger(self, workspace, ref, offset=0, limit=30):
         root = self.root(workspace)
-        original = self.load(root, ref)  # Same signed workspace/ref admission; never infer a root.
+        original = self.load(root, ref,read_only=True)  # Historical reads never transfer ownership.
         from .task_risk_ledger import TaskRiskLedger
         return TaskRiskLedger(self.hooks, root).view(ref, offset, limit, original)
 
@@ -914,6 +950,8 @@ class TaskSecurityService:
     def _view(self, record):
         phase = record['phase']
         result = dict(status=phase, task_ref=record['task_ref'], scanner_run=False,
+            task_scope=('HOST_SESSION' if (record.get('task_owner') or {}).get('host') in {'cursor','codex'} else
+                        'MCP_CONNECTION' if record.get('task_owner') else 'LEGACY_UNOWNED'),
             review_required=phase in {'READY','REVIEWING'}, changes=record.get('changes', [])[:MAX_CHANGED],
             changed_file_count=len(record.get('changes', [])), change_scope_truncated=len(record.get('changes', []))>MAX_CHANGED,
             unverified_file_count=len(record.get('unverified_paths', [])),

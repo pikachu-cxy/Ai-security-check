@@ -1,6 +1,6 @@
 {
   "rule_pack": "ai-security-core",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "rules": [
     {
       "language": "java",
@@ -1437,9 +1437,9 @@
       ],
       "confidence": "MEDIUM",
       "maturity": "BETA",
-      "framework": "Express / Node.js fetch / http / axios / needle",
+      "framework": "Express typed handlers / Node.js fetch / http / axios / needle / request",
       "rule_pack": "ai-security-core",
-      "rule_version": "1.3.1",
+      "rule_version": "1.3.2",
       "references": [
         "https://cwe.mitre.org/data/definitions/918.html",
         "https://nodejs.org/api/globals.html#fetch",
@@ -2122,6 +2122,42 @@
       "fixture": "tests/rules/java/spring-csrf-disabled.java",
       "target_extensions": [
         ".java"
+      ]
+    },
+    {
+      "rule_pack": "ai-security-core",
+      "rule_version": "1.3.2",
+      "language": "python",
+      "category": "path-traversal",
+      "cwe": [
+        "CWE-22"
+      ],
+      "confidence": "MEDIUM",
+      "maturity": "BETA",
+      "framework": "Python filesystem lookup with normalized roots and stat",
+      "references": [
+        "https://docs.python.org/3/library/os.path.html#os.path.commonprefix"
+      ],
+      "provenance": {
+        "origin": "FIRST_PARTY",
+        "author": "AI Security Runtime contributors",
+        "created_at": "2026-10-16",
+        "references": [
+          "https://docs.python.org/3/library/os.path.html#os.path.commonprefix"
+        ],
+        "license": "Apache-2.0",
+        "derived_from": ""
+      },
+      "rule_id": "ai-security.python.path-commonprefix-stat-lookup",
+      "engine_languages": [
+        "python"
+      ],
+      "severity": "WARNING",
+      "mode": "search",
+      "path": "framework/python-path-commonprefix.yml",
+      "fixture": "tests/rules/python/path-commonprefix.py",
+      "target_extensions": [
+        ".py"
       ]
     }
   ]

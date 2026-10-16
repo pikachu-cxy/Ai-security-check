@@ -53,7 +53,7 @@ class JavaFlow:
     def load(self, file):
         if file in self.file_units: return self.file_units[file]
         try:
-            unit = javalang.parse.parse(self.a.read(file))
+            unit = self.a.parse(file, 'java', javalang.parse.parse)
         except (javalang.parser.JavaSyntaxError, javalang.tokenizer.LexerError, UnicodeError, RecursionError):
             self.a.gaps.add((file, 'JAVA8_PARSE_UNSUPPORTED'))
             self.file_units[file] = None
@@ -93,7 +93,7 @@ class JavaFlow:
             relative = candidate.replace('.', '/') + '.java'
             for root in sorted(self.roots):
                 file = (Path(root) / relative).as_posix()
-                if (self.a.root / file).is_file():
+                if self.a.exists(file):
                     self.load(file)
                     if candidate in self.classes: return candidate
         return None
@@ -214,10 +214,25 @@ class JavaFlow:
         if obj.kind == 'request-map' and method == 'get': return Value(taint=obj.taint, kind='input-sequence')
         if obj.kind == 'cookie' and method in {'getValue', 'getName'}: return Value(taint=obj.taint)
         if obj.kind == 'connection':
-            if method == 'createStatement': return Value(kind='statement')
+            if method == 'createStatement': return Value([], kind='statement')
             if method in {'prepareCall', 'prepareStatement'} and args:
                 self.a.emit(self.file, line, 'sql-injection', args[0])
                 return Value(kind='prepared-statement')
+        if obj.kind == 'statement':
+            if method == 'addBatch' and len(args) == 1:
+                if obj.data is UNKNOWN: obj.data = []
+                if isinstance(obj.data, list) and len(obj.data) < 32:
+                    value = args[0]
+                    trace = value.taint + ((self.file, line, 'JDBC_BATCH_ADD'),) if value.taint else ()
+                    obj.data.append(Value(value.data, trace, value.kind, value.ref, value.blocked))
+                else: self.a.gaps.add((self.file, 'JDBC_BATCH_STATE_UNRESOLVED'))
+            elif method == 'clearBatch' and not args:
+                obj.data = []
+            elif method in {'executeBatch', 'executeLargeBatch'} and not args:
+                if isinstance(obj.data, list):
+                    for value in obj.data: self.a.emit(self.file, line, 'sql-injection', value)
+                else:
+                    self.a.gaps.add((self.file, 'JDBC_BATCH_STATE_UNRESOLVED'))
         sql_methods = {'statement': {'execute', 'executeQuery', 'executeUpdate', 'executeLargeUpdate'},
             'jdbc': {'execute', 'query', 'queryForObject', 'queryForList', 'queryForMap', 'queryForRowSet', 'queryForInt', 'queryForLong', 'update', 'batchUpdate'}}
         if method in sql_methods.get(obj.kind, ()) and args:

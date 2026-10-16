@@ -50,24 +50,49 @@ class TaskSecurityStore:
             raise ValueError('Task state cannot be verified')
         return value
 
-    def get(self, ref=None, *, active=False, task_key=None):
+    def records(self, *, active=False):
+        """Bounded signed inventory; never selects a newest foreign task."""
+        no_links(self.path)
+        if not self.path.is_file(): return []
+        with closing(sqlite3.connect(readonly_uri(self.path),uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            # Per-edit routing need not deserialize completed tasks' source
+            # packets. Keep the signed phase/TTL checks below as well.
+            predicate="WHERE phase IN ('ACTIVE','STATIC_RUNNING','READY','REVIEWING')" if active else ''
+            rows=db.execute(f'SELECT data,mac FROM security_tasks {predicate} ORDER BY rowid DESC LIMIT 32').fetchall()
+        from .task_ownership import ACTIVE
+        records=[self.decode(row) for row in rows]
+        return [v for v in records if v and self.now()-v['created_at']<=TTL and (not active or v['phase'] in ACTIVE)]
+
+    def get(self, ref=None, *, active=False, task_key=None, owner=None):
         no_links(self.path)
         if ref is not None and (not isinstance(ref, str) or not REF.fullmatch(ref)):
             raise ValueError('Invalid task reference')
         if not self.path.is_file():
             return None
+        if active and ref is None:
+            from .task_ownership import record_owner
+            values=[v for v in self.records(active=True) if owner is None or record_owner(v)==owner]
+            return values[0] if len(values)==1 else None
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
             db.execute('PRAGMA query_only=ON')
             if ref:
                 row = db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (ref,)).fetchone()
-            elif active:
-                row = db.execute("SELECT data,mac FROM security_tasks WHERE phase IN ('ACTIVE','STATIC_RUNNING','READY','REVIEWING') ORDER BY rowid DESC LIMIT 1").fetchone()
             else:
                 row = db.execute('SELECT data,mac FROM security_tasks WHERE task_key=? ORDER BY rowid DESC LIMIT 1', (task_key,)).fetchone()
             value = self.decode(row)
             if value and self.now() - value['created_at'] > TTL:
                 return None
             return value
+
+    def for_hook(self, host, session):
+        from .task_ownership import record_owner
+        values=self.records(active=True)
+        owned=[v for v in values if record_owner(v)=={'host':host,'session':session}]
+        if len(owned)==1: return owned[0]
+        # Legacy single-task embedding is retained, never a newest-task guess.
+        if not owned and len(values)==1 and record_owner(values[0]) is None: return values[0]
+        return None
 
     def save(self, value, *, new=False):
         no_links(self.path)
@@ -82,7 +107,12 @@ class TaskSecurityStore:
                 raise ValueError('Task changed concurrently; read current task first')
             if new and db.execute('SELECT count(*) FROM security_tasks').fetchone()[0] >= 32:
                 raise ValueError('Task history budget exceeded')
-            value = dict(value, generation=value['generation']+1)
+            from .task_ownership import ACTIVE, LEASE_SECONDS
+            value = dict(value, generation=value['generation']+1, activity_at=self.now())
+            if value['phase'] in ACTIVE:
+                value['lease_until']=self.now()+LEASE_SECONDS
+                value.pop('closed_at',None)
+            else: value.setdefault('closed_at',self.now())
             raw = encode(value)
             if len(raw) > MAX_RECORD_BYTES:
                 raise ValueError('Task record budget exceeded')

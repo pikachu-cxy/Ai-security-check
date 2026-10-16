@@ -39,6 +39,27 @@ def prepare_large_task(server, root):
     return ref, packet, finished
 
 
+def test_global_session_scope_requires_signed_context_not_only_observed_chat(installed,projects,tmp_path):
+    from security_runtime.task_ownership import issue_session_ref,record_owner,session_owner
+    from security_runtime.task_security_state import TaskSecurityStore
+    pool,_=task_pool(installed,tmp_path);server=create_global_server(workspaces=pool);root=projects[0]
+    try:
+        # One observed conversation is not proof of this tool request's identity.
+        pool.bind_session('observed-chat',root)
+        first=call(server,'begin_security_task',root,task_key='one')['task_ref']
+        core=pool.children[root][1];store=TaskSecurityStore(core.store,root)
+        assert record_owner(store.get(first))['host']=='connection'
+        token=issue_session_ref(core.store,root,'codex','actual-chat')
+        second=call(server,'begin_security_task',root,task_key='two',session_ref=token)['task_ref']
+        assert first!=second and record_owner(store.get(second))==session_owner('codex','actual-chat')
+        wrong=issue_session_ref(core.store,root,'codex','observed-chat')
+        rejected=call(server,'finish_security_task',root,task_ref=second,session_ref=wrong,skip_review_reason='foreign')
+        assert rejected['status']=='INCONCLUSIVE' and store.get(second)['phase']=='ACTIVE'
+        assert call(server,'finish_security_task',root,task_ref=second,session_ref=token,
+            skip_review_reason='Own task stopped')['status']=='INCOMPLETE'
+    finally: pool.close()
+
+
 def test_global_paging_keeps_full_static_scope_and_same_task_session(installed, projects, tmp_path):
     pool, ledgers = task_pool(installed, tmp_path)
     server = create_global_server(workspaces=pool)

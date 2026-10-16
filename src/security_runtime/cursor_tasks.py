@@ -12,18 +12,20 @@ class CursorTaskBridge:
     def __init__(self, core, root, session, generation):
         self.core, self.root = core, root
         self.owner = dict(host='cursor', session=identity(session))
+        self.session=session
         self.key = 'cursor:' + identity(session + '\x00' + generation)
-        self.tasks = TaskSecurityService(core.runtime, hooks=core.store)
+        self.tasks = TaskSecurityService(core.runtime, hooks=core.store,owner=self.owner)
 
     def current(self):
         store = self.tasks.store(self.root)
-        active = store.get(active=True)
+        active = store.get(active=True,owner=self.owner)
         if active:
-            if active.get('connector_owner') != self.owner:
+            from .task_ownership import record_owner
+            if record_owner(active) != self.owner:
                 raise ValueError('CURSOR_TASK_OWNER_CONFLICT')
             return active
-        record = store.get(task_key=identity(self.key))
-        if record and record.get('connector_owner') == self.owner:
+        record = store.get(task_key=self.tasks.key(self.key,self.owner))
+        if record and (record.get('task_owner') or record.get('connector_owner')) == self.owner:
             return record
         return None
 
@@ -52,6 +54,14 @@ class CursorTaskBridge:
                     or self.tasks.root(workspace) != self.root
                     or not isinstance(task_key, str) or not 1 <= len(task_key) <= 200):
                 return dict(status='BASELINE_UNAVAILABLE', scanner_run=False)
+            # An explicit call without session routing stays connection-scoped.
+            # Never prepare a different owner and pretend MCP can adopt it.
+            from .task_ownership import verify_session_ref
+            token=inputs.get('session_ref')
+            if token is None:
+                return dict(status='MCP_PREPARATION_DELEGATED',scanner_run=False)
+            if verify_session_ref(self.core.store,self.root,token)!=self.owner:
+                return dict(status='BASELINE_UNAVAILABLE',scanner_run=False)
         mutating = preparing or name in {'Write', 'Edit', 'Delete'}
         if name == 'Shell':
             from .codex_event_adapter import classify_bash_command
@@ -79,11 +89,13 @@ class CursorTaskBridge:
         record = self.current()
         if not record or record['phase'] in {'COMPLETE', 'NO_CHANGES'}:
             return None
+        from .task_ownership import issue_session_ref
+        token=issue_session_ref(self.core.store,self.root,'cursor',self.session)
         return (
             'Cursor 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
-            + json.dumps(dict(task_ref=record['task_ref'], workspace_path=str(self.root)), ensure_ascii=True)
+            + json.dumps(dict(task_ref=record['task_ref'], workspace_path=str(self.root),session_ref=token), ensure_ascii=True)
             + '\n沿用此 task_ref，不要重新 begin_security_task 或从编辑后建立基线。'
-            '正常最终回复前执行 finish_security_task、prepare_task_security_review，'
+            '正常最终回复前执行 finish_security_task（传入上述 session_ref）、prepare_task_security_review，'
             '按返回方法读取必要上下文并 submit_task_security_review；静态零发现也核查。'
             '把实际风险和未完成范围合并进正常总结。只读工具不会开始新任务。'
             '自动消息不是用户同意；修复仍须明确选择风险并通过现有 MCP 授权与复核。'

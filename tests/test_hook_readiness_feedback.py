@@ -102,7 +102,9 @@ def test_global_session_start_copy_preserves_readiness_without_status_echo(conne
         assert message in payload['hookSpecificOutput']['additionalContext']
         assert '普通聊天' in payload['hookSpecificOutput']['additionalContext']
     else:
-        assert 'hookSpecificOutput' not in payload
+        token=output.structuredContent['task_session_ref']
+        assert token in payload['hookSpecificOutput']['additionalContext']
+        assert token not in message
     assert len(runtimes[root].calls) == before
     assert str(root) not in message
     if status == 'READY':

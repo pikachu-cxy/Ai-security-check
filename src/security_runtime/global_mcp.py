@@ -375,8 +375,14 @@ def create_global_server(*, workspaces=None, host='codex'):
                             'workspace_id': identity(os.path.normcase(str(root))),
                             'workspace_readiness': readiness, 'security_proof': False}
                     data.update(claim_diag)
+                    output={'continue':True,'systemMessage':readiness_message(readiness['status'])}
+                    if readiness['status']=='READY':
+                        from .task_ownership import issue_session_ref, session_context
+                        token=issue_session_ref(pool.children[root][1].store,root,active_host,arguments['session_id'])
+                        data['task_session_ref']=token
+                        output['hookSpecificOutput']={'hookEventName':'SessionStart','additionalContext':session_context(token)}
                     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps({
-                        'continue': True, 'systemMessage': readiness_message(readiness['status'])}))])
+                        **output}))])
                 if readiness['status'] != 'READY':
                     # SessionStart may be missed while MCP is connecting. A
                     # mutation Hook can retry the bounded bootstrap; if it is
@@ -408,7 +414,15 @@ def create_global_server(*, workspaces=None, host='codex'):
                 forwarded.pop('workspace_path', None)
             # No parsing/rebuilding references or credentials; all other values
             # are forwarded byte-for-byte as supplied to this request's root.
-            result = await child._tool_manager.call_tool(name, forwarded, convert_result=True)
+            from .task_ownership import owner_scope, session_owner
+            if name in HOOKS:
+                owner=session_owner(active_host,arguments['session_id'])
+            else:
+                owner=None
+            # Ambiguous host identity remains connection-scoped. Never accept
+            # a model-supplied owner or choose the last observed conversation.
+            with owner_scope(owner):
+                result = await child._tool_manager.call_tool(name, forwarded, convert_result=True)
             if claim_diag is not None and isinstance(result, CallToolResult) and result.structuredContent is not None:
                 # Child rejection wins; never overwrite a rejected claim status.
                 claim_diag['workspace_binding_stage'] = 'COMPLETE'

@@ -34,6 +34,14 @@ def test_worker_limit_preserves_explicit_file_scope(tmp_path):
     with pytest.raises(ValueError): evaluation.CappedEvaluationEngine(0)
 
 
+def test_explicit_scope_cannot_override_upstream_labelled_samples(tmp_path):
+    args = SimpleNamespace(root=tmp_path/'corpus', output=tmp_path/'report',
+                           kind='python', file_list=tmp_path/'selected.json')
+    with pytest.raises(ValueError, match='cannot override'):
+        evaluation.run(args)
+    assert not args.output.exists()
+
+
 @pytest.mark.parametrize('run,rules', [({'status': 'FAILED'}, [RULE]),
     ({'status': 'SUCCESS', 'rule_coverage': {'status': 'PARTIAL'}}, [RULE]),
     ({'status': 'SUCCESS', 'rule_coverage': {'status': 'EXECUTED', 'scope_files': [],

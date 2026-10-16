@@ -60,6 +60,10 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         else:
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
+            if normalized.kind == EventKind.SESSION_START:
+                from .task_ownership import issue_session_ref,session_context
+                token=issue_session_ref(core.store,root,'cursor',payload['conversation_id'])
+                output['additional_context']=session_context(token)
             if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                 record = bridge.current()
                 if record and record['phase'] in {'ACTIVE', 'READY', 'REVIEWING'}:

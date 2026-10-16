@@ -28,11 +28,19 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     import sqlite3
     store = TaskSecurityStore(hooks, root)
     try:
-        task = store.get(active=True)
+        task = (store.get(expected_task_ref) if expected_task_ref is not None else
+                store.for_hook(result.get('host'),result.get('session_id')))
     except (ValueError, OSError, sqlite3.DatabaseError):
         return None, 'UNAVAILABLE'
     if not task:
         return None, 'NOT_APPLICABLE'
+    from .task_ownership import ACTIVE
+    if task['phase'] not in ACTIVE:
+        return None, 'TASK_CLOSED'
+    from .task_ownership import record_owner
+    owner=record_owner(task)
+    if owner is not None and owner!={'host':result.get('host'),'session':result.get('session_id')}:
+        return None, 'TASK_OWNER_MISMATCH'
     if expected_task_ref is not None and task['task_ref'] != expected_task_ref:
         return None, 'TASK_CHANGED'
     if result.get('tool_classification') == 'READ_ONLY' or result.get('workspace_mutation_observed') is False:
@@ -77,7 +85,9 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
         except (ValueError, OSError, sqlite3.DatabaseError):
             if attempt == 0:
                 try:
-                    refreshed = store.get(active=True)
+                    refreshed = store.get(task['task_ref'])
+                    if refreshed and refreshed['phase'] not in ACTIVE:
+                        return None, 'TASK_CLOSED'
                     if refreshed and refreshed['task_ref'] == task['task_ref']:
                         task = refreshed
                         continue

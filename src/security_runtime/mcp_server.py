@@ -157,6 +157,12 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if rejected:
             data.update({'continue': True, 'systemMessage': '安全检查尚未成功接入当前项目，暂时无法确认检查结果。'})
         data = {**diag, **data}
+        if data.get('status')=='READY':
+            from .task_ownership import issue_session_ref,session_context
+            root=Path(binding.root)
+            token=issue_session_ref(hook_coordinator.store,root,'codex',session_id)
+            data['task_session_ref']=token
+            data['hookSpecificOutput']['additionalContext']+='\n'+session_context(token)
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=False))])
 
@@ -214,58 +220,77 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             raise ValueError("Requested workspace is outside this MCP connection")
         return binding.root
 
-    task_engine = None
-    def task_service():
-        nonlocal task_engine
+    from .task_ownership import connection_owner, current_owner
+    task_connection_owner=connection_owner()
+    issued_tasks={}
+    def task_service(ref=None,session_ref=None,workspace=None):
         from .task_security import TaskSecurityService
-        if task_engine is None:
-            task_engine = TaskSecurityService(runtime_engine, hook_coordinator.store)
-        return task_engine
+        owner=current_owner(task_connection_owner)
+        if session_ref is not None:
+            from .task_ownership import verify_session_ref
+            root=TaskSecurityService(runtime_engine,hook_coordinator.store).root(bound_path(workspace))
+            scoped=verify_session_ref(hook_coordinator.store,root,session_ref)
+            if owner['host']!='connection' and scoped!=owner: raise ValueError('Task belongs to another session')
+            owner=scoped
+        prior=issued_tasks.get(ref)
+        if prior and session_ref is None and (owner['host']=='connection' or prior==task_connection_owner): owner=prior
+        service=TaskSecurityService(runtime_engine,hook_coordinator.store,owner=owner)
+        if ref is not None and session_ref is not None:
+            service.load(root,ref)  # Reject before changing connection routing.
+            if len(issued_tasks)>=64: issued_tasks.pop(next(iter(issued_tasks)))
+            issued_tasks[ref]=owner
+        return service
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def begin_security_task(task_key: str, workspace_path: str | None = None) -> dict:
+    def begin_security_task(task_key: str, workspace_path: str | None = None, session_ref: str | None = None) -> dict:
         """Before the first source/config edit of an actual development task, snapshot the current workspace (including existing dirty files). Unique task_key per task, no prompt/source. No scan/model/build/edit. Never call for ordinary chat or restart after editing to fake a baseline."""
-        return task_service().begin(bound_path(workspace_path), task_key)
+        service=task_service(session_ref=session_ref,workspace=workspace_path)
+        result=service.begin(bound_path(workspace_path),task_key)
+        if result.get('task_ref'):
+            if len(issued_tasks)>=64: issued_tasks.pop(next(iter(issued_tasks)))
+            issued_tasks[result['task_ref']]=service._owner()
+        return result
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def finish_security_task(task_ref: str, workspace_path: str | None = None, skip_review_reason: str | None = None) -> dict:
+    def finish_security_task(task_ref: str, workspace_path: str | None = None, skip_review_reason: str | None = None,
+                             session_ref: str | None = None) -> dict:
         """Before the development summary, compare against the exact task baseline. No actual changes: no checks/message. Actual changes: one bounded static check of task scope, then prepare_task_security_review even with zero scanner alerts. No repairs, model, target builds or Stop continuation."""
         if skip_review_reason is not None:
-            return task_service().skip(bound_path(workspace_path), task_ref, skip_review_reason)
-        return task_service().finish(bound_path(workspace_path), task_ref)
+            return task_service(task_ref,session_ref,workspace_path).skip(bound_path(workspace_path), task_ref, skip_review_reason)
+        return task_service(task_ref,session_ref,workspace_path).finish(bound_path(workspace_path), task_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def prepare_task_security_review(task_ref: str, workspace_path: str | None = None) -> dict:
+    def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None) -> dict:
         """Obtain sanitized task diff, actual static findings/coverage and canonical quick Skill. Host agent reasons before its final development summary; zero static alerts still require context review. Returns bounded source-version-bound review session, never a repair grant."""
-        return task_service().prepare(bound_path(workspace_path), task_ref)
+        return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
-                                 source_version: str = 'CURRENT') -> dict:
+                                 source_version: str = 'CURRENT', session_ref: str | None = None) -> dict:
         """Read a sanitized task-source window (current or signed preimage for a deleted file). At most 80 lines per response: larger requested ranges return has_more/next_read for the same task/session/path/version. Follow next_read within the unchanged 10-related-file, 40-unique-read and 64KB cumulative budgets. Unread requested ranges require PARTIAL; pagination never rescans or resets budgets. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Returns evidence_id bound to actual path/range/hash/version. No .env content, links, path escapes, external commands or network."""
         from .task_security import TaskContextError
         try:
-            return task_service().read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
+            return task_service(task_ref,session_ref,workspace_path).read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
         except TaskContextError as exc:
             return exc.response(task_ref, review_session)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_task_security_review(task_ref: str, review_session: str, findings: list[dict],
                                     coverage: str, limitations: list[str], workspace_path: str | None = None,
-                                    risk_resolutions: list[dict] | None = None) -> dict:
+                                    risk_resolutions: list[dict] | None = None, session_ref: str | None = None) -> dict:
         """Submit host reasoning with Runtime-issued evidence. See packet submission_contract. Accepts only current task versions, bounded candidates and explicit limitations; validates structure/version, never proves exploitability or scanner coverage. Merge development_summary into normal dev response; do not ask user to continue."""
-        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
+        return task_service(task_ref,session_ref,workspace_path).submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
         """Read same task result after reconnect with current-source freshness. Never rescans or invokes a model; host candidates and real scanner evidence stay distinct. No automatic repair authority."""
-        return task_service().get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
+        return task_service(task_ref).get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_risk_ledger(task_ref: str, workspace_path: str | None = None, offset: int = 0, limit: int = 30) -> dict:
         """Read per-original-finding outcomes and current-source freshness. No scan, edits or repair authority. Native checks and host code review remain distinct; use exact original task_ref."""
-        return task_service().risk_ledger(bound_path(workspace_path), task_ref, offset, limit)
+        return task_service(task_ref).risk_ledger(bound_path(workspace_path), task_ref, offset, limit)
 
     for task_tool_name in ('begin_security_task', 'finish_security_task', 'prepare_task_security_review',
                            'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger'):

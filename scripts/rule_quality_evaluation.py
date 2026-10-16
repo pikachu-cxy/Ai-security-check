@@ -34,6 +34,7 @@ GROUPS = {
     'pathtraver': {'path-traversal', 'arbitrary-file-read', 'arbitrary-file-write'},
     'xss': {'xss'}, 'codeinj': {'code-injection'},
     'deserialization': {'unsafe-deserialization'}, 'xxe': {'xxe'},
+    'ssrf': {'ssrf'},
 }
 SPLIT_VERSION = 'sha256-case-id-mod5-v1'
 IGNORED = {'.git', 'node_modules', 'vendor', 'dist', 'build', '__pycache__', 'assets'}
@@ -173,6 +174,8 @@ class SnapshotProvider:
 
 def run(args):
     root, output = args.root.resolve(), args.output.resolve()
+    if args.kind != 'unlabelled' and getattr(args, 'file_list', None):
+        raise ValueError('An explicit file list cannot override an upstream labelled cohort')
     if output.is_relative_to(root) or root.is_relative_to(output):
         raise ValueError('Output and external corpus must be separate trees')
     # Existing evidence is immutable: every iteration must use a fresh output.
@@ -191,7 +194,8 @@ def run(args):
         flow_checksum = dataflow_module.rule_pack().checksum
         implementation = output / 'dataflow-implementation'
         implementation.mkdir()
-        for name in ('dataflow.py', 'flow_core.py', 'flow_java.py', 'flow_python.py'):
+        for name in ('dataflow.py', 'flow_core.py', 'flow_java.py', 'flow_python.py', 'flow_cache.py'):
+            if not (Path(dataflow_module.__file__).parent / name).is_file(): continue
             shutil.copyfile(Path(dataflow_module.__file__).parent / name, implementation / name)
     all_labels, selected = [], []
     if args.kind != 'unlabelled':
@@ -206,9 +210,18 @@ def run(args):
               'split_unit': 'CASE_ID', 'template_independence': 'NOT_ESTABLISHED',
               'csv_sha256': sha(source(root, csv_name)), 'all_labels': all_labels})
     else:
-        names = sorted(p.relative_to(root).as_posix() for p in root.rglob('*')
-                       if p.suffix in {'.java', '.xml', '.py', '.js', '.jsx', '.ts', '.tsx'} and p.is_file()
-                       and not set(p.relative_to(root).parts) & IGNORED)
+        file_list = getattr(args, 'file_list', None)
+        if file_list:
+            names = json.loads(Path(file_list).read_text(encoding='utf-8'))
+            if (not isinstance(names, list) or not names or len(names) > 20_000 or
+                    not all(isinstance(n, str) and n and '\n' not in n and '\r' not in n for n in names) or
+                    len(names) != len(set(names))):
+                raise ValueError('Invalid explicit corpus file list')
+            names = sorted(names)
+        else:
+            names = sorted(p.relative_to(root).as_posix() for p in root.rglob('*')
+                           if p.suffix in {'.java', '.xml', '.py', '.js', '.jsx', '.ts', '.tsx'} and p.is_file()
+                           and not set(p.relative_to(root).parts) & IGNORED)
         for name in names:
             source(root, name)
         revision = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'],
@@ -219,7 +232,8 @@ def run(args):
     write(output / 'inventory.json', {'root': str(root), 'commit': revision, 'source_hashes': hashes,
           'kind': args.kind, 'split': args.split, 'rule_pack_version': pack.descriptor.version,
           'rule_pack_checksum': pack.checksum, 'dataflow_checksum': flow_checksum,
-          'dataflow_experimental': args.dataflow_experimental, 'target_execution': False})
+          'dataflow_experimental': args.dataflow_experimental, 'target_execution': False,
+          'scope_selection': 'EXPLICIT_FILE_LIST' if getattr(args, 'file_list', None) else 'DEFAULT_KIND_SCOPE'})
     adapter, outcomes, observations = SemgrepAdapter(rule_packs=manager,engine_provider=CappedEvaluationEngine(getattr(args,'jobs',2))), [], []
     for start in range(0, len(names), args.batch_size):
         batch = names[start:start + args.batch_size]
@@ -284,6 +298,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--reference', type=Path)
+    parser.add_argument('--file-list', type=Path, help='Frozen source-only file list for an unlabelled cohort')
     parser.add_argument('--pack', type=Path, help='Retained validated local first-party rule snapshot')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--kind', choices=('python', 'java', 'unlabelled'), required=True)

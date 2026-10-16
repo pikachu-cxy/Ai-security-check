@@ -3,6 +3,13 @@ const express = require("express");
 const https = require("node:https");
 const axios = require("axios");
 const app = express();
+const legacyRequest = require("request");
+app.get("/legacy-client", (req, res) => {
+  // ruleid: ai-security.javascript.ssrf
+  legacyRequest.get(req.query.url);
+  // ok: ai-security.javascript.ssrf
+  legacyRequest.get("https://fixed.example/status");
+});
 app.get("/proxy", async (req, res) => {
   // ruleid: ai-security.javascript.ssrf
   await fetch(req.query.url);
