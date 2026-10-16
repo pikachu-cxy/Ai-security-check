@@ -10,6 +10,22 @@
       "mode": "taint",
       "pattern-sources": [
         {
+          "pattern": "flask.request.cookies.get(...)",
+          "exact": true
+        },
+        {
+          "pattern": "flask.request.cookies[...]",
+          "exact": true
+        },
+        {
+          "pattern": "flask.request.headers.get(...)",
+          "exact": true
+        },
+        {
+          "pattern": "flask.request.headers[...]",
+          "exact": true
+        },
+        {
           "pattern": "flask.request.args.get(...)",
           "exact": true
         },
@@ -81,7 +97,7 @@
       "metadata": {
         "publisher": "AI Security Runtime",
         "rule_pack": "ai-security-core",
-        "rule_version": "1.3.0",
+        "rule_version": "1.3.1",
         "language": "python",
         "category": "sql-injection",
         "cwe": [

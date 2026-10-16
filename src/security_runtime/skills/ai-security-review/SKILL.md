@@ -34,6 +34,13 @@ risk_resolutions 契约；宿主代码复核、原规则复查和完整依赖图
 完整保留位置、具体问题、条件性影响、修复建议、未确认事项和待选的
 “修复/忽略”。可以调整换行或文件链接，不得只摘取标题、数量或内部状态。
 没有非空风险内容时不添加通用检查消息；任务结果合并进开发总结。
+风险提示先用加粗标题“发现 N 项安全风险：具体问题”，下一行用“📍 文件:行号 · 函数”
+展示实际位置，未知函数不编造。按加粗的“问题”“可能影响”“建议修复”“尚未确认”
+分段，每段只讲一件事；保留代码依据、已有防护、触发条件和反证，不把关联风险说成新增漏洞。
+多项风险编号，检查范围和未完成事项在风险说明后集中写一次；开发结果压缩成一句。
+仍需用户选择时，最后只给一次回复指引：单项“回复「修复」或「暂不处理」即可”，多项先选具体风险。
+说明暂不处理保留风险记录、选择前不会修改代码；已授权时不重复确认。不用表格或假按钮，
+不删减必要事实、不编造严重程度、检查结果或用户选择。旧“忽略”回复继续兼容暂不处理。
 `internal_control` 仅供内部流程使用；普通回复和进度说明不展示内部动作、
 原因、验证枚举、授权标识、引用、扫描器或工具名称，也不转述工具调用过程。
 只有用户明确要求技术诊断时，才展示有关诊断细节。
@@ -116,7 +123,8 @@ fix authorization and the originating-scanner retest workflow.
    ordinary feedback. Only an explicit request for technical diagnostics permits
    those details. `internal_control` is machine-only; retain original refs inside.
    For one focused risk awaiting a choice, ask:
-   回复“修复”或“忽略”（忽略仅表示本次不修复，风险仍保留）。
+   回复“修复”或“暂不处理”（暂不处理仅表示本次不修复，风险记录保留）。
+   The legacy reply 忽略 still means deferral for that selected issue.
    If repair is already approved for that scope, continue without asking again.
    If several risks have no selected focus, ask which one before accepting a choice.
    先不要修复/保留改动/观察 Hook prohibits immediate repair; it is NOT an implicit

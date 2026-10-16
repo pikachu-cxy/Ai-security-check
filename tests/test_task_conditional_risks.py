@@ -30,8 +30,14 @@ def test_existing_conditional_risk_has_actual_location_and_pending_choices(servi
                  '当前防护', '未确认', '条件', '建议', '修复', '暂不处理', '风险记录保留'):
         assert text in summary
     assert '本次未发现安全线索' not in summary
-    assert summary.startswith('**有 1 项关联风险需要你决定。**\n\n')
-    assert '\n\n请选择具体风险后回复：**修复** ／ **暂不处理**。\n\n' in summary
+    assert summary.startswith('**发现 1 项关联风险：订单读取缺少所有者检查**\n\n📍 `auth.py:1`')
+    for label in ('问题', '可能影响', '建议修复', '尚未确认', '检查范围'):
+        assert '\n\n**'+label+'**\n' in summary
+    assert summary.count('**回复「修复」或「暂不处理」即可。**') == 1
+    assert summary.index('**尚未确认**') < summary.index('**检查范围**') < summary.index('**回复「修复」')
+    for fact in (value['impact'], value['fix_advice'], *value['preconditions'],
+                 *value['unknowns'], *value['current_protections'], *value['counterevidence']):
+        assert fact in summary
     assert result['risk_choices'][0]['options'] == ['修复', '暂不处理']
     assert result['risk_choices'][0]['deferred_keeps_risk'] is True
     assert result['repair_authorized'] is False

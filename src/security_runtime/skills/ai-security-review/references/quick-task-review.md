@@ -149,11 +149,18 @@ grant from the original development request.
 Preserve every risk's code basis, current protections, preconditions, unknown
 scope and concrete fix advice in the final summary. Instructions to leave a
 module unchanged prohibit editing it; they do not suppress its risk or choices.
-When a risk needs a decision, preserve the Runtime's bold standalone decision
-heading (for example **有 1 项关联风险需要你决定。**) before the explanation.
-Put **修复** ／ **暂不处理** on a separate paragraph, keeping both options bold.
-Do not flatten them into an ordinary paragraph or bury them after implementation
-details. Keep the retention/consent explanation separate. No decision heading
+Use a short risk card rather than one long diagnostic paragraph. Start with a
+bold finding heading (for example **发现 1 项安全风险：HTTPS 证书校验被关闭**),
+then the actual file/line and function if known. Use separate bold labels
+问题, 可能影响, 建议修复 and 尚未确认. Retain code basis, current protections,
+preconditions and counterevidence; never describe an existing conditional risk
+as a newly introduced vulnerability. Number multiple risks. Put the actual
+check scope and incomplete coverage after the risks, once. Keep the development
+result to one sentence. End with one bold reply instruction: for one focused
+risk, 回复「修复」或「暂不处理」即可; for multiple risks, select a specific one
+first. Explain record retention and lack of edit authority separately. Do not
+invent severity, function names, checks, user choices or clickable buttons.
+This changes presentation only, not checks, consent or repair guards. No decision heading
 or processing choices are added for zero risks, no-change or read-only replies.
 Choices are proposals only: no consent or persisted deferral exists until the
 user selects that exact risk. Never pass a task-review candidate id to the

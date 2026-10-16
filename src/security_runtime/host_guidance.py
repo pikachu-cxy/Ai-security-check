@@ -2,6 +2,7 @@
 import sys
 
 from ._version import __version__
+from .risk_presentation import RISK_PRESENTATION_RULES
 
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix',
@@ -28,8 +29,7 @@ prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任�
 RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新增入口仍有漏洞。
 最终保留代码依据、当前防护、触发条件、未知范围和建议，并给出“修复／暂不处理”
 选项；暂不处理保留风险记录，不代表风险消除。原要求保持模块不变不取消该选项。
-有待选风险时，将“有 N 项关联风险/安全风险需要你决定”加粗并单独一段，放在
-风险说明前；“修复／暂不处理”另起一段且两个选项加粗，不埋在开发总结长段中。
+''' + RISK_PRESENTATION_RULES + '''
 无风险、只读或无改动回复不添加风险标题或处理选项。
 选项本身不是授权，不虚构用户选择或修复凭据；旧“忽略”措辞仍兼容明确的暂不处理。
 普通回复不显示原始计划、内部引用或独立“钩子反馈”。改文件 Hook 的静态检查保留。
@@ -147,7 +147,8 @@ progress out of ordinary user feedback. Only an explicit user request for
 technical diagnostics permits those details. internal_control is machine-only.
 Retain the exact structured references internally; never recover them
 from the message or scanner prose. For one focused risk awaiting a choice, end
-with 回复“修复”或“忽略”（忽略仅表示本次不修复，风险仍保留）.
+with 回复“修复”或“暂不处理”（暂不处理仅表示本次不修复，风险记录保留）.
+The legacy reply 忽略 still means deferral for that selected issue.
 先不要修复/保留改动/观察 Hook prohibits immediate repair; it is NOT an
 implicit 忽略 choice or permission to omit the recommendation and pending
 choice. Leave code unchanged and present that choice; never submit a decline
@@ -271,7 +272,8 @@ Ask whether to REMEDIATE that risk; do NOT ask whether to apply, keep, or enable
 the insecure edit. MUST present the required 用户提示 or user_feedback.message;
 explain location, concrete risk,
 conditional impact, specific safe change and any request behavior change, then
-ask 回复“修复”或“忽略”（仅本次不修复，风险仍保留） and WAIT.
+ask 回复“修复”或“暂不处理”（仅本次不修复，风险记录保留） and WAIT.
+The legacy reply 忽略 remains compatible with deferral for that selected issue.
 An immediate 修复, or equivalent explicit selected-risk repair reply, is approval
 for that exact proposed scope. An immediate 忽略, or equivalent explicit refusal
 answering this clearly identified repair choice, declines only this repair.
@@ -397,6 +399,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'task_closeout': 'closeout-state-v1; GENERATION_LEASE_VERSION_BOUND',
                          'persistent_credential_closure': 'PER_ORIGINAL_DETECTOR_RULE_FILE_VERSION',
                           'dynamic_function_check': 'native-js-function-v1; CANONICAL_DYNAMIC_CODE_ONLY',
+                         'bounded_dataflow': 'v1.3; JAVA8_PYTHON_LOCAL_AST; BOUNDED_REQUEST_LOOPS_AND_CONSTANT_MATCH; SQL_AND_PYTHON_CROSS_FILE_PATH_AND_IO_CODECS_STREAMS; FEATURE_RELEASE; NOT_WHOLE_PROGRAM',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
                            'codex_integration': 'v0.2', 'cold_start_readiness': 'v0.3',

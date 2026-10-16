@@ -110,6 +110,16 @@ def deduplicate(findings: list[Finding]) -> list[Finding]:
             old = merged[finding.fingerprint]
             old.scanner_sources = sorted(set(old.scanner_sources + finding.scanner_sources))
             old.equivalence_key = equivalence_key(old)
+            # Keep the supplemental call chain without replacing the original
+            # detector/rule identity or promoting its absence to repair proof.
+            flows = list(old.technical_details.get('supporting_dataflow', []))
+            for candidate in (old, finding):
+                details = candidate.technical_details
+                if details.get('analysis_basis') == 'BOUNDED_AST_ABSTRACT_INTERPRETATION':
+                    record = {key: details[key] for key in ('rule_id', 'rule_pack_checksum',
+                        'analysis_basis', 'dataflow_trace', 'context_hashes', 'verification_scope_complete') if key in details}
+                    if record not in flows: flows.append(record)
+            if flows: old.technical_details['supporting_dataflow'] = flows[:3]
             if old.category=='dependency':
                 records = dependency_remediation_evidence(old) + dependency_remediation_evidence(finding)
                 unique = {json.dumps(record, sort_keys=True): record for record in records}
