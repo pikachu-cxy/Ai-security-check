@@ -1,0 +1,281 @@
+{
+  "date": "2026-10-16",
+  "implementation_commit": "11d5550",
+  "native_cli_version": "0.162.0-alpha.17.2",
+  "verification": "REAL_NATIVE_DEVELOPMENT_NOT_FIXED_DIFF_REPLAY",
+  "native_checks": {
+    "native_parent_completed": true,
+    "exact_pre_edit_baseline": true,
+    "actual_development": true,
+    "checkpoint_then_later_file_edit": true,
+    "actual_background_model": true,
+    "parent_submitted_background": true,
+    "synchronous_final_static": true,
+    "final_parent_integration_current": true,
+    "real_edit_hook_observed": true,
+    "global_config_unchanged": true,
+    "global_hooks_unchanged": true
+  },
+  "native": {
+    "exit_code": 0,
+    "elapsed_ms": 223063.0,
+    "parent_model_usage": [
+      {
+        "input_tokens": 610468,
+        "cached_input_tokens": 534400,
+        "output_tokens": 7599,
+        "reasoning_output_tokens": 795
+      }
+    ],
+    "parent_usage_scope": "NATIVE_PARENT_TURN_CUMULATIVE; excludes child host receipts",
+    "global_config_unchanged": true,
+    "global_hooks_unchanged": true,
+    "process_local_project_trust": true,
+    "global_trust_written": false,
+    "driver_auth_files_read": false,
+    "fixed_development_diff": false
+  },
+  "native_turn_elapsed_ms": 214282.0,
+  "task": {
+    "task_ref": "ts1-c7a15e1119114d109b080639aee71c82",
+    "phase": "COMPLETE",
+    "baseline_matches_pre_run_manifest": true,
+    "changed_file_count": 3,
+    "static_attempts": 1,
+    "static_status": "COMPLETED",
+    "static_coverage": "FULL",
+    "static_finding_count": 0,
+    "host_coverage": "PARTIAL",
+    "host_finding_count": 0,
+    "final_integration_submitted": true,
+    "final_current": true,
+    "context_gap_count": 1,
+    "limitations_present": true
+  },
+  "background": [
+    {
+      "task_ref": "ts1-c7a15e1119114d109b080639aee71c82",
+      "batch_ref": "tb1-c95625b37cfa4c07b0e90e19a48cd5db",
+      "status": "ACCEPTED",
+      "host_status": "COMPLETED",
+      "model_observed": true,
+      "model": "gpt-6.1-sol",
+      "usage": {
+        "input_tokens": 134041,
+        "cached_input_tokens": 118400,
+        "output_tokens": 679,
+        "reasoning_output_tokens": 125,
+        "cache_write_input_tokens": 0,
+        "total_tokens": 134720
+      },
+      "usage_complete": true,
+      "usage_accounting_may_be_incomplete": false,
+      "elapsed_ms": 71188.0,
+      "callback_count": 11,
+      "snapshot_callbacks": [
+        {
+          "path": "orderdesk/__main__.py",
+          "start_line": 1,
+          "end_line": 220,
+          "at_ms": 14453.0
+        },
+        {
+          "path": "orderdesk/service.py",
+          "start_line": 1,
+          "end_line": 240,
+          "at_ms": 16235.0
+        },
+        {
+          "path": "orderdesk/repository.py",
+          "start_line": 1,
+          "end_line": 240,
+          "at_ms": 18250.0
+        },
+        {
+          "path": "orderdesk/sample_data.py",
+          "start_line": 1,
+          "end_line": 240,
+          "at_ms": 21719.0
+        },
+        {
+          "path": "orderdesk/models.py",
+          "start_line": 1,
+          "end_line": 240,
+          "at_ms": 23844.0
+        },
+        {
+          "path": "tests/test_orders.py",
+          "start_line": 1,
+          "end_line": 260,
+          "at_ms": 27141.0
+        },
+        {
+          "path": "orderdesk/__init__.py",
+          "start_line": 1,
+          "end_line": 120,
+          "at_ms": 31375.0
+        },
+        {
+          "path": "orderdesk/__init__.py",
+          "start_line": 1,
+          "end_line": 120,
+          "at_ms": 33578.0
+        },
+        {
+          "path": ".codex/config.toml",
+          "start_line": 1,
+          "end_line": 180,
+          "at_ms": 38375.0
+        },
+        {
+          "path": "orderdesk/__init__.py",
+          "start_line": 1,
+          "end_line": 120,
+          "at_ms": 40641.0
+        },
+        {
+          "path": ".gitignore",
+          "start_line": 1,
+          "end_line": 180,
+          "at_ms": 43094.0
+        }
+      ],
+      "submission_accepted": true,
+      "coverage": "REVIEWED",
+      "isolation_contract": null,
+      "receipt_sha256": "8c47aef0b502a6cdeedfa23f0f03114ad0074700bcfac036e4d1addd3dab3009",
+      "validity_at_final": "STALE",
+      "isolation_contract_from_internal_probe": "bound-reader-host-execution-v2",
+      "internal_probe_evidence": "host-isolation-proof.json"
+    }
+  ],
+  "edit_hook_scans": [
+    {
+      "event": "PostToolUse",
+      "host_claim_status": "VALID",
+      "handler_status": "SCANNED",
+      "scanner_run": true,
+      "changed_file_count": 4,
+      "last_stage": "SCANNER_COMPLETED",
+      "timestamp": "2026-10-16T10:25:55.714870+00:00"
+    },
+    {
+      "event": "PostToolUse",
+      "host_claim_status": "VALID",
+      "handler_status": "SCANNED",
+      "scanner_run": true,
+      "changed_file_count": 2,
+      "last_stage": "SCANNER_COMPLETED",
+      "timestamp": "2026-10-16T10:24:53.469271+00:00"
+    }
+  ],
+  "static": {
+    "status": "COMPLETED",
+    "coverage": "FULL",
+    "duration_ms": 7199,
+    "scope_files": [
+      "orderdesk/__main__.py",
+      "orderdesk/service.py",
+      "tests/test_orders.py"
+    ],
+    "actual_files": [
+      "orderdesk/__main__.py",
+      "orderdesk/service.py",
+      "tests/test_orders.py"
+    ]
+  },
+  "scanner_runs": [
+    {
+      "scanner": "semgrep",
+      "status": "SUCCESS",
+      "version": "1.178.0",
+      "duration_ms": 6718,
+      "error_code": ""
+    },
+    {
+      "scanner": "native-js-function",
+      "status": "NOT_APPLICABLE",
+      "version": "",
+      "duration_ms": 0,
+      "error_code": ""
+    },
+    {
+      "scanner": "native-dataflow",
+      "status": "NOT_APPLICABLE",
+      "version": "",
+      "duration_ms": 0,
+      "error_code": ""
+    },
+    {
+      "scanner": "gitleaks",
+      "status": "SUCCESS",
+      "version": "8.30.0",
+      "duration_ms": 515,
+      "error_code": ""
+    },
+    {
+      "scanner": "trivy-vuln",
+      "status": "NOT_APPLICABLE",
+      "version": "",
+      "duration_ms": 0,
+      "error_code": ""
+    },
+    {
+      "scanner": "trivy-misconfig",
+      "status": "NOT_APPLICABLE",
+      "version": "",
+      "duration_ms": 0,
+      "error_code": ""
+    }
+  ],
+  "integration_review": {
+    "batch_refs": [],
+    "candidate_dispositions": [],
+    "checks": {
+      "authorization": "最终服务均校验当前用户；仓储列表先限制 owner_id，详情与收据同时限制订单 ID 和 owner_id。详情未找到即返回 None，之后才格式化备注与可选收据。收据格式化器只接收已授权订单。本地演示用户上下文不属于生产认证。",
+      "configuration": "本任务未更改配置或依赖。最终源码清单为 CLI、服务及测试；主 Agent 未读取配置或认证文件。证据中的字面量已脱敏，无法据此验证精确 CLI 选项、输出键或错误文字。",
+      "cross_batch_calls": "旧批次服务及 CLI 均因后续收据改动而过期，batch_refs 为空。已重新读取最终服务、CLI、仓储、模型和样例组合；列表与详情均保留仓储所有者边界。all_batch_candidates 为空，因此候选处理为空。测试最终证据受共享字节预算限制，保留 PARTIAL。",
+      "data_flow": "CLI 参数进入服务：page 严格为整数且 >=1，page_size 严格为整数且为 1..100，拒绝布尔值；可选状态要求非空字符串。已隔离订单按状态筛选、按 ID 稳定排序后切片。详情与独立收据复用格式化逻辑，仅输出授权对象，无执行命令、外部写入或网络操作。"
+    },
+    "evidence_refs": [
+      "te1-1be7381347babb4adbbd23897b002f6c",
+      "te1-3ed68f832e02a70308776b3c815bcb21",
+      "te1-1f8d88708f35d6e71c501dd1739f7540",
+      "te1-08e5640ec71c6cf7b2b37260aa1fc249",
+      "te1-3d805c9d7653607056faabaae3de42b8"
+    ],
+    "limitations": [
+      "tests/test_orders.py:1-186 最终证据因共享字节预算未读。",
+      "中间批次 STALE；无可复用批次或待处理候选。",
+      "脱敏字面量的精确语义不可核查。",
+      "最终版本尚未取得完整审查覆盖：tests/test_orders.py"
+    ],
+    "reviewed_paths": [
+      "orderdesk/__main__.py",
+      "orderdesk/service.py"
+    ],
+    "snapshot_id": "bs1-caa49a55b59872b9692c11ff117bbc11",
+    "validation": "HOST_REPORTED_NOT_SCANNER_PROOF"
+  },
+  "model_cost": {
+    "parent_input_plus_output_tokens": 618067,
+    "background_input_plus_output_tokens": 134720,
+    "combined_input_plus_output_tokens": 752787,
+    "billed_money": null,
+    "cached_input_is_subset_of_input": true,
+    "reasoning_output_is_subset_of_output": true
+  },
+  "functional_tests": {
+    "initial_desktop_demo": 9,
+    "native_developed_demo": 22,
+    "native_developed_demo_independently_rerun": true
+  },
+  "scope_limits": [
+    "Native CLI uses the same installed binary and project configuration; desktop UI interaction itself was not automated.",
+    "One normal-development run, no paired baseline timing or finding-quality improvement claim.",
+    "Final reasoning was accepted PARTIAL with tests/test_orders.py context-byte-budget gap and redacted-literal unknowns.",
+    "No candidates from either reviewer does not certify safety.",
+    "The extra source-development review in the existing long-lived connector recorded static FAILED/UNKNOWN and context budget exhaustion; this is separate from this isolated demo static COMPLETED/FULL.",
+    "Probe summary establishes installed-host dummy-route controls, not live-provider inventory parity."
+  ]
+}

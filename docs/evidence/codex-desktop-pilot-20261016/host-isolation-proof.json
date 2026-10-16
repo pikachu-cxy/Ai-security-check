@@ -1,0 +1,39 @@
+{
+  "profile_version": "bound-snapshot-reader-with-inert-host-stubs-v1",
+  "host_binary_sha256": "e98c516f1c8935789aabe9122ee7e05ec4c3efd1ba6acf179242e031c495b99e",
+  "isolation_config_sha256": "05fab7e2b1577aebd6e9e26ab6d4bbb206fc51978acce2854a266e5b982be8d7",
+  "status": "VERIFIED_DUMMY_ROUTE",
+  "effective_model": "gpt-6.1-sol",
+  "effective_reasoning_effort": "high",
+  "execution_profile_verified": true,
+  "checks": {
+    "complete": true,
+    "same_binary_and_config": true,
+    "exact_declared_inventory": true,
+    "same_effective_model": true,
+    "same_effective_reasoning_effort": true,
+    "readonly_sandbox_and_no_approvals": true,
+    "exec_disabled": true,
+    "wait_disabled": true,
+    "bound_reader_works": true,
+    "unknown_tool_rejected": true,
+    "shell_rejected": true,
+    "spawn_rejected": true,
+    "mcp_servers_disabled_without_tools_or_resources": true,
+    "resource_listing_empty": true,
+    "unknown_resource_server_rejected": true,
+    "sync_questions_unavailable": true,
+    "async_questions_produce_no_client_request": true,
+    "no_auth_header_observed": true,
+    "no_real_model_called": true
+  },
+  "actual_model_calls": 0,
+  "usage": null,
+  "real_model_called": false,
+  "live_provider_parity_verified": false,
+  "async_question_behavior": "accepted metadata only; not a disabled tool; client must never forward UI requests",
+  "limitations": [
+    "Dummy-provider execution proof does not observe live-provider requests.",
+    "Declared inventory contains inert host stubs; application callback inventory contains only the bound reader."
+  ]
+}

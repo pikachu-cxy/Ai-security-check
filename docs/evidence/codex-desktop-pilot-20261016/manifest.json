@@ -1,0 +1,9 @@
+{
+  "algorithm": "SHA256",
+  "files": {
+    "host-isolation-proof.json": "e5b17e21278ad611373b7cfa553645af9aefb0df9e427a3f8c7a352b62cb88db",
+    "native-events.jsonl": "97865b6637ba42e39b230002ac82282fee4d3f0e8b3945e04519f3b88091a9d9",
+    "native-generated.patch": "2e0589ea8a5ab58047810a845662fe46338ff94d931fcf6e0253eba2da2f9b02",
+    "observations.json": "2c5d2f1df270cc47d31264ad302c0f5a8d6b901c8c63dabc90acf6f87f595068"
+  }
+}
