@@ -37,6 +37,8 @@
 
 可复核的时间线、生成补丁、隔离摘要和用量见[验收证据](../evidence/codex-desktop-pilot-20261016/README.md)。此前三组配对比较及其样本限制仍见[真实模型比较](REAL_HOST_BATCH_PILOT.zh-CN.md)。
 
+最新用户两批桌面体验另外暴露了预算预留不足：后台和静态运行成功，但最终审查会话未能建立。该失败没有被此前验收覆盖，现列为下一步 P0、待实现和复验，见[预算优化计划](BATCH_REVIEW_BUDGET_PLAN.zh-CN.md)。
+
 ## 安装命令
 
 入口是 `scripts/codex_desktop_pilot.py`，项目安装器是 `scripts/install_codex_desktop_pilot.py`。以下均为 PowerShell 示例，将前三项替换为实际绝对路径，不需硬编码用户名称：
