@@ -35,14 +35,16 @@ class PreparationBudget:
 
     def hard_remaining(self):
         """One absolute ceiling shared by every component, source and retry."""
-        return max(0., self.started + self.max_wait_seconds - time.monotonic())
+        # Float deadline arithmetic can round above the configured duration.
+        return max(0., min(self.max_wait_seconds,
+            self.started + self.max_wait_seconds - time.monotonic()))
 
     def remaining(self):
         with self._lock:
             deadline = min(self._deadline, self.started + self.max_wait_seconds)
             if self._validation_deadline is not None:
                 deadline = min(deadline, self._validation_deadline)
-            return max(0., deadline - time.monotonic())
+            return max(0., min(self.max_wait_seconds, deadline - time.monotonic()))
 
     def _reset_transfer(self):
         self._stream, self._received, self._validation_deadline = None, 0, None

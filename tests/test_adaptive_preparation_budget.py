@@ -1,6 +1,7 @@
 """Adaptive waits use observed bytes; neither retries nor validation renew the hard cap."""
 from copy import deepcopy
 import hashlib
+import math
 from pathlib import Path
 import sys
 import time
@@ -8,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from security_runtime.preparation_budget import preparation_budget
+from security_runtime.preparation_budget import preparation_budget, bounded_timeout
 from security_runtime.processes import run_process, ProcessIdleTimeout, ProcessResult
 from security_runtime.toolchain import OfficialReleaseProvider, ToolStatus
 from security_runtime.install_readiness import prepare_installation_readiness, validate_readiness_receipt
@@ -19,6 +20,59 @@ from test_preparation_download import database
 def observed(budget, received, total=1000, source='ghcr.io'):
     budget.report(dict(event='DOWNLOAD_PROGRESS', component='vulnerability_db',
         received_bytes=received, total_bytes=total, source=source))
+
+
+@pytest.mark.parametrize('adaptive', [False, True])
+def test_remaining_never_exceeds_hard_cap_at_float_boundaries(monkeypatch, adaptive):
+    # Adding 60 crosses a float precision boundary: (196.1 + 60) - 196.1 > 60.
+    now = [196.1]
+    monkeypatch.setattr('security_runtime.preparation_budget.time.monotonic', lambda: now[0])
+    with preparation_budget(60, adaptive=adaptive, max_wait_seconds=60) as budget:
+        deadline = budget.started + 60
+        previous = 60.
+        for stamp, expected in [(budget.started, 60.), (budget.started + 1, 59.),
+                (math.nextafter(deadline, -math.inf), deadline - math.nextafter(deadline, -math.inf)),
+                (deadline, 0.), (math.nextafter(deadline, math.inf), 0.), (deadline + 1, 0.)]:
+            now[0] = stamp
+            for remaining in (budget.hard_remaining(), budget.remaining()):
+                assert 0 <= remaining <= previous <= 60
+                assert remaining == pytest.approx(expected)
+                assert (remaining > 0) == (stamp < deadline)
+            previous = budget.hard_remaining()
+            for hard in (False, True):
+                if expected > 0:
+                    assert bounded_timeout(120, hard=hard) == budget.hard_remaining()
+                    assert bounded_timeout(1, hard=hard) <= 1
+                else:
+                    with pytest.raises(TimeoutError, match='preparation budget exhausted'):
+                        bounded_timeout(120, hard=hard)
+
+
+def test_adaptive_parent_deadline_and_extension_remain_bounded(monkeypatch):
+    now = [196.1]
+    monkeypatch.setattr('security_runtime.preparation_budget.time.monotonic', lambda: now[0])
+    with preparation_budget(5, adaptive=True, max_wait_seconds=60) as budget:
+        deadline = budget.started + 5
+        for stamp in (budget.started, budget.started + 1, math.nextafter(deadline, -math.inf)):
+            now[0] = stamp
+            assert 0 < budget.remaining() <= 5
+            assert budget.remaining() == pytest.approx(deadline - stamp)
+            assert bounded_timeout(120) == budget.remaining() < bounded_timeout(120, hard=True)
+        for stamp in (deadline, math.nextafter(deadline, math.inf), deadline + 1):
+            now[0] = stamp
+            assert budget.remaining() == 0 < budget.hard_remaining()
+            observed(budget, 1000)
+            assert budget.remaining() == 0  # Late output cannot renew an exhausted parent.
+            with pytest.raises(TimeoutError):
+                bounded_timeout(120)
+    now[0] = 196.1
+    with preparation_budget(5, adaptive=True, max_wait_seconds=60) as budget:
+        observed(budget, 1000)  # Validation can extend the live parent up to the hard cap.
+        assert budget.remaining() == budget.hard_remaining() == 60
+        now[0] += 1
+        assert 0 < budget.remaining() == budget.hard_remaining() < 60
+        now[0] = budget.started + 60
+        assert budget.remaining() == budget.hard_remaining() == 0
 
 
 def test_real_slow_transfer_can_finish_after_initial_wait():
@@ -118,6 +172,7 @@ def test_completed_transfer_has_bounded_validation_window(monkeypatch):
 
 
 def test_trivy_native_deadline_uses_hard_cap_parent_uses_adaptive_remaining(database, monkeypatch):
+    monkeypatch.setattr('security_runtime.preparation_budget.time.monotonic', lambda: 196.1)
     manager, cache, _, write = database
     seen = []
     def execute(args, **kwargs):
