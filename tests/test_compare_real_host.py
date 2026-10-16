@@ -108,7 +108,9 @@ def simulated_worker(controller, monkeypatch):
         log.append('review-'+kwargs['output_dir'].name)
         return simulation_result(result=dict(findings=[]))
 
-    monkeypatch.setitem(sys.modules, 'codex_readonly_host', SimpleNamespace(run_review=fake_review))
+    monkeypatch.setitem(sys.modules, 'codex_readonly_host', SimpleNamespace(run_review=fake_review,
+        probe_host=lambda **kwargs: dict(status='SIMULATION_ISOLATION_GATE',
+                                         ready_for_model=True, simulation=True)))
     monkeypatch.setitem(sys.modules, 'real_host_runtime', SimpleNamespace(
         RuntimeCase=FakeRuntime, batch_result_schema=lambda packet: {'simulation': 'batch'},
         final_result_schema=lambda packet: {'simulation': 'final'}))
@@ -128,6 +130,24 @@ def test_baseline_applies_edits_once_and_reads_nested_normalized_candidates(
     assert result['model_reviews'][0]['simulation'] is True
     assert result['model_reviews'][0]['model_observed'] is False
     assert [host['output_dir'].name for host in simulated_worker.hosts] == ['final']
+    assert result['host_setup_status'] == 'SIMULATION_ISOLATION_GATE'
+    assert result['total_elapsed_ms'] >= result['pipeline_elapsed_ms']
+    assert result['host_setup_elapsed_ms'] >= 0
+
+
+def test_worker_isolation_preflight_runs_before_any_fixture_or_development(
+        controller, simulated_worker, monkeypatch, tmp_path):
+    def rejected_probe(**kwargs):
+        assert kwargs['output_dir'] == tmp_path/'experimental-host-setup'
+        assert kwargs['timeout_s'] == 60
+        assert not simulated_worker.instances
+        return dict(ready_for_model=False, status='SIMULATION_GATE_REJECTED')
+
+    monkeypatch.setattr(sys.modules['codex_readonly_host'], 'probe_host', rejected_probe)
+    with pytest.raises(RuntimeError, match='prerequisite failed before development'):
+        controller.run_worker(tmp_path/'source', tmp_path/'experimental', 'experimental',
+                              'order-summary', Path('fake-codex'), 180)
+    assert not simulated_worker.instances and not simulated_worker.log
 
 
 def test_completed_intermediate_workers_are_collected_without_duplicate_preparation(
@@ -185,6 +205,91 @@ def test_failed_submission_preserves_gap_instead_of_scoring_zero_findings(
     assert result['final_submission_error']['error_type'] == 'RuntimeError'
     assert result['quality_screen'] is None
     assert result['quality_measurement_status'].startswith('UNMEASURED')
+
+
+def test_nonexception_busy_submission_is_not_an_accepted_empty_review(
+        controller, simulated_worker, monkeypatch, tmp_path):
+    monkeypatch.setattr(simulated_worker.FakeRuntime, 'submit_final',
+                        lambda self, result: dict(status='BUSY'))
+    result = controller.run_worker(tmp_path/'source', tmp_path/'baseline', 'baseline',
+                                   'order-summary', Path('fake-codex'), 10)
+    assert result['final_submission'] == dict(status='BUSY')
+    assert result['final_submission_accepted'] is False
+    assert result['quality_screen'] is None
+    assert result['quality_measurement_status'].startswith('UNMEASURED')
+
+
+def test_late_worker_usage_is_collected_after_join_without_late_submission(
+        controller, simulated_worker, monkeypatch, tmp_path):
+    deferred = []
+
+    class DeadlineFuture(Future):
+        def result(self, timeout=None):
+            if not self.done():
+                raise controller.TimeoutError()
+            return super().result(timeout=timeout)
+
+    class LatePool(ImmediatePool):
+        def submit(self, call, *args, **kwargs):
+            future = DeadlineFuture()
+            deferred.append((future, call, args, kwargs))
+            return future
+
+        def shutdown(self, **kwargs):
+            super().shutdown(**kwargs)
+            simulated_worker.log.append('join-background-worker')
+            for future, call, args, kwargs in deferred:
+                result = call(*args, **kwargs)
+                result.update(model_observed=True, simulation=False)
+                future.set_result(result)
+
+    original_prepare = simulated_worker.FakeRuntime.prepare_batch
+
+    def prepare(self, checkpoint):
+        if self.step == 2:
+            return dict(status='BATCH_QUEUED', dispatch_required=False, batch_ref='queued')
+        return original_prepare(self, checkpoint)
+
+    monkeypatch.setattr(controller, 'ThreadPoolExecutor', LatePool)
+    monkeypatch.setattr(simulated_worker.FakeRuntime, 'prepare_batch', prepare)
+    result = controller.run_worker(tmp_path/'source', tmp_path/'experimental', 'experimental',
+                                   'order-summary', Path('fake-codex'), 10)
+    assert result['drain_complete'] is False
+    assert result['all_model_sessions_settled_before_receipt'] is True
+    assert result['total_elapsed_ms'] >= result['pipeline_completed_ms']
+    assert result['late_worker_cleanup_elapsed_ms'] >= 0
+    assert result['final_wait_elapsed_ms'] == pytest.approx(
+        result['pipeline_completed_ms'] - result['development_elapsed_ms'], abs=0.001)
+    assert [row['phase'] for row in result['model_reviews']] == ['final', 'batch-1']
+    late = result['model_reviews'][1]
+    assert late['late_result_not_submitted'] is True
+    assert late['usage']['input_tokens'] == 100
+    assert result['batch_dispatches'][0]['usage_receipt_collected_after_final'] is True
+    assert simulated_worker.instances[0].submitted == 0
+    assert simulated_worker.log.index('final-submit') < simulated_worker.log.index('join-background-worker')
+    assert controller.totals(result['model_reviews'])['known_token_subtotals']['input_tokens'] == 100
+    saved = json.loads((tmp_path/'experimental/result.json').read_text(encoding='utf-8'))
+    assert saved['model_reviews'][1]['usage'] == late['usage']
+
+
+def test_final_backend_exception_keeps_usage_receipt_and_an_explicit_quality_gap(
+        controller, simulated_worker, monkeypatch, tmp_path):
+    class ObservedHostFailure(RuntimeError):
+        receipt = dict(status='MODEL_TIMEOUT', model_observed=True,
+            usage=dict(input_tokens=120, cached_input_tokens=0, output_tokens=15,
+                       reasoning_output_tokens=5))
+
+    def fail_review(**kwargs):
+        raise ObservedHostFailure('simulation only')
+
+    monkeypatch.setattr(sys.modules['codex_readonly_host'], 'run_review', fail_review)
+    result = controller.run_worker(tmp_path/'source', tmp_path/'baseline', 'baseline',
+                                   'order-summary', Path('fake-codex'), 10)
+    assert result['final_submission'] is None
+    assert result['quality_screen'] is None
+    assert result['model_reviews'][0]['status'] == 'MODEL_TIMEOUT'
+    assert result['model_reviews'][0]['error_type'] == 'ObservedHostFailure'
+    assert controller.totals(result['model_reviews'])['input_tokens'] == 120
 
 
 def test_background_host_failure_does_not_prevent_final_review_or_prove_model_execution(
@@ -261,7 +366,9 @@ def test_pair_integrity_rejects_different_static_scope_and_missing_results(contr
     import copy
     right = copy.deepcopy(left)
     identical = controller.paired_integrity(left, right)
-    assert identical['passed']
+    assert not identical['passed']  # Simulations cannot prove a real model profile.
+    assert identical['checks']['same_initial_files'] is True
+    assert identical['checks']['same_model_profile'] is False
     assert not identical['timing_comparable']  # Fake runs never become measurements.
     assert not identical['quality_comparable']
     right['scans'][0]['scope'] = ['another.js']
@@ -269,6 +376,133 @@ def test_pair_integrity_rejects_different_static_scope_and_missing_results(contr
     assert not mismatch['passed'] and not mismatch['checks']['same_static_scopes']
     assert not mismatch['timing_comparable'] and not mismatch['quality_comparable']
     assert not controller.paired_integrity({}, {})['passed']
+
+
+def test_pair_integrity_requires_runtime_accepted_final_review(controller):
+    import copy
+    side = dict(initial_files={'a.js': 'first'}, final_files={'a.js': 'last'},
+        rules_identity='same-rules', source_unchanged=True, scan_count=1,
+        scans=[dict(stage='task_finish', scope=['a.js'])], hooks=[dict(scanner_run=True)],
+        model_reviews=[dict(model_observed=True, model='unit-test-model',
+            model_provider='unit-test-provider', reasoning_effort='medium', timeout_s=60,
+            usage=dict(input_tokens=1,
+            cached_input_tokens=0, output_tokens=1, reasoning_output_tokens=0))],
+        final_submission=dict(status='COMPLETE', host_review=dict(findings=[])), quality_screen={})
+    right = copy.deepcopy(side)
+    assert controller.paired_integrity(side, right)['timing_comparable'] is True
+    right['final_submission'] = dict(status='BUSY')
+    result = controller.paired_integrity(side, right)
+    assert result['passed'] is True
+    assert result['timing_comparable'] is False and result['quality_comparable'] is False
+
+
+@pytest.mark.parametrize('key', ['model', 'model_provider', 'reasoning_effort', 'timeout_s'])
+def test_model_profile_never_treats_missing_settings_as_equal(controller, key):
+    receipt = dict(model_observed=True, simulation=False, model='unit-model',
+                   model_provider='unit-provider', reasoning_effort='medium', timeout_s=60)
+    del receipt[key]
+    side = dict(model_reviews=[receipt])
+    assert controller.paired_integrity(side, side)['checks']['same_model_profile'] is False
+
+
+@pytest.mark.parametrize(('key', 'value'), [
+    ('model', 'another-model'), ('model_provider', 'another-provider'),
+    ('reasoning_effort', 'high'), ('timeout_s', 120),
+    ('model', ''), ('timeout_s', True), ('timeout_s', 181), ('timeout_s', 9),
+])
+def test_model_profile_requires_every_observed_batch_and_final_call_to_match(controller, key, value):
+    import copy
+    receipt = dict(model_observed=True, simulation=False, model='unit-model',
+                   model_provider='unit-provider', reasoning_effort='medium', timeout_s=60)
+    left = dict(model_reviews=[copy.deepcopy(receipt)])
+    right = dict(model_reviews=[copy.deepcopy(receipt), copy.deepcopy(receipt)])
+    assert controller.paired_integrity(left, right)['checks']['same_model_profile'] is True
+    right['model_reviews'][0][key] = value
+    assert controller.paired_integrity(left, right)['checks']['same_model_profile'] is False
+
+
+def test_model_reroute_cannot_be_reported_as_same_model_comparison(controller):
+    import copy
+    side = dict(initial_files={'a.js': 'first'}, final_files={'a.js': 'last'},
+        rules_identity='same-rules', source_unchanged=True, scan_count=1,
+        scans=[dict(stage='task_finish', scope=['a.js'])], hooks=[dict(scanner_run=True)],
+        model_reviews=[dict(model_observed=True, model='unit-model',
+            model_provider='unit-provider', reasoning_effort='medium', timeout_s=60,
+            usage=dict(input_tokens=1, cached_input_tokens=0, output_tokens=1,
+                       reasoning_output_tokens=0))],
+        final_submission=dict(status='COMPLETE', host_review=dict(findings=[])), quality_screen={})
+    right = copy.deepcopy(side)
+    assert controller.paired_integrity(side, right)['timing_comparable'] is True
+    right['model_reviews'][0]['model_reroutes'] = [dict(fromModel='unit-model', toModel='other-model')]
+    check = controller.paired_integrity(side, right)
+    assert check['checks']['no_model_reroutes'] is False
+    assert not check['passed'] and not check['timing_comparable']
+    assert not check['quality_comparable'] and not check['model_cost_comparable']
+
+
+def test_live_report_keeps_unknown_cost_and_partial_execution_explicit(controller):
+    result = dict(status='PILOT_RECORDED', source_fingerprints=dict(
+        baseline='baseline-source-sha', experimental='experiment-source-sha'),
+        source_unchanged=dict(baseline=True, experimental=False),
+        cases=[dict(case_id='unit-case', paired_integrity=dict(passed=False,
+            timing_comparable=False, quality_comparable=False, model_cost_comparable=False),
+            baseline=dict(total_elapsed_ms=1234, host_setup_elapsed_ms=234, pipeline_elapsed_ms=1000,
+                model_reviews=[dict(model_observed=True, usage=dict(input_tokens=100,
+                    cached_input_tokens=20, output_tokens=30, reasoning_output_tokens=5))],
+                final_submission=dict(status='COMPLETE', host_review=dict(coverage='PARTIAL', findings=[])),
+                quality_screen=dict(screened_expected_match_count=1, expected_count=2)),
+            experimental=dict(model_reviews=[dict(model_observed=True, usage=None)],
+                final_submission=dict(status='BUSY'), quality_screen=None))])
+    report = controller.live_report(result)
+    assert 'PILOT_RECORDED' in report and '不代表全部' in report
+    assert '1.234 | 0.234 | 1.000 | 100 | 20 | 30 | 1/1 | PARTIAL | 1/2，待人工核实' in report
+    assert '未测量 | 未测量 | 未测量 | 未知 | 未知 | 未知 | 1/1 | 未接受 | 未测量' in report
+    assert '`baseline-source-sha` | 是' in report
+    assert '`experiment-source-sha` | 否' in report
+    assert '订阅账单金额未测量' in report and '不得重复相加' in report
+
+
+def test_live_compare_records_source_hashes_markdown_and_bounded_worker_timeout(
+        controller, monkeypatch, tmp_path):
+    probe = dict(ready_for_model=True, real_model_called=False)
+    monkeypatch.setitem(sys.modules, 'codex_readonly_host', SimpleNamespace(probe_host=lambda **kw: probe))
+    worker_timeouts = []
+
+    def fake_process(command, **kwargs):
+        if 'rev-parse' in command:
+            return SimpleNamespace(stdout=controller.BASELINE_COMMIT+'\n')
+        if 'status' in command:
+            return SimpleNamespace(stdout='')
+        worker_timeouts.append(kwargs['timeout'])
+        target = Path(command[command.index('--output')+1])
+        controller.write_json(target/'result.json', dict(model_reviews=[], final_submission=None))
+        return SimpleNamespace(returncode=0, stdout='', stderr='')
+
+    monkeypatch.setattr(controller.subprocess, 'run', fake_process)
+    monkeypatch.setattr(controller, 'source_fingerprint', lambda root: root.name+'-unchanged')
+    output = tmp_path/'recorded-pilot'
+    args = SimpleNamespace(output=output, baseline=tmp_path/'baseline', experimental=tmp_path/'experiment',
+                           codex=Path('fake-codex'), python=Path('fake-python'), timeout=180)
+    result = controller.compare(args)
+    assert worker_timeouts == [630]*6
+    assert result['status'] == 'PILOT_RECORDED' and result['model_observed'] is False
+    assert not any(row['paired_integrity']['passed'] for row in result['cases'])
+    assert result['source_fingerprints'] == dict(baseline='baseline-unchanged', experimental='experiment-unchanged')
+    assert (output/'comparison.md').exists()
+    assert '不代表全部' in (output/'comparison.md').read_text(encoding='utf-8')
+
+
+def test_cli_supports_180_second_reviews_while_default_stays_60(controller, monkeypatch, tmp_path):
+    captured = []
+    monkeypatch.setattr(controller, 'compare', lambda args: captured.append(args.timeout) or dict(
+        status='PILOT_RECORDED', model_observed=False))
+    arguments = ['compare_real_host', '--baseline', str(tmp_path/'before'), '--experimental',
+                 str(tmp_path/'after'), '--codex', 'unit-codex', '--output', str(tmp_path/'output')]
+    monkeypatch.setattr(sys, 'argv', arguments)
+    assert controller.main() == 0
+    monkeypatch.setattr(sys, 'argv', arguments+['--timeout', '180'])
+    assert controller.main() == 0
+    assert captured == [60, 180]
 
 
 def test_blocked_preflight_never_starts_workers_or_manufactures_comparison(

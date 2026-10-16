@@ -50,16 +50,44 @@ def prompt_for(case, packet, final=False):
     )
 
 
+def accepted_final_submission(submission):
+    """A nonexception result can still be BUSY, STALE or otherwise rejected."""
+    return (isinstance(submission, dict) and submission.get('status') == 'COMPLETE'
+            and isinstance(submission.get('host_review'), dict)
+            and isinstance(submission['host_review'].get('findings'), list))
+
+
+def review_exception(error, phase):
+    """Preserve backend usage on exceptions instead of manufacturing zero use."""
+    receipt = getattr(error, 'receipt', None)
+    result = deepcopy(receipt) if isinstance(receipt, dict) else {}
+    result.update(phase=phase, error_type=type(error).__name__)
+    result.setdefault('status', 'HOST_EXCEPTION')
+    result.setdefault('model_observed', False)
+    result.setdefault('usage', None)
+    return result
+
+
 def run_worker(source, output, side, case_id, codex, timeout_s):
-    from codex_readonly_host import run_review
+    from codex_readonly_host import probe_host, run_review
     from real_host_runtime import RuntimeCase, batch_result_schema, final_result_schema
 
     case = next(item for item in development_cases() if item['id'] == case_id)
     before = source_fingerprint(source)
+    process_start = time.monotonic()
+    # Proving isolation is a prerequisite, not asynchronous review work. Warm
+    # this child process's gate cache before creating or editing its fixture.
+    # RuntimeCase requires a new output path, so keep setup evidence beside it.
+    setup_probe = probe_host(codex=codex,
+        output_dir=output.with_name(output.name+'-host-setup'), timeout_s=min(timeout_s, 60))
+    host_setup_elapsed = round((time.monotonic() - process_start) * 1000, 3)
+    if setup_probe.get('ready_for_model') is not True:
+        raise RuntimeError('Worker host isolation prerequisite failed before development')
     wall_start = time.monotonic()
     runtime = RuntimeCase(output, case['filesinitial'], source=source, side=side)
     timeline, reviews, batches = [], [], []
     pool = ThreadPoolExecutor(max_workers=1)
+    pool_closed = False
     running = None
     dispatched_count = 0
 
@@ -68,13 +96,16 @@ def run_worker(source, output, side, case_id, codex, timeout_s):
 
     def review(packet, *, phase, final=False):
         started = now()
-        result = run_review(
-            prompt=prompt_for(case, packet, final),
-            schema=final_result_schema(packet) if final else batch_result_schema(packet),
-            read_context=runtime.read_final_bound if final else
-                lambda **kw: runtime.read_batch_bound(packet, **kw),
-            output_dir=output/'host'/phase, timeout_s=timeout_s, codex=codex,
-        )
+        try:
+            result = run_review(
+                prompt=prompt_for(case, packet, final),
+                schema=final_result_schema(packet) if final else batch_result_schema(packet),
+                read_context=runtime.read_final_bound if final else
+                    lambda **kw: runtime.read_batch_bound(packet, **kw),
+                output_dir=output/'host'/phase, timeout_s=timeout_s, codex=codex,
+            )
+        except Exception as error:
+            result = review_exception(error, phase)
         return {**result, 'phase': phase, 'started_ms': started, 'completed_ms': now()}
 
     def collect_running(*, timeout=0):
@@ -88,8 +119,7 @@ def run_worker(source, output, side, case_id, codex, timeout_s):
         except TimeoutError:
             return False
         except Exception as error:
-            result = dict(phase=phase, status='HOST_EXCEPTION', model_observed=False,
-                          usage=None, error_type=type(error).__name__)
+            result = review_exception(error, phase)
         reviews.append(result)
         if result.get('result') is not None:
             try:
@@ -148,37 +178,50 @@ def run_worker(source, output, side, case_id, codex, timeout_s):
                 submission = runtime.submit_final(final_review['result'])
             except Exception as exc:
                 submission_error = dict(error_type=type(exc).__name__, detail=str(exc)[:500])
+        pipeline_completed = now()
         # Backend timeout/cleanup can outlive the drain deadline. Preserve its
         # eventual usage receipt without accepting a result after final sealing.
+        # Joining was already required by the finally block. Do it before
+        # measuring and writing the receipt, never discard usage while waiting
+        # for the very same worker during executor shutdown.
+        pool.shutdown(wait=True, cancel_futures=True)
+        pool_closed = True
         if running is not None:
             future, _, row, phase = running
             try:
                 late = future.result(timeout=0)
-            except TimeoutError:
-                late = dict(phase=phase, status='USAGE_PENDING_AFTER_FINAL',
-                            model_observed=False, usage=None)
             except Exception as error:
-                late = dict(phase=phase, status='HOST_EXCEPTION', model_observed=False,
-                            usage=None, error_type=type(error).__name__)
+                late = review_exception(error, phase)
             if late.get('result') is not None:
                 late = {**late, 'late_result_not_submitted': True}
+            row['usage_receipt_collected_after_final'] = True
             reviews.append(late)
             running = None
+        cleanup_completed = now()
         receipt = runtime.receipt()
-        normalized = ((submission or {}).get('host_review') or {}).get('findings', [])
+        accepted = accepted_final_submission(submission)
+        normalized = submission['host_review']['findings'] if accepted else None
         receipt.update(
             contract='real-host-batch-pilot-v1', case_id=case_id, side=side,
             source_before=before, source_after=source_fingerprint(source),
+            host_setup_elapsed_ms=host_setup_elapsed,
+            host_setup_status=setup_probe.get('status'),
             development_elapsed_ms=development_end,
             drain_elapsed_ms=drain_elapsed,
             drain_complete=drained,
-            final_wait_elapsed_ms=round(now() - development_end, 3),
-            final_review_elapsed_ms=round(now() - final_started, 3),
-            total_elapsed_ms=now(), timeline=timeline, model_reviews=reviews,
+            final_wait_elapsed_ms=round(pipeline_completed - development_end, 3),
+            final_review_elapsed_ms=round(final_review['completed_ms'] - final_review['started_ms'], 3),
+            pipeline_completed_ms=pipeline_completed,
+            late_worker_cleanup_elapsed_ms=round(cleanup_completed - pipeline_completed, 3),
+            all_model_sessions_settled_before_receipt=True,
+            pipeline_elapsed_ms=now(),
+            total_elapsed_ms=round((time.monotonic() - process_start) * 1000, 3),
+            timeline=timeline, model_reviews=reviews,
             batch_dispatches=batches, final_submission=submission,
+            final_submission_accepted=accepted,
             final_submission_error=submission_error,
-            quality_screen=evaluate_findings(case_id, normalized) if submission is not None else None,
-            quality_measurement_status='ACCEPTED_REVIEW_SCREENED' if submission is not None
+            quality_screen=evaluate_findings(case_id, normalized) if accepted else None,
+            quality_measurement_status='ACCEPTED_REVIEW_SCREENED' if accepted
                 else 'UNMEASURED; NO_ACCEPTED_FINAL_REVIEW',
             quality_adjudication='REQUIRED; location/category screen is not semantic validation',
             developer_trace='FIXED_EDIT_REPLAY; no model developer productivity measured',
@@ -187,7 +230,8 @@ def run_worker(source, output, side, case_id, codex, timeout_s):
         return receipt
     finally:
         # Backend bounds every model session, including cancellation cleanup.
-        pool.shutdown(wait=True, cancel_futures=True)
+        if not pool_closed:
+            pool.shutdown(wait=True, cancel_futures=True)
 
 
 def totals(review_rows):
@@ -254,6 +298,19 @@ def paired_integrity(before, after):
 
     left, right = before.get('scans', []), after.get('scans', [])
     scans_present = isinstance(left, list) and isinstance(right, list) and bool(left) and bool(right)
+    profiles = []
+    for side in (before, after):
+        observed = [review for review in side.get('model_reviews', [])
+                    if review.get('model_observed') is True and not review.get('simulation')]
+        if not observed:
+            profiles.append(None)
+            continue
+        for review in observed:
+            values = tuple(review.get(key) for key in
+                ('model', 'model_provider', 'reasoning_effort', 'timeout_s'))
+            valid = (all(isinstance(value, str) and bool(value.strip()) for value in values[:3])
+                     and type(values[3]) in (int, float) and 10 <= values[3] <= 180)
+            profiles.append(values if valid else None)
     checks = dict(
         same_initial_files=mapping_equal('initial_files'),
         same_final_files=mapping_equal('final_files'),
@@ -267,12 +324,17 @@ def paired_integrity(before, after):
         source_unchanged=before.get('source_unchanged') is True and after.get('source_unchanged') is True,
         synchronous_hooks=bool(before.get('hooks')) and bool(after.get('hooks')) and
             all(row.get('scanner_run') is True for side in (before, after) for row in side['hooks']),
+        same_model_profile=bool(profiles) and None not in profiles
+            and all(profile == profiles[0] for profile in profiles),
+        no_model_reroutes=all(not review.get('model_reroutes') for side in (before, after)
+            for review in side.get('model_reviews', [])),
     )
     passed = all(checks.values())
     real_reviews = all(bool(side.get('model_reviews')) and
         all(row.get('model_observed') is True and not row.get('simulation')
             for row in side['model_reviews']) for side in (before, after))
-    accepted = all(side.get('final_submission') is not None for side in (before, after))
+    accepted = all(accepted_final_submission(side.get('final_submission'))
+                   for side in (before, after))
     return dict(passed=passed, checks=checks,
         timing_comparable=passed and real_reviews and accepted,
         quality_comparable=passed and real_reviews and accepted and
@@ -280,6 +342,68 @@ def paired_integrity(before, after):
         model_cost_comparable=passed and real_reviews and
             all(totals(side.get('model_reviews', []))['complete'] for side in (before, after)),
         limitation='Input integrity permits comparison; quality still needs manual adjudication and a pilot does not prove superiority.')
+
+
+def live_report(result):
+    """Render observed values and gaps; recording a pilot is not an all-pass."""
+    def cell(value):
+        return str(value).replace('|', '\\|').replace('\n', ' ').replace('\r', ' ')
+
+    def count(value):
+        return str(value) if type(value) is int and value >= 0 else '未知'
+
+    def seconds(value):
+        return f'{value / 1000:.3f}' if type(value) in (int, float) and value >= 0 else '未测量'
+
+    def yes(value):
+        return '是' if value is True else '否'
+
+    rows = result.get('cases', [])
+    observed = sum(totals(row.get(side, {}).get('model_reviews', []))['observed_calls']
+        for row in rows for side in ('baseline', 'experimental'))
+    lines = ['# 真实宿主模型对照记录', '',
+        f'记录状态：`{cell(result.get("status", "UNKNOWN"))}`；观察到真实模型回执 {observed} 份。'
+        '“已记录”不代表全部执行、提交或配对检查通过。', '',
+        '同一组固定开发改动逐步重放，保留同步静态检查；未测量开发模型生成代码的时间或成本。'
+        '隔离预检在写入开发轨迹前完成并单列冷启动成本。流水线从该先决检查结束后开始，'
+        '包含开发轨迹、最终提交及迟到后台模型的有界清理与回执收集；总耗时包括两者。', '',
+        '| 任务 | 流程 | 总耗时 s | 隔离预检 s | 流水线 s | 输入 token | 缓存输入 token | 输出 token | 模型回执 | 最终审查 | 质量位置筛选 |',
+        '|---|---|---:|---:|---:|---:|---:|---:|---|---|---|']
+    for row in rows:
+        for side in ('baseline', 'experimental'):
+            item = row.get(side, {})
+            usage = totals(item.get('model_reviews', []))
+            submission = item.get('final_submission')
+            accepted = accepted_final_submission(submission)
+            coverage = submission['host_review'].get('coverage', 'UNKNOWN') if accepted else '未接受'
+            quality = item.get('quality_screen')
+            screened = (f'{count(quality.get("screened_expected_match_count"))}/'
+                        f'{count(quality.get("expected_count"))}，待人工核实'
+                        if isinstance(quality, dict) else '未测量')
+            lines.append('| ' + ' | '.join(map(cell, (
+                row.get('case_id', 'UNKNOWN'), side,
+                seconds(item.get('total_elapsed_ms')), seconds(item.get('host_setup_elapsed_ms')),
+                seconds(item.get('pipeline_elapsed_ms')),
+                count(usage['input_tokens']), count(usage['cached_input_tokens']),
+                count(usage['output_tokens']), f'{usage["observed_calls"]}/{usage["attempted_calls"]}',
+                coverage, screened))) + ' |')
+    lines.extend(['', '| 任务 | 配对输入及模型设置一致 | 耗时可比 | 质量筛选可比 | token 成本可比 |',
+                  '|---|---|---|---|---|'])
+    for row in rows:
+        check = row.get('paired_integrity', {})
+        lines.append('| ' + ' | '.join(map(cell, (row.get('case_id', 'UNKNOWN'),
+            yes(check.get('passed')), yes(check.get('timing_comparable')),
+            yes(check.get('quality_comparable')), yes(check.get('model_cost_comparable'))))) + ' |')
+    lines.extend(['', '| 源码 | 运行前 SHA-256 | 运行后是否一致 |', '|---|---|---|'])
+    for side in ('baseline', 'experimental'):
+        lines.append(f'| {side} | `{cell(result.get("source_fingerprints", {}).get(side, "未知"))}` | '
+                     + yes(result.get('source_unchanged', {}).get(side)) + ' |')
+    lines.extend(['', '缓存输入已包含在输入 token，推理输出已包含在输出 token；它们不得重复相加。'
+        '缺少回执或计数保持未知，已知小计只是下界。订阅账单金额未测量。', '',
+        '质量表仅筛选最终证据位置与类别，尚未证明语义正确、可利用性、召回率或误报率。'
+        '须逐项核实候选、反证、跨文件路径及过期候选的最终处置。', '',
+        '每个任务各流程仅运行一次，三个合成任务的结果不能证明总体性能或质量更优。'])
+    return '\n'.join(lines) + '\n'
 
 
 def compare(args):
@@ -321,7 +445,7 @@ def compare(args):
                 '--worker-source', str(root), '--case', case['id'], '--output', str(target),
                 '--codex', str(args.codex), '--timeout', str(args.timeout)]
             proc = subprocess.run(command, cwd=root, env=environment, capture_output=True,
-                text=True, encoding='utf-8', timeout=args.timeout*2+90)
+                text=True, encoding='utf-8', timeout=args.timeout*3+90)
             write_json(output/f'{case["id"]}-{side}-process.json',
                 dict(returncode=proc.returncode, stdout=proc.stdout[-2000:], stderr=proc.stderr[-5000:]))
             if (target/'result.json').exists():
@@ -332,7 +456,7 @@ def compare(args):
             pair['baseline'], pair['experimental']), **pair))
         write_json(output/'partial-results.json', rows)
     result = dict(status='PILOT_RECORDED', model_observed=any_model_observed(rows),
-        preflight=probe, cases=rows,
+        preflight=probe, cases=rows, source_fingerprints=fingerprints,
         source_unchanged={side: source_fingerprint(root) == fingerprints[side] for side, root in
             [('baseline', baseline), ('experimental', experimental)]},
         model_usage={side: totals([r for row in rows for r in row[side].get('model_reviews', [])])
@@ -344,6 +468,7 @@ def compare(args):
             'Quality screen requires evidence-based manual adjudication.',
             'Any timeout, failed submission or missing usage remains an explicit measurement gap.'])
     write_json(output/'comparison.json', result)
+    (output/'comparison.md').write_text(live_report(result), encoding='utf-8')
     return result
 
 
@@ -354,7 +479,7 @@ def main():
     parser.add_argument('--python', type=Path, default=Path(sys.executable))
     parser.add_argument('--codex', type=Path, required=True)
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--timeout', type=int, choices=range(10, 61), default=60)
+    parser.add_argument('--timeout', type=int, choices=range(10, 181), default=60)
     parser.add_argument('--worker', choices=('baseline', 'experimental'))
     parser.add_argument('--worker-source', type=Path)
     parser.add_argument('--case')

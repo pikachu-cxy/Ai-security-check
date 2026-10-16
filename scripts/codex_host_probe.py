@@ -11,15 +11,17 @@ import hashlib
 import json
 import os
 import queue
+import re
 import subprocess
 import threading
 import time
+import tomllib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 
 DISABLED_FEATURES = (
-    "shell_tool", "unified_exec", "code_mode",
+    "shell_tool", "unified_exec", "code_mode_host",
     "computer_use", "browser_use", "browser_use_external",
     "browser_use_full_cdp_access", "in_app_browser", "image_generation",
     "view_image", "artifact", "apps", "plugins", "plugin_sharing",
@@ -29,9 +31,43 @@ DISABLED_FEATURES = (
 )
 
 
+def disabled_mcp_config() -> dict[str, str]:
+    """Disable inherited server names without retaining their config values.
+
+    TOML override tables merge with user configuration, so mcp_servers={}
+    alone does not remove required servers from this separate review process.
+    """
+    codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+    config_path = codex_home / "config.toml"
+    if not config_path.is_file():
+        return {}
+    config = tomllib.loads(config_path.read_text(encoding="utf-8"))
+    names = list(config.get("mcp_servers", {}))
+    if any(not re.fullmatch(r"[A-Za-z0-9_-]+", name) for name in names):
+        raise ValueError("MCP server name cannot be safely overridden with this host's dotted-key CLI")
+    return {f"mcp_servers.{name}.enabled": "false" for name in names}
+
+
+def readonly_host_config(*, code_mode_enabled: bool = False) -> dict[str, str]:
+    """Process-local overrides shared by inventory and execution probes."""
+    return {
+        "web_search": '"disabled"',
+        "mcp_servers": "{}",
+        **disabled_mcp_config(),
+        "features.code_mode.enabled": str(code_mode_enabled).lower(),
+        "features.code_mode.direct_only_tool_namespaces": '["functions"]',
+        "agents.enabled": "false",
+        "approval_policy": '"never"',
+        "sandbox_mode": '"read-only"',
+    }
+
+
 def flatten_tool_names(tools: list[dict], prefix: str = "") -> list[str]:
     names = []
     for tool in tools:
+        if not isinstance(tool, dict):
+            names.append(prefix + "unknown")
+            continue
         name = prefix + str(tool.get("name", tool.get("type", "unknown")))
         if tool.get("type") == "namespace":
             names.extend(flatten_tool_names(tool.get("tools", []), name + "."))
@@ -40,7 +76,50 @@ def flatten_tool_names(tools: list[dict], prefix: str = "") -> list[str]:
     return names
 
 
-def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
+def request_tool_inventory(body: dict) -> dict:
+    """Inspect every tool container, including nested additional_tools entries.
+
+    Do not retain model prompts, arbitrary input content, or request headers.
+    An inventory is only complete when all tool containers across the request
+    were inspected; checking only the top-level tools field is insufficient.
+    """
+    containers: list[dict] = []
+
+    def visit(value, path: str):
+        if isinstance(value, dict):
+            for key, entry in value.items():
+                entry_path = f"{path}.{key}"
+                if key in {"tools", "additional_tools"} and not isinstance(entry, list):
+                    containers.append({"path": entry_path, "tools": [], "malformed_entries": 1})
+                elif key in {"tools", "additional_tools"} and isinstance(entry, list):
+                    # Some protocol variants wrap additional_tools around an
+                    # object containing tools, others contain tool schemas.
+                    schemas = [tool for tool in entry if isinstance(tool, dict)
+                               and isinstance(tool.get("type"), str)
+                               and tool.get("type") != "additional_tools"]
+                    if schemas or key == "tools":
+                        containers.append({"path": entry_path, "tools": schemas,
+                                           "malformed_entries": len(entry) - len(schemas)})
+                        # Namespace children belong to their enclosing tool
+                        # schema and are flattened with its namespace prefix.
+                        continue
+                visit(entry, entry_path)
+        elif isinstance(value, list):
+            for index, entry in enumerate(value):
+                visit(entry, f"{path}[{index}]")
+
+    visit(body, "request")
+    tools = [tool for container in containers for tool in container["tools"]]
+    return {
+        "tools": tools,
+        "tool_names": [tool.get("name", tool.get("type")) for tool in tools],
+        "flattened_tool_names": list(dict.fromkeys(flatten_tool_names(tools))),
+        "tool_container_paths": [container["path"] for container in containers],
+        "malformed_tool_entries": sum(container["malformed_entries"] for container in containers),
+    }
+
+
+def probe_inventory(codex: str, output: Path, timeout_s: float = 60, *, code_mode_enabled: bool = False) -> dict:
     output.parent.mkdir(parents=True, exist_ok=True)
     cwd = output.parent / "empty-review-workspace"
     cwd.mkdir(exist_ok=True)
@@ -50,17 +129,13 @@ def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
-            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            tools = list(body.get("tools", []))
-            for entry in body.get("input", []):
-                if isinstance(entry, dict) and entry.get("type") == "additional_tools":
-                    tools.extend(entry.get("tools", []))
+            request_bytes = self.rfile.read(int(self.headers["Content-Length"]))
+            body = json.loads(request_bytes)
             captured.update({
+                "request_sha256": hashlib.sha256(request_bytes).hexdigest(),
                 "path": self.path,
                 "model": body.get("model"),
-                "tools": tools,
-                "tool_names": [tool.get("name", tool.get("type")) for tool in tools],
-                "flattened_tool_names": flatten_tool_names(tools),
+                **request_tool_inventory(body),
                 "tool_choice": body.get("tool_choice"),
                 "authorization_header_present": bool(self.headers.get("Authorization")),
                 "request_keys": list(body),
@@ -90,11 +165,7 @@ def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
             "request_max_retries": 0,
             "stream_max_retries": 0,
         }, separators=(",", ":")),
-        "web_search": '"disabled"',
-        "mcp_servers": "{}",
-        "code_mode.direct_only_tool_namespaces": '["functions"]',
-        "approval_policy": '"never"',
-        "sandbox_mode": '"read-only"',
+        **readonly_host_config(code_mode_enabled=code_mode_enabled),
     }
     # JSON objects use ':' whereas a TOML inline table requires '='.
     config["model_providers.readonly_inventory_probe"] = (
@@ -146,6 +217,8 @@ def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
 
     binary_hash = hashlib.sha256(Path(codex).read_bytes()).hexdigest()
     outcome = {"probe_type": "local_dummy_provider_no_model", "disabled_features": list(DISABLED_FEATURES),
+               "config_overrides": {key: value for key, value in config.items()
+                                    if not key.startswith("model_providers.")},
                "real_model_called": False, "actual_model_calls": 0, "usage": None,
                "model_usage": None, "exact_inventory_observed": False,
                "host_binary_sha256": binary_hash,
@@ -173,6 +246,10 @@ def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
         outcome["effective_approval_policy"] = result.get("approvalPolicy")
         thread_id = result.get("thread", {}).get("id")
         if thread_id:
+            status = request("mcpServerStatus/list", {})
+            outcome["effective_mcp_server_names"] = [entry.get("name") for entry in
+                status.get("result", {}).get("data", [])]
+            outcome["mcp_status_error"] = status.get("error")
             outcome["turn_start"] = request("turn/start", {"threadId": thread_id, "environments": [],
                                                            "input": [{"type": "text", "text": "Inventory probe."}]})
             received.wait(min(25, timeout_s))
@@ -181,22 +258,26 @@ def probe_inventory(codex: str, output: Path, timeout_s: float = 60) -> dict:
         outcome["constructed_requests"] = captures
         outcome["exact_inventory_observed"] = bool(captured)
         outcome["expected_tool_names"] = ["read_security_batch_context"]
-        outcome["observed_tool_names"] = captured.get("flattened_tool_names", [])
+        outcome["observed_tool_names"] = list(dict.fromkeys(
+            name for request in captures for name in request.get("flattened_tool_names", [])))
         outcome["unexpected_tool_names"] = [
             name for name in outcome["observed_tool_names"]
             if name not in {"read_security_batch_context", "functions.read_security_batch_context"}
         ]
         outcome["no_auth_header_observed"] = bool(captures) and all(
             request.get("authorization_header_present") is False for request in captures)
-        outcome["matches_expected_inventory"] = outcome["no_auth_header_observed"] and captured.get("flattened_tool_names") in (
-            ["read_security_batch_context"], ["functions.read_security_batch_context"])
+        outcome["matches_expected_inventory"] = outcome["no_auth_header_observed"] and all(
+            request.get("malformed_tool_entries") == 0 and request.get("flattened_tool_names") in (
+                ["read_security_batch_context"], ["functions.read_security_batch_context"])
+            for request in captures)
         outcome["ready_for_model"] = False
-        outcome["status"] = "UNSUPPORTED_HOST"
+        outcome["status"] = "UNSUPPORTED_HOST" if captured else "HOST_INVENTORY_UNOBSERVED"
         outcome["reason"] = (
             "Host tool inventory includes additional native or orchestration tools; "
             "the required sole bound snapshot reader is not the complete tool inventory."
-            if not outcome["matches_expected_inventory"] else
+            if captured and not outcome["matches_expected_inventory"] else
             "Dummy-provider inventory matches, but live-provider parity is not verified."
+            if captured else "Host did not construct a provider request; inspect thread_start_error or error."
         )
     except Exception as exc:
         outcome["error"] = f"{type(exc).__name__}: {exc}"
@@ -220,8 +301,9 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--codex", required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--code-mode", action="store_true")
     args = parser.parse_args()
-    outcome = probe_inventory(args.codex, args.output)
+    outcome = probe_inventory(args.codex, args.output, code_mode_enabled=args.code_mode)
     print(json.dumps({key: outcome.get(key) for key in (
         "error", "effective_model", "effective_model_provider", "exact_inventory_observed", "matches_expected_inventory",
         "stderr_line_count")}, ensure_ascii=False))
