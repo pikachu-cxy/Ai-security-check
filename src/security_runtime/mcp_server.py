@@ -55,10 +55,14 @@ def _agent_result(result) -> dict:
 
 def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory=None,
                   hook_coordinator=None, workspace_binding=None, global_mode=None,
-                  hook_advisory_only=False, include_functional_verification=False):
+                  hook_advisory_only=False, include_functional_verification=False,
+                  include_batch_review: bool | None = None):
+    if include_batch_review is None:
+        include_batch_review = os.getenv('SECURITY_RUNTIME_BATCH_REVIEW') == '1'
     if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
         from .global_mcp import create_global_server
-        return create_global_server(host=os.getenv('SECURITY_RUNTIME_HOST', 'codex'))
+        return create_global_server(host=os.getenv('SECURITY_RUNTIME_HOST', 'codex'),
+                                    include_batch_review=include_batch_review)
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import server as fastmcp_server
@@ -85,7 +89,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return closeout_engine
     binding = workspace_binding or WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
-    server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
+    instructions = HOST_INSTRUCTIONS
+    if include_batch_review:
+        from .host_guidance import EXPERIMENTAL_BATCH_INSTRUCTIONS
+        instructions += '\n' + EXPERIMENTAL_BATCH_INSTRUCTIONS
+    server = FastMCP("AI Security Runtime", instructions=instructions, log_level=mcp_log_level())
     from .remediation import RemediationService
     from .hook_runtime import HookCoordinator
     hook_coordinator = hook_coordinator or HookCoordinator(runtime)
@@ -222,6 +230,48 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             task_engine = TaskSecurityService(runtime_engine, hook_coordinator.store)
         return task_engine
 
+    def batch_service():
+        from .task_security_batch import TaskSecurityBatchService
+        def read_scan(scan_id):
+            # Read already-persisted observations only. This callback never
+            # invokes a scanner and is not a current-version coverage proof.
+            store = getattr(runtime_engine(), 'store', None)
+            reader = getattr(store, 'get_scan', None)
+            return reader(scan_id) if reader is not None else None
+        return TaskSecurityBatchService(task_service(), scan_reader=read_scan)
+
+    batch_tool_names = ()
+    if include_batch_review:
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        def prepare_security_batch(task_ref: str, checkpoint_key: str, workspace_path: str | None = None) -> dict:
+            """Experimental checkpoint after synchronous file-edit Hooks return. Freeze bounded sanitized source and static records; no scan, model, build, edit or task finish. The host must enforce the returned restricted reviewer profile or use the legacy task-end workflow."""
+            data = batch_service().prepare(bound_path(workspace_path), task_ref, checkpoint_key)
+            return data
+
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        def read_security_batch_context(task_ref: str, batch_ref: str, review_session: str,
+                                        file_path: str, start_line: int = 1, end_line: int = 80,
+                                        workspace_path: str | None = None) -> dict:
+            """Read a version-pinned sanitized batch window; never substitute newer working-tree source. Evidence and cumulative task budgets are recorded. The dedicated reviewer connection binds all task/session identifiers at startup."""
+            return batch_service().read(bound_path(workspace_path), task_ref, batch_ref,
+                                        review_session, file_path, start_line, end_line)
+
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+        def submit_security_batch_review(task_ref: str, batch_ref: str, review_session: str,
+                                         findings: list[dict], coverage: str, limitations: list[str],
+                                         workspace_path: str | None = None) -> dict:
+            """Parent host submits read-only reviewer output. Snapshot-valid historical results can be stored; current applicability is separate. No source edit, scanner proof, task completion or repair authority."""
+            return batch_service().submit(bound_path(workspace_path), task_ref, batch_ref,
+                                           review_session, findings, coverage, limitations)
+
+        @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+        def get_security_batches(task_ref: str, workspace_path: str | None = None) -> dict:
+            """Read batch execution, freshness and task coverage; never dispatch, scan or restart expired work."""
+            return batch_service().get(bound_path(workspace_path), task_ref)
+
+        batch_tool_names = ('prepare_security_batch', 'read_security_batch_context',
+                            'submit_security_batch_review', 'get_security_batches')
+
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def begin_security_task(task_key: str, workspace_path: str | None = None) -> dict:
         """Before the first source/config edit of an actual development task, snapshot the current workspace (including existing dirty files). Unique task_key per task, no prompt/source. No scan/model/build/edit. Never call for ordinary chat or restart after editing to fake a baseline."""
@@ -253,9 +303,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_task_security_review(task_ref: str, review_session: str, findings: list[dict],
                                     coverage: str, limitations: list[str], workspace_path: str | None = None,
-                                    risk_resolutions: list[dict] | None = None) -> dict:
+                                    risk_resolutions: list[dict] | None = None,
+                                    integration_review: dict | None = None) -> dict:
         """Submit host reasoning with Runtime-issued evidence. See packet submission_contract. Accepts only current task versions, bounded candidates and explicit limitations; validates structure/version, never proves exploitability or scanner coverage. Merge development_summary into normal dev response; do not ask user to continue."""
-        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
+        return task_service().submit(bound_path(workspace_path), task_ref, review_session, findings,
+                                     coverage, limitations, risk_resolutions, integration_review=integration_review)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
@@ -268,7 +320,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return task_service().risk_ledger(bound_path(workspace_path), task_ref, offset, limit)
 
     for task_tool_name in ('begin_security_task', 'finish_security_task', 'prepare_task_security_review',
-                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger'):
+                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger') + batch_tool_names:
         task_tool = server._tool_manager.get_tool(task_tool_name)
         task_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
         task_tool.fn_metadata.arg_model.model_rebuild(force=True)
@@ -461,7 +513,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
         from .host_guidance import runtime_info
         return runtime_info(remediation_config=remediation.config,
-                            include_functional_verification=include_functional_verification)
+                            include_functional_verification=include_functional_verification,
+                            include_batch_review=include_batch_review)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_professional_guidance() -> dict:

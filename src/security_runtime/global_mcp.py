@@ -27,9 +27,9 @@ MAX_SESSIONS = 64
 BOOTSTRAP_WAIT_SECONDS = 20
 
 
-def global_runtime_info():
+def global_runtime_info(*, include_batch_review=False):
     from .host_guidance import runtime_info
-    info = runtime_info()
+    info = runtime_info(include_batch_review=include_batch_review)
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1'}
     info['integration_scope'] = 'GLOBAL'
     info['workspace_routing'] = 'EXPLICIT_WORKSPACE_CLAIM'
@@ -37,7 +37,7 @@ def global_runtime_info():
 
 
 class GlobalWorkspaces:
-    def __init__(self, *, base=None, integration=None, child_factory=None, host='codex'):
+    def __init__(self, *, base=None, integration=None, child_factory=None, host='codex', include_batch_review=False):
         from .host_connectors import connector
         self.connector = connector(host)
         self.host = host
@@ -52,7 +52,8 @@ class GlobalWorkspaces:
                 from .global_integration import GlobalCodexIntegration
                 integration = GlobalCodexIntegration(home=os.getenv('SECURITY_RUNTIME_CODEX_HOME'))
         self.integration = integration
-        self.child_factory = child_factory or self._child
+        self.child_factory = child_factory or (lambda root, directory, binding: self._child(
+            root, directory, binding, include_batch_review=include_batch_review))
         self.children = {}
         self.sessions = {}
         from .codex_host_claims import CodexClaimGuard
@@ -62,7 +63,7 @@ class GlobalWorkspaces:
         self.lock = threading.RLock()
 
     @staticmethod
-    def _child(root, directory, binding):
+    def _child(root, directory, binding, *, include_batch_review=False):
         from .mcp_server import create_server
         from .workspace_services import workspace_services
         from .remediation import RemediationService
@@ -72,7 +73,8 @@ class GlobalWorkspaces:
             # User policy stays user-wide; grants/proofs/DB stay workspace-local.
             return RemediationService(store, config=RemediationConfig(), inline_agent_tickets=True, **kwargs)
         server = create_server(runtime, hook_coordinator=core, remediation_factory=remediation_factory,
-                               workspace_binding=binding, global_mode=False, hook_advisory_only=not is_git)
+                               workspace_binding=binding, global_mode=False, hook_advisory_only=not is_git,
+                               include_batch_review=include_batch_review)
         # Same explicit connected-Hook opt-in as the existing default factory.
         # Do not enable deterministic source writes or Deep verification here.
         return server, core
@@ -238,13 +240,13 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(text))])
 
 
-def create_global_server(*, workspaces=None, host='codex'):
+def create_global_server(*, workspaces=None, host='codex', include_batch_review=False):
     from .mcp_server import create_server
     from mcp.types import CallToolResult, TextContent
     from jsonschema import Draft202012Validator
     # Obtain the original registry/instructions without creating a writable DB.
-    server = create_server(global_mode=False)
-    pool = workspaces or GlobalWorkspaces(host=host)
+    server = create_server(global_mode=False, include_batch_review=include_batch_review)
+    pool = workspaces or GlobalWorkspaces(host=host, include_batch_review=include_batch_review)
     active_host = getattr(pool, 'host', host)
     server.global_workspaces = pool
     server._mcp_server.instructions += ('\nGlobal host integration: workspace_path is an untrusted claim. '
@@ -288,7 +290,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
-            info = global_runtime_info()
+            info = global_runtime_info(include_batch_review=include_batch_review)
             info['host_connector'] = active_host
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_professional_guidance':

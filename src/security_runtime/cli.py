@@ -227,6 +227,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
     scan_parser.add_argument('--gate', choices=['strict', 'report'], help='Git gate: 0 allowed, 1 policy blocked, 2 incomplete (strict)')
     mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
+    mcp_parser.add_argument('--experimental-batch-review', action='store_true',
+                            help='Expose opt-in batch snapshot/reviewer tools; synchronous Hooks stay enabled')
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
     config_parser = mcp_sub.add_parser("config")
     config_parser.add_argument("--path")
@@ -235,6 +237,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     config_format.add_argument("--toml", action="store_true")
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
+    reviewer_parser = sub.add_parser('serve-batch-reviewer', help='Run a single-batch read-only MCP connection')
+    reviewer_parser.add_argument('--workspace', required=True)
+    reviewer_parser.add_argument('--task-ref', required=True)
+    reviewer_parser.add_argument('--batch-ref', required=True)
     install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
     install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
@@ -348,7 +354,21 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / Cursor\n'+data['overall'])
         return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
-        configure_logging(mcp=args.command == "mcp")
+        configure_logging(mcp=args.command in {'mcp', 'serve-batch-reviewer'})
+        if args.command == 'serve-batch-reviewer':
+            from .task_security import TaskSecurityService
+            from .task_security_batch import TaskSecurityBatchService
+            from .batch_reviewer import create_reviewer_server
+            from .hook_state import HookStateStore
+            session = os.environ.pop('SECURITY_RUNTIME_BATCH_SESSION', '')
+            if not session:
+                raise ValueError('SECURITY_RUNTIME_BATCH_SESSION is required for the scoped reviewer')
+            directory = os.environ.pop('SECURITY_RUNTIME_BATCH_HOOKS_DIR', None)
+            hooks = HookStateStore(Path(directory)) if directory else HookStateStore()
+            batches = TaskSecurityBatchService(TaskSecurityService(None, hooks))
+            create_reviewer_server(batches, workspace=args.workspace, task_ref=args.task_ref,
+                batch_ref=args.batch_ref, review_session=session).run(transport='stdio')
+            return 0
         if args.command == 'preparation-worker':
             from .background_preparation import run_worker
             return run_worker(args.job, args.ticket)
@@ -846,6 +866,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 print(f"{name:<18} {count}")
             return 0
         if args.command == "mcp":
+            if args.experimental_batch_review:
+                os.environ['SECURITY_RUNTIME_BATCH_REVIEW'] = '1'
             from .mcp_server import serve
             serve()
             return 0

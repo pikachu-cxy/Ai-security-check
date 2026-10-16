@@ -24,6 +24,13 @@ risk_resolutions 契约；宿主代码复核、原规则复查和完整依赖图
 旧的明确收尾任务仍可按原 `execution_plan` 恢复，不从普通 Stop 自动派发。
 任务核查不授权修复，检查完成、实际覆盖和风险修复分别表达。
 
+可选实验版本只有在 Runtime 明确公布 `task_batch_review=batch-review-v1-experimental`
+且宿主能强制限制子 Agent 全部工具时，才按
+[批次并行核查](references/batch-task-review.md) 在功能 checkpoint 派发只读子 Agent。
+Runtime 不调用模型，能力由宿主真实工具隔离决定，不接受客户端布尔声明。
+无法隔离或无法后台派发时，沿用当前快速任务核查；不得把普通子 Agent 称为只读隔离。
+静态 Hook、任务结束静态检查和最终版本核对保留；批次不重置任务预算。
+
 有代码依据的条件性风险须按快速任务核查的 RELATED_EXISTING 契约正式登记，
 不能仅写成后续建议。说明代码依据、当前防护、触发条件与未知范围；新增入口
 已有防护不等于所有关联调用安全，也不能据此说新增入口仍有漏洞。最终提供

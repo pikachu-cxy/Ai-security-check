@@ -56,8 +56,10 @@ Literal redaction can make a literal-only edit invisible in the sanitized diff.
 A changed raw file hash still means MODIFIED; never call it an unchanged file or
 skip its task check. Preserve unknown literal semantics and use PARTIAL when the
 missing value is necessary for the judgment; do not reconstruct hidden values.
-AST/call-graph indexes and separate batched review sessions are future product
-work, not capabilities or budget resets supplied by this method.
+AST/call-graph indexes are future product work. Separate batched review sessions
+are available only through the optional experimental contract advertised as
+`task_batch_review=batch-review-v1-experimental`; see [batch task review](batch-task-review.md).
+They are not capabilities or budget resets supplied by this default method.
 Long test diffs may be ON_DEMAND: read issued current windows instead of duplicating
 the full tests in the packet. Use source_version=BEFORE_TASK for signed preimages
 when comparison matters. Historical text cannot locate a current candidate. Follow

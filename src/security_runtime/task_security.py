@@ -560,6 +560,14 @@ class TaskSecurityService:
                 return dict(record['packet'], review_session=record['review_session'])
             if record.get('packet'):
                 return {'status': 'EXPIRED', 'task_ref': ref, 'review_required': False}
+            batch_usage = dict(context_bytes=0, context_reads=0, related_files=[])
+            batch_coverage = None
+            if record.get('batch_state'):
+                from .task_security_batch import TaskSecurityBatchService, budget_usage
+                from .batch_final import close_batch_inputs
+                batch_usage = budget_usage(record)
+                batch_coverage = TaskSecurityBatchService(self).final_coverage(root, record, snapshot=record['end'])
+                close_batch_inputs(record)
             guide = method()
             diffs, remaining = [], MAX_DIFF_LINES
             for change in record['changes'][:MAX_CHANGED]:
@@ -635,6 +643,19 @@ class TaskSecurityService:
                 evidence='Re-read every required_source_path; current change evidence required. Host outcomes are not scanner proof.',
                 test_report='Host reported only; no Runtime execution attestation.',
                 context='Long test diffs are ON_DEMAND; read current windows and signed BEFORE_TASK only when needed. Budgets unchanged.')
+            if batch_coverage is not None:
+                from .batch_final import integration_contract, candidate_index
+                # Summaries are navigation; current findings still require
+                # final-session evidence. Do not resend all old source windows.
+                packet['batch_review'] = {**batch_coverage, 'reusable_candidates': [
+                    {key:value for key,value in item.items() if key != 'evidence'}
+                    for item in batch_coverage['reusable_candidates']]}
+                packet['integration_review_contract'] = integration_contract(batch_coverage['snapshot_id'])
+                packet['all_batch_candidates'] = candidate_index(record)
+                packet['batch_candidate_navigation'] = dict(tool='get_security_batches', task_ref=ref,
+                    instruction='Review every candidate, including stale/partial history; current final evidence is required for each outcome.')
+                packet['budget']['batch_context_bytes'] = batch_usage['context_bytes']
+                packet['budget']['batch_context_reads'] = batch_usage['context_reads']
             cost = len(json.dumps(packet, ensure_ascii=False).encode())
             if cost > 40_000:
                 packet['diffs'] = []
@@ -642,10 +663,15 @@ class TaskSecurityService:
                 packet['changes'] = record['changes'][:MAX_CHANGED]
                 record['limitations'].append({'reason': 'INITIAL_PACKET_BUDGET', 'changed_file_count': len(record['changes'])})
                 cost = len(json.dumps(packet, ensure_ascii=False).encode())
-            if cost > MAX_CONTEXT:
-                raise ValueError('Review packet exceeds context budget')
+            if cost + batch_usage['context_bytes'] > MAX_CONTEXT and batch_coverage is not None:
+                packet['diffs'] = []
+                packet['related_candidates'] = packet['related_candidates'][:10]
+                record['limitations'].append({'reason':'BATCH_FINAL_PACKET_BUDGET'})
+                cost = len(json.dumps(packet, ensure_ascii=False).encode())
+            if cost + batch_usage['context_bytes'] > MAX_CONTEXT:
+                raise ValueError('Review packet exceeds cumulative task context budget')
             record.update(phase='REVIEWING', packet=packet, review_session='tr1-'+uuid.uuid4().hex,
-                review_deadline=self.now()+REVIEW_TTL, context_bytes=cost)
+                review_deadline=self.now()+REVIEW_TTL, context_bytes=cost+batch_usage['context_bytes'])
             record = self.store(root).save(record)
             return dict(packet, review_session=record['review_session'])
 
@@ -682,7 +708,20 @@ class TaskSecurityService:
                     guidance='Use integer source lines with 1 <= start_line <= end_line. Keep this task and review session; no new scan is required.',
                     details={'max_window_lines': MAX_CONTEXT_WINDOW_LINES})
             changed = {c['path'] for c in record['changes'][:MAX_CHANGED]}
-            if name not in changed and name not in record['related_files'] and len(record['related_files']) >= MAX_RELATED:
+            if record.get('batch_state'):
+                from .task_security_batch import budget_usage
+                shared_changed = set(budget_usage(record)['changed_files'])
+                permitted_changed = shared_changed | set(sorted(changed-shared_changed)[:max(0, MAX_CHANGED-len(shared_changed))])
+                if name in changed and name not in permitted_changed:
+                    self._context_gap(root, record, 'TASK_CONTEXT_CHANGED_FILE_BUDGET', name)
+                    raise TaskContextError('TASK_CONTEXT_CHANGED_FILE_BUDGET', 'Cumulative changed-source budget exceeded', recoverable=False,
+                        guidance='Retain the same task and submit PARTIAL; batches and final review share the changed-file budget.')
+            batch_usage = dict(context_reads=0, related_files=[])
+            if record.get('batch_state'):
+                from .task_security_batch import budget_usage
+                batch_usage = budget_usage(record)
+            shared_related = set(record['related_files']) | set(batch_usage['related_files'])
+            if name not in changed and name not in shared_related and len(shared_related) >= MAX_RELATED:
                 self._context_gap(root, record, 'TASK_CONTEXT_RELATED_FILE_BUDGET', name)
                 raise TaskContextError('TASK_CONTEXT_RELATED_FILE_BUDGET', 'Related source file budget exceeded', recoverable=False,
                     guidance='Keep existing evidence and submit PARTIAL with the unread path; do not create a new task or session to reset budgets.')
@@ -737,7 +776,7 @@ class TaskSecurityService:
                                                             location_version=location_version, spans=[]))
             request['spans'] = _merge_spans([*request['spans'], [start_line, requested_high]])
             if eid not in record['evidence']:
-                if len(record['evidence']) >= MAX_CONTEXT_READS:
+                if len(record['evidence']) + batch_usage['context_reads'] >= MAX_CONTEXT_READS:
                     self._context_gap(root, record, 'TASK_CONTEXT_READ_BUDGET', name)
                     raise TaskContextError('TASK_CONTEXT_READ_BUDGET', 'Task context read budget exceeded', recoverable=False,
                         guidance='Submit PARTIAL with unread ranges. Pagination does not reset the read, byte or session budgets.')
@@ -760,7 +799,8 @@ class TaskSecurityService:
             gaps.append(gap)
         self.store(root).save(record)
 
-    def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None):
+    def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None,
+               *, integration_review=None):
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
             if not acquired:
@@ -826,6 +866,11 @@ class TaskSecurityService:
                     evidence_refs=list(dict.fromkeys(refs)), source='HOST_TASK_REVIEW', validation='STRUCTURE_AND_VERSION_VALIDATED',
                     verdict='CANDIDATE_REQUIRES_REVIEW', scanner_sources=[])
                 accepted.append(item)
+            from .batch_final import validate_integration
+            integration, integration_gaps = validate_integration(record, integration_review, findings)
+            if integration_gaps:
+                coverage = 'PARTIAL'
+                clean_limitations.extend(integration_gaps)
             # Reading related evidence is mandatory for a fully reported multi-
             # file review; runtime cannot prove the host actually reasoned.
             if len(record['changes']) > 1 and not record['related_files']:
@@ -845,6 +890,11 @@ class TaskSecurityService:
             if record['limitations']:
                 coverage = 'PARTIAL'
                 clean_limitations.extend(_coverage_gaps(record['limitations']))
+            if record.get('batch_state'):
+                from .task_security_batch import budget_usage
+                if len(set(budget_usage(record)['changed_files']) | changed) > MAX_CHANGED:
+                    coverage = 'PARTIAL'
+                    clean_limitations.append('批次与最终版本累计改动文件超过本任务上下文预算。')
             from .task_risk_ledger import TaskRiskLedger
             ledger = TaskRiskLedger(self.hooks, root)
             for item in risk_resolutions or []:
@@ -855,11 +905,17 @@ class TaskSecurityService:
                     raise ValueError('Original task was never checked')
                 ledger.register(original_record)
             updates = ledger.validate_host(record, risk_resolutions or [], coverage)
+            # The task may have changed while the host result was validated.
+            # A store CAS protects metadata only, never the working tree.
+            if not self._fresh(root, record):
+                raise ValueError('Final source or Hook scope changed before submission')
             record.update(phase='COMPLETE', review=dict(source='HOST_TASK_REVIEW', coverage=coverage,
                 findings=accepted, limitations=clean_limitations, model_invocation='HOST_ONLY_NOT_OBSERVED_BY_RUNTIME',
                 validation='STRUCTURE_AND_SOURCE_VERSION_ONLY', method_sha256=record['packet']['quick_skill']['sha256'],
                 elapsed_wall_ms=round((self.now()-(record['review_deadline']-REVIEW_TTL))*1000),
                 submitted_at=self.now()))
+            if integration is not None:
+                record['review']['integration_review'] = integration
             # Preimages are no longer needed. Local retention is bounded by TTL.
             record['baseline']['texts'] = {}
             record['end']['texts'] = {}

@@ -24,6 +24,27 @@ def connector(host):
         raise ValueError('UNSUPPORTED_HOST_CONNECTOR') from None
 
 
+def batch_review_requirements(host):
+    """Host obligations, not inferred capabilities or tool-argument attestation.
+
+    Neither existing connector installs a background-agent sandbox. A trusted
+    host integration must enforce these requirements before using the optional
+    worker. Transport discovery alone cannot upgrade this status.
+    """
+    selected = connector(host)
+    return {
+        'host': selected.host,
+        'contract': 'batch-review-v1-experimental',
+        'background_spawn': 'NOT_OBSERVED_BY_RUNTIME',
+        'child_tool_isolation': 'NOT_OBSERVED_BY_RUNTIME',
+        'required_entire_child_tool_inventory': ['read_security_batch_context'],
+        'inherited_parent_tools': 'FORBIDDEN',
+        'source_reads': 'BOUND_SANITIZED_SNAPSHOT_ONLY',
+        'candidate_submission': 'PARENT_ONLY',
+        'fallback': 'EXISTING_TASK_END_REVIEW',
+    }
+
+
 CURSOR_INSTRUCTIONS = '''
 Cursor automatic connector: command Hooks capture the task baseline before a
 supported mutation and deliver its exact task_ref after edits. Reuse that ref;
