@@ -80,6 +80,8 @@ class GlobalWorkspaces:
         return server, core
 
     def root(self, value):
+        if self.host == 'codex':
+            return resolve_workspace(value, excluded=(self.base,), codex_home=self.integration.home)
         return resolve_workspace(value, excluded=(self.base, self.integration.home))
 
     def admit(self, root):
@@ -230,7 +232,14 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
         'WORKSPACE_DEGRADED': readiness_message('DEGRADED'),
         'WORKSPACE_ERROR': readiness_message('ERROR'),
         'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE': '缺少改动前的检查记录，暂时无法确定风险是否由本次改动引入。当前结果不能证明改动安全。',
-    }.get(reason, '本次安全检查未完成，暂时无法确认改动是否安全。建议先检查工具连接和项目设置。')
+        'WORKSPACE_CLAIM_REQUIRED': '安全检查尚未运行：缺少明确的项目工作区目录，请从当前项目目录重新发起检查。',
+        'WORKSPACE_OUTSIDE_ALLOWED_ROOT': '安全检查尚未运行：所选目录不在允许的项目边界内，请从具体项目目录发起检查。',
+        'WORKSPACE_CANONICALIZATION_MISMATCH': '安全检查尚未运行：无法将所选目录确认为当前项目工作区，请核对项目目录。',
+        'WORKSPACE_LINK_REJECTED': '安全检查尚未运行：所选目录或其父目录包含链接，无法建立可信的工作区边界。',
+        'WORKSPACE_RESOLUTION_FAILED': '安全检查尚未运行：无法确定项目的规范目录，请核对工作区目录是否存在且可访问。',
+        'WORKSPACE_CONFIGURATION_REJECTED': '安全检查尚未运行：项目接入配置校验未通过，暂时无法确认改动是否安全。',
+        'WORKSPACE_ADMISSION_FAILED': '安全检查尚未运行：项目工作区准入未完成，暂时无法确认改动是否安全。',
+    }.get(reason, '本次安全检查未完成，暂时无法确认改动是否安全。')
     text = {'continue': True, 'systemMessage': message}
     if recovery is not None:
         data['configuration_recovery'] = recovery
@@ -422,16 +431,23 @@ def create_global_server(*, workspaces=None, host='codex', include_batch_review=
                 observe('HANDLER_ERROR', handler_reason='HANDLER_EXCEPTION')
             # Never echo an arbitrary path, source-like argument or SDK error.
             # Fixed protocol reasons are useful without reflecting host input.
-            reason = str(exc)
+            reason = getattr(exc, 'code', None) or str(exc)
             allowed = {'WORKSPACE_CLAIM_REQUIRED', 'GLOBAL_CONFIGURATION_NOT_READY',
                        'LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR', 'SESSION_WORKSPACE_MISMATCH',
                        'WORKSPACE_CONNECTION_BUDGET_EXCEEDED', 'SESSION_CONNECTION_BUDGET_EXCEEDED',
                        'INVALID_SESSION_CLAIM'}
             allowed |= WORKSPACE_REJECTIONS
+            # Workspace rejection mappings belong to admission only. A child
+            # tool can fail for an invalid task reference or arbitrary runtime
+            # error; its exception text must not masquerade as a path failure.
+            rejection = ('WORKSPACE_TOOL_REJECTED' if handler_entered
+                         else workspace_rejection(exc, binding_stage))
+            public_reason = ('WORKSPACE_OR_REFERENCE_REJECTED' if handler_entered
+                             else reason if reason in allowed else rejection)
             if claim_diag is not None:
                 claim_diag['host_claim_status'] = 'REJECTED'
                 claim_diag.update(workspace_binding_stage=binding_stage,
-                                  workspace_rejection_reason=workspace_rejection(exc, binding_stage))
+                                  workspace_rejection_reason=rejection)
                 if reason == 'SESSION_WORKSPACE_MISMATCH':
                     claim_diag['session_claim_match'] = False
                 elif claim_diag['workspace_claim_match'] is None:
@@ -448,7 +464,13 @@ def create_global_server(*, workspaces=None, host='codex', include_batch_review=
                             recovery = configuration_recovery(pool.integration, claim or root, reason=reason)
                         except (ValueError, OSError, TypeError, RecursionError):
                             pass
-            return _advisory(reason if reason in allowed else 'WORKSPACE_OR_REFERENCE_REJECTED', claims=claim_diag,
+            # Ordinary workspace tools need the same bounded diagnostics as
+            # Hooks, without inventing Hook/session claims or echoing inputs.
+            diagnostics = claim_diag if claim_diag is not None else {
+                'workspace_binding_stage': binding_stage,
+                'workspace_rejection_reason': rejection,
+            }
+            return _advisory(public_reason, claims=diagnostics,
                              recovery=recovery)
 
     # Preserve the public FastMCP helpers for deterministic local tests as well

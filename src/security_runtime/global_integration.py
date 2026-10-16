@@ -243,7 +243,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
 
     def project_layers(self, candidate):
         from .global_workspace import resolve_workspace
-        root = resolve_workspace(candidate, excluded=(self.home, self.store.directory))
+        root = resolve_workspace(candidate, excluded=(self.store.directory,), codex_home=self.home)
         cwd = Path(candidate).absolute().resolve()
         return [root, *reversed([p for p in (cwd, *cwd.parents) if p != root and p.is_relative_to(root)])]
 
@@ -308,7 +308,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
         if workspace is not None:
             from .global_workspace import read_bootstrap
             from .global_workspace import resolve_workspace
-            root = resolve_workspace(workspace, excluded=(self.home, self.store.directory))
+            root = resolve_workspace(workspace, excluded=(self.store.directory,), codex_home=self.home)
             result['workspace_readiness'] = read_bootstrap(root)
             if any(r['related'] for r in rows) and action not in {'setup', 'repair'}:
                 result['diagnostics'] = [*result.get('diagnostics', []), 'LEGACY_PROJECT_CONFIGURATION_PRESENT']

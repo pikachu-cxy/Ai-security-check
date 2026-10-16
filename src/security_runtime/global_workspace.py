@@ -49,7 +49,68 @@ def workspace_rejection(exc, stage):
             'BINDING_SESSION': 'WORKSPACE_SESSION_BINDING_MISSING'}.get(stage, 'WORKSPACE_TOOL_REJECTED')
 
 
-def resolve_workspace(value, *, excluded=()):
+def _git_metadata_target(path, *, prefix=''):
+    """Read one bounded Git pointer, checking lexical and canonical links."""
+    no_links(path)
+    if not path.is_file() or not 0 < path.stat().st_size <= 4096:
+        raise ValueError('INVALID_WORKTREE_METADATA')
+    with path.open('rb') as source:
+        raw = source.read(4097)
+    text = raw.decode('utf-8')
+    lines = text.splitlines()
+    if (len(raw) > 4096 or len(lines) != 1 or not lines[0].startswith(prefix)):
+        raise ValueError('INVALID_WORKTREE_METADATA')
+    target = lines[0][len(prefix):]
+    if (not target or any(ord(c) < 32 for c in target)
+            or target.startswith(('\\\\', '//'))
+            or (os.name != 'nt' and PureWindowsPath(target).drive)):
+        raise ValueError('INVALID_WORKTREE_METADATA')
+    target = Path(target)
+    lexical = target if target.is_absolute() else path.parent / target
+    no_links(lexical)
+    canonical = lexical.resolve(strict=True)
+    no_links(canonical)
+    no_links(path)
+    return canonical
+
+
+def _codex_linked_worktree(candidate, home, forbidden):
+    """Verify only home/worktrees/<id>/<repo>, never the state tree itself.
+
+    Git's external administration record must point back to this exact .git
+    file. A name, project marker, standalone repo or copied one-way pointer is
+    insufficient. No commands, source traversal or registration writes occur.
+    """
+    try:
+        relative = candidate.relative_to(home / 'worktrees')
+        if len(relative.parts) < 2:
+            return None
+        root = home / 'worktrees' / relative.parts[0] / relative.parts[1]
+        no_links(root)
+        git_file = root / '.git'
+        admin = _git_metadata_target(git_file, prefix='gitdir: ')
+        common = _git_metadata_target(admin / 'commondir')
+        if (not admin.is_dir() or not common.is_dir()
+                or admin.parent != common / 'worktrees'
+                or any(p == boundary or p.is_relative_to(boundary)
+                       or boundary.is_relative_to(p)
+                       for p in (admin, common) for boundary in forbidden)):
+            return None
+        if _git_metadata_target(admin / 'gitdir') != git_file:
+            return None
+        for metadata in (admin / 'HEAD', common / 'HEAD', common / 'config'):
+            no_links(metadata)
+            if not metadata.is_file():
+                return None
+        no_links(common / 'objects')
+        if not (common / 'objects').is_dir():
+            return None
+        return root
+    except (ValueError, OSError, UnicodeError, RuntimeError):
+        return None
+
+
+def resolve_workspace(value, *, excluded=(), codex_home=None):
     raw = str(value) if isinstance(value, (str, Path)) else ''
     if (not raw.strip() or len(raw) > 4096 or '${' in raw or any(ord(c) < 32 for c in raw)
         or raw.startswith(('\\\\', '//')) or not Path(raw).is_absolute()
@@ -61,7 +122,15 @@ def resolve_workspace(value, *, excluded=()):
     no_links(candidate)
     forbidden = [SQLiteStore.default_path().parent.absolute(), *map(lambda p: Path(p).absolute(), excluded)]
     configured_home = os.getenv('SECURITY_RUNTIME_CODEX_HOME') or os.getenv('CODEX_HOME')
-    forbidden.append(Path(configured_home).absolute() if configured_home else Path.home() / '.codex')
+    homes = list(dict.fromkeys(Path(p).absolute() for p in
+                 (Path.home() / '.codex', configured_home, codex_home) if p is not None))
+    containing = [home for home in homes if candidate == home or candidate.is_relative_to(home)]
+    worktree_root = None
+    if len(containing) == 1:
+        worktree_root = _codex_linked_worktree(candidate, containing[0], forbidden + homes)
+    # Explicit excludes and Runtime state are never exempted. Only the verified
+    # project's containing Codex home can be omitted from this one admission.
+    forbidden += [home for home in homes if worktree_root is None or home != containing[0]]
     if any(candidate == p or candidate.is_relative_to(p) for p in forbidden):
         raise ValueError('RUNTIME_STATE_IS_NOT_A_WORKSPACE')
     resolver = WorkspaceResolver()
@@ -73,6 +142,8 @@ def resolve_workspace(value, *, excluded=()):
     try:
         root = resolver.resolve(candidate).path
     except ValueError:
+        if worktree_root is not None:
+            raise ValueError('WORKSPACE_BOUNDARY_REJECTED') from None
         # Bounded name-only layout discovery; no repository-wide traversal.
         root = None
         markers = {'pom.xml', 'build.gradle', 'build.gradle.kts', 'settings.gradle',
@@ -91,7 +162,9 @@ def resolve_workspace(value, *, excluded=()):
     no_links(root)
     if resolver._unsafe(root):
         raise ValueError('UNSAFE_WORKSPACE')
-    if not candidate.is_relative_to(root) or any(root == p or root.is_relative_to(p) or p.is_relative_to(root) for p in forbidden):
+    if (worktree_root is not None and root != worktree_root
+            or not candidate.is_relative_to(root)
+            or any(root == p or root.is_relative_to(p) or p.is_relative_to(root) for p in forbidden)):
         raise ValueError('WORKSPACE_BOUNDARY_REJECTED')
     return root
 
