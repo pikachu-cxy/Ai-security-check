@@ -282,6 +282,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                    '本次没有执行安全扫描，改动是否存在风险仍未确认。' if result['status'] == 'BUSY' else
                    '本次操作的自动安全检查未完成，改动是否存在风险仍未确认。')
         summary['user_feedback'] = {'message': message}
+        summary['feedback_kind'] = 'CHECK_GAP'
         output['systemMessage'] = message
         output['continue'] = True
         output['hookSpecificOutput']['additionalContext'] = render_check_gap_context(summary, message)

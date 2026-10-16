@@ -148,7 +148,9 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
 def render_check_gap_context(summary: dict, message: str) -> str:
     """An uncompleted check is user feedback, never a repair choice or grant."""
     return ('用户提示\n' + message + '\n\n呈现要求\n'
-            '本轮正常回复中必须说明上方检查未完成的缺口，不能省略或声称通过。'
+            '仅当本轮实际修改源代码或配置，且总结时该改动的检查仍未完成，'
+            '才在正常开发总结中说明一次缺口，不能声称通过。'
+            '普通聊天、只读或未改动文件时不展示；后续检查完成时不保留旧提示，其他轮次不重复沿用。'
             '工具操作已结束，不因检查未完成而重复编辑、撤销代码或自行修复。'
             '不得伪造检查结果、补发生命周期事件或自动运行构建和测试；不要求用户提供内部引用。'
             + CONTROL_DELIMITER + _encode(_control(summary, None)))

@@ -28,23 +28,24 @@ def test_hidden_child_keeps_progress_and_failure_output():
     assert b''.join(chunks).decode() == result.stderr
 
 
-def test_detached_preparation_worker_does_not_create_child_console():
+def test_background_preparation_worker_and_child_have_no_console():
     # Reproduce the actual background-worker launch flags, then launch a
     # captured console executable inside it (as the worker does for Trivy).
     script = (
         "import ctypes;print(int(bool(ctypes.windll.kernel32.GetConsoleWindow())))"
     )
     worker = (
-        "import json,sys;from security_runtime.processes import run_process;"
+        "import ctypes,json,sys;from security_runtime.processes import run_process;"
+        "worker_console=int(bool(ctypes.windll.kernel32.GetConsoleWindow()));"
         f"result=run_process([sys.executable,'-c',{script!r}]);"
-        "print(json.dumps({'code':result.returncode,'output':result.stdout.strip()}))"
+        "print(json.dumps({'worker_console':worker_console,'code':result.returncode,'output':result.stdout.strip()}))"
     )
     environment = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1] / 'src'))
     result = subprocess.run([sys.executable, '-c', worker], env=environment,
         stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=15,
-        creationflags=subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS)
+        creationflags=subprocess.CREATE_NO_WINDOW)
     assert result.returncode == 0
-    assert json.loads(result.stdout) == {'code': 0, 'output': '0'}
+    assert json.loads(result.stdout) == {'worker_console': 0, 'code': 0, 'output': '0'}
 
 
 def test_timeout_cleanup_also_runs_without_console(monkeypatch):

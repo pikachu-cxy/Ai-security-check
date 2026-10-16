@@ -223,9 +223,10 @@ def start_background_preparation(executable=None, *, store=None, build=None):
     value, launch = store.reserve(command, build)
     if launch:
         argv = command + ['preparation-worker', '--job', value['job_id'], '--ticket', value['ticket']]
-        # No inherited console/protocol handles; closing installer/terminal does
-        # not cancel this worker. Both Windows flags keep it invisible.
-        options = {'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS} if os.name == 'nt' else {'start_new_session': True}
+        # No inherited console/protocol handles. On Windows, DETACHED_PROCESS
+        # would make CREATE_NO_WINDOW ineffective; Python's venv launcher can
+        # then create a console for its child interpreter.
+        options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {'start_new_session': True}
         try:
             subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL, close_fds=True, cwd=str(store.path.parent), **options)

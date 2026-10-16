@@ -74,6 +74,7 @@ def test_repeat_start_reuses_live_worker_and_does_not_inherit_console(tmp_path, 
     assert calls[0][1]['close_fds'] and calls[0][1]['stdout'] == subprocess.DEVNULL
     if __import__('os').name == 'nt':
         assert calls[0][1]['creationflags'] & subprocess.CREATE_NO_WINDOW
+        assert not calls[0][1]['creationflags'] & (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_CONSOLE)
     assert 'ticket' not in one
 
 

@@ -90,7 +90,8 @@ def test_timeout_shows_gap_retains_baseline_and_reconciles_later(repo, tmp_path)
         assert '本次没有执行安全扫描' in output['systemMessage']
         assert result['user_feedback']['message'] == output['systemMessage']
         context = output['hookSpecificOutput']['additionalContext']
-        assert output['systemMessage'] in context and '必须说明' in context
+        assert output['systemMessage'] in context and '说明一次缺口' in context
+        assert '普通聊天、只读或未改动文件时不展示' in context
         assert '修复／忽略' not in context and 'remediation_ref' not in context
         assert output['continue'] is True
     # A later observed activity checks the retained delta, without another edit.

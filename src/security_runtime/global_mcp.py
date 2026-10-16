@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import threading
+from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -452,6 +453,8 @@ def create_global_server(*, workspaces=None, host='codex'):
     # Preserve the public FastMCP helpers for deterministic local tests as well
     # as the actual low-level stdio handlers. Project registry remains untouched.
     routed_call = call
+    gap_notices = OrderedDict()
+    gap_notice_lock = threading.Lock()
     async def quiet_stop_call(name, arguments):
         result = await routed_call(name, arguments)
         if name in {'handle_hook_event', 'handle_readiness_event'}:
@@ -461,19 +464,55 @@ def create_global_server(*, workspaces=None, host='codex'):
             # missed check behind a successful file edit. Keep gaps explicit;
             # this presentation never grants repair or manual-scan authority.
             if ((name == 'handle_readiness_event' and data.get('status') != 'READY') or
-                    (data.get('status') == 'INCONCLUSIVE' and data.get('scanner_run') is False
-                     and not data.get('user_feedback'))):
+                    (data.get('status') in {'INCONCLUSIVE', 'BUSY', 'FAILED', 'PARTIAL'}
+                     and data.get('scanner_run') is False
+                     and (not data.get('user_feedback') or data.get('feedback_kind') == 'CHECK_GAP'))):
                 payload = json.loads(result.content[0].text)
                 message = payload.get('systemMessage')
                 if message:
                     event = 'SessionStart' if name == 'handle_readiness_event' else 'PostToolUse'
+                    # A failed readiness/configuration check is not evidence
+                    # that a file changed. Keep diagnostics, but do not turn
+                    # read-only or malformed events into chat warnings.
+                    valid = host_adapter.validate_claims(arguments,
+                        'SessionStart' if event == 'SessionStart' else 'PostToolUse', schemas.get(name))
+                    operation = data.get('normalized_operation_class')
+                    if event == 'PostToolUse' and operation is None and valid['host_claim_status'] == 'VALID':
+                        from .codex_event_adapter import classify_bash_command
+                        operation = (classify_bash_command(arguments.get('tool_input'))
+                            if arguments.get('tool_name') == 'Bash' else OperationClass.DIRECT_FILE_MUTATION.value)
+                    if (name not in schemas or valid['host_claim_status'] != 'VALID' or
+                            event == 'PostToolUse' and (operation == OperationClass.READ_ONLY.value
+                            or data.get('workspace_mutation_observed') is False)):
+                        data.pop('user_feedback', None)
+                        return CallToolResult(structuredContent=data,
+                            content=[TextContent(type='text', text='{}')])
+                    # One generic gap per turn, not one per tool invocation.
+                    # A later editing turn must still be able to report its own
+                    # gap. Real risk/repair feedback never enters this cache.
+                    key = tuple(identity(str(value)) for value in (
+                        arguments['workspace_path'], arguments['session_id'],
+                        arguments.get('turn_id') if event == 'PostToolUse' else 'SessionStart'))
+                    with gap_notice_lock:
+                        duplicate = key in gap_notices
+                        gap_notices[key] = None
+                        gap_notices.move_to_end(key)
+                        while len(gap_notices) > 512:
+                            gap_notices.popitem(last=False)
+                    if duplicate:
+                        data.pop('user_feedback', None)
+                        return CallToolResult(structuredContent=data,
+                            content=[TextContent(type='text', text='{}')])
                     if event == 'PostToolUse':
-                        message = '本次操作已结束，但自动安全检查未完成。' + message
+                        if not message.startswith('本次操作'):
+                            message = '本次操作已结束，但自动安全检查未完成。' + message
                     data['user_feedback'] = {'message': message}
                     presentation = (
-                        '若本轮实际编辑且自动检查仍未完成，在正常总结中说明上方缺口；'
-                        '普通聊天或检查后来完成时不重复准备提示。' if event == 'SessionStart' else
-                        '本轮正常回复中必须说明上方实际检查状态，不能省略或称检查通过。')
+                        '仅当本轮实际修改了源代码或配置，且该改动的检查在总结时仍未完成，'
+                        '才在正常开发总结中简要说明一次本轮检查缺口，不能称检查通过。'
+                        '普通聊天、只读操作和未改动文件的操作不展示此提示；'
+                        '后续检查完成时不保留旧的未完成提示，其他轮次不重复沿用。'
+                        '这只是检查状态，不是发现了漏洞；没有具体诊断时不要推断连接或配置有误。')
                     payload['systemMessage'] = message
                     payload['hookSpecificOutput'] = {'hookEventName': event, 'additionalContext':
                         '用户提示\n' + message + '\n\n呈现要求\n'
