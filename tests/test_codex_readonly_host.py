@@ -40,6 +40,19 @@ def _proof(executable):
         "real_model_called": False, "usage": None}
 
 
+def test_pre_cancelled_review_never_runs_proof_or_model(monkeypatch, tmp_path):
+    import threading
+    cancelled = threading.Event()
+    cancelled.set()
+    monkeypatch.setattr(host, 'run_suite', lambda *a, **kw: pytest.fail('Cancelled review must not run host probes'))
+    receipt = host.run_review('not sent', {}, lambda **kw: pytest.fail('no reads'),
+                              tmp_path/'cancelled', codex='not-executed', cancel_event=cancelled)
+    assert receipt['status'] == 'CANCELLED'
+    assert receipt['actual_model_calls'] == 0
+    assert receipt['usage'] is None
+    assert receipt['usage_complete'] is False
+
+
 def test_nested_orchestration_inventory_is_not_mistaken_for_zero_tools():
     tools = [{"type": "namespace", "name": "functions", "tools": [
         {"type": "custom", "name": "exec"}, {"type": "function", "name": "wait"}]},

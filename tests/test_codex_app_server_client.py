@@ -145,7 +145,8 @@ def test_unknown_usage_notification_shape_is_unknown(client, notification):
 
 
 def _simulated_turn(client, monkeypatch, tmp_path, *, runtime_status, completed_before_reply=False,
-                    usage_after_completed=False, no_model_response=False):
+                    usage_after_completed=False, no_model_response=False, cancel_event=None,
+                    cancel_after_read=False):
     """Drive native JSON-RPC ordering through pipes, without any child process."""
     schema = local_schema()
     output = dict(coverage='REVIEWED', findings=[], limitations=[], optional_note=None)
@@ -211,10 +212,13 @@ def _simulated_turn(client, monkeypatch, tmp_path, *, runtime_status, completed_
 
     def read_context(**kwargs):
         callbacks.append(kwargs)
+        if cancel_after_read:
+            cancel_event.set()
         return dict(evidence_id='issued-evidence', text='bounded sanitized context')
 
     receipt = client.run_model_turn(executable, 'Unit protocol simulation only.', schema,
-        read_context, tmp_path/'output', timeout_s=10, expected_profile=profile)
+        read_context, tmp_path/'output', timeout_s=10, expected_profile=profile,
+        cancel_event=cancel_event)
     sent = [json.loads(line) for line in process.stdin.getvalue().splitlines()]
     return SimpleNamespace(receipt=receipt, sent=sent, callbacks=callbacks, schema=schema)
 
@@ -254,3 +258,15 @@ def test_initial_zero_usage_does_not_prove_real_model_execution(client, monkeypa
     assert simulated.receipt['status'] == 'HOST_TURN_FAILED'
     assert simulated.receipt['usage']['input_tokens'] == 0
     assert simulated.receipt['model_observed'] is False
+
+
+def test_cancellation_after_snapshot_read_discards_late_result_and_keeps_cost_unknown(client, monkeypatch, tmp_path):
+    import threading
+    cancelled = threading.Event()
+    simulated = _simulated_turn(client, monkeypatch, tmp_path, runtime_status='disabled',
+        cancel_event=cancelled, cancel_after_read=True)
+    assert simulated.receipt['status'] == 'CANCELLED'
+    assert len(simulated.callbacks) == 1
+    assert simulated.receipt['result'] is None
+    assert simulated.receipt['usage_complete'] is False
+    assert simulated.receipt['usage_accounting_may_be_incomplete'] is True

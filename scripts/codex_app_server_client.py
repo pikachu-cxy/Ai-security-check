@@ -34,6 +34,10 @@ INSTRUCTIONS = (
 )
 
 
+class ReviewCancelled(Exception):
+    """Trusted host lifecycle cancellation, never a model instruction."""
+
+
 def strict_schema(schema):
     """Adapt optional/conditional local validation to the host strict subset.
 
@@ -115,7 +119,7 @@ def registry_is_disabled(registry):
 
 
 def run_model_turn(codex, prompt, schema, read_context, output_dir, timeout_s=180,
-                   model=None, *, expected_profile):
+                   model=None, *, expected_profile, cancel_event=None):
     from codex_host_probe import DISABLED_FEATURES, readonly_host_config
     from codex_readonly_host import isolation_profile
     from codex_tool_execution_probe import profile_fingerprint
@@ -193,15 +197,18 @@ def run_model_turn(codex, prompt, schema, read_context, output_dir, timeout_s=18
 
     def consume(wait_s=None):
         nonlocal completed_turn, active_turn_id
-        remaining = deadline-time.monotonic()
-        if remaining<=0:
-            raise TimeoutError('Host review deadline')
-        try:
-            message = messages.get(timeout=min(remaining,wait_s) if wait_s is not None else remaining)
-        except queue.Empty:
-            if wait_s is not None:
-                return None
-            raise TimeoutError('Host review deadline') from None
+        while True:
+            if cancel_event is not None and cancel_event.is_set():
+                raise ReviewCancelled()
+            remaining = deadline-time.monotonic()
+            if remaining<=0:
+                raise TimeoutError('Host review deadline')
+            try:
+                message = messages.get(timeout=min(remaining,wait_s if wait_s is not None else 0.25))
+                break
+            except queue.Empty:
+                if wait_s is not None:
+                    return None
         if message.get('_closed'):
             if completed_turn is not None and wait_s is not None:
                 return None
@@ -315,6 +322,8 @@ def run_model_turn(codex, prompt, schema, read_context, output_dir, timeout_s=18
             text = receipt.pop('final_text','')
             receipt['result'] = remove_optional_nulls(json.loads(text))
             receipt['status'] = 'COMPLETED'
+    except ReviewCancelled:
+        receipt['status'] = 'CANCELLED'
     except TimeoutError:
         receipt['status'] = 'TIMEOUT'
     except Exception as exc:
@@ -334,7 +343,8 @@ def run_model_turn(codex, prompt, schema, read_context, output_dir, timeout_s=18
                 process.kill()
                 process.wait()
         receipt.update(elapsed_ms=clock_ms(),stderr_line_count=stderr_lines[0],
-            tool_call_count=len(calls),usage_complete=isinstance(receipt['usage'],dict) and all(
+            usage_accounting_may_be_incomplete=receipt['status'] in {'CANCELLED','TIMEOUT','HOST_ERROR'},
+            tool_call_count=len(calls),usage_complete=receipt['status']=='COMPLETED' and isinstance(receipt['usage'],dict) and all(
                 receipt['usage'].get(k) is not None for k in ('input_tokens','cached_input_tokens','output_tokens','reasoning_output_tokens')))
         (root/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
     return receipt

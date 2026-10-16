@@ -56,10 +56,13 @@ def _agent_result(result) -> dict:
 def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory=None,
                   hook_coordinator=None, workspace_binding=None, global_mode=None,
                   hook_advisory_only=False, include_functional_verification=False,
-                  include_batch_review: bool | None = None):
+                  include_batch_review: bool | None = None,
+                  batch_review_host_factory=None, project_readiness_adapter=None):
     if include_batch_review is None:
         include_batch_review = os.getenv('SECURITY_RUNTIME_BATCH_REVIEW') == '1'
     if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
+        if batch_review_host_factory is not None or project_readiness_adapter is not None:
+            raise ValueError('Experimental background host requires a bound project connection')
         from .global_mcp import create_global_server
         return create_global_server(host=os.getenv('SECURITY_RUNTIME_HOST', 'codex'),
                                     include_batch_review=include_batch_review)
@@ -88,11 +91,38 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             closeout_engine = CloseoutService(runtime_engine(), hook_coordinator.store)
         return closeout_engine
     binding = workspace_binding or WorkspaceBinding.from_environment()
+    if batch_review_host_factory is not None and (not include_batch_review or binding is None):
+        raise ValueError('Experimental background host requires enabled batches and a workspace binding')
+    if project_readiness_adapter is not None and binding is None:
+        raise ValueError('Project readiness adapter requires a workspace binding')
     from .host_guidance import HOST_INSTRUCTIONS
     instructions = HOST_INSTRUCTIONS
     if include_batch_review:
         from .host_guidance import EXPERIMENTAL_BATCH_INSTRUCTIONS
         instructions += '\n' + EXPERIMENTAL_BATCH_INSTRUCTIONS
+    if batch_review_host_factory is not None:
+        instructions += '''
+This project connection has an explicitly installed experimental background host.
+After a coherent feature/edit chain and its synchronous edit Hooks, call
+prepare_security_batch once with the original task_ref and a short checkpoint_key.
+The installed host owns background dispatch and intermediate submissions; continue
+developing immediately. Do not start another child or manually submit its result.
+get_security_batches reports the actual host state and usage. Its host state is
+not scanner proof. A queued checkpoint is not a completed review.
+Before replying, call finish_security_task, then prepare_task_security_review.
+The host drains existing work for at most 60 seconds and cancels the remainder;
+it never starts tail work merely to finish the queue. YOU, the developing Codex
+agent, must read final-session code and perform the final integration review.
+Submit integration_review exactly as packet.batch_review.integration_contract:
+reviewed_paths contains ONLY task-changed paths in batch_review.review_scope,
+not related unchanged files. batch_refs contains ONLY reusable_candidates refs;
+return [] when no batch is reusable. Old batches are navigation, not current proof.
+Reconcile each all_batch_candidates entry using current final evidence; include
+PRESENT/EXCLUDED/UNKNOWN and map PRESENT to an actual submitted final finding.
+All evidence fields are exact reader-issued identifiers, without prose. Preserve
+PARTIAL and limitations. An accepted result is not a safety certificate.
+Ordinary chat/read-only turns never create tasks, checkpoints or model work.
+'''
     server = FastMCP("AI Security Runtime", instructions=instructions, log_level=mcp_log_level())
     from .remediation import RemediationService
     from .hook_runtime import HookCoordinator
@@ -160,8 +190,14 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         from .codex_mcp_hook import codex_hook_output
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
                                                session_id=session_id, permission_mode=permission_mode), 'SessionStart')
-        data = rejected or handle_readiness(event, workspace_path, session_id, binding=binding,
-                                           tools={t.name for t in server._tool_manager.list_tools()})
+        if rejected is not None:
+            data = rejected
+        elif project_readiness_adapter is not None:
+            data = project_readiness_adapter(normalized.context.workspace,
+                session_id, {t.name for t in server._tool_manager.list_tools()})
+        else:
+            data = handle_readiness(event, workspace_path, session_id, binding=binding,
+                                   tools={t.name for t in server._tool_manager.list_tools()})
         if rejected:
             data.update({'continue': True, 'systemMessage': '安全检查尚未成功接入当前项目，暂时无法确认检查结果。'})
         data = {**diag, **data}
@@ -240,12 +276,27 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             return reader(scan_id) if reader is not None else None
         return TaskSecurityBatchService(task_service(), scan_reader=read_scan)
 
+    experimental_host = None
+    def batch_host():
+        nonlocal experimental_host
+        if batch_review_host_factory is not None and experimental_host is None:
+            experimental_host = batch_review_host_factory(task_service(), batch_service(), Path(binding.root))
+        return experimental_host
+
     batch_tool_names = ()
     if include_batch_review:
         @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
         def prepare_security_batch(task_ref: str, checkpoint_key: str, workspace_path: str | None = None) -> dict:
             """Experimental checkpoint after synchronous file-edit Hooks return. Freeze bounded sanitized source and static records; no scan, model, build, edit or task finish. The host must enforce the returned restricted reviewer profile or use the legacy task-end workflow."""
             data = batch_service().prepare(bound_path(workspace_path), task_ref, checkpoint_key)
+            host = batch_host()
+            if host is not None:
+                from copy import deepcopy
+                data['background_host'] = host.checkpoint(bound_path(workspace_path), task_ref, checkpoint_key, deepcopy(data))
+                data.pop('review_session', None)
+                data.pop('review_handoff', None)
+                data['dispatch_required'] = False
+                data['host_background_owned'] = True
             return data
 
         @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
@@ -261,13 +312,19 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                                          findings: list[dict], coverage: str, limitations: list[str],
                                          workspace_path: str | None = None) -> dict:
             """Parent host submits read-only reviewer output. Snapshot-valid historical results can be stored; current applicability is separate. No source edit, scanner proof, task completion or repair authority."""
+            if batch_review_host_factory is not None:
+                raise ValueError('This experimental host owns intermediate submissions; use final task review')
             return batch_service().submit(bound_path(workspace_path), task_ref, batch_ref,
                                            review_session, findings, coverage, limitations)
 
         @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
         def get_security_batches(task_ref: str, workspace_path: str | None = None) -> dict:
             """Read batch execution, freshness and task coverage; never dispatch, scan or restart expired work."""
-            return batch_service().get(bound_path(workspace_path), task_ref)
+            data = batch_service().get(bound_path(workspace_path), task_ref)
+            host = batch_host()
+            if host is not None:
+                data['background_host'] = host.status(bound_path(workspace_path), task_ref)
+            return data
 
         batch_tool_names = ('prepare_security_batch', 'read_security_batch_context',
                             'submit_security_batch_review', 'get_security_batches')
@@ -280,14 +337,27 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def finish_security_task(task_ref: str, workspace_path: str | None = None, skip_review_reason: str | None = None) -> dict:
         """Before the development summary, compare against the exact task baseline. No actual changes: no checks/message. Actual changes: one bounded static check of task scope, then prepare_task_security_review even with zero scanner alerts. No repairs, model, target builds or Stop continuation."""
+        root = bound_path(workspace_path)
+        host = batch_host()
+        if host is not None:
+            host.stop_dispatch(root, task_ref)
         if skip_review_reason is not None:
-            return task_service().skip(bound_path(workspace_path), task_ref, skip_review_reason)
-        return task_service().finish(bound_path(workspace_path), task_ref)
+            return task_service().skip(root, task_ref, skip_review_reason)
+        data = task_service().finish(root, task_ref)
+        if host is not None:
+            data['background_host'] = host.status(root, task_ref)
+        return data
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_task_security_review(task_ref: str, workspace_path: str | None = None) -> dict:
         """Obtain sanitized task diff, actual static findings/coverage and canonical quick Skill. Host agent reasons before its final development summary; zero static alerts still require context review. Returns bounded source-version-bound review session, never a repair grant."""
-        return task_service().prepare(bound_path(workspace_path), task_ref)
+        root = bound_path(workspace_path)
+        host = batch_host()
+        host_status = host.before_final(root, task_ref) if host is not None else None
+        data = task_service().prepare(root, task_ref)
+        if host_status is not None:
+            data['background_host'] = host_status
+        return data
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
@@ -512,9 +582,18 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def get_runtime_info() -> dict:
         """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
         from .host_guidance import runtime_info
-        return runtime_info(remediation_config=remediation.config,
+        data = runtime_info(remediation_config=remediation.config,
                             include_functional_verification=include_functional_verification,
                             include_batch_review=include_batch_review)
+        if batch_review_host_factory is not None:
+            data['experimental_desktop_pilot'] = {
+                'enabled':True, 'scope':'BOUND_PROJECT_ONLY',
+                'checkpoint_dispatch':'INSTALLED_HOST_ADAPTER',
+                'final_review':'DEVELOPING_CODEX_AGENT_WITH_CURRENT_EVIDENCE',
+                'isolation_proof':'REQUIRED_BEFORE_EACH_UNCACHED_PROFILE',
+                'capability_is_not_execution_proof':True,
+            }
+        return data
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_professional_guidance() -> dict:
@@ -734,6 +813,18 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)
+    if batch_review_host_factory is not None:
+        server._tool_manager.get_tool('prepare_security_batch').description = (
+            'Experimental project checkpoint after synchronous edit Hooks. Freeze the bounded snapshot '
+            'and ask this installed host to start an isolated read-only background review. Return immediately '
+            'and continue development; never start another child or submit the intermediate result manually. '
+            'Inspect background_host for actual status, limits and failures. No source edits or repairs.')
+        status_tool = server._tool_manager.get_tool('get_security_batches')
+        status_tool.annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
+        status_tool.description = ('Read experimental batch status and actual host usage. May retry only a '
+            'previously completed parent submission after BUSY; never reruns a model or starts new work.')
+        # Trusted embedding cleanup; a model cannot supply or replace it.
+        server._experimental_batch_host_close = lambda: experimental_host.close() if experimental_host is not None else None
     return server
 
 

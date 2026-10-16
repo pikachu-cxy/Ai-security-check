@@ -136,11 +136,15 @@ def probe_host(codex: str | None = None, output_dir: Path | str | None = None,
 
 def run_review(prompt: str, schema: dict[str, Any], read_context: Callable[..., Any],
                output_dir: Path | str, timeout_s: float = 180, *, codex: str | None = None,
-               preflight: dict[str, Any] | None = None, model: str | None = None) -> dict[str, Any]:
+               preflight: dict[str, Any] | None = None, model: str | None = None,
+               cancel_event=None) -> dict[str, Any]:
     """Dispatch only after internal proof; caller preflight is informational."""
     del preflight
     directory = Path(output_dir)
     directory.mkdir(parents=True, exist_ok=True)
+    if cancel_event is not None and cancel_event.is_set():
+        return {'status':'CANCELLED','model_observed':False,'usage':None,'usage_complete':False,
+                'actual_model_calls':0,'simulation':False}
     executable = codex or shutil.which("codex")
     if not executable:
         raise UnsupportedReadonlyHost({"status": "HOST_UNAVAILABLE", "ready_for_model": False,
@@ -152,14 +156,18 @@ def run_review(prompt: str, schema: dict[str, Any], read_context: Callable[..., 
             "reason": f"{type(exc).__name__}: {exc}", "actual_model_calls": 0, "usage": None}) from exc
     if not receipt.get("ready_for_model"):
         raise UnsupportedReadonlyHost(receipt)
+    if cancel_event is not None and cancel_event.is_set():
+        return {'status':'CANCELLED','model_observed':False,'usage':None,'usage_complete':False,
+                'actual_model_calls':0,'simulation':False}
     if model is not None and model != receipt["execution_profile"]["effective_model"]:
         raise UnsupportedReadonlyHost({**receipt, "ready_for_model": False,
             "reason": "Requested model differs from the model used by the trusted execution probe."})
     from codex_app_server_client import run_model_turn
 
+    extra = {'cancel_event':cancel_event} if cancel_event is not None else {}
     result = run_model_turn(executable, prompt, schema, read_context, directory, timeout_s,
                             model=receipt["execution_profile"]["effective_model"],
-                            expected_profile=copy.deepcopy(receipt["execution_profile"]))
+                            expected_profile=copy.deepcopy(receipt["execution_profile"]), **extra)
     result["isolation_contract"] = ISOLATION_CONTRACT
     result["isolation_profile_sha256"] = receipt["execution_profile"]["profile_sha256"]
     result["isolation_proof_cache_hit"] = receipt.get("trusted_proof_cache_hit", False)
