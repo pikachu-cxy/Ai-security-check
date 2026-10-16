@@ -6,6 +6,7 @@ dependencies. A present vulnerability database is not proof that it is current.
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import replace
 import json
 import logging
 import os
@@ -17,7 +18,7 @@ import time
 
 from .install_progress import report_progress
 from .progress import ScanCancelled, checkpoint
-from .toolchain import ToolManager, ToolStatus, VERSIONS
+from .toolchain import ToolManager, ToolStatus, ResolvedTool, VERSIONS
 from .preparation_budget import preparation_budget, current_budget
 
 
@@ -91,15 +92,22 @@ def _report(progress, stage):
         pass
 
 
-def _component(result, expected):
+def _component(result, expected, name=None):
     status = _status(getattr(result, 'status', ToolStatus.BROKEN))
     actual = _version(getattr(result, 'version', ''))
     if status == ToolStatus.READY and actual != expected:
         status = ToolStatus.VERSION_MISMATCH.value
     if status == ToolStatus.READY and not getattr(result, 'path', ''):
         status = ToolStatus.BROKEN.value
-    return {'status': status, 'version': actual, 'expected_version': expected,
+    component = {'status': status, 'version': actual, 'expected_version': expected,
         'ready': status == ToolStatus.READY and actual == expected}
+    name = name or getattr(result, 'tool_id', None)
+    if not component['ready'] and name in CORE_TOOLS:
+        from .component_health import component_issue
+        component['diagnostic'] = component_issue(name, status, getattr(result, 'diagnostic', None))
+        if getattr(result, 'source', None) == 'EXPLICIT':
+            component['diagnostic']['automatic_download'] = False
+    return component
 
 
 def _file_identity(value):
@@ -249,8 +257,9 @@ def _message(tools, database, *, offline, ready):
     notes = []
     for name, component in tools.items():
         if not component['ready']:
-            notes.append(_LABELS[name] + ('组件版本不兼容。'
-                if component['status'] == ToolStatus.VERSION_MISMATCH else '尚未准备完成。'))
+            issue = component.get('diagnostic')
+            notes.append(_LABELS[name] + '不可用：' + issue['message'] + issue['remediation'] if issue else
+                _LABELS[name] + ('组件版本不兼容。' if component['status'] == ToolStatus.VERSION_MISMATCH else '尚未准备完成。'))
     if not database['ready']:
         if database['status'] == ToolStatus.BROKEN:
             notes.append('漏洞数据无法正常读取或格式不兼容，需重新准备。')
@@ -268,6 +277,14 @@ def _message(tools, database, *, offline, ready):
 
 
 def _receipt(tools, database, failures, *, offline):
+    # A failed availability result needs a record even without an exception.
+    for name, component in tools.items():
+        if not component['ready']:
+            from .component_health import component_issue
+            issue = component.get('diagnostic') or component_issue(name, component['status'])
+            item = {'stage': 'VERIFY_SCAN_READINESS', 'component': name, 'error_code': issue['code']}
+            if not any(failure.get('component') == name for failure in failures):
+                failures.append(item)
     ready = all(component['ready'] for component in tools.values()) and database['ready']
     usable = any(component['ready'] for component in tools.values()) or database['cached_usable']
     return {'contract': CONTRACT, 'status': 'READY' if ready else 'PARTIAL' if usable else 'UNAVAILABLE',
@@ -311,7 +328,7 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except Exception as exc:
             for name in CORE_TOOLS:
                 _failure(failures, 'INSTALL_TOOLS', name, exc)
-            tools = {name: _component(None, VERSIONS[name]) for name in CORE_TOOLS}
+            tools = {name: _component(None, VERSIONS[name], name) for name in CORE_TOOLS}
             database = {'status': 'BROKEN', 'freshness': 'UNKNOWN', 'ready': False,
                 'cached_usable': False}
             _report(progress, 'INSTALL_DATA')
@@ -335,7 +352,8 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
             raise
         except Exception as exc:
             _failure(failures, 'INSTALL_TOOLS', name, exc)
-        if not _component(current, expected)['ready'] and not offline:
+        if (not _component(current, expected, name)['ready'] and not offline
+                and getattr(current, 'status', None) in {ToolStatus.MISSING, ToolStatus.VERSION_MISMATCH}):
             budget = current_budget()
             if budget:
                 budget.report(dict(event='COMPONENT_STARTED', component=name))
@@ -353,7 +371,7 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
                     code = 'PREPARATION_BUDGET_EXHAUSTED'
                 budget.report(dict(event='COMPONENT_COMPLETE' if _component(current, expected)['ready'] else 'COMPONENT_FAILED',
                     component=name, error_code='' if _component(current, expected)['ready'] else code))
-        tools[name] = _component(current, expected)
+        tools[name] = _component(current, expected, name)
         resolved[name] = current
 
     _report(progress, 'INSTALL_DATA')
@@ -382,7 +400,13 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except Exception as exc:
             current = None
             _failure(failures, 'VERIFY_SCAN_READINESS', name, exc)
-        tools[name] = _component(current, tools[name]['expected_version'])
+        previous = resolved[name]
+        if (isinstance(current, ResolvedTool) and current.status in {ToolStatus.MISSING, ToolStatus.OFFLINE}
+                and getattr(previous, 'diagnostic', None) is not None):
+            # A failed download must not become a vague "missing" diagnosis
+            # just because the final read-only verification found no binary.
+            current = replace(current, diagnostic=previous.diagnostic)
+        tools[name] = _component(current, tools[name]['expected_version'], name)
     database = _database(manager, failures, 'VERIFY_SCAN_READINESS')
     return _receipt(tools, database, failures, offline=offline)
 
@@ -432,9 +456,14 @@ def _validate_readiness_receipt(value):
     tools = value['tools']
     if not isinstance(tools, dict) or set(tools) != set(CORE_TOOLS):
         return False
-    for component in tools.values():
-        if not isinstance(component, dict) or set(component) != {'status', 'version', 'expected_version', 'ready'}:
+    for name, component in tools.items():
+        fields = {'status', 'version', 'expected_version', 'ready'}
+        if not isinstance(component, dict) or not fields <= set(component) or set(component) - fields - {'diagnostic'}:
             return False
+        if 'diagnostic' in component:
+            from .component_health import valid_issue
+            if component.get('ready') is True or not valid_issue(name, component['diagnostic']):
+                return False
         if (component['status'] not in _TOOL_STATUSES or type(component['ready']) is not bool
                 or not isinstance(component['expected_version'], str)
                 or _VERSION.fullmatch(component['expected_version']) is None
@@ -462,6 +491,12 @@ def _validate_readiness_receipt(value):
     if not isinstance(failures, list) or len(failures) > 20:
         return False
     for failure in failures:
+        if isinstance(failure, dict) and set(failure) == {'stage', 'component', 'error_code'}:
+            from .component_health import ISSUES
+            if (failure['stage'] not in _STAGES or failure['component'] not in CORE_TOOLS
+                    or failure['error_code'] not in ISSUES):
+                return False
+            continue
         if (not isinstance(failure, dict) or set(failure) != {'stage', 'component', 'exception_type'}
                 or failure['stage'] not in _STAGES or failure['component'] not in {*CORE_TOOLS, 'vulnerability_db'}
                 or failure['exception_type'] not in _EXCEPTION_TYPES):

@@ -316,10 +316,15 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     hook_parser.add_argument('--adapter-id',choices=['ai-security-runtime-hook-v1'],help=argparse.SUPPRESS)
     tools_parser = sub.add_parser("tools", help="Manage security engines")
     tools_sub = tools_parser.add_subparsers(dest="tools_action", required=True)
-    tools_sub.add_parser("status")
+    tool_status_parser = tools_sub.add_parser("status")
+    tool_status_parser.add_argument('--json', action='store_true')
+    repair_component_parser = tools_sub.add_parser('repair', help='Back up and rebuild confirmed corrupt Semgrep settings; no download or scan')
+    repair_component_parser.add_argument('tool', choices=['semgrep'])
+    repair_component_parser.add_argument('--json', action='store_true')
     install_parser = tools_sub.add_parser("install")
     install_parser.add_argument("tool", nargs="?", choices=tuple(VERSIONS))
     install_parser.add_argument("--all", action="store_true")
+    install_parser.add_argument('--reinstall', action='store_true', help='Explicitly replace one broken managed/system component; never repair user settings by downloading')
     trial_arguments = []
     parsed_argv = list(sys.argv[1:] if argv is None else argv)
     if parsed_argv[:1] == ['trial'] and '--' in parsed_argv:
@@ -348,9 +353,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             from .background_preparation import run_worker
             return run_worker(args.job, args.ticket)
         if args.command == 'preparation':
-            from .background_preparation import current_preparation, start_background_preparation, watch_preparation, preparation_message
+            from .background_preparation import read_preparation_status, start_background_preparation, watch_preparation, preparation_message
             data = (start_background_preparation() if args.action == 'retry' else
-                    watch_preparation() if args.action == 'watch' else current_preparation())
+                    watch_preparation() if args.action == 'watch' else read_preparation_status())
             print(json.dumps(data, ensure_ascii=True) if args.json else preparation_message(data))
             return 0 if data.get('ready') or data['status'] in {'QUEUED', 'PREPARING', 'RESUMING'} else 2
         if args.command in {'prepare-installation', 'prepare-scanners'}:
@@ -362,7 +367,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             adaptive = args.command == 'prepare-scanners' and not args.fixed_timeout and not offline
             kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout,
                 adaptive=adaptive, max_wait_seconds=args.max_wait if adaptive else args.timeout)
-            if os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1':
+            if args.status:
+                # A read-only query must not say it is downloading/updating.
+                data = prepare_installation_readiness(**kwargs)
+            elif os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1':
                 data = prepare_installation_readiness(progress=child_preparation_progress, **kwargs)
             else:
                 with InstallationProgress(preparation=True, adaptive=adaptive,
@@ -374,6 +382,19 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 # Public prepare-scanners retains the richer source trail.
                 base = {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
                 data['preparation'] = {key: value for key, value in data['preparation'].items() if key in base}
+            if args.command == 'prepare-installation':
+                # Preserve the legacy private child receipt for old installers.
+                for component in data['tools'].values():
+                    component.pop('diagnostic', None)
+                data['failures'] = [dict(stage=item['stage'], component=item['component'],
+                    exception_type=item.get('exception_type', 'OtherException')) for item in data['failures']]
+            else:
+                from .component_health import component_feedback
+                health = component_feedback(data['tools'])
+                # Keep the receipt shape stable for scripts. One-time notices
+                # use stderr, while JSON contains current diagnostic state.
+                if health['notify']:
+                    print(health['message'], file=sys.stderr)
             print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
             return 0 if data['ready'] else 2
         if args.command == 'install':
@@ -595,22 +616,47 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             return 0 if result.release_status != "BLOCKED" else 1
         if args.command == "tools":
             manager = ToolManager()
+            if args.tools_action == 'repair':
+                from .component_health import repair_semgrep_settings
+                data = repair_semgrep_settings(manager=manager)
+                print(json.dumps(data, ensure_ascii=False) if args.json else data['message'] +
+                    ('\n备份：' + data['backup_path'] if data.get('backup_path') else ''))
+                return 0 if data['status'] in {'REPAIRED', 'NOT_APPLICABLE'} else 2
             if args.tools_action == "status":
-                for tool_id, resolved in manager.statuses().items():
+                from .component_health import component_feedback
+                from .install_readiness import _component, CORE_TOOLS
+                statuses = manager.statuses()
+                tools = {name: _component(result, manager.versions[name], name)
+                    for name, result in statuses.items() if name in CORE_TOOLS}
+                health = component_feedback(tools, root=manager.root)
+                if args.json:
+                    print(json.dumps(dict(tools=tools, component_health=health,
+                        vulnerability_data=manager.trivy_data_statuses()), ensure_ascii=False))
+                    return 0
+                for tool_id, resolved in statuses.items():
                     if tool_id in ON_DEMAND_ENGINES:
                         print(f"{tool_id.title():<12} ON_DEMAND / FALLBACK ({resolved.status}) {resolved.path}")
                     else:
                         print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
+                    issue = tools.get(tool_id, {}).get('diagnostic')
+                    if issue:
+                        print(issue['message'] + issue['remediation'])
+                        if issue['repair_command']:
+                            print('修复命令：' + ' '.join(issue['repair_command']))
                 for name, state in manager.trivy_data_statuses().items():
                     print(f"Trivy {name}: {state}")
+                if health['notify']:
+                    print(health['message'])
                 return 0
             if not args.all and args.tool is None:
                 parser.error("tools install requires a tool name or --all")
+            if args.reinstall and args.all:
+                parser.error('tools install --reinstall requires one explicitly selected component')
             names = tuple(name for name in VERSIONS if name not in ON_DEMAND_ENGINES) if args.all else (args.tool,)
             successful = True
             for tool_id in names:
                 print(f"Preparing {tool_id}...", file=sys.stderr)
-                resolved = manager.ensure(tool_id)
+                resolved = manager.ensure(tool_id, **({'reinstall': True} if args.reinstall else {}))
                 print(f"{tool_id.title():<12} {resolved.status} {resolved.path} {resolved.detail}")
                 if resolved.diagnostic:
                     print(format_diagnostic(resolved.diagnostic, retry=f"security-check tools install {tool_id}"))

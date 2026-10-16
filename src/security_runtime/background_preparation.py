@@ -312,6 +312,8 @@ def run_worker(job_id, ticket, *, store=None, prepare=None, resume=None, command
         ceiling.cancel()
         if not validate_readiness_receipt(receipt):
             raise ValueError('Invalid preparation receipt')
+        from .component_health import component_feedback
+        component_feedback(receipt['tools'], consume=False)
         if not store.update(job_id, ticket, status='RESUMING' if receipt['ready'] else 'PARTIAL',
                 receipt=receipt, ready=receipt['ready'], reason=None if receipt['ready'] else 'SCANNERS_NOT_READY'):
             return 2
@@ -356,13 +358,23 @@ def run_worker(job_id, ticket, *, store=None, prepare=None, resume=None, command
 
 
 def preparation_message(value):
+    if value.get('current_readiness'):
+        message = value['current_readiness']['message']
+        if value['status'] in ACTIVE:
+            background = {k: v for k, v in value.items() if k != 'current_readiness'}
+            message = preparation_message(background) + '\n' + message
+        health = value.get('component_health') or {}
+        if health.get('notify'):
+            message += '\n' + health['message']
+        return message
     status = value['status']
     if status == 'READY':
         return '扫描能力已准备完成；已登记的待检任务按各自收尾回执确认结果。'
     if status == 'RESUMING':
         return '扫描能力已准备完成，正在通过普通 MCP 接续已登记的收尾检查。'
     if status not in ACTIVE:
-        return '扫描能力尚未就绪；已有缓存和待检任务保留。可重新安装以重试后台准备。'
+        receipt = value.get('receipt') or {}
+        return receipt.get('message') or '扫描能力尚未就绪；已有缓存和待检任务保留。请查询组件状态查看具体原因，先不要重复安装。'
     message = '扫描能力正在后台准备，安装已完成，无需手动执行前置命令。'
     event = value.get('progress') or {}
     if event.get('event') == 'DOWNLOAD_PROGRESS':
@@ -391,6 +403,27 @@ def current_preparation():
         return value
     except (OSError, ValueError, sqlite3.DatabaseError, KeyError, TypeError):
         return {'status': 'UNKNOWN', 'ready': False, 'reason': 'PREPARATION_STATE_UNAVAILABLE'}
+
+
+def read_preparation_status():
+    """Explicit status query: current availability plus one-time health notices.
+
+    The historical worker receipt is retained, so a manual repair cannot be
+    mistaken for execution of old pending scans or closeouts.
+    """
+    value = current_preparation()
+    receipt = prepare_installation_readiness(offline=True)
+    from .component_health import component_feedback
+    value.update(background_receipt=value.get('receipt'), background_reason=value.get('reason'),
+                 receipt=receipt, current_readiness=receipt, receipt_current=True,
+                 component_health=component_feedback(receipt['tools']),
+                 components_ready=all(item['ready'] for item in receipt['tools'].values()),
+                 background_status=value['status'])
+    if value['status'] not in ACTIVE and value.get('build_match') is not False:
+        value.update(status=receipt['status'], ready=receipt['ready'],
+                     reason=None if receipt['ready'] else 'COMPONENTS_NOT_READY')
+    value['message'] = preparation_message(value)
+    return value
 
 
 def watch_preparation(store=None):

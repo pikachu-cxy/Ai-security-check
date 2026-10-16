@@ -105,6 +105,8 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
             receipt = _unavailable_readiness(offline=offline)
             diagnostic = 'INSTALLATION_PREPARATION_FAILED'
     data['scan_readiness'] = receipt
+    from .component_health import component_feedback
+    data['component_health'] = component_feedback(receipt['tools'])
     ready = receipt['ready']
     installation.update(scan_ready=ready, status='INSTALLED',
         engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',

@@ -64,6 +64,48 @@ security-check integration remove cursor --scope global --json
 不要为了安装直接删除用户配置。已有可核验归属的检测模式 Hook 可升级为自动模式。
 普通项目级 `setup cursor` 仍是旧兼容入口；全局自动接入使用上面的 `install cursor`。
 
+## 组件故障、修复和恢复提示
+
+组件缺失、版本不匹配、已安装但启动失败、权限问题、启动超时和 Semgrep 设置损坏分别诊断。
+状态输出保留具体原因、受影响的检查能力和处理建议，不展示设置内容、令牌或原始错误堆栈。
+未就绪组件即使没有抛出异常，也会进入失败记录；其他已就绪组件继续复用。
+
+重复安装只自动补齐缺失或版本不符的组件。已安装组件启动失败、安装记录不完整或完整性异常时，
+先保留现场并提示处理方式，不自动删除并重新下载相同组件。Semgrep 用户设置损坏时，重装程序
+无法修复共享设置，因此即使显式重装也先要求处理设置。
+
+源码开发模式下，在 Runtime 仓库目录查询当前组件：
+
+```powershell
+.\.venv\Scripts\security-check.exe tools status --json
+.\.venv\Scripts\security-check.exe prepare-scanners --status --json
+```
+
+查询不下载组件或扫描项目，不再输出“正在下载/更新”的安装阶段文案。
+Cursor 中的组件准备状态查询同时返回当前实测状态和历史后台回执；修复前的失败回执不能
+覆盖当前状态，也不能被描述成仍在运行的准备任务。状态查询不会恢复旧的待检任务。
+
+仅在确认 Semgrep 用户设置损坏、用户明确选择修复后执行：
+
+```powershell
+.\.venv\Scripts\security-check.exe tools repair semgrep --json
+```
+
+修复命令备份原始设置、重建默认设置，再检查组件是否能启动；不下载组件、不扫描项目。
+有效设置不会被清空，无法安全读取或修复中发生变化的文件不会强行重置。自定义设置路径
+遵循 `SEMGREP_SETTINGS_FILE`，默认采用 Semgrep 的用户配置目录。
+
+若诊断明确需要重装某一个组件，由用户显式执行，例如：
+
+```powershell
+.\.venv\Scripts\security-check.exe tools install semgrep --reinstall
+```
+
+`--reinstall` 不接受 `--all`，也不会覆盖用户显式指定的外部程序。
+故障和恢复提醒按组件持久化去重；跨连接重复查询同一故障不重复推送，恢复后提醒一次，
+再次出现故障时可重新提醒。主动查询始终可以查看完整当前状态。安装输出及组件状态查询共享
+此提醒记录，不新增桌面弹窗或定时扫描。组件恢复只证明可用性，不证明项目通过安全检查。
+
 ## 自动行为与边界
 
 - `preToolUse` 在支持的 Write/Edit/Delete 或可能修改文件的 Shell 前记录任务基线；

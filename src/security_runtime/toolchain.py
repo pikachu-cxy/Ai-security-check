@@ -305,6 +305,7 @@ class ToolManager:
         self._lock_guard = threading.Lock()
         self._version_cache = {}  # Process-local successful probes only, <=16.
         self._version_cache_lock = threading.RLock()
+        self._probe_diagnostics = {}
         self.versions = dict(VERSIONS)
         self.python_engines = {"semgrep"}
         self.python_requirements = {"semgrep": (f"semgrep=={VERSIONS['semgrep']}", False, None)}
@@ -458,6 +459,9 @@ class ToolManager:
         # Version behavior may depend on env/config/workspace. Hash only in RAM.
         digest.update(repr(sorted(tool_environment(path).items())).encode())
         digest.update(str(scan_workspace() or os.getcwd()).encode())
+        if tool_id == 'semgrep':
+            from .component_health import settings_fingerprint
+            digest.update(settings_fingerprint())
         return tool_id, self.versions[tool_id], str(path), digest.digest()
 
     def _version(self, tool_id: str, path: Path) -> str:
@@ -495,57 +499,86 @@ class ToolManager:
             return output
 
     def _probe_version(self, tool_id: str, path: Path) -> str:
+        from .component_health import diagnosis
+        key = (tool_id, str(path))
+        self._probe_diagnostics.pop(key, None)
+        if len(self._probe_diagnostics) >= 16:
+            self._probe_diagnostics.pop(next(iter(self._probe_diagnostics)))
         try:
             with external_tool_loader():
                 with span('version_probe_invocation'):
                     count('version_probe_invocations')
                     from .scanner_observation import invocation
                     invocation('VERSION_PROBE', 0)
+                    environment = tool_environment(path)
+                    if tool_id == 'semgrep':
+                        environment.update(SEMGREP_ENABLE_VERSION_CHECK='0', SEMGREP_SEND_METRICS='off')
                     proc = run_process([str(path.resolve()), "--version"], timeout=8, max_output=16_000,
-                                       env=tool_environment(path))
+                                       env=environment)
             if proc.returncode:
+                lower = proc.stderr.lower()
+                code = ('COMPONENT_PERMISSION_DENIED' if any(marker in lower for marker in
+                    ('permissionerror', 'permission denied', 'access is denied', 'winerror 5')) else
+                    'COMPONENT_DEPENDENCY_BROKEN' if any(marker in lower
+                    for marker in ('modulenotfounderror', 'importerror:')) else 'COMPONENT_START_FAILED')
+                self._probe_diagnostics[key] = diagnosis(code)
                 return ""
-            return sanitize((proc.stdout + proc.stderr).strip(), 160)
-        except (OSError, TimeoutError, ValueError):
+            # Successful probes expose version tokens only, never warnings
+            # that may contain user settings or credentials.
+            version = re.search(r'(?<![0-9.])[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?![0-9.])', proc.stdout[:1600])
+            if not version:
+                self._probe_diagnostics[key] = diagnosis('COMPONENT_START_FAILED')
+            return version.group() if version else ''
+        except (OSError, TimeoutError, ValueError) as exc:
+            code = ('COMPONENT_PERMISSION_DENIED' if isinstance(exc, PermissionError) else
+                    'COMPONENT_START_TIMEOUT' if isinstance(exc, TimeoutError) else 'COMPONENT_START_FAILED')
+            self._probe_diagnostics[key] = diagnosis(code)
             return ""
 
     def _check(self, tool_id: str, path: Path, source: ToolSource) -> ResolvedTool:
         path = path.expanduser().resolve()
         if not path.is_file():
             return ResolvedTool(tool_id, "", str(path), source, ToolStatus.MISSING)
+        from .component_health import diagnosis, settings_problem
+        if tool_id == 'semgrep':
+            problem = settings_problem()
+            if problem is not None:
+                return ResolvedTool(tool_id, '', str(path), source, ToolStatus.BROKEN,
+                    problem.error_summary, problem)
         if source == ToolSource.MANAGED and tool_id in self.python_engines and path.is_relative_to(self.root / ("engines" if tool_id == "semgrep" else "tools")):
             install_dir = path.parents[2]
             if not all((install_dir / name).is_file() for name in ("install.json", "metadata.json", "LICENSE", "NOTICE")):
-                return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "Python package installation is incomplete")
+                return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "Python package installation is incomplete", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
             if tool_id == "semgrep":
                 try:
                     metadata = json.loads((install_dir / "metadata.json").read_text(encoding="utf-8"))
                     if metadata["version"] != self.versions[tool_id]:
                         return ResolvedTool(tool_id, metadata["version"], str(path), source,
-                                            ToolStatus.VERSION_MISMATCH, f"expected {self.versions[tool_id]}")
+                                            ToolStatus.VERSION_MISMATCH, f"expected {self.versions[tool_id]}", diagnosis('COMPONENT_VERSION_MISMATCH'))
                     if metadata["executable_sha256"] != sha256_file(path):
-                        return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python executable checksum mismatch")
+                        return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python executable checksum mismatch", diagnosis('COMPONENT_INTEGRITY_FAILED'))
                 except (OSError, ValueError, KeyError):
-                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python metadata invalid")
+                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed Python metadata invalid", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
         if source == ToolSource.MANAGED and tool_id not in self.python_engines:
             marker = path.parent / "install.json"
             try:
                 data = json.loads(marker.read_text(encoding="utf-8"))
                 if data["archive_sha256"] != self.manifest(tool_id).sha256 or data["binary_sha256"] != sha256_file(path):
-                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed binary checksum mismatch")
+                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed binary checksum mismatch", diagnosis('COMPONENT_INTEGRITY_FAILED'))
                 metadata = json.loads((path.parent / "metadata.json").read_text(encoding="utf-8"))
                 if metadata["license"] != self.license_metadata(tool_id).license_spdx or not (path.parent / "LICENSE").is_file():
-                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed license metadata missing")
+                    return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed license metadata missing", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
                 if self.license_metadata(tool_id).notice_required and not (path.parent / "NOTICE").is_file():
                     return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed notice missing")
             except (OSError, ValueError, KeyError):
-                return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "missing or invalid install marker")
+                return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "missing or invalid install marker", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
         output = self._version(tool_id, path)
         if not output:
-            return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "executable failed version check")
+            problem = self._probe_diagnostics.get((tool_id, str(path))) or diagnosis('COMPONENT_START_FAILED')
+            return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, problem.error_summary, problem)
         expected = self.versions[tool_id]
         if not matches_version(expected, output):
-            return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}")
+            return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}", diagnosis('COMPONENT_VERSION_MISMATCH'))
         return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.READY)
 
     def resolve(self, tool_id: str) -> ResolvedTool:
@@ -557,6 +590,12 @@ class ToolManager:
         managed = self.managed_path(tool_id)
         if managed.exists():
             return self._check(tool_id, managed, ToolSource.MANAGED)
+        install_dir = managed.parents[2] if tool_id in self.python_engines else managed.parent
+        if install_dir.is_dir() and any(install_dir.iterdir()):
+            from .component_health import diagnosis
+            problem = diagnosis('COMPONENT_PACKAGE_INCOMPLETE')
+            return ResolvedTool(tool_id, '', str(managed), ToolSource.MANAGED,
+                ToolStatus.BROKEN, problem.error_summary, problem)
         if tool_id == "semgrep" and not getattr(sys, "frozen", False):
             executable = "semgrep.exe" if os.name == "nt" else "semgrep"
             # Backward-compatible use of an already installed Python script.
@@ -574,7 +613,7 @@ class ToolManager:
             return ResolvedTool(tool_id, "", "", None, ToolStatus.UNSUPPORTED_PLATFORM)
         return ResolvedTool(tool_id, "", "", None, ToolStatus.MISSING)
 
-    def ensure(self, tool_id: str, *, offline: bool | None = None) -> ResolvedTool:
+    def ensure(self, tool_id: str, *, offline: bool | None = None, reinstall=False) -> ResolvedTool:
         checkpoint()
         emit('ENGINE_PREPARING', scanner=tool_id, scanner_version=self.versions.get(tool_id, ''))
         # Multiple capability providers can share one engine. Serialize its
@@ -583,14 +622,14 @@ class ToolManager:
             lock = self._engine_locks.setdefault(tool_id, threading.RLock())
         with lock:
             checkpoint()
-            result = self._ensure(tool_id, offline=offline)
+            result = self._ensure(tool_id, offline=offline, **({'reinstall': True} if reinstall else {}))
         emit('ENGINE_READY' if result.status == ToolStatus.READY else 'ENGINE_PREPARATION_FAILED',
             scanner=tool_id, scanner_version=result.version or self.versions.get(tool_id, ''),
             error_code=result.diagnostic.error_code if result.diagnostic else '',
             source=result.diagnostic.source if result.diagnostic else '')
         return result
 
-    def _ensure(self, tool_id: str, *, offline: bool | None = None) -> ResolvedTool:
+    def _ensure(self, tool_id: str, *, offline: bool | None = None, reinstall=False) -> ResolvedTool:
         try:
             current = self.resolve(tool_id)
         except ScanCancelled:
@@ -603,8 +642,20 @@ class ToolManager:
             return current
         if current.source == ToolSource.EXPLICIT:
             return current
+        # A present engine failing to start needs diagnosis, not another
+        # download of the same bytes. Reinstallation is an explicit CLI choice.
+        if current.status == ToolStatus.BROKEN and not reinstall:
+            return current
+        if tool_id == 'semgrep':
+            from .component_health import settings_problem
+            problem = settings_problem()
+            if problem is not None:
+                return ResolvedTool(tool_id, '', current.path, current.source,
+                    ToolStatus.BROKEN, problem.error_summary, problem)
         if not LicensePolicy.can_auto_download(self.license_metadata(tool_id)):
-            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, "automatic installation prohibited by license policy")
+            from .component_health import diagnosis
+            problem = diagnosis('LICENSE_BLOCKED')
+            return ResolvedTool(tool_id, "", "", None, ToolStatus.BROKEN, problem.error_summary, problem)
         if offline is None:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
         requirement = self.python_requirements.get(tool_id)

@@ -296,9 +296,8 @@ def create_global_server(*, workspaces=None, host='codex'):
             guide = get_professional_guidance()
             return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
         if name == 'get_scan_preparation_status':
-            from .background_preparation import current_preparation, preparation_message
-            value = current_preparation()
-            value['message'] = preparation_message(value)
+            from .background_preparation import read_preparation_status
+            value = read_preparation_status()
             return CallToolResult(structuredContent=value, content=[TextContent(type='text', text=json.dumps(value))])
         handler_entered = False
         binding_stage = 'RESOLVING_ROOT'

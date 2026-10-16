@@ -62,6 +62,9 @@ _ERROR_TEXT = {'NETWORK_TIMEOUT': '下载超时', 'DOWNLOAD_STALLED': '下载阶
     'HTTP_429': '服务器限制请求频率', 'HTTP_401': '下载源要求授权', 'HTTP_403': '下载源拒绝访问',
     'HTTP_404': '下载资源不存在', 'CHECKSUM_MISMATCH': '下载内容校验失败', 'DOWNLOAD_BUSY': '另一个进程正在更新漏洞库',
     'VULNERABILITY_DB_VALIDATION_FAILED': '下载数据未通过版本、有效期或数据库校验'}
+from .component_health import ISSUES as _COMPONENT_ISSUES
+_ERRORS.update(_COMPONENT_ISSUES)
+_ERROR_TEXT.update({code: text[0] for code, text in _COMPONENT_ISSUES.items() if code not in _ERROR_TEXT})
 
 
 def parse_download_progress(line):

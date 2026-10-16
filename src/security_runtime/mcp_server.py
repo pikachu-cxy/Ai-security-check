@@ -471,10 +471,16 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_scan_preparation_status() -> dict:
-        """Read background progress, actual ETA and receipt; no download or scan. Readiness is separate from risk/coverage."""
-        from .background_preparation import current_preparation, preparation_message
-        value = current_preparation()
-        return value | {'message': preparation_message(value)}
+        """Read current component diagnoses, repair guidance and background progress; no download or scan.
+        component_health.notify reports new faults/recovery once across connections.
+        If notify=false, do not repeat prior alerts. Explicit status questions may
+        still describe current availability. receipt/current_readiness reflect
+        current checks; background_status/background_receipt are historical and
+        must not be described as an active stalled job. No pending scan is resumed.
+        Readiness is not project scan proof.
+        """
+        from .background_preparation import read_preparation_status
+        return read_preparation_status()
 
     guidance_tool = server._tool_manager.get_tool('get_professional_guidance')
     guidance_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
