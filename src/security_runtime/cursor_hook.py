@@ -104,7 +104,17 @@ def encode(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
 
 
-def coordinator(root):
+def coordinator(root, *, automatic=False):
+    if automatic:
+        from .workspace_services import workspace_services
+        from .cursor_connector import CursorConnectorInstallation
+        integration = CursorConnectorInstallation()
+        if integration.configuration_status()['overall'] != 'CONFIGURED' or any(
+                row['related'] for row in integration.inspect_project(root)):
+            raise ValueError('GLOBAL_CONFIGURATION_NOT_READY')
+        directory = workspace_state(root, SQLiteStore.default_path().parent / 'cursor-workspaces')
+        _, core, _ = workspace_services(root, directory)
+        return core
     from .hook_runtime import HookCoordinator
     from .runtime import SecurityRuntime
     from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter
@@ -121,7 +131,11 @@ def coordinator(root):
 
 
 def handle_cursor_event(payload, *, core=None, bindings=None, project_dir=None, remote=False, store=None, remediation=None,
-                        feedback=None):
+                        feedback=None, automatic=False):
+    if automatic:
+        from .cursor_automatic import handle_automatic_event
+        return handle_automatic_event(payload, core=core, bindings=bindings, project_dir=project_dir,
+                                      remote=remote, store=store)
     from .recent_hooks import Observation, CURRENT
     from .host_event_runtime import handle_normalized_event
     from .host_events import EventKind
@@ -210,7 +224,7 @@ def handle_cursor_event(payload, *, core=None, bindings=None, project_dir=None, 
         CURRENT.reset(token)
 
 
-def main():
+def main(*, automatic=False):
     # Cursor sends edits/output/transcript metadata; parse bounded input, never
     # persist them, and never open transcript_path or execute command text.
     raw = sys.stdin.buffer.read(1_000_001)
@@ -222,7 +236,7 @@ def main():
     except (ValueError, UnicodeError, RecursionError):
         payload = None
     output, _ = handle_cursor_event(payload, project_dir=os.getenv('CURSOR_PROJECT_DIR'),
-        remote=os.getenv('CURSOR_CODE_REMOTE') == 'true')
+        remote=os.getenv('CURSOR_CODE_REMOTE') == 'true', automatic=automatic)
     print(json.dumps(output, ensure_ascii=True))
     return 0  # Advisory post Hooks never block the Host or fabricate success.
 

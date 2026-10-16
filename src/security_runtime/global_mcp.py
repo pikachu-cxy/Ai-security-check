@@ -36,13 +36,20 @@ def global_runtime_info():
 
 
 class GlobalWorkspaces:
-    def __init__(self, *, base=None, integration=None, child_factory=None):
+    def __init__(self, *, base=None, integration=None, child_factory=None, host='codex'):
+        from .host_connectors import connector
+        self.connector = connector(host)
+        self.host = host
         from .storage import SQLiteStore
-        self.base = Path(base or SQLiteStore.default_path().parent / 'global-workspaces').absolute()
+        self.base = Path(base or SQLiteStore.default_path().parent / ('cursor-workspaces' if host == 'cursor' else 'global-workspaces')).absolute()
         no_links(self.base)
         if integration is None:
-            from .global_integration import GlobalCodexIntegration
-            integration = GlobalCodexIntegration(home=os.getenv('SECURITY_RUNTIME_CODEX_HOME'))
+            if host == 'cursor':
+                from .cursor_connector import CursorConnectorInstallation
+                integration = CursorConnectorInstallation()
+            else:
+                from .global_integration import GlobalCodexIntegration
+                integration = GlobalCodexIntegration(home=os.getenv('SECURITY_RUNTIME_CODEX_HOME'))
         self.integration = integration
         self.child_factory = child_factory or self._child
         self.children = {}
@@ -56,29 +63,10 @@ class GlobalWorkspaces:
     @staticmethod
     def _child(root, directory, binding):
         from .mcp_server import create_server
-        from .runtime import SecurityRuntime
-        from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
-        from .dynamic_function import NativeFunctionScanner
-        from .osv import OSVDependencyAdapter
-        from .toolchain import ToolManager
-        from .storage import SQLiteStore
-        from .hook_runtime import HookCoordinator
+        from .workspace_services import workspace_services
         from .remediation import RemediationService
         from .remediation_policy import RemediationConfig
-        manager = ToolManager()
-        registry = ScannerRegistry([SemgrepAdapter(manager), NativeFunctionScanner(), GitleaksAdapter(manager), TrivyAdapter(manager)],
-                                   tool_manager=manager, fallback_adapters=[OSVDependencyAdapter(manager)])
-        store = SQLiteStore(directory / 'scans.db')
-        # Explicit manual MCP operations retain the existing full registry.
-        # Hook dependency checks are selected only for changed dependency inputs
-        # and remain offline, without preparing tools/data or building targets.
-        runtime = SecurityRuntime(ScannerRegistry(tool_manager=manager), store)
-        hook_runtime = SecurityRuntime(registry, store)
-        is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git
-        core = HookCoordinator(hook_runtime, HookStateStore(directory / 'hooks'),
-                               workspace_resolver=lambda value: resolve_workspace(value),
-                               snapshot_capture=None if is_git else source_snapshot,
-                               seeds=_NoProjectSeed(), activity_wait_seconds=10)
+        runtime, core, is_git = workspace_services(root, directory)
         def remediation_factory(store, **kwargs):
             # User policy stays user-wide; grants/proofs/DB stay workspace-local.
             return RemediationService(store, config=RemediationConfig(), inline_agent_tickets=True, **kwargs)
@@ -110,7 +98,7 @@ class GlobalWorkspaces:
             no_links(directory)
             workspace = WorkspaceResolver().resolve(root, allow_non_git_source=True)
             binding = WorkspaceBinding(identity(os.path.normcase(str(root)))[:24], str(root),
-                                       str(root) if workspace.is_git else '', 'codex', 'PROJECT', '')
+                                       str(root) if workspace.is_git else '', self.host, 'PROJECT', '')
             self.children[root] = self.child_factory(root, directory, binding)
             return self.children[root]
 
@@ -249,20 +237,24 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(text))])
 
 
-def create_global_server(*, workspaces=None):
+def create_global_server(*, workspaces=None, host='codex'):
     from .mcp_server import create_server
     from mcp.types import CallToolResult, TextContent
     from jsonschema import Draft202012Validator
     # Obtain the original registry/instructions without creating a writable DB.
     server = create_server(global_mode=False)
-    pool = workspaces or GlobalWorkspaces()
+    pool = workspaces or GlobalWorkspaces(host=host)
+    active_host = getattr(pool, 'host', host)
     server.global_workspaces = pool
-    server._mcp_server.instructions += ('\nGlobal Codex integration: Hook workspace_path is an untrusted cwd claim. '
+    server._mcp_server.instructions += ('\nGlobal host integration: workspace_path is an untrusted claim. '
         'For every workspace tool supply the current workspace_path, even if only one workspace is admitted. '
         'Never infer a workspace from an opaque reference or use the last workspace. '
         'INITIALIZING/DEGRADED readiness is not a security proof; Core Hooks never request Deep Verification.')
     original_tools = server._tool_manager
-    infos = {t.name: t for t in original_tools.list_tools()}
+    infos = {t.name: t for t in original_tools.list_tools() if active_host != 'cursor' or t.name not in HOOKS}
+    if active_host == 'cursor':
+        from .host_connectors import CURSOR_INSTRUCTIONS
+        server._mcp_server.instructions += CURSOR_INSTRUCTIONS
 
     async def listed():
         from mcp.types import Tool
@@ -289,13 +281,14 @@ def create_global_server(*, workspaces=None):
             schemas = {t.name: t.inputSchema for t in await listed()}
         from .codex_host_claims import EVENTS
         claim_diag = (host_adapter.validate_claims(arguments, EVENTS[name], schemas[name])
-                      if name in HOOKS else None)
+                      if name in HOOKS and name in schemas else None)
         if (name not in schemas or not isinstance(arguments, dict)
                 or not Draft202012Validator(schemas[name]).is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
             info = global_runtime_info()
+            info['host_connector'] = active_host
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_professional_guidance':
             from .professional_guidance import get_professional_guidance
@@ -445,10 +438,14 @@ def create_global_server(*, workspaces=None):
             if not handler_entered and binding_stage in {'VALIDATING_CONFIGURATION', 'ADMITTING_WORKSPACE'}:
                 from .integration_recovery import CONFIGURATION_REASONS, configuration_recovery
                 if reason in CONFIGURATION_REASONS:
-                    try:
-                        recovery = configuration_recovery(pool.integration, claim or root, reason=reason)
-                    except (ValueError, OSError, TypeError, RecursionError):
-                        pass
+                    if active_host == 'cursor':
+                        recovery = dict(host='cursor', reason_code=reason,
+                            message='请查看 Cursor 全局连接状态并处理配置冲突；现有用户配置已保留。')
+                    else:
+                        try:
+                            recovery = configuration_recovery(pool.integration, claim or root, reason=reason)
+                        except (ValueError, OSError, TypeError, RecursionError):
+                            pass
             return _advisory(reason if reason in allowed else 'WORKSPACE_OR_REFERENCE_REJECTED', claims=claim_diag,
                              recovery=recovery)
 

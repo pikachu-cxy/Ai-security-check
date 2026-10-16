@@ -38,12 +38,15 @@ Codex Global Runtime Integration is **DESKTOP VERIFIED** on the observed path,
 including mutation reconciliation, `INLINE_PREPARED`, exact edit envelopes,
 real scanner proof, and the `CLOSED` result.
 
-Cursor production uses `sessionStart`, `afterFileEdit`,
-`afterShellExecution`, and `stop`. Detection Runtime, first-scan attribution,
-Finding/Policy, and advisory remediation are **DESKTOP VERIFIED**. Native Chat
-Feedback is `HOST_CAPABILITY_UNAVAILABLE_ON_OBSERVED_PATH`; Automatic
-Continuation is `PENDING_HOST_CAPABILITY`. The observed path does not rely on
-`postToolUse` or `additional_context` as a production feedback channel.
+Cursor retains the four-event detection-only compatibility mode. The local
+automatic beta adds user-level MCP, synchronous preToolUse task preparation,
+postToolUse task context and bounded stop fallback. Both hosts share
+workspace_services and task_hook_activity; connector-owned configuration and
+Cursor transport/task delivery stay outside the scanner and authorization Core.
+A Windows isolated installed-process check covers the new transport and task
+closeout. Earlier Cursor 3.22.12 Agents probes verified native edit/context and
+followup delivery; the new candidate still needs real model risk/repair acceptance.
+See [Cursor install and testing](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md).
 
 Generic MCP and CLI are supported interfaces. WorkBuddy has project MCP
 configuration and stdio/client regression coverage, but this is not proof of a

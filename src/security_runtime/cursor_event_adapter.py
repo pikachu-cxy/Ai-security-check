@@ -10,7 +10,7 @@ from .host_events import EventKind, HostCapabilities, NormalizedHostEvent, Opera
 
 EVENTS = {'sessionStart': EventKind.SESSION_START, 'afterFileEdit': EventKind.WORKSPACE_ACTIVITY,
           'afterShellExecution': EventKind.WORKSPACE_ACTIVITY, 'stop': EventKind.SESSION_STOP,
-          'postToolUse': None}  # Delivery only; never normalize into Core activity.
+          'preToolUse': None, 'postToolUse': None}  # Preparation/delivery, never Core activity.
 
 
 @dataclass(frozen=True)
@@ -65,6 +65,14 @@ class CursorHostEventAdapter:
         supports_shell_post_event=True, supports_tool_input=True, supports_stop=True,
         supports_global_install=True)
 
+    def __init__(self, *, automatic=False):
+        self.automatic = automatic
+        if automatic:
+            from dataclasses import replace
+            self.transport_capabilities = replace(self.transport_capabilities,
+                supports_user_visible_feedback=True, supports_agent_continuation=True,
+                supports_stop_followup=True, supports_post_edit_context=True)
+
     def validate_claims(self, arguments, expected, schema=None):
         args = arguments if isinstance(arguments, dict) else {}
         missing, invalid = [], []
@@ -100,18 +108,27 @@ class CursorHostEventAdapter:
                 invalid.append('status')
             if type(args.get('loop_count')) is not int or not 0 <= args['loop_count'] <= 100:
                 invalid.append('loop_count')
-        if expected == 'postToolUse':
+        if expected in {'preToolUse', 'postToolUse'}:
             fields = ('tool_name', 'tool_use_id')
             for field in fields:
+                # Live Cursor native writes also send non-string identifiers.
+                # This unused ID is observational only, never routing, dedup
+                # or authority. Session/generation/workspace stay strict.
+                if self.automatic and field == 'tool_use_id':
+                    continue
                 if not claim(args.get(field)):
                     (missing if field not in args else invalid).append(field)
-            if args.get('tool_name') != 'Write':
+            if not self.automatic and args.get('tool_name') != 'Write':
                 invalid.append('tool_name')
         return dict(host='cursor', host_claim_status='INVALID' if missing or invalid else 'VALID',
             missing_claims=sorted(set(missing)), invalid_claims=sorted(set(invalid)),
             event_schema='cursor-'+expected+'-v1' if expected in EVENTS else 'UNKNOWN',
             workspace_claim_match=None, session_claim_match=None,
-            turn_claim_present=claim(args.get('generation_id')), tool_use_claim_present=False,
+            turn_claim_present=claim(args.get('generation_id')),
+            tool_use_claim_present=claim(args.get('tool_use_id')) if self.automatic else False,
+            tool_use_id_state=('NOT_APPLICABLE' if expected not in {'preToolUse', 'postToolUse'} else
+                'MISSING' if 'tool_use_id' not in args else 'NULL' if args['tool_use_id'] is None else
+                'EMPTY' if args['tool_use_id'] == '' else 'VALID' if claim(args['tool_use_id']) else 'INVALID'),
             workspace_root_count=min(len(roots), 10000) if isinstance(roots, list) else None,
             workspace_roots_validation_reason='MISSING' if 'workspace_roots' not in args else
                 'INVALID_TYPE' if not isinstance(roots, list) else 'EMPTY_HOST_LIST' if not roots else
@@ -196,7 +213,7 @@ class CursorHostEventAdapter:
 
     def normalize(self, arguments, root, *, binding_diagnostics):
         event = arguments.get('hook_event_name')
-        if event == 'postToolUse':
+        if event in {'preToolUse', 'postToolUse'}:
             raise ValueError('DELIVERY_EVENT_NOT_CORE_ACTIVITY')
         diag = self.validate_claims(arguments, event)
         if (diag['host_claim_status'] != 'VALID' or binding_diagnostics.get('workspace_claim_match') is not True

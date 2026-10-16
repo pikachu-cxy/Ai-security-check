@@ -26,6 +26,13 @@ UNSAFE = UNSAFE.replace('-> true);', '-> true); // preserve fixture comment')
 from codex_hook_fixture import invocation_claims
 
 
+async def assert_personal_tool_contract(client):
+    exposed = {tool.name for tool in (await client.list_tools()).tools}
+    assert {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event',
+            'confirm_remediation', 'prepare_task_fix', 'verify_task_fix'} <= exposed
+    assert not {'prepare_functional_verification', 'run_functional_verification'} & exposed
+
+
 async def accept(command):
     started = time.monotonic()
     with tempfile.TemporaryDirectory(prefix='codex-product-') as temporary:
@@ -136,23 +143,11 @@ async def accept(command):
                     assert receipt['grant_id'] == decision['grant_id'] and not receipt['explicit_verification_required']
                     closed_stop = await call('handle_stop_event', {**stop_claims, 'stop_hook_active': True})
                     assert closed_stop['status'] == 'ALLOW_STOP' and 'decision' not in closed_stop
-                    functional = await call('prepare_functional_verification', original_refs)
-                    if functional.get('status') == 'FUNCTIONAL_VERIFICATION_READY':
-                        # This integration acceptance deliberately does not build
-                        # targets. New host plans are declined via their exact
-                        # report contract, so Runtime can clean its temp output.
-                        first = functional['plan']['steps'][0]
-                        functional = await call('run_functional_verification', {
-                            **functional['handoff']['arguments'],
-                            'execution_result': {
-                                'plan_digest': functional['plan']['plan_digest'],
-                                'network_access': 'DENIED', 'project_code_reviewed': False,
-                                'steps': [{'command_id': first['command_id'],
-                                           'execution_status': 'NOT_AVAILABLE',
-                                           'exit_code': None, 'duration_ms': 0}]}})
-                    assert functional['functional_verification']['status'] == 'NOT_AVAILABLE'
-                    assert functional['overall_status'] == 'SECURITY_VERIFIED_FUNCTION_UNKNOWN'
-                    assert not functional.get('functional_ref') and not functional.get('handoff')
+                    # Personal MCP hides Deep Verification. The real scanner's
+                    # closed receipt above remains the required security proof.
+                    await assert_personal_tool_contract(client)
+                    assert 'functional_verification_offer' not in closed['remediation']
+                    assert not {'prepare_functional_verification', 'run_functional_verification'} & set(called)
                     assert 'verify_task_fix' not in called
                     assert 'get_runtime_info' not in called
         status = cli(['integration', 'status', 'codex'])
@@ -203,8 +198,8 @@ async def accept(command):
                 'posttool_feedback': 'CONTINUE_FALSE_NON_REJECT_FEEDBACK',
                 'stop_continuation_invoked': True, 'stop_continuation_count': 1,
                 'prepare_task_fix_called': True, 'secure_edit_applied': 'SIMULATED_HOST_ONLY',
-                'explicit_verify_deduped': True, 'functional_prepare_called': True,
-                'functional': functional['functional_verification']['status'],
+                'explicit_verify_deduped': True, 'functional_prepare_called': False,
+                'functional': 'NOT_RUN_HIDDEN_PERSONAL_FEATURE', 'functional_tools_hidden': True,
                 'functional_run_called': 'run_functional_verification' in called,
                 'warmup_called': False, 'target_build': False, 'network': False, 'model': False,
                 'source_edit': 'SIMULATED_HOST_ONLY', 'ground_truth': 'NOT_PERFORMED',

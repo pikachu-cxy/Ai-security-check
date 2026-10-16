@@ -1,7 +1,7 @@
 # 宿主支持与下一阶段接入
 
 更新日期：2026-10-15。本页是宿主接入状态、代码依据和下一阶段验收的总入口。
-它记录现有实现与规划，不代表本轮已经安装、启动或验收任何新宿主。
+本轮增加了 Cursor 自动连接器和隔离独立进程验收，真实新版 Cursor 模型闭环仍待完成。
 当前原生包、真实桌面与发布候选结果仍以 [开发进度](DEVELOPMENT_PROGRESS.md)
 及对应验收记录为准；Codex 细节见 [Codex 接入](design/CODEX_INTEGRATION.md)。
 
@@ -14,7 +14,7 @@
 | 宿主／入口 | 本产品已有实现与证据 | 当前边界 | 下一验收目标 |
 | --- | --- | --- | --- |
 | Codex 桌面全局接入 | 已有观测路径的桌面验证：编辑事件、改动核对、真实扫描、授权修复、精确编辑范围、扫描证明与 `CLOSED` | 不扩展为任意版本、任意模型、所有平台通过；最新冻结包另验 | 保持现有闭环作为跨宿主回归基准，重新确认个人版不展示功能验证入口 |
-| Cursor 本地桌面 | 全局 command Hook、项目 MCP 配置与专用事件适配已实现；既有记录中检测、首扫归属、Finding/Policy、建议修复达到有限桌面验证 | 当前适配声明聊天风险反馈、自动续办为不可用／待验证；不默认启用 `postToolUse`，不以 `stop` 追加提示；远程、多根工作区不在当前支持范围 | 在明确版本的最新候选上重跑检测，再单独验证真实反馈和授权续办通道；未通过前保持现有限制 |
+| Cursor 本地桌面 | 自动测试版新增用户级 MCP/六种 Hook/公共 Skill、编辑前基线、任务上下文和有限续跑；独立进程安装及 MCP 收尾通过。前期 3.22.12 Agents 探针确认上下文与 followup 通道 | 旧仅检测模式仍兼容；新版候选尚未完成真实模型风险呈现及批准修复闭环；远程、多根未支持 | 按 [Cursor 安装与测试](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md) 对同一候选进行真实开发、风险选择、复查和第二模型验收 |
 | WorkBuddy 桌面 | 已有项目级 `.workbuddy/mcp.json` 管理、stdio MCP 自检和测试客户端调用回归 | 测试客户端不是 WorkBuddy 桌面；没有 WorkBuddy 标准化原生事件适配，不能宣称自动检查或修复续办已验收 | 先完成真实桌面 MCP 发现、人工发起检查、风险解释、明确批准修复及原扫描器复验；再研究原生事件 |
 | Qoder IDE／JetBrains／CLI／Qoder 桌面 | CLI 中接受 `qoder` 名称并提供中立手动 Hook 命令；没有已注册的 Qoder 原生事件适配或专用安装器 | 手动命令不等于宿主已接入；各入口分开验收，既有 Qoder 效果对照样本不等于本产品接入证据 | 首先选定一个入口与版本，建议从 Qoder IDE 的 MCP 和 command Hook 做探测，再实现独立适配 |
 | CodeBuddy Code／IDE／插件 | CLI 中接受 `codebuddy` 名称并提供中立手动 Hook 命令；没有已注册的 CodeBuddy 原生适配或专用安装器 | CodeBuddy Code、CodeBuddy IDE／插件与 WorkBuddy 分别记录，不能共用一个“已支持”标签 | 优先选择 CodeBuddy Code 的 MCP 与 command Hook 作为独立试点；IDE／插件后续另验 |
@@ -25,13 +25,11 @@
 - 注册的标准化事件适配只有 Codex 和 Cursor，未实现宿主返回空能力：
   [host_event_adapters.py](../src/security_runtime/host_event_adapters.py)、
   [host_events.py](../src/security_runtime/host_events.py)。
-- Cursor 的生产全局 Hook 由专用安装器管理，事件为 `sessionStart`、`afterFileEdit`、
-  `afterShellExecution`、`stop`；`postToolUse` 不默认安装。能力声明保留
-  `supports_user_visible_feedback=False`、`supports_agent_continuation=False`：
-  [cursor_integration.py](../src/security_runtime/cursor_integration.py)、
-  [cursor_event_adapter.py](../src/security_runtime/cursor_event_adapter.py)、
-  [cursor_hook.py](../src/security_runtime/cursor_hook.py)。`sessionStart` 的启动上下文不等于
-  编辑后风险已送达聊天。安装状态本身仍显示新一轮桌面试验待完成。
+- Cursor 旧仅检测入口保留四种事件和关闭聊天续办的能力声明。`install cursor` 使用独立自动模式，
+  增加 `preToolUse` 和 `postToolUse`，复用公共任务、检查与授权服务；
+  [安装连接器](../src/security_runtime/cursor_connector.py)、[自动事件](../src/security_runtime/cursor_automatic.py)、
+  [任务交接](../src/security_runtime/cursor_tasks.py)、[自动模式回归](../tests/test_cursor_automatic.py)。
+  安装状态仍明确标注本地测试版、真实桌面候选待验；启动上下文不作为风险送达证明。
 - Cursor 的 schema、工作区锚点、会话隔离、事件生命周期、旧配置清理与不虚构反馈有回归：
   [宿主适配](../tests/test_cursor_host_adapter.py)、
   [工作区锚点](../tests/test_cursor_workspace_anchor.py)、
@@ -53,7 +51,7 @@
 
 | 平台资料 | 官方说明的可用通道 | 对本产品下一步的含义 |
 | --- | --- | --- |
-| [Cursor Hooks](https://cursor.com/docs/hooks)、[Cursor MCP](https://docs.cursor.com/context/model-context-protocol) | MCP 与命令 Hook；不同事件有各自输入／输出，桌面与云端生命周期不同 | 研究当前版本新增或变更的反馈通道；不能因官方列出 `postToolUse` 就打开本产品当前关闭的续办能力 |
+| [Cursor Hooks](https://cursor.com/docs/hooks)、[Cursor MCP](https://docs.cursor.com/context/model-context-protocol) | MCP 与命令 Hook；不同事件有各自输入／输出，桌面与云端生命周期不同 | 结合前期实测接入上下文及有限结束续跑；官方字段、模拟客户端与真实模型验收分别记录 |
 | [Qoder IDE Hooks](https://docs.qoder.com/extensions/hooks)、[Qoder IDE MCP](https://docs.qoder.com/user-guide/chat/model-context-protocol) | IDE／JetBrains 有其 Hook 范围及 MCP；IDE 文档明确区分 CLI 等入口 | 优先固定 IDE 入口，按该入口 schema 做探测与适配，不从其他入口复制事件或返回字段 |
 | [Qoder CLI Hooks](https://docs.qoder.com/cli/hooks)、[Qoder Hooks](https://docs.qoder.com/qoder/hooks) | CLI 与 Qoder 桌面另有 Hook 文档；配置兼容不代表每个入口执行同一组事件 | CLI、IDE、Qoder 桌面分别建立能力记录；配置页可见不等于实际触发 |
 | [WorkBuddy MCP](https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/MCP-Guide) | 用户／项目 MCP 配置和界面管理 | 先验证现有项目 MCP 路径；不从同厂商 CodeBuddy 文档推导 WorkBuddy 原生 Hook 能力 |
@@ -61,7 +59,9 @@
 
 ## 共享接入架构
 
-继续复用现有 Core，不为每个宿主复制扫描、策略或修复引擎：
+连接层按宿主独立，公共服务与 Core 共用。当前新增 `host_connectors.py` 组合能力、
+`workspace_services.py` 工厂及 `task_hook_activity.py` 任务活动记录；Codex 旧入口保留兼容。
+Cursor 的配置、原始事件和输出字段留在各自连接器中，不复制扫描、策略或修复引擎：
 
 ```text
 宿主原始事件 → 宿主专用输入适配与工作区／会话核对
@@ -94,7 +94,7 @@ MCP 提供显式查询、检查与修复工具；原生 Hook 提供可证明的�
 
 接口调查和样例准备可并行；主交付顺序与近期计划一致。缺失能力按宿主降级，不用平台总标签掩盖未知。
 
-这份顺序不是已创建任务、交付日期或已完成标记。本次文档整理不新增宿主实现。
+开发工作已推进到 Cursor 自动测试版；表中的完整用户闭环和其他宿主仍按退出条件逐项验收。
 
 ## 每个宿主均需填写的验收表
 

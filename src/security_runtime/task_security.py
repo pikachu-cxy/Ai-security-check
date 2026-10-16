@@ -318,9 +318,14 @@ class TaskSecurityService:
             raise ValueError('Task is unavailable or expired; never infer a baseline after editing')
         return record
 
-    def begin(self, workspace, task_key):
+    def begin(self, workspace, task_key, *, _owner=None):
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
+        if _owner is not None and (not isinstance(_owner, dict)
+                or set(_owner) != {'host', 'session'} or _owner['host'] != 'cursor'
+                or not isinstance(_owner['session'], str) or len(_owner['session']) != 64
+                or any(c not in '0123456789abcdef' for c in _owner['session'])):
+            raise ValueError('Invalid connector owner')
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
             if not acquired:
@@ -346,6 +351,8 @@ class TaskSecurityService:
             record = dict(contract=CONTRACT, task_ref='ts1-'+uuid.uuid4().hex, task_key=identity(task_key),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=self.now(),
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT')
+            if _owner is not None:
+                record['connector_owner'] = _owner
             record = store.save(record, new=True)
             return self._view(record)
 

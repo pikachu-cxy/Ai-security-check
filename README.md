@@ -55,6 +55,16 @@ Apple Silicon 与 Intel 使用相同命令，下载包按上表选择。若系�
 
 Git 提交 Hook **默认关闭、常规帮助隐藏**；默认安装保留已有 Git Hook。
 
+## Cursor 接入测试版
+
+本分支源码新增 Cursor 全局 MCP、自动 Hook、公共 Skill 和常规检查工具免确认配置。
+已发布的 v0.3.4 安装包不因此自动包含这些新改动；请使用包含 Cursor 连接器的新构建。
+在完整候选包中运行 `security-check.exe install cursor`，再重启 Cursor。
+安装器只预批准本产品指定的检查和记录工具，保留原有权限设置，修复仍需明确同意。
+Cursor 运行模式、团队策略和模型额度仍独立适用。
+
+安装、升级及验收范围见 [Cursor 安装指南](docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
+
 ## 下载校验与详细操作
 
 <details>

@@ -58,7 +58,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                   hook_advisory_only=False, include_functional_verification=False):
     if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
         from .global_mcp import create_global_server
-        return create_global_server()
+        return create_global_server(host=os.getenv('SECURITY_RUNTIME_HOST', 'codex'))
     try:
         from mcp.server.fastmcp import FastMCP
         from mcp.server.fastmcp import server as fastmcp_server

@@ -109,7 +109,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     installation.update(scan_ready=ready, status='INSTALLED',
         engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
-            '请完全退出并重启 Codex，按提示审核 Hook 信任；无需逐项目安装。') if ready else
+            f"请完全退出并重启 {'Cursor' if data.get('integration') == 'cursor' else 'Codex'}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
             '已有配置和可用缓存会保留。'))
     if not requested_offline:
@@ -128,6 +128,9 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
         if not ready:
             installation['message'] += '本次为离线安装，未启动下载；联网后重新安装会自动准备。'
     data['overall'] = 'CONFIGURED' if ready else 'DEGRADED'
+    if data.get('integration') == 'cursor' and data.get('routine_tool_approval', {}).get('status') == 'CONFIGURED':
+        installation['message'] += ('常规检查的指定 MCP 工具已加入免确认白名单；'
+            '请重启 Cursor 或重新加载连接。Cursor 运行模式及团队策略仍适用，修复仍需明确同意。')
     data.setdefault('execution', {}).update(scanner_run=False, source_modified=False,
         component_preparation=False, network_allowed=False)
     # Permission to download is not evidence that a request actually occurred.
@@ -155,7 +158,7 @@ def _blocked(manager, reasons, *, status='PREFLIGHT_BLOCKED', recovery=None):
         message = '安装中断，本次配置和 Skill 改动已安全撤回；现有用户内容保留。请处理诊断后重试。'
     elif status == 'RECOVERY_REQUIRED':
         message = '安装中断，检测到不能安全自动撤回的状态。请先使用产品恢复入口，不要手动删除配置或 Skill。'
-    return {'integration':'codex', 'scope':'GLOBAL', 'overall':'BROKEN',
+    return {'integration':getattr(manager, 'host', 'codex'), 'scope':'GLOBAL', 'overall':'BROKEN',
         'diagnostics':sorted(set(reasons)), 'skill':skill,
         'installation':{'contract':CONTRACT, 'status':status, 'local_files_ready':False, 'scan_ready':False,
             'message':message, 'risk_fix_authorized':False,
@@ -226,13 +229,21 @@ def _default_delivery_root():
 
 
 @verified_operation
-def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False):
+def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False, _host='codex'):
     """Install/check caches, then start detached preparation without waiting for it."""
     offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
     from .delivery import StableDelivery, stable_command, package_metadata
-    integration = GlobalCodexIntegration(allow_dev=allow_dev)
+    if _host == 'cursor':
+        from .cursor_connector import CursorConnectorInstallation, CursorInstallPreflight, setup_personal_cursor
+        integration = CursorConnectorInstallation(allow_dev=allow_dev)
+        setup = setup_personal_cursor
+    elif _host == 'codex':
+        integration = GlobalCodexIntegration(allow_dev=allow_dev)
+        setup = setup_personal_codex
+    else:
+        raise ValueError('UNSUPPORTED_HOST_CONNECTOR')
     frozen = bool(getattr(sys, 'frozen', False))
     stable = stable_command() if frozen else None
     if update is not None:
@@ -242,14 +253,14 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         delivery_root = Path(root) if root is not None else Path(stable).parents[1] if stable else _default_delivery_root()
         with materialized_update(StableDelivery(delivery_root), update, progress=progress) as supplied:
             result = install_personal_codex(bundle=supplied, root=delivery_root,
-                workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline)
+                workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline, _host=_host)
             result['downloads'] = {'product': 'LOCAL_DELTA', 'product_network_download': False,
                 'engines': 'AUTOMATIC_BACKGROUND', 'skill_and_rules': 'BUNDLED'}
             return result
     if bundle is None and (not frozen or stable is not None):
         if root is not None and (stable is None or Path(root).absolute() != Path(stable).parents[1]):
             raise IntegrationDiagnostic('INSTALL_ROOT_REQUIRES_PORTABLE_BUNDLE')
-        data = setup_personal_codex(integration, workspace, progress=progress)
+        data = setup(integration, workspace, progress=progress)
         data = _complete_preparation(data, offline=offline, progress=progress)
         data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
             'engines':'AUTOMATIC_BACKGROUND', 'skill_and_rules':'BUNDLED'}
@@ -263,7 +274,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     report_progress(progress, 'PACKAGE_VERIFY')
     package_metadata(supplied)
     report_progress(progress, 'CHECK_CONFIG')
-    manager = InstallationUpgrade(integration, ReviewSkillManager())
+    manager = (CursorInstallPreflight(integration) if _host == 'cursor'
+               else InstallationUpgrade(integration, ReviewSkillManager()))
     if workspace is not None:
         integration.inspect_project(workspace)
     plan = manager.plan(workspace)
@@ -277,7 +289,9 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     # Activation verified this exact slot. Invoke it directly, avoiding an
     # unnecessary launcher hop; discover() still writes the stable command.
     installed_executable = delivery.slot(activated['active_build']) / ('security-check.exe' if os.name == 'nt' else 'security-check')
-    argv = [str(installed_executable), 'setup', 'codex', '--json']
+    argv = [str(installed_executable), 'setup', _host, '--json']
+    if _host == 'cursor':
+        argv += ['--scope', 'global']
     if workspace is not None:
         argv += ['--path', str(workspace)]
     # Execute only the just-validated fixed launcher, never a config-supplied command.
