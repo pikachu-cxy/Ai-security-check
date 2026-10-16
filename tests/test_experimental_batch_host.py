@@ -291,3 +291,115 @@ def test_batch_schema_explains_exact_evidence_ids_without_changing_other_short_f
         assert "identifier" in fields[key]["description"]
     assert fields["evidence_refs"]["items"]["pattern"] == fields["task_evidence"]["pattern"]
     assert "pattern" not in fields["title"] and "pattern" not in fields["category"]
+
+
+def test_close_releases_lock_and_waits_for_cancellation_cleanup_and_usage(sample):
+    root, ref, _, _, _, host = sample
+    started, cleaned = threading.Event(), threading.Event()
+
+    def cancellable(**kwargs):
+        started.set()
+        assert kwargs["cancel_event"].wait(3)
+        # This acquires the same controller lock as close(). A join while
+        # holding that lock would prevent cleanup and lose this real receipt.
+        host.status(root, ref)
+        cleaned.set()
+        return dict(status="CANCELLED", model_observed=True, usage_complete=False,
+                    usage_accounting_may_be_incomplete=True,
+                    usage=dict(input_tokens=17, output_tokens=3))
+
+    host.backend = cancellable
+    checkpoint(sample)
+    assert started.wait(2)
+    thread = host._states[ref].active.thread
+    host.close()
+    assert cleaned.is_set() and not thread.is_alive()
+    value = host.status(root, ref)
+    assert not value["running"]
+    assert value["reviews"][0]["usage"] == dict(input_tokens=17, output_tokens=3)
+    assert value["reviews"][0]["usage_accounting_may_be_incomplete"] is True
+    assert not value["reviews"][0]["submission_accepted"]
+    saved = json.loads((host.directory / ref / "status.json").read_text(encoding="utf-8"))
+    assert saved["reviews"][0]["usage"]["input_tokens"] == 17
+
+
+def test_close_deadline_preserves_unknown_usage_for_unfinished_worker(sample, monkeypatch):
+    root, ref, _, _, _, host = sample
+    started, release = threading.Event(), threading.Event()
+
+    def blocked_gate(**kwargs):
+        started.set()
+        assert release.wait(4)
+        assert kwargs["cancel_event"].is_set()
+        return dict(status="CANCELLED", model_observed=False, usage=None,
+                    usage_complete=False, actual_model_calls=0)
+
+    host.backend = blocked_gate
+    monkeypatch.setattr(host, "_CLOSE_JOIN_TIMEOUT_S", .03)
+    checkpoint(sample)
+    assert started.wait(2)
+    thread = host._states[ref].active.thread
+    try:
+        started_close = time.monotonic()
+        host.close()
+        assert time.monotonic() - started_close < 1
+        assert thread.is_alive()
+        saved = json.loads((host.directory / ref / "status.json").read_text(encoding="utf-8"))
+        row = saved["reviews"][0]
+        assert row["status"] == "INTERRUPTED_ON_CLOSE"
+        assert row["usage"] is None and row["usage_complete"] is False
+        assert row["usage_accounting_may_be_incomplete"] is True
+    finally:
+        release.set()
+        thread.join(timeout=2)
+    assert not thread.is_alive()
+
+
+def test_close_uses_one_deadline_for_all_workers(sample, monkeypatch):
+    _, ref, _, _, _, host = sample
+    module = importlib.import_module("experimental_batch_host")
+    now, joins = [100.0], []
+    monkeypatch.setattr(module.time, "monotonic", lambda: now[0])
+
+    class UnfinishedThread:
+        def __init__(self, name):
+            self.name = name
+
+        def join(self, timeout):
+            joins.append((self.name, timeout))
+            now[0] += timeout
+
+        def is_alive(self):
+            return True
+
+    refs = (ref, "ts1-" + "e" * 32)
+    for i, task_ref in enumerate(refs):
+        state = host._state(task_ref)
+        row = dict(batch_ref="tb1-" + str(i) * 32, status="RUNNING", usage=None)
+        job = module._Job({}, row)
+        job.thread = UnfinishedThread(str(i))
+        state.rows.append(row)
+        state.active = job
+    host.close()
+    assert joins == [("0", 6.0)]
+    assert now[0] == 106.0
+    for task_ref in refs:
+        row = host._states[task_ref].rows[0]
+        assert row["status"] == "INTERRUPTED_ON_CLOSE"
+        assert row["usage"] is None and not row["usage_complete"]
+
+
+def test_close_never_joins_its_current_thread(sample, monkeypatch):
+    _, ref, _, _, _, host = sample
+    module = importlib.import_module("experimental_batch_host")
+    current = threading.current_thread()
+    monkeypatch.setattr(current, "join", lambda *a, **k: pytest.fail("Cannot join current thread"))
+    state = host._state(ref)
+    row = dict(batch_ref="tb1-" + "d" * 32, status="RUNNING", usage=None)
+    job = module._Job({}, row)
+    job.thread = current
+    state.rows.append(row)
+    state.active = job
+    host.close()
+    assert job.cancel.is_set()
+    assert row["status"] == "INTERRUPTED_ON_CLOSE"

@@ -67,6 +67,11 @@ class _TaskState:
 
 
 class ExperimentalBatchHost:
+    """Run bounded model turns behind a process-local isolation gate.
+
+    ``review_timeout_s`` limits the live model turn, not the whole background
+    job: an uncached cold isolation probe runs before that turn and adds time.
+    """
     def __init__(self, task_service, batch_service, root, state_dir, codex=None,
                  max_reviews_per_task=2, review_timeout_s=180,
                  drain_timeout_s=60, backend=None):
@@ -352,13 +357,42 @@ class ExperimentalBatchHost:
             else:
                 time.sleep(min(.025, max(0, deadline - time.monotonic())))
 
+    _CLOSE_JOIN_TIMEOUT_S = 6.0
+
     def close(self):
+        """Cancel and give all workers one shared, bounded cleanup interval.
+
+        Native cancellation/termination and final usage receipts run in the
+        worker's ``finally`` block. Joining outside the lock lets that block
+        finish before the launcher's main thread exits. An unfinished cold
+        gate may outlive the interval; cancellation still prevents it starting
+        a model afterward, and its usage must remain explicitly incomplete.
+        """
+        deadline = time.monotonic() + self._CLOSE_JOIN_TIMEOUT_S
+        jobs = []
         with self._lock:
             self._closed = True
             for ref, state in self._states.items():
                 state.dispatch_closed = state.final_closed = True
                 state.pending_key = None
                 if state.active:
-                    state.active.cancel.set()
-                    state.active.row["status"] = "CANCEL_REQUESTED_ON_CLOSE"
+                    job = state.active
+                    job.cancel.set()
+                    job.row["status"] = "CANCEL_REQUESTED_ON_CLOSE"
+                    jobs.append((ref, state, job))
+                self._persist(ref, state)
+        current = threading.current_thread()
+        for _ref, _state, job in jobs:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if job.thread is not None and job.thread is not current:
+                job.thread.join(timeout=remaining)
+        with self._lock:
+            for ref, state, job in jobs:
+                if job.thread is not None and job.thread.is_alive():
+                    job.row.update(status="INTERRUPTED_ON_CLOSE", usage_complete=False,
+                                   usage_accounting_may_be_incomplete=True)
+                    # Preserve actual partial usage, or None when no usage
+                    # arrived. A cleanup deadline never invents zero tokens.
                 self._persist(ref, state)
