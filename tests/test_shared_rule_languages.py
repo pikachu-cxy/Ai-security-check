@@ -51,7 +51,7 @@ def test_rule_release_preserves_versions_of_unchanged_rules():
     pack = RulePackManager().resolve()
     rule = yaml.safe_load((pack.path/'java/trust-all-hostname.yml').read_text(encoding='utf-8'))['rules'][0]
     assert rule['metadata']['rule_version'] == '1.1.0'
-    assert pack.descriptor.version == '1.3.0'
+    assert pack.descriptor.version == '1.3.1'
     validate_rule(rule, pack.descriptor)
     for version in ('', 'latest', '1.2', '1.2.3-extra', 123, '1234567.1.0'):
         rule['metadata']['rule_version'] = version

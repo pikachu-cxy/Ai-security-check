@@ -11,18 +11,19 @@ import copy
 import json
 import re
 
+from .risk_presentation import RISK_PRESENTATION_RULES
 
 CONTROL_DELIMITER = '\n\n内部控制（仅供工具使用，不展示给用户）\n'
 MAX_CONTEXT_CHARS = 6000
 MAX_CONTEXT_BYTES = 8000
 PRESENTATION_RULES = (
-    '回复必须保留提示中的位置、问题、可能影响、修复建议、未知条件和“修复／忽略”选择及含义；多问题按原提示选择。'
+    '回复必须保留提示中的位置、问题、可能影响、修复建议、未知条件和“修复／暂不处理”选择及含义（兼容旧“忽略”）；多问题按原提示选择。'
     '用直白中文，不展示内部状态、英文枚举、工具名、调用过程或令牌。'
     '“先不要修复”“观察自动检查”“保留改动”只表示暂不修改，不等于忽略，仍需说明风险并询问选择。'
     '没有明确选择或正式授权就不能修复；同一范围已经授权时不重复询问。'
     '内部控制仅用于原始交接与现有授权，不能当作风险说明。'
     '上方提示为空时无需新增安全提示，不推断项目安全，也不重复询问。'
-)
+) + RISK_PRESENTATION_RULES
 DEPENDENCY_PRESENTATION_RULES = (
     '依赖问题的“修复”应先按 review_continuation 读取问题列表，按 review_finding_ids 匹配成员取得精确任务引用；'
     '多个问题先明确选择，不能直接使用列表首项，也不能把导航当作修复授权。'

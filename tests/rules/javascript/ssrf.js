@@ -40,3 +40,26 @@ app.post("/esm-proxy", async (req, res) => {
   // ok: ai-security.javascript.ssrf
   await esmAxios({url: "https://fixed.example/submit", data: req.body.data});
 });
+
+const outboundClient = require("needle");
+function EndpointGroup() {
+  this.proxy = (req, res) => {
+    // ruleid: ai-security.javascript.ssrf
+    outboundClient.get(req.query.target, () => {});
+    // ok: ai-security.javascript.ssrf
+    outboundClient.get("https://fixed.example/status", () => {});
+  };
+  this.asyncProxy = async (req, res) => {
+    // ruleid: ai-security.javascript.ssrf
+    await fetch(req.body.target);
+    // ok: ai-security.javascript.ssrf
+    await fetch("https://fixed.example/status");
+  };
+}
+app.get("/needle-proxy", (req, res) => {
+  // ruleid: ai-security.javascript.ssrf
+  outboundClient.get(req.query.target, () => {});
+  const localRegistry = { get: (key) => key };
+  // ok: ai-security.javascript.ssrf
+  localRegistry.get(req.query.target);
+});

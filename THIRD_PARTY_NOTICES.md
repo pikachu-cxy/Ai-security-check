@@ -13,7 +13,8 @@ This Runtime installs or invokes the independently licensed scanner engines belo
 
 | Component | Version | Copyright | License | Source | Attribution |
 | --- | --- | --- | --- | --- | --- |
-| AI Security Runtime Core Rules (`ai-security-core`) | 1.3.0 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
+| AI Security Runtime Core Rules (`ai-security-core`) | 1.3.1 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
+| Bounded Java/Python dataflow (`ai-security-bounded-dataflow`) | 1.2.0 | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; SQL, resolved cross-file Python paths and exact io/codecs stream opens by default; other intrafile paths/command candidates experimental |
 
 The bundled rule pack is independently authored. Semgrep Community Rules and Semgrep Registry Rules are not bundled or fetched by default. User-provided rules remain under the user's own license and are never copied into the managed tool directory.
 
@@ -26,4 +27,6 @@ Other Python dependency license terms are distributed with their respective inst
 | PyInstaller bootloader | 6.22.3 | PyInstaller Development Team | GPL-2.0-or-later WITH Bootloader-exception | https://pyinstaller.org | Bootloader exception permits distribution; retain this notice |
 | MCP Python SDK | 1.29.0 | MCP contributors | MIT | https://github.com/modelcontextprotocol/python-sdk | Runtime dependency |
 | PyYAML | 6.0.3 | PyYAML contributors | MIT | https://pyyaml.org | Runtime dependency |
+| javalang | 0.13.0 | Copyright (c) 2013 Christopher Thunes | MIT | https://github.com/c2nes/javalang | Java 8 parser; original LICENSE retained |
+| six | 1.17.0 | Copyright (c) 2010-2024 Benjamin Peterson | MIT | https://github.com/benjaminp/six | Parser dependency; original LICENSE retained |
 | Managed CPython | 3.12.12 / 20260211 | Python Software Foundation and distribution contributors | Python-2.0 and included component licenses | https://github.com/astral-sh/python-build-standalone | Separate checksum-pinned download on first Semgrep preparation; preserve upstream license inventory; not bundled |

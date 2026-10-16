@@ -57,6 +57,75 @@ def test_signed_dev_enrollment_verified_without_new_dev_install(dev_enrollment):
     assert before=={p:p.read_bytes() for p in files}
 
 
+def test_dev_source_edits_keep_signed_connection_without_repair(dev_enrollment, monkeypatch):
+    adapter = dev_enrollment
+    files = (adapter.home/'config.toml', adapter.home/'hooks.json',
+             adapter._state_path(adapter.home, 'ownership.json'))
+    before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
+    assert not adapter.allow_dev
+    for digest in ('a'*64, 'b'*64):
+        monkeypatch.setattr('security_runtime.build_identity.build_identity',
+                            lambda digest=digest: {'status': 'DEV', 'build_id': digest})
+        status = adapter.configuration_status()
+        assert status['overall'] == 'CONFIGURED'
+        assert status['mcp']['ownership_state'] == 'OWNED_AND_CURRENT'
+        assert 'RUNTIME_STALE' not in status['diagnostics']
+    assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in files}
+    for action in ('setup', 'repair'):
+        with pytest.raises(IntegrationDiagnostic, match='INSTALLED_RUNTIME_REQUIRED'):
+            adapter.execute(action)
+
+
+@pytest.mark.parametrize('status', ['DEV_IDENTITY_UNAVAILABLE', 'IDENTIFIED', 'UNVERIFIABLE_LEGACY_BUNDLE'])
+def test_dev_enrollment_does_not_exempt_other_build_kinds(dev_enrollment, monkeypatch, status):
+    monkeypatch.setattr('security_runtime.build_identity.build_identity',
+                        lambda: {'status': status, 'build_id': 'c'*64})
+    result = dev_enrollment.configuration_status()
+    assert result['overall'] == 'DEGRADED' and 'RUNTIME_STALE' in result['diagnostics']
+
+
+@pytest.mark.parametrize('status', ['DEV', 'IDENTIFIED'])
+def test_non_dev_delivery_still_requires_matching_build(installed, monkeypatch, status):
+    installed.execute('setup')
+    monkeypatch.setattr('security_runtime.build_identity.build_identity',
+                        lambda: {'status': status, 'build_id': 'd'*64})
+    result = installed.configuration_status()
+    assert result['overall'] == 'DEGRADED' and 'RUNTIME_STALE' in result['diagnostics']
+
+
+@pytest.mark.parametrize('change', ['command', 'prefix', 'version', 'contract', 'signature', 'hook'])
+def test_dev_source_drift_never_bypasses_connection_guards(dev_enrollment, monkeypatch, change):
+    adapter = dev_enrollment
+    monkeypatch.setattr('security_runtime.build_identity.build_identity',
+                        lambda: {'status': 'DEV', 'build_id': 'e'*64})
+    if change in {'command', 'prefix'}:
+        runtime = adapter.discover()
+        different = (runtime['command']+'-different' if change == 'command' else
+                     [*runtime['prefix'], '--different-contract'])
+        adapter.discover = lambda: {**runtime, change: different}
+    elif change in {'version', 'contract'}:
+        manifest = adapter._manifest(adapter.home)
+        manifest['runtime_version' if change == 'version' else 'capability_contract'] = 'different'
+        adapter._save(adapter.home, manifest)
+    elif change == 'signature':
+        path = adapter._state_path(adapter.home, 'ownership.json')
+        manifest = json.loads(path.read_bytes())
+        manifest['signature'] = '0'*64
+        path.write_text(json.dumps(manifest))
+    else:
+        path = adapter.home/'hooks.json'
+        hooks = json.loads(path.read_bytes())
+        hooks['hooks']['PostToolUse'] = []
+        path.write_text(json.dumps(hooks))
+    if change == 'signature':
+        with pytest.raises(IntegrationDiagnostic, match='OWNERSHIP_INVALID'):
+            adapter.configuration_status()
+    else:
+        result = adapter.configuration_status()
+        assert result['overall'] == 'DEGRADED'
+        assert ('HOOK_MISSING' if change == 'hook' else 'RUNTIME_STALE') in result['diagnostics']
+
+
 def test_unowned_dev_configuration_cannot_self_enroll(installed):
     installed.discover=lambda:{'command':'python','prefix':[],'kind':'DEV'}
     installed.home.mkdir()

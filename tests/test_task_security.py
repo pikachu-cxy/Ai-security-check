@@ -402,9 +402,11 @@ def test_task_summary_has_one_selected_risk_choice_and_bounded_risk_list(service
     findings = [dict(candidate(sink['evidence_id'], control['evidence_id']), title=f'风险 {i}') for i in range(4)]
     result = s.submit(root, ref, session, findings, 'REVIEWED', [])
     summary = result['development_summary']
-    assert summary.count('请选择具体风险') == 1 and '**修复** ／ **暂不处理**' in summary
-    assert summary.count('上下文核查线索：') == 3 and '另有 1 项' in summary
-    assert '反证：' in summary and '未确认：' in summary and '条件：' in summary
+    assert summary.count('请选择具体风险') == 1 and '再回复「修复」或「暂不处理」' in summary
+    assert summary.count('上下文核查线索') == 3 and '另有 1 项' in summary
+    assert summary.count('**问题**') == 3 and summary.count('**检查范围**') == 1
+    assert '**1. 风险 0**' in summary and '**3. 风险 2**' in summary
+    assert '反证：' in summary and '**尚未确认**' in summary and '触发条件：' in summary
     assert len(result['host_review']['findings']) == 4 and result['repair_authorized'] is False
 
 
@@ -425,7 +427,8 @@ def test_retained_hook_scope_is_rechecked_at_current_version_outside_net_task_di
     s.read(root, ref, packet['review_session'], 'routes.py', 1, 2)
     s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
     complete = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
-    assert 'auth.py:1' in complete['development_summary'] and '请选择具体风险' in complete['development_summary']
+    assert 'auth.py:1' in complete['development_summary']
+    assert '**回复「修复」或「暂不处理」即可。**' in complete['development_summary']
     assert complete['static']['finding_count'] == 1 and complete['repair_authorized'] is False
 
 

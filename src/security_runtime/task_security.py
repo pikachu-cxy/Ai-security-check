@@ -31,14 +31,46 @@ MAX_INVENTORY_PATHS = 20_000
 MAX_INVENTORY_NAME_BYTES = 256_000
 MAX_RELATED = 10
 
-RISK_CHOICE_PROMPT = ('请选择具体风险后回复：**修复** ／ **暂不处理**。\n\n'
-                      '暂不处理仅表示本次不修复，风险记录保留；未授权的风险不会自动修改。')
+def _risk_choice_prompt(total):
+    choice = ('**回复「修复」或「暂不处理」即可。**' if total == 1 else
+              '**请选择具体风险，再回复「修复」或「暂不处理」。**')
+    return choice + '\n\n暂不处理仅表示本次不修复，风险记录保留；选择前不会修改代码。'
 
 
-def _risk_heading(total, related=0):
+def _risk_heading(total, related=0, title=None):
     label = '关联风险' if related == total else '安全风险'
     detail = f'（其中 {related} 项关联风险）' if 0 < related < total else ''
-    return f'**有 {total} 项{label}需要你决定{detail}。**'
+    subject = f'：{title}' if total == 1 and title else ''
+    return f'**发现 {total} 项{label}{detail}{subject}**'
+
+
+def _risk_details(f, *, context=False, number=None):
+    """Format existing risk facts without changing findings or repair choices."""
+    title = f.get('plain_title') or f['title']
+    parts = [f'**{number}. {title}**'] if number is not None else []
+    source = '上下文核查线索' if context else '静态检查提示'
+    parts.append(f"📍 `{f['file_path']}:{f['line_start']}` · {source}")
+    if f.get('location_version') == 'BEFORE_DELETION':
+        parts.append('位置对应删除前的代码。')
+    parts.extend(['**问题**\n'+title, '**可能影响**\n'+f['impact']])
+    if context:
+        scope = ('关联代码中的现有条件性风险，不等于新增入口仍有漏洞。'
+                 if f.get('risk_scope') == 'RELATED_EXISTING' else '本次改动相关路径。')
+        parts.append('风险范围：'+scope)
+        locations = f.get('evidence_locations', [])
+        if locations:
+            parts.append('代码依据：'+' → '.join(
+                f"{v['path']}:{v['start_line']}-{v['end_line']}" for v in locations))
+        parts.append('触发条件：'+('；'.join(f['preconditions']) or '实际可达性未确认'))
+        parts.append('当前防护：'+('；'.join(f.get('current_protections', f['counterevidence']))
+                                or '未观察到相关防护；不代表不存在'))
+        parts.append('反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的反证'))
+    parts.append('**建议修复**\n'+f['fix_advice'])
+    unknowns = ('；'.join(f['unknowns']) or '尚未运行验证') if context else '实际运行条件尚未确认。'
+    parts.append('**尚未确认**\n'+unknowns)
+    return '\n\n'.join(parts)
+
+
 MAX_CONTEXT = 64_000
 MAX_DIFF_LINES = 2000
 MAX_CONTEXT_READS = 40
@@ -913,13 +945,15 @@ class TaskSecurityService:
         elif phase == 'INCOMPLETE':
             result['development_summary'] = '本次任务安全核查未完成：'+record.get('skip_reason', '上下文核查会话已过期。')+' 已有检查记录保留，不认定风险已消除。'
             pending = record.get('static', {}).get('findings', [])
-            for f in pending[:3]:
-                result['development_summary'] += f"\n- 已有静态提示：{f['file_path']}:{f['line_start']}，{f.get('plain_title') or f['title']}。可能影响：{f['impact']} 建议：{f['fix_advice']} 实际运行条件尚未确认。"
-            if len(pending)>3:
-                result['development_summary'] += f'\n另有 {len(pending)-3} 项静态提示保留在本次核查记录中。'
             if pending:
-                result['development_summary'] = (_risk_heading(len(pending))+'\n\n'
-                    +result['development_summary']+'\n\n'+RISK_CHOICE_PROMPT)
+                title = pending[0].get('plain_title') or pending[0]['title']
+                parts = [_risk_heading(len(pending), title=title)]
+                parts.extend(_risk_details(f, number=i if len(pending)>1 else None)
+                             for i, f in enumerate(pending[:3], 1))
+                if len(pending)>3:
+                    parts.append(f'另有 {len(pending)-3} 项静态提示保留在本次核查记录中。')
+                parts.extend(['**检查范围**\n'+result['development_summary'], _risk_choice_prompt(len(pending))])
+                result['development_summary'] = '\n\n'.join(parts)
         elif phase == 'COMPLETE':
             static = record['static']
             review = record['review']
@@ -930,41 +964,29 @@ class TaskSecurityService:
             if record.get('hook_final_recheck_files'):
                 prefix += f"（包含文件修改检查保留的 {len(record['hook_final_recheck_files'])} 个当前文件）"
             if total:
-                prefix += f'，保留 {total} 项待核实风险。'
+                prefix += '。'
             elif not complete_static:
                 prefix += '，静态检查未完成或覆盖有限，当前风险尚待核实。'
             elif review['coverage'] == 'PARTIAL' or record['limitations']:
                 prefix += '，上下文核查覆盖有限，当前风险尚待核实。'
             else:
                 prefix += '，本次未发现安全线索。'
-            lines = [prefix]
-            if total:
-                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in review['findings'])
-                lines = [_risk_heading(total, related), '', prefix, '']
             # Aggregate final findings once with a bounded default summary;
             # full records stay accessible and candidates retain uncertainty.
             combined = [(f, '静态检查提示') for f in static['findings']] + [(f, '上下文核查线索') for f in review['findings']]
             order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}
             combined.sort(key=lambda v: order.get(v[0]['severity'], 4))
-            for f, source in combined[:3]:
-                title = f.get('plain_title') or f['title']
-                text = f"- {source}：{f['file_path']}:{f['line_start']}，{title}。可能影响：{f['impact']} 建议：{f['fix_advice']}"
-                if f.get('location_version') == 'BEFORE_DELETION':
-                    text += ' 位置对应删除前的代码。'
-                if source == '上下文核查线索':
-                    text += ' 风险范围：'+('关联代码中的现有条件性风险，不等于新增入口仍有漏洞。' if f.get('risk_scope') == 'RELATED_EXISTING' else '本次改动相关路径。')
-                    locations = f.get('evidence_locations', [])
-                    if locations:
-                        text += ' 代码依据：'+' → '.join(f"{v['path']}:{v['start_line']}-{v['end_line']}" for v in locations)
-                    text += ' 条件：'+('；'.join(f['preconditions']) or '实际可达性未确认')
-                    text += ' 未确认：'+('；'.join(f['unknowns']) or '尚未运行验证')
-                    text += ' 当前防护：'+('；'.join(f.get('current_protections', f['counterevidence'])) or '未观察到相关防护；不代表不存在')
-                    text += ' 反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的反证')
-                else:
-                    text += ' 实际运行条件尚未确认。'
-                lines.append(text)
+            lines = []
+            if total:
+                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in review['findings'])
+                first = combined[0][0]
+                lines.append(_risk_heading(total, related, first.get('plain_title') or first['title']))
+            for i, (f, source) in enumerate(combined[:3], 1):
+                lines.append(_risk_details(f, context=source == '上下文核查线索',
+                                           number=i if total>1 else None))
             if total > 3:
                 lines.append(f'另有 {total-3} 项已保留在本次核查记录中。')
+            lines.append('**检查范围**\n'+prefix if total else prefix)
             if not complete_static and record.get('hook_final_recheck_files'):
                 names = record['hook_final_recheck_files']
                 lines.append('文件修改检查保留范围的当前风险尚待核实：'+ '、'.join(names[:5])+
@@ -974,8 +996,8 @@ class TaskSecurityService:
                 lines.append('覆盖有限：'+('；'.join(review['limitations'][:5]) or '静态能力或任务上下文有未完成范围。'))
             lines.append('仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为；风险尚未修复。' if total else '仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为。')
             if total:
-                lines.extend(['', RISK_CHOICE_PROMPT])
-            result['development_summary'] = '\n'.join(lines)
+                lines.append(_risk_choice_prompt(total))
+            result['development_summary'] = ('\n\n' if total else '\n').join(lines)
         else:
             result['development_summary'] = ''
         return result

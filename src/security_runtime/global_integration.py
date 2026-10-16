@@ -138,7 +138,17 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                 or manifest.get('capability_contract', CONTRACT) != CONTRACT):
             diagnostics.append('RUNTIME_STALE')
         from .build_identity import build_identity
-        if manifest.get('build_id') != build_identity().get('build_id') and 'RUNTIME_STALE' not in diagnostics:
+        build = build_identity()
+        # A previously enrolled source checkout changes identity on every edit.
+        # Keep the signed server/path, version, contract and Hook checks; only
+        # source-content drift is expected in this explicit development mode.
+        # Frozen deliveries and unverifiable identities still require an exact
+        # build match. Reading status never grants a new development install.
+        development_source = (self.discover().get('kind') == 'DEV'
+            and build.get('status') == 'DEV' and manifest.get('phase') == 'COMMITTED'
+            and current == server)
+        if (not development_source and manifest.get('build_id') != build.get('build_id')
+                and 'RUNTIME_STALE' not in diagnostics):
             diagnostics.append('RUNTIME_STALE')
         if manifest['managed_version'] != OWNERSHIP_VERSION:
             diagnostics.append('MANAGED_FORMAT_UPGRADE_REQUIRED')

@@ -702,12 +702,13 @@ class ScannerRegistry:
         self.tool_manager = tool_manager or ToolManager()
         from .osv import OSVDependencyAdapter
         from .dynamic_function import NativeFunctionScanner
+        from .dataflow import BoundedDataflowScanner
         self.fallback_adapters = fallback_adapters if fallback_adapters is not None else ([OSVDependencyAdapter(self.tool_manager)] if adapters is None else [])
-        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []
-        used_ids = {"semgrep", "native-js-function", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
+        used_ids = {"semgrep", "native-js-function", "native-dataflow", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
         for entry in importlib.metadata.entry_points(group=SCANNER_ENTRY_POINT):
             try:
                 loaded = entry.load()

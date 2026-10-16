@@ -43,7 +43,7 @@ class ComplianceTests(unittest.TestCase):
         pack = RulePackManager().resolve()
         self.assertEqual(pack.descriptor.rule_pack_id, "ai-security-core")
         self.assertTrue(can_bundle_rule_pack(pack.descriptor))
-        self.assertEqual(pack.descriptor.version, "1.3.0")
+        self.assertEqual(pack.descriptor.version, "1.3.1")
         forbidden = ("--config=auto", "--config=p/", "--config=r/", "semgrep.dev/registry", "semgrep-rules")
         for file in (root / "src/security_runtime").rglob("*.py"):
             text = file.read_text(encoding="utf-8")
@@ -54,10 +54,11 @@ class ComplianceTests(unittest.TestCase):
             manager = ToolManager(root=Path(tmp))
             manager.versions["future-codeql"] = "1.0"
             manager.extra_licenses["future-codeql"] = CODEQL_FUTURE_LICENSE
-            with patch.object(manager.provider, "download", side_effect=AssertionError("download attempted")):
+            with patch.object(manager.provider, "download", side_effect=AssertionError("download attempted")) as download:
                 result = manager.ensure("future-codeql")
             self.assertEqual(result.status, ToolStatus.BROKEN)
-            self.assertIn("license policy", result.detail)
+            self.assertEqual(result.diagnostic.error_code, "LICENSE_BLOCKED")
+            download.assert_not_called()
 
     def test_license_actions_keep_lgpl_obligations_and_restricted_gate(self):
         self.assertEqual(LicensePolicy.permission(SEMGREP_LICENSE, LicenseAction.USE), Permission.YES)
