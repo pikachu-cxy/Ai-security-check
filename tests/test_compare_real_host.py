@@ -358,6 +358,20 @@ def test_prompt_hides_launch_profile_and_oracle(controller):
     assert 'review_handoff' in packet  # Removing launch data must not mutate parent packet.
 
 
+def test_prompt_explains_final_scope_reuse_and_exact_evidence_identifiers(controller):
+    packet = dict(task_ref='task', batch_review=dict(review_scope=['changed.js'],
+        reusable_candidates=[]), all_batch_candidates=[])
+    prompt = controller.prompt_for(controller.development_cases()[0], packet, final=True)
+    assert 'exact members of evidence_refs' in prompt
+    assert 'task_evidence must identify a task-changed file' in prompt
+    assert 'Related unchanged files belong in evidence_refs/checks, not reviewed_paths' in prompt
+    assert 'batch_refs MUST be []' in prompt
+    assert 'an empty list means no enumerated candidates to dispose' in prompt
+    baseline = controller.prompt_for(controller.development_cases()[0], dict(task_ref='task'), final=True)
+    assert 'every historical batch candidate' not in baseline
+    assert 'integration_review.batch_refs' not in baseline
+
+
 def test_pair_integrity_rejects_different_static_scope_and_missing_results(controller):
     left = dict(initial_files={'a.js': 'first'}, final_files={'a.js': 'last'},
         rules_identity='same-rules', source_unchanged=True, scan_count=1,

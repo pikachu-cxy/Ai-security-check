@@ -43,16 +43,46 @@ def _finding_schema():
     required = list(fields)
     fields.update(risk_scope={'enum': ['TASK_CHANGED', 'RELATED_EXISTING']},
         task_evidence=deepcopy(short), current_protections=deepcopy(strings))
-    return dict(type='object', additionalProperties=False, required=required,
+    result = dict(type='object', additionalProperties=False, required=required,
         properties=fields, allOf=[{'if': {'required': ['risk_scope'],
             'properties': {'risk_scope': {'const': 'RELATED_EXISTING'}}},
             'then': {'required': ['task_evidence', 'current_protections'],
                 'properties': {'preconditions': {'minItems': 1}, 'unknowns': {'minItems': 1}}}}])
+    return _describe_finding_evidence(result)
+
+
+def _describe_finding_evidence(schema):
+    """Explain issued identifiers without relaxing Runtime evidence checks."""
+    fields = schema['properties']
+    identifier = r'^(?:be1|te1)-[0-9a-f]{32}$'
+    fields['primary_evidence'] = dict(fields['primary_evidence'], pattern=identifier, description=
+        'One exact evidence identifier issued by the context reader in this review session. '
+        'It must occur in evidence_refs. Never add line numbers or explanatory prose to the identifier.')
+    fields['evidence_refs'] = {**fields['evidence_refs'], 'items': dict(
+        fields['evidence_refs']['items'], pattern=identifier, description=
+        'An exact issued evidence identifier from this session, without added text.')}
+    fields['task_evidence'] = dict(fields['task_evidence'], pattern=identifier, description=
+        'One exact issued evidence identifier for a TASK-CHANGED file, also present in evidence_refs. '
+        'This field is an identifier, never an explanation. Put reasoning in impact or counterevidence.')
+    return schema
 
 
 def batch_result_schema(packet):
     from security_runtime.batch_reviewer import _result_schema
-    return _result_schema(packet)
+    result = _result_schema(packet)
+    _describe_finding_evidence(result['properties']['findings']['items'])
+    return result
+
+
+def _allowed_array_items(values, *, description, max_items):
+    """Keep empty allowlists enforceable locally and explicit in model text."""
+    items = dict(type='string')
+    if values:
+        items['enum'] = list(values)
+    return dict(type='array', maxItems=max_items if values else 0,
+        uniqueItems=True, items=items, description=description +
+            (' Allowed values: '+json.dumps(list(values), ensure_ascii=False) if values
+             else ' No values are allowed; return the empty array [].'))
 
 
 def final_result_schema(packet):
@@ -66,6 +96,8 @@ def final_result_schema(packet):
         limitations={'type': 'array', 'maxItems': 30, 'items': deepcopy(short)})
     required = list(properties)
     if 'batch_review' in packet:
+        final_scope = packet['batch_review']['review_scope']
+        reusable_refs = [item['batch_ref'] for item in packet['batch_review']['reusable_candidates']]
         disposition_fields = dict(batch_ref=deepcopy(short), candidate_id=deepcopy(short),
             outcome={'enum': ['PRESENT', 'EXCLUDED', 'UNKNOWN']}, evidence_refs={
                 'type': 'array', 'minItems': 1, 'maxItems': 10, 'items': deepcopy(short)},
@@ -73,10 +105,14 @@ def final_result_schema(packet):
         disposition_required = list(disposition_fields)
         disposition_fields['primary_evidence'] = deepcopy(short)
         integration = dict(snapshot_id={'const': packet['batch_review']['snapshot_id']},
-            batch_refs={'type': 'array', 'maxItems': 8, 'uniqueItems': True,
-                        'items': deepcopy(short)},
-            reviewed_paths={'type': 'array', 'maxItems': 1000, 'uniqueItems': True,
-                            'items': deepcopy(short)},
+            batch_refs=_allowed_array_items(reusable_refs, max_items=8, description=
+                'Only reusable proof references listed in batch_review.reusable_candidates. '
+                'This is not an inventory of historical or inspected batches. Never include STALE, '
+                'unfinished or cancelled batches; reading their final code does not make them reusable.'),
+            reviewed_paths=_allowed_array_items(final_scope, max_items=1000, description=
+                'Only reviewed TASK-CHANGED paths from batch_review.review_scope. '
+                'Do not include related unchanged files here; record their issued identifiers '
+                'in evidence_refs and discuss their checks instead.'),
             evidence_refs=evidence,
             checks={'type': 'object', 'additionalProperties': False,
                 'required': ['authorization', 'data_flow', 'configuration', 'cross_batch_calls'],

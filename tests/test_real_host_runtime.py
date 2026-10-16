@@ -138,4 +138,62 @@ def test_baseline_source_selection_is_checked_before_writes(tmp_path):
 def test_finding_schema_matches_runtime_candidate_contract():
     from security_runtime.batch_reviewer import _result_schema
     packet = dict(task_ref='task', batch_ref='batch', review_session='session')
-    assert bridge._finding_schema() == _result_schema(packet)['properties']['findings']['items']
+
+    def without_guidance(value):
+        if isinstance(value, dict):
+            return {key:without_guidance(item) for key,item in value.items()
+                    if key not in {'description', 'pattern'}}
+        if isinstance(value, list):
+            return [without_guidance(item) for item in value]
+        return value
+
+    assert without_guidance(bridge._finding_schema()) == _result_schema(packet)['properties']['findings']['items']
+
+
+def test_evidence_guidance_rejects_prose_without_constraining_finding_titles():
+    from jsonschema import Draft202012Validator
+    from security_runtime.batch_reviewer import _result_schema
+    packet = dict(task_ref='task', batch_ref='batch', review_session='session')
+    batch_fields = bridge.batch_result_schema(packet)['properties']['findings']['items']['properties']
+    final_fields = bridge._finding_schema()['properties']
+    identifier = 'be1-'+'a'*32
+    for fields in (batch_fields, final_fields):
+        assert 'exact issued evidence identifier' in fields['task_evidence']['description']
+        Draft202012Validator(fields['task_evidence']).validate(identifier)
+        Draft202012Validator(fields['title']).validate('Ownership check missing')
+        assert 'pattern' not in fields['category']
+        with pytest.raises(ValidationError):
+            Draft202012Validator(fields['task_evidence']).validate(identifier+' lines 4-6 explain the flow')
+    # The source Runtime schema remains unchanged, including its shared short fields.
+    assert 'pattern' not in _result_schema(packet)['properties']['findings']['items']['properties']['title']
+
+
+def test_final_output_schema_limits_reviewed_scope_and_reusable_proof_refs():
+    from jsonschema import Draft202012Validator
+    packet = dict(task_ref='task', review_session='session', batch_review=dict(
+        snapshot_id='snapshot', review_scope=['changed.js'],
+        reusable_candidates=[dict(batch_ref='reusable-batch')]))
+    fields = bridge.final_result_schema(packet)['properties']['integration_review']['properties']
+    assert fields['reviewed_paths']['items']['enum'] == ['changed.js']
+    assert fields['batch_refs']['items']['enum'] == ['reusable-batch']
+    Draft202012Validator(fields['reviewed_paths']).validate(['changed.js'])
+    Draft202012Validator(fields['batch_refs']).validate(['reusable-batch'])
+    with pytest.raises(ValidationError):
+        Draft202012Validator(fields['reviewed_paths']).validate(['changed.js', 'related.js'])
+    with pytest.raises(ValidationError):
+        Draft202012Validator(fields['batch_refs']).validate(['historical-stale-batch'])
+    assert 'not an inventory' in fields['batch_refs']['description']
+    assert 'related unchanged files' in fields['reviewed_paths']['description']
+
+
+def test_empty_reusable_set_requires_empty_array_in_original_contract():
+    from jsonschema import Draft202012Validator
+    packet = dict(task_ref='task', review_session='session', batch_review=dict(
+        snapshot_id='snapshot', review_scope=['changed.js'], reusable_candidates=[]))
+    refs = bridge.final_result_schema(packet)['properties']['integration_review']['properties']['batch_refs']
+    Draft202012Validator(refs).check_schema(refs)
+    Draft202012Validator(refs).validate([])
+    assert refs['maxItems'] == 0
+    assert 'return the empty array []' in refs['description']
+    with pytest.raises(ValidationError):
+        Draft202012Validator(refs).validate(['stale'])
