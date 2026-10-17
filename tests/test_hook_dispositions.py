@@ -185,7 +185,8 @@ def test_multiple_pending_dependencies_use_new_product_choices(repo, tmp_path):
     current = next_scan(repo, runtime, core, findings)
     feedback = current['dependency_user_feedback']
     assert feedback['selection_required'] and feedback['choices'] == []
-    assert '稍后处理' in feedback['message'] and '不再提醒此项' in feedback['message']
+    assert '稍后处理' in feedback['message'] and '不再提醒此项' not in feedback['message']
+    assert all('不再提醒此项' in item['secondary_choices'] for item in feedback['items'])
     assert '误报意见会进一步复核' not in feedback['message']
     output = remediation.on_hook(current, repo, 'session', host='codex')
     assert output['user_feedback']['selection_required']

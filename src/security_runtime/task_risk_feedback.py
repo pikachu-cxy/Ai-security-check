@@ -147,7 +147,7 @@ def project_feedback(row, root, *, configuration=_UNSET):
             (not proof or current_hashes(root, proof) != proof or policy != _policy()
              or configuration is None or config_hashes != configuration)):
         feedback.update(recorded_status=feedback['status'], status='NEEDS_RECHECK', folded=False,
-                        message='误报复核依据对应的源码、配置或检查范围已变化，已重新展开。')
+                        message='误报复核依据对应的源码、配置或检查范围已变化，需要重新核查。')
     return feedback
 
 

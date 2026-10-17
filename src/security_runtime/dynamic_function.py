@@ -442,7 +442,7 @@ class NativeFunctionScanner:
         finding.impact = ('若用户可控制 eval 的动态参数，可能执行服务进程可访问的 JavaScript 操作。' if direct_eval else
                           '若用户可控制动态参数，且生成的函数随后执行，可能执行服务进程可访问的 JavaScript 操作。')
         finding.fix_advice = '算术场景改用限定运算符和语法的解析器，并明确支持的表达式范围；'
-        finding.fix_advice += '不要只过滤几个字符。修复后复扫原位置，并验证正常算术、错误输入和接口返回。'
+        finding.fix_advice += '不要只过滤几个字符。修改后复查原位置的安全风险。'
         finding.technical_details.update(
             rule_pack=PACK_ID, rule_pack_version=VERSION, rule_pack_checksum=plan.pack.checksum,
             rule_version=VERSION, engine=self.engine_id, dangerous_api=candidate['api'],

@@ -1,4 +1,4 @@
-"""Finite adaptive delivery allowances for one immutable review snapshot.
+"""Finite task-wide delivery allowances across immutable review revisions.
 
 This module only accounts for caller-supplied, version-bound obligations. It
 does not read files, invoke scanners, certify reasoning or create evidence.
@@ -86,8 +86,13 @@ def _proposed(ledger, record, windows):
         low, high = window['start_line'], window['end_line']
         if type(low) is not int or type(high) is not int or not 1 <= low <= high <= 2_147_483_647:
             raise ValueError('Invalid adaptive source obligation')
-        key = hashlib.sha256(json.dumps([window[k] for k in
-            ('path', 'file_sha256', 'location_version')], ensure_ascii=True).encode()).hexdigest()
+        identity = [window[k] for k in ('path', 'file_sha256', 'location_version')]
+        # A real new revision creates fresh review obligations, not a fresh
+        # spending ledger. Pagination or retry within a revision remains free
+        # of additional allowances; all revisions share the same hard ceiling.
+        if record.get('review_revision', 1) > 1:
+            identity.append(record['review_revision'])
+        key = hashlib.sha256(json.dumps(identity, ensure_ascii=True).encode()).hexdigest()
         entry = grouped.setdefault(key, dict(window=window, spans=[]))
         entry['spans'].append([low, high])
     for key, entry in grouped.items():
@@ -244,7 +249,11 @@ def record_capacity(record):
     ledger = record.get('review_ledger', {})
     frames = min(ledger.get('limits', {}).get('reads', 0),
                  ledger.get('basis', {}).get('source_frames', 0)*2)
-    outstanding = max(0, frames-len(record.get('evidence', {})))
+    # Historical deliveries are already represented in signed revision history.
+    # Reserve only genuinely outstanding lifetime frames, not those archived
+    # when a new revision starts with an empty current evidence collection.
+    delivered = ledger.get('reads', len(record.get('evidence', {})))
+    outstanding = max(0, frames-delivered)
     # Evidence is repeated in the task, plan and lifetime binding ledger.
     # Per-frame headroom covers refs/ranges, not newly returned source bodies.
     projected = current+outstanding*1_000+100_000

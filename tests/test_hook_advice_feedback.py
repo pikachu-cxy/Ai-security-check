@@ -129,7 +129,7 @@ def test_multiple_advisory_issues_require_selection_and_show_locations(setup):
     feedback = service._advisory_feedback({'action': 'ADVISE', 'reason_code': 'REVIEW'}, result, root)
     assert feedback['selection_required'] is True and feedback['choices'] == []
     assert 'A.java' in feedback['message'] and 'B.java' in feedback['message']
-    assert '请先选择要处理的具体问题' in feedback['message']
+    assert '请选择具体风险' in feedback['message']
     assert not service.authorized and not setup[2].calls
 
 

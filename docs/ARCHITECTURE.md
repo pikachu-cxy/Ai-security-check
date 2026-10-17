@@ -162,3 +162,25 @@ Neither live evidence nor its availability changes coverage, identity or reviews
 See [Rule Program](design/RULE_PROGRAM.md), [coverage matrix](design/RULE_COVERAGE_MATRIX.md),
 [Codex integration](design/CODEX_INTEGRATION.md), and
 [functional verification](FUNCTIONAL_VERIFICATION.md).
+
+### Personal security reply planning
+
+`reply_plan.py` contains immutable security facts and a pure display planner.
+`reply_adapters.py` converts existing task, scan, handling and history views;
+it does not load stores, scan code, invoke a model, execute tests or issue grants.
+`reply_render.py` provides the Chinese fallback used by those views and the CLI.
+The host may phrase the reply naturally using the additive
+`security-reply-plan-v1` envelope; the original fields remain compatible.
+
+The planner filters suppressed reminders and separates current risks, check
+coverage, original-issue verification and handling receipts. It never changes
+technical assessment, persisted user choices, freshness proof or repair authority.
+Long result pages reference complete facts rather than duplicate their source or
+explanations; totals and the three-item display sample are explicitly distinct.
+Hook delivery retains its existing turn deduplication and exact capability
+transport. Internal control references never come from a rendered message.
+
+Personal replies have no functional-test input and do not recommend functional
+tests. Host development outcomes remain outside the security facts model.
+Skill references retain workflow/consent requirements and share the presentation
+contract, without requiring the host to repeat every secondary operation.

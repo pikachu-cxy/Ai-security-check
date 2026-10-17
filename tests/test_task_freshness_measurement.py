@@ -96,7 +96,7 @@ def test_changed_rule_and_config_inventory_cannot_be_reused(service, monkeypatch
     assert s.get(root, ref)['status'] == 'STALE'
 
 
-def test_faster_hash_path_at_five_second_budget_is_conservatively_stale(service, monkeypatch):
+def test_slow_preparation_does_not_create_artificial_hash_freshness_gap(service, monkeypatch):
     s, root, _ = service
     ticks = [0.0]
     original_safe = ts.safe_source
@@ -108,11 +108,13 @@ def test_faster_hash_path_at_five_second_budget_is_conservatively_stale(service,
     monkeypatch.setattr(ts.time, 'monotonic', lambda: ticks[0])
     monkeypatch.setattr(ts, 'safe_source', slow_safe)
     old = ts.capture(root)
-    assert len(old['hashes']) == 2 and old['limitations'] == [{'reason':'INVENTORY_READ_BUDGET'}]
+    assert ticks[0] > 5
+    assert len(old['hashes']) == 3 and old['limitations'] == []
+    assert old['capture_stats']['hash_complete'] and old['capture_stats']['body_complete']
     ticks[0] = 0.0
     fast = ts.capture(root, include_text=False)
     assert len(fast['hashes']) == 3 and fast['limitations'] == []
-    # Same unmodified bytes; additional coverage never makes old proof current.
+    # Hash-only verification observes the same complete, unchanged bytes.
     record = dict(baseline=old, end=old)
     ticks[0] = 0.0
-    assert s._fresh(root, record) is False
+    assert s._fresh(root, record) is True

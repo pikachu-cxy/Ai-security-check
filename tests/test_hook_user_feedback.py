@@ -36,12 +36,13 @@ def test_dynamic_function_copy_explains_location_execution_and_arithmetic_tradeo
     for text in ('new Function', '当作 JavaScript 代码', '如果外部输入能到达这里',
                  '生成的函数被调用', '实际入口是否可到达', '原生构造器尚未确认',
                  '受限解析器', '不能改用 eval', '收窄可接受的语法',
-                 '不能保证保留任意 JavaScript 表达式', '正常算术', '响应格式',
+                 '不能保证保留任意 JavaScript 表达式', '复查原风险是否消除',
                  '回复“修复”', '回复“稍后处理”'):
         assert text in feedback['message']
     assert feedback['choices'] == ['修复', '稍后处理']
     assert feedback['secondary_choices'] == ['请复核', '不再提醒此项']
     assert '系统命令' not in feedback['message']
+    assert '测试正常算术' not in feedback['message'] and '响应格式' not in feedback['message']
 
 
 def test_dynamic_function_prompt_cannot_import_untrusted_remediation_advice():

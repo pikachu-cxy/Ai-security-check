@@ -203,8 +203,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             # Asking/waiting is host guidance, not an automatic model halt.
             message = decision.get('user_feedback', {}).get('message') or (
                 '自动检查发现一个安全风险。请查看本次检查的受影响位置、可能影响和修复建议。'
-                '回复“修复”，我会修复并重新检查；回复“暂不处理”，本次不修复，风险记录仍保留；'
-                '回复“认为误报”，我会记录你的意见并根据代码复核，不等于已确认误报或已修复。')
+                '回复“修复”，我会修复并重新检查；回复“稍后处理”，本次不修复，风险记录仍保留。')
             # User-visible Hook fields carry plain copy; the control protocol
             # remains in additionalContext, never an implicit repair grant.
             output.update({'continue': False, 'stopReason': message, 'systemMessage': message})

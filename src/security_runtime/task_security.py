@@ -19,56 +19,18 @@ from .git import GitError, GitService
 from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source, MAX_LINE_CHARS
 from .redactor import SecretRedactor
 from .task_security_state import CONTRACT, TaskSecurityStore
+from .task_snapshot import (SnapshotPolicy, collect_snapshot,
+                            MAX_READ_BYTES, MAX_INLINE_TEXT_BYTES as MAX_PREIMAGE_BYTES,
+                            MAX_INVENTORY_PATHS, MAX_INVENTORY_NAME_BYTES,
+                            MAX_INVENTORY_DIRECTORIES, MAX_INVENTORY_DEPTH)
 from .target import DEPENDENCIES, EXTENSIONS, IGNORED
 from .workspace import WorkspaceResolver
 
-MAX_FILES = 1000
-MAX_READ_BYTES = 20_000_000
-MAX_PREIMAGE_BYTES = 512_000
+MAX_FILES = SnapshotPolicy().max_files
 MAX_CHANGED = 20
 MAX_STATIC_CHANGED = 1000
-MAX_INVENTORY_PATHS = 20_000
-MAX_INVENTORY_NAME_BYTES = 256_000
 MAX_RELATED = 10
 
-def _risk_choice_prompt(total):
-    choice = ('**回复「修复」或「稍后处理」即可。**' if total == 1 else
-              '**请选择具体风险，再回复「修复」或「稍后处理」。**')
-    return choice + '\n\n暂不处理仅表示本次不修复，风险记录保留，本次不再追问；明确不再提醒此项可按你的决定排除。选择前不会修改代码。'
-
-
-def _risk_heading(total, related=0, title=None):
-    label = '关联风险' if related == total else '安全风险'
-    detail = f'（其中 {related} 项关联风险）' if 0 < related < total else ''
-    subject = f'：{title}' if total == 1 and title else ''
-    return f'**发现 {total} 项{label}{detail}{subject}**'
-
-
-def _risk_details(f, *, context=False, number=None):
-    """Format existing risk facts without changing findings or repair choices."""
-    title = f.get('plain_title') or f['title']
-    parts = [f'**{number}. {title}**'] if number is not None else []
-    source = '上下文核查线索' if context else '静态检查提示'
-    parts.append(f"📍 `{f['file_path']}:{f['line_start']}` · {source}")
-    if f.get('location_version') == 'BEFORE_DELETION':
-        parts.append('位置对应删除前的代码。')
-    parts.extend(['**问题**\n'+title, '**可能影响**\n'+f['impact']])
-    if context:
-        scope = ('关联代码中的现有条件性风险，不等于新增入口仍有漏洞。'
-                 if f.get('risk_scope') == 'RELATED_EXISTING' else '本次改动相关路径。')
-        parts.append('风险范围：'+scope)
-        locations = f.get('evidence_locations', [])
-        if locations:
-            parts.append('代码依据：'+' → '.join(
-                f"{v['path']}:{v['start_line']}-{v['end_line']}" for v in locations))
-        parts.append('触发条件：'+('；'.join(f['preconditions']) or '实际可达性未确认'))
-        parts.append('当前防护：'+('；'.join(f.get('current_protections', f['counterevidence']))
-                                or '未观察到相关防护；不代表不存在'))
-        parts.append('反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的反证'))
-    parts.append('**建议修复**\n'+f['fix_advice'])
-    unknowns = ('；'.join(f['unknowns']) or '风险触发条件与实际可达性尚未确认。') if context else '该风险的实际触发条件尚未确认。'
-    parts.append('**尚未确认**\n'+unknowns)
-    return '\n\n'.join(parts)
 
 
 MAX_CONTEXT = 64_000
@@ -167,42 +129,36 @@ def _inventory(root, ignored):
         except (GitError, OSError, subprocess.TimeoutExpired):
             return [], [], False, [{'reason': 'GIT_INVENTORY_UNAVAILABLE'}]
     else:
-        names = []
-        started, visited = time.monotonic(), 0
-        def onerror(error):
-            limitations.append({'reason': 'INVENTORY_DIRECTORY_UNAVAILABLE'})
-        for directory, dirs, files in os.walk(root, followlinks=False, onerror=onerror):
-            visited += 1
-            depth = len(Path(directory).relative_to(root).parts)
-            dirs[:] = sorted(d for d in dirs if d not in ignored
-                             and d != '.test-tmp' and not d.startswith('.test-tmp-'))
-            for d in list(dirs):
-                path = Path(directory) / d
-                if path.is_symlink() or path.is_junction() or depth >= 12:
-                    limitations.append({'path': path.relative_to(root).as_posix(), 'reason': 'LINK_OR_DEPTH_EXCLUDED'})
-                    dirs.remove(d)
-            if visited > 2000 or time.monotonic() - started > 5:
-                limitations.append({'reason': 'INVENTORY_TIME_OR_DIRECTORY_BUDGET'})
-                break
-            names.extend((Path(directory) / filename).relative_to(root).as_posix() for filename in files)
-            if len(names) > MAX_INVENTORY_PATHS:
-                limitations.append({'reason': 'INVENTORY_PATH_BUDGET'})
-                break
-    selected = set()
+        from .task_inventory import non_git_inventory
+        names, limitations = non_git_inventory(root, ignored,
+            max_entries=MAX_INVENTORY_PATHS, max_directories=MAX_INVENTORY_DIRECTORIES,
+            max_depth=MAX_INVENTORY_DEPTH, max_name_bytes=MAX_INVENTORY_NAME_BYTES)
+    selected, selected_name_bytes = set(), 0
     for name in names:
         try:
             name = _relative(name)
             if not _supported(name) or set(Path(name).parts) & ignored:
                 continue
+            if name in selected:
+                continue
+            cost = len(name.encode('utf-8'))
+            if len(selected) >= MAX_INVENTORY_PATHS or selected_name_bytes+cost > MAX_INVENTORY_NAME_BYTES:
+                reason = ('SNAPSHOT_INVENTORY_FILE_BUDGET' if len(selected) >= MAX_INVENTORY_PATHS
+                          else 'SNAPSHOT_INVENTORY_NAME_BYTE_BUDGET')
+                limitations.append(dict(reason=reason, limit=(MAX_INVENTORY_PATHS
+                    if reason == 'SNAPSHOT_INVENTORY_FILE_BUDGET' else MAX_INVENTORY_NAME_BYTES),
+                    observed_at_least=len(selected)+1, pending_count_unknown=True))
+                break
             # Missing tracked files are real deletions, not read failures. lstat
             # does not follow a link; WorkspaceReader validates every actual read.
             (root / name).lstat()
             selected.add(name)
+            selected_name_bytes += cost
         except FileNotFoundError:
             continue
         except (OSError, EvidenceUnavailable) as exc:
             limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
-    return sorted(selected), dirty, not limitations, limitations[:100]
+    return sorted(selected), dirty, not limitations, limitations
 
 
 def capture(root, *, known_paths=None, priority_paths=(), include_text=True, preimage_writer=None):
@@ -213,64 +169,16 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True, pre
     Freshness-only callers may omit text preparation, but must still inventory
     and safely read/hash every current file with the same source guards.
     """
-    reader = WorkspaceReader(root)
-    hashes, texts, limitations, text_truncations = {}, {}, [], {}
-    preimages, text_unavailable, line_counts = {}, {}, {}
-    total, text_total = 0, 0
     ignored = IGNORED | {v.strip() for v in os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '').split(',') if v.strip()}
     inventory, dirty, complete, inventory_limits = _inventory(root, ignored)
-    limitations.extend(inventory_limits)
-    known = set(known_paths) if known_paths is not None else None
-    added = [p for p in inventory if known is not None and p not in known]
-    priority = list(dict.fromkeys([*priority_paths, *added, *sorted(dirty)]))
-    inventory_set = set(inventory)
-    priority = [p for p in priority if p in inventory_set]
-    ordered = list(dict.fromkeys([*priority, *inventory]))
-    name_bytes = sum(len(p.encode('utf-8')) for p in ordered)
-    if len(ordered) > MAX_INVENTORY_PATHS or name_bytes > MAX_INVENTORY_NAME_BYTES:
-        complete = False
-        limitations.append({'reason': 'INVENTORY_PATH_BUDGET'})
-        selected, cost = [], 0
-        for name in ordered[:MAX_INVENTORY_PATHS]:
-            cost += len(name.encode('utf-8'))
-            if cost > MAX_INVENTORY_NAME_BYTES:
-                break
-            selected.append(name)
-        inventory, ordered = sorted(selected), selected
-    started = time.monotonic()
-    for name in ordered:
-        if len(hashes) >= MAX_FILES or total >= MAX_READ_BYTES or time.monotonic() - started > 5:
-            limitations.append({'reason': 'INVENTORY_READ_BUDGET'})
-            break
-        try:
-            raw, text = reader.read(name, maximum=min(1_000_000, MAX_READ_BYTES-total))
-            hashes[name] = hash_bytes(raw)
-            line_counts[name] = len(text.splitlines())
-            total += len(raw)
-            if not include_text or _environment(name):
-                continue
-            truncated_lines = []
-            lines = safe_source(text, source_path=name, truncation_lines=truncated_lines)
-            if truncated_lines:
-                text_truncations[name] = {'line_count': len(truncated_lines), 'lines': truncated_lines}
-            if preimage_writer is not None:
-                from .task_preimages import TaskPreimageUnavailable as PreimageError
-                try:
-                    preimages[name] = preimage_writer.put(name, raw, lines)
-                except PreimageError as exc:
-                    text_unavailable[name] = exc.reason_code
-                continue
-            cost = len(json.dumps(lines, ensure_ascii=True).encode())
-            if cost + text_total <= MAX_PREIMAGE_BYTES:
-                texts[name] = lines
-                text_total += cost
-        except (OSError, EvidenceUnavailable, UnicodeError) as exc:
-            limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
-    return dict(hashes=hashes, texts=texts, text_truncations=text_truncations,
-                line_counts=line_counts, preimages=preimages, text_unavailable=text_unavailable,
-                limitations=limitations[:100], inventory=inventory,
-                inventory_complete=complete,
-                read_priority=ordered[:MAX_FILES])
+    policy = SnapshotPolicy(max_files=MAX_FILES, max_read_bytes=MAX_READ_BYTES,
+        max_inline_text_bytes=MAX_PREIMAGE_BYTES, max_inventory_paths=MAX_INVENTORY_PATHS,
+        max_inventory_name_bytes=MAX_INVENTORY_NAME_BYTES)
+    return collect_snapshot(root, inventory=inventory, dirty=dirty,
+        inventory_complete=complete, inventory_limits=inventory_limits,
+        known_paths=known_paths, priority_paths=priority_paths, include_text=include_text,
+        preimage_writer=preimage_writer, policy=policy,
+        reader_factory=WorkspaceReader, sanitizer=safe_source)
 
 
 def task_changes(root, baseline, end):
@@ -319,6 +227,13 @@ def finding_view(f):
 
 def _coverage_gaps(limitations):
     labels = {'SOURCE_LINE_CHAR_BUDGET': '源码单行超出显示预算',
+              'SNAPSHOT_INVENTORY_DIRECTORY_BUDGET': '文件盘点达到目录容量上限',
+              'SNAPSHOT_INVENTORY_FILE_BUDGET': '文件盘点达到路径数量上限',
+              'SNAPSHOT_INVENTORY_ENTRY_BUDGET': '文件盘点达到目录条目处理容量上限，剩余数量未知',
+              'SNAPSHOT_INVENTORY_NAME_BYTE_BUDGET': '文件盘点达到路径存储容量上限',
+              'SNAPSHOT_READ_FILE_BUDGET': '源码采集达到文件数量上限',
+              'SNAPSHOT_READ_BYTE_BUDGET': '源码采集达到读取容量上限',
+              'SNAPSHOT_INLINE_TEXT_BYTE_BUDGET': '修改前脱敏正文超出保存容量',
               'TASK_SEMANTIC_PROOF_UNVERIFIED': '脱敏行的修改前定位记录无法核验',
               'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '文件修改检查保留路径的当前源码不可用',
               'TASK_HOOK_FINAL_SCOPE_BUDGET': '文件修改检查保留路径超出最终扫描范围预算',
@@ -477,7 +392,8 @@ class TaskSecurityService:
                 return False
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                           priority_paths=record['end'].get('read_priority', ()), include_text=False)
-        if current['limitations'] != record['end']['limitations']:
+        if current.get('read_limitations', current['limitations']) != record['end'].get(
+                'read_limitations', record['end']['limitations']):
             return False
         return (current['hashes'] == record['end']['hashes']
                 and current.get('inventory') == record['end'].get('inventory', sorted(record['end']['hashes']))
@@ -511,19 +427,26 @@ class TaskSecurityService:
                     and record['phase'] != 'STATIC_RUNNING'
                     and record.get('finished_hook_revision') == hook_revision):
                 return self._view(record)
-            before = record['baseline']['hashes']
             changes, unknown = task_changes(root, record['baseline'], end)
             # Independent tasks may share a checkout, never each other's verdict.
             # Conservatively retain a gap if editing intervals overlap; do not
             # infer exclusive attribution from a whole-workspace snapshot.
             overlaps=[v for v in self.store(root).records() if v['task_ref']!=record['task_ref'] and
                       v.get('closed_at',float('inf'))>record['created_at'] and v['created_at']<=self.now()]
+            # Keep historical risk membership before staging a new current view.
+            from .task_risk_ledger import TaskRiskLedger
+            if record.get('end'):
+                TaskRiskLedger(self.hooks, root).register(record)
+            from .task_review_revisions import advance_revision
+            record = advance_revision(record)
             # Delivery totals and the first review deadline survive refinish.
             record['lifetime_context_bytes'] = max(record.get('lifetime_context_bytes', 0), record.get('context_bytes', 0))
             record['lifetime_context_reads'] = record.get('lifetime_context_reads', 0) + len(record.get('evidence', {}))
             for key in ('packet', 'review_session', 'review_plan', 'review_completion', 'skip_reason'):
                 record.pop(key, None)
-            record.update(end=end, changes=changes, review=None, evidence={}, related_files=[], context_bytes=0,
+            record.update(end=end, changes=changes, review=None, evidence={}, related_files=[],
+                          context_bytes=(record.get('review_ledger', {}).get('total_bytes', 0)
+                                         if record.get('review_protocol') == 3 else 0),
                           context_requests={}, context_gaps=[],
                           finished_hook_revision=hook_revision,
                           unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
@@ -575,8 +498,8 @@ class TaskSecurityService:
                     record['baseline']['texts'] = {}
                     record['end']['texts'] = {}
                     return self._view(self.store(root).save(record))
-                record.update(phase='NO_CHANGES', baseline=dict(hashes=before, texts={}, limitations=record['baseline']['limitations']))
-                self.discard_preimages(root, ref)
+                # A later edit still compares with this exact original baseline.
+                record.update(phase='NO_CHANGES')
                 return self._view(self.store(root).save(record))
             if record['static_attempts'] >= 2:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
@@ -762,6 +685,10 @@ class TaskSecurityService:
     def _session(self, root, ref, session, *, full_fresh=True):
         record = self.load(root, ref)
         if record['phase'] != 'REVIEWING' or session != record.get('review_session'):
+            if record.get('review_protocol') == 3:
+                from .task_review_plan import ReviewPlanError
+                raise ReviewPlanError('REVIEW_PLAN_SESSION_MISMATCH',
+                    'Review session unavailable; keep the original task and current revision session')
             raise ValueError('Review session unavailable; keep the original task and session')
         if self.now() > record['review_deadline']:
             if record.get('review_protocol') == 3:
@@ -1012,8 +939,8 @@ class TaskSecurityService:
                 validation='STRUCTURE_AND_SOURCE_VERSION_ONLY', method_sha256=record['packet']['quick_skill']['sha256'],
                 elapsed_wall_ms=round((self.now()-record.get('review_started_at', record['review_deadline']-REVIEW_TTL))*1000),
                 submitted_at=self.now()))
-            # Preimages are no longer needed. Local retention is bounded by TTL.
-            record['baseline']['texts'] = {}
+            # Further edits stay in this task. Retain the original sanitized
+            # preimages until their original TTL, never recapture after editing.
             record['end']['texts'] = {}
             record.pop('packet', None)
             result_packet = None
@@ -1021,8 +948,6 @@ class TaskSecurityService:
                 from .task_review import TaskReviewCoordinator
                 result_packet = TaskReviewCoordinator(self).completion_packet(record)
             record = self.store(root).save(record)
-            if record['baseline'].get('preimages'):
-                self.discard_preimages(root, ref)
             ledger.register(record)
             ledger.record_host(updates)
             return result_packet if result_packet is not None else self._view(record)
@@ -1055,6 +980,8 @@ class TaskSecurityService:
         if current is False:
             result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码版本或检查范围已变化，旧记录不能用于当前任务范围。')
             result['risk_choices'] = []
+            from .reply_plan import CheckFact, ReplyFacts, plan_reply
+            result['reply_plan'] = plan_reply(ReplyFacts('HISTORY', CheckFact('STALE'), current=False)).to_dict()
         return result
 
     def risk_ledger(self, workspace, ref, offset=0, limit=30):
@@ -1108,6 +1035,11 @@ class TaskSecurityService:
             unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
+        result['snapshot_capture'] = dict(baseline=record['baseline'].get('capture_stats'),
+            current=(record.get('end') or {}).get('capture_stats'))
+        if record.get('review_protocol') == 3:
+            result['review_revision'] = record.get('review_revision', 1)
+            result['previous_review_count'] = len(record.get('review_history', []))
         host_feedback, static_feedback = {}, {}
         try:
             host_feedback, static_feedback = self._current_handling(record)
@@ -1166,74 +1098,14 @@ class TaskSecurityService:
                 has_more=len(static['findings'])>20,
                 scanner_runs=[{k: r[k] for k in ('scanner','version','status','duration_ms','error_code','coverage_contract') if k in r}
                               for r in static.get('scanner_runs', [])])
-        if phase == 'NO_CHANGES':
-            result['development_summary'] = '' if not result['limitations'] else '本次没有观察到可检查的文件改动；部分文件未能建立比较记录。'
-        elif phase == 'INCOMPLETE':
-            result['development_summary'] = '本次任务安全核查未完成：'+record.get('skip_reason', '上下文核查会话已过期。')+' 已有检查记录保留，不认定风险已消除。'
-            incomplete_findings = current_static
-            if incomplete_findings:
-                title = incomplete_findings[0].get('plain_title') or incomplete_findings[0]['title']
-                parts = [_risk_heading(len(incomplete_findings), title=title)]
-                parts.extend(_risk_details(f, number=i if len(incomplete_findings)>1 else None)
-                             for i, f in enumerate(incomplete_findings[:3], 1))
-                if len(incomplete_findings)>3:
-                    parts.append(f'另有 {len(incomplete_findings)-3} 项静态提示保留在本次核查记录中。')
-                parts.extend(['**检查范围**\n'+result['development_summary'], _risk_choice_prompt(len(incomplete_findings))])
-                result['development_summary'] = '\n\n'.join(parts)
-        elif phase == 'COMPLETE':
-            static = record['static']
-            review = record['review']
-            raw_total = len(static['findings']) + len(review['findings'])
-            total = len(current_static) + len(current_host)
-            complete_static = (static['status'] in {'SUCCESS', 'COMPLETED'}
-                               and static['coverage'] in {'FULL', 'SCOPED'})
-            prefix = f"安全核查：本任务有 {len(record['changes'])} 个改动文件，提交静态检查 {len(static.get('scope_files', []))} 个文件"
-            if record.get('hook_final_recheck_files'):
-                prefix += f"（包含文件修改检查保留的 {len(record['hook_final_recheck_files'])} 个当前文件）"
-            if total:
-                prefix += '。'
-            elif raw_total:
-                prefix += '，已登记提示的处置状态另列，原始记录保留。'
-            elif not complete_static:
-                prefix += '，静态检查未完成或覆盖有限，当前风险尚待核实。'
-            elif review['coverage'] == 'PARTIAL' or record['limitations'] or review['limitations']:
-                prefix += '，另有尚未检查或确认的内容，见下方说明。'
-            else:
-                prefix += '，本次未发现安全线索。'
-            # Aggregate final findings once with a bounded default summary;
-            # full records stay accessible and candidates retain uncertainty.
-            combined = [(f, '静态检查提示') for f in current_static] + [(f, '上下文核查线索') for f in current_host]
-            order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}
-            combined.sort(key=lambda v: order.get(v[0]['severity'], 4))
-            lines = []
-            if total:
-                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in current_host)
-                first = combined[0][0]
-                lines.append(_risk_heading(total, related, first.get('plain_title') or first['title']))
-            for i, (f, source) in enumerate(combined[:3], 1):
-                lines.append(_risk_details(f, context=source == '上下文核查线索',
-                                           number=i if total>1 else None))
-            if total > 3:
-                lines.append(f'另有 {total-3} 项已保留在本次核查记录中。')
-            lines.append('**检查范围**\n'+prefix if total else prefix)
-            if not complete_static and record.get('hook_final_recheck_files'):
-                names = record['hook_final_recheck_files']
-                lines.append('文件修改检查保留范围的当前风险尚待核实：'+ '、'.join(names[:5])+
-                             (f' 等 {len(names)} 个文件' if len(names)>5 else '')+
-                             '；本次最终检查不足以证明先前提示已消除。')
-            if not complete_static or review['coverage'] == 'PARTIAL' or record['limitations'] or review['limitations']:
-                lines.append('尚未检查或确认的内容：'+('；'.join(review['limitations'][:5]) or '部分改动的静态检查或关联代码核查未完成。'))
-            if total:
-                lines.append('风险尚未修复。')
-                lines.append(_risk_choice_prompt(total))
-            result['development_summary'] = ('\n\n' if total else '\n').join(lines)
-        else:
-            result['development_summary'] = ''
-        if result.get('handling_unavailable'):
-            from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
-            result['development_summary'] += '\n'+HANDLING_UNAVAILABLE_MESSAGE
-        if record.get('review_capacity') and record['phase'] not in {'COMPLETE', 'INCOMPLETE', 'NO_CHANGES'}:
+        from .reply_adapters import task_facts
+        from .reply_plan import plan_reply
+        from .reply_render import render_reply
+        plan = plan_reply(task_facts(record, host_feedback, static_feedback,
+                                    handling_available=not result.get('handling_unavailable')))
+        result['reply_plan'] = plan.to_dict()
+        result['development_summary'] = render_reply(plan)
+        if plan.check.state == 'CAPACITY_REQUIRED':
             result.update(status='CAPACITY_REQUIRED', review_required=False,
-                review_capacity=record['review_capacity'],
-                development_summary='已有检查记录已保留；代码复核尚未开始：全部必读范围需要的存储或传输资源超过当前可承载容量，未省略文件，也未认定复核通过。')
+                          review_capacity=record['review_capacity'])
         return result

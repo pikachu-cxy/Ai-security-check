@@ -175,7 +175,7 @@ def test_tls_pair_and_unrelated_same_file_stay_distinct(sample):
 def test_unrelated_tls_candidates_do_not_merge(sample,change):
     root, scan, store = sample
     if change=='same-rule': scan.findings[1].technical_details['rule_id']=scan.findings[0].technical_details['rule_id']
-    elif change=='far-apart': scan.findings[1].line_start=100
+    elif change=='far-apart': scan.findings[1].line_start=scan.findings[1].line_end=100
     else: scan.findings[1].file_path='Other.java'; (root/'Other.java').write_text('class Other {}');scan.target_profile.files.append('Other.java')
     store.save(scan)
     assert len([t for t in summary(sample,details=True)['tasks'] if t['topic']=='tls'])==2
@@ -223,7 +223,7 @@ def test_compact_limit_and_detail_trace_every_finding(sample):
     assert len(compact['recommended_tasks'])==3 and compact['task_count']==5
     assert [t['topic'] for t in compact['recommended_tasks']]==['tls','secret','dependency']
     text=render_security_summary(compact)
-    assert '已完成 AI 审阅 2/6' in text and '不适用 AI 1' in text and '0 个优先处理项不表示安全' in text
+    assert '待处理 7 项' in text and '只完成部分范围' in text
     assert '已验证' not in text and 'CVE-' not in text and 'scan-a' not in text and 'confidence' not in text
     assert all(f.id not in text for f in sample[1].findings)
     detail=summary(sample,details=True)
@@ -353,7 +353,7 @@ def test_all_review_115_candidate_shape_with_real_validation(tmp_path):
     assert sum(t['finding_count'] for t in result['tasks'])==115
     compact=SecuritySummaryService(ReadOnlySQLiteStore(store.path)).get(tmp_path)
     text=render_security_summary(compact)
-    assert '适用候选未审阅 75' in text and '不适用 AI 14' in text and '待复核 26' in text
+    assert '待处理 115 项' in text and '只完成部分范围' in text
     assert snapshot(tmp_path)==before
 
 

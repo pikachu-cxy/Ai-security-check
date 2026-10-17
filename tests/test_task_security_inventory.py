@@ -146,6 +146,39 @@ def test_non_git_fallback_prunes_runtime_test_temporary_directories(tmp_path):
     assert snapshot['inventory_complete'] and not snapshot['limitations']
 
 
+def test_git_inventory_applies_capacity_before_statting_the_tail(service, monkeypatch):
+    s, root, _ = service
+    monkeypatch.setattr(task_security, 'MAX_INVENTORY_PATHS', 1)
+    monkeypatch.setattr(GitService, '_paths', lambda *a: ['auth.py', 'routes.py', 'service.py'])
+    from pathlib import Path
+    original = Path.lstat
+    inspected = []
+
+    def observed(path, *args, **kwargs):
+        if path.parent == root and path.name in {'auth.py', 'routes.py', 'service.py'}:
+            inspected.append(path.name)
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, 'lstat', observed)
+    names, _, complete, limitations = task_security._inventory(root, set())
+    assert names == ['auth.py'] and inspected == ['auth.py']
+    assert not complete and limitations[-1]['pending_count_unknown'] is True
+
+
+def test_truncated_inventory_reports_unknown_tail_instead_of_zero_pending(tmp_path, monkeypatch):
+    (tmp_path/'first.py').write_text('value = 1\n')
+    (tmp_path/'second.py').write_text('value = 2\n')
+    monkeypatch.setattr(task_security, 'MAX_INVENTORY_PATHS', 1)
+    snapshot = task_security.capture(tmp_path)
+    stats = snapshot['capture_stats']
+    assert snapshot['inventory_complete'] is False
+    assert stats['inventory_total_file_count'] is None
+    assert stats['pending_hash_file_count'] is None
+    assert stats['pending_body_file_count'] is None
+    assert stats['known_pending_hash_file_count'] == 0
+    assert stats['hash_complete'] is False
+
+
 def test_static_scope_is_complete_while_large_context_packet_stays_bounded(service):
     s, root, runtime = service
     ref = begin(service)

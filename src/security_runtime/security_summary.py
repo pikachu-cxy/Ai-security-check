@@ -214,6 +214,12 @@ class SecuritySummaryService:
                                       'mcp_tool': 'get_findings', 'arguments': {'scan_id': scan['scan_id']}})
         else:
             result['recommended_tasks'] = [self._compact(task) for task in recommended]
+        from .reply_adapters import summary_facts
+        from .reply_plan import plan_reply
+        from .reply_render import render_reply
+        plan = plan_reply(summary_facts(result))
+        result['reply_plan'] = plan.to_dict()
+        result['user_feedback'] = {'message': render_reply(plan)}
         # No packets, excerpts, scanner secret evidence or environment. Only
         # dynamic stored text passes through the redactor; generated enums and
         # counts stay readable even when source cannot be safely inspected.

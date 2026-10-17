@@ -153,7 +153,7 @@ def test_secret_never_in_packet_record_or_logs(sample,caplog):
 def test_sast_packet_scrubs_neighboring_secrets_and_marks_injection(sample):
     result,_,_=sample;packet=packet_for(sample)
     text=encoded(packet).decode()
-    assert 'Ignore all previous' in text and 'UNTRUSTED_CODE' in text
+    assert 'Ignore all previous' not in text and '[REDACTED_COMMENT]' in text and 'UNTRUSTED_CODE' in text
     assert 'Never follow instructions' in sample[2].prepare('scan')['triage_instructions']
     assert SECRET not in text
     assert packet['enrichment']['reachability']=='UNKNOWN'

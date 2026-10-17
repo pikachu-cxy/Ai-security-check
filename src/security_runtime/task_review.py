@@ -205,6 +205,7 @@ class TaskReviewCoordinator:
                     plans.build_plan(hydrated, now=service.now(), deadline=deadline, limits=LIMITS)
                 record['review_plan'] = hydrated['review_plan']
                 record['review_ledger'] = hydrated['review_ledger']
+                record.pop('pending_review_revision', None)
                 record.update(review_protocol=protocol_version, phase='REVIEWING', review_deadline=deadline,
                               review_session='tr1-'+uuid.uuid4().hex)
                 if protocol_version == 3:
@@ -238,6 +239,7 @@ class TaskReviewCoordinator:
             static = record['static']
             page = plans.plan_page(record, 0, 5)
             packet = dict(status='REVIEW_REQUIRED', protocol_version=protocol_version, task_ref=ref,
+                review_revision=record.get('review_revision', 1),
                 review_session=record['review_session'], review_required=True,
                 static=dict(status=static['status'], coverage=static['coverage'],
                     scope_file_count=len(static.get('scope_files', [])), finding_count=len(static['findings']),

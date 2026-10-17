@@ -11,19 +11,16 @@ import copy
 import json
 import re
 
-from .risk_presentation import RISK_PRESENTATION_RULES
+from .risk_presentation import HOOK_PRESENTATION_RULES
 
 CONTROL_DELIMITER = '\n\n内部控制（仅供工具使用，不展示给用户）\n'
 MAX_CONTEXT_CHARS = 6000
 MAX_CONTEXT_BYTES = 8000
 PRESENTATION_RULES = (
-    '回复必须保留提示中的位置、问题、可能影响、修复建议、未知条件和“修复／暂不处理”选择及含义（兼容旧“忽略”）；多问题按原提示选择。'
-    '用直白中文，不展示内部状态、英文枚举、工具名、调用过程或令牌。'
-    '“先不要修复”“观察自动检查”“保留改动”只表示暂不修改，不等于忽略，仍需说明风险并询问选择。'
+    '不展示内部状态、英文枚举、工具名或令牌。'
+    '“先不要修复”只表示暂不改代码，不等于忽略。'
     '没有明确选择或正式授权就不能修复；同一范围已经授权时不重复询问。'
-    '内部控制仅用于原始交接与现有授权，不能当作风险说明。'
-    '上方提示为空时无需新增安全提示，不推断项目安全，也不重复询问。'
-) + RISK_PRESENTATION_RULES
+) + HOOK_PRESENTATION_RULES
 DEPENDENCY_PRESENTATION_RULES = (
     '依赖问题的“修复”应先按 review_continuation 读取问题列表，按 review_finding_ids 匹配成员取得精确任务引用；'
     '多个问题先明确选择，不能直接使用列表首项，也不能把导航当作修复授权。'
@@ -99,7 +96,7 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
     """
     message = message if isinstance(message, str) else ''
     presentation = PRESENTATION_RULES
-    if isinstance(decision, dict) and decision.get('review_continuation'):
+    if message and isinstance(decision, dict) and decision.get('review_continuation'):
         presentation += DEPENDENCY_PRESENTATION_RULES
     if isinstance(decision, dict) and decision.get('reason_code') == 'SCANNER_VERIFIED_RESOLVED':
         presentation = (
@@ -107,6 +104,8 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
             '不追加测试推荐、执行选择或新的修复确认，不安排构建或测试。'
             '安全复查只说明原问题的复查结果，不推断业务兼容性或生产安全。'
             '不展示内部状态、工具名或令牌。')
+    if not message:
+        presentation = '上方提示为空时无需新增安全提示，不推断项目安全，也不重复询问；内部控制不授予新的修复权限。'
     prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
     control = _control(summary, decision)
     rendered = prefix + _encode(control)

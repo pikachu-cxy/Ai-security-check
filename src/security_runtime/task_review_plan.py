@@ -41,11 +41,16 @@ def _now(value):
 
 
 def _snapshot(record):
-    return _digest(dict(task_ref=record['task_ref'],
+    identity = dict(task_ref=record['task_ref'],
                         before=record['baseline']['hashes'],
                         after=record['end']['hashes'], changes=record['changes'],
                         hook_revision=record.get('finished_hook_revision'),
-                        unverified_paths=record.get('unverified_paths', [])))
+                        unverified_paths=record.get('unverified_paths', []))
+    # Keep existing snapshot identities stable. Later revisions are distinct
+    # even if a caller edits a file back to an earlier reviewed version.
+    if record.get('review_revision', 1) > 1:
+        identity['review_revision'] = record['review_revision']
+    return _digest(identity)
 
 
 def _plan(record):
@@ -240,7 +245,9 @@ def _build_adaptive(record, *, now, deadline, limits):
         raise ReviewPlanError('REVIEW_PLAN_LIMITS_FIXED', 'Adaptive allowances derive from actual obligations, not legacy overrides')
     if record.get('review_session') and record.get('review_protocol', 2) != 3:
         raise ReviewPlanError('REVIEW_PLAN_PROTOCOL_FIXED', 'A prepared legacy task cannot switch protocols')
-    if record.get('review_ledger'):
+    if (record.get('pending_review_revision') or record.get('review_history')) and not record.get('review_ledger'):
+        raise ReviewPlanError('REVIEW_PLAN_REVISION_INVALID', 'Revision history requires its original cumulative ledger')
+    if record.get('review_ledger') and not record.get('pending_review_revision'):
         raise ReviewPlanError('REVIEW_PLAN_SNAPSHOT_FIXED', 'An adaptive ledger retains its original plan; do not rebuild a snapshot')
     if deadline is not None and deadline != now+adaptive.ACTIVITY_SECONDS:
         raise ReviewPlanError('REVIEW_PLAN_DEADLINE_FIXED', 'Adaptive review starts with its fixed activity lease')
@@ -257,7 +264,14 @@ def _build_adaptive(record, *, now, deadline, limits):
             change=change['change'], batch_id='', status='PENDING', required_windows=windows,
             evidence_gaps=gaps, limitations=[], submitted_at=None))
     try:
-        ledger = adaptive.create_ledger(record, units, now=now)
+        if record.get('review_ledger'):
+            from .task_review_revisions import revision_ledger, ReviewRevisionError
+            try:
+                ledger = revision_ledger(record, units, now=now)
+            except ReviewRevisionError as exc:
+                raise ReviewPlanError(exc.reason_code, str(exc)) from None
+        else:
+            ledger = adaptive.create_ledger(record, units, now=now)
     except adaptive.AdaptiveBudgetError as exc:
         raise ReviewPlanError(exc.reason_code, str(exc)) from None
     batch_index, batch_cost = 0, 0
@@ -276,6 +290,7 @@ def _build_adaptive(record, *, now, deadline, limits):
         batch_cost += cost
     plan = dict(contract=ADAPTIVE_CONTRACT, protocol_version=3, semantic_coverage_version=1, snapshot_id=snapshot,
         plan_id='tp3-'+_digest([record['task_ref'], snapshot])[:32], created_at=now,
+        review_revision=record.get('review_revision', 1),
         deadline=ledger['deadline'], units=units, evidence={}, sources={},
         related_files=ledger['related_files'], unverified_paths=list(record.get('unverified_paths', [])),
         static_attempts_at_plan=record.get('static_attempts', 0), budget=ledger,
@@ -298,6 +313,7 @@ def _build_adaptive(record, *, now, deadline, limits):
     if metadata_capacity['status'] != 'READY':
         ledger['capacity']['status'] = 'CAPACITY_REQUIRED'
         ledger['capacity']['reasons'].append(dict(category='signed_record', **metadata_capacity))
+    record.pop('pending_review_revision', None)
     return plan
 
 
@@ -382,6 +398,7 @@ def _adaptive_page(record, plan, cursor, limit):
                 start_line=window['start_line'], end_line=window['end_line']))
         units.append(public)
     return dict(protocol_version=3, plan_id=plan['plan_id'], snapshot_id=plan['snapshot_id'],
+        review_revision=plan.get('review_revision', 1),
         unit_count=len(plan['units']), navigation_count=len(navigation), cursor=cursor,
         units=units, next_cursor=high if high < len(navigation) else None,
         batch_id=units[0]['batch_id'] if units else None, sources=list(sources.values()),

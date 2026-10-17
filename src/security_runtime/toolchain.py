@@ -81,12 +81,16 @@ class ResolvedTool:
     status: ToolStatus
     detail: str = ""
     diagnostic: ErrorDiagnostic | None = None
+    probe: dict | None = None
 
     def __post_init__(self):
         object.__setattr__(self, 'detail', sanitize(self.detail, 500))
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        value = asdict(self)
+        if self.probe is None:
+            value.pop('probe')
+        return value
 
 
 def _manifest(tool: str, version: str, platform_name: str, arch: str, asset: str, digest: str, homepage: str, license_name: str) -> ToolManifest:
@@ -572,14 +576,40 @@ class ToolManager:
                     return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed notice missing")
             except (OSError, ValueError, KeyError):
                 return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "missing or invalid install marker", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
-        output = self._version(tool_id, path)
+        from .component_probe import INTERNAL_ERRORS, capture_probe_failure
+        probe = None
+        try:
+            output = self._version(tool_id, path)
+        except INTERNAL_ERRORS as exc:
+            # Integrity/settings checks above still apply. Retry just the engine
+            # version child once, without version-cache bookkeeping or writes.
+            probe = capture_probe_failure(exc, 'VERSION_RESOLUTION')
+            try:
+                before = (sha256_file(path), tool_environment(path))
+                output = self._probe_version(tool_id, path)
+                if before != (sha256_file(path), tool_environment(path)):
+                    output = ''
+                    probe['recovery'] = 'IDENTITY_CHANGED'
+                elif output:
+                    probe['recovery'] = 'READY' if matches_version(self.versions[tool_id], output) else 'VERSION_MISMATCH'
+                else:
+                    probe['recovery'] = 'FAILED'
+            except ScanCancelled:
+                raise
+            except Exception:
+                output = ''
+                probe['recovery'] = 'FAILED'
+            if not output:
+                problem = diagnosis('RUNTIME_PROBE_FAILED')
+                return ResolvedTool(tool_id, '', str(path), source, ToolStatus.BROKEN,
+                    problem.error_summary, problem, probe)
         if not output:
             problem = self._probe_diagnostics.get((tool_id, str(path))) or diagnosis('COMPONENT_START_FAILED')
             return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, problem.error_summary, problem)
         expected = self.versions[tool_id]
         if not matches_version(expected, output):
-            return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}", diagnosis('COMPONENT_VERSION_MISMATCH'))
-        return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.READY)
+            return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}", diagnosis('COMPONENT_VERSION_MISMATCH'), probe)
+        return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.READY, probe=probe)
 
     def resolve(self, tool_id: str) -> ResolvedTool:
         if tool_id not in self.versions:

@@ -438,6 +438,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'finding_feedback': 'finding-feedback-v2; TYPED_EVIDENCE_REFS; USER_AND_HOST_SEPARATE; REVOCABLE; RAW_FINDINGS_PRESERVED',
                          'risk_disposition': 'risk-disposition-v1; USER_FINAL_HANDLING; EXCLUDE_DEFER_RESTORE; NO_REPAIR_AUTHORITY',
                          'risk_decision_workflow': 'risk-decisions-v2; HOST_ASSESSES_FIRST; USER_DECIDES; MATERIAL_CHANGE_REASSESSMENT',
+                         'reply_plan': 'security-reply-plan-v1; PURE_DISPLAY; FACTS_AND_ACTIONS_SEPARATE; NO_FUNCTIONAL_TEST_INPUT',
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',

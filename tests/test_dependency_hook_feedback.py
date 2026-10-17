@@ -99,7 +99,7 @@ def test_multiple_dependency_findings_require_selection_and_keep_scan_navigation
     feedback = decision['user_feedback']
     assert feedback['choices'] == [] and feedback['selection_required'] is True
     assert 'PyYAML' in feedback['message'] and 'requests' in feedback['message']
-    assert '请先选择要处理的具体问题' in feedback['message']
+    assert '请选择具体风险' in feedback['message']
     assert decision['review_continuation']['arguments']['scan_id'] == 'current-scan'
     assert not {'confirmation_ref', 'remediation_ref', 'prepare'} & decision.keys()
 

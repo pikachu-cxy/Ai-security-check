@@ -22,7 +22,7 @@ _DYNAMIC_FUNCTION = (
     '输入可能被当成 JavaScript 执行',
     '这行代码把动态内容传给 Function 构造器（包括 new Function），生成的函数会把这些内容当作 JavaScript 代码。',
     '如果外部输入能到达这里且生成的函数被调用，攻击者可能在应用权限范围内执行非预期代码、读取或修改数据；实际入口是否可到达、Function 是否为原生构造器尚未确认。',
-    '建议修复：核查输入来源；算术计算应改用仅允许数字、括号和已约定运算符的受限解析器，不能改用 eval 或其他动态执行方式。解析器会收窄可接受的语法，不能保证保留任意 JavaScript 表达式；修改后复查风险，并测试正常算术、错误输入和响应格式。',
+    '建议修复：核查输入来源；算术计算应改用仅允许数字、括号和已约定运算符的受限解析器，不能改用 eval 或其他动态执行方式。解析器会收窄可接受的语法，不能保证保留任意 JavaScript 表达式；修改后复查原风险是否消除。',
 )
 _DYNAMIC_EVAL = (
     _DYNAMIC_FUNCTION[0],
@@ -120,8 +120,6 @@ _INCONCLUSIVE_REASONS = frozenset({
 _ATTEMPT_REASONS = frozenset({
     'EPISODE_ATTEMPT_BUDGET_EXCEEDED', 'REMEDIATION_ESCALATED',
 })
-_QUESTION = ('回复“修复”，我会按说明的范围处理并重新检查；回复“稍后处理”，风险记录仍保留，本次不再追问。'
-             '需要核查判断可回复“请复核”；明确“标为误报”或“不再提醒此项”会按你的决定排除，原告警和不同意见仍保留。')
 _DYNAMIC_ONLY_NOTICE = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
                         '其他代码安全规则尚未执行，需要完整扫描确认。')
 
@@ -210,8 +208,6 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
         problem = f'原问题记录：{problem} 当前代码是否仍存在该问题，需重新确认。'
         recommendation = f'先确认当前代码是否已消除原问题；若问题仍存在，{recommendation}'
     location = _location(finding)
-    where = (f"`{location['file']}` 第 {location['line']} 行" if location['line'] else
-             f"`{location['file']}`" if location['file'] else '当前改动的代码')
     state = []
     if reason == 'EPISODE_ALREADY_EXISTS' and not original:
         state.append('此前已有处理记录，风险目前再次被检出，尚未确认解决。')
@@ -223,22 +219,55 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
           verification_status == 'INCONCLUSIVE'):
         state.append('尚未确认修复成功，不代表风险已消除。')
     choices = list(PRIMARY_CHOICES)
-    question = _QUESTION
+    investigate_first = False
     if action == 'ESCALATE' or (isinstance(reason, str) and reason in _ATTEMPT_REASONS):
         state.append('已停止重复自动修复尝试，需要先核查原因和处理范围；不会因为回复“修复”而重置尝试次数或跳过检查。')
-        question = ('回复“修复”，我会先核查再处理并重新检查；回复“稍后处理”，保留记录，本次不再追问。'
-                    '回复“请复核”可核查判断；明确“标为误报”或“不再提醒此项”会按你的决定排除，不需要AI同意。')
+        investigate_first = True
     elif action == 'AUTO_FIX':
         choices = []
-        question = '本次修复已获得授权，将按已批准的范围处理并重新检查。'
-    heading = f'{title}。' if original else f'发现安全风险：{title}。'
-    location_label = '原问题位置' if original else '位置'
-    message = '\n'.join([heading, f'{location_label}：{where}',
-                         problem, impact, recommendation, *state, question])
-    return {'version': 'security-user-feedback-v2', 'title': title, 'location': location,
+    feedback = {'version': 'security-user-feedback-v2', 'title': title, 'location': location,
             'problem': problem, 'impact': impact, 'recommendation': recommendation,
             'choices': choices, 'secondary_choices': list(SECONDARY_CHOICES) if choices else [],
-            'legacy_choice_aliases': {'暂不处理': '稍后处理', '忽略': '稍后处理'}, 'message': message}
+            'legacy_choice_aliases': {'暂不处理': '稍后处理', '忽略': '稍后处理'},
+            'finding_id': finding.get('id', ''),
+            'display_facts': dict(notes=state, authorized=action == 'AUTO_FIX',
+                                  investigate_first=investigate_first, original=original)}
+    return render_feedback(feedback)
+
+
+def render_feedback(feedback, notices=()):
+    """Compatibility envelope; all visible messages use the shared reply plan."""
+    from .reply_adapters import issue_facts
+    from .reply_plan import Notice, ReplyFacts, plan_reply
+    from .reply_render import render_reply
+    items = feedback.get('items') or [feedback]
+    risks = []
+    for item in items:
+        display = item.get('display_facts') or {}
+        risks.extend(issue_facts(item, notes=display.get('notes', ()),
+            authorized=display.get('authorized') is True,
+            investigate_first=display.get('investigate_first') is True,
+            original=display.get('original') is True).risks)
+    existing = tuple(Notice(n['kind'], n['text']) for n in
+                     feedback.get('reply_plan', {}).get('notices', []))
+    plan = plan_reply(ReplyFacts('ISSUE' if len(items) == 1 else 'ISSUE_GROUP',
+        risks=tuple(risks), notices=existing+tuple(notices),
+        total_risk_count=feedback.get('finding_count')))
+    feedback.update(reply_plan=plan.to_dict(), message=render_reply(plan))
+    return feedback
+
+
+def combine_feedback(items, *, total_count=None):
+    return render_feedback(dict(version='security-user-feedback-v2', items=items,
+        finding_count=total_count if type(total_count) is int else len(items),
+        choices=[], selection_required=True))
+
+
+def check_gap_feedback(message, *, state='INCOMPLETE'):
+    from .reply_plan import CheckFact, Notice, ReplyFacts, plan_reply
+    from .reply_render import render_reply
+    plan = plan_reply(ReplyFacts('CHECK_STATUS', CheckFact(state), notices=(Notice('CHECK_GAP', message),)))
+    return dict(message=render_reply(plan), reply_plan=plan.to_dict())
 
 
 def _count(delta: dict, field: str) -> int | None:
@@ -374,12 +403,22 @@ def dependency_status_message(result: dict) -> str:
 
 
 def scan_status_message(result: dict) -> str:
+    return scan_status_feedback(result)['message']
+
+
+def scan_status_feedback(result: dict) -> dict:
+    from .reply_plan import CheckFact, Notice, ReplyFacts, plan_reply
+    from .reply_render import render_reply
     result = result if isinstance(result, dict) else {}
     if result.get('handling_unavailable'):
         from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
         scope = code_scope_notice(result)
         dependency = dependency_status_message(result)
-        return '\n'.join(part for part in (HANDLING_UNAVAILABLE_MESSAGE, scope, dependency) if part)
+        notices = tuple(Notice(kind, text) for kind, text in (
+            ('HANDLING_UNAVAILABLE', HANDLING_UNAVAILABLE_MESSAGE), ('SCOPE', scope),
+            ('CHECK_GAP', dependency)) if text)
+        plan = plan_reply(ReplyFacts('SCAN_STATUS', notices=notices, handling_available=False))
+        return dict(message=render_reply(plan), reply_plan=plan.to_dict())
     message = _base_scan_status_message(result)
     projection = result.get('finding_feedback_projection', {}) if isinstance(result, dict) else {}
     folded = projection.get('folded_count') if isinstance(projection, dict) else None
@@ -393,11 +432,18 @@ def scan_status_message(result: dict) -> str:
                    f'另有 {folded} 条已排除或已暂缓，原始记录保留。'
                    if remaining else '')
     scope_notice = code_scope_notice(result)
-    if scope_notice:
-        message += '\n' + scope_notice
     dependency = dependency_status_message(result)
     verification = rule_delta_message(result)
-    return message + ('\n' + verification if verification else '') + ('\n' + dependency if dependency else '')
+    notices = tuple(Notice(kind, text) for kind, text in (
+        ('SCOPE', scope_notice), ('PRIOR_VERIFICATION', verification), ('CHECK_GAP', dependency)) if text)
+    state = result.get('status')
+    known = {'NOT_SCANNED', 'NOT_APPLICABLE', 'REUSED_LAST_RESULT', 'NO_CHANGE',
+             'SESSION_FINALIZED', 'NO_CHANGES', 'DEBOUNCED', 'BUSY', 'BASELINE_ESTABLISHED',
+             'SCANNED', 'FAILED', 'PARTIAL', 'INCONCLUSIVE'}
+    state = state if isinstance(state, str) and state in known else 'UNKNOWN'
+    plan = plan_reply(ReplyFacts('SCAN_STATUS', CheckFact(state, message=message),
+                                notices=notices))
+    return dict(message=render_reply(plan), reply_plan=plan.to_dict())
 
 
 def rule_delta_message(result: dict) -> str:

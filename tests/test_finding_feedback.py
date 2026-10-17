@@ -393,8 +393,8 @@ def test_feedback_choices_keep_false_positive_review_separate_from_deferral(tmp_
     feedback = issue_feedback(store.get_scan('s1')['findings'][0])
     assert feedback['choices'] == ['修复', '稍后处理']
     assert feedback['secondary_choices'] == ['请复核', '不再提醒此项']
-    assert '按你的决定排除' in feedback['message']
-    assert '原告警和不同意见仍保留' in feedback['message']
+    assert '按你的决定排除' not in feedback['message']
+    assert '原告警和不同意见仍保留' not in feedback['message']
 
 
 def test_bounded_dependency_context_cannot_fold_on_claimed_non_use(tmp_path):

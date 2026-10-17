@@ -613,23 +613,20 @@ class HookCoordinator:
         candidates = sorted((f for f in scan.findings if f.id in (dependency_ids & active_ids)),
                             key=lambda f: ({'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}.get(f.severity,4), f.id))
         if candidates:
-            from .hook_user_feedback import issue_feedback, dependency_status_message
+            from .hook_user_feedback import issue_feedback, dependency_status_message, combine_feedback, render_feedback
+            from .reply_plan import Notice
             items = [issue_feedback(asdict(finding), action='ADVISE') for finding in candidates[:3]]
             if len(candidates) == 1:
                 feedback = items[0]
             else:
-                feedback = {'version': 'security-user-feedback-v1', 'items': items,
-                    'choices': [], 'selection_required': True,
-                    'message': '\n\n'.join(f'问题 {index}：\n{item["message"]}'
-                                          for index, item in enumerate(items, 1)) +
-                               '\n请先选择具体问题，再回复“修复”或“稍后处理”；也可选择“请复核”或“不再提醒此项”。'}
+                feedback = combine_feedback(items, total_count=len(candidates))
             note = (dependency_status_message(result) or '已检查本次读取的依赖版本，但完整依赖关系或漏洞数据的新鲜程度尚未确认。'
                     if scan.capability_results.get('DEPENDENCY_VULN') != 'EXECUTED' else
                     '本次依赖版本检查发现风险；实际安装情况和应用能否被利用尚未确认。')
-            feedback['message'] = note + '\n' + feedback['message']
+            render_feedback(feedback, (Notice('CHECK_GAP', note),))
             feedback['finding_count'] = len(candidates)
             if len(candidates) > len(items):
-                feedback['message'] += '本次检查还检出了其他依赖风险；请查看问题列表后逐项选择处理。'
+                render_feedback(feedback, (Notice('SCOPE', '本次检查还检出了其他依赖风险；请查看问题列表后逐项选择处理。'),))
             result['dependency_review_finding_ids'] = [finding.id for finding in candidates[:3]]
             result['dependency_user_feedback'] = feedback
         observe_recent_hook('SCANNER_COMPLETED', scanner_run=result['execution']['scanner_run'])

@@ -9,7 +9,7 @@ from typing import Protocol
 
 from .hook_runtime import HOSTS, HookCoordinator
 from .hook_state import atomic_bytes, no_links
-from .hook_user_feedback import scan_status_message
+from .hook_user_feedback import scan_status_feedback
 from .hooks import HookEvent
 from .mcp_config import resolve_runtime_command
 from .workspace import WorkspaceResolver
@@ -73,12 +73,14 @@ class CodexHookAdapter:
                 'Stop':[{'hooks':[dict(handler)]}]}
 
     def output(self,payload,result):
-        value = {'systemMessage':scan_status_message(result)}
+        display = scan_status_feedback(result)
+        value = {'systemMessage':display['message']}
         if payload['hook_event_name'] in {'SessionStart','PostToolUse'}:
             # Small fixed metadata only. This is not a request to continue or
             # block the turn, nor an automatic MCP/model invocation.
             value['hookSpecificOutput'] = {'hookEventName':payload['hook_event_name'],
-                'additionalContext':json.dumps({k:result[k] for k in ('status','scan_id','coverage','execution','baseline_available')})}
+                'additionalContext':json.dumps({**{k:result[k] for k in ('status','scan_id','coverage','execution','baseline_available')},
+                                               'reply_plan':display['reply_plan']})}
         return value
 
 

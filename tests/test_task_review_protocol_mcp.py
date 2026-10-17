@@ -130,3 +130,35 @@ def test_global_review_protocol_errors_do_not_report_workspace_failure(installed
         assert not ledgers[root].calls
     finally:
         pool.close()
+
+
+@pytest.mark.parametrize('kind,reason', [
+    ('plan', 'REVIEW_PLAN_SESSION_MISMATCH'),
+    ('plan', 'REVIEW_PLAN_STALE'),
+    ('revision', 'TASK_REVIEW_REVISION_CAPACITY'),
+    ('revision', 'REVIEW_PLAN_REVISION_INVALID'),
+    ('plan', 'UNTRUSTED_DYNAMIC_REASON'),
+])
+def test_global_revision_errors_keep_fixed_diagnostics_without_exception_text(
+        installed, projects, tmp_path, monkeypatch, kind, reason):
+    from security_runtime.task_review_plan import ReviewPlanError
+    from security_runtime.task_review_revisions import ReviewRevisionError
+    pool, _ = task_pool(installed, tmp_path)
+    server = create_global_server(workspaces=pool)
+    error = ReviewPlanError if kind == 'plan' else ReviewRevisionError
+
+    def reject(*args, **kwargs):
+        raise error(reason, 'private source or environment must never be reflected')
+
+    monkeypatch.setattr(TaskSecurityService, 'prepare', reject)
+    try:
+        result = call(server, 'prepare_task_security_review', projects[0],
+            task_ref='ts1-'+'a'*32, protocol_version=3)
+        expected = 'TASK_REQUEST_REJECTED' if reason == 'UNTRUSTED_DYNAMIC_REASON' else reason
+        assert result['reason_code'] == expected
+        assert result['status'] == 'INCONCLUSIVE'
+        assert 'private source' not in json.dumps(result)
+        assert 'workspace_readiness' not in result
+        assert result['scanner_run'] is False
+    finally:
+        pool.close()

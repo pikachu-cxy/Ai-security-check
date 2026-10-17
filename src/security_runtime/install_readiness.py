@@ -82,6 +82,18 @@ def _failure(failures, stage, component, exception):
         failures.append(item)
 
 
+def _probe_failed(name, exception, operation):
+    from .component_health import diagnosis
+    from .component_probe import capture_probe_failure
+    from .diagnostics import DiagnosticError
+    if isinstance(exception, DiagnosticError):
+        return ResolvedTool(name, '', '', None, ToolStatus.BROKEN,
+            exception.diagnostic.error_summary, exception.diagnostic)
+    problem = diagnosis('RUNTIME_PROBE_FAILED')
+    return ResolvedTool(name, '', '', None, ToolStatus.BROKEN,
+        problem.error_summary, problem, capture_probe_failure(exception, operation))
+
+
 def _report(progress, stage):
     try:
         report_progress(progress, stage)
@@ -101,6 +113,11 @@ def _component(result, expected, name=None):
         status = ToolStatus.BROKEN.value
     component = {'status': status, 'version': actual, 'expected_version': expected,
         'ready': status == ToolStatus.READY and actual == expected}
+    probe = getattr(result, 'probe', None)
+    if probe is not None:
+        from .component_probe import valid_probe
+        if valid_probe(probe):
+            component['probe'] = probe
     name = name or getattr(result, 'tool_id', None)
     if not component['ready'] and name in CORE_TOOLS:
         from .component_health import component_issue
@@ -260,6 +277,10 @@ def _message(tools, database, *, offline, ready):
             issue = component.get('diagnostic')
             notes.append(_LABELS[name] + '不可用：' + issue['message'] + issue['remediation'] if issue else
                 _LABELS[name] + ('组件版本不兼容。' if component['status'] == ToolStatus.VERSION_MISMATCH else '尚未准备完成。'))
+            from .component_probe import probe_fault_id
+            reference = probe_fault_id(component.get('probe'))
+            if reference:
+                notes.append('诊断编号：' + reference + '。')
     if not database['ready']:
         if database['status'] == ToolStatus.BROKEN:
             notes.append('漏洞数据无法正常读取或格式不兼容，需重新准备。')
@@ -328,7 +349,7 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except Exception as exc:
             for name in CORE_TOOLS:
                 _failure(failures, 'INSTALL_TOOLS', name, exc)
-            tools = {name: _component(None, VERSIONS[name], name) for name in CORE_TOOLS}
+            tools = {name: _component(_probe_failed(name, exc, 'MANAGER_INIT'), VERSIONS[name], name) for name in CORE_TOOLS}
             database = {'status': 'BROKEN', 'freshness': 'UNKNOWN', 'ready': False,
                 'cached_usable': False}
             _report(progress, 'INSTALL_DATA')
@@ -352,6 +373,7 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
             raise
         except Exception as exc:
             _failure(failures, 'INSTALL_TOOLS', name, exc)
+            current = _probe_failed(name, exc, 'RESOLVE')
         if (not _component(current, expected, name)['ready'] and not offline
                 and getattr(current, 'status', None) in {ToolStatus.MISSING, ToolStatus.VERSION_MISMATCH}):
             budget = current_budget()
@@ -364,6 +386,9 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
                 raise
             except Exception as exc:
                 _failure(failures, 'INSTALL_TOOLS', name, exc)
+                from .component_probe import INTERNAL_ERRORS
+                if isinstance(exc, INTERNAL_ERRORS):
+                    current = _probe_failed(name, exc, 'ENSURE')
             if budget:
                 diagnostic = getattr(current, 'diagnostic', None)
                 code = getattr(diagnostic, 'error_code', '') or 'ENGINE_UNAVAILABLE'
@@ -398,9 +423,17 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except ScanCancelled:
             raise
         except Exception as exc:
-            current = None
+            current = _probe_failed(name, exc, 'RESOLVE')
             _failure(failures, 'VERIFY_SCAN_READINESS', name, exc)
         previous = resolved[name]
+        if (isinstance(current, ResolvedTool) and current.probe is None
+                and isinstance(previous, ResolvedTool) and previous.probe is not None):
+            # Final availability supersedes the old state, not its diagnostic
+            # history. Recovery is not evidence that an earlier scan ran.
+            probe = dict(previous.probe)
+            if current.status == ToolStatus.READY:
+                probe['recovery'] = 'READY'
+            current = replace(current, probe=probe)
         if (isinstance(current, ResolvedTool) and current.status in {ToolStatus.MISSING, ToolStatus.OFFLINE}
                 and getattr(previous, 'diagnostic', None) is not None):
             # A failed download must not become a vague "missing" diagnosis
@@ -458,8 +491,14 @@ def _validate_readiness_receipt(value):
         return False
     for name, component in tools.items():
         fields = {'status', 'version', 'expected_version', 'ready'}
-        if not isinstance(component, dict) or not fields <= set(component) or set(component) - fields - {'diagnostic'}:
+        if not isinstance(component, dict) or not fields <= set(component) or set(component) - fields - {'diagnostic', 'probe'}:
             return False
+        if 'probe' in component:
+            from .component_probe import valid_probe
+            if not valid_probe(component['probe']):
+                return False
+            if component.get('ready') is True and component['probe']['recovery'] != 'READY':
+                return False
         if 'diagnostic' in component:
             from .component_health import valid_issue
             if component.get('ready') is True or not valid_issue(name, component['diagnostic']):

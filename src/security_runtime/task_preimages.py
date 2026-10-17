@@ -381,7 +381,7 @@ class _PreimageWriter:
             'length(CAST(path AS BLOB))+length(mac)+?),0) FROM task_preimage_semantics',
             (ROW_FRAMING_BYTES,)).fetchone()[0]
 
-    def put(self, path, raw_bytes, sanitized_lines):
+    def _prepare_source(self, path, raw_bytes):
         if self.closed:
             _fail('TASK_PREIMAGE_WRITER_CLOSED')
         path = _path(path)
@@ -390,13 +390,34 @@ class _PreimageWriter:
         try:
             if any(byte < 32 and byte not in (9, 10, 12, 13) for byte in raw_bytes):
                 _fail('TASK_PREIMAGE_SOURCE_REJECTED')
-            # Defense in depth: callers cannot accidentally persist unredacted
-            # arguments merely by labelling them sanitized_lines.
-            if not _valid_lines(sanitized_lines) or sanitized_lines != safe_source(raw_bytes.decode('utf-8-sig'), source_path=path):
-                _fail('TASK_PREIMAGE_SANITIZATION_UNVERIFIED')
-            body = _body(sanitized_lines)
+            truncated = []
+            lines = safe_source(raw_bytes.decode('utf-8-sig'), source_path=path,
+                                truncation_lines=truncated)
         except UnicodeError:
             _fail('TASK_PREIMAGE_SOURCE_REJECTED')
+        return path, lines, truncated
+
+    def put_source(self, path, raw_bytes):
+        """Prepare and persist trusted sanitizer output once at this boundary.
+
+        Raw bytes stay ephemeral.  Callers cannot supply alleged sanitized
+        content, and receive only the existing authenticated reference plus
+        line numbers needed to report display truncation.
+        """
+        path, lines, truncated = self._prepare_source(path, raw_bytes)
+        return dict(reference=self._put_sanitized(path, raw_bytes, lines),
+                    truncated_lines=truncated)
+
+    def put(self, path, raw_bytes, sanitized_lines):
+        path, expected, _ = self._prepare_source(path, raw_bytes)
+        # Defense in depth: callers cannot accidentally persist unredacted
+        # arguments merely by labelling them sanitized_lines.
+        if not _valid_lines(sanitized_lines) or sanitized_lines != expected:
+            _fail('TASK_PREIMAGE_SANITIZATION_UNVERIFIED')
+        return self._put_sanitized(path, raw_bytes, sanitized_lines)
+
+    def _put_sanitized(self, path, raw_bytes, sanitized_lines):
+        body = _body(sanitized_lines)
         if len(body) > MAX_FILE_BODY_BYTES:
             _fail('TASK_PREIMAGE_FILE_BUDGET')
         raw_hash = _sha(raw_bytes)

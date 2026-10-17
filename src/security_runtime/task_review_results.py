@@ -253,6 +253,9 @@ def _base(record, freshness=None, feedback=None):
         context_read_coverage=_saved_context(record),
         max_response_bytes=MAX_RESULT_BYTES,
         history_contract='Saved results only; this read does not run checks or extend source-review budgets.')
+    if record.get('review_protocol') == 3:
+        result.update(review_revision=record.get('review_revision', 1),
+                      previous_review_count=len(record.get('review_history', [])))
     if feedback:
         # Current handling is separate from immutable findings and AI evidence.
         # A direct user choice can stop reminders without declaring safety.
@@ -321,22 +324,6 @@ def _base(record, freshness=None, feedback=None):
     return result
 
 
-def _summary(record, total):
-    static, review = record.get('static') or {}, record.get('review') or {}
-    if total:
-        return f"检查记录共 {total} 项：{len(static.get('findings') or [])} 项静态提示、{len(review.get('findings') or [])} 项代码复核线索。风险详情按页返回。"
-    if record.get('review_capacity') and record['phase'] not in {'COMPLETE', 'INCOMPLETE', 'NO_CHANGES'}:
-        return '已有检查记录已保留；代码复核尚未开始：全部必读范围需要的存储或传输资源超过当前可承载容量，未省略文件，也未认定复核通过。'
-    if record['phase'] == 'NO_CHANGES':
-        return '本次记录没有可检查的文件改动。'
-    if record['phase'] != 'COMPLETE':
-        return '这份检查记录尚未完成；当前没有已记录的风险提示。'
-    if (static.get('status') not in {'SUCCESS', 'COMPLETED'}
-            or static.get('coverage') not in {'FULL', 'SCOPED'}
-            or review.get('coverage') != 'REVIEWED'
-            or record.get('limitations') or review.get('limitations')):
-        return '当前没有已记录的风险提示；检查仍有未完成或覆盖受限的内容，见记录说明。'
-    return '本次已保存的检查记录没有发现安全线索。'
 
 
 def _page(base, record, rows, offset, index, limit, selected, next_offset):
@@ -352,13 +339,15 @@ def _page(base, record, rows, offset, index, limit, selected, next_offset):
         host_count=len((record.get('review') or {}).get('findings') or []),
         has_more=next_offset is not None, next_offset=next_offset,
         ordering='STATIC_THEN_HOST', max_findings_per_page=MAX_FINDINGS)
-    result['risk_choices'] = [dict(finding_id=item['detail']['id'],
-        options=['修复', '稍后处理', '帮我核查', '不再提醒'], deferred_keeps_risk=True, repair_authorized=False)
-        for item in selected if item.get('details_complete') and item.get('detail', {}).get('id')
-        and not item.get('detail', {}).get('feedback', {}).get('folded')]
-    if result.get('current_version') is False:
-        result['risk_choices'] = []
-    result['development_summary'] = _summary(record, len(rows))
+    from .reply_adapters import history_facts
+    from .reply_plan import plan_reply
+    from .reply_render import choice_labels, render_reply
+    plan = plan_reply(history_facts(record, selected,
+        current=result.get('current_version', True), feedback=feedback))
+    result['reply_plan'] = plan.to_dict()
+    result['risk_choices'] = [dict(finding_id=identifier, options=choice_labels(),
+        deferred_keeps_risk=True, repair_authorized=False) for identifier in plan.action_ids]
+    result['development_summary'] = render_reply(plan, include_risks=False)
     if next_offset is not None:
         result['next_action'] = dict(tool='get_task_security_review', task_ref=record['task_ref'],
                                      finding_offset=next_offset, finding_limit=min(limit, MAX_FINDINGS))

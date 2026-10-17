@@ -483,7 +483,7 @@ def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
         receipt = prepare_installation_readiness(manager=manager)
         print(receipt['message'])
         output = capsys.readouterr()
-        assert '代码检查尚未准备完成' in output.out
+        assert '代码检查不可用' in output.out and '组件尚未安装' in output.out
         assert all(value not in output.out + output.err for value in (
             'tool_install_failed', 'semgrep', 'PrivateOutput', 'private-path'))
         assert tuple(logger.filters) == original_filters

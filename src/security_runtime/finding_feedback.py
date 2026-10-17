@@ -552,32 +552,18 @@ class FindingFeedbackService:
                       runtime_validation='REFERENCES_AND_VERSIONS_ONLY',
                       state='AGENT_FALSE_POSITIVE' if technical_false_positive else 'REVIEW_STALE' if agent and not current
                       else agent['verdict'] if agent else 'USER_MARKED_UNCONFIRMED' if user else 'UNREVIEWED')
-        messages = {
-            'AGENT_FALSE_POSITIVE': 'Agent 根据当前代码复核认为此告警是误报，已折叠重复提醒；原告警和复核依据仍保留，可撤销。',
-            'FALSE_POSITIVE': 'AI 复核认为此告警不成立；提醒状态按你的处置决定保留。',
-            'USER_MARKED_UNCONFIRMED': '已记录你认为此告警是误报；Agent 尚未确认，仍保留待处理提醒。',
-            'REVIEW_STALE': '此前复核依据已变化或无法读取，原误报结论暂不沿用，需要重新核查这条告警。',
-            'STILL_RISK': 'Agent 复核后仍认为这条告警存在风险；你的误报意见和复核依据均已保留，尚未授权修复。',
-            'NEEDS_CONTEXT': '现有证据不足以判断这条告警是否误报，已保留待确认；具体缺口见复核说明。',
-            'UNREVIEWED': '这条告警没有当前有效的误报复核结论，仍保留待处理。',
-        }
-        result['message'] = messages[result['state']]
         result['handling_status'] = ('DEFERRED' if human_suppressed and disposition['disposition'] == 'DEFER'
                                      else 'EXCLUDED' if reminder_suppressed else 'PENDING')
         result['handling_label'] = {'DEFERRED': '已暂缓', 'EXCLUDED': '已排除', 'PENDING': '待处理'}[result['handling_status']]
         result['handling_source'] = ('USER_DECISION' if human_suppressed else 'USER_RESTORE' if restored
                                     else 'AI_REVIEW_EXCLUSION' if folded else None)
-        if human_suppressed:
-            result['message'] = ('已暂缓此项，本次不再重复追问；技术评估和原告警仍保留。'
-                if disposition['disposition'] == 'DEFER' else
-                '已按你的决定排除此项，不再重复提醒；技术评估和原告警仍保留，可随时恢复。')
-            if (disposition.get('decision') or {}).get('metadata', {}).get('historical_only'):
-                result['message'] += ' 当前源码不可定位，此决定仅关联这次历史告警，后续扫描需重新识别。'
-        elif restored:
-            result['message'] = '已恢复此项提醒；原告警、技术评估及处置历史仍保留。'
-        elif folded and not technical_false_positive:
-            result['message'] += ' 提醒依据未发生实质变化，仍沿用此前不重复提醒的处置；最新技术评估单独保留。'
-        result['user_feedback'] = dict(message=result['message'])
+        from .reply_adapters import handling_facts
+        from .reply_plan import plan_reply
+        from .reply_render import render_reply
+        plan = plan_reply(handling_facts(result))
+        result['reply_plan'] = plan.to_dict()
+        result['message'] = render_reply(plan)
+        result['user_feedback'] = dict(message=result['message'], reply_plan=result['reply_plan'])
         if include_history:
             result['history'] = history
             result['disposition_history'] = disposition.get('history', []) if disposition else []

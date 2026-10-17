@@ -20,6 +20,7 @@ from .storage import SQLiteStore
 
 LABELS = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
 ISSUES = {
+    'RUNTIME_PROBE_FAILED': ('产品的组件探测出现异常，尚未确认组件当前状态。', '保留现有组件，先重试状态查询；持续失败时提供诊断编号，无需直接重装组件。'),
     'COMPONENT_MISSING': ('组件尚未安装。', '联网准备此组件；已有其他组件继续保留。'),
     'COMPONENT_VERSION_MISMATCH': ('已安装版本与当前要求不符。', '准备当前要求的固定版本；不要替换用户指定的外部程序。'),
     'COMPONENT_SETTINGS_CORRUPTED': ('Semgrep 用户设置文件损坏，组件已安装但无法启动。', '先备份损坏设置，再重建默认设置；无需重新下载组件。'),
@@ -157,8 +158,12 @@ class ComponentHealthStore:
                 issue = current.get('diagnostic')
                 if failed and not valid_issue(component, issue):
                     issue = component_issue(component, current.get('status'))
-                fingerprint = json.dumps([current.get('expected_version'),
-                    issue['code'] if failed else 'READY'], separators=(',', ':'))
+                from .component_probe import probe_fault_id
+                fault_id = probe_fault_id(current.get('probe')) if failed else ''
+                identity = [current.get('expected_version'), issue['code'] if failed else 'READY']
+                if fault_id:
+                    identity.append(fault_id)
+                fingerprint = json.dumps(identity, separators=(',', ':'))
                 previous = db.execute('SELECT fingerprint,failed,pending FROM component_health '
                     'WHERE scope=? AND component=?', (self.scope, component)).fetchone()
                 pending = previous[2] if previous else None
@@ -176,6 +181,8 @@ class ComponentHealthStore:
                             and event.get('code') == (issue['code'] if failed else 'READY')):
                         event['message'] = (LABELS[component] + '已恢复可用；这不代表项目已通过安全检查。'
                             if not failed else LABELS[component] + '不可用：' + issue['message'] + issue['remediation'])
+                        if fault_id:
+                            event['message'] += '诊断编号：' + fault_id + '。'
                         notices.append(event)
                     pending = None
                 db.execute('INSERT OR REPLACE INTO component_health VALUES(?,?,?,?,?)',

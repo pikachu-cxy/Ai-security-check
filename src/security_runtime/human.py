@@ -179,6 +179,17 @@ def render_security_summary(result):
         command='security-check '+shlex.join(result['next_step']['cli_args'])
         return '\n'.join(['开发者安全任务',result['message'],f'可选下一步：{command}',
                           '尚未执行扫描；首次扫描可能需要准备引擎和联网解析依赖。'])
+    if not result['details'] and result.get('reply_plan'):
+        lines = [result['user_feedback']['message']]
+        for task in result['recommended_tasks']:
+            if not task.get('active_finding_count', task['finding_count']):
+                continue
+            lines.extend(['', task['title'], '位置：'+'；'.join(task['locations'][:2]),
+                '可能影响：'+task['possible_impact'],
+                '尚未确认：'+' '.join(task['unknown_conditions']),
+                '核查建议：'+task['next_step']['label']])
+        lines.append('\n查看依据、历史和完整检查范围：security-check summary --details。')
+        return '\n'.join(lines)
     c=result['triage_coverage']
     from .risk import presentation_status
     assessment = presentation_status(result['release_status'], finding_count=c['total_candidates'],

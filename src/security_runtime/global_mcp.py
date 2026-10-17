@@ -327,6 +327,16 @@ def _task_request_rejected(reason):
         'TASK_OWNER_UNAVAILABLE':
             '原任务没有保存可确认的会话归属，当前请求不能续接或结束该记录。已有改动和记录保留；'
             '不能把当前聊天当成原任务所有者，也不能从修改后重新建立修改前记录。',
+        'TASK_REVIEW_REVISION_CAPACITY':
+            '任务历史与本次复核材料超出存储容量，前一版本记录已保留。当前版本尚未完成复核。',
+        'REVIEW_PLAN_REVISION_INVALID':
+            '复核版本与原任务记录无法核对，未采用旧证据，也未重建修改前记录。请保留原任务进行诊断。',
+        'REVIEW_PLAN_SNAPSHOT_FIXED':
+            '当前复核计划不能直接重建。请沿用原任务结束本次改动，再准备对应版本的复核。',
+        'REVIEW_PLAN_STALE':
+            '复核对应的代码已变化，旧证据不能提交到新版本。请在原任务中结束本次改动并准备新版本复核。',
+        'REVIEW_PLAN_SESSION_MISMATCH':
+            '本次请求使用了旧的复核会话。请使用原任务当前版本返回的复核会话继续。',
     }.get(reason, '任务复核请求未被接受。请使用当前任务返回的参数继续；这不表示项目准备或产品连接失败。')
     data = dict(status='INCONCLUSIVE', reason_code=reason, scanner_run=False,
         source_modified=False, security_proof=False, repair_authorized=False,
@@ -562,9 +572,17 @@ def create_global_server(*, workspaces=None, host='codex'):
                 # malformed review requests must not masquerade as a broken
                 # workspace. Never reflect arbitrary SDK/source/path errors.
                 from .task_ownership import TaskOwnershipError
+                from .task_review_plan import ReviewPlanError
+                from .task_review_revisions import ReviewRevisionError
                 cause = exc
                 for _ in range(8):
                     if isinstance(cause, TaskOwnershipError):
+                        return _task_request_rejected(cause.reason_code)
+                    if (isinstance(cause, (ReviewPlanError, ReviewRevisionError))
+                            and cause.reason_code in {
+                                'TASK_REVIEW_REVISION_CAPACITY', 'REVIEW_PLAN_REVISION_INVALID',
+                                'REVIEW_PLAN_SNAPSHOT_FIXED', 'REVIEW_PLAN_STALE',
+                                'REVIEW_PLAN_SESSION_MISMATCH'}):
                         return _task_request_rejected(cause.reason_code)
                     cause = cause.__cause__ or cause.__context__
                     if cause is None:
@@ -658,6 +676,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                             event == 'PostToolUse' and (operation == OperationClass.READ_ONLY.value
                             or data.get('workspace_mutation_observed') is False)):
                         data.pop('user_feedback', None)
+                        data.pop('reply_plan', None)
                         return CallToolResult(structuredContent=data,
                             content=[TextContent(type='text', text='{}')])
                     # One generic gap per turn, not one per tool invocation.
@@ -672,12 +691,16 @@ def create_global_server(*, workspaces=None, host='codex'):
                             gap_notices.popitem(last=False)
                     if duplicate:
                         data.pop('user_feedback', None)
+                        data.pop('reply_plan', None)
                         return CallToolResult(structuredContent=data,
                             content=[TextContent(type='text', text='{}')])
                     if event == 'PostToolUse':
                         if data.get('reason_code') in {'WORKSPACE_INITIALIZING', 'WORKSPACE_DEGRADED', 'WORKSPACE_ERROR'}:
                             message += '本次修改尚未检查。'
-                    data['user_feedback'] = {'message': message}
+                    from .hook_user_feedback import check_gap_feedback
+                    data['user_feedback'] = check_gap_feedback(message)
+                    data['reply_plan'] = data['user_feedback']['reply_plan']
+                    message = data['user_feedback']['message']
                     presentation = (
                         '仅当本轮实际修改了源代码或配置，且该改动的检查在总结时仍未完成，'
                         '才在正常开发总结中简要说明一次本轮检查缺口，不能称检查通过。'

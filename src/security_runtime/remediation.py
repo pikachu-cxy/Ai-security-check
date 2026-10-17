@@ -570,7 +570,8 @@ class RemediationService:
 
     def _advisory_feedback(self, output, result, root):
         """Present current saved candidates without granting or resetting a repair."""
-        from .hook_user_feedback import issue_feedback, dependency_status_message, code_scope_notice
+        from .hook_user_feedback import issue_feedback, dependency_status_message, code_scope_notice, combine_feedback, render_feedback
+        from .reply_plan import Notice
         from .finding_feedback import FindingFeedbackService
         if result.get('handling_unavailable'):
             return self._handling_unavailable()['user_feedback']
@@ -649,29 +650,21 @@ class RemediationService:
         if len(matches) == 1:
             feedback = items[0]
         else:
-            feedback = {'version': 'security-user-feedback-v1', 'items': items,
-                        'choices': [], 'selection_required': True,
-                        'message': '\n\n'.join(
-                            f'问题 {index}：{item["title"]}\n'
-                            f'位置：{item["location"]["file"] or "当前改动的代码"}'
-                            f'{" 第 " + str(item["location"]["line"]) + " 行" if item["location"]["line"] else ""}\n'
-                            f'{item["problem"]}\n{item["impact"]}\n建议：{item["recommendation"]}'
-                            for index, item in enumerate(items, 1)) +
-                            '\n请先选择要处理的具体问题，再回复“修复”或“稍后处理”；也可选择“请复核”或“不再提醒此项”。'}
+            feedback = combine_feedback(items, total_count=len(matches))
         scope_notice = code_scope_notice(result)
         if scope_notice:
-            feedback['message'] += '\n' + scope_notice
+            render_feedback(feedback, (Notice('SCOPE', scope_notice),))
         elif result.get('coverage') != 'FULL':
-            feedback['message'] += '\n本次只完成了部分检查，其他风险可能尚未被发现。'
+            render_feedback(feedback, (Notice('CHECK_GAP', '本次只完成了部分检查，其他风险可能尚未被发现。'),))
         if unattributed:
-            feedback['message'] += ('\n缺少改动前的有效检查记录，暂时无法确认是否由本次改动引入。'
-                                    '尚未自动修复；选择“修复”后，仍需核查该问题和修改范围。')
+            render_feedback(feedback, (Notice('CHECK_GAP',
+                '缺少改动前的有效检查记录，暂时无法确认是否由本次改动引入。尚未自动修复；选择“修复”后，仍需核查该问题和修改范围。'),))
         if dependency_matches:
             dependency_note = dependency_status_message(result)
             if dependency_note:
-                feedback['message'] += '\n' + dependency_note
-            feedback['message'] += ('\n已检出这些依赖版本的风险，但暂未确认是否由本次改动引入。'
-                                    '选择“修复”后，会先核查受影响依赖和修改范围，再处理。')
+                render_feedback(feedback, (Notice('CHECK_GAP', dependency_note),))
+            render_feedback(feedback, (Notice('CHECK_GAP',
+                '已检出这些依赖版本的风险，但暂未确认是否由本次改动引入。选择“修复”后，会先核查受影响依赖和修改范围，再处理。'),))
             feedback['review_continuation'] = {'tool': 'get_security_summary', 'arguments': {
                 'workspace_path': str(Path(root).resolve()), 'scan_id': scan_id, 'details': True}}
         return feedback
