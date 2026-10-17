@@ -10,6 +10,65 @@ from .local_evidence import WorkspaceReader, EvidenceUnavailable
 MAX_ROWS = 1000
 MAX_BYTES = 2_000_000
 
+
+def disposition_store(hooks, root, *, now=None):
+    """Keep user decisions outside source-review and repair ledgers."""
+    from .risk_disposition import RiskDispositionStore
+    options = {} if now is None else {'now': now}
+    return RiskDispositionStore(hooks.workspace_directory(root) / 'risk-dispositions.db', **options)
+
+
+def finding_disposition_scope(root, finding):
+    """A task-independent issue identity; source text never enters the ledger."""
+    from .risk_disposition import issue_scope
+    try:
+        return issue_scope(root, finding['file_path'], finding.get('line_start', 1),
+            finding.get('line_end', finding.get('line_start', 1)),
+            category=finding.get('category', ''), rule_id='HOST_CONTEXT_REVIEW')
+    except (OSError, ValueError, EvidenceUnavailable, UnicodeError):
+        return {}
+
+
+def finding_disposition_locations(root, finding, paths):
+    locations = {}
+    for location in finding.get('evidence_locations', []):
+        locations.setdefault(location['path'], location)
+    result = []
+    for path in sorted(paths):
+        location = dict(path=path, start_line=locations.get(path, {}).get('start_line', 1),
+                        end_line=locations.get(path, {}).get('end_line', 1))
+        scope = finding_disposition_scope(root, dict(file_path=path,
+            line_start=location['start_line'], line_end=location['end_line'],
+            category=finding.get('category', '')))
+        location['scope_metadata'] = scope.get('metadata') or {}
+        result.append(location)
+    return result
+
+
+def disposition_revision(root, row, *, with_precision=False):
+    """Changes request reassessment; they do not cancel a user's decision."""
+    from .risk_disposition import issue_scope, refresh_scope
+    revisions, precise = {}, True
+    locations = row.get('disposition_locations') or [dict(path=path, start_line=1, end_line=1)
+                                                   for path in row['required_source_paths']]
+    for location in locations:
+        path = location['path']
+        try:
+            try:
+                scope = refresh_scope(root, location['scope_metadata'])
+            except (KeyError, OSError, ValueError, EvidenceUnavailable, UnicodeError):
+                scope = issue_scope(root, path, location['start_line'], location['end_line'],
+                                    category=row.get('category', ''), rule_id='HOST_CONTEXT_REVIEW')
+        except (OSError, ValueError, EvidenceUnavailable, UnicodeError):
+            return (None, False) if with_precision else None
+        revision = scope.get('evidence_revision')
+        if revision is None:
+            return (None, False) if with_precision else None
+        revisions[path+':'+scope['metadata']['symbol']] = revision
+        precise = precise and scope['metadata'].get('material_change_confirmable') is True
+    revision = digest(b'task-risk-disposition-revision-v1', revisions)
+    return (revision, precise) if with_precision else revision
+
 def current_hashes(root, paths):
     import hashlib
     values = {}
@@ -53,13 +112,18 @@ class TaskRiskLedger:
         rows = self.registration_rows(record, self.read())
         self.save(rows)
 
-    @staticmethod
-    def registration_rows(record, rows):
+    def registration_rows(self, record, rows):
         rows = dict(rows)
         for finding in [*(record.get('static') or {}).get('findings', []),
                         *(record.get('review') or {}).get('findings', [])]:
             key = record['task_ref'] + ':' + finding['id']
             if key in rows:
+                if (rows[key]['source'] == 'HOST_TASK_REVIEW'
+                        and not rows[key].get('disposition_scope')):
+                    rows[key] = dict(rows[key], disposition_scope=finding_disposition_scope(self.root, finding))
+                if rows[key]['source'] == 'HOST_TASK_REVIEW' and not rows[key].get('disposition_locations'):
+                    rows[key] = dict(rows[key], disposition_locations=finding_disposition_locations(
+                        self.root, finding, rows[key]['required_source_paths']))
                 continue
             source = finding.get('source', 'SCANNER')
             paths = {finding['file_path']}
@@ -75,6 +139,9 @@ class TaskRiskLedger:
                 required_source_paths=sorted(paths),
                 original_hashes={p:record['end']['hashes'].get(p) for p in paths},
                 evidence_type='NONE', proof_hashes={}, repair_authorized=False)
+            if source == 'HOST_TASK_REVIEW':
+                rows[key]['disposition_scope'] = finding_disposition_scope(self.root, finding)
+                rows[key]['disposition_locations'] = finding_disposition_locations(self.root, finding, paths)
         return rows
 
     def view(self, task_ref, offset=0, limit=30, origin_record=None):
@@ -84,15 +151,32 @@ class TaskRiskLedger:
         if origin_record and origin_record.get('end'):
             rows = self.registration_rows(origin_record, rows)
         selected = [dict(r) for r in rows.values() if r['origin_task_ref'] == task_ref]
-        counts = {}
+        from .task_risk_feedback import project_feedback, project_disposition, _configuration_state
+        configuration = (_configuration_state(self.root) if any(
+            (row.get('feedback') or {}).get('status') == 'HOST_FALSE_POSITIVE'
+            for row in selected) else None)
+        counts, handling_counts = {}, {}
         for row in selected:
+            events = row.pop('feedback_events', [])
+            if events:
+                row['feedback_audit_event_count'] = len(events)
+                row['feedback_detail'] = dict(tool='get_task_risk_feedback',
+                    task_ref=task_ref, finding_id=row['finding_id'], event_offset=0, event_limit=2)
+            row['feedback'] = project_feedback(row, self.root, configuration=configuration)
+            row.update(project_disposition(self.hooks, self.root, row, row['feedback']))
+            row.pop('assessment_feedback', None)
+            row['feedback']['folded'] = row['reminder_suppressed']
+            row.pop('disposition_scope', None)
+            row.pop('disposition_locations', None)
             proof = row.get('proof_hashes') or row['original_hashes']
             if current_hashes(self.root, proof) != proof:
                 row['recorded_status'] = row['status']
                 row['status'] = 'NEEDS_RECHECK'
             counts[row['status']] = counts.get(row['status'], 0) + 1
+            handling_counts[row['handling_status']] = handling_counts.get(row['handling_status'], 0) + 1
         return dict(contract='task-risk-ledger-v1', task_ref=task_ref, total=len(selected),
-            counts=counts, items=selected[offset:offset+limit], has_more=offset+limit<len(selected),
+            counts=counts, handling_counts=handling_counts, pending_count=handling_counts.get('OPEN', 0),
+            items=selected[offset:offset+limit], has_more=offset+limit<len(selected),
             offset=offset, repair_authorized=False, production_safety_verified=False)
 
     def paths_for_scan(self, scan_id, ids):

@@ -45,7 +45,7 @@ def test_advisory_copy_drops_internal_reasons_and_claim_details(reason):
     output = _advisory(reason, readiness, diagnostics)
     message = public_text(output)
     assert_plain(message)
-    assert '暂时无法' in message or '不能证明' in message
+    assert '未启动' in message or '正在准备' in message or '缺少修改前' in message
     assert output.structuredContent['reason_code'] == reason
     assert output.structuredContent['scanner_skipped_reason'] == reason
     assert output.structuredContent['workspace_readiness'] == readiness
@@ -108,9 +108,10 @@ def test_global_session_start_copy_preserves_readiness_without_status_echo(conne
     assert len(runtimes[root].calls) == before
     assert str(root) not in message
     if status == 'READY':
-        assert '已连接' in message and '不代表项目已经通过安全检查' in message
+        assert '已连接' in message and '项目检查已就绪' in message
+        assert '通过安全检查' not in message
     else:
-        assert '不能证明' in message or '暂时无法' in message
+        assert '未启动' in message or '正在准备' in message
 
 
 @pytest.mark.parametrize('status', ['INITIALIZING', 'DEGRADED', 'ERROR'])
@@ -131,7 +132,8 @@ def test_global_mutation_waiting_copy_preserves_guard_and_no_scan(connected, pro
     assert before == (target.read_bytes(), len(runtimes[root].calls))
     payload = json.loads(output.content[0].text)
     assert payload['hookSpecificOutput']['hookEventName'] == 'PostToolUse'
-    assert '本次操作已结束，但自动安全检查未完成' in public_text(output)
+    assert '本次修改尚未检查' in public_text(output)
+    assert '本次操作已结束' not in public_text(output)
     assert public_text(output) == output.structuredContent['user_feedback']['message']
     assert public_text(output) in payload['hookSpecificOutput']['additionalContext']
     context = payload['hookSpecificOutput']['additionalContext']
@@ -202,7 +204,8 @@ def test_gap_notice_once_per_turn_and_new_turn_can_report(connected, projects, m
 def test_readiness_gap_does_not_guess_configuration_failure(status):
     from security_runtime.integration_readiness import readiness_message
     message = readiness_message(status)
-    assert '暂时无法' in message
+    assert '自动安全检查未启动' in message
+    assert '具体原因未能确定' in message
     assert '检查工具连接和配置' not in message
 
 

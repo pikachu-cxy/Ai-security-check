@@ -119,7 +119,8 @@ def test_counterevidence_empty_review_remains_scoped_and_host_reported(service):
     result = s.submit(root, ref, session, [], 'REVIEWED', ['部署可达性及隐藏字面量未确认'])
     assert not result['host_review']['findings']
     assert result['host_review']['model_invocation'] == 'HOST_ONLY_NOT_OBSERVED_BY_RUNTIME'
-    assert '未验证运行行为' in result['development_summary']
+    assert '未验证运行行为' not in result['development_summary']
+    assert '部署可达性及隐藏字面量未确认' in result['development_summary']
     assert s.get(root, ref)['current_version'] is True
 
 
@@ -178,8 +179,9 @@ def test_changed_and_context_budgets_are_enforced(service):
         (root/f'file{i:02}.ts').write_text('export const value = 5;\n')
     result = s.finish(root, ref)
     assert result['changed_file_count'] == MAX_CHANGED+1 and len(runtime.calls[0]) == MAX_CHANGED+1
-    assert result['limitations']
+    assert not result['limitations']  # Context quotas are selected by prepare's protocol.
     packet = s.prepare(root, ref)
+    assert any(v['reason']=='TASK_CONTEXT_SCOPE_EXCLUDED' for v in packet['limitations'])
     record = s.load(root, ref)
     record['context_bytes'] = MAX_CONTEXT
     s.store(root).save(record)
@@ -402,7 +404,7 @@ def test_task_summary_has_one_selected_risk_choice_and_bounded_risk_list(service
     findings = [dict(candidate(sink['evidence_id'], control['evidence_id']), title=f'风险 {i}') for i in range(4)]
     result = s.submit(root, ref, session, findings, 'REVIEWED', [])
     summary = result['development_summary']
-    assert summary.count('请选择具体风险') == 1 and '再回复「修复」或「暂不处理」' in summary
+    assert summary.count('请选择具体风险') == 1 and '再回复「修复」或「稍后处理」' in summary
     assert summary.count('上下文核查线索') == 3 and '另有 1 项' in summary
     assert summary.count('**问题**') == 3 and summary.count('**检查范围**') == 1
     assert '**1. 风险 0**' in summary and '**3. 风险 2**' in summary
@@ -428,7 +430,7 @@ def test_retained_hook_scope_is_rechecked_at_current_version_outside_net_task_di
     s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
     complete = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
     assert 'auth.py:1' in complete['development_summary']
-    assert '**回复「修复」或「暂不处理」即可。**' in complete['development_summary']
+    assert '**回复「修复」或「稍后处理」即可。**' in complete['development_summary']
     assert complete['static']['finding_count'] == 1 and complete['repair_authorized'] is False
 
 
@@ -562,7 +564,10 @@ def test_same_source_with_new_hook_inputs_refinishes_and_invalidates_old_context
     result = s.finish(root, ref)
     assert result['status'] == 'READY' and runtime.calls[-1] == ('auth.py', 'routes.py', 'service.py')
     refreshed = s.load(root, ref)
-    assert not any(key in refreshed for key in ('packet', 'review_session', 'review_deadline'))
+    assert not any(key in refreshed for key in ('packet', 'review_session'))
+    assert refreshed['review_deadline'] == record['review_deadline']
+    assert refreshed['lifetime_context_reads'] == 1
+    assert refreshed['lifetime_context_bytes'] >= record['context_bytes']
     assert refreshed['evidence'] == {} and refreshed['context_requests'] == {}
     packet = s.prepare(root, ref)
     assert packet['review_session'] != old_session

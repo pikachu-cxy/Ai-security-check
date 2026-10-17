@@ -29,12 +29,47 @@ REVIEWED_MISSING_LABELS = {
 }
 
 
-def inventory(bundle: Path) -> None:
-    if not LicensePolicy.can_bundle(PYINSTALLER_BOOTLOADER_LICENSE):
-        raise ValueError("PyInstaller bootloader distribution is prohibited")
+# The pinned wheel declares UNKNOWN, but contains the original MIT text. This
+# exception is bound to both the release and complete reviewed license bytes;
+# it cannot admit another unknown package or a future unreviewed release.
+REVIEWED_UNKNOWN_LABELS = {
+    ('javalang', '0.13.0'): ('MIT',
+        '84aba968a5049a690b976c1aec8bdcf0c0ba4b044b59bc40ec39b6b1cbbd1dd9'),
+}
+
+
+def dependency_license(distribution, key):
+    label = (distribution.metadata.get('License-Expression')
+             or distribution.metadata.get('License') or REVIEWED_MISSING_LABELS.get(key))
+    texts = [entry for entry in distribution.files or ()
+             if '/licenses/' in str(entry).lower()
+             or str(entry).lower().endswith(('/license', '/license.txt', '/license.md', '/copying'))]
+    reviewed = REVIEWED_UNKNOWN_LABELS.get((key, distribution.version))
+    if label in {None, '', 'UNKNOWN'} and reviewed:
+        verified = False
+        for entry in texts:
+            source = Path(distribution.locate_file(entry))
+            if source.is_file() and source.stat().st_size <= 2_000_000:
+                raw = source.read_bytes().replace(b'\r\n', b'\n')
+                verified |= hashlib.sha256(raw).hexdigest() == reviewed[1]
+        if not verified:
+            raise ValueError(f'Reviewed dependency license text does not match: {key} {distribution.version}')
+        label = reviewed[0]
+    if label not in REVIEWED_LICENSES and not (key in REVIEWED_MISSING_LABELS
+                                             and label == REVIEWED_MISSING_LABELS[key]):
+        raise ValueError(f'Unreviewed standalone dependency license: {key} {label!r}')
+    if not texts:
+        raise ValueError(f'Dependency license text missing: {key}')
+    for entry in texts:
+        source = Path(distribution.locate_file(entry))
+        if not source.is_file() or source.stat().st_size > 2_000_000:
+            raise ValueError(f'Dependency license text invalid: {key}')
+    return label, texts
+
+
+def reviewed_dependencies():
     queue = [("ai-security-runtime", set()), ("pyinstaller", set())]
     seen: dict[str, set[str]] = {}
-    rows = []
     while queue:
         name, extras = queue.pop()
         key = canonicalize_name(name)
@@ -43,17 +78,27 @@ def inventory(bundle: Path) -> None:
         first = key not in seen
         seen.setdefault(key, set()).update(extras)
         distribution = importlib.metadata.distribution(name)
-        license_label = (distribution.metadata.get("License-Expression")
-                         or distribution.metadata.get("License")
-                         or REVIEWED_MISSING_LABELS.get(key))
-        if license_label not in REVIEWED_LICENSES and not (key in REVIEWED_MISSING_LABELS
-                                                             and license_label == REVIEWED_MISSING_LABELS[key]):
-            raise ValueError(f"Unreviewed standalone dependency license: {key} {license_label!r}")
-        texts = [entry for entry in distribution.files or ()
-                 if "/licenses/" in str(entry).lower()
-                 or str(entry).lower().endswith(("/license", "/license.txt", "/license.md", "/copying"))]
-        if not texts:
-            raise ValueError(f"Dependency license text missing: {key}")
+        license_label, texts = dependency_license(distribution, key)
+        yield distribution, key, license_label, texts, first
+        for declaration in distribution.requires or ():
+            requirement = Requirement(declaration)
+            if requirement.marker is None or any(requirement.marker.evaluate({"extra": extra}) for extra in {"", *seen[key]}):
+                queue.append((requirement.name, set(requirement.extras)))
+
+
+def preflight():
+    """Read-only gate before tests/packaging; no output bundle is modified."""
+    if not LicensePolicy.can_bundle(PYINSTALLER_BOOTLOADER_LICENSE):
+        raise ValueError('PyInstaller bootloader distribution is prohibited')
+    return [{'name': key, 'version': distribution.version, 'license': label}
+            for distribution, key, label, _, first in reviewed_dependencies() if first]
+
+
+def inventory(bundle: Path) -> None:
+    if not LicensePolicy.can_bundle(PYINSTALLER_BOOTLOADER_LICENSE):
+        raise ValueError("PyInstaller bootloader distribution is prohibited")
+    rows = []
+    for distribution, key, license_label, texts, first in reviewed_dependencies():
         destination = bundle / "third_party_licenses" / key
         destination.mkdir(parents=True, exist_ok=True)
         copyrights = []
@@ -68,10 +113,6 @@ def inventory(bundle: Path) -> None:
         if first:
             copyright_text = "; ".join(line.strip().replace("|", "\\|") for line in copyrights[:2]) or "See bundled original license texts"
             rows.append((key, distribution.version, copyright_text, license_label, homepage.split(",", 1)[-1].strip()))
-        for declaration in distribution.requires or ():
-            requirement = Requirement(declaration)
-            if requirement.marker is None or any(requirement.marker.evaluate({"extra": extra}) for extra in {"", *seen[key]}):
-                queue.append((requirement.name, set(requirement.extras)))
     python_license = next((candidate for candidate in (Path(sys.base_prefix) / "LICENSE.txt", Path(sys.base_prefix) / "LICENSE")
                            if candidate.is_file()), None)
     python_directory = bundle / "third_party_licenses" / "cpython"

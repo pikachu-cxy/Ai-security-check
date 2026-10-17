@@ -23,7 +23,11 @@ def permissions(tmp_path):
 def test_setup_exact_routine_tools_idempotent_remove(permissions):
     permissions.execute('setup')
     entries = json.loads(permissions.path.read_bytes())['mcpAllowlist']
-    assert len(entries) == 10 and len(set(entries)) == 10
+    assert set(entries) == set(ENTRIES)
+    assert len(entries) == len(ENTRIES) == len(set(entries))
+    assert {'ai-security-runtime:get_task_review_plan',
+            'ai-security-runtime:get_task_review_method',
+            'ai-security-runtime:submit_task_review_batch'} <= set(entries)
     assert all(v.startswith('ai-security-runtime:') and '*' not in v for v in entries)
     assert not any(v.rsplit(':', 1)[1] in {
         'confirm_remediation', 'refresh_remediation_confirmation', 'prepare_task_fix',

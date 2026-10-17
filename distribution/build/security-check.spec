@@ -13,6 +13,7 @@ datas += [(str(package / name), "security_runtime") for name in
 datas += [(str(root / name), "security_runtime") for name in ("LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md")]
 datas += copy_metadata("ai-security-runtime")
 datas += copy_metadata("javalang") + copy_metadata("six")
+datas += copy_metadata("packaging")
 hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server"]
 
 a = Analysis(

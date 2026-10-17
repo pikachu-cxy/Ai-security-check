@@ -92,6 +92,17 @@ class TaskFixService:
         if scan is None:
             return resolved
         task = resolved['task']
+        folded = {member['finding_id'] for member in task['members']
+                  if member.get('false_positive_review', {}).get('folded')}
+        excluded = [{key: member[key] for key in ('finding_id', 'file', 'line', 'rule_id')}
+                    for member in task['members'] if member['finding_id'] in folded]
+        members = [member for member in members if member['id'] not in folded]
+        active_rows = [member for member in task['members'] if member['finding_id'] not in folded]
+        if not members:
+            return dict(status='NO_ACTIVE_FINDINGS', task_ref=task_ref, scan_id=resolved['scan_id'],
+                workspace=resolved['workspace'], message='这组告警当前均有有效误报复核结论，不生成修复建议；原告警和复核记录保留。',
+                excluded_false_positive_findings=excluded, affected_findings=[], affected_finding_count=0,
+                recommended_changes=[], bounded_evidence=[], repair_authorized=False, automatic_execution=False)
         plan = select_fix_plan(task['topic'], members)
         bounded = len(members) <= MAX_MEMBERS
         packets, errors = [], []
@@ -111,7 +122,7 @@ class TaskFixService:
         except (ValueError, OSError):
             errors = [{'reason': 'BOUNDED_EVIDENCE_UNAVAILABLE'}]
         reviews = []
-        for m in task['members']:
+        for m in active_rows:
             if m['review_status'] == 'VALID':
                 candidate = {'finding_id': m['finding_id'], 'trust': 'UNTRUSTED_AI_ANALYSIS', 'review': m['ai_review']}
                 if len(reviews) < 20 and len(encoded(reviews + [candidate])) <= 65536:
@@ -127,12 +138,15 @@ class TaskFixService:
                 'explicit_selected_task_fix_intent_required':True},
             'task_title': task['title'], 'affected_findings': [{k: m[k] for k in
                 ('finding_id', 'file', 'line', 'rule_id', 'scanner_sources', 'review_status', 'runtime_priority')}
-                for m in task['members'][:MAX_MEMBERS]],
+                for m in active_rows[:MAX_MEMBERS]],
             'affected_finding_count': len(members), 'affected_findings_truncated': not bounded,
+            'excluded_false_positive_findings': [{key: member[key] for key in
+                ('finding_id', 'file', 'line', 'rule_id')} for member in excluded],
             'security_goal': plan['security_goal'], 'root_cause': {'source': 'SCANNER_CANDIDATE', 'text': plan['root_cause']},
             'known_facts': [{'source': 'SAVED_SCANNER_RECORD', 'text': text} for text in task['basis'][:1]],
             'existing_reviews': reviews, 'review_states': task['review_states'],
-            'existing_reviews_truncated': len(reviews) < task['review_states']['VALID'],
+            'existing_reviews_truncated': len(reviews) < sum(
+                member['review_status'] == 'VALID' for member in active_rows),
             'unknown_conditions': unknown, 'fix_constraints': [{'requirement': text} for text in plan['constraints']],
             'recommended_changes': plan['changes'], 'regression_requirements': plan['regression'],
             'bounded_evidence': packets, 'evidence_errors': errors,
@@ -153,6 +167,16 @@ class TaskFixService:
             'execution': dict(EXECUTION), 'runtime_observed_execution': dict(EXECUTION),
             'host_reported_execution': {'status': 'NOT_REPORTED'}, 'automatic_execution': False}
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)
+        if excluded:
+            out['fix_constraints'].append({'requirement':
+                '只修改 affected_findings；excluded_false_positive_findings 是当前有效误报，不得将它们当作待修复漏洞修改。原始组仍逐项复查，误报不等于已修复。'})
+        if again['status'] == 'RESOLVED':
+            current_folded = {member['finding_id'] for member in again['task']['members']
+                              if member.get('false_positive_review', {}).get('folded')}
+            if current_folded != folded:
+                return dict(status='FEEDBACK_CHANGED', task_ref=task_ref,
+                    message='准备期间误报复核状态发生变化，请重新读取当前任务后再准备修复。',
+                    automatic_execution=False, repair_authorized=False)
         if task['topic'] == 'dependency':
             from .dependency_context import remediation_options
             # Evidence/text is redacted by the same bounded builder.

@@ -111,6 +111,12 @@ class FindingQualityService:
         # Stable identity correlates rescans; labels do not automatically carry
         # across snapshots without independent evidence of unchanged context.
         reviews = self.store.finding_reviews(workspace, scan_id)
+        feedback = None
+        if any(review.get('feedback_version') for review in reviews.values()):
+            # Conversational claims have a current-source validity contract.
+            # The immutable audit label alone must not become a current FP.
+            from .finding_feedback import FindingFeedbackService
+            feedback = FindingFeedbackService(self.store, workspace).presentations(scan_id)
         findings = []
         seen = set()
         for finding in scan['findings']:
@@ -120,7 +126,27 @@ class FindingQualityService:
             seen.add(row['finding_id'])
             review = reviews.get((row['finding_id'], row['observation_hash']))
             if review:
-                row.update({key: review[key] for key in ('triage_status', 'triage_reason', 'triage_source', 'triaged_at')})
+                if review.get('feedback_version'):
+                    current = feedback[finding['id']]
+                    row['feedback'] = current
+                    row['recorded_review'] = review
+                    agent = current['agent_review']
+                    human = current['user_mark']
+                    if agent and current['agent_review_current']:
+                        row.update({key: agent[key] for key in
+                                    ('triage_status', 'triage_reason', 'triage_source', 'triaged_at')})
+                    elif agent:
+                        row.update(triage_status='NEEDS_CONTEXT', triage_source='AI',
+                                   triaged_at=agent['triaged_at'],
+                                   triage_reason='此前复核已失效，需要根据当前代码重新核查。')
+                    elif human:
+                        row.update(triage_status='NEEDS_CONTEXT', triage_source='HUMAN',
+                                   triaged_at=human['triaged_at'],
+                                   triage_reason='用户提出误报，尚未经 Agent 确认：' + human['triage_reason'])
+                    # A revoke leaves the default UNREVIEWED fields. Its audit
+                    # record remains available instead of being counted as FP.
+                else:
+                    row.update({key: review[key] for key in ('triage_status', 'triage_reason', 'triage_source', 'triaged_at')})
             findings.append(row)
         return dict(contract=VERSION, scan_id=scan_id, scan_coverage=scan.get('coverage'),
                     findings=findings, metrics=metrics(findings))

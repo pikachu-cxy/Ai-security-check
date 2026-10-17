@@ -12,15 +12,26 @@ from .hook_state import atomic_bytes, identity, no_links
 from .integration_lifecycle import IntegrationDiagnostic
 
 
-def readiness_message(status):
+def readiness_message(status, reason_code=None):
     """Fixed user copy; lifecycle metadata never becomes a security verdict."""
+    if status in {'DEGRADED', 'ERROR'}:
+        reasons = {
+            'BASELINE_BUSY': '项目初始检查暂时被其他检查占用。保留当前会话和已有任务记录，等待资源释放后继续同一个任务；无需新建聊天。',
+            'BASELINE_DEADLINE_EXCEEDED': '项目初始检查超时，项目初始比较点未能保存。请查看检查工具准备状态，保留当前会话和已有任务记录。',
+            'BASELINE_FILE_BUDGET_EXCEEDED': '项目文件数量超过项目初始检查上限。任务核查按自己的修改前记录和实际改动范围说明结果。',
+            'BASELINE_CONTENT_BUDGET_EXCEEDED': '项目文件大小超过项目初始检查上限。任务核查按自己的修改前记录和实际改动范围说明结果。',
+            'BASELINE_SOURCE_CHANGED': '准备期间项目文件发生变化，本次项目初始比较点未能保存。任务检查仍沿用其编辑前记录；不能用修改后的文件补作修改前记录。',
+            'BASELINE_COVERAGE_INSUFFICIENT': '项目初始代码检查未完成，项目初始比较点未能保存。请查看检查工具的准备状态，保留已有任务记录。',
+            'BASELINE_STATE_PERMISSION_DENIED': '无法读取项目文件或读写本地检查记录。请检查当前账户的访问权限，保留当前会话和已有任务记录。',
+            'BASELINE_GIT_SNAPSHOT_UNAVAILABLE': '无法读取项目的版本和文件列表。请确认项目目录可访问，保留当前会话和已有任务记录。',
+        }
+        detail = reasons.get(reason_code, '项目初始检查准备失败，具体原因未能确定。请查看本地诊断记录，保留当前会话和已有任务记录。')
+        return '自动安全检查未启动：' + detail
     messages = {
-        'INITIALIZING': '正在准备安全检查，结果尚未就绪。完成前，暂时无法确认本次改动是否安全。',
-        'READY': '安全检查工具已连接。连接成功不代表项目已经通过安全检查。',
-        'DEGRADED': '安全检查的初始准备未完成，暂时无法确认本次改动的检查结果。',
-        'ERROR': '安全检查准备过程中出现错误，暂时无法确认本次改动的检查结果。',
+        'INITIALIZING': '正在准备项目检查。请等待准备完成。',
+        'READY': '安全检查工具已连接，项目检查已就绪。',
     }
-    return messages.get(status, '尚未确认安全检查工具已连接，当前结果不能证明改动安全。建议先检查工具连接和配置。')
+    return messages.get(status, '自动安全检查未启动：尚未确认工具已连接，请查看产品连接状态。')
 
 
 def handle_readiness(event, workspace_path, session_id, *, binding, tools, adapter=None):

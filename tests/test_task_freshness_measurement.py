@@ -11,10 +11,12 @@ from test_task_security import service, prepared
 def test_hash_only_capture_preserves_inventory_hashes_and_failures(service, monkeypatch):
     s, root, _ = service
     (root/'binary.py').write_bytes(b'\0binary')
-    (root/'wide.py').write_text('x'*700+'\n')
+    # A long identifier is fully masked as a possible credential. Exercise
+    # actual display truncation with ordinary source operators instead.
+    (root/'wide.py').write_text('value = '+'1 + '*200+'1\n')
     text = ts.capture(root)
     calls = []
-    monkeypatch.setattr(ts, 'safe_source', lambda value: calls.append(value))
+    monkeypatch.setattr(ts, 'safe_source', lambda value, **kw: calls.append(value))
     digest = ts.capture(root, include_text=False)
     assert not calls and digest['texts'] == {} and digest['text_truncations'] == {}
     for key in ('hashes','limitations','inventory','inventory_complete','read_priority'):
@@ -30,9 +32,9 @@ def test_fresh_still_reads_all_files_and_read_only_sanitizes_requested_file(serv
     def read(reader, name, *a, **kw):
         reads.append(name)
         return original_read(reader, name, *a, **kw)
-    def safe(text):
+    def safe(text, **kw):
         sanitized.append(text)
-        return original_safe(text)
+        return original_safe(text, **kw)
     monkeypatch.setattr(ts.WorkspaceReader, 'read', read)
     monkeypatch.setattr(ts, 'safe_source', safe)
     packet = s.read(root, ref, session, 'routes.py', 1, 2)
@@ -98,9 +100,9 @@ def test_faster_hash_path_at_five_second_budget_is_conservatively_stale(service,
     s, root, _ = service
     ticks = [0.0]
     original_safe = ts.safe_source
-    def slow_safe(text):
+    def slow_safe(text, **kw):
         ticks[0] += 3.0
-        return original_safe(text)
+        return original_safe(text, **kw)
     # Stub only inventory overhead and the clock: all file reads/hashes are real.
     monkeypatch.setattr(ts, '_inventory', lambda root, ignored: (['auth.py','routes.py','service.py'], [], True, []))
     monkeypatch.setattr(ts.time, 'monotonic', lambda: ticks[0])

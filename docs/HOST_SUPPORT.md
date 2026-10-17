@@ -5,6 +5,11 @@
 当前原生包、真实桌面与发布候选结果仍以 [开发进度](DEVELOPMENT_PROGRESS.md)
 及对应验收记录为准；Codex 细节见 [Codex 接入](design/CODEX_INTEGRATION.md)。
 
+本日追加 [Cursor Hook 可行性探测](CURSOR_HOOK_FEASIBILITY.zh-CN.md)：Windows / Cursor 3.22.12
+的本地 Agents 路径已观察到编辑后上下文回传与一次停止续办。它为下一阶段适配提供依据；
+下面现有产品能力声明及完整风险闭环待验状态不变。
+后续实施见 [Cursor 连接器开发与测试计划](CURSOR_INTEGRATION_PLAN.zh-CN.md)。
+
 ## 如何理解支持状态
 
 配置可写、Runtime 自检通过、真实宿主调用成功、完整用户流程通过是不同证据。

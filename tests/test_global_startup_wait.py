@@ -108,8 +108,10 @@ def test_startup_failure_is_explicit_without_retry_or_raw_exception(installed, p
         response = asyncio.run(server.call_tool('handle_readiness_event', startup(root)))
         assert response.structuredContent['status'] == 'DEGRADED'
         payload = json.loads(response.content[0].text)
-        assert '初始准备未完成' in payload['systemMessage']
-        assert '暂时无法确认本次改动的检查结果' in payload['systemMessage']
+        assert '自动安全检查未启动' in payload['systemMessage']
+        assert '具体原因未能确定' in payload['systemMessage']
+        assert '保留当前会话和已有任务记录' in payload['systemMessage']
+        assert '新建聊天' not in payload['systemMessage']
         assert payload['systemMessage'] in payload['hookSpecificOutput']['additionalContext']
         assert response.structuredContent['security_proof'] is False
         assert calls == [root]

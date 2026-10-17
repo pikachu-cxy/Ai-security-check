@@ -115,3 +115,14 @@ Mac 使用 `shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz`，Intel
 - [个人版与企业版规划](docs/PRODUCT_ROADMAP.md)、[功能验证的企业研发项](docs/FUNCTIONAL_VERIFICATION.md)。
 
 当前源码中的功能验证默认入口已隐藏；已发布安装包与本次未重新打包的源码分别记录。
+
+## 当前源码候选与公开下载包
+
+此工作区候选版本为 **0.3.5**，包括任务会话关联、历史结果、误报反馈与自适应代码复核；
+上面的公开下载链接仍指向已发布包，不能用旧包验收本次源码改动。
+本地候选从成功构建记录 artifacts/dependency-fix-latest.json 读取 executable 后安装；
+完整步骤见 [本次验收说明](docs/ACCEPTANCE_CONVERSATIONS_REVIEW.zh-CN.md)。
+自适应额度、信息去重、续接和大改动覆盖的步骤见 [自适应复核验收](docs/ADAPTIVE_REVIEW_ACCEPTANCE.zh-CN.md)。
+后续归档候选时对应文件名为 ai-security-runtime-v0.3.5-windows-x64.zip、
+ai-security-runtime-v0.3.5-macos-arm64.tar.gz、ai-security-runtime-v0.3.5-macos-x64.tar.gz；
+这些是候选命名约定，不代表已经公开发布或已经通过Mac真机验收。

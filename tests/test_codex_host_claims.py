@@ -108,7 +108,7 @@ def test_valid_mutation_reaches_existing_coordinator(connected, projects, tool):
     args = claims(root); args.update(tool_name=tool, tool_input={'command': 'Set-Content src/A.java fixture'})
     (root/'src/A.java').write_text('class A { int n; }\n')
     out = invoke(server, args)
-    assert out['host_claim_status'] == 'VALID' and out['scanner_run']
+    assert out['host_claim_status'] == 'VALID' and out['scanner_run'], out
     assert out['workspace_mutation_observed'] and out['changed_file_count'] == 1
     assert runtimes[root].calls[-1] == ('src/A.java',)
     assert 'remediation' not in out  # advisory-only fixture; no Deep capability used

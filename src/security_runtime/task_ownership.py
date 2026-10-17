@@ -16,6 +16,29 @@ LEASE_SECONDS = 15 * 60
 SESSION_TTL = 24 * 60 * 60
 
 
+class TaskOwnershipError(ValueError):
+    """Fixed routing diagnostics, without reflecting owners or credentials."""
+    def __init__(self, reason_code):
+        if reason_code not in {'TASK_CONNECTION_SCOPE_MISMATCH',
+                               'TASK_SESSION_SCOPE_MISMATCH', 'TASK_SESSION_BINDING_REQUIRED',
+                               'TASK_OWNER_UNAVAILABLE'}:
+            raise ValueError('Invalid task ownership diagnostic')
+        self.reason_code = reason_code
+        super().__init__('Task belongs to another session or an earlier unbound connection')
+
+
+def ownership_error(recorded, requested):
+    if not recorded:
+        reason = 'TASK_OWNER_UNAVAILABLE'
+    elif recorded.get('host') == 'connection':
+        reason = 'TASK_CONNECTION_SCOPE_MISMATCH'
+    elif (recorded or {}).get('host') in {'codex', 'cursor'} and (requested or {}).get('host') == 'connection':
+        reason = 'TASK_SESSION_BINDING_REQUIRED'
+    else:
+        reason = 'TASK_SESSION_SCOPE_MISMATCH'
+    return TaskOwnershipError(reason)
+
+
 def issue_session_ref(hooks, root, host, session, *, now=None):
     """Routing integrity for validated Hook claims, not native host attestation."""
     owner=session_owner(host,session)

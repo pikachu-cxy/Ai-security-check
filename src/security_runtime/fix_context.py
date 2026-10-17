@@ -140,6 +140,12 @@ def compact_packet(packet, context, reference, diagnostics, *, reuse):
     keep=('status','task_ref','scan_id','workspace','remediation_authorization','verification_plan',
           'execution','runtime_observed_execution','host_reported_execution','automatic_execution')
     out={key:packet[key] for key in keep}
+    # These are repair-scope controls, not redundant report text. In particular,
+    # compact continuation must not reintroduce reviewed false positives.
+    for key in ('affected_findings', 'affected_finding_count',
+                'excluded_false_positive_findings', 'fix_constraints'):
+        if key in packet:
+            out[key] = packet[key]
     out.update(fix_path='AGENT_FIX',security_fix_context_ref=reference,
         security_context_status='REUSE_HOOK_CONTEXT' if reuse else 'INLINE',
         security_context_diagnostics=diagnostics,
@@ -151,6 +157,10 @@ def compact_packet(packet, context, reference, diagnostics, *, reuse):
         bounded_evidence=[{'context':[{'trust':'UNTRUSTED_CODE',
                                       'locator_ref':'security_fix_context.target'}]}])
     out['remediation_authorization']['guidance']=GUIDANCE
+    if packet.get('excluded_false_positive_findings'):
+        out['host_protocol']['instructions'] += (
+            ' Edit only affected_findings; do not repair excluded_false_positive_findings. '
+            'A false-positive review is not scanner verification or repair authority.')
     if not reuse:
         out['security_fix_context']=context
     return out

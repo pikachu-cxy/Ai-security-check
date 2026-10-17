@@ -132,7 +132,7 @@ def test_pre_edit_dirty_baseline_post_context_and_no_double_scan(repo,tmp_path):
     assert output == {'permission':'allow'} and before['status']=='BASELINE_CAPTURED'
     bridge=CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation')
     record=bridge.current()
-    assert record['baseline']['texts']['A.java'] and not runtime.calls
+    assert bridge.tasks.before_lines(repo,record,'A.java')==['pre-existing user bytes'] and not runtime.calls
     (repo/'A.java').write_text('task bytes')
     _,result=ingress(repo,tmp_path,core,'afterFileEdit')
     assert result['scanner_run'] and result['hook_check_recording']=='RECORDED'
@@ -140,8 +140,32 @@ def test_pre_edit_dirty_baseline_post_context_and_no_double_scan(repo,tmp_path):
     assert before['task_ref'] in output['additional_context']
     assert 'finish_security_task' in output['additional_context']
     assert 'prepare_task_security_review' in output['additional_context']
+    assert 'protocol_version=3' in output['additional_context']
+    assert all(name in output['additional_context'] for name in
+        ('get_task_review_plan','get_task_review_method','submit_task_review_batch'))
     assert len(runtime.calls)==1 and not post['scanner_run']
     assert bridge.current()['hook_checks']
+
+
+@pytest.mark.parametrize('protocol', [1, 2, 3])
+def test_prepared_cursor_context_preserves_original_protocol_and_baseline(repo, tmp_path, protocol):
+    runtime = LedgerRuntime()
+    core = coordinator(tmp_path, runtime)
+    first = tool(repo, tmp_path, core)[1]['task_ref']
+    bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'private-generation')
+    baseline = bridge.current()['baseline']
+    (repo / 'A.java').write_text('class Changed { boolean allowed(User user) { return policy.check(user); } }\n')
+    prepared = bridge.tasks.prepare(repo, first, protocol_version=protocol)
+    assert prepared['review_required']
+    before = bridge.current()
+    assert before['review_protocol'] == protocol and before['baseline'] == baseline
+    renewed_bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'new-generation')
+    context = renewed_bridge.context()
+    after = renewed_bridge.current()
+    assert f'protocol_version={protocol}' in context
+    assert context.count('prepare_task_security_review(protocol_version=') == 1
+    assert after == before and after['baseline'] == baseline
+    assert first in context and len(runtime.calls) == 1
 
 
 @pytest.mark.parametrize('shape', ['missing', 'null', 'empty'])
@@ -301,7 +325,7 @@ def test_cursor_router_hides_codex_hook_tools_and_routes_to_shared_workspace(int
         approved=integration.configuration_status()['routine_tool_approval']['routine_tools']
         assert set(approved) <= tools.keys()
         missing=await server.call_tool('begin_security_task',{'task_key':'test'})
-        assert missing.structuredContent['reason_code']=='WORKSPACE_CLAIM_REQUIRED'
+        assert missing.structuredContent['reason_code']=='TASK_REQUEST_INVALID'
         info=await server.call_tool('get_runtime_info',{})
         assert info.structuredContent['host_connector']=='cursor'
         result=await server.call_tool('begin_security_task',{'task_key':'test','workspace_path':str(repo)})

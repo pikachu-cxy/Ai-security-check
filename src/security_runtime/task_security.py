@@ -32,9 +32,9 @@ MAX_INVENTORY_NAME_BYTES = 256_000
 MAX_RELATED = 10
 
 def _risk_choice_prompt(total):
-    choice = ('**回复「修复」或「暂不处理」即可。**' if total == 1 else
-              '**请选择具体风险，再回复「修复」或「暂不处理」。**')
-    return choice + '\n\n暂不处理仅表示本次不修复，风险记录保留；选择前不会修改代码。'
+    choice = ('**回复「修复」或「稍后处理」即可。**' if total == 1 else
+              '**请选择具体风险，再回复「修复」或「稍后处理」。**')
+    return choice + '\n\n暂不处理仅表示本次不修复，风险记录保留，本次不再追问；明确不再提醒此项可按你的决定排除。选择前不会修改代码。'
 
 
 def _risk_heading(total, related=0, title=None):
@@ -66,7 +66,7 @@ def _risk_details(f, *, context=False, number=None):
                                 or '未观察到相关防护；不代表不存在'))
         parts.append('反证：'+('；'.join(f['counterevidence']) or '未观察到足以排除风险的反证'))
     parts.append('**建议修复**\n'+f['fix_advice'])
-    unknowns = ('；'.join(f['unknowns']) or '尚未运行验证') if context else '实际运行条件尚未确认。'
+    unknowns = ('；'.join(f['unknowns']) or '风险触发条件与实际可达性尚未确认。') if context else '该风险的实际触发条件尚未确认。'
     parts.append('**尚未确认**\n'+unknowns)
     return '\n\n'.join(parts)
 
@@ -135,10 +135,13 @@ def digest_value(value):
     return hash_bytes(json.dumps(value, sort_keys=True, ensure_ascii=True).encode())
 
 
-def method():
-    path = Path(__file__).parent / 'skills/ai-security-review/references/quick-task-review.md'
+def method(protocol_version=1):
+    if type(protocol_version) is not int or protocol_version not in {1, 2, 3}:
+        raise ValueError('Unsupported task review protocol')
+    name = 'quick-task-review.md' if protocol_version == 1 else f'quick-task-review-v{protocol_version}.md'
+    path = Path(__file__).parent / 'skills/ai-security-review/references' / name
     content = path.read_text(encoding='utf-8')
-    return dict(version='quick-task-review-v1', sha256=hash_bytes(content.encode()), content=content)
+    return dict(version=f'quick-task-review-v{protocol_version}', sha256=hash_bytes(content.encode()), content=content)
 
 
 def _supported(name):
@@ -202,7 +205,7 @@ def _inventory(root, ignored):
     return sorted(selected), dirty, not limitations, limitations[:100]
 
 
-def capture(root, *, known_paths=None, priority_paths=(), include_text=True):
+def capture(root, *, known_paths=None, priority_paths=(), include_text=True, preimage_writer=None):
     """Hash the actual workspace (including pre-existing dirty/new files).
 
     Retain only sanitized text, never raw source/credentials. All budgets are
@@ -212,6 +215,7 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True):
     """
     reader = WorkspaceReader(root)
     hashes, texts, limitations, text_truncations = {}, {}, [], {}
+    preimages, text_unavailable, line_counts = {}, {}, {}
     total, text_total = 0, 0
     ignored = IGNORED | {v.strip() for v in os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '').split(',') if v.strip()}
     inventory, dirty, complete, inventory_limits = _inventory(root, ignored)
@@ -241,13 +245,21 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True):
         try:
             raw, text = reader.read(name, maximum=min(1_000_000, MAX_READ_BYTES-total))
             hashes[name] = hash_bytes(raw)
+            line_counts[name] = len(text.splitlines())
             total += len(raw)
             if not include_text or _environment(name):
                 continue
-            truncated_lines = [i for i, line in enumerate(text.splitlines(), 1) if len(line)>MAX_LINE_CHARS]
+            truncated_lines = []
+            lines = safe_source(text, source_path=name, truncation_lines=truncated_lines)
             if truncated_lines:
-                text_truncations[name] = {'line_count': len(truncated_lines), 'lines': truncated_lines[:20]}
-            lines = safe_source(text)
+                text_truncations[name] = {'line_count': len(truncated_lines), 'lines': truncated_lines}
+            if preimage_writer is not None:
+                from .task_preimages import TaskPreimageUnavailable as PreimageError
+                try:
+                    preimages[name] = preimage_writer.put(name, raw, lines)
+                except PreimageError as exc:
+                    text_unavailable[name] = exc.reason_code
+                continue
             cost = len(json.dumps(lines, ensure_ascii=True).encode())
             if cost + text_total <= MAX_PREIMAGE_BYTES:
                 texts[name] = lines
@@ -255,6 +267,7 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True):
         except (OSError, EvidenceUnavailable, UnicodeError) as exc:
             limitations.append({'path': name, 'reason': getattr(exc, 'reason', 'SOURCE_UNAVAILABLE')})
     return dict(hashes=hashes, texts=texts, text_truncations=text_truncations,
+                line_counts=line_counts, preimages=preimages, text_unavailable=text_unavailable,
                 limitations=limitations[:100], inventory=inventory,
                 inventory_complete=complete,
                 read_priority=ordered[:MAX_FILES])
@@ -306,6 +319,7 @@ def finding_view(f):
 
 def _coverage_gaps(limitations):
     labels = {'SOURCE_LINE_CHAR_BUDGET': '源码单行超出显示预算',
+              'TASK_SEMANTIC_PROOF_UNVERIFIED': '脱敏行的修改前定位记录无法核验',
               'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '文件修改检查保留路径的当前源码不可用',
               'TASK_HOOK_FINAL_SCOPE_BUDGET': '文件修改检查保留路径超出最终扫描范围预算',
               'TASK_HOOK_LEDGER_SCOPE_INCOMPLETE': '部分文件修改检查记录或保留路径超出记录预算',
@@ -356,14 +370,45 @@ class TaskSecurityService:
     def store(self, root):
         return TaskSecurityStore(self.hooks, root, now=self.now)
 
+    def preimages(self, root):
+        from .task_preimages import TaskPreimageStore
+        return TaskPreimageStore(self.hooks, root, now=self.now)
+
+    def discard_preimages(self, root, ref):
+        try:
+            self.preimages(root).discard(ref)
+        except (OSError, ValueError):
+            pass  # TTL and the private-store hard limits remain in force.
+
+    def before_lines(self, root, record, path):
+        """Only the original inline body or its signed immutable reference."""
+        inline = record['baseline'].get('texts', {}).get(path)
+        if inline is not None:
+            return inline
+        reference = record['baseline'].get('preimages', {}).get(path)
+        if reference is None:
+            return None
+        return self.preimages(root).read(record['task_ref'], path,
+            record['baseline']['hashes'][path], reference)
+
+    def end_lines(self, root, record, path):
+        raw, text = WorkspaceReader(root).read(path)
+        if hash_bytes(raw) != record['end']['hashes'].get(path):
+            raise ValueError('Task source changed; submitted evidence is stale')
+        truncated = []
+        lines = safe_source(text, source_path=path, truncation_lines=truncated)
+        if truncated:
+            record['end'].setdefault('text_truncations', {})[path] = dict(line_count=len(truncated), lines=truncated)
+        return lines
+
     def load(self, root, ref, *, read_only=False):
         record = self.store(root).get(ref)
         if not record:
             raise ValueError('Task is unavailable or expired; never infer a baseline after editing')
-        from .task_ownership import record_owner
+        from .task_ownership import record_owner, ownership_error
         owner=self._owner()
         if not read_only and owner is not None and record_owner(record)!=owner:
-            raise ValueError('Task belongs to another session or an earlier unbound connection')
+            raise ownership_error(record_owner(record), owner)
         return record
 
     def begin(self, workspace, task_key, *, _owner=None):
@@ -374,7 +419,10 @@ class TaskSecurityService:
         if owner is not None and not valid_owner(owner):
             raise ValueError('Invalid connector owner')
         root = self.root(workspace)
-        with self.hooks.lock(root) as acquired:
+        # Project preparation publishes its seed under the same short lock.
+        # Give that publication time to finish; never begin an unbound fallback
+        # task merely because the first edit happened during initialization.
+        with self.hooks.lock(root, wait_seconds=2) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'scanner_run': False}
             self.hooks.key(root)
@@ -382,29 +430,35 @@ class TaskSecurityService:
             # Expiration alone never establishes a dead owner. Keep all evidence
             # and risks; only a confirmed ended writer plus an expired lease retires.
             for old in store.records(active=True):
-                if old.get('lease_until',float('inf'))<self.now() and writer_gone(old.get('writer')):
+                if (old.get('review_protocol') != 3
+                        and old.get('lease_until',float('inf'))<self.now() and writer_gone(old.get('writer'))):
                     old.update(phase='INCOMPLETE',skip_reason='原任务运行进程已结束，检查未完成；历史风险与检查记录保留。')
                     old['baseline']['texts']={}
                     if old.get('end'): old['end']['texts']={}
                     old.pop('packet',None)
                     store.save(old)
+                    self.discard_preimages(root, old['task_ref'])
             existing = store.get(task_key=self.key(task_key,owner))
             if existing:
                 return self._view(existing)
             active = store.get(active=True,owner=owner)
-            if active and active['phase'] == 'REVIEWING' and self.now() > active['review_deadline']:
+            if (active and active.get('review_protocol') != 3 and active['phase'] == 'REVIEWING'
+                    and self.now() > active['review_deadline']):
                 active.update(phase='INCOMPLETE')
                 active['baseline']['texts'] = {}
                 active['end']['texts'] = {}
                 active.pop('packet', None)
                 store.save(active)
+                self.discard_preimages(root, active['task_ref'])
                 active = None
             if active and owner is None:
                 # Avoid silently joining another editing task. The host may
                 # resume the exact ref, or finish it, then begin the next one.
                 return dict(status='ACTIVE_TASK_EXISTS', scanner_run=False)
-            baseline = capture(root)
-            record = dict(contract=CONTRACT, task_ref='ts1-'+uuid.uuid4().hex, task_key=self.key(task_key,owner),
+            ref = 'ts1-'+uuid.uuid4().hex
+            with self.preimages(root).writer(ref) as writer:
+                baseline = capture(root, preimage_writer=writer)
+            record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=self.now(),
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
                 # A short-lived command Hook is not the conversation's owner process.
@@ -449,7 +503,7 @@ class TaskSecurityService:
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
             record = self.load(root, ref)
             end = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
-                          priority_paths=record.get('end', {}).get('read_priority', ()))
+                          priority_paths=record.get('end', {}).get('read_priority', ()), include_text=False)
             hook_revision, marker, marker_error = self._hook_inputs(root, record)
             if (record.get('end') and end['hashes'] == record['end']['hashes']
                     and end['limitations'] == record['end']['limitations']
@@ -464,7 +518,10 @@ class TaskSecurityService:
             # infer exclusive attribution from a whole-workspace snapshot.
             overlaps=[v for v in self.store(root).records() if v['task_ref']!=record['task_ref'] and
                       v.get('closed_at',float('inf'))>record['created_at'] and v['created_at']<=self.now()]
-            for key in ('packet', 'review_session', 'review_deadline', 'skip_reason'):
+            # Delivery totals and the first review deadline survive refinish.
+            record['lifetime_context_bytes'] = max(record.get('lifetime_context_bytes', 0), record.get('context_bytes', 0))
+            record['lifetime_context_reads'] = record.get('lifetime_context_reads', 0) + len(record.get('evidence', {}))
+            for key in ('packet', 'review_session', 'review_plan', 'review_completion', 'skip_reason'):
                 record.pop(key, None)
             record.update(end=end, changes=changes, review=None, evidence={}, related_files=[], context_bytes=0,
                           context_requests={}, context_gaps=[],
@@ -519,6 +576,7 @@ class TaskSecurityService:
                     record['end']['texts'] = {}
                     return self._view(self.store(root).save(record))
                 record.update(phase='NO_CHANGES', baseline=dict(hashes=before, texts={}, limitations=record['baseline']['limitations']))
+                self.discard_preimages(root, ref)
                 return self._view(self.store(root).save(record))
             if record['static_attempts'] >= 2:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
@@ -532,9 +590,6 @@ class TaskSecurityService:
             if hook_over_budget:
                 record['limitations'].append({'reason': 'TASK_HOOK_FINAL_SCOPE_BUDGET',
                                              'count': len(hook_over_budget), 'paths': hook_over_budget[:100]})
-            if len(changes) > MAX_CHANGED:
-                record['limitations'].append({'reason': 'TASK_CONTEXT_SCOPE_EXCLUDED', 'count': len(changes)-MAX_CHANGED,
-                                             'paths': [v['path'] for v in changes[MAX_CHANGED:MAX_CHANGED*2]]})
             record.update(phase='STATIC_RUNNING', static_attempts=record['static_attempts']+1)
             record = self.store(root).save(record)
             started = time.perf_counter()
@@ -569,11 +624,18 @@ class TaskSecurityService:
             view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'} for r in record['static'].get('scanner_runs', []))
             return view
 
-    def prepare(self, workspace, ref):
+    def prepare(self, workspace, ref, protocol_version=1):
+        if type(protocol_version) is not int or protocol_version not in {1, 2, 3}:
+            raise ValueError('Unsupported task review protocol')
+        if protocol_version in {2, 3}:
+            from .task_review import TaskReviewCoordinator
+            return TaskReviewCoordinator(self).prepare(workspace, ref, protocol_version=protocol_version)
         root = self.root(workspace)
         # Only the never-finished ACTIVE task may perform its first closeout.
         # Release/no lock here: finish owns the normal lock and attempt guard.
         initial = self.load(root, ref)
+        if initial.get('review_protocol', 1) != 1:
+            raise ValueError('A prepared task keeps its original review protocol and budgets')
         if initial['phase'] == 'STATIC_RUNNING':
             return dict(status='BUSY', task_ref=ref, scanner_run=False, message='任务末检查正在进行，保留原任务；不要重复检查。')
         if initial['phase'] == 'INCOMPLETE':
@@ -608,8 +670,12 @@ class TaskSecurityService:
                     record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
                         before_line_count=before_truncation.get('line_count', 0),
                         after_line_count=after_truncation.get('line_count', 0)))
-                old = record['baseline']['texts'].get(name)
-                new = record['end']['texts'].get(name)
+                from .task_preimages import TaskPreimageUnavailable as PreimageError
+                try:
+                    old = self.before_lines(root, record, name) if change['change'] != 'ADDED' else []
+                    new = self.end_lines(root, record, name) if change['change'] != 'DELETED' else []
+                except (OSError, EvidenceUnavailable, PreimageError, UnicodeError):
+                    old, new = None, None
                 if change['change'] == 'ADDED':
                     old = []
                 if change['change'] == 'DELETED':
@@ -618,6 +684,9 @@ class TaskSecurityService:
                     diffs.append({'path': name, 'change': change['change'], 'availability': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
                     record['limitations'].append({'path': name, 'reason': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
                     continue
+                if record['end'].get('text_truncations', {}).get(name) and not any(
+                        v.get('path') == name and v.get('reason') == 'SOURCE_LINE_CHAR_BUDGET' for v in record['limitations']):
+                    record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET'))
                 # Long tests are retrieved as issued windows, rather than
                 # duplicating their entire added text in both diff and reads.
                 if ('tests' in Path(name).parts or Path(name).name.startswith('test_')) and len(old)+len(new) > 80:
@@ -680,21 +749,35 @@ class TaskSecurityService:
                 cost = len(json.dumps(packet, ensure_ascii=False).encode())
             if cost > MAX_CONTEXT:
                 raise ValueError('Review packet exceeds context budget')
+            if len(record['changes']) > MAX_CHANGED:
+                record['limitations'].append(dict(reason='TASK_CONTEXT_SCOPE_EXCLUDED', count=len(record['changes'])-MAX_CHANGED))
+            cost += record.get('lifetime_context_bytes', 0)
+            if cost > MAX_CONTEXT:
+                raise ValueError('Review task lifetime context budget exceeded')
             record.update(phase='REVIEWING', packet=packet, review_session='tr1-'+uuid.uuid4().hex,
-                review_deadline=self.now()+REVIEW_TTL, context_bytes=cost)
+                review_deadline=record.get('review_deadline', self.now()+REVIEW_TTL), context_bytes=cost, review_protocol=1)
             record = self.store(root).save(record)
             return dict(packet, review_session=record['review_session'])
 
-    def _session(self, root, ref, session):
+    def _session(self, root, ref, session, *, full_fresh=True):
         record = self.load(root, ref)
-        if record['phase'] != 'REVIEWING' or session != record.get('review_session') or self.now() > record['review_deadline']:
+        if record['phase'] != 'REVIEWING' or session != record.get('review_session'):
+            raise ValueError('Review session unavailable; keep the original task and session')
+        if self.now() > record['review_deadline']:
+            if record.get('review_protocol') == 3:
+                raise ValueError('Review activity lease expired; prepare protocol_version=3 to resume this exact snapshot and ledger')
             raise ValueError('Review session unavailable or expired; no automatic restart')
-        if not self._fresh(root, record):
+        if full_fresh and not self._fresh(root, record):
             raise ValueError('Task source or Hook scope changed; submitted evidence is stale')
+        if not full_fresh and self._hook_inputs(root, record)[0] != record.get('finished_hook_revision'):
+            raise ValueError('Task Hook scope changed; submitted evidence is stale')
         return record
 
     def read(self, workspace, ref, session, path, start_line=1, end_line=80, source_version='CURRENT'):
         root = self.root(workspace)
+        if self.load(root, ref).get('review_protocol') in {2, 3}:
+            from .task_review import TaskReviewCoordinator
+            return TaskReviewCoordinator(self).read(workspace, ref, session, path, start_line, end_line, source_version)
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY'}
@@ -723,10 +806,14 @@ class TaskSecurityService:
                 raise TaskContextError('TASK_CONTEXT_RELATED_FILE_BUDGET', 'Related source file budget exceeded', recoverable=False,
                     guidance='Keep existing evidence and submit PARTIAL with the unread path; do not create a new task or session to reset budgets.')
             if deleted or source_version == 'BEFORE_TASK':
-                lines = record['baseline']['texts'].get(name)
+                from .task_preimages import TaskPreimageUnavailable as PreimageError
+                try:
+                    lines = self.before_lines(root, record, name)
+                except (OSError, PreimageError):
+                    lines = None
                 if lines is None:
                     self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
-                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Deleted source preimage unavailable', recoverable=False,
+                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Task-start source preimage unavailable', recoverable=False,
                         guidance='Submit PARTIAL with the unavailable preimage; do not substitute current code or a later baseline.')
                 file_hash = record['baseline']['hashes'][name]
                 location_version = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
@@ -740,7 +827,10 @@ class TaskSecurityService:
                 file_hash = hash_bytes(raw)
                 if file_hash != record['end']['hashes'][name]:
                     raise ValueError('Source changed during context read')
-                lines = safe_source(text)
+                truncated_lines = []
+                lines = safe_source(text, source_path=name, truncation_lines=truncated_lines)
+                if truncated_lines:
+                    record['end'].setdefault('text_truncations', {})[name] = dict(line_count=len(truncated_lines), lines=truncated_lines)
                 location_version = 'CURRENT_TASK_END'
             if start_line > len(lines):
                 raise TaskContextError('TASK_CONTEXT_RANGE_UNAVAILABLE', 'Source range unavailable',
@@ -773,7 +863,7 @@ class TaskSecurityService:
                                                             location_version=location_version, spans=[]))
             request['spans'] = _merge_spans([*request['spans'], [start_line, requested_high]])
             if eid not in record['evidence']:
-                if len(record['evidence']) >= MAX_CONTEXT_READS:
+                if len(record['evidence']) + record.get('lifetime_context_reads', 0) >= MAX_CONTEXT_READS:
                     self._context_gap(root, record, 'TASK_CONTEXT_READ_BUDGET', name)
                     raise TaskContextError('TASK_CONTEXT_READ_BUDGET', 'Task context read budget exceeded', recoverable=False,
                         guidance='Submit PARTIAL with unread ranges. Pagination does not reset the read, byte or session budgets.')
@@ -796,6 +886,18 @@ class TaskSecurityService:
             gaps.append(gap)
         self.store(root).save(record)
 
+    def review_plan(self, workspace, ref, session, cursor=0, limit=10):
+        from .task_review import TaskReviewCoordinator
+        return TaskReviewCoordinator(self).page(workspace, ref, session, cursor, limit)
+
+    def review_method(self, workspace, ref, session):
+        from .task_review import TaskReviewCoordinator
+        return TaskReviewCoordinator(self).method(workspace, ref, session)
+
+    def submit_batch(self, workspace, ref, session, unit_ids, coverage, limitations):
+        from .task_review import TaskReviewCoordinator
+        return TaskReviewCoordinator(self).submit_batch(workspace, ref, session, unit_ids, coverage, limitations)
+
     def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None):
         root = self.root(workspace)
         with self.hooks.lock(root) as acquired:
@@ -815,7 +917,9 @@ class TaskSecurityService:
             fields = {'title','category','severity','primary_evidence','evidence_refs','impact','preconditions','unknowns','counterevidence','fix_advice'}
             optional_fields = {'risk_scope', 'task_evidence', 'current_protections'}
             accepted = []
-            changed = {v['path'] for v in record['changes'][:MAX_CHANGED]}
+            scope = (record['changes'] if record.get('review_protocol') == 3 else
+                     record['changes'][:(100 if record.get('review_protocol') == 2 else MAX_CHANGED)])
+            changed = {v['path'] for v in scope}
             for candidate in findings:
                 if not isinstance(candidate, dict) or not fields <= set(candidate) or set(candidate) - fields - optional_fields:
                     raise ValueError('Use the task candidate schema; scanner proof and authority fields are forbidden')
@@ -864,7 +968,7 @@ class TaskSecurityService:
                 accepted.append(item)
             # Reading related evidence is mandatory for a fully reported multi-
             # file review; runtime cannot prove the host actually reasoned.
-            if len(record['changes']) > 1 and not record['related_files']:
+            if record.get('review_protocol', 1) == 1 and len(record['changes']) > 1 and not record['related_files']:
                 coverage = 'PARTIAL'
                 clean_limitations.append('未读取未改动的关联文件；跨文件控制和调用上下文未充分核查。')
             unread = _unread_context(record)
@@ -881,6 +985,18 @@ class TaskSecurityService:
             if record['limitations']:
                 coverage = 'PARTIAL'
                 clean_limitations.extend(_coverage_gaps(record['limitations']))
+            if record.get('review_protocol') in {2, 3}:
+                from .task_review_plan import finalize_plan
+                completion = finalize_plan(record, now=self.now())
+                record['review_completion'] = completion
+                if completion['coverage'] != 'REVIEWED':
+                    coverage = 'PARTIAL'
+                    gaps = completion['gaps']
+                    if record.get('review_protocol') == 3:
+                        from .task_review_results import semantic_gap_notes
+                        clean_limitations = list(dict.fromkeys(semantic_gap_notes(gaps)+clean_limitations))
+                    clean_limitations.append(f"逐文件复核完成 {completion['reviewed_unit_count']}/{completion['unit_count']} 项；未完成："+
+                        '、'.join(dict.fromkeys(v.get('path', '未知路径') for v in gaps[:10]))+'。')
             from .task_risk_ledger import TaskRiskLedger
             ledger = TaskRiskLedger(self.hooks, root)
             for item in risk_resolutions or []:
@@ -894,22 +1010,40 @@ class TaskSecurityService:
             record.update(phase='COMPLETE', review=dict(source='HOST_TASK_REVIEW', coverage=coverage,
                 findings=accepted, limitations=clean_limitations, model_invocation='HOST_ONLY_NOT_OBSERVED_BY_RUNTIME',
                 validation='STRUCTURE_AND_SOURCE_VERSION_ONLY', method_sha256=record['packet']['quick_skill']['sha256'],
-                elapsed_wall_ms=round((self.now()-(record['review_deadline']-REVIEW_TTL))*1000),
+                elapsed_wall_ms=round((self.now()-record.get('review_started_at', record['review_deadline']-REVIEW_TTL))*1000),
                 submitted_at=self.now()))
             # Preimages are no longer needed. Local retention is bounded by TTL.
             record['baseline']['texts'] = {}
             record['end']['texts'] = {}
             record.pop('packet', None)
+            result_packet = None
+            if record.get('review_protocol') in {2, 3}:
+                from .task_review import TaskReviewCoordinator
+                result_packet = TaskReviewCoordinator(self).completion_packet(record)
             record = self.store(root).save(record)
+            if record['baseline'].get('preimages'):
+                self.discard_preimages(root, ref)
             ledger.register(record)
             ledger.record_host(updates)
-            return self._view(record)
+            return result_packet if result_packet is not None else self._view(record)
 
     def get(self, workspace, ref, finding_offset=0, finding_limit=20):
         if type(finding_offset) is not int or type(finding_limit) is not int or finding_offset < 0 or not 1 <= finding_limit <= 30:
             raise ValueError('Invalid result page')
         root = self.root(workspace)
         record = self.load(root, ref,read_only=True)
+        if record.get('review_protocol') in {2, 3}:
+            from .task_review_results import bounded_history_result, history_freshness, seal_history_result
+            current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
+                              priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False)
+            revision = self._hook_inputs(root, record)[0] if record.get('finished_hook_revision') else None
+            freshness = history_freshness(record, current, hook_revision=revision)
+            from .task_risk_feedback import feedback_for_record
+            feedback = feedback_for_record(self.hooks, root, record)
+            result = bounded_history_result(record, finding_offset, finding_limit,
+                                            now=self.now(), freshness=freshness, feedback=feedback)
+            result['risk_ledger_next_action'] = dict(tool='get_task_risk_ledger', task_ref=ref)
+            return seal_history_result(result)
         current = self._fresh(root, record) if record.get('end') else None
         result = self._view(record)
         if record.get('static'):
@@ -945,7 +1079,24 @@ class TaskSecurityService:
         if record.get('end'):
             record['end']['texts'] = {}
         record.pop('packet', None)
-        return self._view(self.store(root).save(record))
+        saved = self.store(root).save(record)
+        self.discard_preimages(root, ref)
+        return self._view(saved)
+
+    def _current_handling(self, record):
+        """Read current handling independently of the immutable task report."""
+        root = Path(record['workspace'])
+        from .task_risk_feedback import feedback_for_record
+        host = feedback_for_record(self.hooks, root, record)
+        static = {}
+        scan_id = (record.get('static') or {}).get('scan_id')
+        if scan_id:
+            engine = self.runtime() if callable(self.runtime) else self.runtime
+            scan_store = getattr(engine, 'store', None)
+            if scan_store is not None and scan_store.get_scan(scan_id):
+                from .finding_feedback import FindingFeedbackService
+                static = FindingFeedbackService(scan_store, root).presentations(scan_id)
+        return host, static
 
     def _view(self, record):
         phase = record['phase']
@@ -957,9 +1108,39 @@ class TaskSecurityService:
             unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
+        host_feedback, static_feedback = {}, {}
+        try:
+            host_feedback, static_feedback = self._current_handling(record)
+        except (OSError, ValueError):
+            # A failed read cannot turn a past user choice into a new repair ask.
+            result['handling_unavailable'] = True
+        def pending(findings, feedback):
+            if result.get('handling_unavailable'):
+                return []
+            return [f for f in findings if not feedback.get(f['id'], {}).get(
+                'reminder_suppressed', feedback.get(f['id'], {}).get('folded', False))]
+        current_host = pending((record.get('review') or {}).get('findings', []), host_feedback)
+        current_static = pending((record.get('static') or {}).get('findings', []), static_feedback)
+        from .risk_decision_guidance import handling_counts, PRIMARY_CHOICES, SECONDARY_CHOICES
+        feedback = {'host:'+f['id']:host_feedback.get(f['id'], {})
+                    for f in (record.get('review') or {}).get('findings', [])}
+        feedback.update({'scanner:'+f['id']:static_feedback.get(f['id'], {})
+                         for f in (record.get('static') or {}).get('findings', [])})
+        result['risk_handling'] = dict(handling_counts(feedback),
+            raw_finding_count=len((record.get('static') or {}).get('findings', [])) +
+                              len((record.get('review') or {}).get('findings', [])),
+            pending_finding_count=len(current_host)+len(current_static),
+            raw_findings_preserved=True, repair_authorized=False)
+        result['risk_handling']['counts_available'] = not result.get('handling_unavailable', False)
+        if result.get('handling_unavailable'):
+            # Unknown persisted choices are not zero pending risks or confirmed exclusions.
+            for key in ('pending', 'deferred', 'excluded_by_user', 'excluded_by_agent', 'resolved',
+                        'pending_finding_count'):
+                result['risk_handling'][key] = None
+            result['risk_handling']['unknown_finding_count'] = len(feedback)
         result['risk_choices'] = [dict(finding_id=f['id'], title=f['title'],
-            options=['修复', '暂不处理'], deferred_keeps_risk=True, repair_authorized=False)
-            for f in (record.get('review') or {}).get('findings', [])]
+            options=list(PRIMARY_CHOICES), secondary_options=list(SECONDARY_CHOICES),
+            deferred_keeps_risk=True, repair_authorized=False) for f in current_host]
         result['file_hook_checks'] = dict(check_count=len(record.get('hook_checks', [])),
             omitted_check_count=record.get('hook_checks_omitted', 0),
             current_recheck_files=record.get('hook_final_recheck_files', [])[:100],
@@ -971,6 +1152,13 @@ class TaskSecurityService:
             gaps=record.get('context_gaps', []), used_reads=len(record.get('evidence', {})),
             max_reads=MAX_CONTEXT_READS, used_bytes=record.get('context_bytes', 0), max_bytes=MAX_CONTEXT,
             max_window_lines=MAX_CONTEXT_WINDOW_LINES)
+        if record.get('review_protocol') in {2, 3} and record.get('review_plan'):
+            from .task_review_plan import finalize_plan
+            progress = record.get('review_completion') or finalize_plan(record, now=self.now())
+            result['review_progress'] = {k:progress[k] for k in ('unit_count','reviewed_unit_count','coverage','status')}
+            used = record['review_ledger']
+            result['context_read_coverage'].update(used_bytes=used['total_bytes'], max_bytes=used['limits']['total_bytes'],
+                used_reads=used['reads'], max_reads=used['limits']['reads'])
         if record.get('static'):
             static = record['static']
             result['static'] = {key: static[key] for key in ('scan_id','status','coverage','scope_files','actual_files','duration_ms','reason','capability_results') if key in static}
@@ -982,20 +1170,21 @@ class TaskSecurityService:
             result['development_summary'] = '' if not result['limitations'] else '本次没有观察到可检查的文件改动；部分文件未能建立比较记录。'
         elif phase == 'INCOMPLETE':
             result['development_summary'] = '本次任务安全核查未完成：'+record.get('skip_reason', '上下文核查会话已过期。')+' 已有检查记录保留，不认定风险已消除。'
-            pending = record.get('static', {}).get('findings', [])
-            if pending:
-                title = pending[0].get('plain_title') or pending[0]['title']
-                parts = [_risk_heading(len(pending), title=title)]
-                parts.extend(_risk_details(f, number=i if len(pending)>1 else None)
-                             for i, f in enumerate(pending[:3], 1))
-                if len(pending)>3:
-                    parts.append(f'另有 {len(pending)-3} 项静态提示保留在本次核查记录中。')
-                parts.extend(['**检查范围**\n'+result['development_summary'], _risk_choice_prompt(len(pending))])
+            incomplete_findings = current_static
+            if incomplete_findings:
+                title = incomplete_findings[0].get('plain_title') or incomplete_findings[0]['title']
+                parts = [_risk_heading(len(incomplete_findings), title=title)]
+                parts.extend(_risk_details(f, number=i if len(incomplete_findings)>1 else None)
+                             for i, f in enumerate(incomplete_findings[:3], 1))
+                if len(incomplete_findings)>3:
+                    parts.append(f'另有 {len(incomplete_findings)-3} 项静态提示保留在本次核查记录中。')
+                parts.extend(['**检查范围**\n'+result['development_summary'], _risk_choice_prompt(len(incomplete_findings))])
                 result['development_summary'] = '\n\n'.join(parts)
         elif phase == 'COMPLETE':
             static = record['static']
             review = record['review']
-            total = len(static['findings']) + len(review['findings'])
+            raw_total = len(static['findings']) + len(review['findings'])
+            total = len(current_static) + len(current_host)
             complete_static = (static['status'] in {'SUCCESS', 'COMPLETED'}
                                and static['coverage'] in {'FULL', 'SCOPED'})
             prefix = f"安全核查：本任务有 {len(record['changes'])} 个改动文件，提交静态检查 {len(static.get('scope_files', []))} 个文件"
@@ -1003,20 +1192,22 @@ class TaskSecurityService:
                 prefix += f"（包含文件修改检查保留的 {len(record['hook_final_recheck_files'])} 个当前文件）"
             if total:
                 prefix += '。'
+            elif raw_total:
+                prefix += '，已登记提示的处置状态另列，原始记录保留。'
             elif not complete_static:
                 prefix += '，静态检查未完成或覆盖有限，当前风险尚待核实。'
-            elif review['coverage'] == 'PARTIAL' or record['limitations']:
-                prefix += '，上下文核查覆盖有限，当前风险尚待核实。'
+            elif review['coverage'] == 'PARTIAL' or record['limitations'] or review['limitations']:
+                prefix += '，另有尚未检查或确认的内容，见下方说明。'
             else:
                 prefix += '，本次未发现安全线索。'
             # Aggregate final findings once with a bounded default summary;
             # full records stay accessible and candidates retain uncertainty.
-            combined = [(f, '静态检查提示') for f in static['findings']] + [(f, '上下文核查线索') for f in review['findings']]
+            combined = [(f, '静态检查提示') for f in current_static] + [(f, '上下文核查线索') for f in current_host]
             order = {'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}
             combined.sort(key=lambda v: order.get(v[0]['severity'], 4))
             lines = []
             if total:
-                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in review['findings'])
+                related = sum(f.get('risk_scope') == 'RELATED_EXISTING' for f in current_host)
                 first = combined[0][0]
                 lines.append(_risk_heading(total, related, first.get('plain_title') or first['title']))
             for i, (f, source) in enumerate(combined[:3], 1):
@@ -1030,12 +1221,19 @@ class TaskSecurityService:
                 lines.append('文件修改检查保留范围的当前风险尚待核实：'+ '、'.join(names[:5])+
                              (f' 等 {len(names)} 个文件' if len(names)>5 else '')+
                              '；本次最终检查不足以证明先前提示已消除。')
-            if not complete_static or review['coverage'] == 'PARTIAL' or record['limitations']:
-                lines.append('覆盖有限：'+('；'.join(review['limitations'][:5]) or '静态能力或任务上下文有未完成范围。'))
-            lines.append('仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为；风险尚未修复。' if total else '仅覆盖本任务的局部静态检查和代码上下文核查，未验证运行行为。')
+            if not complete_static or review['coverage'] == 'PARTIAL' or record['limitations'] or review['limitations']:
+                lines.append('尚未检查或确认的内容：'+('；'.join(review['limitations'][:5]) or '部分改动的静态检查或关联代码核查未完成。'))
             if total:
+                lines.append('风险尚未修复。')
                 lines.append(_risk_choice_prompt(total))
             result['development_summary'] = ('\n\n' if total else '\n').join(lines)
         else:
             result['development_summary'] = ''
+        if result.get('handling_unavailable'):
+            from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+            result['development_summary'] += '\n'+HANDLING_UNAVAILABLE_MESSAGE
+        if record.get('review_capacity') and record['phase'] not in {'COMPLETE', 'INCOMPLETE', 'NO_CHANGES'}:
+            result.update(status='CAPACITY_REQUIRED', review_required=False,
+                review_capacity=record['review_capacity'],
+                development_summary='已有检查记录已保留；代码复核尚未开始：全部必读范围需要的存储或传输资源超过当前可承载容量，未省略文件，也未认定复核通过。')
         return result

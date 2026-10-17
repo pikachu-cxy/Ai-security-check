@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import re
 
+from .risk_decision_guidance import PRIMARY_CHOICES, SECONDARY_CHOICES
+
 
 _TLS_HOSTNAME = (
     'HTTPS 连接没有核对服务器身份',
@@ -118,7 +120,8 @@ _INCONCLUSIVE_REASONS = frozenset({
 _ATTEMPT_REASONS = frozenset({
     'EPISODE_ATTEMPT_BUDGET_EXCEEDED', 'REMEDIATION_ESCALATED',
 })
-_QUESTION = '回复“修复”，我会进一步处理并重新检查；回复“忽略”，本次不修复，风险记录仍保留。'
+_QUESTION = ('回复“修复”，我会按说明的范围处理并重新检查；回复“稍后处理”，风险记录仍保留，本次不再追问。'
+             '需要核查判断可回复“请复核”；明确“标为误报”或“不再提醒此项”会按你的决定排除，原告警和不同意见仍保留。')
 _DYNAMIC_ONLY_NOTICE = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
                         '其他代码安全规则尚未执行，需要完整扫描确认。')
 
@@ -219,11 +222,12 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
     elif ((isinstance(reason, str) and reason in _INCONCLUSIVE_REASONS) or
           verification_status == 'INCONCLUSIVE'):
         state.append('尚未确认修复成功，不代表风险已消除。')
-    choices = ['修复', '忽略']
+    choices = list(PRIMARY_CHOICES)
     question = _QUESTION
     if action == 'ESCALATE' or (isinstance(reason, str) and reason in _ATTEMPT_REASONS):
         state.append('已停止重复自动修复尝试，需要先核查原因和处理范围；不会因为回复“修复”而重置尝试次数或跳过检查。')
-        question = '回复“修复”，我会先核查再处理并重新检查；回复“忽略”，本次不修复，风险记录仍保留。'
+        question = ('回复“修复”，我会先核查再处理并重新检查；回复“稍后处理”，保留记录，本次不再追问。'
+                    '回复“请复核”可核查判断；明确“标为误报”或“不再提醒此项”会按你的决定排除，不需要AI同意。')
     elif action == 'AUTO_FIX':
         choices = []
         question = '本次修复已获得授权，将按已批准的范围处理并重新检查。'
@@ -231,9 +235,10 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
     location_label = '原问题位置' if original else '位置'
     message = '\n'.join([heading, f'{location_label}：{where}',
                          problem, impact, recommendation, *state, question])
-    return {'version': 'security-user-feedback-v1', 'title': title, 'location': location,
+    return {'version': 'security-user-feedback-v2', 'title': title, 'location': location,
             'problem': problem, 'impact': impact, 'recommendation': recommendation,
-            'choices': choices, 'message': message}
+            'choices': choices, 'secondary_choices': list(SECONDARY_CHOICES) if choices else [],
+            'legacy_choice_aliases': {'暂不处理': '稍后处理', '忽略': '稍后处理'}, 'message': message}
 
 
 def _count(delta: dict, field: str) -> int | None:
@@ -322,6 +327,36 @@ def dependency_status_message(result: dict) -> str:
         errors.add(reason)
     start = ('依赖检查只完成部分范围，尚未确认完整依赖范围。' if state == 'PARTIAL' else
              '依赖检查没有完成，暂时无法确认依赖是否安全。')
+    inventories = result.get('dependency_inventory', [])
+    inventories = inventories if isinstance(inventories, list) else []
+    missing, observed = set(), set()
+    unresolved = False
+    confirmed = False
+    for inventory in inventories[:10]:
+        if not isinstance(inventory, dict):
+            continue
+        names = inventory.get('unconfirmed_manifests', [])
+        for name in names[:20] if isinstance(names, list) else []:
+            if (isinstance(name, str) and len(name) <= 200
+                    and re.fullmatch(r'[\w./ -]+', name) and '..' not in name.split('/')
+                    and not name.startswith('/')):
+                missing.add(name)
+        confirmed |= type(inventory.get('confirmed_manifests')) is int and inventory['confirmed_manifests'] > 0
+        per_manifest = inventory.get('per_manifest', {})
+        if isinstance(per_manifest, dict):
+            observed.update(name for name, count in per_manifest.items()
+                            if isinstance(name, str) and type(count) is int and count > 0)
+        declarations = inventory.get('python_declarations', {})
+        if isinstance(declarations, dict):
+            unresolved |= any(isinstance(report, dict) and type(report.get('unresolved_entries')) is int
+                              and report['unresolved_entries'] > 0 for report in declarations.values())
+    missing -= observed
+    if missing:
+        start += '以下清单尚未取得依赖包列表：' + '、'.join(f'`{name}`' for name in sorted(missing)[:5]) + '；没有告警不代表已检查其中的依赖。'
+    if unresolved:
+        start += '部分 Python 依赖使用版本范围、动态声明或尚未支持的格式，未推断其安装版本；请提供受支持的锁文件以补齐检查。'
+    if confirmed and not missing and state == 'PARTIAL':
+        start += '已检查能够确认的声明版本；全部传递依赖和实际安装版本仍未确认。'
     if 'VULNERABILITY_DB_STALE' in errors:
         return start + ('本次使用的本地漏洞数据已经过期，可能遗漏新的漏洞；'
                         '更新漏洞数据后，需要重新检查。')
@@ -339,7 +374,24 @@ def dependency_status_message(result: dict) -> str:
 
 
 def scan_status_message(result: dict) -> str:
+    result = result if isinstance(result, dict) else {}
+    if result.get('handling_unavailable'):
+        from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+        scope = code_scope_notice(result)
+        dependency = dependency_status_message(result)
+        return '\n'.join(part for part in (HANDLING_UNAVAILABLE_MESSAGE, scope, dependency) if part)
     message = _base_scan_status_message(result)
+    projection = result.get('finding_feedback_projection', {}) if isinstance(result, dict) else {}
+    folded = projection.get('folded_count') if isinstance(projection, dict) else None
+    remaining = projection.get('alert_finding_count') if isinstance(projection, dict) else None
+    if (result.get('status') == 'SCANNED' and result.get('coverage') == 'FULL'
+            and type(folded) is int and 0 < folded <= 1_000_000
+            and type(remaining) is int and 0 <= remaining <= 1_000_000):
+        # Raw delta still counts scanner observations. Do not present the exact
+        # already-reviewed candidates as new pending repair choices again.
+        message = (f'本次检查有 {remaining} 条告警仍需核查；'
+                   f'另有 {folded} 条已排除或已暂缓，原始记录保留。'
+                   if remaining else '')
     scope_notice = code_scope_notice(result)
     if scope_notice:
         message += '\n' + scope_notice

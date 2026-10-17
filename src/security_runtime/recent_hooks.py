@@ -87,6 +87,11 @@ def workspace_hash(root):
 def safe_fields(values):
     """Closed enums/field names: neither exception text nor arbitrary metadata."""
     result = {}
+    from .bootstrap_diagnostics import BASELINE_REASONS
+    for field in ('bootstrap_reason', 'bootstrap_recovered_from'):
+        if field in values:
+            code = values[field]
+            result[field] = code if isinstance(code, str) and code in BASELINE_REASONS else 'UNKNOWN'
     build = values.get('runtime_build_id')
     if isinstance(build, str) and len(build) == 64 and all(c in '0123456789abcdef' for c in build):
         result['runtime_build_id'] = build

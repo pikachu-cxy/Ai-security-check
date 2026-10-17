@@ -110,12 +110,12 @@ def test_partial_dependency_presence_reaches_actual_advisory_sdk_and_exact_summa
     assert data['capabilities']['DEPENDENCY_VULN'] == 'PARTIAL'
     assert provider.offline_calls == [True] and len(provider.calls) == 1
     assert data['remediation']['action'] == 'ADVISE'
-    assert data['remediation']['user_feedback']['choices'] == ['修复', '忽略']
+    assert data['remediation']['user_feedback']['choices'] == ['修复', '暂不处理', '认为误报']
     assert wire['continue'] is False and wire['stopReason'] == wire['systemMessage']
     assert documented_posttool_effect(wire) == {
         'nested_promise_rejected': False, 'model_feedback': wire['systemMessage']}
     for item in ('PyYAML', '5.3.1', 'requirements.txt', 'FullLoader', '执行恶意代码',
-                 '尚未确认', '回复“修复”', '回复“忽略”'):
+                 '尚未确认', '回复“修复”', '回复“暂不处理”'):
         assert item in wire['systemMessage']
     for item in ('ADVISE', 'PARTIAL', 'DEPENDENCY_RISK_REVIEW_REQUIRED', 'get_security_summary'):
         assert item not in wire['systemMessage']
@@ -145,7 +145,9 @@ def test_multiple_dependencies_bind_only_displayed_items_in_display_order(source
     feedback = data['remediation']['user_feedback']
     assert feedback['selection_required'] is True and feedback['choices'] == []
     assert len(feedback['items']) == 3 and feedback['finding_count'] == 5
-    assert '请先选择要处理的具体问题' in wire['systemMessage']
+    assert any(text in wire['systemMessage'] for text in
+               ('请先选择具体问题', '请先选择要处理的具体问题'))
+    assert all(choice in wire['systemMessage'] for choice in ('修复', '暂不处理', '认为误报'))
     assert wire['continue'] is False and documented_posttool_effect(wire)['nested_promise_rejected'] is False
     control = internal_context(wire)['remediation']
     displayed = control['review_finding_ids']
@@ -167,12 +169,12 @@ def test_multiple_dependencies_bind_only_displayed_items_in_display_order(source
 def test_cached_or_readonly_event_does_not_reask_dependency_choice(source_sdk, readonly):
     _, _, _, provider, _, _, _ = source_sdk
     first, _ = hook(source_sdk)
-    assert first['remediation']['user_feedback']['choices'] == ['修复', '忽略']
+    assert first['remediation']['user_feedback']['choices'] == ['修复', '暂不处理', '认为误报']
     data, wire = hook(source_sdk, readonly=readonly)
     assert len(provider.calls) == 1 and data['scanner_run'] is False
     assert not {'continue', 'stopReason'} & wire.keys()
     assert 'remediation' not in data
-    assert '回复“修复”' not in wire.get('systemMessage', '') and '回复“忽略”' not in wire.get('systemMessage', '')
+    assert '回复“修复”' not in wire.get('systemMessage', '') and '回复“暂不处理”' not in wire.get('systemMessage', '')
     assert_no_authority(source_sdk, data)
 
 
@@ -224,8 +226,8 @@ def test_git_dependency_advisory_explains_partial_database_reason_without_author
     assert data['capabilities']['DEPENDENCY_VULN'] == 'PARTIAL'
     assert data['scanner_run'] is True and provider.offline_calls == [True]
     assert decision['action'] == 'ADVISE'
-    assert decision['user_feedback']['choices'] == ['修复', '忽略']
-    for item in (expected, 'PyYAML', '5.3.1', '尚未确认', '回复“修复”', '回复“忽略”'):
+    assert decision['user_feedback']['choices'] == ['修复', '暂不处理', '认为误报']
+    for item in (expected, 'PyYAML', '5.3.1', '尚未确认', '回复“修复”', '回复“暂不处理”'):
         assert item in wire['systemMessage']
     assert 'VULNERABILITY_DB_' not in wire['systemMessage'] and freshness not in wire['systemMessage']
     assert wire['continue'] is False and wire['stopReason'] == wire['systemMessage']

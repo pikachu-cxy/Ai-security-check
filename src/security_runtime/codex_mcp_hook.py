@@ -203,7 +203,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             # Asking/waiting is host guidance, not an automatic model halt.
             message = decision.get('user_feedback', {}).get('message') or (
                 '自动检查发现一个安全风险。请查看本次检查的受影响位置、可能影响和修复建议。'
-                '回复“修复”，我会修复并重新检查；回复“忽略”，本次不修复，风险记录仍保留。')
+                '回复“修复”，我会修复并重新检查；回复“暂不处理”，本次不修复，风险记录仍保留；'
+                '回复“认为误报”，我会记录你的意见并根据代码复核，不等于已确认误报或已修复。')
             # User-visible Hook fields carry plain copy; the control protocol
             # remains in additionalContext, never an implicit repair grant.
             output.update({'continue': False, 'stopReason': message, 'systemMessage': message})
@@ -215,13 +216,15 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                                        '安全检查或修复流程尚未完成。请先核查问题详情；'
                                        '当前结果不能证明风险已消除。')
         elif decision['action'] == 'NONE':
-            output['systemMessage'] = ('这个问题已修复，并通过了原规则的重新检查。'
-                                       if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED' else
-                                       decision.get('user_feedback', {}).get('message') or
-                                       '检查发现一个安全风险，但缺少改动前的检查记录，'
-                                       '暂时无法确认是否由本次改动引入。请查看问题详情后选择是否修复。'
-                                       if result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' else
-                                       output['systemMessage'] if result.get('coverage') not in {'FULL', 'NOT_APPLICABLE'} else '')
+            if decision['reason_code'] == 'SCANNER_VERIFIED_RESOLVED':
+                output['systemMessage'] = '这个问题已修复，并通过了原规则的重新检查。'
+            elif decision.get('user_feedback', {}).get('message'):
+                output['systemMessage'] = decision['user_feedback']['message']
+            elif result.get('reason') == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT':
+                output['systemMessage'] = ('检查发现一个安全风险，但缺少改动前的检查记录，'
+                    '暂时无法确认是否由本次改动引入。请查看问题详情后选择是否修复。')
+            elif result.get('coverage') in {'FULL', 'NOT_APPLICABLE'}:
+                output['systemMessage'] = ''
         feedback = decision.get('user_feedback') or {}
         if (result['execution']['scanner_run'] is True and
                 (feedback.get('choices') or feedback.get('selection_required') is True) and

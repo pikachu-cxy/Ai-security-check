@@ -201,7 +201,27 @@ class HookStateStore:
         path = self.workspace_directory(root) / 'snapshot.key'
         no_links(path)
         if not path.exists():
-            atomic_bytes(path, os.urandom(32))
+            # Session routing can precede the initial scan. Publish a complete
+            # key exactly once, without replacing a concurrent creator's key or
+            # exposing an empty/partially-written key to another connection.
+            path.parent.mkdir(parents=True, exist_ok=True)
+            fd, name = tempfile.mkstemp(prefix='.key-', dir=path.parent)
+            temporary = Path(name)
+            try:
+                with os.fdopen(fd, 'wb') as stream:
+                    stream.write(os.urandom(32))
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                try:
+                    if os.name == 'nt':
+                        # Windows rename fails when the destination exists.
+                        os.rename(temporary, path)
+                    else:
+                        os.link(temporary, path, follow_symlinks=False)
+                except FileExistsError:
+                    pass  # The fully-published winner is the only valid key.
+            finally:
+                temporary.unlink(missing_ok=True)
         key = path.read_bytes()
         if len(key) != 32:
             raise ValueError('Invalid local hook snapshot key')

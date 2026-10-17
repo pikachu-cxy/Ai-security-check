@@ -39,15 +39,21 @@ class SQLiteStore:
                 db.execute('CREATE TABLE IF NOT EXISTS triage_records (id INTEGER PRIMARY KEY, scan_id TEXT NOT NULL, finding_id TEXT NOT NULL, cache_key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(scan_id,finding_id,cache_key))')
                 db.execute('CREATE INDEX IF NOT EXISTS triage_cache ON triage_records(cache_key)')
                 db.execute('CREATE TABLE IF NOT EXISTS finding_reviews (id INTEGER PRIMARY KEY, workspace TEXT NOT NULL, scan_id TEXT NOT NULL, data TEXT NOT NULL)')
+                db.execute('CREATE TABLE IF NOT EXISTS finding_scope_snapshots (scan_id TEXT, finding_id TEXT, data TEXT NOT NULL, PRIMARY KEY(scan_id,finding_id))')
 
     def _connect(self):
         return sqlite3.connect(self.path)
 
     def save(self, result: ScanResult) -> None:
         data = result.to_dict()
+        from .finding_scope_snapshot import capture_scopes
+        scopes = capture_scopes(data['target_profile']['path'], data['findings'])
         with closing(self._connect()) as db:
             with db:
                 db.execute("INSERT OR REPLACE INTO scans VALUES (?, ?)", (result.scan_id, json.dumps(data)))
+                db.execute('DELETE FROM finding_scope_snapshots WHERE scan_id=?', (result.scan_id,))
+                db.executemany('INSERT INTO finding_scope_snapshots VALUES (?,?,?)',
+                    [(result.scan_id, fid, json.dumps(scope)) for fid, scope in scopes.items()])
                 for finding in data["findings"]:
                     db.execute("INSERT OR REPLACE INTO findings VALUES (?, ?, ?)", (finding["id"], result.scan_id, json.dumps(finding)))
 
@@ -109,6 +115,15 @@ class SQLiteStore:
     def finding_reviews(self, workspace, scan_id):
         return ReadOnlySQLiteStore(self.path).finding_reviews(workspace, scan_id)
 
+    def finding_review_history(self, workspace, scan_id=None):
+        return ReadOnlySQLiteStore(self.path).finding_review_history(workspace, scan_id)
+
+    def finding_scope_snapshot(self, scan_id, finding_id):
+        return ReadOnlySQLiteStore(self.path).finding_scope_snapshot(scan_id, finding_id)
+
+    def equivalent_finding_references(self, workspace, finding):
+        return ReadOnlySQLiteStore(self.path).equivalent_finding_references(workspace, finding)
+
     def save_finding_reviews(self, workspace, scan_id, records):
         # Append-only audit history. Batch is validated before this transaction;
         # scanner scans/findings and existing AI triage records are untouched.
@@ -140,6 +155,33 @@ class ReadOnlySQLiteStore:
         rows = self._rows('scans', 'SELECT data FROM scans WHERE id=?', (scan_id,))
         return json.loads(rows[0][0]) if rows else None
 
+    def finding_scope_snapshot(self, scan_id, finding_id):
+        rows = self._rows('finding_scope_snapshots',
+            'SELECT data FROM finding_scope_snapshots WHERE scan_id=? AND finding_id=?',
+            (scan_id, finding_id))
+        return json.loads(rows[0][0]) if rows else None
+
+    def equivalent_finding_references(self, workspace, finding):
+        # Compatibility for scans predating snapshot bindings. Equal line
+        # numbers alone never establish identity across different source bytes.
+        from .finding_scope_snapshot import observation_signature
+        signature = observation_signature(finding)
+        if signature is None:
+            return []
+        references = []
+        for row in self._rows('scans', 'SELECT id,data FROM scans ORDER BY rowid DESC'):
+            scan = json.loads(row[1])
+            if Path(scan['target_profile']['path']).resolve() != Path(workspace).resolve():
+                continue
+            for old in scan['findings']:
+                try:
+                    equivalent = observation_signature(old) == signature
+                except ValueError:
+                    continue
+                if equivalent:
+                    references.append((row[0], old['id']))
+        return references
+
     def latest_scan(self, workspace):
         # Never offer a global latest alias, even if only one scan exists.
         if workspace is None:
@@ -159,6 +201,17 @@ class ReadOnlySQLiteStore:
             'SELECT data FROM finding_reviews WHERE workspace=? AND scan_id=? ORDER BY id', (workspace, scan_id))
         values = [json.loads(row[0]) for row in rows]
         return {(r['finding_id'], r['observation_hash']): r for r in values}
+
+    def finding_review_history(self, workspace, scan_id=None):
+        # The existing append-only quality log also stores conversational review
+        # events. Old databases remain readable without adding tables or keys.
+        query = 'SELECT scan_id,data FROM finding_reviews WHERE workspace=?'
+        parameters = (workspace,)
+        if scan_id is not None:
+            query += ' AND scan_id=?'
+            parameters += (scan_id,)
+        return [dict(json.loads(row[1]), review_scan_id=row[0]) for row in
+                self._rows('finding_reviews', query + ' ORDER BY id', parameters)]
 
     def evidence_key(self):
         path = self.path.parent / 'triage-evidence.key'

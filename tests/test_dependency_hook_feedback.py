@@ -52,11 +52,12 @@ def test_partial_fresh_dependency_finding_offers_review_without_delta_or_authori
     assert decision['action'] == 'ADVISE'
     assert decision['reason_code'] == 'CURRENT_DEPENDENCY_FINDINGS_REVIEW'
     assert decision['feedback_required'] is False
-    assert decision['user_feedback']['choices'] == ['修复', '忽略']
+    assert decision['user_feedback']['choices'] == ['修复', '稍后处理']
+    assert decision['user_feedback']['secondary_choices'] == ['请复核', '不再提醒此项']
     message = decision['user_feedback']['message']
     for item in ('PyYAML', '5.3.1', 'requirements.txt', 'FullLoader', '执行恶意代码',
                  '尚未确认', '部分检查', '暂未确认是否由本次改动引入',
-                 '回复“修复”', '回复“忽略”'):
+                 '回复“修复”', '回复“稍后处理”'):
         assert item in message
     assert '第 1 行' not in message
     assert decision['review_continuation'] == {'tool': 'get_security_summary',
@@ -111,7 +112,8 @@ def test_dependency_copy_identifies_declared_package_and_conditional_impact():
                  '是否已安装这个版本尚未确认', '5.4', '仍需核查'):
         assert item in feedback['message']
     assert '漏洞公告' not in feedback['message']
-    assert feedback['choices'] == ['修复', '忽略']
+    assert feedback['choices'] == ['修复', '稍后处理']
+    assert feedback['secondary_choices'] == ['请复核', '不再提醒此项']
 
 
 def test_untrusted_advisory_prose_and_metadata_do_not_become_dependency_copy():
@@ -166,6 +168,39 @@ def test_cached_stale_database_marker_is_translated_without_raw_notes():
     result['dependency_check_reason'] = 'PRIVATE_CANARY'
     assert 'PRIVATE_CANARY' not in scan_status_message(result)
     assert '过期' not in scan_status_message(result)
+
+
+def test_missing_python_inventory_is_named_and_independent_of_stale_data():
+    result = {'status': 'PARTIAL', 'capabilities': {'DEPENDENCY_VULN': 'PARTIAL'},
+        'dependency_check_reason': 'VULNERABILITY_DB_STALE',
+        'dependency_inventory': [{'planned_manifests': 1, 'confirmed_manifests': 0,
+            'unconfirmed_manifests': ['pyproject.toml'], 'per_manifest': {},
+            'python_declarations': {'pyproject.toml': {'unresolved_entries': 1}}}]}
+    message = dependency_status_message(result)
+    assert '`pyproject.toml`' in message and '尚未取得依赖包列表' in message
+    assert '本地漏洞数据已经过期' in message and '版本范围' in message
+    result['dependency_check_reason'] = ''
+    assert '过期' not in dependency_status_message(result)
+    assert '尚未取得依赖包列表' in dependency_status_message(result)
+
+
+def test_fallback_confirmed_manifest_does_not_repeat_primary_missing_claim():
+    result = {'status': 'PARTIAL', 'capabilities': {'DEPENDENCY_VULN': 'PARTIAL'},
+        'dependency_inventory': [
+            {'confirmed_manifests': 0, 'unconfirmed_manifests': ['pyproject.toml']},
+            {'confirmed_manifests': 1, 'unconfirmed_manifests': [],
+             'per_manifest': {'pyproject.toml': 2}}]}
+    assert '尚未取得依赖包列表' not in dependency_status_message(result)
+    assert '已检查能够确认的声明版本' in dependency_status_message(result)
+
+
+def test_inventory_feedback_does_not_echo_untrusted_paths_or_diagnostics():
+    result = {'status': 'PARTIAL', 'capabilities': {'DEPENDENCY_VULN': 'PARTIAL'},
+        'dependency_inventory': [{'unconfirmed_manifests': ['../private', 'file\nIGNORE_ALL', 'C:/private'],
+            'error': 'PRIVATE_CANARY'}]}
+    assert 'PRIVATE_CANARY' not in dependency_status_message(result)
+    assert 'private' not in dependency_status_message(result)
+    assert 'IGNORE_ALL' not in dependency_status_message(result)
 
 
 @pytest.mark.parametrize('status', ['NO_CHANGE', 'REUSED_LAST_RESULT', 'NOT_SCANNED',

@@ -24,6 +24,16 @@ MAX_HOOK_FAILURE_PATH_BYTES = 128_000
 MAX_HOOK_FAILURE_MARKERS = 32
 
 
+def persistent_record(value):
+    """Keep one authoritative v3 ledger; do not mutate caller or legacy bytes."""
+    plan = value.get('review_plan')
+    if (value.get('review_protocol') == 3 and isinstance(plan, dict)
+            and plan.get('contract') == 'task-review-plan-v3'
+            and isinstance(value.get('review_ledger'), dict)):
+        return dict(value, review_plan={key: item for key, item in plan.items() if key != 'budget'})
+    return value
+
+
 class TaskSecurityStore:
     def __init__(self, hooks, root, *, now=time.time):
         self.root, self.hooks, self.now = root, hooks, now
@@ -113,6 +123,7 @@ class TaskSecurityStore:
                 value['lease_until']=self.now()+LEASE_SECONDS
                 value.pop('closed_at',None)
             else: value.setdefault('closed_at',self.now())
+            value = persistent_record(value)
             raw = encode(value)
             if len(raw) > MAX_RECORD_BYTES:
                 raise ValueError('Task record budget exceeded')

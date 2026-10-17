@@ -3,11 +3,18 @@ import sys
 
 from ._version import __version__
 from .risk_presentation import RISK_PRESENTATION_RULES
+from .risk_decision_guidance import RISK_DECISION_GUIDANCE
 
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix',
                          'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
-                         'read_task_review_context', 'submit_task_security_review', 'get_task_security_review'}
+                         'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
+                         'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
+                         'prepare_finding_feedback', 'submit_finding_feedback',
+                         'mark_finding_false_positive', 'revoke_finding_feedback', 'get_finding_feedback',
+                         'prepare_task_risk_feedback', 'submit_task_risk_feedback',
+                         'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'get_task_risk_feedback',
+                         'set_finding_disposition', 'set_task_risk_disposition'}
 
 HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
@@ -16,16 +23,32 @@ SessionStart 交付 session_ref 时，在 begin_security_task 传入；自动编
 在 finish_security_task 传入其 session_ref。它只绑定会话，不授予修复权限，不展示给用户。
 并行会话分别开始自己的任务，不借用或结束他人的任务；不能按最近活动任务猜测归属。
 断线后沿用原 task_ref 和有效 session_ref；缺少绑定或原记录就说明缺口，不从编辑后补基线。
+任务记录和修改前源码由 Runtime 私有存储保管。不要在项目中写原始源码 Base64、完整任务记录、
+会话凭据或恢复文件来绕过重连归属检查。旧的连接范围任务不能由新聊天认领。
+历史查询保留当时的完成状态和摘要；同时查看 current_version、version_freshness 和 version_notice。
+其他文件变化而已检查/关联源码未变时，明确说原检查结果仍是历史结果、其他项目内容已变化；
+实际检查路径变化则列出路径。不能把历史 COMPLETE 说成当前整个项目已通过，也不自动补扫。
+Windows 自带终端若明确报 PowerShell 的 CET 启动错误，改用可用的 cmd.exe 或文件工具，
+不要重复调用同一故障终端，也不把终端故障解释成项目代码或安全检查失败。
 若当前连接器明确提供同步的编辑前自动任务准备，则沿用 Hook 交付的原 task_ref，不另起任务；
 没有该能力的宿主仍在首次编辑前显式开始任务。编辑后缺少基线时说明缺口，不能补建冒充编辑前状态。
 现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
-不调用模型核查、不添加安全段落。有实际改动时调用 prepare_task_security_review，
+不调用模型核查、不添加安全段落。新任务在能力声明支持 v3 时调用 prepare_task_security_review(protocol_version=3)，
+否则使用 protocol_version=2；已有任务保持原协议。
 prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任务末检查；真实
 版本过期或终止的任务不自动重启。不要把漏调用首次检查解释为版本冲突后直接跳过。
-即使静态扫描零发现，也按返回的 quick_skill 阅读必要改动和未改动的关联代码上下文，
-通过 read_task_review_context 取得精确证据，再 submit_task_security_review。
+即使静态扫描零发现，也按返回的 quick_skill 版本和摘要使用正式方法；本地没有完全相同的
+方法时通过 get_task_review_method 读取一次。用 get_task_review_plan 分页列出全部必读项，
+通过 read_task_review_context 读取各项所需的修改前后证据，按实际关联读取其他源码，
+再通过 submit_task_review_batch 逐批记录完成情况。最后 submit_task_security_review 汇总；
+未请求或未完成的必读项不能算已核查。v3 根据全部必读范围分配独立的源码、导航和控制额度，
+逐行传输可读脱敏源码；source_ref 只定位同版本材料，不代表已经阅读。重复已交付范围只返回原证据
+回执；实际需要相关源码时才扩展计划。沿用同一任务、版本和累计额度，不靠分页、重连或重新
+prepare 清零预算。v3 闲置活动租约可通过原 prepare(protocol_version=3) 恢复，先校验会话归属、
+源码和检查范围，保留原任务、静态结果、已读证据和累计用量；有新读取/提交进度才续活动时间。
+旧 v1/v2 复核沿用原协议、截止时间和额度，不切换协议或重建任务。
 此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
 把 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
 有代码依据的条件性风险也须登记为 findings，不能仅放在 limitations 或后续建议。
@@ -37,7 +60,8 @@ RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新�
 无风险、只读或无改动回复不添加风险标题或处理选项。
 选项本身不是授权，不虚构用户选择或修复凭据；旧“忽略”措辞仍兼容明确的暂不处理。
 普通回复不显示原始计划、内部引用或独立“钩子反馈”。改文件 Hook 的静态检查保留。
-遵守文件、上下文和尝试预算；锁忙、过期、版本变化或不可用时说明缺口并结束，
+遵守文件、上下文和尝试预算；v3 闲置先按原计划恢复，真实证据过期、版本变化、资源不足或不可用时说明具体缺口，
+锁忙可在同一原任务合理等待一次；仍不可用则结束，
 不循环补查、不断新建任务或要求用户“继续”。Runtime 不调用宿主模型。
 无法完成核查时，用 finish_security_task 的 skip_review_reason 记录实际原因并结束
 当前核查；它保留已有结果，不运行额外扫描，不把未完成包装成通过。
@@ -48,16 +72,18 @@ RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新�
 不安排或派发收尾。检查完成、实际覆盖与风险修复分别表达，零发现不得称项目安全。
 
 用户呈现规则（必须遵守）：
-每次 Hook 提供的“用户提示”是本次最终回复的必需内容。必须完整保留其中的
+仅对当前处置状态可读取且仍需提醒的风险，将 Hook 提供的“用户提示”合并进本次最终回复。
+已排除、已暂缓的项目不重复展示或索取选择；处置状态不可读取时说明读取缺口，不能回退旧提示重问。
+对仍需提醒的项目，必须完整保留其中的
 位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
-“修复/忽略”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
+“修复／稍后处理”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
 不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”或非空风险
 内容时不添加通用检查消息；任务核查内容合并到开发总结，不单独刷回复。
 internal_control 仅供内部流程使用。普通用户回复和进度说明不得展示内部
 action、reason_code、verification 枚举、授权标识、引用、扫描器或工具名称，
 也不得转述工具调用过程。只有用户明确索要技术诊断时，才展示有关诊断细节。
 “先不要修复”“保留改动”“观察 Hook”只禁止当前修复，不等于用户已经选择
-忽略风险；仍须说明影响、给出修复建议和待选的“修复/忽略”。保留代码并等待
+忽略风险；当前仍需提醒且尚待选择时，说明影响、给出修复建议和“修复／稍后处理”。保留代码并等待
 选择，不得据此自动修复、提交忽略、取消提示或把风险说成已解决。
 用户提示和等待选择本身不授予编辑权限；既有修复授权仍须按原引用和范围
 执行，已明确同意的同一修复不得再次要求确认。风险、扫描和复查结果仍须
@@ -73,6 +99,8 @@ submit_task_security_review 的 risk_resolutions 绑定原风险和新的实际�
 依赖风险带 review_continuation 时，先读取该扫描的问题列表，再按
 review_finding_ids 与任务成员 finding_id 匹配取得精确 task_ref。多个问题先
 明确用户选择，不能直接替换成列表首项；导航和风险提示本身不授予修复权限。
+
+''' + RISK_DECISION_GUIDANCE + '''
 
 AI Security Runtime developer workflow:
 MANDATORY USER CONSENT: detection, scan/review/development requests and legacy
@@ -135,10 +163,13 @@ never ask for credential values, invent traces or treat tests/samples as false
 positives. Source changes invalidate relevant persisted AI conclusions; re-prepare
 after interruption/reconnection, never reuse a connection-local triage_session.
 Users express ordinary intent, such as 检查这个项目 or 继续第一项/处理第一个问题.
-For Hook feedback, MUST present the event-specific 用户提示, or Runtime-issued
-user_feedback.message when that section is absent, in the user's language.
+For Hook feedback, check current saved handling first. Only for risks still needing
+a reminder with available handling state, MUST present the event-specific 用户提示,
+or Runtime-issued user_feedback.message when that section is absent, in the user's language.
+Do not redisplay excluded/deferred items or ask for their choice again. If saved
+handling is unavailable, report that gap without falling back to an old risk prompt.
 Preserve every supplied location/problem/conditional impact/recommendation,
-unknown and pending 修复/忽略 choice; formatting and file links may be adapted,
+unknown and pending 修复／稍后处理 choice; formatting and file links may be adapted,
 but do not summarize away any of those facts or replace them with diagnostics.
 Describe the affected file/line or dependency
 version owner, the specific unsafe behavior, its conditional impact, the concrete
@@ -150,8 +181,8 @@ UUIDs, grant identifiers, opaque references, scanner/tool names and tool-call
 progress out of ordinary user feedback. Only an explicit user request for
 technical diagnostics permits those details. internal_control is machine-only.
 Retain the exact structured references internally; never recover them
-from the message or scanner prose. For one focused risk awaiting a choice, end
-with 回复“修复”或“暂不处理”（暂不处理仅表示本次不修复，风险记录保留）.
+from the message or scanner prose. For one focused risk still needing a reminder and awaiting a choice, end
+with 回复“修复”或“稍后处理”（兼容“暂不处理”，风险记录保留）.
 The legacy reply 忽略 still means deferral for that selected issue.
 先不要修复/保留改动/观察 Hook prohibits immediate repair; it is NOT an
 implicit 忽略 choice or permission to omit the recommendation and pending
@@ -266,21 +297,23 @@ repair-caused regression; do not revert the secure edit, change failing tests or
 claim SAFE_TO_SHIP to force a passing result.
 When remediation.action == CONFIRM_REQUIRED:
 Automatic repair is NOT authorized. NEVER call prepare_task_fix before explicit
-user approval. Follow only this confirmation branch and the plain-language
-修复/忽略 choice for the focused risk; do not follow the AUTO_FIX branch until
+user approval. Follow only this confirmation branch; ask the plain-language
+修复／稍后处理 choice only when current saved handling says this focused risk
+still needs a reminder. Honor excluded/deferred choices; unavailable handling
+does not permit falling back to an old prompt. Do not follow the AUTO_FIX branch until
 Runtime issues an approved grant. Several unselected risks require selection first.
 For SECURITY_REMEDIATION_CONFIRMATION_REQUIRED feedback, the preceding file edit
 has ALREADY executed. Do NOT retry, re-apply, or repeat the insecure edit, or
 automatically revert it. The completed edit introduced the reported risk.
 Ask whether to REMEDIATE that risk; do NOT ask whether to apply, keep, or enable
-the insecure edit. MUST present the required 用户提示 or user_feedback.message;
+the insecure edit. For a risk still needing a reminder, present its 用户提示 or user_feedback.message;
 explain location, concrete risk,
 conditional impact, specific safe change and any request behavior change, then
-ask 回复“修复”或“暂不处理”（仅本次不修复，风险记录保留） and WAIT.
+ask 回复“修复”或“稍后处理”（风险记录保留，本次不再追问） and WAIT.
 The legacy reply 忽略 remains compatible with deferral for that selected issue.
 An immediate 修复, or equivalent explicit selected-risk repair reply, is approval
-for that exact proposed scope. An immediate 忽略, or equivalent explicit refusal
-answering this clearly identified repair choice, declines only this repair.
+for that exact proposed scope. An immediate 稍后处理/暂不处理/忽略 answering this
+clearly identified repair choice declines the repair and requests durable DEFER.
 An earlier instruction to postpone repair or observe Hook is not that refusal.
 Do not ask an approved user to confirm again.
 Do not call prepare_task_fix or verify_task_fix, or modify affected security behavior,
@@ -292,8 +325,11 @@ Runtime receives only the strict boolean and original confirmation_ref/task_ref;
 it does not parse the user's text. Never send the prompt/transcript/source/Secret. The report
 is UNTRUSTED_HOST_REPORT; Runtime cannot authenticate human speech. Only its returned
 remediation_ref permits the bounded prepare/edit/Hook/verify workflow. Decline leaves
-Raw/triage, findings, risk and code unchanged; it is not suppression, accepted risk
-or permanent ignore. Say 本次不修复，风险仍保留, never promise no future reminders.
+Raw/triage, findings, risk and code unchanged. Separately save the selected finding
+with set_finding_disposition or set_task_risk_disposition, disposition="DEFER",
+user_requested=true. A declined repair alone does not persist reminder handling.
+Only after the disposition succeeds say 已暂缓，风险仍保留，本次不再追问;
+on save failure explain that it was not saved without asking the user to judge again.
 Expired/changed confirmations
 and restarted approved grants require refresh, never substitute another task or T01. Pending confirmation
 can survive connection/process recreation only with its exact signed capability,
@@ -302,17 +338,20 @@ unchanged workspace/host-session namespace/task/family/snapshot/policy and origi
 remain connection-local; their loss requires refresh, never reuse in another connection. User-confirmed
 grants do not change the configured mode or broaden the policy. report_only does
 not force confirmation. NONE/ADVISE/MANUAL_ONLY never authorize automatic edits.
-For actionable ADVISE/MANUAL_ONLY findings, MUST present the required 用户提示
-with its concrete risk, impact, proposed scope and 修复/忽略 choice. No reply
+For actionable ADVISE/MANUAL_ONLY findings still needing a reminder under current
+saved handling, present the 用户提示 with its concrete risk, impact, proposed scope
+and 修复／稍后处理 choice. No reply
 means no edit. A PostToolUse continue=false/stopReason presentation signal asks
 the host to stop and show the choice; it does not reject or undo the completed
-edit and never creates a repair grant. Keep the choice even for an existing
-handling record or when the user initially requested observation only.
+edit and never creates a repair grant. Respect an existing excluded/deferred
+handling decision. Observation alone is not a choice for a still-pending risk.
 Without an existing confirmation_ref, never invent one or call confirm_remediation.
 EPISODE_ALREADY_EXISTS means an existing handling record has not been proven
 resolved; it does not mean safe, fixed, duplicate false positive, or a scanner
-failure. Explain the current issue/impact/recommendation from user_feedback,
-including that repair completion is unconfirmed; keep the internal reason hidden.
+failure. Consult current saved handling: only a still-pending reminder needs the
+issue/impact/recommendation and unconfirmed repair outcome from user_feedback.
+Do not reopen excluded/deferred choices solely because an episode exists; keep
+the internal reason hidden. Unavailable handling is a read gap, not a new risk.
 If Runtime supplies confirmation_recovery, only after the user explicitly replies
 修复 for this exact issue, call that exact recovery handoff. Recovery can only
 restore a pending choice for an unchanged, never-authorized scope. It grants no
@@ -323,12 +362,14 @@ ask for a second confirmation. If recovery fails or scope/expiry/policy changes,
 explain the necessary recheck in plain language and leave code unchanged.
 Never use another task_ref, latest scan, host session, new episode or reset
 attempts to evade an existing confirmation/family guard. Without a valid pending
-confirmation, 忽略 only skips this repair now; do not forge a refusal receipt or
-claim persisted suppression. An already authorized scope uses its original
+confirmation, do not forge a refusal receipt. An explicit selected 稍后处理/忽略
+can still save DEFER through the matching disposition tool without a confirmation_ref;
+only claim persistence after success. An already authorized scope uses its original
 handoff; recovery must never revive an authorized or exhausted attempt.
 For a clearly selected risk, 修复 is explicit local repair intent for the existing
-prepare_task_fix workflow, still subject to Runtime policy guards. 忽略 means only
-skip this repair now; retain findings/risk and do not claim a persisted ignore.
+prepare_task_fix workflow, still subject to Runtime policy guards. A selected
+稍后处理/忽略 saves DEFER independently; retain findings/risk and repair authority
+unchanged, and acknowledge durable reminder handling only after successful saving.
 Only an explicit selected-task repair request counts as consent; do not infer it
 from a scan, audit, ordinary development request, severity or model confidence.
 ESCALATE stops automatic retry. Explain whether the same risk is still detected
@@ -391,8 +432,12 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
+                          'task_security_review_protocol': 'task-review-plan-v3; DEFAULT_V3; ADAPTIVE_RANGE_BUDGETS; READABLE_SOURCE_DEDUP; RESUMABLE_ACTIVITY_LEASE; task-review-plan-v2; LEGACY_V1_SUPPORTED; COMPACT_PACKET_AND_FIXED_PLAN_BATCHES',
                          'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
+                         'finding_feedback': 'finding-feedback-v2; TYPED_EVIDENCE_REFS; USER_AND_HOST_SEPARATE; REVOCABLE; RAW_FINDINGS_PRESERVED',
+                         'risk_disposition': 'risk-disposition-v1; USER_FINAL_HANDLING; EXCLUDE_DEFER_RESTORE; NO_REPAIR_AUTHORITY',
+                         'risk_decision_workflow': 'risk-decisions-v2; HOST_ASSESSES_FIRST; USER_DECIDES; MATERIAL_CHANGE_REASSESSMENT',
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',

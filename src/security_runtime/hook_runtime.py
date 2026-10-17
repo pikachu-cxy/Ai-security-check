@@ -231,7 +231,7 @@ def capture_snapshot(root: Path, key: bytes):
         paths.update(safe_path(v.decode('utf-8')) for v in _git(root,*args).split(b'\0') if v)
     paths = sorted(name for name in paths if not set(PurePosixPath(name).parts) & IGNORED)
     if len(paths) > MAX_FILES:
-        raise ValueError('Hook snapshot file budget exceeded')
+        raise ValueError('Hook snapshot file count budget exceeded')
     digest = hmac.new(key, b'hook-snapshot-v1', hashlib.sha256)
     try:
         head = _git(root,'rev-parse','--verify','HEAD')
@@ -571,12 +571,31 @@ class HookCoordinator:
             for r in scan.scanner_runs)
         result['scanner_runs'] = [{k: getattr(r, k) for k in
             ('scanner', 'status', 'version', 'duration_ms', 'error_code', 'coverage_contract')} for r in scan.scanner_runs]
+        result['dependency_inventory'] = [
+            {key: run.dependency_inventory[key] for key in
+             ('planned_manifests', 'confirmed_manifests', 'unconfirmed_manifests', 'per_manifest',
+              'package_occurrences', 'python_declarations', 'vulnerability_db_freshness')
+             if key in run.dependency_inventory}
+            for run in scan.scanner_runs
+            if run.status == RunStatus.SUCCESS and 'DEPENDENCY_VULN' in run.capabilities]
         result['scanner_diagnostics'] = scan.scanner_diagnostics
         result['status'] = 'SCANNED' if scan.status == 'COMPLETED' else 'FAILED' if scan.execution_state == 'FAILED' else 'PARTIAL'
         from .baseline_coverage import comparison_usable, unproven_files
         result['baseline_comparison_usable'] = comparison_usable(result, observation)
         if baseline:
             result['baseline_unproven_sast_files'] = unproven_files(observation)
+        elif scan.findings and hasattr(getattr(runtime, 'store', None), 'finding_review_history'):
+            # Retain scanner findings and family comparison exactly as observed.
+            # Reminder choices remain independent of raw findings and proofs.
+            try:
+                from .finding_feedback import FindingFeedbackService
+                projection = FindingFeedbackService(runtime.store, root).hook_projection(scan.scan_id)
+                result['finding_feedback_projection'] = projection
+            except (OSError, ValueError):
+                from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+                result.update(handling_unavailable=True, handling_status='UNAVAILABLE', risk_choices=[],
+                    handling_user_feedback=dict(version='security-user-feedback-v1', choices=[],
+                        message=HANDLING_UNAVAILABLE_MESSAGE))
         for run in scan.scanner_runs:
             if run.status == RunStatus.SUCCESS and 'DEPENDENCY_VULN' in run.capabilities:
                 fresh = run.dependency_inventory.get('vulnerability_db_freshness')
@@ -586,7 +605,12 @@ class HookCoordinator:
                 if fresh in {'UNKNOWN', 'MISSING'}:
                     result['dependency_check_reason'] = 'VULNERABILITY_DB_FRESHNESS_UNKNOWN'
         dependency_ids = set(result.get('current_dependency_finding_ids', []))
-        candidates = sorted((f for f in scan.findings if f.id in dependency_ids),
+        folded_ids = set((result.get('finding_feedback_projection') or {}).get('folded_finding_ids', []))
+        active_ids = {finding.id for finding in scan.findings if finding.id not in folded_ids}
+        if result.get('handling_unavailable'):
+            active_ids = set()
+        result['active_dependency_finding_ids'] = sorted(dependency_ids & active_ids)
+        candidates = sorted((f for f in scan.findings if f.id in (dependency_ids & active_ids)),
                             key=lambda f: ({'CRITICAL':0,'HIGH':1,'MEDIUM':2,'LOW':3}.get(f.severity,4), f.id))
         if candidates:
             from .hook_user_feedback import issue_feedback, dependency_status_message
@@ -598,7 +622,7 @@ class HookCoordinator:
                     'choices': [], 'selection_required': True,
                     'message': '\n\n'.join(f'问题 {index}：\n{item["message"]}'
                                           for index, item in enumerate(items, 1)) +
-                               '\n请先选择要处理的具体问题，再回复“修复”或“忽略”。'}
+                               '\n请先选择具体问题，再回复“修复”或“稍后处理”；也可选择“请复核”或“不再提醒此项”。'}
             note = (dependency_status_message(result) or '已检查本次读取的依赖版本，但完整依赖关系或漏洞数据的新鲜程度尚未确认。'
                     if scan.capability_results.get('DEPENDENCY_VULN') != 'EXECUTED' else
                     '本次依赖版本检查发现风险；实际安装情况和应用能否被利用尚未确认。')

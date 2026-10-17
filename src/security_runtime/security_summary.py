@@ -12,6 +12,7 @@ from .triage_evidence import EvidenceBuilder, encoded
 from .triage_models import category, dependency_groups
 from .workspace import WorkspaceResolver
 from .risk import NO_FINDINGS_MESSAGE, presentation_status
+from .risk_decision_guidance import handling_counts
 
 TLS_RULES = {'ai-security.java.trust-all-hostname', 'ai-security.java.trust-all-certificates'}
 SEVERITIES = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'UNKNOWN': 1}
@@ -104,7 +105,9 @@ class SecuritySummaryService:
             if isinstance(value, dict):
                 return {key: safe(item) for key, item in value.items()}
             return value
-        tasks = self._tasks(scan, rows, safe)
+        from .finding_feedback import FindingFeedbackService
+        feedback = FindingFeedbackService(self.store, root).presentations(scan['scan_id'])
+        tasks = self._tasks(scan, rows, safe, feedback)
         from .hook_state import HookStateStore
         from .risk_closure import RiskClosureService
         from .equivalence import equivalence_key
@@ -123,7 +126,8 @@ class SecuritySummaryService:
         coverage['not_eligible'] = sum(category(f) not in {'code', 'secret', 'dependency'} for f in scan['findings'])
         coverage['eligible_untriaged'] = sum(row['triage_status'] == 'UNTRIAGED' and row['category'] in
                                             {'code', 'secret', 'dependency'} for row in rows.values())
-        candidates = [task for task in tasks if task.get('current_closure') != 'CONFIRMED_CLOSED' and
+        candidates = [task for task in tasks if task['active_finding_count'] and
+                      task.get('current_closure') != 'CONFIRMED_CLOSED' and
                       (any(task['priority_counts'][key] for key in ('ACTIONABLE', 'REVIEW', 'UNTRIAGED'))
                       or task['review_states']['NOT_ELIGIBLE'])]
         recommended = [task for task in candidates if task['priority_counts']['ACTIONABLE']][:3]
@@ -154,6 +158,32 @@ class SecuritySummaryService:
         result['scan_context'] = scan_context_summary(scan, self.store, root)
         result['current_credential_closure'] = facts
         result['historical_scan_unchanged'] = True
+        result['false_positive_feedback'] = {
+            'folded_finding_count': sum(item['folded'] for item in feedback.values()),
+            'user_marked_unconfirmed_count': sum(item['state'] == 'USER_MARKED_UNCONFIRMED'
+                                                  for item in feedback.values()),
+            'stale_review_count': sum(item['state'] == 'REVIEW_STALE' for item in feedback.values()),
+            'raw_findings_preserved': True, 'repair_authorized': False,
+            'assessment_source': 'HOST_CODE_REVIEW_NOT_RUNTIME_PROOF',
+            'items': [{key: item.get(key) for key in ('finding_id', 'state', 'folded', 'message',
+                       'handling_status', 'handling_label', 'reminder_suppressed')}
+                      for item in feedback.values() if item['state'] != 'UNREVIEWED' or item.get('folded')]}
+        handling_feedback = {fid:dict(item) for fid,item in feedback.items()}
+        for fid, finding in by_id.items():
+            if equivalence_key(finding) in closed:
+                handling_feedback[fid] = dict(handling_feedback.get(fid, {}),
+                    handling_status='RESOLVED', reminder_suppressed=True)
+        handling = handling_counts(handling_feedback)
+        result['risk_handling'] = dict(handling, raw_finding_count=len(scan['findings']),
+            pending_finding_count=handling['pending'],
+            excluded_finding_count=handling['excluded_by_user']+handling['excluded_by_agent'],
+            deferred_finding_count=handling['deferred'],
+            raw_findings_preserved=True, repair_authorized=False)
+        result['false_positive_feedback']['technical_false_positive_count'] = sum(
+            item.get('technical_false_positive', item.get('state') == 'AGENT_FALSE_POSITIVE')
+            for item in feedback.values())
+        result['false_positive_feedback']['user_excluded_count'] = handling['excluded_by_user']
+        result['false_positive_feedback']['deferred_count'] = handling['deferred']
         from .target import selection_summary
         result['target_selection'] = selection_summary(scan['target_profile'])
         result['rule_coverage'] = {key:value for key,value in scan.get('rule_coverage',{}).items()
@@ -193,7 +223,8 @@ class SecuritySummaryService:
     def _compact(task):
         return {key: value for key, value in task.items() if key not in {'members', 'group_key'}}
 
-    def _tasks(self, scan, rows, safe):
+    def _tasks(self, scan, rows, safe, feedback=None):
+        feedback = feedback or {}
         findings = scan['findings']
         grouped = []
         consumed = set()
@@ -231,13 +262,18 @@ class SecuritySummaryService:
                 state = row['triage_status'] if row['category'] in {'code', 'secret', 'dependency'} else 'NOT_ELIGIBLE'
                 states[state] += 1
                 priority = row['triage']['priority'] if state == 'VALID' else 'UNTRIAGED'
-                priorities[priority] += 1
+                review = feedback.get(fid, {})
+                priorities['SUPPRESSED' if review.get('folded') else priority] += 1
                 md = finding.get('technical_details', {})
                 members.append({'finding_id': fid, 'file': safe(finding['file_path']), 'line': finding['line_start'],
                                 'severity': finding['severity'], 'rule_id': safe(md.get('rule_id', '')),
                                 'scanner_sources': safe(finding['scanner_sources']), 'review_status': state,
                                 'freshness': row['freshness'], 'runtime_priority': priority,
                                 'classification': row.get('classification'),
+                                'false_positive_review': {key: review.get(key) for key in
+                                    ('state', 'folded', 'agent_review_current', 'message',
+                                     'handling_status', 'handling_label', 'handling_source',
+                                     'reminder_suppressed', 'reassessment_required', 'disposition')},
                                 'ai_review': safe(row['triage']),
                                 'advisory': safe({key: md.get(key) for key in ('canonical_vulnerability_id', 'vulnerability_id',
                                             'aliases', 'affected_ranges', 'fixed_versions',
@@ -255,6 +291,9 @@ class SecuritySummaryService:
                           'unknown_conditions': unknown, 'next_step': {'kind': 'SUGGESTION', 'label': next_step,
                                                                       'automatic_execution': False},
                           'finding_count': len(ids), 'locations': sorted(set(f"{m['file']}:{m['line']}" for m in members)),
+                          'folded_finding_count': sum(feedback.get(fid, {}).get('folded', False) for fid in ids),
+                          'active_finding_count': sum(not feedback.get(fid, {}).get('folded', False) for fid in ids),
+                          'handling_counts': handling_counts({fid:feedback.get(fid, {}) for fid in ids}),
                           'priority_counts': priorities, 'review_states': states,
                           'highest_severity': max((m['severity'] for m in members), key=lambda s: SEVERITIES.get(s, 0)),
                           'members': members, 'group_key': (safe({key: group[key] for key in ('ecosystem', 'package', 'version', 'manifest')})

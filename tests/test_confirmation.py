@@ -79,7 +79,7 @@ def test_completed_host_edit_requests_repair_without_rejecting_or_repeating(setu
     assert 'Do NOT retry, re-apply, or repeat the insecure edit' in guidance
     assert 'whether to REMEDIATE the detected risk' in guidance
     assert 'Do NOT ask whether to apply, keep, or enable the insecure edit' in guidance
-    assert '回复“修复”' in guidance and '回复“忽略”' in guidance
+    assert '回复“修复”' in guidance and '回复“暂不处理”' in guidance
     for misleading in ('approve applying this edit', 'allow this insecure configuration',
                        'edit failed', 'edit was rejected', 'edit did not happen'):
         assert misleading not in guidance
@@ -112,12 +112,12 @@ def test_hook_user_message_identifies_risk_change_and_two_choices_without_protoc
     data = pending(setup)
     feedback = data['user_feedback']
     assert feedback['location'] == {'file': 'A.java', 'line': 6}
-    assert feedback['choices'] == ['修复', '忽略']
+    assert feedback['choices'] == ['修复', '暂不处理', '认为误报']
     message = setup[-1]['systemMessage']
     assert 'A.java' in message and '第 6 行' in message
     assert '服务器' in message and '证书' in message and '如果' in message
     assert '删除这行' in message and '默认检查' in message and '重新检查' in message
-    assert '回复“修复”' in message and '回复“忽略”' in message and '风险记录仍保留' in message
+    assert '回复“修复”' in message and '回复“暂不处理”' in message and '风险记录仍保留' in message
     for internal in ('CONFIRM_REQUIRED', 'PENDING_CONFIRMATION', 'confirm_remediation',
                      data['confirmation_ref'], data['task_ref'], str(setup[0]), CANARY):
         assert internal not in message
@@ -184,7 +184,7 @@ def test_decline_keeps_raw_and_no_unrelated_reprompt(setup):
     before = runtime.store.get_scan(scan['scan_id'])
     declined = choice(setup, False)
     assert declined['status'] == 'DECLINED'
-    assert declined['user_message'] == '已忽略本次修复，代码未修改。风险记录仍保留。'
+    assert declined['user_message'] == '本次暂不处理，代码未修改。风险记录仍保留。'
     assert not {'prepare', 'verify', 'remediation_ref'} & declined.keys()
     assert not service.prepared and not service.authorized
     assert service.task_gate(pending(setup)['task_ref'], root)['reason_code'] == 'CONFIRMATION_HANDOFF_REQUIRED'

@@ -102,8 +102,26 @@ def snapshot_fingerprint(workspace, name):
 PUBLIC_LITERALS = frozenset({'MD5', 'SHA-1', 'SHA-256', 'SHA-512', 'TLS', 'SSL',
     'HTTPS', 'http', 'https', 'UTF-8', 'UTF8', 'GET', 'POST', ''})
 
+# One left-to-right scan gives an earlier comment or string ownership of all
+# of its contents. Quotes in comments cannot open strings; comment markers in
+# strings cannot hide their closing delimiter. Unterminated strings still own
+# the rest of the file, so multiline secrets remain closed to evidence output.
+_SOURCE_STRINGS = (
+    r'\x22{3}(?:\\[\s\S]|(?!\x22{3})[\s\S])*(?:\x22{3}|\Z)'
+    r'|\x27{3}(?:\\[\s\S]|(?!\x27{3})[\s\S])*(?:\x27{3}|\Z)'
+    r'|\x22(?:\\[\s\S]|[^\x22\\])*(?:\x22|\Z)'
+    r'|\x27(?:\\[\s\S]|[^\x27\\])*(?:\x27|\Z)'
+    r'|`(?:\\[\s\S]|[^`\\])*(?:`|\Z)')
+_OTHER_COMMENTS = r'//[^\r\n]*|/\*[\s\S]*?(?:\*/|\Z)'
+_SOURCE_TOKENS = re.compile(r'(?P<comment>\#(?=[ \t\r\n]|\Z)[^\r\n]*|'
+    + _OTHER_COMMENTS + ')|(?:' + _SOURCE_STRINGS + ')')
+_HASH_SOURCE_TOKENS = re.compile(r'(?P<comment>\#[^\r\n]*|'
+    + _OTHER_COMMENTS + ')|(?:' + _SOURCE_STRINGS + ')')
+_HASH_COMMENT_SUFFIXES = frozenset({'.py', '.pyi', '.toml', '.yaml', '.yml',
+    '.sh', '.bash', '.zsh', '.ps1', '.psm1', '.rb', '.r', '.pl', '.ini', '.conf'})
 
-def safe_source(text, secret_ranges=()):
+
+def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None):
     """Scrub literals over the whole bounded file before selecting nearby lines.
 
     Preserve line counts, including multiline literals and private-key blocks;
@@ -115,10 +133,16 @@ def safe_source(text, secret_ranges=()):
         if (public_api and value[:1] in ('"', "'") and value[-1:] == value[:1]
                 and value[1:-1] in PUBLIC_LITERALS):
             return value
-        return '[REDACTED_LITERAL]' + '\n' * match.group(0).count('\n')
+        marker = '[REDACTED_COMMENT]' if match.lastgroup == 'comment' else '[REDACTED_LITERAL]'
+        # Keep every physical line, including a closing delimiter at EOF and
+        # CR-only files. A newline-only replacement could lose the final line.
+        return re.sub(r'[^\r\n\v\f\x1c-\x1e\x85\u2028\u2029]+', marker, value)
     text = re.sub(r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)', mask, text)
-    text = re.sub(r'\x22\x22\x22[\s\S]*?(?:\x22\x22\x22|\Z)|\x27\x27\x27[\s\S]*?(?:\x27\x27\x27|\Z)', mask, text)
-    text = re.sub(r'\x22(?:\\[\s\S]|[^\x22\\])*?(?:\x22|\Z)|\x27(?:\\[\s\S]|[^\x27\\])*?(?:\x27|\Z)|`[^`]*(?:`|\Z)', mask, text)
+    path = Path(source_path) if source_path is not None else None
+    tokens = (_HASH_SOURCE_TOKENS if path is not None and
+        (path.suffix.lower() in _HASH_COMMENT_SUFFIXES or path.name.lower() == 'dockerfile')
+        else _SOURCE_TOKENS)
+    text = tokens.sub(mask, text)
     # Per-line redaction preserves line numbering. Scrub even short unquoted
     # credential assignments and comments, not just scanner-identified secrets.
     lines = text.splitlines()
@@ -129,6 +153,8 @@ def safe_source(text, secret_ranges=()):
             line = re.sub(r'(?i)\b(?:password|passwd|token|api[_-]?key|secret)\s*[:=].*', '[REDACTED_SECRET]', line)
             line = SecretRedactor().redact(line)
             line = re.sub(r'\b[A-Za-z0-9+/=_-]{32,}\b', '[REDACTED_SECRET]', line)
+            if truncation_lines is not None and len(line) > MAX_LINE_CHARS:
+                truncation_lines.append(index)
             lines[index-1] = line[:MAX_LINE_CHARS]
     return lines
 
@@ -208,7 +234,8 @@ class LocalEvidenceService:
             status = 'UNAVAILABLE' if not expected else 'EXACT' if current_hash == expected else 'STALE'
             reason = 'SNAPSHOT_FINGERPRINT_MISSING' if not expected else 'FILE_CHANGED_SINCE_SCAN' if status == 'STALE' else None
             output.update(evidence_status=status, reason=reason, current_file_sha256=current_hash)
-            lines = safe_source(text, self.secret_ranges.get(locator['relative_path'], []))
+            lines = safe_source(text, self.secret_ranges.get(locator['relative_path'], []),
+                source_path=locator['relative_path'])
             start, end = locator['start_line'], locator['end_line']
             if type(start) is not int or type(end) is not int or not 1 <= start <= end <= len(lines):
                 output.update(evidence_status='STALE' if status == 'STALE' else 'UNAVAILABLE', reason='LINE_RANGE_UNAVAILABLE')

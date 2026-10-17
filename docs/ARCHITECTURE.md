@@ -1,5 +1,66 @@
 # Architecture
 
+Risk handling separates four facts: technical assessment, the user's handling
+decision, effective reminder state and repair verification. `risk_disposition`
+owns the SQLite decision/event/assessment store, stable issue identity and
+semantic evidence revisions. It does not scan, invoke a model or authorize a fix.
+`finding_feedback` and `task_risk_feedback` adapt their existing finding and
+ownership contracts to that store; raw scanner results and original task risks
+remain intact. `dependency_disposition` supplies package/advisory identity and
+declaration revisions for dependency findings without coupling manifest formats
+to the shared decision store. Each workspace keeps private state outside project source.
+
+`risk_decision_guidance` is the canonical interaction contract and choice list;
+MCP instructions, generated installed Skill references and summary projections
+consume it. `feedback_contract` defines typed evidence input and precise errors.
+The host Agent performs bounded investigation, while explicit EXCLUDE, DEFER and
+RESTORE user decisions control reminders independently of model agreement.
+RESTORE persists until a new user decision. A material code change queues an
+internal review; only fresh, concrete risk evidence can reopen a suppressed issue.
+Unreadable source cannot revoke a saved choice. Unreadable decision storage is
+reported as unavailable rather than converted into zero risks or a new prompt.
+
+Task review v3 separates five responsibilities: immutable sanitized evidence
+(`task_preimages`), pure changed-range selection (`task_review_windows`), finite
+resource policy (`task_review_budget`), plan/coverage accounting
+(`task_review_plan`) and readable delivery (`task_review_transport`). The
+`task_review` coordinator owns source verification, locking and persistence;
+`task_security` retains task lifecycle, scanning and risk-policy integration.
+Neither the planner nor the transport reads files, starts a scanner, authorizes
+repairs or treats a locator as evidence.
+
+New task captures keep optional, keyed redacted-line change locators in a private
+side table committed with the original sanitized body. References and old body
+formats stay compatible. Locators are bound to the original task/path/hash and
+retention, used only in transient planning inputs, and never copied to source
+packets, plans or control records. Missing legacy locators produce conservative
+masked-range requirements rather than post-edit baseline reconstruction.
+
+New v3 plans include every changed unit and derive independent source,
+navigation and control allowances from all required ranges. Large-file diffing
+uses common boundaries, unique-line anchors and bounded local matching; ambiguous
+regions remain required. Batches schedule estimated work without a per-batch
+hard cutoff. Source bindings are registered once; source packets contain readable
+sanitized lines and new evidence ids, while already-delivered ranges reuse only
+actual issued evidence. Finalization still verifies all required windows and
+explicit unit submissions, including pages the host never requested.
+
+A 15-minute activity lease advances only on real reading/submission progress.
+Explicit preparation can resume an idle v3 plan after verifying its original
+owner, immutable snapshot and Hook revision. It preserves the same session,
+evidence, cumulative consumption and static result. It does not recreate the
+baseline or extend immutable preimage retention (24 hours). Admission beyond the
+128MB category guard reports required capacity before delivering source; missing
+bodies, capture limits and source truncation remain explicit gaps. These guards
+bound memory and delivery, rather than silently omitting work or certifying safety.
+
+Historical result pagination and the bounded terminal persistence receipt are
+independent of evidence delivery. Existing v1/v2 task references, original fixed
+quotas/deadlines, owners, signatures, risk records and repair gates remain valid;
+an already prepared task cannot switch protocol to reset its ledger. Current
+window reads verify the requested source and Hook revision; final submission
+rechecks the complete source inventory and hashes.
+
 ## Runtime flow
 
 ```text
@@ -18,6 +79,14 @@ Host adapters normalize events and preserve strict workspace, session, and
 opaque-reference boundaries. The Core owns reconciliation, scanner execution,
 finding identity, policy, remediation authorization, and proof. Hosts do not
 duplicate scanner or policy logic.
+
+The host connector boundary composes installation/configuration, event input,
+feedback/continuation output, and capability reporting. Each product/client
+entry point retains its own acceptance record while sharing the Runtime Core.
+Event adapters already exist; some task registration and global routing remain
+Codex-specific. The [Cursor connector development and test plan](CURSOR_INTEGRATION_PLAN.zh-CN.md)
+defines the limited extraction needed before adding its full automatic workflow.
+This boundary is a development target, not a claim that every connector is complete.
 
 ## Ownership and boundaries
 

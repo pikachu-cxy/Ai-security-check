@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from test_security_summary import sample, review, snapshot, SECRET
+from summary_fixtures import sample, review, snapshot, SECRET
 from test_task_triage import task, server, invoke
 from security_runtime.models import ScannerRun
 from security_runtime.scanners import ScannerRegistry

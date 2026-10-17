@@ -586,6 +586,9 @@ class TrivyAdapter(BaseScanner):
             context = replace(context, files=dependency_scope, context_files=())
             observe_scope(dependency_scope, 'SCOPED_SNAPSHOT')
         with _snapshot(context) as scoped:
+            from .python_manifest import stage_python_manifests, manifest_target
+            aliases, python_reports = (stage_python_manifests(scoped, context.files)
+                if self.checks == 'vuln' else ({}, {}))
             args=[binary, "fs", "--format", "json", "--scanners", self.checks, "--cache-dir", str(self.tool_manager.trivy_cache_dir()), "--skip-db-update", "--skip-java-db-update", "--skip-check-update"]
             if self.checks == 'vuln':
                 args.append('--list-all-pkgs')
@@ -600,13 +603,19 @@ class TrivyAdapter(BaseScanner):
             if not isinstance(data, dict) or not isinstance(data.get('Results', []), list):
                 raise ValueError('Dependency scanner returned an invalid result structure')
             for result in data.get("Results", []):
-                target = Path(result.get("Target", ""))
-                if target.is_absolute():
-                    result["Target"] = target.resolve().relative_to(scoped.resolve()).as_posix()
+                result['Target'] = manifest_target(result.get('Target', ''), scoped, aliases)
+                if self.checks == 'vuln' and result['Target'] not in dependency_scope:
+                    raise ValueError('Dependency scanner reported an unplanned manifest')
             if self.checks == 'vuln':
                 state = _trivy_inventory.get()
                 if state is not None:
                     state.update(self._dependency_inventory(data, context, process.duration_ms))
+                    state['inventory']['python_declarations'] = python_reports
+                    if any(report['unresolved_entries'] for report in python_reports.values()):
+                        state['coverage'] = 'PARTIAL'
+                        state['notes'].append('Some Python declarations are dynamic, unpinned or unsupported; no installed version was inferred.')
+                    if python_reports:
+                        state['notes'].append('Python declared exact versions include optional/build declarations and unevaluated environment markers; applicability and installed versions are unconfirmed.')
                     if any(level in process.stderr for level in ('WARN', 'ERROR')):
                         state['coverage'] = 'PARTIAL'
                         state['notes'].append('Dependency extraction/resolution warnings prevent confirmation of complete inventory coverage.')
@@ -647,6 +656,7 @@ class TrivyAdapter(BaseScanner):
             'unique_packages': len(set(packages)),
             'confirmed_package_occurrences': sum(bool(all(package)) for package in packages),
             'confirmed_manifests': len(observed), 'planned_manifests': len(planned),
+            'unconfirmed_manifests': sorted(planned - observed),
             'per_manifest': per_manifest, 'complete_dependency_graph_attested': False,
             'package_coordinates': [dict(manifest=str(result.get('Target', '')).replace('\\', '/'),
                 ecosystem=str(result.get('Type', '')), package=p.get('Name', ''), version=p.get('Version', ''))

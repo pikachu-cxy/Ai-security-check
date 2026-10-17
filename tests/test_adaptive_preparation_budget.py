@@ -177,8 +177,8 @@ def test_trivy_native_deadline_uses_hard_cap_parent_uses_adaptive_remaining(data
     seen = []
     def execute(args, **kwargs):
         seen.append(kwargs)
-        assert 55 < kwargs['timeout'] <= 60
-        assert 55 < float(args[args.index('--timeout') + 1][:-1]) <= 60
+        assert 45 < kwargs['timeout'] <= 48
+        assert 45 < float(args[args.index('--timeout') + 1][:-1]) <= 48
         assert callable(kwargs['remaining_callback']) and kwargs['remaining_callback']() <= 5
         kwargs['on_stderr_line']('1.00 MiB / 10.00 MiB [>]')
         write(Path(args[args.index('--cache-dir') + 1]) / 'db', fresh=True)
@@ -199,6 +199,29 @@ def test_failed_validation_after_complete_transfer_preserves_original_cache(data
     with preparation_budget(5, adaptive=True, max_wait_seconds=60):
         manager.prepare_trivy_database('trivy.exe', validate_database=lambda _: False)
     assert {p.name: p.read_bytes() for p in (cache / 'db').iterdir()} == before
+
+
+def test_first_source_reserves_time_for_second_without_renewing_global_cap(database, monkeypatch):
+    now = [100.]
+    monkeypatch.setattr('security_runtime.preparation_budget.time.monotonic', lambda: now[0])
+    manager, cache, _, write = database
+    calls = []
+    def execute(args, **kwargs):
+        calls.append(args)
+        if len(calls) == 1:
+            assert kwargs['timeout'] == 48
+            kwargs['on_stderr_line']('1.00 MiB / 10.00 MiB [>]')
+            now[0] = 148.
+            assert kwargs['remaining_callback']() == 0
+            raise TimeoutError('private network detail')
+        assert 0 < kwargs['timeout'] <= 12
+        write(Path(args[args.index('--cache-dir') + 1]) / 'db', fresh=True)
+        return ProcessResult(0, '', '', 1)
+    monkeypatch.setattr('security_runtime.toolchain.run_process', execute)
+    with preparation_budget(60, adaptive=True, max_wait_seconds=60) as budget:
+        assert manager.prepare_trivy_database('trivy.exe') == ToolStatus.READY
+        assert budget.hard_remaining() == 12
+    assert len(calls) == 2 and manager.database_freshness()['status'] == 'FRESH'
 
 
 @pytest.mark.parametrize('tool_id,declared_total', [('gitleaks', True), ('cpython', True), ('gitleaks', False)])

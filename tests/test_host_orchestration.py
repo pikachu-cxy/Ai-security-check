@@ -65,7 +65,7 @@ def test_native_workflow_branches_are_exclusive(setup, tmp_path, tool_name):
         if output['status'] == 'SCANNED' and output.get('last_check_status') == 'SCANNED':
             assert wire['continue'] is False
             assert wire['stopReason'] == wire['systemMessage'] == data['user_feedback']['message']
-            assert QUESTION in wire['stopReason'] and '回复“忽略”' in wire['stopReason']
+            assert QUESTION in wire['stopReason'] and '回复“稍后处理”' in wire['stopReason']
         else:
             assert not {'continue', 'stopReason'} & wire.keys()
         assert 'decision' not in wire and 'reason' not in wire

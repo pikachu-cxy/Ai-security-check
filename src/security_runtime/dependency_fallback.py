@@ -15,9 +15,15 @@ BLOCKED_ERRORS = frozenset({
 
 
 def should_fallback(run):
-    if run.status not in {RunStatus.FAILED, RunStatus.UNAVAILABLE, RunStatus.TIMEOUT}:
-        return False
     if run.error_code in BLOCKED_ERRORS:
+        return False
+    if run.status == RunStatus.SUCCESS and run.coverage_contract == 'PARTIAL':
+        inventory = run.dependency_inventory
+        planned = inventory.get('planned_manifests')
+        confirmed = inventory.get('confirmed_manifests')
+        return (type(planned) is int and type(confirmed) is int
+                and 0 <= confirmed < planned)
+    if run.status not in {RunStatus.FAILED, RunStatus.UNAVAILABLE, RunStatus.TIMEOUT}:
         return False
     return run.error_code in ELIGIBLE_ERRORS or (run.status == RunStatus.UNAVAILABLE and run.error_code in {'', 'UNAVAILABLE'})
 

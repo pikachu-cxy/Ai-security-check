@@ -56,9 +56,9 @@ CONFIRMATION_GUIDANCE = (
     'Proactively ask the user using user_feedback.message: state the affected file/line, '
     'the unsafe behavior, conditional impact and the proposed change in plain language. '
     'Do not show internal action/status names, opaque references or approval protocol details. '
-    'End with: 回复“修复”，我会修复并重新检查；回复“忽略”，本次不修复，风险记录仍保留。 '
+    'End with: 回复“修复”，我会修复并重新检查；回复“暂不处理”，本次不修复，风险记录仍保留；回复“认为误报”，我会记录意见并根据代码复核，不等于已确认误报或已修复。 '
     'Then WAIT for their answer. For this single clearly identified issue, 修复 is explicit '
-    'repair approval and 忽略 is refusal; do not ask for a second fix request. '
+    'repair approval and 暂不处理 (legacy 忽略) is refusal; 认为误报 requests a separate evidence review, never repair approval; do not ask for a second fix request. '
     'If several issues were presented without a single selected target, ask which one first; '
     'never interpret a short reply as approval or refusal of all issues. '
     'Only after explicit user approval call confirm_remediation with the supplied confirmation_ref '
@@ -153,6 +153,13 @@ class RemediationService:
     def _fail(reason='REMEDIATION_INCONCLUSIVE'):
         return {'action': 'ADVISE', 'reason_code': reason, 'verification_status': 'INCONCLUSIVE',
                 'max_attempts': 2, 'verification_required': True, 'feedback_required': False}
+
+    @staticmethod
+    def _handling_unavailable():
+        from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+        return dict(action='NONE', reason_code='HANDLING_UNAVAILABLE', handling_unavailable=True,
+            feedback_required=False, user_feedback=dict(version='security-user-feedback-v1',
+                choices=[], handling_unavailable=True, message=HANDLING_UNAVAILABLE_MESSAGE))
 
     def _read(self, path, key):
         no_links(path)
@@ -527,17 +534,20 @@ class RemediationService:
         problem = '这行代码让主机名检查始终通过，服务器证书的域名与目标地址不匹配也会被接受。'
         impact = '如果网络连接被劫持，攻击者可能冒充目标服务器，窃取或篡改通信内容；实际部署中的使用情况尚未确认。'
         recommendation = '删除这行关闭校验的代码，恢复默认检查；修复后重新检查。证书域名不匹配的连接会被拒绝。'
-        question = '回复“修复”，我会修复并重新检查；回复“忽略”，本次不修复，风险记录仍保留。'
+        question = ('回复“修复”，我会修复并重新检查；回复“暂不处理”，本次不修复，风险记录仍保留；'
+                    '回复“认为误报”，我会记录你的意见并根据代码复核，不等于已确认误报或已修复。')
         return {'version': 'security-user-feedback-v1', 'title': title,
                 'location': {'file': relative, 'line': line if relative else None},
                 'problem': problem, 'impact': impact, 'recommendation': recommendation,
-                'choices': ['修复', '忽略'],
+                'choices': ['修复', '暂不处理', '认为误报'],
                 'message': f'发现一个安全问题：{title}。\n位置：{location}\n'
                            f'{problem}\n{impact}\n建议：{recommendation}\n{question}'}
 
     def _current_dependency_matches(self, result, root, scan):
         """Fresh presence permits a review prompt, never edit/absence authority."""
-        claimed = result.get('current_dependency_finding_ids')
+        if result.get('handling_unavailable'):
+            return []
+        claimed = result.get('active_dependency_finding_ids', result.get('current_dependency_finding_ids'))
         execution = result.get('execution')
         if (not isinstance(claimed, list) or not 0 < len(claimed) <= 50 or
                 any(not isinstance(item, str) or not re.fullmatch('[a-f0-9]{24}', item)
@@ -561,6 +571,9 @@ class RemediationService:
     def _advisory_feedback(self, output, result, root):
         """Present current saved candidates without granting or resetting a repair."""
         from .hook_user_feedback import issue_feedback, dependency_status_message, code_scope_notice
+        from .finding_feedback import FindingFeedbackService
+        if result.get('handling_unavailable'):
+            return self._handling_unavailable()['user_feedback']
         scan_id = result.get('scan_id')
         if not isinstance(scan_id, str) or not re.fullmatch(r'[A-Za-z0-9-]{1,100}', scan_id):
             return None
@@ -583,23 +596,46 @@ class RemediationService:
                    if equivalence_key(finding) in candidates]
         matched_ids = {finding['id'] for finding in matches}
         matches.extend(finding for finding in dependency_matches if finding['id'] not in matched_ids)
+        current_occurrence_found = bool(matches)
+        if matches and hasattr(self.store, 'finding_review_history'):
+            try:
+                projection = FindingFeedbackService(self.store, root).hook_projection(scan_id)
+                folded = set(projection['folded_finding_ids'])
+            except (OSError, ValueError):
+                return self._handling_unavailable()['user_feedback']
+            matches = [finding for finding in matches if finding['id'] not in folded]
         verification = output.get('verification', {})
         verification = verification if isinstance(verification, dict) else {}
         evidence_scope = 'CURRENT_FINDING'
-        if (not matches and family and output['action'] == 'ESCALATE' and
+        if (not matches and not current_occurrence_found and family and output['action'] == 'ESCALATE' and
                 verification.get('verification_status') == 'INCONCLUSIVE' and output.get('task_ref')):
             # The post-edit Hook may see no occurrence while the original-rule
             # recheck failed. Describe the exact original task as historical,
             # without presenting its old coordinates as a fresh detection.
             claimed = decode_task_reference(output['task_ref'])
             if Path(claimed['workspace']).resolve() == Path(root).resolve():
-                summary = SecuritySummaryService(self.store).get(
-                    root, claimed['scan'], details=True, bound_workspace=root)
+                try:
+                    summary = SecuritySummaryService(self.store).get(
+                        root, claimed['scan'], details=True, bound_workspace=root)
+                except (OSError, ValueError):
+                    return self._handling_unavailable()['user_feedback']
                 task = next((item for item in summary['tasks']
-                             if item['task_ref'] == output['task_ref'] and item['finding_count'] == 1), None)
+                             if item['task_ref'] == output['task_ref'] and item['finding_count'] == 1
+                             and item.get('active_finding_count', item['finding_count']) > 0), None)
                 original = self.store.get_scan(claimed['scan'])
                 if task and original:
-                    member_id = task['members'][0]['finding_id']
+                    active_members = [member for member in task['members']
+                                      if not member.get('reminder_suppressed')]
+                    if len(active_members) != 1:
+                        return None
+                    member_id = active_members[0]['finding_id']
+                    if hasattr(self.store, 'finding_review_history'):
+                        try:
+                            if FindingFeedbackService(self.store, root).status(
+                                    claimed['scan'], member_id)['reminder_suppressed']:
+                                return None
+                        except (OSError, ValueError):
+                            return self._handling_unavailable()['user_feedback']
                     matches = [finding for finding in original['findings']
                                if finding['id'] == member_id and equivalence_key(finding) == family]
                     evidence_scope = 'ORIGINAL_FINDING'
@@ -621,7 +657,7 @@ class RemediationService:
                             f'{" 第 " + str(item["location"]["line"]) + " 行" if item["location"]["line"] else ""}\n'
                             f'{item["problem"]}\n{item["impact"]}\n建议：{item["recommendation"]}'
                             for index, item in enumerate(items, 1)) +
-                            '\n请先选择要处理的具体问题，再回复“修复”或“忽略”。'}
+                            '\n请先选择要处理的具体问题，再回复“修复”或“稍后处理”；也可选择“请复核”或“不再提醒此项”。'}
         scope_notice = code_scope_notice(result)
         if scope_notice:
             feedback['message'] += '\n' + scope_notice
@@ -733,6 +769,8 @@ class RemediationService:
                         if output.get('action') == 'NONE':
                             output.update(action='ADVISE', reason_code='CURRENT_DEPENDENCY_FINDINGS_REVIEW')
                     output['user_feedback'] = feedback
+                    if feedback.get('handling_unavailable'):
+                        output['handling_unavailable'] = True
             except Exception:
                 pass  # Missing display data never changes a security decision.
             output.setdefault('user_message',
@@ -951,7 +989,18 @@ class RemediationService:
                     attach(self, output, root, record)
                 return output
 
+            if result.get('handling_unavailable'):
+                return self._handling_unavailable()
             families = result.get('delta', {}).get('families', [])
+            if (result.get('scan_id') and any(family.get('current_count', 0) > 0 for family in families)
+                    and hasattr(self.store, 'finding_review_history')):
+                from .finding_feedback import FindingFeedbackService
+                try:
+                    projection = FindingFeedbackService(self.store, root).hook_projection(result['scan_id'])
+                    folded_families = set(projection['fully_folded_families'])
+                except (OSError, ValueError):
+                    return self._handling_unavailable()
+                families = [family for family in families if family['equivalence_key'] not in folded_families]
             new = [f for f in families if f['status'] == 'NEW_FAMILY' or
                    (f['current_count'] > 0 and f['equivalence_key'] in current and
                     current[f['equivalence_key']][1]['phase'] == 'CLOSED')]
@@ -1190,7 +1239,7 @@ class RemediationService:
                     record.update(phase='DECLINED', last_action='NONE')
                     output = {'status': 'DECLINED', 'action': 'NONE', 'feedback_required': False,
                               'reason_code': 'USER_DECLINED', 'raw_and_triage': 'UNCHANGED',
-                              'user_message': '已忽略本次修复，代码未修改。风险记录仍保留。'}
+                              'user_message': '本次暂不处理，代码未修改。风险记录仍保留。'}
                 else:
                     for token in [t for t, deadline in self.authorized.items() if time.monotonic() >= deadline]:
                         self.authorized.pop(token, None)

@@ -10,7 +10,7 @@ readme = "README.md"
 license = "LicenseRef-AI-Security-Runtime-Proprietary"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
-dependencies = ["PyYAML==6.0.3", "mcp==1.29.0", "javalang==0.13.0", "six==1.17.0"]
+dependencies = ["PyYAML==6.0.3", "mcp==1.29.0", "javalang==0.13.0", "six==1.17.0", "packaging==26.3"]
 
 [project.optional-dependencies]
 mcp = []

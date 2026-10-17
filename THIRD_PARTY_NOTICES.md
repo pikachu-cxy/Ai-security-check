@@ -27,6 +27,7 @@ Other Python dependency license terms are distributed with their respective inst
 | PyInstaller bootloader | 6.22.3 | PyInstaller Development Team | GPL-2.0-or-later WITH Bootloader-exception | https://pyinstaller.org | Bootloader exception permits distribution; retain this notice |
 | MCP Python SDK | 1.29.0 | MCP contributors | MIT | https://github.com/modelcontextprotocol/python-sdk | Runtime dependency |
 | PyYAML | 6.0.3 | PyYAML contributors | MIT | https://pyyaml.org | Runtime dependency |
+| packaging | 26.3 | packaging contributors | Apache-2.0 OR BSD-2-Clause | https://packaging.pypa.io | Python dependency declaration parsing; original license texts included in standalone inventory |
 | javalang | 0.13.0 | Copyright (c) 2013 Christopher Thunes | MIT | https://github.com/c2nes/javalang | Java 8 parser; original LICENSE retained |
 | six | 1.17.0 | Copyright (c) 2010-2024 Benjamin Peterson | MIT | https://github.com/benjaminp/six | Parser dependency; original LICENSE retained |
 | Managed CPython | 3.12.12 / 20260211 | Python Software Foundation and distribution contributors | Python-2.0 and included component licenses | https://github.com/astral-sh/python-build-standalone | Separate checksum-pinned download on first Semgrep preparation; preserve upstream license inventory; not bundled |

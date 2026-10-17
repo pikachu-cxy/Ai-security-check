@@ -20,6 +20,16 @@ def dynamic_function_finding():
                                   'dangerous_api': 'Function'}}
 
 
+def test_unavailable_saved_handling_does_not_replay_raw_delta_as_new_choices():
+    result = dict(status='SCANNED', coverage='FULL', handling_unavailable=True,
+                  delta=dict(new_families=3, persisting_families=1))
+    message = scan_status_message(result)
+    assert '处置记录暂时无法读取' in message
+    assert '原告警和处理记录保留' in message
+    assert '本次不重复要求选择' in message
+    assert '回复' not in message and '发现 3' not in message
+
+
 def test_dynamic_function_copy_explains_location_execution_and_arithmetic_tradeoff():
     feedback = issue_feedback(dynamic_function_finding())
     assert feedback['location'] == {'file': 'src/securityBench/services/expressionEvaluator.ts', 'line': 4}
@@ -27,9 +37,10 @@ def test_dynamic_function_copy_explains_location_execution_and_arithmetic_tradeo
                  '生成的函数被调用', '实际入口是否可到达', '原生构造器尚未确认',
                  '受限解析器', '不能改用 eval', '收窄可接受的语法',
                  '不能保证保留任意 JavaScript 表达式', '正常算术', '响应格式',
-                 '回复“修复”', '回复“忽略”'):
+                 '回复“修复”', '回复“稍后处理”'):
         assert text in feedback['message']
-    assert feedback['choices'] == ['修复', '忽略']
+    assert feedback['choices'] == ['修复', '稍后处理']
+    assert feedback['secondary_choices'] == ['请复核', '不再提醒此项']
     assert '系统命令' not in feedback['message']
 
 
@@ -39,7 +50,7 @@ def test_dynamic_function_prompt_cannot_import_untrusted_remediation_advice():
     finding['technical_details'].update(dangerous_api='PRIVATE_CANARY', dynamic_inputs=['PRIVATE_CANARY'])
     feedback = issue_feedback(finding)
     assert 'PRIVATE_CANARY' not in json.dumps(feedback, ensure_ascii=False)
-    assert feedback['choices'] == ['修复', '忽略']
+    assert feedback['choices'] == ['修复', '稍后处理']
 
 
 def test_eval_candidate_is_explained_without_function_generation_claim():
@@ -70,9 +81,9 @@ def test_recurrent_hostname_risk_explains_impact_and_user_choices():
                  '窃取或篡改', '实际部署中的使用情况尚未确认', '建议修复',
                  '恢复默认检查', '域名不匹配的连接会被拒绝',
                  '此前已有处理记录', '风险目前再次被检出', '尚未确认修复成功',
-                 '不代表风险已消除', '回复“修复”', '回复“忽略”', '风险记录仍保留'):
+                 '不代表风险已消除', '回复“修复”', '回复“稍后处理”', '风险记录仍保留'):
         assert text in message
-    assert output['choices'] == ['修复', '忽略']
+    assert output['choices'] == ['修复', '稍后处理']
     assert not any(text in message for text in ('ADVISE', 'EPISODE_ALREADY_EXISTS',
                                                 'INCONCLUSIVE', 'confirmation_ref'))
 
@@ -136,7 +147,7 @@ def test_escalation_requires_investigation_and_cannot_reset_attempt_guard():
     assert '已停止重复自动修复尝试' in output['message']
     assert '先核查再处理' in output['message']
     assert '不会因为回复“修复”而重置尝试次数或跳过检查' in output['message']
-    assert output['choices'] == ['修复', '忽略']
+    assert output['choices'] == ['修复', '稍后处理']
 
 
 def test_already_authorized_action_does_not_ask_for_second_approval():

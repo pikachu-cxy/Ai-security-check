@@ -968,6 +968,13 @@ class ToolManager:
                         budget.report(dict(event='DOWNLOAD_FALLBACK', component='vulnerability_db', source=source_host))
                 previous_attempt = attempt
                 process_seconds = budget.hard_remaining() if budget and budget.adaptive else seconds
+                # Preserve time for the other official source. A progressing
+                # first transfer must not consume the entire shared hard cap.
+                source_deadline = None
+                if budget and budget.adaptive:
+                    if repository != TRIVY_DATABASE_REPOSITORIES[-1]:
+                        process_seconds -= min(60., process_seconds * .2)
+                    source_deadline = time.monotonic() + process_seconds
                 if budget:
                     budget.report(dict(event='DOWNLOAD_STARTED', component='vulnerability_db', attempt=attempt + 1,
                         source=source_host, max_attempts=max_attempts, timeout_seconds=max(1, int(process_seconds))))
@@ -989,7 +996,9 @@ class ToolManager:
                             on_stderr_chunk=transfer_chunk if budget else None,
                             idle_timeout=budget.idle_seconds if budget else None,
                             activity_clock=lambda: time.monotonic() if validating[0] else observed[0],
-                            **({'remaining_callback': budget.remaining} if budget and budget.adaptive else {}))
+                            **({'remaining_callback': lambda: min(budget.remaining(),
+                                max(0., source_deadline - time.monotonic()))}
+                               if budget and budget.adaptive else {}))
                     if (proc.returncode == 0 and self.database_freshness(staging / 'db')['status'] == 'FRESH'
                             and (validate_database is None or validate_database(staging / 'db'))):
                         from .hook_state import no_links

@@ -22,6 +22,13 @@ def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     assert service.execute('install')['status']=='INSTALLED'
     reference=service.root/'references/runtime-workflow.md'
     assert HOST_INSTRUCTIONS in reference.read_text(encoding='utf-8')
+    assert 'prepare_task_security_review(protocol_version=3)' in reference.read_text(encoding='utf-8')
+    v2_method=service.root/'references/quick-task-review-v2.md'
+    assert v2_method.read_bytes()==skill_files()['references/quick-task-review-v2.md']
+    assert 'references/quick-task-review-v2.md' in service.manifest()['files']
+    v3_method=service.root/'references/quick-task-review-v3.md'
+    assert v3_method.read_bytes()==skill_files()['references/quick-task-review-v3.md']
+    assert 'references/quick-task-review-v3.md' in service.manifest()['files']
     assert service.manifest()['scope']=='USER'
     custom=service.root/'custom-notes.txt';custom.write_bytes(b'personal\r\n')
     assert service.execute('repair')['changed'] is False
@@ -35,6 +42,35 @@ def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     assert custom.read_bytes()==b'personal\r\n'
     assert sibling.read_bytes()==b'user skill\r\n'
     assert not reference.exists()
+    assert not v2_method.exists()
+    assert not v3_method.exists()
+
+
+@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md'])
+def test_legacy_skill_upgrade_adds_signed_versioned_method_without_replacing_user_files(tmp_path,method):
+    legacy=manager(tmp_path)
+    legacy.expected.pop(method)
+    assert legacy.execute('install')['status']=='INSTALLED'
+    custom=legacy.root/'custom-notes.txt';custom.write_bytes(b'user notes\r\n')
+    upgraded=manager(tmp_path)
+    assert upgraded.status()['status']=='UPGRADE_AVAILABLE'
+    assert upgraded.execute('upgrade')['status']=='INSTALLED'
+    assert (upgraded.root/method).read_bytes()==skill_files()[method]
+    assert method in upgraded.manifest()['files']
+    assert custom.read_bytes()==b'user notes\r\n'
+
+
+@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md'])
+def test_legacy_skill_upgrade_does_not_adopt_unowned_versioned_method(tmp_path,method):
+    legacy=manager(tmp_path)
+    legacy.expected.pop(method)
+    legacy.execute('install')
+    path=legacy.root/method;path.write_bytes(b'user authored review method\r\n')
+    upgraded=manager(tmp_path)
+    before=upgraded.manifest()
+    assert upgraded.execute('upgrade')['status']=='USER_MODIFIED'
+    assert path.read_bytes()==b'user authored review method\r\n'
+    assert upgraded.manifest()==before and method not in before['files']
 
 
 @pytest.mark.parametrize('action',['install','upgrade','repair','remove'])

@@ -71,7 +71,7 @@ def test_confirm_feedback_still_requires_human_reply(setup):
     result = setup[-1]; data = result['remediation']; wire = codex_hook_output(result)
     assert data['action'] == 'CONFIRM_REQUIRED' and data['interaction'] == CONFIRM_INTERACTION
     assert wire['continue'] is False and not {'decision', 'reason'} & wire.keys()
-    assert QUESTION in wire['stopReason'] and '回复“忽略”' in wire['stopReason']
+    assert QUESTION in wire['stopReason'] and '回复“暂不处理”' in wire['stopReason']
     assert 'WAIT' in data['guidance'] and 'WAIT' not in wire['stopReason']
     assert wire['stopReason'] == data['user_feedback']['message']
     context = assert_operational_context(wire, data)
@@ -90,7 +90,7 @@ def test_advisory_choice_stops_for_feedback_without_rejecting_edit_or_granting_r
     wire = codex_hook_output(result)
     assert wire['continue'] is False and 'decision' not in wire and 'reason' not in wire
     assert wire['stopReason'] == wire['systemMessage'] == decision['user_feedback']['message']
-    assert QUESTION in wire['stopReason'] and '回复“忽略”' in wire['stopReason']
+    assert QUESTION in wire['stopReason'] and '回复“稍后处理”' in wire['stopReason']
     effect = documented_posttool_effect(wire)
     assert effect == {'nested_promise_rejected': False, 'model_feedback': wire['stopReason']}
     context = assert_operational_context(wire, decision)

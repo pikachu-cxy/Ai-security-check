@@ -306,7 +306,7 @@ def test_single_admitted_workspace_is_not_an_implicit_current_workspace(installe
         # Host could already be in B before B's first Hook arrives. Even with
         # just A admitted, missing claims must not return A's records.
         result = asyncio.run(server.call_tool('get_security_summary', {}))
-        assert result.structuredContent['reason_code'] == 'WORKSPACE_CLAIM_REQUIRED'
+        assert result.structuredContent['reason_code'] == 'INVALID_HOST_CLAIMS'
         assert str(projects[0]) not in result.model_dump_json()
         result = asyncio.run(server.call_tool('get_security_summary', {'workspace_path': str(projects[1])}))
         assert structured(result)['workspace'] == str(projects[1])

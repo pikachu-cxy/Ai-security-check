@@ -366,6 +366,8 @@ def preparation_message(value):
         health = value.get('component_health') or {}
         if health.get('notify'):
             message += '\n' + health['message']
+        if not value['current_readiness'].get('ready') and value['status'] not in ACTIVE:
+            message += '\n' + preparation_failure_message(value)
         return message
     status = value['status']
     if status == 'READY':
@@ -374,7 +376,8 @@ def preparation_message(value):
         return '扫描能力已准备完成，正在通过普通 MCP 接续已登记的收尾检查。'
     if status not in ACTIVE:
         receipt = value.get('receipt') or {}
-        return receipt.get('message') or '扫描能力尚未就绪；已有缓存和待检任务保留。请查询组件状态查看具体原因，先不要重复安装。'
+        message = receipt.get('message') or '扫描能力尚未就绪；已有缓存和待检任务保留。'
+        return message + '\n' + preparation_failure_message(value)
     message = '扫描能力正在后台准备，安装已完成，无需手动执行前置命令。'
     event = value.get('progress') or {}
     if event.get('event') == 'DOWNLOAD_PROGRESS':
@@ -386,6 +389,23 @@ def preparation_message(value):
         else:
             message += '，剩余时间估算中。'
     return message
+
+
+def preparation_failure_message(value):
+    """Closed diagnoses; no raw subprocess output or proxy values in chat."""
+    receipt = value.get('background_receipt') or value.get('receipt') or {}
+    progress = value.get('progress') or {}
+    error = (receipt.get('preparation') or {}).get('error_code') or progress.get('error_code')
+    explanation = {
+        'NETWORK_TIMEOUT': '漏洞数据下载超时，请检查到官方下载源的网络或代理连接。',
+        'DOWNLOAD_STALLED': '漏洞数据下载停止传输，已保留原缓存；请检查网络或代理连接。',
+        'PREPARATION_BUDGET_EXHAUSTED': '本次准备已达到等待上限，已保留原缓存。',
+        'TLS_ERROR': '下载连接的证书校验失败；请检查系统证书或代理，不能关闭证书校验。',
+        'PROXY_CONNECTION_FAILED': '无法连接配置的代理，请确认代理已启动且地址正确。',
+    }.get(error, '')
+    if value.get('build_match') is False:
+        explanation += '上次准备记录来自另一个安装构建，不能作为当前版本的就绪证明。'
+    return explanation + '修正下载条件后，运行 preparation retry 重试，再运行 preparation watch 等待；无需反复重装。'
 
 
 def current_preparation():

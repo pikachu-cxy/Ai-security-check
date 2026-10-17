@@ -16,7 +16,7 @@ from .verification_policy import offline_scanning, scanner_process_observed
 # Lockfiles describe a bounded inventory. POM/requirements/go.mod can need
 # resolution; successful extraction alone does not prove a complete graph.
 LOCKFILES = {'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'gradle.lockfile', 'buildscript-gradle.lockfile'}
-MANIFESTS = LOCKFILES | {'pom.xml', 'requirements.txt', 'go.mod'}
+MANIFESTS = LOCKFILES | {'pom.xml', 'requirements.txt', 'go.mod', 'pyproject.toml'}
 DEPENDENCY_INPUTS = MANIFESTS | {'package.json', 'pyproject.toml', 'build.gradle', 'build.gradle.kts', 'go.sum', 'poetry.lock', 'Pipfile.lock'}
 
 
@@ -65,10 +65,12 @@ class OSVDependencyAdapter(BaseScanner):
             environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         environment['OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY'] = str(db_root)
         if offline:
-            ecosystems = {'Maven' if Path(f).name.endswith('.xml') or 'gradle' in Path(f).name else 'Go' if Path(f).name=='go.mod' else 'PyPI' if Path(f).name=='requirements.txt' else 'npm' for f in supported}
+            ecosystems = {'Maven' if Path(f).name.endswith('.xml') or 'gradle' in Path(f).name else 'Go' if Path(f).name=='go.mod' else 'PyPI' if Path(f).name in {'requirements.txt', 'pyproject.toml'} else 'npm' for f in supported}
             if any(not (db_root/'osv-scalibr'/eco/'all.zip').is_file() for eco in ecosystems):
                 raise DiagnosticError(ErrorDiagnostic('OFFLINE_MODE', 'OSV local vulnerability data is unavailable in offline mode.', 'Prepare local OSV ecosystem databases online before offline scanning.'))
         with _snapshot(replace(context, files=scope, context_files=())) as scoped:
+            from .python_manifest import stage_python_manifests, manifest_target
+            aliases, python_reports = stage_python_manifests(scoped, scope)
             # POM parents can use relativePath to read local files. Confine
             # declared local parents to the snapshot; suppress an implicit
             # root parent lookup outside it. Network resolution remains deps.dev.
@@ -121,14 +123,11 @@ class OSVDependencyAdapter(BaseScanner):
                 raise ValueError('OSV output has no dependency inventory')
             observed=set()
             for result in data['results']:
-                path=Path(result.get('source',{}).get('path',''))
-                if path.is_absolute():
-                    path=path.resolve().relative_to(scoped.resolve())
-                relative=path.as_posix()
+                relative=manifest_target(result.get('source',{}).get('path',''), scoped, aliases)
                 if relative not in scope:
                     raise ValueError('OSV reported a dependency outside its planned manifest scope')
                 result['source']['path']=relative
-                if relative in supported:
+                if relative in supported and result.get('packages'):
                     observed.add(relative)
                 else:
                     self.notes.append('Additional manifest inventory does not attest a complete resolved dependency graph.')
@@ -143,6 +142,10 @@ class OSVDependencyAdapter(BaseScanner):
                 self.notes.append('Manifest extraction/resolution does not attest a complete transitive dependency graph; Maven test dependencies are not covered.')
             if observed != set(supported):
                 self.notes.append('One or more planned dependency inputs produced no inventory confirmation.')
+            if any(report['unresolved_entries'] for report in python_reports.values()):
+                self.notes.append('Some Python declarations are dynamic, unpinned or unsupported; no installed version was inferred.')
+            if python_reports:
+                self.notes.append('Python declared exact versions include optional/build declarations and unevaluated environment markers; applicability and installed versions are unconfirmed.')
             if any(Path(f).name not in MANIFESTS and Path(f).name not in {'package.json','go.sum'} for f in scope):
                 self.notes.append('Some planned dependency formats are not supported by this fallback scope.')
             if process.stderr.strip():
@@ -162,6 +165,8 @@ class OSVDependencyAdapter(BaseScanner):
                 'unique_packages':len({(p.get('ecosystem',''),p.get('name',''),p.get('version','')) for p in packages}),
                 'confirmed_package_occurrences':sum(all(p.get(k) for k in ('ecosystem','name','version')) for p in packages),
                 'confirmed_manifests':len(observed), 'planned_manifests':len(supported),
+                'unconfirmed_manifests':sorted(set(supported) - observed),
+                'python_declarations':python_reports,
                 'per_manifest':{result['source']['path']:len(result.get('packages',[])) for result in data['results']},
                 'complete_dependency_graph_attested':False if self.coverage=='PARTIAL' else True,
                 'native_duration_ms':process.duration_ms}

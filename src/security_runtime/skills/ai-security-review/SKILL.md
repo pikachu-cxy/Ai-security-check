@@ -5,6 +5,13 @@ description: Use AI Security Runtime to check source/config development tasks be
 
 # Security review
 
+用户交互采用 [风险交互与用户处置](references/risk-decisions.md) 的 risk-decisions-v2。
+该文件由 Runtime 与 MCP 共用的规则生成。先由 Agent 复核并给建议，用户决定是否处理；
+明确“这是误报／标为误报／不再提醒此项”使用对应 set_*_disposition(EXCLUDE) 保存人工排除，
+不需要 Agent 批准。询问“是不是误报／请复核”仅调查，明确只记录意见才使用旧 mark 工具。
+“稍后处理／暂不处理”使用 DEFER，恢复提醒使用 RESTORE；原告警、AI 不同意见和历史保留。
+人工排除不得说成已修复或经验证安全。兼容旧 mark/revoke 的用户意见流程时也遵守此交互契约。
+
 Choose one workflow by intent. Source/config development tasks use the quick task
 reference below; they do not also run the project-scan/triage workflow. Ordinary
 chat uses neither workflow. Requested security audits and selected-risk fixes use
@@ -12,7 +19,9 @@ the existing scan/review/fix workflow, retaining their original scope and author
 
 ## 开发任务安全核查
 
-实际开发任务按 [快速任务核查](references/quick-task-review.md) 执行：首次
+新任务在 Runtime 能力声明支持 v3 时按 [自适应任务核查](references/quick-task-review-v3.md) 执行，
+显式传 protocol_version=3；仅支持 v2 的连接按 [分批任务核查](references/quick-task-review-v2.md)
+使用 protocol_version=2。已经准备的任务保留原协议和原账本，不切换协议。首次
 编辑前记录基线，开发完成后比较实际改动，静态扫描后由当前 Agent 核查改动
 及必要关联上下文，即使静态零发现也核查。结果合并进正常开发总结，不要
 用户反复发“继续”，不要等 Stop 后另起回复。普通聊天、只读和无改动任务
@@ -20,32 +29,50 @@ the existing scan/review/fix workflow, retaining their original scope and author
 Runtime 只校验宿主候选的结构、证据引用和代码版本，不证明模型分析或可利用性。
 修复后用 get_task_risk_ledger 查看原风险逐项状态，遵循 quick-task-review 的
 risk_resolutions 契约；宿主代码复核、原规则复查和完整依赖图验证分别报告。
-预算不足、锁忙或版本变化就说明缺口，不循环补查或伪造完成。
+v3 闲置活动租约可在原任务/原快照恢复；真实资源不足、证据失效或版本变化则说明具体缺口，不循环补查或伪造完成。
 旧的明确收尾任务仍可按原 `execution_plan` 恢复，不从普通 Stop 自动派发。
 任务核查不授权修复，检查完成、实际覆盖和风险修复分别表达。
+只读取实际需要的关联代码；不为满足数量而读取无关文件。按返回的固定计划逐项
+读取改前/改后窗口并提交批次。v3 按全部必读范围计算有限额度，源码、导航和控制分开计量；
+逐行可读材料保留实际代码，source_ref 仅压缩重复定位信息，不压缩成不可读编码。已交付同版本范围
+返回证据回执，未交付范围仍必读。大文件采用保守的局部差异窗口，模糊区域完整保留。
+恢复原 v3 计划先验证归属、源码和检查范围，保留静态结果、证据与累计用量，有新进度才续活动时间；
+旧 v1/v2 仍保留原截止时间和总额度。修改前源码的实际保留期独立，不得伪造或延长原证据。
+方法说明按版本和摘要复用本地文件，缺少同版内容时才取 get_task_review_method，
+不在每次源码读取中重复传输。旧连接未提供新参数时沿用
+[旧版核查方法](references/quick-task-review.md) 和原预算，不能在同任务中换协议重置额度。
 
 有代码依据的条件性风险须按快速任务核查的 RELATED_EXISTING 契约正式登记，
 不能仅写成后续建议。说明代码依据、当前防护、触发条件与未知范围；新增入口
 已有防护不等于所有关联调用安全，也不能据此说新增入口仍有漏洞。最终提供
-“修复／暂不处理”选项，暂不处理保留风险记录；旧“忽略”措辞兼容明确的暂不处理。
+“修复／稍后处理”选项，稍后处理保留风险记录；旧“忽略”措辞兼容明确的暂不处理。
 用户要求保持相关模块不变只限制修改，不取消风险提醒和选择；选择前不自动修复。
 
-用户呈现规则（必须遵守）：每次 Hook 的“用户提示”必须出现在最终回复中，
+用户呈现规则（必须遵守）：当前仍需提醒的 Hook“用户提示”合并进最终回复，
 完整保留位置、具体问题、条件性影响、修复建议、未确认事项和待选的
-“修复/忽略”。可以调整换行或文件链接，不得只摘取标题、数量或内部状态。
+“修复／稍后处理”。先读取当前处置，已排除、已暂缓不重复提示或索取选择；
+处置状态不可读取时说明读取缺口，不能回退旧提示重问。
+可以调整换行或文件链接，不得只摘取标题、数量或内部状态。
 没有非空风险内容时不添加通用检查消息；任务结果合并进开发总结。
+个人版默认只说明改动、安全检查结果、具体风险和原问题安全复查，不主动附加
+“运行行为未验证”“未执行项目代码、安装依赖或启动服务”等无关说明，不提示或推荐功能验证。
+用户明确询问执行情况，或开发任务本身要求运行、测试、构建时，才如实说明对应执行结果。
+安全检查未完成、覆盖不足、依赖漏洞数据过期和具体风险的未知条件仍须保留，不能因此宣称项目安全。
+检查状态要区分“未启动”“已经启动但未完成”“只完成部分范围”，说明已知原因和处理方式；
+不要只说“本轮自动安全检查尚未完成”。原因不明就明确说未能确定，不猜测项目未导入或需要重装。
+普通聊天、只读和没有实际改动时不展示通用检查提示；后续检查完成后不再重复旧的未完成提示。
 风险提示先用加粗标题“发现 N 项安全风险：具体问题”，下一行用“📍 文件:行号 · 函数”
 展示实际位置，未知函数不编造。按加粗的“问题”“可能影响”“建议修复”“尚未确认”
 分段，每段只讲一件事；保留代码依据、已有防护、触发条件和反证，不把关联风险说成新增漏洞。
 多项风险编号，检查范围和未完成事项在风险说明后集中写一次；开发结果压缩成一句。
-仍需用户选择时，最后只给一次回复指引：单项“回复「修复」或「暂不处理」即可”，多项先选具体风险。
+仍需用户选择时，主要选择只给一次“修复／稍后处理”，多项先选具体风险；不反复询问已排除、已暂缓项。
 说明暂不处理保留风险记录、选择前不会修改代码；已授权时不重复确认。不用表格或假按钮，
 不删减必要事实、不编造严重程度、检查结果或用户选择。旧“忽略”回复继续兼容暂不处理。
 `internal_control` 仅供内部流程使用；普通回复和进度说明不展示内部动作、
 原因、验证枚举、授权标识、引用、扫描器或工具名称，也不转述工具调用过程。
 只有用户明确要求技术诊断时，才展示有关诊断细节。
 “先不要修复”“保留改动”“观察 Hook”禁止当前修复，不等于已经选择忽略；
-仍须说明影响、建议和待选的“修复/忽略”，保留代码并等待选择，不自动提交
+当前仍需提醒且尚待选择时，说明影响、建议和“修复／稍后处理”，保留代码并等待选择，不自动提交
 忽略或取消提示。用户提示和等待选择不授予编辑权限；已经明确同意的同一
 修复不要求再次确认，仍遵守原范围、引用和授权门禁。
 依赖检查失败时，直说“依赖检查未完成”、已知原因和未检查的范围。
@@ -112,18 +139,21 @@ fix authorization and the originating-scanner retest workflow.
 2. Show risks needing action, unresolved context, and intentional test/sample
    observations separately. Test/sample location never proves a false positive.
    Preserve the exact displayed task's `continuation.arguments.task_ref`.
-   For Hook feedback, MUST present the event-specific 用户提示, or Runtime-issued
-   `user_feedback.message` when that section is absent, in the user's language.
+   For Hook feedback, check current saved handling first. Only for risks still needing
+   a reminder with available handling state, MUST present the event-specific 用户提示,
+   or Runtime-issued `user_feedback.message` when that section is absent, in the user's language.
+   Do not redisplay excluded/deferred items or ask for their choice again. If saved
+   handling is unavailable, report that gap without falling back to an old risk prompt.
    Preserve all supplied location/problem/conditional impact/recommendation,
-   unknowns and pending 修复/忽略 choice. Formatting and file links may be adapted;
+   unknowns and pending 修复／稍后处理 choice. Formatting and file links may be adapted;
    never summarize away these facts or replace them with internal diagnostics.
    Keep internal action/reason_code/verification/status enums (including `ADVISE`,
    `EPISODE_ALREADY_EXISTS`, `INCONCLUSIVE`, `CONFIRM_REQUIRED`), grant identifiers,
    UUIDs, opaque references, scanner/tool names and tool-call progress out of
    ordinary feedback. Only an explicit request for technical diagnostics permits
    those details. `internal_control` is machine-only; retain original refs inside.
-   For one focused risk awaiting a choice, ask:
-   回复“修复”或“暂不处理”（暂不处理仅表示本次不修复，风险记录保留）。
+   For one focused risk still needing a reminder and awaiting a choice, ask:
+   回复“修复”或“稍后处理”（兼容“暂不处理”，风险记录保留，本次不再追问）。
    The legacy reply 忽略 still means deferral for that selected issue.
    If repair is already approved for that scope, continue without asking again.
    If several risks have no selected focus, ask which one before accepting a choice.
@@ -162,16 +192,21 @@ fix authorization and the originating-scanner retest workflow.
    identified risk is explicit approval: call existing `confirm_remediation` with
    its exact `confirmation_ref`, `task_ref` and `approve=true`, then continue only
    with the returned bounded grant. Do not ask for a second confirmation.
-   An immediate '忽略', answering the clearly identified repair choice, declines
-   only this repair: call the same existing tool with `approve=false`. An earlier
+   An immediate '稍后处理/暂不处理/忽略', answering the clearly identified repair choice,
+   declines this repair: call the same existing tool with `approve=false`. An earlier
    instruction to postpone repair or observe Hook is not that refusal.
-   Keep findings, risk, Raw/triage and code unchanged; do not mark
-   it false positive, accepted risk or permanently suppressed, and do not promise
-   no future reminders. Say 本次不修复，风险仍保留。
+   Keep findings, risk, Raw/triage and code unchanged. Separately save the selected
+   finding with `set_finding_disposition` or `set_task_risk_disposition`,
+   `disposition="DEFER", user_requested=true`. A declined repair alone does not
+   persist reminder handling. Only after the disposition succeeds say
+   已暂缓，风险仍保留，本次不再追问; on save failure explain it was not saved
+   without asking the user to make the same decision again.
    Repeated-risk feedback with an existing handling record is still a risk, not
-   proof of a completed repair or a false positive. Explain the current location,
-   conditional impact, recommendation and unconfirmed repair outcome in plain
-   language; do not show internal status codes.
+   proof of a completed repair or a false positive. Consult current saved handling;
+   only a still-pending reminder needs the location, conditional impact,
+   recommendation and unconfirmed repair outcome. Do not reopen excluded/deferred
+   choices solely because an episode exists. Unavailable handling is a read gap,
+   not a new risk. Keep internal status codes hidden.
    If Runtime supplies `confirmation_recovery`, only after the user explicitly
    replies '修复' for this exact issue, call its original handoff. It may restore
    only a pending choice for an unchanged, never-authorized scope, without an
@@ -182,8 +217,10 @@ fix authorization and the originating-scanner retest workflow.
    reset attempts. Already authorized or exhausted scopes cannot use recovery.
    Without a supplied `confirmation_ref` (for example, advisory/manual feedback),
    do not invent one or call confirmation. A clearly selected '修复' follows the
-   existing `prepare_task_fix` policy guards; '忽略' only skips this repair now and
-   is not a persisted ignore. Runtime receives a strict boolean choice, not the
+   existing `prepare_task_fix` policy guards. A selected '稍后处理/忽略' still saves
+   DEFER through the matching disposition tool without a confirmation_ref;
+   acknowledge durable handling only after successful saving. Runtime receives
+   a strict boolean choice for repair confirmation, not the
    user's prompt/transcript, source or credentials. Never substitute another task
    when signed references are expired, changed or lost; refresh the exact scope.
    For a failed or exhausted repair, distinguish 'still detected' from 'recheck
@@ -207,3 +244,22 @@ This Skill does not grant authorization, suppress findings, expand policy, execu
 an LLM inside Runtime, or decide that a project is safe. Runtime gates remain
 authoritative. Hook feedback is an additional entry point; explicit MCP review
 works without a Hook. Missing Host support is a limitation, not a passed test.
+
+## 用户反馈误报
+
+按 [风险交互与用户处置](references/risk-decisions.md) 区分明确处置与请求调查。
+明确标为误报、不再提醒使用对应 set_*_disposition(EXCLUDE)，不要求用户补写安全理由。
+恢复提醒使用 RESTORE；它持续优先于 AI 自动排除。旧 mark/revoke 只保留意见登记的兼容语义。
+请求复核时，扫描器告警使用 prepare_finding_feedback/submit_finding_feedback，任务代码发现
+使用 prepare_task_risk_feedback 等对应接口。沿用原任务、finding_id、返回的会话与版本；
+扫描器 evidence_refs 每项使用 file、start_line、end_line、claim，照返回的 schema/example 提交，
+claim 写明具体代码依据。复核结论是宿主代码评估，Runtime 只校验结构、引用和版本。
+相同依据沿用处置；实质变化先内部复核，有新风险证据才提醒。读取失败或意见变化本身不撤销决定。
+原告警、原 OPEN 状态、AI 不同意见和历史保留；重新连接后不复用旧连接的反馈凭据。
+
+历史查询保留当时结果，同时读取 current_version/version_freshness/version_notice。
+无关文件变动不能说成已检查代码失效；历史COMPLETE也不能代替当前全项目检查。
+不为只读查询补扫、续期或重建基线。记录中没有的模型耗时应说明未记录，不能拿静态扫描耗时代替。
+任务与修改前代码保存在Runtime私有目录；不要向项目保存源码Base64、完整任务记录或恢复凭据。
+旧连接范围任务断线后无法由新聊天认领，保留原记录，不补造修改前版本。
+终端明确报PowerShell CET启动错误时改用可用的cmd.exe或文件工具，不重复失败的终端。

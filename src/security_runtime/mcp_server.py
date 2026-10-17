@@ -8,12 +8,14 @@ import secrets
 import time
 from dataclasses import asdict
 from pathlib import Path
+from typing import Literal
 
 from .logging_utils import mcp_log_level
 from .runtime import SecurityRuntime
 from .integration_state import DogfoodEvent, IntegrationStateStore, WorkspaceBinding
 from .workspace import WorkspaceResolver
 from .functional_host import FunctionalExecutionReport
+from .feedback_contract import FindingEvidenceReference
 
 logger = logging.getLogger(__name__)
 
@@ -197,6 +199,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     stop_tool.parameters = stop_tool.fn_metadata.arg_model.model_json_schema()
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
+    feedback_sessions = {}
 
     def register_handoff(data, task_binding=None, continuation_args=None):
         expired=[key for key,value in triage_sessions.items() if time.monotonic()-value[2]>900]
@@ -230,7 +233,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             from .task_ownership import verify_session_ref
             root=TaskSecurityService(runtime_engine,hook_coordinator.store).root(bound_path(workspace))
             scoped=verify_session_ref(hook_coordinator.store,root,session_ref)
-            if owner['host']!='connection' and scoped!=owner: raise ValueError('Task belongs to another session')
+            if owner['host']!='connection' and scoped!=owner:
+                from .task_ownership import ownership_error
+                raise ownership_error(owner, scoped)
             owner=scoped
         prior=issued_tasks.get(ref)
         if prior and session_ref is None and (owner['host']=='connection' or prior==task_connection_owner): owner=prior
@@ -260,15 +265,51 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return task_service(task_ref,session_ref,workspace_path).finish(bound_path(workspace_path), task_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None) -> dict:
-        """Obtain sanitized task diff, actual static findings/coverage and canonical quick Skill. Host agent reasons before its final development summary; zero static alerts still require context review. Returns bounded source-version-bound review session, never a repair grant."""
-        return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref)
+    def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None,
+                                     protocol_version: int = 1) -> dict:
+        """Prepare the same task's source-version-bound review. Version 1 preserves the existing packet. Version 2 preserves its fixed quotas/deadline. Explicit version 3 derives separate finite source/navigation/control allowances from all required ranges, readable source references and fragment-paged plans, and resumes an idle activity lease only for the same owner/snapshot/ledger; use get_task_review_method only when that method is not already available, then get_task_review_plan and submit_task_review_batch. All versions share the original task baseline and cumulative budgets; preparing again never resets evidence or grants repair authority."""
+        return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref,
+            protocol_version=protocol_version)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def get_task_review_plan(task_ref: str, review_session: str, cursor: int = 0, limit: int = 10,
+                              workspace_path: str | None = None, session_ref: str | None = None) -> dict:
+        """Page the current version-2/3 task's required review units. For v3 follow next_cursor across all window_fragment items, including multiple fragments of the same unit_id. Use the returned cursor and exact task/session; omitted pages remain required work. This reads the plan without rescanning, starting a new task or resetting cumulative budgets."""
+        from .task_security import TaskContextError
+        try:
+            return task_service(task_ref,session_ref,workspace_path).review_plan(bound_path(workspace_path),
+                task_ref, review_session, cursor, limit)
+        except TaskContextError as exc:
+            return exc.response(task_ref, review_session)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def get_task_review_method(task_ref: str, review_session: str, workspace_path: str | None = None,
+                                session_ref: str | None = None) -> dict:
+        """Get the canonical method for this exact version-2/3 review session when its advertised version/hash is unavailable locally. Retrieve once and reuse within the same method version; source evidence and plan coverage remain separate. No scan, task restart or repair authority."""
+        from .task_security import TaskContextError
+        try:
+            return task_service(task_ref,session_ref,workspace_path).review_method(bound_path(workspace_path),
+                task_ref, review_session)
+        except TaskContextError as exc:
+            return exc.response(task_ref, review_session)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def submit_task_review_batch(task_ref: str, review_session: str, unit_ids: list[str], coverage: str,
+                                  limitations: list[str], workspace_path: str | None = None,
+                                  session_ref: str | None = None) -> dict:
+        """Record reasoning completion for exact version-2/3 plan units after their required current/before evidence has been read. Report REVIEWED or PARTIAL with explicit limitations. Batch completion never substitutes for the final submit_task_security_review, erases other pending work, resets task budgets or grants repair authority."""
+        from .task_security import TaskContextError
+        try:
+            return task_service(task_ref,session_ref,workspace_path).submit_batch(bound_path(workspace_path),
+                task_ref, review_session, unit_ids, coverage, limitations)
+        except TaskContextError as exc:
+            return exc.response(task_ref, review_session)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
                                  source_version: str = 'CURRENT', session_ref: str | None = None) -> dict:
-        """Read a sanitized task-source window (current or signed preimage for a deleted file). At most 80 lines per response: larger requested ranges return has_more/next_read for the same task/session/path/version. Follow next_read within the unchanged 10-related-file, 40-unique-read and 64KB cumulative budgets. Unread requested ranges require PARTIAL; pagination never rescans or resets budgets. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Returns evidence_id bound to actual path/range/hash/version. No .env content, links, path escapes, external commands or network."""
+        """Read a sanitized task-source window, including signed before-task evidence. At most 80 lines per response. v1/v2 follow has_more/next_read; v3 reads plain lines with source_ref and follows next_range/unread_ranges in the same task/session/path/version. ALREADY_DELIVERED refers only to actual prior evidence; it creates no new delivery. Use the packet's versioned limits: v1 retains 40 unique reads/64KB; v2 allows 160 unique reads/256KB cumulatively, 16KB per message and 64KB per batch, with at most 100 changed and 20 related files. v3 uses plan-derived independent allowances and size-scheduled batches without a fixed batch cutoff. Pagination never rescans or resets budgets. Unread required or requested ranges remain pending. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Evidence is bound to actual path/range/hash/version. No .env content, links, path escapes, commands or network."""
         from .task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
@@ -284,7 +325,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
-        """Read same task result after reconnect with current-source freshness. Never rescans or invokes a model; host candidates and real scanner evidence stay distinct. No automatic repair authority."""
+        """Read saved task results with current-source freshness, without scans or model calls. V2 combines static then host findings into bounded history pages (finding_offset/limit; next_action), at most 3 complete records and 64KB. This history-only allowance does not renew source-review budgets. Explicit RESULT_DETAIL_LIMIT means the local record could not fit; never present it as complete. No repair authority."""
         return task_service(task_ref).get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
@@ -292,8 +333,70 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         """Read per-original-finding outcomes and current-source freshness. No scan, edits or repair authority. Native checks and host code review remain distinct; use exact original task_ref."""
         return task_service(task_ref).risk_ledger(bound_path(workspace_path), task_ref, offset, limit)
 
+    from .task_risk_feedback import TaskRiskFeedbackService
+    task_risk_feedback = TaskRiskFeedbackService()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def prepare_task_risk_feedback(task_ref: str, finding_id: str, workspace_path: str | None = None,
+                                   session_ref: str | None = None) -> dict:
+        """Read a bounded sanitized review packet for an original HOST_TASK_REVIEW risk. Use the exact original finding and task refs; same owner only. No scans, source edits, task restart, or repair authority. The feedback token is local to this MCP connection and expires after 900 seconds."""
+        return task_risk_feedback.prepare(task_service(task_ref, session_ref, workspace_path),
+                                         bound_path(workspace_path), task_ref, finding_id)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def submit_task_risk_feedback(task_ref: str, finding_id: str, feedback_ref: str, verdict: str,
+                                  rationale: str, counterevidence: list[str], evidence_refs: list[str],
+                                  current_protections: list[str] | None = None, unknowns: list[str] | None = None,
+                                  workspace_path: str | None = None, session_ref: str | None = None) -> dict:
+        """Record HOST_CODE_REVIEW_NOT_SCANNER_PROOF feedback with FALSE_POSITIVE, STILL_RISK or NEEDS_CONTEXT. Complete unchanged issued source evidence is required to fold a false positive; masked secret values and missing context cannot justify folding. Preserve original risk status and audit; this grants no edits or repairs."""
+        return task_risk_feedback.submit(task_service(task_ref, session_ref, workspace_path),
+            bound_path(workspace_path), task_ref, finding_id, feedback_ref, verdict, rationale,
+            counterevidence, evidence_refs, current_protections, unknowns)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def mark_task_risk_false_positive(task_ref: str, finding_id: str, reason: str,
+                                      user_requested: bool = False, workspace_path: str | None = None,
+                                      session_ref: str | None = None) -> dict:
+        """Legacy opinion-only note, USER_REPORT_NOT_CONFIRMED; user_requested must be true. For an explicit user decision to mark false positive or stop reminders use set_task_risk_disposition EXCLUDE instead. This note alone never proves safety, changes handling, or authorizes repair."""
+        return task_risk_feedback.mark(task_service(task_ref, session_ref, workspace_path),
+            bound_path(workspace_path), task_ref, finding_id, reason, user_requested=user_requested)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def set_task_risk_disposition(task_ref: str, finding_id: str,
+                                  disposition: Literal['EXCLUDE', 'DEFER', 'RESTORE'], reason: str = '',
+                                  user_requested: bool = False, until: str | None = None,
+                                  request_id: str | None = None, workspace_path: str | None = None,
+                                  session_ref: str | None = None) -> dict:
+        """Save the user's explicit decision for one original task risk: EXCLUDE stops repeat reminders, DEFER postpones handling (optional ISO-8601 until), RESTORE resumes handling. user_requested must be literal true; no Agent agreement or safety expertise is required. Reasons are optional. Preserve independent technical assessment and history; exclusion is not proof of safety, resolution or permission to repair. Only announce success after the saved response. Use request_id to safely retry the same decision."""
+        if user_requested is not True:
+            from .feedback_contract import FeedbackInputError
+            raise FeedbackInputError()
+        return task_risk_feedback.set_disposition(
+            task_service(task_ref, session_ref, workspace_path), bound_path(workspace_path),
+            task_ref, finding_id, disposition, reason, user_requested=user_requested,
+            until=until, request_id=request_id)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def revoke_task_risk_feedback(task_ref: str, finding_id: str, reason: str,
+                                  user_requested: bool = False, workspace_path: str | None = None,
+                                  session_ref: str | None = None) -> dict:
+        """On explicit user request only, revoke a technical feedback mark without deleting its audit. user_requested must be true. For the user's saved handling choice use set_task_risk_disposition RESTORE instead; this tool does not revoke that independent choice. Preserves original risk status; no edit authority."""
+        return task_risk_feedback.revoke(task_service(task_ref, session_ref, workspace_path),
+            bound_path(workspace_path), task_ref, finding_id, reason, user_requested=user_requested)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_task_risk_feedback(task_ref: str, finding_id: str, workspace_path: str | None = None,
+                               event_offset: int = 0, event_limit: int = 2,
+                               session_ref: str | None = None) -> dict:
+        """Read current task-risk feedback and bounded audit pages without checks or writes. Changed source/configuration automatically unfolds a past host-confirmed false positive. Follow audit_page.next_offset for more events."""
+        return task_risk_feedback.get(task_service(task_ref, session_ref, workspace_path), bound_path(workspace_path),
+                                     task_ref, finding_id, event_offset, event_limit)
+
     for task_tool_name in ('begin_security_task', 'finish_security_task', 'prepare_task_security_review',
-                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger'):
+                           'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
+                           'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger',
+                           'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'mark_task_risk_false_positive',
+                           'revoke_task_risk_feedback', 'get_task_risk_feedback', 'set_task_risk_disposition'):
         task_tool = server._tool_manager.get_tool(task_tool_name)
         task_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
         task_tool.fn_metadata.arg_model.model_rebuild(force=True)
@@ -417,6 +520,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             raise ValueError('Finding does not belong to this scan')
         selected = originals if view == 'full' else originals[offset:offset+page_limit]
         found=[]
+        from .finding_feedback import FindingFeedbackService
+        feedback = FindingFeedbackService(runtime_engine().store,
+            runtime_engine().store.get_scan(scan_id)['target_profile']['path'])
         for finding in selected:
             row=rows[finding['id']]
             item=_agent_finding(finding)
@@ -426,6 +532,14 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                 item['quality_diagnostic'] = 'QUALITY_REVIEW_UNAVAILABLE'
             item['triage_status']=row['triage_status']
             item['triage']=row['triage']
+            item['false_positive_review'] = feedback.status(scan_id, finding['id'])
+            review = item['false_positive_review']
+            if ((review.get('disposition') or {}).get('reassessment_required')
+                    or not (review.get('agent_review_current') or review.get('technical_assessment_current')
+                            or review.get('technical_false_positive')) and not review.get('folded')):
+                item['review_continuation'] = {'tool': 'prepare_finding_feedback',
+                    'arguments': {'scan_id': scan_id, 'finding_id': finding['id']},
+                    'purpose': 'Review this scanner candidate before asking the user to judge security. For a saved decision, notify only after new material risk evidence. Obey an explicit raw-scan-only request.'}
             if row['triage_status']=='VALID':
                 item.update(verdict=row['triage']['verdict'],triage_confidence=row['triage']['confidence'],exploitability=row['triage']['exploitability'])
             if local_evidence is not None:
@@ -435,6 +549,92 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return paged(found, len(originals), offset, page_limit, tool='get_findings', arguments={
             'scan_id':scan_id, 'view':view, 'include_evidence':include_evidence,
             'finding_id':finding_id, 'context_lines':context_lines})
+
+    def finding_feedback(scan_id):
+        check_scan(scan_id)
+        from .finding_feedback import FindingFeedbackService
+        return FindingFeedbackService(runtime_engine().store,
+            runtime_engine().store.get_scan(scan_id)['target_profile']['path'])
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def prepare_finding_feedback(scan_id: str, finding_id: str,
+                                 related_files: list[str] | None = None) -> dict:
+        """Review a selected suspected false positive using bounded current redacted evidence. No scan, model call, suppression rule or repair. Returns a connection-local handoff; after reconnection prepare again for the same finding."""
+        data = finding_feedback(scan_id).prepare(scan_id, finding_id, related_files)
+        if data['status'] != 'READY':
+            return data
+        for key, value in list(feedback_sessions.items()):
+            if time.monotonic() - value['created'] > 900:
+                feedback_sessions.pop(key, None)
+        if len(feedback_sessions) >= 64:
+            feedback_sessions.pop(next(iter(feedback_sessions)))
+        token = secrets.token_urlsafe(32)
+        feedback_sessions[token] = dict(scan_id=scan_id, finding_id=data['finding_id'],
+            context_hash=data['packet']['context_hash'], related_files=related_files or [],
+            created=time.monotonic())
+        return dict(data, feedback_session=token, expires_in_seconds=900)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def submit_finding_feedback(scan_id: str, finding_id: str, feedback_session: str,
+                                context_hash: str, verdict: str, reason: str,
+                                evidence_refs: list[FindingEvidenceReference], confidence: str = 'HIGH',
+                                unknowns: list[str] | None = None,
+                                context_complete: bool = False) -> dict:
+        """Save HOST_CODE_REVIEW opinion independently from user handling decisions. Every evidence_refs item requires exactly file, start_line, end_line and claim; use ranges issued by prepare_finding_feedback, never line_start/line_end. Runtime validates references/versions, not semantic truth. A complete current high-confidence counterevidence review may reduce repeat reminders. User EXCLUDE/DEFER does not require Agent agreement. Never authorizes repair or marks a risk fixed."""
+        service = finding_feedback(scan_id)
+        session = feedback_sessions.get(feedback_session)
+        if (session is None or time.monotonic() - session['created'] > 900
+                or (session['scan_id'], session['finding_id'], session['context_hash'])
+                != (scan_id, finding_id, context_hash)):
+            raise ValueError('Invalid or expired feedback handoff; prepare the selected finding again')
+        data = service.submit(scan_id, finding_id, context_hash=context_hash, verdict=verdict,
+            reason=reason, evidence_refs=[ref.model_dump() for ref in evidence_refs], confidence=confidence, unknowns=unknowns,
+            context_complete=context_complete, related_files=session['related_files'])
+        feedback_sessions.pop(feedback_session, None)
+        return data
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def mark_finding_false_positive(scan_id: str, finding_id: str, reason: str,
+                                    user_requested: bool = False) -> dict:
+        """Legacy opinion-only note for an explicit request to record a suspected false positive. For the user's decision to mark false positive or stop reminders use set_finding_disposition EXCLUDE instead. This note alone keeps handling unchanged and grants no repair authority. Do not use for deferred fixes or an agent's own conclusion."""
+        if user_requested is not True:
+            raise ValueError('An explicit user false-positive request is required')
+        return finding_feedback(scan_id).user_mark(scan_id, finding_id, reason)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def set_finding_disposition(scan_id: str, finding_id: str,
+                                disposition: Literal['EXCLUDE', 'DEFER', 'RESTORE'], reason: str = '',
+                                user_requested: bool = False, until: str | None = None,
+                                request_id: str | None = None) -> dict:
+        """Save the user's explicit decision for one selected scanner finding: EXCLUDE stops repeat reminders, DEFER postpones handling (optional ISO-8601 until), RESTORE resumes handling. user_requested must be literal true; no Agent agreement or security justification is required. Reasons are optional. Keep independent technical assessment, raw findings and history. Exclusion is neither proof of safety nor a fix or repair grant. Announce success only after the saved response. Reuse request_id when retrying the same decision."""
+        if user_requested is not True:
+            from .feedback_contract import FeedbackInputError
+            raise FeedbackInputError()
+        return finding_feedback(scan_id).set_disposition(scan_id, finding_id, disposition, reason,
+            user_requested=user_requested, until=until, request_id=request_id)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def revoke_finding_feedback(scan_id: str, finding_id: str, reason: str,
+                                source: str = 'ALL', user_requested: bool = False) -> dict:
+        """Revoke the selected HUMAN opinion, AI review or both on the user's explicit request. For a saved handling choice use set_finding_disposition RESTORE instead; independent user choices survive technical opinion revocation. Retains audit history and raw findings; does not scan or edit code."""
+        if user_requested is not True:
+            raise ValueError('An explicit user revocation request is required')
+        return finding_feedback(scan_id).revoke(scan_id, finding_id, reason, source)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_finding_feedback(scan_id: str, finding_id: str,
+                             include_history: bool = False) -> dict:
+        """Read user opinion, current host review, freshness and optional history for one exact finding. No new scan or review; raw findings remain available even when a valid false-positive review folds reminders."""
+        return finding_feedback(scan_id).status(scan_id, finding_id, include_history)
+
+    for feedback_name in ('prepare_finding_feedback', 'submit_finding_feedback',
+                          'mark_finding_false_positive', 'revoke_finding_feedback',
+                          'get_finding_feedback', 'set_finding_disposition'):
+        feedback_tool = server._tool_manager.get_tool(feedback_name)
+        feedback_tool.fn_metadata.arg_model.model_config.update(
+            extra='forbid', strict=True, hide_input_in_errors=True)
+        feedback_tool.fn_metadata.arg_model.model_rebuild(force=True)
+        feedback_tool.parameters = feedback_tool.fn_metadata.arg_model.model_json_schema()
 
     @server.tool()
     def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20,
@@ -703,6 +903,25 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if binding:
             event(DogfoodEvent(binding.integration_id, binding.root, verify_result=result["status"]), connected=True)
         return result
+
+    # Stable feedback diagnostics must survive both local SDK validation and the
+    # global router. Never expose arbitrary input/path/SDK exception text.
+    from .feedback_contract import (FEEDBACK_TOOLS, disposition_unavailable,
+                                    feedback_failure, feedback_reason)
+    from mcp.server.fastmcp.exceptions import ToolError
+    original_call = server._tool_manager.call_tool
+    async def feedback_call(name, arguments, *args, **kwargs):
+        try:
+            return await original_call(name, arguments, *args, **kwargs)
+        except Exception as exc:
+            if name not in FEEDBACK_TOOLS and not disposition_unavailable(exc):
+                raise
+            reason = feedback_reason(exc, name)
+            failure = feedback_failure(reason)
+            error = ToolError(reason + ': ' + failure['message'])
+            error.reason_code = reason
+            raise error from exc
+    server._tool_manager.call_tool = feedback_call
 
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)

@@ -134,8 +134,12 @@ def source_snapshot(root, key):
     return CapturedSnapshot(digest.hexdigest(), sorted(files), file_digests, selection_summary(profile))
 
 
-def write_bootstrap(root, status, baseline_status, *, base=None):
+def write_bootstrap(root, status, baseline_status, *, base=None, reason_code=None,
+                    session_id=None, recovered_from=None):
     from .codex_integration import fingerprint, product_hooks
+    from .bootstrap_diagnostics import BASELINE_REASONS
+    if any(code is not None and code not in BASELINE_REASONS for code in (reason_code, recovered_from)):
+        raise ValueError('Invalid bootstrap diagnostic')
     directory = workspace_state(root, base)
     store = HookStateStore(directory / 'hooks')
     key = store.key(root)
@@ -143,6 +147,12 @@ def write_bootstrap(root, status, baseline_status, *, base=None):
              'status': status, 'baseline_status': baseline_status,
              'observed_at': time.time(), 'hook_definition_hash': fingerprint(product_hooks()),
              'security_proof': False}
+    if reason_code is not None:
+        value['reason_code'] = reason_code
+    if recovered_from is not None:
+        value['recovered_from'] = recovered_from
+    if session_id is not None:
+        value['session_hash'] = identity(session_id)
     raw = json.dumps(value, sort_keys=True, separators=(',', ':')).encode()
     value['signature'] = hmac.new(key, raw, hashlib.sha256).hexdigest()
     atomic_bytes(directory / 'bootstrap.json', json.dumps(value, sort_keys=True).encode())
@@ -150,6 +160,7 @@ def write_bootstrap(root, status, baseline_status, *, base=None):
 
 def read_bootstrap(root, *, base=None):
     from .codex_integration import fingerprint, product_hooks
+    from .bootstrap_diagnostics import BASELINE_REASONS
     directory = workspace_state(root, base)
     path = directory / 'bootstrap.json'
     try:
@@ -170,6 +181,10 @@ def read_bootstrap(root, *, base=None):
             or value['hook_definition_hash'] != fingerprint(product_hooks())
             or value['status'] not in {'INITIALIZING', 'READY', 'DEGRADED', 'ERROR'}
             or value['security_proof'] is not False
+            or any(value.get(field) is not None and value[field] not in BASELINE_REASONS
+                   for field in ('reason_code', 'recovered_from'))
+            or 'session_hash' in value and (not isinstance(value['session_hash'], str)
+                or len(value['session_hash']) != 64 or any(c not in '0123456789abcdef' for c in value['session_hash']))
             or not 0 <= time.time() - value['observed_at'] <= 900):
             raise ValueError()
         return value

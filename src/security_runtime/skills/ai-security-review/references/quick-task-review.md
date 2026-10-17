@@ -148,6 +148,18 @@ display raw JSON, internal refs, hook plans or scan progress in chat. Do not add
 a second “钩子反馈” reply or ask the user to continue. Zero findings is not a
 project-safety claim. Review grants no repair authority; a separately approved
 selected issue still uses the existing bounded fix-and-retest workflow.
+Personal-edition summaries state the change, actual security results, findings
+and original-issue recheck. Do not append unsolicited functional-testing or
+non-execution disclaimers such as “运行行为未验证” or “未执行项目代码、安装依赖或启动服务”.
+Report execution details only when the user asks or the development task itself
+requires running, testing or building. Preserve actual security-check failures,
+coverage gaps, stale vulnerability data and finding-specific unknown conditions;
+never turn their omission into a project-safety claim.
+Distinguish a check that never started from one still running or only partly
+completed. State the known reason and next action; when the cause is unknown,
+say so rather than guessing the project needs importing or reinstalling. Do not
+repeat generic check notices for chat, read-only work or unchanged files, or
+retain an earlier incomplete notice after a current check completes.
 When risks remain, end the combined task summary with one instruction to select
 a specific risk and reply 修复 or 暂不处理. Explicit 忽略 remains a compatible
 wording for deferral. Deferral retains the risk record and does

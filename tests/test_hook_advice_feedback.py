@@ -46,7 +46,7 @@ def test_remove_and_readd_describes_current_risk_and_preserves_episode(setup):
     message = result['systemMessage']
     for text in ('A.java', '第 6 行', '主机名校验', '冒充目标服务器',
                  '窃取或篡改', '建议修复', '恢复默认检查', '此前已有处理记录',
-                 '尚未确认解决', '回复“修复”', '回复“忽略”'):
+                 '尚未确认解决', '回复“修复”', '回复“稍后处理”'):
         assert text in message
     assert not any(text in message for text in ('ADVISE', 'EPISODE_ALREADY_EXISTS',
                                                'INCONCLUSIVE', CANARY,
@@ -166,7 +166,7 @@ def test_unattributed_first_risk_explains_details_without_automatic_authority(se
     assert output['reason'] == 'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT'
     assert output['remediation']['action'] == 'NONE'
     for text in ('A.java', '第 6 行', '冒充目标服务器', '建议修复', '回复“修复”',
-                 '回复“忽略”', '无法确认是否由本次改动引入', '尚未自动修复'):
+                 '回复“稍后处理”', '无法确认是否由本次改动引入', '尚未自动修复'):
         assert text in output['systemMessage']
     assert output['continue'] is False and output['stopReason'] == output['systemMessage']
     assert 'decision' not in output
@@ -191,7 +191,7 @@ def test_actual_mcp_sdk_delivers_reintroduced_risk_choice_without_rejecting_or_a
     assert data['remediation']['reason_code'] == 'EPISODE_ALREADY_EXISTS'
     assert data['remediation']['feedback_required'] is False  # no authority/state change
     assert wire['continue'] is False and wire['stopReason'] == wire['systemMessage']
-    for text in ('第 6 行', '主机名校验', '窃取或篡改', '建议修复', '回复“修复”', '回复“忽略”'):
+    for text in ('第 6 行', '主机名校验', '窃取或篡改', '建议修复', '回复“修复”', '回复“稍后处理”'):
         assert text in wire['stopReason']
     for internal in ('ADVISE', 'INCONCLUSIVE', 'EPISODE_ALREADY_EXISTS', 'refresh_remediation_confirmation'):
         assert internal not in wire['stopReason']

@@ -15,8 +15,13 @@ from .owned_json import encode
 
 ROUTINE_TOOLS = (
     'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+    'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
     'get_task_risk_ledger', 'get_runtime_info', 'get_scan_preparation_status', 'get_security_summary',
+    'get_findings', 'prepare_finding_feedback', 'submit_finding_feedback', 'get_finding_feedback',
+    'mark_finding_false_positive', 'revoke_finding_feedback', 'set_finding_disposition',
+    'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'get_task_risk_feedback',
+    'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'set_task_risk_disposition',
 )
 ENTRIES = tuple('ai-security-runtime:' + tool for tool in ROUTINE_TOOLS)
 MAX_BYTES = 262144
@@ -236,11 +241,15 @@ class CursorRoutinePermissions:
             raise ValueError('CURSOR_PERMISSIONS_INVALID') from exc
 
     def status(self):
+        from .risk_disposition import VERSION as disposition_contract
         _, value, _, _ = self.inspect()
         entries = {v.casefold() for v in value.get('mcpAllowlist', [])}
         ready = all(v in entries for v in ENTRIES)
         return dict(status='CONFIGURED' if ready else 'NEEDS_REPAIR',
             routine_tools=list(ROUTINE_TOOLS), repair_preapproved_by_product=False,
+            disposition_contract=disposition_contract,
+            disposition_requires_explicit_user_request=True,
+            exclusion_is_safety_proof=False,
             host_policy='RUN_MODE_AND_TEAM_POLICY_STILL_APPLY', live_no_prompt_verified=False)
 
     def write(self, path, before, desired):

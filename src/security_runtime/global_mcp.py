@@ -5,9 +5,10 @@ import asyncio
 import hashlib
 import json
 import os
+import subprocess
 import threading
 from collections import OrderedDict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from .global_workspace import (resolve_workspace, workspace_state, source_snapshot, write_bootstrap,
@@ -17,9 +18,16 @@ from .integration_state import WorkspaceBinding
 from .workspace import WorkspaceResolver
 from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
+from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, baseline_failure_reason
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
 GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance', 'get_scan_preparation_status'}
+TASK_REVIEW_TOOLS = {'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+    'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
+    'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
+    'get_task_risk_ledger', 'prepare_task_risk_feedback', 'submit_task_risk_feedback',
+    'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'get_task_risk_feedback',
+    'set_task_risk_disposition'}
 LIMIT = 16
 MAX_SESSIONS = 64
 # Leave room for admission/transport within the native 30-second startup Hook.
@@ -138,13 +146,76 @@ class GlobalWorkspaces:
         with self.lock:
             future = self.jobs.get(key)
             if future is None:
-                write_bootstrap(root, 'INITIALIZING', 'NOT_ESTABLISHED', base=self.base)
+                restored = self._restore_existing(root, session, core)
+                if restored is not None:
+                    return self._remember_ready(key, restored)
+                try:
+                    write_bootstrap(root, 'INITIALIZING', 'NOT_ESTABLISHED', base=self.base, session_id=session)
+                except (ValueError, OSError) as exc:
+                    failed = Future()
+                    failed.set_result(self._initialization_failure(root, session, 'DEGRADED', baseline_failure_reason(exc)))
+                    self.jobs[key] = failed
+                    return failed.result()
                 future = self.executor.submit(self._initialize, root, session, core)
                 self.jobs[key] = future
                 return {'status': 'INITIALIZING', 'previous_status': 'NEW_WORKSPACE', 'security_proof': False}
             if not future.done():
                 return {'status': 'INITIALIZING', 'security_proof': False}
-            return future.result()
+            result = future.result()
+            if result['status'] != 'READY':
+                # A failed worker is not a permanent session veto. Recover only
+                # an existing, validated comparison point from this same host,
+                # workspace and session. Never rescan/rebaseline after an edit.
+                restored = self._restore_existing(root, session, core,
+                    recovered_from=result.get('reason_code'))
+                if restored is not None:
+                    return self._remember_ready(key, restored)
+            return result
+
+    def _remember_ready(self, key, result):
+        future = Future()
+        future.set_result(result)
+        self.jobs[key] = future
+        return result
+
+    def _snapshot_readiness(self, root, session, snapshot, *, reused=False, recovered_from=None,
+                            target_selection=None):
+        result = snapshot['last_result']
+        gaps = snapshot.get('unproven_sast_files') or []
+        value = {'status': 'READY', 'baseline_status': result['status'],
+                 'baseline_coverage': result['coverage'],
+                 'baseline_capabilities': result['capabilities'],
+                 'baseline_unproven_code_file_count': len(gaps),
+                 'baseline_unproven_code_files': gaps[:20],
+                 'baseline_code_gaps_truncated': len(gaps) > 20,
+                 'target_selection': target_selection,
+                 'baseline_reused': reused, 'security_proof': False,
+                 'initial_scope': 'EXISTING_SESSION_SNAPSHOT' if reused else 'BOUNDED_QUICK_BASELINE'}
+        if recovered_from in BASELINE_REASONS:
+            value['recovered_from'] = recovered_from
+        write_bootstrap(root, 'READY', result['status'], base=self.base, session_id=session,
+                        recovered_from=value.get('recovered_from'))
+        return value
+
+    def _restore_existing(self, root, session, core, *, recovered_from=None):
+        from .baseline_seed import WorkspaceBaselineSeeds
+        try:
+            snapshot = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core).existing_session(
+                root, session, host=self.host)
+            if snapshot is not None:
+                return self._snapshot_readiness(root, session, snapshot, reused=True,
+                                               recovered_from=recovered_from)
+        except (ValueError, OSError):
+            pass  # Keep the original failure; no guessed baseline or raw error.
+        return None
+
+    def _initialization_failure(self, root, session, status, reason):
+        value = {'status': status, 'reason_code': reason, 'security_proof': False}
+        try:
+            write_bootstrap(root, status, reason, base=self.base, reason_code=reason, session_id=session)
+        except (ValueError, OSError):
+            pass  # Unwritable diagnostics must not hide the actual failure.
+        return value
 
     def _initialize(self, root, session, core):
         from .hooks import HookEvent
@@ -155,9 +226,10 @@ class GlobalWorkspaces:
             if is_git:
                 # A clean tracked file may already contain a risk. Dirty-only
                 # initialization would misattribute that risk to a later edit.
-                snapshot = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core).capture_session(root, session)
-                result = snapshot['last_result']
-                status = 'READY'
+                seeds = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core)
+                snapshot = seeds.capture_session(root, session, host=self.host)
+                return self._snapshot_readiness(root, session, snapshot,
+                    target_selection=getattr(seeds, 'target_selection', None))
             else:
                 result = core.handle(HookEvent.SESSION_START, root, 'codex', session, _baseline_only=True)
                 persisted, _ = core.store.load(core.store.path(root, 'codex', session))
@@ -165,25 +237,24 @@ class GlobalWorkspaces:
                 status = 'READY' if valid and (result.get('baseline_comparison_usable') is True
                     or result.get('baseline_comparison_usable') is None and result.get('coverage') in {'FULL', 'SCOPED'}
                     or result.get('coverage') == 'NONE' and not result.get('scanner_runs')) else 'DEGRADED'
-            write_bootstrap(root, status, result['status'], base=self.base)
-            gaps = (snapshot if is_git else persisted or {}).get('unproven_sast_files') or []
-            return {'status': status, 'baseline_status': result['status'],
-                    'baseline_coverage': result['coverage'],
-                    'baseline_capabilities': result['capabilities'],
-                    'baseline_unproven_code_file_count': len(gaps),
-                    'baseline_unproven_code_files': gaps[:20],
-                    'baseline_code_gaps_truncated': len(gaps) > 20,
-                    'target_selection': getattr(core.snapshot_capture(root, core.store.key(root)), 'target_selection', None),
-                    'security_proof': False, 'initial_scope': 'BOUNDED_QUICK_BASELINE'}
+            if status == 'READY':
+                return self._snapshot_readiness(root, session, persisted, target_selection=result.get('target_selection'))
+            failure = self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_COVERAGE_INSUFFICIENT')
+            failure.update(baseline_status=result['status'], baseline_coverage=result['coverage'],
+                baseline_capabilities=result['capabilities'], target_selection=result.get('target_selection'))
+            return failure
         except ScanCancelled:
-            write_bootstrap(root, 'DEGRADED', 'BASELINE_DEADLINE_EXCEEDED', base=self.base)
-            return {'status': 'DEGRADED', 'reason_code': 'BASELINE_DEADLINE_EXCEEDED', 'security_proof': False}
-        except (ValueError, OSError):
-            write_bootstrap(root, 'DEGRADED', 'BASELINE_CHECK_INCONCLUSIVE', base=self.base)
-            return {'status': 'DEGRADED', 'reason_code': 'BASELINE_CHECK_INCONCLUSIVE', 'security_proof': False}
+            return self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_DEADLINE_EXCEEDED')
+        except BaselinePreparationError as exc:
+            return self._initialization_failure(root, session, 'DEGRADED', exc.code)
+        except PermissionError:
+            return self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_STATE_PERMISSION_DENIED')
+        except (ValueError, OSError) as exc:
+            return self._initialization_failure(root, session, 'DEGRADED', baseline_failure_reason(exc))
+        except subprocess.TimeoutExpired:
+            return self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_GIT_SNAPSHOT_UNAVAILABLE')
         except Exception:
-            write_bootstrap(root, 'ERROR', 'INITIALIZATION_INCONCLUSIVE', base=self.base)
-            return {'status': 'ERROR', 'reason_code': 'INITIALIZATION_INCONCLUSIVE', 'security_proof': False}
+            return self._initialization_failure(root, session, 'ERROR', 'INITIALIZATION_INCONCLUSIVE')
 
     async def wait_for_bootstrap(self, root, session, readiness):
         """Keep startup ahead of edits, without cancelling a slow worker.
@@ -225,10 +296,12 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
     from .integration_readiness import readiness_message
     message = {
         'WORKSPACE_INITIALIZING': readiness_message('INITIALIZING'),
-        'WORKSPACE_DEGRADED': readiness_message('DEGRADED'),
-        'WORKSPACE_ERROR': readiness_message('ERROR'),
-        'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE': '缺少改动前的检查记录，暂时无法确定风险是否由本次改动引入。当前结果不能证明改动安全。',
-    }.get(reason, '本次安全检查未完成，暂时无法确认改动是否安全。建议先检查工具连接和项目设置。')
+        'WORKSPACE_DEGRADED': readiness_message('DEGRADED', (readiness or {}).get('reason_code')),
+        'WORKSPACE_ERROR': readiness_message('ERROR', (readiness or {}).get('reason_code')),
+        'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE': '本次修改尚未完成前后比较：缺少修改前的检查记录，无法判断风险是否由本次修改引入。后续修改会继续自动检查。',
+    }.get(reason, '自动安全检查未启动：检查请求未被接受，请查看产品连接和项目接入状态。')
+    if (readiness or {}).get('reason_code') in BASELINE_REASONS:
+        data['bootstrap_reason'] = readiness['reason_code']
     text = {'continue': True, 'systemMessage': message}
     if recovery is not None:
         data['configuration_recovery'] = recovery
@@ -236,6 +309,30 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
         if recovery.get('question'):
             text['systemMessage'] += ' ' + recovery['question']
     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(text))])
+
+
+def _task_request_rejected(reason):
+    """Task protocol errors say nothing about project admission/readiness."""
+    from mcp.types import CallToolResult, TextContent
+    message = {
+        'TASK_CONNECTION_SCOPE_MISMATCH':
+            '原任务只绑定创建时的工具连接，没有可恢复的聊天身份。当前请求不能续接该记录；'
+            '若原连接已断开，该任务无法跨连接恢复。已有改动和记录保留，不要用修改后的文件补作修改前记录。',
+        'TASK_SESSION_SCOPE_MISMATCH':
+            '当前请求的聊天身份与原任务不一致，未继续或结束该任务。请回到原聊天续接原任务；'
+            '已有修改前记录保留，不要新建任务替代原记录。',
+        'TASK_SESSION_BINDING_REQUIRED':
+            '原任务已绑定聊天，但当前请求缺少对应的会话身份。请在原聊天沿用已有任务和有效会话记录继续；'
+            '不需要重新编辑文件或重新建立修改前记录。',
+        'TASK_OWNER_UNAVAILABLE':
+            '原任务没有保存可确认的会话归属，当前请求不能续接或结束该记录。已有改动和记录保留；'
+            '不能把当前聊天当成原任务所有者，也不能从修改后重新建立修改前记录。',
+    }.get(reason, '任务复核请求未被接受。请使用当前任务返回的参数继续；这不表示项目准备或产品连接失败。')
+    data = dict(status='INCONCLUSIVE', reason_code=reason, scanner_run=False,
+        source_modified=False, security_proof=False, repair_authorized=False,
+        message=message)
+    return CallToolResult(structuredContent=data,
+        content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
 
 def create_global_server(*, workspaces=None, host='codex'):
@@ -263,9 +360,10 @@ def create_global_server(*, workspaces=None, host='codex'):
         for tool in infos.values():
             schema = json.loads(json.dumps(tool.parameters))
             schema['additionalProperties'] = False
-            if tool.name not in HOOKS and tool.name not in GLOBAL_READS and 'workspace_path' not in schema['properties']:
-                schema['properties']['workspace_path'] = {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'default': None,
+            if tool.name not in HOOKS and tool.name not in GLOBAL_READS:
+                schema['properties']['workspace_path'] = {'type': 'string', 'minLength': 1,
                     'description': 'Required for global workspace routing, including a single admitted workspace. Never inferred from an opaque ref.'}
+                schema['required'] = list(dict.fromkeys([*schema.get('required', []), 'workspace_path']))
             description = tool.description
             if tool.name in HOOKS:
                 description = 'Global cwd-routed Hook. ' + description.replace('Requires SECURITY_RUNTIME_WORKSPACE binding;', 'Requires validated workspace admission;')
@@ -286,6 +384,13 @@ def create_global_server(*, workspaces=None, host='codex'):
         if (name not in schemas or not isinstance(arguments, dict)
                 or not Draft202012Validator(schemas[name]).is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
+            from .feedback_contract import FEEDBACK_TOOLS, feedback_failure
+            if name in FEEDBACK_TOOLS:
+                data = feedback_failure('FEEDBACK_INPUT_INVALID')
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            if name in TASK_REVIEW_TOOLS:
+                return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
             info = global_runtime_info()
@@ -357,6 +462,14 @@ def create_global_server(*, workspaces=None, host='codex'):
             if name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP:
                 binding_stage = 'BOOTSTRAPPING'
                 claim_diag['workspace_binding_stage'] = binding_stage
+                session_token = None
+                if normalized.kind == EventKind.SESSION_START:
+                    from .task_ownership import issue_session_ref
+                    # Claims/configuration/admission were already checked.
+                    # Establish stable routing before launching a slow worker;
+                    # the token attests no scanner or comparison-point result.
+                    session_token = issue_session_ref(pool.children[root][1].store,
+                        root, active_host, arguments['session_id'])
                 pre_snapshot_missing = False
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     core = pool.children[root][1]
@@ -368,6 +481,10 @@ def create_global_server(*, workspaces=None, host='codex'):
                             pre_snapshot_match=None, content_delta_detected=None,
                             reconciliation_reason='NO_TRUSTED_PRE_EDIT_SNAPSHOT')
                 readiness = pool.bootstrap(root, arguments['session_id'])
+                if readiness.get('reason_code') in BASELINE_REASONS:
+                    claim_diag['bootstrap_reason'] = readiness['reason_code']
+                if readiness.get('recovered_from') in BASELINE_REASONS:
+                    claim_diag['bootstrap_recovered_from'] = readiness['recovered_from']
                 if normalized.kind == EventKind.SESSION_START:
                     readiness = await pool.wait_for_bootstrap(root, arguments['session_id'], readiness)
                     from .integration_readiness import readiness_message
@@ -375,18 +492,20 @@ def create_global_server(*, workspaces=None, host='codex'):
                             'workspace_id': identity(os.path.normcase(str(root))),
                             'workspace_readiness': readiness, 'security_proof': False}
                     data.update(claim_diag)
-                    output={'continue':True,'systemMessage':readiness_message(readiness['status'])}
-                    if readiness['status']=='READY':
-                        from .task_ownership import issue_session_ref, session_context
-                        token=issue_session_ref(pool.children[root][1].store,root,active_host,arguments['session_id'])
-                        data['task_session_ref']=token
-                        output['hookSpecificOutput']={'hookEventName':'SessionStart','additionalContext':session_context(token)}
+                    if readiness.get('reason_code') in BASELINE_REASONS:
+                        data['bootstrap_reason'] = readiness['reason_code']
+                    output={'continue':True,'systemMessage':readiness_message(readiness['status'], readiness.get('reason_code'))}
+                    # Identity routing is independent of initial scan readiness.
+                    # Slow/busy scanners must not silently downgrade a native
+                    # conversation into an unresumable connection-owned task.
+                    from .task_ownership import session_context
+                    data['task_session_ref']=session_token
+                    output['hookSpecificOutput']={'hookEventName':'SessionStart','additionalContext':session_context(session_token)}
                     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps({
                         **output}))])
                 if readiness['status'] != 'READY':
-                    # SessionStart may be missed while MCP is connecting. A
-                    # mutation Hook can retry the bounded bootstrap; if it is
-                    # still initializing, fail soft without inventing a scan.
+                    # Observe an existing worker or restore a published session
+                    # comparison point; never rerun a failed scan after edits.
                     if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                         readiness = pool.bootstrap(root, arguments['session_id'])
                     if readiness['status'] != 'READY':
@@ -429,6 +548,28 @@ def create_global_server(*, workspaces=None, host='codex'):
                 result.structuredContent = {**claim_diag, **result.structuredContent}
             return result
         except Exception as exc:
+            from .feedback_contract import (FEEDBACK_TOOLS, disposition_unavailable,
+                                            feedback_failure, feedback_reason)
+            if handler_entered and (name in FEEDBACK_TOOLS or disposition_unavailable(exc)):
+                reason = feedback_reason(exc, name)
+                if reason.startswith('TASK_'):
+                    return _task_request_rejected(reason)
+                data = feedback_failure(reason)
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            if handler_entered and name in TASK_REVIEW_TOOLS:
+                # Ownership, expired sessions, unsupported protocol versions and
+                # malformed review requests must not masquerade as a broken
+                # workspace. Never reflect arbitrary SDK/source/path errors.
+                from .task_ownership import TaskOwnershipError
+                cause = exc
+                for _ in range(8):
+                    if isinstance(cause, TaskOwnershipError):
+                        return _task_request_rejected(cause.reason_code)
+                    cause = cause.__cause__ or cause.__context__
+                    if cause is None:
+                        break
+                return _task_request_rejected('TASK_REQUEST_REJECTED')
             if handler_entered or not isinstance(exc, ValueError):
                 from .recent_hooks import observe
                 observe('HANDLER_ERROR', handler_reason='HANDLER_EXCEPTION')
@@ -468,10 +609,29 @@ def create_global_server(*, workspaces=None, host='codex'):
     routed_call = call
     gap_notices = OrderedDict()
     gap_notice_lock = threading.Lock()
+    def gap_key(arguments, event):
+        return tuple(identity(str(value)) for value in (
+            arguments['workspace_path'], arguments['session_id'],
+            arguments.get('turn_id') if event == 'PostToolUse' else 'SessionStart'))
+
     async def quiet_stop_call(name, arguments):
         result = await routed_call(name, arguments)
+        data = (result.structuredContent or {}) if isinstance(result, CallToolResult) else {}
+        if (name == 'handle_hook_event' and data.get('host_claim_status') == 'VALID'
+                and data.get('workspace_mutation_observed') is True and data.get('scanner_run') is True
+                and data.get('status') == 'SCANNED' and data.get('coverage') in {'FULL', 'SCOPED'}):
+            key = gap_key(arguments, 'PostToolUse')
+            with gap_notice_lock:
+                resolved = key in gap_notices
+                gap_notices.pop(key, None)
+            if resolved:
+                data['previous_check_gap_resolved'] = True
+                payload = json.loads(result.content[0].text)
+                context = payload.setdefault('hookSpecificOutput', {'hookEventName': 'PostToolUse'})
+                context['additionalContext'] = context.get('additionalContext', '') + (
+                    '\n同轮此前的未启动提示已被本次检查结果取代，最终总结只保留当前检查状态；保留具体风险提示。')
+                result.content = [TextContent(type='text', text=json.dumps(payload))]
         if name in {'handle_hook_event', 'handle_readiness_event'}:
-            data = result.structuredContent or {}
             # Native Hosts consume additionalContext as model instructions.
             # systemMessage alone can be invisible to the agent, hiding a real
             # missed check behind a successful file edit. Keep gaps explicit;
@@ -503,9 +663,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     # One generic gap per turn, not one per tool invocation.
                     # A later editing turn must still be able to report its own
                     # gap. Real risk/repair feedback never enters this cache.
-                    key = tuple(identity(str(value)) for value in (
-                        arguments['workspace_path'], arguments['session_id'],
-                        arguments.get('turn_id') if event == 'PostToolUse' else 'SessionStart'))
+                    key = gap_key(arguments, event)
                     with gap_notice_lock:
                         duplicate = key in gap_notices
                         gap_notices[key] = None
@@ -517,8 +675,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                         return CallToolResult(structuredContent=data,
                             content=[TextContent(type='text', text='{}')])
                     if event == 'PostToolUse':
-                        if not message.startswith('本次操作'):
-                            message = '本次操作已结束，但自动安全检查未完成。' + message
+                        if data.get('reason_code') in {'WORKSPACE_INITIALIZING', 'WORKSPACE_DEGRADED', 'WORKSPACE_ERROR'}:
+                            message += '本次修改尚未检查。'
                     data['user_feedback'] = {'message': message}
                     presentation = (
                         '仅当本轮实际修改了源代码或配置，且该改动的检查在总结时仍未完成，'
@@ -527,11 +685,16 @@ def create_global_server(*, workspaces=None, host='codex'):
                         '后续检查完成时不保留旧的未完成提示，其他轮次不重复沿用。'
                         '这只是检查状态，不是发现了漏洞；没有具体诊断时不要推断连接或配置有误。')
                     payload['systemMessage'] = message
+                    previous_context = payload.get('hookSpecificOutput', {}).get('additionalContext', '')
                     payload['hookSpecificOutput'] = {'hookEventName': event, 'additionalContext':
+                        (previous_context + '\n' if previous_context else '') +
                         '用户提示\n' + message + '\n\n呈现要求\n'
                         + presentation +
                         '检查未完成不代表文件编辑失败，不要重复编辑、撤销或自行修复。'
-                        '不主动补扫、重建检查事件或运行构建测试，不索取内部引用。'}
+                        '不重放检查事件、不补建编辑后的基线，不运行构建测试。'
+                        '本提示只说明项目初始检查或本次Hook的状态，不取消当前开发任务核查。'
+                        '实际开发任务仍在首次编辑前用本会话路由保存任务记录；已有任务沿用原引用'
+                        '在结束时完成检查，无需用户另发继续。已经编辑而缺少原记录时如实说明缺口。'}
                     result.structuredContent = data
                     result.content = [TextContent(type='text', text=json.dumps(payload))]
         if name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block':

@@ -92,7 +92,7 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
         report["message"] = str(exc)
         code = 2
     if json_output:
-        print(json.dumps(report, ensure_ascii=False))
+        print(json.dumps(report, ensure_ascii=True))
         return code
     print("AI Security Runtime")
     if report["workspace"]:
@@ -528,7 +528,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command=='review-skill':
             from .review_skill import ReviewSkillManager
             data=ReviewSkillManager(args.skills_dir).execute(args.action)
-            print(json.dumps(data,ensure_ascii=False) if args.json else '\n'.join([
+            print(json.dumps(data,ensure_ascii=True) if args.json else '\n'.join([
                 'AI Security Review: '+data['status'],data.get('path',''),data.get('reason','')]))
             return 2 if data['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'} else 0
         if args.command=='runtime-info':
@@ -537,7 +537,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
                 from .global_mcp import global_runtime_info
                 info = global_runtime_info()
-            print(json.dumps(info,ensure_ascii=False) if args.json else '\n'.join([
+            # Native stdout is UTF-8, but Windows PowerShell 5.1 can decode a
+            # pipeline using its legacy console code page. ASCII escapes keep
+            # JSON parseable and preserve Unicode values under either decoder.
+            print(json.dumps(info,ensure_ascii=True) if args.json else '\n'.join([
                 'AI Security Runtime '+info['version'], 'Capabilities: '+info['capability_contract'],
                 *info['connection_recovery']]))
             return 0
@@ -549,7 +552,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             if root is None:
                 root=WorkspaceResolver().resolve(allow_non_git_source=True).path
             result=SecuritySummaryService().get(root,args.scan,details=args.details,bound_workspace=bound)
-            print(json.dumps(result,ensure_ascii=False) if args.json else render_security_summary(result))
+            print(json.dumps(result,ensure_ascii=True) if args.json else render_security_summary(result))
             return 0
         if args.command=='ai':
             from .triage_providers import AIConfig
@@ -571,7 +574,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             selection=dict(categories=args.category,severities=args.severity,limit=args.limit)
             if args.raw:
                 if args.provider or args.prepare: raise ValueError('--raw cannot invoke or prepare AI')
-                print(json.dumps(scan['findings'],ensure_ascii=False,indent=2))
+                print(json.dumps(scan['findings'],ensure_ascii=True,indent=2))
                 return 0
             if args.provider:
                 if args.prepare: raise ValueError('Choose BYOK or agent-native prepare')
@@ -582,13 +585,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 else:
                     from .cli_progress import CLIProgressRenderer
                     with CLIProgressRenderer() as reporter: output=service.run(scan['scan_id'],provider,progress=reporter,**selection)
-                print(json.dumps(output,ensure_ascii=False) if args.json else render_triage(output['view']))
+                print(json.dumps(output,ensure_ascii=True) if args.json else render_triage(output['view']))
                 return 2 if output['failures'] or output['evidence_errors'] else 0
             if args.prepare:
-                print(json.dumps(service.prepare(scan['scan_id'],**selection),ensure_ascii=False))
+                print(json.dumps(service.prepare(scan['scan_id'],**selection),ensure_ascii=True))
             else:
                 view=service.view(scan['scan_id'])
-                print(json.dumps(view,ensure_ascii=False) if args.json else render_triage(view))
+                print(json.dumps(view,ensure_ascii=True) if args.json else render_triage(view))
             return 0
         if args.command == "doctor" and (args.project or (args.path is not None and not args.global_scope)):
             return doctor(Path(args.path) if args.path is not None else None, json_output=args.json, verbose=args.verbose)
@@ -606,7 +609,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                     result.duration_ms, len(result.findings), result.coverage))
             except OSError:
                 pass
-            print(json.dumps(result.to_dict(), ensure_ascii=False) if args.json else render(result, verbose=args.verbose))
+            print(json.dumps(result.to_dict(), ensure_ascii=True) if args.json else render(result, verbose=args.verbose))
             if args.gate:
                 from .hooks import gate_exit
                 code = gate_exit(result, args.gate)
@@ -619,7 +622,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             if args.tools_action == 'repair':
                 from .component_health import repair_semgrep_settings
                 data = repair_semgrep_settings(manager=manager)
-                print(json.dumps(data, ensure_ascii=False) if args.json else data['message'] +
+                print(json.dumps(data, ensure_ascii=True) if args.json else data['message'] +
                     ('\n备份：' + data['backup_path'] if data.get('backup_path') else ''))
                 return 0 if data['status'] in {'REPAIRED', 'NOT_APPLICABLE'} else 2
             if args.tools_action == "status":
@@ -631,7 +634,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 health = component_feedback(tools, root=manager.root)
                 if args.json:
                     print(json.dumps(dict(tools=tools, component_health=health,
-                        vulnerability_data=manager.trivy_data_statuses()), ensure_ascii=False))
+                        vulnerability_data=manager.trivy_data_statuses()), ensure_ascii=True))
                     return 0
                 for tool_id, resolved in statuses.items():
                     if tool_id in ON_DEMAND_ENGINES:

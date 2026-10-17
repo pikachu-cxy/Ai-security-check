@@ -27,10 +27,13 @@ def digest(content):
 
 def skill_files():
     from .host_guidance import HOST_INSTRUCTIONS
+    from .risk_decision_guidance import RISK_DECISION_GUIDANCE
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
-        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review.md')} | {
-        'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')}
+        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review.md',
+        'references/quick-task-review-v2.md', 'references/quick-task-review-v3.md')} | {
+        'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8'),
+        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE).encode('utf-8')}
 
 
 class ReviewSkillManager:

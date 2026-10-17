@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 import pytest
 
-from test_security_summary import sample, review, snapshot, SECRET
+from summary_fixtures import sample, review, snapshot, SECRET
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.task_triage import TaskTriageService
 from security_runtime.triage import TriageService, cache_key

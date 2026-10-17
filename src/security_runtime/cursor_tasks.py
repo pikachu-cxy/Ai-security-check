@@ -89,14 +89,23 @@ class CursorTaskBridge:
         record = self.current()
         if not record or record['phase'] in {'COMPLETE', 'NO_CHANGES'}:
             return None
+        # New reviews use adaptive delivery. An existing review never receives
+        # a different protocol merely because its connector was upgraded.
+        protocol = record.get('review_protocol', 1 if record.get('review_session') else 3)
+        if type(protocol) is not int or protocol not in {1, 2, 3}:
+            raise ValueError('CURSOR_TASK_PROTOCOL_UNSUPPORTED')
         from .task_ownership import issue_session_ref
         token=issue_session_ref(self.core.store,self.root,'cursor',self.session)
         return (
             'Cursor 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
             + json.dumps(dict(task_ref=record['task_ref'], workspace_path=str(self.root),session_ref=token), ensure_ascii=True)
             + '\n沿用此 task_ref，不要重新 begin_security_task 或从编辑后建立基线。'
-            '正常最终回复前执行 finish_security_task（传入上述 session_ref）、prepare_task_security_review，'
-            '按返回方法读取必要上下文并 submit_task_security_review；静态零发现也核查。'
+            '正常最终回复前执行 finish_security_task（传入上述 session_ref），'
+            f'再 prepare_task_security_review(protocol_version={protocol})，各工具均沿用上述 session_ref。'
+            '本地缺少完全相同版本和摘要的方法时 get_task_review_method 读取一次；'
+            '按返回的原协议方法继续；计划式复核通过 get_task_review_plan 分页列出全部必读项，读取所需修改前后证据，'
+            '用 submit_task_review_batch 逐批记录，最后 submit_task_security_review；静态零发现也核查。'
+            '未请求的必读项仍未完成；同一任务累计额度不因分页或重连重置。已有 v1、v2、v3 复核均沿用原协议。'
             '把实际风险和未完成范围合并进正常总结。只读工具不会开始新任务。'
             '自动消息不是用户同意；修复仍须明确选择风险并通过现有 MCP 授权与复核。'
         )
