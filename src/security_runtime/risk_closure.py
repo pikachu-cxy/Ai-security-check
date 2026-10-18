@@ -12,6 +12,7 @@ from .closeout_state import readonly_uri
 from .equivalence import equivalence_key
 from .hook_state import atomic_bytes, no_links
 from .secret_coverage import covers, digest as file_digest
+from .private_authority import PrivateAuthority, revision
 
 
 def family_row(family):
@@ -39,51 +40,117 @@ class RiskClosureService:
         self.hooks = hooks
 
     def _path(self, root):
-        return self.hooks.workspace_directory(Path(root)) / 'closures.state'
+        return self._authority(root).path
+
+    def _authority(self, root):
+        def legacy(raw, key):
+            value = json.loads(raw)
+            if (not isinstance(value, dict) or not isinstance(value.get('records'), dict)
+                    or len(value['records']) > 2000 or not isinstance(value.get('mac'), str)
+                    or not hmac.compare_digest(value['mac'], digest(key, value['records']))):
+                raise ValueError('Closure proofs cannot be verified')
+            return dict(records=value['records'], outbox={}, inbox={})
+        return PrivateAuthority(self.hooks, Path(root), legacy_name='closures.state',
+            name='closures-v2.state', contract='closure-authority-v2',
+            initial=dict(records={}, outbox={}, inbox={}), legacy=legacy)
+
+    def version(self, root):
+        return revision(self._authority(root).read())
+
+    def resume(self, root):
+        if not self.hooks.lock_held(root): raise ValueError('Closure workspace lock required')
+        authority = self._authority(root)
+        if authority.journal.exists(): authority._ensure()
 
     def _read(self, root):
-        path = self._path(root)
-        no_links(path)
-        if not path.exists():
-            return {}
-        if path.stat().st_size > 2_000_000:
-            raise ValueError('Closure proof budget exceeded')
-        value = json.loads(path.read_bytes())
-        key_path = self.hooks.workspace_directory(Path(root)) / 'snapshot.key'
-        no_links(key_path)
-        key = key_path.read_bytes()
-        if len(key) != 32 or not hmac.compare_digest(value['mac'], digest(key, value['records'])):
-            raise ValueError('Closure proofs cannot be verified')
-        if not isinstance(value['records'], dict) or len(value['records']) > 2000:
+        value = self._authority(root).read()
+        if (not isinstance(value, dict) or set(value) != {'records', 'outbox', 'inbox'}
+                or any(not isinstance(value[k], dict) for k in value) or len(value['records']) > 2000):
             raise ValueError('Closure proof budget exceeded')
         return value['records']
 
-    def generation(self, root):
-        """Read-only arrival epoch for independent checks, not repair authority."""
+    def reconcile_caches(self, root):
+        """Retry only original session/version caches; never replace newer state."""
+        if not self.hooks.lock_held(root): raise ValueError('Closure workspace lock required')
+        authority = self._authority(root)
+        if authority.journal.exists(): authority._ensure()
+        value = authority.read()
+        for event_id, effect in list(value['outbox'].items())[:64]:
+            path = authority.directory / effect['file']
+            if not __import__('re').fullmatch(r'[a-f0-9]{64}\.json', effect['file']):
+                raise ValueError('Closure cache owner cannot be verified')
+            state, corrupt = self.hooks.load(path)
+            if corrupt: continue  # Retain the intent; do not overwrite unknown content.
+            if state is not None and (state['host'], state['session_id'], state['workspace_id']) != (
+                    effect['host'], effect['session_id'], effect['workspace_id']):
+                continue
+            if state is not None and revision(state) == effect['expected_version']:
+                state['families'], state['last_result']['delta'] = self.overlay(
+                    root, state['families'], state['last_result']['delta'])
+                self.hooks.save(path, state)
+            # Missing or newer session state supersedes only this cache intent.
+            current = authority.read()
+            before = revision(current)
+            if current['outbox'].get(event_id) != effect:
+                raise ValueError('Closure cache effect changed')
+            del current['outbox'][event_id]
+            authority.save(current, before)
+        remaining = len(authority.read()['outbox'])
+        return dict(state='PENDING' if remaining else 'APPLIED', pending=remaining)
+
+    def activity_snapshot(self, root):
+        """Read-only pending targets; a saved source can recognize its own ACK."""
         import sqlite3
         from contextlib import closing
         path = self.hooks.workspace_directory(Path(root)) / 'pending-activity.db'
         no_links(path)
         if not path.exists():
-            return digest(b'activity-epoch', [])
+            return []
         with closing(sqlite3.connect(readonly_uri(path), uri=True)) as db:
             if not db.execute("SELECT 1 FROM sqlite_master WHERE name='pending_activity'").fetchone():
-                return digest(b'activity-epoch', [])
+                return []
             rows = db.execute('SELECT session, sequence FROM pending_activity ORDER BY session').fetchall()
-        return digest(b'activity-epoch', rows)
+        return [list(row) for row in rows]
+
+    def generation(self, root):
+        """Read-only arrival epoch for independent checks, not repair authority."""
+        return digest(b'activity-epoch', self.activity_snapshot(root))
+
+    def effect_receipt(self, root, effect_id):
+        """Read an authenticated target receipt without migrating or replaying."""
+        return self._authority(root).read()['inbox'].get(effect_id)
+
+    def effect_current(self, root, effect_id):
+        value = self._authority(root).read()
+        receipt = value['inbox'].get(effect_id)
+        return (isinstance(receipt, dict) and receipt.get('status') == 'SAVED'
+            and receipt.get('records_revision') == revision(value['records']))
 
     def record(self, root, originals, results, *, source, generation=None, closeout_ref=None,
-               expected_activity=None, locked=False):
+               expected_activity=None, locked=False, effect_id=None, expected_version=None):
         root = Path(root).resolve()
         if not locked:
             with self.hooks.lock(root) as acquired:
                 if not acquired:
                     return {'status': 'BUSY', 'confirmed': 0}
                 return self.record(root, originals, results, source=source, generation=generation,
-                                   closeout_ref=closeout_ref, expected_activity=expected_activity, locked=True)
+                    closeout_ref=closeout_ref, expected_activity=expected_activity, locked=True,
+                    effect_id=effect_id, expected_version=expected_version)
+        if not self.hooks.lock_held(root): raise ValueError('Closure workspace lock required')
+        authority = self._authority(root)
+        if authority.journal.exists(): authority._ensure()
+        value = authority.read()
+        if effect_id is not None and effect_id in value['inbox']:
+            receipt = value['inbox'][effect_id]
+            if receipt.get('records_revision') != revision(value['records']):
+                return dict(status='SUPERSEDED', confirmed=0, already_applied=True)
+            return dict(receipt, cache_sync=self.reconcile_caches(root), already_applied=True)
+        if expected_version is not None and revision(value) != expected_version:
+            return dict(status='SUPERSEDED', confirmed=0)
         if expected_activity is not None and self.generation(root) != expected_activity:
             return {'status': 'NEW_ACTIVITY', 'confirmed': 0}
-        records = self._read(root)
+        before = revision(value)
+        records = value['records']
         accepted = 0
         accepted_keys = []
         for original, result in zip(originals, results):
@@ -104,8 +171,8 @@ class RiskClosureService:
             key = equivalence_key(original)
             if not key:
                 continue
-            revision = run['scanner_diagnostics']['secret_coverage']['scanned_files'][original['file_path']]
-            records[key] = {'family': original_family(original), 'file_revision': revision,
+            file_revision = run['scanner_diagnostics']['secret_coverage']['scanned_files'][original['file_path']]
+            records[key] = {'family': original_family(original), 'file_revision': file_revision,
                 'detector': original['technical_details'], 'source': source, 'generation': generation,
                 'closeout_ref': closeout_ref, 'activity_epoch': expected_activity, 'execution': run}
             accepted += 1
@@ -119,20 +186,29 @@ class RiskClosureService:
             if any(file_digest(root / records[k]['family']['file_path']) != records[k]['file_revision']
                    for k in accepted_keys):
                 return {'status': 'NEW_ACTIVITY', 'confirmed': 0}
-            envelope = encode({'records': records, 'mac': digest(self.hooks.key(root), records)})
-            if len(envelope) > 2_000_000 or len(records) > 2000:
+            if len(records) > 2000:
                 raise ValueError('Closure proof budget exceeded')
-            atomic_bytes(self._path(root), envelope)
             # Keep all original scans/baselines. Only current session facts and
             # their cached deltas are updated under the same workspace lock.
             for path in self.hooks.workspace_directory(root).glob('*.json'):
+                if not path.is_file(): continue
                 state, _ = self.hooks.load(path)
                 if not state:
                     continue
-                state['families'], state['last_result']['delta'] = self.overlay(
-                    root, state['families'], state['last_result']['delta'])
-                self.hooks.save(path, state)
-        return {'status': 'SAVED', 'confirmed': accepted}
+                event = dict(file=path.name, host=state['host'], session_id=state['session_id'],
+                    workspace_id=state['workspace_id'], expected_version=revision(state))
+                value['outbox'][revision(event)] = event
+            if len(value['outbox']) > 64: raise ValueError('Closure pending cache budget exceeded')
+        receipt = dict(status='SAVED', confirmed=accepted, records_revision=revision(records))
+        if effect_id is not None:
+            if not isinstance(effect_id, str) or not 1 <= len(effect_id) <= 200:
+                raise ValueError('Invalid closure effect identity')
+            if len(value['inbox']) >= 2000: raise ValueError('Closure receipt budget exceeded')
+            value['inbox'][effect_id] = receipt
+        if accepted or effect_id is not None:
+            authority.save(value, before)
+            return dict(receipt, cache_sync=self.reconcile_caches(root))
+        return receipt
 
     def overlay(self, root, families, delta):
         current = dict(families)

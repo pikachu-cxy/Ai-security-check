@@ -131,11 +131,11 @@ def coordinator(root, *, automatic=False):
 
 
 def handle_cursor_event(payload, *, core=None, bindings=None, project_dir=None, remote=False, store=None, remediation=None,
-                        feedback=None, automatic=False):
+                        feedback=None, automatic=False, delivery_observer=None):
     if automatic:
         from .cursor_automatic import handle_automatic_event
         return handle_automatic_event(payload, core=core, bindings=bindings, project_dir=project_dir,
-                                      remote=remote, store=store)
+                                      remote=remote, store=store, delivery_observer=delivery_observer)
     from .recent_hooks import Observation, CURRENT
     from .host_event_runtime import handle_normalized_event
     from .host_events import EventKind
@@ -235,9 +235,16 @@ def main(*, automatic=False):
         payload = unique_json(raw)
     except (ValueError, UnicodeError, RecursionError):
         payload = None
+    from .task_delivery_receipts import DeliveryWriteObserver
+    delivery = DeliveryWriteObserver()
     output, _ = handle_cursor_event(payload, project_dir=os.getenv('CURSOR_PROJECT_DIR'),
-        remote=os.getenv('CURSOR_CODE_REMOTE') == 'true', automatic=automatic)
-    print(json.dumps(output, ensure_ascii=True))
+        remote=os.getenv('CURSOR_CODE_REMOTE') == 'true', automatic=automatic,
+        delivery_observer=delivery)
+    try:
+        print(json.dumps(output, ensure_ascii=True), flush=True)
+    except (BrokenPipeError, OSError):
+        return 0  # The prepared response is not evidence of transport success.
+    delivery.written()
     return 0  # Advisory post Hooks never block the Host or fabricate success.
 
 

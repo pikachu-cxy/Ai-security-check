@@ -14,7 +14,7 @@ import re
 import time
 
 from .equivalence import equivalence_key
-from .hook_state import no_links
+from .hook_state import hook_session_paths, no_links
 from .remediation_guard import preservation_proof, source_proof
 from .remediation_policy import RULE
 from .security_summary import SecuritySummaryService, decode_task_reference
@@ -108,7 +108,7 @@ def _evidence(service, record, root, key, scan_id):
              'CONFIRMATION_RECOVERY_SOURCE_CHANGED')
     # A new host session may produce current evidence for the same workspace.
     # Never move the saved repair namespace to that session or import its grant.
-    hook_paths = list(service.hooks.workspace_directory(root).glob('*.json'))
+    hook_paths = hook_session_paths(service.hooks.workspace_directory(root))
     _require(len(hook_paths) <= 64, 'CONFIRMATION_RECOVERY_HOOK_BUDGET_EXCEEDED')
     hook_matches = []
     for hook_path in hook_paths:

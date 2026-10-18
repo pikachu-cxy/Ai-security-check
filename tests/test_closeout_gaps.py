@@ -3,6 +3,7 @@ from dataclasses import asdict
 import json
 import pytest
 from test_task_security import service, begin, candidate, prepared
+from task_review_helpers import evidence_id,read_plan,read_window,review_all
 from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.verification import declared_dependency_proof
 from security_runtime.models import ScannerRun
@@ -26,6 +27,13 @@ def test_early_prepare_no_changes_is_quiet_and_running_is_busy(service):
     record = s.load(root, second)
     record['phase'] = 'STATIC_RUNNING'
     s.store(root).save(record)
+    assert s.prepare(root,second)['status']=='STALE'  # A bare old phase is no lease.
+    from security_runtime.scan_attempt import ScanAttemptStore,source_binding
+    with s.hooks.lock(root):
+        lease=ScanAttemptStore(s.hooks,root,now=s.now).claim('TASK',second,source_binding({'task':second}))
+        record=s.load(root,second)
+        record['static_execution']=lease.receipt
+        s.store(root).save(record)
     assert s.prepare(root, second)['status'] == 'BUSY' and not runtime.calls
 
 def test_long_test_source_is_read_once_in_same_budget(service):
@@ -35,28 +43,42 @@ def test_long_test_source_is_read_once_in_same_budget(service):
     ref = begin(service)
     (root/'tests/test_long.py').write_text(''.join(f'item_{i} = {i}\n' for i in range(206)))
     packet = s.prepare(root, ref)
-    assert next(d for d in packet['diffs'] if d['path']=='tests/test_long.py')['availability']=='ON_DEMAND'
+    units,_=read_plan(s,root,ref,packet)
+    assert any(window['path']=='tests/test_long.py' for unit in units for window in unit['required_windows'])
     session=packet['review_session']
-    request=dict(path='tests/test_long.py', start_line=1, end_line=206)
-    while True:
-        page=s.read(root,ref,session,**request)
-        assert len(page['numbered_lines']) <= 80
-        if not page['has_more']: break
-        request=dict(path=page['next_read']['file_path'],start_line=page['next_read']['start_line'],end_line=page['next_read']['end_line'])
+    pages=read_window(s,root,ref,session,dict(path='tests/test_long.py',start_line=1,end_line=206,
+                                           location_version='CURRENT_TASK_END'))
+    assert sum(len(page.get('lines',[])) for page in pages)==206
+    assert all(len(page.get('lines',[]))<=80 for page in pages)
     before=s.read(root,ref,session,'tests/test_long.py',1,1,'BEFORE_TASK')
-    assert before['location_version']=='BEFORE_TASK' and 'old = ' in before['numbered_lines'][0]
+    assert s.load(root,ref)['evidence'][evidence_id(before)]['location_version']=='BEFORE_TASK'
+    assert 'old = ' in before['lines'][0]
     s.read(root,ref,session,'auth.py',1,2)
-    out=s.submit(root,ref,session,[],'REVIEWED',[])
-    assert not out['context_read_coverage']['unread_ranges']
-    assert out['context_read_coverage']['used_bytes'] <= 64000
+    review_all(s,root,ref,packet)
+    charged=s.load(root,ref)['review_ledger']
+    source_bytes,reads=charged['source_bytes'],charged['reads']
+    duplicate=s.read(root,ref,session,'tests/test_long.py',1,80)
+    assert duplicate['status']=='ALREADY_DELIVERED'
+    assert s.load(root,ref)['review_ledger']['source_bytes']==source_bytes
+    assert s.load(root,ref)['review_ledger']['reads']==reads
+    saved=s.submit(root,ref,session,[],'REVIEWED',[])
+    assert saved['result_saved']
+    out=s.get(root,ref)
+    assert out['context_read_coverage']['unread_range_count']==0
+    assert out['context_read_coverage']['plan_gap_count']==0
+    assert out['context_read_coverage']['used_bytes'] <= out['context_read_coverage']['max_bytes']
 
 def register_host(sample):
     s,root,runtime=sample
-    ref,session,_=prepared(sample)
+    ref,session,packet=prepared(sample)
     entry=s.read(root,ref,session,'routes.py',1,2)
     auth=s.read(root,ref,session,'auth.py',1,2)
-    out=s.submit(root,ref,session,[candidate(entry['evidence_id'],auth['evidence_id'])],'REVIEWED',[])
-    return ref,out['host_review']['findings'][0]['id']
+    review_all(s,root,ref,packet)
+    receipt=s.submit(root,ref,session,[candidate(evidence_id(entry),evidence_id(auth))],'REVIEWED',[])
+    assert receipt['result_saved']
+    out=s.get(root,ref)
+    finding=next(row for row in out['findings'] if row['source']=='HOST_TASK_REVIEW')
+    return ref,finding['detail']['id']
 
 def test_host_closure_links_original_id_and_becomes_stale_after_edit(service):
     s,root,runtime=service
@@ -67,8 +89,9 @@ def test_host_closure_links_original_id_and_becomes_stale_after_edit(service):
     p=s.prepare(root,ref); session=p['review_session']
     entry=s.read(root,ref,session,'routes.py',1,2)
     auth=s.read(root,ref,session,'auth.py',1,2)
+    review_all(s,root,ref,p)
     resolution=dict(original_task_ref=original,finding_id=fid,
-        evidence_refs=[entry['evidence_id'],auth['evidence_id']],outcome='CODE_REVIEWED_RESOLVED',
+        evidence_refs=[evidence_id(entry),evidence_id(auth)],outcome='CODE_REVIEWED_RESOLVED',
         rationale='Ownership checked before repository operation.',tests='Host ran targeted ownership test.')
     s.submit(root,ref,session,[],'REVIEWED',[],[resolution])
     ledger=s.risk_ledger(root,original)
@@ -83,7 +106,7 @@ def test_host_cannot_close_without_original_paths_or_forge_native_proof(service)
     original,fid=register_host(service)
     ref=s.begin(root,'fix')['task_ref']; (root/'routes.py').write_text('fixed\n')
     p=s.prepare(root,ref); e=s.read(root,ref,p['review_session'],'routes.py',1,1)
-    row=dict(original_task_ref=original,finding_id=fid,evidence_refs=[e['evidence_id']],
+    row=dict(original_task_ref=original,finding_id=fid,evidence_refs=[evidence_id(e)],
         outcome='CODE_REVIEWED_RESOLVED',rationale='fixed',tests='test')
     with pytest.raises(ValueError,match='call/control'):
         s.submit(root,ref,p['review_session'],[],'REVIEWED',[],[row])
@@ -95,10 +118,12 @@ def test_host_cannot_close_without_original_paths_or_forge_native_proof(service)
 def test_ledger_tamper_rejected(service):
     s,root,_=service; original,_=register_host(service)
     ledger=TaskRiskLedger(s.hooks,root)
-    data=json.loads(ledger.path.read_bytes())
-    next(iter(data['rows'].values()))['status']='SCANNER_VERIFIED_RESOLVED'
-    ledger.path.write_text(json.dumps(data))
-    with pytest.raises(ValueError,match='cannot be verified'):
+    index=ledger.authority.read()['partitions'][original]
+    shard=ledger.partitions.directory/index['file']
+    data=json.loads(shard.read_bytes())
+    next(iter(data['content']['rows'].values()))['status']='SCANNER_VERIFIED_RESOLVED'
+    shard.write_text(json.dumps(data))
+    with pytest.raises(ValueError,match='partition content changed'):
         s.risk_ledger(root,original)
 
 def proof_fixture():
@@ -128,11 +153,12 @@ def test_scoped_dependency_absence_needs_all_proof(gap):
     assert declared_dependency_proof(row,run,'package-lock.json',observed) is None
 
 
-def test_legacy_ledger_read_is_derived_without_creating_state(service):
+def test_legacy_ledger_read_is_derived_without_creating_state(service,tmp_path):
     s,root,_=service
     original,fid=register_host(service)
-    ledger=TaskRiskLedger(s.hooks,root)
-    ledger.path.unlink()
-    view=s.risk_ledger(root,original)
+    from security_runtime.hook_state import HookStateStore
+    historical=HookStateStore(tmp_path/'uninitialized-legacy-ledger')
+    ledger=TaskRiskLedger(historical,root)
+    view=ledger.view(original,origin_record=s.load(root,original))
     assert view['total']==1 and view['items'][0]['finding_id']==fid
-    assert not ledger.path.exists()
+    assert not historical.directory.exists()

@@ -5,7 +5,7 @@ import re
 import pytest
 
 from security_runtime.review_skill import ReviewSkillManager, RETIRED_METHODS, digest, skill_files
-from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
 
 
 def manager(tmp_path):
@@ -84,7 +84,8 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
             assert rule in method
     assert '不能用普通 begin_security_task 绕过' in entry
     assert '明确暂缓则直接保存 DEFER' in entry
-    assert '尽早调用 prepare_task_risk_fix 登记意图' in entry
+    assert '尽早登记原修复意图' in entry
+    assert '尽早调用 prepare_task_risk_fix' in files['references/runtime-workflow.md'].decode('utf-8')
 
 
 def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
@@ -97,7 +98,7 @@ def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     assert not service.state.exists()  # status is read-only
     assert service.execute('install')['status']=='INSTALLED'
     reference=service.root/'references/runtime-workflow.md'
-    assert HOST_INSTRUCTIONS in reference.read_text(encoding='utf-8')
+    assert RUNTIME_WORKFLOW in reference.read_text(encoding='utf-8')
     assert 'prepare_task_security_review(protocol_version=3)' in reference.read_text(encoding='utf-8')
     assert not RETIRED_METHODS & service.manifest()['files'].keys()
     assert all(not (service.root/name).exists() for name in RETIRED_METHODS)

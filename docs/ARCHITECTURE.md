@@ -63,13 +63,19 @@ old baselines. Independent risk handling and repair authorization remain intact.
 window reads verify the requested source and Hook revision; final submission
 rechecks the complete source inventory and hashes.
 
-## Shared connector foundation (2026-10-18)
+## Shared architecture (2026-10-19)
 
-The first architecture batch is documented with current diagrams and migration limits in [the implementation record](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md); the staged target remains in [the unification plan](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md).
+Current diagrams, execution flows and acceptance boundaries are in [the continuation record](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md); [the first batch](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md) preserves its historical results. Real Codex/Cursor desktop acceptance is deferred by the user.
 
-Pure host lifecycle/capability profiles feed the existing public projections. Codex and Cursor now share owner-bound task selection, review protocol preservation, pending decisions, followup identity and current-event delivery facts through task_orchestration. TaskSecurityService and HookCoordinator keep their original execution authority; Stop intentions and actual host timings remain connector-specific. No durable delivery or user consumption receipt is implied.
+Pure lifecycle profiles and task decisions are shared. A durable event claim binds the original task, and the core receives that exact expected reference; it cannot substitute a newer task from the same owner. Delivery receipts distinguish preparation, transport output and host reports; none proves authenticated user consumption.
 
-MCPRegistry contains the SDK compatibility boundary and raw input contracts; workspace_services assembles the same mandatory impact gates for project and global entry points. Runtime info exposes a content-derived delivery manifest without workspace admission or scanning. Signed task results carry a conditional ledger projection intent, independently of review completion. History uses an additive, legacy-writer-compatible side index, with conservative streaming fallback and read-only access unchanged. Full cross-store recovery and immutable-input/short-lock scanning remain later stages.
+workspace_services composes product services. WorkspaceApplication owns connection routing and required impact gates without retaining SDK objects. MCPRegistry contains SDK and raw-input adaptation; four tool modules delegate to existing task, audit, disposition and repair services. Short Skill instructions retain mandatory boundaries, with six bundled method topics identified by version and digest.
+
+ScanRequest and CapturedScanInput bind WORKTREE or INDEX bytes, rules and actual execution identities. Task, Hook, setup seed, explicit closeout and production CLI/MCP scans use a shared workspace attempt lane. Claims and conditional publication take short locks; capture, Providers and bounded origin verification run outside them. Source/input identity, independent attempt generation, lease, cancellation and original pending events fence publication. Protected input and Provider artifacts have bounded recovery; the trusted low-level Runtime API without an execution port makes no durable-attempt guarantee.
+
+Each authority commits its own facts and outbox together. Target facts, inbox receipts and version watermarks commit atomically; bounded replay neither scans nor grants authority. Partitioned signed risk storage and real old-writer path fences preserve historical decisions. Package metadata declares actual storage contracts, and the new delivery manager conservatively blocks incompatible rollback while preserving the runtime-state-v1 installation layout. Metadata is not publisher authentication.
+
+Scan history retains its original two-column schema with an additive index and legacy writer tracking. Read-only history does not migrate or replay. A scan's historical attempt record cannot prove publication of the current Task or Hook state, nor revalidate current Provider data.
 
 ## Runtime flow
 

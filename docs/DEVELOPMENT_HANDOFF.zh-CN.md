@@ -1,8 +1,10 @@
 # 开发交接：换电脑或新聊天继续
 
-当前交付：架构前最新源码与规划先同步为 a51a58d；本批完成公共编排/装配首批、v3 唯一开发核查、历史保留与安装清理，并同步 README 和进度。相关回归去重 1719 项通过，原始失败及复测分开保留。当前版本安全核查请求更新未成功，旧部分复核不适用于最新源码；未更新运行中安装、未发布新包。细节见[实现记录](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)和[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
+> 2026-10-19 当前批次：公共应用服务、持久事件与交付、逐写路径恢复、固定扫描输入及短锁、按需方法与包级存储兼容已通过冻结全量回归（4978 通过、17 跳过、26 预期失败，零失败与错误），候选交付验证进行中。当前架构、回执与交付边界以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)为准；下文首批 1719 项和更早 A/B/C 记录均为历史事实，不代替本轮结果。旧任务更新拒绝的容量原因已[确认](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)。真实双宿主桌面验收按用户决定暂缓。
 
-更新日期：2026-10-18。仓库：https://github.com/pikachu-cxy/Ai-security-check
+接续入口：[当前架构及验收](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)记录本轮源码、测试、候选和 GitHub 身份；[首批记录](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)仅对应 b352731 及此前阶段。保留原任务和有效证据，不用历史通过数量或旧包判断当前结果；运行中安装与公开 Release 不随源码提交自动更新。[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
+
+更新日期：2026-10-19。仓库：https://github.com/pikachu-cxy/Ai-security-check
 开发分支：feature/runtime-mvp；源码版本：0.3.6。
 
 此前 A2 修正阶段的验收记录如下（源码已纳入架构前检查点 a51a58d，并不代表新包已发布）：本轮三个回归回执按 `classname + name` 去重并取最后结果为 **295／295 项通过**，最窄新分级及真实四文件恢复组为 **65 项通过，29.55 秒**。完整候选回归与打包按随后对应 `run.json` 和最新指针判定，不由定向回归推定；安装和 A2 新包桌面复验仍为 `PENDING_USER`。最新已实测场景仍是 A2 修复阻塞、B3 与 C2 各自场景通过，不能改写旧 A/B/C 或 B2 的失败记录。已实测的 `55977e7e…` 不包含本轮新增 `repair-impact-unknowns-v1`；版本仍为 0.3.6，不能仅凭版本号或定向测试通过认定新包已交付。
@@ -12,7 +14,7 @@
 ## 先读这四页
 
 1. [开发进度](DEVELOPMENT_PROGRESS.md)：已完成、验证结果和未完成范围。
-2. [近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)：先关闭修复影响的当前阻断，再扩大宿主接入。
+2. [近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)：核对本批源码与候选身份；真实桌面验收暂缓，新平台与宿主扩展分别验收。
 3. [宿主支持](HOST_SUPPORT.md)：Cursor、Qoder、WorkBuddy / CodeBuddy 的实际状态与门槛。
 4. [产品规划](PRODUCT_ROADMAP.md)：个人版闭环与企业深度验证边界。
 
@@ -51,15 +53,15 @@ py -3.12 -m venv .venv
 Windows 沙箱、目录链接和进程权限造成的失败应保留记录，并用相同用例在可用环境对照，不能放宽安全断言。
 全局集成测试运行期间保持源码身份稳定。
 
-当前关键回归入口：
+2026-10-18 修复影响分级批次的回归入口（当前架构全量与候选见[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)）：
 
-- 修复影响与参数契约：tests/test_repair_impact*.py；原生流程：tests/test_native_repair_intent.py、tests/test_native_repair_impact_context.py、tests/test_task_risk_fix_mcp.py；同源指导与安装方法：tests/test_review_skill.py、tests/test_repair_impact_presentation.py。本轮按用例去重取最后结果为 295／295 通过，不用此前证据契约的 51／34／8 项结果替代。
+- 修复影响与参数契约：tests/test_repair_impact*.py；原生流程：tests/test_native_repair_intent.py、tests/test_native_repair_impact_context.py、tests/test_task_risk_fix_mcp.py；同源指导与安装方法：tests/test_review_skill.py、tests/test_repair_impact_presentation.py。该历史批次按用例去重取最后结果为 295／295 通过，不用此前证据契约的 51／34／8 项结果替代。
 - 功能隐藏：tests/test_post_fix_functional_prompt.py、tests/test_host_orchestration.py。
 - 启动和并发：tests/test_global_startup_wait.py、tests/test_codex_hook_contention.py。
 - 宿主就绪与任务反馈：tests/test_hook_readiness_feedback.py、tests/test_task_hook_deferred_feedback.py。
 - 每个新增宿主需补自己的适配、隔离和真实使用验收，见[宿主支持](HOST_SUPPORT.md)。
 
-任务候选提交现使用 typed schema：`primary_evidence`／`task_evidence` 为本任务实际签发的证据 ID 字符串，`evidence_refs` 为这些字符串组成的数组，不能传路径／行号对象或 `source_ref`。错误通过安全 `field_errors` 指明字段；仅在原活动任务、原复核会话及原源码版本中纠正可恢复参数错误，不扫描或重新建立基线。`INCOMPLETE` 终态不因改正 JSON 自动恢复，三版快速方法和 packet 的示例也不是真实风险或已签发证据。
+任务候选提交现使用 typed schema：`primary_evidence`／`task_evidence` 为本任务实际签发的证据 ID 字符串，`evidence_refs` 为这些字符串组成的数组，不能传路径／行号对象或 `source_ref`。错误通过安全 `field_errors` 指明字段；仅在原活动任务、原复核会话及原源码版本中纠正可恢复参数错误，不扫描或重新建立基线。`INCOMPLETE` 终态不因改正 JSON 自动恢复，v3 快速方法和 packet 的示例也不是真实风险或已签发证据。
 
 初始化实际结果：A2 首次对象格式失败、第 2 次改字符串后 `COMPLETE / 1 finding`；C2 前两次对象格式失败、第 3 次改字符串后同样保存成功；B2 三次对象格式失败后 `INCOMPLETE`。保留 B2 目录、聊天和失败记录，不自动重开。后续独立 B3 已完成影响与保留共享成员的修复、原风险复查；C2 已完成影响保存、DEFER 和历史回读。A2 仍因范围未知被过宽升级而阻塞，按本轮新能力在原归属下续验，不重建编辑前基线或重新索取同一批准。具体边界见[验收步骤](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
 
@@ -72,15 +74,17 @@ Windows 沙箱、目录链接和进程权限造成的失败应保留记录，并
 从当前提交构建新的独立目录，并保留提交、源码摘要和构建身份；沿用 scripts/build_standalone.py、
 scripts/verify_package.py 与 scripts/verify_artifact.py 的现有门禁，不用旧包冒充当前源码。
 
-本功能使用 scripts/rebuild_repair_impact.py 纳入实际工作树和新增回归，记录六工具与冻结 schema 检查，失败不覆盖 latest。用户首个重建批次在回归收集阶段失败，旧失败保留；修正后的回归、冻结探针及新候选分别按实际回执认定。旧批次 repair-impact-20261018-034812-775f80、构建 d6ac9d9e…d4d2b5 不含验收后的修正；同为 0.3.6 时也须比较新 build_id。具体命令与新起点案例见[修复影响安装验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
+此前修复影响批次使用 scripts/rebuild_repair_impact.py 纳入实际工作树和新增回归，记录六工具与冻结 schema 检查，失败不覆盖 latest。用户首个重建批次在回归收集阶段失败，旧失败保留；修正后的回归、冻结探针及新候选分别按实际回执认定。旧批次 repair-impact-20261018-034812-775f80、构建 d6ac9d9e…d4d2b5 不含验收后的修正；同为 0.3.6 时也须比较新 build_id。具体命令与新起点案例见[修复影响安装验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
 
-本轮未知分级修正的完整候选回归与构建按随后对应 `run.json` 和最新指针判定，已有 295／295 的去重定向最后结果不代替该门槛；新包身份以 `artifacts/repair-impact-latest.json` 的成功状态、对应 run 回执和源码 manifest 核对，再与实际安装及连接比较。实际连接还须声明 `features.repair_impact_unknowns=repair-impact-unknowns-v1`。此前 `d6ac9d9e…`、`dd571d41…`、`55977e7e…` 都不能证明这轮修正已打包；不虚构新 build_id，不把源码定向通过或安装命令成功写成桌面验收通过。
+历史未知分级批次的完整候选回归与构建按其对应 `run.json` 和最新指针判定，已有 295／295 的去重定向最后结果不代替该门槛；该历史批次包身份以 `artifacts/repair-impact-latest.json` 的成功状态、对应 run 回执和源码 manifest 核对，再与实际安装及连接比较。实际连接还须声明 `features.repair_impact_unknowns=repair-impact-unknowns-v1`。此前 `d6ac9d9e…`、`dd571d41…`、`55977e7e…` 都不能证明这轮修正已打包；不虚构新 build_id，不把源码定向通过或安装命令成功写成桌面验收通过。
 
 检查异常反馈已在源码共用 CHECK_OPERATION_BOUNDARIES：用户明确要求或原开发任务包含的测试、构建与验收照常执行，无需重复确认；检查状态本身不授权额外执行，伪造结果、重放事件和补建编辑后基线仍禁止。验证及实际交付按本轮回执认定，旧安装或仍运行的旧连接不会因源码修改自动更新。
 
 重新安装并完全重启宿主后，核对 MCP、Hook、Skill 与实际包身份，再做真实开发任务。
 安装与准备操作以[详细安装指南](PILOT_INSTALL_AND_USE.zh-CN.md)为准。
 源码拉取和测试通过都不等于原生程序已升级或桌面验收通过。
+
+当前架构候选以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)中的源码提交、冻结回执及 build_id 为准；上述旧指针只用于对应历史批次。
 
 ## 接续边界
 

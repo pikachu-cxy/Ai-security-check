@@ -116,7 +116,14 @@ def test_rule_identity_change_and_target_deletion_do_not_prove_resolution(dynami
     assert 'ORIGINAL_RULE_FILE_COVERAGE_NOT_PROVEN' in out['members'][0]['reason']
     assert '不能认定风险已经消除' in out['user_feedback']['message']
     target.unlink()
-    assert service.verify(task['task_ref'], root, bound_workspace=root)['status'] == 'NOT_VERIFIED'
+    deleted = service.verify(task['task_ref'], root, bound_workspace=root)
+    assert deleted['status'] == 'NOT_VERIFIED'
+    assert not deleted['runtime_observed_execution']['scanner_recheck_attempted']
+    assert not deleted['runtime_observed_execution']['scanner_recheck']
+    assert deleted['members'][0]['reason'] == 'AFFECTED_FILE_MISSING_OR_NOT_IN_SCOPE'
+    assert deleted['risk_ledger_recording']['status'] == 'NOT_REGISTERED'
+    assert deleted['risk_ledger_recording']['recorded'] == 0
+    assert '不能认定风险已经消除' in deleted['user_feedback']['message']
 
 
 def test_another_workspace_cannot_reuse_selected_dynamic_task(dynamic_task, tmp_path):

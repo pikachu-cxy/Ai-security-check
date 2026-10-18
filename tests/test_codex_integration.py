@@ -385,7 +385,8 @@ def test_hook_closed_receipt_direct_functional_without_second_verify(setup, monk
         assert output['functional_verification']['status'] == 'NOT_AVAILABLE'
         assert not output.get('functional_ref') and not output.get('handoff')
     assert output['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
-    assert 'NOT_AVAILABLE without a handoff' in HOST_INSTRUCTIONS
+    from security_runtime.host_guidance import RUNTIME_WORKFLOW
+    assert 'NOT_AVAILABLE without a handoff' in RUNTIME_WORKFLOW
 
 
 def test_inconclusive_does_not_offer_skip_or_functional_proof(setup):

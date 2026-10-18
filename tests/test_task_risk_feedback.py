@@ -309,7 +309,9 @@ def test_feedback_audit_capacity_keeps_one_final_revocation_without_deleting_eve
     key = ref+':'+finding_id
     original_event = rows[key]['feedback_events'][0]
     rows[key]['feedback_events'] = [dict(original_event, event_id=f'event-{index}') for index in range(20)]
-    ledger.save(rows)
+    with s.hooks.lock(root) as acquired:
+        assert acquired
+        ledger.save(rows)
     with pytest.raises(ValueError, match='audit limit'):
         feedback.mark(s, root, ref, finding_id, 'Another mark.', user_requested=True)
     result = feedback.revoke(s, root, ref, finding_id, 'Undo the mark.', user_requested=True)

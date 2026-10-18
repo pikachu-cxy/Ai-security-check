@@ -16,6 +16,7 @@ import tempfile
 import stat
 import copy
 import posixpath
+import re
 from contextvars import ContextVar
 from contextlib import contextmanager
 from functools import wraps
@@ -155,6 +156,22 @@ def file_digest(path):
     return digest.hexdigest()
 
 
+def _valid_storage_contracts(value):
+    return (isinstance(value, list) and len(value) <= 64
+            and all(isinstance(item, str) and len(item) <= 96
+                and re.fullmatch(r'[a-z][a-z0-9]*(?:-[a-z0-9]+)*-v[1-9][0-9]*', item) for item in value)
+            and len(set(value)) == len(value))
+
+
+def _require_storage_compatibility(current, target):
+    # Missing legacy metadata is unknown, never an assertion that the package
+    # can read/write a newly introduced authority. Do not infer from semver or
+    # inspect private state to relax this conservative downgrade boundary.
+    required, available = current.get('storage_contracts'), target.get('storage_contracts')
+    if required and (available is None or not set(required) <= set(available)):
+        raise IntegrationDiagnostic('DELIVERY_STATE_SCHEMA_INCOMPATIBLE')
+
+
 def package_metadata(bundle, *, _retry=True):
     bundle = Path(bundle).absolute()
     no_links(bundle)
@@ -177,6 +194,8 @@ def package_metadata(bundle, *, _retry=True):
             or not {'LICENSE', 'THIRD_PARTY_NOTICES.md', 'SOURCE_OFFER.md'}.issubset(files)
             or not isinstance(links, dict) or len(links) > 2_000
             or (links and value.get('bundle_link_contract') != 'internal-relative-v1')):
+            raise ValueError()
+        if 'storage_contracts' in value and not _valid_storage_contracts(value['storage_contracts']):
             raise ValueError()
         inventory = package_inventory(bundle, allow_internal_links=bool(links))
         cache = _verification_cache.get()
@@ -288,6 +307,14 @@ class StableDelivery:
         key = self.store.key(self.root)
         atomic_bytes(self.root / 'active.json', encode(value | {'signature': hmac.new(key, encode(value), hashlib.sha256).hexdigest()}))
 
+    def _installed_metadata(self, identity):
+        metadata = package_metadata(self.slot(identity))
+        if metadata['build_id'] != identity:
+            # A locally rehashed old package is still not the package pinned
+            # by this signed slot identity. Never use it to lower the floor.
+            raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
+        return metadata
+
     def _probe(self, bundle):
         if self.probe:
             return self.probe(bundle)
@@ -312,6 +339,9 @@ class StableDelivery:
             if not acquired:
                 raise IntegrationDiagnostic('DELIVERY_BUSY')
             pointer = self.pointer()
+            if pointer is not None:
+                current = self._installed_metadata(pointer['active'])
+                _require_storage_compatibility(current, metadata)
             identity = metadata['build_id']
             target = self.slot(identity)
             reused = target.exists()
@@ -426,10 +456,11 @@ class StableDelivery:
             pointer = self.pointer()
             if not pointer or not pointer['previous']:
                 raise IntegrationDiagnostic('DELIVERY_ROLLBACK_UNAVAILABLE')
-            current = package_metadata(self.slot(pointer['active']))
-            previous = package_metadata(self.slot(pointer['previous']))
+            current = self._installed_metadata(pointer['active'])
+            previous = self._installed_metadata(pointer['previous'])
             if current['state_schema'] != previous['state_schema'] or previous['state_schema'] != STATE_SCHEMA:
                 raise IntegrationDiagnostic('DELIVERY_STATE_SCHEMA_INCOMPATIBLE')
+            _require_storage_compatibility(current, previous)
             if self._probe(self.slot(pointer['previous'])).get('status') != 'OK':
                 raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
             self._switch(pointer['previous'], pointer['active'])
@@ -441,7 +472,7 @@ class StableDelivery:
         pointer = self.pointer()
         if pointer is None:
             return {'status': 'NOT_INSTALLED', 'root': str(self.root)}
-        package = package_metadata(self.slot(pointer['active']))
+        package = self._installed_metadata(pointer['active'])
         launcher = self.root / pointer.get('launcher', 'launcher')
         if launcher.name not in {'launcher', 'launcher-v2'} or launcher.parent != self.root:
             raise IntegrationDiagnostic('DELIVERY_POINTER_INVALID')
@@ -449,6 +480,7 @@ class StableDelivery:
         return {'status': 'INSTALLED', 'root': str(self.root), 'active_build': package['build_id'],
                 'previous_build': pointer['previous'], 'version': package['version'],
                 'launcher': str(launcher / EXE), 'state_schema': STATE_SCHEMA,
+                'storage_contracts': package.get('storage_contracts'),
                 'running_connections': 'UNCHANGED_UNTIL_RECONNECT', 'scan_state_modified': False}
 
 

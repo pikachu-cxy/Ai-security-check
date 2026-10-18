@@ -2,9 +2,29 @@
 from __future__ import annotations
 
 import time
+import sqlite3
 
 from .host_events import EventKind, NormalizedHostEvent, OperationClass
 from .hooks import HookEvent
+from .host_event_journal import EventClaim, HostEventJournal
+
+
+def _event_task(hooks, root, context):
+    from .task_orchestration import select_task
+    from .task_security_state import TaskSecurityStore
+    task = select_task(TaskSecurityStore(hooks, root),
+        dict(host=context.host, session=context.session_binding), hook=True)
+    return task['task_ref'] if task else None
+
+
+def _claim_result(claim, normalized, context, *, reason=None):
+    result = inconclusive(reason or claim.state)
+    result.update(normalized, event_processing=claim.facts(), session_id=context.session_binding,
+        scanner_skipped_reason=reason or claim.state, workspace_mutation_observed=None,
+        changed_file_count=None)
+    if claim.task_ref is not None:
+        result['security_task_ref'] = claim.task_ref
+    return result
 
 
 def inconclusive(reason):
@@ -50,13 +70,45 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             result.update(scanner_invocation_count=0, mutation_event_dropped=False)
         observe('READ_ONLY_SKIPPED', scanner_run=False, **normalized)
         return {**result, **normalized}, None
+    journal, claim = None, None
+    if HostEventJournal.applicable(event):
+        try:
+            journal = HostEventJournal(coordinator.store, context.workspace)
+            target = _event_task(coordinator.store, context.workspace, context)
+            claim = journal.claim(event, task_ref=target)
+            if claim.state != 'CLAIMED':
+                return _claim_result(claim, normalized, context), None
+            # Existing sequence-based pending state is retained. Admission and
+            # dispatch are separate so a stale pre-dispatch worker is fenced.
+            coordinator.store.pending_activity(context.workspace, context.host, context._session, mark=True)
+            from .closeout_state import CloseoutStateStore
+            from .hook_state import identity
+            jobs = CloseoutStateStore(coordinator.store.workspace_directory(context.workspace) / 'closeout.db',
+                                      lambda: coordinator.store.key(context.workspace))
+            previous = jobs.latest(context.workspace_identity, identity(context.host+'\0'+context._session))
+            if previous and previous['status'] != 'COMPLETED':
+                jobs.mark_pending(previous['closeout_ref'], previous['workspace_id'])
+            if not journal.start(claim):
+                return _claim_result(claim, normalized, context, reason='EVENT_CLAIM_LOST'), None
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            unavailable = EventClaim(None, 'JOURNAL_UNAVAILABLE')
+            return _claim_result(unavailable, normalized, context), None
     mapped = {EventKind.SESSION_START: HookEvent.SESSION_START,
               EventKind.WORKSPACE_ACTIVITY: HookEvent.FILE_CHANGED,
               EventKind.SESSION_STOP: HookEvent.AGENT_STOP}[event.kind]
     if event.kind == EventKind.WORKSPACE_ACTIVITY:
         observe('RECONCILIATION_STARTED', **normalized)
-    result = (coordinator.handle_lifecycle(event.kind, context.workspace, context.host, context._session)
-              if lifecycle else coordinator.handle(mapped, context.workspace, context.host, context._session))
+    try:
+        task_binding = {'expected_task_ref':claim.task_ref} if claim is not None else {}
+        result = (coordinator.handle_lifecycle(event.kind, context.workspace, context.host, context._session, **task_binding)
+                  if lifecycle else coordinator.handle(mapped, context.workspace, context.host, context._session, **task_binding))
+    except Exception:
+        if journal is not None and claim is not None:
+            try:
+                journal.uncertain(claim)
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                pass  # The dispatched row still prevents automatic replay.
+        raise
     decision = None
     if event.kind == EventKind.WORKSPACE_ACTIVITY:
         result.setdefault('workspace_mutation_observed', None)
@@ -68,5 +120,21 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             decision = remediation.on_hook(result, context.workspace, context._session,
                 host=context.host, event_started=started, initial_scan_finished=time.perf_counter(),
                 workspace_context=context)
+    if journal is not None and claim is not None:
+        try:
+            completed = journal.complete(claim, result)
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            completed = False
+        result['event_processing'] = dict(claim.facts(),
+            state='COMPLETED' if completed else 'COMPLETION_PENDING')
+        if not completed:
+            # Execution may have committed; never discard it or run it again
+            # just because its event acknowledgement failed.
+            try:
+                coordinator.store.pending_activity(context.workspace, context.host, context._session, mark=True)
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                pass
+    elif event.kind == EventKind.WORKSPACE_ACTIVITY:
+        result['event_processing'] = EventClaim(None, 'CONTENT_RECONCILIATION_ONLY').facts()
     result.update(normalized)
     return result, decision

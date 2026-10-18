@@ -44,11 +44,11 @@ assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == 'ai-security-core'
-assert pack.descriptor.version == '1.3.0'
-assert len(pack.catalog) == 55
+assert pack.descriptor.version == '1.3.2'
+assert len(pack.catalog) == 56
 assert not any(c.auto_fix_eligible for c in pack.program.capabilities)
 from security_runtime.rule_coverage import plan_rules
-assert len(plan_rules(pack, ['app.py']).rules) == 15
+assert len(plan_rules(pack, ['app.py']).rules) == 16
 for target in ('app.js', 'view.jsx', 'app.ts', 'view.tsx'):
     plan = plan_rules(pack, [target])
     assert plan.files == (target,) and len(plan.rules) == 6, target
@@ -57,7 +57,7 @@ from security_runtime import task_fix, equivalence, verification, verification_p
 from security_runtime import hook_runtime, hook_state, hook_adapters
 for module in (hook_runtime, hook_state, hook_adapters):
     assert Path(module.__file__).resolve().is_relative_to(package)
-from security_runtime.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS, HOST_INSTRUCTIONS
+from security_runtime.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS, HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
 from security_runtime.mcp_server import create_server
 from security_runtime.professional_guidance import get_professional_guidance
 guide = get_professional_guidance()
@@ -68,7 +68,8 @@ assert runtime_info()['features']['task_fix_verify'] == 'v0.1'
 assert runtime_info()['capability_contract'] == 'developer-guidance-v0.3'
 assert runtime_info()['remediation']['user_consent_required'] is True
 assert runtime_info()['remediation']['automatic_fix_without_user_consent'] is False
-assert 'is analysis, not repair' in HOST_INSTRUCTIONS
+assert 'is analysis, not repair' in RUNTIME_WORKFLOW
+assert '沉默和计划均不授权' in HOST_INSTRUCTIONS
 from security_runtime.remediation_policy import RemediationConfig, RemediationPolicy, RULE
 policy = RemediationConfig(Path.cwd()/'isolated-policy.json')
 assert policy.read() == 'ask_before_fix'
@@ -85,11 +86,36 @@ assert (package / 'python_downloads.json').is_file()
 from security_runtime.review_skill import ReviewSkillManager, skill_files
 assert 'references/runtime-workflow.md' in skill_files()
 assert 'references/deep-audit.md' in skill_files()
-assert 'Silence is never approval' in skill_files()['SKILL.md'].decode('utf-8')
+assert '沉默和计划均不授权' in skill_files()['SKILL.md'].decode('utf-8')
+from security_runtime.compatibility import requirements, storage_contracts, TASK_REVIEW_TOOLS
+from security_runtime.guidance_catalog import TOPICS, get_runtime_guidance, manifest as guidance_manifest
+from security_runtime.task_security import method
+from security_runtime.build_identity import STATE_SCHEMA
+assert STATE_SCHEMA == 'runtime-state-v1'
+assert {'task-risk-authority-v2', 'closure-authority-v2', 'persistence-effect-v1',
+        'private-authority-writer-fence-v1', 'closeout-persistence-v1'} <= set(storage_contracts())
+assert TASK_REVIEW_TOOLS <= {t.name for t in create_server()._tool_manager.list_tools()}
+assert 'task-review-plan-v3' in runtime_info()['features']['task_security_review_protocol']
+assert runtime_info()['guidance_catalog'] == guidance_manifest()
+files = skill_files()
+assert 'references/quick-task-review-v3.md' in files
+assert not {'references/quick-task-review.md', 'references/quick-task-review-v2.md'} & files.keys()
+for topic in TOPICS:
+    guidance = get_runtime_guidance(topic)
+    assert guidance['status'] == 'READY' and not any(guidance['execution'].values())
+    assert guidance['content'].encode('utf-8') == files[guidance['local_reference']]
+    assert (package/'skills/ai-security-review'/guidance['local_reference']).read_bytes() == files[guidance['local_reference']]
+task_guide = get_runtime_guidance('task-review')
+assert (task_guide['version'],task_guide['sha256']) == (method(3)['version'],method(3)['sha256'])
 assert (package/'skills/ai-security-review/references/deep-audit.md').is_file()
 skill = ReviewSkillManager(Path.cwd()/'synthetic-home/.agents/skills',Path.cwd()/'skill-state')
 assert skill.status()['status']=='NOT_INSTALLED'
+assert skill.status()['compatibility_requirements'] == requirements()
+assert skill.status()['requirements_scope'] == 'DECLARATION_NOT_HOST_TOOL_DISCOVERY'
 assert skill.execute('install')['status']=='INSTALLED'
+for topic in TOPICS:
+    guidance = get_runtime_guidance(topic)
+    assert (skill.root/guidance['local_reference']).read_bytes() == files[guidance['local_reference']]
 assert skill.execute('repair')['changed'] is False
 assert skill.execute('remove')['status']=='REMOVED'
 share = Path(__import__('sys').prefix) / 'share' / 'ai-security-runtime'

@@ -53,7 +53,18 @@ def unsupported_protocol_failure(exc):
     return None
 
 
+def _guidance_input(name, arguments, require_workspace):
+    topics = {'core', 'runtime-workflow', 'task-review', 'risk-decisions', 'repair-impact', 'deep-audit'}
+    if (not isinstance(arguments, dict) or set(arguments) != {'topic'}
+            or not isinstance(arguments['topic'], str) or arguments['topic'] not in topics):
+        return dict(status='GUIDANCE_REQUEST_REJECTED', reason_code='GUIDANCE_INPUT_INVALID',
+            message='请选择一个已声明的本地方法主题；此入口不接受项目、源码或网址。',
+            scanner_run=False, source_modified=False, repair_authorized=False)
+    return None
+
+
 RAW_TOOL_CONTRACTS = (
+    RawToolContract(frozenset({'get_runtime_guidance'}), 'runtime-guidance-v1', _guidance_input),
     RawToolContract(frozenset({'prepare_task_security_review'}),
                     'task-review-plan-v3', _task_protocol_input),
     RawToolContract(IMPACT_TOOLS, IMPACT_CONTRACT, _impact_input),
@@ -68,7 +79,7 @@ def raw_input_failure(name, arguments, *, require_workspace=False):
         if name in spec.names:
             result = spec.validator(name, arguments, require_workspace)
             return result if result and (result.get('field_errors') or
-                result.get('reason_code') == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL') else None
+                result.get('reason_code') in {'UNSUPPORTED_TASK_REVIEW_PROTOCOL', 'GUIDANCE_INPUT_INVALID'}) else None
     return None
 
 
@@ -117,7 +128,8 @@ class MCPRegistry:
                     try:
                         return await original(name, arguments, *args, **kwargs)
                     except Exception as exc:
-                        failure = unsupported_protocol_failure(exc)
+                        from .task_diagnostics import capacity_failure
+                        failure = unsupported_protocol_failure(exc) or capacity_failure(exc)
                         if failure is None:
                             raise
                 convert = kwargs.get('convert_result', args[1] if len(args) > 1 else False)
@@ -175,6 +187,8 @@ def schema_specifications(tools):
         annotations = getattr(tool, 'annotations', None)
         if annotations is not None and hasattr(annotations, 'model_dump'):
             annotations = annotations.model_dump(mode='json', exclude_none=True)
+        from .compatibility import tool_requirements
         specs.append(dict(name=tool.name, input_schema=input_schema,
-                          output_schema=output_schema, effects=annotations))
+                          output_schema=output_schema, effects=annotations,
+                          **tool_requirements(tool.name)))
     return sorted(specs, key=lambda item: item['name'])

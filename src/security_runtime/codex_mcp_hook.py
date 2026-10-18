@@ -95,7 +95,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             try:
                 from .host_event_runtime import handle_normalized_event
                 active_coordinator = coordinator or HookCoordinator()
-                if classification != 'READ_ONLY':
+                from .host_event_journal import HostEventJournal
+                if classification != 'READ_ONLY' and not HostEventJournal.applicable(normalized):
                     active_coordinator.store.pending_activity(validated_root, 'codex', session_id, mark=True)
                     from .closeout_state import CloseoutStateStore
                     from .hook_state import identity
@@ -130,6 +131,11 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 'security_task_ref', 'task_edit_check_policy'):
         if key in result:
             summary[key] = result[key]
+    if 'event_processing' in result:
+        # Only the journal's bounded public facts cross this boundary.
+        summary['event_processing'] = {key: result['event_processing'][key] for key in
+            ('contract', 'event_ref', 'state', 'exact_call_deduplication', 'task_ref', 'task_linkage')
+            if key in result['event_processing']}
     summary.update(transport='codex-mcp-hook-poc', scanner_run=result['execution']['scanner_run'],
                    new_families=delta['new'], persisting_families=delta['persisting'],
                    resolved_families=delta['resolved'],
@@ -258,6 +264,10 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         decision.get('episode_id') and decision.get('verification') and decision.get('attempt_count', 0) > 0))
     if validated_root is not None and active_coordinator is not None:
         task, recording = _record_task_hook(active_coordinator.store, validated_root, result, decision)
+        if 'event_processing' in result:
+            summary['event_processing'] = {key: result['event_processing'][key] for key in
+                ('contract', 'event_ref', 'state', 'exact_call_deduplication', 'task_ref', 'task_linkage')
+                if key in result['event_processing']}
         if task:
             summary.update(security_task_ref=task['task_ref'], hook_check_recording=recording)
             summary['task_delivery'] = task_delivery_facts(task,
@@ -302,6 +312,20 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     if 'task_delivery' in summary:
         summary['task_delivery']['context_returned'] = bool(
             output.get('hookSpecificOutput', {}).get('additionalContext'))
+        if summary['task_delivery']['context_returned']:
+            from .task_delivery_receipts import TaskDeliveryReceipts, unavailable
+            import sqlite3
+            from .task_ownership import record_owner
+            try:
+                receipt = TaskDeliveryReceipts(active_coordinator.store, validated_root).prepare(
+                    task, record_owner(task), intent='TASK_FINAL_SUMMARY', category='POST_TOOL_CONTEXT')
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                receipt = unavailable()
+            summary['task_delivery'] = task_delivery_facts(task,
+                scanner_run=result['execution']['scanner_run'], recording=recording,
+                context_returned=True, delivery_receipt=receipt)
+            if summary.get('feedback_delivery') == 'TASK_FINAL_SUMMARY' and not authorized:
+                output['hookSpecificOutput']['additionalContext'] = _deferred_task_context(summary)
     return {**summary, **output}
 
 

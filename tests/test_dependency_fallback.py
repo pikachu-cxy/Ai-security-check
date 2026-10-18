@@ -183,10 +183,12 @@ def test_offline_reuses_installed_engine_and_local_data_without_network_flags(tm
 def test_quick_fallback_stays_offline_and_unknown_database_never_counts_full(tmp_path, monkeypatch):
     (tmp_path/'package-lock.json').write_text('{}')
     manager=ToolManager(root=tmp_path/'managed')
+    binary = tmp_path/'osv-scanner-fixture.bin'
+    binary.write_bytes(b'deterministic mocked OSV engine')
     prepared=[]
     def ensure(tool, **kwargs):
         prepared.append((tool, kwargs))
-        return ResolvedTool(tool,'2.6.0','osv-scanner',None,ToolStatus.READY)
+        return ResolvedTool(tool,'2.6.0',str(binary),None,ToolStatus.READY)
     manager.ensure=ensure
     db=manager.root/'data/osv/osv-scalibr/npm/all.zip'
     db.parent.mkdir(parents=True)
@@ -206,7 +208,8 @@ def test_quick_fallback_stays_offline_and_unknown_database_never_counts_full(tmp
     with patch('security_runtime.osv.run_process',side_effect=execute), \
             patch.object(manager.provider,'download',side_effect=AssertionError('download attempted')), \
             patch('urllib.request.urlopen',side_effect=AssertionError('network attempted')):
-        result=runtime.scan(tmp_path,'quick',_hook_scope=['package-lock.json'])
+        from security_runtime.scan_input import scoped_request
+        result=runtime.scan(tmp_path,'quick',request=scoped_request(tmp_path,['package-lock.json']))
     assert len(calls)==1 and primary.calls==1
     assert prepared==[('osv-scanner',{'offline':True})]
     run=next(run for run in result.scanner_runs if run.scanner=='osv-scanner')

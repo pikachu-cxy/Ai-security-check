@@ -129,8 +129,8 @@ def test_native_pair_review_then_only_material_change_reopens(experience, tmp_pa
 
 
 def test_installation_delivers_same_decision_policy_as_runtime():
-    from security_runtime.host_guidance import HOST_INSTRUCTIONS, REQUIRED_GUIDANCE_TOOLS
-    assert RISK_DECISION_GUIDANCE in HOST_INSTRUCTIONS
+    from security_runtime.host_guidance import RUNTIME_WORKFLOW, REQUIRED_GUIDANCE_TOOLS
+    assert RISK_DECISION_GUIDANCE in RUNTIME_WORKFLOW
     assert RISK_DECISION_GUIDANCE in skill_files()['references/risk-decisions.md'].decode('utf-8')
     assert {'set_finding_disposition','set_task_risk_disposition'} <= REQUIRED_GUIDANCE_TOOLS
 

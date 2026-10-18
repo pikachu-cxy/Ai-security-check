@@ -114,7 +114,7 @@ class CursorTaskBridge:
                     task_ref=record['task_ref'], scanner_run=False,
                     baseline_available=result.get('baseline_available'))
 
-    def context(self, record=_CURRENT):
+    def context(self, record=_CURRENT, *, category='POST_TOOL_CONTEXT'):
         self.last_delivery = None
         self.last_protocol_rejection = None
         record = self.current() if record is _CURRENT else record
@@ -131,9 +131,7 @@ class CursorTaskBridge:
             return None
         from .task_ownership import issue_session_ref
         token=issue_session_ref(self.core.store,self.root,'cursor',self.session)
-        self.last_delivery = task_delivery_facts(record, scanner_run=False,
-            context_returned=True, intent='TASK_CLOSEOUT')
-        return (
+        context = (
             'Cursor 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
             + json.dumps(dict(task_ref=record['task_ref'], workspace_path=str(self.root),session_ref=token),
                          ensure_ascii=True)
@@ -146,8 +144,19 @@ class CursorTaskBridge:
             '未请求的必读项仍未完成；同一任务累计额度不因分页或重连重置。旧协议任务仅供历史查询，不得续办。'
             '把实际风险和未完成范围合并进正常总结。只读工具不会开始新任务。'
             '自动消息不是用户同意；修复仍须明确选择风险并通过现有 MCP 授权与复核。'
-            + DELIVERY_CONTEXT_MARKER + json.dumps(dict(task_delivery=self.last_delivery), ensure_ascii=True)
         )
+        # Rendering a response is not proof that stdout was written or that a
+        # host report/person consumed it. Metadata is outside executable args.
+        from .task_delivery_receipts import TaskDeliveryReceipts, unavailable
+        import sqlite3
+        try:
+            receipt = TaskDeliveryReceipts(self.core.store, self.root).prepare(
+                record, self.owner, intent='TASK_CLOSEOUT', category=category)
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            receipt = unavailable()
+        self.last_delivery = task_delivery_facts(record, scanner_run=False,
+            context_returned=True, intent='TASK_CLOSEOUT', delivery_receipt=receipt)
+        return context + DELIVERY_CONTEXT_MARKER + json.dumps(dict(task_delivery=self.last_delivery), ensure_ascii=True)
 
     def followup(self, payload):
         self.last_delivery = None
@@ -169,7 +178,7 @@ class CursorTaskBridge:
             delivered = record.get('cursor_followups', [])
             if key in delivered or len(delivered) >= 2:
                 return None
-            context = self.context(record)
+            context = self.context(record, category='STOP_FOLLOWUP')
             if context is None:
                 return None
             record['cursor_followups'] = [*delivered, key]

@@ -62,10 +62,13 @@ def file_digest(key, content):
 def recover_bytes(root, name, expected, key):
     from .hook_runtime import _git, safe_path
     from .target import TargetDetector
+    from .progress import checkpoint
+    checkpoint()
     safe_path(name)
     if name not in TargetDetector().detect(root, [name]).files:
         raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
     for spec in (':' + name, 'HEAD:' + name):
+        checkpoint()
         try:
             # cat-file has no textconv/filter/checkout or project command effects.
             oid = _git(root, 'rev-parse', '--verify', spec).decode('ascii').strip()
@@ -92,7 +95,7 @@ def detector_stamp(registry, plan, version, workspace):
     from .scanners import SemgrepAdapter, PatternSASTScanner
     from .sast import SemgrepEngineProvider
     from .toolchain import ToolStatus
-    from .progress import NullProgressReporter, progress_context
+    from .progress import NullProgressReporter, progress_context, current_reporter
     from .scanner_observation import observation
     adapter = next((a for a in registry.adapters if type(a) is SemgrepAdapter), None)
     if (adapter is None or type(adapter.engine_provider) is not SemgrepEngineProvider
@@ -101,14 +104,21 @@ def detector_stamp(registry, plan, version, workspace):
         return None
     # Use one context for both stamps; the temporary source directory must not
     # change tool/config selection. Resolution never installs anything.
-    with progress_context(NullProgressReporter()), observation(str(workspace)):
+    with progress_context(current_reporter() or NullProgressReporter()), observation(str(workspace)):
         resolved = adapter.tool_manager.resolve('semgrep')
         if resolved.status != ToolStatus.READY or resolved.version != version:
             return None
         engine = adapter.tool_manager._probe_identity('semgrep', Path(resolved.path))
     pack = adapter.rule_packs.resolve()
-    if engine is None or (pack.path, pack.checksum, pack.descriptor) != (plan.pack.path, plan.pack.checksum, plan.pack.descriptor):
+    if engine is None or (pack.checksum, pack.descriptor, pack.catalog) != (plan.pack.checksum, plan.pack.descriptor, plan.pack.catalog):
         return None
+    if pack.path != plan.pack.path:
+        # Runtime's rule plan points at the final immutable rule mirror. Its
+        # lifecycle/path differs from the provenance package; verify its actual
+        # bytes while the view is still active before using an equivalent plan.
+        captured = adapter.rule_packs.bind_input(pack, plan.pack.path)
+        if (captured.checksum, captured.descriptor, captured.catalog) != (pack.checksum, pack.descriptor, pack.catalog):
+            return None
     return (engine, version, pack.checksum,
             tuple(sorted((r.rule_id, r.rule_version) for r in plan.rules)))
 
@@ -189,7 +199,8 @@ def matched_occurrences(old, new, before, after):
     return len(old['occurrences']), len(available)
 
 
-def attribute(core, root, previous, changed, current_digests, observation, result):
+def attribute(core, root, previous, changed, current_digests, observation, result, *,
+              current_bytes=None, execution=None):
     """Return real pre-edit families only after complete equivalent detector proof."""
     from .findings import FindingNormalizer
     from .hook_runtime import covered, family_multiset
@@ -220,12 +231,20 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
         if any(name not in old_digests or name not in current_digests for name in targets):
             raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
         before, after, total = {}, {}, 0
-        if native:
+        if current_bytes is None and execution is not None:
+            raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
+        if native and current_bytes is None:
             from .local_evidence import WorkspaceReader
             reader = WorkspaceReader(root)
         for name in targets:
+            from .progress import checkpoint
+            checkpoint()
             before[name] = recover_bytes(root, name, old_digests[name], key)
-            if native:
+            if current_bytes is not None:
+                if name not in current_bytes:
+                    raise ValueError('TARGET_IDENTITY_NOT_PROVEN')
+                after[name] = current_bytes[name]
+            elif native:
                 after[name], _ = reader.read(name, maximum=MAX_FILE)
             else:
                 with (root / name).open('rb') as source:
@@ -244,12 +263,16 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
         pre_plan = replace(plan, **reset)
         adapter = next(a for a in registry.adapters if a.name == provider_name)
         stamp_detector = native_detector_stamp if native else detector_stamp
-        with TemporaryDirectory(prefix='security-runtime-attribution-') as temporary:
+        from .scan_input import _private_directory, _write
+        temporary_scope = (_private_directory(root, execution.private_parent,
+            on_created=execution.input_created, on_removed=execution.input_removed)
+            if execution is not None else TemporaryDirectory(prefix='security-runtime-attribution-'))
+        with temporary_scope as temporary:
             scoped = Path(temporary)
             for name, content in before.items():
-                destination = scoped / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_bytes(content)
+                if execution is not None:
+                    execution.checkpoint()
+                _write(scoped, name, content)
             context = ScanContext(str(scoped), ScanMode.QUICK, tuple(targets), rule_plan=pre_plan)
             expected_pre = stamp_detector(registry, plan, stamp[1], scoped)
             if expected_pre is None or expected_pre[1:] != stamp[1:]:
@@ -275,7 +298,7 @@ def attribute(core, root, previous, changed, current_digests, observation, resul
             raise ValueError('PRE_EDIT_SCAN_INCOMPLETE')
         if capture_detector(registry, observation, root) != stamp:
             raise ValueError('DETECTOR_NOT_EQUIVALENT')
-        if native:
+        if native and current_bytes is None:
             for name in targets:
                 current, _ = reader.read(name, maximum=MAX_FILE)
                 if file_digest(key, current) != current_digests[name]:

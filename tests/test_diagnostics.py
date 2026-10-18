@@ -134,8 +134,13 @@ def mock_registry(root):
     manager = ToolManager(root=root / 'managed')
     # Current credential execution evidence hashes the selected executable.
     # Keep this synthetic engine identity inside the excluded test state.
-    binaries = root / '.security-runtime' / 'mock-engines'
+    binaries = root / '.security-runtime' / 'mock-engines' / 'runtime' / 'Scripts'
     binaries.mkdir(parents=True)
+    # Fixed-input execution hashes the selected Python engine's package bytes.
+    # This is a synthetic complete layout, never an executed scanner.
+    package = binaries.parent / 'Lib' / 'site-packages' / 'semgrep'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_bytes(b'# Synthetic Semgrep identity fixture\n')
     for tool in ('semgrep', 'gitleaks', 'trivy'):
         (binaries / tool).write_bytes(b'Synthetic mock engine; never executed')
     manager.ensure = lambda tool: ResolvedTool(tool, 'mock', str(binaries / tool), None, ToolStatus.READY)

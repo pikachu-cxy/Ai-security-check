@@ -8,9 +8,10 @@ import os
 import re
 import subprocess
 import time
+import copy
 from contextlib import nullcontext
 from time import perf_counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, replace, dataclass
 from pathlib import Path, PurePosixPath
 
 from .equivalence import equivalence_key
@@ -29,6 +30,7 @@ MAX_BYTES = 20_000_000
 MAX_FAMILIES = 2000
 MAX_OCCURRENCES = 10000
 MAX_PROOF_RULES = 1000
+_UNBOUND_TASK = object()
 
 
 def safe_path(value):
@@ -69,6 +71,65 @@ class HookSnapshot:
     last_result: dict
     file_digests: dict | None = None
     unproven_sast_files: list[str] | None = None
+
+
+def captured_input_matches(view, captured, key):
+    """Compare actual final mirror bytes with the original Hook inventory.
+
+    The two input contracts use different keyed identities. Comparing their
+    digest strings would not establish that Providers received these bytes.
+    """
+    from .scan_input import _read_file
+    expected = getattr(captured, 'file_digests', None)
+    if not isinstance(expected, dict):
+        return False
+    for entry in view.manifest:
+        if entry.role == 'RULES':
+            continue
+        if entry.role == 'ABSENT':
+            actual = hmac.new(key, b'hook-file-deleted-v1', hashlib.sha256).hexdigest()
+        else:
+            raw = _read_file(view.execution_root / entry.path, 1_000_000)
+            actual = hmac.new(key, b'hook-file-v1' + raw, hashlib.sha256).hexdigest()
+        if entry.path not in expected or not hmac.compare_digest(actual, expected[entry.path]):
+            return False
+    return True
+
+
+def capture_recheck_expectation(root, captured, key, scope):
+    """Bind known recheck inputs even when Git no longer lists their names.
+
+    An add followed by removal before HEAD can disappear from both index and
+    dirty inventory. Its retained recheck scope still requires an actual,
+    bounded presence/absence observation before Runtime captures its input.
+    Never overwrite the original snapshot or accept arbitrary mirror entries.
+    """
+    from .hook_state import no_links
+    from .scan_input import _read_file
+    from .progress import checkpoint
+    expected = getattr(captured, 'file_digests', None)
+    if not isinstance(expected, dict):
+        raise ValueError('Hook input expectation unavailable')
+    expected = dict(expected)
+    names = sorted({safe_path(name) for name in scope} - set(expected))
+    if len(expected) + len(names) > MAX_FILES:
+        raise ValueError('Hook input expectation file count budget exceeded')
+    consumed = 0
+    for name in names:
+        checkpoint()
+        path = root / name
+        no_links(path)
+        try:
+            raw = _read_file(path, 1_000_000)
+        except FileNotFoundError:
+            expected[name] = hmac.new(key, b'hook-file-deleted-v1', hashlib.sha256).hexdigest()
+        else:
+            consumed += len(raw)
+            if consumed > MAX_BYTES:
+                raise ValueError('Hook input expectation byte budget exceeded')
+            expected[name] = hmac.new(key, b'hook-file-v1' + raw, hashlib.sha256).hexdigest()
+    return CapturedSnapshot(captured[0], captured[1], expected,
+                            getattr(captured, 'target_selection', None))
 
 
 def incremental_scope(previous, dirty_files, content_changed, *, checked_files=()):
@@ -475,7 +536,7 @@ class HookCoordinator:
         return self._managed_registry
 
     def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False,
-                    dependency_changes=None, previous_families=None):
+                    dependency_changes=None, previous_families=None, execution=None):
         """One quick provider/observer path for events and setup seeds."""
         result['hook_scope_files'] = sorted(scope)
         result['hook_recheck_files'] = sorted({f['file_path'] for f in (previous_families or {}).values()})
@@ -509,40 +570,28 @@ class HookCoordinator:
                 def save(self, result):
                     pass
             runtime = SecurityRuntime(self.managed_registry(),store=ProjectionOnlyStore() if baseline else None)
-        # Immediate dynamic-code advice uses the same provider as its later
-        # verification. Full scans and other retained code risks keep Semgrep.
+        # Only retained provider facts cross the adapter boundary. Eligibility
+        # reads run later against Runtime's captured bytes.
+        code_preference, recheck_native = 'FULL', False
         if not baseline and isinstance(runtime, SecurityRuntime):
-            from .dynamic_function import NativeFunctionScanner, quick_function_candidate_scope
-            from .scanners import ScannerRegistry, SemgrepAdapter
+            from .dynamic_function import NativeFunctionScanner
+            from .scanners import SemgrepAdapter
             from .capabilities import Capability
             prior = list((previous_families or {}).values())
             native = any(type(a) is NativeFunctionScanner for a in runtime.registry.adapters)
             other_code = any(Capability.CODE_SAST in a.capabilities and
-                             type(a) not in {NativeFunctionScanner, SemgrepAdapter}
-                             for a in runtime.registry.adapters)
+                type(a) not in {NativeFunctionScanner, SemgrepAdapter} for a in runtime.registry.adapters)
             other_family = any(any(source != NativeFunctionScanner.scanner_id for source in f['scanner_sources'])
-                               and f['category'] != 'secret' for f in prior)
+                and f['category'] != 'secret' for f in prior)
             if native and not other_code and not other_family:
-                choice = quick_function_candidate_scope(root, scope, has_native_family=any(
-                    NativeFunctionScanner.scanner_id in f['scanner_sources'] for f in prior))
-                if choice['eligible']:
-                    registry = ScannerRegistry([a for a in runtime.registry.adapters if type(a) is not SemgrepAdapter],
-                        tool_manager=runtime.registry.tool_manager,
-                        fallback_adapters=runtime.registry.fallback_adapters)
-                    registry.code_scope_notice = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
-                        '其他代码安全规则尚未执行，需要完整扫描确认。')
-                    runtime = SecurityRuntime(registry, store=runtime.store)
-                    result.update(scan_scope_notice=registry.code_scope_notice,
-                                  code_check_scope='CANONICAL_DYNAMIC_CODE_ONLY',
-                                  deferred_code_providers=['semgrep'])
+                code_preference = 'CANONICAL_DYNAMIC_WHEN_ELIGIBLE'
+                recheck_native = any(NativeFunctionScanner.scanner_id in f['scanner_sources'] for f in prior)
         kwargs = {}
         if baseline:
             # Setup/session seeds establish SAST rule/file comparison evidence.
             # Dependency presence has a separate advisory contract and must not
             # turn an otherwise usable connection into a failed SAST baseline.
             dependency_changes = ()
-        if dependency_changes is not None and isinstance(runtime, SecurityRuntime):
-            kwargs['_hook_dependency_changes'] = tuple(dependency_changes)
         if baseline:
             from .progress import NullProgressReporter, ScanCancelled
             class BaselineDeadline(NullProgressReporter):
@@ -551,6 +600,35 @@ class HookCoordinator:
                     if time.monotonic() - self.started >= 60:
                         raise ScanCancelled()
             kwargs['progress'] = BaselineDeadline()
+        if execution is not None:
+            if 'progress' in kwargs:
+                execution.progress = kwargs.pop('progress')
+            # Retain only the bounded risk-bearing immutable bytes needed for
+            # optional pre-edit attribution. Never reopen live source later.
+            def captured_result(view, scan):
+                observation['input_current'] = execution.applicability(view).state == 'CURRENT'
+                if attribution_candidate:
+                    from .first_scan_attribution import capture_detector, detector_observed
+                    stamp = capture_detector(self.managed_registry(), observation, root)
+                    observation['attribution_detector'] = stamp if detector_observed(stamp, observation, prepared) else None
+                    plan = observation['plans'].get('semgrep')
+                    if observation['attribution_detector'] is not None and plan is not None:
+                        # Retain the verified provenance pack for the later
+                        # pre-edit scan, not a path to a soon-disposed mirror.
+                        from .scanners import SemgrepAdapter
+                        adapter = next(a for a in self.managed_registry().adapters if type(a) is SemgrepAdapter)
+                        observation['plans']['semgrep'] = replace(plan, pack=adapter.rule_packs.resolve())
+                    from .scan_input import _read_file
+                    from .first_scan_attribution import MAX_TARGETS, MAX_TOTAL, MAX_FILE
+                    names = sorted({f['file_path'] for f in observation['families'].values()})
+                    if len(names) <= MAX_TARGETS:
+                        available = {e.path for e in view.manifest if e.role in {'TARGET', 'CONTEXT'}}
+                        if set(names).issubset(available):
+                            values = {name:_read_file(view.execution_root/name, MAX_FILE) for name in names}
+                            if sum(map(len, values.values())) <= MAX_TOTAL:
+                                observation['current_bytes'] = values
+            execution._after_scan = captured_result
+            kwargs['execution'] = execution
         started = perf_counter()
         from .recent_hooks import observe as observe_recent_hook
         observe_recent_hook('SCANNER_TRIGGERED', scanner_trigger_reason='POST_TOOL_USE_MUTATION',
@@ -559,10 +637,17 @@ class HookCoordinator:
             from .first_scan_attribution import probe_scope
             from .scanners import baseline_sast_batches
             with local_recheck() as ledger, baseline_sast_batches(baseline), (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
-                scan = runtime.scan(root, 'quick', _hook_scope=tuple(scope), _hook_observer=observe, **kwargs)
+                from .scan_input import scoped_request
+                request = replace(scoped_request(root, scope, dependency_changes=dependency_changes),
+                    code_preference=code_preference, recheck_native=recheck_native)
+                scan = runtime.scan(root, 'quick', request=request, observer=observe, **kwargs)
         finally:
             result.setdefault('timing_ms', timings())['scanner'] = elapsed(started)
             observe_recent_hook('SCANNER_TRIGGERED', scanner_run=locals().get('ledger', {}).get('engine_process_observed'))
+        selection = scan.scanner_diagnostics.get('code_selection', {})
+        if selection.get('applied'):
+            result.update(scan_scope_notice=selection['notice'],
+                code_check_scope='CANONICAL_DYNAMIC_CODE_ONLY', deferred_code_providers=['semgrep'])
         result.update(scan_id=scan.scan_id, coverage=scan.coverage, execution_state=scan.execution_state,
                       capabilities=dict(scan.capability_results))
         result['execution']['engine_process_observed'] = ledger['engine_process_observed']
@@ -633,10 +718,13 @@ class HookCoordinator:
         if attribution_candidate and observation['families']:
             from .first_scan_attribution import capture_detector, detector_observed
             stamp = capture_detector(self.managed_registry(), observation, root)
-            observation['attribution_detector'] = stamp if detector_observed(stamp, observation, prepared) else None
+            if 'attribution_detector' not in observation:
+                observation['attribution_detector'] = stamp if detector_observed(stamp, observation, prepared) else None
+            elif stamp != observation['attribution_detector']:
+                observation['attribution_detector'] = None
         return observation
 
-    def handle_lifecycle(self, kind, workspace, host, session_id):
+    def handle_lifecycle(self, kind, workspace, host, session_id, *, expected_task_ref=_UNBOUND_TASK):
         """Explicit snapshot/activity/finalization dispatch, sharing one Core.
 
         Existing legacy callers retain their convergence contract. The bounded
@@ -646,16 +734,21 @@ class HookCoordinator:
         event = {EventKind.SESSION_START: HookEvent.SESSION_START,
                  EventKind.WORKSPACE_ACTIVITY: HookEvent.FILE_CHANGED,
                  EventKind.SESSION_STOP: HookEvent.AGENT_STOP}[EventKind(kind)]
-        return self.handle(event, workspace, host, session_id, _lifecycle=True)
+        return self.handle(event, workspace, host, session_id, _lifecycle=True,
+                           expected_task_ref=expected_task_ref)
 
     def handle(self, event, workspace=None, host='generic', session_id=None, *, _baseline_only=False,
-               _lifecycle=False):
+               _lifecycle=False, expected_task_ref=_UNBOUND_TASK):
         start = time.monotonic()
         event = HookEvent(event)
         if event not in {HookEvent.SESSION_START,HookEvent.FILE_CHANGED,HookEvent.AGENT_STOP} or host not in HOSTS:
             raise ValueError('Unsupported advisory hook event or host')
         if session_id is not None and (not isinstance(session_id,str) or len(session_id)>500):
             raise ValueError('Invalid hook session identity')
+        if expected_task_ref is not _UNBOUND_TASK and expected_task_ref is not None:
+            from .task_security_state import REF
+            if not isinstance(expected_task_ref, str) or REF.fullmatch(expected_task_ref) is None:
+                raise ValueError('Invalid expected Hook task reference')
         root = (self.workspace_resolver(workspace) if self.workspace_resolver
                 else WorkspaceResolver().resolve(workspace).path)
         result = {'schema_version':'hook-v1','event':event.value,'host':host,'status':'BUSY',
@@ -689,42 +782,57 @@ class HookCoordinator:
                 pending = self.store.pending_activity(root, host, session_id, mark=True)
                 result['pending_mutation'] = True
             observe('CLAIMS_VALID', **result)
+        if not (_lifecycle and event == HookEvent.AGENT_STOP):
+            from .scan_attempt import ScanAttemptStore
+            ScanAttemptStore(self.store, root).recover_cleanup(limit=2)
         waiting = time.monotonic()
         wait_seconds = (10 if _lifecycle else 2 if event == HookEvent.AGENT_STOP else
                         self.activity_wait_seconds if event == HookEvent.FILE_CHANGED else 0)
+        transaction = None
         with self.store.lock(root, wait_seconds=wait_seconds) as locked:
-            if not _lifecycle and event == HookEvent.FILE_CHANGED:
-                result.update(activity_wait_ms=round((time.monotonic()-waiting)*1000, 3),
-                              pending_mutation=pending is not None)
+            result.update(activity_wait_ms=round((time.monotonic()-waiting)*1000, 3),
+                          pending_mutation=pending is not None)
             if _lifecycle and event == HookEvent.FILE_CHANGED:
-                result['activity_wait_ms'] = round((time.monotonic()-waiting)*1000, 3)
-                # A missing baseline at arrival plus publication while waiting is
-                # the observable baseline wait; other lock owners remain unknown.
                 current, _ = self.store.load(self.store.path(root, host, session_id))
                 result['activity_waited_for_baseline'] = (True if not before and current else
                     False if result['activity_wait_ms'] < 20 else None)
-            if locked:
-                if _lifecycle and event == HookEvent.SESSION_START:
-                    self._session_baseline_locked(result, root, host, session_id)
-                elif _lifecycle and event == HookEvent.AGENT_STOP:
-                    self._session_finalize_locked(result, root, host, session_id)
-                else:
-                    self._handle_locked(result,event,root,host,session_id,baseline_only=_baseline_only,
-                                        lifecycle_activity=_lifecycle)
-                if (pending is not None and result['status'] in {'SCANNED', 'NO_CHANGE', 'NO_CHANGES', 'BASELINE_ESTABLISHED'}
-                        and result.get('first_scan_attribution_status') != 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'):
-                    result['pending_mutation'] = self.store.pending_activity(root, host, session_id, completed=pending) is not None
-            elif _lifecycle:
-                result.update(status='INCONCLUSIVE', reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
-                    busy_reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
-                    next_step='Activity is pending. Retry a workspace activity after the current transaction finishes; Stop does not scan.')
-            elif event == HookEvent.FILE_CHANGED:
-                result.update(reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT', busy_reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT',
-                    next_step='Activity remains pending; the security check did not run. Stop does not scan.')
-            if _lifecycle:
-                current, _ = self.store.load(self.store.path(root, host, session_id))
-                result['baseline_state_after'] = 'AVAILABLE' if current else 'MISSING'
-                observe('HANDLER_COMPLETED', **result)
+            if locked and _lifecycle and event == HookEvent.AGENT_STOP:
+                self._session_finalize_locked(result, root, host, session_id)
+            elif locked:
+                transaction = self._claim(result, root, host, session_id, pending, expected_task_ref)
+            else:
+                self._attempt_unavailable(result, lifecycle=_lifecycle)
+        if (not _lifecycle and event == HookEvent.AGENT_STOP and transaction is None
+                and result.get('busy_reason') == 'WORKSPACE_SCAN_ATTEMPT_BUSY'):
+            # Preserve the bounded legacy convergence wait. Normalized Stop
+            # above never enters this path and never claims a scanner lane.
+            deadline = time.monotonic() + 2
+            while transaction is None and time.monotonic() < deadline:
+                time.sleep(.025)
+                with self.store.lock(root) as locked:
+                    if locked:
+                        transaction = self._claim(result, root, host, session_id, pending, expected_task_ref)
+        # Source inventory, immutable input capture, Providers and attribution
+        # run without the workspace state lock. The signed lane remains owned.
+        if transaction is not None:
+            from .progress import ScanCancelled, progress_context
+            try:
+                with progress_context(transaction['execution']):
+                    if _lifecycle and event == HookEvent.SESSION_START:
+                        self._session_baseline(result, root, host, session_id, transaction=transaction)
+                    else:
+                        self._reconcile(result, event, root, host, session_id,
+                            baseline_only=_baseline_only, lifecycle_activity=_lifecycle, transaction=transaction)
+                self._publish(result, root, host, session_id, transaction)
+            except ScanCancelled:
+                self._abandon(result, root, transaction, 'CANCELLED')
+            except BaseException:
+                self._abandon(result, root, transaction, 'FAILED')
+                raise
+        if _lifecycle:
+            current, _ = self.store.load(self.store.path(root, host, session_id))
+            result['baseline_state_after'] = 'AVAILABLE' if current else 'MISSING'
+            observe('HANDLER_COMPLETED', **result)
         result['duration_ms'] = round((time.monotonic()-start)*1000)
         result.setdefault('timing_ms', timings())['hook_total'] = result['duration_ms']
         result['execution_context'] = core_context(ExecutionTrigger.STOP if event == HookEvent.AGENT_STOP else ExecutionTrigger.HOOK)
@@ -732,11 +840,99 @@ class HookCoordinator:
         result.update(lifetime())
         return result
 
-    def _session_baseline_locked(self, result, root, host, session_id):
+    @staticmethod
+    def _attempt_unavailable(result, *, lifecycle=False, reason='WORKSPACE_SINGLE_FLIGHT_TIMEOUT'):
+        result.update(status='INCONCLUSIVE' if lifecycle else 'BUSY', reason=reason,
+            busy_reason=reason, next_step='Activity remains pending; the security check did not run. Stop does not scan.')
+
+    def _claim(self, result, root, host, session_id, pending, expected_task_ref=_UNBOUND_TASK):
+        from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, source_binding
+        from .task_security_state import TaskSecurityStore
+        from .task_ownership import record_owner
+        path = self.store.path(root, host, session_id)
+        previous, recovered = self.store.load(path)
+        key = self.store.key(root)
+        task = (TaskSecurityStore(self.store, root).for_hook(host, result['session_id'])
+                if result['event'] == HookEvent.FILE_CHANGED.value else None)
+        if expected_task_ref is not _UNBOUND_TASK and (task['task_ref'] if task else None) != expected_task_ref:
+            result.update(status='INCONCLUSIVE', reason='EVENT_TASK_BINDING_CHANGED', pending_mutation=True,
+                next_step='The original event task changed; no scan or association with later work was performed.')
+            if expected_task_ref is not None:
+                result['security_task_ref'] = expected_task_ref
+            return None
+        attempts = ScanAttemptStore(self.store, root)
+        lease = attempts.claim('HOOK', identity(host+'\0'+(session_id or 'default')),
+            source_binding(dict(previous=previous, pending=pending, task_ref=task['task_ref'] if task else None)),
+            owner=record_owner(task) if task else None)
+        if lease is None:
+            self._attempt_unavailable(result, lifecycle='event_dispatch_route' in result,
+                                      reason='WORKSPACE_SCAN_ATTEMPT_BUSY')
+            return None
+        result.pop('busy_reason', None)
+        execution = ScanAttemptExecution(attempts, lease)
+        result['scan_attempt'] = lease.receipt | {'publication':'PENDING'}
+        return dict(path=path, previous=previous, recovered=recovered, key=key, task=task,
+                    pending=pending, attempts=attempts, lease=lease, execution=execution, state=None)
+
+    def _abandon(self, result, root, transaction, outcome):
+        execution = transaction['execution']
+        with self.store.lock(root, wait_seconds=2) as acquired:
+            if acquired:
+                transaction['attempts'].finish(transaction['lease'], input_id=execution.input_id,
+                    scan_id=result.get('scan_id'), outcome=outcome)
+        result.update(status='INCONCLUSIVE', coverage='UNKNOWN', reason='SCAN_ATTEMPT_'+outcome,
+            pending_mutation=True, next_step='The captured result is not published; original comparison point and pending changes are retained.')
+        if result.get('baseline_publish_status') == 'PUBLISHED':
+            result['baseline_publish_status'] = 'FAILED'
+        result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
+
+    def _publish(self, result, root, host, session_id, transaction):
+        from .task_security_state import TaskSecurityStore
+        execution, attempts, lease = (transaction[k] for k in ('execution','attempts','lease'))
+        # All expensive byte comparisons have completed outside this lock.
+        with self.store.lock(root, wait_seconds=2) as acquired:
+            if not acquired:
+                self._attempt_unavailable(result, lifecycle=True)
+                if result.get('baseline_publish_status') == 'PUBLISHED':
+                    result['baseline_publish_status'] = 'FAILED'
+                result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
+                return
+            current, _ = self.store.load(transaction['path'])
+            pending = self.store.pending_activity(root, host, session_id)
+            task = (TaskSecurityStore(self.store, root).for_hook(host, result['session_id'])
+                    if result['event'] == HookEvent.FILE_CHANGED.value else None)
+            task_ref = lambda value: value['task_ref'] if value else None
+            valid = (attempts.is_current(lease, execution.input_id)
+                     and current == transaction['previous'] and pending == transaction['pending']
+                     and task_ref(task) == task_ref(transaction['task'])
+                     and self.store.key(root) == transaction['key'])
+            if result.get('hook_scope_files'):
+                valid = valid and execution.input_id is not None and transaction.get('input_current') is True
+            if not valid:
+                attempts.finish(lease, input_id=execution.input_id, scan_id=result.get('scan_id'), outcome='STALE')
+                reason = ('BASELINE_ATTRIBUTION_UNAVAILABLE' if result.get('reason') == 'BASELINE_ATTRIBUTION_UNAVAILABLE'
+                          else 'SCAN_ATTEMPT_PUBLICATION_STALE')
+                result.update(status='INCONCLUSIVE', coverage='UNKNOWN', reason=reason,
+                    pending_mutation=True, next_step='Source, pending sequence or original task changed; the old comparison point is retained.')
+                if result.get('baseline_publish_status') == 'PUBLISHED':
+                    result['baseline_publish_status'] = 'REJECTED_ACTIVITY_ORDER'
+                result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
+                return
+            if transaction['state'] is not None:
+                self.store.save(transaction['path'], transaction['state'])
+            if (transaction['pending'] is not None and result['status'] in
+                    {'SCANNED','NO_CHANGE','NO_CHANGES','BASELINE_ESTABLISHED'} and
+                    result.get('first_scan_attribution_status') != 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'):
+                result['pending_mutation'] = self.store.pending_activity(root, host, session_id,
+                    completed=transaction['pending']) is not None
+            attempts.finish(lease, input_id=execution.input_id, scan_id=result.get('scan_id'), outcome='COMPLETED')
+            result['scan_attempt'] = execution.receipt | {'publication':'PUBLISHED' if transaction['state'] is not None else 'NO_STATE_CHANGE'}
+
+    def _session_baseline(self, result, root, host, session_id, *, transaction):
         """Publish a comparison point only; it asserts no scanner coverage."""
         from .recent_hooks import observe
         path = self.store.path(root, host, session_id)
-        previous, recovered = self.store.load(path)
+        previous, recovered = transaction['previous'], transaction['recovered']
         result['state_recovered'] = recovered
         if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
             result.update(status='INCONCLUSIVE', reason='BASELINE_REFERENCE_REJECTED', baseline_publish_status='FAILED')
@@ -752,7 +948,7 @@ class HookCoordinator:
                 baseline_publish_status='REJECTED_ACTIVITY_ORDER', pending_mutation=True)
             return
         try:
-            key = self.store.key(root)
+            key = transaction['key']
             captured = self.snapshot_capture(root, key)
             after = self.snapshot_capture(root, key)
             if (captured != after or getattr(captured,'file_digests',None) != getattr(after,'file_digests',None)
@@ -765,7 +961,7 @@ class HookCoordinator:
             summary['status'] = 'COMPARISON_BASELINE'
             state = asdict(HookSnapshot('hook-v1', result['workspace_id'], host, result['session_id'],
                 digest, files, {}, None, 0, summary, getattr(captured,'file_digests',None)))
-            self.store.save(path, state)
+            transaction['state'] = state
         except (ValueError, OSError):
             result.update(status='INCONCLUSIVE', reason='BASELINE_CAPTURE_FAILED', baseline_publish_status='FAILED')
             return
@@ -791,27 +987,23 @@ class HookCoordinator:
             next_step='Session finalized without scanning or publishing a new baseline; pending changes require a workspace activity.')
         observe('SESSION_FINALIZED', **result)
 
-    def _handle_locked(self,result,event,root,host,session_id,*,baseline_only=False,lifecycle_activity=False):
+    def _reconcile(self,result,event,root,host,session_id,*,baseline_only=False,lifecycle_activity=False,transaction):
         from .first_scan_attribution import diagnostics, attribute
         result.update(diagnostics())
         # A verified task snapshot makes each observed source revision a check
         # boundary. The unchanged-byte reuse guard below still applies; only
         # the legacy time-based debounce is bypassed during actual development.
-        from .task_security_state import TaskSecurityStore
-        import sqlite3
-        try:
-            task = TaskSecurityStore(self.store, root).for_hook(host,result['session_id']) if event == HookEvent.FILE_CHANGED else None
-        except (ValueError, OSError, sqlite3.DatabaseError):
-            task = None
+        task = transaction['task']
         if task:
             result.update(security_task_ref=task['task_ref'], task_edit_check_policy='EVERY_OBSERVED_MUTATION')
         path = self.store.path(root,host,session_id)
-        previous,recovered = self.store.load(path)
+        previous,recovered = copy.deepcopy(transaction['previous']), transaction['recovered']
         result['state_recovered'] = recovered
         if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
             previous = None
             result['state_recovered'] = True
-        captured = self.snapshot_capture(root,self.store.key(root))
+        captured = self.snapshot_capture(root, transaction['key'])
+        execution = transaction['execution']
         if getattr(captured, 'target_selection', None) is not None:
             result['target_selection'] = captured.target_selection
         digest,files = captured
@@ -890,13 +1082,17 @@ class HookCoordinator:
         # Keep validated removed input names for selection. Providers still see
         # only existing files in the bounded mirror, never resurrected bytes.
         scope = sorted(set(existing_scope) | set(dependency_changes))
+        input_expected = capture_recheck_expectation(root, captured, transaction['key'], scope)
+        execution.validator = lambda view: captured_input_matches(view, input_expected, transaction['key'])
         old = previous['families'] if previous else {}
         if lifecycle_activity:
             result['scanner_invocation_count'] = 1 if scope else 0
         comparison_only = previous is not None and previous['last_result']['status'] == 'COMPARISON_BASELINE'
         observation = self._scan_scope(result, root, scope, baseline=baseline_only,
                                       attribution_candidate=comparison_only,
-                                      dependency_changes=dependency_changes, previous_families=old)
+                                      dependency_changes=dependency_changes, previous_families=old,
+                                      execution=execution)
+        transaction['input_current'] = observation.get('input_current')
         if not scope:
             result['scan_id'] = previous['last_scan_id'] if previous else None
         result['last_check_status'] = result['status']
@@ -916,7 +1112,8 @@ class HookCoordinator:
         attribution_old = None
         if comparison_only and observation['families']:
             attribution_old = attribute(self, root, previous, content_changed,
-                                        current_files or {}, observation, result)
+                                        current_files or {}, observation, result,
+                                        current_bytes=observation.get('current_bytes'), execution=execution)
             observe_recent_hook('SCANNER_COMPLETED', **result)
             if attribution_old is None:
                 checked = self.snapshot_capture(root, self.store.key(root))
@@ -991,4 +1188,4 @@ class HookCoordinator:
         state = asdict(HookSnapshot('hook-v1',result['workspace_id'],host,result['session_id'],digest,files,
             families,result['scan_id'],self.clock(),summary,current_files,
             result.get('baseline_unproven_sast_files') if baseline_only else sorted(gaps) if previous else None))
-        self.store.save(path,state)
+        transaction['state'] = state

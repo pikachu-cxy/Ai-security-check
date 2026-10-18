@@ -24,13 +24,25 @@ class LedgerRuntime:
         self.findings = []
 
     def scan(self, root, mode, **kwargs):
-        scope = kwargs['_hook_scope']
+        scope = kwargs['request'].requested_files
         self.calls.append(tuple(scope))
-        if self.mutate:
-            self.mutate(root)
-        return ScanResult('fixture-scan', mode, TargetProfile(str(root), files=scope), 'SUCCESS', self.findings,
-                          [ScannerRun('fixture-only', '0', 'SUCCESS', 0)], '', '', 0,
-                          coverage='SCOPED', capability_results={'code':'SUCCESS'})
+        def result():
+            if self.mutate:
+                self.mutate(root)
+            return ScanResult('fixture-scan', mode, TargetProfile(str(root), files=scope), 'SUCCESS', self.findings,
+                              [ScannerRun('fixture-only', '0', 'SUCCESS', 0)], '', '', 0,
+                              coverage='SCOPED', capability_results={'code':'SUCCESS'})
+        execution = kwargs.get('execution')
+        if execution is None:
+            return result()
+        # This detector ledger is simulated; its fixed-input lifecycle is real.
+        from security_runtime.scan_input import capture_scan_input
+        with capture_scan_input(kwargs['request'], private_parent=execution.private_parent,
+                on_created=execution.input_created, on_removed=execution.input_removed) as view:
+            execution.input_ready(view)
+            out = result()
+            execution.after_scan(view, out)
+            return out
 
 
 @pytest.fixture

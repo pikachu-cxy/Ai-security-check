@@ -160,6 +160,14 @@ class RulePackManager:
         # The caller owns these rules. We validate local scope, never copy them.
         return self._cached_resolve(descriptor, user_path, require_first_party_metadata=False)
 
+    def bind_input(self, pack: ResolvedRulePack, path: Path) -> ResolvedRulePack:
+        """Validate captured bytes while retaining the actual rule provenance."""
+        captured = self._validate(pack.descriptor, path,
+            require_first_party_metadata=pack.program is not None)
+        if captured.checksum != pack.checksum:
+            raise ValueError('Rule pack changed during input capture')
+        return captured
+
     @staticmethod
     def _validate(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool = True) -> ResolvedRulePack:
         path = path.expanduser().resolve()

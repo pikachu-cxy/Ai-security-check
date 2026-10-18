@@ -81,7 +81,8 @@ def closeout_fixture(secret_engine, tmp_path):
     subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
     findings, run = original(secret_engine)
     runtime = SecurityRuntime(ScannerRegistry([adapter]), SQLiteStore(tmp_path / 'state' / 'runtime.db'))
-    scan = runtime.scan(root, _hook_scope=['fixture.ts'])
+    from security_runtime.scan_input import scoped_request
+    scan = runtime.scan(root, request=scoped_request(root, ['fixture.ts']))
     hooks = HookStateStore(tmp_path / 'hooks')
     capture = capture_snapshot(root, hooks.key(root))
     families = family_multiset(findings, [run], {})
@@ -185,8 +186,8 @@ def test_new_edit_during_closeout_keeps_new_generation_and_intent(secret_engine,
     job = service.prepare(root, ['fixture.ts'], host='codex', session='session')
     from security_runtime.verification import VerificationService
     verify = VerificationService.verify_many
-    def new_arrival(self, *args):
-        results = verify(self, *args)
+    def new_arrival(self, *args, **kwargs):
+        results = verify(self, *args, **kwargs)
         path.write_text('// next edit\n')
         service.hooks.pending_activity(root, 'codex', 'session', mark=True)
         service._store(root).mark_pending(job['closeout_ref'], service._workspace(root))
@@ -457,9 +458,10 @@ def test_excluded_environment_finding_keeps_original_risk_unconfirmed(secret_eng
     snapshot['families'][excluded['equivalence_key']] = excluded
     service.hooks.save(state_path, snapshot)
     original_verify = VerificationService.verify_many
-    def eligible_only(self, workspace, members, context):
+    def eligible_only(self, workspace, members, context, **kwargs):
         assert all(m['file_path'] != '.env' for m in members)
-        return original_verify(self, workspace, members, context)
+        assert kwargs['input_view'] is not None
+        return original_verify(self, workspace, members, context, **kwargs)
     monkeypatch.setattr(VerificationService, 'verify_many', eligible_only)
     job = service.prepare(root, host='codex', session='session', source='HOOK_SCHEDULED_CLOSEOUT')
     result = service.run(job['closeout_ref'], root)

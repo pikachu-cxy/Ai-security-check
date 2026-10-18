@@ -1,5 +1,7 @@
 # 架构统一首批实现与验收记录
 
+本文保留 2026-10-18 首批事实；2026-10-19 的接续实现与当前状态见[后续架构记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)。原“原因未知”的核查拒绝现已确认是旧账本容量超限，见[诊断](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)。
+
 更新日期：2026-10-18。源码版本：0.3.6。开发分支：feature/runtime-mvp。
 
 本次按用户授权，先将本地最新源码、近期修复和开发规划提交并推送为 [a51a58d](https://github.com/pikachu-cxy/Ai-security-check/commit/a51a58d)，再开展架构升级。本文记录第一批公共架构实现与 v3 唯一协议收敛，后续阶段按[总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md)继续；未完成的存储迁移、扫描输入和真实宿主验收不能从本批回归推定通过。

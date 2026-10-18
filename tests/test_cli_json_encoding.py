@@ -39,6 +39,10 @@ def test_cli_json_preserves_unicode_after_pipeline_decoding(tmp_path, monkeypatc
         monkeypatch.setattr(cli, 'ScannerRegistry', lambda: object())
         monkeypatch.setattr(cli, 'SecurityRuntime',
                             lambda **kwargs: SimpleNamespace(scan=lambda *args, **kw: result))
+        # Encoding-only fixture: execution contracts are tested with real
+        # Runtime/CLI entry points in test_explicit_scan_attempt.py.
+        monkeypatch.setattr('security_runtime.explicit_scan.run_explicit_scan',
+                            lambda *args, **kwargs: result)
         monkeypatch.setattr(cli, 'IntegrationStateStore',
                             lambda: SimpleNamespace(event=lambda event: None))
         args = ['scan', '--path', str(tmp_path), '--json', '--no-progress']

@@ -10,6 +10,7 @@ from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
 from security_runtime.task_ownership import session_owner
 from security_runtime.task_security import TaskSecurityService
+from security_runtime.scan_attempt import ScanAttemptStore, AttemptLease, ScanAttemptLost
 from test_global_integration import complete_runtime, installed, projects
 
 
@@ -41,9 +42,9 @@ def test_task_can_capture_during_initial_scan_and_worker_rejects_changed_source(
             assert seeds.existing_session(root, 'startup') is None
         finally:
             release.set()
-        with pytest.raises(BaselinePreparationError) as caught:
+        with pytest.raises(ScanAttemptLost, match='SCAN_ATTEMPT_SOURCE_MISMATCH'):
             future.result(timeout=10)
-        assert caught.value.code == 'BASELINE_SOURCE_CHANGED'
+        assert not core.runtime.calls  # Reject captured B before any Provider.
         assert seeds.existing_session(root, 'startup') is None
         assert tasks.load(root, begun['task_ref'])['baseline']['hashes'] == baseline
 
@@ -56,13 +57,26 @@ def test_late_worker_never_overwrites_session_published_by_another_writer(
         future = workers.submit(seeds.capture_session, root, 'startup')
         try:
             assert started.wait(10)
+            # A live workspace lane prevents competing Providers. Explicitly
+            # cancel the first owner before a second real writer takes over;
+            # the old worker must not regain publication on its later return.
+            attempts = ScanAttemptStore(core.store, root)
+            with core.store.lock(root) as acquired:
+                assert acquired
+                lane = attempts.read()['lane']
+                lease = AttemptLease(**{key:lane[key] for key in
+                    ('attempt_id','generation','lease_owner','cancel_generation')})
+                assert attempts.cancel(lease)
             other = HookCoordinator(complete_runtime(), core.store)
             published = WorkspaceBaselineSeeds(integration=installed, coordinator=other).capture_session(root, 'startup')
             path = core.store.path(root, 'codex', 'startup')
             before = path.read_bytes(), path.stat().st_mtime_ns
         finally:
             release.set()
-        assert future.result(timeout=10) == published
+        with pytest.raises(ScanAttemptLost, match='SCAN_ATTEMPT_INPUT_REGISTRATION_FAILED'):
+            future.result(timeout=10)
+        assert not core.runtime.calls and len(other.runtime.calls) == 1
+        assert seeds.existing_session(root, 'startup') == published
         assert (path.read_bytes(), path.stat().st_mtime_ns) == before
 
 

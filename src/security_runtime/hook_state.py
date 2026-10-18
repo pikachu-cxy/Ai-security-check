@@ -4,11 +4,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 import tempfile
 import time
 import uuid
 import stat
+import threading
 from contextlib import contextmanager
 from contextlib import closing
 from pathlib import Path
@@ -18,10 +20,29 @@ from .storage import SQLiteStore
 MAX_STATE_BYTES = 2_000_000
 MAX_SESSIONS = 64
 _is_reserved = getattr(os.path, 'isreserved', lambda name: Path(name).is_reserved())
+_held_workspace_locks = threading.local()
 
 
 def identity(value: str) -> str:
     return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+
+def hook_session_paths(directory: Path) -> list[Path]:
+    """Enumerate only Hook-owned filenames; other stores share this directory.
+
+    A path inside the Hook namespace must still be a regular, unlinked file.
+    Product ledger files and writer-fence directories never consume session TTL.
+    """
+    no_links(directory)
+    paths = []
+    for path in directory.glob('*.json'):
+        if re.fullmatch(r'[a-f0-9]{64}\.json', path.name) is None:
+            continue
+        no_links(path)
+        if not path.is_file():
+            raise ValueError('Hook session path cannot be verified')
+        paths.append(path)
+    return paths
 
 
 def native_io_path(path: Path) -> Path:
@@ -185,9 +206,17 @@ class HookStateStore:
                     if time.monotonic() >= deadline:
                         break
                     time.sleep(min(.025, max(0, deadline - time.monotonic())))
+            if acquired:
+                held = getattr(_held_workspace_locks, 'paths', None)
+                if held is None:
+                    held = _held_workspace_locks.paths = {}
+                held[os.path.normcase(os.path.abspath(path))] = (os.getpid(), fd)
             yield acquired
         finally:
             if acquired:
+                held = getattr(_held_workspace_locks, 'paths', {})
+                marker = os.path.normcase(os.path.abspath(path))
+                if held.get(marker) == (os.getpid(), fd): held.pop(marker, None)
                 os.lseek(fd, 0, os.SEEK_SET)
                 if os.name == 'nt':
                     import msvcrt
@@ -196,6 +225,12 @@ class HookStateStore:
                     import fcntl
                     fcntl.flock(fd, fcntl.LOCK_UN)
             os.close(fd)
+
+    def lock_held(self, root: Path) -> bool:
+        """This thread owns the actual workspace OS lock; never authorization."""
+        path = self.workspace_directory(root) / 'workspace.lock'
+        marker = getattr(_held_workspace_locks, 'paths', {}).get(os.path.normcase(os.path.abspath(path)))
+        return marker is not None and marker[0] == os.getpid()
 
     def key(self, root: Path) -> bytes:
         path = self.workspace_directory(root) / 'snapshot.key'
@@ -249,7 +284,8 @@ class HookStateStore:
             raise ValueError('Hook state budget exceeded')
         atomic_bytes(path, content)
         # Workspace lock protects both state updates and bounded retention.
-        states = sorted(path.parent.glob('*.json'), key=lambda p: p.stat().st_mtime, reverse=True)
+        states = sorted(hook_session_paths(path.parent),
+                        key=lambda p: p.stat().st_mtime, reverse=True)
         for old in states[MAX_SESSIONS:]:
             no_links(old)
             old.unlink()

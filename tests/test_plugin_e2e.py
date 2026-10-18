@@ -95,7 +95,7 @@ class PluginE2ETests(unittest.TestCase):
                     async with ClientSession(read, write) as client:
                         await client.initialize()
                         response = await client.call_tool("scan_diff", {"workspace_path": str(root)})
-                        self.assertFalse(response.isError)
+                        self.assertFalse(response.isError, response)
                         payload = response.structuredContent or json.loads(response.content[0].text)
                         payload = payload.get("result", payload)
                         self.assertTrue(any(finding["plain_title"] == "Fake issue" for finding in payload["findings"]))

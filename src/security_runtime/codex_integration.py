@@ -101,7 +101,11 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
         or not REQUIRED_TOOLS.issubset(tools)
         or not REQUIRED_GUIDANCE_TOOLS.issubset(set(info.get('required_guidance_tools', [])))):
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
-    return {'status': 'OK', 'version': info['version'], 'capabilities': 'OK',
+    from .compatibility import task_review_compatibility
+    compatibility = task_review_compatibility(info, tools)
+    if compatibility['status'] != 'SUPPORTED':
+        raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
+    return {'compatibility': compatibility, 'status': 'OK', 'version': info['version'], 'capabilities': 'OK',
             'capability_contract': CONTRACT, 'mode': info.get('remediation', {}).get('mode', 'UNKNOWN')}
 
 

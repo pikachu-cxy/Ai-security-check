@@ -25,8 +25,16 @@ def engine(tmp_path,monkeypatch):
     root=tmp_path/'project';root.mkdir();path=root/'A.java';path.write_text('class A {}')
     pack=tmp_path/'rules';shutil.copytree(RulePackManager().resolve().path,pack)
     adapter=SemgrepAdapter(rule_packs=RulePackManager(BundledRulePackProvider(pack)))
+    # A deterministic mocked engine still has real bytes/package identity. This
+    # fixture proves contracts, never actual Semgrep behavior or performance.
+    binary = tmp_path/'fixture-engine/runtime/Scripts/semgrep.exe'
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b'synthetic mocked engine command')
+    package = binary.parent.parent/'Lib/site-packages/semgrep'
+    package.mkdir(parents=True)
+    (package/'__init__.py').write_bytes(b'# deterministic provider fixture')
     monkeypatch.setattr(adapter.tool_manager,'ensure',lambda *a,**k:
-                        ResolvedTool('semgrep','1.178.0','semgrep',None,ToolStatus.READY))
+                        ResolvedTool('semgrep','1.178.0',str(binary),None,ToolStatus.READY))
     calls=[];failure={'mode':None}
     def execute(argv,cwd,timeout):
         from security_runtime.verification_policy import scanner_process_observed

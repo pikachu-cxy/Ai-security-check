@@ -1,16 +1,16 @@
 """The installed Skill and live instructions preserve the Hook reply contract."""
 import pytest
 
-from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.host_guidance import RUNTIME_WORKFLOW
 from security_runtime.review_skill import skill_files
 
 
 @pytest.fixture(params=['live', 'skill'])
 def guidance(request):
     if request.param == 'live':
-        text = HOST_INSTRUCTIONS
+        text = RUNTIME_WORKFLOW
     else:
-        text = skill_files()['SKILL.md'].decode('utf-8')
+        text = skill_files()['references/runtime-workflow.md'].decode('utf-8')
     return ' '.join(text.split())
 
 

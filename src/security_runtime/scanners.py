@@ -42,6 +42,13 @@ logger = logging.getLogger(__name__)
 _trivy_inventory = ContextVar('trivy_inventory', default=None)
 _sast_batch_limit = ContextVar('sast_batch_limit', default=40)
 _executing_engine = ContextVar('executing_scanner_engine', default=None)
+_executing_environment = ContextVar('executing_scanner_environment', default=None)
+
+
+def execution_environment(binary):
+    """A copy of the environment fixed at this provider's execution boundary."""
+    captured = _executing_environment.get()
+    return dict(captured) if captured is not None else tool_environment(Path(binary))
 
 
 @contextmanager
@@ -72,17 +79,34 @@ def sast_batches(files):
 
 
 @contextmanager
+def _artifacts(context, *, prefix='security-runtime-artifacts-'):
+    if context.input_view is not None:
+        with context.input_view.artifacts() as directory:
+            yield directory
+        return
+    # Standalone adapter embeddings retain their existing temporary-output API.
+    with tempfile.TemporaryDirectory(prefix=prefix) as directory:
+        yield Path(directory)
+
+
+@contextmanager
 def _snapshot(context: ScanContext):
     """Directory-based engines receive only validated, scoped project files."""
     root = Path(context.root)
+    from .hook_state import no_links
+    no_links(root)
+    root = root.resolve(strict=True)
     files = TargetDetector().detect(root, list(dict.fromkeys((*context.files, *context.context_files)))).files
-    with tempfile.TemporaryDirectory(prefix="security-runtime-scope-") as temporary:
-        scoped = Path(temporary)
-        with span('target_preparation'):
-            for name in files:
-                destination = scoped / name
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(root / name, destination)
+    if context.input_view is not None:
+        with context.input_view.derive(tuple(files)) as scoped:
+            yield scoped
+        return
+    # Standalone adapter embeddings use the same bounded capture path. Runtime
+    # always supplies its already captured view above, with no live fallback.
+    from .scan_input import capture_scan_input
+    from .scan_request import ScanRequest, SourceKind
+    request = ScanRequest(root, context.mode, SourceKind.WORKTREE, tuple(files))
+    with capture_scan_input(request) as view, view.derive(tuple(files)) as scoped:
         yield scoped
 
 
@@ -102,7 +126,7 @@ class ScannerAdapter(Protocol):
 
 def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
     with external_tool_loader():
-        environment = tool_environment(Path(args[0]))
+        environment = execution_environment(args[0])
         if local_recheck_requested():
             environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         try:
@@ -145,7 +169,7 @@ class BaseScanner:
         return self.tool_manager.resolve(self.engine_id or self.scanner_id).version
 
     def scan(self, context: ScanContext, normalizer: FindingNormalizer) -> tuple[list[Finding], ScannerRun]:
-        with observation(context.root) as observed:
+        with observation(context.logical_root or context.root) as observed:
             findings, run = self._scan_observed(context, normalizer)
             run.scanner_diagnostics = {**metadata(observed), **run.scanner_diagnostics}
         return findings, run
@@ -186,13 +210,38 @@ class BaseScanner:
                 return failed(RunStatus.UNAVAILABLE, diagnostic, resolved.version)
             checkpoint()
             stage = 'SCANNER_EXECUTION'
+            environment = self._environment(resolved.path, context)
+            execution_identity = None
+            if context.input_view is not None:
+                with span('execution_input_identity'):
+                    execution_identity = self._input_execution_identity(resolved.path, context, environment)
+                if execution_identity['tool'] is None:
+                    return failed(RunStatus.UNAVAILABLE, ErrorDiagnostic(
+                        'SCAN_EXECUTION_IDENTITY_UNAVAILABLE', 'Actual scanner executable identity is unavailable.',
+                        'Restore the bounded local tool identity before retrying.'), resolved.version)
             emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
             token = _executing_engine.set((self.name, resolved.version, resolved.path))
+            environment_token = _executing_environment.set(environment)
             try:
                 findings = self._scan(resolved.path, context, normalizer)
             finally:
                 _executing_engine.reset(token)
-            return findings, ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
+                _executing_environment.reset(environment_token)
+            run = ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
+            if execution_identity is not None:
+                with span('execution_input_identity'):
+                    after_identity = self._input_execution_identity(resolved.path, context, environment)
+                verified = execution_identity == after_identity
+                run.scanner_diagnostics['execution_binding'] = dict(execution_identity,
+                    contract='scanner-execution-binding-v1', verified=verified,
+                    data_status='UNVERIFIABLE' if execution_identity['data_required'] and execution_identity['data'] is None else 'VERIFIED')
+                if not verified:
+                    run.status, run.coverage_contract = RunStatus.FAILED, 'NONE'
+                    run.error_code = 'SCAN_EXECUTION_IDENTITY_CHANGED'
+                    run.error_summary = 'Scanner tool or data changed during execution; absence is not proven.'
+            return findings, run
+        except ScanCancelled:
+            raise
         except DiagnosticError as exc:
             return failed(RunStatus.FAILED, exc.diagnostic, resolved.version)
         except TimeoutError:
@@ -210,6 +259,48 @@ class BaseScanner:
 
     def _scan(self, binary: str, context: ScanContext, normalizer: FindingNormalizer) -> list[Finding]:
         raise NotImplementedError
+
+    def _environment(self, binary, context):
+        environment = tool_environment(Path(binary))
+        if local_recheck_requested():
+            environment['SECURITY_RUNTIME_OFFLINE'] = '1'
+        if context.input_view is not None:
+            variables = {'gitleaks': ('GITLEAKS_CONFIG',), 'trivy': ('TRIVY_CONFIG',)}
+            for name in variables.get(self.engine_id or self.scanner_id, ()):
+                if not environment.get(name):
+                    continue
+                source = Path(environment[name]).expanduser()
+                source = (Path(context.logical_root) / source).resolve() if not source.is_absolute() else source.resolve()
+                try:
+                    relative = source.relative_to(Path(context.logical_root)).as_posix()
+                except ValueError:
+                    relative = None
+                available = {entry.path for entry in context.input_view.manifest if entry.role in {'TARGET', 'CONTEXT'}}
+                if relative not in available:
+                    raise DiagnosticError(ErrorDiagnostic('SCAN_INPUT_CONFIGURATION_UNBOUND',
+                        'Explicit scanner configuration is outside the captured input.',
+                        'Provide configuration inside the bounded input scope before retrying.'))
+                environment[name] = str(Path(context.root) / relative)
+        return environment
+
+    def _input_execution_identity(self, binary, context, environment):
+        tool = self.engine_id or self.scanner_id
+        identity_reader = getattr(self.tool_manager, 'execution_identity', None)
+        actual = identity_reader(tool, Path(binary), environment=environment) if callable(identity_reader) else None
+        actual = actual if (isinstance(actual, str) and len(actual) == 64
+            and all(char in '0123456789abcdef' for char in actual)) else None
+        data_required = tool in {'trivy', 'osv-scanner'} or Capability.DEPENDENCY_VULN in self.capabilities
+        data = None
+        data_reader = getattr(self.tool_manager, 'execution_data_identity', None)
+        if data_required and callable(data_reader):
+            names = (*context.files, *context.context_files)
+            ecosystems = {'Maven' if Path(name).name.endswith('.xml') or 'gradle' in Path(name).name
+                else 'Go' if Path(name).name == 'go.mod' else 'PyPI' if Path(name).name in
+                {'requirements.txt', 'pyproject.toml'} else 'npm' for name in names if is_dependency_input(name)}
+            data = data_reader(tool, kind=getattr(self, 'checks', None), ecosystems=ecosystems)
+            data = data if (isinstance(data, str) and len(data) == 64
+                and all(char in '0123456789abcdef' for char in data)) else None
+        return dict(tool=actual, data=data, data_required=data_required)
 
     def _prepare(self, binary: str) -> ToolStatus:
         return ToolStatus.READY
@@ -244,18 +335,21 @@ class PatternSASTScanner(BaseScanner):
             self._planning_lock = bucket.lock
 
     def plan_rules(self, profile, context):
+        if context.input_view is not None and context.bound_rule_pack is None:
+            raise ValueError('Fixed rule input is unavailable')
         from .scanner_cache import workspace_scope
         self._bind_preparations()
         started = time.perf_counter()
-        with self._planning_lock, workspace_scope(context.root):
-            pack=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
+        with self._planning_lock, workspace_scope(context.logical_root or context.root):
+            pack=context.bound_rule_pack or self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
             root=Path(context.root).resolve()
             signature=None
             validated=TargetDetector().detect(root,list(context.files)).files
             if set(validated)==set(context.files) and len(validated)<=1000:
                 if sum((root/name).stat().st_size for name in validated)<=20_000_000:
                     signature=tuple((name,hashlib.sha256((root/name).read_bytes()).digest()) for name in validated)
-            key=(os.path.normcase(str(root)),pack.path,pack.checksum,context.files,signature)
+            key=(os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
+                 pack.descriptor,pack.checksum,context.files,signature)
             hit=signature is not None and key in self._plan_cache
             if not hit:
                 template=plan_rules(pack,context.files)
@@ -266,7 +360,7 @@ class PatternSASTScanner(BaseScanner):
             # Engine execution sets never enter a template/cache.
             if hit:
                 template=self._plan_cache[key]
-            return replace(template, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
+            return replace(template, pack=pack, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
                 unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
                     'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
                     'rule_plan_cache':'HIT' if hit else 'MISS',
@@ -295,12 +389,14 @@ class PatternSASTScanner(BaseScanner):
         plan=context.rule_plan
         rule_pack=plan.pack
         with span('rule_config_preparation'):
-            current=self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None)
+            current=(self.rule_packs.bind_input(rule_pack, rule_pack.path) if context.bound_rule_pack
+                else self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None))
             if (current.path,current.checksum,current.descriptor)!=(rule_pack.path,rule_pack.checksum,rule_pack.descriptor):
                 raise ValueError('Rule pack changed after planning')
         with span('rule_config_preparation'):
             selected_ids={r.rule_id for r in plan.rules}
-            key=(os.path.normcase(str(Path(context.root).resolve())),str(rule_pack.path),rule_pack.checksum,tuple(sorted(selected_ids)))
+            key=(os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
+                 rule_pack.descriptor,rule_pack.checksum,tuple(sorted(selected_ids)))
             with self._planning_lock:
                 hit=key in self._config_cache
                 cache_observed('selected_config',hit)
@@ -317,7 +413,7 @@ class PatternSASTScanner(BaseScanner):
                     config_text=self._config_cache[key]
         findings=[]
         # Serialize selected execution rules, without copying source files.
-        with tempfile.TemporaryDirectory(prefix='security-runtime-rules-') as temporary:
+        with _artifacts(context, prefix='security-runtime-rules-') as temporary:
             config=Path(temporary)/'selected.yml'
             with span('rule_config_preparation'):
                 config.write_text(config_text,encoding='utf-8')
@@ -441,7 +537,8 @@ class GitleaksAdapter(BaseScanner):
             names = {p.relative_to(snapshot_root).as_posix(): p for p in inputs} if snapshot_root else {
                 p.relative_to(Path(context.root)).as_posix(): p for p in inputs}
             sizes = {name: path.stat().st_size for name, path in names.items()}
-            default_config = (not os.getenv('GITLEAKS_CONFIG') and not os.getenv('GITLEAKS_CONFIG_TOML') and
+            environment = execution_environment(binary)
+            default_config = (not environment.get('GITLEAKS_CONFIG') and not environment.get('GITLEAKS_CONFIG_TOML') and
                 not (scoped / '.gitleaks.toml').exists() and not (Path(context.root) / '.gitleaks.toml').exists() and
                 not (Path(context.root) / '.gitleaksignore').exists())
             # Trace is bounded and stays in memory. Never enable it for custom
@@ -453,7 +550,7 @@ class GitleaksAdapter(BaseScanner):
             before = {name: digest(path) for name, path in names.items()} if trace else {}
             source_matches = trace and all(digest(Path(context.root) / name) == revision for name, revision in before.items())
             engine_before = digest(binary)
-            with tempfile.TemporaryDirectory() as tmp:
+            with _artifacts(context) as tmp:
                 report = str(Path(tmp) / "findings.json")
                 invocation('SECRET_SCAN', target_count)
                 process = _execute([binary, "dir", target, "--report-format", "sarif", "--report-path", report,
@@ -479,7 +576,7 @@ class GitleaksAdapter(BaseScanner):
                 stable = source_matches and engine_before == digest(binary) and all(
                     digest(path) == before[name] and digest(Path(context.root) / name) == before[name]
                     for name, path in names.items())
-                config_stable = (not os.getenv('GITLEAKS_CONFIG') and not os.getenv('GITLEAKS_CONFIG_TOML') and
+                config_stable = (not environment.get('GITLEAKS_CONFIG') and not environment.get('GITLEAKS_CONFIG_TOML') and
                     not (scoped / '.gitleaks.toml').exists() and not (Path(context.root) / '.gitleaks.toml').exists() and
                     not (Path(context.root) / '.gitleaksignore').exists())
                 receipt = build_receipt(binary, version, rules, before,

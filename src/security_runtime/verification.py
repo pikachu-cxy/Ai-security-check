@@ -1,4 +1,5 @@
 """Bounded, local scanner evidence for resolution; never a code editor or build."""
+from contextlib import nullcontext
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -7,6 +8,7 @@ from .findings import FindingNormalizer
 from .models import ScanContext, ScanMode, RunStatus
 from .target import TargetDetector
 from .verification_policy import local_recheck
+from .progress import ScanCancelled, checkpoint, progress_context
 
 MAX_MEMBERS = 100
 MAX_FILES = 20
@@ -63,14 +65,34 @@ class VerificationService:
     def __init__(self, registry):
         self.registry = registry
 
-    def verify_many(self, root, findings, scan):
-        root = Path(root).resolve()
+    def verify_many(self, root, findings, scan, *, input_view=None, progress=None, bound_rule_pack=None):
+        """Recheck the originating scope; optionally reuse one active fixed input.
+
+        The optional view never falls back to the live project. It remains owned
+        by the calling execution and must outlive this bounded verification.
+        """
+        with progress_context(progress) if progress is not None else nullcontext():
+            checkpoint()
+            if input_view is not None:
+                if Path(root).resolve() != input_view.request.workspace_root.resolve():
+                    raise ValueError('Verification input belongs to another workspace')
+                input_view.assert_intact()
+            results = self._verify_many(root, findings, scan, input_view=input_view, bound_rule_pack=bound_rule_pack)
+            checkpoint()
+            if input_view is not None:
+                input_view.assert_intact()
+            return results
+
+    def _verify_many(self, root, findings, scan, *, input_view=None, bound_rule_pack=None):
+        logical_root = Path(root).resolve()
+        root = input_view.execution_root if input_view is not None else logical_root
         cache = {}
         files = {f.get('file_path', '') for f in findings}
         budget = len(findings) <= MAX_MEMBERS and len(files) <= MAX_FILES
         if budget:
             total = 0
             for name in sorted(files):
+                checkpoint()
                 try:
                     profile = TargetDetector(max_files=1).detect(root, [name])
                     total += sum((root / p).stat().st_size for p in profile.files)
@@ -83,9 +105,14 @@ class VerificationService:
         for row in findings:
             for name in row.get('scanner_sources', []):
                 rules.setdefault((name,row.get('file_path','')),set()).add(row.get('technical_details',{}).get('rule_id',''))
-        return [self._verify(root, row, scan, cache, budget, rules) for row in findings]
+        result=[]
+        for row in findings:
+            checkpoint()
+            result.append(self._verify(root, row, scan, cache, budget, rules,
+                input_view=input_view, logical_root=logical_root, bound_rule_pack=bound_rule_pack))
+        return result
 
-    def _verify(self, root, row, scan, cache, budget, rules):
+    def _verify(self, root, row, scan, cache, budget, rules, *, input_view=None, logical_root=None, bound_rule_pack=None):
         result = {'finding_id': row['id'], 'status': 'INCONCLUSIVE', 'verification_status': 'INCONCLUSIVE',
                   'matched_by': None, 'original_evidence': evidence(row), 'current_evidence': [],
                   'scanner_runs': [], 'scope_files': [],
@@ -120,6 +147,7 @@ class VerificationService:
         reasons = []
         provider_failure = False
         for name in sorted(origins):
+            checkpoint()
             adapter = adapters.get(name)
             if adapter is None:
                 complete = False
@@ -149,7 +177,10 @@ class VerificationService:
                     continue
             key = (name, path)
             if key not in cache:
-                context = ScanContext(str(root), ScanMode.FEATURE, (path,))
+                context = ScanContext(str(root), ScanMode.FEATURE, (path,),
+                    logical_root=str(logical_root or root), input_view=input_view,
+                    rules_path=str(input_view.rules_path) if input_view is not None and input_view.rules_path else None,
+                    bound_rule_pack=bound_rule_pack)
                 plan = None
                 ledger = {'engine_process_observed': False}
                 try:
@@ -168,8 +199,10 @@ class VerificationService:
                         if not adapter.supports(profile, context):
                             cache[key] = ([], None, plan, 'ORIGINAL_SCOPE_UNSUPPORTED', False)
                         else:
-                            found, run = adapter.scan(context, FindingNormalizer(root))
+                            found, run = adapter.scan(context, FindingNormalizer(root, identity_root=logical_root or root))
                             cache[key] = (found, run, plan, '', ledger['engine_process_observed'])
+                except ScanCancelled:
+                    raise
                 except Exception:
                     cache[key] = ([], None, plan, 'SCANNER_RECHECK_FAILED', ledger['engine_process_observed'])
             found, run, plan, error, process_observed = cache[key]

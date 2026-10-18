@@ -206,54 +206,80 @@ class WorkspaceBaselineSeeds:
                             raise BaselinePreparationError('BASELINE_CONTENT_BUDGET_EXCEEDED')
                         digest.update(chunk)
             return digest.hexdigest(), files
+        from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, source_binding
+        from .hook_runtime import captured_input_matches
+        from .progress import progress_context
+        attempts = ScanAttemptStore(core.store, root)
+        attempts.recover_cleanup(limit=2)
         with core.store.lock(root, wait_seconds=2) as locked:
             if not locked:
                 raise BaselinePreparationError('BASELINE_BUSY')
             key = core.store.key(root)
             if session_id is not None:
-                # Reconnect/duplicate SessionStart must not overwrite the last
-                # processed pre-edit comparison point with post-edit bytes.
                 previous = self.existing_session(root, session_id, host=host)
                 if previous is not None:
                     return previous
-            captured = capture_snapshot(root, key)
-            self.target_selection = getattr(captured, 'target_selection', None)
-            dirty_digest, dirty_files = captured
-            full_digest, scope = inventory(key)
-        # Initial scanning must not monopolize the edit/task state lock for its
-        # entire duration. A task can capture its own pre-edit bytes meanwhile.
-        # This worker may publish only if those original bytes still match.
+            pending = core.store.pending_activity(root, host, session_id)
+            if pending is not None:
+                raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
+            lease = attempts.claim('HOOK', identity(host+'\0'+(session_id or 'setup-seed')),
+                source_binding(dict(session=identity(session_id or 'setup-seed'), baseline='SETUP')))
+            if lease is None:
+                raise BaselinePreparationError('BASELINE_BUSY')
+        execution = ScanAttemptExecution(attempts, lease)
+        outcome = 'FAILED'
         result = dict(status='NO_CHANGES', coverage='NONE', execution_state='NO_CHANGES',
             scan_id=None, capabilities={}, scanner_runs=[], execution={'scanner_run': False})
-        observation = core._scan_scope(result, root, scope, baseline=True)
-        with core.store.lock(root, wait_seconds=2) as locked:
-            if not locked:
-                raise BaselinePreparationError('BASELINE_BUSY')
-            if session_id is not None:
-                # Another valid writer may already have published/processed
-                # this session. Preserve its point instead of overwriting it.
-                previous = self.existing_session(root, session_id, host=host)
-                if previous is not None:
-                    return previous
-            if core.store.key(root) != key:
-                raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
-            after_capture = capture_snapshot(root, key)
-            if (after_capture[0] != dirty_digest or after_capture.file_digests != captured.file_digests
-                    or inventory(key) != (full_digest, scope)):
-                raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
-            # A comparison point can retain explicit unsupported-code gaps.
-            # Failed/missing engine evidence still prevents publication; no
-            # partial coverage is upgraded into security proof.
-            from .baseline_coverage import comparison_usable, unproven_files
-            if scope and not comparison_usable(result, observation):
-                raise BaselinePreparationError('BASELINE_COVERAGE_INSUFFICIENT')
-            delta = dict(new=0, persisting=0, resolved=0, additional_occurrences=0, removed_occurrences=0, families=[])
-            summary = {k: result[k] for k in ('coverage', 'execution_state', 'capabilities', 'scanner_runs')}
-            summary.update(status='PRE_EXISTING_BASELINE', last_check_status=result['status'], delta=delta)
-            snapshot = validate_state(asdict(HookSnapshot('hook-v1', identity(os.path.normcase(str(root))), host,
-                identity(session_id if session_id is not None else 'setup-seed'), dirty_digest, dirty_files,
-                observation['families'], result['scan_id'], self.now(), summary, captured.file_digests,
-                unproven_files(observation))))
-            if session_id is not None:
-                core.store.save(core.store.path(root, host, session_id), snapshot)
-            return snapshot
+        try:
+            with progress_context(execution):
+                captured = capture_snapshot(root, key)
+                self.target_selection = getattr(captured, 'target_selection', None)
+                dirty_digest, dirty_files = captured
+                full_digest, scope = inventory(key)
+                execution.validator = lambda view: captured_input_matches(view, captured, key)
+                observation = core._scan_scope(result, root, scope, baseline=True, execution=execution)
+                after_capture = capture_snapshot(root, key)
+                if (after_capture[0] != dirty_digest or after_capture.file_digests != captured.file_digests
+                        or inventory(key) != (full_digest, scope)):
+                    outcome = 'STALE'
+                    raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
+                if scope and (execution.input_id is None or observation.get('input_current') is not True):
+                    outcome = 'STALE'
+                    raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
+                from .baseline_coverage import comparison_usable, unproven_files
+                if scope and not comparison_usable(result, observation):
+                    raise BaselinePreparationError('BASELINE_COVERAGE_INSUFFICIENT')
+                delta = dict(new=0, persisting=0, resolved=0, additional_occurrences=0, removed_occurrences=0, families=[])
+                summary = {k: result[k] for k in ('coverage', 'execution_state', 'capabilities', 'scanner_runs')}
+                summary.update(status='PRE_EXISTING_BASELINE', last_check_status=result['status'], delta=delta)
+                snapshot = validate_state(asdict(HookSnapshot('hook-v1', identity(os.path.normcase(str(root))), host,
+                    identity(session_id if session_id is not None else 'setup-seed'), dirty_digest, dirty_files,
+                    observation['families'], result['scan_id'], self.now(), summary, captured.file_digests,
+                    unproven_files(observation))))
+            # Publication is a short state transaction. No source reads or
+            # Providers run while the workspace lock is held.
+            with core.store.lock(root, wait_seconds=2) as locked:
+                if not locked:
+                    raise BaselinePreparationError('BASELINE_BUSY')
+                if session_id is not None:
+                    previous = self.existing_session(root, session_id, host=host)
+                    if previous is not None:
+                        outcome = 'STALE'
+                        return previous
+                if (core.store.key(root) != key or not attempts.is_current(lease, execution.input_id)
+                        or core.store.pending_activity(root, host, session_id) != pending):
+                    outcome = 'STALE'
+                    raise BaselinePreparationError('BASELINE_SOURCE_CHANGED')
+                if session_id is not None:
+                    core.store.save(core.store.path(root, host, session_id), snapshot)
+                outcome = 'COMPLETED'
+                attempts.finish(lease, input_id=execution.input_id, scan_id=result['scan_id'], outcome=outcome)
+                return snapshot
+        except ScanCancelled:
+            outcome = 'CANCELLED'
+            raise
+        finally:
+            if outcome != 'COMPLETED':
+                with core.store.lock(root, wait_seconds=2) as locked:
+                    if locked:
+                        attempts.finish(lease, input_id=execution.input_id, scan_id=result['scan_id'], outcome=outcome)

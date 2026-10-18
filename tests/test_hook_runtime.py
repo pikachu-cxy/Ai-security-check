@@ -14,6 +14,7 @@ from security_runtime.hook_runtime import HookCoordinator, capture_snapshot, cov
 from security_runtime.hook_state import HookStateStore
 from security_runtime.models import ScanResult, ScannerRun, TargetProfile
 from security_runtime.verification_policy import scanner_process_observed, offline_scanning
+from scan_attempt_helpers import captured_scan
 
 
 @pytest.fixture
@@ -39,17 +40,18 @@ def row(root,line=1,rule='test.rule',category='code',file='A.java',evidence='UNT
 class FakeRuntime:
     def __init__(self,findings=(),status='SUCCESS',complete=True):
         self.findings=list(findings); self.calls=[];self.status=status;self.complete=complete
+    @captured_scan
     def scan(self,root,mode,**kwargs):
         assert mode == 'quick' and offline_scanning()
-        self.calls.append(kwargs['_hook_scope'])
+        self.calls.append(kwargs['request'].requested_files)
         scanner_process_observed()
         run = ScannerRun('semgrep','1.178.0',self.status,1,provider='semgrep')
         rule_ids={f.technical_details['rule_id'] for f in self.findings} | {'test.rule'}
         plan = SimpleNamespace(rules=[SimpleNamespace(rule_id=r,rule_version='0.1') for r in rule_ids],
             pack=SimpleNamespace(checksum='a'*64), confirmed_rules=rule_ids if self.complete else set(),
-            scanned_files=set(kwargs['_hook_scope']),errored_files=set(),unscoped_error=False)
-        kwargs['_hook_observer'](self.findings,[run],{'semgrep':plan})
-        return ScanResult('scan-'+str(len(self.calls)),mode,TargetProfile(str(root),files=list(kwargs['_hook_scope'])),
+            scanned_files=set(kwargs['request'].requested_files),errored_files=set(),unscoped_error=False)
+        kwargs['observer'](self.findings,[run],{'semgrep':plan})
+        return ScanResult('scan-'+str(len(self.calls)),mode,TargetProfile(str(root),files=list(kwargs['request'].requested_files)),
             'COMPLETED' if self.status=='SUCCESS' else 'PARTIAL',self.findings,[run],'advisory','BLOCKED',1,
             capability_results={'CODE_SAST':'EXECUTED' if self.status=='SUCCESS' else 'FAILED'},
             execution_state='EXECUTED' if self.status=='SUCCESS' else 'FAILED')

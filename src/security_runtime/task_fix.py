@@ -214,16 +214,92 @@ class TaskFixService:
         activity_epoch = closure.generation(resolved['workspace'])
         from .task_risk_ledger import TaskRiskLedger, current_hashes
         ledger = TaskRiskLedger(hooks, Path(resolved['workspace']))
+        from .task_verification_journal import TaskVerificationJournal
+        journal = TaskVerificationJournal(hooks, Path(resolved['workspace']))
         from .task_security_state import TaskSecurityStore
         legacy = TaskSecurityStore(hooks, Path(resolved['workspace'])).for_scan(resolved['scan_id'])
-        if legacy:
-            with hooks.lock(Path(resolved['workspace'])) as acquired:
-                if not acquired:
-                    return dict(status='BUSY', task_ref=task_ref, verification_status='INCONCLUSIVE')
-                for record in legacy:
-                    ledger.register(record)
-        before = current_hashes(resolved['workspace'], ledger.paths_for_scan(resolved['scan_id'], {r['id'] for r in members}))
-        results = VerificationService(self.registry).verify_many(resolved['workspace'], members, scan)
+        root=Path(resolved['workspace']).resolve()
+        from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, ScanAttemptLost, source_binding
+        from .progress import ScanCancelled, progress_context, current_reporter
+        attempts=ScanAttemptStore(hooks,root)
+        attempts.recover_cleanup(limit=2)
+        with hooks.lock(root) as acquired:
+            if not acquired:
+                return dict(status='BUSY', task_ref=task_ref, verification_status='INCONCLUSIVE')
+            ledger.resume()
+            closure.resume(Path(resolved['workspace']))
+            # Mutating verification is also a bounded recovery point. Query and
+            # prepare paths never open a write connection or replay deliveries.
+            journal.reconcile()
+            for record in legacy:
+                ledger.register(record)
+            ids = {row['id'] for row in members}
+            expected_rows = {key:ledger.row_version(row) for key,row in ledger.read_scan(resolved['scan_id']).items()
+                if row['source'] == 'SCANNER' and row['origin_scan_id'] == resolved['scan_id']
+                and row['finding_id'] in ids}
+            paths=ledger.paths_for_scan(resolved['scan_id'], ids) | {row['file_path'] for row in members}
+            closure_version = closure.version(Path(resolved['workspace']))
+            key=hooks.key(root)
+        # Source, rule preparation and all detector execution are outside the
+        # workspace publication lock. Their exact bytes are bound below.
+        before=current_hashes(root,paths)
+        from .task_fix_input import prepare_input
+        from .scan_input import capture_scan_input
+        specification=prepare_input(self.registry,root,members,before)
+        with hooks.lock(root) as acquired:
+            if not acquired:
+                return dict(status='BUSY',task_ref=task_ref,verification_status='INCONCLUSIVE')
+            current_rows={key:ledger.row_version(row) for key,row in ledger.read_scan(resolved['scan_id']).items()
+                if row['source']=='SCANNER' and row['origin_scan_id']==resolved['scan_id'] and row['finding_id'] in ids}
+            if (current_rows!=expected_rows or closure.version(root)!=closure_version
+                    or closure.generation(root)!=activity_epoch):
+                return dict(status='BUSY',task_ref=task_ref,verification_status='INCONCLUSIVE',
+                            reason='VERIFICATION_SOURCE_FACTS_CHANGED')
+            lease=attempts.claim('VERIFY','verify-'+__import__('hashlib').sha256(task_ref.encode()).hexdigest(),
+                source_binding(dict(scan_id=resolved['scan_id'],members=sorted(ids),input_hashes=specification.hashes,
+                    bindings=[binding.__dict__ for binding in specification.request.bindings])))
+            if lease is None:
+                return dict(status='BUSY',task_ref=task_ref,verification_status='INCONCLUSIVE',
+                            reason='WORKSPACE_SCAN_ATTEMPT_BUSY')
+        control=ScanAttemptExecution(attempts,lease,validator=specification.matches,progress=current_reporter())
+        delivery = None
+        persistence_error = False
+        applicability='UNVERIFIABLE'
+        outcome='FAILED'
+        try:
+            with progress_context(control):
+                with capture_scan_input(specification.request,identity_key=key,private_parent=control.private_parent,
+                        on_created=control.input_created,on_removed=control.input_removed) as view:
+                    control.input_ready(view)
+                    bound_pack=specification.bind_rules(view)
+                    results=VerificationService(self.registry).verify_many(root,members,scan,input_view=view,
+                        progress=control,bound_rule_pack=bound_pack)
+                    control.checkpoint(force=True)
+                    applicability=view.check_current().state
+                    try:
+                        with hooks.lock(root) as acquired:
+                            if not acquired:
+                                persistence_error=True
+                            elif not attempts.is_current(lease,view.input_id):
+                                raise ScanAttemptLost('SCAN_ATTEMPT_SUPERSEDED')
+                            else:
+                                delivery=journal.append(task_ref=task_ref,scan_id=resolved['scan_id'],members=members,
+                                    results=results,before=before,expected_rows=expected_rows,
+                                    closure_version=closure_version,activity_epoch=activity_epoch,
+                                    input_hashes=specification.hashes,
+                                    input_context=dict(control.receipt,applicability=applicability))
+                                delivery=journal.drain(delivery)
+                    except (OSError,ValueError,__import__('sqlite3').DatabaseError):
+                        persistence_error=True
+                    outcome='COMPLETED' if delivery is not None and delivery['state']=='APPLIED' else 'STALE'
+        except (ScanCancelled,KeyboardInterrupt):
+            outcome='CANCELLED'
+            raise
+        finally:
+            with hooks.lock(root,wait_seconds=2) as acquired:
+                if acquired:
+                    if outcome=='CANCELLED': attempts.cancel(lease)
+                    else: attempts.finish(lease,input_id=control.input_id,outcome=outcome)
         states = {r['verification_status'] for r in results}
         attempted = any(r['runtime_observed_execution']['scanner_recheck_attempted'] for r in results)
         if 'INCONCLUSIVE' in states or not states:
@@ -247,9 +323,16 @@ class TaskFixService:
             'production_verification': 'NOT_PERFORMED', 'automatic_execution': False,
             'next_steps': ['仅按实际复查状态反馈；仍存在则继续修选定问题，INCONCLUSIVE/NOT_VERIFIED 说明缺少的规则/文件/引擎依据。',
                 '扫描规则复查不证明业务行为、完整依赖图或生产安全；宿主编辑与测试声明单列为未独立验证的报告。']}
-        out['risk_ledger_recording'] = ledger.record_native(resolved['scan_id'], results, before)
-        if out['risk_ledger_recording']['status'] in {'BUSY','STALE'}:
-            state = 'INCONCLUSIVE'
+        out['verification_persistence'] = dict(state=delivery['state'] if delivery else 'PENDING',
+            event_id=delivery['event_id'] if delivery else None, pending=persistence_error or
+            delivery is None or delivery['state'] == 'PENDING')
+        out['verification_input']=dict(control.receipt,applicability=applicability,
+            publication=delivery['state'] if delivery else 'PENDING')
+        out['risk_ledger_recording'] = ((delivery or {}).get('targets', {}).get('ledger')
+            or dict(status='PENDING', recorded=0))
+        if (persistence_error or (delivery or {}).get('state')=='SUPERSEDED'
+                or out['risk_ledger_recording']['status'] in {'BUSY','STALE','SUPERSEDED','PENDING'}):
+            state = 'INCONCLUSIVE' if attempted else 'NOT_VERIFIED'
             out.update(status=state, verification_status=state, current_version=False,
                        reason='RISK_LEDGER_CURRENT_VERSION_NOT_CONFIRMED')
         if members and all(member.get('category') == 'dependency' for member in members):
@@ -289,10 +372,11 @@ class TaskFixService:
             from .hook_state import HookStateStore
             from .risk_closure import RiskClosureService
             hooks = self.hooks or HookStateStore(self.store.path.parent / 'hooks')
-            out['persistent_closure'] = closure.record(resolved['workspace'], members, results,
-                source='MANUAL_INDEPENDENT_RECHECK', expected_activity=activity_epoch)
-            if out['persistent_closure']['status'] in {'NEW_ACTIVITY', 'BUSY'}:
-                out.update(status='INCONCLUSIVE', verification_status='INCONCLUSIVE', current_version=False)
+            out['persistent_closure'] = ((delivery or {}).get('targets', {}).get('closure')
+                or dict(status='PENDING', confirmed=0))
+            if out['persistent_closure']['status'] in {'NEW_ACTIVITY', 'BUSY','SUPERSEDED','PENDING'}:
+                state = 'INCONCLUSIVE' if attempted else 'NOT_VERIFIED'
+                out.update(status=state, verification_status=state, current_version=False)
                 out['user_feedback'] = {'message': '检查未完成：复查期间出现新的待检事件或工作区正忙，持续记录尚未确认关闭；请恢复原任务复查。', 'choices': []}
             out['verification_source'] = 'MANUAL_INDEPENDENT_RECHECK'
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)

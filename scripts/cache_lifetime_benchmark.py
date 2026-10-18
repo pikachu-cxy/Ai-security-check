@@ -14,6 +14,7 @@ from remediation_episode_acceptance import SAFE, UNSAFE
 
 def run():
     from security_runtime.runtime import SecurityRuntime
+    from security_runtime.scan_input import scoped_request
     from security_runtime.scanners import SemgrepAdapter, GitleaksAdapter, ScannerRegistry
     from security_runtime.storage import SQLiteStore
     from security_runtime.toolchain import ToolManager, ToolSource
@@ -49,7 +50,7 @@ def run():
             runtime = create(); samples = []
             def scan(label, files, source):
                 path.write_text(source, encoding='utf-8'); calls.clear(); start = time.perf_counter()
-                result = runtime.scan(root, 'quick', _hook_scope=tuple(files))
+                result = runtime.scan(root, 'quick', request=scoped_request(root, tuple(files)))
                 assert result.capability_results['CODE_SAST'] == 'EXECUTED'
                 assert result.capability_results['SECRET_SCAN'] == 'EXECUTED'
                 samples.append(dict(label=label, wall_ms=round((time.perf_counter()-start)*1000, 3),

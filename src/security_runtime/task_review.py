@@ -136,6 +136,16 @@ class TaskReviewCoordinator:
                 return dict(status='BUSY', task_ref=ref, scanner_run=False)
             record = service.load(root, ref)
             require_record_protocol(record)
+            if record['phase']=='STATIC_RUNNING':
+                from .scan_attempt import ScanAttemptStore
+                attempts=ScanAttemptStore(service.hooks,root,now=service.now)
+                lane=attempts.read()['lane']
+                receipt=record.get('static_execution')
+                if (lane and isinstance(receipt,dict) and lane.get('kind')=='TASK' and lane.get('scope_key')==ref
+                        and lane.get('state')=='ACTIVE' and service.now()<lane['expires_at']
+                        and all(lane.get(key)==receipt.get(key) for key in
+                            ('attempt_id','generation','cancel_generation'))):
+                    return dict(status='BUSY',task_ref=ref,scanner_run=False)
             if record['phase'] in {'NO_CHANGES', 'INCOMPLETE', 'COMPLETE'}:
                 return service._view(record)
             if record['phase'] not in {'READY', 'REVIEWING'} or not service._fresh(root, record):

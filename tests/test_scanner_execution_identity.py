@@ -1,0 +1,132 @@
+"""Actual bytes determine execution identity; probe invalidation stays stricter."""
+import ctypes
+import os
+from pathlib import Path
+
+import pytest
+
+from security_runtime.component_health import settings_fingerprint
+from security_runtime.findings import FindingNormalizer
+from security_runtime.capabilities import Capability
+from security_runtime.models import ScanContext, ScanMode
+from security_runtime.scan_input import capture_scan_input
+from security_runtime.scan_request import ScanRequest, SourceKind
+from security_runtime.scanners import BaseScanner, _snapshot
+from security_runtime.toolchain import ResolvedTool, ToolManager, ToolStatus
+from link_fixture import linked_directory
+
+
+@pytest.fixture
+def identity(tmp_path,monkeypatch):
+    root=tmp_path/'project'
+    root.mkdir()
+    (root/'source.py').write_bytes(b'original = 1\n')
+    environment=tmp_path/'managed-python'
+    binary=environment/'Scripts/semgrep.exe'
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b'not-executed-launcher-fixture')
+    package=environment/'Lib/site-packages/semgrep'
+    package.mkdir(parents=True)
+    (package/'entry.py').write_bytes(b'not-executed-package-fixture')
+    settings=tmp_path/'settings.yml'
+    settings.write_bytes(b'anonymous_user_id: fixture\n')
+    monkeypatch.setenv('SEMGREP_SETTINGS_FILE',str(settings))
+    manager=ToolManager(tmp_path/'tool-state')
+    manager.ensure=lambda *_a,**_kw:ResolvedTool('semgrep',manager.versions['semgrep'],str(binary),None,ToolStatus.READY)
+    return root,binary,settings,manager
+
+
+def rewrite(path,raw):
+    replacement=path.with_suffix('.replacement')
+    replacement.write_bytes(raw)
+    replacement.replace(path)
+
+
+def test_same_settings_bytes_replacement_expires_health_but_preserves_content_identities(identity):
+    _,binary,settings,manager=identity
+    probe=manager._probe_identity('semgrep',binary)
+    execution=manager.execution_identity('semgrep',binary)
+    fingerprint=settings_fingerprint()
+    before=settings.stat()
+    rewrite(settings,settings.read_bytes())
+    assert settings.stat().st_ino!=before.st_ino
+    assert settings_fingerprint()!=fingerprint
+    assert manager._probe_identity('semgrep',binary)==probe
+    assert manager.execution_identity('semgrep',binary)==execution
+
+
+def test_actual_settings_change_expires_version_cache(identity,monkeypatch):
+    _,binary,settings,manager=identity
+    calls=[]
+    def probe(tool,path):
+        calls.append((tool,path))
+        rewrite(settings,settings.read_bytes())
+        return manager.versions['semgrep']
+    monkeypatch.setattr(manager,'_probe_version',probe)
+    assert manager._version('semgrep',binary)==manager.versions['semgrep']
+    assert manager._version('semgrep',binary)==manager.versions['semgrep']
+    assert len(calls)==1
+    settings.write_bytes(b'changed: true\n')
+    assert manager._version('semgrep',binary)==manager.versions['semgrep']
+    assert len(calls)==2
+
+
+def test_missing_settings_and_present_empty_settings_have_distinct_execution_identity(identity):
+    _,binary,settings,manager=identity
+    settings.unlink()
+    absent=manager.execution_identity('semgrep',binary)
+    settings.write_bytes(b'')
+    assert manager.execution_identity('semgrep',binary)!=absent
+
+
+@pytest.mark.parametrize('changed',[False,True])
+def test_provider_accepts_same_settings_bytes_and_rejects_actual_change(identity,changed):
+    root,_,settings,manager=identity
+    original=settings.read_bytes()
+    class Provider(BaseScanner):
+        name=scanner_id=engine_id='semgrep'
+        capabilities=frozenset({Capability.CODE_SAST})
+        def _scan(self,binary,context,normalizer):
+            rewrite(settings,original+b'changed: true\n' if changed else original)
+            return []
+    provider=Provider(manager)
+    request=ScanRequest(root,ScanMode.QUICK,SourceKind.WORKTREE,('source.py',))
+    with capture_scan_input(request) as view:
+        context=ScanContext(str(view.execution_root),ScanMode.QUICK,('source.py',),
+            logical_root=str(root),input_view=view)
+        _,run=provider.scan(context,FindingNormalizer(view.execution_root,identity_root=root))
+    assert run.scanner_diagnostics['execution_binding']['verified'] is (not changed)
+    assert run.status==('FAILED' if changed else 'SUCCESS')
+    assert run.error_code==('SCAN_EXECUTION_IDENTITY_CHANGED' if changed else '')
+
+
+@pytest.mark.skipif(os.name!='nt',reason='Windows DOS path alias boundary')
+def test_standalone_snapshot_canonicalizes_real_short_path_without_live_fallback(tmp_path):
+    root=tmp_path/'long-project-name'
+    root.mkdir()
+    expected=b'original bytes\n'
+    (root/'source.py').write_bytes(expected)
+    call=ctypes.windll.kernel32.GetShortPathNameW
+    call.argtypes=(ctypes.c_wchar_p,ctypes.c_wchar_p,ctypes.c_uint32)
+    call.restype=ctypes.c_uint32
+    buffer=ctypes.create_unicode_buffer(32768)
+    assert call(str(root),buffer,len(buffer))
+    alias=Path(buffer.value)
+    if str(alias)==str(root.resolve()): pytest.skip('Filesystem has no DOS alias for this path')
+    assert alias.resolve()==root.resolve()
+    context=ScanContext(str(alias),ScanMode.QUICK,('source.py',))
+    with _snapshot(context) as scoped:
+        assert scoped.resolve()!=root.resolve()
+        (root/'source.py').write_bytes(b'live changed\n')
+        assert (scoped/'source.py').read_bytes()==expected
+    assert not scoped.exists()
+
+
+def test_standalone_snapshot_still_rejects_real_junction_before_resolve(tmp_path):
+    original=tmp_path/'outside'
+    original.mkdir()
+    (original/'source.py').write_bytes(b'not admitted\n')
+    link=linked_directory(tmp_path/'linked-project',original)
+    with pytest.raises(ValueError):
+        with _snapshot(ScanContext(str(link),ScanMode.QUICK,('source.py',))):
+            pytest.fail('A linked source root must not be admitted')

@@ -13,6 +13,7 @@ import sqlite3
 
 
 CONTRACT = 'task-ledger-projection-v1'
+_OWNER_UNSET = object()
 
 
 def _basis(record):
@@ -45,7 +46,11 @@ def status(record):
     state = projection.get('state')
     if state not in {'PENDING', 'APPLIED', 'SUPERSEDED'}:
         return dict(state='UNAVAILABLE', pending=True)
-    return dict(state=state, pending=state == 'PENDING')
+    result = dict(state=state, pending=state == 'PENDING')
+    failure = projection.get('sync_failure')
+    if state == 'PENDING' and isinstance(failure, dict):
+        result['capacity_failure'] = copy.deepcopy(failure)
+    return result
 
 
 def drain(service, root, record):
@@ -56,6 +61,8 @@ def drain(service, root, record):
     Register is an upsert; host updates are assignments already validated at
     submission. They touch neither user dispositions nor repair intents.
     """
+    if not service.hooks.lock_held(root):
+        raise ValueError('Projection workspace lock required')
     projection = record.get('ledger_projection')
     if not status(record)['pending']:
         return record
@@ -83,8 +90,48 @@ def drain(service, root, record):
             candidate['ledger_projection']['state'] = 'APPLIED'
         candidate['ledger_projection'].pop('host_updates', None)
         candidate['ledger_projection'].pop('expected_versions', None)
-        return service.store(root).save(candidate)
-    except (OSError, ValueError, sqlite3.DatabaseError):
+        store = service.store(root)
+        if record.get('retained_for_projection') is True:
+            return store.ack_retained_projection(candidate)
+        return store.save(candidate)
+    except (OSError, ValueError, sqlite3.DatabaseError) as exc:
         # The source result was committed first. Preserve its pending intent,
         # rather than pretending a failed projection means no risks were found.
+        from .task_diagnostics import capacity_failure
+        failure = capacity_failure(exc)
+        if failure is not None:
+            current = copy.deepcopy(record)
+            current['ledger_projection']['sync_failure'] = dict(
+                reason_code=failure['reason_code'], capacity=failure['capacity'],
+                source_result_saved=True, original_task_preserved=True,
+                message='原检查结果已保存；风险账本投影容量不足，待按原任务恢复。')
+            return current  # Attempt diagnostic only: do not rewrite source/history.
         return record
+
+
+def reconcile_pending(service, root, limit=8, *, owner=_OWNER_UNSET):
+    """Drain owned retained facts under the caller's workspace lock, never tasks.
+
+    The caller must already hold the workspace lock. Historical query paths must
+    not call this function. Expired source bodies and task execution stay expired.
+    """
+    from .task_ownership import record_owner, valid_owner
+    if not service.hooks.lock_held(root): raise ValueError('Projection workspace lock required')
+    if type(limit) is not int or not 1 <= limit <= 32: raise ValueError('Invalid projection limit')
+    selected_owner = service._owner() if owner is _OWNER_UNSET else owner
+    if selected_owner is not None and not valid_owner(selected_owner):
+        raise ValueError('Projection owner cannot be verified')
+    selected = service.store(root).pending_projections(32)
+    applied, pending, foreign = 0, 0, 0
+    for record in selected:
+        if record_owner(record) != selected_owner:
+            foreign += 1
+            continue
+        if applied + pending >= limit: break
+        result = drain(service, root, record)
+        if status(result)['pending']:
+            pending += 1
+        else:
+            applied += 1
+    return dict(applied=applied, pending=pending, foreign=foreign,
+                scanner_run=False, repair_authorized=False)

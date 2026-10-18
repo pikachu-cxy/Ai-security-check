@@ -17,6 +17,8 @@ from .logging_utils import configure_logging
 from .risk import MESSAGES
 from .runtime import SecurityRuntime
 from .scanners import ScannerRegistry
+from .explicit_scan import ExplicitScanBusy, cancelled_scan
+from .progress import ScanCancelled
 from .target import TargetDetector, DiscoveryLimitError
 from .models import TargetProfile
 from .toolchain import ToolManager, ToolStatus, VERSIONS
@@ -599,11 +601,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             registry = ScannerRegistry()
             # Adapters prepare their engines only after Runtime scope/planning.
             from .cli_progress import CLIProgressRenderer
+            from .explicit_scan import run_explicit_scan
+            runtime = SecurityRuntime(registry=registry)
             if args.no_progress:
-                result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules)
+                result = run_explicit_scan(runtime, args.path, mode=args.mode, staged=args.staged, rules_path=args.rules)
             else:
                 with CLIProgressRenderer() as reporter:
-                    result = SecurityRuntime(registry=registry).scan(args.path, args.mode, staged=args.staged, rules_path=args.rules, progress=reporter)
+                    result = run_explicit_scan(runtime, args.path, mode=args.mode, staged=args.staged, rules_path=args.rules, progress=reporter)
             try:
                 IntegrationStateStore().event(DogfoodEvent("cli", result.target_profile.path, args.mode,
                     result.duration_ms, len(result.findings), result.coverage))
@@ -871,6 +875,18 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             result = registry.manage(args.action,args.hook,args.path) if args.hook else registry.status(args.path)
             print(json.dumps(result,ensure_ascii=True) if args.json else json.dumps(result,ensure_ascii=False,indent=2))
             return 0
+    except ExplicitScanBusy as exc:
+        if getattr(args, 'json', False):
+            print(json.dumps(exc.to_dict(), ensure_ascii=True))
+        else:
+            print(f"security-check: SCAN_ATTEMPT_BUSY: {exc}", file=sys.stderr)
+        return 2
+    except ScanCancelled:
+        if getattr(args, 'json', False):
+            print(json.dumps(cancelled_scan(), ensure_ascii=True))
+        else:
+            print(cancelled_scan()['message'], file=sys.stderr, flush=True)
+        return 130
     except KeyboardInterrupt:
         message = '扫描能力准备已取消，未确认就绪。' if args.command in {'prepare-installation', 'prepare-scanners'} else '安装已取消，未确认完成。' if args.command in {'install', 'setup'} else '操作已取消。'
         print(message, file=sys.stderr, flush=True)

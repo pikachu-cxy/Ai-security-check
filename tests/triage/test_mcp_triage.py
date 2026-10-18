@@ -15,14 +15,15 @@ def unpack(response):
 
 
 def test_real_stdio_host_agent_mock_model(tmp_path):
-    (tmp_path/'App.java').write_text('class App {\n void method() {\n  boolean verify() { return true; }\n }\n}\n')
+    project=tmp_path/'project';project.mkdir()
+    (project/'App.java').write_text('class App {\n void method() {\n  boolean verify() { return true; }\n }\n}\n')
     secret='syntheticHostAgentCredential999'
-    (tmp_path/'config.properties').write_text(f'api_key="{secret}"\n')
-    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(tmp_path),SECURITY_RUNTIME_STATE_DIR=str(tmp_path/'state'),
+    (project/'config.properties').write_text(f'api_key="{secret}"\n')
+    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(project),SECURITY_RUNTIME_STATE_DIR=str(tmp_path/'state'),
         SECURITY_RUNTIME_INTEGRATION='generic-mcp',SECURITY_RUNTIME_OFFLINE='1')
     driver=Path(__file__).with_name('mcp_fixture_server.py')
     async def run():
-        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=tmp_path,env=env)
+        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=project,env=env)
         with tempfile.TemporaryFile(mode='w+',encoding='utf-8') as stderr:
             async with stdio_client(params,errlog=stderr) as (read,write):
                 async with ClientSession(read,write) as client:
@@ -85,16 +86,17 @@ def test_real_stdio_host_agent_mock_model(tmp_path):
 
 
 def test_real_stdio_local_evidence_freshness(tmp_path):
-    source=tmp_path/'App.java'
+    project=tmp_path/'project';project.mkdir()
+    source=project/'App.java'
     source.write_text('class App {\n void method() {\n boolean verify() { return true; }\n }\n}\n')
     secret='syntheticLocalEvidenceCredentialOnly'
-    (tmp_path/'config.properties').write_text(f'api_key="{secret}"\n')
-    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(tmp_path),
+    (project/'config.properties').write_text(f'api_key="{secret}"\n')
+    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(project),
         SECURITY_RUNTIME_STATE_DIR=str(tmp_path/'state'),SECURITY_RUNTIME_INTEGRATION='generic-mcp',
         SECURITY_RUNTIME_OFFLINE='1',SECURITY_RUNTIME_TEST_CAPTURE_EVIDENCE='1')
     driver=Path(__file__).with_name('mcp_fixture_server.py')
     async def run():
-        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=tmp_path,env=env)
+        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=project,env=env)
         with tempfile.TemporaryFile(mode='w+',encoding='utf-8') as stderr:
             async with stdio_client(params,errlog=stderr) as (read,write):
                 async with ClientSession(read,write) as client:

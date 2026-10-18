@@ -153,9 +153,11 @@ def default_data_root() -> Path:
 
 
 def sha256_file(path: Path) -> str:
+    from .progress import checkpoint
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            checkpoint()
             digest.update(chunk)
     return digest.hexdigest()
 
@@ -436,7 +438,7 @@ class ToolManager:
             raise DiagnosticError(ErrorDiagnostic('CONFIG_CORRUPTED', 'Invalid tool configuration.', 'Repair the local tool configuration before retrying.')) from None
         return None
 
-    def _probe_identity(self, tool_id, path):
+    def _probe_identity(self, tool_id, path, *, environment=None, settings_metadata=False):
         """Content-keyed probe reuse, not an engine integrity check bypass."""
         files = [path]
         if tool_id in self.python_engines:
@@ -461,12 +463,40 @@ class ToolManager:
                 return None
             digest.update(str(file).encode());digest.update(sha256_file(file).encode())
         # Version behavior may depend on env/config/workspace. Hash only in RAM.
-        digest.update(repr(sorted(tool_environment(path).items())).encode())
+        digest.update(repr(sorted((tool_environment(path) if environment is None else environment).items())).encode())
         digest.update(str(scan_workspace() or os.getcwd()).encode())
         if tool_id == 'semgrep':
             from .component_health import settings_fingerprint
-            digest.update(settings_fingerprint())
+            digest.update(settings_fingerprint(include_metadata=settings_metadata))
         return tool_id, self.versions[tool_id], str(path), digest.digest()
+
+    def execution_identity(self, tool_id: str, path: Path, *, environment=None) -> str | None:
+        """Actual executable/package bytes; no version-only integrity claim."""
+        try:
+            identity = self._probe_identity(tool_id, Path(path), environment=environment, settings_metadata=False)
+            return hashlib.sha256(repr(identity).encode()).hexdigest() if identity is not None else None
+        except (OSError, ValueError, KeyError, RuntimeError):
+            return None
+
+    def execution_data_identity(self, tool_id: str, *, kind=None, ecosystems=()) -> str | None:
+        from .scanner_identity import content_identity
+        if tool_id == 'trivy':
+            root = self.trivy_cache_dir()
+            if kind != 'misconfig' and (not (root / 'db' / 'trivy.db').is_file()
+                    or not (root / 'db' / 'metadata.json').is_file()):
+                return None
+            names = ('checks',) if kind == 'misconfig' else ('db', 'java-db', 'checks')
+            return content_identity((name, root / name) for name in names)
+        if tool_id == 'osv-scanner':
+            from .verification_policy import offline_scanning
+            if not offline_scanning():
+                # Online responses have no locally fixed database identity.
+                return None
+            root = self.root / 'data' / 'osv' / 'osv-scalibr'
+            if not ecosystems or any(not (root / name / 'all.zip').is_file() for name in ecosystems):
+                return None
+            return content_identity((name, root / name / 'all.zip') for name in sorted(set(ecosystems)))
+        return None
 
     def _version(self, tool_id: str, path: Path) -> str:
         from .scanner_cache import preparation_bucket

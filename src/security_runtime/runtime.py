@@ -7,7 +7,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 from contextlib import nullcontext
 from contextvars import copy_context
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from .findings import FindingNormalizer, deduplicate
@@ -21,7 +21,9 @@ from .storage import ScanStore, SQLiteStore
 from .target import TargetDetector, DEPENDENCIES
 from .workspace import WorkspaceResolver, WorkspaceError
 from .progress import NullProgressReporter, progress_context, current_reporter, emit, checkpoint, ScanCancelled
-from .scanners import BaseScanner
+from .scanners import BaseScanner, PatternSASTScanner
+from .scan_request import ScanRequest, ScanBinding, ScanInputError, SourceKind
+from .scan_input import capture_scan_input, index_inventory
 from .dependency_fallback import should_fallback, dependency_status, capability_detail
 from .scanner_observation import milliseconds
 from .dependency_inputs import is_dependency_input
@@ -63,31 +65,28 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
-    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, _hook_scope=None, _hook_observer=None, _hook_dependency_changes=None) -> ScanResult:
+    def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, request: ScanRequest | None = None, observer=None, execution=None) -> ScanResult:
         from .background_preparation import current_preparation, ACTIVE
         from .verification_policy import local_recheck, local_recheck_requested
         preparation = current_preparation()
         preparing = preparation['status'] in ACTIVE and not preparation.get('ready')
-        reporter = progress or NullProgressReporter()
+        reporter = execution or progress or NullProgressReporter()
         with progress_context(reporter), (local_recheck() if preparing and not local_recheck_requested() else nullcontext()):
             try:
-                if staged:
-                    workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
-                    if not workspace.is_git:
-                        raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
-                    if mode != 'quick':
-                        raise ValueError('INDEX_SCAN_REQUIRES_QUICK_MODE')
-                    from .staged import index_projection
-                    git = GitService(workspace.path)
-                    with index_projection(git) as projection:
-                        return self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer, projection, _hook_dependency_changes)
-                result = self._scan(repository_path, mode, staged, rules_path, _hook_scope, _hook_observer,
-                                    dependency_changes=_hook_dependency_changes)
+                if request is not None:
+                    if not isinstance(request, ScanRequest):
+                        raise ScanInputError('SCAN_INPUT_REQUEST_INVALID')
+                    if repository_path is not None and Path(repository_path).resolve() != request.workspace_root.resolve():
+                        raise ScanInputError('SCAN_INPUT_WORKSPACE_MISMATCH')
+                    repository_path, mode = request.workspace_root, request.mode
+                    staged = request.source_kind == SourceKind.INDEX
+                    rules_path = request.rules_path
+                result = self._scan(repository_path, mode, staged, rules_path, request, observer, execution)
                 if preparing:
                     from .background_preparation import preparation_message
                     result.background_preparation = preparation | {'message': preparation_message(preparation),
                         'execution_policy': 'AVAILABLE_LOCAL_COMPONENTS_ONLY', 'missing_checks': 'PENDING'}
-                    if _hook_scope is None and mode == 'quick' and not staged and not rules_path:
+                    if request is None and mode == 'quick' and not staged and not rules_path:
                         from .closeout import CloseoutService
                         try:
                             job = CloseoutService(self).prepare(result.target_profile.path, source_scan_id=result.scan_id,
@@ -105,82 +104,205 @@ class SecurityRuntime:
                 emit('SCAN_CANCELLED')
                 raise
 
-    def _scan(self, repository_path, mode, staged, rules_path, hook_scope=None, hook_observer=None, projection=None,
-              dependency_changes=None):
+    def _scan(self, repository_path, mode, staged, rules_path, request=None, observer=None, attempt=None):
         start = time.monotonic()
         observed_start = time.perf_counter()
-        stage_start = observed_start
-        observed = {'timing_ms': {'state_persistence':None,'total':None}, 'providers': {}}
+        stage_start = time.perf_counter()
+        observed = {'timing_ms': {'state_persistence': None, 'total': None}, 'providers': {}}
         checkpoint()
         emit('SCAN_STARTED', message=f'模式：{mode}')
-        scan_mode = ScanMode(mode)
         emit('WORKSPACE_DISCOVERY_STARTED')
+        scan_mode = ScanMode(mode)
         workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
-        root = projection or workspace.path
-        from .scan_freshness import capture, complete as complete_context
-        source_context = capture(workspace.path, self.store, mode=mode, staged=staged,
-                                 rules_path=rules_path, hook_scope=hook_scope)
-        emit('WORKSPACE_DISCOVERY_COMPLETED', message=f'项目：{root.name}')
+        if staged and not workspace.is_git:
+            raise WorkspaceError('Staged scans require Git; use release mode without --staged for a source directory.')
+        if staged and scan_mode != ScanMode.QUICK:
+            raise WorkspaceError('INDEX_SCAN_REQUIRES_GIT_QUICK_MODE')
+        if not workspace.is_git and scan_mode != ScanMode.RELEASE and request is None:
+            raise WorkspaceError('Quick and feature scans require Git; use release mode for a source directory, or an explicit validated input request.')
+        git = GitService(workspace.path) if workspace.is_git else None
+        emit('WORKSPACE_DISCOVERY_COMPLETED', message=f'项目：{workspace.path.name}')
         observed['timing_ms']['workspace_discovery'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
-        if not workspace.is_git and (scan_mode != ScanMode.RELEASE or staged) and hook_scope is None:
-            raise WorkspaceError("Quick, feature and staged scans require Git. Use security-check scan --mode release --path <project> for a source directory.")
-        git = GitService(workspace.path) if workspace.is_git else None
-        checkpoint()
         emit('TARGET_DISCOVERY_STARTED')
-        profile = None
-        if hook_scope is not None:
-            if scan_mode != ScanMode.QUICK or staged:
-                raise ValueError('Hook scope requires an unstaged quick check')
-            # Coordinator supplies only dirty files and previously dirty files
-            # reverting to HEAD. Validate through the normal target boundary.
-            files = list(hook_scope)
-        else:
-            if workspace.is_git:
-                files = git.changed_files(scan_mode, staged=staged)
-            else:
-                profile = TargetDetector().detect(root, select_scan_targets=True)
-                files = profile.files
-        # TargetDetector validates every explicit path before any file is read.
-        # Preserve removed input names for capability selection; the profile
-        # and provider snapshots continue to contain existing files only.
-        changed_files = tuple(files)
-        if scan_mode != ScanMode.RELEASE:
-            manifests = set()
-            directories = {root} if files else set()
-            if scan_mode == ScanMode.FEATURE:
-                for name in files:
-                    directories.update(parent for parent in (root / name).parents if parent.is_relative_to(root))
-            elif scan_mode == ScanMode.QUICK:
-                for name in files:
-                    if is_dependency_input(name):
-                        directories.update(parent for parent in (root / name).parents if parent.is_relative_to(root))
-            for directory in directories:
-                for name in set(DEPENDENCIES) | {"Dockerfile"}:
-                    path = directory / name
-                    if path.is_file():
-                        manifests.add(path.relative_to(root).as_posix())
-            profile = TargetDetector().detect(root, sorted(set(files) | manifests), select_scan_targets=True)
-        elif profile is None:
-            profile = TargetDetector().detect(root, files, select_scan_targets=True)
+        index_names, selection_revision = index_inventory(git) if staged else ((), None)
+        initial_files = (list(request.requested_files) if request is not None else
+            git.changed_files(scan_mode, staged=staged) if git else None)
         detector = TargetDetector()
+        discovery_skipped = []
+        if initial_files is None:
+            initial = detector.detect(workspace.path, select_scan_targets=True)
+            initial_files = initial.files
+            discovery_skipped = initial.skipped_files
+        changed_files = tuple(initial_files)
         changed_dependencies = tuple(name for name in changed_files
             if is_dependency_input(name) and not set(Path(name).parts) & detector.ignored)
-        if dependency_changes is not None:
-            if hook_scope is None or not set(dependency_changes).issubset(changed_dependencies):
-                raise ValueError('Dependency trigger scope does not match the validated Hook scope')
-            changed_dependencies = tuple(dependency_changes)
-        files = [name for name in files if name in profile.files]
-        changed_lines = git.changed_lines(files, scan_mode, staged=staged) if scan_mode != ScanMode.RELEASE and hook_scope is None else {}
-        profile.git_info = {"branch": git.branch()} if workspace.is_git else {}
-        profile.path = str(workspace.path)
-        emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
-        observed['timing_ms']['target_preparation'] = milliseconds(stage_start)
-        stage_start = time.perf_counter()
-        context = ScanContext(str(root), scan_mode, tuple(files), staged, rules_path,
-                              tuple(name for name in profile.files if name not in files),
-                              dependency_changes=changed_dependencies if scan_mode != ScanMode.RELEASE else None)
+        if request is not None and request.dependency_changes is not None:
+            if not set(request.dependency_changes).issubset(changed_dependencies):
+                raise ScanInputError('SCAN_INPUT_DEPENDENCY_SCOPE_INVALID')
+            changed_dependencies = request.dependency_changes
+        manifests = set(request.context_files if request is not None else ())
+        if scan_mode != ScanMode.RELEASE:
+            directories = {Path('.')} if initial_files else set()
+            if scan_mode == ScanMode.FEATURE:
+                for name in initial_files:
+                    directories.update(Path(name).parents)
+            elif scan_mode == ScanMode.QUICK:
+                for name in initial_files:
+                    if is_dependency_input(name):
+                        directories.update(Path(name).parents)
+            for directory in directories:
+                for name in set(DEPENDENCIES) | {'Dockerfile'}:
+                    candidate = (directory / name).as_posix()
+                    if (candidate in index_names if staged else (workspace.path / candidate).is_file()):
+                        manifests.add(candidate)
+        if initial_files:
+            for name in ('.gitleaks.toml', '.gitleaksignore', '.semgrepignore'):
+                if (name in index_names if staged else (workspace.path / name).is_file()):
+                    manifests.add(name)
+            import os
+            for name in ('GITLEAKS_CONFIG', 'TRIVY_CONFIG'):
+                value = os.getenv(name)
+                if not value:
+                    continue
+                configured = Path(value).expanduser()
+                configured = ((workspace.path / configured).resolve() if not configured.is_absolute()
+                              else configured.resolve())
+                if configured.is_relative_to(workspace.path):
+                    candidate = configured.relative_to(workspace.path).as_posix()
+                    if (candidate in index_names if staged else configured.is_file()):
+                        manifests.add(candidate)
+        candidates = sorted(set(initial_files) | manifests)
+        if staged:
+            present = sorted(set(candidates).intersection(index_names))
+            skipped = []
+        else:
+            initial = detector.detect(workspace.path, candidates, select_scan_targets=True)
+            present = initial.files
+            skipped = [*discovery_skipped, *initial.skipped_files]
+        targets = tuple(name for name in initial_files if name in present)
+        context_files = tuple(name for name in present if name not in targets)
+        absent = tuple(name for name in changed_files if name not in present and
+            (name not in index_names if staged else not (workspace.path / name).exists()))
+        expected_absent = request.absent_files if request is not None else ()
+        if not set(expected_absent).issubset(absent):
+            raise ScanInputError('SCAN_INPUT_ABSENCE_CHANGED')
+        rule_pack = None
+        rule_manager = None
+        rule_root = Path(rules_path) if rules_path else None
+        bindings = list(request.bindings if request is not None else ())
+        for adapter in self.registry.adapters:
+            reader = getattr(adapter, 'input_bindings', None)
+            if callable(reader):
+                for actual in reader():
+                    if any(value.kind == actual.kind and value.name == actual.name and value != actual for value in bindings):
+                        raise ScanInputError('SCAN_INPUT_BINDING_CHANGED')
+                    if actual not in bindings:
+                        bindings.append(actual)
+        for adapter in self.registry.adapters:
+            if not isinstance(adapter, PatternSASTScanner):
+                continue
+            try:
+                candidate_pack = adapter.rule_packs.resolve(user_path=Path(rules_path) if rules_path else None)
+                if rule_pack is not None and candidate_pack != rule_pack:
+                    raise ScanInputError('SCAN_INPUT_RULE_PACK_MISMATCH')
+                rule_pack, rule_manager = candidate_pack, adapter.rule_packs
+                rule_root = rule_pack.path
+            except ScanInputError:
+                raise
+            except (OSError, ValueError, KeyError):
+                # Missing rules stay a provider gap; other capabilities still run.
+                rule_root = None
+                continue
+        if rule_pack is not None:
+            actual = ScanBinding('RULES', rule_pack.descriptor.rule_pack_id, rule_pack.checksum)
+            if any(value.kind == actual.kind and value.name == actual.name and value != actual for value in bindings):
+                raise ScanInputError('SCAN_INPUT_BINDING_CHANGED')
+            if actual not in bindings:
+                bindings.append(actual)
+        fixed_request = ScanRequest(workspace.path, scan_mode,
+            SourceKind.INDEX if staged else SourceKind.WORKTREE, targets, context_files,
+            absent, changed_dependencies if scan_mode != ScanMode.RELEASE else None,
+            rule_root, tuple(bindings), selection_revision,
+            code_preference=request.code_preference if request else 'FULL',
+            recheck_native=request.recheck_native if request else False)
+        inventory_reader = None
+        if scan_mode == ScanMode.RELEASE and not staged:
+            def inventory_reader():
+                names = git.changed_files('release') if git else None
+                return TargetDetector().detect(workspace.path, names, select_scan_targets=True).files
+        key = self.store.evidence_key() if hasattr(self.store, 'evidence_key') else None
+        initial_changed_lines = (git.changed_lines(list(targets), scan_mode, staged=staged)
+            if git and scan_mode != ScanMode.RELEASE and request is None else {})
+        # Resolve source-dependent routing before copying deferred rule packs.
+        source_request = replace(fixed_request, rules_path=None)
+        with capture_scan_input(source_request, git=git, identity_key=key,
+                                inventory_reader=inventory_reader,
+                                private_parent=attempt.private_parent if attempt is not None else None,
+                                on_created=attempt.input_created if attempt is not None else None,
+                                on_removed=attempt.input_removed if attempt is not None else None) as view:
+            root = view.execution_root
+            profile = TargetDetector().detect(root, list(fixed_request.source_paths), select_scan_targets=True)
+            profile.skipped_files = sorted([*profile.skipped_files, *skipped], key=lambda row: row['path'])
+            files = [name for name in targets if name in profile.files]
+            changed_lines = (git.changed_lines(files, scan_mode, staged=staged)
+                if git and scan_mode != ScanMode.RELEASE and request is None else {})
+            if changed_lines != initial_changed_lines:
+                # Moving diff metadata cannot suppress a finding. Inspect the
+                # complete captured target files instead of filtering by it.
+                changed_lines = None
+            profile.git_info = {'branch': git.branch()} if git else {}
+            profile.path = str(workspace.path)
+            bound_pack = None
+            context = ScanContext(str(root), scan_mode, tuple(files), staged,
+                str(view.rules_path) if view.rules_path is not None else None,
+                tuple(name for name in profile.files if name not in files),
+                dependency_changes=changed_dependencies if scan_mode != ScanMode.RELEASE else None,
+                logical_root=str(workspace.path), input_view=view, bound_rule_pack=bound_pack)
+            emit('TARGET_DISCOVERY_COMPLETED', message=f'{len(files)} 个扫描文件')
+            observed['timing_ms']['target_preparation'] = milliseconds(stage_start)
+            from .scan_freshness import capture
+            source_context = capture(root, self.store, mode=mode, staged=staged,
+                rules_path=rules_path, hook_scope=request.files if request is not None else None,
+                logical_root=workspace.path, selection=profile)
+            execution = self
+            if fixed_request.code_preference == 'CANONICAL_DYNAMIC_WHEN_ELIGIBLE':
+                from .dynamic_function import NativeFunctionScanner, quick_function_candidate_scope
+                from .scanners import SemgrepAdapter
+                native = any(type(adapter) is NativeFunctionScanner for adapter in self.registry.adapters)
+                other_code = any(Capability.CODE_SAST in adapter.capabilities and
+                    type(adapter) not in {NativeFunctionScanner, SemgrepAdapter} for adapter in self.registry.adapters)
+                choice = quick_function_candidate_scope(root, files, has_native_family=fixed_request.recheck_native)
+                if native and not other_code and choice['eligible']:
+                    registry = ScannerRegistry([adapter for adapter in self.registry.adapters if type(adapter) is not SemgrepAdapter],
+                        tool_manager=self.registry.tool_manager, fallback_adapters=self.registry.fallback_adapters)
+                    registry.code_scope_notice = ('本次快速检查只覆盖这些文件中的动态 Function / eval 调用；'
+                        '其他代码安全规则尚未执行，需要完整扫描确认。')
+                    observed['code_selection'] = dict(applied=True, notice=registry.code_scope_notice,
+                        basis='CAPTURED_INPUT', input_id=view.input_id)
+                    execution = SecurityRuntime(registry, self.store)
+            selected_rule_provider = any(isinstance(adapter, PatternSASTScanner) and adapter.supports(profile, context)
+                for adapter in execution.registry.adapters)
+            capture_rules = rule_root is not None and (selected_rule_provider or bool(rules_path))
+            with (view.with_rules(rule_root) if capture_rules else nullcontext(view)) as final_view:
+                bound_pack = (rule_manager.bind_input(rule_pack, final_view.rules_path)
+                    if rule_pack is not None and selected_rule_provider else None)
+                final_context = replace(context, input_view=final_view, bound_rule_pack=bound_pack,
+                    rules_path=str(final_view.rules_path) if final_view.rules_path else None)
+                if observed.get('code_selection'):
+                    observed['code_selection']['input_id'] = final_view.input_id
+                if attempt is not None:
+                    attempt.input_ready(final_view)
+                return execution._execute_scan(workspace, final_context, profile, changed_lines, observer,
+                    source_context, final_view, start, observed_start, observed, attempt)
+
+    def _execute_scan(self, workspace, context, profile, changed_lines, hook_observer,
+                      source_context, view, start, observed_start, observed, attempt=None):
+        root = view.execution_root
+        scan_mode, staged = context.mode, context.staged
+        files, changed_dependencies = list(context.files), tuple(context.dependency_changes or ())
         normalizer = FindingNormalizer(root, identity_root=workspace.path)
+        stage_start = time.perf_counter()
         findings = []
         runs: list[ScannerRun] = []
         has_targets = bool(files or changed_dependencies)
@@ -233,7 +355,12 @@ class SecurityRuntime:
                 raise
             except Exception as exc:
                 found, run = [], unexpected_run(scanner, exc, execution_started, 'PROVIDER_EXECUTION')
-            if scan_mode != ScanMode.RELEASE and hook_scope is None and getattr(scanner, 'filter_changed_lines', False):
+            if run.scanner_diagnostics.get('execution_binding', {}).get('data_status') == 'UNVERIFIABLE':
+                run.coverage_contract = 'PARTIAL'
+                run.coverage_notes = list(dict.fromkeys([*run.coverage_notes,
+                    'DATA_IDENTITY_UNVERIFIABLE: actual vulnerability data version was not fixed and verified.']))
+            if (scan_mode != ScanMode.RELEASE and not source_context['hook_scope']
+                    and changed_lines is not None and getattr(scanner, 'filter_changed_lines', False)):
                 found = [f for f in found if any(f.line_start<=line<=f.line_end for line in changed_lines.get(f.file_path,set()))]
                 run.finding_count = len(found)
             run.capabilities = tuple(sorted(scanner.capabilities))
@@ -368,13 +495,27 @@ class SecurityRuntime:
         result.scanner_diagnostics = observed
         source_context.update(input_files=list(context.files), context_files=list(context.context_files),
                               dependency_changes=list(context.dependency_changes or ()))
-        result.scan_context = complete_context(source_context, workspace.path, self.store)
+        source_context['execution_bindings'] = {run.scanner: run.scanner_diagnostics['execution_binding']
+            for run in runs if 'execution_binding' in run.scanner_diagnostics}
+        from .scan_freshness import complete as complete_context
+        view.assert_intact()
+        if attempt is not None:
+            source_context['execution_attempt'] = attempt.receipt
+            attempt.checkpoint(force=True)
+        result.scan_context = complete_context(source_context, root, self.store, input_view=view)
+        from .finding_scope_snapshot import capture_scopes
+        result.source_scopes = capture_scopes(root, [asdict(finding) for finding in findings])
+        if result.scan_context['fixed_input']['applicability'] != 'CURRENT':
+            result.status, result.coverage, result.release_status = 'PARTIAL', 'UNKNOWN', 'REVIEW'
+            result.summary += '\n扫描对应已捕获的文件版本；原来源已变化或无法核验，最新变化仍需检查。'
         if staged:
             observed['source_kind'] = 'GIT_INDEX_PROJECTION'
         from .scanner_cache import lifetime
         observed.update(lifetime())
         stage_start = time.perf_counter()
         self.store.save(result)
+        if attempt is not None:
+            attempt.after_scan(view, result)
         observed['timing_ms']['state_persistence'] = milliseconds(stage_start)
         observed['timing_ms']['total'] = milliseconds(observed_start)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))

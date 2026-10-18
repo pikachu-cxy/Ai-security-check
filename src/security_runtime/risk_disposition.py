@@ -235,6 +235,11 @@ class RiskDispositionStore:
         db.execute('CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, workspace TEXT, issue_key TEXT, request_id TEXT, payload_hash TEXT, data TEXT NOT NULL, UNIQUE(workspace,request_id))')
         db.execute('CREATE TABLE IF NOT EXISTS aliases (workspace TEXT, reference TEXT, issue_key TEXT, PRIMARY KEY(workspace,reference))')
         db.execute('CREATE TABLE IF NOT EXISTS assessments (workspace TEXT, issue_key TEXT, data TEXT NOT NULL, PRIMARY KEY(workspace,issue_key))')
+        db.execute('CREATE TABLE IF NOT EXISTS effect_inbox (event_id TEXT PRIMARY KEY, payload_hash TEXT NOT NULL, outcome TEXT NOT NULL)')
+        db.execute('CREATE TABLE IF NOT EXISTS effect_sources (workspace TEXT, issue_key TEXT, source_id TEXT, revision INTEGER NOT NULL, target_revision TEXT, target_choice_revision TEXT, PRIMARY KEY(workspace,issue_key,source_id))')
+        if 'target_choice_revision' not in {row[1] for row in db.execute('PRAGMA table_info(effect_sources)')}:
+            db.execute('ALTER TABLE effect_sources ADD COLUMN target_choice_revision TEXT')
+        db.execute('CREATE TABLE IF NOT EXISTS choice_effect_outbox (event_id TEXT PRIMARY KEY, workspace TEXT NOT NULL, data TEXT NOT NULL, state TEXT NOT NULL, outcome TEXT)')
         return db
 
     @staticmethod
@@ -275,7 +280,7 @@ class RiskDispositionStore:
         return metadata
 
     def set(self, workspace, issue_key, disposition, reason='', *, user_requested=False,
-            until=None, request_id=None, evidence_revision=None, metadata=None):
+            until=None, request_id=None, evidence_revision=None, metadata=None, effects=()):
         if user_requested is not True:
             raise ValueError('A direct user request is required for this reminder choice')
         self._validate_key(issue_key)
@@ -289,6 +294,15 @@ class RiskDispositionStore:
         # different offset spelling is still the same requested deadline.
         deadline = _until(until)
         reason, metadata = _safe_reason(reason), self._metadata(metadata)
+        effects = tuple(effects)
+        if len(effects) > 4:
+            raise ValueError('Decision effect capacity exceeded')
+        for effect in effects:
+            if (not isinstance(effect, dict) or set(effect) != {'kind', 'payload'}
+                    or effect['kind'] != 'RELEASE_NATIVE_INTENT' or not isinstance(effect['payload'], dict)
+                    or set(effect['payload']) != {'owner', 'source', 'intent_sha256'}
+                    or len(json.dumps(effect, ensure_ascii=False).encode()) > 16_000):
+                raise ValueError('Invalid decision effect template')
         workspace = _workspace(workspace)
         payload = dict(issue_key=issue_key, disposition=disposition, reason=reason,
                        until=deadline, evidence_revision=evidence_revision, metadata=metadata)
@@ -308,6 +322,15 @@ class RiskDispositionStore:
                 if metadata.get('reference'):
                     db.execute('INSERT OR REPLACE INTO aliases VALUES (?,?,?)',
                                (workspace, metadata['reference'], issue_key))
+                for template in effects:
+                    if disposition not in {'DEFER', 'EXCLUDE'}:
+                        raise ValueError('Only a saved pause decision releases its workflow')
+                    from .persistence_effects import digest as effect_digest
+                    effect = dict(contract='native-intent-release-v1', decision_event_id=event['event_id'],
+                        kind=template['kind'], payload=template['payload'])
+                    effect['event_id'] = 'nie1-'+effect_digest(effect)
+                    db.execute('INSERT INTO choice_effect_outbox VALUES (?,?,?,?,?)',
+                        (effect['event_id'], workspace, json.dumps(effect), 'PENDING', None))
         return self.status(workspace, issue_key, current_revision=evidence_revision, include_history=True)
 
     def status(self, workspace, issue_key, *, current_revision=None, include_history=False):
@@ -350,20 +373,28 @@ class RiskDispositionStore:
             return self.status(workspace, issue_key, current_revision=revision)
         workspace = _workspace(workspace)
         with closing(self._connect()) as db, db:
-            row = db.execute('SELECT data FROM choices WHERE workspace=? AND issue_key=?', (workspace, issue_key)).fetchone()
-            choice = json.loads(row[0]) if row else None
-            if (choice and choice['disposition'] in ('EXCLUDE', 'DEFER') and not choice.get('reopened')
-                    and choice.get('evidence_revision') and choice['evidence_revision'] != revision):
-                choice.update(reopened=True, reopened_revision=revision,
-                              reassessed_at=self._now().isoformat(), reassessment_id=assessment_id)
-                event = dict(event_kind='MATERIAL_RISK_CHANGE', event_id=uuid.uuid4().hex,
-                             created_at=choice['reassessed_at'], assessment_id=assessment_id,
-                             evidence_revision=revision, previous_decision=choice['event_id'])
-                self._event(db, workspace, issue_key, 'reassessment:'+assessment_id,
-                            dict(issue_key=issue_key, revision=revision), event)
-                db.execute('UPDATE choices SET data=? WHERE workspace=? AND issue_key=?',
-                           (json.dumps(choice), workspace, issue_key))
+            self._confirm_material_change(db, workspace, issue_key, revision,
+                assessment_id=assessment_id, verdict=verdict, fresh=fresh, evidence_backed=evidence_backed)
         return self.status(workspace, issue_key, current_revision=revision)
+
+    def _confirm_material_change(self, db, workspace, issue_key, revision, *, assessment_id,
+                                 verdict, fresh=False, evidence_backed=False):
+        """Apply a checked reassessment in the caller's authority transaction."""
+        if verdict != 'STILL_RISK' or fresh is not True or evidence_backed is not True or not revision:
+            return
+        row = db.execute('SELECT data FROM choices WHERE workspace=? AND issue_key=?', (workspace, issue_key)).fetchone()
+        choice = json.loads(row[0]) if row else None
+        if (choice and choice['disposition'] in ('EXCLUDE', 'DEFER') and not choice.get('reopened')
+                and choice.get('evidence_revision') and choice['evidence_revision'] != revision):
+            choice.update(reopened=True, reopened_revision=revision,
+                          reassessed_at=self._now().isoformat(), reassessment_id=assessment_id)
+            event = dict(event_kind='MATERIAL_RISK_CHANGE', event_id=uuid.uuid4().hex,
+                         created_at=choice['reassessed_at'], assessment_id=assessment_id,
+                         evidence_revision=revision, previous_decision=choice['event_id'])
+            self._event(db, workspace, issue_key, 'reassessment:'+assessment_id,
+                        dict(issue_key=issue_key, revision=revision), event)
+            db.execute('UPDATE choices SET data=? WHERE workspace=? AND issue_key=?',
+                       (json.dumps(choice), workspace, issue_key))
 
     def record_assessment(self, workspace, issue_key, verdict, evidence_revision, *,
                           assessment_id, fresh=False, evidence_backed=False, metadata=None):
@@ -373,29 +404,34 @@ class RiskDispositionStore:
         metadata = self._metadata(metadata)
         workspace = _workspace(workspace)
         with closing(self._connect()) as db, db:
-            row = db.execute('SELECT data FROM assessments WHERE workspace=? AND issue_key=?', (workspace, issue_key)).fetchone()
-            old = json.loads(row[0]) if row else {}
-            auto = bool(old.get('automatic_exclusion'))
-            revision = old.get('exclusion_revision')
-            if fresh is True and evidence_backed is True and evidence_revision:
-                if verdict == 'FALSE_POSITIVE':
-                    auto, revision = True, evidence_revision
-                elif verdict == 'STILL_RISK' and evidence_revision != revision:
-                    auto = False
-            assessment = dict(verdict=verdict, evidence_revision=evidence_revision,
-                              assessment_id=assessment_id, fresh=fresh is True,
-                              evidence_backed=evidence_backed is True, metadata=metadata,
-                              created_at=self._now().isoformat(), automatic_exclusion=auto,
-                              exclusion_revision=revision)
-            db.execute('INSERT OR REPLACE INTO assessments VALUES (?,?,?)',
-                       (workspace, issue_key, json.dumps(assessment)))
-            if metadata.get('reference'):
-                db.execute('INSERT OR REPLACE INTO aliases VALUES (?,?,?)',
-                           (workspace, metadata['reference'], issue_key))
-        if metadata.get('material_change_confirmable') is True:
-            return self.confirm_material_change(workspace, issue_key, evidence_revision,
-                assessment_id=assessment_id, verdict=verdict, fresh=fresh, evidence_backed=evidence_backed)
+            self._record_assessment(db, workspace, issue_key, verdict, evidence_revision,
+                assessment_id=assessment_id, fresh=fresh, evidence_backed=evidence_backed, metadata=metadata)
         return self.status(workspace, issue_key, current_revision=evidence_revision)
+
+    def _record_assessment(self, db, workspace, issue_key, verdict, evidence_revision, *,
+                           assessment_id, fresh=False, evidence_backed=False, metadata=None):
+        row = db.execute('SELECT data FROM assessments WHERE workspace=? AND issue_key=?', (workspace, issue_key)).fetchone()
+        old = json.loads(row[0]) if row else {}
+        auto = bool(old.get('automatic_exclusion'))
+        revision = old.get('exclusion_revision')
+        if fresh is True and evidence_backed is True and evidence_revision:
+            if verdict == 'FALSE_POSITIVE':
+                auto, revision = True, evidence_revision
+            elif verdict == 'STILL_RISK' and evidence_revision != revision:
+                auto = False
+        assessment = dict(verdict=verdict, evidence_revision=evidence_revision,
+                          assessment_id=assessment_id, fresh=fresh is True,
+                          evidence_backed=evidence_backed is True, metadata=metadata,
+                          created_at=self._now().isoformat(), automatic_exclusion=auto,
+                          exclusion_revision=revision)
+        db.execute('INSERT OR REPLACE INTO assessments VALUES (?,?,?)',
+                   (workspace, issue_key, json.dumps(assessment)))
+        if metadata.get('reference'):
+            db.execute('INSERT OR REPLACE INTO aliases VALUES (?,?,?)',
+                       (workspace, metadata['reference'], issue_key))
+        if metadata.get('material_change_confirmable') is True:
+            self._confirm_material_change(db, workspace, issue_key, evidence_revision,
+                assessment_id=assessment_id, verdict=verdict, fresh=fresh, evidence_backed=evidence_backed)
 
     def clear_assessment(self, workspace, issue_key):
         """Revoke an AI assessment without altering a human reminder choice."""
@@ -409,6 +445,143 @@ class RiskDispositionStore:
                 assessment = dict(json.loads(row[0]), revoked=True, automatic_exclusion=False)
                 db.execute('UPDATE assessments SET data=? WHERE workspace=? AND issue_key=?',
                            (json.dumps(assessment), workspace, issue_key))
+
+    @staticmethod
+    def _pending_effect_filter(workspace, owner, ready_only):
+        query = "workspace=? AND state='PENDING'"
+        arguments = [_workspace(workspace)]
+        if owner is not None:
+            from .task_ownership import valid_owner
+            if not valid_owner(owner):
+                raise ValueError('Invalid decision recovery owner')
+            query += " AND json_extract(data,'$.payload.owner.host')=? AND json_extract(data,'$.payload.owner.session')=?"
+            arguments.extend((owner['host'], owner['session']))
+        if type(ready_only) is not bool:
+            raise ValueError('Invalid decision recovery readiness')
+        if ready_only:
+            query += (" AND json_type(data,'$.payload.intent_sha256')='text'"
+                " AND length(json_extract(data,'$.payload.intent_sha256'))=64"
+                " AND json_extract(data,'$.payload.intent_sha256') NOT GLOB '*[^0-9a-f]*'")
+        return query, arguments
+
+    def pending_effects(self, workspace, limit=16, *, owner=None, ready_only=False):
+        if type(limit) is not int or not 1 <= limit <= 32:
+            raise ValueError('Invalid decision recovery limit')
+        query, arguments = self._pending_effect_filter(workspace, owner, ready_only)
+        if not self.path.is_file():
+            return []
+        from .closeout_state import readonly_uri
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='choice_effect_outbox'").fetchone():
+                return []
+            return [json.loads(r[0]) for r in db.execute(
+                'SELECT data FROM choice_effect_outbox WHERE '+query+' ORDER BY rowid LIMIT ?',
+                (*arguments, limit))]
+
+    def pending_effect_count(self, workspace, *, owner=None, ready_only=False):
+        query, arguments = self._pending_effect_filter(workspace, owner, ready_only)
+        if not self.path.is_file():
+            return 0
+        from .closeout_state import readonly_uri
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='choice_effect_outbox'").fetchone():
+                return 0
+            return db.execute('SELECT COUNT(*) FROM choice_effect_outbox WHERE '+query, arguments).fetchone()[0]
+
+    def acknowledge_effect(self, event_id, outcome):
+        if outcome not in {'APPLIED', 'SUPERSEDED'} or not re.fullmatch(r'nie1-[a-f0-9]{64}', event_id):
+            raise ValueError('Invalid decision effect acknowledgement')
+        with closing(self._connect()) as db, db:
+            db.execute("UPDATE choice_effect_outbox SET state='APPLIED',outcome=? WHERE event_id=? AND state='PENDING'",
+                       (outcome, event_id))
+
+    @staticmethod
+    def _effect_versions(db, workspace, issue_key):
+        from .persistence_effects import digest as effect_digest
+        row = db.execute('SELECT (SELECT data FROM choices WHERE workspace=? AND issue_key=?), '
+            '(SELECT data FROM assessments WHERE workspace=? AND issue_key=?)',
+            (workspace, issue_key, workspace, issue_key)).fetchone()
+        choice = json.loads(row[0]) if row[0] else None
+        assessment = json.loads(row[1]) if row[1] else None
+        return dict(choice_event_id=choice.get('event_id') if choice else None,
+            assessment_id=assessment.get('assessment_id') if assessment else None,
+            choice_revision=effect_digest(choice) if choice else None,
+            assessment_revision=effect_digest(assessment) if assessment else None)
+
+    def effect_versions(self, workspace, issue_key):
+        """One read snapshot; no tables, keys, replay, scans or decisions created."""
+        self._validate_key(issue_key)
+        if not self.path.is_file():
+            return dict(choice_event_id=None, assessment_id=None, choice_revision=None, assessment_revision=None)
+        from .closeout_state import readonly_uri
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            return self._effect_versions(db, _workspace(workspace), issue_key)
+
+    def apply_effect(self, effect):
+        """Atomically materialize a fact and its inbox receipt, preserving newer choices."""
+        from .persistence_effects import validate_effect
+        validate_effect(effect)
+        workspace, issue = effect['workspace'], effect['issue_key']
+        payload, source = effect['payload'], effect['source']
+        with closing(self._connect()) as db, db:
+            prior = db.execute('SELECT payload_hash,outcome FROM effect_inbox WHERE event_id=?',
+                               (effect['event_id'],)).fetchone()
+            if prior:
+                if prior[0] != effect['payload_sha256']:
+                    raise ValueError('Persistence effect receipt mismatch')
+                return dict(event_id=effect['event_id'], outcome=prior[1], already_applied=True)
+            watermark = db.execute('SELECT revision,target_revision,target_choice_revision FROM effect_sources WHERE workspace=? AND issue_key=? AND source_id=?',
+                (workspace, issue, source['id'])).fetchone()
+            current = self._effect_versions(db, workspace, issue)
+            outcome = 'SUPERSEDED'
+            expected = effect['expected']
+            choice_matches = all(current[k] == expected[k] for k in ('choice_event_id', 'choice_revision'))
+            assessment_matches = all(current[k] == expected[k] for k in ('assessment_id', 'assessment_revision'))
+            # Accept only this source's exact prior projection. Reopening a
+            # reminder is also a derived choice mutation; its hash must be owned
+            # by the watermark and its original human event must remain unchanged.
+            # Missing legacy watermark fields never imply ownership.
+            own_advance = bool(watermark and watermark[1] is not None
+                               and watermark[1] == current['assessment_revision'])
+            own_choice_advance = bool(watermark and watermark[2] is not None
+                and current['choice_event_id'] == expected['choice_event_id']
+                and watermark[2] == current['choice_revision'])
+            if ((not watermark or source['revision'] > watermark[0])
+                    and (choice_matches or own_choice_advance)
+                    and (assessment_matches or own_advance)):
+                if effect['kind'] == 'ASSESSMENT':
+                    if (set(payload) != {'verdict', 'evidence_revision', 'assessment_id', 'fresh', 'evidence_backed', 'metadata'}
+                            or payload['verdict'] not in ('FALSE_POSITIVE', 'STILL_RISK', 'NEEDS_CONTEXT')
+                            or any(type(payload[f]) is not bool for f in ('fresh', 'evidence_backed'))):
+                        raise ValueError('Invalid persistence assessment payload')
+                    self._record_assessment(db, workspace, issue, metadata=self._metadata(payload['metadata']),
+                        **{k: v for k, v in payload.items() if k != 'metadata'})
+                elif effect['kind'] == 'CLEAR_ASSESSMENT':
+                    if payload:
+                        raise ValueError('Invalid persistence clear payload')
+                    row = db.execute('SELECT data FROM assessments WHERE workspace=? AND issue_key=?', (workspace, issue)).fetchone()
+                    if row:
+                        assessment = dict(json.loads(row[0]), revoked=True, automatic_exclusion=False)
+                        db.execute('UPDATE assessments SET data=? WHERE workspace=? AND issue_key=?',
+                                   (json.dumps(assessment), workspace, issue))
+                else:
+                    if set(payload) != {'revision', 'assessment_id', 'verdict', 'fresh', 'evidence_backed'}:
+                        raise ValueError('Invalid persistence material-change payload')
+                    self._confirm_material_change(db, workspace, issue, **payload)
+                outcome = 'APPLIED'
+            if not watermark or source['revision'] > watermark[0]:
+                target = self._effect_versions(db, workspace, issue) if outcome == 'APPLIED' else None
+                target_revision = target['assessment_revision'] if target else watermark[1] if watermark else None
+                choice_revision = target['choice_revision'] if target else watermark[2] if watermark else None
+                db.execute('INSERT OR REPLACE INTO effect_sources '
+                    '(workspace,issue_key,source_id,revision,target_revision,target_choice_revision) VALUES (?,?,?,?,?,?)',
+                    (workspace, issue, source['id'], source['revision'], target_revision, choice_revision))
+            db.execute('INSERT INTO effect_inbox VALUES (?,?,?)',
+                       (effect['event_id'], effect['payload_sha256'], outcome))
+        return dict(event_id=effect['event_id'], outcome=outcome, already_applied=False)
 
 
 def source_revision(workspace, name):

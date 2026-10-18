@@ -245,7 +245,7 @@ def test_existing_session_schema_and_reference_guards_survive_task_handoff(sampl
     if bad=='other-member':result['finding_id']=sample[1].findings[2].id
     elif bad=='forged-ref':result['evidence_refs'][0]['file']='outside.java'
     elif bad=='instruction-field':result['run_shell']='curl attacker.invalid'
-    elif bad=='expired':monkeypatch.setattr('security_runtime.mcp_server.time.monotonic',lambda:10**12)
+    elif bad=='expired':monkeypatch.setattr('security_runtime.mcp_tools.explicit_audit.time.monotonic',lambda:10**12)
     else:invoke(s,'submit_triage',scan_id='scan-a',results=[result],triage_session=token)
     with pytest.raises(ValueError):invoke(s,'submit_triage',scan_id='scan-a',results=[result],triage_session=token)
     assert len(sample[2].triage_records('scan-a'))==(1 if bad=='replay' else 0)
@@ -267,7 +267,11 @@ def test_actual_stdio_user_first_task_to_host_submit_to_retained_review(sample):
             async with stdio_client(params,errlog=stderr) as (read,write):
                 async with ClientSession(read,write) as client:
                     initialized=await asyncio.wait_for(client.initialize(),20)
-                    assert 'Do not ask users for Finding UUIDs' in initialized.instructions
+                    assert 'runtime-workflow' in initialized.instructions
+                    workflow=unwrap(await client.call_tool('get_runtime_guidance',{'topic':'runtime-workflow'}))
+                    assert workflow['status']=='READY'
+                    assert 'Do not ask users for Finding UUIDs' in workflow['content']
+                    assert workflow['authority']['repair_authorized'] is False
                     listed=(await client.list_tools()).tools
                     assert {'get_security_summary','prepare_task_triage','get_runtime_info'} <= {t.name for t in listed}
                     metadata={t.name:t for t in listed}

@@ -1,5 +1,6 @@
 """Automatic task scope must not be consumed by ignored or partial inventory."""
 import subprocess
+from pathlib import Path
 
 import pytest
 
@@ -8,6 +9,17 @@ from security_runtime.local_evidence import EvidenceUnavailable, WorkspaceReader
 from security_runtime import task_security
 from test_task_security import service, begin
 from task_review_helpers import read_plan
+
+
+def guard_source_discovery(monkeypatch, root, message):
+    """Reject recursive original-source discovery, not private-input checks."""
+    original = task_security.os.walk
+    def guarded(directory, *args, **kwargs):
+        candidate = Path(directory).resolve()
+        if candidate == root or candidate.is_relative_to(root):
+            pytest.fail(message)
+        return original(directory, *args, **kwargs)
+    monkeypatch.setattr(task_security.os, 'walk', guarded)
 
 
 def test_ignored_old_files_cannot_consume_task_budget_or_hide_new_source(service, monkeypatch):
@@ -19,7 +31,7 @@ def test_ignored_old_files_cannot_consume_task_budget_or_hide_new_source(service
         (old / f'cached{number:04d}.py').write_text('value = 1\n')
     (root / 'artifacts').mkdir()
     (root / 'artifacts' / 'generated.py').write_text('value = 2\n')
-    monkeypatch.setattr(task_security.os, 'walk', lambda *a, **k: pytest.fail('Git inventory must not walk ignored directories'))
+    guard_source_discovery(monkeypatch, root, 'Git inventory must not walk ignored source directories')
     (root / 'routes.py').write_text('user_dirty_before_task = 1\n')
     ref = begin(service)
     baseline = s.load(root, ref)['baseline']
@@ -73,7 +85,7 @@ def test_partial_path_snapshots_do_not_invent_added_deleted_or_clean_result(serv
 def test_git_inventory_failure_never_falls_back_to_recursive_discovery(service, monkeypatch):
     s, root, runtime = service
     monkeypatch.setattr(GitService, '_paths', lambda *a: (_ for _ in ()).throw(GitError('fixture failure')))
-    monkeypatch.setattr(task_security.os, 'walk', lambda *a, **k: pytest.fail('No fallback through ignored outputs'))
+    guard_source_discovery(monkeypatch, root, 'No source fallback through ignored outputs')
     ref = begin(service)
     result = s.finish(root, ref)
     assert result['status'] == 'INCOMPLETE' and runtime.calls == []

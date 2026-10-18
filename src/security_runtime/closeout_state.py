@@ -51,6 +51,10 @@ class CloseoutStateStore:
                    '(ref TEXT PRIMARY KEY, workspace TEXT NOT NULL, request_key TEXT NOT NULL, '
                    'data TEXT NOT NULL, mac TEXT NOT NULL)')
         db.execute('CREATE INDEX IF NOT EXISTS closeout_requests ON closeouts(workspace, request_key)')
+        db.execute('CREATE TABLE IF NOT EXISTS closeout_effect_outbox '
+                   '(id TEXT PRIMARY KEY, ref TEXT NOT NULL, workspace TEXT NOT NULL, '
+                   'state TEXT NOT NULL, data TEXT NOT NULL, mac TEXT NOT NULL)')
+        db.execute('CREATE INDEX IF NOT EXISTS closeout_pending ON closeout_effect_outbox(workspace,ref,state)')
         db.commit()
         db.execute('BEGIN IMMEDIATE')
         return db
@@ -146,7 +150,7 @@ class CloseoutStateStore:
             return value, owner
 
     def finish(self, ref, workspace, generation, owner, *, status, coverage, reason=None,
-               receipt=None, scan_id=None):
+               receipt=None, scan_id=None, persistence=None):
         if status not in {'COMPLETED', 'NEEDS_RETRY'}:
             raise ValueError('Invalid closeout transition')
         with closing(self._write()) as db, db:
@@ -156,12 +160,104 @@ class CloseoutStateStore:
             # An old runner cannot clear a newer arrival or another lease.
             if value['generation'] != generation or value['lease_owner'] != owner:
                 return value, False
+            if persistence is not None:
+                from .closeout_persistence import validate_effect, pending_receipt, MAX_EFFECTS, MAX_PENDING, CONTRACT
+                validate_effect(persistence)
+                if (persistence['closeout_ref'] != ref or persistence['workspace_id'] != workspace
+                        or persistence['generation'] != generation or persistence['receipt'] != receipt
+                        or persistence['status'] != status or persistence['coverage'] != coverage
+                        or persistence['pending_receipt_sha256'] != digest(self.key_reader(), pending_receipt(persistence))):
+                    raise ValueError('Closeout source binding cannot be verified')
+                if (db.execute('SELECT count(*) FROM closeout_effect_outbox').fetchone()[0] >= MAX_EFFECTS
+                        or db.execute("SELECT count(*) FROM closeout_effect_outbox WHERE state='PENDING'").fetchone()[0] >= MAX_PENDING):
+                    raise ValueError('Closeout persistence capacity exceeded')
+                source = dict(contract=CONTRACT, event=persistence, state='PENDING', acknowledgement=None)
+                self._save_effect(db, source)
+                status, reason, receipt = 'NEEDS_RETRY', 'CLOSURE_PERSISTENCE_INCOMPLETE', pending_receipt(persistence)
             value.update(status=status, coverage=coverage, reason=reason, receipt=receipt,
                          lease_owner=None, lease_until=None, updated_at=self.now())
             if scan_id is not None:
                 value['scan_ids'] = (value['scan_ids'] + [scan_id])[-20:]
             self._save(db, value)
             return value, True
+
+    def _save_effect(self, db, source):
+        from .closeout_persistence import MAX_EFFECT_BYTES
+        raw = encode(source)
+        if len(raw) > MAX_EFFECT_BYTES:
+            raise ValueError('Closeout persistence capacity exceeded')
+        event = source['event']
+        db.execute('INSERT OR REPLACE INTO closeout_effect_outbox VALUES(?,?,?,?,?,?)',
+            (event['event_id'], event['closeout_ref'], event['workspace_id'], source['state'],
+             raw.decode(), digest(self.key_reader(), source)))
+
+    def _decode_effect(self, row, workspace, ref):
+        from .closeout_persistence import validate_effect, CONTRACT, MAX_EFFECT_BYTES
+        if row is None:
+            return None
+        event_id, state, raw, mac = row
+        if len(raw.encode()) > MAX_EFFECT_BYTES:
+            raise ValueError('Closeout persistence cannot be verified')
+        value = json.loads(raw)
+        if (not isinstance(value, dict) or value.get('contract') != CONTRACT or value.get('state') != state
+                or state not in {'PENDING', 'APPLIED', 'SUPERSEDED'}
+                or not hmac.compare_digest(mac, digest(self.key_reader(), value))):
+            raise ValueError('Closeout persistence cannot be verified')
+        event = value['event']
+        validate_effect(event)
+        if event['event_id'] != event_id or event['workspace_id'] != workspace or event['closeout_ref'] != ref:
+            raise ValueError('Closeout persistence source changed')
+        return value
+
+    def pending_effects(self, ref, workspace, *, limit=8):
+        """Read-only, authenticated obligations; no schema/key/repair creation."""
+        if type(limit) is not int or not 1 <= limit <= 32:
+            raise ValueError('Invalid closeout recovery limit')
+        if not isinstance(ref, str) or REF.fullmatch(ref) is None:
+            raise ValueError('Invalid closeout reference')
+        no_links(self.path)
+        if not self.path.is_file():
+            return []
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='closeout_effect_outbox'").fetchone():
+                return []
+            rows = db.execute("SELECT id,state,data,mac FROM closeout_effect_outbox "
+                "WHERE workspace=? AND ref=? AND state='PENDING' ORDER BY rowid LIMIT ?",
+                (workspace, ref, limit)).fetchall()
+        return [self._decode_effect(row, workspace, ref)['event'] for row in rows]
+
+    def acknowledge_effect(self, effect, *, outcome):
+        """ACK a target, updating only the exact pending source receipt."""
+        from .closeout_persistence import validate_effect, source_matches, FLAGS
+        validate_effect(effect)
+        if outcome not in {'APPLIED', 'SUPERSEDED'}:
+            raise ValueError('Invalid closeout acknowledgement')
+        with closing(self._write()) as db, db:
+            row = db.execute('SELECT id,state,data,mac FROM closeout_effect_outbox WHERE id=?',
+                (effect['event_id'],)).fetchone()
+            source = self._decode_effect(row, effect['workspace_id'], effect['closeout_ref'])
+            if source is None or source['event'] != effect:
+                raise ValueError('Closeout persistence source changed')
+            value = self._row(db, effect['closeout_ref'], effect['workspace_id'])
+            if source['state'] != 'PENDING':
+                return value, False
+            accepted = source_matches(self, value, effect)
+            terminal = outcome if accepted else 'SUPERSEDED'
+            if accepted:
+                if terminal == 'APPLIED':
+                    receipt = dict(effect['receipt'], persistence_status='APPLIED',
+                        persistence_sync=dict(state='APPLIED'), persistence_effect_id=effect['event_id'])
+                    value.update(status=effect['status'], coverage=effect['coverage'], reason=effect['reason'],
+                        receipt=receipt, updated_at=self.now())
+                else:
+                    value.update(status='NEEDS_RETRY', reason='SOURCE_OR_EVENT_CHANGED', updated_at=self.now())
+                    value['receipt'].update({name: False for name in FLAGS})
+                    value['receipt'].update(persistence_status='SUPERSEDED', persistence_sync=dict(state='SUPERSEDED'))
+                self._save(db, value)
+            source.update(state=terminal, acknowledgement=dict(outcome=terminal, source_accepted=accepted))
+            self._save_effect(db, source)
+            return value, accepted
 
     def mark_pending(self, ref, workspace):
         """Internal arrival primitive for future adapters; never renews authority."""
@@ -198,10 +294,14 @@ class CloseoutStateStore:
                 return value
         return None
 
-    def incomplete_persistence(self, ref, workspace, generation, *, reason='CLOSURE_PERSISTENCE_INCOMPLETE'):
+    def incomplete_persistence(self, ref, workspace, generation, *, reason='CLOSURE_PERSISTENCE_INCOMPLETE',
+                               expected_receipt_hash=None):
         with closing(self._write()) as db, db:
             value = self._row(db, ref, workspace)
             if value is not None and value['generation'] == generation and value['status'] in {'COMPLETED', 'NEEDS_RETRY'}:
+                if (expected_receipt_hash is not None and
+                        digest(self.key_reader(), value.get('receipt')) != expected_receipt_hash):
+                    return value
                 value.update(status='NEEDS_RETRY', reason=reason)
                 if value.get('receipt'):
                     value['receipt'].update(check_completed=False, risk_fix_complete=False, current_version=False,

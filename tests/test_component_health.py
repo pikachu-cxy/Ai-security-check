@@ -77,7 +77,9 @@ def test_reinstall_requires_explicit_choice_and_preserves_explicit_external_path
     calls = []
     monkeypatch.setattr(manager, 'resolve', lambda name: next(results))
     monkeypatch.setattr(manager, '_install_binary', lambda manifest: calls.append(manifest.tool_id))
-    assert manager.ensure('gitleaks', reinstall=True).status == ToolStatus.READY
+    # The installer is mocked; test the explicit online reinstall path even
+    # when the regression harness keeps all unmocked providers offline.
+    assert manager.ensure('gitleaks', offline=False, reinstall=True).status == ToolStatus.READY
     assert calls == ['gitleaks']
     external = ResolvedTool('gitleaks', '', '/user/custom/engine', ToolSource.EXPLICIT, ToolStatus.BROKEN)
     monkeypatch.setattr(manager, 'resolve', lambda name: external)

@@ -8,14 +8,15 @@ from security_runtime.fast_fix import HOST_CONTRACT
 from security_runtime.fix_context import build
 
 def test_ambiguous_continuation_is_not_repair_approval():
-    from security_runtime.host_guidance import HOST_INSTRUCTIONS
+    from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
     from security_runtime.review_skill import skill_files
-    assert 'is analysis, not repair' in HOST_INSTRUCTIONS
-    assert 'approval. Clarify whether to fix before editing' in HOST_INSTRUCTIONS
-    assert 'For explicit fix intent 修复/修复它/把它修掉/修第一项' in HOST_INSTRUCTIONS
+    assert 'is analysis, not repair' in RUNTIME_WORKFLOW
+    assert 'approval. Clarify whether to fix before editing' in RUNTIME_WORKFLOW
+    assert 'For explicit fix intent 修复/修复它/把它修掉/修第一项' in RUNTIME_WORKFLOW
     skill = skill_files()['SKILL.md'].decode('utf-8')
-    assert "'处理这个问题' is not repair approval" in skill
-    assert 'Silence is never approval' in skill
+    for text in (HOST_INSTRUCTIONS, skill):
+        assert '继续第一项/处理这个问题' in text and '只表示分析' in text
+        assert '沉默和计划均不授权' in text
 
 @pytest.mark.parametrize('setup', ['smart_auto', 'ask_before_fix'], indirect=True)
 def test_unconfirmed_hook_cannot_issue_any_edit_handoff(setup):

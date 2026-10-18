@@ -301,18 +301,22 @@ def test_hook_removing_all_dependency_inputs_keeps_unknown_without_old_finding_i
     hooks = coordinator(tmp_path, engine, repo)
     start(hooks, repo)
     manifest = write(repo, "requirements.txt", "fixture-vulnerable-package==1.0\n")
-    # Track the input so removal remains visible to Git's raw changed inventory.
+    # Stage an addition, process it, then remove it before it ever reaches
+    # HEAD. The final recheck name disappears from index AND Git dirty paths.
     git(repo, "add", "requirements.txt")
     first = activity(hooks, repo)
     assert first["current_dependency_finding_ids"] and len(dependency.calls) == 1
     manifest.unlink()
     git(repo, "add", "-u", "requirements.txt")
+    assert "requirements.txt" not in git(repo, "ls-files").splitlines()
+    assert "requirements.txt" not in git(repo, "diff", "--name-only", "HEAD").splitlines()
     removed = activity(hooks, repo)
     assert len(dependency.calls) == 1
-    assert removed["capabilities"][Capability.DEPENDENCY_VULN] == "UNAVAILABLE"
+    assert removed["capabilities"].get(Capability.DEPENDENCY_VULN) == "UNAVAILABLE", removed
     assert not removed.get("current_dependency_finding_ids")
     assert removed["scan_id"] != first["scan_id"]
     assert removed["delta"]["resolved"] == 0
+    assert removed["status"] == "PARTIAL" and removed["scan_attempt"]["input_id"]
 
 
 @pytest.mark.parametrize("exception", [RuntimeError, type("PrivateProviderFailure", (Exception,), {})])

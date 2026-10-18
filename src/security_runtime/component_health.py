@@ -131,9 +131,12 @@ def settings_problem():
         return diagnosis('COMPONENT_SETTINGS_UNREADABLE')
 
 
-def settings_fingerprint():
+def settings_fingerprint(*, include_metadata=True):
     path, raw, stamp = _settings_bytes()
-    return hashlib.sha256(str(path).encode() + repr(stamp).encode() + (raw or b'')).digest()
+    # Probe reuse also expires on replacement. Execution binds actual settings
+    # bytes: Semgrep atomically rewrites unchanged settings during normal runs.
+    metadata = repr(stamp).encode() if include_metadata else (b'MISSING' if raw is None else b'PRESENT')
+    return hashlib.sha256(str(path).encode() + metadata + (raw or b'')).digest()
 
 
 class ComponentHealthStore:

@@ -45,7 +45,9 @@ def native_case(tmp_path):
         review=dict(source='HOST_TASK_REVIEW', findings=[finding], status='COMPLETE'),
         review_plan=dict(snapshot_id='acceptance-native-snapshot'))
     record = store.save(record)
-    TaskRiskLedger(hooks.store, root).register(record)
+    with hooks.store.lock(root) as acquired:
+        assert acquired
+        TaskRiskLedger(hooks.store, root).register(record)
     source = dict(kind='HOST_TASK_RISK', task_ref=record['task_ref'],
                   finding_id=finding['id'], origin_review_revision=1)
     proposal = dict(security_goal='Require access before returning the body.',

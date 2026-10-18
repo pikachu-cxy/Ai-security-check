@@ -100,7 +100,7 @@ def test_new_risk_in_preedit_parser_gap_is_unattributed(adapter, repo):
         partial, observation = partial_plan(('A.java', 'good.ts'))
         observation['plans']['semgrep'].errored_files.add('A.java')
         partial['capabilities']['CODE_SAST'] = observation['plans']['semgrep'].coverage('SUCCESS')['status']
-        kwargs['_hook_observer']([], observation['runs'], observation['plans'])
+        kwargs['observer']([], observation['runs'], observation['plans'])
         return replace(result, status='PARTIAL', coverage='PARTIAL', execution_state='EXECUTED',
                        capability_results=partial['capabilities'], scanner_runs=observation['runs'])
     runtime.scan = partial_scan
@@ -139,7 +139,7 @@ def test_partial_seed_preserves_gap_and_reloads_as_comparison(adapter, repo):
     def scan(*args, **kwargs):
         result = original(*args, **kwargs)
         partial, observation = partial_plan(('A.java', 'app.ts', 'Component.vue'))
-        kwargs['_hook_observer']([], observation['runs'], observation['plans'])
+        kwargs['observer']([], observation['runs'], observation['plans'])
         return replace(result, status='PARTIAL', coverage='PARTIAL', execution_state='EXECUTED',
                        capability_results=partial['capabilities'], scanner_runs=observation['runs'])
     runtime.scan = scan
@@ -166,7 +166,7 @@ def test_non_git_partial_baseline_readiness_and_reconnect(tmp_path, failure):
         partial, observation = partial_plan()
         if failure:
             observation['plans']['semgrep'].confirmed_rules.clear()
-        kwargs['_hook_observer']([], observation['runs'], observation['plans'])
+        kwargs['observer']([], observation['runs'], observation['plans'])
         return replace(result, status='PARTIAL', coverage='PARTIAL', execution_state='EXECUTED',
                        capability_results=partial['capabilities'], scanner_runs=observation['runs'])
     runtime.scan = scan

@@ -26,6 +26,8 @@ STANDALONE_DOCUMENTS = (
     'docs/design/SCAN_TARGET_SELECTION.md',
     'docs/design/RULE_FOUNDATION.md',
     'docs/design/RULE_SOURCE_INVENTORY.md',
+    'docs/TASK_REVIEW_V3_ONLY.zh-CN.md',
+    'docs/PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md',
 )
 
 
@@ -95,6 +97,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
     source_commit = git_provenance(root, 'rev-parse', 'HEAD', timeout=30)
     source_dirty = bool(git_provenance(root, 'status', '--porcelain', timeout=30))
     from security_runtime.delivery import CONTRACT, encode, file_digest, package_metadata, package_inventory
+    from security_runtime.compatibility import storage_contracts
     entries = package_inventory(bundle, allow_internal_links=os.name != 'nt')
     files = {r[0]: file_digest(bundle / r[0]) for r in entries
              if stat.S_ISREG(r[1]) and r[0] != 'version.json'}
@@ -103,6 +106,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
         "format": "pyinstaller-onedir", "source_commit": source_commit,
         "source_dirty":source_dirty, "experience_contract":"upgrade-and-scan-v1",
         "state_schema": STATE_SCHEMA, "capability_contract": "developer-guidance-v0.3",
+        "storage_contracts": storage_contracts(),
         "launcher_contract": CONTRACT, "files": files,
         "managed_engines": ["semgrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}
     if links:

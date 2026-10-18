@@ -182,7 +182,8 @@ def project_disposition(hooks, root, row, technical_feedback, *, now=None, inclu
 def feedback_for_record(hooks, root, record):
     """Current display facts for original host findings, never rewrite history."""
     ledger = TaskRiskLedger(hooks, root)
-    rows = ledger.registration_rows(record, ledger.read()) if record.get('end') else ledger.read()
+    rows = ledger.read(record['task_ref'])
+    if record.get('end'): rows = ledger.registration_rows(record, rows)
     selected = [rows.get(record['task_ref']+':'+finding['id'])
                 for finding in (record.get('review') or {}).get('findings', [])]
     selected = [row for row in selected if row]
@@ -210,7 +211,7 @@ class TaskRiskFeedbackService:
         root = service.root(workspace)
         record = service.load(root, task_ref, read_only=read_only)
         ledger = TaskRiskLedger(service.hooks, root)
-        rows = ledger.registration_rows(record, ledger.read())
+        rows = ledger.registration_rows(record, ledger.read(record['task_ref']))
         key = task_ref + ':' + finding_id
         row = rows.get(key)
         if not row or row['source'] != 'HOST_TASK_REVIEW':
@@ -321,6 +322,7 @@ class TaskRiskFeedbackService:
         with service.hooks.lock(root, wait_seconds=2) as acquired:
             if not acquired:
                 return dict(status='BUSY', scanner_run=False, repair_authorized=False)
+            TaskRiskLedger(service.hooks, root).resume()
             root, record, ledger, rows, key, _ = self._load(service, workspace, task_ref, finding_id)
             row = rows[key]
             events = list(row.get('feedback_events') or [])
@@ -362,20 +364,45 @@ class TaskRiskFeedbackService:
             if (event.get('evidence_type') == 'HOST_CODE_REVIEW_NOT_SCANNER_PROOF'
                     or event['status'] == 'REVOKED'):
                 row['assessment_feedback'] = copy.deepcopy(row['feedback'])
-            ledger.save(rows)
+            effects = []
             scope = row.get('disposition_scope') or {}
             if event['status'] == 'STILL_PRESENT' and proof is not None and scope.get('issue_key'):
                 revision, precise = disposition_revision(root, row, with_precision=True)
                 decisions = disposition_store(service.hooks, root, now=self.now)
                 saved_choice = decisions.status(root, scope['issue_key'], current_revision=revision)
                 if precise and saved_choice.get('active') and saved_choice.get('reassessment_required'):
-                    decisions.confirm_material_change(
-                        root, scope['issue_key'], revision, assessment_id=event['event_id'],
-                        verdict='STILL_RISK', fresh=True, evidence_backed=True)
+                    from .persistence_effects import make_effect
+                    effects.append(make_effect(kind='MATERIAL_CHANGE',
+                        source_id=_digest(['native-risk-feedback', str(root), key]),
+                        source_revision=len(events), workspace=str(root), issue_key=scope['issue_key'],
+                        expected=decisions.effect_versions(root, scope['issue_key']),
+                        payload=dict(revision=revision, assessment_id=event['event_id'],
+                                     verdict='STILL_RISK', fresh=True, evidence_backed=True)))
+            # Feedback facts and their exact target expectations share one
+            # signed authority publication; a failed target never loses intent.
+            ledger.save(rows, effects=effects)
+            sync = self.reconcile_effects(service, root, ledger=ledger)
             result = project_feedback(row, root)
             return dict(status='FEEDBACK_RECORDED', task_ref=task_ref, finding_id=finding_id,
                 feedback=result, original_risk_status=row['status'], audit_event_count=len(events),
-                scanner_run=False, repair_authorized=False)
+                scanner_run=False, repair_authorized=False, disposition_sync=sync)
+
+    def reconcile_effects(self, service, root, *, ledger=None):
+        """Mutation-only target recovery, independent of source-review execution."""
+        if not service.hooks.lock_held(root): raise ValueError('Feedback workspace lock required')
+        ledger = ledger or TaskRiskLedger(service.hooks, root)
+        decisions = disposition_store(service.hooks, root, now=self.now)
+        applied = 0
+        try:
+            for effect in ledger.pending_effects():
+                result = decisions.apply_effect(effect)
+                if result['outcome'] not in {'APPLIED', 'SUPERSEDED'}:
+                    raise ValueError('Feedback target receipt unavailable')
+                ledger.acknowledge_effect(effect)
+                applied += 1
+        except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+            return dict(state='PENDING', applied=applied)
+        return dict(state='APPLIED', applied=applied)
 
     def submit(self, service, workspace, task_ref, finding_id, feedback_ref, verdict,
                rationale, counterevidence, evidence_refs, current_protections=None, unknowns=None):
@@ -452,6 +479,7 @@ class TaskRiskFeedbackService:
         with service.hooks.lock(root, wait_seconds=2) as acquired:
             if not acquired:
                 return dict(status='BUSY', scanner_run=False, repair_authorized=False)
+            TaskRiskLedger(service.hooks, root).resume()
             root, record, ledger, rows, key, _ = self._load(
                 service, workspace, task_ref, finding_id)
             row = rows[key]
@@ -471,10 +499,35 @@ class TaskRiskFeedbackService:
             # selected issue when its original source later becomes unavailable.
             ledger.save(rows)
             store = disposition_store(service.hooks, root, now=self.now)
+            from .native_repair_intent import NativeRepairIntents
+            from .task_ownership import valid_owner
+            intents = (NativeRepairIntents(service.hooks, root, service._owner(), now=self.now)
+                       if valid_owner(service._owner()) else None)
+            effects = []
+            if disposition in {'DEFER', 'EXCLUDE'} and intents is not None:
+                try:
+                    pending = intents.get()
+                    if (pending and pending['source'].get('task_ref') == task_ref
+                            and pending['source'].get('finding_id') == finding_id):
+                        effect = intents.release_effect(pending['source'])
+                        if effect is not None: effects.append(effect)
+                except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+                    # A damaged independent workflow cannot veto the user's
+                    # saved reminder choice. Unknown versions remain pending;
+                    # later recovery must never invent a cancellation target.
+                    effects.append(dict(kind='RELEASE_NATIVE_INTENT',payload=dict(
+                        owner=service._owner(), source=dict(kind='HOST_TASK_RISK',
+                            task_ref=task_ref,finding_id=finding_id), intent_sha256=None)))
             state = store.set(root, scope['issue_key'], disposition, safe_reason,
                 user_requested=True, until=until, request_id=request_id,
                 evidence_revision=disposition_revision(root, row),
-                metadata=dict(scope.get('metadata') or {}, reference=_digest([task_ref, finding_id])))
+                metadata=dict(scope.get('metadata') or {}, reference=_digest([task_ref, finding_id])),
+                effects=effects)
+            try:
+                release = (intents.drain_releases(store) if intents is not None
+                           else dict(status='NOT_APPLICABLE', repair_authorized=False))
+            except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+                release = dict(status='PENDING', repair_authorized=False)
             history = state.pop('history', [])
             handling = project_disposition(service.hooks, root, row,
                 project_feedback(row, root), now=self.now)
@@ -486,7 +539,8 @@ class TaskRiskFeedbackService:
             return dict(status='DISPOSITION_RECORDED', task_ref=task_ref, finding_id=finding_id,
                 **handling, original_risk_status=row['status'],
                 audit_event_count=len(history), message=messages[disposition],
-                scanner_run=False, repair_authorized=False, raw_findings_changed=False)
+                scanner_run=False, repair_authorized=False, raw_findings_changed=False,
+                repair_workflow_release=release)
 
     def get(self, service, workspace, task_ref, finding_id, offset=0, limit=2):
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 2:

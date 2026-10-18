@@ -85,7 +85,9 @@ def test_zero_delta_cannot_clear_later_arriving_activity(repo, tmp_path):
         return snapshot
     core.snapshot_capture = concurrent_arrival
     out = core.handle('FILE_CHANGED', repo, 'codex', 's')
-    assert out['status'] == 'NO_CHANGE' and not runtime.calls
+    assert out['status'] == 'INCONCLUSIVE' and not runtime.calls
+    assert out['reason'] == 'SCAN_ATTEMPT_PUBLICATION_STALE'
+    assert out['pending_mutation'] is True
     assert later and later[0] != first
     assert core.store.pending_activity(repo, 'codex', 's') == later[0]
 

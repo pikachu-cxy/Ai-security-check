@@ -71,14 +71,14 @@ def followup_identity(record, version):
 
 
 def task_delivery_facts(record, *, scanner_run=None, recording='UNKNOWN',
-                        context_returned=False, intent='TASK_FINAL_SUMMARY'):
+                        context_returned=False, intent='TASK_FINAL_SUMMARY', delivery_receipt=None):
     """Project known facts without claiming persistence, host consumption or consent."""
     from .task_projection import status as projection_status
     if type(context_returned) is not bool or scanner_run is not None and type(scanner_run) is not bool:
         raise ValueError('Invalid task delivery observation')
     if intent not in {'TASK_FINAL_SUMMARY', 'TASK_CLOSEOUT'}:
         raise ValueError('Invalid task delivery intent')
-    if recording not in {'UNKNOWN', 'RECORDED', 'FAILURE_MARKER_RECORDED', 'UNAVAILABLE',
+    if recording not in {'UNKNOWN', 'RECORDED', 'ALREADY_RECORDED', 'FAILURE_MARKER_RECORDED', 'UNAVAILABLE',
                          'NO_MUTATION', 'NOT_APPLICABLE', 'TASK_CLOSED',
                          'TASK_OWNER_MISMATCH', 'TASK_CHANGED'}:
         raise ValueError('Invalid task recording observation')
@@ -86,7 +86,7 @@ def task_delivery_facts(record, *, scanner_run=None, recording='UNKNOWN',
     protocol = record.get('review_protocol')
     if type(protocol) is not int or protocol not in {1, 2, 3}:
         protocol = None
-    return dict(contract='task-delivery-v1', observation_scope='CURRENT_EVENT', task_ref=record['task_ref'],
+    result = dict(contract='task-delivery-v1', observation_scope='CURRENT_EVENT', task_ref=record['task_ref'],
         phase=record['phase'], review_protocol=protocol,
         task_pending=task_needs_handoff(record), delivery_intent=intent,
         risk_ledger_sync=projection_status(record),
@@ -95,3 +95,26 @@ def task_delivery_facts(record, *, scanner_run=None, recording='UNKNOWN',
         task_recording=recording, context_returned=context_returned,
         host_report_submitted='NOT_OBSERVED', user_consumption='UNKNOWN',
         repair_authorized=False)
+    if delivery_receipt is not None:
+        import re
+        fields = {'contract', 'delivery_ref', 'result_version', 'response_prepared',
+            'transport_written', 'host_report_submitted', 'user_consumption', 'recording'}
+        if (not isinstance(delivery_receipt, dict) or set(delivery_receipt) != fields
+                or delivery_receipt['contract'] != 'task-delivery-receipt-v1'
+                or delivery_receipt['recording'] not in {'RECORDED', 'UNAVAILABLE'}
+                or any(type(delivery_receipt[field]) is not bool for field in
+                       ('response_prepared', 'transport_written'))
+                or delivery_receipt['user_consumption'] != 'UNKNOWN'
+                or delivery_receipt['host_report_submitted'] not in {'NOT_OBSERVED', 'REPORTED'}):
+            raise ValueError('Invalid task delivery receipt facts')
+        if delivery_receipt['recording'] == 'RECORDED':
+            if (not re.fullmatch(r'tdr1-[a-f0-9]{64}', delivery_receipt['delivery_ref'] or '')
+                    or not re.fullmatch(r'[a-f0-9]{64}', delivery_receipt['result_version'] or '')):
+                raise ValueError('Invalid task delivery receipt identity')
+        elif (delivery_receipt['delivery_ref'] is not None or delivery_receipt['result_version'] is not None
+                or delivery_receipt['response_prepared'] or delivery_receipt['transport_written']
+                or delivery_receipt['host_report_submitted'] != 'NOT_OBSERVED'):
+            raise ValueError('Unavailable delivery receipt cannot claim delivery')
+        result['delivery_receipt'] = dict(delivery_receipt)
+        result['host_report_submitted'] = delivery_receipt['host_report_submitted']
+    return result

@@ -177,7 +177,8 @@ def test_impact_metadata_is_bounded_and_does_not_duplicate_long_analysis():
 
 
 def test_host_and_installed_skill_share_bounded_impact_workflow():
-    assert REPAIR_IMPACT_GUIDANCE in HOST_INSTRUCTIONS
+    from security_runtime.host_guidance import RUNTIME_WORKFLOW
+    assert REPAIR_IMPACT_GUIDANCE in RUNTIME_WORKFLOW
     reference = skill_files()['references/repair-impact.md'].decode('utf-8')
     assert REPAIR_IMPACT_GUIDANCE in reference
     assert REPAIR_IMPACT_GUIDANCE in skill_files()['references/runtime-workflow.md'].decode('utf-8')

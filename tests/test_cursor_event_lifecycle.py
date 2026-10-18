@@ -159,16 +159,25 @@ def test_independent_process_session_activity_overlap(repo,tmp_path,mode):
         release(start)
         began=result(start); changed=result(edit)
         assert not began['result']['scanner_run'] and not began['scopes']
-        assert changed['result']['scanner_run'] and changed['scopes']==[['A.java']]
-        assert not changed['result']['mutation_event_dropped'] and not changed['result']['pending_mutation']
+        assert not changed['result']['mutation_event_dropped']
         if mode=='publish':
+            assert changed['result']['scanner_run'] and changed['scopes']==[['A.java']]
+            assert not changed['result']['pending_mutation']
             assert began['result']['baseline_publish_status']=='PUBLISHED'
             assert changed['result']['workspace_mutation_observed'] and changed['result']['changed_file_count']==1
             assert changed['result']['activity_waited_for_baseline']
         else:
+            # Capture is now outside the OS state lock. A competing mutation
+            # sees the durable lane BUSY and keeps intent instead of waiting
+            # inside a long source transaction or executing a second scan.
+            assert changed['result']['reason']=='WORKSPACE_SCAN_ATTEMPT_BUSY'
+            assert not changed['result']['scanner_run'] and not changed['scopes']
+            assert changed['result']['pending_mutation']
             assert began['result']['reason']=='BASELINE_ATTRIBUTION_UNAVAILABLE'
-            assert changed['result']['workspace_mutation_observed'] is None
-            assert changed['result']['delta']['new']==0
+            retried=result(child(repo,tmp_path,'activity'))
+            assert retried['result']['scanner_run'] and retried['scopes']==[['A.java']]
+            assert retried['result']['workspace_mutation_observed'] is None
+            assert retried['result']['delta']['new']==0 and not retried['result']['pending_mutation']
         duplicate=result(child(repo,tmp_path,'activity'))
         assert duplicate['result']['status']=='NO_CHANGE' and not duplicate['scopes']
     finally:

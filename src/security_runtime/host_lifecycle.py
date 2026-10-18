@@ -125,3 +125,13 @@ def connector_profile(host, mode=None):
         return _PROFILES[(host, mode)]
     except (KeyError, TypeError):
         raise ValueError('UNSUPPORTED_HOST_CONNECTOR') from None
+
+
+def profile_catalog():
+    """Implemented mode declarations; never host discovery or execution proof."""
+    return dict(contract='host-connector-profiles-v1', modes=[dict(host=value.host,
+        mode=value.mode, command_hooks=value.command_hooks,
+        phases=sorted(phase.value for phase in value.phases), stop_intent=value.stop_intent.value,
+        invocation_id=value.invocation_id, capabilities=asdict(value.capabilities),
+        transport=asdict(value.transport_capabilities)) for value in _PROFILES.values()],
+        live_host_discovery=False, security_proof=False)

@@ -7,7 +7,7 @@ from pathlib import Path
 from .capabilities import Capability
 from .diagnostics import DiagnosticError, ErrorDiagnostic
 from .models import RunStatus, ScannerRun
-from .scanners import BaseScanner, _snapshot, _process_failure
+from .scanners import BaseScanner, _snapshot, _process_failure, execution_environment
 from .toolchain import tool_environment, external_tool_loader
 from .processes import run_process, OutputLimitError
 from .progress import emit
@@ -53,6 +53,13 @@ class OSVDependencyAdapter(BaseScanner):
             message='覆盖：'+run.coverage_contract)
         return found, run
 
+    def _environment(self, binary, context):
+        environment = super()._environment(binary, context)
+        if offline_scanning():
+            environment['SECURITY_RUNTIME_OFFLINE'] = '1'
+        environment['OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY'] = str(self.tool_manager.root / 'data' / 'osv')
+        return environment
+
     def _scan(self, binary, context, normalizer):
         scope = tuple(dict.fromkeys(f for f in (*context.files, *context.context_files) if Path(f).name in DEPENDENCY_INPUTS))
         supported = [f for f in scope if Path(f).name in MANIFESTS]
@@ -60,7 +67,7 @@ class OSVDependencyAdapter(BaseScanner):
             raise DiagnosticError(ErrorDiagnostic('DEPENDENCY_SCOPE_UNSUPPORTED', 'No supported dependency inventory is in the planned scope.', 'Provide a supported manifest or lockfile.'))
         offline = offline_scanning()
         db_root = self.tool_manager.root / 'data' / 'osv'
-        environment = tool_environment(Path(binary))
+        environment = execution_environment(binary)
         if offline:
             environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         environment['OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY'] = str(db_root)

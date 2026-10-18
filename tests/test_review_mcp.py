@@ -10,7 +10,7 @@ import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters,stdio_client
 
-from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
 from security_runtime.review_skill import ReviewSkillManager
 from security_runtime.mcp_views import page_bounds
 
@@ -29,19 +29,20 @@ def test_pagination_boundaries(arguments):
 
 
 def test_official_sdk_no_hook_task_review_and_output_volume(tmp_path):
-    source=tmp_path/'App.java'
+    project=tmp_path/'project';project.mkdir()
+    source=project/'App.java'
     source.write_text('import javax.net.ssl.*;\nclass App {\n'+
         ''.join(f' HostnameVerifier v{i} = (host, session) -> true;\n' for i in range(114))+'}\n')
     installed=ReviewSkillManager(tmp_path/'home/.agents/skills',tmp_path/'skill-state')
     installed.execute('install')
-    assert HOST_INSTRUCTIONS in (installed.root/'references/runtime-workflow.md').read_text(encoding='utf-8')
-    assert not (tmp_path/'.codex/hooks.json').exists()
-    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(tmp_path),
+    assert RUNTIME_WORKFLOW in (installed.root/'references/runtime-workflow.md').read_text(encoding='utf-8')
+    assert not (project/'.codex/hooks.json').exists()
+    env=dict(os.environ,SECURITY_RUNTIME_WORKSPACE=str(project),
         SECURITY_RUNTIME_STATE_DIR=str(tmp_path/'state'),SECURITY_RUNTIME_OFFLINE='1',
         SECURITY_RUNTIME_INTEGRATION='generic-mcp',SECURITY_RUNTIME_MCP_SELF_TEST='1')
     driver=Path(__file__).with_name('review_fixture_server.py')
     async def run():
-        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=tmp_path,env=env)
+        params=StdioServerParameters(command=sys.executable,args=[str(driver)],cwd=project,env=env)
         with tempfile.TemporaryFile(mode='w+',encoding='utf-8') as stderr:
             async with stdio_client(params,errlog=stderr) as (read,write):
                 async with ClientSession(read,write) as client:
@@ -114,5 +115,5 @@ def test_official_sdk_no_hook_task_review_and_output_volume(tmp_path):
                     source.write_text(changed)
                     stale=unpack(await call('get_triage',{'scan_id':sid,'view':'summary','limit':5}))
                     assert stale['triage_coverage']['stale']==3
-                    assert not (tmp_path/'.codex/hooks.json').exists()
+                    assert not (project/'.codex/hooks.json').exists()
     asyncio.run(run())

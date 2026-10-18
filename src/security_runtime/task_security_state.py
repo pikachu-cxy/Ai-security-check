@@ -20,6 +20,7 @@ MAX_RECORD_BYTES = 4_000_000
 TTL = 24 * 3600
 MAX_V3_RECORDS = 32
 MAX_HISTORY_RECORDS = MAX_V3_RECORDS * 2  # Preserve up to 32 retired records without using v3 slots.
+MAX_RETAINED_PROJECTIONS = 32
 HOOK_FAILURE_CONTRACT = 'task-hook-recording-failure-v1'
 MAX_HOOK_FAILURE_BYTES = 160_000
 MAX_HOOK_FAILURE_FILES = 1000
@@ -108,6 +109,95 @@ class TaskSecurityStore:
         if not owned and len(values)==1 and record_owner(values[0]) is None: return values[0]
         return None
 
+    def _retain_pending(self, db):
+        """Archive pending obligations before task TTL pruning, never source bodies."""
+        import copy
+        from .task_projection import status
+        db.execute('CREATE TABLE IF NOT EXISTS retained_task_projections '
+                   '(ref TEXT PRIMARY KEY, data TEXT NOT NULL, mac TEXT NOT NULL, created REAL NOT NULL)')
+        archived = db.execute('SELECT ref,data,mac,created FROM retained_task_projections LIMIT ?',
+                              (MAX_RETAINED_PROJECTIONS+1,)).fetchall()
+        if len(archived) > MAX_RETAINED_PROJECTIONS:
+            raise ValueError('Pending task projection retention capacity exceeded')
+        for ref, raw, mac, created in archived:
+            value = self.decode((raw, mac))
+            if created < self.now()-TTL and not status(value)['pending']:
+                db.execute('DELETE FROM retained_task_projections WHERE ref=?', (ref,))
+        expired = db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?',
+                             (self.now()-TTL,)).fetchall()
+        for ref, raw, mac in expired:
+            value = self.decode((raw, mac))
+            if not status(value)['pending']:
+                continue
+            previous = db.execute('SELECT data,mac FROM retained_task_projections WHERE ref=?', (ref,)).fetchone()
+            if previous:
+                retained = self.decode(previous)
+                if retained['ledger_projection'].get('projection_id') != value['ledger_projection'].get('projection_id'):
+                    raise ValueError('Retained task projection identity changed')
+                continue
+            if db.execute('SELECT count(*) FROM retained_task_projections').fetchone()[0] >= MAX_RETAINED_PROJECTIONS:
+                raise ValueError('Pending task projection retention capacity exceeded')
+            retained = copy.deepcopy(value)
+            for field in ('baseline', 'end'):
+                snapshot = retained.get(field)
+                if isinstance(snapshot, dict):
+                    for body in ('texts', 'semantic_proofs', 'text_truncations'):
+                        snapshot.pop(body, None)
+            retained.pop('packet', None)
+            retained['retained_for_projection'] = True
+            retained_raw = encode(retained)
+            if len(retained_raw) > MAX_RECORD_BYTES:
+                raise ValueError('Retained task projection budget exceeded')
+            db.execute('INSERT INTO retained_task_projections VALUES(?,?,?,?)',
+                       (ref, retained_raw.decode(), digest(self.key(), retained), self.now()))
+
+    def pending_projections(self, limit=8):
+        """Read authenticated expired obligations without reviving tasks or evidence."""
+        if type(limit) is not int or not 1 <= limit <= MAX_RETAINED_PROJECTIONS:
+            raise ValueError('Invalid pending task projection limit')
+        no_links(self.path)
+        if not self.path.is_file(): return []
+        with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
+            db.execute('PRAGMA query_only=ON')
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='retained_task_projections'").fetchone():
+                return []
+            rows = db.execute('SELECT data,mac FROM retained_task_projections ORDER BY created,ref LIMIT ?',
+                              (MAX_RETAINED_PROJECTIONS+1,)).fetchall()
+        if len(rows) > MAX_RETAINED_PROJECTIONS:
+            raise ValueError('Pending task projection retention capacity exceeded')
+        from .task_projection import status
+        selected = []
+        for row in rows:
+            value = self.decode(row)
+            if value.get('retained_for_projection') is not True:
+                raise ValueError('Retained task projection cannot be verified')
+            if status(value)['pending']:
+                selected.append(value)
+                if len(selected) == limit: break
+        return selected
+
+    def ack_retained_projection(self, candidate):
+        """Acknowledge only the original signed obligation; no task is rewritten."""
+        from .task_projection import status
+        if (candidate.get('retained_for_projection') is not True
+                or status(candidate)['state'] not in {'APPLIED', 'SUPERSEDED'}):
+            raise ValueError('Invalid retained task projection acknowledgement')
+        no_links(self.path)
+        with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT data,mac FROM retained_task_projections WHERE ref=?',
+                             (candidate['task_ref'],)).fetchone()
+            current = self.decode(row)
+            if (not current or current.get('retained_for_projection') is not True
+                    or current['ledger_projection'].get('projection_id') != candidate['ledger_projection'].get('projection_id')):
+                raise ValueError('Retained task projection changed')
+            if not status(current)['pending']: return current
+            updated = dict(current, ledger_projection=dict(candidate['ledger_projection']))
+            raw = encode(updated)
+            db.execute('UPDATE retained_task_projections SET data=?,mac=? WHERE ref=? AND data=? AND mac=?',
+                       (raw.decode(), digest(self.key(), updated), updated['task_ref'], row[0], row[1]))
+            return updated
+
     def save(self, value, *, new=False):
         if new:
             require_record_protocol(value)
@@ -117,6 +207,7 @@ class TaskSecurityStore:
             db.execute('PRAGMA secure_delete=ON')
             db.execute('CREATE TABLE IF NOT EXISTS security_tasks (ref TEXT PRIMARY KEY, task_key TEXT NOT NULL, phase TEXT NOT NULL, created REAL NOT NULL, data TEXT NOT NULL, mac TEXT NOT NULL)')
             db.execute('BEGIN IMMEDIATE')
+            self._retain_pending(db)
             db.execute('DELETE FROM security_tasks WHERE created<?', (self.now()-TTL,))
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):

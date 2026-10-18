@@ -39,13 +39,13 @@ class SavedRuntime(FakeRuntime):
         self.store = store
 
     def scan(self, *args, **kwargs):
-        observe = kwargs['_hook_observer']
+        observe = kwargs['observer']
         def with_rule(found, runs, plans):
             plan = plans['semgrep']
             plan.rules.append(SimpleNamespace(rule_id=RULE, rule_version='0.1'))
             plan.confirmed_rules.add(RULE)
             observe(found, runs, plans)
-        kwargs['_hook_observer'] = with_rule
+        kwargs['observer'] = with_rule
         out = super().scan(*args, **kwargs)
         out.coverage = 'FULL'
         self.store.save(out)

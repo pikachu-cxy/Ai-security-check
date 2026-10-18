@@ -1,1 +1,7 @@
 src/security_runtime/licenses/trivy/NOTICE -whitespace
+
+# Versioned Skill method digests bind exact shipped bytes across platforms.
+src/security_runtime/skills/** text eol=lf
+
+# Historical writer evidence must remain byte-identical to its pinned Git blob.
+tests/fixtures/legacy_writers/*.py.txt -text

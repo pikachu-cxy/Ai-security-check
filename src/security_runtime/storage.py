@@ -51,7 +51,12 @@ class SQLiteStore:
     def save(self, result: ScanResult) -> None:
         data = result.to_dict()
         from .finding_scope_snapshot import capture_scopes
-        scopes = capture_scopes(data['target_profile']['path'], data['findings'])
+        scopes = result.source_scopes
+        if scopes is None:
+            # Direct legacy result writers retain their old contract. A fixed
+            # input must never silently bind a missing proof to live bytes.
+            scopes = ({} if data.get('scan_context', {}).get('fixed_input')
+                      else capture_scopes(data['target_profile']['path'], data['findings']))
         with closing(self._connect()) as db:
             with db:
                 db.execute("INSERT OR REPLACE INTO scans VALUES (?, ?)", (result.scan_id, json.dumps(data)))
@@ -130,13 +135,23 @@ class SQLiteStore:
     def equivalent_finding_references(self, workspace, finding):
         return ReadOnlySQLiteStore(self.path).equivalent_finding_references(workspace, finding)
 
-    def save_finding_reviews(self, workspace, scan_id, records):
-        # Append-only audit history. Batch is validated before this transaction;
-        # scanner scans/findings and existing AI triage records are untouched.
-        with closing(self._connect()) as db:
-            with db:
-                db.executemany('INSERT INTO finding_reviews(workspace,scan_id,data) VALUES (?,?,?)',
-                    [(workspace, scan_id, json.dumps(record)) for record in records])
+    def save_finding_reviews(self, workspace, scan_id, records, *, effects=None):
+        """Audit facts and derived obligations commit together in this authority."""
+        from .feedback_effects import append_reviews
+        with closing(self._connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            append_reviews(db, self.path, workspace, scan_id, records, effects)
+
+    def mark_finding_effect_attempt(self, effect):
+        from .feedback_effects import mark_attempt
+        with closing(self._connect()) as db, db:
+            db.execute('BEGIN IMMEDIATE')
+            mark_attempt(db, effect)
+
+    def acknowledge_finding_effect(self, effect, outcome):
+        from .feedback_effects import acknowledge
+        with closing(self._connect()) as db, db:
+            acknowledge(db, effect, outcome)
 
 
 class ReadOnlySQLiteStore:

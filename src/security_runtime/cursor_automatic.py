@@ -15,7 +15,8 @@ GAP = ('本次 Cursor 自动安全任务未能建立或读取编辑前的任务�
        '不要把此消息当成修复授权或反复尝试。')
 
 
-def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=None, remote=False, store=None):
+def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=None, remote=False, store=None,
+                           delivery_observer=None):
     from .cursor_hook import CursorBindings, coordinator
     adapter = CursorHostEventAdapter(automatic=True)
     event = payload.get('hook_event_name') if isinstance(payload, dict) else 'UNKNOWN'
@@ -57,6 +58,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 status='DELIVERED' if output else 'NOT_APPLICABLE', scanner_run=False)
             if bridge.last_delivery is not None:
                 result['task_delivery'] = bridge.last_delivery
+                result['response_prepared'] = True
         elif event == 'stop':
             message = bridge.followup(payload)
             if message:
@@ -64,6 +66,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             result = dict(status='FOLLOWUP' if message else 'NOT_APPLICABLE', scanner_run=False)
             if message and bridge.last_delivery is not None:
                 result['task_delivery'] = bridge.last_delivery
+                result['response_prepared'] = True
         else:
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
@@ -82,6 +85,10 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                             scanner_run=result.get('execution', {}).get('scanner_run'), recording=recording)
             result['scanner_run'] = result.get('execution', {}).get('scanner_run', False)
         result.update(diag, automatic_connector=True)
+        if bridge.last_delivery is not None and delivery_observer is not None:
+            receipt = bridge.last_delivery.get('delivery_receipt') or {}
+            if receipt.get('recording') == 'RECORDED':
+                delivery_observer.bind(core.store, root, bridge.owner, receipt)
         return output, result
     except Exception:
         # Host tool execution stays advisory; no exception text, source or tool

@@ -154,6 +154,82 @@ class NativeRepairIntents:
             record['status'] = 'CANCELLED'
             return self._save(db, record)
 
+    def release_effect(self, source):
+        """Capture only the exact selected intent; this template is not consent."""
+        source = clean_source(source)
+        record = self.get()
+        if (record is None or record['source'] != source or record['owner'] != self.owner
+                or record['status'] == 'CANCELLED'):
+            return None
+        return dict(kind='RELEASE_NATIVE_INTENT', payload=dict(owner=copy.deepcopy(self.owner),
+            source=copy.deepcopy(source), intent_sha256=digest(record)))
+
+    def apply_release(self, effect):
+        """Decision outbox -> exact owner/version cancellation plus signed inbox."""
+        require(isinstance(effect, dict) and effect.get('contract') == 'native-intent-release-v1'
+            and effect.get('kind') == 'RELEASE_NATIVE_INTENT'
+            and isinstance(effect.get('event_id'), str) and 0 < len(effect['event_id']) <= 200,
+            'NATIVE_REPAIR_RELEASE_INVALID')
+        payload = effect.get('payload')
+        require(isinstance(payload, dict) and set(payload) == {'owner','source','intent_sha256'}
+            and payload['owner'] == self.owner and clean_source(payload['source']) == payload['source'],
+            'NATIVE_REPAIR_RELEASE_OWNER_MISMATCH')
+        require(isinstance(payload['intent_sha256'],str) and
+                re.fullmatch(r'[a-f0-9]{64}',payload['intent_sha256']) is not None,
+                'NATIVE_REPAIR_RELEASE_SNAPSHOT_UNAVAILABLE')
+        from .persistence_effects import digest as effect_digest
+        require(effect['event_id'] == 'nie1-'+effect_digest({key: value for key, value in effect.items()
+            if key != 'event_id'}),
+            'NATIVE_REPAIR_RELEASE_INVALID')
+        sha = digest(effect)
+        with self.store.connect(write=True) as db:
+            prior = self.store.load(db, 'native_effect_receipts', effect['event_id'])
+            if prior is not None:
+                require(prior.get('payload_sha256') == sha, 'NATIVE_REPAIR_RELEASE_CONFLICT')
+                return dict(event_id=effect['event_id'], outcome=prior['outcome'], already_applied=True)
+            require(db.execute('SELECT count(*) FROM native_effect_receipts').fetchone()[0] < 2000,
+                    'NATIVE_REPAIR_RELEASE_CAPACITY')
+            record = self._load(db)
+            matches = (record is not None and record['source'] == payload['source']
+                       and digest(record) == payload['intent_sha256'])
+            outcome = 'APPLIED' if matches else 'SUPERSEDED'
+            if matches:
+                record['status'] = 'CANCELLED'
+                self._save(db, record)
+            self.store.save(db, 'native_effect_receipts', effect['event_id'],
+                dict(payload_sha256=sha, outcome=outcome, owner=self.owner))
+            return dict(event_id=effect['event_id'], outcome=outcome, already_applied=False)
+
+    def drain_releases(self, decisions, limit=16):
+        """Mutation-only bounded recovery; foreign owners remain pending."""
+        applied = superseded = errors = 0
+        import sqlite3
+        def unavailable():
+            # A corrupt/unavailable decision store is not an empty queue. Its
+            # recovery diagnostic must not undo explicit cancel or bypass guard.
+            return dict(status='PENDING', applied=applied, superseded=superseded,
+                foreign=None, pending=None, errors=errors + 1,
+                reason_code='NATIVE_RELEASE_QUEUE_UNAVAILABLE', repair_authorized=False)
+        try:
+            effects = decisions.pending_effects(self.root, limit=limit, owner=self.owner, ready_only=True)
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            return unavailable()
+        for effect in effects:
+            try:
+                result = self.apply_release(effect)
+                decisions.acknowledge_effect(effect['event_id'], outcome=result['outcome'])
+                applied += result['outcome'] == 'APPLIED'
+                superseded += result['outcome'] == 'SUPERSEDED'
+            except (OSError, ValueError, sqlite3.DatabaseError):
+                errors += 1  # Preserve this obligation; other owned deliveries can progress.
+        try:
+            pending = decisions.pending_effect_count(self.root,owner=self.owner)
+            foreign = decisions.pending_effect_count(self.root)-pending
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            return unavailable()
+        return dict(status='PENDING' if pending else 'APPLIED', applied=applied,
+            superseded=superseded, foreign=foreign, pending=pending, errors=errors, repair_authorized=False)
+
     def guard(self, preparation=None):
         record = self.get()
         if record is None or record['status'] == 'CANCELLED':

@@ -127,6 +127,16 @@ def test_tracked_runtime_entry_does_not_become_owned(repo):
     assert config.path.is_file()
 
 
+def forbid_recursive_target_discovery(monkeypatch):
+    original = TargetDetector.detect
+    def explicit(self, root, files=None, **options):
+        assert files is not None, 'recursive discovery'
+        return original(self, root, files, **options)
+    # Do not replace global os.walk: private input cleanup and tool identity
+    # inventories legitimately walk their bounded non-workspace directories.
+    monkeypatch.setattr(TargetDetector, 'detect', explicit)
+
+
 def make_deep(repo):
     # An ignored cache should never be traversed by any Git-scoped operation.
     (repo / ".gitignore").write_text("data/repos/\n")
@@ -149,8 +159,8 @@ def test_deep_git_feature_release_verify_and_fingerprint(repo, tmp_path, monkeyp
     git(repo, "switch", "-qc", "feature-test")
     git(repo, "commit", "-qm", "deep tracked source")
     engine, scanner = runtime(tmp_path)
-    # Fails if Runtime or verify accidentally calls os.walk.
-    monkeypatch.setattr("security_runtime.target.os.walk", lambda *a, **k: pytest.fail("recursive discovery"))
+    # Fails if Runtime or verify recursively discovers the live project.
+    forbid_recursive_target_discovery(monkeypatch)
     feature = engine.scan(repo, "feature")
     release = engine.scan(repo, "release")
     assert feature.findings and release.findings
@@ -233,7 +243,7 @@ def test_feature_includes_nearby_manifests_without_recursive_discovery(repo, tmp
     git(repo, "add", "packages/service/requirements.txt")
     git(repo, "commit", "-qm", "manifest")
     engine, scanner = runtime(tmp_path)
-    monkeypatch.setattr("security_runtime.target.os.walk", lambda *a, **k: pytest.fail("recursive discovery"))
+    forbid_recursive_target_discovery(monkeypatch)
     result = engine.scan(repo, "feature")
     assert "packages/service/requirements.txt" in result.target_profile.files
     assert scanner.calls[-1].context_files == ("packages/service/requirements.txt",)

@@ -97,14 +97,21 @@ def repair_impact_reference():
         'PARTIAL 或 WAITING 都不表示可编辑；只有准备返回 ready_for_host_fix=true 才进入原范围编辑。\n\n' + rendered + '\n')
 
 
-def skill_files():
+def skill_entrypoint():
     from .host_guidance import HOST_INSTRUCTIONS
+    return ('---\nname: ai-security-review\ndescription: Check source/config development before the final summary, or use AI Security Runtime for requested audits and explicitly authorized selected-risk fixes. Ordinary chat and read-only questions do not start checks. Requires connected ai_security_runtime MCP.\n---\n\n# Security review\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')
+
+
+def skill_files():
+    from .host_guidance import RUNTIME_WORKFLOW
     from .risk_decision_guidance import RISK_DECISION_GUIDANCE
+    from .risk_presentation import RISK_PRESENTATION_RULES
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
-        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review-v3.md')} | {
-        'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8'),
-        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE).encode('utf-8'),
+        'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review-v3.md')} | {
+        'SKILL.md': skill_entrypoint(),
+        'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8'),
+        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE + '\n' + RISK_PRESENTATION_RULES).encode('utf-8'),
         'references/repair-impact.md': repair_impact_reference().encode('utf-8')}
 
 
@@ -171,6 +178,7 @@ class ReviewSkillManager:
             raise ValueError('SKILL_OWNERSHIP_INVALID') from None
 
     def status(self):
+        from .compatibility import requirements
         try:
             no_links(self.root)
             manifest = self.manifest()
@@ -199,6 +207,8 @@ class ReviewSkillManager:
                          else 'INSTALLED' if manifest['files']=={n:digest(b) for n,b in self.expected.items()}
                          else 'UPGRADE_AVAILABLE')
             return {'skill':NAME, 'status':state, 'path':str(self.root),
+                    'compatibility_requirements':requirements(),
+                    'requirements_scope':'DECLARATION_NOT_HOST_TOOL_DISCOVERY',
                     'contract':CONTRACT, 'runtime_version':__version__,
                     'shipped_content_sha256':skill_content_manifest(self.expected)['content_sha256'],
                     'installed_content_sha256':(digest(encode(manifest['files']))
@@ -206,7 +216,9 @@ class ReviewSkillManager:
                     'preserved_retired_files':sorted(preserved_retired),
                     'host_discovery':'HOST_MANAGED; restart if not visible'}
         except (OSError, ValueError):
-            return {'skill':NAME, 'status':'OWNERSHIP_CONFLICT', 'reason':'SKILL_PATH_OR_OWNERSHIP_INVALID'}
+            return {'skill':NAME, 'status':'OWNERSHIP_CONFLICT', 'reason':'SKILL_PATH_OR_OWNERSHIP_INVALID',
+                    'compatibility_requirements':requirements(),
+                    'requirements_scope':'DECLARATION_NOT_HOST_TOOL_DISCOVERY'}
 
     def save(self, value):
         key = self.read(self.state / 'ownership.key')

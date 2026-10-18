@@ -4,6 +4,23 @@ import json
 MAX_TASK_HOOK_CHECKS = 256
 
 
+def _event_ack(hooks, root, result, task, *, recording):
+    """A committed task row/marker is the proof; failed ACK never repeats it."""
+    from .host_event_journal import HostEventJournal
+    import sqlite3
+    event = result.get('event_processing') or {}
+    reference = event.get('event_ref')
+    if reference is None:
+        return
+    try:
+        HostEventJournal(hooks, root).ack_task(reference,
+            dict(host=result.get('host'), session=result.get('session_id')),
+            task['task_ref'], recording=recording)
+        event['task_linkage'] = recording
+    except (ValueError, OSError, sqlite3.DatabaseError):
+        event['task_linkage'] = 'PENDING'
+
+
 def _bounded_task_paths(paths, *, count=1000, bytes_limit=128_000):
     from .hook_runtime import safe_path
     ordered = sorted({safe_path(name) for name in paths})
@@ -26,8 +43,21 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     """
     from .task_security_state import TaskSecurityStore
     from .task_orchestration import select_task, TaskSelectionError
+    from .host_event_journal import HostEventJournal, EVENT_REF
     import sqlite3
     store = TaskSecurityStore(hooks, root)
+    event = result.get('event_processing') or {}
+    reference = event.get('event_ref')
+    if reference is not None:
+        if not isinstance(reference, str) or not EVENT_REF.fullmatch(reference):
+            return None, 'UNAVAILABLE'
+        target = event.get('task_ref')
+        if target is None:
+            # A later task cannot adopt an earlier event with no target.
+            return None, 'NOT_APPLICABLE'
+        if expected_task_ref is not None and expected_task_ref != target:
+            return None, 'TASK_CHANGED'
+        expected_task_ref = target
     try:
         task = select_task(store, {'host': result.get('host'), 'session': result.get('session_id')},
                            task_ref=expected_task_ref, hook=True)
@@ -41,15 +71,48 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     if not is_v3_record(task):
         return None, 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
     from .task_ownership import ACTIVE
-    if task['phase'] not in ACTIVE:
-        return None, 'TASK_CLOSED'
     from .task_ownership import record_owner
     owner=record_owner(task)
     if owner is not None and owner!={'host':result.get('host'),'session':result.get('session_id')}:
         return None, 'TASK_OWNER_MISMATCH'
     if expected_task_ref is not None and task['task_ref'] != expected_task_ref:
         return None, 'TASK_CHANGED'
+    if reference is not None:
+        previous = next((row for row in task.get('hook_checks', ()) if row.get('event_ref') == reference), None)
+        if previous is not None:
+            _event_ack(hooks, root, result, task, recording='RECORDED')
+            return task, 'ALREADY_RECORDED'
+        saved = None
+        try:
+            saved = HostEventJournal(hooks, root).get(reference,
+                dict(host=result.get('host'), session=result.get('session_id')))
+            link = saved.get('task_link') if saved else None
+            if link and link['task_ref'] == task['task_ref']:
+                event['task_linkage'] = link['recording']
+                return task, 'ALREADY_RECORDED'
+        except (ValueError, OSError, sqlite3.DatabaseError):
+            event['task_linkage'] = 'PENDING'
+        if event.get('state') in {'IN_PROGRESS', 'BINDING_CONFLICT'}:
+            return task, 'UNKNOWN'
+        if event.get('state') in {'ALREADY_COMPLETED', 'EXECUTION_UNCONFIRMED'}:
+            # The call may have executed before its original task linkage was
+            # saved. Preserve a closeout gap instead of reconstructing proof
+            # from a fresh scan or appending a duplicate no-scan row.
+            try:
+                if task['phase'] not in ACTIVE:
+                    return None, 'TASK_CLOSED'
+                store.record_hook_failure(task['task_ref'], task_created_at=task['created_at'],
+                    scope_files=set(task.get('hook_recheck_files', ())) |
+                        set(task.get('hook_pending_scope_files', ())),
+                    scan_id=(saved.get('outcome') or {}).get('scan_id') if saved else None)
+                _event_ack(hooks, root, result, task, recording='FAILURE_MARKER_RECORDED')
+                return task, 'FAILURE_MARKER_RECORDED'
+            except (ValueError, OSError, sqlite3.DatabaseError):
+                return task, 'UNAVAILABLE'
+    if task['phase'] not in ACTIVE:
+        return None, 'TASK_CLOSED'
     if result.get('tool_classification') == 'READ_ONLY' or result.get('workspace_mutation_observed') is False:
+        _event_ack(hooks, root, result, task, recording='NO_MUTATION')
         return task, 'NO_MUTATION'
     row = {key: result[key] for key in ('status', 'last_check_status', 'coverage', 'scan_id',
         'change_digest', 'workspace_mutation_observed', 'changed_file_count', 'capabilities',
@@ -57,6 +120,8 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     row.update(scanner_run=result['execution']['scanner_run'],
         delta={key: result['delta'].get(key, 0) for key in (
             'new', 'persisting', 'resolved', 'additional_occurrences', 'removed_occurrences')})
+    if reference is not None:
+        row['event_ref'] = reference
     scope = result.get('hook_scope_files', [])
     row['scope_files'], row['scope_files_omitted'] = _bounded_task_paths(scope, count=20, bytes_limit=2048)
     row['scope_file_count'] = len(scope)
@@ -87,7 +152,9 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
             limit = MAX_TASK_HOOK_CHECKS if max_checks is None else max_checks
             task.update(hook_checks=rows[-limit:],
                 hook_checks_omitted=task.get('hook_checks_omitted', 0) + max(0, len(rows)-limit))
-            return store.save(task), 'RECORDED'
+            saved_task = store.save(task)
+            _event_ack(hooks, root, result, saved_task, recording='RECORDED')
+            return saved_task, 'RECORDED'
         except (ValueError, OSError, sqlite3.DatabaseError):
             if attempt == 0:
                 try:
@@ -98,6 +165,10 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
                         return None, 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
                     if refreshed and refreshed['task_ref'] == task['task_ref']:
                         task = refreshed
+                        if reference is not None and any(row.get('event_ref') == reference
+                                for row in task.get('hook_checks', ())):
+                            _event_ack(hooks, root, result, task, recording='RECORDED')
+                            return task, 'ALREADY_RECORDED'
                         continue
                 except (ValueError, OSError, sqlite3.DatabaseError):
                     pass
@@ -106,6 +177,7 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
                     scope_files=set(scope) | set(result.get('hook_recheck_files', ())) |
                         set(task.get('hook_recheck_files', ())) | set(task.get('hook_pending_scope_files', ())),
                     scan_id=result.get('scan_id'))
+                _event_ack(hooks, root, result, task, recording='FAILURE_MARKER_RECORDED')
                 return task, 'FAILURE_MARKER_RECORDED'
             except (ValueError, OSError, sqlite3.DatabaseError):
                 return task, 'UNAVAILABLE'

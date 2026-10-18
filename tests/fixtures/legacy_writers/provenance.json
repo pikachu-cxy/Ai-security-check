@@ -1,0 +1,23 @@
+{
+  "v0.3.4": {
+    "file": "ledger-v0.3.4.py.txt",
+    "source": "src/security_runtime/task_risk_ledger.py",
+    "commit": "88fe6db9d9b1b4e0b5bbce689c3f79d7b0134727",
+    "git_blob": "63ad5d0d386f7e8dfca2fdbe78a4dc5e11ce2ed8",
+    "sha256": "5b6459f8b7a45c5c58c37276474a6de665e86090e254bce318a392f49c1f97ef"
+  },
+  "a51a58d": {
+    "file": "ledger-a51a58d.py.txt",
+    "source": "src/security_runtime/task_risk_ledger.py",
+    "commit": "a51a58d735f705c3f95b4276c41f59bb9f58f396",
+    "git_blob": "89536883d99feda881a67f3d3dd8de934ddb4fc5",
+    "sha256": "6fb546175e14030b5dfb5a078b8c49174c91d28d4ecdb9b7d9b8e7124d027bde"
+  },
+  "b352731": {
+    "file": "ledger-b352731.py.txt",
+    "source": "src/security_runtime/task_risk_ledger.py",
+    "commit": "b352731d6487042985435c9478709c7460e00d8e",
+    "git_blob": "b9be778239c2798433d112581fc678a9f0b5f837",
+    "sha256": "32bcee293ec5563d38bdf07f6808dcfa569ffdb7ca9b819ca4c420861314f5dc"
+  }
+}

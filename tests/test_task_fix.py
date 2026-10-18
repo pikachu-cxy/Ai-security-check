@@ -37,6 +37,14 @@ def service(sample, provider=None):
     return TaskFixService(sample[2], ScannerRegistry([provider or LocalProvider()]))
 
 
+def assert_only_new_private_receipts(before, after):
+    # Verification now persists its Runtime result and deliveries. Every
+    # pre-existing byte (source, original scan, triage and evidence key) stays
+    # identical; only the explicit hook-private authority may be added.
+    assert {name:after[name] for name in before} == before
+    assert all(Path(name).parts[:2] == ('state','hooks') for name in set(after)-set(before))
+
+
 def test_prepare_structured_tls_readonly_even_without_state_key(sample):
     before = snapshot(sample[0])
     with patch('security_runtime.scanners.SemgrepAdapter.scan', side_effect=AssertionError('scanner forbidden')), \
@@ -125,7 +133,9 @@ def test_every_group_member_checked_same_file_scanned_once(sample, remaining, ex
     assert provider.calls == [('App.java',)]
     assert out['runtime_observed_execution']['scanner_recheck']
     assert not out['runtime_observed_execution']['patch_applied']
-    assert snapshot(sample[0]) == before
+    assert out['verification_persistence']['state'] == 'APPLIED'
+    assert not out['verification_persistence']['pending']
+    assert_only_new_private_receipts(before, snapshot(sample[0]))
 
 
 @pytest.mark.parametrize('status', ['FAILED','TIMEOUT','UNAVAILABLE'])
@@ -188,11 +198,8 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
             async with ClientSession(read, write) as client:
                 initialized = await client.initialize()
                 instructions = ' '.join(initialized.instructions.split())
-                assert 'The host coding agent edits selected local code' in instructions
-                assert 'Scanner repairs then use verify_task_fix with the originating scanner.' in instructions
-                assert 'Native task repairs use their bound repair_task_ref for finish/review' in instructions
-                assert 'do not call scanner verify_task_fix for a native risk.' in instructions
-                assert 'Do not ask users to ferry coding_agent_prompt or UUIDs.' in instructions
+                assert 'task-review-plan-v3' in instructions and 'get_runtime_guidance' in instructions
+                assert 'prepare_task_risk_fix' in instructions
                 tools = {t.name:t for t in (await client.list_tools()).tools}
                 from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
                 assert REQUIRED_GUIDANCE_TOOLS <= set(tools)
@@ -204,6 +211,17 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
                     data = response.structuredContent or json.loads(response.content[0].text)
                     return data.get('result', data)
                 info = await call('get_runtime_info', {})
+                workflow = await call('get_runtime_guidance', {'topic':'runtime-workflow'})
+                assert workflow['status'] == 'READY'
+                assert workflow['authority']['repair_authorized'] is False
+                assert workflow['sha256'] == info['guidance_catalog']['topics']['runtime-workflow']['sha256']
+                assert workflow['sha256'] == __import__('hashlib').sha256(workflow['content'].encode('utf-8')).hexdigest()
+                instructions = ' '.join(workflow['content'].split())
+                assert 'The host coding agent edits selected local code' in instructions
+                assert 'Scanner repairs then use verify_task_fix with the originating scanner.' in instructions
+                assert 'Native task repairs use their bound repair_task_ref for finish/review' in instructions
+                assert 'do not call scanner verify_task_fix for a native risk.' in instructions
+                assert 'Do not ask users to ferry coding_agent_prompt or UUIDs.' in instructions
                 assert info['capability_contract'] == 'developer-guidance-v0.3'
                 assert info['features']['task_fix_verify'] == 'v0.1'
                 summary = await call('get_security_summary', {})
@@ -214,4 +232,4 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
                 assert all(m['scanner_runs'][0]['status'] == 'FAILED' for m in checked['members'])
                 assert (await call('verify_task_fix', {'task_ref':'T01'}))['status'] == 'REFRESH_REQUIRED'
     asyncio.run(run())
-    assert snapshot(root) == before
+    assert_only_new_private_receipts(before, snapshot(root))

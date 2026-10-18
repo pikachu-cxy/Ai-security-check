@@ -212,7 +212,9 @@ def test_deleted_source_can_be_excluded_for_exact_historical_finding(service):
     rows = ledger.read()
     rows[ref+':'+finding].pop('disposition_scope')
     rows[ref+':'+finding].pop('disposition_locations')
-    ledger.save(rows)  # Model a pre-feature historical task.
+    with s.hooks.lock(root) as acquired:
+        assert acquired
+        ledger.save(rows)  # Model a pre-feature historical task.
     (root/'routes.py').unlink()
     feedback = TaskRiskFeedbackService()
     result = feedback.set_disposition(s, root, ref, finding, 'EXCLUDE', user_requested=True)

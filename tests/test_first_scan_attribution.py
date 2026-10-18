@@ -32,6 +32,9 @@ class Tools:
         record_probe('semgrep',self._probe_identity())
         return self.resolve('semgrep')
     def _probe_identity(self, *a): return self.path.read_bytes()
+    def execution_identity(self, tool, binary, **kwargs):
+        from security_runtime.scanner_identity import content_identity
+        return content_identity((('fixture-engine', binary),))
 
 
 class Secrets:
@@ -48,12 +51,23 @@ def harness(repo, tmp_path, monkeypatch):
     tools=Tools(tmp_path)
     adapter=SemgrepAdapter(tools)
     calls=[]
+    phase={'pre':False}
+    original_scan=adapter.scan
+    def staged_scan(context, normalizer):
+        # Runtime supplies the original logical root for captured current
+        # input. The separately recovered pre-edit scope has no live root.
+        phase['pre']=context.logical_root is None
+        return original_scan(context, normalizer)
+    monkeypatch.setattr(adapter,'scan',staged_scan)
     failure={'pre':False, 'version':False, 'coverage':False, 'moving':False, 'stamp':False, 'post_stamp':False, 'rule_mismatch':False}
     import security_runtime.scanners as module
     def execute(argv, cwd, timeout):
+        assert not core.store.lock_held(repo)
         selected = yaml.safe_load(Path(argv[argv.index('--config')+1]).read_text())['rules']
         files = argv[argv.index('--no-git-ignore')+1:]
-        pre = str(cwd) != str(repo)
+        # Both scans now read private immutable inputs. Their path cannot
+        # distinguish current Providers from the targeted pre-edit scan.
+        pre = phase['pre']
         calls.append(dict(pre=pre, root=str(cwd), files=tuple(files), rules=tuple(r['id'] for r in selected)))
         found=[]
         for name in files:
@@ -110,13 +124,16 @@ def edit(core, root, text=UNSAFE):
 def test_new_risk_real_pre_scan_reuses_family_and_policy(repo,harness):
     core,calls,_,store=harness; commit(repo,FIXED); start(core,repo)
     out=edit(core,repo)
-    assert out['first_scan_attribution_status']=='FIRST_SCAN_NEW_RISK_ATTRIBUTED'
+    assert out['first_scan_attribution_status']=='FIRST_SCAN_NEW_RISK_ATTRIBUTED', json.dumps(out, default=str)
     assert out['attribution_scanner_equivalent'] and out['newly_attributed_risk_count']==1
     assert out['pre_existing_risk_count']==0 and out['delta']['new']==1
     assert out['scan_id']==store.latest_scan()['scan_id']
     assert [c['pre'] for c in calls]==[False,True]
     assert calls[0]['rules']==calls[1]['rules'] and calls[1]['files']==('A.java',)
     assert not Path(calls[1]['root']).exists()
+    assert Path(calls[1]['root']).parent == core.store.workspace_directory(repo)/'scan-inputs'
+    from security_runtime.scan_attempt import ScanAttemptStore
+    assert ScanAttemptStore(core.store,repo).read()['directories']==[]
     assert out['scanner_invocation_count']==2
     from security_runtime.remediation import RemediationService
     service=RemediationService(store,hooks=core.store)
@@ -147,8 +164,17 @@ def test_existing_plus_new_same_rule_occurrences(repo,harness):
 def test_failed_or_mismatched_attribution_never_advances_snapshot(repo,harness,issue):
     core,_,failure,_=harness; commit(repo,FIXED); before=start(core,repo); failure[issue]=True
     out=edit(core,repo)
-    assert out['first_scan_attribution_status']=='FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
-    assert out['reason']=='FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT' and out['delta']['new']==0
+    if issue=='post_stamp':
+        # Fixed-input Providers now reject a changed actual executable before
+        # attempting any pre-edit attribution, retaining the same baseline.
+        assert out['status']=='PARTIAL'
+        assert out['first_scan_attribution_status']=='NOT_APPLICABLE'
+        assert not out['pre_edit_targeted_scan_run']
+        assert any(run['error_code']=='SCAN_EXECUTION_IDENTITY_CHANGED' for run in out['scanner_runs'])
+    else:
+        assert out['first_scan_attribution_status']=='FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
+        assert out['reason']=='FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT'
+    assert out['delta']['new']==0
     assert core.store.path(repo,'cursor','session').read_bytes()==before
     assert core.store.pending_activity(repo,'cursor','session')
 

@@ -75,7 +75,8 @@ def run(samples):
         for index in range(samples):
             for phase,source in (('safe_edit',SAFE),('risk_edit',UNSAFE)):
                 path.write_text(source,encoding='utf-8');operations.clear();started=time.perf_counter()
-                result=runtime.scan(root,'quick',_hook_scope=(target,))
+                from security_runtime.scan_input import scoped_request
+                result=runtime.scan(root,'quick',request=scoped_request(root,(target,)))
                 assert result.capability_results['CODE_SAST']=='EXECUTED'
                 measured.append({'sample':index,'phase':phase,'wall_ms':round((time.perf_counter()-started)*1000,3),
                     'files':result.rule_coverage['total_files'],'rules':result.rule_coverage['total_selected'],

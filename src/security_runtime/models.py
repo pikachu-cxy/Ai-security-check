@@ -157,9 +157,14 @@ class ScanResult:
 
     scan_context: dict = field(default_factory=dict)
     background_preparation: dict = field(default_factory=dict)
+    # In-memory persistence handoff, captured from the same execution input.
+    # None supports direct legacy ScanResult writers; {} is authoritative empty.
+    source_scopes: dict | None = field(default=None, repr=False)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        value = asdict(self)
+        value.pop('source_scopes', None)
+        return value
 
 
 @dataclass(frozen=True)
@@ -174,6 +179,9 @@ class ScanContext:
     # Trigger inputs are distinct from existing files in the scoped snapshot.
     # Removed manifests and retained Hook candidates must not be confused.
     dependency_changes: tuple[str, ...] | None = None
+    logical_root: str | None = None
+    input_view: Any = field(default=None, repr=False, compare=False)
+    bound_rule_pack: Any = field(default=None, repr=False, compare=False)
 
     def capability_files(self) -> tuple[str, ...]:
         from .dependency_inputs import is_dependency_input

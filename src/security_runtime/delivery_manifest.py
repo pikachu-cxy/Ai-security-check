@@ -35,7 +35,8 @@ def delivery_manifest(info, tools, *, skill_contents=None):
     identity = dict(contract=CONTRACT,
         runtime=dict(version=info.get('version'), build_id=build.get('build_id'),
             build_status=build.get('status'), state_schema=build.get('state_schema')),
-        tools=dict(schema_sha256=digest(specs), names=[item['name'] for item in specs],
+        tools=dict(specification_contract='mcp-tool-spec-v1', schema_sha256=digest(specs), names=[item['name'] for item in specs],
+            workflows={item['name']:dict(workflow=item['workflow'], required_features=item['required_features'], guard=item['guard']) for item in specs},
             raw_contracts={spec.version: sorted(spec.names) for spec in RAW_TOOL_CONTRACTS}),
         skill=skill_identity,
         rules=dict(status=inventory.get('status', 'UNAVAILABLE'),
@@ -43,6 +44,14 @@ def delivery_manifest(info, tools, *, skill_contents=None):
         protocols={name: features[name] for name in ('task_security_review_protocol',
             'task_session_routing', 'task_review_submission', 'repair_impact',
             'repair_impact_unknowns', 'risk_disposition') if name in features})
+    from .compatibility import requirements, storage_contracts, task_review_compatibility
+    from .guidance_catalog import manifest as guidance_manifest
+    from .host_lifecycle import profile_catalog
+    identity['connectors'] = dict(declared=profile_catalog(), observed_host=info.get('host_connector'),
+        integration_scope=info.get('integration_scope'), workspace_routing=info.get('workspace_routing'))
+    identity['guidance'] = guidance_manifest()
+    identity['compatibility'] = dict(requirements=requirements(), storage_contracts=storage_contracts(),
+        observed=task_review_compatibility(info, {item['name'] for item in specs}))
     return dict(identity, manifest_sha256=digest(identity),
         comparison='REQUIRED_TOOL_SUBSET_AND_SUPPORTED_PROTOCOL; DIGEST_IDENTIFIES_CONTENT_NOT_COMPATIBILITY',
         scope='THIS_CONNECTION_AND_SHIPPED_SKILL; HOST_DISCOVERY_AND_USER_MODIFICATIONS_NOT_VERIFIED',

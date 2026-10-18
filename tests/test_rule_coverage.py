@@ -38,7 +38,13 @@ def run_fixture(tmp_path,languages,*,status='SUCCESS',evidence=True):
         if not evidence: payload.pop('time')
         return ProcessResult(0,json.dumps(payload),'',1)
     manager=adapter.tool_manager
-    tool=ResolvedTool('semgrep','1.178.0','semgrep',None,ToolStatus.READY if status=='SUCCESS' else ToolStatus.MISSING)
+    binary=tmp_path/'.security-runtime/mock-engine/runtime/Scripts/semgrep'
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b'Synthetic executable identity; never executed')
+    package=binary.parent.parent/'Lib/site-packages/semgrep'
+    package.mkdir(parents=True)
+    (package/'__init__.py').write_bytes(b'# Synthetic engine package identity\n')
+    tool=ResolvedTool('semgrep','1.178.0',str(binary),None,ToolStatus.READY if status=='SUCCESS' else ToolStatus.MISSING)
     with patch.object(manager,'ensure',return_value=tool) as ensure,patch('security_runtime.scanners._execute',side_effect=execute):
         runtime=SecurityRuntime(ScannerRegistry([adapter]),SQLiteStore(tmp_path/'.security-runtime/state.db'))
         result=runtime.scan(tmp_path,'release',rules_path=str(rules))

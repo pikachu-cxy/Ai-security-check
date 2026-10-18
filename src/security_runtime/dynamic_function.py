@@ -347,6 +347,12 @@ class NativeFunctionScanner:
     def version(self):
         return VERSION
 
+    def input_bindings(self):
+        from .scan_request import ScanBinding
+        checksum = rule_pack().checksum
+        return (ScanBinding('RULES', PACK_ID, checksum),
+                ScanBinding('TOOL', self.engine_id, checksum))
+
     def supports(self, profile, context):
         return any(Path(name).suffix.lower() in EXTENSIONS for name in context.files)
 
@@ -363,6 +369,9 @@ class NativeFunctionScanner:
             plan = context.rule_plan if isinstance(context.rule_plan, NativeFunctionRulePlan) else self.plan_rules(None, context)
             if plan.pack.checksum != rule_pack().checksum:
                 raise ValueError('NATIVE_RULE_IDENTITY_CHANGED')
+            if context.input_view is not None and any(binding not in context.input_view.request.bindings
+                    for binding in self.input_bindings()):
+                raise ValueError('NATIVE_CAPTURED_IDENTITY_CHANGED')
         except (OSError, ValueError):
             return [], ScannerRun(self.name, VERSION, RunStatus.FAILED,
                 round((time.monotonic() - started) * 1000), error_code='NATIVE_RULE_IDENTITY_UNAVAILABLE',
@@ -401,9 +410,17 @@ class NativeFunctionScanner:
                 errors[name] = reason
                 plan.errored_files.add(name)
                 plan.skipped_files[name] = reason
-        run = self._run(plan, started, findings, 'LOCAL_SCOPE_INCOMPLETE' if errors else '')
+        identity_verified = plan.pack.checksum == rule_pack().checksum
+        if not identity_verified:
+            plan.unscoped_error = True
+        run = self._run(plan, started, findings,
+            'NATIVE_RULE_IDENTITY_CHANGED' if not identity_verified else 'LOCAL_SCOPE_INCOMPLETE' if errors else '')
         run.scanner_diagnostics.update(bytes_read=total_bytes,
             skipped_targets=[{'path': name, 'reason': reason} for name, reason in sorted(errors.items())[:20]])
+        if context.input_view is not None:
+            run.scanner_diagnostics['execution_binding'] = dict(contract='scanner-execution-binding-v1',
+                tool=plan.pack.checksum, data=None, data_required=False,
+                verified=identity_verified, data_status='VERIFIED')
         return findings, run
 
     def _run(self, plan, started, findings, error=''):

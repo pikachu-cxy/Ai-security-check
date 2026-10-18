@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import ast
 import re
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
@@ -159,6 +160,7 @@ class FindingFeedbackService:
                         user_requested=False, until=None, request_id=None):
         if user_requested is not True:
             raise ValueError('A direct user request is required for this reminder choice')
+        self.reconcile_pending()
         scan, finding, _ = self._finding(scan_id, finding_id)
         if not isinstance(reason, str) or len(reason) > 4000:
             raise ValueError('Reason must be a string of at most 4000 characters')
@@ -308,15 +310,36 @@ class FindingFeedbackService:
             # re-read to mask them. The user's label can still be recorded.
             return '理由已隐藏：当前无法读取用于脱敏的原始证据。'
 
-    def _append(self, scan_id, row, source, status, reason, **extra):
+    def reconcile_pending(self, *, limit=16):
+        """Bounded fact replay only; an unavailable projection stays pending."""
+        from .feedback_effects import reconcile
+        try:
+            return reconcile(self.store, self.dispositions, self.workspace, limit=limit)
+        except (OSError, ValueError, sqlite3.DatabaseError):
+            return dict(applied=0, more_pending=True, unavailable=True)
+
+    def _effect(self, kind, scope, payload):
+        return dict(kind=kind, issue_key=scope['issue_key'],
+            expected=self.dispositions.effect_versions(self.workspace, scope['issue_key']), payload=payload)
+
+    def _append(self, scan_id, row, source, status, reason, *, effect_template=None, **extra):
         record = dict(finding_id=row['finding_id'], observation_hash=row['observation_hash'],
                       triage_status=status, triage_reason=self._reason(reason), triage_source=source,
                       triaged_at=datetime.now(timezone.utc).isoformat(), feedback_version=VERSION,
                       feedback_id=uuid.uuid4().hex, **extra)
-        self.store.save_finding_reviews(self.workspace, scan_id, [record])
+        if effect_template is not None:
+            payload = dict(effect_template['payload'])
+            if effect_template['kind'] == 'ASSESSMENT':
+                payload['assessment_id'] = record['feedback_id']
+            effect_template = dict(effect_template, payload=payload)
+            self.store.save_finding_reviews(self.workspace, scan_id, [record], effects=[effect_template])
+            self.reconcile_pending()
+        else:
+            self.store.save_finding_reviews(self.workspace, scan_id, [record])
         return record
 
     def user_mark(self, scan_id, finding_id, reason):
+        self.reconcile_pending()
         scan, finding, row = self._finding(scan_id, finding_id)
         self._append(scan_id, row, 'HUMAN', 'FALSE_POSITIVE', self._safe_reason(scan, reason),
                      event_kind='USER_MARK')
@@ -325,6 +348,7 @@ class FindingFeedbackService:
     def submit(self, scan_id, finding_id, *, context_hash, verdict, reason,
                evidence_refs, confidence='HIGH', unknowns=None, context_complete=False,
                related_files=None):
+        self.reconcile_pending()
         scan, finding, row = self._finding(scan_id, finding_id)
         if verdict not in VERDICTS or confidence not in ('HIGH', 'MEDIUM', 'LOW'):
             raise ValueError('Invalid feedback verdict or confidence')
@@ -392,6 +416,11 @@ class FindingFeedbackService:
         scope = self._scope(scan_id, finding)
         if fresh and scope.get('file_sha256') != evidence_locator(finding)['file_sha256']:
             raise ValueError('Feedback source changed while validating; prepare this finding again')
+        scope['metadata']['related_versions'] = {name: source_revision(self.workspace, name)
+                                                 for name in packet['explicit_related_files']}
+        scope['metadata']['rule_versions'] = self._rule_versions(scan, finding)
+        scope['metadata']['runtime_build'] = build_identity().get('build_id')
+        scope['metadata']['review_scan_id'] = scan_id
         record = self._append(scan_id, row, 'AI', {'FALSE_POSITIVE': 'FALSE_POSITIVE',
                      'STILL_RISK': 'TRUE_POSITIVE', 'NEEDS_CONTEXT': 'NEEDS_CONTEXT'}[verdict],
                      _feedback_text(builder, reason), event_kind='AGENT_REVIEW',
@@ -399,32 +428,29 @@ class FindingFeedbackService:
                      related_files=packet['explicit_related_files'], evidence_refs=refs,
                      confidence=confidence, unknowns=[_feedback_text(builder, v) for v in unknowns],
                      context_complete=context_complete, assessment_source='HOST_CODE_REVIEW_NOT_RUNTIME_PROOF',
-                     runtime_validation='REFERENCES_AND_VERSIONS_ONLY')
-        scope['metadata']['related_versions'] = {name: source_revision(self.workspace, name)
-                                                 for name in packet['explicit_related_files']}
-        scope['metadata']['rule_versions'] = self._rule_versions(scan, finding)
-        scope['metadata']['runtime_build'] = build_identity().get('build_id')
-        scope['metadata']['review_scan_id'] = scan_id
-        self.dispositions.record_assessment(self.workspace, scope['issue_key'], verdict,
-            scope['evidence_revision'], assessment_id=record['feedback_id'], fresh=fresh,
-            evidence_backed=bool(covers_observation and confidence == 'HIGH' and context_complete and
-                                 not unknowns and not packet['evidence_gaps']), metadata=scope['metadata'])
+                     runtime_validation='REFERENCES_AND_VERSIONS_ONLY',
+                      effect_template=self._effect('ASSESSMENT', scope, dict(verdict=verdict,
+                          evidence_revision=scope['evidence_revision'], assessment_id=None, fresh=fresh,
+                          evidence_backed=bool(covers_observation and confidence == 'HIGH' and context_complete
+                              and not unknowns and not packet['evidence_gaps']), metadata=scope['metadata'])))
         return self.status(scan_id, finding['id'])
 
     def revoke(self, scan_id, finding_id, reason, source='ALL'):
+        self.reconcile_pending()
         scan, finding, row = self._finding(scan_id, finding_id)
         if source not in ('ALL', 'HUMAN', 'AI'):
             raise ValueError('Invalid feedback revocation source')
-        self._append(scan_id, row, 'HUMAN', 'UNREVIEWED', self._safe_reason(scan, reason),
-                     event_kind='REVOKE', revoked_source=source)
+        effect_template = None
         if source in ('ALL', 'AI'):
             try:
                 scope = self._scope(scan_id, finding)
-                self.dispositions.clear_assessment(self.workspace, scope['issue_key'])
+                effect_template = self._effect('CLEAR_ASSESSMENT', scope, {})
             except DispositionUnavailable:
                 raise
             except (OSError, ValueError):
                 pass
+        self._append(scan_id, row, 'HUMAN', 'UNREVIEWED', self._safe_reason(scan, reason),
+                     event_kind='REVOKE', revoked_source=source, effect_template=effect_template)
         return self.status(scan_id, finding['id'])
 
     def status(self, scan_id, finding_id, include_history=False):
@@ -533,6 +559,15 @@ class FindingFeedbackService:
                 current, stale_reason = True, None
         else:
             technical_current = current
+        from .feedback_effects import pending as pending_effects
+        projection_pending = bool(scope and pending_effects(self.store.path, self.workspace,
+            issue_key=scope['issue_key'], limit=1))
+        if projection_pending:
+            # Keep user choices; an older materialized model assessment cannot
+            # override the latest accepted source fact while replay is pending.
+            folded = automatic = technical_current = False
+            current = False
+            stale_reason = 'FEEDBACK_PROJECTION_PENDING'
         human_suppressed = bool(disposition and disposition['active'])
         restored = bool(disposition and disposition['disposition'] == 'RESTORE' and
                         not disposition.get('automatic_excluded'))
@@ -550,6 +585,7 @@ class FindingFeedbackService:
                       repair_authorized=False, fix_authorized=False,
                       assessment_source='HOST_CODE_REVIEW_NOT_RUNTIME_PROOF' if agent else None,
                       runtime_validation='REFERENCES_AND_VERSIONS_ONLY',
+                      projection_sync='PENDING' if projection_pending else 'APPLIED',
                       state='AGENT_FALSE_POSITIVE' if technical_false_positive else 'REVIEW_STALE' if agent and not current
                       else agent['verdict'] if agent else 'USER_MARKED_UNCONFIRMED' if user else 'UNREVIEWED')
         result['handling_status'] = ('DEFERRED' if human_suppressed and disposition['disposition'] == 'DEFER'

@@ -56,6 +56,13 @@ def test_edit_waits_for_foreign_lock_then_scans_once(repo, tmp_path, monkeypatch
 
     @contextmanager
     def observed(root, *, wait_seconds=0):
+        if wait_seconds == 0:
+            # Cleanup first makes a nonblocking metadata-only probe. It must
+            # not be mistaken for the actual two-second edit admission wait.
+            with original(root) as available:
+                assert not available
+                yield available
+            return
         with original(root) as available:
             assert not available
         assert wait_seconds == 2

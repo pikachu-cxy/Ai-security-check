@@ -22,7 +22,7 @@ from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, b
 from .mcp_contracts import MCPRegistry, raw_input_failure
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
-GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance', 'get_scan_preparation_status'}
+GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status'}
 TASK_REVIEW_TOOLS = {'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
     'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
@@ -36,12 +36,14 @@ MAX_SESSIONS = 64
 BOOTSTRAP_WAIT_SECONDS = 20
 
 
-def global_runtime_info(*, tools=None):
+def global_runtime_info(*, tools=None, host=None):
     from .host_guidance import runtime_info
     info = runtime_info()
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1'}
     info['integration_scope'] = 'GLOBAL'
     info['workspace_routing'] = 'EXPLICIT_WORKSPACE_CLAIM'
+    if host is not None:
+        info['host_connector'] = host
     if tools is not None:
         from .delivery_manifest import delivery_manifest
         info['delivery_manifest'] = delivery_manifest(info, tools)
@@ -434,9 +436,13 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
-            info = global_runtime_info(tools=await listed())
+            info = global_runtime_info(tools=await listed(), host=active_host)
             info['host_connector'] = active_host
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
+        if name == 'get_runtime_guidance':
+            from .guidance_catalog import get_runtime_guidance
+            guide = get_runtime_guidance(arguments['topic'])
+            return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
         if name == 'get_professional_guidance':
             from .professional_guidance import get_professional_guidance
             guide = get_professional_guidance()
@@ -612,7 +618,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .mcp_contracts import unsupported_protocol_failure
-            unsupported = unsupported_protocol_failure(exc) if handler_entered else None
+            from .task_diagnostics import capacity_failure
+            unsupported = (unsupported_protocol_failure(exc) or capacity_failure(exc)) if handler_entered else None
             if unsupported is not None:
                 return CallToolResult(isError=False, structuredContent=unsupported,
                     content=[TextContent(type='text', text=json.dumps(unsupported, ensure_ascii=False))])

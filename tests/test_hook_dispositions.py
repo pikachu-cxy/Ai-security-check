@@ -17,6 +17,7 @@ from security_runtime.storage import SQLiteStore
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.verification_policy import scanner_process_observed
 from test_hook_runtime import repo  # noqa: F401
+from scan_attempt_helpers import captured_scan
 
 
 class SavedHookRuntime:
@@ -24,8 +25,9 @@ class SavedHookRuntime:
     def __init__(self, store):
         self.store, self.findings, self.calls = store, [], []
 
+    @captured_scan
     def scan(self, root, mode, **kwargs):
-        self.calls.append(tuple(kwargs['_hook_scope']))
+        self.calls.append(tuple(kwargs['request'].requested_files))
         scanner_process_observed()
         for finding in self.findings:
             finding.technical_details['evidence_locator'] = snapshot_fingerprint(root, finding.file_path)
@@ -40,10 +42,10 @@ class SavedHookRuntime:
                  if finding.category != 'dependency'} | {'fixture.rule'}
         plan = SimpleNamespace(rules=[SimpleNamespace(rule_id=rule, rule_version='1') for rule in rules],
             pack=SimpleNamespace(checksum='a'*64), confirmed_rules=rules,
-            scanned_files=set(kwargs['_hook_scope']), errored_files=set(), unscoped_error=False)
-        kwargs['_hook_observer'](self.findings, runs, {'semgrep': plan})
+            scanned_files=set(kwargs['request'].requested_files), errored_files=set(), unscoped_error=False)
+        kwargs['observer'](self.findings, runs, {'semgrep': plan})
         scan = ScanResult('hook-scan-'+str(len(self.calls)), mode,
-            TargetProfile(str(root), files=list(kwargs['_hook_scope'])), 'COMPLETED',
+            TargetProfile(str(root), files=list(kwargs['request'].requested_files)), 'COMPLETED',
             list(self.findings), runs, 'advisory', 'REVIEW', 1,
             capability_results=dict(CODE_SAST='EXECUTED', DEPENDENCY_VULN='EXECUTED'),
             execution_state='EXECUTED')
