@@ -25,6 +25,11 @@ DEPENDENCY_PRESENTATION_RULES = (
     '依赖问题的“修复”应先按 review_continuation 读取问题列表，按 review_finding_ids 匹配成员取得精确任务引用；'
     '多个问题先明确选择，不能直接使用列表首项，也不能把导航当作修复授权。'
 )
+CHECK_OPERATION_BOUNDARIES = (
+    '不得伪造检查结果、重放检查事件或补建编辑后的基线。'
+    '检查状态本身不授予额外扫描、构建或测试权限；不得仅因检查异常或复查结束而擅自追加这些操作。'
+    '用户已明确要求或当前开发任务已包含的测试、构建与验收仍按原授权执行，无需重复确认。'
+)
 
 SUMMARY_FIELDS = ('status', 'coverage', 'scan_id', 'scanner_run', 'last_check_status',
                   'first_scan_attribution_status', 'reason')
@@ -101,9 +106,9 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
     if isinstance(decision, dict) and decision.get('reason_code') == 'SCANNER_VERIFIED_RESOLVED':
         presentation = (
             '将原问题安全复查结果合并到本轮正常总结中，不暂停原开发任务。'
-            '不追加测试推荐、执行选择或新的修复确认，不安排构建或测试。'
+            '不因安全复查结束而追加测试推荐、执行选择或新的修复确认。'
             '安全复查只说明原问题的复查结果，不推断业务兼容性或生产安全。'
-            '不展示内部状态、工具名或令牌。')
+            '不展示内部状态、工具名或令牌。' + CHECK_OPERATION_BOUNDARIES)
     if not message:
         presentation = '上方提示为空时无需新增安全提示，不推断项目安全，也不重复询问；内部控制不授予新的修复权限。'
     prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
@@ -152,5 +157,5 @@ def render_check_gap_context(summary: dict, message: str) -> str:
             '才在正常开发总结中说明一次缺口，不能声称通过。'
             '普通聊天、只读或未改动文件时不展示；后续检查完成时不保留旧提示，其他轮次不重复沿用。'
             '工具操作已结束，不因检查未完成而重复编辑、撤销代码或自行修复。'
-            '不得伪造检查结果、补发生命周期事件或自动运行构建和测试；不要求用户提供内部引用。'
+            + CHECK_OPERATION_BOUNDARIES + '不要求用户提供内部引用。'
             + CONTROL_DELIMITER + _encode(_control(summary, None)))

@@ -513,3 +513,57 @@ class RepairImpactService:
                 repair_authorized=False, automatic_execution=False,
                 analysis_trust='HOST_ANALYSIS_NOT_SCANNER_PROOF')
             return result
+
+    def native_fix_context(self, assessment_ref, source):
+        """Return a current native preparation basis to the trusted task bridge.
+
+        This is metadata, not an edit grant. Source hashes stay inside the
+        Runtime and let the bridge compare the actual pre-edit baseline with
+        the version that was reviewed. A history read cannot obtain this basis.
+        """
+        source = clean_source(source)
+        require(source['kind'] == 'HOST_TASK_RISK', 'REPAIR_IMPACT_SOURCE_BINDING_MISMATCH')
+        with self.store.connect() as db:
+            record, cycle = self._record(db, assessment_ref)
+            resolved = self._resolve(source)
+            require(record['binding_digest'] == digest(resolved['binding']),
+                    'REPAIR_IMPACT_SOURCE_BINDING_MISMATCH')
+            binding = copy.deepcopy(record['source_binding'])
+            canonical = {key: binding[key] for key in
+                         ('kind', 'task_ref', 'finding_id', 'origin_review_revision')}
+            return dict(assessment_ref=assessment_ref, revision=record['revision'],
+                source=canonical, source_binding=binding,
+                gate=self._gate(record, fresh=self._fresh(record) and cycle['latest'] == assessment_ref),
+                proposal_revision=record['proposal_revision'],
+                proposal_summary=record['proposal']['summary'],
+                security_goal=record['proposal']['security_goal'],
+                preserve=copy.deepcopy(record['proposal']['preserve']),
+                source_hashes=copy.deepcopy(record['source_hashes']),
+                repair_authorized=False, automatic_execution=False)
+
+    def bound_native_fix_status(self, assessment_ref, context):
+        """Recheck immutable analysis and lifetime for an existing repair task.
+
+        The task may already have edited its target, so this deliberately does
+        not treat its own patch as an opportunity to recapture a baseline.
+        Handling and untouched source checks belong to the native task bridge.
+        """
+        with self.store.connect() as db:
+            record, cycle = self._record(db, assessment_ref)
+            require(record['source']['kind'] == 'HOST_TASK_RISK' and
+                    record['source_binding'] == context['source_binding'] and
+                    record['proposal_revision'] == context['proposal_revision'] and
+                    record['revision'] == context['revision'],
+                    'REPAIR_IMPACT_SOURCE_BINDING_MISMATCH')
+            fresh = (cycle['latest'] == assessment_ref and
+                     record['created_at'] <= self._time() <= record['material_expires_at'])
+            editable = {change['file_path'] for change in record['proposal']['changes']}
+            for name, sha in record['source_hashes'].items():
+                if name in editable:
+                    continue
+                try:
+                    if hashlib.sha256(self.reader.read(name)[0]).hexdigest() != sha:
+                        fresh = False
+                except Exception:
+                    fresh = False
+            return self._gate(record, fresh=fresh)

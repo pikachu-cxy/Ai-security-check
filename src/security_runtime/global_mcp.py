@@ -12,7 +12,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 from .global_workspace import (resolve_workspace, workspace_state, source_snapshot, write_bootstrap,
-                               workspace_rejection, WORKSPACE_REJECTIONS)
+                               workspace_rejection, WORKSPACE_REJECTIONS, WorkspaceClaimError)
 from .hook_state import HookStateStore, identity, no_links
 from .integration_state import WorkspaceBinding
 from .workspace import WorkspaceResolver
@@ -27,7 +27,7 @@ TASK_REVIEW_TOOLS = {'begin_security_task', 'finish_security_task', 'prepare_tas
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
     'get_task_risk_ledger', 'prepare_task_risk_feedback', 'submit_task_risk_feedback',
     'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'get_task_risk_feedback',
-    'set_task_risk_disposition'}
+    'set_task_risk_disposition', 'prepare_task_risk_fix', 'cancel_task_risk_fix'}
 LIMIT = 16
 MAX_SESSIONS = 64
 # Leave room for admission/transport within the native 30-second startup Hook.
@@ -345,6 +345,24 @@ def _task_request_rejected(reason):
         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
 
+def _scan_request_rejected(reason):
+    """A scan input error does not diagnose workspace or scanner readiness."""
+    from mcp.types import CallToolResult, TextContent
+    message = {
+        'WORKSPACE_DIRECTORY_REQUIRED':
+            '扫描未启动：workspace_path 和旧参数 path 都只接受项目目录，不能传入文件。path 只是项目目录的旧参数别名，'
+            '不能用于指定单文件。当前工具不支持单文件扫描；不会自动改为扫描整个项目。',
+        'WORKSPACE_ALIAS_MISMATCH':
+            '扫描未启动：workspace_path 与旧参数 path 指向了不同项目。path 只是项目目录的别名，'
+            '请使用当前项目目录作为 workspace_path 并省略 path；不会改扫其他项目。',
+    }[reason]
+    data = dict(status='INCONCLUSIVE', reason_code=reason, coverage='UNKNOWN',
+        scanner_run=False, source_modified=False, security_proof=False,
+        repair_authorized=False, message=message)
+    return CallToolResult(structuredContent=data,
+        content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+
+
 def create_global_server(*, workspaces=None, host='codex'):
     from .mcp_server import create_server
     from mcp.types import CallToolResult, TextContent
@@ -372,8 +390,13 @@ def create_global_server(*, workspaces=None, host='codex'):
             schema['additionalProperties'] = False
             if tool.name not in HOOKS and tool.name not in GLOBAL_READS:
                 schema['properties']['workspace_path'] = {'type': 'string', 'minLength': 1,
-                    'description': 'Required for global workspace routing, including a single admitted workspace. Never inferred from an opaque ref.'}
+                    'description': 'Absolute project directory required for global workspace routing, including a single admitted workspace. Not a file or scan target. Never inferred from an opaque ref.'}
                 schema['required'] = list(dict.fromkeys([*schema.get('required', []), 'workspace_path']))
+            if tool.name in {'scan_diff', 'scan_project'}:
+                schema['properties']['path']['description'] = (
+                    'Legacy alias of workspace_path for the same project directory. '
+                    'Not a file, glob, or scan target. Prefer workspace_path and omit path. '
+                    'Single-file scans are not supported by this tool.')
             description = tool.description
             if tool.name in HOOKS:
                 description = 'Global cwd-routed Hook. ' + description.replace('Requires SECURITY_RUNTIME_WORKSPACE binding;', 'Requires validated workspace admission;')
@@ -388,15 +411,36 @@ def create_global_server(*, workspaces=None, host='codex'):
         nonlocal schemas
         if schemas is None:
             schemas = {t.name: t.inputSchema for t in await listed()}
+        if name == 'submit_task_security_review':
+            # JSON Schema cannot express all model checks (for example blank
+            # text). Reject the same raw input before any workspace admission.
+            from .task_review_contract import task_review_input_failure
+            data = task_review_input_failure(arguments, require_workspace=True)
+            if data['field_errors']:
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+        from .repair_impact_contract import IMPACT_TOOLS, impact_input_failure
+        if name in IMPACT_TOOLS:
+            # Classification/critical consistency is a model constraint, not a
+            # JSON Schema enum check. Reject before routing or admitting a root.
+            data = impact_input_failure(name, arguments, require_workspace=True)
+            if data['field_errors']:
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
         from .codex_host_claims import EVENTS
         claim_diag = (host_adapter.validate_claims(arguments, EVENTS[name], schemas[name])
                       if name in HOOKS and name in schemas else None)
         if (name not in schemas or not isinstance(arguments, dict)
                 or not Draft202012Validator(schemas[name]).is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
-            from .repair_impact_contract import IMPACT_TOOLS, impact_failure
+            if name == 'submit_task_security_review':
+                from .task_review_contract import task_review_input_failure
+                data = task_review_input_failure(arguments, require_workspace=True)
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            from .repair_impact_contract import IMPACT_TOOLS, impact_input_failure
             if name in IMPACT_TOOLS:
-                data = impact_failure('IMPACT_INPUT_INVALID')
+                data = impact_input_failure(name, arguments, require_workspace=True)
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .feedback_contract import FEEDBACK_TOOLS, feedback_failure
@@ -444,7 +488,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     workspace_rejection_reason=None)
                 claim_diag.update(pool.binding_diagnostics(root, arguments['session_id']))
             if alias is not None and pool.root(alias) != root:
-                raise ValueError('WORKSPACE_CLAIM_REQUIRED')
+                raise WorkspaceClaimError('WORKSPACE_ALIAS_MISMATCH')
             binding_stage = 'VALIDATING_CONFIGURATION'
             if claim_diag is not None:
                 claim_diag['workspace_binding_stage'] = binding_stage
@@ -563,6 +607,13 @@ def create_global_server(*, workspaces=None, host='codex'):
                 result.structuredContent = {**claim_diag, **result.structuredContent}
             return result
         except Exception as exc:
+            if name == 'submit_task_security_review':
+                from .task_review_contract import find_task_review_input_error
+                rejection = find_task_review_input_error(exc)
+                if rejection is not None:
+                    data = rejection.response()
+                    return CallToolResult(isError=True, structuredContent=data,
+                        content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .repair_impact_contract import IMPACT_TOOLS, impact_failure
             if name in IMPACT_TOOLS:
                 data = impact_failure(exc)
@@ -603,7 +654,10 @@ def create_global_server(*, workspaces=None, host='codex'):
                 observe('HANDLER_ERROR', handler_reason='HANDLER_EXCEPTION')
             # Never echo an arbitrary path, source-like argument or SDK error.
             # Fixed protocol reasons are useful without reflecting host input.
-            reason = str(exc)
+            reason = getattr(exc, 'code', None) or str(exc)
+            if (not handler_entered and name in {'scan_diff', 'scan_project'}
+                    and reason in {'WORKSPACE_DIRECTORY_REQUIRED', 'WORKSPACE_ALIAS_MISMATCH'}):
+                return _scan_request_rejected(reason)
             allowed = {'WORKSPACE_CLAIM_REQUIRED', 'GLOBAL_CONFIGURATION_NOT_READY',
                        'LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR', 'SESSION_WORKSPACE_MISMATCH',
                        'WORKSPACE_CONNECTION_BUDGET_EXCEEDED', 'SESSION_CONNECTION_BUDGET_EXCEEDED',
@@ -708,6 +762,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                         if data.get('reason_code') in {'WORKSPACE_INITIALIZING', 'WORKSPACE_DEGRADED', 'WORKSPACE_ERROR'}:
                             message += '本次修改尚未检查。'
                     from .hook_user_feedback import check_gap_feedback
+                    from .hook_reply_context import CHECK_OPERATION_BOUNDARIES
                     data['user_feedback'] = check_gap_feedback(message)
                     data['reply_plan'] = data['user_feedback']['reply_plan']
                     message = data['user_feedback']['message']
@@ -724,7 +779,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                         '用户提示\n' + message + '\n\n呈现要求\n'
                         + presentation +
                         '检查未完成不代表文件编辑失败，不要重复编辑、撤销或自行修复。'
-                        '不重放检查事件、不补建编辑后的基线，不运行构建测试。'
+                        + CHECK_OPERATION_BOUNDARIES +
                         '本提示只说明项目初始检查或本次Hook的状态，不取消当前开发任务核查。'
                         '实际开发任务仍在首次编辑前用本会话路由保存任务记录；已有任务沿用原引用'
                         '在结束时完成检查，无需用户另发继续。已经编辑而缺少原记录时如实说明缺口。'}

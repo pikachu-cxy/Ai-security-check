@@ -55,6 +55,7 @@ class RepairImpactStore:
                 db = sqlite3.connect(self.path, timeout=1)
                 db.execute('CREATE TABLE IF NOT EXISTS cycles (id TEXT PRIMARY KEY, record TEXT NOT NULL)')
                 db.execute('CREATE TABLE IF NOT EXISTS assessments (id TEXT PRIMARY KEY, cycle_id TEXT NOT NULL, record TEXT NOT NULL)')
+                db.execute('CREATE TABLE IF NOT EXISTS native_intents (id TEXT PRIMARY KEY, record TEXT NOT NULL)')
                 db.execute('CREATE INDEX IF NOT EXISTS impact_cycle ON assessments(cycle_id)')
                 db.commit()
                 db.execute('BEGIN IMMEDIATE')
@@ -91,7 +92,7 @@ class RepairImpactStore:
                 db.close()
 
     def load(self, db, table, ref):
-        if table not in {'cycles', 'assessments'}:
+        if table not in {'cycles', 'assessments', 'native_intents'}:
             raise RepairImpactError('REPAIR_IMPACT_STORAGE_UNAVAILABLE')
         row = db.execute(f'SELECT record FROM {table} WHERE id=?', (ref,)).fetchone()
         if row is None:
@@ -115,8 +116,8 @@ class RepairImpactStore:
         content = encoded(dict(payload=record, mac=mac))
         if len(content) > MAX_RECORD_BYTES:
             raise RepairImpactError('REPAIR_IMPACT_STORAGE_CAPACITY')
-        if table == 'cycles':
-            db.execute('INSERT OR REPLACE INTO cycles VALUES (?,?)', (ref, content.decode()))
+        if table in {'cycles', 'native_intents'}:
+            db.execute(f'INSERT OR REPLACE INTO {table} VALUES (?,?)', (ref, content.decode()))
         elif table == 'assessments':
             db.execute('INSERT OR REPLACE INTO assessments VALUES (?,?,?)',
                        (ref, cycle_id, content.decode()))

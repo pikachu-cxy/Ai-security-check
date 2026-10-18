@@ -48,6 +48,19 @@ v3 闲置活动租约可在原任务/原快照恢复；真实资源不足、证�
 “修复／稍后处理”选项，稍后处理保留风险记录；旧“忽略”措辞兼容明确的暂不处理。
 用户要求保持相关模块不变只限制修改，不取消风险提醒和选择；选择前不自动修复。
 
+选定风险修复或只问修复影响时，先读取 [修复影响分析](references/repair-impact.md)，
+按其中的严格字段、枚举和来源分支执行。任务原生 HOST_TASK_RISK 不使用 scanner 的
+prepare_task_fix／verify_task_fix，不伪造 scan_id，也不为找引用另扫项目。当前影响提交
+未被接受时保持代码不变，不能用普通 begin_security_task 绕过；原授权保留，不重复索取同一批准。
+原生风险在用户已明确选择修复后，先取得或复用原方案的影响引用，尽早调用 prepare_task_risk_fix 登记意图。
+影响未 READY 时只保存 WAITING、不建基线；沿同一评估 read／submit 后重试该入口，只有返回
+ready_for_host_fix=true 才编辑。成功准备直接建立或复用原基线并返回 repair_task_ref；修复后
+finish／review 使用该引用，risk_resolutions 和风险账本仍指向原问题。
+只问影响不编辑、不主动索取修复批准；明确暂缓则直接保存 DEFER，不经过影响或修复门槛。
+准备失败的修复意图会阻止同归属普通 begin；用户明确暂停该修复或切换其他开发时，使用
+cancel_task_risk_fix 报告原 task_ref／finding_id 和 user_requested=true，不再索取批准。
+取消只解除该修复流程的阻塞，不关闭风险或改变用户处置；DEFER／EXCLUDE 成功后自动解除同一意图。
+
 用户呈现规则（必须遵守）：当前仍需提醒的 Hook“用户提示”合并进最终回复，
 完整保留位置、具体问题、条件性影响、修复建议、未确认事项和待选的
 “修复／稍后处理”。先读取当前处置，已排除、已暂缓不重复提示或索取选择；
@@ -118,6 +131,10 @@ does not start a repository-wide deep audit. All modes share task references,
 fix authorization and the originating-scanner retest workflow.
 
 ## Requested scans and selected risk workflows
+
+The numbered scanner workflow below is for scanner findings. Native task risks
+use their original task/finding refs and the source-specific repair-impact method
+above; do not substitute a scan result or scanner repair entry point.
 
 1. Read `get_runtime_info` and `get_security_summary` for the current workspace.
    For whole-project intent use `scan_project`, which performs a release scan,
@@ -219,7 +236,9 @@ fix authorization and the originating-scanner retest workflow.
    reset attempts. Already authorized or exhausted scopes cannot use recovery.
    Without a supplied `confirmation_ref` (for example, advisory/manual feedback),
    do not invent one or call confirmation. A clearly selected '修复' follows the
-   existing `prepare_task_fix` policy guards. A selected '稍后处理/忽略' still saves
+   existing scanner `prepare_task_fix` policy guards, or `prepare_task_risk_fix`
+   for a native task risk: promptly register its selected intent with the impact ref,
+   complete the same impact analysis, then retry preparation before editing. A selected '稍后处理/忽略' still saves
    DEFER through the matching disposition tool without a confirmation_ref;
    acknowledge durable handling only after successful saving. Runtime receives
    a strict boolean choice for repair confirmation, not the
@@ -228,7 +247,7 @@ fix authorization and the originating-scanner retest workflow.
    For a failed or exhausted repair, distinguish 'still detected' from 'recheck
    incomplete', stop automatic retry and explain the next review step in plain
    language. Neither outcome proves the issue is fixed.
-   Follow `prepare_task_fix`, host edits, then `verify_task_fix` with the originating
+   For scanner findings follow `prepare_task_fix`, host edits, then `verify_task_fix` with the originating
    scanner/rules. Report actual execution and inconclusive verification honestly.
    Do not automatically run broad builds/tests or edit unrelated code.
 

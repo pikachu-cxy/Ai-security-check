@@ -37,10 +37,25 @@ from security_runtime.hook_state import no_links
 
 CONTRACT = 'repair-impact-v1'
 TOOLS = ('prepare_repair_impact', 'read_repair_impact_context',
-         'submit_repair_impact', 'get_repair_impact')
+         'submit_repair_impact', 'get_repair_impact',
+         'prepare_task_risk_fix', 'cancel_task_risk_fix')
 HIDDEN_TOOLS = {'prepare_functional_verification', 'run_functional_verification'}
+ACCEPTANCE_REGRESSIONS = ('tests/test_repair_impact_input_contract.py',
+    'tests/test_native_repair_intent.py', 'tests/test_native_repair_impact_context.py',
+    'tests/test_task_risk_fix_mcp.py', 'tests/test_task_review_submission_contract.py',
+    'tests/test_task_review_submission_recovery.py',
+    'tests/test_repair_impact_unknown_classification.py', 'tests/test_repair_impact_a2_recovery.py')
 # These are product regressions, not a new personal-edition testing capability.
 REGRESSIONS = (
+    'tests/test_native_repair_intent.py', 'tests/test_native_repair_impact_context.py',
+    'tests/test_task_risk_fix_mcp.py', 'tests/test_task_security.py',
+    'tests/test_task_security_inventory.py', 'tests/test_task_review_redacted_changes.py',
+    'tests/test_task_review_submission_contract.py', 'tests/test_task_review_submission_recovery.py',
+    'tests/test_rebuild_task_review_probe.py',
+    'tests/test_repair_impact_unknown_classification.py', 'tests/test_repair_impact_a2_recovery.py',
+    'tests/test_task_review_protocol_mcp.py', 'tests/test_task_review_v2.py', 'tests/test_task_review_v3_state.py',
+    'tests/test_local_evidence.py', 'tests/test_local_evidence_empty_literals.py', 'tests/test_redactor_markers.py',
+    'tests/test_scan_workspace_contract.py',
     'tests/test_reply_plan.py', 'tests/test_risk_decision_experience.py',
     'tests/test_feedback_contract_v2.py', 'tests/test_finding_disposition.py',
     'tests/test_task_risk_dispositions.py', 'tests/test_task_risk_feedback.py',
@@ -49,6 +64,8 @@ REGRESSIONS = (
     'tests/test_confirmation.py', 'tests/test_agent_fix_envelope.py',
     'tests/test_agent_fix_ticket.py', 'tests/test_fix_context.py',
     'tests/test_hook_advice_feedback.py', 'tests/test_hook_user_feedback.py',
+    'tests/test_check_operation_boundaries.py', 'tests/test_hook_reply_context.py',
+    'tests/test_bootstrap_recovery.py', 'tests/test_codex_host_claims.py',
     'tests/test_hook_dispositions.py', 'tests/test_host_feedback_contract.py',
     'tests/test_host_orchestration.py', 'tests/test_codex_code_mode_contract.py',
     'tests/test_review_mcp.py', 'tests/test_review_skill.py',
@@ -176,9 +193,17 @@ def junit_counts(path):
     feature = [case for case in cases if 'repair_impact' in case.get('classname', '')]
     feature_passed = sum(not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped'))
                          for case in feature)
+    acceptance = {}
+    for name in ACCEPTANCE_REGRESSIONS:
+        module = Path(name).stem
+        selected = [case for case in cases if module in case.get('classname', '').split('.')]
+        acceptance[name] = dict(total=len(selected), passed=sum(
+            not any(case.find(tag) is not None for tag in ('failure', 'error', 'skipped'))
+            for case in selected))
     return {'total': len(cases), 'passed': len(cases)-failed-errors-skipped,
             'failed': failed, 'errors': errors, 'skipped': skipped,
-            'repair_impact_cases': len(feature), 'repair_impact_passed': feature_passed}
+            'repair_impact_cases': len(feature), 'repair_impact_passed': feature_passed,
+            'acceptance_regressions': acceptance}
 
 
 def clean_environment(profile):
@@ -192,12 +217,14 @@ def clean_environment(profile):
     return env
 
 
-def decoded_tool(result):
-    if result.isError:
-        raise ValueError('Frozen runtime-info returned a tool error')
-    if result.structuredContent is not None:
-        return result.structuredContent
-    return json.loads(next(item.text for item in result.content if item.type == 'text'))
+def decoded_tool(result, *, expected_error=False):
+    if bool(result.isError) != expected_error:
+        raise ValueError('Frozen tool returned an unexpected success/error status')
+    value = (result.structuredContent if result.structuredContent is not None else
+        json.loads(next(item.text for item in result.content if item.type == 'text')))
+    if not isinstance(value, dict):
+        raise ValueError('Frozen tool did not return a structured object')
+    return value
 
 
 def has_contract(value, token):
@@ -208,6 +235,132 @@ def has_contract(value, token):
     if isinstance(value, list):
         return any(has_contract(item, token) for item in value)
     return False
+
+
+def task_review_schema_payload():
+    """Schema-only examples; no reference here is issued or submitted as a risk."""
+    return dict(workspace_path='C:/schema-only-never-admitted', task_ref='ts1-' + 'c' * 32,
+        review_session='tr1-' + 'd' * 32, coverage='REVIEWED', limitations=[],
+        findings=[dict(title='Schema-only access review', category='ACCESS_CONTROL', severity='MEDIUM',
+            risk_scope='RELATED_EXISTING', primary_evidence='te3-' + 'a' * 32,
+            task_evidence='te3-' + 'b' * 32,
+            evidence_refs=['te3-' + 'a' * 32, 'te3-' + 'b' * 32], impact='Schema example only.',
+            preconditions=['A caller can choose the object ID.'], unknowns=['Upstream checks are unknown.'],
+            counterevidence=[], current_protections=[], fix_advice='Check access before returning content.')])
+
+
+def malformed_task_review_payload():
+    payload = task_review_schema_payload()
+    candidate = payload['findings'][0]
+    candidate['primary_evidence'] = dict(evidence_id=candidate['primary_evidence'], file_path='documents.py',
+        start_line=1, end_line=3)
+    candidate['task_evidence'] = dict(evidence_id=candidate['task_evidence'], file_path='download.py',
+        start_line=4, end_line=5)
+    candidate['evidence_refs'] = [candidate['primary_evidence'], candidate['task_evidence']]
+    return payload
+
+
+def malformed_impact_unknown_payload():
+    """A semantic conflict must fail before the schema-only root is admitted."""
+    evidence = 'ri-evidence-' + 'b' * 32
+    return dict(workspace_path='C:/schema-only-never-admitted', assessment_ref='ria1-' + 'a' * 32,
+        impacts=[dict(kind='EXPECTED_SECURITY_RESTRICTION', summary='Reject unauthorized reads.',
+                      evidence_refs=[evidence])],
+        unknowns=[dict(summary='External presentation is outside this local proposal.',
+            classification='SCOPE_LIMITATION', critical=True,
+            decision_basis='This intentionally contradictory label is a negative probe.',
+            evidence_refs=[evidence])])
+
+
+def frozen_schema_contract(rows):
+    """Check the schema actually advertised by the frozen process, not src."""
+    from jsonschema import Draft202012Validator
+    submit = rows['submit_repair_impact']
+    properties = submit['properties']
+    item = properties['impacts']['items']
+    if '$ref' in item:
+        item = submit['$defs'][item['$ref'].removeprefix('#/$defs/')]
+    if (set(item['properties']['kind'].get('enum', [])) != {
+            'EXPECTED_SECURITY_RESTRICTION', 'NO_ADDITIONAL_CHANGE_IDENTIFIED',
+            'BUSINESS_BEHAVIOR_CHANGE', 'UNDETERMINED'} or
+            set(properties['coverage'].get('enum', [])) != {'REVIEWED', 'PARTIAL'} or
+            item.get('additionalProperties') is not False):
+        raise ValueError('Frozen impact schema does not expose the closed analysis contract')
+    page = rows['get_repair_impact']['properties']['limit']
+    if page.get('minimum') != 1 or page.get('maximum') != 10:
+        raise ValueError('Frozen impact history page limits are missing')
+    for name in ('prepare_task_risk_fix', 'cancel_task_risk_fix'):
+        schema = rows[name]
+        required = {'task_ref', 'finding_id', 'user_requested'}
+        if name == 'prepare_task_risk_fix':
+            required.add('impact_ref')
+        intent = schema['properties']['user_requested']
+        if (not required.issubset(schema.get('required', [])) or
+                schema.get('additionalProperties') is not False or
+                intent.get('type') != 'boolean' or intent.get('const') is not True):
+            raise ValueError('Frozen native repair schema is incomplete: ' + name)
+    workspace = dict(workspace_path='C:/schema-only-never-admitted')
+    ref = 'ria1-' + 'a' * 32
+    impact = dict(kind='EXPECTED_SECURITY_RESTRICTION', summary='Preserve shared member reads.',
+                  evidence_refs=['ri-evidence-' + 'b' * 32])
+    validator = Draft202012Validator(submit)
+    payload = dict(workspace, assessment_ref=ref, impacts=[impact], unknowns=[])
+    for kind in ('EXPECTED_SECURITY_RESTRICTION', 'NO_ADDITIONAL_CHANGE_IDENTIFIED',
+                 'BUSINESS_BEHAVIOR_CHANGE', 'UNDETERMINED'):
+        validator.validate(dict(payload, impacts=[dict(impact, kind=kind)], coverage='REVIEWED'))
+    validator.validate(dict(payload, coverage='PARTIAL'))
+    invalid = [dict(payload, impacts=[dict(impact, kind='SECURITY_RESTRICTION')]),
+               dict(payload, coverage='FULL'), dict(payload, coverage='COMPLETE'),
+               dict(payload, unknowns=[dict(summary='Unknown policy.', critical='true')]),
+               dict(payload, impacts=[dict(impact, unsupported='not allowed')])]
+    if any(validator.is_valid(value) for value in invalid):
+        raise ValueError('Frozen impact schema accepts an invalid nested contract')
+    unknown = properties['unknowns']['items']
+    if '$ref' in unknown:
+        unknown = submit['$defs'][unknown['$ref'].removeprefix('#/$defs/')]
+    label = unknown['properties'].get('classification', {})
+    labels = next((part.get('enum', []) for part in label.get('anyOf', [label])
+                   if part.get('type') == 'string'), [])
+    if set(labels) != {'BLOCKING_CONTEXT', 'SCOPE_LIMITATION'} or 'decision_basis' not in unknown['properties']:
+        raise ValueError('Frozen impact schema lacks explicit unknown classification')
+    for classification, critical in (('BLOCKING_CONTEXT', True), ('SCOPE_LIMITATION', False)):
+        validator.validate(dict(payload, unknowns=[dict(summary='Schema-only unknown.',
+            classification=classification, critical=critical, evidence_refs=impact['evidence_refs'],
+            decision_basis='Explain the missing fact and its effect on this exact proposal.')]))
+    for name in ('prepare_task_risk_fix', 'cancel_task_risk_fix'):
+        validator = Draft202012Validator(rows[name])
+        payload = dict(workspace, task_ref='ts1-' + 'c' * 32, finding_id='tc1-' + 'd' * 32,
+                       user_requested=True)
+        if name == 'prepare_task_risk_fix':
+            payload['impact_ref'] = ref
+        validator.validate(payload)
+        for value in (False, 1, 'true'):
+            if validator.is_valid(dict(payload, user_requested=value)):
+                raise ValueError('Frozen native schema coerces user repair intent')
+        for key in ('task_ref', 'finding_id', 'user_requested'):
+            if validator.is_valid({k: v for k, v in payload.items() if k != key}):
+                raise ValueError('Frozen native schema accepts missing selection fields')
+    review = rows['submit_task_security_review']
+    candidate = review['properties']['findings']['items']
+    if '$ref' in candidate:
+        candidate = review['$defs'][candidate['$ref'].removeprefix('#/$defs/')]
+    props = candidate['properties']
+    if (candidate.get('additionalProperties') is not False
+            or props['primary_evidence'].get('type') != 'string'
+            or props['task_evidence'].get('type') != 'string'
+            or props['evidence_refs'].get('type') != 'array'
+            or props['evidence_refs']['items'].get('type') != 'string'):
+        raise ValueError('Frozen task review schema does not expose evidence ID strings')
+    validator = Draft202012Validator(review)
+    validator.validate(task_review_schema_payload())
+    if validator.is_valid(malformed_task_review_payload()):
+        raise ValueError('Frozen task review schema accepts B2 object-shaped evidence')
+    return dict(status='PASSED', closed_impact_kinds=True, coverage_values=True,
+        bounded_history_page=True, explicit_native_repair_intent=True,
+        typed_task_review_evidence=True, object_shaped_task_evidence_rejected=True,
+        explicit_unknown_classification=True,
+        representative_schema_inputs_validated=True, invalid_schema_inputs_rejected=True,
+        native_preparation_executed=False, native_baseline_guard_executed=False)
 
 
 async def frozen_mcp(executable, env, errors):
@@ -227,16 +380,43 @@ async def frozen_mcp(executable, env, errors):
                     break
             else:
                 raise ValueError('Frozen tool list exceeded bounded pagination')
+            # Invalid JSON is rejected before project admission; no task or scan
+            # may be created by this process-level regression probe.
+            rejected = decoded_tool(await client.call_tool('submit_task_security_review',
+                malformed_task_review_payload()), expected_error=True)
+            fields = {item['field'] for item in rejected.get('field_errors', [])}
+            if (rejected.get('reason_code') != 'TASK_REVIEW_INPUT_INVALID'
+                    or not {'findings[0].primary_evidence', 'findings[0].task_evidence'} <= fields
+                    or any(rejected.get(key) is not False for key in
+                        ('scanner_run', 'source_modified', 'repair_authorized', 'review_state_changed'))
+                    or 'workspace_readiness' in rejected):
+                raise ValueError('Frozen task review input rejection lost actionable safe diagnostics')
+            rejected_unknown = decoded_tool(await client.call_tool('submit_repair_impact',
+                malformed_impact_unknown_payload()), expected_error=True)
+            if (rejected_unknown.get('reason_code') != 'REPAIR_IMPACT_INPUT_INVALID'
+                    or not any(row['field'].startswith('unknowns[')
+                               for row in rejected_unknown.get('field_errors', []))
+                    or any(rejected_unknown.get(key) is not False for key in
+                           ('scanner_run', 'source_modified', 'repair_authorized'))
+                    or 'workspace_readiness' in rejected_unknown):
+                raise ValueError('Frozen unknown classification conflict was not rejected before admission')
     if not set(TOOLS).issubset(rows) or HIDDEN_TOOLS.intersection(rows):
         raise ValueError('Frozen repair-impact tools missing or personal hidden tools exposed')
+    schema_contract = frozen_schema_contract(rows)
     for name in ('prepare_task_fix', 'confirm_remediation'):
         if 'impact_ref' not in rows.get(name, {}).get('properties', {}):
             raise ValueError('Frozen repair gate is missing impact_ref: ' + name)
-    for contract in (CONTRACT, 'security-reply-plan-v1', 'risk-decisions-v2'):
+    for contract in (CONTRACT, 'security-reply-plan-v1', 'risk-decisions-v2', 'task-review-submission-v1',
+                     'repair-impact-unknowns-v1'):
         if not has_contract(info, contract):
             raise ValueError('Frozen Runtime does not advertise required contract: ' + contract)
     return {'status': 'PASSED', 'runtime_info': info,
             'tool_names': sorted(rows), 'required_tools': list(TOOLS),
+            'schema_contract': schema_contract,
+            'task_review_input_rejection': dict(status='PASSED', field_diagnostics=True,
+                scanner_run=False, workspace_admitted=False, task_created=False),
+            'unknown_classification_rejection': dict(status='PASSED', field_diagnostics=True,
+                scanner_run=False, workspace_admitted=False, task_created=False),
             'hidden_personal_tools_absent': True, 'impact_gate_parameters_present': True,
             'scanner_run': False, 'hook_dispatch': False, 'runtime_installed': False}
 
@@ -290,9 +470,21 @@ def main(argv=None):
         receipt['regression'] = {'status': 'PASSED' if result.returncode == 0 else 'FAILED',
             'exit_code': result.returncode, 'duration_seconds': round(time.perf_counter()-started, 3),
             'junit': str(xml), **counts}
+        acceptance = counts.get('acceptance_regressions', {})
         if (result.returncode or not counts.get('repair_impact_passed')
+                or any(not acceptance.get(name, {}).get('total') or
+                       acceptance[name]['passed'] != acceptance[name]['total']
+                       for name in ACCEPTANCE_REGRESSIONS)
                 or counts.get('failed') or counts.get('errors')):
-            raise ValueError('Required internal regressions did not pass')
+            receipt['regression']['status'] = 'FAILED'
+            raise ValueError(
+                'Required internal regressions did not pass: '
+                f'pytest exit_code={result.returncode}, '
+                f'passed={counts.get("passed", "UNKNOWN")}, '
+                f'failed={counts.get("failed", "UNKNOWN")}, '
+                f'errors={counts.get("errors", "UNKNOWN")}. '
+                f'Test report: {xml}. Run receipt: {run_path}. '
+                'No new candidate was built; latest was not updated.')
         same_inputs(snapshot, source_snapshot())
         stage = 'BUILD_STANDALONE'
         command = [sys.executable, str(ROOT / 'scripts/build_standalone.py'),

@@ -326,7 +326,7 @@ class TaskSecurityService:
             raise ownership_error(record_owner(record), owner)
         return record
 
-    def begin(self, workspace, task_key, *, _owner=None):
+    def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None):
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
         from .task_ownership import valid_owner, record_owner, writer_identity, writer_gone
@@ -342,6 +342,31 @@ class TaskSecurityService:
                 return {'status': 'BUSY', 'scanner_run': False}
             self.hooks.key(root)
             store = self.store(root)
+            native = None
+            if owner is not None:
+                from .native_repair_intent import NativeRepairIntents
+                native = NativeRepairIntents(self.hooks, root, owner, now=self.now)
+                blocked = native.guard(_native_preparation)
+                if blocked is not None:
+                    return blocked
+                intent = native.get()
+                if _native_preparation is not None and intent.get('repair_task_ref'):
+                    original = self.load(root, intent['repair_task_ref'])
+                    if original.get('native_repair') != _native_preparation:
+                        raise ValueError('NATIVE_REPAIR_TASK_MISMATCH')
+                    return self._view(original)
+                if _native_preparation is not None:
+                    # Recover a task published before a process stopped between
+                    # the signed baseline save and the independent intent bind.
+                    candidates = [old for old in store.records(active=True)
+                        if record_owner(old) == owner and old.get('native_repair') == _native_preparation]
+                    if len(candidates) > 1:
+                        raise ValueError('NATIVE_REPAIR_TASK_AMBIGUOUS')
+                    if candidates:
+                        native.bind(candidates[0]['task_ref'])
+                        return self._view(candidates[0])
+            elif _native_preparation is not None:
+                raise ValueError('NATIVE_REPAIR_OWNER_REQUIRED')
             # Expiration alone never establishes a dead owner. Keep all evidence
             # and risks; only a confirmed ended writer plus an expired lease retires.
             for old in store.records(active=True):
@@ -355,6 +380,10 @@ class TaskSecurityService:
                     self.discard_preimages(root, old['task_ref'])
             existing = store.get(task_key=self.key(task_key,owner))
             if existing:
+                if _native_preparation is not None:
+                    if existing.get('native_repair') != _native_preparation:
+                        raise ValueError('NATIVE_REPAIR_TASK_KEY_CONFLICT')
+                    native.bind(existing['task_ref'])
                 return self._view(existing)
             active = store.get(active=True,owner=owner)
             if (active and active.get('review_protocol') != 3 and active['phase'] == 'REVIEWING'
@@ -372,7 +401,13 @@ class TaskSecurityService:
                 return dict(status='ACTIVE_TASK_EXISTS', scanner_run=False)
             ref = 'ts1-'+uuid.uuid4().hex
             with self.preimages(root).writer(ref) as writer:
-                baseline = capture(root, preimage_writer=writer)
+                baseline = capture(root, preimage_writer=writer,
+                    priority_paths=tuple(_native_preparation['source_hashes']) if _native_preparation else ())
+            if _native_preparation is not None and not all(
+                    baseline['hashes'].get(name) == sha
+                    for name, sha in _native_preparation['source_hashes'].items()):
+                self.discard_preimages(root, ref)
+                raise ValueError('NATIVE_REPAIR_BASELINE_MISMATCH')
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=self.now(),
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
@@ -380,9 +415,14 @@ class TaskSecurityService:
                 # Its normal exit can never prove that the editing task ended.
                 writer=writer_identity() if _owner is None else None)
             if owner is not None: record['task_owner']=owner
+            if _native_preparation is not None:
+                import copy
+                record['native_repair'] = copy.deepcopy(_native_preparation)
             if _owner is not None:
                 record['connector_owner'] = _owner
             record = store.save(record, new=True)
+            if _native_preparation is not None:
+                native.bind(record['task_ref'])
             return self._view(record)
 
     def _fresh(self, root, record):
@@ -633,6 +673,7 @@ class TaskSecurityService:
             if any(d.get('truncated') for d in diffs):
                 record['limitations'].append({'reason': 'DIFF_LINE_BUDGET'})
             static = record['static']
+            from .task_review import submission_contract
             findings = [dict(id=f['id'], title=f['plain_title'], category=f['category'], severity=f['severity'],
                             file_path=f['file_path'], line_start=f['line_start']) for f in static['findings'][:30]]
             packet = dict(status='REVIEW_REQUIRED', task_ref=ref, review_required=True,
@@ -643,12 +684,7 @@ class TaskSecurityService:
                 changes=record['changes'], diffs=diffs, related_candidates=[],
                 quick_skill=guide, limitations=record['limitations'],
                 trust='UNTRUSTED_CODE_AND_SCANNER_DATA', redaction='LITERALS_AND_CREDENTIALS_MASKED; RETAIN_SEMANTIC_UNKNOWNS',
-                submission_contract=dict(findings='list[max10]: title,category,severity,primary_evidence,evidence_refs,impact,preconditions,unknowns,counterevidence,fix_advice',
-                                         optional_candidate_fields='risk_scope: TASK_CHANGED or RELATED_EXISTING; task_evidence: issued changed-file evidence; current_protections: list[str]',
-                                         related_existing_risk='Primary evidence may locate a read unchanged related file only with task_evidence in evidence_refs, conditions, unknowns and explicit current_protections. Register surviving conditional risks as findings, never only as limitations or later advice.',
-                                         coverage='REVIEWED or PARTIAL', limitations='list[str], including unreviewed paths and missing context',
-                                         evidence='Runtime-issued ids only; primary location must be a changed file',
-                                         validation='STRUCTURE_AND_SOURCE_VERSION_ONLY; HOST_CANDIDATES_NOT_SCANNER_PROOF'),
+                submission_contract=submission_contract(),
                 budget=dict(changed_files=MAX_CHANGED, static_changed_files=MAX_STATIC_CHANGED,
                             related_files=MAX_RELATED, context_reads=MAX_CONTEXT_READS,
                             context_window_lines=MAX_CONTEXT_WINDOW_LINES,
@@ -834,47 +870,56 @@ class TaskSecurityService:
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
                 return self.get(workspace, ref)  # idempotent retry; no scan/model.
             record = self._session(root, ref, session)
-            if not isinstance(findings, list) or len(findings) > 10 or coverage not in {'REVIEWED','PARTIAL'}:
-                raise ValueError('Invalid bounded host review')
-            if not isinstance(limitations, list) or len(limitations) > 30:
-                raise ValueError('Invalid review limitations')
+            from .task_review_contract import validate_task_review_body, evidence_error, TaskReviewInputError
+            body = validate_task_review_body(findings, coverage, limitations)
+            findings, coverage, limitations = body['findings'], body['coverage'], body['limitations']
             clean_limitations = [_clean(v, 500) for v in limitations]
             if coverage == 'PARTIAL' and not clean_limitations:
-                raise ValueError('Partial review must identify a limitation')
+                raise TaskReviewInputError([dict(field='limitations', code='REQUIRED_FOR_PARTIAL',
+                    correction='PARTIAL 必须列出实际未完成范围或缺少的上下文。')])
             fields = {'title','category','severity','primary_evidence','evidence_refs','impact','preconditions','unknowns','counterevidence','fix_advice'}
             optional_fields = {'risk_scope', 'task_evidence', 'current_protections'}
             accepted = []
             scope = (record['changes'] if record.get('review_protocol') == 3 else
                      record['changes'][:(100 if record.get('review_protocol') == 2 else MAX_CHANGED)])
             changed = {v['path'] for v in scope}
-            for candidate in findings:
+            for index, candidate in enumerate(findings):
                 if not isinstance(candidate, dict) or not fields <= set(candidate) or set(candidate) - fields - optional_fields:
                     raise ValueError('Use the task candidate schema; scanner proof and authority fields are forbidden')
                 refs = candidate['evidence_refs']
                 primary = candidate['primary_evidence']
                 if not isinstance(refs, list) or not 1 <= len(refs) <= 10 or any(not isinstance(e, str) or e not in record['evidence'] for e in refs) or not isinstance(primary, str) or primary not in refs:
-                    raise ValueError('Every candidate needs Runtime-issued evidence')
+                    raise evidence_error(index, 'evidence_refs', 'EVIDENCE_NOT_ISSUED',
+                        '只使用原任务当前复核版本实际读取返回的 evidence_id 字符串，且 primary_evidence 必须包含在 evidence_refs 中。')
                 location = record['evidence'][primary]
                 if location['location_version'] == 'BEFORE_TASK':
-                    raise ValueError('Historical evidence cannot locate a current risk')
+                    raise evidence_error(index, 'primary_evidence', 'HISTORICAL_LOCATION',
+                        '当前风险的主证据不能使用 BEFORE_TASK；引用实际读取的当前代码证据。')
                 risk_scope = candidate.get('risk_scope', 'TASK_CHANGED')
                 if risk_scope not in {'TASK_CHANGED', 'RELATED_EXISTING'}:
                     raise ValueError('Invalid task risk scope')
                 task_evidence = candidate.get('task_evidence', primary)
                 if (not isinstance(task_evidence, str) or task_evidence not in refs
                         or record['evidence'][task_evidence]['path'] not in changed):
-                    raise ValueError('Every risk needs issued task-changed evidence in evidence_refs')
+                    raise evidence_error(index, 'task_evidence', 'TASK_CHANGED_EVIDENCE_REQUIRED',
+                        '引用原任务当前复核版本已读取的改动文件 evidence_id 字符串，并将它包含在 evidence_refs 中。')
                 if risk_scope == 'TASK_CHANGED' and location['path'] not in changed:
-                    raise ValueError('Primary evidence must locate a task-changed file')
+                    raise evidence_error(index, 'primary_evidence', 'TASK_CHANGED_LOCATION_REQUIRED',
+                        'TASK_CHANGED 的主证据须来自任务改动文件；关联现有风险按 RELATED_EXISTING 契约提交。')
                 if risk_scope == 'RELATED_EXISTING' and (location['path'] not in record['related_files']
                         or location['path'] in changed or location['location_version'] != 'CURRENT_TASK_END'):
-                    raise ValueError('Existing risk must locate current read related evidence')
+                    raise evidence_error(index, 'primary_evidence', 'CURRENT_RELATED_LOCATION_REQUIRED',
+                        'RELATED_EXISTING 的主证据须来自当前已读取、未修改的关联文件。')
                 protections = candidate.get('current_protections', candidate['counterevidence'])
                 if not isinstance(protections, list) or len(protections) > 10:
                     raise ValueError('Invalid current protections')
                 if risk_scope == 'RELATED_EXISTING' and (not candidate.get('preconditions')
                         or not candidate.get('unknowns') or 'current_protections' not in candidate):
-                    raise ValueError('Conditional existing risk requires conditions, unknowns and current protections')
+                    raise TaskReviewInputError([dict(field=f'findings[{index}].{field}',
+                        code='RELATED_EXISTING_FIELD_REQUIRED',
+                        correction='RELATED_EXISTING 须说明实际触发条件、未知范围和当前防护；不编造缺少的事实。')
+                        for field in ('preconditions', 'unknowns', 'current_protections')
+                        if not candidate.get(field) and (field != 'current_protections' or field not in candidate)])
                 if candidate['severity'] not in {'LOW','MEDIUM','HIGH','CRITICAL'}:
                     raise ValueError('Invalid candidate severity')
                 item = {k: _clean(candidate[k], 1200) for k in ('title','category','impact','fix_advice')}
@@ -1037,6 +1082,11 @@ class TaskSecurityService:
             static=None, host_review=record.get('review'), repair_authorized=False)
         result['snapshot_capture'] = dict(baseline=record['baseline'].get('capture_stats'),
             current=(record.get('end') or {}).get('capture_stats'))
+        if record.get('native_repair'):
+            import copy
+            result['native_repair'] = {key: copy.deepcopy(record['native_repair'][key]) for key in
+                ('source', 'assessment_ref', 'proposal_revision', 'source_binding')}
+            result['native_repair']['repair_authorized'] = False
         if record.get('review_protocol') == 3:
             result['review_revision'] = record.get('review_revision', 1)
             result['previous_review_count'] = len(record.get('review_history', []))

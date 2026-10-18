@@ -24,10 +24,21 @@ WORKSPACE_REJECTIONS = {
     'POTENTIAL_DUPLICATE_HOOK', 'WORKSPACE_CONNECTION_BUDGET_EXCEEDED',
     'SESSION_CONNECTION_BUDGET_EXCEEDED', 'TOOL_USE_CLAIM_REPLAYED',
     'HOST_CLAIM_BUDGET_EXCEEDED', 'RUNTIME_MISSING',
+    'WORKSPACE_DIRECTORY_REQUIRED', 'WORKSPACE_ALIAS_MISMATCH',
 }
 WORKSPACE_STAGES = {'RESOLVING_ROOT', 'VALIDATING_CONFIGURATION', 'ADMITTING_WORKSPACE',
                     'BINDING_SESSION', 'VALIDATING_INVOCATION', 'BOOTSTRAPPING',
                     'FORWARDING_TOOL', 'COMPLETE'}
+
+
+class WorkspaceClaimError(ValueError):
+    """Fixed input diagnostics; never reflect a supplied path or raw error."""
+
+    def __init__(self, code):
+        if code not in {'WORKSPACE_DIRECTORY_REQUIRED', 'WORKSPACE_ALIAS_MISMATCH'}:
+            raise ValueError('Invalid workspace claim diagnostic')
+        self.code = code
+        super().__init__(code)
 
 
 def workspace_rejection(exc, stage):
@@ -37,7 +48,7 @@ def workspace_rejection(exc, stage):
         return reason
     if reason == 'Hook state/configuration links are not supported':
         return 'WORKSPACE_LINK_REJECTED'
-    if reason in {'INVALID_WORKSPACE_CLAIM', 'WORKSPACE_DIRECTORY_REQUIRED'}:
+    if reason == 'INVALID_WORKSPACE_CLAIM':
         return 'WORKSPACE_CANONICALIZATION_MISMATCH'
     if reason in {'RUNTIME_STATE_IS_NOT_A_WORKSPACE', 'UNSAFE_WORKSPACE', 'WORKSPACE_BOUNDARY_REJECTED'}:
         return 'WORKSPACE_OUTSIDE_ALLOWED_ROOT'
@@ -69,7 +80,7 @@ def resolve_workspace(value, *, excluded=()):
     if resolver._unsafe(candidate):
         raise ValueError('UNSAFE_WORKSPACE')
     if not candidate.is_dir():
-        raise ValueError('WORKSPACE_DIRECTORY_REQUIRED')
+        raise WorkspaceClaimError('WORKSPACE_DIRECTORY_REQUIRED')
     try:
         root = resolver.resolve(candidate).path
     except ValueError:

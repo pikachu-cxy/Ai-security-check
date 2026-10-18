@@ -92,12 +92,43 @@ be described as such. Do not duplicate a scanner alert as another host finding.
 Runtime evidence ids are required; scanner labels/proof, authority or user choices
 cannot be invented. Use HIGH/CRITICAL only with concrete reachability and impact.
 
+`primary_evidence` and `task_evidence` are Runtime-issued `evidence_id` STRINGS
+present in `evidence_refs`, an array of 1-10 issued ID STRINGS from this exact
+task/session's read responses. Do not submit evidence_id/file_path/start_line/
+end_line objects. A `source_ref` is a locator, not an evidence ID.
+
 For an evidence-backed RELATED_EXISTING conditional risk, use current related
 primary evidence, task_evidence in evidence_refs from a changed file, explicit
 current_protections, preconditions and unknowns. A protected new entry does not
 prove all shared callers safe; do not describe a protected entry as vulnerable.
 Register a surviving concrete conditional risk as a finding rather than hiding
 it in limitations or later advice. Missing context alone is a coverage gap.
+
+RELATED_EXISTING shape only: all IDs and prose below are illustrative, not a finding.
+Replace IDs with actual Runtime-issued strings and prose with actual code facts.
+Never register this example risk or submit its placeholders. Keep original
+task_ref/review_session/workspace, actual coverage/limitations and issued
+session_ref if available. REVIEWED requires completed review obligations.
+
+```json
+{
+  "title": "Related read lacks an access check", "category": "ACCESS_CONTROL",
+  "severity": "MEDIUM", "risk_scope": "RELATED_EXISTING",
+  "primary_evidence": "<ISSUED_RELATED_ID>", "task_evidence": "<ISSUED_CHANGED_ID>",
+  "evidence_refs": ["<ISSUED_RELATED_ID>", "<ISSUED_CHANGED_ID>", "<ISSUED_CONTROL_ID>"],
+  "impact": "Unshared users could read content if callers lack an upstream check.",
+  "preconditions": ["A caller can choose the document ID without authorization."],
+  "unknowns": ["Repository and external callers were not supplied."],
+  "current_protections": ["Shared listing filters owners and members."],
+  "counterevidence": ["That list filter does not protect the observed direct read."],
+  "fix_advice": "Reuse the owner/member check before returning content."
+}
+```
+
+For recoverable submission errors, use `field_errors` to correct the named fields
+in the SAME task/session/source version. Do not rescan, restart or replace the
+baseline. A terminal INCOMPLETE task is not automatically reopened by correcting
+JSON; retain its result and report the gap, without claiming a finding was saved.
 
 After selected repairs, get_task_risk_ledger with the ORIGINAL task_ref. A new
 zero-finding task does not close old risks. Host risk_resolutions require original

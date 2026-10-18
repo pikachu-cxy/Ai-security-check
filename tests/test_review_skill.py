@@ -1,5 +1,6 @@
 """Only synthetic homes; never touch real Host configuration or skills."""
 import json
+import re
 
 import pytest
 
@@ -9,6 +10,71 @@ from security_runtime.host_guidance import HOST_INSTRUCTIONS
 
 def manager(tmp_path):
     return ReviewSkillManager(tmp_path/'home/.agents/skills',tmp_path/'state')
+
+
+def test_repair_impact_examples_use_the_accepted_domain_contract():
+    from pydantic import TypeAdapter
+    from security_runtime.repair_impact_models import KINDS, proposal, reasoning, source, validate_impact_request
+    from security_runtime.task_risk_fix import NativeTaskReference, NativeFindingReference, NativeImpactReference
+
+    reference = skill_files()['references/repair-impact.md'].decode('utf-8')
+    examples = [json.loads(block) for block in re.findall(r'```json\n(.*?)\n```', reference, re.S)]
+    assert [item['tool'] for item in examples] == [
+        'prepare_repair_impact', 'prepare_task_risk_fix', 'submit_repair_impact', 'submit_repair_impact',
+        'prepare_task_risk_fix', 'cancel_task_risk_fix', 'submit_repair_impact']
+    prepare, intent, complete, partial, fix, cancel, blocked = [item['arguments'] for item in examples]
+    for item in examples:
+        if item['tool'] in {'prepare_repair_impact', 'submit_repair_impact'}:
+            validate_impact_request(item['tool'], item['arguments'])
+    assert source(prepare['source'])['kind'] == 'HOST_TASK_RISK'
+    assert proposal(prepare['proposal'])['changes'][0]['file_path'] == 'documents.py'
+    for submitted in (complete, partial, blocked):
+        evidence = {ref for row in submitted['impacts'] + submitted['unknowns']
+                    for ref in row['evidence_refs']}
+        reasoning(submitted['impacts'], submitted['unknowns'], evidence)
+        assert submitted['coverage'] in {'REVIEWED', 'PARTIAL'}
+    assert complete['coverage'] == 'REVIEWED' and partial['coverage'] == 'PARTIAL'
+    assert partial['unknowns'][0]['critical'] is True
+    scope_unknowns = [row for row in complete['unknowns']
+                      if row.get('classification') == 'SCOPE_LIMITATION']
+    assert scope_unknowns
+    assert all(row['critical'] is False and row['decision_basis'].strip() and row['evidence_refs']
+               for row in scope_unknowns)
+    blocking_unknowns = [row for row in blocked['unknowns']
+                         if row.get('classification') == 'BLOCKING_CONTEXT']
+    assert blocking_unknowns
+    assert all(row['critical'] is True and row['decision_basis'].strip() and row['evidence_refs']
+               for row in blocking_unknowns)
+    assert fix['task_ref'] == prepare['source']['task_ref']
+    assert fix['finding_id'] == prepare['source']['finding_id']
+    assert fix['impact_ref'] == complete['assessment_ref']
+    assert fix['user_requested'] is True and 'scan_id' not in fix
+    TypeAdapter(NativeTaskReference).validate_python(fix['task_ref'])
+    TypeAdapter(NativeFindingReference).validate_python(fix['finding_id'])
+    TypeAdapter(NativeImpactReference).validate_python(fix['impact_ref'])
+    assert intent == fix  # Retrying cannot select a fresh source or replacement baseline.
+    assert cancel == dict(task_ref=fix['task_ref'], finding_id=fix['finding_id'], user_requested=True)
+    assert all(kind in reference for kind in KINDS)
+
+
+def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
+    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE, REQUIRED_GUIDANCE_TOOLS
+
+    files = skill_files()
+    entry = files['SKILL.md'].decode('utf-8')
+    assert 'references/repair-impact.md' in entry
+    assert {'prepare_task_risk_fix', 'cancel_task_risk_fix'} <= REQUIRED_GUIDANCE_TOOLS
+    for name in ('references/runtime-workflow.md', 'references/repair-impact.md'):
+        method = files[name].decode('utf-8')
+        assert REPAIR_IMPACT_GUIDANCE in method
+        for rule in ('不能传入任务原生风险的 ts1 引用', '不通过新 begin_security_task',
+                     '技术性提交失败不重复索取同一批准', '只读查询不索取新的修复或业务批准',
+                     '直接保存对应处置', '任意外部编辑', 'risk_resolutions 仍绑定原 task_ref／finding_id',
+                     'cancel_task_risk_fix', '取消不代表 DEFER／EXCLUDE', '只保存 WAITING 意图、不建基线'):
+            assert rule in method
+    assert '不能用普通 begin_security_task 绕过' in entry
+    assert '明确暂缓则直接保存 DEFER' in entry
+    assert '尽早调用 prepare_task_risk_fix 登记意图' in entry
 
 
 def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):

@@ -154,7 +154,9 @@ def test_preparation_failure_retains_specific_reason_and_plain_recovery(installe
         context = payload['hookSpecificOutput']['additionalContext']
         assert '不取消当前开发任务核查' in context
         assert '已有任务沿用原引用' in context
-        assert '不补建编辑后的基线' in context
+        assert '不得伪造检查结果、重放检查事件或补建编辑后的基线。' in context
+        assert '检查状态本身不授予额外扫描、构建或测试权限' in context
+        assert '用户已明确要求或当前开发任务已包含的测试、构建与验收仍按原授权执行，无需重复确认。' in context
         assert reply.structuredContent['bootstrap_reason'] == reason
         assert reply.structuredContent['scanner_run'] is False
         assert safe_fields(reply.structuredContent)['bootstrap_reason'] == reason

@@ -22,6 +22,32 @@ _DELIVERY_BUDGET_ERRORS = frozenset({'TASK_CONTEXT_BYTE_BUDGET',
     'TASK_CONTEXT_BATCH_BUDGET', 'TASK_CONTEXT_RESPONSE_BUDGET'})
 
 
+def submission_contract():
+    """Describe submitted IDs separately from source-location metadata."""
+    return dict(coverage='REVIEWED or PARTIAL',
+        findings='max10; title,category,severity,primary_evidence,evidence_refs,impact,preconditions,unknowns,counterevidence,fix_advice',
+        optional='risk_scope,task_evidence,current_protections; RELATED_EXISTING needs current related and task evidence plus conditions and protections',
+        evidence_fields=dict(
+            primary_evidence='Runtime-issued evidence_id string; must occur in evidence_refs',
+            task_evidence='Runtime-issued changed-file evidence_id string; must occur in evidence_refs',
+            evidence_refs='array of 1-10 Runtime-issued evidence_id strings from this exact task/session/source version'),
+        evidence_format='Copy read_task_review_context evidence_id strings. Do not submit location objects containing evidence_id/file_path/start_line/end_line. source_ref is a locator, not evidence.',
+        related_existing_example=dict(example_only=True, placeholders_are_issued=False,
+            instruction='All IDs and prose are illustrative, not a finding. Replace IDs with actual issued strings and prose with actual code facts; never register the example risk or submit placeholders. Keep the original task_ref/review_session and actual coverage/limitations. REVIEWED requires completed required review work.',
+            candidate=dict(title='Related read lacks an access check', category='ACCESS_CONTROL',
+                severity='MEDIUM', risk_scope='RELATED_EXISTING',
+                primary_evidence='<ISSUED_RELATED_ID>', task_evidence='<ISSUED_CHANGED_ID>',
+                evidence_refs=['<ISSUED_RELATED_ID>', '<ISSUED_CHANGED_ID>', '<ISSUED_CONTROL_ID>'],
+                impact='Unshared users could read content if callers lack an upstream check.',
+                preconditions=['A caller can choose the document ID without authorization.'],
+                unknowns=['Repository and external callers were not supplied.'],
+                current_protections=['Shared listing filters owners and members.'],
+                counterevidence=['That list filter does not protect the observed direct read.'],
+                fix_advice='Reuse the owner/member check before returning content.')),
+        correction='For recoverable submission errors, correct field_errors in the same original task/review_session/source version; do not rescan or replace the baseline. Correcting JSON does not automatically reopen terminal INCOMPLETE work or prove a finding was saved.',
+        validation='HOST_REASONING; STRUCTURE_AND_SOURCE_VERSION_ONLY; NO_REPAIR_AUTHORITY')
+
+
 class TaskReviewCoordinator:
     def __init__(self, service):
         self.service = service
@@ -247,9 +273,7 @@ class TaskReviewCoordinator:
                 changed_file_count=len(record['changes']), plan=page, quick_skill=guide,
                 method_fetch='get_task_review_method only when this exact version/digest is not already available locally',
                 workflow='Read required windows; submit each unit with submit_task_review_batch; page get_task_review_plan until next_cursor is null; then submit_task_security_review with evidence-backed findings. Related source is read when needed, not an arbitrary mandatory unrelated file.',
-                submission_contract=dict(coverage='REVIEWED or PARTIAL', findings='max10; title,category,severity,primary_evidence,evidence_refs,impact,preconditions,unknowns,counterevidence,fix_advice',
-                    optional='risk_scope,task_evidence,current_protections; RELATED_EXISTING needs current related and task evidence plus conditions and protections',
-                    validation='HOST_REASONING; STRUCTURE_AND_SOURCE_VERSION_ONLY; NO_REPAIR_AUTHORITY'),
+                submission_contract=submission_contract(),
                 limitations=record['limitations'][:10], trust='UNTRUSTED_SOURCE_AND_SCANNER_DATA')
             if protocol_version == 3:
                 capacity = record['review_plan'].get('capacity', {})

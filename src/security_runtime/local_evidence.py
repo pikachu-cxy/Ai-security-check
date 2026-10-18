@@ -119,6 +119,16 @@ _HASH_SOURCE_TOKENS = re.compile(r'(?P<comment>\#[^\r\n]*|'
     + _OTHER_COMMENTS + ')|(?:' + _SOURCE_STRINGS + ')')
 _HASH_COMMENT_SUFFIXES = frozenset({'.py', '.pyi', '.toml', '.yaml', '.yml',
     '.sh', '.bash', '.zsh', '.ps1', '.psm1', '.rb', '.r', '.pl', '.ini', '.conf'})
+_EMPTY_LITERALS = frozenset({'""', "''", '``', '""""""', "''''''"})
+# Only an entire safe value may bypass credential masking. Matching the safe
+# alternative consumes just that value, so a later assignment on the same line
+# is still checked. Unknown expressions retain the conservative tail mask.
+_SAFE_CREDENTIAL_VALUE = (
+    r'(?:\[REDACTED_(?:LITERAL|SECRET|COMMENT)\]|\x22{6}|\x27{6}|\x22{2}|\x27{2}|`{2})'
+    r'(?=[ \t]*(?:$|[;,)}\]]|\[REDACTED_COMMENT\][ \t]*$))')
+_SHORT_CREDENTIAL_ASSIGNMENTS = re.compile(
+    r'(?i)\b(?:password|passwd|token|api[_-]?key|secret)[ \t]*[:=][ \t]*'
+    r'(?:(?P<safe>' + _SAFE_CREDENTIAL_VALUE + r')|[^\r\n]*)')
 
 
 def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None):
@@ -129,6 +139,8 @@ def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=No
     """
     def mask(match):
         value = match.group(0)
+        if match.lastgroup != 'comment' and value in _EMPTY_LITERALS:
+            return value
         public_api = re.search(r'\b(?:MessageDigest|SSLContext)\.getInstance\(\s*$', text[max(0,match.start()-80):match.start()])
         if (public_api and value[:1] in ('"', "'") and value[-1:] == value[:1]
                 and value[1:-1] in PUBLIC_LITERALS):
@@ -150,7 +162,8 @@ def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=No
         if any(start <= index <= end for start, end in secret_ranges):
             lines[index-1] = '[REDACTED_SECRET]'
         else:
-            line = re.sub(r'(?i)\b(?:password|passwd|token|api[_-]?key|secret)\s*[:=].*', '[REDACTED_SECRET]', line)
+            line = _SHORT_CREDENTIAL_ASSIGNMENTS.sub(
+                lambda match: match.group(0) if match.group('safe') else '[REDACTED_SECRET]', line)
             line = SecretRedactor().redact(line)
             line = re.sub(r'\b[A-Za-z0-9+/=_-]{32,}\b', '[REDACTED_SECRET]', line)
             if truncation_lines is not None and len(line) > MAX_LINE_CHARS:

@@ -25,8 +25,77 @@ def digest(content):
     return hashlib.sha256(content).hexdigest()
 
 
+def repair_impact_reference():
+    from .host_guidance import REPAIR_IMPACT_GUIDANCE
+
+    original_task_ref = 'ts1-' + '0' * 32
+    original_finding_id = 'tc1-' + '1' * 32
+    assessment_ref = 'ria1-' + '2' * 32
+    evidence_ref = 'ri-evidence-' + '3' * 32
+    examples = [
+        ('准备原生风险的具体方案', dict(tool='prepare_repair_impact', arguments=dict(
+            source=dict(kind='HOST_TASK_RISK', task_ref=original_task_ref,
+                        finding_id=original_finding_id, origin_review_revision=1),
+            proposal=dict(security_goal='拒绝未获授权的文档读取与下载。',
+                summary='读取入口复用所有者或共享成员的权限规则。',
+                changes=[dict(file_path='documents.py', start_line=1, end_line=3,
+                              reason='在返回内容前复用现有 can_read 权限检查。')],
+                preserve=['所有者和共享成员读取及下载获准文档。'])))),
+        ('用户已明确修复：尽早登记原生修复意图', dict(tool='prepare_task_risk_fix', arguments=dict(
+            task_ref=original_task_ref, finding_id=original_finding_id,
+            origin_review_revision=1, impact_ref=assessment_ref,
+            user_requested=True))),
+        ('A2 局部方案：保存有限分析及非阻断范围未知', dict(tool='submit_repair_impact', arguments=dict(
+            assessment_ref=assessment_ref, coverage='REVIEWED',
+            impacts=[dict(kind='EXPECTED_SECURITY_RESTRICTION', summary='其他用户的读取与下载将被拒绝。',
+                          evidence_refs=[evidence_ref]),
+                     dict(kind='NO_ADDITIONAL_CHANGE_IDENTIFIED',
+                           summary='已读四文件的权限与下载调用链中，所有者和共享成员继续使用同一 can_read；参数、返回结构和下载委托关系不变。',
+                           evidence_refs=[evidence_ref])],
+            unknowns=[dict(summary='项目外仓储实现、上游身份来源和异常显示未提供，本次局部修复不改变这些边界；全局兼容性尚未证明。',
+                critical=False, classification='SCOPE_LIMITATION',
+                decision_basis='当前方案仅复用既有 can_read；已查正常所有者和共享成员路径未发现额外变化，也没有合法记录缺字段的具体依据。外部实现缺失本身不改变这一局部方案，保留范围限制而不推断全局安全。',
+                evidence_refs=[evidence_ref])]))),
+        ('保存未完成分析', dict(tool='submit_repair_impact', arguments=dict(
+            assessment_ref=assessment_ref, coverage='PARTIAL', impacts=[],
+            unknowns=[dict(summary='共享成员权限的必要调用路径尚未读完。', critical=True,
+                           evidence_refs=[])]))),
+        ('影响提交通过后重试同一原生准备', dict(tool='prepare_task_risk_fix', arguments=dict(
+            task_ref=original_task_ref, finding_id=original_finding_id,
+            origin_review_revision=1, impact_ref=assessment_ref,
+            user_requested=True))),
+        ('用户明确暂停原修复或切换开发', dict(tool='cancel_task_risk_fix', arguments=dict(
+            task_ref=original_task_ref, finding_id=original_finding_id, user_requested=True))),
+        ('真实必要上下文阻断对照（替代提交，并非 A2 已知事实）', dict(
+            tool='submit_repair_impact', arguments=dict(
+                assessment_ref=assessment_ref, coverage='REVIEWED',
+                impacts=[dict(kind='UNDETERMINED',
+                    summary='对照例已确认合法共享成员下载可使用精简文档投影，但尚不能确定当前调用所选分支，无法判定新增 can_read 是否会造成缺字段异常。',
+                    decision_basis='正常共享成员下载路径存在具体的精简投影分支；当前方案依赖该分支可能未提供的权限字段。必须先查明实际投影选择，才能决定复用当前方案还是补齐返回契约。',
+                    evidence_refs=[evidence_ref])],
+                unknowns=[dict(
+                    summary='当前合法下载调用选择完整权限字段还是精简投影尚未核对。',
+                    critical=True, classification='BLOCKING_CONTEXT',
+                    decision_basis='具体正常路径是共享成员下载；缺少实际仓储投影选择。完整投影可继续既有 can_read，精简投影则须先调整数据契约或方案；下一步读取投影选择的调用与返回契约，未补齐前不编辑。',
+                    evidence_refs=[evidence_ref])]))),
+    ]
+    rendered = '\n\n'.join('### ' + title + '\n\n```json\n' +
+        json.dumps(value, ensure_ascii=False, indent=2) + '\n```' for title, value in examples)
+    return ('# 修复影响分析\n\n' + REPAIR_IMPACT_GUIDANCE +
+        '\n## 字段与调用示例\n\n以下引用仅演示字段形状，必须替换为原记录和本评估读取返回的真实引用；'
+        'SessionStart 已提供 session_ref 时，每次调用还须原样携带它及当前 workspace_path。'
+        '只问影响时不调用 prepare_task_risk_fix／cancel_task_risk_fix；用户已明确修复时，先取评估引用并尽早登记 WAITING 意图，'
+        '沿原评估读取／提交，再重试同一准备入口取得基线。PARTIAL 是保存未完成结果的替代分支。'
+        '示例不独立授权修复，不表示示例项目已经核查。空 unknowns 只适用于实际没有剩余未知的范围。'
+        '示例中的 classification／decision_basis 仅在当前实际连接声明 repair_impact_unknowns=repair-impact-unknowns-v1 时使用；'
+        '旧连接不发送新字段，仍按原 critical 与门槛保存事实，不用省略或重命名未知来伪造通过。'
+        'A2 的外部范围未知不同时登记为 UNDETERMINED；对照例的具体分支事实必须由实际读取证据支持，不能照抄到 A2。'
+        '未读 PARTIAL 例尚无可引用材料时沿用 legacy critical=true，不虚构 evidence_ref。'
+        'PARTIAL 或 WAITING 都不表示可编辑；只有准备返回 ready_for_host_fix=true 才进入原范围编辑。\n\n' + rendered + '\n')
+
+
 def skill_files():
-    from .host_guidance import HOST_INSTRUCTIONS, REPAIR_IMPACT_GUIDANCE
+    from .host_guidance import HOST_INSTRUCTIONS
     from .risk_decision_guidance import RISK_DECISION_GUIDANCE
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
@@ -34,7 +103,7 @@ def skill_files():
         'references/quick-task-review-v2.md', 'references/quick-task-review-v3.md')} | {
         'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8'),
         'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE).encode('utf-8'),
-        'references/repair-impact.md': ('# 修复影响分析\n\n' + REPAIR_IMPACT_GUIDANCE).encode('utf-8')}
+        'references/repair-impact.md': repair_impact_reference().encode('utf-8')}
 
 
 class ReviewSkillManager:

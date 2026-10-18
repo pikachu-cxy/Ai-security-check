@@ -106,19 +106,38 @@ do not infer hidden route, SQL or configuration values. No active exploit requir
 
 ## Submit and summarize
 
-Submit at most ten evidence-backed host candidates using `submit_task_security_review`.
-Each candidate requires: title, category, severity, primary_evidence,
-evidence_refs, impact, preconditions, unknowns, counterevidence, fix_advice.
-Do not resubmit an already reported static alert as a new context candidate.
-Explain additional context with the existing alert in the development summary;
-reserve host candidates for distinct risks supported by task context.
-For TASK_CHANGED (the default), primary_evidence points to the changed location.
-For an evidence-backed RELATED_EXISTING risk, primary_evidence may point to a
-current, read unchanged related file. Set risk_scope=RELATED_EXISTING, provide
-task_evidence for an issued changed-file window in evidence_refs, and supply
-current_protections, preconditions and unknowns. evidence_refs must connect the
-task's input/call/control to the related operation and its strongest counterevidence.
-The Runtime checks those locations and versions, not whether the call chain is true.
+Submit up to ten distinct host findings, not duplicate static alerts.
+`primary_evidence`: Runtime-issued `evidence_id` STRING in `evidence_refs`.
+`task_evidence`: issued changed-file ID STRING, also in `evidence_refs`.
+`evidence_refs`: array of 1-10 issued ID STRINGS from this task/session's reads.
+Never submit evidence_id/file_path/start_line/end_line objects or a source_ref.
+TASK_CHANGED primary locates changed code; RELATED_EXISTING primary locates read
+current unchanged related code. Runtime checks locations/versions, not call chains.
+
+RELATED_EXISTING shape only: all IDs and prose below are illustrative, not a finding.
+Replace IDs with actual Runtime-issued strings and prose with actual code facts.
+Never register this example risk or submit its placeholders. Keep original
+task_ref/review_session/workspace, actual coverage/limitations and issued
+session_ref if available. REVIEWED requires completed review obligations.
+
+```json
+{
+  "title": "Related read lacks authorization", "category": "ACCESS_CONTROL",
+  "severity": "MEDIUM", "risk_scope": "RELATED_EXISTING",
+  "primary_evidence": "<ISSUED_RELATED_ID>", "task_evidence": "<ISSUED_CHANGED_ID>",
+  "evidence_refs": ["<ISSUED_RELATED_ID>", "<ISSUED_CHANGED_ID>", "<ISSUED_CONTROL_ID>"],
+  "impact": "Unshared users could read content without an upstream check.",
+  "preconditions": ["Caller can select a document ID without authorization."],
+  "unknowns": ["Repository and other callers unknown."],
+  "current_protections": ["Listing checks owner/member access."],
+  "counterevidence": ["List filtering does not protect direct reads."],
+  "fix_advice": "Check owner/member access before returning content."
+}
+```
+
+Correct recoverable `field_errors` in the SAME task/session/source version;
+do not rescan, restart or replace its baseline. Correcting JSON does not reopen
+terminal INCOMPLETE work. Preserve that gap; do not claim a finding was saved.
 
 A new entrypoint's protection does not prove an unchanged shared service or
 repository is safe for other callers. Register a surviving conditional related

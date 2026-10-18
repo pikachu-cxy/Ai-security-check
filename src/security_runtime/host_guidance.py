@@ -4,6 +4,7 @@ import sys
 from ._version import __version__
 from .risk_presentation import RISK_PRESENTATION_RULES
 from .risk_decision_guidance import RISK_DECISION_GUIDANCE
+from .repair_impact_policy import UNKNOWN_CLASSIFICATION_CONTRACT, UNKNOWN_CLASSIFICATION_GUIDANCE
 
 REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_task_triage',
                          'prepare_triage', 'submit_triage', 'get_triage', 'prepare_task_fix', 'verify_task_fix',
@@ -16,7 +17,8 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
                          'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'get_task_risk_feedback',
                          'set_finding_disposition', 'set_task_risk_disposition',
                          'prepare_repair_impact', 'read_repair_impact_context',
-                         'submit_repair_impact', 'get_repair_impact'}
+                         'submit_repair_impact', 'get_repair_impact',
+                         'prepare_task_risk_fix', 'cancel_task_risk_fix'}
 
 REPAIR_IMPACT_GUIDANCE = '''
 修复影响分析（repair-impact-v1）：
@@ -24,7 +26,9 @@ REPAIR_IMPACT_GUIDANCE = '''
 先生成具体建议再分析；generate_fix 只生成建议，不要求先取得影响 READY，也不授予编辑权限。
 用户对选定问题明确回复修复后，保留原响应的任务／风险引用和编号映射，不按新摘要排序换对象。
 扫描器分组使用 SCANNER_TASK_GROUP；任务原生风险使用 HOST_TASK_RISK，保留原风险修订和快照，
-不伪造 scan_id、不用最新风险或其他会话代替。当前 prepare_task_fix 没有任意组内子集参数；
+不伪造 scan_id、不用最新风险或其他会话代替。prepare_task_fix／verify_task_fix 仅用于扫描器任务，
+不能传入任务原生风险的 ts1 引用；原生风险使用下述 prepare_task_risk_fix 分支，不因路由错误另扫或换引用。
+当前 prepare_task_fix 没有任意组内子集参数；
 不能准确表达用户所选子集时说明范围限制，不扩大成全组。暂缓／排除成员不纳入活动修复范围。
 在确认批准或进入宿主编辑前，调用 prepare_repair_impact，按工具 schema 提交 source 和 proposal：
 security_goal、summary、changes[{file_path,start_line,end_line,reason}]、preserve[]。
@@ -35,15 +39,41 @@ source 按实际 schema 使用 kind/task_ref，原生风险另带 finding_id 及
 submit_repair_impact 所需的实际证据、影响和未知。不能因搜索零命中、import 或已读页无异常宣称全局兼容。
 业务取舍要说明具体角色、操作、变化及替代方案；只问会改变方案的事实，不循环询问用户证明漏洞真假。
 impacts 使用 kind/summary/evidence_refs，unknowns 使用 summary/critical/evidence_refs。
+kind 只接受 EXPECTED_SECURITY_RESTRICTION（预期安全限制）、NO_ADDITIONAL_CHANGE_IDENTIFIED
+（已读范围内未发现额外变化）、BUSINESS_BEHAVIOR_CHANGE（正常业务变化）、UNDETERMINED（无法判断）。
+coverage 只接受 REVIEWED 或 PARTIAL；不要使用 FULL／COMPLETE、缩写或大小写变体。
+每项影响至少引用一个本评估读取回执的 evidence_ref；unknowns.critical 必须是布尔值。
+submit 返回未接受、INCONCLUSIVE 或字段错误时，说明本次提交未保存、原有记录保留，并按具体错误和正式方法修正原提交，
+不把草稿或“源码已读完”当作 READY，不猜枚举反复试投，不通过新 begin_security_task、换任务或新扫描绕过编辑前条件。
+保留用户对同一问题和方案的既有修复授权，技术性提交失败不重复索取同一批准；不能补齐时说明具体阻塞并保持代码不变。
 仅当用户明确接受已说明的当前方案业务变化时，提交 business_choice={user_requested:true,
 proposal_revision:当前方案摘要,decision:'ACCEPT_PROPOSED_CHANGE'}；原批准已包含同一取舍时复用，不重复问。
 一般修复请求或影响查询不能伪造此选择报告，业务选择本身也不补发编辑授权。
 有关键未知时停止对应方案；有效评估只表示编辑前条件，不是修复授权或功能验证证明。
-满足条件后，confirm_remediation(approve=true) 或 prepare_task_fix 传原 assessment_ref 为 impact_ref，
-沿原任务、确认引用和授权继续，不重复确认同一修复。approve=false、DEFER／EXCLUDE／RESTORE 不经过影响门槛。
-SessionStart 提供有效 session_ref 时，prepare/read/submit/get 与 confirm_remediation/prepare_task_fix
+扫描器分支满足条件后，confirm_remediation(approve=true) 或 prepare_task_fix 传原 assessment_ref 为 impact_ref，
+沿原任务、确认引用和授权继续，不重复确认同一修复。
+原生风险明确修复后，先 prepare_repair_impact 取得或复用原方案 assessment_ref，尽早调用 prepare_task_risk_fix，
+传原 task_ref、finding_id、该 impact_ref、可用的 origin_review_revision，以及 user_requested=true，登记选定修复意图。
+当前影响尚未 READY 时只保存 WAITING 意图、不建基线；沿同一评估 read／submit，提交被接受后重试同一原生准备入口。
+只有返回 ready_for_host_fix=true 和 repair_task_ref 才进入编辑；不把登记意图或影响查询当作准备完成。
+user_requested 仅报告用户对已选问题的明确修复意图，是 UNTRUSTED_HOST_REPORT；影响查询、模型建议或一般开发请求不能填 true。
+准备成功直接建立修复前开发基线并返回 repair_task_ref；保留原 source 和方案，仅用该 repair_task_ref 做 finish／review，
+不再裸调用 begin_security_task。准备失败不建立基线、不编辑，不用 scanner 入口、换引用或新开发任务绕过。
+修复后对照已接受方案和应保留行为核对实际改动；submit_task_security_review 的 risk_resolutions 仍绑定原 task_ref／finding_id，
+再以原任务 get_task_risk_ledger 核对落库状态。新任务零发现不关闭原风险，宿主复核不冒称扫描器复查证明。
+risk_resolutions 每项使用 original_task_ref、finding_id、evidence_refs、outcome、rationale、tests；
+original_task_ref 是原风险任务，不是 repair_task_ref。outcome 只接受 CODE_REVIEWED_RESOLVED、STILL_PRESENT 或 INCONCLUSIVE。
+证据须覆盖原风险全部必需路径的当前版本并含本次实际改动；tests 如实记录实际验证或未执行事项，不编造复查成功。
+当前宿主没有原子编辑桥时，这些调用顺序是宿主协议约束，不能宣称 Runtime 能强制拦截任意外部编辑。
+真实选定风险已登记修复意图后，准备未完成时同归属普通 begin 会被阻止；先修正原评估或说明阻塞，不另起任务绕过。
+只有用户明确暂停该修复或切换到其他开发时，调用 cancel_task_risk_fix，传原 task_ref／finding_id 和
+user_requested=true，结束该修复工作流的阻塞意图；这是用户既有暂停／切换请求的报告，不另索取批准。
+取消不代表 DEFER／EXCLUDE，不关闭风险、不修改用户处置或撤销已有审计。DEFER／EXCLUDE 保存成功会自动解除同一修复意图。
+approve=false、DEFER／EXCLUDE／RESTORE 不经过影响门槛；明确稍后处理时直接保存对应处置，不先补影响或创建修复任务。
+SessionStart 提供有效 session_ref 时，prepare/read/submit/get 与 confirm_remediation/prepare_task_fix/prepare_task_risk_fix/cancel_task_risk_fix
 一致携带该引用；没有时保持当前连接范围，不猜测归属或最近任务。重试不重建基线、不清空累计消费。
 用户只问影响且没有既有修复授权时，只准备／读取／分析报告，不调用批准、不编辑；
+用户明确限定本轮只看影响或先不要改代码时，即使有既有授权本轮也不编辑；保留授权，恢复原范围时不重问。
 get_repair_impact 及历史只读不转移 owner、不重新取证、不恢复授权。只读查询不索取新的修复或业务批准。
 已授权修复中追问影响，先回答再按原有效范围继续，明确暂停、新业务取舍或范围变化才停相应编辑。
 对已签发 INLINE_PREPARED 票据不得追加搜索；影响分析必须在签发前完成，随后仅按原票据精确编辑与复查。
@@ -52,11 +82,12 @@ get_repair_impact 及历史只读不转移 owner、不重新取证、不恢复�
 current 过滤，已排除／暂缓不重问，处置不可读不回退旧提示。业务方案选择不是第二次 FIX／DEFER。
 普通用户只看具体方案、正常行为变化和关键未知，不显示工具、引用、内部 gate 或授权枚举。
 个人版不接入或推荐功能测试，也不把功能未测列为安全检查缺口；原问题安全复查与影响分析分别说明。
-'''
+''' + '\n' + UNKNOWN_CLASSIFICATION_GUIDANCE + '\n'
 
 HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
-实际修改源代码/配置的开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
+实际修改源代码/配置的普通开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
+已选原生风险修复由 prepare_task_risk_fix 校验影响并建立基线，沿用返回的 repair_task_ref，不用普通开发入口替代。
 SessionStart 交付 session_ref 时，在 begin_security_task 传入；自动编辑前 Hook 交付原任务时，
 在 finish_security_task 传入其 session_ref。它只绑定会话，不授予修复权限，不展示给用户。
 并行会话分别开始自己的任务，不借用或结束他人的任务；不能按最近活动任务猜测归属。
@@ -259,7 +290,14 @@ Ambiguous continuation such as 继续第一项/处理这个问题 is analysis, n
 approval. Clarify whether to fix before editing; never infer consent from it.
 For explicit fix intent 修复/修复它/把它修掉/修第一项 with a clear selected
 issue and proposed bounded change, retain the exact
-selected task_ref and call prepare_task_fix (or that displayed task's fix_handoff).
+selected task_ref. For scanner tasks call prepare_task_fix (or that displayed task's fix_handoff)
+after the accepted impact gate. For HOST_TASK_RISK, obtain or reuse its impact assessment
+and promptly call prepare_task_risk_fix with original task_ref/finding_id/impact_ref and
+explicit user_requested=true to record the selected intent. A non-ready impact creates
+only WAITING intent, never a baseline; complete read/submit on that assessment and retry
+the same native entry point. Only ready_for_host_fix=true permits the selected edit. Never pass its ts1 ref
+to prepare_task_fix or invent a scan_id. Use its returned repair_task_ref for development
+finish/review and original task/finding refs for risk_resolutions and the final ledger.
 The host coding agent edits selected local code using its structured security goal,
 constraints and adequate bounded current evidence, then calls verify_task_fix.
 Agent fixes. Runtime verifies. Do not ask users to ferry coding_agent_prompt or UUIDs.
@@ -404,8 +442,8 @@ confirmation, do not forge a refusal receipt. An explicit selected 稍后处理/
 can still save DEFER through the matching disposition tool without a confirmation_ref;
 only claim persistence after success. An already authorized scope uses its original
 handoff; recovery must never revive an authorized or exhausted attempt.
-For a clearly selected risk, 修复 is explicit local repair intent for the existing
-prepare_task_fix workflow, still subject to Runtime policy guards. A selected
+For a clearly selected risk, 修复 is explicit local repair intent for its source-specific
+prepare_task_fix or prepare_task_risk_fix workflow, still subject to Runtime policy guards. A selected
 稍后处理/忽略 saves DEFER independently; retain findings/risk and repair authority
 unchanged, and acknowledge durable reminder handling only after successful saving.
 Only an explicit selected-task repair request counts as consent; do not infer it
@@ -413,8 +451,10 @@ from a scan, audit, ordinary development request, severity or model confidence.
 ESCALATE stops automatic retry. Explain whether the same risk is still detected
 or the recheck could not finish; neither proves safety. Propose checking the
 failure and repair plan before further local edits, without resetting attempts.
-Never claim verification without
-SCANNER_VERIFIED_RESOLVED. Production impact and business behavior stay unknown.
+For scanner findings, never claim scanner verification without
+SCANNER_VERIFIED_RESOLVED. Native task risk resolution must appear in the original
+risk ledger as CODE_REVIEWED_RESOLVED; host code review is not scanner proof.
+Production impact and business behavior stay unknown.
 Report investigation, patch, build/tests and scanner recheck execution separately.
 Professional deep audit/attack-chain requests also use the installed Skill's
 versioned get_professional_guidance contract when advertised; record its version
@@ -470,6 +510,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
+                          'task_review_submission': 'task-review-submission-v1; TYPED_ISSUED_EVIDENCE_IDS; SAFE_FIELD_ERRORS; SAME_ACTIVE_REVIEW_RETRY',
                           'task_security_review_protocol': 'task-review-plan-v3; DEFAULT_V3; ADAPTIVE_RANGE_BUDGETS; READABLE_SOURCE_DEDUP; RESUMABLE_ACTIVITY_LEASE; task-review-plan-v2; LEGACY_V1_SUPPORTED; COMPACT_PACKET_AND_FIXED_PLAN_BATCHES',
                          'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
@@ -478,6 +519,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'risk_decision_workflow': 'risk-decisions-v2; HOST_ASSESSES_FIRST; USER_DECIDES; MATERIAL_CHANGE_REASSESSMENT',
                          'reply_plan': 'security-reply-plan-v1; PURE_DISPLAY; FACTS_AND_ACTIONS_SEPARATE; NO_FUNCTIONAL_TEST_INPUT',
                           'repair_impact': 'repair-impact-v1; BOUNDED_STATIC_ANALYSIS; NO_REPAIR_AUTHORITY; ORIGINAL_RISK_VERSION_BOUND',
+                          'repair_impact_unknowns': UNKNOWN_CLASSIFICATION_CONTRACT,
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',

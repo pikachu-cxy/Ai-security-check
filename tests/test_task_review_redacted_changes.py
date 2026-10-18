@@ -166,7 +166,7 @@ def test_mixed_hidden_and_visible_changes_require_both_versions_and_keep_semanti
         assert _covers(requirements, version, 124), 'Distant visible change line was omitted.'
     record = tasks.load(root, ref)
     assert any(unit['evidence_gaps'] for unit in record['review_plan']['units'])
-    batch, history, _, delivered = _complete(prepared)
+    batch, history, requirements, delivered = _complete(prepared)
     assert delivered and batch['coverage'] == 'PARTIAL'
     assert history['host_review']['coverage'] == 'PARTIAL'
     assert history['context_read_coverage']['plan_gap_count'] > 0
@@ -194,3 +194,59 @@ def test_missing_old_private_proof_never_uses_visible_hunk_as_complete_semantic_
     assert history['context_read_coverage']['plan_gap_count'] > 0
     notes = json.dumps(history['host_review']['limitations'], ensure_ascii=False)
     assert 'mixed.py' in notes and '定位' in notes
+
+
+def _prepare_credential_change(sample, name, current_literal, *, comment_only=False):
+    tasks, root, runtime = sample
+    path = root / 'demo.ts'
+    source = f"export const {name} = '{PRIVATE_VALUE}';\n// before comment\n"
+    path.write_text(source, encoding='utf-8')
+    server = create_server(runtime, hook_coordinator=HookCoordinator(runtime, tasks.hooks), global_mode=False)
+    base = dict(workspace_path=str(root))
+    ref = _call(server, 'begin_security_task', **base, task_key='credential-clear')['task_ref']
+    baseline = tasks.load(root, ref)['baseline']
+    private = tasks.preimages(root)
+    before = private.read_semantic_proof(ref, 'demo.ts', baseline['hashes']['demo.ts'],
+                                        baseline['preimages']['demo.ts'])
+    current = (source.replace('before comment', 'after comment') if comment_only else
+               f'export const {name} = {current_literal};\n// before comment\n')
+    path.write_text(current, encoding='utf-8')
+    after = private.semantic_proof(ref, 'demo.ts', path.read_bytes())
+    assert before['complete'] and after['complete']
+    commitments = set(before['semantic_lines'].values()) | set(after['semantic_lines'].values())
+    packet = _call(server, 'prepare_task_security_review', **base, task_ref=ref, protocol_version=3)
+    return server, tasks, root, runtime, ref, packet, commitments
+
+
+@pytest.mark.parametrize('name', ['demoToken', 'token', 'api_key'])
+@pytest.mark.parametrize('empty', ["''", '""', '``'])
+def test_v3_cleared_credential_has_readable_empty_value_and_no_hidden_change_gap(service, name, empty):
+    prepared = _prepare_credential_change(service, name, empty)
+    batch, history, requirements, delivered = _complete(prepared)
+    assert batch['coverage'] == 'REVIEWED'
+    assert history['host_review']['coverage'] == 'REVIEWED'
+    assert history['context_read_coverage']['plan_gap_count'] == 0
+    versions = {item['source_ref']: item['location_version'] for item in requirements}
+    current = [item for item in delivered if versions[item['source_ref']] == 'CURRENT_TASK_END']
+    before = [item for item in delivered if versions[item['source_ref']] == 'BEFORE_TASK']
+    assert current and before
+    assert f'export const {name} = {empty};' in '\n'.join(
+        line for item in current for line in item['lines'])
+    assert PRIVATE_VALUE not in json.dumps(delivered)
+
+
+@pytest.mark.parametrize('name', ['demoToken', 'token'])
+def test_v3_different_hidden_credential_still_forces_partial(service, name):
+    prepared = _prepare_credential_change(service, name, f"'{PRIVATE_VALUE}-replacement'")
+    batch, history, _, _ = _complete(prepared)
+    assert batch['coverage'] == 'PARTIAL'
+    assert history['host_review']['coverage'] == 'PARTIAL'
+    assert history['context_read_coverage']['plan_gap_count'] > 0
+
+
+def test_v3_unchanged_hidden_credential_and_comment_edit_remains_reviewable(service):
+    prepared = _prepare_credential_change(service, 'demoToken', None, comment_only=True)
+    batch, history, _, _ = _complete(prepared)
+    assert batch['coverage'] == 'REVIEWED'
+    assert history['host_review']['coverage'] == 'REVIEWED'
+    assert history['context_read_coverage']['plan_gap_count'] == 0
