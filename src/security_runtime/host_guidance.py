@@ -14,7 +14,45 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
                          'mark_finding_false_positive', 'revoke_finding_feedback', 'get_finding_feedback',
                          'prepare_task_risk_feedback', 'submit_task_risk_feedback',
                          'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'get_task_risk_feedback',
-                         'set_finding_disposition', 'set_task_risk_disposition'}
+                         'set_finding_disposition', 'set_task_risk_disposition',
+                         'prepare_repair_impact', 'read_repair_impact_context',
+                         'submit_repair_impact', 'get_repair_impact'}
+
+REPAIR_IMPACT_GUIDANCE = '''
+修复影响分析（repair-impact-v1）：
+漏洞后果与拟修复方案对正常业务的影响分别保存并经同一 reply_plan 呈现，不另建提示链。
+先生成具体建议再分析；generate_fix 只生成建议，不要求先取得影响 READY，也不授予编辑权限。
+用户对选定问题明确回复修复后，保留原响应的任务／风险引用和编号映射，不按新摘要排序换对象。
+扫描器分组使用 SCANNER_TASK_GROUP；任务原生风险使用 HOST_TASK_RISK，保留原风险修订和快照，
+不伪造 scan_id、不用最新风险或其他会话代替。当前 prepare_task_fix 没有任意组内子集参数；
+不能准确表达用户所选子集时说明范围限制，不扩大成全组。暂缓／排除成员不纳入活动修复范围。
+在确认批准或进入宿主编辑前，调用 prepare_repair_impact，按工具 schema 提交 source 和 proposal：
+security_goal、summary、changes[{file_path,start_line,end_line,reason}]、preserve[]。
+source 按实际 schema 使用 kind/task_ref，原生风险另带 finding_id 及可用的 origin_review_revision；
+原快照由 Runtime 定位并返回，保留返回的来源身份，不自填或猜测 origin_snapshot_id。
+原有建议／无授权准备材料可先取得；影响 prepare 不调用开发任务 prepare／finish 或新扫描。
+沿原评估计划通过 read_repair_impact_context 读取必读窗口，复用经校验的同版材料，再提交
+submit_repair_impact 所需的实际证据、影响和未知。不能因搜索零命中、import 或已读页无异常宣称全局兼容。
+业务取舍要说明具体角色、操作、变化及替代方案；只问会改变方案的事实，不循环询问用户证明漏洞真假。
+impacts 使用 kind/summary/evidence_refs，unknowns 使用 summary/critical/evidence_refs。
+仅当用户明确接受已说明的当前方案业务变化时，提交 business_choice={user_requested:true,
+proposal_revision:当前方案摘要,decision:'ACCEPT_PROPOSED_CHANGE'}；原批准已包含同一取舍时复用，不重复问。
+一般修复请求或影响查询不能伪造此选择报告，业务选择本身也不补发编辑授权。
+有关键未知时停止对应方案；有效评估只表示编辑前条件，不是修复授权或功能验证证明。
+满足条件后，confirm_remediation(approve=true) 或 prepare_task_fix 传原 assessment_ref 为 impact_ref，
+沿原任务、确认引用和授权继续，不重复确认同一修复。approve=false、DEFER／EXCLUDE／RESTORE 不经过影响门槛。
+SessionStart 提供有效 session_ref 时，prepare/read/submit/get 与 confirm_remediation/prepare_task_fix
+一致携带该引用；没有时保持当前连接范围，不猜测归属或最近任务。重试不重建基线、不清空累计消费。
+用户只问影响且没有既有修复授权时，只准备／读取／分析报告，不调用批准、不编辑；
+get_repair_impact 及历史只读不转移 owner、不重新取证、不恢复授权。只读查询不索取新的修复或业务批准。
+已授权修复中追问影响，先回答再按原有效范围继续，明确暂停、新业务取舍或范围变化才停相应编辑。
+对已签发 INLINE_PREPARED 票据不得追加搜索；影响分析必须在签发前完成，随后仅按原票据精确编辑与复查。
+相关代码、方案或活动成员变化时按原引用重评，不能偷偷换成员、扩大 envelope 或复活过期 grant。
+新增影响不覆盖 RiskFact.impact，不重置 authorized／choice_required；沿用 suppressed、handling_available、
+current 过滤，已排除／暂缓不重问，处置不可读不回退旧提示。业务方案选择不是第二次 FIX／DEFER。
+普通用户只看具体方案、正常行为变化和关键未知，不显示工具、引用、内部 gate 或授权枚举。
+个人版不接入或推荐功能测试，也不把功能未测列为安全检查缺口；原问题安全复查与影响分析分别说明。
+'''
 
 HOST_INSTRUCTIONS = '''开发任务安全核查（普通聊天不触发）：
 普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
@@ -100,7 +138,7 @@ submit_task_security_review 的 risk_resolutions 绑定原风险和新的实际�
 review_finding_ids 与任务成员 finding_id 匹配取得精确 task_ref。多个问题先
 明确用户选择，不能直接替换成列表首项；导航和风险提示本身不授予修复权限。
 
-''' + RISK_DECISION_GUIDANCE + '''
+''' + RISK_DECISION_GUIDANCE + REPAIR_IMPACT_GUIDANCE + '''
 
 AI Security Runtime developer workflow:
 MANDATORY USER CONSENT: detection, scan/review/development requests and legacy
@@ -439,6 +477,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'risk_disposition': 'risk-disposition-v1; USER_FINAL_HANDLING; EXCLUDE_DEFER_RESTORE; NO_REPAIR_AUTHORITY',
                          'risk_decision_workflow': 'risk-decisions-v2; HOST_ASSESSES_FIRST; USER_DECIDES; MATERIAL_CHANGE_REASSESSMENT',
                          'reply_plan': 'security-reply-plan-v1; PURE_DISPLAY; FACTS_AND_ACTIONS_SEPARATE; NO_FUNCTIONAL_TEST_INPUT',
+                          'repair_impact': 'repair-impact-v1; BOUNDED_STATIC_ANALYSIS; NO_REPAIR_AUTHORITY; ORIGINAL_RISK_VERSION_BOUND',
                          'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',

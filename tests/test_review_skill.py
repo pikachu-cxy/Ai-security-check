@@ -46,7 +46,7 @@ def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     assert not v3_method.exists()
 
 
-@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md'])
+@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md','references/repair-impact.md'])
 def test_legacy_skill_upgrade_adds_signed_versioned_method_without_replacing_user_files(tmp_path,method):
     legacy=manager(tmp_path)
     legacy.expected.pop(method)
@@ -60,7 +60,7 @@ def test_legacy_skill_upgrade_adds_signed_versioned_method_without_replacing_use
     assert custom.read_bytes()==b'user notes\r\n'
 
 
-@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md'])
+@pytest.mark.parametrize('method',['references/quick-task-review-v2.md','references/quick-task-review-v3.md','references/risk-decisions.md','references/repair-impact.md'])
 def test_legacy_skill_upgrade_does_not_adopt_unowned_versioned_method(tmp_path,method):
     legacy=manager(tmp_path)
     legacy.expected.pop(method)

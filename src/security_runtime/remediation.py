@@ -120,6 +120,9 @@ class RemediationService:
         self.authorized = {}
         from .host_continuation import HostContinuationGuard
         self.continuation = HostContinuationGuard(self)
+        # A trusted MCP embedding may add an impact gate. Direct legacy service
+        # users retain their original contract; no tool argument can disable it.
+        self.impact_gate = None
 
     def _observe_cycle(self, method, *args, **kwargs):
         # Optional timing must not change a grant, scanner proof, or transition.
@@ -1203,7 +1206,7 @@ class RemediationService:
             raise SecurityReceiptError('REMEDIATION_EPISODE_SUPERSEDED')
         return path, key, rows, match[0]
 
-    def confirm(self, ref, task_ref, root, *, approve):
+    def confirm(self, ref, task_ref, root, *, approve, impact_ref=None, impact_owner=None):
         """Consume explicit host-reported user choice; never accept a prompt or infer consent."""
         consent_started = time.perf_counter()
         try:
@@ -1234,6 +1237,11 @@ class RemediationService:
                               'reason_code': 'USER_DECLINED', 'raw_and_triage': 'UNCHANGED',
                               'user_message': '本次暂不处理，代码未修改。风险记录仍保留。'}
                 else:
+                    if self.impact_gate is not None:
+                        checked = self.impact_gate(root, task_ref, impact_ref, impact_owner, record=record)
+                        if checked.get('gate') != 'READY_FOR_EXISTING_AUTH':
+                            return checked
+                        record['impact_proposal_revision'] = checked['proposal_revision']
                     for token in [t for t, deadline in self.authorized.items() if time.monotonic() >= deadline]:
                         self.authorized.pop(token, None)
                     if len(self.authorized) >= 32:

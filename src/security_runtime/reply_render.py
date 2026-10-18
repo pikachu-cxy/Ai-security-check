@@ -42,6 +42,32 @@ def risk_details(risk, *, issue=False, number=None):
     return '\n\n'.join(parts)
 
 
+def repair_impact_details(impact):
+    """Render business effects without declaring compatibility or edit authority."""
+    parts = ['**修复影响**']
+    if impact.summary:
+        parts.append('方案：'+impact.summary)
+    if impact.security_goal:
+        parts.append('安全目标：'+impact.security_goal)
+    for label, values in (
+            ('预期限制的危险行为', impact.expected_restrictions),
+            ('正常业务变化', impact.behavior_changes),
+            ('拟保留的正常行为', impact.preserved_behaviors),
+            ('已核对范围', impact.no_additional_changes),
+            ('替代方案', impact.alternatives),
+            ('关键未知', impact.critical_unknowns),
+            ('尚未确认', impact.unknowns)):
+        if values:
+            parts.append(label+'：'+'；'.join(values))
+    if impact.current is not True:
+        parts.append('这份分析的依据尚未核对为当前有效，不能作为继续编辑的依据。')
+    elif impact.gate == 'CRITICAL_CONTEXT_MISSING':
+        parts.append('决定该方案是否保留正常行为的依据不足，该方案尚不能实施。')
+    if impact.read_only:
+        parts.append('本次仅查看影响分析，不产生修复授权。')
+    return '\n\n'.join(parts)
+
+
 def _check_message(plan):
     check = plan.check
     if check.message:
@@ -94,6 +120,9 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
                      for i, r in enumerate(risks[:3], 1))
         if total > 3:
             parts.append(f'另有 {total-3} 项已保留在本次核查记录中。')
+    parts.extend(repair_impact_details(item) for item in plan.repair_impacts[:3])
+    if len(plan.repair_impacts) > 3:
+        parts.append(f'另有 {len(plan.repair_impacts)-3} 份修复影响分析已保留。')
     check = _check_message(plan)
     if check:
         parts.append(('**检查范围**\n' if total else '')+check)
@@ -114,6 +143,8 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
     if include_risks and plan.action_ids:
         parts.append(choice_prompt(len(plan.action_ids), issue=plan.intent == 'ISSUE',
                                    investigate_first=any(r.investigate_first for r in risks)))
+    if plan.business_choice_refs:
+        parts.append('请明确要保留的业务行为或采用的方案；这项选择不会扩大已有修复授权。')
     return '\n\n'.join(parts)
 
 

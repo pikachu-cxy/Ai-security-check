@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-15。先看当前状态和下一步，再按需要进入设计或历史记录。
+更新日期：2026-10-18。先看当前状态和下一步，再按需要进入设计或历史记录。
 
 ## 从这里开始
 
@@ -9,6 +9,7 @@
 | 下载、安装和开始使用 | [项目 README](../README.md) → [详细安装与故障处理](PILOT_INSTALL_AND_USE.zh-CN.md) |
 | 当前完成了什么、还有哪些缺口 | [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) |
 | 下一阶段先做什么 | [近期开发计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) |
+| 修复对关联功能有什么影响、如何验收 | [开发计划](REPAIR_IMPACT_ASSESSMENT_PLAN.zh-CN.md) · [架构设计](design/REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md) · [安装验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md) |
 | Cursor、Qoder、WorkBuddy / CodeBuddy 接入 | [宿主支持与接入计划](HOST_SUPPORT.md) |
 | Cursor 自动连接器的本地安装和验证 | [安装与测试](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md) · [开发测试计划](CURSOR_INTEGRATION_PLAN.zh-CN.md) · [Hook 实测](CURSOR_HOOK_FEASIBILITY.zh-CN.md) |
 | 个人版和企业版怎么分工 | [产品规划](PRODUCT_ROADMAP.md) |

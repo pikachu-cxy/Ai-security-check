@@ -347,7 +347,48 @@ def test_mcp_tool_closed_schema_boundary_and_legacy_gate(setup, monkeypatch, tmp
     for name in ['prepare_task_fix', 'verify_task_fix']:
         result = server._tool_manager.get_tool(name).fn(data['task_ref'])
         assert result['reason_code'] == 'CONFIRMATION_HANDOFF_REQUIRED'
-    assert fn(data['confirmation_ref'], data['task_ref'], True)['status'] == 'AUTHORIZED'
+    waiting = fn(data['confirmation_ref'], data['task_ref'], True)
+    assert waiting['status'] == 'IMPACT_REQUIRED'
+    assert not service.authorized
+    # Impact preparation does not consume this pending choice or prevent a
+    # later explicit refusal. Approval still needs the bound assessment.
+    assert fn(data['confirmation_ref'], data['task_ref'], False)['status'] == 'DECLINED'
+
+
+@pytest.mark.parametrize('different_proposal', [False, True])
+def test_product_factory_requires_the_evaluated_exact_repair(setup, monkeypatch, different_proposal):
+    from security_runtime.mcp_server import create_server
+    root, runtime, _, service, _, _ = setup
+    monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', str(root))
+    # Global product connections use a factory to retain user-wide policy.
+    server = create_server(runtime, remediation_factory=lambda *a, **k: service,
+                           hook_coordinator=HookCoordinator(runtime, service.hooks), global_mode=False)
+    def call(name, **arguments):
+        return server._tool_manager.get_tool(name).fn(**arguments)
+    data = pending(setup)
+    confirm = dict(confirmation_ref=data['confirmation_ref'], task_ref=data['task_ref'], approve=True)
+    waiting = call('confirm_remediation', **confirm)
+    assert waiting['status'] == 'IMPACT_REQUIRED'
+    assert not service.authorized
+    arguments = waiting['next_action']['arguments']
+    if different_proposal:
+        arguments['proposal']['summary'] = 'A different plan has not assessed the approved deletion.'
+    prepared = call('prepare_repair_impact', **arguments)
+    evidence = call('read_repair_impact_context', assessment_ref=prepared['assessment_ref'],
+                    workspace_path=str(root), file_path='A.java', start_line=1, end_line=12)
+    saved = call('submit_repair_impact', assessment_ref=prepared['assessment_ref'], workspace_path=str(root),
+        impacts=[dict(kind='EXPECTED_SECURITY_RESTRICTION', summary='Valid hostname requests remain permitted.',
+                      evidence_refs=[evidence['evidence_ref']])], unknowns=[])
+    assert saved['gate'] == 'READY_FOR_EXISTING_AUTH'
+    result = call('confirm_remediation', **confirm, impact_ref=prepared['assessment_ref'])
+    if different_proposal:
+        assert result['reason_code'] == 'IMPACT_PROPOSAL_MISMATCH'
+        assert not service.authorized
+        assert next(iter(state(setup).values()))['attempt_count'] == 0
+    else:
+        assert result['status'] == 'AUTHORIZED'
+        assert next(iter(state(setup).values()))['impact_proposal_revision'] == saved['proposal_revision']
+    assert (root / 'A.java').read_text() == UNSAFE
 
 
 @pytest.mark.parametrize('extra', ['source', 'secret', 'prompt', 'transcript', 'confirmation_expires_at_epoch'])

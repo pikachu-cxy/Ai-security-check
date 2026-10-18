@@ -5,7 +5,7 @@ ownership, version checks, redaction and persisted handling authoritative.
 """
 from __future__ import annotations
 
-from .reply_plan import CheckFact, Notice, ReplyFacts, RiskFact
+from .reply_plan import CheckFact, Notice, RepairImpactFact, ReplyFacts, RiskFact
 
 
 def finding_fact(finding, *, source='SCANNER', feedback=None, choice_required=True):
@@ -154,3 +154,56 @@ def handling_facts(result):
     elif result.get('folded') and not result.get('technical_false_positive'):
         message += ' 提醒依据未发生实质变化，仍沿用此前不重复提醒的处置；最新技术评估单独保留。'
     return ReplyFacts('HANDLING', notices=(Notice('HANDLING_RECEIPT', message),))
+
+
+def repair_impact_facts(result, *, history=False, allow_business_choice=True,
+                        handling_available=True, suppressed=False):
+    """Project validated domain results without creating a repair choice or grant.
+
+    Callers retain redaction, ownership, source freshness and saved handling.
+    Reading an existing report may show its analysis, but never requests a choice.
+    """
+    proposal = result.get('proposal') or {}
+    effects = result.get('impacts') or []
+    unknowns = result.get('unknowns') or []
+    current = result.get('lifecycle') in {'CURRENT', 'PARTIAL'}
+    # PARTIAL can describe current evidence, but never supplies a ready verdict.
+    if result.get('gate') == 'REASSESS_REQUIRED':
+        current = False
+
+    def summaries(kind):
+        def describe(item):
+            details = [label+'：'+'、'.join(item[key]) for key, label in (
+                ('affected_roles', '角色'), ('affected_operations', '操作'),
+                ('affected_modules', '模块'), ('interfaces', '接口')) if item.get(key)]
+            return item['summary'] + ('（'+'；'.join(details)+'）' if details else '')
+        return tuple(describe(item) for item in effects if item.get('kind') == kind)
+
+    def unknown_summaries(critical):
+        return tuple(item['summary'] for item in unknowns
+                     if bool(item.get('critical')) is critical)
+
+    alternatives = tuple(dict.fromkeys(text for item in effects
+                                      for text in item.get('alternatives', [])))
+    page_unknowns = ()
+    if (result.get('impact_count', len(effects)) > len(effects)
+            or result.get('unknown_count', len(unknowns)) > len(unknowns)):
+        page_unknowns = ('本页尚未展示全部影响或未知项，需查看后续报告；未展示不等于不存在。',)
+    impact = RepairImpactFact(result.get('assessment_ref', ''), proposal.get('summary', ''),
+        security_goal=proposal.get('security_goal', ''),
+        proposal_revision=result.get('proposal_revision', ''),
+        expected_restrictions=summaries('EXPECTED_SECURITY_RESTRICTION'),
+        behavior_changes=summaries('BUSINESS_BEHAVIOR_CHANGE'),
+        preserved_behaviors=tuple(proposal.get('preserve') or ()),
+        no_additional_changes=summaries('NO_ADDITIONAL_CHANGE_IDENTIFIED'),
+        unknowns=unknown_summaries(False) + summaries('UNDETERMINED') + page_unknowns,
+        critical_unknowns=unknown_summaries(True), alternatives=alternatives,
+        gate=result.get('gate', ''), current=current, suppressed=suppressed,
+        choice_required=(allow_business_choice and not history
+                         and result.get('gate') == 'BUSINESS_CHOICE_REQUIRED'),
+        read_only=history or not allow_business_choice)
+    notices = (() if handling_available else (Notice('HANDLING_UNAVAILABLE',
+        '风险处置记录暂时无法读取，本次不重复要求选择；原记录保留。'),))
+    return ReplyFacts('REPAIR_IMPACT_HISTORY' if history else 'REPAIR_IMPACT',
+        notices=notices, handling_available=handling_available, current=current,
+        repair_impacts=(impact,))

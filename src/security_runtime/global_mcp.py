@@ -394,6 +394,11 @@ def create_global_server(*, workspaces=None, host='codex'):
         if (name not in schemas or not isinstance(arguments, dict)
                 or not Draft202012Validator(schemas[name]).is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
+            from .repair_impact_contract import IMPACT_TOOLS, impact_failure
+            if name in IMPACT_TOOLS:
+                data = impact_failure('IMPACT_INPUT_INVALID')
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .feedback_contract import FEEDBACK_TOOLS, feedback_failure
             if name in FEEDBACK_TOOLS:
                 data = feedback_failure('FEEDBACK_INPUT_INVALID')
@@ -558,6 +563,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                 result.structuredContent = {**claim_diag, **result.structuredContent}
             return result
         except Exception as exc:
+            from .repair_impact_contract import IMPACT_TOOLS, impact_failure
+            if name in IMPACT_TOOLS:
+                data = impact_failure(exc)
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .feedback_contract import (FEEDBACK_TOOLS, disposition_unavailable,
                                             feedback_failure, feedback_reason)
             if handler_entered and (name in FEEDBACK_TOOLS or disposition_unavailable(exc)):
