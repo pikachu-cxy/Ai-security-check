@@ -1,6 +1,6 @@
 # 开发交接：换电脑或新聊天继续
 
-> 2026-10-19 当前批次：公共应用服务、持久事件与交付、逐写路径恢复、固定扫描输入及短锁、按需方法与包级存储兼容已通过冻结全量回归（4978 通过、17 跳过、26 预期失败，零失败与错误），候选交付验证进行中。当前架构、回执与交付边界以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)为准；下文首批 1719 项和更早 A/B/C 记录均为历史事实，不代替本轮结果。旧任务更新拒绝的容量原因已[确认](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)。真实双宿主桌面验收按用户决定暂缓。
+> 2026-10-19 当前批次：公共应用服务、持久事件与交付、逐写路径恢复、固定扫描输入及短锁、按需方法与包级存储兼容已通过冻结全量回归（4978 通过、17 跳过、26 预期失败，零失败与错误），正式 wheel 与独立 Windows 候选契约验收也已完成。当前架构、回执与交付边界以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)为准；下文首批 1719 项和更早 A/B/C 记录均为历史事实，不代替本轮结果。旧任务更新拒绝的容量原因已[确认](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)。真实双宿主桌面验收按用户决定暂缓。
 
 接续入口：[当前架构及验收](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)记录本轮源码、测试、候选和 GitHub 身份；[首批记录](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)仅对应 b352731 及此前阶段。保留原任务和有效证据，不用历史通过数量或旧包判断当前结果；运行中安装与公开 Release 不随源码提交自动更新。[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
 

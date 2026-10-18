@@ -98,11 +98,26 @@ flowchart TD
 | 冻结后校验与格式整理 | scripts/verify_package.py 的规则包断言从过期 1.3.0 改为实际 1.3.2；另移除五个公共模块的多余 EOF 空行，逐文件确认仅尾部空行变化且 AST 相同。测试字节不变；最终 wheel 另作实际安装验证 |
 | 最终源码摘要 | `b66396e971124bd037eb7e08f1c17e7586bbaf4c40b30fc6466c3b8ea8300280`；范围同上，文档另随 Git 保存 |
 | wheel 隔离安装 | 正式 scripts/verify_package.py 离线验证通过：CLI、许可、56 项规则、7 个 Skill 文件与 6 个固定方法、v3 契约及隔离 Hook 安装/移除；未修改当前安装 |
-| 候选交付 | 独立 Windows 候选构建与 GitHub 同步正在收尾；最终身份另列下文 |
+| Windows 候选 | 干净提交的独立构建与隔离 self-test stdio MCP 契约自检通过；具体身份如下 |
 
 固定输入与真实执行身份、短锁并发、跨进程崩溃恢复、账本旧 writer 围栏、历史只读、无工作区 admission 的指导读取、非法参数不回显、旧方法受管清理及用户修改保护均纳入此次全量。三个真实 MANAGED 性能用例也全部通过；跳过项及预期失败不计入通过数量。
 
 17 项跳过中，9 项为 POSIX 包链接、1 项为非 Windows 路径、1 项为 Windows 不允许的换行文件名；另 6 项是旧 PATH 驱动的三引擎 E2E 前置不足（当前 PATH 缺少 Gitleaks/Trivy），不能宣称这 6 项已验收。MANAGED 性能用例使用独立已就绪工具目录，两者分别记录。26 项 strict xfail 精确对应既有 KNOWN_ANALYSIS_LIMITATION 语料，无新增或遗漏，代表现有分析边界。
+
+本次交付身份如下；最终文档提交仅补回执，不改变上述 Runtime、测试或构建源码。
+
+| 交付项 | 身份及范围 |
+| --- | --- |
+| 源码提交 | [1bcc2f79e239412cd3f6656eb1791690cede1d93](https://github.com/pikachu-cxy/Ai-security-check/commit/1bcc2f79e239412cd3f6656eb1791690cede1d93)，版本 0.3.6；候选元数据 source_dirty=false |
+| GitHub 分支 | [feature/runtime-mvp](https://github.com/pikachu-cxy/Ai-security-check/tree/feature/runtime-mvp)，源码与本轮 README、计划、进度及交接文档同步交付 |
+| wheel | 本地 `dist/architecture-final-wheel-20261019/ai_security_runtime-0.3.6-py3-none-any.whl`，SHA256 `2f58ef13e6ca8a81499d19db8b3200dc2ebc927e84a058113a75b6a56f495e57`，正式隔离验证通过 |
+| Windows 独立候选 | 本地 `dist/architecture-final-native-20261019/security-check`；build_id `57fea182efb4ab09120c7b6d6b87af513180f061bde308dc3aca592a75498f87` |
+| 实际候选 MCP | 52 个工具中含全部九项 v3 必需工具，六个主题字节与源码一致，11 项 storage_contracts 与包元数据一致；显式旧协议与非法指导参数均拒绝，参数不回显 |
+| 本地回执 | `artifacts/architecture-final-native-build-20261019.json`、`artifacts/architecture-final-native-probe-20261019.json`、`artifacts/architecture-final-wheel-verification-20261019.log` |
+
+构建只复用经完整包校验、且 launcher.c 与其源码提交无差异的原生 launcher；Runtime 和资源重新构建。以上本地包与回执留在忽略目录，GitHub 交付源码、测试与文档，不含用户扫描数据、原始聊天或构建产物。
+
+候选自检使用全新临时状态及 self-test stdio 路径；未扫描、未新建开发任务，不证明普通生产 admission、实际安装、Hook 或桌面行为已经验收。当前安装、外部 Skill、运行中连接与公开 Release 尚未更新，macOS 和真实双宿主桌面未验收。
 
 [本地性能数据](ARCHITECTURE_PERFORMANCE.zh-CN.md)单列样本、条件与成本，不把历史查询的合成提速换算为用户总等待。Windows 候选构建与包内 API 验收不代表 macOS 或真实桌面验收。
 

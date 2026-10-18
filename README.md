@@ -115,7 +115,7 @@ Codex 与 Cursor 共用同一业务核心、任务编排、扫描执行及风险
 
 开发核查只使用 **v3**。新版 Skill 要求同一 Runtime 构建具备 v3 与九项任务工具；旧协议任务仅保留只读历史，不自动迁移或改后补基线。升级清理未被用户修改的旧受管方法，保护用户自定义内容。新账本启用后，缺少对应存储能力的旧二进制不能安全回退。[升级说明](docs/TASK_REVIEW_V3_ONLY.zh-CN.md) · [事务与恢复](docs/PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)。
 
-本轮全量回归完成：4978 项通过、17 项跳过、26 项预期失败，零失败与错误；四片无重复用例、无源码漂移。wheel 的正式隔离安装验证通过，独立 Windows 候选正在构建验收；原诊断失败回执保留。历史索引与输入捕获的[实测成本](docs/ARCHITECTURE_PERFORMANCE.zh-CN.md)单列，不把模拟事件当作真实用户体验。双宿主桌面实测依用户决定暂缓；源码、候选构建、当前安装与公开 Release 分别认定，GitHub 同步不会自动更新现有安装。
+本轮全量回归完成：4978 项通过、17 项跳过、26 项预期失败，零失败与错误；四片无重复用例、无源码漂移。正式 wheel 隔离安装、独立 Windows 候选构建及 MCP 契约自检均通过；候选来自干净源码提交 `1bcc2f7`，构建身份与验收范围见[完整回执](docs/ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md#验收状态)。原诊断失败回执保留。历史索引与输入捕获的[实测成本](docs/ARCHITECTURE_PERFORMANCE.zh-CN.md)单列，不把模拟事件当作真实用户体验。双宿主桌面实测依用户决定暂缓；源码、候选构建、当前安装与公开 Release 分别认定，GitHub 同步不会自动更新现有安装。
 
 旧任务更新被拒的原因已确认：旧 Runtime 账本总量超限；另一次资源占用来自锁超时。保留原任务和证据，不清空历史或重建基线。当前最终任务核查状态见[诊断与限制](docs/ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)，代码回归不替代安全核查。
 
