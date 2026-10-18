@@ -34,12 +34,16 @@ class SQLiteStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as db:
             with db:
+                db.execute('BEGIN IMMEDIATE')
                 db.execute("CREATE TABLE IF NOT EXISTS scans (id TEXT PRIMARY KEY, data TEXT NOT NULL)")
                 db.execute("CREATE TABLE IF NOT EXISTS findings (id TEXT PRIMARY KEY, scan_id TEXT NOT NULL, data TEXT NOT NULL)")
                 db.execute('CREATE TABLE IF NOT EXISTS triage_records (id INTEGER PRIMARY KEY, scan_id TEXT NOT NULL, finding_id TEXT NOT NULL, cache_key TEXT NOT NULL, data TEXT NOT NULL, UNIQUE(scan_id,finding_id,cache_key))')
                 db.execute('CREATE INDEX IF NOT EXISTS triage_cache ON triage_records(cache_key)')
                 db.execute('CREATE TABLE IF NOT EXISTS finding_reviews (id INTEGER PRIMARY KEY, workspace TEXT NOT NULL, scan_id TEXT NOT NULL, data TEXT NOT NULL)')
                 db.execute('CREATE TABLE IF NOT EXISTS finding_scope_snapshots (scan_id TEXT, finding_id TEXT, data TEXT NOT NULL, PRIMARY KEY(scan_id,finding_id))')
+                from .scan_history_index import initialize, reconcile
+                initialize(db)
+                reconcile(db)
 
     def _connect(self):
         return sqlite3.connect(self.path)
@@ -56,6 +60,8 @@ class SQLiteStore:
                     [(result.scan_id, fid, json.dumps(scope)) for fid, scope in scopes.items()])
                 for finding in data["findings"]:
                     db.execute("INSERT OR REPLACE INTO findings VALUES (?, ?, ?)", (finding["id"], result.scan_id, json.dumps(finding)))
+                from .scan_history_index import reconcile
+                reconcile(db)
 
     def get_scan(self, scan_id: str) -> dict | None:
         with closing(self._connect()) as db:
@@ -63,13 +69,13 @@ class SQLiteStore:
         return json.loads(row[0]) if row else None
 
     def latest_scan(self, workspace=None):
+        from .scan_history_index import has_pending, latest, reconcile
         with closing(self._connect()) as db:
-            rows=db.execute('SELECT data FROM scans ORDER BY rowid DESC').fetchall()
-        for row in rows:
-            data=json.loads(row[0])
-            if workspace is None or Path(data['target_profile']['path']).resolve()==Path(workspace).resolve():
-                return data
-        return None
+            if has_pending(db):
+                with db:
+                    db.execute('BEGIN IMMEDIATE')
+                    reconcile(db)
+            return latest(db, workspace)
 
     def save_triage(self, record, cache_key):
         data=record.to_dict()
@@ -186,11 +192,15 @@ class ReadOnlySQLiteStore:
         # Never offer a global latest alias, even if only one scan exists.
         if workspace is None:
             raise ValueError('A workspace is required for the security summary')
-        for row in self._rows('scans', 'SELECT data FROM scans ORDER BY rowid DESC'):
-            scan = json.loads(row[0])
-            if Path(scan['target_profile']['path']).resolve() == Path(workspace).resolve():
-                return scan
-        return None
+        if not self.path.is_file():
+            return None
+        from .scan_history_index import latest
+        try:
+            with closing(sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+                db.execute('PRAGMA query_only=ON')
+                return latest(db, workspace)
+        except sqlite3.DatabaseError:
+            raise ValueError('Existing scan state cannot be read safely; no state was changed') from None
 
     def triage_records(self, scan_id):
         rows = self._rows('triage_records', 'SELECT data FROM triage_records WHERE scan_id=? ORDER BY id', (scan_id,))

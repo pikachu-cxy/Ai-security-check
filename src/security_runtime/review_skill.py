@@ -15,6 +15,9 @@ NAME = 'ai-security-review'
 CONTRACT = 'security-review-skill-v1'
 MAX_BYTES = 256_000
 BASE_FILES = {'SKILL.md', 'agents/openai.yaml', 'references/runtime-workflow.md'}
+# These names are accepted only in authenticated prior ownership, never shipped
+# or adopted from matching bytes in an unmanaged Skill directory.
+RETIRED_METHODS = frozenset({'references/quick-task-review.md', 'references/quick-task-review-v2.md'})
 
 
 def encode(value):
@@ -99,11 +102,17 @@ def skill_files():
     from .risk_decision_guidance import RISK_DECISION_GUIDANCE
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
-        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review.md',
-        'references/quick-task-review-v2.md', 'references/quick-task-review-v3.md')} | {
+        'SKILL.md', 'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review-v3.md')} | {
         'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8'),
         'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE).encode('utf-8'),
         'references/repair-impact.md': repair_impact_reference().encode('utf-8')}
+
+
+def skill_content_manifest(contents=None):
+    """Shared identity for shipped managed bytes; no installation or state I/O."""
+    files = skill_files() if contents is None else contents
+    hashes = {name: digest(raw) for name, raw in sorted(files.items())}
+    return dict(contract=CONTRACT, content_sha256=digest(encode(hashes)), files=hashes)
 
 
 class ReviewSkillManager:
@@ -146,9 +155,16 @@ class ReviewSkillManager:
             if (value['contract'] != CONTRACT or value['scope'] != 'USER'
                     or value['skill'] != NAME or value['root_identity'] != self.state.name
                     or value['phase'] not in {'COMMITTED', 'UPDATING'}
-                    or not BASE_FILES <= set(value['files']) <= set(self.expected)
-                    or set(value.get('previous', {})) - set(self.expected)): raise ValueError()
-            for content_hash in [*value['files'].values(), *value.get('previous', {}).values()]:
+                    or not isinstance(value['files'], dict)
+                    or not isinstance(value.get('previous', {}), dict)
+                    or not isinstance(value.get('cleanup', {}), dict)
+                    or not BASE_FILES <= set(value['files']) <= set(self.expected) | RETIRED_METHODS
+                    or set(value.get('previous', {})) - (set(self.expected) | RETIRED_METHODS)
+                    or set(value.get('cleanup', {})) - RETIRED_METHODS
+                    or set(value.get('cleanup', {})) & set(value['files'])
+                    or value.get('cleanup') and value['phase'] != 'UPDATING'): raise ValueError()
+            for content_hash in [*value['files'].values(), *value.get('previous', {}).values(),
+                                 *value.get('cleanup', {}).values()]:
                 if not isinstance(content_hash, str) or len(content_hash) != 64 or any(c not in '0123456789abcdef' for c in content_hash): raise ValueError()
             return value
         except (ValueError, TypeError, KeyError):
@@ -158,16 +174,23 @@ class ReviewSkillManager:
         try:
             no_links(self.root)
             manifest = self.manifest()
+            preserved_retired = []
             if manifest is None:
                 state = 'USER_MANAGED' if self.root.exists() and any(self.root.iterdir()) else 'NOT_INSTALLED'
             else:
                 modified = []
                 missing = []
-                for name, content_hash in manifest['files'].items():
+                for name, content_hash in (manifest['files'] | manifest.get('cleanup', {})).items():
                     raw = self.read(self.root / name)
-                    if raw is None: missing.append(name)
+                    if raw is None:
+                        # A recorded deletion may already have completed before
+                        # an interrupted cleanup; it is not a missing new file.
+                        if name not in manifest.get('cleanup', {}): missing.append(name)
                     elif digest(raw) not in {content_hash, manifest.get('previous', {}).get(name)}:
-                        modified.append(name)
+                        if name in RETIRED_METHODS and name not in self.expected:
+                            preserved_retired.append(name)
+                        else:
+                            modified.append(name)
                 # Adding a shipped file must not adopt content outside old ownership.
                 for name in set(self.expected) - set(manifest['files']):
                     if self.read(self.root / name) is not None:
@@ -177,6 +200,10 @@ class ReviewSkillManager:
                          else 'UPGRADE_AVAILABLE')
             return {'skill':NAME, 'status':state, 'path':str(self.root),
                     'contract':CONTRACT, 'runtime_version':__version__,
+                    'shipped_content_sha256':skill_content_manifest(self.expected)['content_sha256'],
+                    'installed_content_sha256':(digest(encode(manifest['files']))
+                        if manifest and not preserved_retired and state in {'INSTALLED', 'UPGRADE_AVAILABLE'} else None),
+                    'preserved_retired_files':sorted(preserved_retired),
                     'host_discovery':'HOST_MANAGED; restart if not visible'}
         except (OSError, ValueError):
             return {'skill':NAME, 'status':'OWNERSHIP_CONFLICT', 'reason':'SKILL_PATH_OR_OWNERSHIP_INVALID'}
@@ -194,15 +221,28 @@ class ReviewSkillManager:
         if action not in {'install','status','upgrade','repair','remove'}: raise ValueError('Unknown Skill action')
         if action == 'status': return self.status()
         no_links(self.root)
-        with HookStateStore(self.state / 'locks').lock(self.root, wait_seconds=0):
+        with HookStateStore(self.state / 'locks').lock(self.root, wait_seconds=0) as acquired:
+            if not acquired: raise ValueError('SKILL_BUSY')
             before = self.status()
             if before['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'}:
                 return before | {'action':action,'changed':False,'reason':'USER_CONTENT_PRESERVED'}
             manifest = self.manifest()
-            originals = {name:self.read(self.root / name) for name in self.expected}
+            owned = (manifest['files'] | manifest.get('cleanup', {})) if manifest else {}
+            originals = {name:self.read(self.root / name) for name in set(self.expected) | set(owned)}
+            detached = set()
+            # A snapshot taken after status must still match signed ownership.
+            # Never re-sign a concurrent user edit as the new previous content.
+            for name, raw in originals.items():
+                if raw is not None and (name not in owned or digest(raw) not in {
+                        owned[name], manifest.get('previous', {}).get(name)}):
+                    if name in RETIRED_METHODS and name not in self.expected:
+                        detached.add(name)
+                    else:
+                        raise ValueError('SKILL_CHANGED_DURING_UPDATE')
+            owned = {name:content_hash for name,content_hash in owned.items() if name not in detached}
             if action == 'remove':
                 if manifest:
-                    for name in manifest['files']:
+                    for name in owned:
                         raw = originals[name]
                         if raw is not None:
                             if self.read(self.root / name) != raw: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
@@ -211,16 +251,29 @@ class ReviewSkillManager:
                         try: (self.root / directory).rmdir()
                         except OSError: pass  # Never remove extra user files.
                     self.write(self.state / 'ownership.json', None)
-                return {'skill':NAME,'status':'REMOVED','changed':bool(manifest), 'user_files_preserved':True}
+                return {'skill':NAME,'status':'REMOVED','changed':bool(manifest), 'user_files_preserved':True,
+                        'preserved_retired_files':sorted(detached)}
             desired = {name:digest(raw) for name,raw in self.expected.items()}
             if before['status']=='INSTALLED': return before | {'action':action,'changed':False}
             value = {'skill':NAME,'contract':CONTRACT,'scope':'USER','root_identity':self.state.name,
                      'runtime_version':__version__,'phase':'UPDATING','files':desired,
-                     'previous':{name:digest(raw) for name,raw in originals.items() if raw is not None}}
+                      'previous':{name:digest(raw) for name,raw in originals.items()
+                                  if name in self.expected and raw is not None},
+                      'cleanup':{name:digest(originals[name]) if originals[name] is not None else content_hash
+                                 for name,content_hash in owned.items()
+                                 if name in RETIRED_METHODS and name not in self.expected}}
             self.save(value)
             for name, raw in self.expected.items():
                 if self.read(self.root / name) != originals[name]: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
                 self.write(self.root / name,raw)
                 if self.read(self.root / name) != raw: raise ValueError('SKILL_WRITE_FAILED')
-            self.save(value | {'phase':'COMMITTED','previous':{}})
-            return self.status() | {'action':action,'changed':True,'user_files_preserved':True}
+            for name in value['cleanup']:
+                if self.read(self.root / name) != originals[name]: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
+                self.write(self.root / name, None)
+                if self.read(self.root / name) is not None: raise ValueError('SKILL_WRITE_FAILED')
+            if (any(self.read(self.root / name) != raw for name,raw in self.expected.items())
+                    or any(self.read(self.root / name) is not None for name in value['cleanup'])):
+                raise ValueError('SKILL_CHANGED_DURING_UPDATE')
+            self.save(value | {'phase':'COMMITTED','previous':{},'cleanup':{}})
+            return self.status() | {'action':action,'changed':True,'user_files_preserved':True,
+                                    'preserved_retired_files':sorted(detached)}

@@ -15,7 +15,9 @@ from security_runtime.task_ownership import TaskOwnershipError, session_owner
 from security_runtime.task_review_contract import TaskReviewInputError
 from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.task_security import TaskSecurityService
+from security_runtime.task_review_protocol import UnsupportedTaskReviewProtocol
 from test_task_security import LedgerRuntime
+from task_review_helpers import review_all, evidence_id
 
 
 ORIGINAL_FILES = {
@@ -55,39 +57,15 @@ def source_hashes(root):
 
 def complete_plan(tasks, root, ref, packet):
     """Read every issued version/window before acknowledging its unit."""
-    session, page = packet['review_session'], packet['plan']
-    visited = []
-    while True:
-        sources = {item['source_ref']: item for item in page.get('sources', [])}
-        for unit in page['units']:
-            for window in unit['required_windows']:
-                binding = sources[window['source_ref']] if 'source_ref' in window else window
-                version = ('BEFORE_TASK' if binding['location_version'] in
-                           {'BEFORE_TASK', 'BEFORE_DELETION'} else 'CURRENT')
-                low, high = window['start_line'], window['end_line'] or 2_147_483_647
-                while True:
-                    read = tasks.read(root, ref, session, binding['path'], low, high,
-                                      source_version=version)
-                    assert len(read.get('lines', read.get('numbered_lines', []))) <= 80
-                    if 'next_range' in read:
-                        low, high = read['next_range']
-                    elif read.get('has_more'):
-                        following = read['next_read']
-                        assert following['source_version'] == version
-                        low, high = following['start_line'], following['end_line']
-                    else:
-                        break
-            batch = tasks.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])
-            assert batch['status'] == 'BATCH_RECORDED'
-            assert batch['coverage'] == 'REVIEWED' and batch['scanner_run'] is False
-            visited.append(unit['path'])
-        if page['next_cursor'] is None:
-            return visited
-        page = tasks.review_plan(root, ref, session, page['next_cursor'], limit=5)
+    packets, units = review_all(tasks, root, ref, packet)
+    assert all('lines' in value or value.get('status') == 'ALREADY_DELIVERED' for value in packets)
+    saved = {unit['unit_id']: unit for unit in tasks.load(root, ref)['review_plan']['units']}
+    assert all(saved[unit['unit_id']]['status'] == 'REVIEWED' for unit in units)
+    return [unit['path'] for unit in units]
 
 
-@pytest.fixture(params=[2, 3], ids=['protocol-2', 'protocol-3'])
-def review_case(tmp_path, request):
+@pytest.fixture
+def review_case(tmp_path):
     root = tmp_path / 'project'
     root.mkdir()
     subprocess.run(['git', 'init', '-q', str(root)], check=True)
@@ -103,18 +81,18 @@ def review_case(tmp_path, request):
     assert baseline['hashes'] == original_hashes
     assert 'download.py' not in baseline['hashes']
     (root / 'download.py').write_text(DOWNLOAD, encoding='utf-8')
-    packet = tasks.prepare(root, ref, protocol_version=request.param)
-    assert packet['status'] == 'REVIEW_REQUIRED'
+    packet = tasks.prepare(root, ref, protocol_version=3)
+    assert packet['status'] == 'REVIEW_REQUIRED' and packet['protocol_version'] == 3
     session = packet['review_session']
     # Match the B submission's actual task evidence at download.py:4-5, while
     # still reading every plan window and submitting every plan batch below.
     download = tasks.read(root, ref, session, 'download.py', 4, 5)
-    assert download['evidence_id']
+    assert evidence_id(download)
     assert complete_plan(tasks, root, ref, packet) == ['download.py']
-    evidence = {'download.py': download['evidence_id']}
+    evidence = {'download.py': evidence_id(download)}
     for name, content in ORIGINAL_FILES.items():
         read = tasks.read(root, ref, session, name, 1, len(content.splitlines()))
-        evidence[name] = read['evidence_id']
+        evidence[name] = evidence_id(read)
     # Related reads add real plan obligations. Navigate and acknowledge those
     # units too; reading their source alone must never satisfy a full review.
     expanded = dict(review_session=session, plan=tasks.review_plan(root, ref, session))
@@ -258,3 +236,20 @@ def test_submission_recovery_keeps_source_version_freshness_gate(review_case):
     assert before['record']['phase'] == 'REVIEWING'
     assert before['record']['end']['hashes']['documents.py'] != before['source_hashes']['documents.py']
     assert before['ledger'] == {} and before['scans'] == [('download.py',)]
+
+
+@pytest.mark.parametrize('protocol', [1, 2, None])
+def test_historical_task_cannot_resume_by_correcting_its_submission(review_case, protocol):
+    case = review_case
+    record = case['tasks'].load(case['root'], case['ref'])
+    if protocol is None:
+        record.pop('review_protocol')
+    else:
+        record['review_protocol'] = protocol
+    case['tasks'].store(case['root']).save(record)
+    before = observed_state(case)
+    with pytest.raises(UnsupportedTaskReviewProtocol) as rejected:
+        submit(case, [candidate(case)])
+    assert rejected.value.response()['read_only_supported'] is True
+    assert observed_state(case) == before
+    assert before['record']['phase'] == 'REVIEWING' and before['ledger'] == {}

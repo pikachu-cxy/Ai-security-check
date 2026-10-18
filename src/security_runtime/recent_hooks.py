@@ -446,15 +446,5 @@ def instrument(call, *, schemas, resolve_root, adapter=None):
 
 def install_project_observer(server, binding):
     """Observe SDK requests before its existing validator, without replacing it."""
-    from mcp.types import CallToolRequest
-    schemas = {t.name: t.parameters for t in server._tool_manager.list_tools()}
-    resolver = lambda arguments: Path(binding.root) if binding is not None else None
-    manager = server._tool_manager
-    manager.call_tool = instrument(manager.call_tool, schemas=schemas, resolve_root=resolver)
-    original = server._mcp_server.request_handlers[CallToolRequest]
-    async def request_handler(request):
-        async def invoke(name, arguments):
-            return await original(request)
-        return await instrument(invoke, schemas=schemas, resolve_root=resolver)(
-            request.params.name, request.params.arguments)
-    server._mcp_server.request_handlers[CallToolRequest] = request_handler
+    from .mcp_contracts import MCPRegistry
+    MCPRegistry(server).observe_project(binding)

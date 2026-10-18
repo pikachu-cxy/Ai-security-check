@@ -6,7 +6,8 @@ import pytest
 
 from security_runtime.task_review_results import bounded_history_result, history_freshness
 from test_task_review_results import record as history_record, assert_bounded
-from test_task_review_v2 import review_all, assert_reviewed
+from test_task_review_invariants import review_all, assert_reviewed
+from task_review_helpers import read_plan
 from test_task_security import service  # noqa: F401; shared fixture
 
 
@@ -14,12 +15,12 @@ def complete_task(service, *, related=False):
     s, root, _ = service
     ref = s.begin(root, 'completed-review-history')['task_ref']
     (root/'routes.py').write_text('def route(user):\n    return policy.enforce(user)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     review_all(s, root, ref, packet)
     if related:
         s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-        page = s.review_plan(root, ref, packet['review_session'])
-        related_unit = next(unit for unit in page['units'] if unit['change'] == 'RELATED')
+        units, _ = read_plan(s, root, ref, packet)
+        related_unit = next(unit for unit in units if unit['change'] == 'RELATED')
         s.submit_batch(root, ref, packet['review_session'], [related_unit['unit_id']], 'REVIEWED', [])
     assert_reviewed(s, root, ref, packet)
     return s, root, ref

@@ -4,6 +4,7 @@ import asyncio, json, os, subprocess
 from pathlib import Path
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from task_review_v3_acceptance import TASK_TOOLS, V3Review, require_v3
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bundle', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
@@ -35,7 +36,7 @@ assert receipt['installation']['local_files_ready']
 assert receipt['routine_tool_approval']['status']=='CONFIGURED'
 assert receipt['routine_tool_approval']['live_no_prompt_verified'] is False
 permissions=json.loads((base/'cursor home/permissions.json').read_bytes())
-assert len(permissions['mcpAllowlist'])==10
+assert TASK_TOOLS <= {entry.split(':',1)[1] for entry in permissions['mcpAllowlist']}
 assert all(v.startswith('ai-security-runtime:') and '*' not in v for v in permissions['mcpAllowlist'])
 assert 'ai-security-runtime:confirm_remediation' not in permissions['mcpAllowlist']
 assert 'terminalAllowlist' not in permissions and 'approvalMode' not in permissions
@@ -70,7 +71,8 @@ assert hook('preToolUse',tool_name='Write',tool_use_id=write_id,tool_input={})==
 hook('afterFileEdit',file_path=str(project/'sample.py'))
 post=hook('postToolUse',tool_name='Write',tool_use_id=write_id)
 assert 'additional_context' in post and 'ts1-' in post['additional_context'],post
-ref=json.loads(post['additional_context'].splitlines()[1])['task_ref']
+binding=json.loads(post['additional_context'].splitlines()[1])
+ref,session_ref=binding['task_ref'],binding['session_ref']
 if prepared_ref is not None:
     assert ref==prepared_ref
 follow=hook('stop',status='completed',loop_count=0)
@@ -86,19 +88,26 @@ async def run():
             assert all(entry.split(':',1)[1] in names for entry in permissions['mcpAllowlist'])
             assert 'handle_hook_event' not in names and 'prepare_functional_verification' not in names
             async def call(name,**args):
-                value=await session.call_tool(name,dict(workspace_path=str(project),**args))
+                arguments = ({} if name == 'get_runtime_info' else
+                             dict(workspace_path=str(project),session_ref=session_ref))
+                arguments.update(args)
+                value=await session.call_tool(name,arguments)
                 data=value.structuredContent or json.loads(value.content[0].text)
                 assert not value.isError,(name,data)
                 return data
+            require_v3(await call('get_runtime_info'), names)
             finished=await call('finish_security_task',task_ref=ref)
-            packet=await call('prepare_task_security_review',task_ref=ref)
+            packet=await call('prepare_task_security_review',task_ref=ref,protocol_version=3)
             assert finished['status']=='READY',finished
             assert packet['review_required'],packet
-            context=await call('read_task_review_context',task_ref=ref,review_session=packet['review_session'],file_path='sample.py',start_line=1,end_line=1)
-            submitted=await call('submit_task_security_review',task_ref=ref,review_session=packet['review_session'],findings=[],coverage='PARTIAL',limitations=['Process smoke only; model behavior and application runtime not verified'])
-            assert submitted['status']=='COMPLETE',submitted
-            (base/'task-result.json').write_text(json.dumps(submitted,ensure_ascii=True,indent=2))
-            print('MCP task status', submitted['status'], 'coverage', submitted['host_review']['coverage'])
+            review=V3Review(call,ref,packet['review_session'],project)
+            units=await review.plan()
+            assert [unit['path'] for unit in units]==['sample.py']
+            await review.read('sample.py',1,1)
+            submitted,pages=await review.save_partial([],
+                ['Process smoke and requested source only; no observed host model reasoning.'])
+            (base/'task-result.json').write_text(json.dumps(dict(receipt=submitted,history_pages=pages),ensure_ascii=True,indent=2))
+            print('MCP task status', submitted['status'], 'coverage', pages[0]['host_review']['coverage'])
 asyncio.run(run())
 assert hook('stop',status='completed',loop_count=0)=={}
 removed=subprocess.run([config['command'],'integration','remove','cursor','--scope','global','--json'],

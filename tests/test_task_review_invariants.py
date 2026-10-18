@@ -14,55 +14,22 @@ from security_runtime.task_ownership import session_owner
 from test_task_security import LedgerRuntime, service  # noqa: F401; shared fixture
 
 
-def read_window(s, root, ref, session, window):
-    """Follow issued windows without turning a before read into a current read."""
-    source_version = ('BEFORE_TASK' if window['location_version'] in
-                      {'BEFORE_TASK', 'BEFORE_DELETION'} else 'CURRENT')
-    low, high = window['start_line'], window['end_line'] or 2_147_483_647
-    packets = []
-    while True:
-        packet = s.read(root, ref, session, window['path'], low, high,
-                        source_version=source_version)
-        assert packet['location_version'] == window['location_version']
-        assert packet['file_sha256'] == window['file_sha256']
-        packets.append(packet)
-        if not packet['has_more']:
-            return packets
-        following = packet['next_read']
-        assert following['source_version'] == source_version
-        assert following['file_path'] == window['path']
-        assert following['start_line'] == packet['end_line']+1
-        low, high = following['start_line'], following['end_line']
+from task_review_helpers import read_plan, read_window, review_all
 
 
-def review_page(s, root, ref, session, page):
-    packets = []
-    for unit in page['units']:
+def review_units(s, root, ref, session, units):
+    for unit in units:
         for window in unit['required_windows']:
-            packets.extend(read_window(s, root, ref, session, window))
-        batch = s.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])
-        assert batch['status'] == 'BATCH_RECORDED'
-        assert batch['coverage'] == 'REVIEWED'
-        assert batch['scanner_run'] is False
-    return packets
-
-
-def review_all(s, root, ref, packet):
-    session, page = packet['review_session'], packet['plan']
-    delivered, units = [], []
-    while True:
-        units.extend(page['units'])
-        delivered.extend(review_page(s, root, ref, session, page))
-        if page['next_cursor'] is None:
-            return delivered, units
-        page = s.review_plan(root, ref, session, cursor=page['next_cursor'], limit=5)
+            read_window(s, root, ref, session, window)
+        s.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])
 
 
 def assert_reviewed(s, root, ref, packet):
-    result = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
-    assert result['status'] == 'COMPLETE'
+    receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert receipt['status'] == 'COMPLETE' and receipt['result_saved'] is True
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'REVIEWED'
-    assert not result['host_review']['limitations']
+    assert result['host_review']['limitations']['total_count'] == 0
     return result
 
 
@@ -72,18 +39,20 @@ def test_refused_extra_critical_window_remains_an_explicit_unread_gap(service):
     (root/'routes.py').write_text(source)
     ref = s.begin(root, 'explicit-critical-gap')['task_ref']
     (root/'routes.py').write_text(source.replace('policy.allow(subject_5)', 'policy.enforce(subject_5)'))
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     review_all(s, root, ref, packet)
     record = s.load(root, ref)
-    batch_id = record['review_plan']['units'][0]['batch_id']
-    record['review_ledger']['batches'][batch_id] = record['review_ledger']['limits']['batch_bytes']
+    ledger = record['review_ledger']
+    ledger['source_bytes'] = ledger['category_limits']['source']
     s.store(root).save(record)
     with pytest.raises(TaskContextError) as rejected:
         s.read(root, ref, packet['review_session'], 'routes.py', 90, 92)
-    assert rejected.value.reason_code == 'TASK_CONTEXT_BATCH_BUDGET'
-    result = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert rejected.value.reason_code == 'TASK_CONTEXT_SOURCE_BUDGET'
+    receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert receipt['result_saved'] is True
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert 'routes.py:90-92' in ' '.join(result['host_review']['limitations'])
+    assert 'routes.py:90-92' in ' '.join(result['host_review']['limitations']['items'])
 
 
 def test_unrelated_long_line_does_not_poison_a_completed_hunk_review(service):
@@ -92,7 +61,7 @@ def test_unrelated_long_line_does_not_poison_a_completed_hunk_review(service):
     (root/'routes.py').write_text(source)
     ref = s.begin(root, 'only-requested-long-lines')['task_ref']
     (root/'routes.py').write_text(source.replace('policy.allow(subject_55)', 'policy.enforce(subject_55)'))
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     delivered, _ = review_all(s, root, ref, packet)
     assert all(page['start_line'] > 1 for page in delivered)
     assert_reviewed(s, root, ref, packet)
@@ -102,7 +71,7 @@ def test_fully_masked_long_comment_is_not_a_character_truncation_gap(service):
     s, root, _ = service
     ref = s.begin(root, 'masked-comment-is-complete')['task_ref']
     (root/'added.py').write_text('# '+ 'context '*100+'\ndef allowed(user):\n    return auth.check(user)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     review_all(s, root, ref, packet)
     assert_reviewed(s, root, ref, packet)
 
@@ -129,15 +98,15 @@ def test_719_file_project_reviews_all_fourteen_changes_without_old_preimage_ceil
         path.write_text(large.replace('policy.allow(subject_0480)',
                                       'policy.enforce(subject_0480)'), encoding='utf-8')
     assert s.finish(root, ref)['status'] == 'READY'
-    packet = s.prepare(root, ref, protocol_version=2)
-    assert packet['protocol_version'] == 2
+    packet = s.prepare(root, ref, protocol_version=3)
+    assert packet['protocol_version'] == 3
     assert packet['changed_file_count'] == 14
     assert packet['plan']['unit_count'] == 14
     assert 'content' not in packet['quick_skill']
     delivered, units = review_all(s, root, ref, packet)
     assert len(units) == 14
     assert {unit['path'] for unit in units} == {p.relative_to(root).as_posix() for p in affected}
-    assert {p['location_version'] for p in delivered} == {'BEFORE_TASK', 'CURRENT_TASK_END'}
+    assert {p['location_version'] for p in s.load(root, ref)['evidence'].values()} == {'BEFORE_TASK', 'CURRENT_TASK_END'}
     assert_reviewed(s, root, ref, packet)
     record = s.load(root, ref)
     assert record['static_attempts'] == 1
@@ -152,12 +121,15 @@ def test_an_unrequested_second_plan_page_prevents_a_full_review_claim(service):
     ref = s.begin(root, 'all-units-required')['task_ref']
     for i in range(6):
         (root/f'changed_{i}.py').write_text('def check(subject):\n    return policy.enforce(subject)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
-    assert len(packet['plan']['units']) == 5 and packet['plan']['next_cursor'] == 5
-    review_page(s, root, ref, packet['review_session'], packet['plan'])
+    packet = s.prepare(root, ref, protocol_version=3)
+    units, _ = read_plan(s, root, ref, packet)
+    assert len(units) == 6
+    review_units(s, root, ref, packet['review_session'], units[:5])
     # The last unit was never navigated to or requested. Runtime still owns
     # the fixed complete plan and must not equate first-page completion to all.
-    result = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert receipt['result_saved'] is True
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
     assert result['host_review']['limitations']
     record = s.load(root, ref)
@@ -170,19 +142,16 @@ def test_read_pagination_can_be_completed_without_a_permanent_false_missing_gap(
     s, root, runtime = service
     ref = s.begin(root, 'finish-issued-pages')['task_ref']
     (root/'added.py').write_text(''.join(f'guard_{i:03} = policy.check(item_{i:03})\n' for i in range(190)))
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     session = packet['review_session']
-    unit = packet['plan']['units'][0]
+    units, _ = read_plan(s, root, ref, packet)
+    unit = units[0]
     window = unit['required_windows'][0]
-    first = s.read(root, ref, session, 'added.py', 1, 190, source_version='CURRENT')
-    assert first['has_more'] and first['next_read']['source_version'] == 'CURRENT'
+    first = s.read(root, ref, session, 'added.py', 1, 80, source_version='CURRENT')
+    assert first['start_line'] == 1 and len(first['lines']) == 80
     partial = s.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])
     assert partial['coverage'] == 'PARTIAL'
-    current = first
-    while current['has_more']:
-        next_read = current['next_read']
-        current = s.read(root, ref, session, next_read['file_path'],
-            next_read['start_line'], next_read['end_line'], source_version=next_read['source_version'])
+    read_window(s, root, ref, session, dict(window, start_line=81))
     completed = s.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])
     assert completed['coverage'] == 'REVIEWED'
     assert window['end_line'] == 190
@@ -195,7 +164,7 @@ def test_same_length_external_edit_with_restored_mtime_invalidates_final_submiss
     ref = s.begin(root, 'external-edit-freshness')['task_ref']
     source = root/'routes.py'
     source.write_bytes(b'def route(user):\n    return auth.check(user)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     review_all(s, root, ref, packet)
     before = source.stat()
     source.write_bytes(b'def route(user):\n    return auth.deny_(user)\n')
@@ -227,14 +196,15 @@ def test_actual_before_version_survives_existing_user_changes_and_non_git(tmp_pa
     s = TaskSecurityService(runtime, HookStateStore(tmp_path/'state'))
     ref = s.begin(root, f'before-{kind}')['task_ref']
     source.write_text('def route(subject):\n    return policy.updated(subject)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     assert packet['plan']['unit_count'] == 1
     assert packet['plan']['units'][0]['change'] == 'MODIFIED'
     delivered, _ = review_all(s, root, ref, packet)
-    previous = '\n'.join(line for item in delivered if item['location_version']=='BEFORE_TASK'
-                         for line in item['numbered_lines'])
-    current = '\n'.join(line for item in delivered if item['location_version']=='CURRENT_TASK_END'
-                        for line in item['numbered_lines'])
+    sources = s.load(root, ref)['review_plan']['sources']
+    previous = '\n'.join(line for item in delivered if sources[item['source_ref']]['location_version']=='BEFORE_TASK'
+                         for line in item['lines'])
+    current = '\n'.join(line for item in delivered if sources[item['source_ref']]['location_version']=='CURRENT_TASK_END'
+                        for line in item['lines'])
     assert f'preexisting_{kind}' in previous
     assert 'policy.committed' not in previous
     assert 'policy.updated' in current and f'preexisting_{kind}' not in current
@@ -249,15 +219,16 @@ def test_deleted_renamed_crlf_file_keeps_original_hash_and_before_pagination(ser
     old.write_bytes(raw)
     ref = s.begin(root, 'delete-rename-crlf')['task_ref']
     old.rename(root/'new_name.py')
-    packet = s.prepare(root, ref, protocol_version=2)
+    packet = s.prepare(root, ref, protocol_version=3)
     delivered, units = review_all(s, root, ref, packet)
     assert {(unit['path'], unit['change']) for unit in units} == {
         ('old_name.py', 'DELETED'), ('new_name.py', 'ADDED')}
-    prior = [p for p in delivered if p['location_version']=='BEFORE_DELETION']
+    sources = s.load(root, ref)['review_plan']['sources']
+    prior = [p for p in delivered if sources[p['source_ref']]['location_version']=='BEFORE_DELETION']
     assert len(prior) >= 3
-    assert all(p['path']=='old_name.py' and p['file_sha256']==hashlib.sha256(raw).hexdigest()
-               for p in prior)
-    assert all(p['next_read']['source_version']=='BEFORE_TASK' for p in prior if p['has_more'])
+    assert all(sources[p['source_ref']]['path']=='old_name.py' and
+               sources[p['source_ref']]['file_sha256']==hashlib.sha256(raw).hexdigest() for p in prior)
+    assert sum(len(p['lines']) for p in prior) == 190
     assert_reviewed(s, root, ref, packet)
     assert len(runtime.calls) == 1
 
@@ -266,14 +237,14 @@ def test_reconnect_same_owner_keeps_plan_evidence_and_cumulative_budgets(service
     s, root, runtime = service
     owner = session_owner('codex', 'same-review-conversation')
     s.owner = owner
-    ref = s.begin(root, 'resume-review-v2')['task_ref']
+    ref = s.begin(root, 'resume-review-v3')['task_ref']
     (root/'routes.py').write_text('def route(user):\n    return policy.enforce(user)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
-    unit = packet['plan']['units'][0]
-    read_window(s, root, ref, packet['review_session'], unit['required_windows'][0])
+    packet = s.prepare(root, ref, protocol_version=3)
+    units, _ = read_plan(s, root, ref, packet)
+    read_window(s, root, ref, packet['review_session'], units[0]['required_windows'][0])
     before = s.load(root, ref)
     restarted = TaskSecurityService(runtime, s.hooks, owner=dict(owner))
-    resumed = restarted.prepare(root, ref, protocol_version=2)
+    resumed = restarted.prepare(root, ref, protocol_version=3)
     after = restarted.load(root, ref)
     assert resumed['review_session'] == packet['review_session']
     assert resumed['plan']['plan_id'] == packet['plan']['plan_id']
@@ -282,7 +253,7 @@ def test_reconnect_same_owner_keeps_plan_evidence_and_cumulative_budgets(service
     assert after['review_ledger']['source_bytes'] == before['review_ledger']['source_bytes']
     assert after['review_ledger']['total_bytes'] > before['review_ledger']['total_bytes']
     assert after['evidence'] == before['evidence']
-    assert restarted.begin(root, 'resume-review-v2')['task_ref'] == ref
+    assert restarted.begin(root, 'resume-review-v3')['task_ref'] == ref
     outsider = TaskSecurityService(runtime, s.hooks, owner=session_owner('codex', 'other-conversation'))
     with pytest.raises(ValueError, match='another session'):
         outsider.review_plan(root, ref, packet['review_session'])

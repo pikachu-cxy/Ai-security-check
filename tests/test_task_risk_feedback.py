@@ -11,7 +11,7 @@ from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.task_ownership import session_owner
 from security_runtime.task_security import TaskSecurityService
 from test_task_security import service, candidate  # noqa: F401; shared fixture
-from test_task_review_v2 import review_all
+from task_review_helpers import review_all, evidence_id
 from test_task_review_protocol_mcp import local_call
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.mcp_server import create_server
@@ -25,26 +25,23 @@ def frozen_review_identity(monkeypatch):
     import security_runtime.task_security as tasks
     monkeypatch.setattr(builds, 'build_identity', lambda: dict(status='IDENTIFIED', build_id='a'*64))
     original = tasks.method
-    monkeypatch.setattr(tasks, 'method', lambda version=1: dict(original(version), sha256='b'*64))
+    monkeypatch.setattr(tasks, 'method', lambda version=3: dict(original(version), sha256='b'*64))
 
 
 def host_risk(sample, *, category=None):
     s, root, _ = sample
     ref = s.begin(root, 'host-risk-feedback')['task_ref']
     (root/'routes.py').write_text('def get_order(order_id, user):\n    return load_order(order_id)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
-    delivered, _ = review_all(s, root, ref, packet)
-    main = next(item for item in delivered if item['location_version'] == 'CURRENT_TASK_END')
+    packet = s.prepare(root, ref, protocol_version=3)
+    main = s.read(root, ref, packet['review_session'], 'routes.py', 1, 2, source_version='CURRENT')
     related = s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-    page = s.review_plan(root, ref, packet['review_session'])
-    for unit in page['units']:
-        if unit['change'] == 'RELATED':
-            s.submit_batch(root, ref, packet['review_session'], [unit['unit_id']], 'REVIEWED', [])
-    finding = candidate(main['evidence_id'], related['evidence_id'])
+    review_all(s, root, ref, dict(packet, plan=s.review_plan(root, ref, packet['review_session'])))
+    finding = candidate(evidence_id(main), evidence_id(related))
     if category:
         finding['category'] = category
     result = s.submit(root, ref, packet['review_session'], [finding], 'REVIEWED', [])
-    return s, root, ref, result['host_review']['findings'][0]['id']
+    assert result['result_saved'] and not result['scanner_run']
+    return s, root, ref, s.get(root, ref)['findings'][0]['detail']['id']
 
 
 def submit_false_positive(feedback, s, root, ref, finding_id, packet):
@@ -261,7 +258,7 @@ def test_runtime_build_or_method_changes_unfold_existing_confirmation(service, m
         monkeypatch.setattr(builds, 'build_identity', lambda: dict(status='IDENTIFIED', build_id='c'*64))
     elif kind == 'method':
         original = tasks.method
-        monkeypatch.setattr(tasks, 'method', lambda version=1: dict(original(version), sha256='d'*64))
+        monkeypatch.setattr(tasks, 'method', lambda version=3: dict(original(version), sha256='d'*64))
     else:
         monkeypatch.setattr(builds, 'build_identity', lambda: dict(status='UNVERIFIABLE_LEGACY_BUNDLE'))
     result = feedback.get(s, root, ref, finding_id)

@@ -4,6 +4,7 @@ import os
 import pytest
 
 from security_runtime import task_security as ts
+from security_runtime import task_review as tr
 from security_runtime.local_evidence import EvidenceUnavailable
 from test_task_security import service, prepared
 
@@ -24,7 +25,7 @@ def test_hash_only_capture_preserves_inventory_hashes_and_failures(service, monk
     assert text['text_truncations']['wide.py']
 
 
-def test_fresh_still_reads_all_files_and_read_only_sanitizes_requested_file(service, monkeypatch):
+def test_v3_read_checks_and_sanitizes_only_requested_source(service, monkeypatch):
     s, root, _ = service
     ref, session, _ = prepared(service)
     reads, sanitized = [], []
@@ -36,11 +37,11 @@ def test_fresh_still_reads_all_files_and_read_only_sanitizes_requested_file(serv
         sanitized.append(text)
         return original_safe(text, **kw)
     monkeypatch.setattr(ts.WorkspaceReader, 'read', read)
-    monkeypatch.setattr(ts, 'safe_source', safe)
+    monkeypatch.setattr(tr, 'safe_source', safe)
     packet = s.read(root, ref, session, 'routes.py', 1, 2)
-    assert set(reads) == {'routes.py','service.py','auth.py'}
-    assert reads.count('routes.py') == 2
-    assert len(sanitized) == 1 and packet['location_version'] == 'CURRENT_TASK_END'
+    assert reads == ['routes.py']
+    assert len(sanitized) == 1
+    assert s.load(root, ref)['evidence'][packet['evidence_id']]['location_version'] == 'CURRENT_TASK_END'
 
 
 def test_same_size_external_last_edit_preserving_mtime_is_stale(service):
@@ -51,8 +52,13 @@ def test_same_size_external_last_edit_preserving_mtime_is_stale(service):
     raw = path.read_bytes()
     path.write_bytes(raw.replace(b'==', b'!='))
     os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns))
+    # Per-frame checks validate the requested source; final submission verifies
+    # every source hash, including an unrelated file changed without a Hook.
+    s.read(root, ref, session, 'routes.py', 1, 2)
     with pytest.raises(ValueError, match='stale'):
-        s.read(root, ref, session, 'routes.py', 1, 2)
+        s.read(root, ref, session, 'auth.py', 1, 2)
+    with pytest.raises(ValueError, match='stale'):
+        s.submit(root, ref, session, [], 'PARTIAL', ['Unrelated source changed'])
     assert s.get(root, ref)['status'] == 'STALE'
 
 
@@ -66,7 +72,8 @@ def test_rapid_last_edit_and_revert_checks_current_bytes_without_hook(service):
     assert s.get(root, ref)['status'] == 'STALE'
     path.write_bytes(raw)
     assert s.get(root, ref)['current_version'] is True
-    assert s.read(root, ref, session, 'routes.py', 1, 2)['file_sha256']
+    packet = s.read(root, ref, session, 'routes.py', 1, 2)
+    assert s.load(root, ref)['review_plan']['sources'][packet['source_ref']]['file_sha256']
 
 
 def test_read_failure_during_freshness_rejects_existing_evidence(service, monkeypatch):
@@ -77,8 +84,12 @@ def test_read_failure_during_freshness_rejects_existing_evidence(service, monkey
         if path == 'auth.py': raise EvidenceUnavailable('SOURCE_UNAVAILABLE')
         return original(reader, path, *a, **kw)
     monkeypatch.setattr(ts.WorkspaceReader, 'read', read)
+    s.read(root, ref, session, 'routes.py', 1, 2)
+    with pytest.raises(ts.TaskContextError) as rejected:
+        s.read(root, ref, session, 'auth.py', 1, 2)
+    assert rejected.value.reason_code == 'TASK_CONTEXT_SOURCE_UNAVAILABLE'
     with pytest.raises(ValueError, match='stale'):
-        s.read(root, ref, session, 'routes.py', 1, 2)
+        s.submit(root, ref, session, [], 'PARTIAL', ['Source unavailable'])
 
 
 def test_changed_rule_and_config_inventory_cannot_be_reused(service, monkeypatch):

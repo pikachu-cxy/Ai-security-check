@@ -10,7 +10,7 @@ from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.task_security import TaskSecurityService
 from security_runtime.task_review_results import bounded_history_result
 from test_task_security import service, candidate  # noqa: F401
-from test_task_review_v2 import review_all
+from task_review_helpers import review_all, evidence_id
 from test_task_risk_feedback import host_risk, submit_false_positive, frozen_review_identity  # noqa: F401
 
 
@@ -19,17 +19,14 @@ def repeat_risk(sample):
     ref = s.begin(root, 'new-development-context')['task_ref']
     (root/'routes.py').write_text('# A harmless comment moves the same issue.\n' +
         'def get_order(order_id, user):\n    return load_order(order_id)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
-    delivered, _ = review_all(s, root, ref, packet)
-    main = next(item for item in delivered if item['location_version'] == 'CURRENT_TASK_END')
+    packet = s.prepare(root, ref, protocol_version=3)
+    main = s.read(root, ref, packet['review_session'], 'routes.py', 1, 3, source_version='CURRENT')
     related = s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-    page = s.review_plan(root, ref, packet['review_session'])
-    for unit in page['units']:
-        if unit['change'] == 'RELATED':
-            s.submit_batch(root, ref, packet['review_session'], [unit['unit_id']], 'REVIEWED', [])
+    review_all(s, root, ref, dict(packet, plan=s.review_plan(root, ref, packet['review_session'])))
     result = s.submit(root, ref, packet['review_session'],
-        [candidate(main['evidence_id'], related['evidence_id'])], 'REVIEWED', [])
-    return s, root, ref, result['host_review']['findings'][0]['id']
+        [candidate(evidence_id(main), evidence_id(related))], 'REVIEWED', [])
+    assert result['result_saved'] and not result['scanner_run']
+    return s, root, ref, s.get(root, ref)['findings'][0]['detail']['id']
 
 
 @pytest.mark.parametrize('requested', [False, None, 1, 'true'])
@@ -71,16 +68,12 @@ def test_excluding_one_occurrence_does_not_hide_same_category_in_sibling_functio
     ref = s.begin(root, 'two-risk-occurrences')['task_ref']
     (root/'routes.py').write_text('def first(user):\n    return load_order(user)\n\n'
                                 'def second(user):\n    return load_order(user)\n')
-    packet = s.prepare(root, ref, protocol_version=2)
-    review_all(s, root, ref, packet)
+    packet = s.prepare(root, ref, protocol_version=3)
     first = s.read(root, ref, packet['review_session'], 'routes.py', 2, 2)
     second = s.read(root, ref, packet['review_session'], 'routes.py', 5, 5)
     related = s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-    page = s.review_plan(root, ref, packet['review_session'])
-    for unit in page['units']:
-        if unit['change'] == 'RELATED':
-            s.submit_batch(root, ref, packet['review_session'], [unit['unit_id']], 'REVIEWED', [])
-    candidates = [candidate(item['evidence_id'], related['evidence_id']) for item in (first, second)]
+    review_all(s, root, ref, dict(packet, plan=s.review_plan(root, ref, packet['review_session'])))
+    candidates = [candidate(evidence_id(item), evidence_id(related)) for item in (first, second)]
     s.submit(root, ref, packet['review_session'], candidates, 'REVIEWED', [])
     findings = s.load(root, ref)['review']['findings']
     feedback = TaskRiskFeedbackService()

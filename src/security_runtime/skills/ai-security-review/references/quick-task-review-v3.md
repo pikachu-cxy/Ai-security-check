@@ -12,10 +12,22 @@ synchronous pre-edit Hook already supplied them, reuse that task. Never substitu
 Git HEAD, another chat's task, the most recent task, or an after-edit baseline.
 Missing historical source cannot be reconstructed from the current workspace.
 
+Before editing, get_runtime_info must explicitly advertise task-review-plan-v3
+and the connected tool list must include begin_security_task, finish_security_task,
+prepare_task_security_review, get_task_review_plan, get_task_review_method,
+read_task_review_context, submit_task_review_batch, submit_task_security_review
+and get_task_security_review. Verify the configured Runtime environment and
+build_identity; a marketing version alone does not establish these capabilities.
+An existing 0.3.6 delivery with this capability subset is sufficient. Independent
+contracts such as security-review-skill-v1 and risk-decisions-v2 are not obsolete
+task-review protocols. If v3 is missing or the active build cannot be verified,
+stop this workflow and require updating that Runtime and reconnecting. Never
+downgrade, send old protocol parameters, or substitute another scan for this task.
+
 After development call finish_security_task once. NO_CHANGES needs no model
 review or security paragraph. For actual changes call prepare_task_security_review
-with protocol_version=3 when Runtime advertises task-review-plan-v3. Already
-prepared v1/v2 tasks retain their original protocol and limits. It can finish a
+with protocol_version=3. Historical tasks using an older protocol retain their
+records and limitations; this workflow does not execute or convert them. It can finish a
 never-finished ACTIVE task once; it does not restart stale or terminal work. Static zero alerts still require
 the bounded review below. Keep ordinary file-edit Hook checks enabled.
 
@@ -44,8 +56,9 @@ strings and comment edits do not imply an unknown hidden change. Legacy preimage
 without this locator cannot be upgraded after editing: include conservative
 masked ranges and the explicit missing-locator gap instead of inventing proof.
 
-Each source response returns at most 80 lines and at most 16000 serialized UTF-8
-bytes. Read its plain lines array; line number = start_line + array index. Follow
+Request at most 80 lines at a time. Runtime caps each source response at 600
+lines and 16000 serialized UTF-8 bytes and may return a smaller interval.
+Read its plain lines array; line number = start_line + array index. Follow
 next_range and unread_ranges with the SAME task/session/path/version, retaining
 the source dictionary from the plan. For a related source not registered before,
 the response includes its binding. The response is readable sanitized code, not

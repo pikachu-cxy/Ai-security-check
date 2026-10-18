@@ -8,6 +8,7 @@ from .codex_host_claims import diagnostics, schema_diagnostics
 from .hook_state import identity, no_links
 from .host_events import (EventKind, HostCapabilities, NormalizedHostEvent,
                           OperationClass, VerifiedHostContext)
+from .host_lifecycle import connector_profile
 
 
 def classify_bash_command(tool_input) -> str:
@@ -32,10 +33,8 @@ def classify_bash_command(tool_input) -> str:
 
 class CodexEventAdapter:
     host = 'codex'
-    capabilities = HostCapabilities(supports_session_start=True,
-        supports_native_file_edit=True, supports_shell_post_event=True,
-        supports_tool_input=True, supports_invocation_id=True,
-        supports_stop=True, supports_global_install=True, supports_setup_seed=True)
+    profile = connector_profile('codex')
+    capabilities = profile.capabilities
     from .codex_host_claims import EVENTS as mcp_events
     events = {'SessionStart': EventKind.SESSION_START,
               'PostToolUse': EventKind.WORKSPACE_ACTIVITY, 'Stop': EventKind.SESSION_STOP}

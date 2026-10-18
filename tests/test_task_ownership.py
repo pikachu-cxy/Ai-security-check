@@ -80,17 +80,19 @@ def test_lease_expiry_does_not_end_an_unknown_or_live_process(service,monkeypatc
     assert a.load(root,ref)['phase']=='ACTIVE'
 
 
-def test_confirmed_dead_writer_retires_without_erasing_findings(service,monkeypatch):
+def test_dead_historical_writer_stays_read_only_without_blocking_new_v3_key(service,monkeypatch):
     _,root,_=service;clock=[1000.0];a=scoped(service,'a',lambda:clock[0])
     ref=a.begin(root,'one')['task_ref'];record=a.load(root,ref)
     record['static']={'findings':[{'id':'retained-risk','category':'authorization'}]}
-    a.store(root).save(record)
+    record['review_protocol']=2  # A signed record issued by an older Runtime.
+    historical=a.store(root).save(record)
     clock[0]+=own.LEASE_SECONDS+1
     monkeypatch.setattr(own,'process_stamp',lambda pid:False)
-    assert a.begin(root,'two')['status']=='ACTIVE'
+    fresh=a.begin(root,'two')
+    assert fresh['status']=='ACTIVE' and fresh['task_ref']!=ref
     old=a.load(root,ref)
-    assert old['phase']=='INCOMPLETE' and old['static']['findings'][0]['id']=='retained-risk'
-    assert not old['baseline']['texts']
+    assert old==historical and old['static']['findings'][0]['id']=='retained-risk'
+    assert a.load(root,fresh['task_ref'])['review_protocol']==3
 
 
 def test_overlapping_checkout_never_reports_a_full_review(service):
@@ -99,9 +101,10 @@ def test_overlapping_checkout_never_reports_a_full_review(service):
     (root/'routes.py').write_text('def route(): return 1\n')
     result=a.finish(root,ar)
     assert any(v['reason']=='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE' for v in result['limitations'])
-    packet=a.prepare(root,ar)
+    packet=a.prepare(root,ar,protocol_version=3)
     submitted=a.submit(root,ar,packet['review_session'],[],'REVIEWED',[])
-    assert submitted['host_review']['coverage']=='PARTIAL'
+    assert submitted['result_saved'] and not submitted['scanner_run']
+    assert a.get(root,ar)['host_review']['coverage']=='PARTIAL'
     assert b.load(root,br)['phase']=='ACTIVE'
 
 
@@ -172,7 +175,7 @@ def test_signed_session_survives_mcp_reconnect_without_new_baseline(service):
     result=call(b,'finish_security_task',workspace_path=str(root),task_ref=ref,session_ref=token)
     assert result['status']=='READY' and legacy.store(root).get(ref)['baseline']['hashes']==baseline['hashes']
     assert len(legacy.store(root).records())==1 and len(runtime.calls)==1
-    assert call(b,'prepare_task_security_review',workspace_path=str(root),task_ref=ref)['review_session']
+    assert call(b,'prepare_task_security_review',workspace_path=str(root),task_ref=ref,protocol_version=3)['review_session']
 
 
 def test_cursor_pre_edit_task_finishes_through_actual_mcp_connection(service):

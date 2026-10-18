@@ -5,6 +5,8 @@ import json
 
 import pytest
 
+from security_runtime.task_review_revisions import advance_revision
+
 from security_runtime.task_review_plan import (
     ReviewPlanError, build_plan, charge_packet, finalize_plan, plan_gaps,
     plan_page, record_read, register_related, submit_units,
@@ -19,7 +21,7 @@ def snapshot(files):
 def task(before=None, after=None, changes=None):
     before = {'main.py': ['old = 1']} if before is None else before
     after = {'main.py': ['new = 2']} if after is None else after
-    return dict(task_ref='ts1-' + 'a' * 32, baseline=snapshot(before),
+    return dict(task_ref='ts1-' + 'a' * 32, review_protocol=3, baseline=snapshot(before),
                 end=snapshot(after), changes=changes or [dict(path='main.py', change='MODIFIED')],
                 static_attempts=1)
 
@@ -33,14 +35,16 @@ def read_requirement(record, requirement, *, low=None, high=None, identifier=Non
     texts = record[source].get('texts', {})
     if requirement['path'] in texts:
         evidence['total_lines'] = len(texts[requirement['path']])
-    record_read(record, evidence, now=2)
+    now = max(2, record['review_ledger']['activity_lease']['last_progress_at'])
+    record_read(record, evidence, now=now)
     return evidence
 
 
 def satisfy_unit(record, unit):
     for requirement in list(unit['required_windows']):
         read_requirement(record, requirement)
-    return submit_units(record, [unit['unit_id']], 'REVIEWED', [], now=3)
+    now = max(3, record['review_ledger']['activity_lease']['last_progress_at'])
+    return submit_units(record, [unit['unit_id']], 'REVIEWED', [], now=now)
 
 
 def test_plan_contains_all_changes_across_navigation_pages_and_batches():
@@ -127,13 +131,13 @@ def test_known_line_counts_do_not_require_storing_full_snapshot_text():
     assert all(window['end_line'] == 10 for window in plan['units'][0]['required_windows'])
 
 
-def test_very_large_diff_input_uses_bounded_full_source_obligations():
-    from security_runtime.task_review_plan import MAX_DIFF_INPUT_LINES
-    old = ['same'] * (MAX_DIFF_INPUT_LINES // 2 + 1)
+def test_very_large_ambiguous_diff_keeps_full_source_obligations():
+    old = ['same'] * 40_000
     new = old.copy()
-    new[1] = 'changed'
+    new[0], new[20_000], new[-1] = 'first_change', 'middle_change', 'last_change'
     record = task({'main.py': old}, {'main.py': new})
     unit = build_plan(record, now=1)['units'][0]
+    assert len(unit['required_windows']) == 2
     assert all(window['start_line'] == 1 and window['end_line'] == len(old)
                for window in unit['required_windows'])
 
@@ -171,16 +175,19 @@ def test_empty_hashed_files_have_no_impossible_line_one_requirement():
 
 def test_immutable_plan_and_shared_budget_survive_repeated_prepare_and_batches():
     record = task()
-    plan = build_plan(record, now=1, deadline=100)
+    plan = build_plan(record, now=1)
     charge_packet(record, b'123456', 'control', now=2)
     original = copy.deepcopy(plan)
     assert build_plan(record, now=50) == original
     assert plan_page(record)['budget']['total_bytes'] == 6
     assert record['static_attempts'] == 1
-    with pytest.raises(ReviewPlanError, match='original limits'):
+    with pytest.raises(ReviewPlanError) as error:
         build_plan(record, now=50, limits={'total_bytes': 999_999})
-    with pytest.raises(ReviewPlanError, match='original deadline'):
+    assert error.value.reason_code == 'REVIEW_PLAN_LIMITS_FIXED'
+    with pytest.raises(ReviewPlanError) as error:
         build_plan(record, now=50, deadline=1000)
+    assert error.value.reason_code == 'REVIEW_PLAN_DEADLINE_FIXED'
+    assert record['review_ledger'] == original['budget']
 
 
 def test_snapshot_changes_reject_existing_plan_instead_of_resetting_evidence():
@@ -210,65 +217,55 @@ def test_actual_utf8_packets_and_duplicate_deliveries_are_all_charged():
     assert 'batches' not in plan_page(record)['budget']
 
 
-def test_byte_limit_has_one_task_wide_boundary_and_rejection_preserves_ledger():
-    record = task()
-    budget = build_plan(record, now=1, limits={'total_bytes': 5})['budget']
-    charge_packet(record, b'123', now=2)
-    charge_packet(record, b'45', 'navigation', now=2)
-    assert budget['total_bytes'] == 5
-    with pytest.raises(ReviewPlanError) as failure:
-        charge_packet(record, b'6', now=2)
-    assert failure.value.reason_code == 'TASK_CONTEXT_BYTE_BUDGET'
-    assert budget['total_bytes'] == 5
-    assert build_plan(record, now=3)['budget'] is budget
 
 
 def test_response_limit_is_recoverable_by_smaller_payload_without_material_gap():
     record = task()
-    budget = build_plan(record, now=1, limits={'response_bytes': 5})['budget']
+    budget = build_plan(record, now=1)['budget']
+    maximum = budget['limits']['response_bytes']
+    before = copy.deepcopy(budget)
     with pytest.raises(ReviewPlanError) as failure:
-        charge_packet(record, b'123456', now=2)
+        charge_packet(record, b'x'*(maximum+1), now=2)
     assert failure.value.reason_code == 'TASK_CONTEXT_RESPONSE_BUDGET'
-    assert budget['total_bytes'] == 0
-    charge_packet(record, b'12345', now=2)
+    assert budget == before
+    charge_packet(record, b'x'*maximum, now=2)
+    assert budget['total_bytes'] == maximum
     assert not record['review_plan']['units'][0]['evidence_gaps']
 
 
-def test_batch_limit_is_fixed_and_source_packet_automatically_selects_unit_batch():
+def test_source_packet_automatically_selects_its_existing_unit_batch():
     record = task()
-    plan = build_plan(record, now=1, limits={'batch_bytes': 500})
+    plan = build_plan(record, now=1)
     required = plan['units'][0]['required_windows'][0]
-    payload = dict(required, numbered_lines=['1: source'])
+    payload = dict(required, lines=['source'])
     cost = charge_packet(record, payload, 'source', source_bytes=6, now=2)
     batch_id = plan['units'][0]['batch_id']
     assert plan['budget']['batches'][batch_id] == cost
-    with pytest.raises(ReviewPlanError) as failure:
-        charge_packet(record, b'x' * 500, batch_id=batch_id, now=2)
-    assert failure.value.reason_code == 'TASK_CONTEXT_BATCH_BUDGET'
+    assert plan['budget']['source_bytes'] == 6
     assert plan_page(record, 0, 1)['batch_id'] == batch_id
     assert plan_page(record, 0, 10)['batch_id'] == batch_id
     assert plan['budget']['batches'][batch_id] == cost
+    assert plan_page(record)['budget']['batch_is_scheduling_only'] is True
 
 
 def test_lifetime_ledger_survives_new_plan_snapshot_and_json_roundtrip():
     record = task()
-    plan = build_plan(record, now=1, deadline=100, limits={'total_bytes': 1000})
-    required = plan['units'][0]['required_windows'][0]
-    read_requirement(record, required)
+    plan = build_plan(record, now=1)
+    read_requirement(record, plan['units'][0]['required_windows'][0])
     charge_packet(record, b'123', batch_id=plan['units'][0]['batch_id'], now=2)
     record = json.loads(json.dumps(record))
-    record['review_plan']['budget']['total_bytes'] = 0  # stale duplicated view is never authoritative
+    record['review_plan']['budget']['total_bytes'] = 0
     assert plan_page(record)['budget']['total_bytes'] == 3
     original = copy.deepcopy(record['review_ledger'])
-    record.pop('review_plan')  # root explicitly creates a new end-version plan
+    record = advance_revision(record)
     record['end']['hashes']['main.py'] = 'new-version'
-    record['context_bytes'] = 0
-    record['evidence'] = {}
     new = build_plan(record, now=50)
-    assert new['budget'] == original
-    assert new['deadline'] == 100
-    assert new['budget']['reads'] == 1
-    assert new['budget']['limits']['total_bytes'] == 1000
+    assert new['budget']['total_bytes'] == original['total_bytes'] == 3
+    assert new['budget']['reads'] == original['reads'] == 1
+    assert new['budget']['source_bytes'] == original['source_bytes']
+    assert new['budget']['limits']['total_bytes'] >= original['limits']['total_bytes']
+    assert record['review_history'][-1]['consumption']['total_bytes'] == 3
+    assert record['review_revision'] == 2
 
 
 def test_evidence_id_cannot_be_rebound_after_new_snapshot_plan():
@@ -277,35 +274,30 @@ def test_evidence_id_cannot_be_rebound_after_new_snapshot_plan():
     current = next(window for window in plan['units'][0]['required_windows']
                    if window['location_version'] == 'CURRENT_TASK_END')
     evidence = read_requirement(record, current)
-    record.pop('review_plan')
+    record = advance_revision(record)
     record['end']['hashes']['main.py'] = 'next-version'
     build_plan(record, now=4)
+    before = copy.deepcopy(record)
     with pytest.raises(ValueError, match='cannot change'):
         record_read(record, dict(evidence, file_sha256='next-version'), now=5)
+    assert record == before
 
 
-def test_legacy_context_is_migrated_once_without_restarting_deadline():
-    record = task()
-    record.update(context_bytes=1234, evidence={'old-id': {}}, review_deadline=200)
-    plan = build_plan(record, now=10)
-    assert plan['budget']['total_bytes'] == 1234
-    assert plan['budget']['reads'] == 1
-    assert plan['deadline'] == 200
-    record.pop('review_plan')
-    build_plan(record, now=20)
-    assert record['review_ledger']['total_bytes'] == 1234
-    assert record['review_ledger']['reads'] == 1
 
 
 def test_unique_evidence_read_budget_is_shared_and_duplicates_dont_create_proof():
     record = task()
-    unit = build_plan(record, now=1, limits={'reads': 1})['units'][0]
+    unit = build_plan(record, now=1)['units'][0]
+    budget = record['review_ledger']
+    budget['reads'] = budget['limits']['reads']-1
     first = read_requirement(record, unit['required_windows'][0])
     record_read(record, first, now=2)
+    before = copy.deepcopy(record)
     with pytest.raises(ReviewPlanError) as failure:
         read_requirement(record, unit['required_windows'][1])
     assert failure.value.reason_code == 'TASK_CONTEXT_READ_BUDGET'
-    assert record['review_plan']['budget']['reads'] == 1
+    assert record == before
+    assert budget['reads'] == budget['limits']['reads']
     assert finalize_plan(record, now=3)['coverage'] == 'PARTIAL'
 
 
@@ -333,16 +325,17 @@ def test_related_requirements_are_explicit_and_reopen_only_the_affected_unit():
     assert finalize_plan(record, now=5)['coverage'] == 'REVIEWED'
 
 
-def test_related_file_budget_is_global_across_batches():
+def test_related_source_identity_and_allowance_are_global_across_batches():
     before = {'main.py': ['old'], 'guard1.py': ['one'], 'guard2.py': ['two']}
-    after = dict(before, **{'main.py': ['new']})
-    record = task(before, after)
-    unit = build_plan(record, now=1, limits={'related_files': 1})['units'][0]
+    record = task(before, dict(before, **{'main.py': ['new']}))
+    unit = build_plan(record, now=1)['units'][0]
     register_related(record, unit['unit_id'], 'guard1.py', record['end']['hashes']['guard1.py'], 1, 1, now=2)
-    with pytest.raises(ReviewPlanError) as failure:
-        register_related(record, unit['unit_id'], 'guard2.py', record['end']['hashes']['guard2.py'], 1, 1, now=2)
-    assert failure.value.reason_code == 'TASK_CONTEXT_RELATED_FILE_BUDGET'
+    original = copy.deepcopy(record)
+    with pytest.raises(ValueError, match='snapshot'):
+        register_related(record, unit['unit_id'], 'guard2.py', 'forged-hash', 1, 1, now=2)
+    assert record == original
     assert record['review_plan']['related_files'] == ['guard1.py']
+    assert build_plan(record, now=3)['budget'] is record['review_ledger']
 
 
 def test_none_unit_id_creates_discoverable_related_unit_and_extends_same_path():
@@ -351,7 +344,13 @@ def test_none_unit_id_creates_discoverable_related_unit_and_extends_same_path():
     plan = build_plan(record, now=1)
     related = register_related(record, None, 'guard.py', record['end']['hashes']['guard.py'], 1, 1, now=2)
     assert related['change'] == 'RELATED'
-    assert related['unit_id'] in [unit['unit_id'] for unit in plan_page(record)['units']]
+    page, identifiers = plan_page(record), []
+    while True:
+        identifiers.extend(unit['unit_id'] for unit in page['units'])
+        if page['next_cursor'] is None:
+            break
+        page = plan_page(record, cursor=page['next_cursor'])
+    assert related['unit_id'] in identifiers
     repeated = register_related(record, None, 'guard.py', record['end']['hashes']['guard.py'], 2, 3, now=2)
     assert repeated is related and len(plan['units']) == 2
     assert related['required_windows'][0]['start_line'] == 1
@@ -362,16 +361,15 @@ def test_none_unit_id_creates_discoverable_related_unit_and_extends_same_path():
     assert finalize_plan(record, now=4)['coverage'] == 'REVIEWED'
 
 
-def test_more_changed_files_than_policy_remain_visible_and_cannot_claim_full():
+def test_every_changed_file_retains_an_obligation_without_a_legacy_cutoff():
     record = task({}, {'one.py': ['one'], 'two.py': ['two']},
                   [dict(path=name, change='ADDED') for name in ['one.py', 'two.py']])
-    plan = build_plan(record, now=1, limits={'changed_files': 1})
+    plan = build_plan(record, now=1)
     for unit in plan['units']:
         satisfy_unit(record, unit)
     assert len(plan['units']) == 2
-    assert finalize_plan(record, now=4)['coverage'] == 'PARTIAL'
-    assert any(gap['reason'] == 'TASK_CONTEXT_UNIT_BUDGET' and gap['path'] == 'two.py'
-               for gap in plan_gaps(record))
+    assert finalize_plan(record, now=4)['coverage'] == 'REVIEWED'
+    assert not plan_gaps(record)
 
 
 def test_unverified_change_scope_prevents_aggregate_reviewed():
@@ -383,24 +381,26 @@ def test_unverified_change_scope_prevents_aggregate_reviewed():
     assert any(gap['reason'] == 'TASK_CHANGE_COMPARISON_UNAVAILABLE' for gap in plan_gaps(record))
 
 
-def test_expiry_cannot_be_reset_by_preparing_or_starting_another_batch():
+def test_idle_lease_cannot_be_reset_by_prepare_or_another_batch():
     record = task()
-    plan = build_plan(record, now=1, deadline=3)
-    assert finalize_plan(record, now=4)['status'] == 'EXPIRED'
-    assert build_plan(record, now=5) is plan
-    for action in [lambda: charge_packet(record, b'one', now=4),
-                   lambda: submit_units(record, [plan['units'][0]['unit_id']], 'REVIEWED', [], now=4)]:
+    plan = build_plan(record, now=1)
+    deadline = plan['deadline']
+    assert finalize_plan(record, now=deadline+1)['status'] == 'IDLE'
+    before = copy.deepcopy(record)
+    assert build_plan(record, now=deadline+2) is plan
+    for action in [lambda: charge_packet(record, b'one', now=deadline+1),
+                   lambda: submit_units(record, [plan['units'][0]['unit_id']], 'REVIEWED', [], now=deadline+1)]:
         with pytest.raises(ReviewPlanError) as failure:
             action()
-        assert failure.value.reason_code == 'REVIEW_PLAN_EXPIRED'
-    assert plan['deadline'] == 3
+        assert failure.value.reason_code == 'REVIEW_PLAN_IDLE'
+    assert record == before and plan['deadline'] == deadline
 
 
 def test_completed_units_keep_their_historical_result_after_deadline():
     record = task()
-    unit = build_plan(record, now=1, deadline=3)['units'][0]
+    unit = build_plan(record, now=1)['units'][0]
     satisfy_unit(record, unit)
-    assert finalize_plan(record, now=4)['status'] == 'COMPLETE'
+    assert finalize_plan(record, now=record['review_deadline']+1)['status'] == 'COMPLETE'
 
 
 def test_forged_or_rebound_evidence_is_rejected():

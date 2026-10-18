@@ -16,6 +16,8 @@ from .integration_state import DogfoodEvent, IntegrationStateStore, WorkspaceBin
 from .workspace import WorkspaceResolver
 from .functional_host import FunctionalExecutionReport
 from .feedback_contract import FindingEvidenceReference
+from .mcp_contracts import MCPRegistry
+from .task_review_protocol import PROTOCOL_VERSION
 from .task_risk_fix import (NativeTaskReference, NativeFindingReference,
     NativeImpactReference, NativeReviewRevision, NativeFixIntent)
 from . import repair_impact_models as impact_models
@@ -92,17 +94,13 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     binding = workspace_binding or WorkspaceBinding.from_environment()
     from .host_guidance import HOST_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
-    from .remediation import RemediationService
+    registry = MCPRegistry(server)
+    from .workspace_services import assemble_remediation, bind_impact_gate
     from .hook_runtime import HookCoordinator
     hook_coordinator = hook_coordinator or HookCoordinator(runtime)
     # Trusted embedding only, never environment/MCP claims. Default Codex has
     # no atomic edit bridge and cannot opt into Fast Fix through tool arguments.
-    remediation = (remediation_factory or RemediationService)(getattr(runtime, 'store', None),
-        hooks=hook_coordinator.store, registry=hook_coordinator.managed_registry())
-    if remediation_factory is None:
-        # Same connected MCP lifetime; ordinary command/embedded hosts keep the
-        # legacy prepare contract unless their trusted constructor opts in.
-        remediation.agent_tickets.enabled = True
+    remediation = assemble_remediation(runtime, hook_coordinator, factory=remediation_factory)
     from .functional_verification import FunctionalVerificationService
     # Trusted internal embedding only; personal MCP discovery hides these tools.
     # Enabling discovery never supplies repair or project-execution authority.
@@ -146,10 +144,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     # Event-specific invocation claims. SDK validation must not echo rejected
     # values (including accidentally supplied source/Secret) in errors or logs.
-    hook_tool = server._tool_manager.get_tool('handle_hook_event')
-    hook_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    hook_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    hook_tool.parameters = hook_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('handle_hook_event',))
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_readiness_event(event: str, workspace_path: str, session_id: str,
                                permission_mode: str | None = None) -> dict:
@@ -159,7 +154,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
                                                session_id=session_id, permission_mode=permission_mode), 'SessionStart')
         data = rejected or handle_readiness(event, workspace_path, session_id, binding=binding,
-                                           tools={t.name for t in server._tool_manager.list_tools()})
+                                           tools=registry.names())
         if rejected:
             data.update({'continue': True, 'systemMessage': '安全检查尚未成功接入当前项目，暂时无法确认检查结果。'})
         data = {**diag, **data}
@@ -172,10 +167,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps(codex_hook_output(data), ensure_ascii=False))])
 
-    readiness_tool = server._tool_manager.get_tool('handle_readiness_event')
-    readiness_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    readiness_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    readiness_tool.parameters = readiness_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('handle_readiness_event',))
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
                           turn_id: str | None = None, permission_mode: str | None = None) -> dict:
@@ -197,10 +189,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         return CallToolResult(structuredContent=data, content=[TextContent(
             type='text', text=json.dumps({} if rejected else codex_hook_output(data), ensure_ascii=True))])
 
-    stop_tool = server._tool_manager.get_tool('handle_stop_event')
-    stop_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    stop_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    stop_tool.parameters = stop_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('handle_stop_event',))
     # Connection-local opaque handoffs hold hashes only, never packet source.
     triage_sessions={}
     feedback_sessions = {}
@@ -327,7 +316,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     # Product wiring covers global workspace factories as well as the local
     # default. Caller version/feature claims cannot bypass this gate.
-    remediation.impact_gate = impact_check
+    bind_impact_gate(remediation, impact_check)
 
     def impact_arguments(name, arguments):
         request = impact_models.validate_impact_request(name, arguments)
@@ -409,28 +398,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     from .repair_impact_contract import IMPACT_TOOLS
     for impact_tool_name in IMPACT_TOOLS:
-        impact_tool = server._tool_manager.get_tool(impact_tool_name)
-        impact_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-        impact_tool.fn_metadata.arg_model.model_rebuild(force=True)
-        impact_tool.parameters = impact_tool.fn_metadata.arg_model.model_json_schema()
-
-    original_impact_call = server._tool_manager.call_tool
-    async def impact_call(name, arguments, *args, **kwargs):
-        # Validate before the SDK: its generic nested validation exception may
-        # otherwise disclose a caller's source text or secret extra-field key.
-        if name in IMPACT_TOOLS:
-            from pydantic import ValidationError
-            from .repair_impact_contract import impact_input_failure
-            try:
-                impact_models.validate_impact_request(name, arguments)
-            except ValidationError:
-                failure = impact_input_failure(name, arguments)
-                convert_result = kwargs.get('convert_result', args[1] if len(args) > 1 else False)
-                if convert_result:
-                    return server._tool_manager.get_tool(name).fn_metadata.convert_result(failure)
-                return failure
-        return await original_impact_call(name, arguments, *args, **kwargs)
-    server._tool_manager.call_tool = impact_call
+        registry.harden((impact_tool_name,))
 
     def native_intents(service, workspace):
         from .native_repair_intent import NativeRepairIntents
@@ -471,7 +439,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                 issued_tasks[result['repair_task_ref']] = service._owner()
             return result
         except Exception as exc:
-            return impact_failure(exc)
+            from .mcp_contracts import unsupported_protocol_failure
+            failure = unsupported_protocol_failure(exc)
+            return failure if failure is not None else impact_failure(exc)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def cancel_task_risk_fix(task_ref: NativeTaskReference, finding_id: NativeFindingReference,
@@ -519,15 +489,15 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None,
-                                     protocol_version: int = 1) -> dict:
-        """Prepare the same task's source-version-bound review. Version 1 preserves the existing packet. Version 2 preserves its fixed quotas/deadline. Explicit version 3 derives separate finite source/navigation/control allowances from all required ranges, readable source references and fragment-paged plans, and resumes an idle activity lease only for the same owner/snapshot/ledger; use get_task_review_method only when that method is not already available, then get_task_review_plan and submit_task_review_batch. All versions share the original task baseline and cumulative budgets; preparing again never resets evidence or grants repair authority."""
+                                     protocol_version: Literal[3] = PROTOCOL_VERSION) -> dict:
+        """Prepare protocol 3 only, preserving the original pre-edit baseline, source snapshot, evidence and cumulative allowances. Older protocols are unsupported and older tasks remain read-only. Page all required fragments, read actual before/current evidence and submit batches; resume only the same owner/snapshot/ledger. No scan reset or repair authority."""
         return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref,
             protocol_version=protocol_version)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def get_task_review_plan(task_ref: str, review_session: str, cursor: int = 0, limit: int = 10,
                               workspace_path: str | None = None, session_ref: str | None = None) -> dict:
-        """Page the current version-2/3 task's required review units. For v3 follow next_cursor across all window_fragment items, including multiple fragments of the same unit_id. Use the returned cursor and exact task/session; omitted pages remain required work. This reads the plan without rescanning, starting a new task or resetting cumulative budgets."""
+        """Page the current version-3 task's required review units. For v3 follow next_cursor across all window_fragment items, including multiple fragments of the same unit_id. Use the returned cursor and exact task/session; omitted pages remain required work. This reads the plan without rescanning, starting a new task or resetting cumulative budgets."""
         from .task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).review_plan(bound_path(workspace_path),
@@ -538,7 +508,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def get_task_review_method(task_ref: str, review_session: str, workspace_path: str | None = None,
                                 session_ref: str | None = None) -> dict:
-        """Get the canonical method for this exact version-2/3 review session when its advertised version/hash is unavailable locally. Retrieve once and reuse within the same method version; source evidence and plan coverage remain separate. No scan, task restart or repair authority."""
+        """Get the canonical method for this exact version-3 review session when its advertised version/hash is unavailable locally. Retrieve once and reuse within the same method version; source evidence and plan coverage remain separate. No scan, task restart or repair authority."""
         from .task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).review_method(bound_path(workspace_path),
@@ -550,7 +520,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def submit_task_review_batch(task_ref: str, review_session: str, unit_ids: list[str], coverage: str,
                                   limitations: list[str], workspace_path: str | None = None,
                                   session_ref: str | None = None) -> dict:
-        """Record reasoning completion for exact version-2/3 plan units after their required current/before evidence has been read. Report REVIEWED or PARTIAL with explicit limitations. Batch completion never substitutes for the final submit_task_security_review, erases other pending work, resets task budgets or grants repair authority."""
+        """Record reasoning completion for exact version-3 plan units after their required current/before evidence has been read. Report REVIEWED or PARTIAL with explicit limitations. Batch completion never substitutes for the final submit_task_security_review, erases other pending work, resets task budgets or grants repair authority."""
         from .task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).submit_batch(bound_path(workspace_path),
@@ -562,7 +532,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
                                  source_version: str = 'CURRENT', session_ref: str | None = None) -> dict:
-        """Read a sanitized task-source window, including signed before-task evidence. At most 80 lines per response. v1/v2 follow has_more/next_read; v3 reads plain lines with source_ref and follows next_range/unread_ranges in the same task/session/path/version. ALREADY_DELIVERED refers only to actual prior evidence; it creates no new delivery. Use the packet's versioned limits: v1 retains 40 unique reads/64KB; v2 allows 160 unique reads/256KB cumulatively, 16KB per message and 64KB per batch, with at most 100 changed and 20 related files. v3 uses plan-derived independent allowances and size-scheduled batches without a fixed batch cutoff. Pagination never rescans or resets budgets. Unread required or requested ranges remain pending. Correct recoverable CONTEXT_REQUEST_REJECTED parameters in the same session; unsupported documentation is not a connection failure. Evidence is bound to actual path/range/hash/version. No .env content, links, path escapes, commands or network."""
+        """Read a v3 sanitized before/current source window, at most 80 lines. Follow next_range/unread_ranges using the exact task/session/version. ALREADY_DELIVERED reuses only real issued evidence. Plan-derived finite source/navigation/control allowances and size-scheduled batches never reset on pagination or reconnect. Missing source, unread ranges and incomplete coverage remain gaps. No old-protocol reads, .env content, links, path escapes, commands or network."""
         from .task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
@@ -581,7 +551,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
-        """Read saved task results with current-source freshness, without scans or model calls. V2 combines static then host findings into bounded history pages (finding_offset/limit; next_action), at most 3 complete records and 64KB. This history-only allowance does not renew source-review budgets. Explicit RESULT_DETAIL_LIMIT means the local record could not fit; never present it as complete. No repair authority."""
+        """Read saved task results with current-source freshness, without scans or model calls. History combines static then host findings into bounded history pages (finding_offset/limit; next_action), at most 3 complete records and 64KB. This history-only allowance does not renew source-review budgets. Explicit RESULT_DETAIL_LIMIT means the local record could not fit; never present it as complete. No repair authority."""
         return task_service(task_ref).get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
@@ -669,10 +639,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                            'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger',
                            'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'mark_task_risk_false_positive',
                            'revoke_task_risk_feedback', 'get_task_risk_feedback', 'set_task_risk_disposition'):
-        task_tool = server._tool_manager.get_tool(task_tool_name)
-        task_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-        task_tool.fn_metadata.arg_model.model_rebuild(force=True)
-        task_tool.parameters = task_tool.fn_metadata.arg_model.model_json_schema()
+        registry.harden((task_tool_name,))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_closeout_check(workspace_path: str | None = None, files: list[str] | None = None,
@@ -902,11 +869,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     for feedback_name in ('prepare_finding_feedback', 'submit_finding_feedback',
                           'mark_finding_false_positive', 'revoke_finding_feedback',
                           'get_finding_feedback', 'set_finding_disposition'):
-        feedback_tool = server._tool_manager.get_tool(feedback_name)
-        feedback_tool.fn_metadata.arg_model.model_config.update(
-            extra='forbid', strict=True, hide_input_in_errors=True)
-        feedback_tool.fn_metadata.arg_model.model_rebuild(force=True)
-        feedback_tool.parameters = feedback_tool.fn_metadata.arg_model.model_json_schema()
+        registry.harden((feedback_name,))
 
     @server.tool()
     def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20,
@@ -957,8 +920,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def get_runtime_info() -> dict:
         """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
         from .host_guidance import runtime_info
-        return runtime_info(remediation_config=remediation.config,
+        from .delivery_manifest import delivery_manifest
+        info = runtime_info(remediation_config=remediation.config,
                             include_functional_verification=include_functional_verification)
+        info['delivery_manifest'] = delivery_manifest(info, registry.tools())
+        return info
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_professional_guidance() -> dict:
@@ -979,10 +945,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         from .background_preparation import read_preparation_status
         return read_preparation_status()
 
-    guidance_tool = server._tool_manager.get_tool('get_professional_guidance')
-    guidance_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    guidance_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    guidance_tool.parameters = guidance_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('get_professional_guidance',))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_security_summary(workspace_path: str | None = None, scan_id: str | None = None, details: bool = False) -> dict:
@@ -1099,10 +1062,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         except Exception:
             return remediation._fail('CONFIRMATION_REJECTED_REFRESH_REQUIRED')
 
-    confirmation_tool = server._tool_manager.get_tool('confirm_remediation')
-    confirmation_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    confirmation_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    confirmation_tool.parameters = confirmation_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('confirm_remediation',))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def refresh_remediation_confirmation(task_ref: str, scan_id: str, workspace_path: str | None = None) -> dict:
@@ -1127,10 +1087,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         except Exception:
             return failure(remediation, 'CONFIRMATION_RECOVERY_REJECTED')
 
-    recovery_tool = server._tool_manager.get_tool('refresh_remediation_confirmation')
-    recovery_tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-    recovery_tool.fn_metadata.arg_model.model_rebuild(force=True)
-    recovery_tool.parameters = recovery_tool.fn_metadata.arg_model.model_json_schema()
+    registry.harden(('refresh_remediation_confirmation',))
 
     if include_functional_verification:
         @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
@@ -1151,10 +1108,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                                   bound_workspace=binding.root if binding else None)
 
         for name in ('prepare_functional_verification','run_functional_verification'):
-            tool = server._tool_manager.get_tool(name)
-            tool.fn_metadata.arg_model.model_config.update(extra='forbid', strict=True, hide_input_in_errors=True)
-            tool.fn_metadata.arg_model.model_rebuild(force=True)
-            tool.parameters = tool.fn_metadata.arg_model.model_json_schema()
+            registry.harden((name,))
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:
@@ -1205,36 +1159,21 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     from .feedback_contract import (FEEDBACK_TOOLS, disposition_unavailable,
                                     feedback_failure, feedback_reason)
     from mcp.server.fastmcp.exceptions import ToolError
-    original_call = server._tool_manager.call_tool
-    async def feedback_call(name, arguments, *args, **kwargs):
-        try:
-            return await original_call(name, arguments, *args, **kwargs)
-        except Exception as exc:
-            if name not in FEEDBACK_TOOLS and not disposition_unavailable(exc):
-                raise
-            reason = feedback_reason(exc, name)
-            failure = feedback_failure(reason)
-            error = ToolError(reason + ': ' + failure['message'])
-            error.reason_code = reason
-            raise error from exc
-    server._tool_manager.call_tool = feedback_call
-
-    original_task_review_call = server._tool_manager.call_tool
-    async def task_review_call(name, arguments, *args, **kwargs):
-        if name == 'submit_task_security_review':
-            # SDK pre-parsing and nested validation happen before the tool body.
-            # Diagnose raw JSON types without echoing input or extra-field names.
-            from pydantic import ValidationError
+    def feedback_wrapper(original):
+        async def feedback_call(name, arguments, *args, **kwargs):
             try:
-                task_review_models.SubmitTaskSecurityReviewInput.model_validate(arguments)
-            except ValidationError:
-                failure = task_review_models.task_review_input_failure(arguments)
-                convert_result = kwargs.get('convert_result', args[1] if len(args) > 1 else False)
-                if convert_result:
-                    return server._tool_manager.get_tool(name).fn_metadata.convert_result(failure)
-                return failure
-        return await original_task_review_call(name, arguments, *args, **kwargs)
-    server._tool_manager.call_tool = task_review_call
+                return await original(name, arguments, *args, **kwargs)
+            except Exception as exc:
+                if name not in FEEDBACK_TOOLS and not disposition_unavailable(exc):
+                    raise
+                reason = feedback_reason(exc, name)
+                failure = feedback_failure(reason)
+                error = ToolError(reason + ': ' + failure['message'])
+                error.reason_code = reason
+                raise error from exc
+        return feedback_call
+    registry.wrap_dispatch(feedback_wrapper)
+    registry.validate_raw_inputs()
 
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)

@@ -87,15 +87,15 @@ def test_duplicates_are_charged_and_pagination_never_creates_a_new_allowance():
         charge_packet(record, b'code', 'source', batch_id='invented-new-batch', now=2)
 
 
-@pytest.mark.parametrize('original,target', [(2, 3), (3, 2)])
-def test_prepared_protocols_cannot_be_switched_to_refresh_limits(original, target):
+@pytest.mark.parametrize('target', [1, 2])
+def test_prepared_v3_cannot_downgrade_or_refresh_limits(target):
     record = added(['guard = policy.check(subject)'])
-    build_plan(record, protocol_version=original, now=1)
+    build_plan(record, now=1)
     charge_packet(record, b'already delivered', now=2)
     before = copy.deepcopy(record)
-    with pytest.raises(ReviewPlanError) as caught:
+    from security_runtime.task_review_protocol import UnsupportedTaskReviewProtocol
+    with pytest.raises(UnsupportedTaskReviewProtocol):
         build_plan(record, protocol_version=target, now=3)
-    assert caught.value.reason_code == 'REVIEW_PLAN_PROTOCOL_FIXED'
     assert record == before
 
 
@@ -136,7 +136,7 @@ def test_lease_progress_resume_and_reconnect_keep_exact_evidence_and_spent_quota
     assert record['review_plan']['snapshot_id'] == before['review_plan']['snapshot_id']
 
 
-def test_resume_cannot_renew_a_stale_snapshot_and_legacy_deadline_stays_fixed():
+def test_resume_cannot_renew_a_stale_snapshot_or_a_legacy_record():
     record = added(['guard = policy.check(subject)'])
     build_plan(record, protocol_version=3, now=1)
     record['end']['hashes']['main.py'] = 'changed'
@@ -144,9 +144,12 @@ def test_resume_cannot_renew_a_stale_snapshot_and_legacy_deadline_stays_fixed():
         renew_activity(record, now=1000, resume=True)
     assert caught.value.reason_code == 'REVIEW_PLAN_STALE'
     old = added(['guard = policy.check(subject)'])
-    build_plan(old, now=1, deadline=10)
-    assert renew_activity(old, now=1000, resume=True) == dict(protocol_version=2, deadline=10, renewable=False)
-    assert old['review_ledger']['deadline'] == 10
+    old.update(review_protocol=2, review_deadline=10, context_bytes=1234)
+    saved = copy.deepcopy(old)
+    from security_runtime.task_review_protocol import UnsupportedTaskReviewProtocol
+    with pytest.raises(UnsupportedTaskReviewProtocol):
+        renew_activity(old, now=1000, resume=True)
+    assert old == saved
 
 
 def test_sources_are_registered_once_without_delivery_or_rebind_credit():

@@ -126,7 +126,7 @@ def reviewing(service):
     (root / 'routes.py').write_text('def get_order(order_id, user):\n    return load_order(order_id)\n')
     invoke(server, 'finish_security_task', task_ref=task['task_ref'], **common)
     packet = invoke(server, 'prepare_task_security_review', task_ref=task['task_ref'],
-                    protocol_version=1, **common)
+                    protocol_version=3, **common)
     data = dict(arguments(), task_ref=task['task_ref'], review_session=packet['review_session'], **common)
     return server, legacy, root, runtime, data
 

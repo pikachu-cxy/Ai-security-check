@@ -14,6 +14,7 @@ import time
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from security_runtime.hook_state import no_links
+from task_review_v3_acceptance import V3Review, require_v3
 
 
 CHANGES = ('orders/api.py', 'orders/presentation.py', 'tests/test_order_detail.py')
@@ -59,6 +60,7 @@ async def accept(executable, engine_root, output, projects):
                         return data.get('result', data)
                     await client.initialize()
                     info = await call('get_runtime_info')
+                    require_v3(info, {tool.name for tool in (await client.list_tools()).tools})
                     ref = (await call('begin_security_task', task_key=f'conditional-order-{number}', workspace_path=str(root)))['task_ref']
                     for name in CHANGES:
                         source = original/name
@@ -67,13 +69,14 @@ async def accept(executable, engine_root, output, projects):
                     static = await call('finish_security_task', task_ref=ref, workspace_path=str(root))
                     assert static['static']['scope_files'] == sorted(CHANGES)
                     assert {'semgrep','gitleaks'} <= {r['scanner'] for r in static['static']['scanner_runs'] if r['status']=='SUCCESS'}
-                    packet = await call('prepare_task_security_review', task_ref=ref, workspace_path=str(root))
+                    packet = await call('prepare_task_security_review', task_ref=ref, workspace_path=str(root), protocol_version=3)
                     session = packet['review_session']
+                    review = V3Review(call, ref, session, root)
+                    await review.plan()
                     evidence = {}
                     for name, start, end in (('orders/api.py',15,21), ('orders/service.py',11,12),
                                              ('orders/repository.py',29,35)):
-                        evidence[name] = (await call('read_task_review_context', task_ref=ref, review_session=session,
-                            file_path=name, start_line=start, end_line=end, workspace_path=str(root)))['evidence_id']
+                        evidence[name] = (await review.read(name, start, end))[0]
                     # Known manual fixtures; no claim of general program analysis.
                     repo = (root/'orders/repository.py').read_text()
                     protected = 'if row["customer_id"] != customer_id:' in repo
@@ -89,25 +92,34 @@ async def accept(executable, engine_root, output, projects):
                             counterevidence=['列表查询按客户过滤，详情 API 有归属校验'],
                             unknowns=['其他调用方及外部身份认证、部署可达性未验证'],
                             fix_advice='在仓储返回前统一核对订单 customer_id，并验证相关调用及测试。')]
-                    result = await call('submit_task_security_review', task_ref=ref, review_session=session, findings=findings,
-                        coverage='REVIEWED', limitations=['固定人工场景模拟提交；不是独立AI发现准确率或真实Desktop调度验收。'], workspace_path=str(root))
-                    assert len(result['host_review']['findings']) == (0 if protected else 1)
+                    submitted, pages = await review.save_partial(findings,
+                        ['固定人工场景模拟提交；仅请求相关片段，未完成全部必读项，不是独立AI发现或真实Desktop调度验收。'])
+                    result = pages[0]
+                    host = [item['detail'] for page in pages for item in page['findings']
+                            if item['source'] == 'HOST_TASK_REVIEW' and item['details_complete']]
+                    assert result['host_review']['finding_count'] == len(host) == (0 if protected else 1)
                     assert bool(result['risk_choices']) == (not protected)
                     if findings:
-                        assert result['development_summary'].startswith('**有 1 项关联风险需要你决定。**\n\n')
-                        assert '\n\n请选择具体风险后回复：**修复** ／ **暂不处理**。\n\n' in result['development_summary']
-                        for phrase in ('当前新增详情路径受保护','代码依据','未确认','暂不处理','风险记录保留'):
-                            assert phrase in result['development_summary']
-                        assert result['host_review']['findings'][0]['file_path'] == 'orders/repository.py'
-                    assert not result['repair_authorized']
-                    again = await call('get_task_security_review', task_ref=ref, workspace_path=str(root))
+                        finding = host[0]
+                        assert finding['file_path'] == 'orders/repository.py'
+                        assert finding['risk_scope'] == 'RELATED_EXISTING'
+                        for field in ('impact','preconditions','unknowns','current_protections','counterevidence','fix_advice'):
+                            assert finding[field] == findings[0][field]
+                        assert finding['task_evidence'] == evidence['orders/api.py']
+                        assert result['reply_plan']['required_actions'] == [dict(finding_id=finding['id'], actions=['FIX','DEFER'])]
+                        assert result['risk_choices'][0]['finding_id'] == finding['id']
+                        assert result['risk_choices'][0]['deferred_keeps_risk']
+                    else:
+                        assert not result['reply_plan']['required_actions']
+                    assert not result['repair_authorized'] and not result['reply_plan']['grants_authority']
+                    again = (await review.history())[0]
                     assert again['current_version'] and again['risk_choices'] == result['risk_choices']
                     receipts.append(dict(original_project=str(original), build_identity=info['build_identity'],
-                        static=static['static'], result=result, timings=timings,
+                        static=static['static'], result=result, review_receipt=submitted, history_pages=pages, timings=timings,
                         host_review_is_fixture=True, desktop_dispatch_observed=False, original_project_modified=False))
     (output/'receipt.json').write_text(json.dumps(receipts, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     print(json.dumps({'status':'PASS','receipt':str(output/'receipt.json'),
-                      'scenarios':[{'project':r['original_project'],'risks':len(r['result']['host_review']['findings'])} for r in receipts]},ensure_ascii=False))
+                      'scenarios':[{'project':r['original_project'],'risks':r['result']['host_review']['finding_count']} for r in receipts]},ensure_ascii=False))
 
 
 if __name__ == '__main__':

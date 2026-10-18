@@ -5,7 +5,6 @@ No model, source edits, installs, builds or Stop continuation inside Runtime.
 from __future__ import annotations
 
 from dataclasses import asdict
-import difflib
 import hashlib
 import json
 import os
@@ -19,6 +18,7 @@ from .git import GitError, GitService
 from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source, MAX_LINE_CHARS
 from .redactor import SecretRedactor
 from .task_security_state import CONTRACT, TaskSecurityStore
+from .task_review_protocol import PROTOCOL_VERSION, validate_protocol, require_record_protocol, is_v3_record
 from .task_snapshot import (SnapshotPolicy, collect_snapshot,
                             MAX_READ_BYTES, MAX_INLINE_TEXT_BYTES as MAX_PREIMAGE_BYTES,
                             MAX_INVENTORY_PATHS, MAX_INVENTORY_NAME_BYTES,
@@ -29,14 +29,7 @@ from .workspace import WorkspaceResolver
 MAX_FILES = SnapshotPolicy().max_files
 MAX_CHANGED = 20
 MAX_STATIC_CHANGED = 1000
-MAX_RELATED = 10
 
-
-
-MAX_CONTEXT = 64_000
-MAX_DIFF_LINES = 2000
-MAX_CONTEXT_READS = 40
-MAX_CONTEXT_WINDOW_LINES = 80
 REVIEW_TTL = 900
 
 
@@ -97,13 +90,11 @@ def digest_value(value):
     return hash_bytes(json.dumps(value, sort_keys=True, ensure_ascii=True).encode())
 
 
-def method(protocol_version=1):
-    if type(protocol_version) is not int or protocol_version not in {1, 2, 3}:
-        raise ValueError('Unsupported task review protocol')
-    name = 'quick-task-review.md' if protocol_version == 1 else f'quick-task-review-v{protocol_version}.md'
-    path = Path(__file__).parent / 'skills/ai-security-review/references' / name
+def method(protocol_version=PROTOCOL_VERSION):
+    validate_protocol(protocol_version)
+    path = Path(__file__).parent / 'skills/ai-security-review/references/quick-task-review-v3.md'
     content = path.read_text(encoding='utf-8')
-    return dict(version=f'quick-task-review-v{protocol_version}', sha256=hash_bytes(content.encode()), content=content)
+    return dict(version='quick-task-review-v3', sha256=hash_bytes(content.encode()), content=content)
 
 
 def _supported(name):
@@ -329,7 +320,7 @@ class TaskSecurityService:
     def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None):
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
-        from .task_ownership import valid_owner, record_owner, writer_identity, writer_gone
+        from .task_ownership import valid_owner, record_owner, writer_identity
         owner=self._owner() if _owner is None else _owner
         if owner is not None and not valid_owner(owner):
             raise ValueError('Invalid connector owner')
@@ -352,6 +343,7 @@ class TaskSecurityService:
                 intent = native.get()
                 if _native_preparation is not None and intent.get('repair_task_ref'):
                     original = self.load(root, intent['repair_task_ref'])
+                    require_record_protocol(original)
                     if original.get('native_repair') != _native_preparation:
                         raise ValueError('NATIVE_REPAIR_TASK_MISMATCH')
                     return self._view(original)
@@ -363,38 +355,20 @@ class TaskSecurityService:
                     if len(candidates) > 1:
                         raise ValueError('NATIVE_REPAIR_TASK_AMBIGUOUS')
                     if candidates:
+                        require_record_protocol(candidates[0])
                         native.bind(candidates[0]['task_ref'])
                         return self._view(candidates[0])
             elif _native_preparation is not None:
                 raise ValueError('NATIVE_REPAIR_OWNER_REQUIRED')
-            # Expiration alone never establishes a dead owner. Keep all evidence
-            # and risks; only a confirmed ended writer plus an expired lease retires.
-            for old in store.records(active=True):
-                if (old.get('review_protocol') != 3
-                        and old.get('lease_until',float('inf'))<self.now() and writer_gone(old.get('writer'))):
-                    old.update(phase='INCOMPLETE',skip_reason='原任务运行进程已结束，检查未完成；历史风险与检查记录保留。')
-                    old['baseline']['texts']={}
-                    if old.get('end'): old['end']['texts']={}
-                    old.pop('packet',None)
-                    store.save(old)
-                    self.discard_preimages(root, old['task_ref'])
             existing = store.get(task_key=self.key(task_key,owner))
             if existing:
+                require_record_protocol(existing)
                 if _native_preparation is not None:
                     if existing.get('native_repair') != _native_preparation:
                         raise ValueError('NATIVE_REPAIR_TASK_KEY_CONFLICT')
                     native.bind(existing['task_ref'])
                 return self._view(existing)
             active = store.get(active=True,owner=owner)
-            if (active and active.get('review_protocol') != 3 and active['phase'] == 'REVIEWING'
-                    and self.now() > active['review_deadline']):
-                active.update(phase='INCOMPLETE')
-                active['baseline']['texts'] = {}
-                active['end']['texts'] = {}
-                active.pop('packet', None)
-                store.save(active)
-                self.discard_preimages(root, active['task_ref'])
-                active = None
             if active and owner is None:
                 # Avoid silently joining another editing task. The host may
                 # resume the exact ref, or finish it, then begin the next one.
@@ -410,6 +384,7 @@ class TaskSecurityService:
                 raise ValueError('NATIVE_REPAIR_BASELINE_MISMATCH')
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=self.now(),
+                review_protocol=PROTOCOL_VERSION,
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
                 # A short-lived command Hook is not the conversation's owner process.
                 # Its normal exit can never prove that the editing task ended.
@@ -452,12 +427,25 @@ class TaskSecurityService:
                       marker=marker, marker_error=marker_error)
         return digest_value(inputs), marker, marker_error
 
+    def _project_risks(self, root, record, updates=None):
+        from .task_projection import enqueue, drain
+        from .task_risk_ledger import TaskRiskLedger
+        ledger = TaskRiskLedger(self.hooks, root)
+        rows = ledger.read() if updates else {}
+        expected = {key: ledger.row_version(rows[key]) for key in (updates or {})}
+        saved = self.store(root).save(enqueue(record, updates, expected))
+        return drain(self, root, saved)
+
     def finish(self, workspace, ref):
         root = self.root(workspace)
+        require_record_protocol(self.load(root, ref))
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
             record = self.load(root, ref)
+            require_record_protocol(record)
+            from .task_projection import drain
+            record = drain(self, root, record)
             end = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                           priority_paths=record.get('end', {}).get('read_priority', ()), include_text=False)
             hook_revision, marker, marker_error = self._hook_inputs(root, record)
@@ -485,8 +473,7 @@ class TaskSecurityService:
             for key in ('packet', 'review_session', 'review_plan', 'review_completion', 'skip_reason'):
                 record.pop(key, None)
             record.update(end=end, changes=changes, review=None, evidence={}, related_files=[],
-                          context_bytes=(record.get('review_ledger', {}).get('total_bytes', 0)
-                                         if record.get('review_protocol') == 3 else 0),
+                          context_bytes=record.get('review_ledger', {}).get('total_bytes', 0),
                           context_requests={}, context_gaps=[],
                           finished_hook_revision=hook_revision,
                           unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
@@ -580,156 +567,25 @@ class TaskSecurityService:
                 record['phase'] = 'NO_CHANGES'
                 record['baseline']['texts'] = {}
                 record['end']['texts'] = {}
-            record = self.store(root).save(record)
-            from .task_risk_ledger import TaskRiskLedger
-            TaskRiskLedger(self.hooks, root).register(record)
+            record = self._project_risks(root, record)
             view = self._view(record)
             view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'} for r in record['static'].get('scanner_runs', []))
             return view
 
-    def prepare(self, workspace, ref, protocol_version=1):
-        if type(protocol_version) is not int or protocol_version not in {1, 2, 3}:
-            raise ValueError('Unsupported task review protocol')
-        if protocol_version in {2, 3}:
-            from .task_review import TaskReviewCoordinator
-            return TaskReviewCoordinator(self).prepare(workspace, ref, protocol_version=protocol_version)
-        root = self.root(workspace)
-        # Only the never-finished ACTIVE task may perform its first closeout.
-        # Release/no lock here: finish owns the normal lock and attempt guard.
-        initial = self.load(root, ref)
-        if initial.get('review_protocol', 1) != 1:
-            raise ValueError('A prepared task keeps its original review protocol and budgets')
-        if initial['phase'] == 'STATIC_RUNNING':
-            return dict(status='BUSY', task_ref=ref, scanner_run=False, message='任务末检查正在进行，保留原任务；不要重复检查。')
-        if initial['phase'] == 'INCOMPLETE':
-            return self._view(initial)
-        if initial['phase'] == 'ACTIVE':
-            finished = self.finish(workspace, ref)
-            if finished['status'] not in {'READY', 'NO_CHANGES'}:
-                return finished
-        with self.hooks.lock(root) as acquired:
-            if not acquired:
-                return {'status': 'BUSY', 'task_ref': ref}
-            record = self.load(root, ref)
-            if record['phase'] == 'NO_CHANGES':
-                return self._view(record)
-            if record['phase'] not in {'READY', 'REVIEWING', 'COMPLETE'} or not self._fresh(root, record):
-                return {'status': 'STALE', 'task_ref': ref, 'review_required': False, 'message': '代码版本或文件修改检查范围已变化，或基础检查未完成；保留缺口，不循环扫描。'}
-            if record['phase'] == 'COMPLETE':
-                return self._view(record)
-            if record.get('packet') and self.now() <= record.get('review_deadline', 0):
-                return dict(record['packet'], review_session=record['review_session'])
-            if record.get('packet'):
-                return {'status': 'EXPIRED', 'task_ref': ref, 'review_required': False}
-            guide = method()
-            diffs, remaining = [], MAX_DIFF_LINES
-            for change in record['changes'][:MAX_CHANGED]:
-                name = change['path']
-                if _environment(name):
-                    continue
-                before_truncation = record['baseline'].get('text_truncations', {}).get(name, {})
-                after_truncation = record['end'].get('text_truncations', {}).get(name, {})
-                if before_truncation or after_truncation:
-                    record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
-                        before_line_count=before_truncation.get('line_count', 0),
-                        after_line_count=after_truncation.get('line_count', 0)))
-                from .task_preimages import TaskPreimageUnavailable as PreimageError
-                try:
-                    old = self.before_lines(root, record, name) if change['change'] != 'ADDED' else []
-                    new = self.end_lines(root, record, name) if change['change'] != 'DELETED' else []
-                except (OSError, EvidenceUnavailable, PreimageError, UnicodeError):
-                    old, new = None, None
-                if change['change'] == 'ADDED':
-                    old = []
-                if change['change'] == 'DELETED':
-                    new = []
-                if old is None or new is None:
-                    diffs.append({'path': name, 'change': change['change'], 'availability': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
-                    record['limitations'].append({'path': name, 'reason': 'PREIMAGE_OR_TEXT_BUDGET_UNAVAILABLE'})
-                    continue
-                if record['end'].get('text_truncations', {}).get(name) and not any(
-                        v.get('path') == name and v.get('reason') == 'SOURCE_LINE_CHAR_BUDGET' for v in record['limitations']):
-                    record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET'))
-                # Long tests are retrieved as issued windows, rather than
-                # duplicating their entire added text in both diff and reads.
-                if ('tests' in Path(name).parts or Path(name).name.startswith('test_')) and len(old)+len(new) > 80:
-                    spans = _merge_spans([[max(1,j1-2), min(len(new),max(j1+1,j2)+3)]
-                        for tag,i1,i2,j1,j2 in difflib.SequenceMatcher(None,old,new).get_opcodes()
-                        if tag != 'equal' and new])
-                    diffs.append(dict(path=name, change=change['change'], availability='ON_DEMAND',
-                        before_lines=len(old), after_lines=len(new),
-                        changed_current_ranges=spans, trust='NAVIGATION_ONLY_NOT_REVIEW_PROOF',
-                        context_read=dict(file_path=name, start_line=1, end_line=max(1,len(new))),
-                        before_read=(dict(file_path=name, start_line=1, end_line=len(old), source_version='BEFORE_TASK') if old else None)))
-                    continue
-                lines = list(difflib.unified_diff(old, new, fromfile='before/'+name, tofile='after/'+name, lineterm=''))
-                selected = lines[:remaining]
-                item = dict(path=name, change=change['change'], diff='\n'.join(selected), truncated=len(selected)<len(lines))
-                if len(json.dumps(diffs+[item], ensure_ascii=False).encode()) > 24_000:
-                    record['limitations'].append({'reason': 'DIFF_BYTE_BUDGET'})
-                    break
-                diffs.append(item)
-                remaining -= len(selected)
-            if any(d.get('truncated') for d in diffs):
-                record['limitations'].append({'reason': 'DIFF_LINE_BUDGET'})
-            static = record['static']
-            from .task_review import submission_contract
-            findings = [dict(id=f['id'], title=f['plain_title'], category=f['category'], severity=f['severity'],
-                            file_path=f['file_path'], line_start=f['line_start']) for f in static['findings'][:30]]
-            packet = dict(status='REVIEW_REQUIRED', task_ref=ref, review_required=True,
-                static=dict(scan_id=static.get('scan_id'), status=static['status'], coverage=static['coverage'],
-                    duration_ms=static.get('duration_ms'), scope_files=static.get('scope_files', [])[:MAX_CHANGED],
-                    scope_file_count=len(static.get('scope_files', [])), scope_truncated=len(static.get('scope_files', []))>MAX_CHANGED,
-                    finding_count=len(static['findings']), findings=findings, capability_results=static.get('capability_results', {})),
-                changes=record['changes'], diffs=diffs, related_candidates=[],
-                quick_skill=guide, limitations=record['limitations'],
-                trust='UNTRUSTED_CODE_AND_SCANNER_DATA', redaction='LITERALS_AND_CREDENTIALS_MASKED; RETAIN_SEMANTIC_UNKNOWNS',
-                submission_contract=submission_contract(),
-                budget=dict(changed_files=MAX_CHANGED, static_changed_files=MAX_STATIC_CHANGED,
-                            related_files=MAX_RELATED, context_reads=MAX_CONTEXT_READS,
-                            context_window_lines=MAX_CONTEXT_WINDOW_LINES,
-                            total_context_bytes=MAX_CONTEXT, expires_in_seconds=REVIEW_TTL))
-            changed_dirs = {str(Path(c['path']).parent) for c in record['changes']}
-            candidates = [p for p in record['end']['hashes'] if p not in {c['path'] for c in record['changes']} and not _environment(p)]
-            candidates.sort(key=lambda p: (not any(v in p.lower() for v in ('auth','route','service','repository','permission','middleware')), str(Path(p).parent) not in changed_dirs, p))
-            packet['related_candidates'] = candidates[:100]
-            packet['risk_resolution_contract'] = dict(tool='get_task_risk_ledger',
-                submission='risk_resolutions: original_task_ref,finding_id,evidence_refs,outcome,rationale,tests',
-                outcomes=['CODE_REVIEWED_RESOLVED','STILL_PRESENT','INCONCLUSIVE'],
-                evidence='Re-read every required_source_path; current change evidence required. Host outcomes are not scanner proof.',
-                test_report='Host reported only; no Runtime execution attestation.',
-                context='Long test diffs are ON_DEMAND; read current windows and signed BEFORE_TASK only when needed. Budgets unchanged.')
-            cost = len(json.dumps(packet, ensure_ascii=False).encode())
-            if cost > 40_000:
-                packet['diffs'] = []
-                packet['related_candidates'] = candidates[:30]
-                packet['changes'] = record['changes'][:MAX_CHANGED]
-                record['limitations'].append({'reason': 'INITIAL_PACKET_BUDGET', 'changed_file_count': len(record['changes'])})
-                cost = len(json.dumps(packet, ensure_ascii=False).encode())
-            if cost > MAX_CONTEXT:
-                raise ValueError('Review packet exceeds context budget')
-            if len(record['changes']) > MAX_CHANGED:
-                record['limitations'].append(dict(reason='TASK_CONTEXT_SCOPE_EXCLUDED', count=len(record['changes'])-MAX_CHANGED))
-            cost += record.get('lifetime_context_bytes', 0)
-            if cost > MAX_CONTEXT:
-                raise ValueError('Review task lifetime context budget exceeded')
-            record.update(phase='REVIEWING', packet=packet, review_session='tr1-'+uuid.uuid4().hex,
-                review_deadline=record.get('review_deadline', self.now()+REVIEW_TTL), context_bytes=cost, review_protocol=1)
-            record = self.store(root).save(record)
-            return dict(packet, review_session=record['review_session'])
+    def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION):
+        validate_protocol(protocol_version)
+        from .task_review import TaskReviewCoordinator
+        return TaskReviewCoordinator(self).prepare(workspace, ref, protocol_version=protocol_version)
 
     def _session(self, root, ref, session, *, full_fresh=True):
         record = self.load(root, ref)
+        require_record_protocol(record)
         if record['phase'] != 'REVIEWING' or session != record.get('review_session'):
-            if record.get('review_protocol') == 3:
-                from .task_review_plan import ReviewPlanError
-                raise ReviewPlanError('REVIEW_PLAN_SESSION_MISMATCH',
-                    'Review session unavailable; keep the original task and current revision session')
-            raise ValueError('Review session unavailable; keep the original task and session')
+            from .task_review_plan import ReviewPlanError
+            raise ReviewPlanError('REVIEW_PLAN_SESSION_MISMATCH',
+                'Review session unavailable; keep the original task and current revision session')
         if self.now() > record['review_deadline']:
-            if record.get('review_protocol') == 3:
-                raise ValueError('Review activity lease expired; prepare protocol_version=3 to resume this exact snapshot and ledger')
-            raise ValueError('Review session unavailable or expired; no automatic restart')
+            raise ValueError('Review activity lease expired; prepare protocol_version=3 to resume this exact snapshot and ledger')
         if full_fresh and not self._fresh(root, record):
             raise ValueError('Task source or Hook scope changed; submitted evidence is stale')
         if not full_fresh and self._hook_inputs(root, record)[0] != record.get('finished_hook_revision'):
@@ -737,115 +593,13 @@ class TaskSecurityService:
         return record
 
     def read(self, workspace, ref, session, path, start_line=1, end_line=80, source_version='CURRENT'):
-        root = self.root(workspace)
-        if self.load(root, ref).get('review_protocol') in {2, 3}:
-            from .task_review import TaskReviewCoordinator
-            return TaskReviewCoordinator(self).read(workspace, ref, session, path, start_line, end_line, source_version)
-        with self.hooks.lock(root) as acquired:
-            if not acquired:
-                return {'status': 'BUSY'}
-            record = self._session(root, ref, session)
-            if source_version not in {'CURRENT', 'BEFORE_TASK'}:
-                raise ValueError('Invalid source version')
-            try:
-                name = _relative(path)
-            except (ValueError, EvidenceUnavailable):
-                raise TaskContextError('TASK_CONTEXT_PATH_REJECTED', 'Source path rejected',
-                    guidance='Use a relative source path from this task packet; do not escape the workspace.') from None
-            deleted = any(c['path'] == name and c['change'] == 'DELETED' for c in record['changes'][:MAX_CHANGED])
-            if not _supported(name):
-                raise TaskContextError('TASK_CONTEXT_FILE_UNSUPPORTED', 'File type is outside task source context',
-                    guidance='Use task changes or related_candidates. This source contract excludes documentation; if it is needed for the conclusion, submit PARTIAL and identify the gap.')
-            if (name not in record['end']['hashes'] and not deleted) or _environment(name):
-                raise TaskContextError('TASK_CONTEXT_PATH_EXCLUDED', 'Path is outside the task inventory or excluded from model context',
-                    guidance='Use an allowed task source path. Environment content stays excluded; do not widen the task scope.')
-            if type(start_line) is not int or type(end_line) is not int or not 1 <= start_line <= end_line <= 2_147_483_647:
-                raise TaskContextError('TASK_CONTEXT_RANGE_INVALID', 'Invalid source range',
-                    guidance='Use integer source lines with 1 <= start_line <= end_line. Keep this task and review session; no new scan is required.',
-                    details={'max_window_lines': MAX_CONTEXT_WINDOW_LINES})
-            changed = {c['path'] for c in record['changes'][:MAX_CHANGED]}
-            if name not in changed and name not in record['related_files'] and len(record['related_files']) >= MAX_RELATED:
-                self._context_gap(root, record, 'TASK_CONTEXT_RELATED_FILE_BUDGET', name)
-                raise TaskContextError('TASK_CONTEXT_RELATED_FILE_BUDGET', 'Related source file budget exceeded', recoverable=False,
-                    guidance='Keep existing evidence and submit PARTIAL with the unread path; do not create a new task or session to reset budgets.')
-            if deleted or source_version == 'BEFORE_TASK':
-                from .task_preimages import TaskPreimageUnavailable as PreimageError
-                try:
-                    lines = self.before_lines(root, record, name)
-                except (OSError, PreimageError):
-                    lines = None
-                if lines is None:
-                    self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
-                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Task-start source preimage unavailable', recoverable=False,
-                        guidance='Submit PARTIAL with the unavailable preimage; do not substitute current code or a later baseline.')
-                file_hash = record['baseline']['hashes'][name]
-                location_version = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
-            else:
-                try:
-                    raw, text = WorkspaceReader(root).read(name)
-                except (OSError, EvidenceUnavailable, UnicodeError):
-                    self._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name)
-                    raise TaskContextError('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Task source context unavailable', recoverable=False,
-                        guidance='Submit PARTIAL with the missing source; link and source-size guards remain in force.') from None
-                file_hash = hash_bytes(raw)
-                if file_hash != record['end']['hashes'][name]:
-                    raise ValueError('Source changed during context read')
-                truncated_lines = []
-                lines = safe_source(text, source_path=name, truncation_lines=truncated_lines)
-                if truncated_lines:
-                    record['end'].setdefault('text_truncations', {})[name] = dict(line_count=len(truncated_lines), lines=truncated_lines)
-                location_version = 'CURRENT_TASK_END'
-            if start_line > len(lines):
-                raise TaskContextError('TASK_CONTEXT_RANGE_UNAVAILABLE', 'Source range unavailable',
-                    guidance='Use a range within total_lines, keeping this task and review session; no new scan is required.',
-                    details={'total_lines': len(lines), 'max_window_lines': MAX_CONTEXT_WINDOW_LINES})
-            requested_high = min(end_line, len(lines))
-            high = min(requested_high, start_line+MAX_CONTEXT_WINDOW_LINES-1)
-            eid = 'te1-'+digest_value([ref, session, name, file_hash, start_line, high, location_version])[:32]
-            packet = dict(evidence_id=eid, path=name, file_sha256=file_hash, location_version=location_version, start_line=start_line, end_line=high,
-                          total_lines=len(lines), requested_range=dict(start_line=start_line, end_line=end_line),
-                          returned_range=dict(start_line=start_line, end_line=high),
-                          max_window_lines=MAX_CONTEXT_WINDOW_LINES, has_more=high<requested_high,
-                          next_read=(dict(task_ref=ref, review_session=session, file_path=name,
-                                          start_line=high+1, end_line=requested_high, source_version=source_version, workspace_path=str(root))
-                                     if high<requested_high else None),
-                          numbered_lines=[f'{i}: {lines[i-1]}' for i in range(start_line, high+1)], trust='UNTRUSTED_CODE')
-            truncation_snapshot = record['baseline'] if deleted or source_version == 'BEFORE_TASK' else record['end']
-            truncated = truncation_snapshot.get('text_truncations', {}).get(name)
-            packet['line_truncation'] = dict(max_line_chars=MAX_LINE_CHARS,
-                file_line_truncation_count=truncated['line_count'] if truncated else 0,
-                known_truncated_lines=[i for i in (truncated or {}).get('lines', []) if start_line<=i<=high],
-                complete_line_text=not truncated)
-            if truncated and not any(v.get('path') == name and v.get('reason') == 'SOURCE_LINE_CHAR_BUDGET'
-                                     for v in record['limitations']):
-                record['limitations'].append(dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
-                                                  line_count=truncated['line_count']))
-            request_key = digest_value([name, file_hash, location_version])
-            requests = record.setdefault('context_requests', {})
-            request = requests.setdefault(request_key, dict(path=name, file_sha256=file_hash,
-                                                            location_version=location_version, spans=[]))
-            request['spans'] = _merge_spans([*request['spans'], [start_line, requested_high]])
-            if eid not in record['evidence']:
-                if len(record['evidence']) + record.get('lifetime_context_reads', 0) >= MAX_CONTEXT_READS:
-                    self._context_gap(root, record, 'TASK_CONTEXT_READ_BUDGET', name)
-                    raise TaskContextError('TASK_CONTEXT_READ_BUDGET', 'Task context read budget exceeded', recoverable=False,
-                        guidance='Submit PARTIAL with unread ranges. Pagination does not reset the read, byte or session budgets.')
-                cost = len(json.dumps(packet, ensure_ascii=False).encode())
-                if record['context_bytes'] + cost > MAX_CONTEXT:
-                    self._context_gap(root, record, 'TASK_CONTEXT_BYTE_BUDGET', name)
-                    raise TaskContextError('TASK_CONTEXT_BYTE_BUDGET', 'Task model context byte budget exceeded', recoverable=False,
-                        guidance='Submit PARTIAL with unread ranges; do not restart a task, rescan or widen the context budget.')
-                record['evidence'][eid] = {k: packet[k] for k in ('path','file_sha256','location_version','start_line','end_line')}
-                record['context_bytes'] += cost
-                if name not in changed and name not in record['related_files']:
-                    record['related_files'].append(name)
-            self.store(root).save(record)
-            return packet
+        from .task_review import TaskReviewCoordinator
+        return TaskReviewCoordinator(self).read(workspace, ref, session, path, start_line, end_line, source_version)
 
     def _context_gap(self, root, record, reason_code, path):
         gap = dict(reason=reason_code, path=path)
         gaps = record.setdefault('context_gaps', [])
-        if gap not in gaps and len(gaps) < MAX_CONTEXT_READS:
+        if gap not in gaps and len(gaps) < record['review_ledger']['limits']['reads']:
             gaps.append(gap)
         self.store(root).save(record)
 
@@ -863,10 +617,14 @@ class TaskSecurityService:
 
     def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None):
         root = self.root(workspace)
+        require_record_protocol(self.load(root, ref))
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY'}
             old = self.load(root, ref)
+            require_record_protocol(old)
+            from .task_projection import drain
+            old = drain(self, root, old)
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
                 return self.get(workspace, ref)  # idempotent retry; no scan/model.
             record = self._session(root, ref, session)
@@ -880,8 +638,7 @@ class TaskSecurityService:
             fields = {'title','category','severity','primary_evidence','evidence_refs','impact','preconditions','unknowns','counterevidence','fix_advice'}
             optional_fields = {'risk_scope', 'task_evidence', 'current_protections'}
             accepted = []
-            scope = (record['changes'] if record.get('review_protocol') == 3 else
-                     record['changes'][:(100 if record.get('review_protocol') == 2 else MAX_CHANGED)])
+            scope = record['changes']
             changed = {v['path'] for v in scope}
             for index, candidate in enumerate(findings):
                 if not isinstance(candidate, dict) or not fields <= set(candidate) or set(candidate) - fields - optional_fields:
@@ -938,11 +695,6 @@ class TaskSecurityService:
                     evidence_refs=list(dict.fromkeys(refs)), source='HOST_TASK_REVIEW', validation='STRUCTURE_AND_VERSION_VALIDATED',
                     verdict='CANDIDATE_REQUIRES_REVIEW', scanner_sources=[])
                 accepted.append(item)
-            # Reading related evidence is mandatory for a fully reported multi-
-            # file review; runtime cannot prove the host actually reasoned.
-            if record.get('review_protocol', 1) == 1 and len(record['changes']) > 1 and not record['related_files']:
-                coverage = 'PARTIAL'
-                clean_limitations.append('未读取未改动的关联文件；跨文件控制和调用上下文未充分核查。')
             unread = _unread_context(record)
             if unread:
                 coverage = 'PARTIAL'
@@ -957,18 +709,16 @@ class TaskSecurityService:
             if record['limitations']:
                 coverage = 'PARTIAL'
                 clean_limitations.extend(_coverage_gaps(record['limitations']))
-            if record.get('review_protocol') in {2, 3}:
-                from .task_review_plan import finalize_plan
-                completion = finalize_plan(record, now=self.now())
-                record['review_completion'] = completion
-                if completion['coverage'] != 'REVIEWED':
-                    coverage = 'PARTIAL'
-                    gaps = completion['gaps']
-                    if record.get('review_protocol') == 3:
-                        from .task_review_results import semantic_gap_notes
-                        clean_limitations = list(dict.fromkeys(semantic_gap_notes(gaps)+clean_limitations))
-                    clean_limitations.append(f"逐文件复核完成 {completion['reviewed_unit_count']}/{completion['unit_count']} 项；未完成："+
-                        '、'.join(dict.fromkeys(v.get('path', '未知路径') for v in gaps[:10]))+'。')
+            from .task_review_plan import finalize_plan
+            completion = finalize_plan(record, now=self.now())
+            record['review_completion'] = completion
+            if completion['coverage'] != 'REVIEWED':
+                coverage = 'PARTIAL'
+                gaps = completion['gaps']
+                from .task_review_results import semantic_gap_notes
+                clean_limitations = list(dict.fromkeys(semantic_gap_notes(gaps)+clean_limitations))
+                clean_limitations.append(f"逐文件复核完成 {completion['reviewed_unit_count']}/{completion['unit_count']} 项；未完成："+
+                    '、'.join(dict.fromkeys(v.get('path', '未知路径') for v in gaps[:10]))+'。')
             from .task_risk_ledger import TaskRiskLedger
             ledger = TaskRiskLedger(self.hooks, root)
             for item in risk_resolutions or []:
@@ -988,52 +738,40 @@ class TaskSecurityService:
             # preimages until their original TTL, never recapture after editing.
             record['end']['texts'] = {}
             record.pop('packet', None)
-            result_packet = None
-            if record.get('review_protocol') in {2, 3}:
-                from .task_review import TaskReviewCoordinator
-                result_packet = TaskReviewCoordinator(self).completion_packet(record)
-            record = self.store(root).save(record)
-            ledger.register(record)
-            ledger.record_host(updates)
-            return result_packet if result_packet is not None else self._view(record)
+            from .task_review import TaskReviewCoordinator
+            result_packet = TaskReviewCoordinator(self).completion_packet(record, reserve_projection_sync=True)
+            record = self._project_risks(root, record, updates)
+            from .task_projection import status as projection_status
+            result_packet['risk_ledger_sync'] = projection_status(record)
+            return result_packet
 
     def get(self, workspace, ref, finding_offset=0, finding_limit=20):
         if type(finding_offset) is not int or type(finding_limit) is not int or finding_offset < 0 or not 1 <= finding_limit <= 30:
             raise ValueError('Invalid result page')
         root = self.root(workspace)
         record = self.load(root, ref,read_only=True)
-        if record.get('review_protocol') in {2, 3}:
-            from .task_review_results import bounded_history_result, history_freshness, seal_history_result
-            current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
-                              priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False)
-            revision = self._hook_inputs(root, record)[0] if record.get('finished_hook_revision') else None
-            freshness = history_freshness(record, current, hook_revision=revision)
-            from .task_risk_feedback import feedback_for_record
-            feedback = feedback_for_record(self.hooks, root, record)
-            result = bounded_history_result(record, finding_offset, finding_limit,
-                                            now=self.now(), freshness=freshness, feedback=feedback)
-            result['risk_ledger_next_action'] = dict(tool='get_task_risk_ledger', task_ref=ref)
-            return seal_history_result(result)
-        current = self._fresh(root, record) if record.get('end') else None
-        result = self._view(record)
-        if record.get('static'):
-            result['static']['findings'] = [finding_view(f) for f in record['static']['findings'][finding_offset:finding_offset+finding_limit]]
-            result['static']['finding_offset'] = finding_offset
-            result['static']['has_more'] = finding_offset+finding_limit < len(record['static']['findings'])
-        result['current_version'] = current
-        result['risk_ledger'] = self.risk_ledger(workspace, ref)
-        if current is False:
-            result.update(status='STALE', review_required=False, development_summary='任务核查对应的代码版本或检查范围已变化，旧记录不能用于当前任务范围。')
-            result['risk_choices'] = []
-            from .reply_plan import CheckFact, ReplyFacts, plan_reply
-            result['reply_plan'] = plan_reply(ReplyFacts('HISTORY', CheckFact('STALE'), current=False)).to_dict()
-        return result
+        from .task_review_results import bounded_history_result, history_freshness, seal_history_result
+        current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
+                          priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False)
+        revision = self._hook_inputs(root, record)[0] if record.get('finished_hook_revision') else None
+        freshness = history_freshness(record, current, hook_revision=revision)
+        from .task_risk_feedback import feedback_for_record
+        feedback = feedback_for_record(self.hooks, root, record)
+        result = bounded_history_result(record, finding_offset, finding_limit,
+                                        now=self.now(), freshness=freshness, feedback=feedback)
+        result['risk_ledger_next_action'] = dict(tool='get_task_risk_ledger', task_ref=ref)
+        from .task_projection import status as projection_status
+        result['risk_ledger_sync'] = projection_status(record)
+        return seal_history_result(result)
 
     def risk_ledger(self, workspace, ref, offset=0, limit=30):
         root = self.root(workspace)
         original = self.load(root, ref,read_only=True)  # Historical reads never transfer ownership.
         from .task_risk_ledger import TaskRiskLedger
-        return TaskRiskLedger(self.hooks, root).view(ref, offset, limit, original)
+        result = TaskRiskLedger(self.hooks, root).view(ref, offset, limit, original)
+        from .task_projection import status as projection_status
+        result['risk_ledger_sync'] = projection_status(original)
+        return result
 
     def skip(self, workspace, ref, reason):
         """Finish with an explicit coverage gap, never a fabricated host pass.
@@ -1043,6 +781,7 @@ class TaskSecurityService:
         """
         root = self.root(workspace)
         record = self.load(root, ref)
+        require_record_protocol(record)
         if record['phase'] in {'COMPLETE','NO_CHANGES','INCOMPLETE'}:
             return self._view(record)
         reason = _clean(reason, 500)
@@ -1075,11 +814,14 @@ class TaskSecurityService:
         result = dict(status=phase, task_ref=record['task_ref'], scanner_run=False,
             task_scope=('HOST_SESSION' if (record.get('task_owner') or {}).get('host') in {'cursor','codex'} else
                         'MCP_CONNECTION' if record.get('task_owner') else 'LEGACY_UNOWNED'),
-            review_required=phase in {'READY','REVIEWING'}, changes=record.get('changes', [])[:MAX_CHANGED],
+            review_protocol=record.get('review_protocol'),
+            review_required=is_v3_record(record) and phase in {'READY','REVIEWING'}, changes=record.get('changes', [])[:MAX_CHANGED],
             changed_file_count=len(record.get('changes', [])), change_scope_truncated=len(record.get('changes', []))>MAX_CHANGED,
             unverified_file_count=len(record.get('unverified_paths', [])),
             baseline_file_count=len(record['baseline']['hashes']), limitations=record.get('limitations') or record['baseline']['limitations'],
             static=None, host_review=record.get('review'), repair_authorized=False)
+        from .task_projection import status as projection_status
+        result['risk_ledger_sync'] = projection_status(record)
         result['snapshot_capture'] = dict(baseline=record['baseline'].get('capture_stats'),
             current=(record.get('end') or {}).get('capture_stats'))
         if record.get('native_repair'):
@@ -1087,7 +829,7 @@ class TaskSecurityService:
             result['native_repair'] = {key: copy.deepcopy(record['native_repair'][key]) for key in
                 ('source', 'assessment_ref', 'proposal_revision', 'source_binding')}
             result['native_repair']['repair_authorized'] = False
-        if record.get('review_protocol') == 3:
+        if is_v3_record(record):
             result['review_revision'] = record.get('review_revision', 1)
             result['previous_review_count'] = len(record.get('review_history', []))
         host_feedback, static_feedback = {}, {}
@@ -1130,11 +872,13 @@ class TaskSecurityService:
             findings_source='FINAL_CURRENT_STATIC_CHECK; HISTORICAL_HOOK_ALERTS_NOT_REPLAYED',
             recording_failure=record.get('hook_recording_failure'))
         unread = _unread_context(record)
+        budget = record.get('review_ledger') or {}
+        limits = budget.get('limits') or {}
         result['context_read_coverage'] = dict(unread_range_count=len(unread), unread_ranges=unread[:100],
-            gaps=record.get('context_gaps', []), used_reads=len(record.get('evidence', {})),
-            max_reads=MAX_CONTEXT_READS, used_bytes=record.get('context_bytes', 0), max_bytes=MAX_CONTEXT,
-            max_window_lines=MAX_CONTEXT_WINDOW_LINES)
-        if record.get('review_protocol') in {2, 3} and record.get('review_plan'):
+            gaps=record.get('context_gaps', []), used_reads=budget.get('reads'),
+            max_reads=limits.get('reads'), used_bytes=budget.get('total_bytes'),
+            max_bytes=limits.get('total_bytes'))
+        if is_v3_record(record) and record.get('review_plan'):
             from .task_review_plan import finalize_plan
             progress = record.get('review_completion') or finalize_plan(record, now=self.now())
             result['review_progress'] = {k:progress[k] for k in ('unit_count','reviewed_unit_count','coverage','status')}

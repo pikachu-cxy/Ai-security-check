@@ -8,8 +8,8 @@ import pytest
 
 from security_runtime.hook_state import HookStateStore
 from security_runtime.models import ScanResult, ScannerRun, TargetProfile
-from security_runtime.task_security import (TaskSecurityService, TaskContextError, MAX_CHANGED,
-                                            MAX_CONTEXT, MAX_CONTEXT_WINDOW_LINES)
+from security_runtime.task_security import TaskSecurityService, TaskContextError, MAX_CHANGED
+from task_review_helpers import evidence_id, read_plan, read_window, review_all
 from security_runtime.mcp_server import create_server
 from security_runtime.integration_state import WorkspaceBinding
 from security_runtime.codex_mcp_hook import codex_hook_output, handle_codex_hook
@@ -100,36 +100,42 @@ def test_static_zero_findings_still_requires_context_review(service):
     s, root, runtime = service
     ref, session, packet = prepared(service)
     assert packet['review_required'] and packet['static']['finding_count'] == 0
-    assert packet['quick_skill']['version'] == 'quick-task-review-v1'
+    assert packet['quick_skill']['version'] == 'quick-task-review-v3'
     sink = s.read(root, ref, session, 'routes.py', 2, 2)
     control = s.read(root, ref, session, 'auth.py', 1, 2)
-    result = s.submit(root, ref, session, [candidate(sink['evidence_id'], control['evidence_id'])], 'REVIEWED', [])
-    finding = result['host_review']['findings'][0]
+    review_all(s, root, ref, packet)
+    s.submit(root, ref, session, [candidate(evidence_id(sink), evidence_id(control))], 'REVIEWED', [])
+    result = s.get(root, ref)
+    finding = result['findings'][0]['detail']
     assert finding['source'] == 'HOST_TASK_REVIEW' and finding['scanner_sources'] == []
     assert finding['validation'] == 'STRUCTURE_AND_VERSION_VALIDATED'
-    assert '未确认' in result['development_summary'] and not result['repair_authorized']
+    assert finding['unknowns'] == ['外层路由及部署权限未确认']
+    assert result['history_read_only'] and not result['repair_authorized']
     assert len(runtime.calls) == 1
     assert s.submit(root, ref, session, [], 'REVIEWED', []) == s.get(root, ref)  # idempotent
 
 
 def test_counterevidence_empty_review_remains_scoped_and_host_reported(service):
     s, root, _ = service
-    ref, session, _ = prepared(service)
+    ref, session, packet = prepared(service)
     s.read(root, ref, session, 'auth.py', 1, 2)
-    result = s.submit(root, ref, session, [], 'REVIEWED', ['部署可达性及隐藏字面量未确认'])
-    assert not result['host_review']['findings']
-    assert result['host_review']['model_invocation'] == 'HOST_ONLY_NOT_OBSERVED_BY_RUNTIME'
+    review_all(s, root, ref, packet)
+    s.submit(root, ref, session, [], 'REVIEWED', ['部署可达性及隐藏字面量未确认'])
+    result = s.get(root, ref)
+    assert result['host_review']['finding_count'] == 0
+    assert s.load(root, ref)['review']['model_invocation'] == 'HOST_ONLY_NOT_OBSERVED_BY_RUNTIME'
     assert '未验证运行行为' not in result['development_summary']
-    assert '部署可达性及隐藏字面量未确认' in result['development_summary']
+    assert '部署可达性及隐藏字面量未确认' in s.load(root, ref)['review']['limitations']
     assert s.get(root, ref)['current_version'] is True
 
 
-def test_missing_related_context_forces_partial(service):
+def test_unread_required_plan_context_forces_partial(service):
     s, root, _ = service
     ref, session, _ = prepared(service)
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert '关联' in result['development_summary']
+    assert result['context_read_coverage']['plan_gap_count'] > 0
 
 
 def test_source_changed_or_unissued_evidence_cannot_be_submitted(service):
@@ -179,14 +185,19 @@ def test_changed_and_context_budgets_are_enforced(service):
         (root/f'file{i:02}.ts').write_text('export const value = 5;\n')
     result = s.finish(root, ref)
     assert result['changed_file_count'] == MAX_CHANGED+1 and len(runtime.calls[0]) == MAX_CHANGED+1
-    assert not result['limitations']  # Context quotas are selected by prepare's protocol.
     packet = s.prepare(root, ref)
-    assert any(v['reason']=='TASK_CONTEXT_SCOPE_EXCLUDED' for v in packet['limitations'])
+    units, _ = read_plan(s, root, ref, packet)
+    assert len(units) == MAX_CHANGED+1
+    assert not any(v['reason']=='TASK_CONTEXT_SCOPE_EXCLUDED' for v in packet['limitations'])
     record = s.load(root, ref)
-    record['context_bytes'] = MAX_CONTEXT
+    budget = record['review_ledger']
+    budget['source_bytes'] = budget['category_limits']['source']
+    budget['total_bytes'] = sum(budget[name+'_bytes'] for name in ('source','navigation','control'))
     s.store(root).save(record)
-    with pytest.raises(ValueError, match='byte budget'):
+    with pytest.raises(TaskContextError) as rejected:
         s.read(root, ref, packet['review_session'], 'file00.ts')
+    assert rejected.value.reason_code == 'TASK_CONTEXT_SOURCE_BUDGET'
+    assert len(runtime.calls) == 1
 
 
 def test_tampered_task_state_and_cross_workspace_ref_fail(service, tmp_path):
@@ -210,8 +221,8 @@ def test_deleted_control_has_bound_preimage_and_skip_keeps_next_task_usable(serv
     s.finish(root, ref)
     packet = s.prepare(root, ref)
     evidence = s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-    assert evidence['location_version'] == 'BEFORE_DELETION'
-    assert 'owner_id' in '\n'.join(evidence['numbered_lines'])
+    assert s.load(root, ref)['evidence'][evidence_id(evidence)]['location_version'] == 'BEFORE_DELETION'
+    assert 'owner_id' in '\n'.join(evidence['lines'])
     skipped = s.skip(root, ref, '缺少外层路由上下文')
     assert skipped['status'] == 'INCOMPLETE' and '未完成' in skipped['development_summary']
     assert len(runtime.calls) == 1
@@ -285,64 +296,65 @@ def large_review(sample, line_count):
 @pytest.mark.parametrize('line_count', [106, 300, 500])
 def test_large_requested_context_is_paged_in_same_session_without_rescans(service, line_count):
     s, root, runtime = service
-    ref, session, review = large_review(service, line_count)
-    assert review['budget']['context_window_lines'] == MAX_CONTEXT_WINDOW_LINES
-    assert runtime.calls == [('large.py',)]  # Static scope is the full file, not its first 80 lines.
-    page = s.read(root, ref, session, 'large.py', 1, line_count)
-    assert page['total_lines'] == line_count
-    assert page['requested_range'] == {'start_line': 1, 'end_line': line_count}
-    assert page['returned_range'] == {'start_line': 1, 'end_line': 80}
-    assert page['has_more'] and page['next_read']['review_session'] == session
-    seen, issued = [], []
-    version = (page['file_sha256'], page['location_version'])
-    while True:
-        seen.extend(range(page['start_line'], page['end_line']+1))
-        issued.append(page['evidence_id'])
-        assert len(page['numbered_lines']) <= 80
-        assert (page['file_sha256'], page['location_version']) == version
-        if not page['has_more']:
-            assert page['next_read'] is None
-            break
-        arguments = page['next_read']
-        assert arguments['task_ref'] == ref and arguments['file_path'] == 'large.py'
-        assert arguments['workspace_path'] == str(root.resolve())
-        page = s.read(arguments['workspace_path'], arguments['task_ref'], arguments['review_session'],
-                      arguments['file_path'], arguments['start_line'], arguments['end_line'])
+    ref, session, packet = large_review(service, line_count)
+    assert runtime.calls == [('large.py',)]
+    pending, seen, issued = [[1, line_count]], [], []
+    while pending:
+        low, high = pending.pop(0)
+        page = s.read(root, ref, session, 'large.py', low, high)
+        item = s.load(root, ref)['evidence'][evidence_id(page)]
+        assert item['path'] == 'large.py' and item['location_version'] == 'CURRENT_TASK_END'
+        assert 1 <= len(page['lines']) <= 600
+        assert len(json.dumps(page, ensure_ascii=False).encode()) <= s.load(root, ref)['review_ledger']['limits']['response_bytes']
+        seen.extend(range(page['start_line'], page['start_line']+len(page['lines'])))
+        issued.append(evidence_id(page))
+        if page.get('next_range'):
+            pending.append(page['next_range'])
+        pending.extend(page.get('unread_ranges', []))
     assert seen == list(range(1, line_count+1)) and len(set(issued)) == len(issued)
-    assert s.get(root, ref)['context_read_coverage']['unread_ranges'] == []
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
-    assert result['host_review']['coverage'] == 'REVIEWED'
+    assert s.get(root, ref)['context_read_coverage']['unread_ranges']['total_count'] == 0
+    review_all(s, root, ref, packet)
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert s.get(root, ref)['host_review']['coverage'] == 'REVIEWED'
     assert len(runtime.calls) == 1
 
 
 def test_unread_requested_continuation_cannot_claim_reviewed(service):
     s, root, runtime = service
-    ref, session, _ = large_review(service, 500)
-    s.read(root, ref, session, 'large.py', 1, 500)
-    s.read(root, ref, session, 'auth.py', 1, 2)
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    ref, session, _ = large_review(service, 1500)
+    first = s.read(root, ref, session, 'large.py', 1, 1500)
+    assert first['next_range'][0] == len(first['lines'])+1
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['context_read_coverage']['unread_ranges'] == [dict(path='large.py', start_line=81, end_line=500)]
-    assert any('large.py:81-500' in value for value in result['host_review']['limitations'])
+    assert result['context_read_coverage']['unread_ranges']['items'] == [
+        dict(path='large.py', start_line=first['next_range'][0], end_line=1500)]
+    assert any('large.py:' in value for value in s.load(root, ref)['review']['limitations'])
     assert len(runtime.calls) == 1
 
 
 def test_repeated_or_overlapping_pages_do_not_hide_unread_ranges_or_spend_again(service):
     s, root, _ = service
     ref, session, _ = large_review(service, 300)
-    first = s.read(root, ref, session, 'large.py', 1, 300)
-    cost = s.load(root, ref)['context_bytes']
-    assert s.read(root, ref, session, 'large.py', 1, 300) == first
-    assert s.load(root, ref)['context_bytes'] == cost
-    s.read(root, ref, session, 'large.py', 40, 120)
+    first = s.read(root, ref, session, 'large.py', 1, 80)
+    initial = s.load(root, ref)['review_ledger'].copy()
+    duplicate = s.read(root, ref, session, 'large.py', 1, 80)
+    current = s.load(root, ref)['review_ledger']
+    assert duplicate['status'] == 'ALREADY_DELIVERED' and duplicate['source_lines_delivered'] == 0
+    assert duplicate['evidence_refs'] == [evidence_id(first)]
+    assert current['source_bytes'] == initial['source_bytes'] and current['reads'] == initial['reads']
+    assert current['navigation_bytes'] > initial['navigation_bytes']
+    overlap = s.read(root, ref, session, 'large.py', 40, 120)
+    assert overlap['start_line'] == 81 and len(overlap['lines']) == 40
     s.read(root, ref, session, 'large.py', 200, 300)
-    assert s.get(root, ref)['context_read_coverage']['unread_ranges'] == [
-        dict(path='large.py', start_line=120, end_line=199), dict(path='large.py', start_line=280, end_line=300)]
+    s.read(root, ref, session, 'large.py', 1, 300)
+    assert s.get(root, ref)['context_read_coverage']['unread_ranges']['total_count'] == 0
+    assert s.load(root, ref)['review_ledger']['reads'] == 4
 
 
 def test_invalid_ranges_and_unsupported_files_do_not_break_context_session(service):
     s, root, runtime = service
-    ref, session, _ = large_review(service, 106)
+    ref, session, packet = large_review(service, 106)
     (root/'README.md').write_text('Untrusted task notes.')
     for low, high in [(0, 80), (81, 80), (True, 80), (1, '110')]:
         with pytest.raises(TaskContextError) as error:
@@ -356,26 +368,35 @@ def test_invalid_ranges_and_unsupported_files_do_not_break_context_session(servi
     assert error.value.reason_code == 'TASK_CONTEXT_RANGE_UNAVAILABLE'
     assert error.value.details['total_lines'] == 106
     first = s.read(root, ref, session, 'large.py', 1, 110)
+    assert first['start_line'] == 1 and len(first['lines']) == 106 and not first.get('next_range')
     last = s.read(root, ref, session, 'large.py', 81, 110)
-    assert first['has_more'] and last['end_line'] == 106 and not last['has_more']
-    assert s.submit(root, ref, session, [], 'REVIEWED', [])['host_review']['coverage'] == 'REVIEWED'
+    assert last['status'] == 'ALREADY_DELIVERED' and evidence_id(last) == evidence_id(first)
+    review_all(s, root, ref, packet)
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert s.get(root, ref)['host_review']['coverage'] == 'REVIEWED'
     assert len(runtime.calls) == 1
 
 
 def test_context_byte_budget_retains_pending_ranges_and_forces_partial(service):
     s, root, runtime = service
     ref, session, _ = large_review(service, 300)
-    s.read(root, ref, session, 'large.py', 1, 300)
+    s.read(root, ref, session, 'large.py', 1, 80)
     record = s.load(root, ref)
-    record['context_bytes'] = MAX_CONTEXT
+    ledger = record['review_ledger']
+    ledger['source_bytes'] = ledger['category_limits']['source']
+    ledger['total_bytes'] = sum(ledger[name+'_bytes'] for name in ('source','navigation','control'))
     s.store(root).save(record)
+    before = s.load(root, ref)
     with pytest.raises(TaskContextError) as error:
         s.read(root, ref, session, 'large.py', 81, 300)
-    assert error.value.reason_code == 'TASK_CONTEXT_BYTE_BUDGET' and not error.value.recoverable
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert error.value.reason_code == 'TASK_CONTEXT_SOURCE_BUDGET' and not error.value.recoverable
+    refused = s.load(root, ref)
+    assert refused['evidence'] == before['evidence'] and refused['review_ledger'] == before['review_ledger']
+    receipt = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert receipt['status'] == 'COMPLETE'
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['context_read_coverage']['unread_ranges'] == [dict(path='large.py', start_line=81, end_line=300)]
-    assert result['context_read_coverage']['gaps'][0]['reason'] == 'TASK_CONTEXT_BYTE_BUDGET'
+    assert result['context_read_coverage']['unread_ranges']['items'] == [dict(path='large.py', start_line=81, end_line=300)]
     assert len(runtime.calls) == 1
 
 
@@ -384,32 +405,36 @@ def test_deleted_large_preimage_pages_keep_before_deletion_identity(service):
     (root/'old.py').write_text(''.join(f'value_{i} = {i}\n' for i in range(1, 301)))
     ref = begin(service)
     (root/'old.py').unlink()
-    s.finish(root, ref)
     packet = s.prepare(root, ref)
-    page = s.read(root, ref, packet['review_session'], 'old.py', 1, 300)
-    assert page['location_version'] == 'BEFORE_DELETION'
-    while page['has_more']:
-        next_page = page['next_read']
-        page = s.read(root, ref, packet['review_session'], 'old.py', next_page['start_line'], next_page['end_line'])
-        assert page['location_version'] == 'BEFORE_DELETION'
-    assert s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])['host_review']['coverage'] == 'REVIEWED'
+    delivered, units = review_all(s, root, ref, packet)
+    record = s.load(root, ref)
+    assert len(units) == 1 and delivered
+    assert {record['evidence'][evidence_id(page)]['location_version'] for page in delivered} == {'BEFORE_DELETION'}
+    assert all(record['evidence'][evidence_id(page)]['path'] == 'old.py' for page in delivered)
+    s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert s.get(root, ref)['host_review']['coverage'] == 'REVIEWED'
     assert len(runtime.calls) == 1
 
 
 def test_task_summary_has_one_selected_risk_choice_and_bounded_risk_list(service):
     s, root, _ = service
-    ref, session, _ = prepared(service)
+    ref, session, packet = prepared(service)
     sink = s.read(root, ref, session, 'routes.py', 2, 2)
     control = s.read(root, ref, session, 'auth.py', 1, 2)
-    findings = [dict(candidate(sink['evidence_id'], control['evidence_id']), title=f'风险 {i}') for i in range(4)]
-    result = s.submit(root, ref, session, findings, 'REVIEWED', [])
-    summary = result['development_summary']
-    assert summary.count('请选择具体风险') == 1 and '再回复「修复」或「稍后处理」' in summary
-    assert summary.count('上下文核查线索') == 3 and '另有 1 项' in summary
-    assert summary.count('**问题**') == 3 and summary.count('**检查范围**') == 1
-    assert '**1. 风险 0**' in summary and '**3. 风险 2**' in summary
-    assert '反证：' in summary and '**尚未确认**' in summary and '触发条件：' in summary
-    assert len(result['host_review']['findings']) == 4 and result['repair_authorized'] is False
+    review_all(s, root, ref, packet)
+    findings = [dict(candidate(evidence_id(sink), evidence_id(control)), title=f'风险 {i}') for i in range(4)]
+    receipt = s.submit(root, ref, session, findings, 'REVIEWED', [])
+    assert receipt['status'] == 'COMPLETE' and receipt['result_details_required']
+    first = s.get(root, ref)
+    assert first['finding_page']['total_count'] == 4 and first['finding_page']['returned_count'] == 3
+    assert first['finding_page']['next_offset'] == 3 and first['host_review']['finding_count'] == 4
+    assert [item['detail']['title'] for item in first['findings']] == [f'风险 {i}' for i in range(3)]
+    assert all(item['details_complete'] and item['detail']['preconditions'] and item['detail']['counterevidence']
+               for item in first['findings'])
+    last = s.get(root, ref, finding_offset=3)
+    assert last['findings'][0]['detail']['title'] == '风险 3' and not last['finding_page']['has_more']
+    assert not first['repair_authorized'] and not last['repair_authorized']
+    assert len(s.load(root, ref)['review']['findings']) == 4
 
 
 def test_retained_hook_scope_is_rechecked_at_current_version_outside_net_task_diff(service):
@@ -428,9 +453,11 @@ def test_retained_hook_scope_is_rechecked_at_current_version_outside_net_task_di
     packet = s.prepare(root, ref)
     s.read(root, ref, packet['review_session'], 'routes.py', 1, 2)
     s.read(root, ref, packet['review_session'], 'auth.py', 1, 2)
-    complete = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
-    assert 'auth.py:1' in complete['development_summary']
-    assert '**回复「修复」或「稍后处理」即可。**' in complete['development_summary']
+    s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    complete = s.get(root, ref)
+    assert complete['findings'][0]['detail']['file_path'] == 'auth.py'
+    assert complete['findings'][0]['detail']['line_start'] == 1
+    assert complete['history_read_only'] and not complete['repair_authorized']
     assert complete['static']['finding_count'] == 1 and complete['repair_authorized'] is False
 
 
@@ -466,67 +493,81 @@ def test_long_sanitized_lines_cannot_support_full_context_review(service):
     s, root, _ = service
     ref = begin(service)
     (root/'long.py').write_text('value = '+ '1 + '*200 + '1\n')
-    s.finish(root, ref)
     packet = s.prepare(root, ref)
     page = s.read(root, ref, packet['review_session'], 'long.py', 1, 1)
-    assert page['line_truncation']['complete_line_text'] is False
-    assert page['line_truncation']['known_truncated_lines'] == [1]
-    assert len(page['numbered_lines'][0]) <= 603
-    result = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert page['line_truncation']['lines'] == [1]
+    assert len(page['lines'][0]) <= 600
+    s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations'])
+    assert any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations']['items'])
 
 
 def test_unrelated_unread_long_lines_do_not_widen_scoped_review_gaps(service):
     s, root, _ = service
     (root/'unrelated.py').write_text('value = '+ '1 + '*200 + '1\n')
-    ref, session, _ = large_review(service, 106)
-    s.read(root, ref, session, 'large.py', 1, 106)
-    s.read(root, ref, session, 'large.py', 81, 106)
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    ref, session, packet = large_review(service, 106)
+    review_all(s, root, ref, packet)
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'REVIEWED'
-    assert not any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations'])
+    assert not any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations']['items'])
+    assert not any(value['path'] == 'unrelated.py' for value in s.load(root, ref)['evidence'].values())
 
 
 def test_unique_read_budget_cannot_be_reset_and_missing_page_forces_partial(service):
     s, root, runtime = service
     (root/'auth.py').write_text(''.join(f'value_{i} = {i}\n' for i in range(1, 65)))
     ref = begin(service)
-    (root/'routes.py').write_text('changed route\n')
-    s.finish(root, ref)
+    (root/'routes.py').write_text('changed_route = True\n')
     packet = s.prepare(root, ref)
     session = packet['review_session']
-    for line in range(1, 41):
-        s.read(root, ref, session, 'auth.py', line, line)
+    review_all(s, root, ref, packet)
+    record = s.load(root, ref)
+    record['review_ledger']['reads'] = record['review_ledger']['limits']['reads']-1
+    s.store(root).save(record)
+    issued = s.read(root, ref, session, 'auth.py', 1, 1)
+    exhausted = s.load(root, ref)['review_ledger']['reads']
+    assert exhausted == s.load(root, ref)['review_ledger']['limits']['reads']
+    duplicate = s.read(root, ref, session, 'auth.py', 1, 1)
+    assert duplicate['status'] == 'ALREADY_DELIVERED' and evidence_id(duplicate) == evidence_id(issued)
     with pytest.raises(TaskContextError) as error:
-        s.read(root, ref, session, 'auth.py', 41, 41)
+        s.read(root, ref, session, 'auth.py', 2, 2)
     assert error.value.reason_code == 'TASK_CONTEXT_READ_BUDGET' and not error.value.recoverable
-    assert s.load(root, ref)['review_session'] == session
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert s.prepare(root, ref)['review_session'] == session
+    assert s.load(root, ref)['review_ledger']['reads'] == exhausted
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['context_read_coverage']['used_reads'] == 40
-    assert result['context_read_coverage']['unread_ranges'] == [dict(path='auth.py', start_line=41, end_line=41)]
-    assert result['context_read_coverage']['gaps'][0]['reason'] == 'TASK_CONTEXT_READ_BUDGET'
-    assert '未发现安全线索' not in result['development_summary'] and len(runtime.calls) == 1
+    assert result['context_read_coverage']['used_reads'] == exhausted
+    assert result['context_read_coverage']['unread_ranges']['items'] == [dict(path='auth.py', start_line=2, end_line=2)]
+    assert len(runtime.calls) == 1
 
 
-def test_related_file_budget_cannot_be_reset_and_excluded_file_forces_partial(service):
+def test_related_inventory_scales_without_reset_and_unknown_source_stays_excluded(service):
     s, root, runtime = service
-    for number in range(11):
+    for number in range(25):
         (root/f'related{number:02}.py').write_text('def check():\n    pass\n')
     ref = begin(service)
-    (root/'routes.py').write_text('changed route\n')
-    s.finish(root, ref)
-    session = s.prepare(root, ref)['review_session']
-    for number in range(10):
+    (root/'routes.py').write_text('changed_route = True\n')
+    packet = s.prepare(root, ref)
+    session = packet['review_session']
+    limit = s.load(root, ref)['review_ledger']['limits']['related_files']
+    assert limit >= 25
+    for number in range(25):
         s.read(root, ref, session, f'related{number:02}.py', 1, 2)
     with pytest.raises(TaskContextError) as error:
-        s.read(root, ref, session, 'related10.py', 1, 2)
-    assert error.value.reason_code == 'TASK_CONTEXT_RELATED_FILE_BUDGET' and not error.value.recoverable
-    result = s.submit(root, ref, session, [], 'REVIEWED', [])
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['context_read_coverage']['gaps'] == [dict(path='related10.py', reason='TASK_CONTEXT_RELATED_FILE_BUDGET')]
-    assert '未发现安全线索' not in result['development_summary'] and len(runtime.calls) == 1
+        s.read(root, ref, session, 'not-in-baseline.py', 1, 2)
+    assert error.value.reason_code == 'TASK_CONTEXT_PATH_EXCLUDED'
+    before = s.load(root, ref)['review_ledger']
+    assert len(s.load(root, ref)['related_files']) == 25
+    assert s.prepare(root, ref)['review_session'] == session
+    after = s.load(root, ref)['review_ledger']
+    assert after['source_bytes'] == before['source_bytes'] and after['reads'] == before['reads']
+    assert after['total_bytes'] > before['total_bytes']
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert s.get(root, ref)['host_review']['coverage'] == 'PARTIAL'
+    assert len(runtime.calls) == 1
 
 
 def test_failed_final_static_does_not_turn_retained_hook_risk_into_no_findings_pass(service):
@@ -543,7 +584,8 @@ def test_failed_final_static_does_not_turn_retained_hook_risk_into_no_findings_p
     assert result['static']['status'] == 'FAILED'
     session = s.prepare(root, ref)['review_session']
     s.read(root, ref, session, 'auth.py', 1, 2)
-    complete = s.submit(root, ref, session, [], 'REVIEWED', [])
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    complete = s.get(root, ref)
     summary = complete['development_summary']
     assert '未发现安全线索' not in summary and '当前风险尚待核实' in summary
     assert 'auth.py' in summary and '不足以证明先前提示已消除' in summary
@@ -566,7 +608,8 @@ def test_same_source_with_new_hook_inputs_refinishes_and_invalidates_old_context
     refreshed = s.load(root, ref)
     assert not any(key in refreshed for key in ('packet', 'review_session'))
     assert refreshed['review_deadline'] == record['review_deadline']
-    assert refreshed['lifetime_context_reads'] == 1
+    assert len(refreshed['review_history'][-1]['evidence']) == 1
+    assert refreshed['review_ledger']['reads'] == record['review_ledger']['reads']
     assert refreshed['lifetime_context_bytes'] >= record['context_bytes']
     assert refreshed['evidence'] == {} and refreshed['context_requests'] == {}
     packet = s.prepare(root, ref)
@@ -596,7 +639,8 @@ def test_signed_hook_failure_scope_is_checked_but_recording_gap_is_preserved(ser
     assert any(v['reason'] == 'TASK_HOOK_RECORDING_FAILED' for v in result['limitations'])
     session = s.prepare(root, ref)['review_session']
     s.read(root, ref, session, 'auth.py', 1, 2)
-    complete = s.submit(root, ref, session, [], 'REVIEWED', [])
+    s.submit(root, ref, session, [], 'REVIEWED', [])
+    complete = s.get(root, ref)
     assert complete['host_review']['coverage'] == 'PARTIAL'
     assert 'auth.py' in complete['development_summary'] and '未发现安全线索' not in complete['development_summary']
 

@@ -15,6 +15,7 @@ import time
 
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
+from task_review_v3_acceptance import V3Review, require_v3
 
 
 async def accept(executable, engine_root, output):
@@ -63,9 +64,13 @@ async def accept(executable, engine_root, output):
                         return data.get('result',data), response
                     tools = {t.name for t in (await client.list_tools()).tools}
                     assert {'begin_security_task','finish_security_task','prepare_task_security_review',
+                            'get_task_review_method','get_task_review_plan','submit_task_review_batch',
                             'read_task_review_context','submit_task_security_review','get_task_security_review'} <= tools
+                    async def data_call(name, **arguments):
+                        data, _ = await call(name, **arguments)
+                        return data
                     info,_ = await call('get_runtime_info')
-                    assert 'task_security_review' in info['features']
+                    require_v3(info, tools)
                     await call('handle_readiness_event',event='SessionStart',workspace_path=str(root),session_id='acceptance')
                     async def hook(number):
                         return await call('handle_hook_event',event='PostToolUse',workspace_path=str(root),session_id='acceptance',
@@ -87,15 +92,18 @@ async def accept(executable, engine_root, output):
                     with closing(sqlite3.connect(state/'scans.db')) as db:
                         scan = json.loads(db.execute('SELECT data FROM scans WHERE id=?',(finished['static']['scan_id'],)).fetchone()[0])
                     assert first['expected_rule'] in {f['technical_details'].get('rule_id') for f in scan['findings']}
-                    packet,_ = await call('prepare_task_security_review',task_ref=ref,workspace_path=str(root))
+                    packet,_ = await call('prepare_task_security_review',task_ref=ref,workspace_path=str(root),protocol_version=3)
                     session = packet['review_session']
-                    await call('read_task_review_context',task_ref=ref,review_session=session,file_path=first['file'],workspace_path=str(root))
-                    await call('read_task_review_context',task_ref=ref,review_session=session,file_path=related,workspace_path=str(root))
-                    reviewed,_ = await call('submit_task_security_review',task_ref=ref,review_session=session,findings=[],coverage='PARTIAL',
-                        limitations=['接口与耗时验收的模拟提交，未观察真实宿主模型语义核查。'],workspace_path=str(root))
-                    assert reviewed['status'] == 'COMPLETE' and reviewed['host_review']['coverage'] == 'PARTIAL'
-                    assert reviewed['static']['finding_count'] > 0
-                    readback,_ = await call('get_task_security_review',task_ref=ref,workspace_path=str(root))
+                    review = V3Review(data_call, ref, session, root)
+                    units = await review.plan()
+                    assert {unit['path'] for unit in units} == {first['file'], second['file']}
+                    await review.read(first['file'], end_line=80)
+                    await review.read(related, end_line=80)
+                    reviewed, history = await review.save_partial([],
+                        ['接口与耗时验收的模拟提交；仅检查所请求的源码范围，未观察真实宿主模型语义核查。'])
+                    readback = history[0]
+                    assert readback['host_review']['coverage'] == 'PARTIAL'
+                    assert readback['static']['finding_count'] > 0
                     assert readback['current_version']
                     for i in range(5):
                         stopped,response = await call('handle_stop_event',event='Stop',workspace_path=str(root),session_id='acceptance',
@@ -111,6 +119,7 @@ async def accept(executable, engine_root, output):
                         hook_risk_static_executed=edited['scanner_run'], quiet_stop_count=5,
                         hook_observations=[{k:h.get(k) for k in ('status','scanner_run','changed_file_count','scanner_skipped_reason')}
                                            for h in (edited,later_edit)],
+                        review_protocol=3, review_receipt=reviewed, review_history_pages=history,
                         host_model_observed=False, application_executed=False, business_dependencies_installed=False, timings=timings))
     receipt = dict(contract='task-security-native-acceptance-v1', desktop_events_observed=False, results=results)
     (output/'receipt.json').write_text(json.dumps(receipt,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

@@ -147,25 +147,88 @@ def test_pre_edit_dirty_baseline_post_context_and_no_double_scan(repo,tmp_path):
     assert bridge.current()['hook_checks']
 
 
-@pytest.mark.parametrize('protocol', [1, 2, 3])
-def test_prepared_cursor_context_preserves_original_protocol_and_baseline(repo, tmp_path, protocol):
+def test_prepared_cursor_v3_context_preserves_original_baseline_and_budget(repo, tmp_path):
     runtime = LedgerRuntime()
     core = coordinator(tmp_path, runtime)
     first = tool(repo, tmp_path, core)[1]['task_ref']
     bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'private-generation')
     baseline = bridge.current()['baseline']
     (repo / 'A.java').write_text('class Changed { boolean allowed(User user) { return policy.check(user); } }\n')
-    prepared = bridge.tasks.prepare(repo, first, protocol_version=protocol)
+    prepared = bridge.tasks.prepare(repo, first, protocol_version=3)
     assert prepared['review_required']
     before = bridge.current()
-    assert before['review_protocol'] == protocol and before['baseline'] == baseline
+    assert before['review_protocol'] == 3 and before['baseline'] == baseline
     renewed_bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'new-generation')
     context = renewed_bridge.context()
     after = renewed_bridge.current()
-    assert f'protocol_version={protocol}' in context
+    assert 'protocol_version=3' in context
     assert context.count('prepare_task_security_review(protocol_version=') == 1
     assert after == before and after['baseline'] == baseline
     assert first in context and len(runtime.calls) == 1
+
+
+@pytest.mark.parametrize('protocol', [1, 2, None])
+def test_historical_cursor_task_cannot_resume_capture_or_stop_and_new_work_is_explicit(repo, tmp_path, protocol):
+    core = coordinator(tmp_path, FakeRuntime())
+    first = tool(repo, tmp_path, core)[1]['task_ref']
+    bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'private-generation')
+    record = bridge.current()
+    if protocol is None:
+        record.pop('review_protocol')
+    else:
+        record['review_protocol'] = protocol
+    historical = bridge.tasks.store(repo).save(record)
+    saved = bridge.tasks.store(repo).path.read_bytes()
+    context = bridge.context()
+    assert '只保留历史查询' in context and '不支持继续检查或续办' in context
+    assert '新的 task_key' in context and '只覆盖其后的改动' in context
+    assert '若连接的旧 Runtime 不支持 v3' in context
+    assert 'finish_security_task' not in context and 'prepare_task_security_review(' not in context
+    assert bridge.last_delivery is None
+    assert bridge.last_protocol_rejection['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+    # A different generation cannot silently choose a replacement task or capture.
+    result = tool(repo, tmp_path, core, generation='later-generation')[1]
+    assert result['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+    assert result['task_ref'] == first and not result['scanner_run']
+    assert ingress(repo, tmp_path, core, 'stop')[0] == {}
+    assert bridge.tasks.store(repo).path.read_bytes() == saved and not core.runtime.calls
+    assert bridge.current() == historical
+
+    # An explicit, bound begin starts only subsequent work under a different key.
+    (repo/'A.java').write_text('already edited under historical task')
+    from security_runtime.task_ownership import issue_session_ref
+    token = issue_session_ref(core.store, repo, 'cursor', 'private-cursor-conversation')
+    refused = tool(repo, tmp_path, core, 'MCP:begin_security_task',
+                   workspace_path=str(repo), task_key=bridge.key, session_ref=token)[1]
+    assert refused['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL' and not refused['scanner_run']
+    assert bridge.tasks.store(repo).path.read_bytes() == saved
+    fresh = tool(repo, tmp_path, core, 'MCP:begin_security_task',
+                 workspace_path=str(repo), task_key='future-work-v3', session_ref=token)[1]
+    assert fresh['status'] == 'BASELINE_CAPTURED' and fresh['task_ref'] != first
+    assert bridge.tasks.load(repo, first) == historical
+    current = bridge.current()
+    assert current['task_ref'] == fresh['task_ref'] and current['review_protocol'] == 3
+    assert bridge.tasks.before_lines(repo, current, 'A.java') == ['already edited under historical task']
+    assert len(bridge.tasks.store(repo).records()) == 2 and not core.runtime.calls
+
+
+def test_multiple_historical_tasks_are_not_newest_selected_or_implicitly_replaced(repo, tmp_path):
+    core = coordinator(tmp_path, FakeRuntime())
+    bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'new-generation')
+    records = []
+    for key in ('old-first', 'old-second'):
+        ref = bridge.tasks.begin(repo, key)['task_ref']
+        record = bridge.tasks.load(repo, ref)
+        record['review_protocol'] = 2
+        records.append(bridge.tasks.store(repo).save(record))
+    before = bridge.tasks.store(repo).path.read_bytes()
+    assert bridge.current() is None
+    assert '只保留历史查询' in bridge.context()
+    result = tool(repo, tmp_path, core)[1]
+    assert result['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL' and 'task_ref' not in result
+    assert ingress(repo, tmp_path, core, 'stop')[0] == {}
+    assert bridge.tasks.store(repo).path.read_bytes() == before and not core.runtime.calls
+    assert [bridge.tasks.load(repo, item['task_ref']) for item in records] == records
 
 
 @pytest.mark.parametrize('shape', ['missing', 'null', 'empty'])

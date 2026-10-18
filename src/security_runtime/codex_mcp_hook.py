@@ -11,6 +11,7 @@ from .hook_runtime import HookCoordinator
 from .hook_state import no_links
 from .integration_state import WorkspaceBinding
 from .hook_timing import timings, elapsed, core_context
+from .task_orchestration import task_needs_handoff, task_delivery_facts
 
 
 def codex_mcp_hook_config() -> dict:
@@ -259,17 +260,20 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         task, recording = _record_task_hook(active_coordinator.store, validated_root, result, decision)
         if task:
             summary.update(security_task_ref=task['task_ref'], hook_check_recording=recording)
+            summary['task_delivery'] = task_delivery_facts(task,
+                scanner_run=result['execution']['scanner_run'], recording=recording)
             if recording == 'UNAVAILABLE':
                 scope = set(result.get('hook_scope_files', ())) | set(result.get('hook_recheck_files', ()))
                 summary['unpersisted_hook_scope_files'], summary['unpersisted_hook_scope_files_omitted'] = (
                     _bounded_task_paths(scope, count=20, bytes_limit=2048))
-            if not repair_flow and recording != 'NO_MUTATION':
+            if task_needs_handoff(task) and not repair_flow and recording != 'NO_MUTATION':
                 summary['feedback_delivery'] = 'TASK_FINAL_SUMMARY'
                 output.pop('systemMessage', None)
                 output.pop('stopReason', None)
                 output['continue'] = True
                 # Rebuild instead of appending to the immediate alert's
                 # presentation rules and unapproved confirmation handoffs.
+                summary['task_delivery']['context_returned'] = True
                 output['hookSpecificOutput']['additionalContext'] = _deferred_task_context(summary)
     # Read-only/cached checks are useful diagnostics, not chat messages. Keep
     # actual risk feedback and an explicitly approved fix handoff intact.
@@ -295,6 +299,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         output = {}
     elif not unpersisted_gap and not decision and not result.get('dependency_user_feedback') and result.get('coverage') in {'FULL', 'NOT_APPLICABLE'} and not delta['new'] and not delta['additional_occurrences']:
         output = {}
+    if 'task_delivery' in summary:
+        summary['task_delivery']['context_returned'] = bool(
+            output.get('hookSpecificOutput', {}).get('additionalContext'))
     return {**summary, **output}
 
 

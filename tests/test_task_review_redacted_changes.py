@@ -12,6 +12,7 @@ import pytest
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.mcp_server import create_server
 from test_task_security import service  # noqa: F401
+from task_review_helpers import read_plan, read_window
 
 
 PRIVATE_VALUE = 'acceptance-private-credential-473b8e69'
@@ -62,26 +63,25 @@ def _prepare(sample, *, hidden=False, visible=True, comment=False, missing_old_p
     return server, tasks, root, runtime, ref, packet, commitments
 
 
+class _ReviewTransport:
+    """Keep the shared traversal helper on the real MCP ingress boundary."""
+    def __init__(self, server):
+        self.server = server
+
+    def review_plan(self, root, ref, session, cursor=0, limit=5):
+        return _call(self.server, 'get_task_review_plan', workspace_path=str(root), task_ref=ref,
+                     review_session=session, cursor=cursor, limit=limit)
+
+    def read(self, root, ref, session, path, low, high, source_version='CURRENT'):
+        return _call(self.server, 'read_task_review_context', workspace_path=str(root), task_ref=ref,
+                     review_session=session, file_path=path, start_line=low, end_line=high,
+                     source_version=source_version)
+
+
 def _windows(server, root, ref, packet):
-    bindings, units = {}, {}
-    page = packet['plan']
-    seen = set()
-    while True:
-        assert page['cursor'] not in seen
-        seen.add(page['cursor'])
-        bindings.update((item['source_ref'], item) for item in page['sources'])
-        for item in page['units']:
-            unit = units.setdefault(item['unit_id'], dict(item, required_windows=[]))
-            unit['required_windows'].extend(item['required_windows'])
-        if page['next_cursor'] is None:
-            break
-        page = _call(server, 'get_task_review_plan', workspace_path=str(root), task_ref=ref,
-                     review_session=packet['review_session'], cursor=page['next_cursor'], limit=1)
-    requirements = []
-    for unit in units.values():
-        for window in unit['required_windows']:
-            requirements.append(dict(bindings[window['source_ref']], **window))
-    return units, requirements
+    units, _ = read_plan(_ReviewTransport(server), root, ref, packet)
+    return {unit['unit_id']:unit for unit in units}, [
+        window for unit in units for window in unit['required_windows']]
 
 
 def _covers(requirements, version, line):
@@ -131,16 +131,9 @@ def _complete(prepared):
     units, requirements = _windows(server, root, ref, packet)
     delivered = []
     for item in requirements:
-        low, high = item['start_line'], item['end_line'] or 2_147_483_647
-        while True:
-            evidence = _call(server, 'read_task_review_context', workspace_path=str(root), task_ref=ref,
-                review_session=packet['review_session'], file_path=item['path'], start_line=low, end_line=high,
-                source_version='CURRENT' if item['location_version'] == 'CURRENT_TASK_END' else 'BEFORE_TASK')
+        for evidence in read_window(_ReviewTransport(server), root, ref, packet['review_session'], item):
             _private_absent(evidence, commitments)
             delivered.append(evidence)
-            if 'next_range' not in evidence:
-                break
-            low, high = evidence['next_range']
     _private_absent(packet, commitments)
     _private_absent(tasks.load(root, ref), commitments)
     _database_private_absent(tasks, root, ref, commitments)

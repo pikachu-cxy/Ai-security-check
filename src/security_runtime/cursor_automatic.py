@@ -7,6 +7,7 @@ from .host_events import EventKind
 from .host_event_runtime import handle_normalized_event
 from .recent_hooks import Observation, CURRENT
 from .task_hook_activity import _record_task_hook
+from .task_orchestration import task_allows_followup, task_delivery_facts
 
 
 GAP = ('本次 Cursor 自动安全任务未能建立或读取编辑前的任务记录。'
@@ -46,17 +47,23 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if event == 'preToolUse':
             result = bridge.before(payload)
         elif event == 'postToolUse':
-            context = bridge.context()
+            record = bridge.current()
+            context = bridge.context(record)
             if context:
                 output['additional_context'] = context
-            elif payload['tool_name'] in {'Write', 'Edit', 'Delete', 'Shell'} and bridge.current() is None:
+            elif payload['tool_name'] in {'Write', 'Edit', 'Delete', 'Shell'} and record is None:
                 output['additional_context'] = GAP
-            result = dict(status='DELIVERED' if output else 'NOT_APPLICABLE', scanner_run=False)
+            result = bridge.last_protocol_rejection or dict(
+                status='DELIVERED' if output else 'NOT_APPLICABLE', scanner_run=False)
+            if bridge.last_delivery is not None:
+                result['task_delivery'] = bridge.last_delivery
         elif event == 'stop':
             message = bridge.followup(payload)
             if message:
                 output['followup_message'] = message
             result = dict(status='FOLLOWUP' if message else 'NOT_APPLICABLE', scanner_run=False)
+            if message and bridge.last_delivery is not None:
+                result['task_delivery'] = bridge.last_delivery
         else:
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
@@ -66,10 +73,13 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 output['additional_context']=session_context(token)
             if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                 record = bridge.current()
-                if record and record['phase'] in {'ACTIVE', 'READY', 'REVIEWING'}:
-                    _, recording = _record_task_hook(core.store, root, result, None,
+                if task_allows_followup(record):
+                    task, recording = _record_task_hook(core.store, root, result, None,
                                                      expected_task_ref=record['task_ref'])
                     result['hook_check_recording'] = recording
+                    if task:
+                        result['task_delivery'] = task_delivery_facts(task,
+                            scanner_run=result.get('execution', {}).get('scanner_run'), recording=recording)
             result['scanner_run'] = result.get('execution', {}).get('scanner_run', False)
         result.update(diag, automatic_connector=True)
         return output, result

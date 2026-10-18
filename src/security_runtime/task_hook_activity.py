@@ -25,15 +25,21 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     it never turns a historical finding into a current risk or grants repair.
     """
     from .task_security_state import TaskSecurityStore
+    from .task_orchestration import select_task, TaskSelectionError
     import sqlite3
     store = TaskSecurityStore(hooks, root)
     try:
-        task = (store.get(expected_task_ref) if expected_task_ref is not None else
-                store.for_hook(result.get('host'),result.get('session_id')))
+        task = select_task(store, {'host': result.get('host'), 'session': result.get('session_id')},
+                           task_ref=expected_task_ref, hook=True)
+    except TaskSelectionError:
+        return None, 'TASK_OWNER_MISMATCH'
     except (ValueError, OSError, sqlite3.DatabaseError):
         return None, 'UNAVAILABLE'
     if not task:
         return None, 'NOT_APPLICABLE'
+    from .task_review_protocol import is_v3_record
+    if not is_v3_record(task):
+        return None, 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
     from .task_ownership import ACTIVE
     if task['phase'] not in ACTIVE:
         return None, 'TASK_CLOSED'
@@ -88,6 +94,8 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
                     refreshed = store.get(task['task_ref'])
                     if refreshed and refreshed['phase'] not in ACTIVE:
                         return None, 'TASK_CLOSED'
+                    if refreshed and not is_v3_record(refreshed):
+                        return None, 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
                     if refreshed and refreshed['task_ref'] == task['task_ref']:
                         task = refreshed
                         continue
@@ -110,7 +118,7 @@ def _deferred_task_context(summary):
         'coverage', 'scan_id', 'scanner_run', 'new_families', 'persisting_families', 'resolved_families',
         'additional_occurrences', 'removed_occurrences', 'capabilities', 'deferred_code_providers',
         'dependency_check_reason', 'hook_check_recording', 'unpersisted_hook_scope_files',
-        'unpersisted_hook_scope_files_omitted') if key in summary}
+        'unpersisted_hook_scope_files_omitted', 'task_delivery') if key in summary}
     control.update(feedback_delivery='TASK_FINAL_SUMMARY', user_feedback_suppressed=True,
                    repair_authorized=False)
     failure = ('本次文件修改检查的任务记录保存失败；已保留独立失败记录，任务结束必须复查其中的范围并披露历史记录缺口。'

@@ -102,7 +102,14 @@ def test_status_readonly_missing_configured_observed_stale(adapter, repo):
     assert output['cold_start_host_trial'] == 'PENDING_ACTUAL_DESKTOP'
     raw = json.dumps(output)
     assert str(repo) not in raw and str(adapter.store.directory) not in raw
-    assert '连接成功不代表项目已经通过安全检查' in observe(adapter, repo)['systemMessage']
+    observed = observe(adapter, repo)
+    assert observed['systemMessage'] == '安全检查工具已连接，项目检查已就绪。'
+    assert '通过安全检查' not in observed['systemMessage']
+    assert observed['status'] == 'READY' and observed['readiness'] == 'READINESS_OBSERVED'
+    assert observed['execution'] == {'scan': False, 'scanner_run': False, 'model': False,
+                                     'source_modified': False, 'target_build': False,
+                                     'network': False, 'remediation': False}
+    assert 'security_proof' not in observed and 'scan_id' not in observed
     adapter.now = lambda: time.time() + 901
     assert call(adapter, repo, 'status')['readiness']['status'] == 'READINESS_STALE'
 

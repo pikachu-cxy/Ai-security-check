@@ -1,19 +1,9 @@
 """Host transport composition. Capabilities describe transport, never authority."""
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class HostConnector:
-    host: str
-    command_hooks: bool
-    post_edit_context: bool
-    stop_followup: bool
-    global_mcp: bool
+from .host_lifecycle import HostConnector, connector_profile
 
 
 CONNECTORS = {
-    'codex': HostConnector('codex', False, True, True, True),
-    'cursor': HostConnector('cursor', True, True, True, True),
+    host: connector_profile(host).connector for host in ('codex', 'cursor')
 }
 
 
@@ -33,21 +23,25 @@ an automatic task was supplied.
 For every workspace operation supply the current absolute workspace_path.
 Before the normal development summary call finish_security_task for that task;
 if review_required, start a new review with prepare_task_security_review using
-protocol_version=3. A prepared review keeps its recorded protocol (1, 2 or 3);
-never switch protocols to replace its existing plan, evidence or allowance.
+protocol_version=3, the only executable development review protocol. First verify
+the v3 capability and all required task tools in the main instructions; otherwise
+request a Runtime upgrade and stop the review. Older tasks remain read-only; never
+migrate them, rebuild their baseline or reset existing evidence or allowances.
 Use its exact method version/hash; get_task_review_method once if that method is
-not already available. Follow the returned protocol method. For plan-based reviews,
+not already available. Use only the v3 method;
 page get_task_review_plan, read each required before/current
 window and relevant code, and record completed units with submit_task_review_batch.
 Finish with submit_task_security_review, even with zero static alerts. Unrequested
 required units remain pending; all batches retain the same task, source version and
-cumulative budgets. Existing version-1 and version-2 reviews keep their original protocol.
+cumulative budgets. Version-1 and version-2 history cannot resume.
 Merge the actual risks and coverage gaps into your normal final response.
 Do not display per-edit internal records or interrupt normal development to ask
 about a security risk; present current risks together at task completion.
 An automatic followup is a check/report handoff, never human repair approval.
 No confirmed risk selection means no security repair. Selected repairs keep
-the existing MCP authorization and originating-scanner verification workflow.
+the existing source-specific authorization: scanner repairs use verify_task_fix;
+native risks use the bound repair_task_ref for finish/review and original risk
+references for risk_resolutions and ledger status.
 If the automatic pre-edit baseline is unavailable, disclose the gap; never
 create a post-edit task to claim that the missing baseline was captured earlier.
 Ordinary chat and read-only work do not start development checks. An explicit

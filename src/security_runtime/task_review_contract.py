@@ -7,6 +7,9 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, ValidationErr
 from typing_extensions import NotRequired, TypedDict
 
 
+CONTRACT = 'task-review-submission-v1'
+
+
 def _nonblank(value: str) -> str:
     if not value.strip():
         raise ValueError('TASK_REVIEW_NONEMPTY_TEXT_REQUIRED')
@@ -122,7 +125,7 @@ class TaskReviewInputError(ValueError):
         super().__init__('Use the task candidate schema with Runtime-issued evidence; unsupported fields are forbidden')
 
     def response(self):
-        return dict(contract='task-review-submission-v1', status='INCONCLUSIVE',
+        return dict(contract=CONTRACT, status='INCONCLUSIVE',
             reason_code=self.reason_code, scanner_run=False, source_modified=False,
             security_proof=False, repair_authorized=False, review_state_changed=False,
             field_errors=self.field_errors,

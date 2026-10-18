@@ -66,7 +66,7 @@ TESTS = (
     'tests/test_task_review_transport_v3.py',
     'tests/test_task_review_redacted_changes.py',
     'tests/test_task_review_v3_state.py',
-    'tests/test_task_review_v2.py',
+    'tests/test_task_review_invariants.py',
     'tests/test_task_review_completion_budget.py',
     'tests/test_task_review_protocol_mcp.py',
     'tests/test_task_context_global_transport.py',

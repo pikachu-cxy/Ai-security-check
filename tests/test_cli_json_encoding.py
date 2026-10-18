@@ -86,4 +86,7 @@ $info.features.task_security_review_protocol
                                creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
     assert completed.returncode == 0, completed.stderr.decode('cp936', errors='replace')
     assert b'task-review-plan-v3' in completed.stdout
-    assert b'task-review-plan-v2' in completed.stdout  # legacy capability remains advertised
+    assert b'ONLY_V3' in completed.stdout
+    assert b'LEGACY_HISTORY_READ_ONLY' in completed.stdout
+    assert b'task-review-plan-v2' not in completed.stdout
+    assert b'LEGACY_V1_SUPPORTED' not in completed.stdout

@@ -9,6 +9,8 @@ import copy
 import hashlib
 import json
 
+from .task_review_protocol import PROTOCOL_VERSION, require_record_protocol
+
 
 CONTRACT = 'task-review-revision-v1'
 _PLAN_FIELDS = frozenset({'contract', 'protocol_version', 'semantic_coverage_version',
@@ -26,6 +28,15 @@ class ReviewRevisionError(ValueError):
 def _digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=True, sort_keys=True,
         separators=(',', ':')).encode()).hexdigest()
+
+
+def _ledger(record):
+    ledger = record.get('review_ledger')
+    if (not isinstance(ledger, dict) or type(ledger.get('protocol_version')) is not int
+            or ledger['protocol_version'] != PROTOCOL_VERSION):
+        raise ReviewRevisionError('REVIEW_PLAN_REVISION_INVALID',
+            'A revision requires its original cumulative protocol 3 ledger')
+    return ledger
 
 
 def _pending(record):
@@ -53,17 +64,17 @@ def advance_revision(record):
     existing pending revision can move to the latest end snapshot before review
     starts, without making extra history entries or resetting any consumption.
     """
+    require_record_protocol(record)
     candidate = copy.deepcopy(record)
     plan, ledger = candidate.get('review_plan'), candidate.get('review_ledger')
+    if 'review_ledger' in candidate or plan:
+        ledger = _ledger(candidate)
     if not plan:
-        if ledger and ledger.get('protocol_version') == 3:
+        if ledger is not None:
             _pending(candidate)
         return candidate
     if plan.get('contract') != 'task-review-plan-v3':
-        return candidate  # Legacy protocols retain their existing fixed limits.
-    if not isinstance(ledger, dict) or ledger.get('protocol_version') != 3:
-        raise ReviewRevisionError('REVIEW_PLAN_REVISION_INVALID',
-            'An adaptive revision requires its original cumulative ledger')
+        raise ReviewRevisionError('REVIEW_PLAN_REVISION_INVALID', 'A protocol 3 task requires its original protocol 3 plan')
     from .task_review_plan import _snapshot
     if plan.get('snapshot_id') != _snapshot(record):
         raise ReviewRevisionError('REVIEW_PLAN_REVISION_INVALID',
@@ -105,6 +116,8 @@ def advance_revision(record):
 
 def revision_ledger(record, units, *, now):
     """Allocate real new obligations without clearing any historical spending."""
+    require_record_protocol(record)
+    _ledger(record)
     _pending(record)
     from . import task_review_budget as adaptive
     ledger = copy.deepcopy(record['review_ledger'])

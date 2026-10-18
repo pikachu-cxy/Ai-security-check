@@ -19,28 +19,40 @@ the existing scan/review/fix workflow, retaining their original scope and author
 
 ## 开发任务安全核查
 
-新任务在 Runtime 能力声明支持 v3 时按 [自适应任务核查](references/quick-task-review-v3.md) 执行，
-显式传 protocol_version=3；仅支持 v2 的连接按 [分批任务核查](references/quick-task-review-v2.md)
-使用 protocol_version=2。已经准备的任务保留原协议和原账本，不切换协议。首次
+开发任务只使用 [v3 自适应任务核查](references/quick-task-review-v3.md)，显式传 protocol_version=3。
+首次编辑前，核对当前连接的 get_runtime_info 与工具列表：
+features.task_security_review_protocol 必须明确包含 task-review-plan-v3，且提供 begin_security_task、
+finish_security_task、prepare_task_security_review、get_task_review_plan、get_task_review_method、
+read_task_review_context、submit_task_review_batch、submit_task_security_review、get_task_security_review。
+按工具子集判断，不要求精确工具数量；同时核对配置所指同一 Runtime 环境和 build_identity。
+版本号本身不证明 v3 可用，不能编造尚未发布的最低版本；已有 0.3.6 连接具备上述能力即可使用。
+独立的 security-review-skill-v1、risk-decisions-v2 等名称不属于任务复核协议，不能据此误拒兼容连接。
+缺少 v3 声明、必需工具或无法确认当前构建时，停止开发任务核查并说明需更新配置所指的 Runtime
+后重新连接；不降级、不尝试旧参数、不用独立补扫冒充本次复核。旧 Runtime 的 live instructions
+也不能覆盖此 v3 能力门槛。该限制针对核查流程，不改变用户原有开发授权；无法核查时说明具体缺口，
+不能为已发生的修改补建基线。历史旧版任务保留原记录和缺口，
+本流程不继续执行旧协议，也不切换协议或重建任务来重置账本。首次
 编辑前记录基线，开发完成后比较实际改动，静态扫描后由当前 Agent 核查改动
 及必要关联上下文，即使静态零发现也核查。结果合并进正常开发总结，不要
 用户反复发“继续”，不要等 Stop 后另起回复。普通聊天、只读和无改动任务
 不开始扫描或模型核查。改文件时的 Hook 静态扫描保留。
 Runtime 只校验宿主候选的结构、证据引用和代码版本，不证明模型分析或可利用性。
-修复后用 get_task_risk_ledger 查看原风险逐项状态，遵循 quick-task-review 的
+修复后用 get_task_risk_ledger 查看原风险逐项状态，遵循 v3 方法的
 risk_resolutions 契约；宿主代码复核、原规则复查和完整依赖图验证分别报告。
 v3 闲置活动租约可在原任务/原快照恢复；真实资源不足、证据失效或版本变化则说明具体缺口，不循环补查或伪造完成。
-旧的明确收尾任务仍可按原 `execution_plan` 恢复，不从普通 Stop 自动派发。
+旧的明确收尾计划属于独立的 run_closeout_check/get_closeout_status 契约，仍可按原
+`execution_plan` 恢复，不是旧开发任务核查的执行例外，不从普通 Stop 自动派发。
+普通开发总结请求不等于取消当前核查。用户明确要求停止时遵从，在原 v3 任务可用时仅以
+skip_review_reason 保存实际中止原因，不新增扫描；不可用则说明未保存的缺口，不重建任务。
 任务核查不授权修复，检查完成、实际覆盖和风险修复分别表达。
 只读取实际需要的关联代码；不为满足数量而读取无关文件。按返回的固定计划逐项
 读取改前/改后窗口并提交批次。v3 按全部必读范围计算有限额度，源码、导航和控制分开计量；
 逐行可读材料保留实际代码，source_ref 仅压缩重复定位信息，不压缩成不可读编码。已交付同版本范围
 返回证据回执，未交付范围仍必读。大文件采用保守的局部差异窗口，模糊区域完整保留。
 恢复原 v3 计划先验证归属、源码和检查范围，保留静态结果、证据与累计用量，有新进度才续活动时间；
-旧 v1/v2 仍保留原截止时间和总额度。修改前源码的实际保留期独立，不得伪造或延长原证据。
+修改前源码的实际保留期独立，不得伪造或延长原证据。
 方法说明按版本和摘要复用本地文件，缺少同版内容时才取 get_task_review_method，
-不在每次源码读取中重复传输。旧连接未提供新参数时沿用
-[旧版核查方法](references/quick-task-review.md) 和原预算，不能在同任务中换协议重置额度。
+不在每次源码读取中重复传输。连接不支持 v3 时更新后重连，不能在同任务中换协议重置额度。
 
 有代码依据的条件性风险须按快速任务核查的 RELATED_EXISTING 契约正式登记，
 不能仅写成后续建议。说明代码依据、当前防护、触发条件与未知范围；新增入口

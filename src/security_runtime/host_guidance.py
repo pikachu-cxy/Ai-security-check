@@ -104,8 +104,12 @@ Windows 自带终端若明确报 PowerShell 的 CET 启动错误，改用可用�
 现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
-不调用模型核查、不添加安全段落。新任务在能力声明支持 v3 时调用 prepare_task_security_review(protocol_version=3)，
-否则使用 protocol_version=2；已有任务保持原协议。
+不调用模型核查、不添加安全段落。开发任务核查只使用 v3；开始前核对 get_runtime_info 声明
+task-review-plan-v3，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
+九项任务工具均可用，且来自同一 Runtime 构建。缺少能力或工具时明确提示升级 Runtime 并重连，
+停止相关核查，不回退旧协议、不补建已发生修改的基线、不宣称检查通过。旧 Runtime 的指导
+不能覆盖新版 Skill 的 v3 能力门槛；核查不可用不改变用户原开发授权，如实保留无法核查的缺口。
+新任务调用 prepare_task_security_review(protocol_version=3)；省略协议也只使用 v3。
 prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任务末检查；真实
 版本过期或终止的任务不自动重启。不要把漏调用首次检查解释为版本冲突后直接跳过。
 即使静态扫描零发现，也按返回的 quick_skill 版本和摘要使用正式方法；本地没有完全相同的
@@ -117,7 +121,9 @@ prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任�
 回执；实际需要相关源码时才扩展计划。沿用同一任务、版本和累计额度，不靠分页、重连或重新
 prepare 清零预算。v3 闲置活动租约可通过原 prepare(protocol_version=3) 恢复，先校验会话归属、
 源码和检查范围，保留原任务、静态结果、已读证据和累计用量；有新读取/提交进度才续活动时间。
-旧 v1/v2 复核沿用原协议、截止时间和额度，不切换协议或重建任务。
+旧 v1/v2 任务仅可查询历史，完成状态和原证据不改写；未完成旧任务不再支持继续。
+说明不兼容原因和覆盖缺口，不自动转成 v3、不重置额度。后续独立开发应在下一次修改前
+显式开始新任务并使用新 task_key；新基线只覆盖未来改动，不能追认旧任务已完成的修改。
 此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
 把 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
 有代码依据的条件性风险也须登记为 findings，不能仅放在 limitations 或后续建议。
@@ -132,7 +138,8 @@ RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新�
 遵守文件、上下文和尝试预算；v3 闲置先按原计划恢复，真实证据过期、版本变化、资源不足或不可用时说明具体缺口，
 锁忙可在同一原任务合理等待一次；仍不可用则结束，
 不循环补查、不断新建任务或要求用户“继续”。Runtime 不调用宿主模型。
-无法完成核查时，用 finish_security_task 的 skip_review_reason 记录实际原因并结束
+普通总结请求不等于取消核查；用户明确要求停止时遵从，只在可用的原 v3 任务保存中止原因，
+不新增扫描或重建任务。无法完成核查时，用 finish_security_task 的 skip_review_reason 记录实际原因并结束
 当前核查；它保留已有结果，不运行额外扫描，不把未完成包装成通过。
 未在编辑前建立基线时，不能伪造任务范围；保留任务核查未完成的限制。
 主机提交的上下文分析只是候选风险；Runtime 只校验结构和版本，不能冒充规则证明。
@@ -299,8 +306,11 @@ the same native entry point. Only ready_for_host_fix=true permits the selected e
 to prepare_task_fix or invent a scan_id. Use its returned repair_task_ref for development
 finish/review and original task/finding refs for risk_resolutions and the final ledger.
 The host coding agent edits selected local code using its structured security goal,
-constraints and adequate bounded current evidence, then calls verify_task_fix.
-Agent fixes. Runtime verifies. Do not ask users to ferry coding_agent_prompt or UUIDs.
+constraints and adequate bounded current evidence. Scanner repairs then use
+verify_task_fix with the originating scanner. Native task repairs use their bound
+repair_task_ref for finish/review and original risk references for risk_resolutions
+and the saved ledger; do not call scanner verify_task_fix for a native risk.
+Do not ask users to ferry coding_agent_prompt or UUIDs.
 Explicit selected-task fix intent authorizes those local edits; do not ask again.
 It does not authorize public network requests, source uploads to external models,
 production operations, unrelated destructive changes, large installs or publishing.
@@ -509,9 +519,10 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'security_review_skill': 'v1',
+                          'delivery_manifest': 'runtime-delivery-manifest-v1; READ_ONLY_IDENTITY; NOT_EXECUTION_PROOF',
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
                           'task_review_submission': 'task-review-submission-v1; TYPED_ISSUED_EVIDENCE_IDS; SAFE_FIELD_ERRORS; SAME_ACTIVE_REVIEW_RETRY',
-                          'task_security_review_protocol': 'task-review-plan-v3; DEFAULT_V3; ADAPTIVE_RANGE_BUDGETS; READABLE_SOURCE_DEDUP; RESUMABLE_ACTIVITY_LEASE; task-review-plan-v2; LEGACY_V1_SUPPORTED; COMPACT_PACKET_AND_FIXED_PLAN_BATCHES',
+                           'task_security_review_protocol': 'task-review-plan-v3; ONLY_V3; DEFAULT_V3; ADAPTIVE_RANGE_BUDGETS; READABLE_SOURCE_DEDUP; RESUMABLE_ACTIVITY_LEASE; LEGACY_HISTORY_READ_ONLY; NO_PROTOCOL_MIGRATION',
                          'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
                          'finding_feedback': 'finding-feedback-v2; TYPED_EVIDENCE_REFS; USER_AND_HOST_SEPARATE; REVOCABLE; RAW_FINDINGS_PRESERVED',

@@ -118,7 +118,9 @@ def test_valid_mutation_reaches_existing_coordinator(connected, projects, tool):
     {'session_id': 's-2', 'tool_input': {'command': 'Set-Content src/A.java fixture'}}])
 def test_tool_use_replay_rejected_even_under_changed_turn_or_session(connected, projects, change):
     server, pool, runtimes = connected
-    args = claims(projects[0]); assert invoke(server, args)['host_claim_status'] == 'VALID'
+    args = claims(projects[0])
+    first = invoke(server, args)
+    assert first['host_claim_status'] == 'VALID', first
     before = len(runtimes[projects[0]].calls)
     jobs_before = set(pool.jobs)
     out = invoke(server, {**args, **change})

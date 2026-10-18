@@ -22,8 +22,8 @@ from .target import TargetDetector, IGNORED
 from .verification_policy import local_recheck
 from .workspace import WorkspaceResolver
 from .hook_timing import timings, elapsed, core_context, ExecutionTrigger
+from .host_lifecycle import HOSTS
 
-HOSTS = ('codex', 'cursor', 'kiro', 'workbuddy', 'codebuddy', 'qoder', 'generic')
 MAX_FILES = 1000
 MAX_BYTES = 20_000_000
 MAX_FAMILIES = 2000

@@ -55,11 +55,21 @@ bodies, capture limits and source truncation remain explicit gaps. These guards
 bound memory and delivery, rather than silently omitting work or certifying safety.
 
 Historical result pagination and the bounded terminal persistence receipt are
-independent of evidence delivery. Existing v1/v2 task references, original fixed
-quotas/deadlines, owners, signatures, risk records and repair gates remain valid;
-an already prepared task cannot switch protocol to reset its ledger. Current
+independent of evidence delivery. Only v3 executes; v1/v2 task references remain
+readable history with their original protocol, owners, signatures, risks and
+completion status. Incomplete older tasks cannot resume or migrate. Explicit
+subsequent work can start a new v3 task before its first edit without rewriting
+old baselines. Independent risk handling and repair authorization remain intact. Current
 window reads verify the requested source and Hook revision; final submission
 rechecks the complete source inventory and hashes.
+
+## Shared connector foundation (2026-10-18)
+
+The first architecture batch is documented with current diagrams and migration limits in [the implementation record](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md); the staged target remains in [the unification plan](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md).
+
+Pure host lifecycle/capability profiles feed the existing public projections. Codex and Cursor now share owner-bound task selection, review protocol preservation, pending decisions, followup identity and current-event delivery facts through task_orchestration. TaskSecurityService and HookCoordinator keep their original execution authority; Stop intentions and actual host timings remain connector-specific. No durable delivery or user consumption receipt is implied.
+
+MCPRegistry contains the SDK compatibility boundary and raw input contracts; workspace_services assembles the same mandatory impact gates for project and global entry points. Runtime info exposes a content-derived delivery manifest without workspace admission or scanning. Signed task results carry a conditional ledger projection intent, independently of review completion. History uses an additive, legacy-writer-compatible side index, with conservative streaming fallback and read-only access unchanged. Full cross-store recovery and immutable-input/short-lock scanning remain later stages.
 
 ## Runtime flow
 

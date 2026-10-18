@@ -19,6 +19,7 @@ from .workspace import WorkspaceResolver
 from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
 from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, baseline_failure_reason
+from .mcp_contracts import MCPRegistry, raw_input_failure
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
 GLOBAL_READS = {'get_runtime_info', 'get_professional_guidance', 'get_scan_preparation_status'}
@@ -35,12 +36,15 @@ MAX_SESSIONS = 64
 BOOTSTRAP_WAIT_SECONDS = 20
 
 
-def global_runtime_info():
+def global_runtime_info(*, tools=None):
     from .host_guidance import runtime_info
     info = runtime_info()
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1'}
     info['integration_scope'] = 'GLOBAL'
     info['workspace_routing'] = 'EXPLICIT_WORKSPACE_CLAIM'
+    if tools is not None:
+        from .delivery_manifest import delivery_manifest
+        info['delivery_manifest'] = delivery_manifest(info, tools)
     return info
 
 
@@ -71,19 +75,8 @@ class GlobalWorkspaces:
 
     @staticmethod
     def _child(root, directory, binding):
-        from .mcp_server import create_server
-        from .workspace_services import workspace_services
-        from .remediation import RemediationService
-        from .remediation_policy import RemediationConfig
-        runtime, core, is_git = workspace_services(root, directory)
-        def remediation_factory(store, **kwargs):
-            # User policy stays user-wide; grants/proofs/DB stay workspace-local.
-            return RemediationService(store, config=RemediationConfig(), inline_agent_tickets=True, **kwargs)
-        server = create_server(runtime, hook_coordinator=core, remediation_factory=remediation_factory,
-                               workspace_binding=binding, global_mode=False, hook_advisory_only=not is_git)
-        # Same explicit connected-Hook opt-in as the existing default factory.
-        # Do not enable deterministic source writes or Deep verification here.
-        return server, core
+        from .workspace_services import workspace_mcp_server
+        return workspace_mcp_server(root, directory, binding)
 
     def root(self, value):
         return resolve_workspace(value, excluded=(self.base, self.integration.home))
@@ -369,18 +362,18 @@ def create_global_server(*, workspaces=None, host='codex'):
     from jsonschema import Draft202012Validator
     # Obtain the original registry/instructions without creating a writable DB.
     server = create_server(global_mode=False)
+    registry = MCPRegistry(server)
     pool = workspaces or GlobalWorkspaces(host=host)
     active_host = getattr(pool, 'host', host)
     server.global_workspaces = pool
-    server._mcp_server.instructions += ('\nGlobal host integration: workspace_path is an untrusted claim. '
+    registry.add_instructions('\nGlobal host integration: workspace_path is an untrusted claim. '
         'For every workspace tool supply the current workspace_path, even if only one workspace is admitted. '
         'Never infer a workspace from an opaque reference or use the last workspace. '
         'INITIALIZING/DEGRADED readiness is not a security proof; Core Hooks never request Deep Verification.')
-    original_tools = server._tool_manager
-    infos = {t.name: t for t in original_tools.list_tools() if active_host != 'cursor' or t.name not in HOOKS}
+    infos = {t.name: t for t in registry.tools() if active_host != 'cursor' or t.name not in HOOKS}
     if active_host == 'cursor':
         from .host_connectors import CURSOR_INSTRUCTIONS
-        server._mcp_server.instructions += CURSOR_INSTRUCTIONS
+        registry.add_instructions(CURSOR_INSTRUCTIONS)
 
     async def listed():
         from mcp.types import Tool
@@ -411,22 +404,11 @@ def create_global_server(*, workspaces=None, host='codex'):
         nonlocal schemas
         if schemas is None:
             schemas = {t.name: t.inputSchema for t in await listed()}
-        if name == 'submit_task_security_review':
-            # JSON Schema cannot express all model checks (for example blank
-            # text). Reject the same raw input before any workspace admission.
-            from .task_review_contract import task_review_input_failure
-            data = task_review_input_failure(arguments, require_workspace=True)
-            if data['field_errors']:
-                return CallToolResult(isError=True, structuredContent=data,
-                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
-        from .repair_impact_contract import IMPACT_TOOLS, impact_input_failure
-        if name in IMPACT_TOOLS:
-            # Classification/critical consistency is a model constraint, not a
-            # JSON Schema enum check. Reject before routing or admitting a root.
-            data = impact_input_failure(name, arguments, require_workspace=True)
-            if data['field_errors']:
-                return CallToolResult(isError=True, structuredContent=data,
-                    content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+        # Shared strict raw-model checks precede SDK parsing and workspace admission.
+        data = raw_input_failure(name, arguments, require_workspace=True)
+        if data is not None:
+            return CallToolResult(isError=True, structuredContent=data,
+                content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
         from .codex_host_claims import EVENTS
         claim_diag = (host_adapter.validate_claims(arguments, EVENTS[name], schemas[name])
                       if name in HOOKS and name in schemas else None)
@@ -452,7 +434,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
-            info = global_runtime_info()
+            info = global_runtime_info(tools=await listed())
             info['host_connector'] = active_host
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_professional_guidance':
@@ -585,7 +567,8 @@ def create_global_server(*, workspaces=None, host='codex'):
             binding_stage = 'FORWARDING_TOOL'
             if claim_diag is not None:
                 claim_diag['workspace_binding_stage'] = binding_stage
-            child_tool = child._tool_manager.get_tool(name)
+            child_registry = MCPRegistry(child)
+            child_tool = child_registry.tool(name)
             if 'workspace_path' in child_tool.parameters['properties']:
                 forwarded['workspace_path'] = str(root)
             else:
@@ -600,7 +583,7 @@ def create_global_server(*, workspaces=None, host='codex'):
             # Ambiguous host identity remains connection-scoped. Never accept
             # a model-supplied owner or choose the last observed conversation.
             with owner_scope(owner):
-                result = await child._tool_manager.call_tool(name, forwarded, convert_result=True)
+                result = await child_registry.dispatch(name, forwarded, convert_result=True)
             if claim_diag is not None and isinstance(result, CallToolResult) and result.structuredContent is not None:
                 # Child rejection wins; never overwrite a rejected claim status.
                 claim_diag['workspace_binding_stage'] = 'COMPLETE'
@@ -628,6 +611,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                 data = feedback_failure(reason)
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            from .mcp_contracts import unsupported_protocol_failure
+            unsupported = unsupported_protocol_failure(exc) if handler_entered else None
+            if unsupported is not None:
+                return CallToolResult(isError=False, structuredContent=unsupported,
+                    content=[TextContent(type='text', text=json.dumps(unsupported, ensure_ascii=False))])
             if handler_entered and name in TASK_REVIEW_TOOLS:
                 # Ownership, expired sessions, unsupported protocol versions and
                 # malformed review requests must not masquerade as a broken
@@ -796,18 +784,6 @@ def create_global_server(*, workspaces=None, host='codex'):
     call = instrument(call, schemas={name: tool.parameters for name, tool in infos.items()},
                       resolve_root=lambda arguments: pool.root(arguments.get('workspace_path'))
                       if isinstance(arguments, dict) else None)
-    server.list_tools = listed
-    server.call_tool = call
-    server._mcp_server.list_tools()(listed)
-    server._mcp_server.call_tool(validate_input=False)(call)
-    from contextlib import asynccontextmanager
-    original_lifespan = server._mcp_server.lifespan
-    @asynccontextmanager
-    async def lifespan(inner):
-        async with original_lifespan(inner) as context:
-            try:
-                yield context
-            finally:
-                pool.close()
-    server._mcp_server.lifespan = lifespan
+    registry.install_router(listed, call)
+    registry.close_with(lambda: pool.close())
     return server

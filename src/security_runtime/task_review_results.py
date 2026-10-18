@@ -205,7 +205,8 @@ def _saved_context(record):
     unread = _unread_context(record) if 'context_requests' in record else None
     completion = record.get('review_completion') or {}
     gaps = completion.get('gaps')
-    if gaps is None and record.get('review_plan'):
+    from .task_review_protocol import is_v3_record
+    if gaps is None and is_v3_record(record) and record.get('review_plan'):
         from .task_review_plan import plan_gaps
         gaps = plan_gaps(copy.deepcopy(record))
     evidence = record.get('evidence')
@@ -228,7 +229,8 @@ def _base(record, freshness=None, feedback=None):
     changes = record.get('changes') or []
     static_findings, host_findings = static.get('findings') or [], review.get('findings') or []
     result = dict(status=record['phase'], task_ref=record['task_ref'],
-        protocol_version=record.get('review_protocol', 2), history_read_only=True, scanner_run=False,
+        protocol_version=(record.get('review_protocol') if type(record.get('review_protocol')) is int else None),
+        history_read_only=True, scanner_run=False,
         repair_authorized=False,
         task_scope=('HOST_SESSION' if owner.get('host') in {'codex', 'cursor'} else
                     'MCP_CONNECTION' if owner else 'LEGACY_UNOWNED'),
@@ -253,7 +255,12 @@ def _base(record, freshness=None, feedback=None):
         context_read_coverage=_saved_context(record),
         max_response_bytes=MAX_RESULT_BYTES,
         history_contract='Saved results only; this read does not run checks or extend source-review budgets.')
-    if record.get('review_protocol') == 3:
+    from .task_review_protocol import is_v3_record, UnsupportedTaskReviewProtocol
+    if not is_v3_record(record):
+        result.update(review_required=False,
+            historical_review_required=record['phase'] in {'READY', 'REVIEWING'},
+            protocol_support=UnsupportedTaskReviewProtocol(record.get('review_protocol')).response())
+    if is_v3_record(record):
         result.update(review_revision=record.get('review_revision', 1),
                       previous_review_count=len(record.get('review_history', [])))
     if feedback:
@@ -342,12 +349,35 @@ def _page(base, record, rows, offset, index, limit, selected, next_offset):
     from .reply_adapters import history_facts
     from .reply_plan import plan_reply
     from .reply_render import choice_labels, render_reply
-    plan = plan_reply(history_facts(record, selected,
-        current=result.get('current_version', True), feedback=feedback))
+    facts = history_facts(record, selected,
+        current=result.get('current_version', True), feedback=feedback)
+    # Scope/diagnostic notices can contain arbitrarily long historical paths.
+    # Bound their display separately from complete finding explanations, while
+    # retaining the original record and honest sampled scope counts above.
+    from dataclasses import replace
+    from .reply_plan import Notice
+    omitted = 0
+    notices = []
+    for notice in facts.notices:
+        if len(notices) >= 8:
+            omitted += 1
+        elif _bytes(notice.text) > 2_000:
+            omitted += 1
+            notices.append(Notice(notice.kind,
+                '一项历史范围说明超过单页长度；原记录完整保留，覆盖缺口及省略数量见本页明细。'))
+        else:
+            notices.append(notice)
+    if omitted:
+        result['notice_display'] = dict(complete=False, omitted_count=omitted,
+                                       original_count=len(facts.notices))
+        facts = replace(facts, notices=tuple(notices))
+    plan = plan_reply(facts)
     result['reply_plan'] = plan.to_dict()
     result['risk_choices'] = [dict(finding_id=identifier, options=choice_labels(),
         deferred_keeps_risk=True, repair_authorized=False) for identifier in plan.action_ids]
     result['development_summary'] = render_reply(plan, include_risks=False)
+    if result.get('protocol_support'):
+        result['development_summary'] += '\n旧开发任务协议已停止执行，此处仅保留历史查询。未完成旧任务不能继续或转为 v3；只能在后续新工作实际编辑前显式建立新任务，不能为旧改动补建基线。'
     if next_offset is not None:
         result['next_action'] = dict(tool='get_task_security_review', task_ref=record['task_ref'],
                                      finding_offset=next_offset, finding_limit=min(limit, MAX_FINDINGS))

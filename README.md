@@ -4,6 +4,8 @@
 
 当前为 **Developer Alpha 试用版**，主要试用宿主是 Codex。源码在本机检查，首次准备扫描组件和漏洞数据需要联网。完整安装包自带 Python，**无需安装 Python、pip 或 venv**，也不会安装你的项目依赖或启动项目服务。
 
+本分支新版 Skill 的开发任务核查仅支持 **v3**，须配套具备 v3 能力的 Runtime；下列现有发布包不会自动包含本分支改动。[升级影响与历史任务处理](docs/TASK_REVIEW_V3_ONLY.zh-CN.md)。
+
 ## 安装到 Codex：三步
 
 ### 1. 下载并解压完整包
@@ -106,6 +108,20 @@ Mac 使用 `shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz`，Intel
 - [许可说明](LICENSING.md)、[使用条款](EULA.md)、[第三方声明](THIRD_PARTY_NOTICES.md)
 
 安装入口为 Releases 完整包，Homebrew／winget 外部上架不作为试用安装前提。
+
+## 架构统一进度（源码 0.3.6）
+
+当前相关回归分批去重 **1719 项通过**；两个扩大回归失败已在冻结源码后复测通过，原回执保留。最终版本的安全核查更新未成功，旧复核为部分覆盖且已过时，不能认定本轮安全检查通过。详见[验证记录与限制](docs/ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md#测试与交付记录)。
+
+
+本分支的开发任务安全核查已统一为 **v3**。新版 Skill 需要支持 v3 及全部任务工具的 Runtime；旧 Runtime 须升级配套构建并重连。旧任务保留只读历史，未完成旧任务不能继续；后续工作必须在下次修改前显式开始新任务，不能补造旧基线。升级只清理未被用户修改的旧受管方法文件。[兼容影响与升级说明](docs/TASK_REVIEW_V3_ONLY.zh-CN.md)。
+
+
+Codex 和 Cursor 复用同一 Runtime 核心，本批进一步共用宿主能力、任务选择、待办判断与交付事实，连接器保留各自的事件、传输和呈现。同步统一工作区服务装配、MCP 输入契约和版本内容清单，加入兼容旧扫描数据库的历史索引与任务结果到账本的中断恢复。
+
+近期原生修复意图、影响未知分级、严格证据提交、会话归属和原始基线按原契约保留。完整架构图、实际流程、冲突核对及测试结果见[本批实现记录](docs/ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)，后续顺序见[架构优化开发计划](docs/ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md)。
+
+本批按阶段交付，完整跨存储恢复、固定扫描输入和短锁、持久交付回执与双宿主性能验收仍待完成。GitHub 源码更新不会自动升级现有安装；本批未发布新安装包，不能由源码回归认定真实宿主已验收或完全无感。
 
 ## 项目文档
 

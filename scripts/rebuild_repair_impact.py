@@ -53,7 +53,7 @@ REGRESSIONS = (
     'tests/test_task_review_submission_contract.py', 'tests/test_task_review_submission_recovery.py',
     'tests/test_rebuild_task_review_probe.py',
     'tests/test_repair_impact_unknown_classification.py', 'tests/test_repair_impact_a2_recovery.py',
-    'tests/test_task_review_protocol_mcp.py', 'tests/test_task_review_v2.py', 'tests/test_task_review_v3_state.py',
+    'tests/test_task_review_protocol_mcp.py', 'tests/test_task_review_invariants.py', 'tests/test_task_review_v3_state.py',
     'tests/test_local_evidence.py', 'tests/test_local_evidence_empty_literals.py', 'tests/test_redactor_markers.py',
     'tests/test_scan_workspace_contract.py',
     'tests/test_reply_plan.py', 'tests/test_risk_decision_experience.py',

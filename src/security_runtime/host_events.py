@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .hook_state import identity, no_links
+from .host_lifecycle import HOSTS, HostCapabilities
 
 CONTRACT = 'host-event-v1'
 CLOCK_SCOPE = uuid.uuid4().hex
@@ -27,23 +28,6 @@ class OperationClass(StrEnum):
     DIRECT_FILE_MUTATION = 'DIRECT_FILE_MUTATION'
     POSSIBLE_WORKSPACE_MUTATION = 'POSSIBLE_WORKSPACE_MUTATION'
     UNKNOWN = 'UNKNOWN'
-
-
-@dataclass(frozen=True)
-class HostCapabilities:
-    supports_session_start: bool = False
-    supports_workspace_open: bool = False
-    supports_native_file_edit: bool = False
-    supports_shell_post_event: bool = False
-    supports_tool_input: bool = False
-    supports_invocation_id: bool = False
-    supports_stop: bool = False
-    supports_global_install: bool = False
-    supports_setup_seed: bool = False
-
-    def __post_init__(self):
-        if any(type(v) is not bool for v in asdict(self).values()):
-            raise ValueError('Invalid host capability contract')
 
 
 @dataclass(frozen=True)
@@ -64,7 +48,6 @@ class VerifiedHostContext:
     validation_status: str = 'BINDING_CONSISTENT'
 
     def __post_init__(self):
-        from .hook_runtime import HOSTS
         if (self.host not in HOSTS or not isinstance(self.workspace, Path)
                 or not self.workspace.is_absolute()
                 or self.workspace_identity != identity(os.path.normcase(str(self.workspace)))

@@ -27,12 +27,15 @@
 通过源码运行的开发者可显式使用 `install cursor --dev`；源码路径属于开发模式，
 不推荐用于家里电脑的长期安装。普通用户使用整个独立包，不能单独复制其中一个 EXE。
 
+当前源码的开发任务核查仅支持 v3；旧 Runtime 或缺少 v3 工具时须升级配套构建并重连，旧任务仅历史可读。详见[升级与历史处理](../TASK_REVIEW_V3_ONLY.zh-CN.md)。
+
 ## 常规检查免确认
 
 首次安装及再次安装/修复会更新用户级 `~/.cursor/permissions.json` 的 `mcpAllowlist`，
 只添加 `ai-security-runtime` 下列精确工具名，无通配符：
 
 - `begin_security_task`、`finish_security_task`、`prepare_task_security_review`
+- `get_task_review_method`、`get_task_review_plan`、`submit_task_review_batch`
 - `read_task_review_context`、`submit_task_security_review`、`get_task_security_review`
 - `get_task_risk_ledger`、`get_runtime_info`、`get_scan_preparation_status`、`get_security_summary`
 

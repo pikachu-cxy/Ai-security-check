@@ -181,7 +181,7 @@ def test_directive_only_change_is_private_semantic_evidence_and_partial_after_al
     assert before['texts'] == after['texts']
     assert 1 in before['semantic_proofs'][path]['semantic_lines']
     assert before['semantic_proofs'] != after['semantic_proofs']
-    record = dict(task_ref=FIRST, baseline=before, end=after, changes=[dict(path=path, change='MODIFIED')], static_attempts=1)
+    record = dict(task_ref=FIRST, review_protocol=3, baseline=before, end=after, changes=[dict(path=path, change='MODIFIED')], static_attempts=1)
     unit = plans.build_plan(record, now=1, protocol_version=3)['units'][0]
     assert any(gap['reason'] == 'SANITIZED_CHANGE_UNOBSERVABLE' and gap['start_line'] == 1
                for gap in unit['evidence_gaps'])

@@ -88,6 +88,8 @@ class TaskRiskFixService:
             require(all(bound.get(k) == v for k, v in source.items()),
                     'REPAIR_IMPACT_SOURCE_BINDING_MISMATCH')
             record = self.tasks.load(root, prior['repair_task_ref'])
+            from .task_review_protocol import require_record_protocol
+            require_record_protocol(record)
             require(record.get('native_repair') == context, 'REPAIR_IMPACT_NATIVE_BASELINE_MISMATCH')
             require(all(record['baseline']['hashes'].get(name) == sha
                         for name, sha in context['source_hashes'].items()),

@@ -8,11 +8,12 @@ from security_runtime import task_review_plan as plans
 from security_runtime.task_review_revisions import advance_revision, ReviewRevisionError
 from test_task_review_plan import task, snapshot
 from test_task_security import service  # noqa: F401
+from task_review_helpers import review_all
 
 
 def completed_record():
     record = task()
-    record.update(evidence={}, context_bytes=0, related_files=[])
+    record.update(review_protocol=3, evidence={}, context_bytes=0, related_files=[])
     plan = plans.build_plan(record, now=1, protocol_version=3)
     for index, window in enumerate(plan['units'][0]['required_windows']):
         evidence = dict(window, evidence_id=f'first-{index}', total_lines=1)
@@ -142,24 +143,8 @@ def test_new_revision_resumes_idle_activity_without_resetting_task_spending():
 
 
 def _review_all(tasks, root, ref, packet):
-    session, page = packet['review_session'], packet['plan']
-    while True:
-        sources = {source['source_ref']: source for source in page['sources']}
-        for unit in page['units']:
-            for window in unit['required_windows']:
-                source = sources[window['source_ref']]
-                version = 'CURRENT' if source['location_version'] == 'CURRENT_TASK_END' else 'BEFORE_TASK'
-                low, high = window['start_line'], window['end_line'] or 2_147_483_647
-                while True:
-                    result = tasks.read(root, ref, session, source['path'], low, high, source_version=version)
-                    if 'next_range' not in result:
-                        break
-                    low, high = result['next_range']
-            assert tasks.submit_batch(root, ref, session, [unit['unit_id']], 'REVIEWED', [])['coverage'] == 'REVIEWED'
-        if page['next_cursor'] is None:
-            break
-        page = tasks.review_plan(root, ref, session, cursor=page['next_cursor'])
-    result = tasks.submit(root, ref, session, [], 'REVIEWED', [])
+    review_all(tasks, root, ref, packet)
+    result = tasks.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
     assert result['status'] == 'COMPLETE'
     assert tasks.load(root, ref)['review']['coverage'] == 'REVIEWED'
 

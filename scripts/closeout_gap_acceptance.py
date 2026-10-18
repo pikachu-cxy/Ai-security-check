@@ -10,6 +10,7 @@ import subprocess
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from security_runtime.hook_state import no_links
+from task_review_v3_acceptance import V3Review, require_v3
 
 SOURCES = ['dashboard.py','settings.py','package.json','package-lock.json','component-profile.json',
            *['modules/'+n+'.py' for n in ('command','file','page','record','request','sql')],
@@ -57,28 +58,23 @@ async def run(args):
                         if r.isError: raise AssertionError((name,r.content))
                         data=r.structuredContent or json.loads(r.content[0].text)
                         return data.get('result',data)
-                    async def windows(ref,session,names=CONTEXT,overrides=None):
+                    async def windows(review,names=CONTEXT,overrides=None):
                         evidence={}
                         for name in names:
                             if not (root/name).is_file(): continue
-                            low, high = (overrides or {}).get(name, (1,2147483647))
-                            request=dict(task_ref=ref,review_session=session,file_path=name,start_line=low,end_line=high,workspace_path=str(root))
-                            ids=[]
-                            while True:
-                                r=await call('read_task_review_context',**request)
-                                assert r.get('evidence_id'), (name,r)
-                                ids.append(r['evidence_id'])
-                                if not r['has_more']: break
-                                request=r['next_read']
-                            evidence[name]=ids
+                            low, high = (overrides or {}).get(name, (1,None))
+                            evidence[name]=await review.read(name,low,high)
                         return evidence
                     info=await call('get_runtime_info')
+                    require_v3(info,{tool.name for tool in (await client.list_tools()).tools})
                     original=(await call('begin_security_task',task_key='normal-development',workspace_path=str(root)))['task_ref']
                     copy_files(source,root)
                     # Intentionally omit finish: reproduce the observed early prepare.
-                    packet=await call('prepare_task_security_review',task_ref=original,workspace_path=str(root))
+                    packet=await call('prepare_task_security_review',task_ref=original,workspace_path=str(root),protocol_version=3)
                     assert packet['status']=='REVIEW_REQUIRED'
-                    evidence=await windows(original,packet['review_session'])
+                    review=V3Review(call,original,packet['review_session'],root)
+                    await review.plan()
+                    evidence=await windows(review)
                     findings=[]
                     if index==1:
                         for path,category in [('orders/repository.py','authorization'),('modules/sql.py','sql-injection'),
@@ -95,12 +91,13 @@ async def run(args):
                                 item.update(risk_scope='RELATED_EXISTING',task_evidence=evidence['orders/api.py'][0],
                                             current_protections=['Login and output field filter; owner check absent'])
                             findings.append(item)
-                    initial=await call('submit_task_security_review',task_ref=original,review_session=packet['review_session'],
-                                       findings=findings,coverage='REVIEWED',limitations=['Fixed host reasoning fixture, not independent AI discovery.'],workspace_path=str(root))
+                    initial_receipt,initial_pages=await review.save_partial(findings,
+                        ['Fixed host fixture; no independent AI reasoning or complete before/current review.'])
+                    initial=initial_pages[0]
                     ledger=await call('get_task_risk_ledger',task_ref=original,workspace_path=str(root))
                     assert ledger['total']==(13 if index==1 else 0), ledger
-                    assert initial['host_review']['coverage']=='REVIEWED', initial
-                    assert not initial['context_read_coverage']['unread_ranges']
+                    assert initial['host_review']['coverage']=='PARTIAL', initial
+                    assert initial['host_review']['finding_count']==len(findings)
                     verification=[]
                     if index==1:
                         summary=await call('get_security_summary',scan_id=initial['static']['scan_id'],details=True,workspace_path=str(root))
@@ -114,33 +111,38 @@ async def run(args):
                             assert result['status']=='SCANNER_VERIFIED_RESOLVED', result
                         ref=(await call('begin_security_task',task_key='approved-context-repair',workspace_path=str(root)))['task_ref']
                         copy_files(args.repaired,root)
-                        p=await call('prepare_task_security_review',task_ref=ref,workspace_path=str(root))
+                        p=await call('prepare_task_security_review',task_ref=ref,workspace_path=str(root),protocol_version=3)
+                        repair_review=V3Review(call,ref,p['review_session'],root)
+                        await repair_review.plan()
                         needed=['dashboard.py',*['modules/'+n+'.py' for n in ('file','page','record','request','sql')],
                             'orders/api.py','orders/service.py','orders/repository.py',
                             'modules/command.py','settings.py','tests/test_workbench.py','tests/test_security_fixes.py']
-                        e=await windows(ref,p['review_session'],needed,{'tests/test_workbench.py':(46,89)})
+                        e=await windows(repair_review,needed,{'tests/test_workbench.py':(46,89)})
                         resolutions=[]
                         for item in ledger['items']:
                             if item['source']!='HOST_TASK_REVIEW': continue
                             resolutions.append(dict(original_task_ref=original,finding_id=item['finding_id'],
-                                evidence_refs=[e[path][0] for path in item['required_source_paths']],outcome='CODE_REVIEWED_RESOLVED',
-                                rationale='Fixture repaired source contains the corresponding input/control checks.',
+                                evidence_refs=[e[path][0] for path in item['required_source_paths']],outcome='INCONCLUSIVE',
+                                rationale='Selected repaired source was read in a fixed fixture; partial host coverage cannot establish resolution.',
                                 tests='Host ran the mock regression suite in this isolated copy.'))
                         test=subprocess.run([str(args.python.resolve()),'-B','-m','unittest','discover','-s','tests','-v'],cwd=root,capture_output=True,text=True)
                         (output/'tests.txt').write_text(test.stdout+test.stderr,encoding='utf-8')
                         assert test.returncode==0
-                        final=await call('submit_task_security_review',task_ref=ref,review_session=p['review_session'],
-                            findings=[],coverage='REVIEWED',limitations=['Fixed host review; no real network/dependency install/production validation.'],
-                            risk_resolutions=resolutions,workspace_path=str(root))
+                        final_receipt,final_pages=await repair_review.save_partial([],
+                            ['Fixed host fixture; incomplete before/current obligations and no independent model validation.'],
+                            risk_resolutions=resolutions)
+                        final=final_pages[0]
                         ledger=await call('get_task_risk_ledger',task_ref=original,workspace_path=str(root))
-                        assert ledger['counts']=={'SCANNER_VERIFIED_RESOLVED':7,'CODE_REVIEWED_RESOLVED':6}, ledger
-                        assert final['host_review']['coverage']=='REVIEWED'
-                        assert not final['context_read_coverage']['unread_ranges'] and not final['context_read_coverage']['gaps']
+                        assert ledger['counts']=={'SCANNER_VERIFIED_RESOLVED':7,'INCONCLUSIVE':6}, ledger
+                        assert final['host_review']['coverage']=='PARTIAL'
+                        assert not final['repair_authorized']
                     else:
                         final=initial
+                        final_receipt,final_pages=initial_receipt,initial_pages
                         assert not initial['risk_choices'] and not initial['static']['finding_count']
                     receipts.append(dict(case=index,build_identity=info['build_identity'],original_task_ref=original,
-                        initial=initial,final=final,risk_ledger=ledger,verification=verification,
+                        initial=initial,initial_receipt=initial_receipt,initial_history_pages=initial_pages,
+                        final=final,final_receipt=final_receipt,final_history_pages=final_pages,risk_ledger=ledger,verification=verification,
                         host_review_is_fixture=True,desktop_dispatch_observed=False,original_projects_modified=False))
     (output/'receipt.json').write_text(json.dumps(receipts,ensure_ascii=False,indent=2),encoding='utf-8')
     print(json.dumps(dict(status='PASS',receipt=str(output/'receipt.json'),

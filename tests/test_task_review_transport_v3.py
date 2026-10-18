@@ -17,7 +17,7 @@ from test_task_security import service  # noqa: F401
 def coordinator(service, monkeypatch):
     tasks, root, runtime = service
     # This suite tests the transport boundary independently of shipped guidance.
-    monkeypatch.setattr(TaskReviewCoordinator, '_method', lambda self, protocol_version=2:
+    monkeypatch.setattr(TaskReviewCoordinator, '_method', lambda self, protocol_version=3:
         dict(version=f'fixture-review-v{protocol_version}', sha256='a' * 64, content='Fixture method'))
     return TaskReviewCoordinator(tasks), tasks, root, runtime
 
@@ -159,18 +159,21 @@ def test_idle_resume_preserves_same_plan_session_and_consumption_but_polling_doe
     assert len(runtime.calls) == 1
 
 
-def test_protocol_switch_cannot_replace_old_ledger_or_recover_legacy_deadline(coordinator):
-    c, tasks, root, _ = coordinator
-    ref = tasks.begin(root, 'legacy-no-reset')['task_ref']
+@pytest.mark.parametrize('protocol', [1, 2])
+def test_old_protocol_is_rejected_without_creating_or_replacing_a_plan(coordinator, protocol):
+    from security_runtime.task_review_protocol import UnsupportedTaskReviewProtocol
+    c, tasks, root, runtime = coordinator
+    ref = tasks.begin(root, 'no-protocol-downgrade')['task_ref']
     (root / 'added.py').write_text('allowed = access.check(subject)\n')
-    c.prepare(root, ref, protocol_version=2)
     before = tasks.load(root, ref)
-    with pytest.raises(ValueError, match='original review protocol'):
-        c.prepare(root, ref, protocol_version=3)
-    assert tasks.load(root, ref) == before
-    tasks.now = lambda: before['review_deadline'] + 1
-    assert c.prepare(root, ref, protocol_version=2)['status'] == 'EXPIRED'
-    assert tasks.load(root, ref) == before
+    with pytest.raises(UnsupportedTaskReviewProtocol):
+        c.prepare(root, ref, protocol_version=protocol)
+    assert tasks.load(root, ref) == before and not runtime.calls
+    c.prepare(root, ref)
+    prepared_record = tasks.load(root, ref)
+    with pytest.raises(UnsupportedTaskReviewProtocol):
+        c.prepare(root, ref, protocol_version=protocol)
+    assert tasks.load(root, ref) == prepared_record and len(runtime.calls) == 1
 
 
 def test_terminal_receipt_never_uses_source_budget_or_carries_unbounded_host_prose(coordinator, monkeypatch):

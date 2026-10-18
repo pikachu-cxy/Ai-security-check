@@ -37,13 +37,14 @@ def _digest(value):
 def _policy():
     from .build_identity import build_identity
     from .task_security import method
+    from .task_review_protocol import PROTOCOL_VERSION
     try:
         identity = build_identity()
         build = identity.get('build_id')
         if (identity.get('status') not in {'DEV', 'IDENTIFIED'} or not isinstance(build, str)
                 or len(build) != 64 or any(character not in '0123456789abcdef' for character in build)):
             return None
-        guide = method(2)
+        guide = method(PROTOCOL_VERSION)
         return _digest(dict(contract='task-risk-feedback-v1', build_id=build,
             method_version=guide['version'], method_sha256=guide['sha256'],
             rule_identity='HOST_CONTEXT_REVIEW; NATIVE_RULES_NOT_APPLICABLE',

@@ -23,7 +23,7 @@ def finding(identifier, *, impact='A conditional impact'):
 
 
 def record(static_count=2, host_count=5):
-    return dict(phase='COMPLETE', task_ref='ts1-' + 'a' * 32,
+    return dict(phase='COMPLETE', task_ref='ts1-' + 'a' * 32, review_protocol=3,
         task_owner={'host': 'codex', 'session': 'private-session'},
         baseline={'hashes': {'src/service.py': 'hash'},
                   'texts': {'src/service.py': ['private preimage source']}},
@@ -124,20 +124,31 @@ def test_condition_protection_uncertainty_and_code_locations_are_preserved():
     assert item['evidence_locations'][0]['path'] == 'src/service.py'
 
 
-def test_scope_and_metadata_are_bounded_with_honest_total_counts():
+@pytest.mark.parametrize('protocol', [3, 1, 2, None])
+def test_scope_and_metadata_are_bounded_with_honest_total_counts(protocol):
     original = record(0, 1)
+    if protocol is None:
+        original.pop('review_protocol')
+    else:
+        original['review_protocol'] = protocol
     paths = ['long/' + '目录' * 1000 + str(i) + '.py' for i in range(1000)]
     original['static']['scope_files'] = paths
     original['static']['actual_files'] = paths
     original['hook_final_recheck_files'] = paths
     original['changes'] = [dict(path=path, change='MODIFIED') for path in paths]
     original['limitations'] = [dict(reason='SOURCE_UNAVAILABLE', paths=paths, count=1000)]
+    before = copy.deepcopy(original)
     packet = bounded_history_result(original, 0, 1)
+    assert packet['notice_display']['complete'] is False
+    assert 0 < packet['notice_display']['omitted_count'] <= packet['notice_display']['original_count']
+    assert packet['findings'][0]['details_complete'] is True
+    assert packet['findings'][0]['detail']['impact'] == original['review']['findings'][0]['impact']
     scope = packet['static']['scope_files']
     assert scope['total_count'] == scope['omitted_count'] == 1000
     assert scope['items'] == []
     assert packet['changes']['total_count'] == 1000
     assert packet['file_hook_checks']['current_recheck_files']['total_count'] == 1000
+    assert original == before
     assert_bounded(packet)
 
 

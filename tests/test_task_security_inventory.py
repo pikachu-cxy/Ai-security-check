@@ -7,6 +7,7 @@ from security_runtime.git import GitError, GitService
 from security_runtime.local_evidence import EvidenceUnavailable, WorkspaceReader
 from security_runtime import task_security
 from test_task_security import service, begin
+from task_review_helpers import read_plan
 
 
 def test_ignored_old_files_cannot_consume_task_budget_or_hide_new_source(service, monkeypatch):
@@ -31,8 +32,9 @@ def test_ignored_old_files_cannot_consume_task_budget_or_hide_new_source(service
     assert runtime.calls == [('routes.py', 'z_new_source.py')]
     assert not result['limitations']
     packet = s.prepare(root, ref)
-    assert {'routes.py', 'z_new_source.py'} == {d['path'] for d in packet['diffs']}
-    assert s.read(root, ref, packet['review_session'], 'auth.py')['path'] == 'auth.py'
+    assert {'routes.py', 'z_new_source.py'} == {unit['path'] for unit in read_plan(s, root, ref, packet)[0]}
+    evidence = s.read(root, ref, packet['review_session'], 'auth.py')
+    assert s.load(root, ref)['evidence'][evidence['evidence_id']]['path'] == 'auth.py'
     assert s.get(root, ref)['current_version'] is True
 
 
@@ -47,8 +49,11 @@ def test_priority_keeps_new_file_when_snapshot_read_budget_is_partial(service, m
     assert runtime.calls == [('z_new_source.py',)]
     assert result['unverified_file_count'] == 3
     packet = s.prepare(root, ref)
-    assert packet['diffs'][0]['path'] == 'z_new_source.py'
-    assert packet['diffs'][0].get('availability') is None
+    unit, = read_plan(s, root, ref, packet)[0]
+    assert unit['path'] == 'z_new_source.py'
+    assert unit['required_windows']
+    evidence = s.read(root, ref, packet['review_session'], 'z_new_source.py')
+    assert evidence['lines'] == ['new_value = 3']
     assert s.get(root, ref)['current_version'] is True
 
 
@@ -118,7 +123,7 @@ def test_starting_staged_dirty_new_deleted_and_restored_bytes_are_preserved(serv
     assert s.finish(root, ref)['status'] == 'READY' and len(runtime.calls) == 1
     packet = s.prepare(root, ref)
     evidence = s.read(root, ref, packet['review_session'], 'auth.py')
-    assert evidence['location_version'] == 'BEFORE_DELETION'
+    assert s.load(root, ref)['evidence'][evidence['evidence_id']]['location_version'] == 'BEFORE_DELETION'
 
 
 def test_new_ignore_rule_does_not_pretend_an_existing_file_was_deleted(service):
@@ -192,7 +197,9 @@ def test_static_scope_is_complete_while_large_context_packet_stays_bounded(servi
     assert set(runtime.calls[0]) == set(names)
     packet = s.prepare(root, ref)
     assert packet['static']['scope_file_count'] == 210
-    assert packet['static']['scope_truncated'] is True
-    assert len(packet['static']['scope_files']) == task_security.MAX_CHANGED
-    assert packet['budget']['static_changed_files'] == task_security.MAX_STATIC_CHANGED
-    assert len(__import__('json').dumps(packet, ensure_ascii=False).encode()) < task_security.MAX_CONTEXT
+    assert 'scope_files' not in packet['static']
+    assert set(s.load(root, ref)['static']['scope_files']) == set(names)
+    units, _ = read_plan(s, root, ref, packet)
+    assert {unit['path'] for unit in units} == set(names)
+    from security_runtime.task_review_plan import DEFAULT_LIMITS
+    assert len(__import__('json').dumps(packet, ensure_ascii=False).encode()) <= DEFAULT_LIMITS['response_bytes']

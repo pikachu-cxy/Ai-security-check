@@ -187,7 +187,12 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as client:
                 initialized = await client.initialize()
-                assert 'Agent fixes. Runtime verifies.' in initialized.instructions
+                instructions = ' '.join(initialized.instructions.split())
+                assert 'The host coding agent edits selected local code' in instructions
+                assert 'Scanner repairs then use verify_task_fix with the originating scanner.' in instructions
+                assert 'Native task repairs use their bound repair_task_ref for finish/review' in instructions
+                assert 'do not call scanner verify_task_fix for a native risk.' in instructions
+                assert 'Do not ask users to ferry coding_agent_prompt or UUIDs.' in instructions
                 tools = {t.name:t for t in (await client.list_tools()).tools}
                 from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
                 assert REQUIRED_GUIDANCE_TOOLS <= set(tools)

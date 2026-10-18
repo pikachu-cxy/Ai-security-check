@@ -12,11 +12,14 @@ import time
 
 from .closeout_state import digest, encode, readonly_uri
 from .hook_state import atomic_bytes, no_links
+from .task_review_protocol import require_record_protocol, is_v3_record
 
 CONTRACT = 'task-security-v1'
 REF = re.compile(r'ts1-[a-f0-9]{32}')
 MAX_RECORD_BYTES = 4_000_000
 TTL = 24 * 3600
+MAX_V3_RECORDS = 32
+MAX_HISTORY_RECORDS = MAX_V3_RECORDS * 2  # Preserve up to 32 retired records without using v3 slots.
 HOOK_FAILURE_CONTRACT = 'task-hook-recording-failure-v1'
 MAX_HOOK_FAILURE_BYTES = 160_000
 MAX_HOOK_FAILURE_FILES = 1000
@@ -27,7 +30,7 @@ MAX_HOOK_FAILURE_MARKERS = 32
 def persistent_record(value):
     """Keep one authoritative v3 ledger; do not mutate caller or legacy bytes."""
     plan = value.get('review_plan')
-    if (value.get('review_protocol') == 3 and isinstance(plan, dict)
+    if (is_v3_record(value) and isinstance(plan, dict)
             and plan.get('contract') == 'task-review-plan-v3'
             and isinstance(value.get('review_ledger'), dict)):
         return dict(value, review_plan={key: item for key, item in plan.items() if key != 'budget'})
@@ -69,7 +72,7 @@ class TaskSecurityStore:
             # Per-edit routing need not deserialize completed tasks' source
             # packets. Keep the signed phase/TTL checks below as well.
             predicate="WHERE phase IN ('ACTIVE','STATIC_RUNNING','READY','REVIEWING')" if active else ''
-            rows=db.execute(f'SELECT data,mac FROM security_tasks {predicate} ORDER BY rowid DESC LIMIT 32').fetchall()
+            rows=db.execute(f'SELECT data,mac FROM security_tasks {predicate} ORDER BY rowid DESC LIMIT {MAX_HISTORY_RECORDS}').fetchall()
         from .task_ownership import ACTIVE
         records=[self.decode(row) for row in rows]
         return [v for v in records if v and self.now()-v['created_at']<=TTL and (not active or v['phase'] in ACTIVE)]
@@ -82,7 +85,8 @@ class TaskSecurityStore:
             return None
         if active and ref is None:
             from .task_ownership import record_owner
-            values=[v for v in self.records(active=True) if owner is None or record_owner(v)==owner]
+            values=[v for v in self.records(active=True) if is_v3_record(v)
+                    and (owner is None or record_owner(v)==owner)]
             return values[0] if len(values)==1 else None
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
             db.execute('PRAGMA query_only=ON')
@@ -97,14 +101,16 @@ class TaskSecurityStore:
 
     def for_hook(self, host, session):
         from .task_ownership import record_owner
-        values=self.records(active=True)
+        values=[v for v in self.records(active=True) if is_v3_record(v)]
         owned=[v for v in values if record_owner(v)=={'host':host,'session':session}]
         if len(owned)==1: return owned[0]
-        # Legacy single-task embedding is retained, never a newest-task guess.
+        # A single unowned v3 embedding is retained, never a newest-task guess.
         if not owned and len(values)==1 and record_owner(values[0]) is None: return values[0]
         return None
 
     def save(self, value, *, new=False):
+        if new:
+            require_record_protocol(value)
         no_links(self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
@@ -115,8 +121,16 @@ class TaskSecurityStore:
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
                 raise ValueError('Task changed concurrently; read current task first')
-            if new and db.execute('SELECT count(*) FROM security_tasks').fetchone()[0] >= 32:
-                raise ValueError('Task history budget exceeded')
+            if new:
+                rows = db.execute('SELECT data,mac FROM security_tasks LIMIT ?',
+                                  (MAX_HISTORY_RECORDS+1,)).fetchall()
+                # Protocol classification must use authenticated records. Old
+                # history retains its bytes and its own bounded reserve; it
+                # cannot consume the unchanged v3 task allowance.
+                records = [self.decode(row) for row in rows]
+                if (len(records) >= MAX_HISTORY_RECORDS or
+                        sum(is_v3_record(item) for item in records) >= MAX_V3_RECORDS):
+                    raise ValueError('Task history budget exceeded')
             from .task_ownership import ACTIVE, LEASE_SECONDS
             value = dict(value, generation=value['generation']+1, activity_at=self.now())
             if value['phase'] in ACTIVE:
@@ -138,7 +152,7 @@ class TaskSecurityStore:
             return []
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
             db.execute('PRAGMA query_only=ON')
-            rows = db.execute('SELECT data,mac FROM security_tasks ORDER BY rowid DESC LIMIT 32').fetchall()
+            rows = db.execute(f'SELECT data,mac FROM security_tasks ORDER BY rowid DESC LIMIT {MAX_HISTORY_RECORDS}').fetchall()
         values = [self.decode(row) for row in rows]
         return [v for v in values if v and self.now()-v['created_at'] <= TTL
                 and v.get('end') and (v.get('static') or {}).get('scan_id') == scan_id]

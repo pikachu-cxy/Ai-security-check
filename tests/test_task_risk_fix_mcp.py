@@ -12,6 +12,8 @@ from security_runtime.storage import SQLiteStore
 from security_runtime.task_ownership import issue_session_ref
 from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.task_security import TaskSecurityService
+from security_runtime.native_repair_intent import NativeRepairIntents
+from security_runtime.task_ownership import record_owner
 
 
 def invoke(server, name, **kwargs):
@@ -121,6 +123,71 @@ def test_ready_native_preparation_reuses_original_baseline_after_its_own_edit(na
     assert second['resolution_target']['original_task_ref'] == case['source']['task_ref']
     assert second['repair_authorized'] is False
     assert second['atomic_edit_enforcement'] is False
+
+
+@pytest.mark.parametrize('protocol', [1, 2, None])
+def test_bound_historical_repair_task_cannot_resume_or_replace_baseline(native_case, protocol):
+    case = native_case
+    ready(case)
+    first = prepare_fix(case)
+    record = case['store'].get(first['repair_task_ref'])
+    if protocol is None:
+        record.pop('review_protocol')
+    else:
+        record['review_protocol'] = protocol
+    historical = case['store'].save(record)
+    intents = NativeRepairIntents(case['hooks'].store, case['root'], record_owner(historical))
+    intent_before = copy.deepcopy(intents.get())
+    tasks_before = case['store'].path.read_bytes()
+    source_before = (case['root'] / 'app.py').read_bytes()
+    with patch('security_runtime.task_security.capture', side_effect=AssertionError('no replacement baseline')), \
+            patch.object(SecurityRuntime, 'scan', side_effect=AssertionError('no scanner in historical refusal')):
+        refused = prepare_fix(case)
+        blocked = invoke(case['server'], 'begin_security_task',
+                         task_key='cannot-bypass-historical-repair', **case['common'])
+    assert refused['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+    assert refused['read_only_supported'] and not refused['scanner_run']
+    assert refused.get('ready_for_host_fix') is not True and not refused['repair_authorized']
+    assert blocked['status'] == 'NATIVE_REPAIR_PREPARATION_REQUIRED'
+    assert blocked['protocol_support']['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+    assert blocked['new_work_requires_explicit_switch'] is True and 'next_action' not in blocked
+    assert '已绑定的旧开发任务协议已停止执行' in blocked['message']
+    assert '原风险、修复意图与基线保留' in blocked['message']
+    assert '如用户已明确暂停该修复或切换其他工作' in blocked['message']
+    assert case['store'].path.read_bytes() == tasks_before
+    assert case['store'].get(first['repair_task_ref']) == historical
+    assert len(case['store'].records()) == 2 and intents.get() == intent_before
+    assert (case['root'] / 'app.py').read_bytes() == source_before
+    paused = invoke(case['server'], 'cancel_task_risk_fix',
+                    task_ref=case['source']['task_ref'], finding_id=case['source']['finding_id'],
+                    user_requested=True, **case['common'])
+    assert paused['status'] == 'NATIVE_RISK_FIX_PAUSED' and paused['risk_handling_unchanged']
+    fresh = invoke(case['server'], 'begin_security_task', task_key='explicit-future-work-v3',
+                   **case['common'])
+    assert fresh['status'] == 'ACTIVE' and fresh['task_ref'] != first['repair_task_ref']
+    assert case['store'].get(fresh['task_ref'])['review_protocol'] == 3
+    assert case['store'].get(first['repair_task_ref']) == historical
+    assert intents.get()['status'] == 'CANCELLED' and len(case['store'].records()) == 3
+
+
+@pytest.mark.parametrize('protocol', [1, 2, None])
+def test_historical_original_risk_can_authorize_separate_future_v3_repair(native_case, protocol):
+    case = native_case
+    original = case['store'].get(case['source']['task_ref'])
+    if protocol is None:
+        original.pop('review_protocol')
+    else:
+        original['review_protocol'] = protocol
+    historical = case['store'].save(original)
+    ready(case)
+    with patch.object(SecurityRuntime, 'scan', side_effect=AssertionError('preparation never scans')):
+        prepared = prepare_fix(case)
+    assert prepared['status'] == 'NATIVE_RISK_FIX_PREPARED' and prepared['ready_for_host_fix']
+    assert prepared['repair_task_ref'] != case['source']['task_ref']
+    assert case['store'].get(prepared['repair_task_ref'])['review_protocol'] == 3
+    assert case['store'].get(case['source']['task_ref']) == historical
+    assert prepared['resolution_target']['original_task_ref'] == case['source']['task_ref']
+    assert not prepared['repair_authorized'] and not prepared['scanner_run']
 
 
 def test_decline_or_pause_releases_only_the_exact_workflow(native_case):

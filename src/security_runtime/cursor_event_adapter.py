@@ -2,28 +2,15 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 from .hook_state import identity, no_links
 from .host_events import EventKind, HostCapabilities, NormalizedHostEvent, OperationClass, VerifiedHostContext
+from .host_lifecycle import TransportCapabilities as CursorTransportCapabilities, connector_profile
 
 EVENTS = {'sessionStart': EventKind.SESSION_START, 'afterFileEdit': EventKind.WORKSPACE_ACTIVITY,
           'afterShellExecution': EventKind.WORKSPACE_ACTIVITY, 'stop': EventKind.SESSION_STOP,
           'preToolUse': None, 'postToolUse': None}  # Preparation/delivery, never Core activity.
-
-
-@dataclass(frozen=True)
-class CursorTransportCapabilities:
-    supports_detection: bool = True
-    supports_advisory_remediation: bool = True
-    supports_user_visible_feedback: bool = False
-    supports_agent_continuation: bool = False
-    supports_stop_followup: bool = False
-    supports_post_edit_context: bool = False
-    supports_mcp: bool = True
-    supports_live_remediation_continuation: bool = False
-    supports_remote_workspace: bool = False
 
 
 def claim(value):
@@ -60,18 +47,15 @@ def generation_diagnostics(arguments):
 
 class CursorHostEventAdapter:
     host = 'cursor'
-    transport_capabilities = CursorTransportCapabilities()
-    capabilities = HostCapabilities(supports_session_start=True, supports_native_file_edit=True,
-        supports_shell_post_event=True, supports_tool_input=True, supports_stop=True,
-        supports_global_install=True)
+    profile = connector_profile('cursor', 'legacy')
+    transport_capabilities = profile.transport_capabilities
+    capabilities = profile.capabilities
 
     def __init__(self, *, automatic=False):
         self.automatic = automatic
-        if automatic:
-            from dataclasses import replace
-            self.transport_capabilities = replace(self.transport_capabilities,
-                supports_user_visible_feedback=True, supports_agent_continuation=True,
-                supports_stop_followup=True, supports_post_edit_context=True)
+        self.profile = connector_profile('cursor', 'automatic' if automatic else 'legacy')
+        self.capabilities = self.profile.capabilities
+        self.transport_capabilities = self.profile.transport_capabilities
 
     def validate_claims(self, arguments, expected, schema=None):
         args = arguments if isinstance(arguments, dict) else {}

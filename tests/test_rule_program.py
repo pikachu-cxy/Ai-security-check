@@ -145,7 +145,8 @@ def test_zero_applicable_language_and_maturity_planning():
     javascript=plan_rules(PACK,['main.js','main.ts'])
     assert len(javascript.rules)==6 and javascript.files==('main.js','main.ts')
     python=plan_rules(PACK,['main.py'])
-    assert all(r.language=='python' for r in python.rules) and len(python.rules)==15
+    assert all(r.language=='python' for r in python.rules) and len(python.rules)==16
+    assert 'ai-security.python.path-commonprefix-stat-lookup' in {r.rule_id for r in python.rules}
     java=plan_rules(PACK,['A.java','other.js'])
     assert java.files==('A.java','other.js')
     assert java.coverage()['applicable_capabilities']==11

@@ -11,6 +11,7 @@ import uuid
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from security_runtime.hook_state import no_links
+from task_review_v3_acceptance import V3Review, require_v3
 
 
 async def accept(executable, engine_root, output, workspace=None):
@@ -65,6 +66,7 @@ async def accept(executable, engine_root, output, workspace=None):
                         data = response.structuredContent or json.loads(response.content[0].text)
                         return data.get('result', data)
                     info = await call('get_runtime_info')
+                    require_v3(info, {tool.name for tool in (await client.list_tools()).tools})
                     started = await call('begin_security_task', task_key='automatic-inventory-'+tag,
                                          workspace_path=str(root))
                     assert started['status'] == 'ACTIVE' and not started['limitations'], started
@@ -83,21 +85,25 @@ async def accept(executable, engine_root, output, workspace=None):
                     assert {'semgrep', 'gitleaks'} <= {r['scanner'] for r in result['static']['scanner_runs'] if r['status']=='SUCCESS'}
                     again = await call('finish_security_task', task_ref=ref, workspace_path=str(root))
                     assert again['static']['scan_id'] == result['static']['scan_id'] and not again['scanner_run']
-                    packet = await call('prepare_task_security_review', task_ref=ref, workspace_path=str(root))
-                    assert set(d['path'] for d in packet['diffs']) == set(expected)
-                    assert not any('availability' in d for d in packet['diffs'])
-                    session = packet['review_session']
-                    for name in [expected[0], related]:
-                        await call('read_task_review_context', task_ref=ref, review_session=session,
-                                   file_path=name, start_line=1, end_line=40, workspace_path=str(root))
-                    submitted = await call('submit_task_security_review', task_ref=ref, review_session=session,
-                        findings=[], coverage='PARTIAL', limitations=['接口验收模拟提交，不代表真实宿主AI分析。'], workspace_path=str(root))
-                    assert submitted['status'] == 'COMPLETE'
-                    readback = await call('get_task_security_review', task_ref=ref, workspace_path=str(root))
+                    packet = await call('prepare_task_security_review', task_ref=ref, workspace_path=str(root), protocol_version=3)
+                    review = V3Review(call, ref, packet['review_session'], root)
+                    units = await review.plan()
+                    assert {unit['path'] for unit in units} == set(expected)
+                    for unit in units:
+                        assert unit['change'] == 'ADDED' and unit['required_windows']
+                        for window in unit['required_windows']:
+                            source = review.sources[window['source_ref']]
+                            assert source['path'] == unit['path'] and source['location_version'] == 'CURRENT_TASK_END'
+                    for name in [*expected, related]:
+                        await review.read(name, 1, 40)
+                    submitted, pages = await review.save_partial([],
+                        ['接口验收模拟提交；仅检查所请求的源码范围，不代表真实宿主AI分析。'])
+                    readback = pages[0]
                     assert readback['current_version'] is True
                     receipt = {'contract': 'automatic-task-inventory-acceptance-v1', 'workspace': str(root),
                         'build_id': info['build_identity']['build_id'], 'baseline_files': started['baseline_file_count'],
-                        'changes': result['changes'], 'static': result['static'], 'diff_preimages_available': True,
+                        'changes': result['changes'], 'static': result['static'], 'source_windows_verified': True,
+                        'review_protocol': 3, 'review_receipt': submitted, 'review_history_pages': pages,
                         'same_result_reused': True, 'context_read': True, 'timings': timings,
                         'host_review_is_fixture': True, 'desktop_dispatch_observed': False,
                         'caller_supplied_file_scope': False, 'global_configuration_modified': False}

@@ -35,7 +35,7 @@ def prepare_large_task(server, root):
     source = root / 'large.py'
     source.write_text(''.join(f'value_{number} = {number}\n' for number in range(500)), encoding='utf-8')
     finished = call(server, 'finish_security_task', root, task_ref=ref)
-    packet = call(server, 'prepare_task_security_review', root, task_ref=ref)
+    packet = call(server, 'prepare_task_security_review', root, task_ref=ref, protocol_version=3)
     return ref, packet, finished
 
 
@@ -50,7 +50,9 @@ def test_global_session_scope_requires_signed_context_not_only_observed_chat(ins
         core=pool.children[root][1];store=TaskSecurityStore(core.store,root)
         assert record_owner(store.get(first))['host']=='connection'
         token=issue_session_ref(core.store,root,'codex','actual-chat')
-        second=call(server,'begin_security_task',root,task_key='two',session_ref=token)['task_ref']
+        second_packet=call(server,'begin_security_task',root,task_key='two',session_ref=token)
+        assert 'task_ref' in second_packet, second_packet
+        second=second_packet['task_ref']
         assert first!=second and record_owner(store.get(second))==session_owner('codex','actual-chat')
         wrong=issue_session_ref(core.store,root,'codex','observed-chat')
         rejected=call(server,'finish_security_task',root,task_ref=second,session_ref=wrong,skip_review_reason='foreign')
@@ -68,33 +70,37 @@ def test_global_paging_keeps_full_static_scope_and_same_task_session(installed, 
         ref, packet, finished = prepare_large_task(server, root)
         assert finished['static']['scope_files'] == ['large.py']
         assert ledgers[root].calls == [('large.py',)]
-        page = call(server, 'read_task_review_context', root, task_ref=ref,
-                    review_session=packet['review_session'], file_path='large.py',
-                    start_line=1, end_line=500)
+        assert packet['protocol_version'] == 3
+        binding = next(source for source in packet['plan']['sources'] if source['path'] == 'large.py')
+        assert binding['total_lines'] == 500 and binding['location_version'] == 'CURRENT_TASK_END'
+        arguments = dict(task_ref=ref, review_session=packet['review_session'],
+                         file_path='large.py', source_version='CURRENT')
         evidence, ranges = [], []
-        while True:
+        for low in range(1, 501, 80):
+            page = call(server, 'read_task_review_context', root, **arguments,
+                        start_line=low, end_line=min(low+79, 500))
             assert page.get('reason_code') != 'WORKSPACE_OR_REFERENCE_REJECTED'
             assert 'workspace_readiness' not in page
-            assert page['total_lines'] == 500
-            assert 1 <= len(page['numbered_lines']) <= 80
+            assert page['source_ref'] == binding['source_ref']
+            assert 1 <= len(page['lines']) <= 80
             evidence.append(page['evidence_id'])
-            ranges.append((page['start_line'], page['end_line']))
-            if not page['has_more']:
-                break
-            next_read = page['next_read']
-            assert next_read['task_ref'] == ref
-            assert next_read['review_session'] == packet['review_session']
-            assert next_read['file_path'] == 'large.py'
-            page = call(server, 'read_task_review_context', root,
-                        **{k: v for k, v in next_read.items() if k != 'workspace_path'})
+            ranges.append((page['start_line'], page['start_line']+len(page['lines'])-1))
+            assert page['start_line'] == low
         assert ranges[0] == (1, 80) and ranges[-1][1] == 500
         assert all(left[1] + 1 == right[0] for left, right in zip(ranges, ranges[1:]))
         assert len(evidence) == len(set(evidence)) == 7
+        batch = call(server, 'submit_task_review_batch', root, task_ref=ref,
+                     review_session=packet['review_session'],
+                     unit_ids=[unit['unit_id'] for unit in packet['plan']['units']],
+                     coverage='REVIEWED', limitations=[])
+        assert batch['status'] == 'BATCH_RECORDED' and batch['coverage'] == 'REVIEWED'
         submitted = call(server, 'submit_task_security_review', root, task_ref=ref,
                          review_session=packet['review_session'], findings=[],
                          coverage='REVIEWED', limitations=[])
         assert submitted['status'] == 'COMPLETE'
-        assert submitted['host_review']['coverage'] == 'REVIEWED'
+        assert submitted['result_saved'] and submitted['review_progress']['coverage'] == 'REVIEWED'
+        history = call(server, 'get_task_security_review', root, task_ref=ref)
+        assert history['history_read_only'] and history['host_review']['coverage'] == 'REVIEWED'
         assert ledgers[root].calls == [('large.py',)]
     finally:
         pool.close()

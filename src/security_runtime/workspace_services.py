@@ -10,6 +10,43 @@ class NoProjectSeed:
         return None, 'GLOBAL_SESSION_BASELINE'
 
 
+def assemble_remediation(runtime, coordinator, *, factory=None):
+    """Shared product construction; trusted embeddings may supply a constructor.
+
+    Workspace claims and MCP arguments never choose this constructor. The impact
+    gate is installed after its workspace-bound callback has been constructed.
+    """
+    from .remediation import RemediationService
+    service = (factory or RemediationService)(getattr(runtime, 'store', None),
+        hooks=coordinator.store, registry=coordinator.managed_registry())
+    if factory is None:
+        service.agent_tickets.enabled = True
+    return service
+
+
+def bind_impact_gate(service, gate):
+    """Required product wiring, including custom global workspace factories."""
+    if not callable(gate):
+        raise ValueError('PRODUCT_IMPACT_GATE_REQUIRED')
+    service.impact_gate = gate
+
+
+def workspace_mcp_server(root, directory, binding):
+    """Compose one bound product server; transport hosts share this assembly."""
+    from .mcp_server import create_server
+    from .remediation import RemediationService
+    from .remediation_policy import RemediationConfig
+    runtime, core, is_git = workspace_services(root, directory)
+
+    def remediation_factory(store, **kwargs):
+        # Preferences are user-wide; evidence, grants and task state are local.
+        return RemediationService(store, config=RemediationConfig(), inline_agent_tickets=True, **kwargs)
+
+    return create_server(runtime, hook_coordinator=core,
+        remediation_factory=remediation_factory, workspace_binding=binding,
+        global_mode=False, hook_advisory_only=not is_git), core
+
+
 def workspace_services(root, directory):
     from .runtime import SecurityRuntime
     from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter

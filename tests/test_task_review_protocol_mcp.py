@@ -31,7 +31,7 @@ def protocol_routes(monkeypatch):
         return row
 
     monkeypatch.setattr(TaskSecurityService, 'prepare',
-        lambda self, root, ref, protocol_version=1: checked(self, root, ref, 'prepare',
+        lambda self, root, ref, protocol_version=3: checked(self, root, ref, 'prepare',
             protocol_version=protocol_version))
     monkeypatch.setattr(TaskSecurityService, 'review_plan',
         lambda self, root, ref, session, cursor=0, limit=10: checked(self, root, ref, 'plan',
@@ -46,13 +46,12 @@ def protocol_routes(monkeypatch):
     return calls
 
 
-def test_local_review_protocol_preserves_v1_default_and_forwards_v2_v3_arguments(service, protocol_routes):
+def test_local_review_protocol_defaults_to_v3_and_forwards_v3_arguments(service, protocol_routes):
     tasks, root, runtime = service
     server = create_server(runtime, hook_coordinator=HookCoordinator(runtime, tasks.hooks), global_mode=False)
     ref = local_call(server, 'begin_security_task', workspace_path=str(root), task_key='protocol')['task_ref']
     base = dict(workspace_path=str(root), task_ref=ref)
-    assert local_call(server, 'prepare_task_security_review', **base)['protocol_version'] == 1
-    assert local_call(server, 'prepare_task_security_review', **base, protocol_version=2)['protocol_version'] == 2
+    assert local_call(server, 'prepare_task_security_review', **base)['protocol_version'] == 3
     assert local_call(server, 'prepare_task_security_review', **base, protocol_version=3)['protocol_version'] == 3
     session = dict(base, review_session='tr1-protocol-test')
     plan = local_call(server, 'get_task_review_plan', **session)
@@ -63,11 +62,26 @@ def test_local_review_protocol_preserves_v1_default_and_forwards_v2_v3_arguments
     batch = local_call(server, 'submit_task_review_batch', **session, unit_ids=['unit-a', 'unit-b'],
         coverage='PARTIAL', limitations=['Caller context remains unread'])
     assert batch['unit_ids'] == ['unit-a', 'unit-b'] and batch['coverage'] == 'PARTIAL'
-    assert len(protocol_routes) == 7 and not runtime.calls
+    assert len(protocol_routes) == 6 and not runtime.calls
+
+
+@pytest.mark.parametrize('protocol', [1, 2, None, True, '3', 3.0])
+def test_local_old_or_invalid_protocol_is_rejected_before_business_routing(service, protocol_routes, protocol):
+    tasks, root, runtime = service
+    server = create_server(runtime, hook_coordinator=HookCoordinator(runtime, tasks.hooks), global_mode=False)
+    ref = local_call(server, 'begin_security_task', workspace_path=str(root), task_key='old-protocol')['task_ref']
+    before = tasks.load(root, ref)
+    result = local_call(server, 'prepare_task_security_review', workspace_path=str(root), task_ref=ref,
+                        protocol_version=protocol)
+    assert result['reason_code'] == result['status'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+    assert result['protocol_version'] == 3 and result['read_only_supported'] is True
+    assert result['scanner_run'] is False and result['repair_authorized'] is False
+    assert protocol_routes == [] and not runtime.calls
+    assert tasks.load(root, ref) == before
 
 
 @pytest.mark.parametrize('name,extra', [
-    ('prepare_task_security_review', {'protocol_version': True}),
+    ('prepare_task_security_review', {'protocol_version': 3, 'source': 'forbidden'}),
     ('get_task_review_plan', {'review_session': 'tr1-test', 'cursor': True}),
     ('get_task_review_method', {'review_session': 'tr1-test', 'source': 'forbidden'}),
     ('submit_task_review_batch', {'review_session': 'tr1-test', 'unit_ids': [4],
@@ -109,9 +123,13 @@ def test_global_review_protocol_errors_do_not_report_workspace_failure(installed
     root = projects[0]
     try:
         ref = call(server, 'begin_security_task', root, task_key='protocol')['task_ref']
-        assert call(server, 'prepare_task_security_review', root, task_ref=ref)['protocol_version'] == 1
-        assert call(server, 'prepare_task_security_review', root, task_ref=ref,
-            protocol_version=2)['protocol_version'] == 2
+        assert call(server, 'prepare_task_security_review', root, task_ref=ref)['protocol_version'] == 3
+        for protocol in (1, 2):
+            rejected = call(server, 'prepare_task_security_review', root, task_ref=ref,
+                            protocol_version=protocol)
+            assert rejected['status'] == rejected['reason_code'] == 'UNSUPPORTED_TASK_REVIEW_PROTOCOL'
+            assert rejected['scanner_run'] is False and rejected['repair_authorized'] is False
+            assert 'workspace_readiness' not in rejected
         assert call(server, 'prepare_task_security_review', root, task_ref=ref,
             protocol_version=3)['protocol_version'] == 3
         base = dict(task_ref=ref, review_session='tr1-protocol-test')
@@ -141,8 +159,25 @@ def test_global_review_protocol_errors_do_not_report_workspace_failure(installed
 ])
 def test_global_revision_errors_keep_fixed_diagnostics_without_exception_text(
         installed, projects, tmp_path, monkeypatch, kind, reason):
+    from security_runtime import build_identity
     from security_runtime.task_review_plan import ReviewPlanError
     from security_runtime.task_review_revisions import ReviewRevisionError
+    build_observations, health_observations = [], []
+    original_build, original_status = build_identity.build_identity, installed.configuration_status
+    def observed_build():
+        value = original_build()
+        build_observations.append({key:value.get(key) for key in ('status', 'build_id')})
+        return value
+    def observed_status():
+        start = len(build_observations)
+        value = original_status()
+        receipt = installed._manifest(installed.home)
+        health_observations.append(dict(overall=value['overall'], diagnostics=value['diagnostics'],
+            enrolled_build=(receipt or {}).get('build_id'),
+            observed_builds=build_observations[start:]))
+        return value
+    monkeypatch.setattr(build_identity, 'build_identity', observed_build)
+    monkeypatch.setattr(installed, 'configuration_status', observed_status)
     pool, _ = task_pool(installed, tmp_path)
     server = create_global_server(workspaces=pool)
     error = ReviewPlanError if kind == 'plan' else ReviewRevisionError
@@ -155,7 +190,7 @@ def test_global_revision_errors_keep_fixed_diagnostics_without_exception_text(
         result = call(server, 'prepare_task_security_review', projects[0],
             task_ref='ts1-'+'a'*32, protocol_version=3)
         expected = 'TASK_REQUEST_REJECTED' if reason == 'UNTRUSTED_DYNAMIC_REASON' else reason
-        assert result['reason_code'] == expected
+        assert result['reason_code'] == expected, health_observations
         assert result['status'] == 'INCONCLUSIVE'
         assert 'private source' not in json.dumps(result)
         assert 'workspace_readiness' not in result

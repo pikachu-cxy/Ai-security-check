@@ -109,8 +109,10 @@ class TaskRiskLedger:
         atomic_bytes(self.path, raw)
 
     def register(self, record):
-        rows = self.registration_rows(record, self.read())
-        self.save(rows)
+        previous = self.read()
+        rows = self.registration_rows(record, previous)
+        if rows != previous:
+            self.save(rows)
 
     def registration_rows(self, record, rows):
         rows = dict(rows)
@@ -157,6 +159,7 @@ class TaskRiskLedger:
             for row in selected) else None)
         counts, handling_counts = {}, {}
         for row in selected:
+            row.pop('_task_projection', None)
             events = row.pop('feedback_events', [])
             if events:
                 row['feedback_audit_event_count'] = len(events)
@@ -251,11 +254,30 @@ class TaskRiskLedger:
                 production_safety_verified=False)
         return updates
 
-    def record_host(self, updates):
+    @staticmethod
+    def row_version(row):
+        """A compare token, not a claim of safety or repair authority."""
+        return digest(b'task-risk-row-version-v1', row)
+
+    def record_host(self, updates, *, expected_versions=None, projection_id=None):
         rows = self.read()
+        pending = {}
         for key, update in updates.items():
             if key not in rows:
                 raise ValueError('Original ledger row missing')
+            if expected_versions is not None:
+                if not isinstance(projection_id, str) or len(projection_id) != 64:
+                    raise ValueError('Risk projection identity missing')
+                if rows[key].get('_task_projection') == projection_id:
+                    continue  # Applied before an acknowledgement failure.
+                if self.row_version(rows[key]) != expected_versions.get(key):
+                    raise ValueError('Risk ledger row changed; retain pending projection')
+            pending[key] = update
+        # Validate every row before changing any; one conflicting row cannot
+        # cause a partial technical-result rollback on an otherwise valid one.
+        for key, update in pending.items():
             rows[key].update(update)
-        if updates:
+            if expected_versions is not None:
+                rows[key]['_task_projection'] = projection_id
+        if pending:
             self.save(rows)

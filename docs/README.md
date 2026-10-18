@@ -8,6 +8,7 @@
 | --- | --- |
 | 下载、安装和开始使用 | [项目 README](../README.md) → [详细安装与故障处理](PILOT_INSTALL_AND_USE.zh-CN.md) |
 | 当前完成了什么、还有哪些缺口 | [开发进度与验收状态](DEVELOPMENT_PROGRESS.md) |
+| 架构统一、耦合边界与本批实现 | [优化总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md) · [架构图、冲突矩阵与实施进度](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md) |
 | 下一阶段先做什么 | [近期开发计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) |
 | 修复对关联功能有什么影响、如何验收 | [开发计划](REPAIR_IMPACT_ASSESSMENT_PLAN.zh-CN.md) · [架构设计](design/REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md) · [安装验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md) |
 | Cursor、Qoder、WorkBuddy / CodeBuddy 接入 | [宿主支持与接入计划](HOST_SUPPORT.md) |
@@ -36,3 +37,5 @@
 - 源码回归、原生包、CI 和真实宿主使用分别记录；配置能生成不等于已经支持该宿主。
 - 临时测试输出、扫描数据库、原始聊天、缓存和构建包留在忽略目录，不提交进 docs。
 - 目录调整时同步修正相对链接；保留历史证据，不把旧失败改写成通过。
+
+开发任务仅 v3 的调用链、历史保留、Runtime 升级与安装清理见[兼容说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。

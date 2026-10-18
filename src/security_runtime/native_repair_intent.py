@@ -173,6 +173,19 @@ class NativeRepairIntents:
             result.update(source=copy.deepcopy(record['source']), assessment_ref=record['assessment_ref'])
             if record.get('repair_task_ref'):
                 result['repair_task_ref'] = record['repair_task_ref']
+            if record.get('repair_task_ref'):
+                from .task_security_state import TaskSecurityStore
+                from .task_review_protocol import is_v3_record, UnsupportedTaskReviewProtocol
+                task = TaskSecurityStore(self.hooks, self.root, now=self.now).get(record['repair_task_ref'])
+                if (task is not None and record_owner(task) == self.owner
+                        and task.get('native_repair') == record['preparation']
+                        and not is_v3_record(task)):
+                    result.update(protocol_support=UnsupportedTaskReviewProtocol(
+                        task.get('review_protocol')).response(), new_work_requires_explicit_switch=True,
+                        message='已绑定的旧开发任务协议已停止执行，原风险、修复意图与基线保留。'
+                                '如用户已明确暂停该修复或切换其他工作，沿原引用取消阻塞意图后，'
+                                '在后续修改前用新任务键开始 v3；不能为旧改动补建基线。')
+                    return result
             arguments = dict(task_ref=record['source']['task_ref'], finding_id=record['source']['finding_id'],
                              impact_ref=record['assessment_ref'], user_requested=True,
                              workspace_path=str(self.root))
