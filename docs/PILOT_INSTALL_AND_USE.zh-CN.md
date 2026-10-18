@@ -137,7 +137,7 @@ Windows示例项目与生成器见[全链路手测](guides/FULL_CHAIN_RELIABILIT
 
 ## 当前源码候选
 
-本次工作区候选为0.3.5，Windows验收请使用成功构建记录指定的完整本地包，
+本次工作区候选为0.3.6，增加安全修复功能影响评估；Windows验收请使用 artifacts/repair-impact-latest.json 成功回执指定的完整本地包，
 不要重新下载上文旧发布包来验证新修复。候选Mac ARM归档命名为
-ai-security-runtime-v0.3.5-macos-arm64.tar.gz；该命名不表示已发布或完成Mac真机验收。
-见 [本次验收说明](ACCEPTANCE_CONVERSATIONS_REVIEW.zh-CN.md)。
+ai-security-runtime-v0.3.6-macos-arm64.tar.gz；该命名不表示已发布或完成Mac真机验收。
+见 [修复影响安装与验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。

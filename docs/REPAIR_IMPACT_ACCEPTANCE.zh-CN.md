@@ -97,6 +97,8 @@ $trial
 
 该样例主要验收任务原生风险。扫描器分组与确定性票据路径还须使用其已有可复现告警分别执行第 4—6 节，不能用原生风险通过代替扫描器通道通过。
 
+确定性 Java TLS 路径还须核对 Agent 如何取得规范方案：用户明确批准选定修复后，Agent 先沿原 pending 的 `confirmation_ref/task_ref` 调用 `confirm_remediation(approve=true)`，不传 `impact_ref`；应返回 `IMPACT_REQUIRED.next_action.arguments` 中的 Runtime 规范 source/proposal，且尚未签发 grant 或增加尝试次数。Agent 应原样完成该方案的影响准备、读取和提交，再使用同一确认引用与 `impact_ref` 续办，不要求用户传递内部引用或再次批准。若先前自拟方案返回 `IMPACT_PROPOSAL_MISMATCH`，原 pending 仍有效时可以不传 `impact_ref` 重新取得规范方案，不能循环猜测摘要；过期和范围变化按原确认恢复契约处理。此为待观察的验收流程，未执行时仍登记 `PENDING_USER`。
+
 ## 4. 只问影响与已授权续办
 
 先在独立 PowerShell 保存当前样例源码摘要：
@@ -158,4 +160,4 @@ Compare-Object $before $after -Property Path, Hash
 
 构建脚本 `scripts/rebuild_repair_impact.py` 只由开发任务使用当前已有构建环境执行：先运行本功能及相关交互、修复、隐藏入口、归属和证据回归，再构建唯一的新 dist/build 目录，验证完整包、冻结进程身份、契约和所需工具，仅成功后更新 `artifacts/repair-impact-latest.json`。失败保留独立 run 回执，不覆盖上一个成功候选或其他功能的 latest 指针。该内部检查不执行用户项目，不为个人版重新开放功能测试能力。
 
-自动回归、包完整性、冻结包工具列表和真实桌面交互是不同证据。只有用户实际完成对应案例并确认结果后，才将本功能桌面验收登记为通过；未完成案例保留待验收或具体缺口，不由 Agent 自报替代。
+自动回归、包完整性、冻结包工具列表和真实桌面交互是不同证据。容量与分类消费的受控证据来自实际运行的定向内部回归；冻结探针只证明其实际检查过的启动、身份、契约和工具发现，不能据此宣称冻结进程已运行 prepare/read/submit 影响分析或消费过源码额度。只有用户实际完成对应案例并确认结果后，才将本功能桌面验收登记为通过；未完成案例保留 `PENDING_USER` 或具体缺口，不由 Agent 自报替代。

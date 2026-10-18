@@ -24,7 +24,11 @@ import uuid
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'src'))
+# Use the existing editable environment: putting src first also shadows the
+# installed license-bearing dist-info with setuptools' source egg-info.
+import security_runtime
+if Path(security_runtime.__file__).resolve().parent != ROOT / 'src/security_runtime':
+    raise SystemExit('The build environment must import this checkout through its local editable install.')
 
 from dependency_notices import preflight
 from build_standalone import STANDALONE_DOCUMENTS
