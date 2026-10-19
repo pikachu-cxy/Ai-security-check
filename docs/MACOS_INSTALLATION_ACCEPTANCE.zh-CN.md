@@ -40,7 +40,7 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 使用当前干净源码提交的 Intel 与 Apple Silicon 原生包及其验收回执。只有 Windows/Mac 回归和原生包验收完成后才更新 Release；现有 Windows ZIP、SHA256 文件的资产 ID 和摘要必须保持不变。原始版本标签不移动，机器清单保留原始 `source_commit` 并另以 `artifact_source_commits` 记录各平台来源，避免把新版 Mac 来源错误套给 Windows。
 
-显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
+显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。原生流程也监听引导、Mac 安装、发行替换及验收预算四份契约测试，避免仅修测试时漏建同提交的原生包。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
 
 收敛后本地安装相关回归：182 通过、13 跳过；安装分支最终复测 26 通过，与前组重叠、不相加。发行替换、上传失败重试及既有元数据相关回归最终为 23 通过。对应 `artifacts/mac-only-regression.xml`、`artifacts/mac-only-dispatch-final.xml` 与 `artifacts/mac-release-refresh-final.xml` 仅保存在本地，不随源码发布。公开资产更新状态以 Release 的 `macos-refresh.json` 及 Actions 原生验收为准。
 
