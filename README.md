@@ -4,6 +4,16 @@
 
 当前源码为 **0.3.6 / Developer Alpha**，开发分支为 **feature/runtime-mvp**。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
 
+## 产品与使用文档
+
+**默认完整接入 Runtime + MCP + Skill + Hook**，不需要在安装时选择版本；仅需要 MCP 时可手动配置，不执行完整接入。
+
+- [产品介绍](website/guide/overview.md)、[快速开始](website/guide/quickstart.md)、[安装与升级](website/guide/installation.md)、[仅 MCP 接入](website/guide/mcp.md)。
+- [工作流程](website/guide/workflow.md)、[风险处置](website/guide/risk-handling.md)、[支持范围](website/reference/support.md)、[隐私与联网](website/reference/privacy.md)、[常见问题](website/reference/faq.md)。
+- [当前安装包状态与校验](website/downloads.md)、[版本进展](website/reference/changelog.md)。
+
+独立文档站采用 **VitePress + GitHub Pages**，源码在 `website/`，配套导航、站内搜索与移动端布局。部署目标为 [pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)；工作树编辑不等于已上线，需按[部署指南](website/contributing/deployment.md)提交代码、启用 Pages 并确认工作流成功。
+
 ## 当前源码状态
 
 本次修复包括：
@@ -45,7 +55,7 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 使用完整安装包
 
-[Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)是完整包入口。仓库保留的 [v0.3.4 下载页](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)属于旧发行，不包含本分支后续 v3 与恢复修复，不能与本分支新版 Skill 混用。本次 Git 推送不发布新的安装包。
+[Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)是公开完整包入口。本次本地 Windows 0.3.6 候选包基于默认分支固定提交 `c526cdd3d6c6923e04d64334c5dc19c0908cef31` 构建，尚未上传为公开发行；文件与校验见[下载状态](website/downloads.md)。仓库保留的 [v0.3.4 下载页](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)属于旧发行，不包含本分支后续 v3 与恢复修复，不能与本分支新版 Skill 混用。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，退出 Codex，在解压目录执行：
 
@@ -55,6 +65,8 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 ~~~
 
 完整包自带 Python，无需另装 Python、pip 或 venv。不要只复制一个可执行文件。Windows、macOS、SHA256 校验及仅 MCP 模式见[详细安装指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)。macOS CI、候选构建和真机验收分别记录；Linux 暂不发行。
+
+首次组件准备仍可能下载漏洞数据库；在线 / 本地双模式与一条命令安装尚未交付，不作为本版宣传能力。当前完整包不要求 Node.js，也没有正式 `npx` 安装入口。
 
 ## 日常流程
 
@@ -67,6 +79,8 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 支持 Java、Python、JavaScript / TypeScript 的已安装规则子集、密钥检查、可识别依赖及有界关联分析。零发现不证明项目安全；不完整范围和失败原因应如实保留。检查在本机运行，语义分析由宿主 Agent 完成。
 
 ## 开发与支持
+
+文档本地预览：进入 `website/` 后执行 `npm ci`、`npm run docs:dev`；构建使用 `npm run docs:build`。Node.js 仅为文档开发依赖。GitHub 默认分支推送会按变更路径触发文档工作流；三平台包工作流也支持独立手动构建，不必触发 Release 发布。
 
 - [开发进度](docs/DEVELOPMENT_PROGRESS.md)、[近期计划](docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)、[开发交接](docs/DEVELOPMENT_HANDOFF.zh-CN.md)。
 - [架构与恢复](docs/ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)、[持久化契约](docs/PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)、[v3 升级边界](docs/TASK_REVIEW_V3_ONLY.zh-CN.md)。

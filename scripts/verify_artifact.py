@@ -16,9 +16,11 @@ import zipfile
 from pathlib import Path
 
 from security_runtime._version import __version__
+from security_runtime.compatibility import TASK_REVIEW_TOOLS, task_review_compatibility
 from security_runtime.toolchain import platform_key
 
 REQUIRED_TOOLS = {"scan_diff", "scan_project", "get_findings", "generate_fix", "verify", "prepare_triage", "submit_triage", "get_triage", "get_security_summary", "prepare_task_triage", "get_runtime_info", "prepare_task_fix", "verify_task_fix"}
+REQUIRED_TOOLS |= TASK_REVIEW_TOOLS
 PLUGIN_PROBE = '''
 from security_runtime.capabilities import Capability
 from security_runtime.models import ScannerRun, RunStatus
@@ -39,6 +41,23 @@ class Probe:
 '''
 
 
+def verify_skill_payload(skill_root: Path) -> None:
+    from security_runtime.review_skill import RETIRED_METHODS, skill_files
+    for name, expected in skill_files().items():
+        installed = skill_root / name
+        if not installed.is_file() or installed.read_bytes() != expected:
+            raise ValueError(f'Standalone Skill canonical content mismatch: {name}')
+    for name in RETIRED_METHODS:
+        if (skill_root / name).exists():
+            raise ValueError(f'Standalone Skill contains retired method: {name}')
+
+
+def verify_host_instructions(instructions: str | None) -> None:
+    from security_runtime.host_guidance import HOST_INSTRUCTIONS
+    if instructions != HOST_INSTRUCTIONS:
+        raise ValueError('Standalone host workflow instructions mismatch')
+
+
 async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str, str]) -> list[str]:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -48,8 +67,7 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
         async with stdio_client(params, errlog=stderr) as (read, write):
             async with ClientSession(read, write) as client:
                 initialized=await asyncio.wait_for(client.initialize(), timeout=30)
-                if 'Do not ask users for Finding UUIDs' not in (initialized.instructions or ''):
-                    raise ValueError('Standalone host workflow instructions missing')
+                verify_host_instructions(initialized.instructions)
                 names = {tool.name for tool in (await client.list_tools()).tools}
                 if not REQUIRED_TOOLS.issubset(names):
                     raise ValueError("Standalone MCP tools incomplete")
@@ -57,6 +75,9 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 if runtime.isError:raise ValueError('Standalone runtime capability discovery failed')
                 runtime_data=runtime.structuredContent or json.loads(runtime.content[0].text)
                 runtime_data=runtime_data.get('result',runtime_data)
+                compatibility = task_review_compatibility(runtime_data, names)
+                if compatibility['status'] != 'SUPPORTED':
+                    raise ValueError(f"Standalone task review incompatible: {compatibility['reasons']}")
                 if runtime_data['features']['task_triage']!='v0.1':raise ValueError('Standalone task capability missing')
                 if runtime_data['features']['task_fix_verify']!='v0.1':raise ValueError('Standalone task fix capability missing')
                 summary_before=await client.call_tool('get_security_summary',{})
@@ -375,9 +396,7 @@ def main() -> None:
         installed = json.loads(run([str(executable),'review-skill','install','--skills-dir',str(skills),'--json'],cwd=root,env=env).stdout)
         if installed['status']!='INSTALLED': raise ValueError('Standalone companion Skill install failed')
         skill_root = skills / 'ai-security-review'
-        workflow = (skill_root/'references/runtime-workflow.md').read_text(encoding='utf-8')
-        from security_runtime.host_guidance import HOST_INSTRUCTIONS
-        if HOST_INSTRUCTIONS not in workflow: raise ValueError('Standalone Skill canonical workflow mismatch')
+        verify_skill_payload(skill_root)
         custom = skill_root/'user-notes.txt'
         custom.write_bytes(b'preserve user notes\r\n')
         for action in ('status','upgrade','repair','remove'):

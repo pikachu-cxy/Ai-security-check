@@ -1,0 +1,44 @@
+# 文档开发与部署
+
+文档站源码在仓库 `website/`，使用 VitePress。面向用户的产品站与仓库 `docs/` 工程记录分工：前者帮助理解、安装和使用，后者保留架构、契约与验收依据。
+
+## 本地开发
+
+文档开发需要 Node.js；这不是完整包最终用户的安装要求。CI 使用 Node.js 24。
+
+```sh
+cd website
+npm ci
+npm run docs:dev
+```
+
+## 构建与预览
+
+```sh
+npm run docs:build
+npm run docs:preview
+```
+
+默认以 `/Ai-security-check/` 为站点 base，访问终端显示地址下的这一前缀。构建包含站内链接检查；正式发布前需检查桌面与窄屏布局、导航、搜索和安装命令。
+
+## GitHub Pages
+
+仓库已配套 `.github/workflows/docs.yml`：
+
+1. 将文档与工作流改动提交至默认分支 `feature/runtime-mvp`。
+2. 在仓库 **Settings → Pages → Build and deployment** 将 Source 设为 **GitHub Actions**。
+3. 文档工作流先运行 `npm ci` 和站点构建；默认分支的非 PR 构建才进入 Pages 部署，PR 只构建。
+4. 在 Actions 确认部署成功后，再把站点视为已上线。
+
+默认项目站预计地址为 [pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)。这是部署目标，不代表本次工作树编辑已经发布。自定义域名需要另行配置 DNS、Pages 域名与 `DOCS_BASE=/`。
+
+工作流仅使用 Pages 部署所需的最小权限，不需要在仓库保存个人访问令牌。不要用不受信任的 PR 构建直接部署生产站。
+
+平台细节可查阅 [VitePress 部署指南](https://vitepress.dev/guide/deploy#github-pages) 与 [GitHub Pages 自定义工作流](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)。
+
+## 内容维护
+
+- 版本能力以真实源码、构建身份与验证证据为准，不把路线图写成已交付功能。
+- 新版候选包、CI 产物、正式 Release 和手工验收分别记录。
+- 公开 Release 上传后，更新下载页的真实链接与对应校验文件。
+- 不在文档中放入私有路径、密钥、原始诊断或不真实的性能与用户数据。

@@ -2,6 +2,7 @@ name: Standalone artifacts
 
 on:
   workflow_call:
+  workflow_dispatch:
   push:
     branches: [feature/runtime-mvp]
     paths:
