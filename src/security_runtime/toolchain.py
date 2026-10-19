@@ -875,12 +875,12 @@ class ToolManager:
             if getattr(sys, "frozen", False):
                 bootstrap = self.prepare_python_runtime()
                 with external_tool_loader():
-                    proc = run_process([str(bootstrap), "-m", "venv", str(environment)],
+                    proc = run_process([str(bootstrap), "-m", "venv", "--copies", str(environment)],
                                        env=tool_environment(bootstrap), timeout=120)
                 if proc.returncode:
                     raise DiagnosticError(classify_network_error(stderr=proc.stderr, return_code=proc.return_code, fallback='PYTHON_BOOTSTRAP_FAILED'))
             else:
-                venv.EnvBuilder(with_pip=True).create(environment)
+                venv.EnvBuilder(with_pip=True, symlinks=False).create(environment)
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             report = staging / "pip-report.json"
             command = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--report", str(report)]

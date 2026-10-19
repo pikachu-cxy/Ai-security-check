@@ -54,11 +54,16 @@ def frozen_install(tmp_path, monkeypatch):
 
     def process(args, **kwargs):
         state["calls"].append(args)
+        if args[1:2] == ["scan"]:
+            assert Path(args[0]).stem == "semgrep" and args[-1] == "probe.py"
+            return ProcessResult(0, json.dumps({"results": [{"check_id": "runtime-engine-probe",
+                "path": "probe.py", "start": {"line": 1}}], "errors": []}), "", 1)
         if args[1:] == ["--version"]:
             version = toolchain.VERSIONS["semgrep"] if Path(args[0]).stem == "semgrep" else state["version"]
             return ProcessResult(0, version, "", 1)
         if args[1:3] == ["-m", "venv"]:
-            target = Path(args[3])
+            assert args[3] == "--copies"
+            target = Path(args[4])
             python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             python.parent.mkdir(parents=True)
             python.write_bytes(b"synthetic venv Python")
@@ -83,6 +88,7 @@ def frozen_install(tmp_path, monkeypatch):
     monkeypatch.setattr(toolchain.sys, "frozen", True, raising=False)
     monkeypatch.setattr(toolchain, "external_tool_loader", nullcontext)
     monkeypatch.setattr(toolchain, "run_process", process)
+    monkeypatch.setattr('security_runtime.engine_probe.run_process', process)
     monkeypatch.setattr(toolchain.urllib.request, "urlopen", download)
     monkeypatch.setattr(toolchain.shutil, "which", lambda name: None)
     monkeypatch.setenv("SECURITY_RUNTIME_DATA_DIR", str(root))
@@ -102,7 +108,7 @@ def test_frozen_first_semgrep_install_and_bootstrap_reuse(frozen_install):
     result = manager.ensure("semgrep", offline=False)
     assert result.status == ToolStatus.READY, result.detail
     assert state["downloads"] == 1
-    assert any(args[1:3] == ["-m", "venv"] for args in state["calls"])
+    assert any(args[1:4] == ["-m", "venv", "--copies"] for args in state["calls"])
     assert any(args[1:4] == ["-m", "pip", "install"] for args in state["calls"])
     python_metadata = next((root / "python").rglob("metadata.json"))
     python = python_metadata.parent / relative

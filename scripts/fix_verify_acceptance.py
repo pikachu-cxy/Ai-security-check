@@ -16,6 +16,14 @@ from security_runtime.verification_policy import local_recheck
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.task_fix import TaskFixService
 from security_runtime.sast import SemgrepEngineProvider
+from security_runtime.host_guidance import HOST_INSTRUCTIONS
+
+
+def acceptance_workspace(temporary):
+    base = Path(temporary).resolve()
+    root = base / 'project'
+    root.mkdir()
+    return root, SQLiteStore(base / 'state/scans.db')
 
 
 def source(line=100, vulnerable=True):
@@ -44,14 +52,13 @@ async def native_sdk_acceptance(executable):
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
     with tempfile.TemporaryDirectory(prefix='runtime-native-fix-') as temporary:
-        root = Path(temporary).resolve()
+        root, store = acceptance_workspace(temporary)
         file = root / 'Tls.java'
         write_task_sources(root)
         adapter = SemgrepAdapter()
         with local_recheck():
             found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java', 'OtherTls.java')), FindingNormalizer(root))
         assert run.status == 'SUCCESS' and len(found) == 2, run
-        store = SQLiteStore(root / 'state/scans.db')
         scan = ScanResult('synthetic-native-task-fix', ScanMode.FEATURE, TargetDetector().detect(root, ['Tls.java', 'OtherTls.java']),
             'COMPLETED', found, [run], 'Synthetic fixture', 'REVIEW', run.duration_ms)
         store.save(scan)
@@ -62,7 +69,7 @@ async def native_sdk_acceptance(executable):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as client:
                 initialized = await client.initialize()
-                assert 'Agent fixes. Runtime verifies.' in initialized.instructions
+                assert initialized.instructions == HOST_INSTRUCTIONS
                 names = {t.name for t in (await client.list_tools()).tools}
                 assert {'prepare_task_fix','verify_task_fix','get_runtime_info'} <= names
                 async def call(name, args):
@@ -98,7 +105,7 @@ async def native_sdk_acceptance(executable):
 
 def run_acceptance():
     with tempfile.TemporaryDirectory(prefix='runtime-fix-verification-') as temporary:
-        root = Path(temporary).resolve()
+        root, store = acceptance_workspace(temporary)
         file = root / 'Tls.java'
         file.write_text(source(), encoding='utf-8')
         adapter = SemgrepAdapter()
@@ -108,7 +115,6 @@ def run_acceptance():
         assert run.status == 'SUCCESS', run
         old = next(f for f in found if f.technical_details['rule_id'] == 'ai-security.java.trust-all-hostname')
         assert old.line_start == 100, old.line_start
-        store = SQLiteStore(root / 'state.db')
         scan = ScanResult('synthetic-fix-a', ScanMode.FEATURE, profile, 'COMPLETED', found, [run],
                           'Synthetic local scanner evidence', 'REVIEW', run.duration_ms)
         store.save(scan)

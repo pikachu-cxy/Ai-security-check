@@ -1,6 +1,7 @@
 """Actual bytes determine execution identity; probe invalidation stays stricter."""
 import ctypes
 import os
+import venv
 from pathlib import Path
 
 import pytest
@@ -40,6 +41,27 @@ def rewrite(path,raw):
     replacement=path.with_suffix('.replacement')
     replacement.write_bytes(raw)
     replacement.replace(path)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX virtual environment interpreter layout')
+@pytest.mark.parametrize('symlinks', [False, True])
+def test_posix_venv_identity_requires_copied_interpreter(tmp_path, monkeypatch, symlinks):
+    environment = tmp_path / 'runtime'
+    venv.EnvBuilder(with_pip=False, symlinks=symlinks).create(environment)
+    binary = environment / 'bin/semgrep'
+    binary.write_bytes(b'not-executed-launcher-fixture')
+    package = environment / 'lib/python3.12/site-packages/semgrep'
+    package.mkdir(parents=True, exist_ok=True)
+    (package / '__init__.py').write_bytes(b'not-executed-package-fixture')
+    monkeypatch.setenv('SEMGREP_SETTINGS_FILE', str(tmp_path / 'settings.yml'))
+    manager = ToolManager(tmp_path / 'tool-state')
+    assert (manager.execution_identity('semgrep', binary) is None) is symlinks
+    if not symlinks:
+        before = manager.execution_identity('semgrep', binary)
+        python = environment / 'bin/python'
+        assert not python.is_symlink()
+        rewrite(python, b'changed-interpreter-fixture')
+        assert manager.execution_identity('semgrep', binary) != before
 
 
 def test_same_settings_bytes_replacement_expires_health_but_preserves_content_identities(identity):
