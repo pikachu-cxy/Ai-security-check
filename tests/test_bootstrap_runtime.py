@@ -62,8 +62,7 @@ def frozen_install(tmp_path, monkeypatch):
             version = toolchain.VERSIONS["semgrep"] if Path(args[0]).stem == "semgrep" else state["version"]
             return ProcessResult(0, version, "", 1)
         if args[1:3] == ["-m", "venv"]:
-            assert args[3] == "--copies"
-            target = Path(args[4])
+            target = Path(args[3])
             python = target / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             python.parent.mkdir(parents=True)
             python.write_bytes(b"synthetic venv Python")
@@ -108,7 +107,7 @@ def test_frozen_first_semgrep_install_and_bootstrap_reuse(frozen_install):
     result = manager.ensure("semgrep", offline=False)
     assert result.status == ToolStatus.READY, result.detail
     assert state["downloads"] == 1
-    assert any(args[1:4] == ["-m", "venv", "--copies"] for args in state["calls"])
+    assert any(args[1:3] == ["-m", "venv"] for args in state["calls"])
     assert any(args[1:4] == ["-m", "pip", "install"] for args in state["calls"])
     python_metadata = next((root / "python").rglob("metadata.json"))
     python = python_metadata.parent / relative

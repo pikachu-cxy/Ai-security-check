@@ -438,6 +438,30 @@ class ToolManager:
             raise DiagnosticError(ErrorDiagnostic('CONFIG_CORRUPTED', 'Invalid tool configuration.', 'Repair the local tool configuration before retrying.')) from None
         return None
 
+    def _managed_python_link_identity(self, path, file):
+        if path != self.managed_path('semgrep') or file != path.parent / 'python':
+            return None
+        try:
+            key = '-'.join(platform_key())
+            entries = json.loads(Path(__file__).with_name('python_downloads.json').read_text(encoding='utf-8'))
+            entry = entries[key]
+            home = self.root / 'python' / (entry['version'] + '-' + entry['build']) / key
+            expected = home / 'bin/python3.12'
+            if expected.is_symlink() or expected.is_junction() or file.resolve(strict=True) != expected:
+                return None
+            metadata = home / 'metadata.json'
+            if metadata.stat().st_size > 64_000 or metadata.is_symlink() or metadata.is_junction():
+                return None
+            record = json.loads(metadata.read_text(encoding='utf-8'))
+            checksum = sha256_file(expected)
+            if (record['engine_id'] != 'cpython-bootstrap' or record['version'] != entry['version']
+                    or record['build'] != entry['build'] or record['sha256'] != entry['sha256']
+                    or record['binary_sha256'] != checksum):
+                return None
+            return repr((str(file.readlink()), str(expected), checksum, sha256_file(metadata))).encode()
+        except (OSError, ValueError, KeyError, RuntimeError):
+            return None
+
     def _probe_identity(self, tool_id, path, *, environment=None, settings_metadata=False):
         """Content-keyed probe reuse, not an engine integrity check bypass."""
         files = [path]
@@ -459,8 +483,13 @@ class ToolManager:
             return None
         digest = hashlib.sha256()
         for file in sorted(set(files)):
-            if file.is_symlink() or file.is_junction():
+            if file.is_junction():
                 return None
+            if file.is_symlink():
+                binding = self._managed_python_link_identity(path, file) if tool_id == 'semgrep' else None
+                if binding is None:
+                    return None
+                digest.update(binding)
             digest.update(str(file).encode());digest.update(sha256_file(file).encode())
         # Version behavior may depend on env/config/workspace. Hash only in RAM.
         digest.update(repr(sorted((tool_environment(path) if environment is None else environment).items())).encode())
@@ -875,7 +904,7 @@ class ToolManager:
             if getattr(sys, "frozen", False):
                 bootstrap = self.prepare_python_runtime()
                 with external_tool_loader():
-                    proc = run_process([str(bootstrap), "-m", "venv", "--copies", str(environment)],
+                    proc = run_process([str(bootstrap), "-m", "venv", str(environment)],
                                        env=tool_environment(bootstrap), timeout=120)
                 if proc.returncode:
                     raise DiagnosticError(classify_network_error(stderr=proc.stderr, return_code=proc.return_code, fallback='PYTHON_BOOTSTRAP_FAILED'))

@@ -1,5 +1,6 @@
 """Actual bytes determine execution identity; probe invalidation stays stricter."""
 import ctypes
+import json
 import os
 import venv
 from pathlib import Path
@@ -13,7 +14,8 @@ from security_runtime.models import ScanContext, ScanMode
 from security_runtime.scan_input import capture_scan_input
 from security_runtime.scan_request import ScanRequest, SourceKind
 from security_runtime.scanners import BaseScanner, _snapshot
-from security_runtime.toolchain import ResolvedTool, ToolManager, ToolStatus
+from security_runtime.toolchain import ResolvedTool, ToolManager, ToolStatus, platform_key, sha256_file
+from security_runtime import toolchain
 from link_fixture import linked_directory
 
 
@@ -62,6 +64,64 @@ def test_posix_venv_identity_requires_copied_interpreter(tmp_path, monkeypatch, 
         assert not python.is_symlink()
         rewrite(python, b'changed-interpreter-fixture')
         assert manager.execution_identity('semgrep', binary) != before
+
+
+@pytest.fixture
+def managed_posix_interpreter(tmp_path, monkeypatch):
+    manager = ToolManager(tmp_path / 'managed')
+    binary = manager.managed_path('semgrep')
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b'not-executed-launcher-fixture')
+    package = binary.parent.parent / 'lib/python3.12/site-packages/semgrep'
+    package.mkdir(parents=True)
+    (package / '__init__.py').write_bytes(b'not-executed-package-fixture')
+    key = '-'.join(platform_key())
+    entry = json.loads(Path(toolchain.__file__).with_name('python_downloads.json').read_text())[key]
+    home = manager.root / 'python' / (entry['version'] + '-' + entry['build']) / key
+    python = home / 'bin/python3.12'
+    python.parent.mkdir(parents=True)
+    python.write_bytes(b'not-executed-bootstrap-fixture')
+    metadata = home / 'metadata.json'
+    metadata.write_text(json.dumps(dict(engine_id='cpython-bootstrap', version=entry['version'],
+        build=entry['build'], sha256=entry['sha256'], binary_sha256=sha256_file(python))))
+    interpreter = binary.parent / 'python'
+    interpreter.symlink_to(python)
+    monkeypatch.setenv('SEMGREP_SETTINGS_FILE', str(tmp_path / 'settings.yml'))
+    return manager, binary, interpreter, python, metadata
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX managed interpreter symlink layout')
+def test_managed_bootstrap_link_binds_target_and_metadata(managed_posix_interpreter):
+    manager, binary, _, python, metadata = managed_posix_interpreter
+    original = manager.execution_identity('semgrep', binary)
+    assert original is not None
+    record = json.loads(metadata.read_text())
+    record['installed_at'] = 'changed-metadata-fixture'
+    metadata.write_text(json.dumps(record))
+    assert manager.execution_identity('semgrep', binary) != original
+    python.write_bytes(b'changed-bootstrap-fixture')
+    assert manager.execution_identity('semgrep', binary) is None
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX managed interpreter symlink layout')
+@pytest.mark.parametrize('changed', ['external', 'metadata', 'launcher', 'package'])
+def test_managed_bootstrap_link_rejects_unbound_layout(managed_posix_interpreter, changed, tmp_path):
+    manager, binary, interpreter, python, metadata = managed_posix_interpreter
+    if changed == 'external':
+        external = tmp_path / 'external-python'
+        external.write_bytes(python.read_bytes())
+        interpreter.unlink()
+        interpreter.symlink_to(external)
+    elif changed == 'metadata':
+        record = json.loads(metadata.read_text())
+        record['sha256'] = 'unreviewed-bootstrap'
+        metadata.write_text(json.dumps(record))
+    else:
+        selected = binary if changed == 'launcher' else next((binary.parent.parent / 'lib').rglob('__init__.py'))
+        replacement = selected.with_suffix('.original')
+        selected.rename(replacement)
+        selected.symlink_to(replacement)
+    assert manager.execution_identity('semgrep', binary) is None
 
 
 def test_same_settings_bytes_replacement_expires_health_but_preserves_content_identities(identity):
