@@ -20,6 +20,12 @@ from .storage import SQLiteStore
 
 LABELS = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
 ISSUES = {
+    'ENGINE_TEMP_DIRECTORY_UNAVAILABLE': ('无法准备引擎专用的短私有临时目录。', '检查目录权限，或将 SECURITY_RUNTIME_ENGINE_TEMP_ROOT 指向项目外已存在的短本地目录；不要修改系统临时目录。'),
+    'ENGINE_TEMP_PATH_TOO_LONG': ('引擎临时目录超过本地通信地址的长度预算。', '为 SECURITY_RUNTIME_ENGINE_TEMP_ROOT 选择更短的本地目录；不会自动使用共享目录或放宽权限。'),
+    'ENGINE_LOCAL_IPC_DENIED': ('执行环境拒绝引擎创建本地通信通道。', '在获准支持本地通信的环境运行检查；不要关闭沙箱、安全防护或重复下载组件。'),
+    'ENGINE_LOCAL_IPC_PATH_LIMIT': ('引擎本地通信地址超过底层路径预算。', '核对引擎私有临时目录和固定版本兼容性；无需重装全部组件。'),
+    'ENGINE_LOCAL_IPC_FAILED': ('引擎本地通信初始化失败，具体原因尚未确认。', '核对执行环境的本地通信权限和临时目录；保留组件，不将失败当作检查通过。'),
+    'ENGINE_EXECUTION_PROBE_FAILED': ('组件版本可读取，但合成扫描未能确认引擎可执行。', '核对本地引擎环境及诊断；本次没有扫描项目，不自动重装组件。'),
     'RUNTIME_PROBE_FAILED': ('产品的组件探测出现异常，尚未确认组件当前状态。', '保留现有组件，先重试状态查询；持续失败时提供诊断编号，无需直接重装组件。'),
     'COMPONENT_MISSING': ('组件尚未安装。', '联网准备此组件；已有其他组件继续保留。'),
     'COMPONENT_VERSION_MISMATCH': ('已安装版本与当前要求不符。', '准备当前要求的固定版本；不要替换用户指定的外部程序。'),

@@ -184,6 +184,9 @@ import sys, threading
 from pathlib import Path
 from types import SimpleNamespace
 from security_runtime import toolchain as t, scanner_cache
+from security_runtime import engine_probe
+# Python stands in for every engine here; test cache recovery, not native scans.
+engine_probe.probe_semgrep = lambda *a: None
 original_init = t.ToolManager.__init__
 original_bucket = scanner_cache.preparation_bucket
 injected = False

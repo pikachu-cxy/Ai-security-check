@@ -31,6 +31,7 @@ from .sast import SASTRequest, SemgrepEngineProvider
 from .target import TargetDetector
 from .dependency_inputs import is_dependency_input
 from .local_evidence import snapshot_fingerprint, scanner_evidence_metadata
+from .engine_environment import engine_environment
 from .processes import ProcessResult, run_process, OutputLimitError
 from .diagnostics import DiagnosticError, ErrorDiagnostic, classify_network_error, sanitize
 from .progress import emit, checkpoint, ScanCancelled
@@ -212,35 +213,37 @@ class BaseScanner:
             checkpoint()
             stage = 'SCANNER_EXECUTION'
             environment = self._environment(resolved.path, context)
-            execution_identity = None
-            if context.input_view is not None:
-                with span('execution_input_identity'):
-                    execution_identity = self._input_execution_identity(resolved.path, context, environment)
-                if execution_identity['tool'] is None:
-                    return failed(RunStatus.UNAVAILABLE, ErrorDiagnostic(
-                        'SCAN_EXECUTION_IDENTITY_UNAVAILABLE', 'Actual scanner executable identity is unavailable.',
-                        'Restore the bounded local tool identity before retrying.'), resolved.version)
-            emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
-            token = _executing_engine.set((self.name, resolved.version, resolved.path))
-            environment_token = _executing_environment.set(environment)
-            try:
-                findings = self._scan(resolved.path, context, normalizer)
-            finally:
-                _executing_engine.reset(token)
-                _executing_environment.reset(environment_token)
-            run = ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
-            if execution_identity is not None:
-                with span('execution_input_identity'):
-                    after_identity = self._input_execution_identity(resolved.path, context, environment)
-                verified = execution_identity == after_identity
-                run.scanner_diagnostics['execution_binding'] = dict(execution_identity,
-                    contract='scanner-execution-binding-v1', verified=verified,
-                    data_status='UNVERIFIABLE' if execution_identity['data_required'] and execution_identity['data'] is None else 'VERIFIED')
-                if not verified:
-                    run.status, run.coverage_contract = RunStatus.FAILED, 'NONE'
-                    run.error_code = 'SCAN_EXECUTION_IDENTITY_CHANGED'
-                    run.error_summary = 'Scanner tool or data changed during execution; absence is not proven.'
-            return findings, run
+            with engine_environment(self.engine_id or self.scanner_id, environment,
+                    workspace=context.logical_root or context.root) as environment:
+                execution_identity = None
+                if context.input_view is not None:
+                    with span('execution_input_identity'):
+                        execution_identity = self._input_execution_identity(resolved.path, context, environment)
+                    if execution_identity['tool'] is None:
+                        return failed(RunStatus.UNAVAILABLE, ErrorDiagnostic(
+                            'SCAN_EXECUTION_IDENTITY_UNAVAILABLE', 'Actual scanner executable identity is unavailable.',
+                            'Restore the bounded local tool identity before retrying.'), resolved.version)
+                emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
+                token = _executing_engine.set((self.name, resolved.version, resolved.path))
+                environment_token = _executing_environment.set(environment)
+                try:
+                    findings = self._scan(resolved.path, context, normalizer)
+                finally:
+                    _executing_engine.reset(token)
+                    _executing_environment.reset(environment_token)
+                run = ScannerRun(self.name, resolved.version, RunStatus.SUCCESS, round((time.monotonic()-start)*1000), len(findings))
+                if execution_identity is not None:
+                    with span('execution_input_identity'):
+                        after_identity = self._input_execution_identity(resolved.path, context, environment)
+                    verified = execution_identity == after_identity
+                    run.scanner_diagnostics['execution_binding'] = dict(execution_identity,
+                        contract='scanner-execution-binding-v1', verified=verified,
+                        data_status='UNVERIFIABLE' if execution_identity['data_required'] and execution_identity['data'] is None else 'VERIFIED')
+                    if not verified:
+                        run.status, run.coverage_contract = RunStatus.FAILED, 'NONE'
+                        run.error_code = 'SCAN_EXECUTION_IDENTITY_CHANGED'
+                        run.error_summary = 'Scanner tool or data changed during execution; absence is not proven.'
+                return findings, run
         except ScanCancelled:
             raise
         except DiagnosticError as exc:

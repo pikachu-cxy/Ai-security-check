@@ -137,63 +137,13 @@ def _read_file(path, maximum):
 
 
 def _windows_private_directory(path):
-    """Create with a protected owner/System DACL before any source is written."""
-    import ctypes
-    from ctypes import wintypes
-
-    class SecurityAttributes(ctypes.Structure):
-        _fields_ = [('length', wintypes.DWORD), ('descriptor', ctypes.c_void_p),
-                    ('inherit', wintypes.BOOL)]
-
-    advapi = ctypes.WinDLL('advapi32', use_last_error=True)
-    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
-    convert = advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW
-    convert.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p),
-                        ctypes.POINTER(wintypes.ULONG)]
-    convert.restype = wintypes.BOOL
-    create = kernel.CreateDirectoryW
-    create.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(SecurityAttributes)]
-    create.restype = wintypes.BOOL
-    kernel.LocalFree.argtypes = [ctypes.c_void_p]
-    descriptor = ctypes.c_void_p()
-    # Bind the actual token user, not its potentially shared Administrators owner.
-    token = wintypes.HANDLE()
-    kernel.GetCurrentProcess.restype = wintypes.HANDLE
-    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
-    advapi.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
-    advapi.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p,
-                                         wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
-    advapi.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.LPWSTR)]
-    if not advapi.OpenProcessToken(kernel.GetCurrentProcess(), 8, ctypes.byref(token)):
-        raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-    user_string = wintypes.LPWSTR()
+    from .private_directories import windows_private_directory
     try:
-        needed = wintypes.DWORD()
-        advapi.GetTokenInformation(token, 1, None, 0, ctypes.byref(needed))
-        if not 1 <= needed.value <= 65_536:
-            raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-        buffer = ctypes.create_string_buffer(needed.value)
-        if not advapi.GetTokenInformation(token, 1, buffer, needed.value, ctypes.byref(needed)):
-            raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-        sid = ctypes.cast(buffer, ctypes.POINTER(ctypes.c_void_p)).contents.value
-        if not advapi.ConvertSidToStringSidW(sid, ctypes.byref(user_string)):
-            raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-        user = user_string.value
-    finally:
-        if user_string:
-            kernel.LocalFree(user_string)
-        kernel.CloseHandle(token)
-    security = f'O:{user}D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;{user})'
-    if not convert(security, 1, ctypes.byref(descriptor), None):
-        raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-    try:
-        attributes = SecurityAttributes(ctypes.sizeof(SecurityAttributes), descriptor, False)
-        if not create(str(native_io_path(path)), ctypes.byref(attributes)):
-            if ctypes.get_last_error() == 183:
-                raise FileExistsError()
-            raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE')
-    finally:
-        kernel.LocalFree(descriptor)
+        windows_private_directory(path)
+    except FileExistsError:
+        raise
+    except OSError:
+        raise ScanInputError('SCAN_INPUT_PRIVATE_DIRECTORY_UNAVAILABLE') from None
 
 
 @contextmanager

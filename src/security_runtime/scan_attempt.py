@@ -174,6 +174,13 @@ class ScanAttemptStore:
         no_links(self.private_parent)
         self.private_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         no_links(self.private_parent)
+        # Windows package redirection/8.3 spelling may canonicalize differently
+        # only after creation. Capture and cleanup must share that exact root.
+        self.private_parent = self.private_parent.resolve(strict=True)
+        no_links(self.private_parent)
+        check_private_input_parent(self.private_parent)
+        if self.private_parent.is_relative_to(self.root):
+            raise ValueError('Private scan input cannot be stored inside source workspace')
         if not self.private_parent.is_dir():
             raise ValueError('Private scan input parent is not a directory')
         value['generation'] += 1

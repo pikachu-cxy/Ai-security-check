@@ -88,6 +88,25 @@ def test_retire_expired_lane_never_publishes_or_changes_a_replacement(sample):
     assert store.is_current(new)
 
 
+def test_claim_normalizes_created_parent_for_capture_and_cleanup(sample):
+    root, hooks, store, _ = sample
+    canonical = store.private_parent
+    segment = canonical.parent / 'alias-segment'
+    segment.mkdir(parents=True)
+    store.private_parent = segment / '..' / canonical.name
+    lease = claim(sample)
+    assert store.private_parent == canonical.resolve(strict=True)
+    created = []
+    with capture_scan_input(scoped_request(root, ('source.py',)),
+            private_parent=store.private_parent, on_created=created.append):
+        directory = created[0]
+        with hooks.lock(root):
+            assert store.register_directory(lease, directory)
+    with hooks.lock(root):
+        assert store.release_directory(lease, directory)
+    assert store.read()['directories'] == []
+
+
 def test_global_input_root_is_short_and_stays_in_the_configured_state_boundary(tmp_path):
     from security_runtime.hook_state import identity
     root = tmp_path/'project'

@@ -87,6 +87,19 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
             diagnostic_detail=detail)
     text = str(error or '') + '\n' + stderr
     lower = text.lower()
+    # Local IPC startup is unrelated to remote proxy/download failures. Keep
+    # only canonical reasons, even if debug output contains paths or secrets.
+    if 'socketpair' in lower and any(marker in lower for marker in
+            ('unix_error', 'unix.eacces', 'socketpair:')):
+        code = ('ENGINE_LOCAL_IPC_DENIED' if any(marker in lower for marker in
+            ('eacces', 'permission denied', 'access is denied', 'access denied', '拒绝访问'))
+            else 'ENGINE_LOCAL_IPC_PATH_LIMIT' if any(marker in lower for marker in
+            ('insufficient buffer', 'data area passed to a system call is too small', '数据区域太小'))
+            else 'ENGINE_LOCAL_IPC_FAILED')
+        return ErrorDiagnostic(code, 'The engine could not initialize its local socketpair.',
+            'Check the engine temporary-directory budget and local IPC permissions. '
+            'Use an authorized execution environment; do not disable sandbox protections or reinstall the engine.',
+            diagnostic_detail=f'Return code: {return_code}.' if return_code is not None else '')
     cause = error.reason if isinstance(error, urllib.error.URLError) else error
     status = error.code if isinstance(error, urllib.error.HTTPError) else None
     if status is None:

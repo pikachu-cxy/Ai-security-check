@@ -562,7 +562,17 @@ class ToolManager:
             version = re.search(r'(?<![0-9.])[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}(?![0-9.])', proc.stdout[:1600])
             if not version:
                 self._probe_diagnostics[key] = diagnosis('COMPONENT_START_FAILED')
+            elif tool_id == 'semgrep' and os.name == 'nt' and matches_version(self.versions[tool_id], version.group()):
+                # The version CLI does not exercise Windows native socketpair.
+                # Run only our bounded synthetic input; successful version-cache
+                # reuse includes this probe and never certifies project coverage.
+                from .engine_probe import probe_semgrep
+                with external_tool_loader():
+                    probe_semgrep(path.resolve(), environment)
             return version.group() if version else ''
+        except DiagnosticError as exc:
+            self._probe_diagnostics[key] = exc.diagnostic
+            return ''
         except (OSError, TimeoutError, ValueError) as exc:
             code = ('COMPONENT_PERMISSION_DENIED' if isinstance(exc, PermissionError) else
                     'COMPONENT_START_TIMEOUT' if isinstance(exc, TimeoutError) else 'COMPONENT_START_FAILED')

@@ -233,7 +233,9 @@ def test_failed_or_mismatched_version_never_cached(probe,failed_output):
     assert len(calls)==2 and not manager._version_cache
 
 
-def test_python_engine_helper_change_invalidates_version(probe,tmp_path):
+def test_python_engine_helper_change_invalidates_version(probe,tmp_path,monkeypatch):
+    # This test uses a non-executable package fixture to exercise identity.
+    monkeypatch.setattr('security_runtime.engine_probe.probe_semgrep', lambda *a: None)
     manager,_,calls,answer=probe;answer['value']='1.178.0'
     runtime=tmp_path/'python';path=runtime/'Scripts/semgrep.exe';path.parent.mkdir(parents=True);path.write_bytes(b'launcher')
     package=runtime/'Lib/site-packages/semgrep';package.mkdir(parents=True)

@@ -98,6 +98,42 @@ Each authority commits its own facts and outbox together. Target facts, inbox re
 
 Scan history retains its original two-column schema with an additive index and legacy writer tracking. Read-only history does not migrate or replay. A scan's historical attempt record cannot prove publication of the current Task or Hook state, nor revalidate current Provider data.
 
+## Windows native engine execution
+
+`private_directories` owns only the OS primitive that creates an owner/System
+protected Windows directory. Scan input keeps its existing error/lifetime
+contract through a small adapter; no engine module depends on scan lifecycle.
+
+`engine_environment` owns invocation-local scratch lifetime and child-only
+TEMP/TMP/TMPDIR. Windows Semgrep uses the OS-known account LocalAppData/Temp,
+independently of inherited temporary-directory variables. An explicit
+SECURITY_RUNTIME_ENGINE_TEMP_ROOT must be an existing absolute local directory;
+scans reject roots inside their logical workspace. Linked/reparse ancestors,
+UNC/device roots and over-budget paths fail closed. An existing, verified 8.3
+spelling may shorten a path; the product does not create aliases or junctions.
+The UTF-8 scratch-path budget is 60 bytes, reserving space for native socket
+names. Each concurrent scan has its own protected random directory. Cleanup
+checks the created directory's identity and removes only that directory. A hard
+process kill can leave private OS-temp residue; no shared-directory sweeping is
+introduced. Host environment, permissions, proxy settings and sandbox remain
+under their existing owners.
+
+BaseScanner binds the effective child environment before execution identity
+capture and retains it through all batches and post-execution verification.
+Other engines and platforms keep their prior environment. Scan-attempt roots
+are canonicalized and revalidated after creation, before ACTIVE publication,
+so Windows redirection or path spelling cannot split capture from cleanup.
+
+`engine_probe` executes only a small owned Python fixture and fixed local rule
+with metrics/version checks disabled, an eight-second process limit and a 64KB
+output limit. Windows Semgrep readiness requires its expected result, beyond a
+successful --version. Only success enters the existing content/environment/
+settings-bound in-process cache. This is component execution availability,
+never project scan evidence. Failures keep canonical directory/path-budget,
+local-IPC or probe diagnoses; no raw output, source or credentials are persisted.
+Existing components are retained. No automatic reinstall, privilege escalation,
+sandbox bypass or global environment mutation is part of recovery.
+
 ## Runtime flow
 
 ```text
