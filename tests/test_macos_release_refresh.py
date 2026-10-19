@@ -75,7 +75,7 @@ def refresh_case(tmp_path, monkeypatch):
             state['assets'] = [asset for asset in state['assets'] if asset['name'] != path.name]
             state['assets'].append(dict(name=path.name, id=100 + len(uploads), digest='sha256:' + refresh.digest(path)))
         elif args[:3] == ['gh', 'release', 'edit']:
-            state['body'] = Path(args[args.index('--notes-file') + 1]).read_text()
+            state['body'] = Path(args[args.index('--notes-file') + 1]).read_text(encoding='utf-8')
         else:
             raise AssertionError(args)
     monkeypatch.setattr(refresh, 'release', lambda: copy.deepcopy(state))
@@ -84,8 +84,13 @@ def refresh_case(tmp_path, monkeypatch):
     return tmp_path, approval, state, uploads
 
 
-def test_refresh_preserves_windows_and_uses_both_clean_native_packages(refresh_case):
+@pytest.mark.parametrize('default_encoding', ('utf-8', 'cp1252'))
+def test_refresh_preserves_windows_and_uses_both_clean_native_packages(refresh_case, monkeypatch, default_encoding):
     root, approval, state, uploads = refresh_case
+    original_encoding = io.text_encoding
+    def host_encoding(encoding, stacklevel=2):
+        return default_encoding if encoding in (None, 'locale') else original_encoding(encoding, stacklevel)
+    monkeypatch.setattr(io, 'text_encoding', host_encoding)
     windows_before = [asset for asset in state['assets'] if 'windows-x64' in asset['name']]
     refresh.prepare(root, SOURCE, approval)
     staged = root / 'dist/macos-refresh/staged'
@@ -102,6 +107,7 @@ def test_refresh_preserves_windows_and_uses_both_clean_native_packages(refresh_c
     assert len(uploads) == 8
     assert [asset for asset in state['assets'] if 'windows-x64' in asset['name']] == windows_before
     assert state['body'].startswith('Original release notes')
+    assert 'macOS 安装兼容修订' in state['body']
     refresh.publish(root, SOURCE, approval)
     assert len(uploads) == 8, 'Retry must reuse identical staged files'
 

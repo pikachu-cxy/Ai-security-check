@@ -30,7 +30,7 @@ def archive_name(platform):
 
 
 def api(path):
-    return json.loads(subprocess.check_output(['gh', 'api', f'repos/{REPOSITORY}/{path}'], text=True))
+    return json.loads(subprocess.check_output(['gh', 'api', f'repos/{REPOSITORY}/{path}'], text=True, encoding='utf-8'))
 
 
 def release():
@@ -55,7 +55,7 @@ def require_original(value, approval):
 
 
 def require_native(archive, platform, source):
-    record = json.loads(archive.with_name(archive.name + '.verification.json').read_text())
+    record = json.loads(archive.with_name(archive.name + '.verification.json').read_text(encoding='utf-8'))
     required = ('smoke', 'managed_engines', 'plugin_discovery', 'osv_offline_fallback',
                 'fix_verify_offline_synthetic', 'hooks_offline_synthetic',
                 'remediation_offline_synthetic', 'codex_integration_offline_synthetic')
@@ -63,7 +63,7 @@ def require_native(archive, platform, source):
             or record.get('platform') != platform or record.get('archive_sha256') != digest(archive)
             or not all(record.get(key) is True for key in required)):
         raise ValueError('Incomplete native verification: ' + platform)
-    if archive.with_name(archive.name + '.sha256').read_text().strip() != digest(archive) + '  ' + archive.name:
+    if archive.with_name(archive.name + '.sha256').read_text(encoding='utf-8').strip() != digest(archive) + '  ' + archive.name:
         raise ValueError('Archive sidecar mismatch')
     with tarfile.open(archive) as tar:
         members = [item for item in tar.getmembers() if item.name == 'security-check/version.json']
@@ -99,8 +99,8 @@ def prepare(root, source, approval):
     previous, staged = work / 'previous', work / 'staged'
     previous.mkdir()
     staged.mkdir()
-    (previous / 'release.json').write_text(json.dumps(original, ensure_ascii=False, indent=2))
-    (work / 'approval.json').write_text(json.dumps(approval, indent=2))
+    (previous / 'release.json').write_text(json.dumps(original, ensure_ascii=False, indent=2), encoding='utf-8')
+    (work / 'approval.json').write_text(json.dumps(approval, indent=2), encoding='utf-8')
     for name in approval['assets']:
         if 'windows-x64' in name:
             continue
@@ -108,7 +108,7 @@ def prepare(root, source, approval):
                         '--pattern', name, '--dir', str(previous)], check=True)
         if digest(previous / name) != approval['assets'][name]['sha256']:
             raise ValueError('Original download checksum mismatch: ' + name)
-    manifest = json.loads((previous / 'release-manifest.json').read_text())
+    manifest = json.loads((previous / 'release-manifest.json').read_text(encoding='utf-8'))
     if manifest['version'] != '0.3.6' or manifest['source_commit'] != approval['original_source_commit']:
         raise ValueError('Original manifest provenance changed')
     windows = copy.deepcopy(manifest['artifacts']['windows-x64'])
@@ -122,12 +122,12 @@ def prepare(root, source, approval):
         manifest['artifacts'][platform]['sha256'] = digest(staged / name)
     manifest['artifact_source_commits'] = {'windows-x64': approval['original_source_commit'], **dict.fromkeys(MACS, source)}
     manifest['macos_refresh'] = {'source_commit': source, 'receipt': RECEIPT}
-    (staged / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    (staged / 'release-manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
     receipt = dict(version='0.3.6', source_commit=source, platforms=list(MACS), build_ids=builds,
         runtime_tests=test_url, windows='UNCHANGED', original_source_commit=approval['original_source_commit'],
         artifacts={key: manifest['artifacts'][key] for key in MACS},
         apple_developer_id_and_notarization='NOT_CONFIGURED; NATIVE_CI_IS_NOT_GATEKEEPER_ACCEPTANCE')
-    (staged / RECEIPT).write_text(json.dumps(receipt, indent=2) + '\n')
+    (staged / RECEIPT).write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
     from scripts.update_homebrew_formula import generate
     formula = work / 'ai-security-runtime.rb'
     generate(staged / 'release-manifest.json', formula)
@@ -148,23 +148,23 @@ def prepare(root, source, approval):
         new.write(formula, 'distribution/homebrew/Formula/ai-security-runtime.rb')
         new.write(staged / RECEIPT, 'release/' + RECEIPT)
     sums = {}
-    for line in (previous / 'SHA256SUMS.txt').read_text().splitlines():
+    for line in (previous / 'SHA256SUMS.txt').read_text(encoding='utf-8').splitlines():
         sha, name = line.split('  ')
         sums[name] = sha
     if sums[windows_name] != windows['sha256']:
         raise ValueError('Windows aggregate checksum mismatch')
     for name in [*(archive_name(platform) for platform in MACS), EVIDENCE, RECEIPT]:
         sums[name] = digest(staged / name)
-    (staged / 'SHA256SUMS.txt').write_text(''.join(f'{sha}  {name}\n' for name, sha in sums.items()))
+    (staged / 'SHA256SUMS.txt').write_text(''.join(f'{sha}  {name}\n' for name, sha in sums.items()), encoding='utf-8')
     plan = dict(source_commit=source, files={path.name: digest(path) for path in staged.iterdir()})
-    (work / 'plan.json').write_text(json.dumps(plan, indent=2))
+    (work / 'plan.json').write_text(json.dumps(plan, indent=2), encoding='utf-8')
     print('Prepared both Mac replacements and a complete pre-publication backup.')
 
 
 def publish(root, source, approval):
     work = root / 'dist/macos-refresh'
     staged = work / 'staged'
-    plan = json.loads((work / 'plan.json').read_text())
+    plan = json.loads((work / 'plan.json').read_text(encoding='utf-8'))
     expected = {*(archive_name(platform) + suffix for platform in MACS for suffix in ('', '.sha256')), *SHARED}
     if plan['source_commit'] != source or set(plan['files']) != expected:
         raise ValueError('Unexpected publication scope')
@@ -211,10 +211,10 @@ def publish(root, source, approval):
             f'Intel 与 Apple Silicon 包已从提交 [{source[:7]}](https://github.com/{REPOSITORY}/commit/{source}) 重新构建并通过原生验收。'
             'Windows 包及其 SHA256 保持不变，版本标签仍对应原始发行源码。'
             '请重新下载 Mac 完整包及配套校验文件；平台源码身份见发行清单的 artifact_source_commits 和 macos-refresh.json。'
-            '本次不提供 Apple Developer ID 签名、公证或浏览器下载后 Gatekeeper 放行保证。\n')
+            '本次不提供 Apple Developer ID 签名、公证或浏览器下载后 Gatekeeper 放行保证。\n', encoding='utf-8')
         subprocess.run(['gh', 'release', 'edit', TAG, '--repo', REPOSITORY, '--notes-file', str(notes)], check=True)
     (work / 'publication.json').write_text(json.dumps(dict(source_commit=source, release_url=current['html_url'],
-        files=plan['files'], windows_assets_unchanged=True), indent=2))
+        files=plan['files'], windows_assets_unchanged=True), indent=2), encoding='utf-8')
     print('Published both Mac replacements; Windows asset IDs and checksums are unchanged.')
 
 
@@ -226,7 +226,7 @@ if __name__ == '__main__':
     if not re.fullmatch(r'[0-9a-f]{40}', args.source_commit):
         raise ValueError('A complete source commit is required')
     root = Path(__file__).resolve().parents[1]
-    approval = json.loads((root / 'distribution/releases/v0.3.6-macos-refresh.json').read_text())
+    approval = json.loads((root / 'distribution/releases/v0.3.6-macos-refresh.json').read_text(encoding='utf-8'))
     if approval['tag'] != TAG or approval['repository'] != REPOSITORY:
         raise ValueError('Unexpected refresh approval')
     {'prepare': prepare, 'publish': publish}[args.action](root, args.source_commit, approval)

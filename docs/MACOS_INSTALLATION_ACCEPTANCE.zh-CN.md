@@ -1,6 +1,6 @@
 # macOS 安装优化与验收
 
-更新：2026-10-19。当前修订仅限 Mac，Windows 保持原安装行为。本地通过、源码推送与 Release 资产替换分别记录。
+更新：2026-10-20。当前修订仅限 Mac，Windows 保持原安装行为。本地通过、源码推送与 Release 资产替换分别记录。
 
 ## 同类工具的安装方式
 
@@ -49,6 +49,8 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 后续修订提交 `82b554d94ddec9692f8d27c82f239e9bf92c4509` 的 Intel、Apple Silicon 和 Windows 原生包均已通过[原生完整验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)，没有跳过原专项断言。发布仍需同一提交的[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)通过；原发行的 Windows 全量回归曾用时约 115 分钟，因此先完成的原生包不代表发布门禁已满足。准备步骤仅因等待回归触及时限时，待原回归通过后恢复准备/发布，复用本轮已验证的原生包，不重建或混用其他提交的资产。实际公开资产身份以 `macos-refresh.json`、发行清单及 SHA256 为准。
 
 该提交的 Mac 全量回归随后返回 **5,084 passed、1 failed、75 skipped、26 xfailed**；唯一失败是源码首次安装测试误用了 CI Python 旁已有的 Semgrep，导致引导下载次数为 0。PATH 已隔离，但 `sysconfig` 的脚本发现路径仍指向宿主环境。后续只隔离该 Mac 测试的宿主脚本目录，保留产品对已有 Semgrep 的复用行为及全部原断言。人工模拟“宿主已有 Semgrep”可复现原失败，隔离后同场景通过；相关回归在普通本机权限下为 **65 passed / 8.49 秒**，原沙箱中真实离线扫描被拒绝启动的记录单独保留。修订需重新完成同提交的原生与全量门禁。旧包未因原生验收通过而提前替换。
+
+修订提交 `40033e1f388cae5e2dde522b54c280ef1f98ac43` 的三套原生包均完成验收，Mac 全量为 **5,085 passed、75 skipped、26 xfailed**，规则质量检查通过。Windows 全量为 **5,100 passed、2 failed、58 skipped、26 xfailed**；两个失败均来自新增 Mac 发行工具写入中文说明时依赖 Windows 默认 CP1252 编码（[失败日志](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39276253714/job/118141214473)），不是 Windows 安装行为回归。后续为该发行工具的 API 文本、备份、清单及发布说明显式指定 UTF-8，补充 UTF-8 / CP1252 语义回归；本地关闭 Python UTF-8 模式后的安装/发行契约为 **36 passed / 1.21 秒**，原编码失败保存在本地 `artifacts/mac-release-utf8-reproduction.log`。CI 在全量测试前先执行同组短检查，避免等待近两小时后才发现发行工具的基础问题。Windows 产品安装逻辑不因此调整，门禁失败仍保留旧资产，重新冻结并验收后才发布。
 
 首轮远端源码提交 `0b709ff2a2028b24dd401c933d307a49c2a9047e` 的 Apple Silicon 原生包通过；Intel 在前置组件、样例检查及 MCP 检查之后，整组修复复查专项触及 180 秒验收时限（[失败回执](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39266404355/job/118107009555)）。门禁阻止了发布，旧资产没有因此替换。后续仅将 Mac Intel 的这组多次扫描/MCP 专项整体时限改为 600 秒，并补充阶段输出；Windows 与 Apple Silicon 仍为 180 秒，产品自身执行时限不受此项调整影响。专项全部断言保留，不能用延长时限代替重新验收。包含上传重试与验收预算契约的本地回归为 26 通过；此前分组与之有重叠，不相加。
 
