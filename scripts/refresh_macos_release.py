@@ -181,6 +181,11 @@ def publish(root, source, approval):
     # approved bytes or this run's staged bytes are accepted; Windows IDs stay fixed.
     for name, old in approval['assets'].items():
         actual = assets.get(name, {})
+        # --clobber deletes before uploading. A failed transfer can leave an
+        # approved replacement absent; recreating that name is safe on retry.
+        # Windows is never in the replacement plan and must remain present.
+        if not actual and name in plan['files']:
+            continue
         allowed = {'sha256:' + old['sha256']}
         if name in plan['files']:
             allowed.add('sha256:' + plan['files'][name])

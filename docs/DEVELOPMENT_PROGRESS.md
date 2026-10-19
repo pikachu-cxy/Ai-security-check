@@ -46,7 +46,7 @@ socketpair 的后续对照区分了两个触发条件：工具沙箱禁止本地
 
 本批采用平台分支适配：macOS 临时目录别名、系统证书/已有代理、受校验 CPython 引导、Semgrep 首次启动时限及安装失败恢复仅在 Mac 生效。Windows 保持原 pip 参数、环境创建、并发安装、失败处理及路径/诊断逻辑。本轮只验收 Mac 和 Windows。
 
-收敛后本地定向回归为 **182 passed、13 skipped**；发行替换、资产保护及既有发行元数据回归为 **22 passed**。前轮未收敛候选的 322/84 项结果只保留历史依据，不冒充本轮重新执行或跨平台实机通过。
+收敛后本地定向回归为 **182 passed、13 skipped**；发行替换、资产保护、上传失败重试及既有元数据回归最终为 **23 passed**。安装分支最后复测为 **26 passed**，与前述分组有重叠，不相加。前轮未收敛候选的 322/84 项结果只保留历史依据，不冒充本轮重新执行或跨平台实机通过。
 
 用户已要求更新 v0.3.6 对应 Mac Intel 与 Apple Silicon 包。替换流程保留完整旧资产备份，要求同一干净提交的原生验收及 Windows/Mac 回归通过，替换前后核对 Windows 资产 ID 与 SHA256；版本标签及 Windows 包不移动。发布完成以 Release 中 `macos-refresh.json`、新清单及发布回执为准，不能仅根据源码已推送认定完成。详见 [Mac 验收记录](MACOS_INSTALLATION_ACCEPTANCE.zh-CN.md)。
 

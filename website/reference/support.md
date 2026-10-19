@@ -14,7 +14,7 @@
 
 macOS 两种架构使用对应的原生完整包，不以 Rosetta 作为默认兼容策略。Windows 机器可以提交代码并触发 macOS runner 构建，但不能在本机直接运行 macOS 原生可执行文件来证明兼容。
 
-本次发行源码为 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。[发布验收工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)全部通过后，才公开 [v0.3.6 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
+原始版本标签与 Windows 包对应源码 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`，[原始发布验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)通过后公开 v0.3.6。Mac 兼容修订保留 Windows 原安装行为和公开资产，另对 Intel 与 Apple Silicon 构建验收；完成状态和实际源码以[下载页](../downloads.md)、发行清单的 `artifact_source_commits` 及 `macos-refresh.json` 为准。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
 
 ## 检查范围
 

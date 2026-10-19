@@ -197,6 +197,13 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
     return result
 
 
+def fix_verification_timeout():
+    # This harness performs many real scans and MCP round trips. The Intel
+    # macOS runner exceeded its former whole-harness deadline after the package
+    # and scanner checks had passed. Product timeouts and Windows stay unchanged.
+    return 600 if platform_key() == ('macos', 'x64') else 180
+
+
 def sample_scan_diagnostics(payload):
     return {
         'coverage': payload.get('coverage'),
@@ -507,7 +514,7 @@ def main() -> None:
             script = Path(__file__).with_name('fix_verify_acceptance.py').resolve()
             evidence = args.archive.resolve().with_name(args.archive.name + '.fix-verify.json')
             run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
-                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=180)
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=fix_verification_timeout())
         if args.remediation:
             script = Path(__file__).with_name('remediation_acceptance.py').resolve()
             evidence = args.archive.resolve().with_name(args.archive.name + '.remediation.json')

@@ -175,8 +175,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--executable', type=Path, help='Additionally verify actual installed/native MCP SDK with real Semgrep')
     args = parser.parse_args()
+    print('Fix verification stage: local synthetic scanner cases', flush=True)
     record = run_acceptance()
     if args.executable:
+        print('Fix verification stage: native MCP synthetic cases', flush=True)
         record['installed_native_sdk'] = asyncio.run(native_sdk_acceptance(args.executable))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')

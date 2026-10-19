@@ -136,3 +136,13 @@ def test_changed_staging_cannot_be_uploaded(refresh_case):
     with pytest.raises(ValueError, match='Staged publication changed'):
         refresh.publish(root, SOURCE, approval)
     assert not uploads
+
+
+def test_retry_recovers_an_approved_mac_asset_missing_after_failed_upload(refresh_case):
+    root, approval, state, uploads = refresh_case
+    refresh.prepare(root, SOURCE, approval)
+    missing = refresh.archive_name('macos-x64')
+    state['assets'] = [asset for asset in state['assets'] if asset['name'] != missing]
+    refresh.publish(root, SOURCE, approval)
+    assert missing in uploads
+    assert all('windows-x64' not in name for name in uploads)

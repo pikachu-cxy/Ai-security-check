@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: standalone-${{ github.ref }}${{ contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]') && '-macos-refresh' || '' }}
+  group: standalone-${{ github.ref }}-${{ contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]') && github.sha || 'default' }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]') }}
 
 jobs:

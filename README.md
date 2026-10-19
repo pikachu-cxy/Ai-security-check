@@ -63,9 +63,9 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 - Mac Apple Silicon：`ai-security-runtime-v0.3.6-macos-arm64.tar.gz`
 - Mac Intel：`ai-security-runtime-v0.3.6-macos-x64.tar.gz`
 
-本次发行源码固定为 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。文件、直接下载入口和 SHA256 见[下载页](website/downloads.md)。此前本地候选与 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)旧发行不是本次构建，不要混用校验值或不同版本 Skill。当前仍为预发行试用版，macOS 真机和 Cursor 桌面验收单独记录。
+原始版本标签与 Windows 包的源码为 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。Mac 兼容修订单独更新 Intel 与 Apple Silicon 资产，完成状态、各平台源码、直接下载入口和 SHA256 见[下载页](website/downloads.md)及 Release 的 `macos-refresh.json`。旧 Mac 包不会自动升级，重新下载时应同时取得新的校验文件；不要混用旧候选、旧摘要或不同版本 Skill。当前仍为预发行试用版，签名、公证、macOS 真机和 Cursor 桌面验收单独记录。
 
-拿到与所需能力匹配的完整包后，保留全部 security-check 目录，退出 Codex，在解压目录执行：
+拿到与所需能力匹配的完整包后，保留全部 security-check 目录，在解压目录执行下列命令。由 Codex 辅助安装时保留当前聊天，安装及准备完成后再退出并重启，使新连接生效：
 
 ~~~powershell
 .\security-check\security-check.exe install codex

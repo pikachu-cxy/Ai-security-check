@@ -42,9 +42,11 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
 
-收敛后本地安装相关回归：182 通过、13 跳过；发行替换及既有元数据相关回归：22 通过。对应 `artifacts/mac-only-regression.xml` 与 `artifacts/mac-release-refresh-tests.xml` 仅保存在本地，不随源码发布。公开资产更新状态以 Release 的 `macos-refresh.json` 及 Actions 原生验收为准。
+收敛后本地安装相关回归：182 通过、13 跳过；安装分支最终复测 26 通过，与前组重叠、不相加。发行替换、上传失败重试及既有元数据相关回归最终为 23 通过。对应 `artifacts/mac-only-regression.xml`、`artifacts/mac-only-dispatch-final.xml` 与 `artifacts/mac-release-refresh-final.xml` 仅保存在本地，不随源码发布。公开资产更新状态以 Release 的 `macos-refresh.json` 及 Actions 原生验收为准。
 
 ## 必须保留的边界
+
+首轮远端源码提交 `0b709ff2a2028b24dd401c933d307a49c2a9047e` 的 Apple Silicon 原生包通过；Intel 在前置组件、样例检查及 MCP 检查之后，整组修复复查专项触及 180 秒验收时限（[失败回执](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39266404355/job/118107009555)）。门禁阻止了发布，旧资产没有因此替换。后续仅将 Mac Intel 的这组多次扫描/MCP 专项整体时限改为 600 秒，并补充阶段输出；Windows 与 Apple Silicon 仍为 180 秒，产品自身执行时限不受此项调整影响。专项全部断言保留，不能用延长时限代替重新验收。包含上传重试与验收预算契约的本地回归为 26 通过；此前分组与之有重叠，不相加。
 
 本机没有可用的 Apple 代码签名身份。本轮不能完成 Developer ID 签名、公证或浏览器下载后的 Gatekeeper 放行验收；不删除隔离标记来声称这些环节通过。新本地候选仅用于本机手动回归，不能替代正式签名发行。
 
