@@ -1,6 +1,6 @@
 # 开发进度与验收状态
 
-更新日期：2026-10-19。源码版本：0.3.6；分支：feature/runtime-mvp。
+更新日期：2026-10-20。源码版本：0.3.6；分支：feature/runtime-mvp。
 
 ## 当前批次
 
@@ -42,13 +42,21 @@ socketpair 的后续对照区分了两个触发条件：工具沙箱禁止本地
 
 ## 交付与桌面状态
 
-### macOS 安装兼容修订（2026-10-19）
+### macOS 安装兼容修订（2026-10-20 已发布）
 
 本批采用平台分支适配：macOS 临时目录别名、系统证书/已有代理、受校验 CPython 引导、Semgrep 首次启动时限及安装失败恢复仅在 Mac 生效。Windows 保持原 pip 参数、环境创建、并发安装、失败处理及路径/诊断逻辑。本轮只验收 Mac 和 Windows。
 
 收敛后本地定向回归为 **182 passed、13 skipped**；发行替换、资产保护、上传失败重试及既有元数据回归最终为 **23 passed**。安装分支最后复测为 **26 passed**，与前述分组有重叠，不相加。前轮未收敛候选的 322/84 项结果只保留历史依据，不冒充本轮重新执行或跨平台实机通过。
 
-用户已要求更新 v0.3.6 对应 Mac Intel 与 Apple Silicon 包。替换流程保留完整旧资产备份，要求同一干净提交的原生验收及 Windows/Mac 回归通过，替换前后核对 Windows 资产 ID 与 SHA256；版本标签及 Windows 包不移动。发布完成以 Release 中 `macos-refresh.json`、新清单及发布回执为准，不能仅根据源码已推送认定完成。详见 [Mac 验收记录](MACOS_INSTALLATION_ACCEPTANCE.zh-CN.md)。
+已从干净提交 [`c1641b7`](https://github.com/pikachu-cxy/Ai-security-check/commit/c1641b799b0ec537ae4a8e2ba5280e3969ea471a) 构建并替换 [v0.3.6](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6) 的 Mac Intel 与 Apple Silicon 包。同提交[全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298843038)最终为 Mac **5,086 passed、75 skipped、26 xfailed**，Windows **5,103 passed、58 skipped、26 xfailed**，均另有 6 subtests，规则质量通过。[三套原生包验收与发布](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842869)、包检查及合规检查通过。
+
+替换前保存待替换的七份旧资产和精确待发内容；公开包重下载后，两种 Mac 各 323 个包内文件及各层 SHA256 一致，原生主回执八项必需标记为 true。Windows ZIP/校验文件的资产 ID、大小与摘要未变，证据 ZIP 中 Windows、WinGet 等 15 份保留条目逐字节一致。标签仍指向原始 `b4fa0ab`，新清单按平台记录来源。详见 [Mac 验收记录](MACOS_INSTALLATION_ACCEPTANCE.zh-CN.md)。签名、公证和真实桌面验收仍未完成，Linux 本轮不增加交付。
+
+Windows 首轮 5,102 通过、1 失败，原 MCP stdio 测试初始化触及既有 20 秒时限；相同提交仅重跑失败的 Windows 作业后通过，产品、断言和时限均未改动。准备阶段等待全量回归超时后，待门禁成功再恢复发布，失败记录保留。
+
+本轮开发安全任务在编辑前建立并已完成，结果为 PARTIAL：SAST 执行身份不可验证，正式证据中部分字符串和配置脱敏限制了语义核查。未形成可报告发现，不能作为安全检查通过；不以产品回归替代此结果。
+
+以下为发布前候选历史，最终交付以上述 `c1641b7` 为准。
 
 修订提交 `82b554d94ddec9692f8d27c82f239e9bf92c4509` 的 Intel、Apple Silicon 与 Windows 原生包已分别通过完整验收；[原生流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)和[同提交全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)分别保留结果。共享清单按平台记录来源；只有实际发布回执和公开摘要一致，才认定 Mac 包已替换。
 
@@ -72,7 +80,7 @@ socketpair 的后续对照区分了两个触发条件：工具沙箱禁止本地
 ## 接下来
 
 1. 完成当前样例的真实 Codex 验收，按实际结果更新状态。
-2. 从冻结提交构建新的独立候选，校验包内工具、指导、存储门槛后再决定发布。
+2. Mac 兼容包已发布；后续候选仍需冻结源码和独立验收。优先补齐 Developer ID、签名、公证及浏览器下载首次运行证据，再推进正式 Homebrew 渠道或签名 PKG。
 3. 在同一候选上执行 Cursor 桌面矩阵；macOS、Qoder、WorkBuddy / CodeBuddy 分别验收。
 4. 持续核对旧决定、恢复、检查范围和性能，不以缩小必要证据换取速度。
 

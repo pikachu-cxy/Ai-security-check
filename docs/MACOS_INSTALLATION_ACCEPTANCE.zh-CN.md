@@ -1,6 +1,6 @@
 # macOS 安装优化与验收
 
-更新：2026-10-20。当前修订仅限 Mac，Windows 保持原安装行为。本地通过、源码推送与 Release 资产替换分别记录。
+更新：2026-10-20。Mac 兼容修订已发布，Windows 保持原安装行为和公开安装包。本轮未增加 Linux 产品构建或验收。本地通过、源码推送与 Release 资产替换分别记录。
 
 ## 同类工具的安装方式
 
@@ -40,11 +40,41 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 使用当前干净源码提交的 Intel 与 Apple Silicon 原生包及其验收回执。只有 Windows/Mac 回归和原生包验收完成后才更新 Release；现有 Windows ZIP、SHA256 文件的资产 ID 和摘要必须保持不变。原始版本标签不移动，机器清单保留原始 `source_commit` 并另以 `artifact_source_commits` 记录各平台来源，避免把新版 Mac 来源错误套给 Windows。
 
-显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。原生流程也监听引导、Mac 安装、发行替换、验收预算、Node 宿主预检与发行资产六份契约测试，以及 Runtime 测试工作流，避免仅修测试或 CI 时漏建同提交的原生包。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
+显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。原生流程也监听引导、Mac 安装、发行替换、验收预算、Node 宿主预检与发行资产六份契约测试，以及 Runtime 测试工作流，避免仅修测试或 CI 时漏建同提交的原生包。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存待替换的七份旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
 
 收敛后本地安装相关回归：182 通过、13 跳过；安装分支最终复测 26 通过，与前组重叠、不相加。发行替换、上传失败重试及既有元数据相关回归最终为 23 通过。对应 `artifacts/mac-only-regression.xml`、`artifacts/mac-only-dispatch-final.xml` 与 `artifacts/mac-release-refresh-final.xml` 仅保存在本地，不随源码发布。公开资产更新状态以 Release 的 `macos-refresh.json` 及 Actions 原生验收为准。
 
-## 必须保留的边界
+### 已完成的公开发布核对
+
+2026-10-20 已替换 [v0.3.6 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6) 的 Intel 和 Apple Silicon 包，发行源码固定为干净提交 [`c1641b799b0ec537ae4a8e2ba5280e3969ea471a`](https://github.com/pikachu-cxy/Ai-security-check/commit/c1641b799b0ec537ae4a8e2ba5280e3969ea471a)。后续文档提交不改变这批包的源码身份。
+
+| 同提交门禁 | 最终结果 |
+| --- | --- |
+| [Windows / Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298843038) | Mac：5,086 passed、75 skipped、26 xfailed、6 subtests；Windows：5,103 passed、58 skipped、26 xfailed、6 subtests；两平台规则质量检查通过 |
+| [原生包验收及发布](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842869) | Intel、Apple Silicon、Windows 三套原生包全部必需验收项通过；备份、准备和发布成功，Windows 原公开包保留 |
+| [包检查](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842727) / [合规检查](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842821) | 通过 |
+
+Windows 首轮为 5,102 passed、1 failed，唯一失败是既有真实 MCP stdio 测试在 20 秒初始化时限内未完成。保留原记录，在相同提交上只重跑失败的 Windows 作业后全量通过；没有改变产品、测试断言或时限。Mac 和原生包结果复用同提交已通过的记录。准备步骤等待全量回归触及时限后，待回归成功再恢复准备和发布，未提前替换资产。
+
+公开包重新下载后完成以下核对，回执仅保存在本地 `artifacts/macos-refresh-public/public-verification.json`：
+
+- 两份实际压缩包与 GitHub 资产摘要、同名 SHA256 文件、完整校验清单、发行清单和 `macos-refresh.json` 一致。
+- 两份 `version.json` 均为版本 0.3.6、上述源码提交、`source_dirty=false`，构建 ID 与发布回执一致；各自包内 323 个清单文件逐一校验通过，启动器权限为 0755，内嵌 Python 及其完整载荷存在。
+- 两份 Mac 主验收回执的源码和压缩包摘要一致，八项必需验收标记全部为 true；其余 Mac 专项证据一并更新。
+- Windows ZIP 和 SHA256 文件分别保持资产 ID `656134876`、`656134882`，大小与摘要均未变。Windows ZIP SHA256 仍为 `898337c27f718f4843fc89f01a6d6f092cca107c29ed163c3cb814b57d940dbc`。
+- 证据 ZIP 中 15 份原非 Mac / 非 Homebrew 条目逐字节保持一致，含 Windows 验收、WinGet 和原说明；Homebrew 示例使用新 Mac 摘要，尚未建立外部官方 tap。
+- 原 `v0.3.6` 标签仍指向 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`；机器清单分别记录 Windows 原来源与 Mac 新来源，发布说明也披露了差异。
+
+| Mac 公开包 | SHA256 |
+| --- | --- |
+| Apple Silicon | `3a42b210a624dfc9f5c903d2dbf86f8b0271a2d7970fb833a98c9651881f0267` |
+| Intel | `ae56a1edea6866b3f1f7f0bbccde563664da033aa2f4dfd67708d49bf2c527c3` |
+
+请重新下载对应 Mac 完整包和同名校验文件，校验后解压到新目录，避免混入旧 `_internal` 文件。正常解压保留启动器执行权限，通常无需另行 `chmod`；此权限不等于 Apple 信任或动态库签名有效。文档站的安装请求按钮使用公开平台包，可交给本地 Codex 安装；网页本身不会执行命令。
+
+本轮编辑前建立并完成了开发安全任务，最终为 PARTIAL 覆盖：静态检查缺少可验证的 SAST 执行身份，正式代码证据中的部分字符串和配置被脱敏，无法据此确认全部语义。未形成可报告发现，不能记为安全检查通过；产品测试与此结果分别记录。
+
+## 门禁历史与保留边界
 
 后续修订提交 `82b554d94ddec9692f8d27c82f239e9bf92c4509` 的 Intel、Apple Silicon 和 Windows 原生包均已通过[原生完整验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)，没有跳过原专项断言。发布仍需同一提交的[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)通过；原发行的 Windows 全量回归曾用时约 115 分钟，因此先完成的原生包不代表发布门禁已满足。准备步骤仅因等待回归触及时限时，待原回归通过后恢复准备/发布，复用本轮已验证的原生包，不重建或混用其他提交的资产。实际公开资产身份以 `macos-refresh.json`、发行清单及 SHA256 为准。
 
@@ -58,7 +88,7 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 本机没有可用的 Apple 代码签名身份。本轮不能完成 Developer ID 签名、公证或浏览器下载后的 Gatekeeper 放行验收；不删除隔离标记来声称这些环节通过。新本地候选仅用于本机手动回归，不能替代正式签名发行。
 
-先在隔离用户配置与独立数据目录中验证候选，不覆盖真实安装。回归和包检查完成后，使用产品卸载入口移除本机 MCP、受管 Hook 和受管 Skill，保留用户其他配置、历史和组件缓存，供用户手动安装。保留缓存的重装不等于新机器冷安装；独立空目录的组件验收另存回执。
+前轮已在隔离用户配置与独立数据目录中验证候选，并使用产品卸载入口移除当时的本机安装，供用户手动重装，具体见下方历史回执。用户之后已手动重装；本次公开资产更新未再次安装或卸载本机产品。保留缓存的重装不等于新机器冷安装；独立空目录的组件验收另存回执。
 
 ## 前轮本地候选验证记录（收敛前历史）
 
@@ -72,6 +102,6 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 - 最终候选 r4：构建 `757dc0fa4423aa28d47ae4ee87387a9f649e6e742254230d37bdbdf53dce56b7`，版本 0.3.6，来源提交 `f6d93bdd48dc54b41e92d3b6e48387aa425a9b17` 加本地未提交安装器改动（`source_dirty=true`）。程序和包内 272 个文件通过清单校验。压缩包 SHA256 为 `75e5284930ac61363736cb3d2e4a050a4f04641fb8e7ad782f164e5a9c1cd442`；重新解压后再次通过清单校验并正常启动。见 `artifacts/mac-local-candidate.json`、`artifacts/mac-local-archive-verification.json`。
 - r4 实际冷安装：新的隔离 Codex 配置、独立空组件目录，路径含中文和空格；未显式注入 CA、代理或外部 Semgrep 路径。安装返回 0，后台准备约 122 秒后返回 0，Semgrep 1.178.0、Gitleaks 8.30.0、Trivy 0.74.0 均 READY，漏洞库 READY/FRESH、失败列表为空。使用真实官方安装来源，未复用本机产品组件目录；pip 下载缓存、操作系统及网络缓存未清空，不等于全新操作系统验收。见 `artifacts/mac-cold-r4-install.json`、`artifacts/mac-cold-r4-preparation.json`。
 - 接入核对须调用**安装后的稳定启动入口**。最初从下载目录执行状态查询返回 RUNTIME_STALE，是查询入口与安装入口不同，不是组件准备失败；原始回执 `artifacts/mac-cold-r4-status.json` 保留。从已安装启动入口重查返回 CONFIGURED、OWNED_AND_CURRENT，MCP 与 Hook 配置完成、诊断为空，Skill 状态查询成功；见 `artifacts/mac-cold-r4-installed-status.json` 等文件。真实 Codex 重启后的连接仍待用户手动安装后确认。
-- 本轮开发安全任务未建立：修改前调用当前已连接 Runtime 的任务入口时，发生 `RUNTIME_WORKFLOW` 模块导入错误，未获得 task_ref。没有事后重建基线，也未把测试结果冒充任务安全核查结果。
+- 前轮 r4 开发安全任务未建立：当时修改前调用已连接 Runtime 的任务入口时，发生 `RUNTIME_WORKFLOW` 模块导入错误，未获得任务引用。没有事后重建基线，也未把测试结果冒充任务安全核查结果；这是历史缺口，本次安全任务结果见上文。
 - 本机原安装已卸载：官方卸载入口返回 REMOVED，Skill 移除返回 REMOVED；只在确认没有原安装目录下的产品进程后，把原程序移至 `artifacts/mac-local-uninstall/program-backup` 可恢复备份。最终产品状态和 Skill 状态均 NOT_INSTALLED。与卸载前备份逐项比较，其他 Codex 配置、其他 Hook 和组件路径配置保持不变，组件数据与历史未清空。见 `artifacts/mac-local-uninstall/verification.json`。
-- 用户手动重装入口为 `dist/mac-local-20261019-r4/security-check/security-check install codex`，完整说明见 `dist/本机手动安装说明.txt`。本轮结束前未替用户重装，也未自动退出或重启当前聊天。网站按钮指向公开发行包，本地候选尚未上传覆盖公开包。
+- 前轮用户手动重装入口为 `dist/mac-local-20261019-r4/security-check/security-check install codex`，完整说明见 `dist/本机手动安装说明.txt`。当时未替用户重装，也未自动退出或重启聊天。该 r4 候选未上传；当前公开 Mac 包为上文独立构建和验收的 `c1641b7`，不是本地 r4。

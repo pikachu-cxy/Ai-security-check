@@ -4,7 +4,7 @@
 
 [v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，原始版本标签与 Windows 包对应提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
 
-**Mac 安装兼容修订：** 本轮仅替换 Intel 与 Apple Silicon 两套 Mac 资产，Windows 公开包保持不变。修订源码与构建身份以发布后的 [Mac 修订回执](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/macos-refresh.json)为准；只有回执、包摘要与配套清单一致，且对应提交的[原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/standalone.yml)及[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/tests.yml)通过，才表示修订已发布。完成后请重新下载 Mac 完整包及 SHA256 文件；机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
+**2026-10-20 Mac 修订已发布：** Intel 与 Apple Silicon 两套包已由干净提交 [`c1641b7`](https://github.com/pikachu-cxy/Ai-security-check/commit/c1641b799b0ec537ae4a8e2ba5280e3969ea471a) 重新构建并替换，Windows 公开包保持不变。[原生验收及发布](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842869)和[同提交全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298843038)通过；公开下载的包摘要、包内清单与 [Mac 修订回执](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/macos-refresh.json)已核对一致。请重新下载 Mac 完整包及 SHA256 文件，解压到新目录，避免混入旧 `_internal` 文件。机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |
@@ -14,7 +14,7 @@
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-release-evidence.zip)
 
-[发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)已通过 Windows / macOS 全量测试、规则质量、合规、包完整性与三平台原生安装包验收。原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。
+原始 [0.3.6 发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)的记录保留。当前 Mac 修订另完成 Windows / macOS 全量测试（最终分别 5,103 / 5,086 项通过，平台跳过与预期失败见 CI）、规则质量、合规、包完整性与三套原生包验收。原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。
 
 合成 SDK / Hook 场景不是实际桌面操作；macOS 真机、Cursor 桌面、苹果签名与公证等仍按[支持边界](./reference/support.md)单独认定。安装包通过检查也不代表任何用户项目已完成漏洞检查。
 
@@ -41,4 +41,4 @@ shasum -a 256 -c ai-security-runtime-v0.3.6-macos-arm64.tar.gz.sha256
 
 Intel 换为 `macos-x64`。摘要用于检查下载完整性，不代替发布者身份、系统签名或平台兼容性验证。
 
-完整解压后按[快速开始](./guide/quickstart.md)安装。macOS 签名、公证、真机与宿主验收不能用一次交叉编译或校验和替代。
+完整解压后按[快速开始](./guide/quickstart.md)安装，也可复制页面上的安装请求交给本地 Codex。Mac 包已保留执行权限，正常解压通常无需另行 `chmod`。当前尚未配置 Apple Developer ID 签名和公证，“未知开发者”提示仍可能出现；处理方式见[安装故障排查](./guide/installation.md)。签名、公证、真机与宿主验收不能用一次交叉编译或校验和替代。

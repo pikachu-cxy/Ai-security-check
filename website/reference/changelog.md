@@ -6,7 +6,9 @@
 
 ### Mac 安装兼容修订
 
-系统证书/代理、临时路径别名、受校验 Python 引导、首次启动时限及组件安装失败恢复均限定 Mac；Windows 继续原安装行为。本轮只验收 Mac 与 Windows。Intel 与 Apple Silicon 原生验收通过后，按用户要求替换 v0.3.6 对应 Mac 资产，并同步校验清单和 Mac 证据，Windows 资产及版本标签不移动。完成状态以[下载页](../downloads.md)和 `macos-refresh.json` 为准，签名、公证与浏览器首次运行另行验收。
+2026-10-20：系统证书/代理、临时路径别名、受校验 Python 引导、首次启动时限及组件安装失败恢复均限定 Mac；Windows 继续原安装行为。干净提交 `c1641b7` 已通过同提交全量回归（Mac 5,086、Windows 5,103 项通过，跳过与预期失败见 CI）和三套原生包验收，v0.3.6 的 Intel 与 Apple Silicon 包已替换，并核对公开下载。配套校验、Mac 证据和 Homebrew 示例同步更新；Windows 原包、WinGet 内容及版本标签保持不变。详情见[下载页](../downloads.md)和 `macos-refresh.json`，本轮不增加 Linux 交付。
+
+文档首页、快速开始和安装页已提供“复制安装请求”按钮，可交给本地 Codex 使用公开完整包安装；手动安装入口保留。Apple 签名、公证与浏览器首次运行仍待完成，“未知开发者”提示尚未从发行流程根治。
 
 这一源码阶段包括：
 
