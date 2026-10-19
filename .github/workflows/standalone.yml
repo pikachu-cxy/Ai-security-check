@@ -13,8 +13,11 @@ on:
       - 'tests/test_macos_installation.py'
       - 'tests/test_macos_artifact_budget.py'
       - 'tests/test_macos_release_refresh.py'
+      - 'tests/test_node_host_preflight.py'
+      - 'tests/test_release_assets.py'
       - 'pyproject.toml'
       - '.github/workflows/standalone.yml'
+      - '.github/workflows/tests.yml'
       - '.github/workflows/release.yml'
 
 permissions:

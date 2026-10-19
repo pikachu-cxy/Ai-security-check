@@ -47,7 +47,7 @@ jobs:
       - name: Check installation and Mac release contracts before the full regression
         env:
           PYTHONUTF8: '0'
-        run: python -m pytest -q tests/test_bootstrap_runtime.py tests/test_macos_installation.py tests/test_macos_release_refresh.py tests/test_macos_artifact_budget.py
+        run: python -m pytest -q tests/test_bootstrap_runtime.py tests/test_macos_installation.py tests/test_macos_release_refresh.py tests/test_macos_artifact_budget.py tests/test_node_host_preflight.py tests/test_release_assets.py
       - name: Run Runtime tests
         env:
           SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence

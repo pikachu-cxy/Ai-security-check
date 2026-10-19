@@ -80,7 +80,7 @@ def test_ci_pins_node_and_records_preflight_before_full_tests(source_default_enc
     steps=job['steps']; setup=next(i for i,s in enumerate(steps) if s.get('uses')=='actions/setup-node@v4')
     assert steps[setup]['with']['node-version']=='24.16.0'
     preflight=next(i for i,s in enumerate(steps) if 'node_host_preflight.py' in s.get('run',''))
-    tests=next(i for i,s in enumerate(steps) if 'python -m pytest' in s.get('run',''))
+    tests=next(i for i,s in enumerate(steps) if s.get('name')=='Run Runtime tests')
     assert setup < preflight < tests
     # runner context is allowed in step env, not jobs.<job_id>.env.
     assert all('runner.' not in str(value) for value in job['env'].values())

@@ -40,7 +40,7 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 使用当前干净源码提交的 Intel 与 Apple Silicon 原生包及其验收回执。只有 Windows/Mac 回归和原生包验收完成后才更新 Release；现有 Windows ZIP、SHA256 文件的资产 ID 和摘要必须保持不变。原始版本标签不移动，机器清单保留原始 `source_commit` 并另以 `artifact_source_commits` 记录各平台来源，避免把新版 Mac 来源错误套给 Windows。
 
-显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。原生流程也监听引导、Mac 安装、发行替换及验收预算四份契约测试，避免仅修测试时漏建同提交的原生包。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
+显式发布提交标记 `[refresh-macos-v0.3.6]` 启动一次受约束的替换流程；普通源码推送不触发已发布资产覆盖。原生流程也监听引导、Mac 安装、发行替换、验收预算、Node 宿主预检与发行资产六份契约测试，以及 Runtime 测试工作流，避免仅修测试或 CI 时漏建同提交的原生包。旧版资产 ID/摘要固定在 `distribution/releases/v0.3.6-macos-refresh.json`。发布前保存旧资产及精确待发布内容的 Actions 备份，随后只替换 Mac 包/侧车与共享清单、证据 ZIP，增加 `macos-refresh.json`，保留 Windows 证据。共享证据内的 Homebrew 示例更新为新 Mac 摘要，WinGet 保留原内容。GitHub 多资产操作不是原子事务；失败沿同一准备产物重试，发现未知的并发变动则停止。
 
 收敛后本地安装相关回归：182 通过、13 跳过；安装分支最终复测 26 通过，与前组重叠、不相加。发行替换、上传失败重试及既有元数据相关回归最终为 23 通过。对应 `artifacts/mac-only-regression.xml`、`artifacts/mac-only-dispatch-final.xml` 与 `artifacts/mac-release-refresh-final.xml` 仅保存在本地，不随源码发布。公开资产更新状态以 Release 的 `macos-refresh.json` 及 Actions 原生验收为准。
 
@@ -51,6 +51,8 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 该提交的 Mac 全量回归随后返回 **5,084 passed、1 failed、75 skipped、26 xfailed**；唯一失败是源码首次安装测试误用了 CI Python 旁已有的 Semgrep，导致引导下载次数为 0。PATH 已隔离，但 `sysconfig` 的脚本发现路径仍指向宿主环境。后续只隔离该 Mac 测试的宿主脚本目录，保留产品对已有 Semgrep 的复用行为及全部原断言。人工模拟“宿主已有 Semgrep”可复现原失败，隔离后同场景通过；相关回归在普通本机权限下为 **65 passed / 8.49 秒**，原沙箱中真实离线扫描被拒绝启动的记录单独保留。修订需重新完成同提交的原生与全量门禁。旧包未因原生验收通过而提前替换。
 
 修订提交 `40033e1f388cae5e2dde522b54c280ef1f98ac43` 的三套原生包均完成验收，Mac 全量为 **5,085 passed、75 skipped、26 xfailed**，规则质量检查通过。Windows 全量为 **5,100 passed、2 failed、58 skipped、26 xfailed**；两个失败均来自新增 Mac 发行工具写入中文说明时依赖 Windows 默认 CP1252 编码（[失败日志](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39276253714/job/118141214473)），不是 Windows 安装行为回归。后续为该发行工具的 API 文本、备份、清单及发布说明显式指定 UTF-8，补充 UTF-8 / CP1252 语义回归；本地关闭 Python UTF-8 模式后的安装/发行契约为 **36 passed / 1.21 秒**，原编码失败保存在本地 `artifacts/mac-release-utf8-reproduction.log`。CI 在全量测试前先执行同组短检查，避免等待近两小时后才发现发行工具的基础问题。Windows 产品安装逻辑不因此调整，门禁失败仍保留旧资产，重新冻结并验收后才发布。
+
+`cf6322435aa74c442e514ee5dbd0cee2ff52423f` 的三套原生包和两平台快速契约均通过，Mac 全量返回 **5,084 passed、2 failed、75 skipped、26 xfailed**。两个失败是原 Node CI 契约把第一个 pytest 步骤当作全量步骤，新加快速检查后选错了环境块；完整测试步骤的执行配置并未丢失。后续只将测试定位改为明确的 `Run Runtime tests`，保留 Node 固定版本、预算、报告目录、禁止跳过及证据上传等原断言。所有直接读取这两份工作流的测试均已纳入前置检查；新组本地 **61 passed / 1.66 秒**，原选择错误也已独立复现。此组与全量有重叠，不相加，门禁失败不替换公开 Mac 包。
 
 首轮远端源码提交 `0b709ff2a2028b24dd401c933d307a49c2a9047e` 的 Apple Silicon 原生包通过；Intel 在前置组件、样例检查及 MCP 检查之后，整组修复复查专项触及 180 秒验收时限（[失败回执](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39266404355/job/118107009555)）。门禁阻止了发布，旧资产没有因此替换。后续仅将 Mac Intel 的这组多次扫描/MCP 专项整体时限改为 600 秒，并补充阶段输出；Windows 与 Apple Silicon 仍为 180 秒，产品自身执行时限不受此项调整影响。专项全部断言保留，不能用延长时限代替重新验收。包含上传重试与验收预算契约的本地回归为 26 通过；此前分组与之有重叠，不相加。
 
