@@ -321,7 +321,13 @@ class StableDelivery:
         from .codex_integration import probe_runtime
         from .trial import TrialProfile, isolated_environment
         with tempfile.TemporaryDirectory(prefix='runtime-delivery-probe-') as directory:
-            root = Path(directory) / 'profile'
+            # macOS's OS-owned /var temporary root aliases /private/var. Only
+            # normalize this newly-created private directory; user configuration
+            # paths still pass the original strict no-links validation.
+            root = Path(directory)
+            if sys.platform == 'darwin':
+                root = root.resolve(strict=True)
+            root = root / 'profile'
             TrialProfile(root).create()
             env = isolated_environment(root)
             env.update(SECURITY_RUNTIME_GLOBAL='1', SECURITY_RUNTIME_WORKSPACE='',

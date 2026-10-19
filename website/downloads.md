@@ -2,7 +2,9 @@
 
 ## 当前发行：0.3.6 · Developer Alpha
 
-[v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，源码固定在默认分支 `feature/runtime-mvp` 的提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
+[v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，原始版本标签与 Windows 包对应提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
+
+**Mac 兼容修订正在准备：** 仅替换 Intel 与 Apple Silicon 两套 Mac 包，Windows 资产保持不变。只有 Release 出现 `macos-refresh.json` 且其源码、包摘要与配套清单一致，才表示修订已发布。完成后请重新下载 Mac 完整包及 SHA256 文件；机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |

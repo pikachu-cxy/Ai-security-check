@@ -17,8 +17,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: standalone-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: standalone-${{ github.ref }}${{ contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]') && '-macos-refresh' || '' }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') && !contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]') }}
 
 jobs:
   build:
@@ -59,4 +59,66 @@ jobs:
         with:
           name: diagnostics-${{ matrix.platform }}
           path: dist/release/*.diagnostics.json
+          if-no-files-found: ignore
+
+  refresh-macos-stage:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/runtime-mvp' && contains(github.event.head_commit.message, '[refresh-macos-v0.3.6]')
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-macos-*
+          merge-multiple: true
+          path: dist/release
+      - name: Check regressions, both native Mac receipts, and original release identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: src
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: python -m scripts.refresh_macos_release prepare --source-commit "$SOURCE_COMMIT"
+      - name: Save old assets and exact proposed replacements before any release write
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-refresh-${{ github.sha }}
+          path: dist/macos-refresh/
+          if-no-files-found: error
+          retention-days: 30
+
+  refresh-macos-publish:
+    needs: refresh-macos-stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: refresh-published-macos-v0.3.6
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: macos-refresh-${{ github.sha }}
+          path: dist/macos-refresh
+      - name: Replace only approved Mac assets and shared metadata; preserve Windows and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: python -m scripts.refresh_macos_release publish --source-commit "$SOURCE_COMMIT"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-refresh-publication-${{ github.sha }}
+          path: dist/macos-refresh/publication.json
           if-no-files-found: ignore

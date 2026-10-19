@@ -1,0 +1,48 @@
+{
+  "repository": "pikachu-cxy/Ai-security-check",
+  "tag": "v0.3.6",
+  "release_id": 417233752,
+  "original_source_commit": "b4fa0ab086866f5db5c59b8f5f74ec180ed43f23",
+  "scope": [
+    "macos-arm64",
+    "macos-x64"
+  ],
+  "assets": {
+    "ai-security-runtime-v0.3.6-macos-arm64.tar.gz": {
+      "id": 656134860,
+      "sha256": "b75f0381eea892645ac5ec3bbb1175168def93d8db1330e885ebce1eaa782170"
+    },
+    "ai-security-runtime-v0.3.6-macos-arm64.tar.gz.sha256": {
+      "id": 656134854,
+      "sha256": "871449f02e92b63db1cd101f95cc6f3338bce6c4e2933e5fe0c0b3a56ce53c1f"
+    },
+    "ai-security-runtime-v0.3.6-macos-x64.tar.gz": {
+      "id": 656134858,
+      "sha256": "73b997233023887437bfca76822cbf33d3a96f3e324407702ae5f6f68b875b8c"
+    },
+    "ai-security-runtime-v0.3.6-macos-x64.tar.gz.sha256": {
+      "id": 656134857,
+      "sha256": "613f3178b63f8237225e845786f63f628d4ce0bb76ec6aff87c66ddb1b424d7c"
+    },
+    "ai-security-runtime-v0.3.6-release-evidence.zip": {
+      "id": 656134869,
+      "sha256": "3a92c51636275297695305b231b9d373f767e20dba810623fea86c668af7b2e5"
+    },
+    "ai-security-runtime-v0.3.6-windows-x64.zip": {
+      "id": 656134876,
+      "sha256": "898337c27f718f4843fc89f01a6d6f092cca107c29ed163c3cb814b57d940dbc"
+    },
+    "ai-security-runtime-v0.3.6-windows-x64.zip.sha256": {
+      "id": 656134882,
+      "sha256": "6caf22a3809d93ebb24877a12b537943f14d7182ab749f516d9bf15e39c65acf"
+    },
+    "release-manifest.json": {
+      "id": 656134886,
+      "sha256": "d6f5395efc261fc565547d863ae51205fdb57854004e44fb0feb27bf1193c5d7"
+    },
+    "SHA256SUMS.txt": {
+      "id": 656134859,
+      "sha256": "9ca35e55073d2ab48cf2cfbd49c3ce2a6ff1efa93e2155806d36b4a22221d2c1"
+    }
+  }
+}

@@ -67,7 +67,9 @@ class FakePackageScanner:
 class PythonPackageEngineTests(unittest.TestCase):
     def test_install_resolve_invoke_and_consume(self):
         with tempfile.TemporaryDirectory() as tmp:
-            base = Path(tmp)
+            # The test owns this freshly-created directory; canonicalize the
+            # macOS /var alias before passing it as an explicit managed root.
+            base = Path(tmp).resolve()
             wheel = base / "fake_engine-0.1.0-py3-none-any.whl"
             make_wheel(wheel)
             manager = ToolManager(root=base / "managed")

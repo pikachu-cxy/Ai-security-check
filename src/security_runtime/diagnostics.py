@@ -6,6 +6,8 @@ import os
 import re
 import socket
 import ssl
+import subprocess
+import sys
 import urllib.error
 from http.client import IncompleteRead
 from urllib.parse import urlsplit
@@ -86,7 +88,28 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
             'Inspect the recorded startup stage, OS error number and path lengths, then retry.',
             diagnostic_detail=detail)
     text = str(error or '') + '\n' + stderr
+    if sys.platform == 'darwin' and isinstance(error, subprocess.CalledProcessError):
+        # venv.ensurepip captures dyld's explanation in output, while str(error)
+        # contains only the signal. Classify it without exposing raw output.
+        captured = error.stderr or error.output or ''
+        if isinstance(captured, bytes):
+            captured = captured[:64_000].decode('utf-8', errors='replace')
+        text += '\n' + captured[:64_000]
+        return_code = error.returncode
     lower = text.lower()
+    if sys.platform == 'darwin' and ('library load disallowed by system policy' in lower
+            or 'code signature' in lower and 'not valid for use in process' in lower):
+        return ErrorDiagnostic('MACOS_SIGNATURE_BLOCKED',
+            'macOS blocked the downloaded runtime or one of its libraries.',
+            'Verify the official package and its signing status. Use the macOS '
+            'per-application approval flow; do not disable system protection.')
+    if (sys.platform == 'darwin' and 'library not loaded:' in lower
+            and ('libpython' in lower or 'python.framework' in lower)):
+        return ErrorDiagnostic('PYTHON_VENV_DYLIB_MISSING',
+            'The Python environment could not load its required shared library.',
+            'Retry with a complete supported runtime; preserve the diagnostic. '
+            'Installing project dependencies will not repair this environment.',
+            diagnostic_detail=f'Return code: {return_code}.' if return_code is not None else '')
     # Local IPC startup is unrelated to remote proxy/download failures. Keep
     # only canonical reasons, even if debug output contains paths or secrets.
     if 'socketpair' in lower and any(marker in lower for marker in

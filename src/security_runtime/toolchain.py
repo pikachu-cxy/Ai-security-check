@@ -37,6 +37,7 @@ from .preparation_budget import current_budget, bounded_timeout
 from .install_progress import parse_download_progress, DownloadProgressParser
 from .progress import emit, checkpoint, ScanCancelled
 from .scanner_observation import span, cache as cache_observed, count, workspace as scan_workspace
+from .install_platform import network_environment, download_context
 
 
 class ToolStatus(StrEnum):
@@ -168,7 +169,7 @@ def tool_environment(executable: Path) -> dict[str, str]:
     In particular, Semgrep delegates to pysemgrep on PATH. A frozen Runtime's
     library search path must also not leak into external Python processes.
     """
-    env = dict(os.environ)
+    env = network_environment() if sys.platform == 'darwin' else dict(os.environ)
     env["PATH"] = str(executable.resolve().parent) + os.pathsep + env.get("PATH", "")
     for name in ("PYTHONHOME", "PYTHONPATH"):
         env.pop(name, None)
@@ -245,7 +246,8 @@ class OfficialReleaseProvider:
                     continue
         def receive():
             try:
-                with urllib.request.urlopen(request, timeout=network_timeout) as response:
+                tls = {'context': download_context()} if sys.platform == 'darwin' else {}
+                with urllib.request.urlopen(request, timeout=network_timeout, **tls) as response:
                     if not response.url.startswith('https://'):
                         raise ValueError('Insecure release redirect')
                     declared = getattr(response, 'headers', {}).get('Content-Length', '')
@@ -576,7 +578,10 @@ class ToolManager:
                     environment = tool_environment(path)
                     if tool_id == 'semgrep':
                         environment.update(SEMGREP_ENABLE_VERSION_CHECK='0', SEMGREP_SEND_METRICS='off')
-                    proc = run_process([str(path.resolve()), "--version"], timeout=8, max_output=16_000,
+                    # macOS can spend more than eight seconds loading Semgrep
+                    # for the first time. Keep a finite allowance for that probe.
+                    timeout = 30 if sys.platform == 'darwin' and tool_id == 'semgrep' else 8
+                    proc = run_process([str(path.resolve()), "--version"], timeout=timeout, max_output=16_000,
                                        env=environment)
             if proc.returncode:
                 lower = proc.stderr.lower()
@@ -885,6 +890,43 @@ class ToolManager:
         return executable
 
     def install_python_package(self, tool_id: str, version: str, requirement: str, *, executable_name: str | None = None, no_index: bool = False) -> Path:
+        # Preserve the existing installer on other platforms. The recovery
+        # transaction is part of this macOS compatibility fix only.
+        if sys.platform != 'darwin':
+            return self._install_python_package(tool_id, version, requirement,
+                executable_name=executable_name, no_index=no_index)
+        from .hook_state import HookStateStore, no_links
+        parent = self.root / ('engines' if tool_id == 'semgrep' else 'tools') / tool_id
+        parent.mkdir(parents=True, exist_ok=True)
+        final = parent / version
+        locks = HookStateStore(self.root / '.python-install-locks')
+        # Keep the final absolute path: installed console scripts contain it in
+        # their shebangs, so moving a staged venv would break its launchers.
+        with locks.lock(final, wait_seconds=1) as acquired:
+            if not acquired:
+                raise DiagnosticError(ErrorDiagnostic('ENGINE_INSTALL_BUSY',
+                    'This component is already being installed.', 'Wait for the active installation to finish.'))
+            no_links(final)
+            previous = None
+            if final.exists():
+                previous = Path(tempfile.mkdtemp(prefix='.previous-', dir=parent)) / 'component'
+                os.replace(final, previous)
+            try:
+                result = self._install_python_package(tool_id, version, requirement,
+                    executable_name=executable_name, no_index=no_index)
+            except BaseException:
+                # A failed restore must retain the backup for diagnosis, not
+                # destroy it through a TemporaryDirectory finalizer.
+                if previous is not None:
+                    shutil.rmtree(final, ignore_errors=True)
+                    os.replace(previous, final)
+                    previous.parent.rmdir()
+                raise
+            if previous is not None:
+                shutil.rmtree(previous.parent, ignore_errors=True)
+            return result
+
+    def _install_python_package(self, tool_id: str, version: str, requirement: str, *, executable_name: str | None = None, no_index: bool = False) -> Path:
         checkpoint()
         emit('ENGINE_PACKAGE_PREPARING', scanner=tool_id, scanner_version=version)
         license_metadata = self.license_metadata(tool_id)
@@ -901,7 +943,7 @@ class ToolManager:
         try:
             staging = final
             environment = staging / ("runtime" if tool_id == "semgrep" else "venv")
-            if getattr(sys, "frozen", False):
+            if getattr(sys, "frozen", False) or (sys.platform == 'darwin' and tool_id == 'semgrep'):
                 bootstrap = self.prepare_python_runtime()
                 with external_tool_loader():
                     proc = run_process([str(bootstrap), "-m", "venv", str(environment)],
@@ -909,10 +951,14 @@ class ToolManager:
                 if proc.returncode:
                     raise DiagnosticError(classify_network_error(stderr=proc.stderr, return_code=proc.return_code, fallback='PYTHON_BOOTSTRAP_FAILED'))
             else:
-                venv.EnvBuilder(with_pip=True, symlinks=False).create(environment)
+                venv.EnvBuilder(with_pip=True, symlinks=sys.platform == 'darwin').create(environment)
             python = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
             report = staging / "pip-report.json"
             command = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--report", str(report)]
+            if sys.platform == 'darwin' and tool_id == 'semgrep' and not no_index:
+                # A default install must not introduce an implicit Rust/C build
+                # toolchain when a transitive release lacks a platform wheel.
+                command.append('--only-binary=:all:')
             if no_index:
                 command += ["--no-index", "--no-build-isolation"]
             command.append(requirement)
@@ -924,6 +970,10 @@ class ToolManager:
             if not executable.is_file():
                 raise ValueError("Python package engine did not provide the expected command")
             if not matches_version(version, self._version(tool_id, executable)):
+                if sys.platform == 'darwin':
+                    diagnostic = self._probe_diagnostics.get((tool_id, str(executable)))
+                    if diagnostic is not None:
+                        raise DiagnosticError(diagnostic)
                 raise ValueError("Python package engine failed version validation")
             license_candidates = list(environment.rglob("*.dist-info/LICENSE")) + list(environment.rglob("*.dist-info/LICENSE.txt"))
             own_license = next((candidate for candidate in license_candidates

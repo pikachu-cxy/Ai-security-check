@@ -311,7 +311,8 @@ def test_child_failure_preserves_files_without_false_success(portable, monkeypat
     monkeypatch.setattr(subprocess, 'run', run)
     data = install_personal_codex(bundle=package, root=root)
     assert data['diagnostics'] == [code] and not data['installation']['local_files_ready']
-    assert 'private' not in json.dumps(data)
+    assert 'private error' not in json.dumps(data)
+    assert 'private output' not in json.dumps(data)
     assert (root / 'launcher' / EXE).exists()
 
 

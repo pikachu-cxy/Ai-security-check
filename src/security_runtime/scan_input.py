@@ -12,6 +12,7 @@ import os
 import secrets
 import shutil
 import stat
+import sys
 import tempfile
 import uuid
 from contextlib import contextmanager
@@ -148,7 +149,11 @@ def _windows_private_directory(path):
 
 @contextmanager
 def _private_directory(workspace, parent, *, on_created=None, on_removed=None):
-    parent = Path(parent) if parent is not None else Path(tempfile.gettempdir())
+    if parent is None and sys.platform == 'darwin':
+        from .install_platform import temporary_parent
+        parent = temporary_parent()
+    else:
+        parent = Path(parent) if parent is not None else Path(tempfile.gettempdir())
     no_links(parent)
     parent = parent.resolve(strict=True)
     if parent == workspace or parent.is_relative_to(workspace):

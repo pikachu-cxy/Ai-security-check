@@ -109,6 +109,8 @@ def test_frozen_first_semgrep_install_and_bootstrap_reuse(frozen_install):
     assert state["downloads"] == 1
     assert any(args[1:3] == ["-m", "venv"] for args in state["calls"])
     assert any(args[1:4] == ["-m", "pip", "install"] for args in state["calls"])
+    assert all(('--only-binary=:all:' in args) == (toolchain.sys.platform == 'darwin')
+               for args in state['calls'] if args[1:4] == ['-m', 'pip', 'install'])
     python_metadata = next((root / "python").rglob("metadata.json"))
     python = python_metadata.parent / relative
     metadata = json.loads(python_metadata.read_text())
@@ -129,6 +131,17 @@ def test_frozen_first_semgrep_install_and_bootstrap_reuse(frozen_install):
     python.write_bytes(b"tampered executable")
     assert fresh_manager.prepare_python_runtime() == python
     assert state["downloads"] == 2 and sha256_file(python) == metadata["binary_sha256"]
+
+
+@pytest.mark.skipif(__import__('sys').platform != 'darwin', reason='macOS source Semgrep environment')
+def test_macos_source_semgrep_uses_pinned_bootstrap_instead_of_copying_python(frozen_install, monkeypatch):
+    root, state, archive, _ = frozen_install
+    archive()
+    monkeypatch.setattr(toolchain.sys, 'frozen', False)
+    result = ToolManager().ensure('semgrep', offline=False)
+    assert result.status == ToolStatus.READY, result.detail
+    assert state['downloads'] == 1
+    assert any(args[1:3] == ['-m', 'venv'] for args in state['calls'])
 
 
 @pytest.mark.parametrize("failure", ["version", "checksum", "license"])
