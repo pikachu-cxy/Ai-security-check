@@ -57,13 +57,13 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 使用完整安装包
 
-本版平台资产命名如下；列出文件名不表示已公开发行，实际下载以 Releases 中通过验收的版本为准。
+[v0.3.6 Developer Alpha 已发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)。[发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)通过全量测试、规则质量、合规、包完整性及三平台原生验收后，才公开以下资产：
 
 - Windows x64：`ai-security-runtime-v0.3.6-windows-x64.zip`
 - Mac Apple Silicon：`ai-security-runtime-v0.3.6-macos-arm64.tar.gz`
 - Mac Intel：`ai-security-runtime-v0.3.6-macos-x64.tar.gz`
 
-[Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)是公开完整包入口，只有验收通过的候选才会发布。此前本地 Windows 0.3.6 候选基于固定提交 `c526cdd3d6c6923e04d64334c5dc19c0908cef31`，仅供历史构建核对；后续修正版应以 Release 的实际源码提交、资产和校验为准，不能仅凭版本号混用。文件与校验见[下载状态](website/downloads.md)。[v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)是旧发行，不包含后续 v3 与恢复修复，不能与新版 Skill 混用。
+本次发行源码固定为 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。文件、直接下载入口和 SHA256 见[下载页](website/downloads.md)。此前本地候选与 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)旧发行不是本次构建，不要混用校验值或不同版本 Skill。当前仍为预发行试用版，macOS 真机和 Cursor 桌面验收单独记录。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，退出 Codex，在解压目录执行：
 

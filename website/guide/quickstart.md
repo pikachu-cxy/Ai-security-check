@@ -6,7 +6,7 @@
 
 先看[下载与构建状态](../downloads.md)，选择 Windows x64、macOS Intel 或 macOS Apple Silicon。保留解压后的整个 `security-check` 目录，不要只取一个可执行文件。
 
-完整包内置运行时 Python，不要求另装 Python、pip 或 Node.js。首次检查组件准备仍需联网；macOS 真机验收尚未完成，不能把候选包当作已验证兼容版本。
+完整包内置运行时 Python，不要求另装 Python、pip 或 Node.js。首次检查组件准备仍需联网。当前 Developer Alpha 已通过三平台原生 CI；macOS 真机与 Cursor 桌面验收仍待独立完成，不作为稳定兼容性保证。
 
 ## 2. 完全退出 Codex，执行完整接入
 
@@ -22,7 +22,7 @@ if ($LASTEXITCODE -ne 0) { throw '接入未完成，请保留诊断' }
 
 ### macOS 终端
 
-以下为候选包安装命令；需使用对应架构包，并保留系统提示与诊断，不要为安装而关闭系统安全保护。
+以下为 Developer Alpha 完整包安装命令；需使用对应架构包，并保留系统提示与诊断，不要为安装而关闭系统安全保护。
 
 ```sh
 ./security-check/security-check install codex

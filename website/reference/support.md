@@ -1,20 +1,20 @@
 # 支持状态与验证边界
 
-**版本范围：0.3.6 开发源码。** 版本、构建身份、CI 验证和桌面手工验收分别认定，不把历史版本的结果直接套用到新包。
+**版本范围：0.3.6 Developer Alpha 发行包及对应源码。** 版本、构建身份、CI 验证和桌面手工验收分别认定，不把历史版本的结果直接套用到新包。
 
 ## 系统与宿主
 
 | 组合 | 当前说明 |
 | --- | --- |
-| Windows x64 + Codex | 当前主要使用与手工验收路径；本次候选包另行进行包级验证 |
+| Windows x64 + Codex | Windows 原生完整包 CI 验收通过；Codex 为主要使用路径，CI 合成宿主不等于桌面实操 |
 | Windows x64 + Cursor | 有连接器与接入指南；本次版本仍需独立 Cursor 桌面验收 |
-| macOS Apple Silicon | 原生 CI 构建目标为 `macos-arm64`；当前构建、验证、真机验收分别记录 |
-| macOS Intel | 原生 CI 构建目标为 `macos-x64`；不能用 ARM 构建成功代替 Intel 验收 |
+| macOS Apple Silicon | `macos-arm64` 原生完整包 CI 验收通过；桌面真机验收仍待独立完成 |
+| macOS Intel | `macos-x64` 原生完整包 CI 验收通过；不是用 ARM 结果代替 Intel，桌面真机验收仍待完成 |
 | Linux | 当前不作为公开发行的受支持目标 |
 
 macOS 两种架构使用对应的原生完整包，不以 Rosetta 作为默认兼容策略。Windows 机器可以提交代码并触发 macOS runner 构建，但不能在本机直接运行 macOS 原生可执行文件来证明兼容。
 
-本次文档搭建时，默认分支提交 `c526cdd` 的三个 CI 目标均完成了打包，但在旧版 Skill 校验处失败，产物未上传。因此不能宣称三个平台发布已通过；校验修正后的 CI 结果及后续真机验收仍需单独确认。
+本次发行源码为 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。[发布验收工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)全部通过后，才公开 [v0.3.6 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
 
 ## 检查范围
 

@@ -1,29 +1,23 @@
 # 下载与构建状态
 
-## 当前候选：0.3.6
+## 当前发行：0.3.6 · Developer Alpha
 
-源码基准为默认分支 `feature/runtime-mvp` 的 `c526cdd3d6c6923e04d64334c5dc19c0908cef31`。本次已在隔离工作树中构建 Windows 完整包；本地交付不等于 GitHub Release 已发布。
+[v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，源码固定在默认分支 `feature/runtime-mvp` 的提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
 
-| 平台 | 文件名 | 当前状态 |
-| --- | --- | --- |
-| Windows x64 | `ai-security-runtime-v0.3.6-windows-x64.zip` | 约 26.1 MiB，本地包级冒烟通过；公开上传待完成 |
-| macOS Apple Silicon | `ai-security-runtime-v0.3.6-macos-arm64.tar.gz` | 需通过修正后的原生 CI 验证 |
-| macOS Intel | `ai-security-runtime-v0.3.6-macos-x64.tar.gz` | 需通过修正后的原生 CI 验证 |
+| 平台 | 完整安装包 | 校验 | 当前状态 |
+| --- | --- | --- | --- |
+| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-windows-x64.zip.sha256) | 原生全量 CI 验收通过 |
+| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-arm64.tar.gz.sha256) | ARM 原生全量 CI 验收通过 |
+| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-x64.tar.gz.sha256) | Intel 原生全量 CI 验收通过 |
 
-Windows 本地候选包 SHA256：
+[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-release-evidence.zip)
 
-```text
-3072ced5d079b88097797f0384eeafeeedf05c1b392e68f5df23d89eb93655c9
-```
+[发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)已通过 Windows / macOS 全量测试、规则质量、合规、包完整性与三平台原生安装包验收。原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。
 
-该值只对应本次本地候选 ZIP。后续 CI 重新构建应使用它自己的校验文件，不能混用。
+合成 SDK / Hook 场景不是实际桌面操作；macOS 真机、Cursor 桌面、苹果签名与公证等仍按[支持边界](./reference/support.md)单独认定。安装包通过检查也不代表任何用户项目已完成漏洞检查。
 
-本地包级验证包含无外部 Python 的原生启动、版本、受管 Skill 内容、MCP 工具与能力、工作区绑定、自检及隔离安装生命周期。这不是扫描引擎全量准备、真实桌面验收或漏洞检查结果；相应完整 CI 与手工验收仍分开记录。
-
-公开入口：[GitHub Releases](https://github.com/pikachu-cxy/Ai-security-check/releases) · [三平台构建记录](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/standalone.yml)。没有通过验证的产物不应冒充正式发行。
-
-::: warning 历史发行不等于当前源码
-已有 v0.3.4 属于旧发行，不包含当前分支后续 v3 与恢复修复。不要将它与当前新版 Skill 混用。新版未上传前，本页不提供虚构的 v0.3.6 Release 下载链接。
+::: warning 不要混用旧候选与新发行
+此前本地 `c526cdd` 候选和 v0.3.4 旧发行不等于本次发行。请使用本页平台包及其配套校验，不将旧候选的 SHA256 或其他版本 Skill 套用到新包。
 :::
 
 ## 校验后再安装
