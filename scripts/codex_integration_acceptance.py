@@ -24,6 +24,10 @@ from remediation_acceptance import SAFE, UNSAFE
 # comment keeps the current public fallback path, without disabling tickets.
 UNSAFE = UNSAFE.replace('-> true);', '-> true); // preserve fixture comment')
 from codex_hook_fixture import invocation_claims
+if __package__:
+    from .tls_impact_fixture import confirm_tls_fixture
+else:
+    from tls_impact_fixture import confirm_tls_fixture
 
 
 async def assert_personal_tool_contract(client):
@@ -118,7 +122,8 @@ async def accept(command):
                     pending_stop = await call('handle_stop_event', stop_claims)
                     assert pending_stop['status'] == 'ALLOW_STOP' and 'decision' not in pending_stop
                     # Simulated explicit host-reported consent, not a Desktop human reply.
-                    decision = await call('confirm_remediation', dict(decision['confirmation']['arguments'], approve=True))
+                    decision = await confirm_tls_fixture(call,
+                        dict(decision['confirmation']['arguments'], approve=True), source, UNSAFE)
                     assert decision['status'] == 'AUTHORIZED'
                     assert decision['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
                     original_refs = decision['prepare']['arguments']

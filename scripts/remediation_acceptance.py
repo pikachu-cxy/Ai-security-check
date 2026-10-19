@@ -13,6 +13,10 @@ import time
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from codex_hook_fixture import invocation_claims
+if __package__:
+    from .tls_impact_fixture import confirm_tls_fixture
+else:
+    from tls_impact_fixture import confirm_tls_fixture
 
 SAFE = '''import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
@@ -48,7 +52,8 @@ async def approve_reported_risk(call, pending, source):
     assert not {'prepare', 'fast_fix_plan', 'agent_fix_ticket'} & pending.keys()
     message = pending['user_feedback']['message']
     assert '修复' in message and '忽略' in message
-    grant = await call('confirm_remediation', dict(pending['confirmation']['arguments'], approve=True))
+    grant = await confirm_tls_fixture(call, dict(pending['confirmation']['arguments'], approve=True),
+                                      source, source.read_text(encoding='utf-8'))
     assert grant['authorization_kind'] == 'USER_CONFIRMED'
     assert grant['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
     assert source.read_bytes() == before
@@ -148,8 +153,8 @@ async def run(command, mode='ask_before_fix', approve=True):
                         assert path.read_text() == UNSAFE
                         # This is a simulated explicit host-reported reply.
                         # It cannot prove a real human interaction in Desktop.
-                        authorization, _ = await call('confirm_remediation',
-                            dict(decision['confirmation']['arguments'], approve=True))
+                        authorization = await confirm_tls_fixture(call,
+                            dict(decision['confirmation']['arguments'], approve=True), path, UNSAFE)
                         assert authorization['status'] == 'AUTHORIZED'
                         assert authorization['approval_trust'] == 'UNTRUSTED_HOST_REPORT'
                         arguments = authorization['prepare']['arguments']
@@ -274,7 +279,10 @@ async def run_cross_turn(command, approve):
         # A's stdio context has exited; B is a distinct OS server process.
         assert path.read_text() == UNSAFE and record()['phase'] == 'PENDING_CONFIRMATION'
         async with connection() as call_b:
-            out, _ = await call_b('confirm_remediation', dict(arguments, approve=approve))
+            if approve:
+                out = await confirm_tls_fixture(call_b, dict(arguments, approve=True), path, UNSAFE)
+            else:
+                out, _ = await call_b('confirm_remediation', dict(arguments, approve=False))
             assert out['status'] == ('AUTHORIZED' if approve else 'DECLINED'), out
             assert record()['confirmation_expires_at_epoch'] == expires
             proof = dict(pending_from_server_a=True, confirmation_in_server_b=out['status'],

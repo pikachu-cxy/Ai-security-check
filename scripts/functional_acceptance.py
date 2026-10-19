@@ -17,6 +17,10 @@ import time
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from codex_hook_fixture import invocation_claims
+if __package__:
+    from .tls_impact_fixture import confirm_tls_fixture
+else:
+    from tls_impact_fixture import confirm_tls_fixture
 
 SAFE='''import javax.net.ssl.HttpsURLConnection;
 import java.net.URL;
@@ -135,7 +139,8 @@ async def run(command,failure=False,mode='ask_before_fix'):
                     assert pending['action']=='CONFIRM_REQUIRED'
                     assert 'prepare' not in pending and 'agent_fix_ticket' not in pending
                     assert path.read_text()==UNSAFE
-                    decision=await call('confirm_remediation',dict(pending['confirmation']['arguments'],approve=True))
+                    decision=await confirm_tls_fixture(call,
+                        dict(pending['confirmation']['arguments'],approve=True),path,UNSAFE)
                     assert decision['status']=='AUTHORIZED'
                     assert decision['authorization_kind']=='USER_CONFIRMED'
                     assert decision['approval_trust']=='UNTRUSTED_HOST_REPORT'

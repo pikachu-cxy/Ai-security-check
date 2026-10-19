@@ -17,6 +17,10 @@ from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.task_fix import TaskFixService
 from security_runtime.sast import SemgrepEngineProvider
 from security_runtime.host_guidance import HOST_INSTRUCTIONS
+if __package__:
+    from .tls_impact_fixture import assess_tls_fixture
+else:
+    from tls_impact_fixture import assess_tls_fixture
 
 
 def acceptance_workspace(temporary):
@@ -82,7 +86,14 @@ async def native_sdk_acceptance(executable):
                 summary = await call('get_security_summary', {})
                 chosen = summary['recommended_tasks']
                 assert len(chosen) == 2 and all(t['finding_count'] == 1 for t in chosen)
-                fixes = [await call('prepare_task_fix', t['fix_handoff']['arguments']) for t in chosen]
+                fixes = []
+                for task in chosen:
+                    arguments = task['fix_handoff']['arguments']
+                    waiting = await call('prepare_task_fix', arguments)
+                    assert waiting['status'] == 'IMPACT_REQUIRED', waiting
+                    ref = await assess_tls_fixture(call, waiting, root, {
+                        'Tls.java': source(), 'OtherTls.java': source().replace('class Fixture', 'class OtherFixture')})
+                    fixes.append(await call('prepare_task_fix', dict(arguments, impact_ref=ref)))
                 assert all(f['status'] == 'READY_FOR_HOST_FIX' and not any(f['execution'].values()) for f in fixes)
                 arguments = [f['verification_plan']['arguments'] for f in fixes]
                 unchanged = [await call('verify_task_fix', args) for args in arguments]
@@ -100,7 +111,8 @@ async def native_sdk_acceptance(executable):
         return {'transport': 'ACTUAL_SDK_STDIO', 'runtime_executable': str(Path(executable).resolve()),
             'runtime_version': info['version'], 'capability_contract': info['capability_contract'],
             'tools': sorted(names), 'unchanged': unchanged, 'one_remaining': partial, 'all_fixed': complete,
-            'state_unchanged': True, 'host_natural_language_ux': 'PENDING', 'model_invocation': False}
+            'state_unchanged': True, 'host_natural_language_ux': 'PENDING', 'model_invocation': False,
+            'impact_reasoning': 'SIMULATED_HOST_KNOWN_TLS_FIXTURE_ONLY'}
 
 
 def run_acceptance():
