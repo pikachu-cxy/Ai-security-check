@@ -50,9 +50,11 @@ socketpair 的后续对照区分了两个触发条件：工具沙箱禁止本地
 
 用户已要求更新 v0.3.6 对应 Mac Intel 与 Apple Silicon 包。替换流程保留完整旧资产备份，要求同一干净提交的原生验收及 Windows/Mac 回归通过，替换前后核对 Windows 资产 ID 与 SHA256；版本标签及 Windows 包不移动。发布完成以 Release 中 `macos-refresh.json`、新清单及发布回执为准，不能仅根据源码已推送认定完成。详见 [Mac 验收记录](MACOS_INSTALLATION_ACCEPTANCE.zh-CN.md)。
 
+修订提交 `82b554d94ddec9692f8d27c82f239e9bf92c4509` 的 Intel、Apple Silicon 与 Windows 原生包已分别通过完整验收；[原生流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)和[同提交全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)分别保留结果。共享清单按平台记录来源；只有实际发布回执和公开摘要一致，才认定 Mac 包已替换。
+
 - 本机此前已完成开发模式安装及重启；连接曾核对到 v3、新结果交付能力、三个引擎和有效漏洞库。
 - 用户正在手工验收真实开发、修复与误报链路，尚未反馈完整通过结果；不能标为桌面验收完成。
-- 本次同步不发布新 Release、不自动重新安装，不把旧 Windows 候选或 macOS CI 当作当前桌面验收。
+- 本次只替换 v0.3.6 的 Mac 资产，不创建新版本、不自动重新安装；桌面验收仍以当前安装和实际操作为准。
 - 此前开发批次的任务建立请求曾返回 TASK_REQUEST_REJECTED；这是历史缺口，不代替当前任务核查结果，也不补建该历史任务的编辑前基线。
 
 ## 前一冻结阶段

@@ -46,6 +46,8 @@ Windows 同时保持原有临时探测目录校验、子进程环境和首次启
 
 ## 必须保留的边界
 
+后续修订提交 `82b554d94ddec9692f8d27c82f239e9bf92c4509` 的 Intel、Apple Silicon 和 Windows 原生包均已通过[原生完整验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)，没有跳过原专项断言。发布仍需同一提交的[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)通过；原发行的 Windows 全量回归曾用时约 115 分钟，因此先完成的原生包不代表发布门禁已满足。准备步骤仅因等待回归触及时限时，待原回归通过后恢复准备/发布，复用本轮已验证的原生包，不重建或混用其他提交的资产。实际公开资产身份以 `macos-refresh.json`、发行清单及 SHA256 为准。
+
 首轮远端源码提交 `0b709ff2a2028b24dd401c933d307a49c2a9047e` 的 Apple Silicon 原生包通过；Intel 在前置组件、样例检查及 MCP 检查之后，整组修复复查专项触及 180 秒验收时限（[失败回执](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39266404355/job/118107009555)）。门禁阻止了发布，旧资产没有因此替换。后续仅将 Mac Intel 的这组多次扫描/MCP 专项整体时限改为 600 秒，并补充阶段输出；Windows 与 Apple Silicon 仍为 180 秒，产品自身执行时限不受此项调整影响。专项全部断言保留，不能用延长时限代替重新验收。包含上传重试与验收预算契约的本地回归为 26 通过；此前分组与之有重叠，不相加。
 
 本机没有可用的 Apple 代码签名身份。本轮不能完成 Developer ID 签名、公证或浏览器下载后的 Gatekeeper 放行验收；不删除隔离标记来声称这些环节通过。新本地候选仅用于本机手动回归，不能替代正式签名发行。
