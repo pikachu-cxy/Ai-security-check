@@ -72,8 +72,8 @@ def test_previous_large_host_review_no_longer_repeats_every_risk():
     original = record(0, 10)
     packet = bounded_history_result(original, 4, 1)
     assert [item['detail']['id'] for item in packet['findings']] == ['host-4']
-    assert len(packet['risk_choices']) == 1
-    assert packet['risk_choices'][0]['finding_id'] == 'host-4'
+    assert not packet['risk_choices']
+    assert packet['reply_plan']['action_count'] == 0
     assert 'findings' not in packet['host_review']
     assert 'findings' not in packet['static']
     assert 'Permission check' not in packet['development_summary']

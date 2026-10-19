@@ -1,6 +1,7 @@
 """The model sees a plain explanation and a bounded, separate control packet."""
 import copy
 import json
+import pytest
 
 from security_runtime.hook_reply_context import (
     CONTROL_DELIMITER, MAX_CONTEXT_BYTES, MAX_CONTEXT_CHARS, render_hook_context,
@@ -171,3 +172,18 @@ def test_quiet_message_stays_empty_and_does_not_invent_risk_or_grant():
     assert '上方提示为空时无需新增安全提示' in notice
     assert 'remediation' not in control
     assert '扫描通过' not in notice and '项目安全' not in notice.replace('不推断项目安全', '')
+
+
+@pytest.mark.parametrize('message,reference', [('风险' * 10000, 'task.exact'), ('', 't' * 20000)],
+                         ids=['oversized-message', 'oversized-navigation'])
+def test_oversized_facts_or_navigation_require_original_within_both_limits(message, reference):
+    decision = {'action': 'AUTO_FIX', 'task_ref': reference,
+                'prepare': {'mcp_tool': 'prepare_task_fix', 'arguments': {'task_ref': reference}}}
+    original = copy.deepcopy(decision)
+    rendered = render_hook_context({}, decision, message)
+    _, control = parse(rendered)
+    assert control['editing_allowed_from_this_context'] is False
+    assert control['original_control_location'] == 'ORIGINAL_MCP_STRUCTURED_CONTENT'
+    assert 'remediation' not in control
+    assert len(rendered) <= MAX_CONTEXT_CHARS and len(rendered.encode()) <= MAX_CONTEXT_BYTES
+    assert decision == original

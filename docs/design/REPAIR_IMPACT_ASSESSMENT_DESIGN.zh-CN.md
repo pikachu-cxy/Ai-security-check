@@ -4,7 +4,7 @@
 
 安全修复可能改变共享权限、公共接口和数据处理行为，从而影响其他模块。本设计在具体修复方案与代码编辑之间增加受限的功能影响评估：Agent 调查技术影响，用户决定确有分歧的业务行为，Runtime 负责范围、版本、记录和执行条件校验。
 
-原方案将旧交互候选的用户桌面验收作为开工前提；用户已在本轮明确授权按最新方案直接实施、同步 GitHub 并构建候选，按该新授权继续开发。旧 `risk-decisions-v2` 候选仍按原记录保留待验收状态，不追记为通过。开发顺序及验收矩阵见[实施计划](../REPAIR_IMPACT_ASSESSMENT_PLAN.zh-CN.md)，新候选的安装与实际验收见[验收指南](../REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
+原方案将旧交互候选的用户桌面验收作为开工前提；用户已在本轮明确授权按最新方案直接实施、同步 GitHub 并构建候选，按该新授权继续开发。旧 `risk-decisions-v2` 候选仍按原记录保留待验收状态，不追记为通过。开发顺序及验收矩阵见[实施计划](REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md)，新候选的安装与实际验收见[验收指南](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。
 
 当前打包脚本已纳入三项 native 及字段契约等回归，并给冻结进程增加六工具和严格嵌套 schema 门禁；实际执行范围、失败与后续结果按本轮回执认定。冻结 schema 门禁只验证实际宣告的参数契约，不执行原生准备、编辑或裸 begin 守卫，不能代替真实宿主验收。过宽的反馈限制已在源码收窄为共享 CHECK_OPERATION_BOUNDARIES，三个提示路径均明确用户要求或原开发任务包含的测试、构建与验收照常执行，无需重复确认；仍禁止伪造结果、重放事件或补建编辑后基线。源码修正与旧安装、运行中连接及冻结包是否包含该修正分别核对。
 
@@ -28,7 +28,7 @@
 
 旧记录没有新字段时不补填、不删除关键未知、不在历史查询时改写门槛。未读材料可保存 legacy `critical=true` 与 PARTIAL，不虚构证据。修正 A2 分级必须由原归属会话结合真实证据沿原评估提交，保留原风险、修改前基线和已有授权；材料或来源变化时按原恢复流程处理，不能另起普通开发任务绕过。
 
-本轮三个定向回执按 `classname + name` 去重并取每项最后结果为 **295／295 项通过**，汇总见 `artifacts/a2-classification-validation-20261018.json`。原始 `a2-classification-targeted-20261018.xml` 的 196 通过／2 失败、`a2-classification-verification-20261018.xml` 的 242 通过／2 失败原样保留；最窄新分级及真实四文件恢复组 `a2-classification-recovery-final-20261018.xml` 为 65 通过、29.55 秒。各轮数量不能相加。完整候选回归与构建按随后对应 `run.json` 和最新指针判定，不由定向回归推定；安装与分级修正版真实 A2 桌面复验仍为 `PENDING_USER`，见[验收指南](../REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。以下源码基点是实施前历史，保留原日期、版本与提交，不以本轮补充覆盖。
+本轮三个定向回执按 `classname + name` 去重并取每项最后结果为 **295／295 项通过**，汇总见 `artifacts/a2-classification-validation-20261018.json`。原始 `a2-classification-targeted-20261018.xml` 的 196 通过／2 失败、`a2-classification-verification-20261018.xml` 的 242 通过／2 失败原样保留；最窄新分级及真实四文件恢复组 `a2-classification-recovery-final-20261018.xml` 为 65 通过、29.55 秒。各轮数量不能相加。完整候选回归与构建按随后对应 `run.json` 和最新指针判定，不由定向回归推定；安装与分级修正版真实 A2 桌面复验仍为 `PENDING_USER`，见[验收指南](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。以下源码基点是实施前历史，保留原日期、版本与提交，不以本轮补充覆盖。
 
 ## 实现前源码基点与历史修订结论
 
@@ -274,5 +274,5 @@ Agent 提交的影响判断标注为宿主分析；Runtime 接受提交仅代表
 - [整体架构](../ARCHITECTURE.md)
 - [用户批准修复与原问题复查](SMART_AUTO_REMEDIATION.md)
 - [任务安全核查设计](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)
-- [新版风险处置验收](../RISK_DECISIONS_ACCEPTANCE.zh-CN.md)
+- [新版风险处置验收](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)
 - [功能验证产品边界](../FUNCTIONAL_VERIFICATION.md)

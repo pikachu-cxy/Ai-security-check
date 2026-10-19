@@ -83,7 +83,7 @@ def _check_message(plan):
     if plan.intent == 'QUERY':
         return ('已保存的安全检查只完成部分范围。' if check.state == 'PARTIAL' else
                 '本次查询读取已保存的安全检查结果，未重新检查。')
-    if plan.intent != 'TASK':
+    if plan.intent not in {'TASK', 'TASK_DELIVERY'}:
         return ''
     if check.state == 'NO_CHANGES':
         return '本次没有观察到可检查的文件改动。'

@@ -5,8 +5,7 @@
 可信本地完整 Windows 包执行 `.\security-check.exe install codex`：验证包文件清单，
 检查现有配置/Skill 冲突，复制至用户固定版本槽，由已验证的活动程序执行协同 setup。
 全局连接始终指向固定启动器；Windows 新包使用独立小型原生启动器，不再复制一份完整 Runtime。
-已安装 Python 发行包的 `security-check install codex` 也接入协同 setup；但本轮隔离
-虚拟环境实际连接自检仍返回 CAPABILITY_MISMATCH，尚未验收，不作为用户推荐安装方式。
+已安装 Python 发行包的 `security-check install codex` 也接入协同 setup；当前开发模式已由用户安装并重启验证连接能力；wheel 隔离安装是另一层验证，不能由源码连接推定所有完整包或平台通过。
 开发源码需要显式 `--dev`，不是给普通用户的安装方式。
 
 安装反馈从 standalone 入口启动，包校验/复制/能力自检/全局连接/Skill/已有缓存核对显示
@@ -17,7 +16,7 @@
 安装成功后自动启动隐藏后台准备，不占用安装等待，也不要求普通用户执行前置命令。
 默认初始 300 秒、按真实进度续等、最长 1800 秒和 30 秒无进展限制。
 准备期间使用可用组件，缺失项登记原收尾任务，完成后自动通过普通 MCP 接续并核对最新版本。
-进度可选用 `preparation watch` 查看；[本批验收步骤](../archive/2026-10/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md)。
+进度可选用 `preparation watch` 查看；[本批验收步骤](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。
 
 `personal-install-v1` 回执把本地文件就绪、宿主连接、引擎准备、扫描和修复授权分开。
 `install codex` 在本地程序、全局配置自检和 Skill 安装通过后返回 0；

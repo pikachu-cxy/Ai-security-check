@@ -69,7 +69,9 @@ def test_incomplete_managed_directory_is_not_treated_as_absent(tmp_path, monkeyp
     assert result.diagnostic.error_code == 'COMPONENT_PACKAGE_INCOMPLETE'
 
 
-def test_reinstall_requires_explicit_choice_and_preserves_explicit_external_path(tmp_path, monkeypatch):
+@pytest.mark.parametrize('environment_offline', ['0', '1'])
+def test_reinstall_requires_explicit_choice_and_preserves_explicit_external_path(tmp_path, monkeypatch, environment_offline):
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE', environment_offline)
     manager = ToolManager(tmp_path / 'engines')
     broken = tool(ToolStatus.BROKEN, 'COMPONENT_START_FAILED', 'gitleaks')
     ready = tool(name='gitleaks')
@@ -83,7 +85,27 @@ def test_reinstall_requires_explicit_choice_and_preserves_explicit_external_path
     assert calls == ['gitleaks']
     external = ResolvedTool('gitleaks', '', '/user/custom/engine', ToolSource.EXPLICIT, ToolStatus.BROKEN)
     monkeypatch.setattr(manager, 'resolve', lambda name: external)
-    assert manager.ensure('gitleaks', reinstall=True) == external
+    assert manager.ensure('gitleaks', reinstall=True, offline=False) == external
+    assert calls == ['gitleaks']
+
+
+@pytest.mark.parametrize('explicit_offline', [None, True])
+def test_offline_reinstall_preserves_broken_component_without_download(tmp_path, monkeypatch, explicit_offline):
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE', '1')
+    manager = ToolManager(tmp_path / 'engines')
+    broken = tool(ToolStatus.BROKEN, 'COMPONENT_START_FAILED', 'gitleaks')
+    monkeypatch.setattr(manager, 'resolve', lambda name: broken)
+    monkeypatch.setattr(manager, '_install_binary', lambda *a: pytest.fail('offline must not download'))
+    assert manager.ensure('gitleaks', reinstall=True, offline=explicit_offline) == broken
+
+
+def test_reinstalled_component_must_pass_final_probe(tmp_path, monkeypatch):
+    manager = ToolManager(tmp_path / 'engines')
+    broken = tool(ToolStatus.BROKEN, 'COMPONENT_START_FAILED', 'gitleaks')
+    monkeypatch.setattr(manager, 'resolve', lambda name: broken)
+    calls = []
+    monkeypatch.setattr(manager, '_install_binary', lambda manifest: calls.append(manifest.tool_id))
+    assert manager.ensure('gitleaks', reinstall=True, offline=False) == broken
     assert calls == ['gitleaks']
 
 

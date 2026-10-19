@@ -1,8 +1,18 @@
 # 架构统一后续实施与验收记录
 
-更新日期：2026-10-19。源码版本：0.3.6；分支：feature/runtime-mvp。本文接续[首批记录](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)，按[总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md)记录后续实现。P1—P6 后续实现已通过下述冻结全量回归；最终候选交付按独立回执记录，不能用源码测试推定安装已生效。
+更新日期：2026-10-19。源码版本：0.3.6；分支：feature/runtime-mvp。本文记录当前边界和前一冻结阶段，实施目标见[总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md)。后续修复的定向回归与前一冻结全库分别认定，不能用源码测试推定安装已生效。
 
-用户已授权完成开发、必要测试、文档同步和 GitHub 推送；Codex / Cursor 真实桌面验收依用户决定暂缓。当前运行的 Runtime、外部安装 Skill 和公开 Release 不会因本次源码提交自动更新。
+用户已授权最新源码、文档清理和 GitHub 同步。Codex 正在由用户手工验收，完整结果尚未反馈；Cursor 仍待独立桌面验证。源码推送不自动更新已运行进程、外部 Skill 或公开 Release。
+
+## 当前修复批次
+
+本批修复 Windows 私有输入长路径、初始化残留占位、扫描完成但发布锁失败后的恢复，以及当前风险交付误走历史摘要的问题。短路径不回读实时工作区；签名完成事实不授予执行权限。Ctrl-C、失效代际和旧事件不能恢复为新成功，重试不重置预算。
+
+当前交付继续使用 get_task_security_review，只有原 owner、终态 completion_revision 与当前源码匹配时生成完整风险正文和有效选择。默认历史查询不主动重放选择；两类风险共用当前处置，未知读取不变成新待处理项。只读依赖不初始化可写 Runtime。
+
+ScanAttemptStore 新写 workspace-scan-attempt-v2，兼容已签名 v1 的读取和旧根清理；执行 receipt 仍 v1。ScanPublications 使用 scan-publication-v1 保存有界完成事实，认领新工作前在原权威锁下回收确定失效项。
+
+另合入退役 Skill 升级事务、超长 Hook 控制上下文和包内规则/数据流身份校验。定向回归、当前同步验证及手测步骤统一见[验收记录](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)，不沿用下文旧候选的通过状态。
 
 ## 当前架构
 
@@ -23,6 +33,10 @@ flowchart TB
     ATT --> INPUT["同一受限私有输入：源码、规则、工具及数据身份"]
     INPUT --> ENG["扫描 Provider 与原问题有界复查"]
     ENG --> HISTORY["原扫描历史 + 兼容侧索引"]
+    ENG --> FACTS["签名完成事实：原尝试与脱敏结果"]
+    FACTS --> PUB
+    FACTS --> RECOVER["发布忙时按原代际恢复；只读不恢复"]
+    RECOVER --> PUB
     ATT --> PUB["短锁条件发布：原任务、原版本、原待检序号"]
     PUB --> AUTH["各自权威仓储 + 同事务待同步义务"]
     AUTH --> PROJ["有界恢复：目标 inbox 与版本水位"]
@@ -41,6 +55,8 @@ Codex 与 Cursor 共用业务规则、状态和编排。保留的差异是宿主
 | TaskSecurityService / TaskReviewCoordinator | 编辑前基线、固定复核计划、证据和累计额度 | 不接受改后重建、跨会话认领或协议降级 |
 | ScanRequest / CapturedScanInput | 源码类型、范围、固定字节与输入身份 | index 对照 index；缺失不能回读实时工作区 |
 | ScanAttemptStore / ScanAttemptExecution | 执行认领、租约、取消、固定输入和条件发布 | 与任务 generation、Agent 复核租约分别管理；不授予编辑权限 |
+| ScanPublications | 有界签名完成事实与发布恢复依据 | 原 lease、源码、事件与任务条件仍由原服务核对；不是另一套权威 |
+| task_review_results / 只读扫描存储 | 当前交付与历史共用有界投影 | 当前交付有额外归属与版本校验；默认历史不写库、不重放选择 |
 | 各权威仓储及恢复器 | 同库事务、幂等收件、水位、条件投影 | 恢复不扫描、不发消息、不改变人工选择或扩展修复授权 |
 | 交付记录 | 结果版本及可证明的传输阶段 | 输出准备、stdout 写成功、宿主报告均不等于认证用户已读 |
 
@@ -82,11 +98,11 @@ flowchart TD
 
 短核心保留不可跳过的时序和安全边界；完整方法有固定六个主题、版本、摘要和本地 reference。缺失才取同版方法，不能以拆分方法为由跳过必读代码。源 Skill、动态生成内容、安装结果及方法接口按字节校验。
 
-新任务只执行开发核查 v3；缺少 v3、真实构建身份或九项必需工具时停止对应核查并提示升级或重连，不静默降级。旧 v1/v2 任务保留原状态和只读历史，未完成旧任务不能续办。独立的 security-review-skill-v1、risk-decisions-v2 等契约保持原用途。具体升级步骤见[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
+新任务只执行开发核查 v3；缺少 v3、task-result-delivery-v1、真实构建身份或九项必需工具时停止对应核查并提示升级或重连，不静默降级。旧 v1/v2 任务保留原状态和只读历史，未完成旧任务不能续办。独立的 security-review-skill-v1、risk-decisions-v2 等契约保持原用途。具体升级步骤见[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
 
 用户日常无需理解内部引用或方法切换，最终反馈仍合并到开发总结。暂缓、排除、缺证据、升级、运行失败或业务取舍需要如实说明，因此不能承诺所有情况下完全无感。没有稳定事件 ID 的宿主只做版本核对；没有消费回执时保留未知，不宣称全局永久精确一次或用户已经看见。
 
-## 验收状态
+## 前一冻结阶段验收
 
 2026-10-19 冻结全部 266 个测试文件，四片覆盖全部用例，不将重叠专项数量相加。原诊断失败回执继续保留；本轮正式冻结回执如下。
 
@@ -121,7 +137,7 @@ flowchart TD
 
 [本地性能数据](ARCHITECTURE_PERFORMANCE.zh-CN.md)单列样本、条件与成本，不把历史查询的合成提速换算为用户总等待。Windows 候选构建与包内 API 验收不代表 macOS 或真实桌面验收。
 
-## 原任务安全核查的诊断
+## 前一阶段原任务安全核查诊断
 
 旧 Runtime 拒绝更新的原因已经确认：原账本 837 行加本任务 280 项观察会超过旧构建 1000 行总上限；原先通用错误隐藏了容量原因。另一次资源占用是工作区锁超时，二者不同。[诊断与处理](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)保留原任务、基线和证据，不清历史或改后补建。
 

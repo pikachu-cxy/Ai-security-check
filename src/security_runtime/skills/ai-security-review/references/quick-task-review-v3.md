@@ -13,14 +13,15 @@ Git HEAD, another chat's task, the most recent task, or an after-edit baseline.
 Missing historical source cannot be reconstructed from the current workspace.
 
 Before editing, get_runtime_info must explicitly advertise task-review-plan-v3
+and task_security_result_delivery=task-result-delivery-v1,
 and the connected tool list must include begin_security_task, finish_security_task,
 prepare_task_security_review, get_task_review_plan, get_task_review_method,
 read_task_review_context, submit_task_review_batch, submit_task_security_review
 and get_task_security_review. Verify the configured Runtime environment and
 build_identity; a marketing version alone does not establish these capabilities.
-An existing 0.3.6 delivery with this capability subset is sufficient. Independent
+An existing 0.3.6 delivery with both capabilities is sufficient. Independent
 contracts such as security-review-skill-v1 and risk-decisions-v2 are not obsolete
-task-review protocols. If v3 is missing or the active build cannot be verified,
+task-review protocols. If either capability is missing or the active build cannot be verified,
 stop this workflow and require updating that Runtime and reconnecting. Never
 downgrade, send old protocol parameters, or substitute another scan for this task.
 
@@ -127,8 +128,17 @@ has been delivered. Actual truncation, missing bodies, inventory gaps, stale dat
 unread or unsubmitted units remain explicit. A validated final result is saved
 independently of evidence-delivery allowance. Runtime returns a control receipt
 capped at 1600 UTF-8 bytes, containing no source, finding prose or repair authority.
-Follow get_task_security_review for saved details before explaining risks. The
-receipt and a source_ref never imply complete coverage.
+Follow the receipt's get_task_security_review next_action for saved details before
+explaining risks, preserving completion_revision and the original session_ref.
+Runtime verifies the original owner, terminal revision and current source for
+current delivery; a revision selector alone grants no authority. Merge that
+page's complete development_summary, including position, four risk paragraphs and
+valid source-specific choices. Follow next_action for further complete pages;
+raw total, current pending total and page-visible counts are distinct. Default
+history reads omit completion_revision and never repeat a repair choice. If
+current handling cannot be read, its state is UNKNOWN; saved details remain
+readable, without treating unknown decisions as new pending risks. The receipt
+and a source_ref never imply complete coverage or repair authority.
 
 For exhaustion, unavailable source, stale version, lock contention or expiry,
 retain actual results and report PARTIAL with the concrete file/range/reason.

@@ -1,6 +1,6 @@
 # 开发任务结束安全核查实现方案
 
-历史设计日期：2026-10-13。以下实现状态、固定额度与旧接口记录描述当时版本，已被当前 [v3 唯一协议说明](../TASK_REVIEW_V3_ONLY.zh-CN.md)取代，不能用于新版 Runtime 的调用或恢复。当前默认仅 3，旧任务只读且不迁移；get_task_security_review 只查询历史，不恢复任务。完整架构与状态见[本批实现记录](../ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)。
+历史设计日期：2026-10-13。以下实现状态、固定额度与旧接口记录描述当时版本，已被当前 [v3 唯一协议说明](../TASK_REVIEW_V3_ONLY.zh-CN.md)取代，不能用于新版 Runtime 的调用或恢复。当前默认仅 3，旧任务只读且不迁移；get_task_security_review 只查询历史，不恢复任务。完整架构与状态见[本批实现记录](../ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)。
 
 目标是在 Agent 完成一次代码开发任务时，把该任务的实际改动、基础扫描结果和必要上下文交给宿主 Agent，按快速核查方法发现更深一层风险。普通聊天、解释问题和只读操作安静结束。安全核查作为开发任务的一个步骤，结果融入任务总结；内部计划不成为独立聊天消息。
 
@@ -16,13 +16,13 @@
 修改前保存实际工作区内容哈希及有限脱敏前像，包含既有脏文件；删除文件可返回签名前像。
 Git盘点遵循项目忽略规则，名称清单与读取成功的哈希分开，优先读取实际新文件及已有脏文件。
 任务静态范围最多1000个改动文件，AI改动上下文最多20个，关联最多10个文件、40个读取窗口，累计64,000字节。
-不完整快照不能证明新增、删除或无改动；最新范围验收见 [自动任务范围](../archive/2026-10/TASK_INVENTORY_ACCEPTANCE.zh-CN.md)。
+不完整快照不能证明新增、删除或无改动；最新范围验收见 [自动任务范围](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。
 同版本结束不重扫；源码变化时静态尝试最多2次。未完成核查用 `skip_review_reason` 保留缺口
 并结束，不要求用户“继续”。模型由当前宿主执行，Runtime 只校验候选结构、证据及版本。
 
 真实本地包的普通MCP和Hook接口测试已跑过四类语言，原风险可检出，重复结束为空反馈，
 无改动不扫描。真实桌面事件派发及 Agent 自动遵循 Skill 编排仍须本机手测，不能以模拟
-候选提交声称AI核查准确率已验证。具体复现和耗时见 [任务核查验收](../archive/2026-10/TASK_SECURITY_REVIEW_ACCEPTANCE.zh-CN.md)。
+候选提交声称AI核查准确率已验证。具体复现和耗时见 [任务核查验收](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。
 
 ## 产品边界和触发方式
 
@@ -175,7 +175,7 @@ Stop 仅做有界兜底：无有效开发任务时空返回；任务有待检部
 
 ## 相关文档
 
-- [核心链路手动测试](../guides/MANUAL_CORE_TEST.zh-CN.md)
+- [核心链路手动测试](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)
 - [当前接续计划](../NEXT_DEVELOPMENT_PLAN.zh-CN.md)
 - [第一版受邀试用清单](../PILOT_V1_CHECKLIST.zh-CN.md)
 

@@ -9,7 +9,7 @@ import pytest
 from security_runtime.cli import main
 from security_runtime.integration_lifecycle import IntegrationDiagnostic
 from security_runtime.personal_install import setup_personal_codex, install_personal_codex, CONTRACT
-from security_runtime.review_skill import ReviewSkillManager
+from security_runtime.review_skill import ReviewSkillManager, RETIRED_METHODS
 from security_runtime.upgrade import InstallationUpgrade
 from test_global_integration import installed, projects
 from test_delivery import bundle
@@ -104,6 +104,57 @@ def test_signed_old_skill_is_upgraded_in_same_setup(installed, skill):
     assert skill.status()['status'] == 'UPGRADE_AVAILABLE'
     assert setup_personal_codex(installed, skill=skill)['installation']['local_files_ready']
     assert (skill.root / 'SKILL.md').read_bytes() == current['SKILL.md']
+
+
+@pytest.mark.parametrize('customized', [False, True])
+def test_coordinated_upgrade_cleans_owned_retired_methods_and_preserves_user_edits(installed, skill, customized):
+    current = skill.expected
+    skill.expected = current | {name: b'old managed method' for name in RETIRED_METHODS}
+    assert skill.execute('install')['status'] == 'INSTALLED'
+    skill.expected = current
+    key = (skill.state / 'ownership.key').read_bytes()
+    personal = skill.root / sorted(RETIRED_METHODS)[0]
+    if customized:
+        personal.write_bytes(b'user customized retired method')
+
+    result = setup_personal_codex(installed, skill=skill)
+
+    assert result['installation']['local_files_ready'] is True, result['diagnostics']
+    assert result['skill']['status'] == 'INSTALLED'
+    for name in RETIRED_METHODS:
+        path = skill.root / name
+        if customized and path == personal:
+            assert path.read_bytes() == b'user customized retired method'
+        else:
+            assert not path.exists()
+    assert (skill.state / 'ownership.key').read_bytes() == key
+
+
+def test_coordinated_upgrade_restores_retired_methods_after_late_failure(installed, skill, monkeypatch):
+    current = skill.expected
+    skill.expected = current | {name: b'old managed method' for name in RETIRED_METHODS}
+    assert skill.execute('install')['status'] == 'INSTALLED'
+    skill.expected = current
+    before = {path: path.read_bytes() for path in skill.root.rglob('*') if path.is_file()}
+    ownership = (skill.state / 'ownership.json').read_bytes()
+    real = skill.execute
+    cleaned = []
+
+    def fail_after_upgrade(action):
+        assert real(action)['status'] == 'INSTALLED'
+        assert all(not (skill.root / name).exists() for name in RETIRED_METHODS)
+        cleaned.append(True)
+        raise OSError('synthetic failure after retired method cleanup')
+
+    monkeypatch.setattr(skill, 'execute', fail_after_upgrade)
+    result = setup_personal_codex(installed, skill=skill)
+
+    assert result['installation']['status'] == 'ROLLED_BACK'
+    assert result['installation']['recovery_status'] == 'RECOVERED'
+    assert cleaned == [True]
+    assert {path: path.read_bytes() for path in skill.root.rglob('*') if path.is_file()} == before
+    assert (skill.state / 'ownership.json').read_bytes() == ownership
+    assert not (installed.home / 'config.toml').exists()
 
 
 def test_failed_skill_write_rolls_back_only_this_transaction(installed, skill, monkeypatch):

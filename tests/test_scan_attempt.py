@@ -1,6 +1,7 @@
 """Actual OS workspace locks, signed fencing and immutable input lifetimes."""
 from dataclasses import replace
 import hashlib
+import hmac
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ from security_runtime.hook_state import HookStateStore
 from security_runtime.models import ScanMode
 from security_runtime.progress import ScanCancelled
 from security_runtime.scan_attempt import (ScanAttemptStore, ScanAttemptExecution,
-    ScanAttemptLost, source_binding)
+    ScanAttemptLost, source_binding, CONTRACT, STATE_CONTRACT)
 from security_runtime.scan_input import capture_scan_input, scoped_request
 
 
@@ -22,6 +23,7 @@ from security_runtime.scan_input import capture_scan_input, scoped_request
 def sample(tmp_path):
     root = tmp_path/'project'
     root.mkdir()
+    subprocess.run(['git', 'init', '-q', str(root)], check=True)
     (root/'source.py').write_text('old = 1\n')
     hooks = HookStateStore(tmp_path/'state')
     clock = [100.0]
@@ -56,6 +58,87 @@ def test_expired_generation_cannot_bind_renew_cancel_or_publish_new_worker(sampl
         assert not store.renew(old) and not store.cancel(old)
     assert store.is_current(new) and not store.is_current(old)
     assert 'lease_owner' not in old.receipt
+
+
+def test_failed_private_parent_initialization_does_not_publish_a_busy_lane(sample):
+    root, hooks, store, _ = sample
+    store.private_parent.parent.mkdir(parents=True)
+    store.private_parent.write_text('synthetic directory blocker')
+    with hooks.lock(root):
+        with pytest.raises(FileExistsError):
+            store.claim('TASK', 'first', source_binding({}))
+    assert store.read()['lane'] is None and store.read()['generation'] == 0
+    store.private_parent.unlink()
+    lease = claim(sample)
+    assert lease is not None and lease.generation == 1
+
+
+def test_retire_expired_lane_never_publishes_or_changes_a_replacement(sample):
+    root, hooks, store, clock = sample
+    old = claim(sample)
+    clock[0] += 601
+    with hooks.lock(root):
+        with pytest.raises(ValueError):
+            store.retire(old, outcome='COMPLETED')
+        assert store.retire(old, outcome='STALE')
+    assert store.read()['lane']['state'] == 'STALE'
+    new = claim(sample)
+    with hooks.lock(root):
+        assert not store.retire(old)
+    assert store.is_current(new)
+
+
+def test_global_input_root_is_short_and_stays_in_the_configured_state_boundary(tmp_path):
+    from security_runtime.hook_state import identity
+    root = tmp_path/'project'
+    root.mkdir()
+    state = tmp_path/'private-state'
+    hooks = HookStateStore(state/'global-workspaces'/identity(str(root))/'hooks')
+    store = ScanAttemptStore(hooks, root)
+    assert store.private_parent == state/'i'
+    assert store.legacy_private_parent == store.path.parent/'scan-inputs'
+    assert not state.exists()  # Merely resolving the namespace is read-only.
+
+
+def test_legacy_cleanup_obligation_uses_its_original_root_only(sample):
+    root, hooks, store, clock = sample
+    lease = claim(sample)
+    name = 'runtime-input-' + 'e'*32
+    old = store.legacy_private_parent/name
+    old.mkdir(parents=True)
+    (old/'old.py').write_text('old private input')
+    current = store.private_parent/name
+    current.mkdir()
+    (current/'canary').write_text('preserve new namespace')
+    info = old.stat()
+    with hooks.lock(root):
+        value = store.read()
+        value['directories'].append(dict(name=name, attempt_id=lease.attempt_id,
+            generation=lease.generation, device=info.st_dev, inode=info.st_ino))
+        value['contract'] = CONTRACT
+        raw = json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
+        store.path.write_bytes(json.dumps(dict(content=value,
+            mac=hmac.new(store._key(), raw, hashlib.sha256).hexdigest())).encode())
+    assert store.read()['contract'] == CONTRACT
+    before = store.path.read_bytes()
+    assert store.read()['contract'] == CONTRACT and store.path.read_bytes() == before
+    clock[0] += 601
+    assert store.recover_cleanup() == dict(cleaned=1, pending=0)
+    assert not old.exists() and (current/'canary').read_text() == 'preserve new namespace'
+    assert store.read()['contract'] == STATE_CONTRACT
+
+
+def test_new_cleanup_state_fences_the_legacy_reader_contract(sample):
+    _, _, store, _ = sample
+    lease = claim(sample)
+    state = store.read()
+    assert state['contract'] == STATE_CONTRACT and state['contract'] != CONTRACT
+    assert lease.receipt['contract'] == CONTRACT  # Public execution receipt stays compatible.
+    # This is the v1 reader's exact contract gate, before it interprets paths.
+    envelope = json.loads(store.path.read_bytes())
+    with pytest.raises(ValueError, match='legacy state contract rejected'):
+        if envelope['content'].get('contract') != CONTRACT:
+            raise ValueError('legacy state contract rejected')
 
 
 def test_same_workspace_lane_is_cross_process_not_just_a_thread_mutex(sample):

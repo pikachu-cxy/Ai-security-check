@@ -145,7 +145,7 @@ def source_snapshot():
             continue
         selected = (name in SOURCE_NAMES or name.startswith('LICENSES/')
             or name.startswith(SOURCE_PREFIXES) and relative.suffix.lower() in SOURCE_SUFFIXES
-            or name in {'docs/REPAIR_IMPACT_ACCEPTANCE.zh-CN.md',
+            or name in {'docs/RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md',
                 'docs/REPAIR_IMPACT_ASSESSMENT_PLAN.zh-CN.md',
                 'docs/design/REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md'}
             or name in STANDALONE_DOCUMENTS)
@@ -450,7 +450,7 @@ def main(argv=None):
         'reply_plan_contract': 'security-reply-plan-v1', 'risk_decision_contract': 'risk-decisions-v2',
         'python': sys.executable, 'reviewed_build_dependencies': dependencies,
         'test_scope': targets, 'full_repository_suite_claimed': False,
-        'acceptance_guide': 'docs/REPAIR_IMPACT_ACCEPTANCE.zh-CN.md'}
+        'acceptance_guide': 'docs/RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md'}
     stage = 'SOURCE_SNAPSHOT'
     try:
         snapshot = source_snapshot()

@@ -16,7 +16,8 @@ AI Security Runtime 核心指导
 新指导不能升级旧 Runtime 的实际能力；不能用旧 live instructions 覆盖以下 v3 门槛。
 
 开发任务必读 [v3 方法](references/quick-task-review-v3.md)，topic=task-review：
-先核对 get_runtime_info 的 task-review-plan-v3、真实 build_identity 和同一 Runtime 的九项必需工具子集：
+先核对 get_runtime_info 的 task-review-plan-v3、task_security_result_delivery=task-result-delivery-v1、
+真实 build_identity 和同一 Runtime 的九项必需工具子集：
 begin_security_task、finish_security_task、prepare_task_security_review、get_task_review_method、get_task_review_plan、
 read_task_review_context、submit_task_review_batch、submit_task_security_review、get_task_security_review。
 版本号和独立的 security-review-skill-v1/risk-decisions-v2 不代替上述能力检查，不按精确工具数量判断。
@@ -32,6 +33,8 @@ NO_CHANGES 不扫描或追加核查段落；即使静态零发现也由当前 Ag
 必读项通过 plan 全部分页、真实改前/改后窗口和 batch 逐项提交；未读、脱敏或缺失语义如实保留，不冒充已核查。
 source_ref/重复交付回执不等于源码已读；只按真实证据提交。原 v3 闲置可按原引用恢复，预算/证据/版本限制不重置。
 最终 submit_task_security_review，关联条件性风险按正式 findings 记录；不只藏入 limitations 或后续建议。
+沿保存回执 next_action 读取当前交付，保留 completion_revision 和原 session_ref，按页完整呈现
+development_summary 中的位置、四类正文及有效选项；默认历史读取不重放选择，处置未知不重复追问。
 普通总结请求不取消核查，也不要求用户反复发“继续”；用户明确停止时仅在原可用 v3 任务记录实际中止原因，不新增扫描。
 原任务的检查、覆盖、风险处置、风险账本同步与交付分别说明；prepared 不等于发送，发送不等于用户阅读。
 历史 COMPLETE 不证明当前项目安全；核查缺口、过期依赖数据和未知触发条件不包装成通过。

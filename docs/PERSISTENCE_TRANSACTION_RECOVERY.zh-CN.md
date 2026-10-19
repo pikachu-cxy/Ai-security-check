@@ -30,6 +30,16 @@ Scanner 链的实际来源是 `SQLiteStore.save_finding_reviews`：feedback 审�
 
 Native release 队列在 SQL LIMIT 之前先按 owner 与已知精确 intent 摘要过滤，foreign owner 和未知版本义务仍保留但不阻塞后方可执行交付。单条目标或 ACK 失败时保留该项、继续有界处理其他项，返回当前 owner 的 pending 数。队列读取或计数失败时返回 `PENDING` 与未知数量，不假称零 pending，不修改坏库或用户选择；已有 intent guard 继续生效，显式取消后的普通开发不因后台恢复异常而被再次阻塞。默认只读查询仍可观察全部 pending 与未知项。
 
+## 扫描完成后的待发布事实
+
+scan_publication 使用独立、有界的签名 SQLite 日志保存 TASK / Hook 完成结果及原 lease、源码与事件依据。它不保存原始源码，不授予执行、发布或编辑权限。扫描完成后先 stage，取得工作区锁并核对原条件后由原服务保存权威结果，最后 ACK 日志。
+
+发布锁繁忙时返回 SCAN_ATTEMPT_PUBLICATION_PENDING；同一原任务重试先恢复事实，不重复扫描或消耗第二次预算。目标提交后、租约完成前或 ACK 前中断均幂等恢复。过期、新代际、源码/辅助配置/Hook 序列变化及取消结果不能恢复为成功；旧 worker 不能结束新 worker 的 lease。
+
+新事件在登记新 pending 序号前尝试恢复，原事件去重回执可读取已恢复事实。只读事件和查询不消费日志。日志上限为 32 条、单条 8MB、总计 32MB；在真实工作区锁下按已签名执行代际有界回收确定失效事实，避免不同旧 scope 永久占满。
+
+扫描占位状态新写 workspace-scan-attempt-v2，兼容验签的 v1 查询及旧 scan-inputs 根清理；执行 receipt 仍为 v1，旧 writer 不能误解释新目录义务。固定输入的短私有根保留 ACL、链接拒绝、inode/device 及签名清理校验。
+
 ## 账本分区与容量
 
 旧全局 1000 行限制会使一个新任务耗尽全部历史共享额度。现在使用按 `origin_task_ref` 分区的不可变签名文件，单分区仍限制 1000 行、2 MB；最多 256 个历史分区。固定哈希文件名及签名 index 同时校验内容、workspace、原任务、行数与字节数。view 可局部读取原任务；完整 read 保留全部历史。

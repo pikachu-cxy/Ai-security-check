@@ -135,10 +135,12 @@ def test_release_floor_matches_implemented_store_contracts_and_creates_no_state(
     from security_runtime.host_event_journal import CONTRACT as EVENT
     from security_runtime.task_delivery_receipts import CONTRACT as DELIVERY
     from security_runtime.closeout_persistence import CONTRACT as CLOSEOUT
+    from security_runtime.scan_attempt import STATE_CONTRACT as ATTEMPT
+    from security_runtime.scan_publication import CONTRACT as PUBLICATION
     hooks=HookStateStore(tmp_path/'state');root=tmp_path/'workspace';root.mkdir()
     expected={TaskRiskLedger(hooks,root).authority.contract,RiskClosureService(hooks)._authority(root).contract,
               FENCE_CONTRACT,EFFECT,VERIFICATION,EVENT,DELIVERY,CLOSEOUT,'task-risk-partition-v1',
-              'native-intent-release-v1','workspace-scan-attempt-v1'}
+              'native-intent-release-v1',ATTEMPT,PUBLICATION}
     assert storage_contracts()==sorted(expected)
     changed=storage_contracts();changed.clear()
     assert storage_contracts()==sorted(expected) and not (tmp_path/'state').exists()

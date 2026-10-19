@@ -32,8 +32,21 @@ class ProcessIdleTimeout(TimeoutError):
     pass
 
 
+class ProcessStartError(OSError):
+    """Bounded launch facts without paths, argv, environment or raw OS text."""
+    def __init__(self, error, *, cwd=None, executable=None):
+        super().__init__('External process could not be started.')
+        kind = type(error).__name__ if type(error).__module__ == 'builtins' else 'OSError'
+        self.failure = dict(stage='PROCESS_START', exception_type=kind,
+            errno=error.errno if type(error.errno) is int else None,
+            winerror=getattr(error, 'winerror', None) if type(getattr(error, 'winerror', None)) is int else None,
+            cwd_length=len(os.fspath(cwd)) if cwd is not None else 0,
+            executable_length=len(os.fspath(executable)) if executable is not None else 0)
+
+
 def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, on_stderr_line=None,
-                idle_timeout=None, activity_clock=None, on_stderr_chunk=None, remaining_callback=None) -> ProcessResult:
+                idle_timeout=None, activity_clock=None, on_stderr_chunk=None, remaining_callback=None,
+                capture_start_failure=False) -> ProcessResult:
     checkpoint()
     # A dynamic preparation deadline may grow, but the process's static ceiling
     # remains absolute. Ordinary scans retain their original timeout contract.
@@ -43,9 +56,14 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
     # Captured engine helpers must not create a Windows console, even when
     # launched by the detached preparation worker. Pipes still carry progress.
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-    proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                            creationflags=creationflags, start_new_session=os.name != 'nt')
+    try:
+        proc = subprocess.Popen(args, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                creationflags=creationflags, start_new_session=os.name != 'nt')
+    except OSError as error:
+        if not capture_start_failure:
+            raise  # Installation/probe callers retain their OS exception types.
+        raise ProcessStartError(error, cwd=cwd, executable=args[0] if args else None) from None
     creation_ms = round((time.perf_counter()-creation_started)*1000, 3)
     buffers = [bytearray(), bytearray()]
     overflow = threading.Event()

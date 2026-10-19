@@ -17,7 +17,8 @@ from summary_fixtures import sample
 
 def runtime_info():
     return dict(version='synthetic', build_identity=dict(status='IDENTIFIED', build_id='b' * 64,
-        state_schema='runtime-state-v1'), features=dict(task_security_review_protocol='task-review-plan-v3; ONLY_V3; LEGACY_HISTORY_READ_ONLY'),
+        state_schema='runtime-state-v1'), features=dict(task_security_review_protocol='task-review-plan-v3; ONLY_V3; LEGACY_HISTORY_READ_ONLY',
+            task_security_result_delivery='task-result-delivery-v1'),
         rule_inventory=dict(status='AVAILABLE', rule_pack_version='1', rule_pack_checksum='c' * 64))
 
 

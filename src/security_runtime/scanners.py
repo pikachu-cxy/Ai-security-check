@@ -132,7 +132,8 @@ def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
         try:
             with span('process_invocation'):
                 count('process_invocations')
-                result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT)
+                result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT,
+                    capture_start_failure=True)
             add_time('process_creation', getattr(result, 'timing_ms', {}).get('process_creation'))
         except (TimeoutError, OutputLimitError):
             scanner_process_observed()
@@ -251,7 +252,11 @@ class BaseScanner:
         except ValueError as exc:
             return failed(RunStatus.FAILED, ErrorDiagnostic('SCANNER_OUTPUT_OR_CONFIG_ERROR', sanitize(str(exc), 200), 'Check local rules/configuration and retry.'), resolved.version)
         except (OSError, KeyError) as exc:
-            return failed(RunStatus.FAILED, classify_network_error(exc, fallback='LOCAL_IO_ERROR'), resolved.version)
+            from .processes import ProcessStartError
+            findings, run = failed(RunStatus.FAILED, classify_network_error(exc, fallback='LOCAL_IO_ERROR'), resolved.version)
+            if isinstance(exc, ProcessStartError):
+                run.scanner_diagnostics = {'failure': dict(exc.failure)}
+            return findings, run
         except Exception as exc:
             # Keep fixed internal diagnostics without reflecting arbitrary
             # exception text, paths, commands, environment or source material.

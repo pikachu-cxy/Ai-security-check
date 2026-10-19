@@ -254,11 +254,13 @@ def _coverage_gaps(limitations):
 
 
 class TaskSecurityService:
-    def __init__(self, runtime, hooks=None, *, now=time.time, owner=None):
+    def __init__(self, runtime, hooks=None, *, now=time.time, owner=None,
+                 read_only_scan_store_provider=None):
         self.runtime = runtime
         self.hooks = hooks or HookStateStore()
         self.now = now
         self.owner = owner
+        self.read_only_scan_store_provider = read_only_scan_store_provider
 
     def _owner(self):
         from .task_ownership import valid_owner
@@ -461,6 +463,86 @@ class TaskSecurityService:
         saved = self.store(root).save(enqueue(record, updates, expected))
         return drain(self, root, saved)
 
+    @staticmethod
+    def _publication_source(snapshot):
+        return {key: snapshot.get(key) for key in
+                ('hashes', 'inventory', 'inventory_complete', 'read_limitations', 'limitations')}
+
+    def _publish_static(self, root, ref, pending, attempts, *, fresh):
+        """Commit completed facts only against their original task and live lane."""
+        from .scan_attempt import AttemptLease
+        from .scan_publication import ScanPublications
+        publications = ScanPublications(self.hooks, root)
+        lease = AttemptLease(**pending['lease'])
+        payload = pending['payload']
+        with self.hooks.lock(root, wait_seconds=2) as acquired:
+            if not acquired:
+                return dict(status='BUSY', task_ref=ref, scanner_run=False,
+                            reason='SCAN_ATTEMPT_PUBLICATION_PENDING', source_result_saved=True)
+            current = self.load(root, ref)
+            require_record_protocol(current)
+            same_task = (current.get('static_execution') == lease.receipt
+                and digest_value(self._publication_source(current['baseline'])) == payload['baseline_revision']
+                and self._publication_source(current.get('end', {})) == payload['end'])
+            if same_task and current['phase'] != 'STATIC_RUNNING':
+                # The target committed before the independent ACK. Reads or
+                # review preparation may have advanced its generation since.
+                observed = (current.get('static') or {}).get('execution_attempt', {})
+                if all(observed.get(k) == v for k, v in lease.receipt.items()):
+                    source_current = fresh and self._hook_inputs(root, current)[0] == current['finished_hook_revision']
+                    if source_current and attempts.is_current(lease, payload['execution'].get('input_id')):
+                        attempts.finish(lease, input_id=payload['execution'].get('input_id'),
+                            scan_id=current['static'].get('scan_id'),
+                            outcome='FAILED' if current['static']['status'] == 'FAILED' else 'COMPLETED')
+                    else:
+                        attempts.retire(lease, outcome='STALE')
+                    publications.acknowledge(pending)
+                    if not source_current:
+                        return None  # Continue the original task's normal freshness path.
+                    result = self._view(current)
+                    result.update(scanner_run=False, publication_recovered=True)
+                    return result
+            if not same_task or current['phase'] != 'STATIC_RUNNING':
+                attempts.retire(lease, outcome='STALE')
+                publications.acknowledge(pending)
+                return dict(status='STALE', task_ref=ref, scanner_run=False,
+                            reason='SCAN_ATTEMPT_SUPERSEDED', publication_recovered=True)
+            live = attempts.is_current(lease, payload['execution'].get('input_id'))
+            current['static'] = dict(payload['static'])
+            current['phase'] = ('READY' if live and fresh and self._hook_inputs(root, current)[0]
+                                == current['finished_hook_revision'] else 'STALE')
+            if (current['phase'] == 'READY' and not current['changes'] and not current['limitations']
+                    and not current['static']['findings'] and current['static']['coverage'] in {'FULL', 'SCOPED'}
+                    and current['static']['status'] in {'SUCCESS', 'COMPLETED'}):
+                current['phase'] = 'NO_CHANGES'
+                current['baseline']['texts'] = {}
+                current['end']['texts'] = {}
+            current['static']['execution_attempt'] = dict(payload['execution'],
+                publication='STALE' if current['phase'] == 'STALE' else 'COMMITTED')
+            current = self._project_risks(root, current)
+            if current['phase'] == 'STALE':
+                attempts.retire(lease, outcome='STALE')
+            else:
+                attempts.finish(lease, input_id=payload['execution'].get('input_id'),
+                    scan_id=current['static'].get('scan_id'),
+                    outcome='FAILED' if current['static']['status'] == 'FAILED' else 'COMPLETED')
+            publications.acknowledge(pending)
+            return self._view(current)
+
+    def _recover_static(self, root, ref, end, auxiliary_hashes, attempts):
+        from .scan_publication import ScanPublications
+        rows = ScanPublications(self.hooks, root).pending('TASK', ref)
+        for pending in rows:
+            payload = pending['payload']
+            fresh = (self._publication_source(end) == payload['end']
+                     and auxiliary_hashes == payload['auxiliary_hashes'])
+            result = self._publish_static(root, ref, pending, attempts, fresh=fresh)
+            if result is None:
+                continue
+            result.update(scanner_run=False, publication_recovered=True)
+            return result
+        return None
+
     def finish(self, workspace, ref):
         root = self.root(workspace)
         original = self.load(root, ref)
@@ -492,6 +574,9 @@ class TaskSecurityService:
         from .progress import ScanCancelled, current_reporter
         attempts = ScanAttemptStore(self.hooks, root, now=self.now)
         attempts.recover_cleanup(limit=2)
+        recovered = self._recover_static(root, ref, end, auxiliary_hashes, attempts)
+        if recovered is not None:
+            return recovered
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
@@ -511,7 +596,7 @@ class TaskSecurityService:
             if (record.get('end') and end['hashes'] == record['end']['hashes']
                     and end['limitations'] == record['end']['limitations']
                     and end['inventory'] == record['end'].get('inventory', sorted(record['end']['hashes']))
-                    and record['phase'] != 'STATIC_RUNNING'
+                    and record['phase'] not in {'STATIC_RUNNING', 'STALE'}
                     and record.get('static', {}).get('status') != 'CANCELLED'
                     and record.get('finished_hook_revision') == hook_revision):
                 return self._view(record)
@@ -600,6 +685,8 @@ class TaskSecurityService:
             if hook_over_budget:
                 record['limitations'].append({'reason': 'TASK_HOOK_FINAL_SCOPE_BUDGET',
                                              'count': len(hook_over_budget), 'paths': hook_over_budget[:100]})
+            from .scan_publication import ScanPublications
+            ScanPublications(self.hooks, root).collect(attempts)
             lease = attempts.claim('TASK', ref, source_binding(dict(task_ref=ref,
                 end_hashes=end['hashes'], auxiliary_hashes=auxiliary_hashes,
                 scope=scope, hook_revision=hook_revision)), owner=self._owner())
@@ -632,6 +719,7 @@ class TaskSecurityService:
             return True
         execution = ScanAttemptExecution(attempts, lease, validator=validate_input, progress=current_reporter())
         started = time.perf_counter()
+        pending = None
         try:
             if scope:
                 from .dependency_inputs import is_dependency_input
@@ -655,44 +743,16 @@ class TaskSecurityService:
             else:
                 record['static'] = dict(status='NOT_EXECUTED', coverage='UNKNOWN', scope_files=[], findings=[], reason='NO_ELIGIBLE_STATIC_FILES')
             record['static']['duration_ms'] = round((time.perf_counter()-started)*1000)
+            from .scan_publication import ScanPublications
+            pending = ScanPublications(self.hooks, root).stage('TASK', ref, lease, dict(
+                baseline_revision=digest_value(self._publication_source(record['baseline'])),
+                end=self._publication_source(record['end']), auxiliary_hashes=auxiliary_hashes,
+                static=record['static'], execution=execution.receipt))
             fresh = self._fresh(root, record)  # Expensive task inventory outside the lock.
-            with self.hooks.lock(root, wait_seconds=2) as acquired:
-                if not acquired:
-                    return dict(status='BUSY', task_ref=ref, scanner_run=False,
-                                reason='SCAN_ATTEMPT_PUBLICATION_PENDING')
-                if not attempts.is_current(lease, execution.input_id):
-                    raise ScanAttemptLost('SCAN_ATTEMPT_SUPERSEDED')
-                current = self.load(root, ref)
-                require_record_protocol(current)
-                if (current.get('static_execution') != lease.receipt
-                        or current['phase'] != 'STATIC_RUNNING'
-                        or current['end']['hashes'] != end['hashes']):
-                    attempts.finish(lease, input_id=execution.input_id, outcome='STALE')
-                    return dict(status='STALE', task_ref=ref, scanner_run=False,
-                                reason='SCAN_ATTEMPT_SUPERSEDED')
-                # Preserve Hook arrivals and any newer metadata, never save an
-                # old whole-record copy after the unlocked worker completes.
-                current['static'] = record['static']
-                current['phase'] = ('READY' if fresh and self._hook_inputs(root,current)[0]
-                                    == current['finished_hook_revision'] else 'STALE')
-                if (current['phase'] == 'READY' and not changes and not current['limitations']
-                        and not current['static']['findings'] and current['static']['coverage'] in {'FULL', 'SCOPED'}
-                        and current['static']['status'] in {'SUCCESS', 'COMPLETED'}):
-                    current['phase'] = 'NO_CHANGES'
-                    current['baseline']['texts'] = {}
-                    current['end']['texts'] = {}
-                current['static']['execution_attempt'] = dict(execution.receipt,
-                    publication='STALE' if current['phase']=='STALE' else 'COMMITTED')
-                try:
-                    current = self._project_risks(root, current)
-                finally:
-                    attempts.finish(lease, input_id=execution.input_id,
-                        scan_id=record['static'].get('scan_id'),
-                        outcome='STALE' if current['phase']=='STALE' else 'COMPLETED')
-                view = self._view(current)
-                view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'}
-                                          for r in current['static'].get('scanner_runs', []))
-                return view
+            view = self._publish_static(root, ref, pending, attempts, fresh=fresh)
+            view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'}
+                                      for r in record['static'].get('scanner_runs', []))
+            return view
         except (ScanCancelled, KeyboardInterrupt):
             with self.hooks.lock(root, wait_seconds=2) as acquired:
                 if acquired:
@@ -704,6 +764,10 @@ class TaskSecurityService:
                     attempts.cancel(lease)
             raise
         except Exception:
+            if pending is not None:
+                # The immutable completed facts can be resumed by this exact
+                # task. Do not overwrite them with a generic execution failure.
+                raise
             # A source/storage failure must not leave a live lane until timeout.
             # Do not overwrite a replacement worker or publish partial evidence.
             with self.hooks.lock(root, wait_seconds=2) as acquired:
@@ -770,7 +834,7 @@ class TaskSecurityService:
             from .task_projection import drain
             old = drain(self, root, old)
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
-                return self.get(workspace, ref)  # idempotent retry; no scan/model.
+                return self.get(workspace, ref, completion_revision=old.get('review_revision', 1))  # no scan/model.
             record = self._session(root, ref, session)
             from .task_review_contract import validate_task_review_body, evidence_error, TaskReviewInputError
             body = validate_task_review_body(findings, coverage, limitations)
@@ -889,20 +953,47 @@ class TaskSecurityService:
             result_packet['risk_ledger_sync'] = projection_status(record)
             return result_packet
 
-    def get(self, workspace, ref, finding_offset=0, finding_limit=20):
+    def get(self, workspace, ref, finding_offset=0, finding_limit=20, *, completion_revision=None):
         if type(finding_offset) is not int or type(finding_limit) is not int or finding_offset < 0 or not 1 <= finding_limit <= 30:
             raise ValueError('Invalid result page')
         root = self.root(workspace)
         record = self.load(root, ref,read_only=True)
+        delivery = completion_revision is not None
+        if delivery:
+            # A caller-provided revision is only a selector. The original owner,
+            # terminal revision and current source remain separate requirements;
+            # reading never transfers ownership or writes a delivery receipt.
+            from .task_ownership import record_owner, ownership_error
+            if record_owner(record) != self._owner():
+                raise ownership_error(record_owner(record), self._owner())
+            require_record_protocol(record)
+            if (type(completion_revision) is not int
+                    or completion_revision != record.get('review_revision', 1)
+                    or record['phase'] not in {'COMPLETE', 'INCOMPLETE', 'NO_CHANGES'}):
+                raise ValueError('Task completion revision is unavailable or stale')
         from .task_review_results import bounded_history_result, history_freshness, seal_history_result
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                           priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False)
         revision = self._hook_inputs(root, record)[0] if record.get('finished_hook_revision') else None
         freshness = history_freshness(record, current, hook_revision=revision)
-        from .task_risk_feedback import feedback_for_record
-        feedback = feedback_for_record(self.hooks, root, record)
+        feedback, static_feedback, handling_available = {}, {}, True
+        try:
+            feedback, static_feedback = self._current_handling(record, read_only=True)
+        except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+            # A separate ledger outage cannot hide the committed result, turn
+            # unknown saved decisions into pending risks, or repeat a choice.
+            handling_available = False
+        current_delivery = delivery and freshness['workspace_matches_snapshot'] is True
         result = bounded_history_result(record, finding_offset, finding_limit,
-                                        now=self.now(), freshness=freshness, feedback=feedback)
+            now=self.now(), freshness=freshness, feedback=feedback, static_feedback=static_feedback,
+            handling_available=handling_available, delivery=current_delivery)
+        if delivery:
+            result['delivery_status'] = 'CURRENT' if current_delivery else 'SOURCE_NOT_CURRENT'
+            result['completion_revision'] = completion_revision
+            if not current_delivery:
+                result['delivery_notice'] = ('源码或检查范围已变化或无法核验；这里只读取原检查记录，'
+                                             '不重复要求修复选择。')
+                result['development_summary'] += '\n'+result['delivery_notice']
         result['risk_ledger_next_action'] = dict(tool='get_task_risk_ledger', task_ref=ref)
         from .task_projection import status as projection_status
         result['risk_ledger_sync'] = projection_status(record)
@@ -938,19 +1029,31 @@ class TaskSecurityService:
         self.discard_preimages(root, ref)
         return self._view(saved)
 
-    def _current_handling(self, record):
+    def _current_handling(self, record, *, read_only=False):
         """Read current handling independently of the immutable task report."""
         root = Path(record['workspace'])
         from .task_risk_feedback import feedback_for_record
         host = feedback_for_record(self.hooks, root, record)
         static = {}
         scan_id = (record.get('static') or {}).get('scan_id')
-        if scan_id:
-            engine = self.runtime() if callable(self.runtime) else self.runtime
-            scan_store = getattr(engine, 'store', None)
+        if scan_id and (record.get('static') or {}).get('findings'):
+            if read_only:
+                provider = self.read_only_scan_store_provider
+                # Querying history cannot instantiate the lazy Runtime: its
+                # writable SQLite constructor creates/migrates the schema.
+                scan_store = (provider() if provider is not None else
+                    getattr(self.runtime, 'store', None) if not callable(self.runtime) else None)
+                if getattr(scan_store, 'path', None) is not None:
+                    from .storage import ReadOnlySQLiteStore
+                    scan_store = ReadOnlySQLiteStore(scan_store.path)
+            else:
+                engine = self.runtime() if callable(self.runtime) else self.runtime
+                scan_store = getattr(engine, 'store', None)
             if scan_store is not None and scan_store.get_scan(scan_id):
                 from .finding_feedback import FindingFeedbackService
                 static = FindingFeedbackService(scan_store, root).presentations(scan_id)
+            elif (record.get('static') or {}).get('findings'):
+                raise ValueError('Current scanner handling is unavailable')
         return host, static
 
     def _view(self, record):
@@ -979,7 +1082,7 @@ class TaskSecurityService:
         host_feedback, static_feedback = {}, {}
         try:
             host_feedback, static_feedback = self._current_handling(record)
-        except (OSError, ValueError):
+        except (OSError, ValueError, __import__('sqlite3').DatabaseError):
             # A failed read cannot turn a past user choice into a new repair ask.
             result['handling_unavailable'] = True
         def pending(findings, feedback):

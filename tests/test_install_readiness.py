@@ -484,6 +484,10 @@ def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
         print(receipt['message'])
         output = capsys.readouterr()
         assert '代码检查不可用' in output.out and '组件尚未安装' in output.out
+        assert receipt['vulnerability_db']['ready'] is True
+        assert receipt['ready'] is False and receipt['tools']['semgrep']['ready'] is False
+        assert any(item['component'] == 'semgrep' for item in receipt['failures'])
+        assert_valid(receipt)
         assert all(value not in output.out + output.err for value in (
             'tool_install_failed', 'semgrep', 'PrivateOutput', 'private-path'))
         assert tuple(logger.filters) == original_filters

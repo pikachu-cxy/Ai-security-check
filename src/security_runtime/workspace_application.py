@@ -45,7 +45,9 @@ class WorkspaceApplication:
             owner=scoped
         prior=self.issued_tasks.get(ref)
         if prior and session_ref is None and (owner['host']=='connection' or prior==self.connection_owner): owner=prior
-        service=TaskSecurityService(self.runtime_provider,self.hooks,owner=owner)
+        from .storage import ReadOnlySQLiteStore
+        service=TaskSecurityService(self.runtime_provider,self.hooks,owner=owner,
+            read_only_scan_store_provider=lambda: ReadOnlySQLiteStore(self.scan_path_provider()))
         if ref is not None and session_ref is not None:
             service.load(root,ref)  # Reject before changing connection routing.
             if len(self.issued_tasks)>=64: self.issued_tasks.pop(next(iter(self.issued_tasks)))

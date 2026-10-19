@@ -21,7 +21,7 @@ Windows 自带终端若明确报 PowerShell 的 CET 启动错误，改用可用�
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
 不调用模型核查、不添加安全段落。开发任务核查只使用 v3；开始前核对 get_runtime_info 声明
-task-review-plan-v3，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
+task-review-plan-v3 和 task_security_result_delivery=task-result-delivery-v1，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
 九项任务工具均可用，且来自同一 Runtime 构建。缺少能力或工具时明确提示升级 Runtime 并重连，
 停止相关核查，不回退旧协议、不补建已发生修改的基线、不宣称检查通过。旧 Runtime 的指导
 不能覆盖新版 Skill 的 v3 能力门槛；核查不可用不改变用户原开发授权，如实保留无法核查的缺口。
@@ -41,7 +41,10 @@ prepare 清零预算。v3 闲置活动租约可通过原 prepare(protocol_versio
 说明不兼容原因和覆盖缺口，不自动转成 v3、不重置额度。后续独立开发应在下一次修改前
 显式开始新任务并使用新 task_key；新基线只覆盖未来改动，不能追认旧任务已完成的修改。
 此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
-把 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
+最终保存回执不含风险正文。沿 next_action 读取 get_task_security_review，保留 completion_revision
+和原 session_ref；当前任务交付校验原会话、完成修订和当前源码，逐页保留完整格式、有效处置选项。
+把其 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
+不带 completion_revision 的历史查询不重复提问；处置读取失败显示未知，不把已暂缓或排除项重新提醒。
 有代码依据的条件性风险也须登记为 findings，不能仅放在 limitations 或后续建议。
 新增入口已有防护，但直接关联的现有服务/仓储仍缺少控制时，按 quick_skill 的
 RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新增入口仍有漏洞。

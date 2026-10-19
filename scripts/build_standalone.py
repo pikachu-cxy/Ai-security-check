@@ -21,8 +21,7 @@ STANDALONE_DOCUMENTS = (
     'docs/guides/WINDOWS_EXPERIENCE.md',
     'docs/guides/WINDOWS_EXPERIENCE.zh-CN.md',
     'docs/guides/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md',
-    'docs/archive/2026-10/INSTALL_FLOW_ACCEPTANCE.zh-CN.md',
-    'docs/archive/2026-10/BACKGROUND_PREPARATION_ACCEPTANCE.zh-CN.md',
+    'docs/RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md',
     'docs/design/SCAN_TARGET_SELECTION.md',
     'docs/design/RULE_FOUNDATION.md',
     'docs/design/RULE_SOURCE_INVENTORY.md',
@@ -32,7 +31,7 @@ STANDALONE_DOCUMENTS = (
 
 
 def copy_standalone_documents(root: Path, bundle: Path) -> None:
-    # Repository organization may change; installed document names stay stable.
+    # Ship current operating guidance rather than retired stage reports.
     for relative_path in STANDALONE_DOCUMENTS:
         source = root / relative_path
         shutil.copy2(source, bundle / source.name)

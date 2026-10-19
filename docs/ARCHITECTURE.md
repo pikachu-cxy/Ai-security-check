@@ -63,9 +63,30 @@ old baselines. Independent risk handling and repair authorization remain intact.
 window reads verify the requested source and Hook revision; final submission
 rechecks the complete source inventory and hashes.
 
+## Current execution and result recovery (2026-10-19)
+
+Private scan inputs use a short protected state root, including rules and
+provider artifacts. Initialization precedes the ACTIVE claim. Signed attempt
+state writes workspace-scan-attempt-v2 while verified v1 cleanup obligations
+retain their legacy root; execution receipts remain v1.
+
+ScanPublications stores bounded signed completed facts when publication is
+busy. The original task or Hook service rechecks its lease, source, auxiliary
+configuration and pending event before committing. The journal cannot grant
+execution or repair authority. Queries do not drain it. Cancellation, expiry
+and newer generations cannot turn old facts into a new successful execution.
+
+Current result delivery and history share one bounded projection. The current
+completion selector requires the original owner, terminal revision and current
+source. Default history never repeats a repair choice. Static and host findings
+read their existing handling; a read failure preserves details with UNKNOWN
+handling. Cold history uses an injected read-only store rather than creating a
+writable Runtime. The nine task tools remain unchanged; the additional declared
+capability is task-result-delivery-v1.
+
 ## Shared architecture (2026-10-19)
 
-Current diagrams, execution flows and acceptance boundaries are in [the continuation record](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md); [the first batch](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md) preserves its historical results. Real Codex/Cursor desktop acceptance is deferred by the user.
+Current diagrams, execution flows and acceptance boundaries are in [the continuation record](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md); [the first batch](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md) preserves its historical results. Real Codex/Cursor desktop acceptance is deferred by the user.
 
 Pure lifecycle profiles and task decisions are shared. A durable event claim binds the original task, and the core receives that exact expected reference; it cannot substitute a newer task from the same owner. Delivery receipts distinguish preparation, transport output and host reports; none proves authenticated user consumption.
 

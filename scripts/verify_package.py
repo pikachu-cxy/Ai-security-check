@@ -6,8 +6,20 @@ import argparse
 import subprocess
 import tempfile
 import venv
+import json
 from pathlib import Path
 from security_runtime._version import __version__
+
+
+def rule_contract(pack=None) -> dict:
+    """Compare the installed rules with the validated build-source identity."""
+    from security_runtime.rulepacks import RulePackManager
+    from security_runtime.rule_coverage import plan_rules
+    pack = pack if pack is not None else RulePackManager().resolve()
+    return {'id': pack.descriptor.rule_pack_id, 'version': pack.descriptor.version,
+            'checksum': pack.checksum, 'catalog': sorted(rule.rule_id for rule in pack.catalog),
+            'plans': {target: sorted(rule.rule_id for rule in plan_rules(pack, [target]).rules)
+                      for target in ('app.py', 'app.js', 'view.jsx', 'app.ts', 'view.tsx')}}
 
 
 def run(*command: str, cwd: Path) -> None:
@@ -16,6 +28,7 @@ def run(*command: str, cwd: Path) -> None:
 
 def main(wheel: Path | None = None, *, offline=False) -> None:
     repository = Path(__file__).resolve().parents[1]
+    expected_rules = rule_contract()
     wheels = [wheel.resolve()] if wheel else list((repository / "dist").glob(f"ai_security_runtime-{__version__}-*.whl"))
     if len(wheels) != 1:
         raise ValueError("Expected exactly one built wheel")
@@ -37,21 +50,23 @@ def main(wheel: Path | None = None, *, offline=False) -> None:
         run(str(cli), "licenses", "--check-distribution", cwd=root)
         check = """
 from pathlib import Path
+import json, sys
 import security_runtime
 from security_runtime.rulepacks import RulePackManager
 package = Path(security_runtime.__file__).resolve().parent
 assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
+expected = json.loads(sys.argv[1])
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
-assert pack.descriptor.rule_pack_id == 'ai-security-core'
-assert pack.descriptor.version == '1.3.2'
-assert len(pack.catalog) == 56
+assert pack.descriptor.rule_pack_id == expected['id']
+assert pack.descriptor.version == expected['version'], (pack.descriptor.version, expected['version'])
+assert pack.checksum == expected['checksum'], 'Installed rule content differs from build source'
+assert sorted(rule.rule_id for rule in pack.catalog) == expected['catalog']
 assert not any(c.auto_fix_eligible for c in pack.program.capabilities)
 from security_runtime.rule_coverage import plan_rules
-assert len(plan_rules(pack, ['app.py']).rules) == 16
-for target in ('app.js', 'view.jsx', 'app.ts', 'view.tsx'):
+for target, expected_ids in expected['plans'].items():
     plan = plan_rules(pack, [target])
-    assert plan.files == (target,) and len(plan.rules) == 6, target
+    assert plan.files == (target,) and sorted(rule.rule_id for rule in plan.rules) == expected_ids, target
 assert any(rule.rule_id == 'ai-security.java.spring-named-jdbc' for rule in pack.catalog)
 from security_runtime import task_fix, equivalence, verification, verification_policy
 from security_runtime import hook_runtime, hook_state, hook_adapters
@@ -96,6 +111,8 @@ assert {'task-risk-authority-v2', 'closure-authority-v2', 'persistence-effect-v1
         'private-authority-writer-fence-v1', 'closeout-persistence-v1'} <= set(storage_contracts())
 assert TASK_REVIEW_TOOLS <= {t.name for t in create_server()._tool_manager.list_tools()}
 assert 'task-review-plan-v3' in runtime_info()['features']['task_security_review_protocol']
+assert runtime_info()['features']['task_security_result_delivery'] == 'task-result-delivery-v1'
+assert {'workspace-scan-attempt-v2', 'scan-publication-v1'} <= set(storage_contracts())
 assert runtime_info()['guidance_catalog'] == guidance_manifest()
 files = skill_files()
 assert 'references/quick-task-review-v3.md' in files
@@ -125,9 +142,8 @@ for name in ('LICENSE', 'EULA.md', 'LICENSING.md', 'LICENSES/Apache-2.0.txt'):
     assert (share / name).is_file()
 print('Installed wheel integrity OK')
 """
-        run(str(python), "-c", check, cwd=root)
+        run(str(python), "-c", check, json.dumps(expected_rules), cwd=root)
         from security_runtime.trial import isolated_environment
-        import json
         env = isolated_environment(root)
         completed = subprocess.run([str(cli), 'install', 'codex', '--json'],
             env=env, cwd=root, timeout=120, capture_output=True, check=False)
@@ -181,7 +197,6 @@ asyncio.run(asyncio.wait_for(check(), timeout=60))
         project.mkdir()
         run('git', 'init', str(project), cwd=root)
         env = dict(os.environ, SECURITY_RUNTIME_STATE_DIR=str(root/'hook-state'), SECURITY_RUNTIME_OFFLINE='1')
-        import json
         result = json.loads(subprocess.check_output([str(cli),'hook','session-start','--path',str(project),'--host','codex','--json'],
             env=env,cwd=root,text=True,encoding='utf-8',timeout=30))
         assert result['status']=='BASELINE_ESTABLISHED' and not result['execution']['scanner_run']

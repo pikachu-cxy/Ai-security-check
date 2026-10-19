@@ -19,13 +19,32 @@ import threading
 import time
 import uuid
 
-from .hook_state import atomic_bytes, no_links
+from .hook_state import atomic_bytes, native_io_path, no_links
 from .progress import NullProgressReporter, ScanCancelled
 
 CONTRACT = 'workspace-scan-attempt-v1'
+STATE_CONTRACT = 'workspace-scan-attempt-v2'
 MAX_DIRECTORIES = 64
 MAX_BYTES = 131072
 _HEX = re.compile('[a-f0-9]{64}')
+_INPUT_NAME = re.compile('(?:runtime-input-|i-)[a-f0-9]{32}')
+_INPUT_NAMESPACE = 'STATE_ROOT_V2'
+
+
+def _input_parent(hooks):
+    """Keep raw bytes in the state boundary without repeating workspace hashes.
+
+    The global adapter owns <state>/global-workspaces/<id>/hooks. Other Hook
+    stores own their supplied directory. Only that exact known global shape
+    is shortened; arbitrary configured directories never escape their root.
+    """
+    directory = Path(hooks.directory).resolve()
+    anchor = directory
+    if directory.name == 'hooks':
+        anchor = directory.parent
+        if _HEX.fullmatch(anchor.name) and anchor.parent.name == 'global-workspaces':
+            anchor = anchor.parent.parent
+    return anchor / 'i'
 
 
 def _encode(value):
@@ -65,7 +84,8 @@ class ScanAttemptStore:
         # Capture canonicalizes its private parent (including Windows TEMP 8.3
         # aliases). Compare one checked namespace, never lexical alias strings.
         self.path = directory.resolve() / 'scan-attempt.state'
-        self.private_parent = self.path.parent / 'scan-inputs'
+        self.legacy_private_parent = self.path.parent / 'scan-inputs'
+        self.private_parent = _input_parent(hooks)
 
     def _locked(self):
         if not self.hooks.lock_held(self.root):
@@ -81,7 +101,7 @@ class ScanAttemptStore:
     def read(self):
         no_links(self.path)
         if not self.path.exists():
-            return dict(contract=CONTRACT, workspace=str(self.root), generation=0, lane=None, directories=[])
+            return dict(contract=STATE_CONTRACT, workspace=str(self.root), generation=0, lane=None, directories=[])
         if not self.path.is_file() or self.path.stat().st_size > MAX_BYTES:
             raise ValueError('Scan attempt state cannot be verified')
         raw = self.path.read_bytes()
@@ -90,7 +110,7 @@ class ScanAttemptStore:
         if not isinstance(envelope, dict) or set(envelope) != {'content', 'mac'}:
             raise ValueError('Scan attempt envelope cannot be verified')
         value = envelope['content']
-        if (not isinstance(value, dict) or value.get('contract') != CONTRACT
+        if (not isinstance(value, dict) or value.get('contract') not in {CONTRACT, STATE_CONTRACT}
                 or value.get('workspace') != str(self.root)
                 or type(value.get('generation')) is not int or value['generation'] < 0
                 or not isinstance(value.get('directories'), list) or len(value['directories']) > MAX_DIRECTORIES
@@ -102,6 +122,10 @@ class ScanAttemptStore:
     def _save(self, value):
         self._locked()
         self.hooks.key(self.root)
+        # New directory obligations cannot be read safely by the v1 writer:
+        # it assumes every name belongs to the legacy scan-inputs directory.
+        # Upgrade signed v1 state only on a real mutation; queries stay pure.
+        value = dict(value, contract=STATE_CONTRACT)
         raw = _encode(dict(content=value, mac=hmac.new(self._key(), _encode(value), hashlib.sha256).hexdigest()))
         if len(raw) > MAX_BYTES: raise ValueError('Scan attempt state budget exceeded')
         atomic_bytes(self.path, raw)
@@ -143,6 +167,15 @@ class ScanAttemptStore:
             return None
         if len(value['directories']) >= MAX_DIRECTORIES:
             raise ValueError('Private input cleanup pending; scan attempt capacity exceeded')
+        # Initialize before publishing ACTIVE. A failed mkdir must not occupy
+        # the shared lane for the entire lease after its underlying cause ends.
+        from .scan_input import check_private_input_parent
+        check_private_input_parent(self.private_parent)
+        no_links(self.private_parent)
+        self.private_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        no_links(self.private_parent)
+        if not self.private_parent.is_dir():
+            raise ValueError('Private scan input parent is not a directory')
         value['generation'] += 1
         lease = AttemptLease('sa1-' + uuid.uuid4().hex, value['generation'], uuid.uuid4().hex, 0)
         row = dict(lease.__dict__, kind=kind, scope_key=scope_key, source_binding=dict(source_binding),
@@ -150,8 +183,6 @@ class ScanAttemptStore:
                    lease_seconds=lease_seconds, input_id=None, source_revision=None, scan_id=None)
         value['lane'] = row
         self._save(value)
-        no_links(self.private_parent)
-        self.private_parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         return lease
 
     def bind_input(self, lease, view):
@@ -192,17 +223,38 @@ class ScanAttemptStore:
         self._save(value)
         return True
 
+    def retire(self, lease, *, outcome='FAILED'):
+        """Retire this exact abandoned lane, even after expiry; never publish."""
+        self._locked()
+        if outcome not in {'FAILED', 'STALE'}:
+            raise ValueError('Invalid abandoned scan attempt outcome')
+        value = self.read()
+        if not self._matches(value['lane'], lease) or value['lane'].get('state') != 'ACTIVE':
+            return False
+        value['lane'].update(state=outcome, finished_at=self.now())
+        self._save(value)
+        return True
+
+    def _directory_parent(self, row):
+        namespace = row.get('input_namespace')
+        if namespace is None:
+            # Pre-upgrade signed obligations always belong to the old root.
+            return self.legacy_private_parent
+        if namespace == _INPUT_NAMESPACE:
+            return self.private_parent
+        raise ValueError('Unknown private input cleanup namespace')
+
     def register_directory(self, lease, path):
         self._locked()
         path = Path(path)
         no_links(path)
-        if path.parent != self.private_parent or re.fullmatch('runtime-input-[a-f0-9]{32}', path.name) is None:
+        if path.parent != self.private_parent or _INPUT_NAME.fullmatch(path.name) is None:
             raise ValueError('Private input cleanup path is outside managed namespace')
         value = self.read()
         if not self._current(value, lease): return False
         if len(value['directories']) >= MAX_DIRECTORIES: raise ValueError('Private input cleanup capacity exceeded')
         info = path.stat()
-        value['directories'].append(dict(name=path.name, attempt_id=lease.attempt_id,
+        value['directories'].append(dict(name=path.name, input_namespace=_INPUT_NAMESPACE, attempt_id=lease.attempt_id,
             generation=lease.generation, device=info.st_dev, inode=info.st_ino))
         self._save(value)
         return True
@@ -215,6 +267,7 @@ class ScanAttemptStore:
         value = self.read()
         rows = value['directories']
         value['directories'] = [row for row in rows if not (row['name'] == path.name
+            and self._directory_parent(row) == path.parent
             and row['attempt_id'] == lease.attempt_id and row['generation'] == lease.generation)]
         if rows != value['directories']: self._save(value)
         return True
@@ -244,9 +297,11 @@ class ScanAttemptStore:
             if selected: self._save(value)
         cleaned = []
         for row in selected:
-            path = self.private_parent/row['name']
             try:
-                if re.fullmatch('runtime-input-[a-f0-9]{32}',row['name']) is None:
+                parent = self._directory_parent(row)
+                path = parent/row['name']
+                if (_INPUT_NAME.fullmatch(row['name']) is None or
+                        row.get('input_namespace') is None and not row['name'].startswith('runtime-input-')):
                     raise ValueError('Unknown private input namespace')
                 no_links(path)
                 if path.exists():
@@ -262,7 +317,7 @@ class ScanAttemptStore:
                     def writable(function,name,error):
                         os.chmod(name,stat.S_IREAD|stat.S_IWRITE)
                         function(name)
-                    shutil.rmtree(path,onexc=writable)
+                    shutil.rmtree(native_io_path(path),onexc=writable)
                 cleaned.append(row['cleanup_owner'])
             except (ValueError,OSError):
                 pass  # Keep signed obligations and unrelated/replaced bytes.

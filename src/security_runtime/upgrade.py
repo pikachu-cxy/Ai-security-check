@@ -18,7 +18,7 @@ from .global_integration import GlobalCodexIntegration, LEGACY, runtime_aliases
 from .global_toml import patch_server
 from .hook_state import HookStateStore, atomic_bytes, no_links
 from .integration_lifecycle import IntegrationDiagnostic
-from .review_skill import ReviewSkillManager
+from .review_skill import ReviewSkillManager, RETIRED_METHODS
 from .storage import SQLiteStore
 
 CONTRACT = 'installation-upgrade-v1'
@@ -148,7 +148,9 @@ class InstallationUpgrade:
             paths.extend(adapter._config_paths(root))
             paths.append(adapter._state_path(root, 'ownership.json'))
         if self.manage_skill:
-            paths.extend(self.skill.root / name for name in self.skill.expected)
+            # Cleanup uses the same CAS journal as new Skill writes. Ownership
+            # and preservation of user edits are still checked by the Skill.
+            paths.extend(self.skill.root / name for name in set(self.skill.expected) | RETIRED_METHODS)
             paths.append(self.skill.state / 'ownership.json')
         return sorted(set(paths), key=str)
 

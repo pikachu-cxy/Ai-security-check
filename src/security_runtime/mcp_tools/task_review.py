@@ -87,16 +87,19 @@ def register(server, registry, *, application):
     def submit_task_security_review(task_ref: str, review_session: str, findings: task_review_models.TaskReviewFindings,
                                      coverage: task_review_models.ReviewCoverage, limitations: task_review_models.TaskReviewLimitations, workspace_path: str | None = None,
                                     risk_resolutions: list[dict] | None = None, session_ref: str | None = None) -> dict:
-        """Submit host reasoning with Runtime-issued evidence_id strings: primary_evidence and task_evidence are strings; evidence_refs is an array of strings, never file/line objects. See packet submission_contract for a complete candidate example. On field_errors correct the same active task/review version without rescanning or replacing its baseline. Runtime validates structure/version, never proves exploitability or grants repair authority. Merge development_summary into the normal response."""
+        """Submit host reasoning with Runtime-issued evidence_id strings: primary_evidence and task_evidence are strings; evidence_refs is an array of strings, never file/line objects. On field_errors correct the same active task/review version without rescanning or replacing its baseline. Follow the saved terminal receipt's next_action, preserving completion_revision and the original session_ref, for the bounded current delivery; then merge its full development_summary into the normal response. Saving never proves exploitability or grants repair authority."""
         try:
             return task_service(task_ref,session_ref,workspace_path).submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
         except task_review_models.TaskReviewInputError as exc:
             return exc.response()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0, finding_limit: int = 20) -> dict:
-        """Read saved task results with current-source freshness, without scans or model calls. History combines static then host findings into bounded history pages (finding_offset/limit; next_action), at most 3 complete records and 64KB. This history-only allowance does not renew source-review budgets. Explicit RESULT_DETAIL_LIMIT means the local record could not fit; never present it as complete. No repair authority."""
-        return task_service(task_ref).get(bound_path(workspace_path), task_ref, finding_offset, finding_limit)
+    def get_task_security_review(task_ref: str, workspace_path: str | None = None, finding_offset: int = 0,
+                                 finding_limit: int = 20, completion_revision: int | None = None,
+                                 session_ref: str | None = None) -> dict:
+        """Read saved results without scans, writes or model calls. Default history reads never repeat a repair choice. For current development delivery follow the terminal next_action with its completion_revision and original session_ref; Runtime verifies the original owner, terminal revision and current source before showing complete risk text and valid choices. Both paths combine static then host findings, at most 3 complete records and 64KB; follow next_action pages. RESULT_DETAIL_LIMIT explicitly withholds oversized details. No review-budget reset or repair authority."""
+        return task_service(task_ref,session_ref,workspace_path).get(bound_path(workspace_path), task_ref,
+            finding_offset, finding_limit, completion_revision=completion_revision)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_task_risk_ledger(task_ref: str, workspace_path: str | None = None, offset: int = 0, limit: int = 30) -> dict:

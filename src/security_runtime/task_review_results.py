@@ -222,7 +222,25 @@ def _saved_context(record):
         record_only=True)
 
 
-def _base(record, freshness=None, feedback=None):
+def _suppressed(value):
+    return bool(value.get('reminder_suppressed', value.get('folded', False)))
+
+
+def _compact_feedback(value):
+    assessment_fields = ('status', 'folded', 'recorded_status', 'evidence_type', 'recorded_at', 'event_id')
+    item = {key: copy.deepcopy(value[key]) for key in (*assessment_fields, 'reminder_suppressed',
+            'handling_status', 'handling_label', 'handling_source') if key in value}
+    if value.get('technical_feedback'):
+        item['technical_feedback'] = {key: copy.deepcopy(value['technical_feedback'][key])
+            for key in assessment_fields if key in value['technical_feedback']}
+    if value.get('disposition'):
+        item['disposition'] = {key: copy.deepcopy(value['disposition'][key]) for key in
+            ('disposition', 'active', 'suppressed', 'reassessment_required', 'expired',
+             'until', 'recorded_at', 'event_id') if key in value['disposition']}
+    return item
+
+
+def _base(record, freshness=None, feedback=None, static_feedback=None, *, handling_available=True):
     static, review = record.get('static') or {}, record.get('review') or {}
     owner = record.get('task_owner') or {}
     completion = record.get('review_completion') or {}
@@ -263,33 +281,34 @@ def _base(record, freshness=None, feedback=None):
     if is_v3_record(record):
         result.update(review_revision=record.get('review_revision', 1),
                       previous_review_count=len(record.get('review_history', [])))
-    if feedback:
+    feedback, static_feedback = feedback or {}, static_feedback or {}
+    pending_host = sum(not _suppressed(feedback.get(item['id'], {})) for item in host_findings)
+    pending_static = sum(not _suppressed(static_feedback.get(item['id'], {})) for item in static_findings)
+    result['risk_counts'] = dict(raw_total=len(host_findings)+len(static_findings),
+        current_handling='KNOWN' if handling_available else 'UNKNOWN',
+        current_pending_total=pending_host+pending_static if handling_available else None,
+        current_pending_host=pending_host if handling_available else None,
+        current_pending_static=pending_static if handling_available else None)
+    if feedback or static_feedback or not handling_available:
         # Current handling is separate from immutable findings and AI evidence.
         # A direct user choice can stop reminders without declaring safety.
-        suppressed = [identifier for identifier, value in feedback.items() if value.get('folded')]
+        suppressed = [identifier for identifier, value in feedback.items() if _suppressed(value)]
         folded = [identifier for identifier, value in feedback.items()
                   if value.get('technical_feedback', value).get('folded')
                   and (value.get('disposition') or {}).get('disposition') != 'RESTORE']
-        compact = {}
-        assessment_fields = ('status', 'folded', 'recorded_status', 'evidence_type', 'recorded_at', 'event_id')
-        for identifier, value in feedback.items():
-            item = {key: value[key] for key in (*assessment_fields, 'reminder_suppressed',
-                    'handling_status', 'handling_label', 'handling_source') if key in value}
-            if value.get('technical_feedback'):
-                item['technical_feedback'] = {key: value['technical_feedback'][key]
-                    for key in assessment_fields if key in value['technical_feedback']}
-            if value.get('disposition'):
-                item['disposition'] = {key: value['disposition'][key] for key in
-                    ('disposition', 'active', 'suppressed', 'reassessment_required', 'expired',
-                     'until', 'recorded_at', 'event_id') if key in value['disposition']}
-            compact[identifier] = item
         result['current_feedback'] = dict(
-            folded_host_risk_count=len(folded),
-            suppressed_host_risk_count=len(suppressed),
-            excluded_host_risk_count=sum(value.get('handling_status') == 'EXCLUDED' for value in feedback.values()),
-            deferred_host_risk_count=sum(value.get('handling_status') == 'DEFERRED' for value in feedback.values()),
-            visible_host_risk_count=len(host_findings)-len(suppressed),
-            by_finding_id=compact,
+            folded_host_risk_count=len(folded) if handling_available else None,
+            suppressed_host_risk_count=len(suppressed) if handling_available else None,
+            excluded_host_risk_count=(sum(value.get('handling_status') == 'EXCLUDED'
+                for value in feedback.values()) if handling_available else None),
+            deferred_host_risk_count=(sum(value.get('handling_status') == 'DEFERRED'
+                for value in feedback.values()) if handling_available else None),
+            visible_host_risk_count=pending_host if handling_available else None,
+            visible_static_risk_count=pending_static if handling_available else None,
+            handling_available=handling_available,
+            # Only page-local details are copied below; project-wide counts do
+            # not make an unbounded second copy of the disposition ledger.
+            by_finding_id={}, static_by_finding_id={},
             detail_tool='get_task_risk_feedback',
             message='按用户处置和当前技术评估展示待处理项；原始发现、AI判断和处理历史完整保留。')
     if freshness is not None:
@@ -333,13 +352,19 @@ def _base(record, freshness=None, feedback=None):
 
 
 
-def _page(base, record, rows, offset, index, limit, selected, next_offset):
+def _page(base, record, rows, offset, index, limit, selected, next_offset, *,
+          feedback=None, static_feedback=None, handling_available=True, delivery=False):
     result = copy.deepcopy(base)
     result['findings'] = selected
-    feedback = (result.get('current_feedback') or {}).get('by_finding_id') or {}
+    feedback, static_feedback = feedback or {}, static_feedback or {}
     for item in selected:
-        if item.get('source') == 'HOST_TASK_REVIEW' and item.get('detail', {}).get('id') in feedback:
-            item['detail']['feedback'] = copy.deepcopy(feedback[item['detail']['id']])
+        identifier = item.get('detail', {}).get('id')
+        source_feedback = feedback if item['source'] == 'HOST_TASK_REVIEW' else static_feedback
+        if identifier in source_feedback:
+            compact = _compact_feedback(source_feedback[identifier])
+            item['detail']['feedback'] = compact
+            key = 'by_finding_id' if item['source'] == 'HOST_TASK_REVIEW' else 'static_by_finding_id'
+            result['current_feedback'][key][identifier] = copy.deepcopy(compact)
     result['finding_page'] = dict(finding_offset=offset, logical_offset=index,
         requested_limit=limit, returned_count=len(selected), total_count=len(rows),
         static_count=len((record.get('static') or {}).get('findings') or []),
@@ -350,7 +375,9 @@ def _page(base, record, rows, offset, index, limit, selected, next_offset):
     from .reply_plan import plan_reply
     from .reply_render import choice_labels, render_reply
     facts = history_facts(record, selected,
-        current=result.get('current_version', True), feedback=feedback)
+        current=result.get('current_version', True), feedback=feedback,
+        static_feedback=static_feedback, handling_available=handling_available,
+        delivery=delivery)
     # Scope/diagnostic notices can contain arbitrarily long historical paths.
     # Bound their display separately from complete finding explanations, while
     # retaining the original record and honest sampled scope counts above.
@@ -373,14 +400,34 @@ def _page(base, record, rows, offset, index, limit, selected, next_offset):
         facts = replace(facts, notices=tuple(notices))
     plan = plan_reply(facts)
     result['reply_plan'] = plan.to_dict()
-    result['risk_choices'] = [dict(finding_id=identifier, options=choice_labels(),
-        deferred_keeps_risk=True, repair_authorized=False) for identifier in plan.action_ids]
-    result['development_summary'] = render_reply(plan, include_risks=False)
+    result['risk_choices'] = []
+    for risk in plan.risks:
+        if risk.identifier not in plan.action_ids:
+            continue
+        identifier = risk.identifier
+        source = 'HOST_TASK_REVIEW' if risk.source == 'HOST_REVIEW' else 'STATIC_SCAN'
+        choice = dict(finding_id=identifier, source=source, options=choice_labels(),
+            deferred_keeps_risk=True, repair_authorized=False,
+            handling_tool='set_task_risk_disposition' if source == 'HOST_TASK_REVIEW' else 'set_finding_disposition',
+            repair_workflow='HOST_TASK_RISK' if source == 'HOST_TASK_REVIEW' else 'SCANNER_TASK_GROUP')
+        if source == 'HOST_TASK_REVIEW':
+            choice['task_ref'] = record['task_ref']
+        else:
+            choice['scan_id'] = record['static']['scan_id']
+        result['risk_choices'].append(choice)
+    result['risk_counts']['page_visible'] = plan.total_risk_count if handling_available else None
+    result['development_summary'] = render_reply(plan, include_risks=delivery)
+    if delivery and (offset or next_offset is not None):
+        result['development_summary'] += ('\n\n本页返回 '+str(len(selected))+' 项原始风险记录，'
+            '当前可提醒 '+str(plan.total_risk_count if handling_available else '未知')+' 项；'
+            '全部原始记录共 '+str(len(rows))+' 项，后续详情按页返回。')
     if result.get('protocol_support'):
         result['development_summary'] += '\n旧开发任务协议已停止执行，此处仅保留历史查询。未完成旧任务不能继续或转为 v3；只能在后续新工作实际编辑前显式建立新任务，不能为旧改动补建基线。'
     if next_offset is not None:
         result['next_action'] = dict(tool='get_task_security_review', task_ref=record['task_ref'],
                                      finding_offset=next_offset, finding_limit=min(limit, MAX_FINDINGS))
+        if delivery:
+            result['next_action']['completion_revision'] = record.get('review_revision', 1)
     result['response_bytes'] = 0
     return result
 
@@ -398,7 +445,8 @@ def seal_history_result(packet):
     raise ValueError('History response size did not stabilize')
 
 
-def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=None, feedback=None):
+def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=None, feedback=None,
+                           static_feedback=None, handling_available=True, delivery=False):
     """Return at most three complete risks, or an explicit detail-limit notice.
 
     ``now`` is accepted for the service's clock-compatible interface; history
@@ -411,16 +459,22 @@ def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=Non
     rows = [('STATIC_SCAN', finding) for finding in static.get('findings') or []]
     rows.extend(('HOST_TASK_REVIEW', finding) for finding in review.get('findings') or [])
     index = offset
-    base = _base(record, freshness, feedback)
+    base = _base(record, freshness, feedback, static_feedback, handling_available=handling_available)
+    if delivery:
+        base.update(history_read_only=False, delivery_read_only=True,
+                    delivery_contract='CURRENT_TASK_COMPLETION',
+                    completion_revision=record.get('review_revision', 1))
+    options = dict(feedback=feedback, static_feedback=static_feedback,
+                   handling_available=handling_available, delivery=delivery)
     count = min(limit, MAX_FINDINGS)
     if index >= len(rows):
-        return seal_history_result(_page(base, record, rows, offset, index, limit, [], None))
+        return seal_history_result(_page(base, record, rows, offset, index, limit, [], None, **options))
     for size in range(min(count, len(rows)-index), 0, -1):
         selected = [dict(finding_index=position, source=rows[position][0],
                          details_complete=True, detail=_finding(rows[position][1]))
                     for position in range(index, index+size)]
         next_offset = index+size if index+size < len(rows) else None
-        packet = _page(base, record, rows, offset, index, limit, selected, next_offset)
+        packet = _page(base, record, rows, offset, index, limit, selected, next_offset, **options)
         if _bytes(packet) + 8 <= MAX_RESULT_BYTES - ROOT_METADATA_RESERVE:
             return seal_history_result(packet)
     source, finding = rows[index]
@@ -428,7 +482,7 @@ def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=Non
     selected = [dict(finding_index=index, source=source, details_complete=False,
                      reason_code='RESULT_DETAIL_LIMIT', finding_id=finding.get('id'),
                      message='This finding alone exceeds the history response limit. Its original local record is retained; inspect that record for the full explanation. No complete risk details were returned.')]
-    packet = _page(base, record, rows, offset, index, limit, selected, next_offset)
+    packet = _page(base, record, rows, offset, index, limit, selected, next_offset, **options)
     packet['details_complete'] = False
     packet['reason_code'] = 'RESULT_DETAIL_LIMIT'
     return seal_history_result(packet)

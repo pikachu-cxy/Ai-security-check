@@ -43,4 +43,4 @@
 
 - [安装使用](PILOT_INSTALL_AND_USE.zh-CN.md)、[当前进度](DEVELOPMENT_PROGRESS.md)、[近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)。
 - [个人与企业分工](PRODUCT_ROADMAP.md)、[企业验证研发](FUNCTIONAL_VERIFICATION.md)。
-- [完整旧清单与验收依据](archive/2026-10/PILOT_V1_CHECKLIST.before-2026-10-15.zh-CN.md)。
+- [完整旧清单与验收依据](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。

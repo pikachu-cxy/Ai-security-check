@@ -77,10 +77,13 @@ def test_startup_timeout_keeps_worker_and_exposes_gap(installed, projects, tmp_p
         assert response.structuredContent['security_proof'] is False
         payload = json.loads(response.content[0].text)
         assert payload['hookSpecificOutput']['hookEventName'] == 'SessionStart'
-        context=payload['hookSpecificOutput']['additionalContext']
+        context = payload['hookSpecificOutput']['additionalContext']
         assert '仅当本轮实际修改了源代码或配置' in context
-        assert '总结时仍未完成' in context and '不能称检查通过' in context
-        assert '普通聊天' in context and '其他轮次不重复沿用' in context
+        assert '该改动的检查在总结时仍未完成' in context
+        assert '不能称检查通过' in context and '普通聊天、只读操作和未改动文件的操作不展示' in context
+        assert '其他轮次不重复沿用' in context
+        assert '不得伪造检查结果、重放检查事件或补建编辑后的基线' in context
+        assert '用户已明确要求或当前开发任务已包含的测试、构建与验收仍按原授权执行' in context
         assert payload['continue'] is True
         future = pool.jobs[(root, pool.bind_session('startup', root))]
         assert not future.cancelled()

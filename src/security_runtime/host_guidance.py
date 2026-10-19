@@ -107,7 +107,7 @@ Windows 自带终端若明确报 PowerShell 的 CET 启动错误，改用可用�
 已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
 完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
 不调用模型核查、不添加安全段落。开发任务核查只使用 v3；开始前核对 get_runtime_info 声明
-task-review-plan-v3，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
+task-review-plan-v3 和 task_security_result_delivery=task-result-delivery-v1，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
 九项任务工具均可用，且来自同一 Runtime 构建。缺少能力或工具时明确提示升级 Runtime 并重连，
 停止相关核查，不回退旧协议、不补建已发生修改的基线、不宣称检查通过。旧 Runtime 的指导
 不能覆盖新版 Skill 的 v3 能力门槛；核查不可用不改变用户原开发授权，如实保留无法核查的缺口。
@@ -127,7 +127,10 @@ prepare 清零预算。v3 闲置活动租约可通过原 prepare(protocol_versio
 说明不兼容原因和覆盖缺口，不自动转成 v3、不重置额度。后续独立开发应在下一次修改前
 显式开始新任务并使用新 task_key；新基线只覆盖未来改动，不能追认旧任务已完成的修改。
 此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
-把 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
+最终保存回执不含风险正文。沿 next_action 读取 get_task_security_review，保留 completion_revision
+和原 session_ref；当前任务交付校验原会话、完成修订和当前源码，逐页保留完整格式、有效处置选项。
+把其 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
+不带 completion_revision 的历史查询不重复提问；处置读取失败显示未知，不把已暂缓或排除项重新提醒。
 有代码依据的条件性风险也须登记为 findings，不能仅放在 limitations 或后续建议。
 新增入口已有防护，但直接关联的现有服务/仓储仍缺少控制时，按 quick_skill 的
 RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新增入口仍有漏洞。
@@ -503,7 +506,8 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 新指导不能升级旧 Runtime 的实际能力；不能用旧 live instructions 覆盖以下 v3 门槛。
 
 开发任务必读 [v3 方法](references/quick-task-review-v3.md)，topic=task-review：
-先核对 get_runtime_info 的 task-review-plan-v3、真实 build_identity 和同一 Runtime 的九项必需工具子集：
+先核对 get_runtime_info 的 task-review-plan-v3、task_security_result_delivery=task-result-delivery-v1、
+真实 build_identity 和同一 Runtime 的九项必需工具子集：
 begin_security_task、finish_security_task、prepare_task_security_review、get_task_review_method、get_task_review_plan、
 read_task_review_context、submit_task_review_batch、submit_task_security_review、get_task_security_review。
 版本号和独立的 security-review-skill-v1/risk-decisions-v2 不代替上述能力检查，不按精确工具数量判断。
@@ -519,6 +523,8 @@ NO_CHANGES 不扫描或追加核查段落；即使静态零发现也由当前 Ag
 必读项通过 plan 全部分页、真实改前/改后窗口和 batch 逐项提交；未读、脱敏或缺失语义如实保留，不冒充已核查。
 source_ref/重复交付回执不等于源码已读；只按真实证据提交。原 v3 闲置可按原引用恢复，预算/证据/版本限制不重置。
 最终 submit_task_security_review，关联条件性风险按正式 findings 记录；不只藏入 limitations 或后续建议。
+沿保存回执 next_action 读取当前交付，保留 completion_revision 和原 session_ref，按页完整呈现
+development_summary 中的位置、四类正文及有效选项；默认历史读取不重放选择，处置未知不重复追问。
 普通总结请求不取消核查，也不要求用户反复发“继续”；用户明确停止时仅在原可用 v3 任务记录实际中止原因，不新增扫描。
 原任务的检查、覆盖、风险处置、风险账本同步与交付分别说明；prepared 不等于发送，发送不等于用户阅读。
 历史 COMPLETE 不证明当前项目安全；核查缺口、过期依赖数据和未知触发条件不包装成通过。
@@ -598,6 +604,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'task_security_review': 'task-security-v1; PRE_EDIT_BASELINE_STATIC_AND_BOUNDED_HOST_REVIEW',
                           'task_review_submission': 'task-review-submission-v1; TYPED_ISSUED_EVIDENCE_IDS; SAFE_FIELD_ERRORS; SAME_ACTIVE_REVIEW_RETRY',
                            'task_security_review_protocol': 'task-review-plan-v3; ONLY_V3; DEFAULT_V3; ADAPTIVE_RANGE_BUDGETS; READABLE_SOURCE_DEDUP; RESUMABLE_ACTIVITY_LEASE; LEGACY_HISTORY_READ_ONLY; NO_PROTOCOL_MIGRATION',
+                           'task_security_result_delivery': 'task-result-delivery-v1',
                          'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
                          'finding_feedback': 'finding-feedback-v2; TYPED_EVIDENCE_REFS; USER_AND_HOST_SEPARATE; REVOCABLE; RAW_FINDINGS_PRESERVED',

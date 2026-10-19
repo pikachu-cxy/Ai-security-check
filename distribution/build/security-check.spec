@@ -8,8 +8,9 @@ package = root / "src" / "security_runtime"
 datas = collect_data_files("security_runtime")
 # Native rule identity includes its implementation bytes, including in PYZ builds.
 datas += [(str(package / "dynamic_function.py"), "security_runtime")]
-datas += [(str(package / name), "security_runtime") for name in
-          ("dataflow.py", "flow_core.py", "flow_java.py", "flow_python.py")]
+# Keep every flow helper readable for frozen implementation identity checks.
+datas += [(str(source), "security_runtime") for source in
+          (package / "dataflow.py", *sorted(package.glob("flow_*.py")))]
 datas += [(str(root / name), "security_runtime") for name in ("LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md")]
 datas += copy_metadata("ai-security-runtime")
 datas += copy_metadata("javalang") + copy_metadata("six")

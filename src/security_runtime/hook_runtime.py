@@ -758,6 +758,13 @@ class HookCoordinator:
             'coverage':'UNKNOWN','execution_state':'NOT_EXECUTED','last_check_status':'NOT_EXECUTED','capabilities':{},'scanner_runs':[],
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
+        if not (_lifecycle and event == HookEvent.AGENT_STOP):
+            # Consume completed facts before this new event can advance the
+            # pending sequence. This never invokes a provider or moves source.
+            recovered_publication = self.recover_publications(root, host, session_id)
+            if recovered_publication is not None:
+                result['publication_recovery'] = {k:v for k,v in recovered_publication.items()
+                                                  if k != 'recovered_result'}
         from .background_preparation import current_preparation, preparation_message, ACTIVE
         preparation = current_preparation()
         if preparation['status'] in ACTIVE and not preparation.get('ready'):
@@ -823,11 +830,15 @@ class HookCoordinator:
                     else:
                         self._reconcile(result, event, root, host, session_id,
                             baseline_only=_baseline_only, lifecycle_activity=_lifecycle, transaction=transaction)
+                self._stage_publication(result, root, host, session_id, transaction)
                 self._publish(result, root, host, session_id, transaction)
-            except ScanCancelled:
+            except (ScanCancelled, KeyboardInterrupt) as error:
                 self._abandon(result, root, transaction, 'CANCELLED')
+                if isinstance(error, KeyboardInterrupt):
+                    raise
             except BaseException:
-                self._abandon(result, root, transaction, 'FAILED')
+                if transaction.get('publication') is None:
+                    self._abandon(result, root, transaction, 'FAILED')
                 raise
         if _lifecycle:
             current, _ = self.store.load(self.store.path(root, host, session_id))
@@ -861,6 +872,8 @@ class HookCoordinator:
                 result['security_task_ref'] = expected_task_ref
             return None
         attempts = ScanAttemptStore(self.store, root)
+        from .scan_publication import ScanPublications
+        ScanPublications(self.store, root).collect(attempts)
         lease = attempts.claim('HOOK', identity(host+'\0'+(session_id or 'default')),
             source_binding(dict(previous=previous, pending=pending, task_ref=task['task_ref'] if task else None)),
             owner=record_owner(task) if task else None)
@@ -886,30 +899,106 @@ class HookCoordinator:
             result['baseline_publish_status'] = 'FAILED'
         result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
 
+    @staticmethod
+    def _publication_snapshot(captured):
+        return dict(digest=captured[0], paths=list(captured[1]),
+                    file_digests=getattr(captured, 'file_digests', None))
+
+    def _stage_publication(self, result, root, host, session_id, transaction):
+        from .scan_publication import ScanPublications
+        source = transaction.get('publication_snapshot')
+        if source is None:
+            source = self._publication_snapshot(self.snapshot_capture(root, transaction['key']))
+        task = transaction['task']
+        transaction['publication'] = ScanPublications(self.store, root).stage('HOOK',
+            identity(host+'\0'+(session_id or 'default')), transaction['lease'], dict(
+                host=host, session_binding=result['session_id'], result=result,
+                previous=transaction['previous'], state=transaction['state'],
+                pending=transaction['pending'], task_ref=task['task_ref'] if task else None,
+                input_current=transaction.get('input_current'), snapshot=source,
+                execution=transaction['execution'].receipt))
+
+    def recover_publications(self, root, host, session_id):
+        """Recover only this Hook's original signed facts; no scan or baseline."""
+        from types import SimpleNamespace
+        from .scan_attempt import AttemptLease, ScanAttemptStore
+        from .scan_publication import ScanPublications
+        scope = identity(host+'\0'+(session_id or 'default'))
+        publications = ScanPublications(self.store, root)
+        rows = publications.pending('HOOK', scope)
+        for pending in rows:
+            payload = pending['payload']
+            if payload['host'] != host or payload['session_binding'] != identity(session_id or 'default'):
+                raise ValueError('Hook publication owner cannot be verified')
+            key = self.store.key(root)
+            try:
+                fresh = self._publication_snapshot(self.snapshot_capture(root, key)) == payload['snapshot']
+            except (OSError, ValueError):
+                fresh = False
+            attempts = ScanAttemptStore(self.store, root)
+            execution = SimpleNamespace(receipt=payload['execution'], input_id=payload['execution'].get('input_id'))
+            result = copy.deepcopy(payload['result'])
+            transaction = dict(path=self.store.path(root, host, session_id), previous=payload['previous'],
+                key=key, task={'task_ref':payload['task_ref']} if payload['task_ref'] else None,
+                pending=payload['pending'], attempts=attempts, lease=AttemptLease(**pending['lease']),
+                execution=execution, state=payload['state'], input_current=payload['input_current'],
+                publication=pending, publication_current=fresh)
+            self._publish(result, root, host, session_id, transaction)
+            return dict(publication=result['scan_attempt']['publication'],
+                reason=result.get('reason'), scanner_run=False, original_attempt=pending['lease']['attempt_id'],
+                recovered_result=result if result['scan_attempt']['publication'] in {'PUBLISHED','NO_STATE_CHANGE'} else None)
+        return None
+
     def _publish(self, result, root, host, session_id, transaction):
         from .task_security_state import TaskSecurityStore
         execution, attempts, lease = (transaction[k] for k in ('execution','attempts','lease'))
+        from .scan_publication import ScanPublications
+        publications = ScanPublications(self.store, root)
+        publication = transaction.get('publication')
         # All expensive byte comparisons have completed outside this lock.
         with self.store.lock(root, wait_seconds=2) as acquired:
             if not acquired:
-                self._attempt_unavailable(result, lifecycle=True)
+                self._attempt_unavailable(result, lifecycle=True, reason='SCAN_ATTEMPT_PUBLICATION_PENDING')
                 if result.get('baseline_publish_status') == 'PUBLISHED':
                     result['baseline_publish_status'] = 'FAILED'
                 result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
+                result['publication_pending'] = publication is not None
+                result['source_result_saved'] = publication is not None
+                result['next_step'] = 'Completed facts await their original publication fence; retry restores them without another scan.'
                 return
             current, _ = self.store.load(transaction['path'])
+            lane = attempts.read()['lane']
+            if (publication is not None and transaction['state'] is not None
+                    and current == transaction['state'] and attempts._matches(lane, lease)
+                    and transaction.get('publication_current', True)):
+                if lane['state'] == 'ACTIVE' and attempts.is_current(lease, execution.input_id):
+                    attempts.finish(lease, input_id=execution.input_id,
+                                    scan_id=result.get('scan_id'), outcome='COMPLETED')
+                elif lane['state'] != 'COMPLETED':
+                    attempts.retire(lease, outcome='STALE')
+                    publications.acknowledge(publication)
+                    result.update(status='INCONCLUSIVE', coverage='UNKNOWN',
+                                  reason='SCAN_ATTEMPT_PUBLICATION_STALE')
+                    result['scan_attempt'] = execution.receipt | {'publication':'NOT_PUBLISHED'}
+                    return
+                publications.acknowledge(publication)
+                result['scan_attempt'] = execution.receipt | {'publication':'PUBLISHED'}
+                return
             pending = self.store.pending_activity(root, host, session_id)
             task = (TaskSecurityStore(self.store, root).for_hook(host, result['session_id'])
                     if result['event'] == HookEvent.FILE_CHANGED.value else None)
             task_ref = lambda value: value['task_ref'] if value else None
             valid = (attempts.is_current(lease, execution.input_id)
+                     and transaction.get('publication_current', True)
                      and current == transaction['previous'] and pending == transaction['pending']
                      and task_ref(task) == task_ref(transaction['task'])
                      and self.store.key(root) == transaction['key'])
             if result.get('hook_scope_files'):
                 valid = valid and execution.input_id is not None and transaction.get('input_current') is True
             if not valid:
-                attempts.finish(lease, input_id=execution.input_id, scan_id=result.get('scan_id'), outcome='STALE')
+                attempts.retire(lease, outcome='STALE')
+                if publication is not None:
+                    publications.acknowledge(publication)
                 reason = ('BASELINE_ATTRIBUTION_UNAVAILABLE' if result.get('reason') == 'BASELINE_ATTRIBUTION_UNAVAILABLE'
                           else 'SCAN_ATTEMPT_PUBLICATION_STALE')
                 result.update(status='INCONCLUSIVE', coverage='UNKNOWN', reason=reason,
@@ -926,6 +1015,8 @@ class HookCoordinator:
                 result['pending_mutation'] = self.store.pending_activity(root, host, session_id,
                     completed=transaction['pending']) is not None
             attempts.finish(lease, input_id=execution.input_id, scan_id=result.get('scan_id'), outcome='COMPLETED')
+            if publication is not None:
+                publications.acknowledge(publication)
             result['scan_attempt'] = execution.receipt | {'publication':'PUBLISHED' if transaction['state'] is not None else 'NO_STATE_CHANGE'}
 
     def _session_baseline(self, result, root, host, session_id, *, transaction):
@@ -950,6 +1041,7 @@ class HookCoordinator:
         try:
             key = transaction['key']
             captured = self.snapshot_capture(root, key)
+            transaction['publication_snapshot'] = self._publication_snapshot(captured)
             after = self.snapshot_capture(root, key)
             if (captured != after or getattr(captured,'file_digests',None) != getattr(after,'file_digests',None)
                     or self.store.pending_activity(root, host, session_id) is not None):
@@ -1003,6 +1095,7 @@ class HookCoordinator:
             previous = None
             result['state_recovered'] = True
         captured = self.snapshot_capture(root, transaction['key'])
+        transaction['publication_snapshot'] = self._publication_snapshot(captured)
         execution = transaction['execution']
         if getattr(captured, 'target_selection', None) is not None:
             result['target_selection'] = captured.target_selection

@@ -71,12 +71,25 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
         observe('READ_ONLY_SKIPPED', scanner_run=False, **normalized)
         return {**result, **normalized}, None
     journal, claim = None, None
+    recovered_publication = None
+    if event.kind == EventKind.WORKSPACE_ACTIVITY:
+        recover = getattr(coordinator, 'recover_publications', None)
+        if callable(recover):
+            recovered_publication = recover(context.workspace, context.host, context._session)
     if HostEventJournal.applicable(event):
         try:
             journal = HostEventJournal(coordinator.store, context.workspace)
             target = _event_task(coordinator.store, context.workspace, context)
             claim = journal.claim(event, task_ref=target)
             if claim.state != 'CLAIMED':
+                if (claim.state == 'ALREADY_COMPLETED' and recovered_publication is not None
+                        and recovered_publication.get('recovered_result') is not None):
+                    result = recovered_publication['recovered_result']
+                    result['original_execution'] = dict(result['execution'])
+                    result['execution'] = dict(result['execution'], scanner_run=False)
+                    result.update(normalized, event_processing=claim.facts(),
+                                  publication_recovered=True, scanner_run=False)
+                    return result, None
                 return _claim_result(claim, normalized, context), None
             # Existing sequence-based pending state is retained. Admission and
             # dispatch are separate so a stale pre-dispatch worker is fenced.

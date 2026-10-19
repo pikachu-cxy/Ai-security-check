@@ -1,19 +1,15 @@
 # 设计与开发参考
 
-先读[整体架构](../ARCHITECTURE.md)及[宿主支持](../HOST_SUPPORT.md)。本目录按主题保留维护中的设计契约。
+先读[当前架构与流程](../ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)、[技术架构](../ARCHITECTURE.md)和[宿主支持](../HOST_SUPPORT.md)。
 
-- [DECISIONS.md](DECISIONS.md)。
-- [EXTENDING.md](EXTENDING.md)。
-- [SECURITY_REVIEW.md](SECURITY_REVIEW.md)。
-- [TASK_SECURITY_REVIEW_DESIGN.zh-CN.md](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)。
-- [FINDING_QUALITY.md](FINDING_QUALITY.md)。
-- [RULE_FOUNDATION.md](RULE_FOUNDATION.md)。
-- [RULE_PROGRAM.md](RULE_PROGRAM.md)。
-- [RULE_COVERAGE_MATRIX.md](RULE_COVERAGE_MATRIX.md)。
-- [RULE_SOURCE_INVENTORY.md](RULE_SOURCE_INVENTORY.md)。
-- [SCAN_TARGET_SELECTION.md](SCAN_TARGET_SELECTION.md)。
-- [SMART_AUTO_REMEDIATION.md](SMART_AUTO_REMEDIATION.md)。
-- [安全修复功能影响评估架构设计](REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md)；[开发计划](../REPAIR_IMPACT_ASSESSMENT_PLAN.zh-CN.md)；[当前安装与验收](../REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。旧 A/B/C 未整体通过，优化与收窄后的检查反馈边界已写入源码；回归和候选验证按本轮回执判定，旧失败保留，真实桌面复验保持 `PENDING_USER`；同为 0.3.6 时仍须核对新 build_id。
-- [CODEX_INTEGRATION.md](CODEX_INTEGRATION.md)。
+| 主题 | 资料 |
+| --- | --- |
+| 核心原则 | [架构决策](DECISIONS.md)、[扩展接口](EXTENDING.md) |
+| 开发核查 | [核查契约](SECURITY_REVIEW.md)、[任务设计](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)、[会话归属](TASK_SESSION_OWNERSHIP_20261016.md) |
+| 运行及恢复 | [证据与恢复](RUNTIME_EVIDENCE_AND_RECOVERY.zh-CN.md)、[持久事务](../PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md) |
+| 修复与影响 | [修复授权](SMART_AUTO_REMEDIATION.md)、[影响评估](REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md) |
+| 规则范围 | [规则基础](RULE_FOUNDATION.md)、[规则计划](RULE_PROGRAM.md)、[覆盖矩阵](RULE_COVERAGE_MATRIX.md)、[来源](RULE_SOURCE_INVENTORY.md) |
+| 规则质量 | [发现质量](FINDING_QUALITY.md)、[迭代边界](RULE_QUALITY_ITERATION.md)、[第三方准入](THIRD_PARTY_RULE_ADMISSION.md) |
+| 接入与范围 | [Codex 接入](CODEX_INTEGRATION.md)、[目标选择](SCAN_TARGET_SELECTION.md) |
 
-当前产品范围以[产品规划](../PRODUCT_ROADMAP.md)为准；历史验收见[归档](../archive/2026-10/README.md)。
+旧轮次实验报告已从当前树清理，其冻结版本仍可通过 Git 历史查阅。当前验收入口统一为[手工验收](../RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)，不以历史设计中的待办描述覆盖最新实现。

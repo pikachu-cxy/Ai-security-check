@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 CONTRACT = 'runtime-compatibility-v1'
+TASK_RESULT_DELIVERY = 'task-result-delivery-v1'
 TASK_REVIEW_TOOLS = frozenset({'begin_security_task', 'finish_security_task',
     'prepare_task_security_review', 'get_task_review_plan', 'get_task_review_method',
     'read_task_review_context', 'submit_task_review_batch', 'submit_task_security_review',
@@ -11,6 +12,7 @@ TASK_REVIEW_TOOLS = frozenset({'begin_security_task', 'finish_security_task',
 
 def requirements():
     return dict(contract=CONTRACT, task_review_protocol='task-review-plan-v3',
+        task_result_delivery=TASK_RESULT_DELIVERY,
         required_task_tools=sorted(TASK_REVIEW_TOOLS), version_policy='ACTUAL_CAPABILITIES_AND_BUILD_NOT_SEMVER',
         legacy_tasks='READ_ONLY_NO_MIGRATION_OR_BASELINE_RECONSTRUCTION',
         independent_contracts='security-review-skill-v1; risk-decisions-v2',
@@ -22,10 +24,13 @@ def task_review_compatibility(info, tools=None):
     """Compare facts from one runtime; does not connect, scan or write state."""
     info = info if isinstance(info, dict) else {}
     features = info.get('features') or {}
-    advertised = features.get('task_security_review_protocol') if isinstance(features, dict) else None
+    features = features if isinstance(features, dict) else {}
+    advertised = features.get('task_security_review_protocol')
     reasons = []
     if not isinstance(advertised, str) or not re.search(r'(?<![a-z0-9-])task-review-plan-v3(?![a-z0-9-])', advertised):
         reasons.append('TASK_REVIEW_V3_REQUIRED')
+    if features.get('task_security_result_delivery') != TASK_RESULT_DELIVERY:
+        reasons.append('TASK_RESULT_DELIVERY_REQUIRED')
     build = info.get('build_identity') or {}
     build_id = build.get('build_id') if isinstance(build, dict) else None
     if not isinstance(build_id, str) or not re.fullmatch(r'[a-f0-9]{64}', build_id):
@@ -73,4 +78,4 @@ def storage_contracts():
         'private-authority-writer-fence-v1', 'persistence-effect-v1',
         'task-risk-partition-v1', 'task-verification-journal-v1',
         'host-event-journal-v1', 'task-delivery-receipt-v1', 'native-intent-release-v1',
-        'workspace-scan-attempt-v1', 'closeout-persistence-v1'))
+        'workspace-scan-attempt-v2', 'scan-publication-v1', 'closeout-persistence-v1'))

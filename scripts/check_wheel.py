@@ -55,6 +55,12 @@ def check(wheel: Path, project: Path) -> None:
             data_prefix + "SOURCE_OFFER.md",
         }
         source_package = project / "src" / "security_runtime"
+        # Compare the descriptor and catalog as well as rule filenames. A stale
+        # wheel must fail even if its old metadata remains internally valid.
+        for relative in ('rulepacks.py', 'rules/catalog.json'):
+            name = 'security_runtime/' + relative
+            if name in names and package.read(name) != (source_package / relative).read_bytes():
+                raise ValueError(f'Wheel rule metadata differs from source: {relative}')
         for engine in ("gitleaks", "trivy", "semgrep", "osv-scanner"):
             for name in ("LICENSE", "NOTICE"):
                 required.add(f"security_runtime/licenses/{engine}/{name}")
@@ -66,6 +72,8 @@ def check(wheel: Path, project: Path) -> None:
             required.add("security_runtime/" + relative)
             if "security_runtime/" + relative not in names:
                 continue
+            if package.read('security_runtime/' + relative) != file.read_bytes():
+                raise ValueError(f'Wheel rule content differs from source: {relative}')
             payload = yaml.safe_load(package.read("security_runtime/" + relative))
             if not isinstance(payload, dict) or not isinstance(payload.get("rules"), list) or not payload["rules"]:
                 raise ValueError(f"Invalid bundled rule file: {relative}")

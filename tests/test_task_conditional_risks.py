@@ -53,7 +53,9 @@ def test_existing_conditional_risk_has_actual_location_and_pending_choices(servi
     assert result['risk_choices'][0]['deferred_keeps_risk'] is True
     assert result['repair_authorized'] is False
     assert s.get(root, ref)['current_version'] is True
-    assert [item['finding_id'] for item in history['risk_choices']] == [
+    assert history['risk_choices'] == []
+    current = s.get(root, ref, completion_revision=receipt['next_action']['completion_revision'])
+    assert [item['finding_id'] for item in current['risk_choices']] == [
         item['finding_id'] for item in result['risk_choices']]
 
 

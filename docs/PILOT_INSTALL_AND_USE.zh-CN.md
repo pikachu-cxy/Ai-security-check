@@ -1,4 +1,6 @@
-# 3–4人试用：安装、使用与反馈
+# 安装、使用与反馈
+
+当前源码为 0.3.6，开发安装见[README](../README.md#安装当前开发源码windows)。以下完整包步骤需使用与所需能力匹配的实际构建；v0.3.4 是旧发行，不包含本分支后续 v3 与恢复修复。
 
 更新：2026-10-14。Developer Alpha，面向受邀试用。程序在本机检查项目，不向产品服务上传源码；宿主聊天工具自身的数据处理仍按其设置。
 本批 Windows 本机验收与 macOS CI/真机验收分开记录；没有 Mac 真机，macOS 包必须以同提交 CI 构建和对应架构回执为准。不能用 Windows 包改名作为 Mac 包。
@@ -6,7 +8,7 @@
 
 首版发行范围为Windows x64、Mac Apple Silicon与Mac Intel；Linux发行和验收暂缓。
 
-当前公开下载版为 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)，对应源码提交 `88fe6db9d9b1b4e0b5bbce689c3f79d7b0134727`。日常安装可先按 [README 三步入口](../README.md#安装到-codex三步)操作；下面保留完整校验、状态与诊断步骤。原生完整包会自动定位自身目录，因此 README 的 `install codex` 可省略 `--bundle`，不加 `--json` 时显示中文安装结果。
+保留的历史下载版为 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)，对应源码提交 `88fe6db9d9b1b4e0b5bbce689c3f79d7b0134727`。日常安装可先按 [README 三步入口](../README.md#使用完整安装包)操作；下面保留完整校验、状态与诊断步骤。原生完整包会自动定位自身目录，因此 README 的 `install codex` 可省略 `--bundle`，不加 `--json` 时显示中文安装结果。
 
 ## 选择模式和安装包
 
@@ -133,11 +135,11 @@ Mac用 "$exe" 替代 & $exe。卸载接入和Skill保留程序槽位、数据与
 每轮记录：OS/架构、Codex版本、模型设置、source_commit/build_id、模式、组件与库新鲜度、实际改动范围、静态/上下文执行、风险总数与逐项关闭结果、漏检误报、开发/修复耗时。
 修复后应列出每个原风险：原规则已复查、代码复核完成、仍存在或未核实；不能以新任务零发现替代旧13项关闭。依赖“声明版本指定漏洞消除”与完整图、安装/完整性分别记录。
 提交反馈前脱敏源码、用户名、凭据和私有业务数据。测试密钥为合成值；真实密钥撤销/历史泄露处理另行由持有者处理，产品不声称已撤销。
-Windows示例项目与生成器见[全链路手测](guides/FULL_CHAIN_RELIABILITY_TEST.zh-CN.md)。维护者发新项目给试用者，答案留在项目之外；不要用已开发完的旧目录冒充首轮。
+Windows示例项目与生成器见[全链路手测](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。维护者发新项目给试用者，答案留在项目之外；不要用已开发完的旧目录冒充首轮。
 
 ## 当前源码候选
 
 本次工作区候选为0.3.6，增加安全修复功能影响评估；Windows验收请使用 artifacts/repair-impact-latest.json 成功回执指定的完整本地包，
 不要重新下载上文旧发布包来验证新修复。候选Mac ARM归档命名为
 ai-security-runtime-v0.3.6-macos-arm64.tar.gz；该命名不表示已发布或完成Mac真机验收。
-见 [修复影响安装与验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
+见 [修复影响安装与验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。

@@ -78,6 +78,13 @@ def classify_network_error(error=None, *, stderr='', url='', offline=False, retu
 
     Output uses canonical reasons and hosts only, never raw scanner logs.
     """
+    from .processes import ProcessStartError
+    if isinstance(error, ProcessStartError):
+        detail = '; '.join(f'{key}: {value}' for key, value in error.failure.items())
+        return ErrorDiagnostic('PROCESS_START_FAILED',
+            'The local scanner process could not be started.',
+            'Inspect the recorded startup stage, OS error number and path lengths, then retry.',
+            diagnostic_detail=detail)
     text = str(error or '') + '\n' + stderr
     lower = text.lower()
     cause = error.reason if isinstance(error, urllib.error.URLError) else error

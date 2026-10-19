@@ -80,5 +80,6 @@ def terminal_receipt(record):
                 review_progress={key: completion[key] for key in
                                  ('unit_count', 'reviewed_unit_count', 'coverage') if key in completion},
                 next_action=dict(tool='get_task_security_review', task_ref=record['task_ref'],
+                                 completion_revision=record.get('review_revision', 1),
                                  finding_offset=0, finding_limit=1),
                 delivery_contract='INDEPENDENT_TERMINAL_RECEIPT')

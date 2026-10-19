@@ -42,7 +42,8 @@ def sample(tmp_path, monkeypatch):
         capability_results={'CODE_SAST':'PARTIAL', 'SECRET_SCAN':'EXECUTED', 'DEPENDENCY_VULN':'PARTIAL', 'IAC_MISCONFIG':'EXECUTED'},
         capability_details={'DEPENDENCY_VULN':{'status':'PARTIAL','active_provider':'osv-scanner','provider_role':'FALLBACK',
             'coverage':'PARTIAL','primary_error_code':'MAVEN_RATE_LIMITED','coverage_notes':['Incomplete graph']}})
-    store = SQLiteStore(tmp_path/'state/scans.db')
+    # Private captured input must remain outside the synthetic source tree.
+    store = SQLiteStore(tmp_path.parent/(tmp_path.name+'-state')/'scans.db')
     store.save(result)
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(store.path.parent))
     return tmp_path, result, store

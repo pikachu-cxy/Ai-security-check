@@ -42,6 +42,7 @@ def delivery_manifest(info, tools, *, skill_contents=None):
         rules=dict(status=inventory.get('status', 'UNAVAILABLE'),
             version=inventory.get('rule_pack_version'), checksum=inventory.get('rule_pack_checksum')),
         protocols={name: features[name] for name in ('task_security_review_protocol',
+            'task_security_result_delivery',
             'task_session_routing', 'task_review_submission', 'repair_impact',
             'repair_impact_unknowns', 'risk_disposition') if name in features})
     from .compatibility import requirements, storage_contracts, task_review_compatibility

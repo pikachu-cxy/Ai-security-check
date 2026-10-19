@@ -1,93 +1,44 @@
-# 开发交接：换电脑或新聊天继续
+# 开发交接
 
-> 2026-10-19 当前批次：公共应用服务、持久事件与交付、逐写路径恢复、固定扫描输入及短锁、按需方法与包级存储兼容已通过冻结全量回归（4978 通过、17 跳过、26 预期失败，零失败与错误），正式 wheel 与独立 Windows 候选契约验收也已完成。当前架构、回执与交付边界以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)为准；下文首批 1719 项和更早 A/B/C 记录均为历史事实，不代替本轮结果。旧任务更新拒绝的容量原因已[确认](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)。真实双宿主桌面验收按用户决定暂缓。
+更新日期：2026-10-19。版本 0.3.6，分支 feature/runtime-mvp；最新事实以[开发进度](DEVELOPMENT_PROGRESS.md)为准。
 
-接续入口：[当前架构及验收](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)记录本轮源码、测试、候选和 GitHub 身份；[首批记录](ARCHITECTURE_UNIFICATION_IMPLEMENTATION.zh-CN.md)仅对应 b352731 及此前阶段。保留原任务和有效证据，不用历史通过数量或旧包判断当前结果；运行中安装与公开 Release 不随源码提交自动更新。[v3 升级说明](TASK_REVIEW_V3_ONLY.zh-CN.md)。
+## 恢复工作前
 
-更新日期：2026-10-19。仓库：https://github.com/pikachu-cxy/Ai-security-check
-开发分支：feature/runtime-mvp；源码版本：0.3.6。
+1. 核对 git status、当前分支和远端；保护用户已有修改。
+2. 从实际 get_runtime_info 核对 build_id、task-review-plan-v3、task-result-delivery-v1 和九项任务工具。源码、安装包、运行进程分别认定。
+3. 开发任务在首次新编辑前保存真实基线；已有合法任务沿原引用继续，不按最近任务猜测。旧 v1/v2 仅供历史读取。
+4. 原始会话、任务/风险引用及安全状态保留在 Runtime 私有目录，不复制进仓库作为恢复文件。
 
-此前 A2 修正阶段的验收记录如下（源码已纳入架构前检查点 a51a58d，并不代表新包已发布）：本轮三个回归回执按 `classname + name` 去重并取最后结果为 **295／295 项通过**，最窄新分级及真实四文件恢复组为 **65 项通过，29.55 秒**。完整候选回归与打包按随后对应 `run.json` 和最新指针判定，不由定向回归推定；安装和 A2 新包桌面复验仍为 `PENDING_USER`。最新已实测场景仍是 A2 修复阻塞、B3 与 C2 各自场景通过，不能改写旧 A/B/C 或 B2 的失败记录。已实测的 `55977e7e…` 不包含本轮新增 `repair-impact-unknowns-v1`；版本仍为 0.3.6，不能仅凭版本号或定向测试通过认定新包已交付。
+## 当前实现边界
 
-本轮统一判据由 `repair_impact_policy.py` 的常量供工具和宿主方法复用，安装 `repair-impact.md` 与 MCP 指导同源生成。显式 `classification` 只接受 `BLOCKING_CONTEXT`／`SCOPE_LIMITATION`，均需非空且不超过 800 字符的 `decision_basis`；阻断项还需本评估实际签发的证据，且与 `critical` 一致。未读材料的 PARTIAL 仍可保守使用 legacy `critical=true`，不能编造证据。当前具体正常路径的结果无法确定时，UNDETERMINED 仍阻断；只因外部实现未提供的范围未知不能同时放入它。旧 live 能力缺失时不发送新字段，也不自动改写旧记录或放宽门槛。
+- 连接：WorkspaceApplication 和 workspace_services 装配原服务，MCPRegistry 负责 SDK / 原始输入边界，连接器只适配事件和输出。
+- 执行：ScanRequest / CapturedScanInput 固定源码及执行身份；ScanAttemptStore 管理独立租约、代际、取消和发布条件。
+- 恢复：scan_publication 保存有界签名完成事实，TASK / Hook 在原代际下恢复发布；不创建第二套扫描引擎或编辑权限。
+- 交付：当前结果沿终态回执的 completion_revision 与原 session_ref 读取；普通历史省略该选择器，不重放修复选择。
+- 处置：AI 技术评估、EXCLUDE / DEFER / RESTORE、提醒与修复证明分开；查询失败不能把未知决定当成新待处理项。
+- 修复：原生风险与扫描器发现使用各自原引用；影响分析只读，已有明确授权在原范围内保留。新任务零发现不能关闭旧风险。
 
-## 先读这四页
+私有扫描状态新写 v2，兼容已签名 v1 的读取及旧根清理；执行 receipt 仍 v1。降级需核对 storage_contracts，不删除历史、围栏或用户 Skill。
 
-1. [开发进度](DEVELOPMENT_PROGRESS.md)：已完成、验证结果和未完成范围。
-2. [近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)：核对本批源码与候选身份；真实桌面验收暂缓，新平台与宿主扩展分别验收。
-3. [宿主支持](HOST_SUPPORT.md)：Cursor、Qoder、WorkBuddy / CodeBuddy 的实际状态与门槛。
-4. [产品规划](PRODUCT_ROADMAP.md)：个人版闭环与企业深度验证边界。
+## 当前验证与待办
 
-旧候选路径、构建回执和此前交接均已归入[历史交接](archive/2026-10/DEVELOPMENT_HANDOFF.through-2026-10-14.zh-CN.md)，不直接沿用为当前安装身份。
+已记录的定向回归、当前同步验证和跳过原因见[验收记录](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。前一冻结全库及候选身份见[架构记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)，不直接转用于新改动。
 
-## 同步源码
+当前用户已安装重启，正在手工验证新链路与误报；完整桌面结果尚未反馈。本次源码同步不构建或发布新安装包，也不自动重装当前接入。
 
-先检查工作树；存在自己的未提交改动时保留现场，不强制重置。工作树可安全同步时执行：
+下一步先完成 Codex 样例验收，再按冻结提交构建独立候选及跨宿主验证。新增能力只按真实证据承诺，见[计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)和[宿主状态](HOST_SUPPORT.md)。
 
-~~~powershell
-git status --short
-git fetch origin
-git switch feature/runtime-mvp
-git pull --ff-only origin feature/runtime-mvp
-git log -1 --oneline
-~~~
+## 开发环境命令
 
-首次获取：
-
-~~~powershell
-git clone --branch feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-~~~
-
-Git 仅同步源码、测试及文档。扫描数据库、原始聊天、真实项目、构建包、工具缓存和本机配置不会随拉取迁移。
-
-## 开发与验证
-
-使用 Python 3.12 及以上，并在项目独立虚拟环境安装开发依赖：
+在仓库根目录，使用 Python 3.12+：
 
 ~~~powershell
 py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e '.[test,build-standalone]'
+.\.venv\Scripts\python.exe -m pip install -e ".[test]"
+.\.venv\Scripts\python.exe -m pytest -q
+git diff --check
 ~~~
 
-测试临时项目放在仓库外并为每次运行使用新目录；非 Git 用例放在仓库内会被向上识别为父 Git 项目。
-Windows 沙箱、目录链接和进程权限造成的失败应保留记录，并用相同用例在可用环境对照，不能放宽安全断言。
-全局集成测试运行期间保持源码身份稳定。
+测试使用隔离的 TEMP、状态目录和合成源码；不连接用户真实样例或修改实际配置。Windows 本地套接字与 ACL 测试需在正常用户环境运行，不能通过放宽产品权限边界绕过工具沙箱限制。
 
-2026-10-18 修复影响分级批次的回归入口（当前架构全量与候选见[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)）：
-
-- 修复影响与参数契约：tests/test_repair_impact*.py；原生流程：tests/test_native_repair_intent.py、tests/test_native_repair_impact_context.py、tests/test_task_risk_fix_mcp.py；同源指导与安装方法：tests/test_review_skill.py、tests/test_repair_impact_presentation.py。该历史批次按用例去重取最后结果为 295／295 通过，不用此前证据契约的 51／34／8 项结果替代。
-- 功能隐藏：tests/test_post_fix_functional_prompt.py、tests/test_host_orchestration.py。
-- 启动和并发：tests/test_global_startup_wait.py、tests/test_codex_hook_contention.py。
-- 宿主就绪与任务反馈：tests/test_hook_readiness_feedback.py、tests/test_task_hook_deferred_feedback.py。
-- 每个新增宿主需补自己的适配、隔离和真实使用验收，见[宿主支持](HOST_SUPPORT.md)。
-
-任务候选提交现使用 typed schema：`primary_evidence`／`task_evidence` 为本任务实际签发的证据 ID 字符串，`evidence_refs` 为这些字符串组成的数组，不能传路径／行号对象或 `source_ref`。错误通过安全 `field_errors` 指明字段；仅在原活动任务、原复核会话及原源码版本中纠正可恢复参数错误，不扫描或重新建立基线。`INCOMPLETE` 终态不因改正 JSON 自动恢复，v3 快速方法和 packet 的示例也不是真实风险或已签发证据。
-
-初始化实际结果：A2 首次对象格式失败、第 2 次改字符串后 `COMPLETE / 1 finding`；C2 前两次对象格式失败、第 3 次改字符串后同样保存成功；B2 三次对象格式失败后 `INCOMPLETE`。保留 B2 目录、聊天和失败记录，不自动重开。后续独立 B3 已完成影响与保留共享成员的修复、原风险复查；C2 已完成影响保存、DEFER 和历史回读。A2 仍因范围未知被过宽升级而阻塞，按本轮新能力在原归属下续验，不重建编辑前基线或重新索取同一批准。具体边界见[验收步骤](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
-
-分级正例是四文件已读、仅复用已有 `can_read`、保留所有者和共享成员及参数返回关系。未提供外部仓储、身份来源或异常显示本身只限制结论范围，不等于全项目兼容证明缺失就必须停下局部修复。真实阻断对照需有当前正常路径的具体依据，例如合法记录确有精简投影缺少权限字段，而当前调用所选分支未明，或方案要改变跨边界身份来源却未核对该来源；必须说明答案如何改变方案及必要下一步，不能笼统写“上游未提供”。
-
-本轮原始回执保留：`artifacts/a2-classification-targeted-20261018.xml` 为 196 通过／2 失败，`artifacts/a2-classification-verification-20261018.xml` 为 242 通过／2 失败，`artifacts/a2-classification-recovery-final-20261018.xml` 为 65 通过。汇总位置为 `artifacts/a2-classification-validation-20261018.json`，以 `classname + name` 去重取最后状态得 295／295 通过；不可把各轮数量相加，也不能删除前两轮的历史失败。
-
-## 构建与安装分开认定
-
-从当前提交构建新的独立目录，并保留提交、源码摘要和构建身份；沿用 scripts/build_standalone.py、
-scripts/verify_package.py 与 scripts/verify_artifact.py 的现有门禁，不用旧包冒充当前源码。
-
-此前修复影响批次使用 scripts/rebuild_repair_impact.py 纳入实际工作树和新增回归，记录六工具与冻结 schema 检查，失败不覆盖 latest。用户首个重建批次在回归收集阶段失败，旧失败保留；修正后的回归、冻结探针及新候选分别按实际回执认定。旧批次 repair-impact-20261018-034812-775f80、构建 d6ac9d9e…d4d2b5 不含验收后的修正；同为 0.3.6 时也须比较新 build_id。具体命令与新起点案例见[修复影响安装验收](REPAIR_IMPACT_ACCEPTANCE.zh-CN.md)。
-
-历史未知分级批次的完整候选回归与构建按其对应 `run.json` 和最新指针判定，已有 295／295 的去重定向最后结果不代替该门槛；该历史批次包身份以 `artifacts/repair-impact-latest.json` 的成功状态、对应 run 回执和源码 manifest 核对，再与实际安装及连接比较。实际连接还须声明 `features.repair_impact_unknowns=repair-impact-unknowns-v1`。此前 `d6ac9d9e…`、`dd571d41…`、`55977e7e…` 都不能证明这轮修正已打包；不虚构新 build_id，不把源码定向通过或安装命令成功写成桌面验收通过。
-
-检查异常反馈已在源码共用 CHECK_OPERATION_BOUNDARIES：用户明确要求或原开发任务包含的测试、构建与验收照常执行，无需重复确认；检查状态本身不授权额外执行，伪造结果、重放事件和补建编辑后基线仍禁止。验证及实际交付按本轮回执认定，旧安装或仍运行的旧连接不会因源码修改自动更新。
-
-重新安装并完全重启宿主后，核对 MCP、Hook、Skill 与实际包身份，再做真实开发任务。
-安装与准备操作以[详细安装指南](PILOT_INSTALL_AND_USE.zh-CN.md)为准。
-源码拉取和测试通过都不等于原生程序已升级或桌面验收通过。
-
-当前架构候选以[架构验收记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)中的源码提交、冻结回执及 build_id 为准；上述旧指针只用于对应历史批次。
-
-## 接续边界
-
-- 个人版功能验证已隐藏，原问题安全复查保留；深度验证作为企业版开发项。
-- 下一阶段是多宿主适用范围扩展，不在本次同步中宣称新增适配完成。
-- 既有不完整安全核查、平台待验和数据新鲜度限制继续保留，见开发进度。
+自动回归依赖的 fixture、兼容旧 writer 语料和对照数据保留。旧阶段教程和无引用手工实验从当前树删除，历史通过 Git 查阅；本机 artifacts、dist、缓存与状态仍为忽略内容，不上传。

@@ -25,6 +25,12 @@ DEPENDENCY_PRESENTATION_RULES = (
     '依赖问题的“修复”应先按 review_continuation 读取问题列表，按 review_finding_ids 匹配成员取得精确任务引用；'
     '多个问题先明确选择，不能直接使用列表首项，也不能把导航当作修复授权。'
 )
+COMPACT_PRESENTATION_RULES = (
+    '保留上方提示的位置、问题、影响、建议、未知条件及“修复／暂不处理”（兼容“忽略”）的选择和含义。'
+    '先不要修复或保留改动不等于忽略；没有明确选择或正式授权就不能修复，同一范围已经授权时不重复询问。'
+    '不展示内部状态、英文枚举、工具名或令牌；内部控制不能当作风险说明。'
+    '上方提示为空时无需新增安全提示，不推断项目安全。'
+)
 CHECK_OPERATION_BOUNDARIES = (
     '不得伪造检查结果、重放检查事件或补建编辑后的基线。'
     '检查状态本身不授予额外扫描、构建或测试权限；不得仅因检查异常或复查结束而擅自追加这些操作。'
@@ -135,6 +141,14 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
         rendered = prefix + _encode(control)
         if _fits(rendered):
             return rendered
+        # Compact repeated display instructions, never the original ticket.
+        presentation = COMPACT_PRESENTATION_RULES
+        if remediation.get('review_continuation'):
+            presentation += DEPENDENCY_PRESENTATION_RULES
+        prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
+        rendered = prefix + _encode(control)
+        if _fits(rendered):
+            return rendered
     # Never send a cut-down ticket as though it were usable authorization.
     # The exact capabilities remain in the original structuredContent. Keep
     # original handoffs/tokens for navigation; do not invent a retrieval tool.
@@ -147,7 +161,15 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
     control.update(context_budget_status='ORIGINAL_CONTROL_REQUIRED',
                    editing_allowed_from_this_context=False,
                    original_control_location='ORIGINAL_MCP_STRUCTURED_CONTENT')
-    return prefix + _encode(control)
+    rendered = prefix + _encode(control)
+    if _fits(rendered):
+        return rendered
+    return ('用户提示\n完整提示与控制信息超过输出限制，请读取原始工具结果后继续；'
+            '当前精简上下文不允许编辑。\n\n呈现要求\n不得推断授权或检查通过。'
+            + CONTROL_DELIMITER + _encode({
+                'context_budget_status': 'ORIGINAL_CONTROL_REQUIRED',
+                'editing_allowed_from_this_context': False,
+                'original_control_location': 'ORIGINAL_MCP_STRUCTURED_CONTENT'}))
 
 
 def render_check_gap_context(summary: dict, message: str) -> str:

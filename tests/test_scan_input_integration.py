@@ -32,6 +32,7 @@ NEW = b'def query(db, value):\n    return db.safe_query(value)\n'
 def project(tmp_path):
     root = tmp_path / 'project'
     root.mkdir()
+    subprocess.run(['git', 'init', '-q', str(root)], check=True)
     (root / 'app.py').write_bytes(OLD)
     return root, SQLiteStore(tmp_path / 'state' / 'scans.db')
 

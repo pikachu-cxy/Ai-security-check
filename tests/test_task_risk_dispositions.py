@@ -79,8 +79,10 @@ def test_excluding_one_occurrence_does_not_hide_same_category_in_sibling_functio
     feedback = TaskRiskFeedbackService()
     feedback.set_disposition(s, root, ref, findings[0]['id'], 'EXCLUDE', user_requested=True)
     history = s.get(root, ref)
-    assert [item['finding_id'] for item in history['risk_choices']] == [findings[1]['id']]
+    assert not history['risk_choices']
     assert history['current_feedback']['visible_host_risk_count'] == 1
+    delivery = s.get(root, ref, completion_revision=s.load(root, ref).get('review_revision', 1))
+    assert [item['finding_id'] for item in delivery['risk_choices']] == [findings[1]['id']]
 
 
 def test_same_issue_across_new_task_line_movement_and_new_owner_reuses_user_choice(service):
@@ -164,7 +166,8 @@ def test_restore_overrides_old_ai_false_positive_but_retains_both_histories(serv
     state = feedback.get(s, root, ref, finding)
     assert [event['disposition'] for event in state['disposition_audit_events']] == ['EXCLUDE', 'RESTORE']
     assert state['audit_events'][0]['status'] == 'HOST_FALSE_POSITIVE'
-    assert len(s.get(root, ref)['risk_choices']) == 1
+    assert not s.get(root, ref)['risk_choices']
+    assert len(s.get(root, ref, completion_revision=s.load(root, ref).get('review_revision', 1))['risk_choices']) == 1
 
 
 def test_defer_and_expiration_keep_risk_open_and_history_durable(service):

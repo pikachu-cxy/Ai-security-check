@@ -118,7 +118,8 @@ class OSVDependencyAdapter(BaseScanner):
             emit('FALLBACK_RUNNING',scanner=self.name,capability=tuple(self.capabilities))
             with external_tool_loader():
                 try:
-                    process=run_process(args,cwd=str(scoped),env=environment,timeout=self.timeout,max_output=4_000_000)
+                    process=run_process(args,cwd=str(scoped),env=environment,timeout=self.timeout,max_output=4_000_000,
+                        capture_start_failure=True)
                 except (TimeoutError, OutputLimitError):
                     scanner_process_observed()
                     raise

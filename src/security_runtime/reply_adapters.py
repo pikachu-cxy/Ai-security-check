@@ -95,17 +95,29 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
         quiet=phase not in {'COMPLETE', 'INCOMPLETE'} and not notices)
 
 
-def history_facts(record, selected, *, current=True, feedback=None):
-    facts = task_facts(record, host_feedback=feedback)
+def history_facts(record, selected, *, current=True, feedback=None,
+                  static_feedback=None, handling_available=True, delivery=False,
+                  total_risk_count=None):
+    """One bounded projection, with current delivery authorized by the service.
+
+    The default remains a history read. Neither a current file hash nor reading
+    a saved report is a reason to repeat a repair choice.
+    """
+    facts = task_facts(record, host_feedback=feedback, static_feedback=static_feedback,
+                       handling_available=handling_available)
     risks = tuple(finding_fact(item['detail'],
         source='HOST_REVIEW' if item['source'] == 'HOST_TASK_REVIEW' else 'SCANNER',
         feedback=(item['detail'].get('feedback') or {}),
-        choice_required=item['source'] == 'HOST_TASK_REVIEW')
+        choice_required=delivery and (item['source'] == 'HOST_TASK_REVIEW'
+                                     or bool((record.get('static') or {}).get('scan_id'))))
         for item in selected if item.get('details_complete'))
     # Historical pages retain the complete explanations in their existing
     # fields. They never imply a fresh check or replay a repair prompt.
-    return ReplyFacts('HISTORY', facts.check, risks, facts.notices,
-                      current=current, quiet=False)
+    return ReplyFacts('TASK_DELIVERY' if delivery else 'HISTORY', facts.check, risks,
+                      facts.notices, handling_available=handling_available,
+                      current=current,
+                      quiet=delivery and record['phase'] == 'NO_CHANGES' and not facts.notices,
+                      total_risk_count=total_risk_count)
 
 
 def issue_facts(feedback, *, notes=(), authorized=False, investigate_first=False, original=False):

@@ -23,6 +23,20 @@ from .progress import checkpoint
 from .scan_request import ScanBinding, ScanInputError, ScanRequest, SourceKind, paths, relative_path
 
 INPUT_CONTRACT = 'scan-input-v1'
+# Leave room for source/rules and provider-generated report/config filenames.
+# CreateProcess cwd and third-party native arguments do not share Python's
+# extended-path filesystem support. Fail before writing private source bytes.
+_PRIVATE_PATH_LIMIT = 236
+
+
+def _check_private_path(path):
+    if os.name == 'nt' and len(str(path)) > _PRIVATE_PATH_LIMIT:
+        raise ScanInputError('SCAN_INPUT_PRIVATE_PATH_BUDGET')
+
+
+def check_private_input_parent(parent):
+    """Reserve the complete attempt plus provider subdirectory path budget."""
+    _check_private_path(Path(parent) / ('i-' + '0' * 32) / ('i-' + '0' * 32))
 
 
 def scoped_request(workspace, names, *, dependency_changes=None):
@@ -193,7 +207,8 @@ def _private_directory(workspace, parent, *, on_created=None, on_removed=None):
     directory_identity = None
     try:
         for _ in range(8):
-            candidate = parent / ('runtime-input-' + uuid.uuid4().hex)
+            candidate = parent / ('i-' + uuid.uuid4().hex)
+            _check_private_path(candidate)
             try:
                 if os.name == 'nt':
                     _windows_private_directory(candidate)

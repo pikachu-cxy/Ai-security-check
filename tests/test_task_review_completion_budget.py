@@ -35,7 +35,7 @@ def test_exhausted_delivery_budget_still_saves_partial_result_and_full_gaps(serv
     assert 'host_review' not in result
     assert result['result_saved'] is True and result['result_details_required'] is True
     assert result['next_action'] == dict(tool='get_task_security_review', task_ref=ref,
-                                       finding_offset=0, finding_limit=1)
+                                       completion_revision=1, finding_offset=0, finding_limit=1)
     assert not result['repair_authorized'] and not result['scanner_run']
     assert len(json.dumps(result, ensure_ascii=False).encode()) <= 1600
     assert detail not in json.dumps(result)
@@ -54,7 +54,7 @@ def test_exhausted_delivery_budget_still_saves_partial_result_and_full_gaps(serv
     assert history['host_review']['coverage'] == 'PARTIAL'
     assert tasks.load(root, ref)['review_ledger'] == before['review_ledger']
     retried = tasks.submit(root, ref, prepared['review_session'], [], 'PARTIAL', ['Retry only'])
-    assert retried['history_read_only'] is True
+    assert retried['delivery_read_only'] is True
     assert tasks.load(root, ref)['review'] == saved['review']
     assert len(runtime.calls) == 1
 
