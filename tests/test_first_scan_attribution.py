@@ -131,8 +131,9 @@ def test_new_risk_real_pre_scan_reuses_family_and_policy(repo,harness):
     assert [c['pre'] for c in calls]==[False,True]
     assert calls[0]['rules']==calls[1]['rules'] and calls[1]['files']==('A.java',)
     assert not Path(calls[1]['root']).exists()
-    assert Path(calls[1]['root']).parent == core.store.workspace_directory(repo)/'scan-inputs'
     from security_runtime.scan_attempt import ScanAttemptStore
+    assert Path(calls[1]['root']).parent == ScanAttemptStore(core.store,repo).private_parent
+    assert not Path(calls[1]['root']).parent.resolve().is_relative_to(repo.resolve())
     assert ScanAttemptStore(core.store,repo).read()['directories']==[]
     assert out['scanner_invocation_count']==2
     from security_runtime.remediation import RemediationService

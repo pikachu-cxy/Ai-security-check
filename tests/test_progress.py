@@ -43,7 +43,7 @@ class FakeScanner:
 
 def engine(tmp_path, adapters):
     (tmp_path / 'app.py').write_text('pass\n')
-    return SecurityRuntime(ScannerRegistry(adapters), SQLiteStore(tmp_path / '.security-runtime/state.db'))
+    return SecurityRuntime(ScannerRegistry(adapters), SQLiteStore(tmp_path.parent / (tmp_path.name + '-state') / 'scans.db'))
 
 
 def test_event_structure_and_sanitization():

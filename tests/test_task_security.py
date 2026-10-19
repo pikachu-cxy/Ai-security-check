@@ -124,7 +124,10 @@ def test_static_zero_findings_still_requires_context_review(service):
     assert finding['unknowns'] == ['外层路由及部署权限未确认']
     assert result['history_read_only'] and not result['repair_authorized']
     assert len(runtime.calls) == 1
-    assert s.submit(root, ref, session, [], 'REVIEWED', []) == s.get(root, ref)  # idempotent
+    before = s.store(root).path.read_bytes()
+    repeated = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert repeated == s.get(root, ref, completion_revision=repeated['completion_revision'])
+    assert s.store(root).path.read_bytes() == before and len(runtime.calls) == 1
 
 
 def test_counterevidence_empty_review_remains_scoped_and_host_reported(service):

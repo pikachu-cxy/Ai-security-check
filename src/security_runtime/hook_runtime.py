@@ -830,8 +830,11 @@ class HookCoordinator:
                     else:
                         self._reconcile(result, event, root, host, session_id,
                             baseline_only=_baseline_only, lifecycle_activity=_lifecycle, transaction=transaction)
-                self._stage_publication(result, root, host, session_id, transaction)
-                self._publish(result, root, host, session_id, transaction)
+                if _lifecycle and event == HookEvent.SESSION_START and result.get('baseline_publish_status') == 'FAILED':
+                    self._abandon(result, root, transaction, 'FAILED', reason=result['reason'])
+                else:
+                    self._stage_publication(result, root, host, session_id, transaction)
+                    self._publish(result, root, host, session_id, transaction)
             except (ScanCancelled, KeyboardInterrupt) as error:
                 self._abandon(result, root, transaction, 'CANCELLED')
                 if isinstance(error, KeyboardInterrupt):
@@ -887,13 +890,13 @@ class HookCoordinator:
         return dict(path=path, previous=previous, recovered=recovered, key=key, task=task,
                     pending=pending, attempts=attempts, lease=lease, execution=execution, state=None)
 
-    def _abandon(self, result, root, transaction, outcome):
+    def _abandon(self, result, root, transaction, outcome, *, reason=None):
         execution = transaction['execution']
         with self.store.lock(root, wait_seconds=2) as acquired:
             if acquired:
                 transaction['attempts'].finish(transaction['lease'], input_id=execution.input_id,
                     scan_id=result.get('scan_id'), outcome=outcome)
-        result.update(status='INCONCLUSIVE', coverage='UNKNOWN', reason='SCAN_ATTEMPT_'+outcome,
+        result.update(status='INCONCLUSIVE', coverage='UNKNOWN', reason=reason or 'SCAN_ATTEMPT_'+outcome,
             pending_mutation=True, next_step='The captured result is not published; original comparison point and pending changes are retained.')
         if result.get('baseline_publish_status') == 'PUBLISHED':
             result['baseline_publish_status'] = 'FAILED'

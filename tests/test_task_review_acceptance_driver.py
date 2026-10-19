@@ -106,10 +106,12 @@ def test_partial_receipt_and_complete_risk_history_pages_keep_choices_and_are_re
         assert {item['finding_id'] for item in choices} == {item['id'] for item in details}
         assert all(item['deferred_keeps_risk'] and not item['repair_authorized'] for item in choices)
         assert all(page['host_review']['coverage'] == 'PARTIAL' and not page['repair_authorized'] for page in pages)
+        assert all(page['delivery_read_only'] and not page['history_read_only'] for page in pages)
         assert all(action['actions'] == ['FIX', 'DEFER'] for page in pages
                    for action in page['reply_plan']['required_actions'])
         stored, raw = copy.deepcopy(s.load(root, ref)), s.store(root).path.read_bytes()
-        await review.history()
+        historical = await review.history()
+        assert all(page['history_read_only'] and not page['risk_choices'] for page in historical)
         assert s.load(root, ref) == stored and s.store(root).path.read_bytes() == raw
         assert all(unit['status'] == 'PARTIAL' for unit in stored['review_plan']['units'])
 

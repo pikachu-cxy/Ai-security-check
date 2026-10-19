@@ -20,6 +20,8 @@
 
 - Windows 扫描私有输入路径过长导致进程启动失败；固定输入、规则和产物继续保留权限、身份与清理校验。
 - Windows Semgrep 使用独立的短私有临时目录，处理超长或中文 TEMP；就绪探测包含有界合成扫描，区分本地通信权限与组件下载失败。
+- macOS 托管 Semgrep 的解释器链接仅允许指向匹配固定版本、清单与实际字节校验的托管 Python；外部链接仍被拒绝。
+- Cursor 会话基线捕获失败时保留明确失败原因，不重复捕获或发布不可核验基线。
 - 执行初始化、发布锁竞争、中断及取消后的恢复；已完成结果沿原任务恢复，不重复扫描或消耗预算。
 - 本轮风险交付恢复位置及“问题／可能影响／建议修复／尚未确认”四段说明；历史查询不重复索取处置选择。
 - 静态发现与代码复核风险共用当前处置投影；处置暂时不可读时保留详情并标记未知。
@@ -55,7 +57,13 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 使用完整安装包
 
-[Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)是公开完整包入口。本次本地 Windows 0.3.6 候选包基于默认分支固定提交 `c526cdd3d6c6923e04d64334c5dc19c0908cef31` 构建，尚未上传为公开发行；文件与校验见[下载状态](website/downloads.md)。仓库保留的 [v0.3.4 下载页](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)属于旧发行，不包含本分支后续 v3 与恢复修复，不能与本分支新版 Skill 混用。
+本版平台资产命名如下；列出文件名不表示已公开发行，实际下载以 Releases 中通过验收的版本为准。
+
+- Windows x64：`ai-security-runtime-v0.3.6-windows-x64.zip`
+- Mac Apple Silicon：`ai-security-runtime-v0.3.6-macos-arm64.tar.gz`
+- Mac Intel：`ai-security-runtime-v0.3.6-macos-x64.tar.gz`
+
+[Releases](https://github.com/pikachu-cxy/Ai-security-check/releases)是公开完整包入口，只有验收通过的候选才会发布。此前本地 Windows 0.3.6 候选基于固定提交 `c526cdd3d6c6923e04d64334c5dc19c0908cef31`，仅供历史构建核对；后续修正版应以 Release 的实际源码提交、资产和校验为准，不能仅凭版本号混用。文件与校验见[下载状态](website/downloads.md)。[v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)是旧发行，不包含后续 v3 与恢复修复，不能与新版 Skill 混用。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，退出 Codex，在解压目录执行：
 

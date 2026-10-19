@@ -79,12 +79,19 @@ class V3Review:
         assert identifiers
         return list(dict.fromkeys(identifiers))
 
-    async def history(self):
-        """Keep bounded history pages intact instead of fabricating a v1 result."""
+    async def history(self, *, completion_revision=None):
+        """Read history quietly or explicitly deliver the saved terminal revision."""
         pages, offset = [], 0
         while True:
-            page = await self._call('get_task_security_review', finding_offset=offset, finding_limit=3)
-            assert page['history_read_only'] and page['protocol_version'] == 3
+            arguments = dict(finding_offset=offset, finding_limit=3)
+            if completion_revision is not None:
+                arguments['completion_revision'] = completion_revision
+            page = await self._call('get_task_security_review', **arguments)
+            assert page['protocol_version'] == 3
+            if completion_revision is None:
+                assert page['history_read_only'] and not page['risk_choices']
+            else:
+                assert page['delivery_read_only'] and page['completion_revision'] == completion_revision
             pages.append(page)
             offset = page['finding_page']['next_offset']
             if offset is None:
@@ -103,6 +110,6 @@ class V3Review:
             arguments['risk_resolutions'] = risk_resolutions
         receipt = await self._call('submit_task_security_review', **arguments)
         assert receipt['status'] == 'COMPLETE' and receipt['result_details_required']
-        pages = await self.history()
+        pages = await self.history(completion_revision=receipt['next_action']['completion_revision'])
         assert pages[0]['host_review']['coverage'] == 'PARTIAL'
         return receipt, pages

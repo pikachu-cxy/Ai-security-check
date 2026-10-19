@@ -88,6 +88,9 @@ def test_failed_session_capture_lazy_activity_does_not_fake_attribution(repo,tmp
     result=ingress(repo,tmp_path,core,event='sessionStart')
     assert result['reason']=='BASELINE_CAPTURE_FAILED' and result['baseline_publish_status']=='FAILED'
     assert result['baseline_state_after']=='MISSING' and not runtime.calls
+    assert result['scan_attempt']['publication']=='NOT_PUBLISHED'
+    from security_runtime.scan_attempt import ScanAttemptStore
+    assert ScanAttemptStore(core.store,repo).read()['lane']['state']=='FAILED'
     core.snapshot_capture=capture_snapshot
     (repo/'A.java').write_text('changed')
     result=ingress(repo,tmp_path,core)
