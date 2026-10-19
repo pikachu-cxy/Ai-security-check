@@ -2,15 +2,23 @@
 
 默认完整接入，不需要选择“MCP 版”或“完整版”。如果不希望自动配置 Skill 和 Hook，请走[手动 MCP](./mcp.md)。
 
+## 让 Codex 帮你安装
+
+已有本地 Codex 时，可以把安装交给它完成，无需手动输入终端命令。权限请求仍按客户端设置处理；当前 Mac 包的签名限制见[安装说明](./installation.md#macos-首次启动)。
+
+<InstallRequest />
+
+以下命令供希望自己操作的用户使用。
+
 ## 1. 获取匹配的完整包
 
 先看[下载与构建状态](../downloads.md)，选择 Windows x64、macOS Intel 或 macOS Apple Silicon。保留解压后的整个 `security-check` 目录，不要只取一个可执行文件。
 
 完整包内置运行时 Python，不要求另装 Python、pip 或 Node.js。首次检查组件准备仍需联网。当前 Developer Alpha 已通过三平台原生 CI；macOS 真机与 Cursor 桌面验收仍待独立完成，不作为稳定兼容性保证。
 
-## 2. 完全退出 Codex，执行完整接入
+## 2. 执行完整接入
 
-在**解压目录**打开终端。
+在**解压目录**打开终端。安装器会写入供下次启动使用的配置；由 Codex 辅助安装时保持当前聊天，完成后再完全退出并重启。安装期间不要运行其他安装器或编辑宿主配置。
 
 ### Windows PowerShell
 

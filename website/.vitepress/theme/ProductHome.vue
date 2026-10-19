@@ -1,5 +1,6 @@
 <script setup>
 import { withBase } from 'vitepress'
+import InstallRequest from './InstallRequest.vue'
 
 const steps = [
   { number: '01', title: '检查本次改动', text: '从编辑前的真实工作区开始，记录新增、修改与删除，保留已有改动的边界。' },
@@ -39,6 +40,8 @@ const steps = [
         </div>
       </div>
     </section>
+
+    <InstallRequest />
 
     <section class="workflow-section" aria-labelledby="workflow-title">
       <div class="section-heading"><p class="eyebrow">ONE CONNECTED WORKFLOW</p><h2 id="workflow-title">从发现，到处理，再到复查。</h2><p>把检查结果留在正在进行的开发任务中。</p></div>
