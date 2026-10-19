@@ -138,6 +138,9 @@ def test_macos_source_semgrep_uses_pinned_bootstrap_instead_of_copying_python(fr
     root, state, archive, _ = frozen_install
     archive()
     monkeypatch.setattr(toolchain.sys, 'frozen', False)
+    # Model a first installation even when the test host has Semgrep installed
+    # beside its Python. PATH isolation alone does not cover this discovery path.
+    monkeypatch.setattr(toolchain.sysconfig, 'get_path', lambda _name: str(root.parent / 'missing-scripts'))
     result = ToolManager().ensure('semgrep', offline=False)
     assert result.status == ToolStatus.READY, result.detail
     assert state['downloads'] == 1

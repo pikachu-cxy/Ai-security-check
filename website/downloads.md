@@ -4,7 +4,7 @@
 
 [v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，原始版本标签与 Windows 包对应提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
 
-**Mac 安装兼容修订：** 修订源码为 [`82b554d94ddec9692f8d27c82f239e9bf92c4509`](https://github.com/pikachu-cxy/Ai-security-check/commit/82b554d94ddec9692f8d27c82f239e9bf92c4509)，Intel、Apple Silicon 和 Windows 原生包均已通过[本轮原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609668)。该流程在[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39268609723)通过后仅替换两套 Mac 资产，Windows 公开包保持不变。只有 Release 出现对应的 [Mac 修订回执](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/macos-refresh.json)，且源码、包摘要与配套清单一致，才表示修订已发布。完成后请重新下载 Mac 完整包及 SHA256 文件；机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
+**Mac 安装兼容修订：** 本轮仅替换 Intel 与 Apple Silicon 两套 Mac 资产，Windows 公开包保持不变。修订源码与构建身份以发布后的 [Mac 修订回执](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/macos-refresh.json)为准；只有回执、包摘要与配套清单一致，且对应提交的[原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/standalone.yml)及[Windows/Mac 全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/tests.yml)通过，才表示修订已发布。完成后请重新下载 Mac 完整包及 SHA256 文件；机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |
