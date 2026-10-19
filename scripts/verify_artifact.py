@@ -197,6 +197,27 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
     return result
 
 
+def sample_scan_diagnostics(payload):
+    return {
+        'coverage': payload.get('coverage'),
+        'execution_state': payload.get('execution_state'),
+        'findings': [{'file_path': item.get('file_path'), 'line_start': item.get('line_start'),
+                      'rule_id': (item.get('technical_details') or {}).get('rule_id'),
+                      'scanner_sources': item.get('scanner_sources')}
+                     for item in payload.get('findings', [])],
+        'scanner_runs': [{key: item.get(key) for key in
+                          ('scanner', 'status', 'finding_count', 'error_code',
+                           'coverage_contract', 'coverage_notes', 'rule_coverage')}
+                         for item in payload.get('scanner_runs', [])],
+    }
+
+
+def verify_first_party_sample(payload):
+    if not any('command-injection' in str((item.get('technical_details') or {}).get('rule_id', ''))
+               for item in payload.get('findings', [])):
+        raise ValueError('First-party scanner finding missing: ' + json.dumps(sample_scan_diagnostics(payload)))
+
+
 def verify_sample_scan(payload, *, dependency=False):
     """Engine execution and declared inventory are separate from graph completeness."""
     expected = {'semgrep': 'SUCCESS', 'gitleaks': 'SUCCESS',
@@ -205,6 +226,8 @@ def verify_sample_scan(payload, *, dependency=False):
     runs = {item['scanner']: item for item in payload['scanner_runs']}
     if 'native-js-function' in runs:
         expected['native-js-function'] = 'NOT_APPLICABLE'
+    if 'native-dataflow' in runs:
+        expected['native-dataflow'] = 'SUCCESS' if dependency else 'NOT_APPLICABLE'
     if {name: item['status'] for name, item in runs.items()} != expected:
         raise ValueError('Sample scan has unexpected engine execution: ' + json.dumps(payload['scanner_runs']))
     if payload.get('coverage') != ('PARTIAL' if dependency else 'FULL'):
@@ -440,9 +463,9 @@ def main() -> None:
             if result.returncode not in (0, 1):
                 raise RuntimeError(f"Sample scan failed: {result.stderr[-1000:]}")
             payload = json.loads(result.stdout)
-            if not any("command-injection" in str(item.get("technical_details", {}).get("rule_id", ""))
-                       for item in payload.get("findings", [])):
-                raise ValueError("First-party scanner finding missing")
+            args.archive.with_name(args.archive.name + '.quick-scan.diagnostics.json').write_text(
+                json.dumps(sample_scan_diagnostics(payload), indent=2) + '\n', encoding='utf-8')
+            verify_first_party_sample(payload)
             verify_sample_scan(payload)
             # Dependency manifests are a distinct release check, not a source-only QUICK.
             (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
@@ -451,6 +474,8 @@ def main() -> None:
             if release_scan.returncode not in (0, 1):
                 raise RuntimeError(f"Release sample scan failed: {release_scan.stderr[-1000:]}")
             release_payload = json.loads(release_scan.stdout)
+            args.archive.with_name(args.archive.name + '.release-scan.diagnostics.json').write_text(
+                json.dumps(sample_scan_diagnostics(release_payload), indent=2) + '\n', encoding='utf-8')
             verify_sample_scan(release_payload, dependency=True)
             all_engines = release_payload["scanner_runs"]
             if any(item["status"] not in {"SUCCESS", "NOT_APPLICABLE"} for item in all_engines):

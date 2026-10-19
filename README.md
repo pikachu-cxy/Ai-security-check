@@ -12,7 +12,7 @@
 - [工作流程](website/guide/workflow.md)、[风险处置](website/guide/risk-handling.md)、[支持范围](website/reference/support.md)、[隐私与联网](website/reference/privacy.md)、[常见问题](website/reference/faq.md)。
 - [当前安装包状态与校验](website/downloads.md)、[版本进展](website/reference/changelog.md)。
 
-独立文档站采用 **VitePress + GitHub Pages**，源码在 `website/`，配套导航、站内搜索与移动端布局。部署目标为 [pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)；工作树编辑不等于已上线，需按[部署指南](website/contributing/deployment.md)提交代码、启用 Pages 并确认工作流成功。
+独立文档站已上线：[AI Security Runtime 产品与使用文档](https://pikachu-cxy.github.io/Ai-security-check/)。使用 **VitePress + GitHub Pages**，源码在 `website/`，配套导航、站内搜索与移动端布局。后续维护见[部署指南](website/contributing/deployment.md)。
 
 ## 当前源码状态
 

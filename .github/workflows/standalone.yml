@@ -53,3 +53,10 @@ jobs:
           name: release-${{ matrix.platform }}
           path: dist/release/*
           if-no-files-found: error
+      - name: Retain failed sample verification diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ matrix.platform }}
+          path: dist/release/*.diagnostics.json
+          if-no-files-found: ignore

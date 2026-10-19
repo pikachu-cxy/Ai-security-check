@@ -54,6 +54,39 @@ def test_artifact_gate_accepts_successful_declared_inventory_with_partial_graph(
     verify_artifact.verify_sample_scan(declared_sample(), dependency=True)
 
 
+@pytest.mark.parametrize('dependency', [False, True])
+def test_artifact_gate_accepts_current_native_dataflow_inventory(dependency):
+    payload = declared_sample()
+    if not dependency:
+        payload['coverage'] = 'FULL'
+        payload['scanner_runs'][-1]['status'] = 'NOT_APPLICABLE'
+    payload['scanner_runs'].append({'scanner': 'native-dataflow',
+                                   'status': 'SUCCESS' if dependency else 'NOT_APPLICABLE'})
+    verify_artifact.verify_sample_scan(payload, dependency=dependency)
+
+
+@pytest.mark.parametrize('status', ['FAILED', 'UNAVAILABLE', 'NOT_APPLICABLE'])
+def test_artifact_gate_rejects_unexecuted_release_dataflow(status):
+    payload = declared_sample()
+    payload['scanner_runs'].append({'scanner': 'native-dataflow', 'status': status})
+    with pytest.raises(ValueError, match='unexpected engine execution'):
+        verify_artifact.verify_sample_scan(payload, dependency=True)
+
+
+def test_first_party_sample_diagnostics_preserve_gate_without_source_content():
+    payload = {'coverage': 'FULL', 'findings': [], 'scanner_runs': [
+        {'scanner': 'semgrep', 'status': 'FAILED', 'error_code': 'PROBE_FAILURE',
+         'raw_output': 'private source'}]}
+    with pytest.raises(ValueError, match='First-party scanner finding missing') as failure:
+        verify_artifact.verify_first_party_sample(payload)
+    assert 'PROBE_FAILURE' in str(failure.value)
+    assert 'private source' not in str(failure.value)
+    payload['findings'] = [{'technical_details': {'rule_id': 'ai-security.python.command-injection'},
+                            'evidence': 'private source'}]
+    verify_artifact.verify_first_party_sample(payload)
+    assert 'private source' not in json.dumps(verify_artifact.sample_scan_diagnostics(payload))
+
+
 @pytest.mark.parametrize('change', ['failed', 'stale', 'missing', 'truncated', 'full', 'wrong_version'])
 def test_artifact_gate_rejects_incomplete_or_misrepresented_dependency_check(change):
     value = copy.deepcopy(declared_sample())

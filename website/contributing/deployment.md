@@ -30,7 +30,7 @@ npm run docs:preview
 3. 文档工作流先运行 `npm ci` 和站点构建；默认分支的非 PR 构建才进入 Pages 部署，PR 只构建。
 4. 在 Actions 确认部署成功后，再把站点视为已上线。
 
-默认项目站预计地址为 [pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)。这是部署目标，不代表本次工作树编辑已经发布。自定义域名需要另行配置 DNS、Pages 域名与 `DOCS_BASE=/`。
+默认项目站已于 2026-10-19 首次部署成功：[pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)。后续工作树编辑仍需推送并确认部署成功，不能将本地预览视为公开更新。自定义域名需要另行配置 DNS、Pages 域名与 `DOCS_BASE=/`。
 
 工作流仅使用 Pages 部署所需的最小权限，不需要在仓库保存个人访问令牌。不要用不受信任的 PR 构建直接部署生产站。
 
