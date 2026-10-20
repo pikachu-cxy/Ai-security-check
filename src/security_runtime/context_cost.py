@@ -31,6 +31,7 @@ MAX_EVENTS = 10_000
 RETENTION_SECONDS = 14 * 86400
 MAX_HOST_IMPORTS = 1_000
 MAX_MEASURE_BYTES = 64 * 1024 * 1024
+MONITOR_MODES = ('off', 'basic', 'debug')
 RUN_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z')
 TOOL_NAMES = frozenset('''scan_diff scan_project scan_files get_findings prepare_triage submit_triage
 get_runtime_info get_runtime_guidance get_professional_guidance get_scan_preparation_status
@@ -65,6 +66,12 @@ def _build_metadata():
     # Development mode deliberately avoids a tree hash/git subprocess per call.
     # The label permits comparisons; an unverified build id is never invented.
     build = dict(version=__version__, build_id=None, build_status='DEVELOPMENT')
+    if not getattr(sys, 'frozen', False):
+        from .managed_identity import managed_build_identity
+        managed = managed_build_identity(Path(__file__).parent, version=__version__)
+        if managed is not None:
+            return dict(version=__version__, build_id=managed.get('build_id'),
+                        build_status=managed['status'], source_commit=managed.get('source_commit'))
     if getattr(sys, 'frozen', False):
         try:
             path = Path(sys.executable).absolute().parent / 'version.json'
@@ -208,6 +215,7 @@ class ContextCostStore:
                 db.execute('CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at REAL, run TEXT, record BLOB, mac TEXT)')
                 db.execute('CREATE INDEX IF NOT EXISTS cost_events_run ON events(run,at)')
                 db.execute('CREATE TABLE IF NOT EXISTS host_usage (source TEXT PRIMARY KEY, at REAL, run TEXT, record BLOB, mac TEXT)')
+                db.execute('CREATE TABLE IF NOT EXISTS monitor_settings (id INTEGER PRIMARY KEY CHECK(id=1), record BLOB, mac TEXT)')
                 db.commit()
                 db.execute('BEGIN IMMEDIATE')
             else:
@@ -234,21 +242,78 @@ class ContextCostStore:
         db.execute('DELETE FROM host_usage WHERE at < ?', (cutoff,))
         db.execute('DELETE FROM host_usage WHERE source NOT IN (SELECT source FROM host_usage ORDER BY at DESC LIMIT ?)', (MAX_HOST_IMPORTS,))
 
-    def record_call(self, tool_name, result, *, elapsed_ms=0, transport='workspace',
-                    connection_id='', workspace=None, run_label=None, succeeded=True):
+    def monitoring(self):
+        """Read the live setting without initializing storage; environment wins."""
+        if os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR') == '0':
+            return dict(status='AVAILABLE', mode='off', source='environment')
+        override = os.getenv('SECURITY_RUNTIME_CONTEXT_MODE')
+        if override is not None:
+            return dict(status='AVAILABLE' if override in MONITOR_MODES else 'UNAVAILABLE',
+                        mode=override if override in MONITOR_MODES else 'off', source='environment')
         try:
-            label = globals()['run_label'](run_label)
+            if not self.path.exists():
+                return dict(status='AVAILABLE', mode='basic', source='default', run=run_label())
+            db, key = self._connect()
+            with closing(db):
+                exists = db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='monitor_settings'").fetchone()
+                row = db.execute('SELECT substr(record,1,16385),substr(mac,1,129) FROM monitor_settings WHERE id=1').fetchone() if exists else None
+            if row is None:
+                return dict(status='AVAILABLE', mode='basic', source='default', run=run_label())
+            records, invalid = self._verified([row], key)
+            if invalid or records[0].get('mode') not in MONITOR_MODES:
+                raise ValueError('INVALID_MONITOR_SETTING')
+            label = run_label(os.getenv('SECURITY_RUNTIME_CONTEXT_RUN', records[0].get('run', 'default')))
+            return dict(status='AVAILABLE', mode=records[0]['mode'], source='saved', run=label)
+        except Exception:
+            return dict(status='UNAVAILABLE', mode='off', source='unavailable')
+
+    def set_monitoring(self, mode, run=None):
+        if mode not in MONITOR_MODES:
+            return dict(status='INVALID_MODE')
+        try:
+            label = run_label(run) if run is not None else self.monitoring().get('run', 'default')
+            db, key = self._connect(write=True)
+            with closing(db), db:
+                encoded, mac = self._signed(key, dict(mode=mode, run=label))
+                db.execute('INSERT OR REPLACE INTO monitor_settings VALUES(1,?,?)', (encoded, mac))
+            return dict(status='AVAILABLE', saved_mode=mode, effective=self.monitoring(),
+                        takes_effect='NEXT_CALL_WITH_SAME_DATABASE', historical_data_retained=True)
+        except Exception:
+            return dict(status='UNAVAILABLE', reason_code='CONTEXT_COST_OBSERVATION_UNAVAILABLE')
+
+    def record_call(self, tool_name, result, *, elapsed_ms=0, transport='workspace',
+                    connection_id='', workspace=None, run_label=None, succeeded=True,
+                    started_at=None, finished_at=None, mode=None):
+        try:
+            setting = self.monitoring()
+            if setting['status'] != 'AVAILABLE':
+                return {'status': 'UNAVAILABLE', 'reason_code': 'CONTEXT_COST_OBSERVATION_UNAVAILABLE'}
+            if setting['mode'] == 'off':
+                return {'status': 'DISABLED'}
+            # A call started in basic mode cannot acquire details after a switch.
+            debug = setting['mode'] == 'debug' and mode in (None, 'debug')
+            observation_started = time.monotonic()
+            label = globals()['run_label'](run_label if run_label is not None else setting.get('run'))
             mapped, sizes = _measure(result)
             db, key = self._connect(write=True)
             with closing(db), db:
                 digest = lambda kind, value: self._digest(key, kind, value)
                 elapsed = int(elapsed_ms) if isinstance(elapsed_ms, (int, float)) and math.isfinite(elapsed_ms) else 0
-                record = dict(schema_version=1, tool=tool_name if tool_name in TOOL_NAMES else 'unknown',
+                record = dict(schema_version=2, tool=tool_name if tool_name in TOOL_NAMES else 'unknown',
                               transport=transport if transport in TRANSPORTS else 'unknown',
                               succeeded=succeeded is True, elapsed_ms=max(0, min(elapsed, 86_400_000)),
                               connection_hash=digest('connection', connection_id) if connection_id else None,
                               workspace_hash=digest('workspace', os.path.normcase(os.path.abspath(str(workspace)))) if workspace else None,
                               build=_build_metadata(), **sizes, **_observations(mapped, digest))
+                record.update(run_label=label, mode='debug' if debug else 'basic')
+                if debug:
+                    valid_time = (type(started_at) in (int, float) and type(finished_at) in (int, float)
+                                  and math.isfinite(started_at) and math.isfinite(finished_at)
+                                  and 0 <= started_at <= finished_at <= 32_503_680_000)
+                    record.update(call_id=secrets.token_hex(12),
+                                  started_at=started_at if valid_time else None,
+                                  finished_at=finished_at if valid_time else None,
+                                  observation_prewrite_ms=round((time.monotonic() - observation_started) * 1000, 3))
                 encoded, mac = self._signed(key, record)
                 db.execute('INSERT INTO events(at,run,record,mac) VALUES(?,?,?,?)', (time.time(), label, encoded, mac))
                 self._prune(db)
@@ -336,21 +401,39 @@ class ContextCostStore:
                 invalid += 1
         return result, invalid
 
-    def summary(self, run_label=None):
+    def snapshot(self, run_label=None):
+        """Bounded, verified local records shared by summary and report readers."""
         try:
             label = globals()['run_label'](run_label) if run_label is not None else None
             if not self.path.exists():
-                return self._summary([], [], label, 0)
+                return dict(status='AVAILABLE', events=[], reports=[], label=label, invalid=0)
             db, key = self._connect()
             with closing(db):
+                db.execute('BEGIN')
                 where = ' WHERE at>=?' + (' AND run=?' if label is not None else '')
                 params = (time.time() - RETENTION_SECONDS,) + ((label,) if label is not None else ())
                 events, bad1 = self._verified(db.execute('SELECT substr(record,1,16385),substr(mac,1,129) FROM events' + where + ' ORDER BY id DESC LIMIT ?', (*params, MAX_EVENTS)).fetchall(), key)
                 usage, bad2 = self._verified(db.execute('SELECT substr(record,1,16385),substr(mac,1,129) FROM host_usage' + where + ' ORDER BY at DESC LIMIT ?', (*params, MAX_HOST_IMPORTS)).fetchall(), key)
-            return self._summary(events, usage, label, bad1 + bad2)
+            # v2 binds the label inside the MAC too. Legacy labels remain marked.
+            valid = [item for item in events if item.get('schema_version') == 1 or
+                     (RUN_PATTERN.fullmatch(str(item.get('run_label', ''))) and
+                      (label is None or item['run_label'] == label))]
+            return dict(status='AVAILABLE', events=valid, reports=usage, label=label,
+                        invalid=bad1 + bad2 + len(events) - len(valid))
         except Exception:
+            return dict(status='UNAVAILABLE')
+
+    def summary(self, run_label=None):
+        snapshot = self.snapshot(run_label)
+        if snapshot['status'] == 'UNAVAILABLE':
             return dict(status='UNAVAILABLE', reason_code='CONTEXT_COST_OBSERVATION_UNAVAILABLE',
                         actual_model_tokens=None, actual_model_tokens_status='UNKNOWN')
+        try:
+            result = self._summary(snapshot['events'], snapshot['reports'], snapshot['label'], snapshot['invalid'])
+            result['monitoring'] = self.monitoring()
+            return result
+        except Exception:
+            return dict(status='UNAVAILABLE', actual_model_tokens=None, actual_model_tokens_status='UNKNOWN')
 
     @staticmethod
     def _summary(events, reports, label, invalid):

@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-19。当前资料已合并过时阶段教程和重复验收记录，旧版本通过 Git 历史查阅。
+更新日期：2026-10-20。当前资料已合并过时阶段教程和重复验收记录，旧版本通过 Git 历史查阅。
 
 | 目标 | 入口 |
 | --- | --- |
@@ -13,6 +13,7 @@
 | 恢复开发 | [开发交接](DEVELOPMENT_HANDOFF.zh-CN.md)、[项目上下文](PROJECT_CONTEXT.md) |
 | 规则、设计及性能 | [设计导航](design/README.md)、[性能数据](ARCHITECTURE_PERFORMANCE.zh-CN.md) |
 | 上下文开销与实际 token 对比 | [监测、导入与实验方法（当前源码）](guides/CONTEXT_COST_MONITORING.zh-CN.md) |
+| 实时消耗可视化与采集开关 | [独立页面、任务窗口、计量边界与移除方式](guides/LIVE_MONITORING.zh-CN.md) |
 | 产品和企业边界 | [产品规划](PRODUCT_ROADMAP.md)、[功能验证](FUNCTIONAL_VERIFICATION.md) |
 | 旧发行说明 | [历史发行](archive/2026-10/README.md) |
 

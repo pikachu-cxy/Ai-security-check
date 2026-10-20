@@ -13,6 +13,9 @@ def test_final_response_measured_once_in_global_router(monkeypatch):
     calls = []
 
     class Store:
+        def monitoring(self):
+            return dict(status='AVAILABLE', mode='basic')
+
         def record_call(self, name, result, **metadata):
             calls.append((name, result, metadata))
 
@@ -52,6 +55,9 @@ def test_metrics_failure_never_changes_result_or_cancellation(monkeypatch):
     from security_runtime.context_cost_mcp import observe_response
 
     class BrokenStore:
+        def monitoring(self):
+            return dict(status='AVAILABLE', mode='debug')
+
         def record_call(self, *args, **kwargs):
             raise OSError('private exception text')
 

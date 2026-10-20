@@ -28,6 +28,51 @@ Codex CLI 的实际 usage 则覆盖相应宿主运行，不能把全部变化归
 
 监测默认启用。使用更新后的 Runtime 并重新连接宿主后，正常工具调用就会记录。
 
+### 可切换的消耗调试模式（当前源码新增）
+
+本节的新命令已进入源码，并在本机以 `4e926b5ba565…` 的 0.3.8 本地调试构建安装验证，尚未公开发行。已有其他 0.3.8 包不因版本号相同而自动具备这些命令；需安装包含该功能的构建后使用。源码开发环境可在仓库根目录用 `PYTHONPATH=src .venv/bin/python -m security_runtime.cli` 代替下列 `security-check`。
+
+本机受管安装入口未加入 PATH 时，可先设置 `RUNTIME_DEBUG="$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"`，再以 `"$RUNTIME_DEBUG"` 代替下列 `security-check`。首次升级后需重启 Codex，让既有 MCP 进程切到新构建；之后保存模式即时生效。
+
+```console
+security-check context-usage monitor
+security-check context-usage monitor --mode debug --run pilot-one
+security-check context-usage monitor --mode basic
+security-check context-usage monitor --mode off
+```
+
+- `basic` 为兼容既有行为的默认值：记录调用统计，保留原有数据，不增加调用时间线。
+- `debug` 记录调用统计、随机调用编号和起止时间，支持观察工具流程与并发；阶段按工具类别划分，不代表扫描器内部计时。
+- `off` 停止自动记录新的调用，保留已有数据供查询和导出；显式导入用量仍属于用户主动写入。
+
+模式和可选运行标签保存在同一统计库，使用该库的进程在后续调用读取，无需重启。关闭过程中已开始的调用可能已有观测；关闭不是历史清理。`--db` 只控制指定的统计库，不会修改 MCP 进程正在使用的库。默认库在当前用户范围共享，开关影响同一库的其他宿主连接；运行标签用于实验分组，不是会话或项目隔离证明。
+
+环境变量优先：`SECURITY_RUNTIME_CONTEXT_MONITOR=0` 强制关闭；否则 `SECURITY_RUNTIME_CONTEXT_MODE=off|basic|debug` 覆盖保存的模式，使用环境指定的运行标签或 `default`。`SECURITY_RUNTIME_CONTEXT_RUN` 覆盖保存的运行标签。非法模式或不可读取的设置停止观测并返回未知，不影响原工具结果。环境变量需要在 MCP 进程启动环境中设置，修改它们仍需重连；保存开关不需要。
+
+### 真实统计的本地可视化（当前源码新增）
+
+```console
+security-check context-usage report --run pilot-one --output pilot-one.html
+security-check context-usage report --run pilot-one --output pilot-one.json
+```
+
+输出目录须存在，文件须为新的 `.html` 或 `.json`；拒绝覆盖已有文件和链接路径。默认最多导出最近 2,000 条明细，可用 `--limit 1..10000` 调整；总览和排名仍基于所选运行的全部有效保留记录，省略数量会明确显示。省略 `--run` 时涵盖该统计库全部保留运行，不能当作当前聊天的独立用量。
+
+HTML 是离线交互快照，无外部脚本、网络请求或源码正文。打开文件即可查看：
+
+- 运行整体的真实 token、响应字节、累计工具耗时、调用和错误数；没有导入 usage 时 token 显示未知。
+- 工具耗时/返回量/次数排名、单次最大值及 P50/P95；分位数为保留样本的最近秩计算，样本量单独显示。
+- 按工具、类别、状态和名称筛选调用明细及时间线，查看详细模式中的并发调用。筛选不改变顶部完整样本总览及排名，也不会将运行级 token 分配给单个工具。
+- 观测窗口、工具区间并集、数据缺失、无效记录、导出省略及构建身份；已有基础记录没有起止时间，不能补建历史时间线。
+
+页面提供采集模式切换命令的复制入口和 JSON 下载；它不能直接控制后台进程。切换后需重新导出新文件才能刷新快照。导出只读取已有统计，不触发扫描、模型调用、安装或修复。
+
+`elapsed_ms` 使用单调时钟；起止时间用墙钟。区间并集不重复累计并发，但不是完整任务实际用时；系统时钟变化会限制时间线解释。模型处理、宿主调度、网络和锁/队列等待尚无独立记录时明确为未知。调试记录中的 `observation_prewrite_ms` 只计测量准备至写入前的开销，排除设置读取、事务提交与完整监控开销，不可作为监控总成本。
+
+实时页面现已作为可选独立模块提供，每 2 秒刷新，支持采集模式控件、单份聊天真实用量读取、扫描入口分类和手动观察窗口。完整产品任务身份、内部阶段/等待拆分及宿主 token 的调用级关联仍待补齐。启动、计量边界与整体移除方式见[实时页面指南](LIVE_MONITORING.zh-CN.md)。实时页面从源码独立运行，不要求替换当前受管 Runtime。
+
+聊天总 token 包含开发、讨论和核查等宿主消耗，不能视为产品扫描消耗；显式扫描入口响应耗时也不等于扫描器内部时间。此次只增加观测和展示，不改变检查、复核、缓存或调度策略，不宣称节省 token 或时间。
+
 ```console
 security-check context-usage status --json
 ```
@@ -88,7 +133,7 @@ AGENT_NATIVE 每批领域 JSON 预算为 64 KiB，含指导、schema 和检查�
 公共统计依赖通用 token 计数契约；Codex 日志解析只在显式导入命令执行。
 Cursor 及其他 MCP 宿主可以使用字节统计，无真实 usage 适配器时保持 token 未知。
 这些变更没有修改编辑器配置、审批开关或宿主的上下文管理。
-Windows/macOS 使用相同代码；本轮定向测试运行在 Windows，macOS 实机尚未验收。
+Windows/macOS 使用相同代码。早期监测定向测试在 Windows；本轮新增实时页面及相关 72 项回归在 macOS 完成，Windows 实时页面仍待实机验收。
 
 ## 可重复的本地基准
 

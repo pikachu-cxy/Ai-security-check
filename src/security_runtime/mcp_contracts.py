@@ -177,9 +177,15 @@ class MCPRegistry:
 
     def observe_context_cost(self, *, workspace=None):
         """Observe each external response once, after SDK normalization."""
+        import os
+        if os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR') == '0':
+            return
+        try:
+            from .context_cost_mcp import observe_response
+        except Exception:
+            return
         from mcp.types import CallToolRequest
         from uuid import uuid4
-        from .context_cost_mcp import observe_response
         original = self.low_level.request_handlers[CallToolRequest]
         connection_id = uuid4().hex
 

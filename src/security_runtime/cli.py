@@ -155,8 +155,12 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
-    from .context_cost_cli import register as register_context_usage
-    register_context_usage(sub)
+    # Optional observer: removing it must not remove any product commands.
+    try:
+        from .context_cost_cli import register as register_context_usage
+        register_context_usage(sub)
+    except Exception:
+        pass
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
     skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
