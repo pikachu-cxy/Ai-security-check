@@ -1,5 +1,11 @@
 # 下载与构建状态
 
+## Mac 用户：独立环境安装试用
+
+使用 **Cursor 或 Codex** 的 Mac 用户可前往 [Mac 一条命令安装](./guide/macos-trial.md)。安装器会自动准备专用 Python 和产品包，无需预装 Python、Git 或 Homebrew；适合首次试用，也适合原完整包启动时被系统拒绝的用户。
+
+该入口使用独立预发行 `macos-trial-v0.3.8.1`，不替换下方 0.3.8 完整包。真实 M 系列 Mac 桌面验收仍待用户试用；已有所选编辑器的连接可能更新为试用版本，安装前请阅读[适用范围与恢复说明](./guide/macos-trial.md)。
+
 ## 当前发行：0.3.8 · Developer Alpha
 
 [v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 已公开发布并于 2026-10-20 替换更新。Windows、Mac Apple Silicon 与 Mac Intel 的当前包来自同一产品源码提交 [`8d5d9a6`](https://github.com/pikachu-cxy/Ai-security-check/commit/8d5d9a694529c7d29cb1fa79c6843ea0763576a9)，实际构建身份以各平台包的 `build_id` 为准。

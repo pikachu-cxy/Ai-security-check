@@ -48,6 +48,10 @@ def build_identity():
         except (OSError, ValueError, KeyError, TypeError, RecursionError):
             return {'status': 'UNVERIFIABLE_LEGACY_BUNDLE', 'version': __version__, 'state_schema': STATE_SCHEMA}
     source = Path(__file__).parent
+    from .managed_identity import managed_build_identity
+    managed = managed_build_identity(source, version=__version__)
+    if managed is not None:
+        return managed
     digest = hashlib.sha256(b'runtime-source-build-v1')
     total = 0
     for path in sorted(source.rglob('*')):

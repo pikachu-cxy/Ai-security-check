@@ -8,15 +8,15 @@ const editors = {
     name: 'Codex',
     target: '接入本地 Codex',
     page: 'codex',
-    steps: '使用完整包的 install codex 入口，配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
-    note: '粘贴到本机 Codex 聊天，让它下载、核验并安装。'
+    steps: 'Windows 使用完整包的 install codex 入口；macOS 使用官方 Mac 独立环境试用安装器并选择 codex，先说明试用范围及已有 Codex 连接可能更新。配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
+    note: '粘贴到本机 Codex 聊天。Windows 使用完整包，Mac 使用独立环境试用入口；已有 Codex 连接可能更新为所选版本。'
   },
   cursor: {
     name: 'Cursor',
     target: '接入本地 Cursor',
     page: 'cursor',
-    steps: '按当前系统与芯片选择完整包，并阅读 Cursor 接入指南中的支持说明。使用完整包的 install cursor 入口，配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
-    note: '粘贴到本机 Cursor 的 Agent 聊天，让它选择 Windows 或 macOS 对应完整包，完成下载、核验和安装。'
+    steps: '阅读 Cursor 接入指南中的支持说明。Windows 使用完整包的 install cursor 入口；macOS 使用官方 Mac 独立环境试用安装器并选择 cursor，先说明试用范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
+    note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 使用完整包，Mac 使用独立环境试用入口；已有 Cursor 连接可能更新为所选版本。'
   },
   workbuddy: {
     name: 'WorkBuddy',
@@ -34,13 +34,16 @@ const editors = {
   }
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
+const installSource = computed(() => ['codex', 'cursor'].includes(editor.value.page)
+  ? '自动识别系统与芯片。Windows 选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。macOS 按 https://pikachu-cxy.github.io/Ai-security-check/guide/macos-trial.html 使用独立预发行 macos-trial-v0.3.8.1 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。该试用尚未完成真实 M 系列 Mac 桌面验收，不宣称 Apple 签名或公证已验证。'
+  : '自动识别系统与芯片，选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
 
 const copied = ref(false)
 const copyFailed = ref(false)
 const request = computed(() => `请根据 https://pikachu-cxy.github.io/Ai-security-check/guide/editors/${editor.value.page}.html 的官方安装说明，在当前电脑安装 AI Security Runtime，并${editor.value.target}。
-自动识别系统与芯片，选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。备份并保留现有配置、其他 MCP 服务及用户修改。
+${installSource.value}备份并保留现有配置、其他 MCP 服务及用户修改。
 ${editor.value.steps}
-等待组件及漏洞数据就绪；不要用源码开发安装替代发行包，不关闭系统安全保护或 TLS 校验。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
+等待组件及漏洞数据就绪；不要自行用源码开发安装替代官方发行或官方试用入口，不关闭系统安全保护或 TLS 校验。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
 安装期间保持当前聊天，完成后核对版本、build_id、组件状态与漏洞库有效期，分别说明安装结果和仍待验证的步骤，并提示我重启${editor.value.name === '其他 MCP 客户端' ? '实际使用的客户端' : editor.value.name}生效。重启后通过实际工具调用确认连接和项目路径；无法确认的部分明确列出。不扫描或修改我的业务项目。`)
 
 watch(editor, () => {

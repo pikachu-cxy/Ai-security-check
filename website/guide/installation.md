@@ -2,6 +2,8 @@
 
 正常接入从[选择编辑器](./quickstart.md)开始。0.3.8 完整包的 `install codex` 和 `install cursor` 已自动启动组件准备。本页的查询和扩展命令按需使用。
 
+Mac 的 Cursor / Codex 用户可以使用 [独立环境一条命令安装（试用）](./macos-trial.md)。试用版的程序路径与下文完整包不同，查询命令、版本核对及切回方法请以试用页面为准。
+
 ## 查看准备进度
 
 以下命令在能看到 `security-check` 文件夹的目录执行，每次选择需要的一条：
@@ -52,7 +54,7 @@ Cursor 用户使用 `integration status cursor --scope global --json`。这些�
 | `--json` | 需要机器可读的安装回执 |
 | `--dev` | 源码开发调试，普通完整包安装无需使用 |
 
-当前没有正式交付 `npx` 或远程 Shell / PowerShell 一键下载安装入口。完整包不要求系统 Python 或 Node.js。
+Mac 的 Cursor / Codex 已提供[远程 Shell 试用安装入口](./macos-trial.md)，自动准备独立 Python 环境。当前未提供 `npx` 或远程 PowerShell 安装入口。完整包不要求系统 Python 或 Node.js。
 
 ## 手动准备组件
 
@@ -74,7 +76,7 @@ Cursor 用户使用 `integration status cursor --scope global --json`。这些�
 
 公开包尚无 Apple Developer ID 签名与公证保证。出现“未知开发者”时，先核对官方包的 SHA256 并保留完整目录。确认来源可信后，按 [Apple 的单个应用批准流程](https://support.apple.com/zh-cn/102445)，在“系统设置 → 隐私与安全性”中处理系统提示。
 
-若出现 `library load disallowed by system policy`，保留完整报错，查看[下载页](../downloads.md)的 Mac 修订状态。不要全局关闭系统保护或 TLS 校验。若出现 `no such file`，检查是否完整解压；重新解压到新目录，避免混入旧包文件。
+若出现 `library load disallowed by system policy` 或 `Failed to load Python shared library`，保留完整报错。Cursor / Codex 用户可尝试[独立环境安装](./macos-trial.md)，它避开原完整包加载内嵌 Python 的方式，成功与否仍需按页面完成验证。不要全局关闭系统保护或 TLS 校验。若出现 `no such file`，检查是否完整解压；重新解压到新目录，避免混入旧包文件。
 
 Mac 包通常已带执行权限。仅当执行位丢失且出现 `Permission denied` 时才补充执行权限；执行位不能解决签名或系统策略拒绝的问题。
 

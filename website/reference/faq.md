@@ -38,7 +38,11 @@ Git 拉取与正常开发都按真实修改前记录和实际改动范围核对�
 
 ## Cursor 支持哪些系统，如何确认能用？
 
-Cursor 安装页提供 Windows 和 macOS 的完整接入命令，Mac 按 Apple Silicon 或 Intel 选择对应包。安装后重启 Cursor，先核对连接、版本、组件与项目路径，再完成一次小任务检查。可直接使用 [Cursor 安装与使用](../guide/editors/cursor.md)中的请求和示例。具体桌面验收记录与尚未覆盖的环境见[支持状态](./support.md#cursor-接入与桌面验证)。
+Cursor 安装页提供 Windows 完整包和 [Mac 独立环境试用入口](../guide/macos-trial.md)，Mac 安装器会自动选择 Apple Silicon 或 Intel。安装后重启 Cursor，先核对连接、版本、组件与项目路径，再完成一次小任务检查。可直接使用 [Cursor 安装与使用](../guide/editors/cursor.md)中的请求和示例。具体桌面验收记录与尚未覆盖的环境见[支持状态](./support.md#cursor-接入与桌面验证)。
+
+## Mac 安装提示 Python 动态库被系统拒绝，怎么办？
+
+原完整包如果出现 `Failed to load Python shared library` 或 `library load disallowed by system policy`，可以尝试 [Mac 独立环境安装](../guide/macos-trial.md)。它自动下载产品专用 Python 与产品包，无需预装 Python、Git 或 Homebrew，避开原包内嵌 Python 的加载路径。这个新入口仍处于试用阶段，请按页面核对真实连接与组件状态，失败时提供脱敏诊断，不关闭系统安全保护。
 
 ## Windows TEMP 路径太长怎么办？
 

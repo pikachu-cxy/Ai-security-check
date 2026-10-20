@@ -8,6 +8,7 @@ on:
       - 'README.md'
       - 'README.zh-CN.md'
       - '.github/workflows/docs.yml'
+      - 'distribution/macos/install.sh'
   pull_request:
     paths:
       - 'website/**'
@@ -24,6 +25,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      trial_ready: ${{ steps.trial-assets.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,12 +40,31 @@ jobs:
         working-directory: website
       - run: npm run docs:build
         working-directory: website
+      - name: Include the opt-in macOS trial installer
+        run: |
+          mkdir -p website/.vitepress/dist/install
+          cp distribution/macos/install.sh website/.vitepress/dist/install/macos.sh
+      - name: Check that the documented trial downloads are public
+        id: trial-assets
+        run: |
+          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.8.1
+          ready=true
+          for platform in macos-arm64 macos-x64; do
+            for suffix in .tar.gz .tar.gz.sha256; do
+              curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
+                "$base/ai-security-runtime-macos-trial-$platform$suffix" >/dev/null || ready=false
+            done
+          done
+          echo "ready=$ready" >> "$GITHUB_OUTPUT"
+          if [ "$ready" != true ]; then
+            echo 'Trial assets are not public yet. The trial release workflow will request deployment after publishing.' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feature/runtime-mvp'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feature/runtime-mvp' && needs.build.outputs.trial_ready == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:
