@@ -1,5 +1,15 @@
 # 版本与进度
 
+## 0.3.8 · Developer Alpha · 源码阶段
+
+2026-10-20：当前源码版本为 0.3.8，本地候选待构建验证，尚未公开发布安装包；公开下载仍使用下述 0.3.7 发行。
+
+- 工作流指导按需加载、去重，并按版本、摘要和实际构建身份复用已读内容。
+- MCP 接通共用扫描阶段进度与计时，区分本次核验、历史扫描和宿主侧未知耗时。
+- 支持明确指定工作区相对文件，展示实际范围，不把单文件请求扩大为整项目。
+- 完整项目扫描仅在源码、规则、引擎、配置及数据身份等证明有效时复用结果；无法核验或明确要求重扫时重新执行。
+- 保留必要复核与修复授权。Windows/macOS、Codex/Cursor 共用核心逻辑，进度显示由宿主能力决定，不沿用旧包的原生或桌面验收结论。
+
 ## 0.3.7 · Developer Alpha
 
 2026-10-20：[0.3.7 发布构建](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39365932407)已通过，[v0.3.7](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.7)的九项资产已公开，下载及校验入口见[下载页](../downloads.md)。Windows、Mac Apple Silicon 与 Mac Intel 使用同一版本和同一发布提交 `96ade76`。

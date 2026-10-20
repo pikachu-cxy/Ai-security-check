@@ -1,5 +1,11 @@
 # 下载与构建状态
 
+## 当前源码：0.3.8 · Developer Alpha
+
+0.3.8 源码包含工作流指导去重、MCP 阶段进度与计时、明确文件范围扫描，以及经过身份核验的完整项目扫描结果复用。必要复核、修复授权与强制重扫行为保留，Windows/macOS、Codex/Cursor 共用核心实现；实时进度显示取决于宿主支持。
+
+本地候选待构建验证，尚未公开发布 0.3.8 安装包。下面的下载链接仍为已发布的 0.3.7，不包含这些扫描体验改进；源码更新不代表已安装产品同步升级。
+
 ## 当前发行：0.3.7 · Developer Alpha
 
 [v0.3.7 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.7) 使用固定提交 [`96ade76`](https://github.com/pikachu-cxy/Ai-security-check/commit/96ade76788fa76a5b31f85ce33b4356dc36d250e)，Windows、Mac Apple Silicon 与 Mac Intel 来自同一版本和同一源码提交。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
