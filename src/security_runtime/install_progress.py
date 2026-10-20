@@ -389,7 +389,7 @@ class InstallationProgress:
             if succeeded and not scan_ready:
                 self._write('本地安装完成；扫描能力准备状态见下方回执，后台进度可用 preparation watch 查看。')
                 return
-            self._write('本地安装完成。请完全退出并重启 Codex，按提示审核 Hook 信任；扫描能力以实际扫描结果为准。'
+            self._write('本地安装完成。请按下方回执完全退出并重启对应编辑器，审核工具连接与 Hook 信任；扫描能力以实际扫描结果为准。'
                         if succeeded else '安装未完成。请查看下方诊断；不要删除配置或 Skill，也不要将本次安装视为成功。')
 
     def __exit__(self, exc_type, exc, traceback):
