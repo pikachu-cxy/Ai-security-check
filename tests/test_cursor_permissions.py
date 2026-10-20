@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from security_runtime.cursor_permissions import CursorRoutinePermissions, ENTRIES, document, edit_allowlist, ide_allowlist
+from security_runtime import cursor_permissions
 from security_runtime.hook_state import HookStateStore
 from security_runtime.owned_json import WriteTransaction
 from test_cursor_automatic import integration
@@ -39,6 +40,102 @@ def test_setup_exact_routine_tools_idempotent_remove(permissions):
     assert permissions.status()['live_no_prompt_verified'] is False
     permissions.execute('remove')
     assert not permissions.path.exists() and not permissions.manifest.exists()
+
+
+def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monkeypatch):
+    """New MCP tools must be classified; discovery must never auto-grant them."""
+    import asyncio
+    from security_runtime.global_mcp import create_global_server
+    from security_runtime.mcp_contracts import MCPRegistry
+    from security_runtime.mcp_server import create_server
+
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'private'))
+    monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
+    # These operations start scans, plan/authorize repairs, or recheck repairs.
+    explicit = {
+        'scan_project', 'scan_diff', 'prepare_closeout_check', 'run_closeout_check',
+        'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
+        'confirm_remediation', 'refresh_remediation_confirmation',
+        'generate_fix', 'verify', 'verify_task_fix',
+    }
+    # Host event adapters are invoked by installed hooks, not routine chat.
+    host_events = {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
+    optional_execution = {'prepare_functional_verification', 'run_functional_verification'}
+    routine = set(cursor_permissions.ROUTINE_TOOLS)
+    assert not routine & (explicit | host_events | optional_execution)
+    assert len(routine) == len(cursor_permissions.ROUTINE_TOOLS)
+    local = create_server(global_mode=False, include_functional_verification=True)
+    assert set(MCPRegistry(local).names()) == routine | explicit | host_events | optional_execution
+    # Global inventory discovery must not admit or initialize any workspace.
+    routed = create_global_server(host='cursor', workspaces=object())
+    assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit
+
+
+@pytest.mark.parametrize('workflow', [
+    ('get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status'),
+    ('get_security_summary', 'get_findings', 'prepare_task_triage', 'submit_triage', 'get_triage'),
+    ('prepare_triage', 'submit_triage', 'get_triage'),
+    ('prepare_repair_impact', 'read_repair_impact_context', 'submit_repair_impact', 'get_repair_impact'),
+    ('get_closeout_status',),
+])
+def test_routine_workflow_steps_are_installed_as_exact_grants(permissions, workflow):
+    permissions.execute('setup')
+    grants = document(permissions.path.read_bytes())[3]['mcpAllowlist']
+    assert {'ai-security-runtime:'+name for name in workflow} <= set(grants)
+
+
+# Frozen pre-fix installation inventory, independent of the current allowlist.
+LEGACY_ROUTINE_TOOLS = (
+    'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+    'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
+    'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
+    'get_task_risk_ledger', 'get_runtime_info', 'get_scan_preparation_status', 'get_security_summary',
+    'get_findings', 'prepare_finding_feedback', 'submit_finding_feedback', 'get_finding_feedback',
+    'mark_finding_false_positive', 'revoke_finding_feedback', 'set_finding_disposition',
+    'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'get_task_risk_feedback',
+    'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'set_task_risk_disposition',
+)
+
+
+@pytest.mark.parametrize('user_config', [False, True])
+@pytest.mark.parametrize('action', ['setup', 'repair'])
+def test_upgrade_legacy_signed_permissions_preserves_ownership(permissions, monkeypatch, user_config, action):
+    original = b'{/* keep */ "mcpAllowlist":["user:tool","ai-security-runtime:get_triage"],"terminalAllowlist":["git status"]}'
+    if user_config:
+        permissions.path.write_bytes(original)
+    with monkeypatch.context() as legacy:
+        legacy.setattr(cursor_permissions, 'ENTRIES', tuple('ai-security-runtime:'+v for v in LEGACY_ROUTINE_TOOLS))
+        permissions.execute('setup')
+    assert permissions.status()['status'] == 'NEEDS_REPAIR'
+    permissions.execute(action)
+    assert permissions.status()['status'] == 'CONFIGURED'
+    grants = document(permissions.path.read_bytes())[3]['mcpAllowlist']
+    assert len(grants) == len(set(grants))
+    assert set(ENTRIES) <= set(grants)
+    owned = permissions.inspect()[3]['added']
+    if user_config:
+        assert 'ai-security-runtime:get_triage' not in owned
+    before = permissions.path.read_bytes(), permissions.manifest.read_bytes()
+    permissions.execute('repair')
+    assert before == (permissions.path.read_bytes(), permissions.manifest.read_bytes())
+    permissions.execute('remove')
+    assert not permissions.manifest.exists()
+    if user_config:
+        assert document(permissions.path.read_bytes())[3] == document(original)[3]
+        assert b'/* keep */' in permissions.path.read_bytes()
+    else:
+        assert not permissions.path.exists()
+
+
+def test_user_edit_during_legacy_upgrade_prevents_whole_file_removal(permissions, monkeypatch):
+    with monkeypatch.context() as legacy:
+        legacy.setattr(cursor_permissions, 'ENTRIES', tuple('ai-security-runtime:'+v for v in LEGACY_ROUTINE_TOOLS))
+        permissions.execute('setup')
+    permissions.path.write_bytes(b'/* user note */\n'+permissions.path.read_bytes())
+    permissions.execute('repair')
+    permissions.execute('remove')
+    assert b'/* user note */' in permissions.path.read_bytes()
+    assert document(permissions.path.read_bytes())[3] == {}
 
 
 @pytest.mark.parametrize('array', [

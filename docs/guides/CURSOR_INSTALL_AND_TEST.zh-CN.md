@@ -38,9 +38,24 @@
 - `get_task_review_method`、`get_task_review_plan`、`submit_task_review_batch`
 - `read_task_review_context`、`submit_task_security_review`、`get_task_security_review`
 - `get_task_risk_ledger`、`get_runtime_info`、`get_scan_preparation_status`、`get_security_summary`
+- `get_runtime_guidance`、`get_professional_guidance`
+- `get_findings`、`prepare_task_triage`、`prepare_triage`、`submit_triage`、`get_triage`
+- `prepare_repair_impact`、`read_repair_impact_context`、`submit_repair_impact`、`get_repair_impact`
+- `get_closeout_status`
+- `prepare_finding_feedback`、`submit_finding_feedback`、`get_finding_feedback`
+- `mark_finding_false_positive`、`revoke_finding_feedback`、`set_finding_disposition`
+- `prepare_task_risk_feedback`、`submit_task_risk_feedback`、`get_task_risk_feedback`
+- `mark_task_risk_false_positive`、`revoke_task_risk_feedback`、`set_task_risk_disposition`
 
-这些调用可以建立检查记录、运行检查、读取有限上下文和保存结果；不预批准修复确认、修复准备、
-生成补丁或项目全量扫描工具。风险修复继续遵守既有明确同意和原问题复查流程。
+这些调用可以建立开发任务检查记录、运行任务范围内的检查、读取指导、复核已有扫描结果、
+读取有限上下文、保存分析与用户明确要求的风险处置。修复影响分析不会批准修复。
+独立扫描（`scan_project`、`scan_diff`）、收尾检查的准备和执行、修复确认、修复准备、
+生成补丁及修复复查工具不预批准。风险处置与修复继续遵守既有明确同意和原问题复查流程。
+
+当前源码补齐了上述指导、扫描复核、影响分析和收尾状态调用；已发布的 0.3.7 包尚不包含这次补齐。
+使用包含本次修复的新构建再次安装或修复接入后，旧版签名配置会补齐缺失条目。
+只拉取源码不会更新已安装的独立包或用户级白名单。工具清单测试会对照实际 MCP 注册表，
+要求新增工具明确归入常规调用、需确认操作或宿主事件，避免静默漏配。
 已有 JSONC 注释、用户白名单、终端白名单与其他策略保留。如果原来只在 Cursor 界面设置 MCP 白名单，
 安装器会先只读导入该列表，避免新增文件后覆盖原有效列表；无法可靠读取时停止并保留配置。
 卸载只撤回签名记录中本产品实际添加的条目；原有授权和后来添加的用户授权保留。

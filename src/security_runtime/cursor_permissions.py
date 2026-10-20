@@ -22,6 +22,12 @@ ROUTINE_TOOLS = (
     'mark_finding_false_positive', 'revoke_finding_feedback', 'set_finding_disposition',
     'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'get_task_risk_feedback',
     'mark_task_risk_false_positive', 'revoke_task_risk_feedback', 'set_task_risk_disposition',
+    # Bundled guidance and existing-scan triage: never starts another scan.
+    'get_runtime_guidance', 'get_professional_guidance',
+    'prepare_task_triage', 'prepare_triage', 'submit_triage', 'get_triage',
+    # Analysis records/evidence do not authorize the selected repair itself.
+    'prepare_repair_impact', 'read_repair_impact_context', 'submit_repair_impact',
+    'get_repair_impact', 'get_closeout_status',
 )
 ENTRIES = tuple('ai-security-runtime:' + tool for tool in ROUTINE_TOOLS)
 MAX_BYTES = 262144
@@ -285,8 +291,14 @@ class CursorRoutinePermissions:
         missing = [v for v in ENTRIES if v not in known]
         desired = edit_allowlist(raw, add=[*imported, *missing]) if imported or missing else raw
         added = list(dict.fromkeys([*(record['added'] if record else []), *missing]))
+        created_hash = record['created_hash'] if record else (
+            hashlib.sha256(desired).hexdigest() if raw is None else None)
+        # An untouched product-created file stays removable after an upgrade.
+        # Any user edit breaks this match and must survive uninstall.
+        if record and raw is not None and created_hash == hashlib.sha256(raw).hexdigest():
+            created_hash = hashlib.sha256(desired).hexdigest()
         data = dict(contract=CONTRACT, added=added, had_key=record['had_key'] if record else 'mcpAllowlist' in value,
-                    created_hash=record['created_hash'] if record else hashlib.sha256(desired).hexdigest() if raw is None else None)
+                    created_hash=created_hash)
         signed = encode({**data, 'signature': hmac.new(self.store.key(self.home), encode(data), hashlib.sha256).hexdigest()})
         self.write(self.path, raw, desired)
         self.write(self.manifest, ownership, signed)
