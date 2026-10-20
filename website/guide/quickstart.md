@@ -1,56 +1,51 @@
+---
+description: 选择编辑器，用一条命令接入，再通过连接检查和一个小例子开始使用。
+---
+
 # 快速开始
 
-默认完整接入，不需要选择“MCP 版”或“完整版”。如果不希望自动配置 Skill 和 Hook，请走[手动 MCP](./mcp.md)。
+让 AI 帮你改代码时，同时检查这次改动里的安全问题。接入后，你可以直接在原来的聊天中提出开发需求、查看风险，再决定是否修复。
 
-## 让 Codex 帮你安装
+<div class="doc-journey" aria-label="开始使用的四个步骤">
+<span><b>01</b> 选择编辑器</span><span><b>02</b> 一条命令接入</span><span><b>03</b> 确认安装成功</span><span><b>04</b> 试一个 Demo</span>
+</div>
 
-已有本地 Codex 时，可以把安装交给它完成，无需手动输入终端命令。权限请求仍按客户端设置处理；当前 Mac 包的签名限制见[安装说明](./installation.md#macos-首次启动)。
+## 1. 选择你使用的编辑器
 
-<InstallRequest />
+每个编辑器都有独立的接入说明。请选择你实际使用的工具：
 
-以下命令供希望自己操作的用户使用。
+<EditorCards />
 
-## 1. 获取匹配的完整包
+## 2. 下载、解压，执行一条安装命令
 
-先看[下载与构建状态](../downloads.md)，选择 Windows x64、macOS Intel 或 macOS Apple Silicon。保留解压后的整个 `security-check` 目录，不要只取一个可执行文件。
+从[下载页](../downloads.md)获取与你的系统和芯片匹配的完整包，核对 SHA256 后解压。**保留整个 `security-check` 文件夹**，不要只拿出里面的可执行文件。完整包不要求另装 Python 或 Node.js。
 
-完整包内置运行时 Python，不要求另装 Python、pip 或 Node.js。首次检查组件准备仍需联网。当前 Developer Alpha 已通过三平台原生 CI；macOS 真机与 Cursor 桌面验收仍待独立完成，不作为稳定兼容性保证。
+进入对应编辑器的页面，复制一条适合你的系统的安装命令。完整安装会自动开始准备检查组件；首次下载可能需要等待，不必再执行一条准备命令。WorkBuddy 和其他客户端的手动 MCP 路径按各自页面操作。
 
-## 2. 执行完整接入
+::: info 从哪里打开终端？
+在能看到 `security-check` 文件夹的目录打开终端。例如解压到“下载”目录，就在“下载”目录执行页面上的命令。找不到程序时，先确认终端位置和解压后的文件夹层级。
+:::
 
-在**解压目录**打开终端。安装器会写入供下次启动使用的配置；由 Codex 辅助安装时保持当前聊天，完成后再完全退出并重启。安装期间不要运行其他安装器或编辑宿主配置。
+## 3. 重启编辑器，确认接入成功
 
-### Windows PowerShell
+安装结束后完全退出并重新打开编辑器，在项目的新聊天中发送：
 
-```powershell
-.\security-check\security-check.exe install codex
-if ($LASTEXITCODE -ne 0) { throw '接入未完成，请保留诊断' }
-.\security-check\security-check.exe preparation watch
+```text
+请确认 AI Security Runtime 是否已连接，检查版本和检查组件是否就绪。
+只检查安装状态，不扫描或修改项目。如果还没准备好，请告诉我原因和下一步。
 ```
 
-### macOS 终端
+你应得到明确的连接与组件状态。看到“安装完成”后，还需要这一步确认编辑器已加载新配置。具体判断方式见[安装成功了吗？](./verify.md)。
 
-以下为 Developer Alpha 完整包安装命令；需使用对应架构包，并保留系统提示与诊断，不要为安装而关闭系统安全保护。
+## 4. 跑一个小例子
 
-```sh
-./security-check/security-check install codex
-./security-check/security-check preparation watch
+先用[第一个使用 Demo](./demo.md)体验“检查 → 看懂问题 → 选择修复 → 复查”。想自己动手对照结果，可继续完成[测试用例](./playground.md)。
+
+接入成功后，日常直接说需求即可，例如：
+
+```text
+给导出功能增加文件名校验，保持原来的返回格式。
+完成后检查本次改动中的安全问题，说明检查范围和需要我决定的事项。
 ```
 
-接入会安装到当前用户的稳定目录、写入配套宿主配置并启动组件准备。已有配置冲突、权限或下载失败应按输出处理，不要重复覆盖配置。
-
-## 3. 确认准备与连接
-
-`preparation watch` 观察准备进度，`preparation status` 查询当前状态。下载完成仅代表组件可用，不代表任何项目已经检查。
-
-重新打开 Codex，在实际 Git 项目的新聊天中发送：
-
-> 请只核对已连接的 ai_security_runtime 的版本、构建身份、v3 任务工具及 task-result-delivery-v1 能力，不扫描、不修改代码。
-
-当前源码路径应具备 `task-review-plan-v3`、`task-result-delivery-v1` 及配套任务工具。相同版本号不一定是相同构建，请一并核对 `build_id` 和配套 Skill；不要把旧发行包与新 Skill 混用。
-
-## 4. 正常提出开发需求
-
-在项目内正常让 Agent 开发。编辑前建立任务基线，编辑后进行检查和关联复核。出现风险时再明确选择处置；仅询问修复影响不授权编辑。
-
-[详细安装与升级](./installation.md) · [风险处置](./risk-handling.md) · [排查问题](../reference/faq.md)
+[前往 Codex 安装 →](./editors/codex.md) · [查看支持范围](../reference/support.md)

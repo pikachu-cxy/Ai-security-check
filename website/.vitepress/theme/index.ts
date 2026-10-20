@@ -1,6 +1,7 @@
 import DefaultTheme from 'vitepress/theme'
 import ProductHome from './ProductHome.vue'
 import InstallRequest from './InstallRequest.vue'
+import EditorCards from './EditorCards.vue'
 import './style.css'
 
 export default {
@@ -8,5 +9,6 @@ export default {
   enhanceApp({ app }) {
     app.component('ProductHome', ProductHome)
     app.component('InstallRequest', InstallRequest)
+    app.component('EditorCards', EditorCards)
   }
 }

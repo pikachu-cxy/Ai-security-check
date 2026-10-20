@@ -2,7 +2,15 @@
 
 ## 安装为什么这么慢？
 
-完整程序接入与扫描能力准备是两个阶段。首次可能下载引擎、独立运行环境和漏洞数据库；先查看 `preparation status`，用 `preparation watch` 观察进度。不要反复清空缓存后重装。
+安装命令已经自动开始准备组件，首次可能下载引擎、独立运行环境和漏洞数据库。无需再执行第二条安装命令；需要了解进度时，按[高级命令](../guide/installation.md#查看准备进度)查询。不要反复清空缓存后重装。
+
+## 安装完了，怎么知道能用了？
+
+重启编辑器，在项目聊天中请求只读连接与组件状态查询，再用一个小例子确认实际检查结果能返回聊天。可直接复制[安装验证页](../guide/verify.md)的请求；随后完成[使用 Demo](../guide/demo.md)。
+
+## 在哪里查看各编辑器的安装步骤？
+
+左侧“接入你的编辑器”分为 [Codex](../guide/editors/codex.md)、[Cursor](../guide/editors/cursor.md)、[WorkBuddy](../guide/editors/workbuddy.md)和[其他 MCP 客户端](../guide/editors/other.md)。每页说明对应入口、安装或配置方法，以及实际支持范围。
 
 ## 能不下载漏洞库吗？
 
