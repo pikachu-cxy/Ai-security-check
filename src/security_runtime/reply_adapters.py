@@ -35,6 +35,32 @@ _GAPS = {
     'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '部分文件未能取得本次检查所需的当前内容。',
 }
 
+_ATTRIBUTION_REASON = 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
+_ATTRIBUTION_LABEL = '同一工作区的任务时间窗重叠，改动归属未能独立确认'
+
+
+def _attribution_details(record, limitations, static_complete):
+    """Display facts only; never upgrade persisted coverage or closure authority."""
+    attribution = [item for item in limitations if isinstance(item, dict)
+                   and item.get('reason') == _ATTRIBUTION_REASON]
+    if not attribution:
+        return (), set()
+    completion = record.get('review_completion') or {}
+    units, reviewed = completion.get('unit_count'), completion.get('reviewed_unit_count')
+    source_complete = (record['phase'] == 'COMPLETE'
+        and completion.get('status') == 'COMPLETE'
+        and completion.get('coverage') == 'REVIEWED'
+        and type(units) is int and units > 0 and type(reviewed) is int and reviewed == units
+        and not completion.get('gaps') and not record.get('context_gaps')
+        and not record.get('unverified_paths'))
+    # Recognize only the exact notes generated for these structured reasons.
+    # Unknown/historical prose remains a check gap rather than being hidden.
+    notes = {_ATTRIBUTION_LABEL + (f"（{item['count']} 项）" if item.get('count') else '')
+             for item in attribution}
+    return (('static_check', 'COMPLETED' if static_complete else 'INCOMPLETE'),
+            ('source_review', 'COMPLETED' if source_complete else 'INCOMPLETE'),
+            ('change_attribution', 'UNCONFIRMED')), notes
+
 
 def gap_notes(values):
     notes = []
@@ -61,6 +87,7 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
     state = phase
     complete = (static.get('status') in {'SUCCESS', 'COMPLETED'}
                 and static.get('coverage') in {'FULL', 'SCOPED'})
+    details, attribution_notes = _attribution_details(record, limitations, complete)
     if phase == 'COMPLETE' and (not complete or review.get('coverage') != 'REVIEWED'
                                or limitations or review.get('limitations')):
         state = 'PARTIAL'
@@ -68,8 +95,17 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
     if phase in {'COMPLETE', 'INCOMPLETE'}:
         if not complete:
             notices.append(Notice('CHECK_GAP', '静态检查未完成或覆盖受限，未检查范围的风险尚待核实。'))
-        for note in gap_notes([*limitations, *(review.get('limitations') or [])]):
+        check_gaps = [item for item in limitations if not (
+            isinstance(item, dict) and item.get('reason') == _ATTRIBUTION_REASON)]
+        check_gaps.extend(note for note in review.get('limitations') or []
+                          if not (isinstance(note, str) and note in attribution_notes))
+        for note in gap_notes(check_gaps):
             notices.append(Notice('CHECK_GAP', note))
+        if details:
+            notices.append(Notice('ATTRIBUTION',
+                '同一工作区存在任务时间窗重叠，无法独立确认本次改动的归属。'))
+            if dict(details)['source_review'] != 'COMPLETED':
+                notices.append(Notice('CHECK_GAP', '必读代码复核尚未完成或缺少完成记录。'))
         if phase == 'INCOMPLETE':
             notices.append(Notice('CHECK_GAP', record.get('skip_reason') or '代码复核尚未完成，已有检查记录保留。'))
         if not complete and record.get('hook_final_recheck_files'):
@@ -91,7 +127,7 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
         notices.extend(Notice('CHECK_GAP', note) for note in gap_notes(limitations))
     return ReplyFacts('TASK', CheckFact(state, len(record.get('changes', [])),
         len(static.get('scope_files', [])), raw,
-        capabilities=tuple((static.get('capability_results') or {}).items())), risks, tuple(notices), handling_available,
+        capabilities=tuple((static.get('capability_results') or {}).items()), details=details), risks, tuple(notices), handling_available,
         quiet=phase not in {'COMPLETE', 'INCOMPLETE'} and not notices)
 
 

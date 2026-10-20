@@ -68,11 +68,23 @@ def repair_impact_details(impact):
     return '\n\n'.join(parts)
 
 
+def _only_attribution_gap(plan):
+    details = dict(plan.check.details)
+    return (plan.check.state == 'PARTIAL'
+        and details.get('static_check') == details.get('source_review') == 'COMPLETED'
+        and details.get('change_attribution') == 'UNCONFIRMED'
+        and not any(notice.kind == 'CHECK_GAP' for notice in plan.notices)
+        and not any(state in {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}
+                    for _, state in plan.check.capabilities))
+
+
 def _check_message(plan):
     check = plan.check
     if check.message:
         return check.message
     if plan.intent == 'HISTORY':
+        if _only_attribution_gap(plan):
+            return '已保存的静态检查和必读代码复核均已完成；改动归属尚未独立确认。本次查询未重新执行检查。'
         if check.raw_findings:
             return f'检查记录共 {check.raw_findings} 项，风险详情按页返回；本次查询未重新执行检查。'
         if check.state == 'NO_CHANGES':
@@ -94,6 +106,8 @@ def _check_message(plan):
     message = f'安全核查：本任务有 {check.changed_files} 个改动文件，提交静态检查 {check.scope_files} 个文件。'
     if check.state == 'INCOMPLETE':
         message += '本次任务安全核查未完成。'
+    elif _only_attribution_gap(plan):
+        message += '静态检查和必读代码复核均已完成；改动归属尚未独立确认。'
     elif check.state == 'PARTIAL':
         message += '本次只完成部分安全检查。'
     elif not check.raw_findings:
@@ -126,13 +140,19 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
     check = _check_message(plan)
     if check:
         parts.append(('**检查范围**\n' if total else '')+check)
+    if plan.check.details and not _only_attribution_gap(plan):
+        details = dict(plan.check.details)
+        labels = {'COMPLETED': '已完成', 'INCOMPLETE': '未完成或覆盖受限'}
+        parts.append('静态检查：'+labels.get(details.get('static_check'), '尚未确认')+
+                     '；必读代码复核：'+labels.get(details.get('source_review'), '尚未确认')+'。')
     capability_labels = {'CODE_SAST': '代码安全检查', 'SECRET_SCAN': '密钥检查',
                          'DEPENDENCY_VULN': '依赖检查', 'IAC_MISCONFIG': '配置安全检查'}
     unavailable = [capability_labels[key]+'未完成' for key, state in plan.check.capabilities
                    if key in capability_labels and state in {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}]
     labels = {'CHECK_GAP': '检查未完成', 'PRIOR_VERIFICATION': '原问题复查',
               'HANDLING_RECEIPT': '处置结果', 'HANDLING_UNAVAILABLE': '处置记录',
-              'APPLICABILITY': '结果适用范围', 'CHECK_RESULT': '处置状态', 'SCOPE': '检查范围'}
+              'APPLICABILITY': '结果适用范围', 'CHECK_RESULT': '处置状态', 'SCOPE': '检查范围',
+              'ATTRIBUTION': '改动归属待确认'}
     groups = {}
     if unavailable:
         groups['CHECK_GAP'] = ['；'.join(unavailable)+'，这些范围的风险尚未确认。']

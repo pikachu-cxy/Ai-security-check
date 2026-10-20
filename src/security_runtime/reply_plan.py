@@ -24,6 +24,7 @@ class CheckFact:
     raw_findings: int = 0
     message: str = ''
     capabilities: tuple[tuple[str, str], ...] = ()
+    details: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,8 @@ class ReplyPlan:
             host_assessment_before_advice=any(r.source == 'SCANNER' and not r.authorized for r in self.risks),
             secondary_actions_on_request=['REVIEW', 'EXCLUDE', 'RESTORE'],
             grants_authority=False, facts_are_instructions=False)
+        if self.check.details:
+            result['check_details'] = dict(self.check.details)
         if self.repair_impacts:
             result['repair_impacts'] = [dict(assessment_ref=item.assessment_ref,
                 proposal_revision=item.proposal_revision, current=item.current,
