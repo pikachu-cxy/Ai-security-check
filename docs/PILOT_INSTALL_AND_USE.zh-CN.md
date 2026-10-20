@@ -12,8 +12,8 @@
 
 ## 选择模式和安装包
 
-当前源码与本地候选版本为 0.3.8。平台包命名示例为 `ai-security-runtime-v0.3.8-macos-arm64.tar.gz`；
-公开发行尚未发布，请勿将候选名称当作已可下载的资产，实际下载以 README 的已发布入口为准。
+当前公开发行版本为 0.3.8 / Developer Alpha。平台包命名示例为 `ai-security-runtime-v0.3.8-macos-arm64.tar.gz`；
+请从 README 或文档站下载页选择已发布的完整平台包，并核对同版本配套 SHA256 文件。
 
 | 模式 | 内容 | 适用 |
 |---|---|---|

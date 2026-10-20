@@ -1,12 +1,12 @@
 # Cursor 本地自动接入与验收
 
-2026-10-15。开发基线为 `fix/codex-acceptance-hidden-functional` 的
-`3ed0841af613c1e18b908bdfb7a84f74a2129347`，开发分支为 `codex/cursor-integration`。
-当前是本地测试版，尚未作为正式 GitHub 发布包提供。
+2026-10-20：当前完整接入及下述常规工具白名单已包含在 [0.3.8 Developer Alpha 发行包](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8)中；Cursor 桌面免确认体验仍需独立验收。
+最初开发基线为 `fix/codex-acceptance-hidden-functional` 的
+`3ed0841af613c1e18b908bdfb7a84f74a2129347`，原开发分支为 `codex/cursor-integration`，仅作历史记录。
 
 ## 安装
 
-在本次候选解压目录运行：
+完整解压 0.3.8 对应平台包后，进入 `security-check` 目录运行（Windows）：
 
 ```powershell
 .\security-check.exe install cursor
@@ -17,7 +17,7 @@
 在工具设置中确认 AI Security Runtime 已连接。新项目无需重复填写 MCP 配置。
 安装完成和检查组件全部就绪分别显示；不要把配置成功当成已检查项目。
 
-本地指定候选和安装位置时：
+本地指定完整包和安装位置时：
 
 ```powershell
 .\security-check.exe install cursor --bundle "D:\Downloads\security-check" --root "D:\Apps\AI-Security-Runtime" --json
@@ -49,11 +49,11 @@
 
 这些调用可以建立开发任务检查记录、运行任务范围内的检查、读取指导、复核已有扫描结果、
 读取有限上下文、保存分析与用户明确要求的风险处置。修复影响分析不会批准修复。
-独立扫描（`scan_project`、`scan_diff`）、收尾检查的准备和执行、修复确认、修复准备、
+独立扫描（`scan_project`、`scan_files`、`scan_diff`）、收尾检查的准备和执行、修复确认、修复准备、
 生成补丁及修复复查工具不预批准。风险处置与修复继续遵守既有明确同意和原问题复查流程。
 
-当前源码补齐了上述指导、扫描复核、影响分析和收尾状态调用；已发布的 0.3.7 包尚不包含这次补齐。
-使用包含本次修复的新构建再次安装或修复接入后，旧版签名配置会补齐缺失条目。
+0.3.8 发行包已补齐上述指导、扫描复核、影响分析和收尾状态调用。
+使用 0.3.8 包再次安装或修复接入后，旧版签名配置会补齐缺失条目。
 只拉取源码不会更新已安装的独立包或用户级白名单。工具清单测试会对照实际 MCP 注册表，
 要求新增工具明确归入常规调用、需确认操作或宿主事件，避免静默漏配。
 已有 JSONC 注释、用户白名单、终端白名单与其他策略保留。如果原来只在 Cursor 界面设置 MCP 白名单，
@@ -65,7 +65,7 @@ Cursor 必须允许通过运行模式使用白名单；团队策略仍可要求�
 `live_no_prompt_verified=false` 表示尚不能据此宣称真实聊天已免确认。
 
 此前 R6 在 Windows 本地 Agents、Grok 4.6 Medium 的普通新建文件任务已走通编辑前记录、修改后静态检查、
-模型核查和结果保存，当时仍手动确认 MCP 调用。当前免确认候选需要在有可用额度的 Cursor 中再做同样验收。
+模型核查和结果保存，当时仍手动确认 MCP 调用。0.3.8 的免确认流程仍需要在有可用额度的 Cursor 中再做同样桌面验收。
 Free 模型额度耗尽时不能完成该真实模型验收；白名单不会增加或替代模型额度。
 协议依据：[Cursor permissions.json](https://cursor.com/docs/reference/permissions)。
 

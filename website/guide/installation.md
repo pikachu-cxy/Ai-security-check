@@ -1,6 +1,6 @@
 # 安装参数、准备与升级
 
-正常接入从[选择编辑器](./quickstart.md)开始。`install codex`（或支持该入口的候选包中的 `install cursor`）已自动启动组件准备。本页的查询和扩展命令按需使用。
+正常接入从[选择编辑器](./quickstart.md)开始。0.3.8 完整包的 `install codex` 和 `install cursor` 已自动启动组件准备。本页的查询和扩展命令按需使用。
 
 ## 查看准备进度
 
@@ -34,7 +34,7 @@ Codex 用户可执行：
 ```
 :::
 
-Cursor 候选包使用 `integration status cursor --scope global --json`。这些命令检查本地配置；编辑器内的实际调用仍按[安装验证](./verify.md)完成。
+Cursor 用户使用 `integration status cursor --scope global --json`。这些命令检查本地配置；编辑器内的实际调用仍按[安装验证](./verify.md)完成。
 
 ## 安装参数
 
@@ -78,7 +78,7 @@ Cursor 候选包使用 `integration status cursor --scope global --json`。这�
 
 Mac 包通常已带执行权限。仅当执行位丢失且出现 `Permission denied` 时才补充执行权限；执行位不能解决签名或系统策略拒绝的问题。
 
-Intel 与 Apple Silicon 使用各自完整包。Mac 修订与原始 Windows 包可能来自不同提交，以发行清单和 `macos-refresh.json` 为准；相同版本号不保证相同构建。
+Intel 与 Apple Silicon 使用各自完整包。0.3.8 三平台包来自同一发布提交，以该发行的 `release-manifest.json` 为准；平台不同或版本号相同仍不代表相同构建。历史 0.3.6 Mac 单独修订另见当时的 `macos-refresh.json`，不要与当前发行混用。
 
 ## 升级
 

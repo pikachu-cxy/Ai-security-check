@@ -7,7 +7,7 @@
 | 你使用的工具 | 当前接入方式 | 使用前需要知道 |
 | --- | --- | --- |
 | Codex | [完整安装](./codex.md) | 主要使用路径 |
-| Cursor | [候选包测试接入](./cursor.md) | 目前限定 Windows 本地单根工作区 |
+| Cursor | [完整包测试接入](./cursor.md) | 目前限定 Windows 本地单根工作区 |
 | WorkBuddy | [项目级 MCP](./workbuddy.md) | 需在真实桌面确认调用结果 |
 | Claude Code、VS Code / Copilot | 通用 MCP 手动配置 | 尚无本产品专用安装器或完整流程验收 |
 | Qoder、CodeBuddy | 通用 MCP 条件下手动尝试 | 尚无已注册的原生编辑事件适配 |

@@ -3,7 +3,7 @@
 Cursor 接入目前面向 **Windows x64、本地单根工作区的测试版**。先确认安装包来源与接入方式，再在隔离示例项目中试用。
 
 ::: warning 先确认你拿到的包
-下面的 `install cursor` 需要支持该入口的完整包，0.3.7 发行进度和下载入口见[下载页](../../downloads.md)。命令入口、连接配置和实际桌面任务验收分别认定，当前仍需独立 Cursor 桌面验收。仅需工具连接时可参考[手动 MCP 配置](../mcp.md)，但这不包含自动任务检查。详细记录见[Cursor 接入状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
+下面的 `install cursor` 请使用 0.3.8 完整发行包，下载入口见[下载页](../../downloads.md)。命令入口、连接配置和实际桌面任务验收分别认定，当前仍需独立 Cursor 桌面验收。仅需工具连接时可参考[手动 MCP 配置](../mcp.md)，但这不包含自动任务检查。详细记录见[Cursor 接入状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
 :::
 
 ## 1. 执行一条安装命令
@@ -28,7 +28,7 @@ macOS 两种芯片使用相同的安装命令，但安装包不能混用。首�
 
 源码中的白名单现已补齐指导读取、已有扫描结果的复核与查询、修复影响分析和收尾状态查询。
 影响分析不会批准修复；独立项目/差异扫描、执行收尾检查及修复操作仍保留确认要求。
-这次补齐尚未包含在已发布的 0.3.7 包中；需要使用包含修复的新构建再次安装或修复接入。
+这次补齐已包含在 0.3.8 发行包中；从旧版本升级后需再次安装或修复接入，使受管白名单生效。
 仅拉取源码不会更新已安装产品的配置。Cursor 的运行模式和团队策略仍决定实际是否弹出确认。
 
 ## 2. 确认连接与准备状态

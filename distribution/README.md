@@ -6,7 +6,7 @@ The Homebrew Formula and WinGet manifests are generated **only after all three s
 
 After these checks and copying the installation guides, `scripts/prepare_release_assets.py` stages only the three native archives, their three `.sha256` files, `SHA256SUMS.txt`, `release-manifest.json`, and one versioned `release-evidence.zip` in a fresh `dist/public-release` directory. The evidence ZIP preserves all remaining release files (including native and specialty JSON receipts and guides) plus the generated Formula and three WinGet YAML files. Original CI artifacts and `dist/release` stay intact. The public checksum list additionally covers the evidence ZIP. Release notes are generated from the same version and manifest, with direct platform download links at the top; an existing draft receives the same notes before publication. Do not reuse a stale public staging directory. The expected public asset set is defined by scripts/prepare_release_assets.py and covered by its release-asset regression tests; retired stage examples are available in Git history.
 
-The tag-only release workflow validates each native archive before creating a draft GitHub Release and publishes the draft only after all assets upload. Uninstalling the Runtime does not remove the user data directory, managed scanners, scan history, or Trivy DB.
+The release workflow supports version tags and explicit manual dispatch (including focused validation). It validates each native archive before creating a draft GitHub Release and publishes the draft only after all assets upload. Uninstalling the Runtime does not remove the user data directory, managed scanners, scan history, or Trivy DB.
 
 Runtime Core remains proprietary under `LICENSE` and `EULA.md`; the public
 Plugin API and `ai-security-core` rules remain Apache-2.0. Every bundle includes
@@ -22,10 +22,10 @@ Install the development extras `.[test,build-standalone]`, then run:
 ```text
 python scripts/build_standalone.py
 python scripts/package_artifact.py --platform windows-x64
-python scripts/verify_artifact.py --full dist/release/ai-security-runtime-v0.3.6-windows-x64.zip
+python scripts/verify_artifact.py --full dist/release/ai-security-runtime-v0.3.8-windows-x64.zip
 ```
 
-Use the actual host platform for macOS or Linux. The verifier extracts to a fresh
+Use the matching native host and archive for macOS; Linux is not a public release target. The verifier extracts to a fresh
 directory, removes Python and scanners from PATH, uses a separate user data
 directory, prepares all three scanners and the Trivy DB, scans a Python source
 file plus a dependency manifest, and opens a real MCP SDK stdio session. It
