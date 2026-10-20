@@ -241,6 +241,24 @@ def test_upgrade_uses_one_atomic_pointer_and_keeps_stable_launcher(tmp_path, mon
     assert installer.read_json(root / "active.json")["build_id"] == "c" * 64
 
 
+def test_changed_bootstrap_path_refused_before_host_install(tmp_path, monkeypatch):
+    first, first_manifest = make_payload(tmp_path)
+    mock_runtime(monkeypatch, first_manifest)
+    root = tmp_path / "installed"
+    installer.install(first, root, "cursor", "macos-arm64")
+    previous_launcher = (root / "security-check").read_bytes()
+    previous_active = (root / "active.json").read_bytes()
+    second, second_manifest = make_payload(tmp_path, build_id="c" * 64)
+    calls = mock_runtime(monkeypatch, second_manifest)
+    monkeypatch.setattr(installer.sys, "executable", str(tmp_path / "different-python/bin/python3"))
+    with pytest.raises(installer.InstallError, match="不同的运行环境"):
+        installer.install(second, root, "cursor", "macos-arm64")
+    assert not calls
+    assert not (root / "versions" / second_manifest["build_id"]).exists()
+    assert (root / "security-check").read_bytes() == previous_launcher
+    assert (root / "active.json").read_bytes() == previous_active
+
+
 def test_activation_write_failure_keeps_existing_active_pointer(tmp_path, monkeypatch):
     first, first_manifest = make_payload(tmp_path)
     mock_runtime(monkeypatch, first_manifest)

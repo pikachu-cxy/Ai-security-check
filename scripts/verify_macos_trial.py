@@ -14,12 +14,12 @@ import tempfile
 from urllib.request import urlopen
 
 
-def run(command, env, cwd, timeout=180):
+def run(command, env, cwd, timeout=180, accepted_codes=(0,)):
     result = subprocess.run(
         [str(part) for part in command], env=env, cwd=cwd,
         text=True, capture_output=True, timeout=timeout,
     )
-    if result.returncode:
+    if result.returncode not in accepted_codes:
         # CI runs only with synthetic user paths and no project credentials.
         print(result.stdout[-12000:])
         print(result.stderr[-8000:], file=sys.stderr)
@@ -112,7 +112,11 @@ def verify(archive: Path, platform: str, output: Path) -> None:
             second_status = json.loads(run([launcher, *status_args], env, user))
             assert first_status["overall"] == second_status["overall"] == "CONFIGURED"
             # Installation deliberately does not require ready engines offline.
-            preparation = json.loads(run([launcher, "preparation", "status", "--json"], env, user))
+            preparation = json.loads(run(
+                [launcher, "preparation", "status", "--json"], env, user, accepted_codes=(0, 2),
+            ))
+            assert preparation["components_ready"] is False
+            assert preparation["current_readiness"]["network_allowed"] is False
             receipts.append({
                 "host": host, "local_install": "PASSED", "repeat_install": "PASSED",
                 "build_id": identity["build_id"], "integration_status": second_status["overall"],

@@ -261,13 +261,19 @@ os.execv(str(executable), [str(executable), "-I", "-m", "security_runtime.cli", 
             + shlex.quote(str(root)) + ' "$@"\n').encode()
 
 
+def preflight_launcher(root):
+    launcher = no_links(root / "security-check")
+    data = launcher_bytes(root)
+    if launcher.exists() and launcher.read_bytes() != data:
+        raise InstallError("已有入口使用不同的运行环境；已保留，请联系支持确认升级路径。")
+    return data
+
+
 def activate(root, owner, host, manifest):
     validate_root(root)
     launcher = root / "security-check"
-    data = launcher_bytes(root)
+    data = preflight_launcher(root)
     existed = launcher.exists()
-    if existed and launcher.read_bytes() != data:
-        raise InstallError("已有入口使用不同的运行环境；已保留，请联系支持确认升级路径。")
     if not existed:
         with tempfile.NamedTemporaryFile(dir=root, prefix=".launcher-", delete=False) as stream:
             temporary = Path(stream.name)
@@ -288,6 +294,9 @@ def activate(root, owner, host, manifest):
 def install(payload, root, host, platform):
     manifest = verify_payload(payload, platform)
     root = validate_root(root)
+    # The immutable entry point includes the bootstrap interpreter path.
+    # Refuse an incompatible delivery before touching editor configuration.
+    preflight_launcher(root)
     versions = no_links(root / "versions")
     versions.mkdir(mode=0o700, exist_ok=True)
     slot = no_links(versions / manifest["build_id"])
@@ -328,6 +337,8 @@ def install(payload, root, host, platform):
         verify_identity(python, manifest, root)
         atomic_json(installed, owner)
     verify_identity(python, manifest, root)
+    validate_root(root)
+    preflight_launcher(root)
     print(f"[安装] 程序版本 {manifest['version']}，构建 {manifest['build_id'][:12]} 已校验。正在配置 {host.title()}。", flush=True)
     code, result = json_command([str(python), "-I", "-m", "security_runtime.cli", "install", host, "--json"],
                                 cwd=root, timeout=240)
