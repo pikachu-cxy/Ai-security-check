@@ -1,8 +1,8 @@
 # AI 写代码，安全检查跟上开发节奏
 
-AI Security Runtime 是面向 AI 编程工作流的本地安全检查运行时。它不替代编程 Agent，也不宣称自动证明整个项目安全：它把本次改动、静态检查、关联代码复核和风险处置放在同一条可恢复的任务链中。
+AI Security Runtime 把安全检查接入你正在使用的编程助手。你在 Codex 或 Cursor 中提出开发需求，助手完成修改后，结合检查结果和必要的关联代码说明风险。你可以查看依据、了解修复影响，再决定处理哪一项；修复后继续对照原问题复查。
 
-当前源码及最新公开发行为 **0.3.8 / Developer Alpha**，三平台安装包与校验入口见[下载页](../downloads.md)。主要使用路径是 Codex；其他宿主与平台的真实验证范围见[支持状态](../reference/support.md)。
+当前公开发行为 **0.3.8 / Developer Alpha**。Codex 与 Cursor 均提供一条命令完整接入，Windows、macOS Apple Silicon 和 macOS Intel 使用各自的原生完整包。安装与校验入口见[下载页](../downloads.md)，各编辑器和平台的实际验证范围见[支持状态](../reference/support.md)。
 
 ## 适合什么场景
 

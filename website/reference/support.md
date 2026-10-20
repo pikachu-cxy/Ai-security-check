@@ -7,7 +7,7 @@
 | 组合 | 当前说明 |
 | --- | --- |
 | Windows x64 + Codex | 独立 Windows 原生完整包及 CI 验收；Codex 为主要使用路径，CI 合成宿主不等于桌面实操 |
-| Windows x64 + Cursor | 有连接器与接入指南；本次版本仍需独立 Cursor 桌面验收 |
+| Windows x64 + Cursor | 提供 `install cursor` 完整接入，包含用户级 MCP、Skill、Hook 和常规工具白名单；桌面验证范围见下文 |
 | macOS Apple Silicon | 独立 `macos-arm64` 原生构建与验收；桌面真机验收仍待独立完成 |
 | macOS Intel | 独立 `macos-x64` 原生构建与验收；不以 ARM 结果代替 Intel，桌面真机验收仍待完成 |
 | Linux | 当前不作为公开发行的受支持目标 |
@@ -17,6 +17,14 @@ macOS 两种架构使用对应的原生完整包，不以 Rosetta 作为默认�
 0.3.8 三平台包来自同一版本和同一发布提交 `be65833`，源码身份及校验值以 Release 的 `release-manifest.json` 和 `SHA256SUMS.txt` 为准。[本次发布](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39386551651)通过精简相关回归、合规、包完整性和三平台原生验收。源码证据脱敏规则共用一套实现，平台差异在构建、系统接入和扫描组件运行环境。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
 
 0.3.8 发行包中的指导去重、文件范围扫描与结果核验复用使用共用核心逻辑；MCP 阶段通知由支持进度令牌的宿主显示，缺少该能力仍返回相同的最终结果。本次 Windows/macOS 原生构建已有各自的 CI 记录，Codex/Cursor 桌面验收仍单独记录。
+
+## Cursor 接入与桌面验证
+
+Cursor 的完整接入入口为 `install cursor`，安装页提供 Windows 和 macOS 命令；macOS Apple Silicon 与 Intel 使用各自完整包。安装器配置用户级 MCP、配套 Skill、编辑事件 Hook 和常规工具白名单，并启动检查组件准备。安装后需重启 Cursor，在实际项目中完成连接核对和一次小任务检查。
+
+**验证范围**：已有 Windows 本地单根工作区的有限桌面记录，以及安装、MCP 和 Hook 的自动化检查。当前 0.3.8 的完整桌面流程、不同模型和免确认体验仍需独立验收；macOS 桌面也不能以原生 CI 结果代替实机记录。远程与多根工作区未列为已支持范围。
+
+“完整接入”描述安装内容，不代表所有系统、Cursor 版本和模型的桌面流程均已通过验收。操作步骤见 [Cursor 安装与使用](../guide/editors/cursor.md)，工程记录见 [Cursor 接入与验收](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
 
 ## 检查范围
 

@@ -36,9 +36,9 @@ Git 拉取与正常开发都按真实修改前记录和实际改动范围核对�
 
 不要执行默认完整接入命令。按[仅 MCP 指南](../guide/mcp.md)准备组件并生成宿主配置，手动合并；此时不承诺完整任务自动化。
 
-## Cursor 或 macOS 已完全兼容了吗？
+## Cursor 支持哪些系统，如何确认能用？
 
-不能这样概括。连接器、原生 CI、完整任务和桌面手工验收是不同层次。当前边界见[支持状态](./support.md)，本次 macOS 与 Cursor 的手工验收仍待完成。
+Cursor 安装页提供 Windows 和 macOS 的完整接入命令，Mac 按 Apple Silicon 或 Intel 选择对应包。安装后重启 Cursor，先核对连接、版本、组件与项目路径，再完成一次小任务检查。可直接使用 [Cursor 安装与使用](../guide/editors/cursor.md)中的请求和示例。具体桌面验收记录与尚未覆盖的环境见[支持状态](./support.md#cursor-接入与桌面验证)。
 
 ## Windows TEMP 路径太长怎么办？
 

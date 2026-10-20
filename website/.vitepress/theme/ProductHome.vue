@@ -16,12 +16,12 @@ const steps = [
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / DEVELOPER ALPHA</p>
         <h1 id="product-title">让 AI 写代码，<br>也让风险<span>有据可查。</span></h1>
-        <p class="hero-description">把安全核查接入日常 AI 编程。从本次改动、风险解释，到你批准后的修复与复查，让每一步都有上下文、有记录。</p>
+        <p class="hero-description">在 Codex、Cursor 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
         <div class="hero-actions">
           <a class="primary-action" :href="withBase('/guide/quickstart.html')">开始使用 <span aria-hidden="true">↗</span></a>
           <a class="secondary-action" :href="withBase('/guide/overview.html')">了解工作方式 <span aria-hidden="true">→</span></a>
         </div>
-        <p class="hero-note">Codex 为主要验收路径 · 支持本地 stdio MCP 接入</p>
+        <p class="hero-note">Codex / Cursor 一条命令接入 · Windows / macOS 原生完整包</p>
       </div>
       <div class="review-example" aria-label="示意：一次开发任务的风险说明和用户选择">
         <div class="example-heading"><span class="example-dots" aria-hidden="true">● ● ●</span><span>一次开发任务 / 示例</span><span class="example-tag">REVIEW</span></div>
@@ -67,6 +67,6 @@ const steps = [
       </div>
     </section>
 
-    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">明确边界，才有可信的结果。</h2><p>Developer Alpha 聚焦已支持的规则与工作流。零发现不证明项目安全；安全复查与业务功能验证分别认定。Cursor 与 Mac 的真实桌面兼容性按具体候选独立验收。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
+    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">了解这次检查覆盖了什么。</h2><p>检查结果会说明发现的问题、实际覆盖范围和未完成项。当前产品处于 Developer Alpha 阶段，各系统与编辑器的验证记录见支持范围；零发现不代表整个项目安全。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
   </main>
 </template>

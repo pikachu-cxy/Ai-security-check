@@ -15,8 +15,8 @@ const editors = {
     name: 'Cursor',
     target: '接入本地 Cursor',
     page: 'cursor',
-    steps: '先核对当前系统是否在 Cursor 已验证的支持范围内，说明测试版限制。使用完整包的 install cursor 入口，配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
-    note: '粘贴到本机 Cursor 的 Agent 聊天。当前主要验证 Windows 本地单根工作区，其他环境先核对支持情况。'
+    steps: '按当前系统与芯片选择完整包，并阅读 Cursor 接入指南中的支持说明。使用完整包的 install cursor 入口，配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
+    note: '粘贴到本机 Cursor 的 Agent 聊天，让它选择 Windows 或 macOS 对应完整包，完成下载、核验和安装。'
   },
   workbuddy: {
     name: 'WorkBuddy',
