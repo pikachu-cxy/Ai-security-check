@@ -6,13 +6,16 @@ import pytest
 
 from security_runtime import guidance_catalog
 from security_runtime.compatibility import requirements
-from security_runtime.host_guidance import HOST_INSTRUCTIONS,RUNTIME_WORKFLOW,runtime_info
+from security_runtime.host_guidance import (
+    HOST_INSTRUCTIONS, REPAIR_IMPACT_GUIDANCE, RUNTIME_WORKFLOW, runtime_info,
+)
 from security_runtime.review_skill import ReviewSkillManager,skill_files
 
 
 def test_core_is_short_but_keeps_non_optional_safety_boundaries_and_intent_routing():
     core=HOST_INSTRUCTIONS
-    assert len(core.encode()) < len(RUNTIME_WORKFLOW.encode())/3
+    assert len(core.encode()) < 10_000
+    assert len(RUNTIME_WORKFLOW.encode()) < 20_000
     assert len(core.splitlines()) < 100
     for required in ('普通聊天、只读和普通 Stop', '不开始、恢复或派发检查', '必读方法，并非可跳过',
         'task-review-plan-v3', '真实 build_identity', '九项必需工具子集', '不回退旧协议',
@@ -29,8 +32,8 @@ def test_core_is_short_but_keeps_non_optional_safety_boundaries_and_intent_routi
     for topic in guidance_catalog.TOPICS[1:]:
         assert 'topic='+topic in core
     assert 'prepare_functional_verification' not in core and 'When remediation.action ==' not in core
-    assert 'When remediation.action == AUTO_FIX:' in RUNTIME_WORKFLOW
-    assert 'When remediation.action == CONFIRM_REQUIRED:' in RUNTIME_WORKFLOW
+    assert 'When remediation.action == AUTO_FIX:' in REPAIR_IMPACT_GUIDANCE
+    assert 'When remediation.action == CONFIRM_REQUIRED:' in REPAIR_IMPACT_GUIDANCE
 
 
 def test_fixed_topics_match_generated_and_installed_bytes(tmp_path):
@@ -58,6 +61,29 @@ def test_existing_task_and_deep_methods_keep_the_same_version_and_digest():
     assert (task['version'],task['sha256'],task['content'])==(original['version'],original['sha256'],original['content'])
     deep=guidance_catalog.get_runtime_guidance('deep-audit');original=get_professional_guidance()
     assert (deep['version'],deep['sha256'],deep['content'])==(original['version'],original['content_sha256'],original['content'])
+
+
+def test_scan_workflow_loads_only_the_needed_topics_and_preserves_full_repair_methods():
+    from security_runtime.host_guidance import RISK_DECISION_WORKFLOW
+    from security_runtime.risk_decision_guidance import RISK_DECISION_GUIDANCE
+    workflow = guidance_catalog.get_runtime_guidance('runtime-workflow')
+    risk = guidance_catalog.get_runtime_guidance('risk-decisions')['content']
+    repair = guidance_catalog.get_runtime_guidance('repair-impact')['content']
+    assert workflow['version'] == 'runtime-workflow-v2'
+    assert RISK_DECISION_GUIDANCE not in workflow['content']
+    assert RISK_DECISION_WORKFLOW not in workflow['content']
+    assert REPAIR_IMPACT_GUIDANCE not in workflow['content']
+    assert 'When remediation.action ==' not in workflow['content']
+    assert RISK_DECISION_WORKFLOW in risk and REPAIR_IMPACT_GUIDANCE in repair
+    for required in ('topic=risk-decisions', 'topic=repair-impact', '同一份内容',
+                     'force_rescan=true', 'scan_files', 'files', 'summary=true',
+                     '必要复核', 'Runtime 不调用宿主模型', '对话总耗时'):
+        assert required in workflow['content']
+    assert '不重复加载已读的同版本主题' in HOST_INSTRUCTIONS
+    assert '只有存在待呈现的风险或实际保存用户处置时才读取' in workflow['content']
+    assert '零发现不加载该主题' in workflow['content']
+    assert 'scan_context.full_project_reusable=true' not in workflow['content']
+    assert 'execution.result_reused=true' in workflow['content']
 
 
 def test_full_methods_distinguish_saved_choice_from_released_workflow():

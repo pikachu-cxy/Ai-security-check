@@ -1,0 +1,106 @@
+name: Refresh published v0.3.7
+
+on:
+  push:
+    branches: [codex/release-v0.3.7-refresh]
+    paths:
+      - '.github/workflows/refresh-v037.yml'
+      - 'scripts/refresh_release_v037.py'
+      - 'distribution/releases/v0.3.7-refresh.json'
+      - 'tests/test_release_v037_refresh.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-published-v0.3.7
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 699851ea94bcce8d21cd27fdc40cff315ecf815d
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: refresh-control
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify refresh guards and wait for pinned native CI and regressions
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PYTHONPATH: refresh-control
+        run: |
+          python -m pip install pytest PyYAML
+          python -m pytest -q refresh-control/tests/test_release_v037_refresh.py
+          python refresh-control/scripts/refresh_release_v037.py wait
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 39381465188
+          pattern: release-*
+          merge-multiple: true
+          path: dist/release
+      - name: Prepare matching downloads, checksums, package-manager metadata and evidence
+        run: |
+          python -m pip install -e . jsonschema
+          python scripts/make_release_metadata.py
+          python scripts/update_homebrew_formula.py --manifest dist/release/release-manifest.json
+          python scripts/generate_winget_manifest.py --manifest dist/release/release-manifest.json
+          python scripts/validate_manager_metadata.py --manifest dist/release/release-manifest.json
+          cp README.md dist/release/INSTALL.zh-CN.md
+          cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
+          python scripts/prepare_release_assets.py
+      - name: Verify exact old release identity and back up all replaced assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python refresh-control/scripts/refresh_release_v037.py prepare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-v037-backup-and-staged-${{ github.sha }}
+          path: dist/refresh-v037/
+          if-no-files-found: error
+          retention-days: 90
+  publish:
+    needs: stage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 699851ea94bcce8d21cd27fdc40cff315ecf815d
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: refresh-control
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-v037-backup-and-staged-${{ github.sha }}
+          path: dist/refresh-v037
+      - name: Replace approved downloads and update source tag with a lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python refresh-control/scripts/refresh_release_v037.py publish
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-v037-publication-${{ github.sha }}
+          path: dist/refresh-v037/publication.json
+          if-no-files-found: ignore

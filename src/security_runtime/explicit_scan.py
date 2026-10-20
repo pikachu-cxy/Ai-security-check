@@ -31,10 +31,16 @@ def cancelled_scan():
 
 
 def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
-                      rules_path=None, progress=None, hooks=None, now=time.time):
+                      rules_path=None, progress=None, hooks=None, now=time.time, files=None):
     if mode not in {'quick','feature','release'} or type(staged) is not bool:
         raise ValueError('Invalid explicit scan mode')
     root=WorkspaceResolver().resolve(workspace, allow_non_git_explicit=True, allow_non_git_source=True).path
+    request=None
+    if files is not None:
+        from .selected_scan import selected_request
+        if mode!='feature' or staged:
+            raise ValueError('Explicit file scans require feature mode and the worktree')
+        request=selected_request(root,files)
     hooks=hooks or HookStateStore(Path(runtime.store.path).parent/'hooks')
     attempts=ScanAttemptStore(hooks,root,now=now)
     attempts.recover_cleanup(limit=2)
@@ -44,6 +50,7 @@ def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
         # fabricates a before-edit snapshot or resets a development task.
         lease=attempts.claim('MANUAL','explicit-'+uuid.uuid4().hex,source_binding(dict(
             contract='explicit-scan-request-v1', mode=mode, staged=staged,
+            requested_files=list(request.files) if request is not None else None,
             rules_path=str(rules_path) if rules_path is not None else None,
             baseline='NONE_EXPLICIT_REQUEST'),source_kind='INDEX' if staged else 'WORKTREE'))
         if lease is None: raise ExplicitScanBusy()
@@ -65,11 +72,23 @@ def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
             result.status,result.coverage,result.release_status='PARTIAL','UNKNOWN','REVIEW'
             result.summary+='\n检查对应已捕获的版本；最新来源已变化或无法核验，仍需检查。'
 
-    execution=ScanAttemptExecution(attempts,lease,after_scan=publish,progress=progress)
+    validator=None
+    if request is not None:
+        from .selected_scan import selection_captured
+        validator=lambda view:selection_captured(view,request.files)
+    execution=ScanAttemptExecution(attempts,lease,after_scan=publish,progress=progress,validator=validator)
     try:
-        result=runtime.scan(root,mode,staged=staged,rules_path=rules_path,execution=execution)
+        arguments=dict(staged=staged,rules_path=rules_path,execution=execution)
+        if request is not None:
+            from dataclasses import replace
+            request=replace(request,rules_path=Path(rules_path) if rules_path is not None else None)
+            arguments['request']=request
+        result=runtime.scan(root,mode,**arguments)
         if execution.input_id is None:
             raise ScanAttemptLost('SCAN_ATTEMPT_INPUT_NOT_BOUND')
+        if request is not None:
+            from .selected_scan import selection_scope
+            result.scanner_diagnostics['selected_scope']=selection_scope(result,request.files)
         return result
     except (ScanCancelled,KeyboardInterrupt):
         with hooks.lock(root,wait_seconds=2) as acquired:

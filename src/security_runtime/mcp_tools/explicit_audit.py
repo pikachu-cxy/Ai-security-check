@@ -10,6 +10,7 @@ from ..integration_state import DogfoodEvent
 from ..explicit_scan import ExplicitScanBusy, cancelled_scan
 from ..progress import ScanCancelled
 from .presentation import _agent_finding, _agent_result
+from ..mcp_scan_progress import run_mcp_scan, scan_timing
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +32,8 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return data
 
     @server.tool()
-    def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = False) -> dict:
-        """Scan changed files in a local Git repository. workspace_path is the project directory; path is its legacy directory alias, not a file/glob/scan target. Prefer workspace_path and omit path. Single-file scans are not supported."""
+    async def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = False) -> dict:
+        """Scan changed files in a local Git repository. workspace_path is the project directory; path is its legacy directory alias, not a file/glob/scan target. Prefer workspace_path and omit path. For explicitly selected files use scan_files."""
         if mode not in {"quick", "feature"}:
             raise ValueError("mode must be quick or feature")
         if workspace_path is not None and path is not None and workspace_path != path:
@@ -41,7 +42,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         root = bound_path(workspace_path if workspace_path is not None else path)
         from ..target import DiscoveryLimitError
         try:
-            result = application.scan(root, mode)
+            result, timing = await run_mcp_scan(server, lambda progress: application.scan(root, mode, progress=progress))
         except DiscoveryLimitError as exc:
             return exc.to_dict()
         except ExplicitScanBusy as exc:
@@ -51,34 +52,75 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
                            mode, result.duration_ms, len(result.findings), result.coverage), connected=True)
         logger.info("scan_diff finished scan_id=%s", result.scan_id)
-        return scan_response(result, summary)
+        return scan_response(result, summary, timing)
 
     @server.tool()
-    def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = False) -> dict:
-        """Run a full local project scan. workspace_path is the project directory; path is its legacy directory alias, not a file/glob/scan target. Prefer workspace_path and omit path. Single-file scans are not supported; a file request is not automatically expanded to the project."""
+    async def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = False,
+                           force_rescan: bool = False) -> dict:
+        """Check a full local project, reusing only explicitly revalidated complete proof. Set force_rescan=true for an explicit rescan. workspace_path is the project directory; path is its legacy directory alias, never a file/glob. For selected files use scan_files; never expand a file request to the project."""
         if workspace_path is not None and path is not None and workspace_path != path:
             raise ValueError("Specify only one workspace path")
         root = bound_path(workspace_path if workspace_path is not None else path)
         from ..target import DiscoveryLimitError
         try:
-            result = application.scan(root, "release")
+            result, timing = await run_mcp_scan(server, lambda progress: application.scan_project(
+                root, force_rescan=force_rescan, progress=progress))
         except DiscoveryLimitError as exc:
             return exc.to_dict()
         except ExplicitScanBusy as exc:
             return exc.to_dict()
         except ScanCancelled:
             return cancelled_scan()
-        event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
-                           "release", result.duration_ms, len(result.findings), result.coverage), connected=True)
-        return scan_response(result, summary)
+        if not isinstance(result, dict):
+            event(DogfoodEvent(binding.integration_id if binding else "generic-mcp", result.target_profile.path,
+                               "release", result.duration_ms, len(result.findings), result.coverage), connected=True)
+        return scan_response(result, summary, timing)
 
-    def scan_response(result, summary):
+    @server.tool()
+    async def scan_files(files: list[str], workspace_path: str | None = None, summary: bool = False) -> dict:
+        """Scan 1-100 exact workspace-relative files using '/' separators. No globs, directories, traversal or absolute paths; no implicit project expansion. Reports requested files, actual targets, supporting context and exclusions. Never proves whole-project coverage."""
+        root = bound_path(workspace_path)
+        from ..target import DiscoveryLimitError
+        from ..scan_request import ScanInputError
+        try:
+            result, timing = await run_mcp_scan(server, lambda progress: application.scan_files(root, files, progress=progress))
+        except DiscoveryLimitError as exc:
+            return exc.to_dict()
+        except ExplicitScanBusy as exc:
+            return exc.to_dict()
+        except ScanCancelled:
+            return cancelled_scan()
+        except ScanInputError as exc:
+            return dict(status='REJECTED', reason_code=exc.reason_code, scanner_run=False,
+                        source_modified=False, repair_authorized=False)
+        return scan_response(result, summary, timing)
+
+    registry.harden(('scan_files', 'scan_project', 'scan_diff'))
+
+    def scan_response(result, summary, timing):
         data = _agent_result(result)
-        data['execution_publication'] = result.scanner_diagnostics['execution_publication']
+        diagnostics = result.get('scanner_diagnostics', {}) if isinstance(result, dict) else result.scanner_diagnostics
+        reused = isinstance(result, dict)
+        # A reuse request performs no new scan publication. Historical records
+        # can predate the post-save publication receipt attached in memory.
+        data['execution_publication'] = (dict(scope='HISTORICAL_EXECUTION_ONLY',
+            publication='HISTORICAL', current_execution=False, current_task_proof=False)
+            if reused else diagnostics.get('execution_publication',
+                dict(publication='UNAVAILABLE', current_task_proof=False)))
+        data['timing'] = scan_timing(result, timing, reused=reused)
+        ran = not reused and any(run['status'] in {'SUCCESS', 'FAILED', 'TIMEOUT'} for run in data['scanner_runs'])
+        data['execution'] = dict(scanner_run=ran, result_reused=reused,
+                                 host_review_completed=False, repair_authorized=False)
+        if reused:
+            data['result_reuse'] = result['result_reuse']
+        elif diagnostics.get('reuse_check'):
+            data['result_reuse'] = diagnostics['reuse_check']
+        if diagnostics.get('selected_scope'):
+            data['scan_scope'] = diagnostics['selected_scope']
         if summary:
             data['finding_count'] = len(data.pop('findings'))
             data['findings_access'] = {'tool':'get_findings', 'arguments':{
-                'scan_id':result.scan_id, 'view':'summary', 'limit':20}}
+                'scan_id':data['scan_id'], 'view':'summary', 'limit':20}}
         return data
 
     @server.tool()

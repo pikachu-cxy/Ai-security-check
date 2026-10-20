@@ -108,7 +108,8 @@ class SecurityRuntime:
         start = time.monotonic()
         observed_start = time.perf_counter()
         stage_start = time.perf_counter()
-        observed = {'timing_ms': {'state_persistence': None, 'total': None}, 'providers': {}}
+        observed = {'timing_ms': {'state_persistence': None, 'total': None,
+            'reuse_proof_prepare': None, 'reuse_proof_seal': None}, 'providers': {}}
         checkpoint()
         emit('SCAN_STARTED', message=f'模式：{mode}')
         emit('WORKSPACE_DISCOVERY_STARTED')
@@ -324,6 +325,18 @@ class SecurityRuntime:
             selected = []
         emit('PLAN_READY', message=f'将执行 {len(selected)} 个安全引擎')
         observed['timing_ms']['rule_planning'] = milliseconds(stage_start)
+        reuse_identity = None
+        if (scan_mode == ScanMode.RELEASE and not staged and not source_context['hook_scope']
+                and not source_context['custom_rules']):
+            from .scan_reuse import capture_reuse_identity
+            proof_started = time.perf_counter()
+            try:
+                reuse_identity = capture_reuse_identity(self.registry, workspace.path,
+                    files=context.files, context_files=context.context_files, selected=selected)
+            except (ValueError, OSError, KeyError, TypeError, AttributeError, RuntimeError):
+                pass  # A missing reuse proof never prevents a fresh scan.
+            finally:
+                observed['timing_ms']['reuse_proof_prepare'] = milliseconds(proof_started)
         stage_start = time.perf_counter()
 
         def unexpected_run(scanner, exc, started, stage):
@@ -512,6 +525,11 @@ class SecurityRuntime:
             observed['source_kind'] = 'GIT_INDEX_PROJECTION'
         from .scanner_cache import lifetime
         observed.update(lifetime())
+        if reuse_identity is not None:
+            from .scan_reuse import finalize_reuse_proof
+            proof_started = time.perf_counter()
+            finalize_reuse_proof(self, result, reuse_identity)
+            observed['timing_ms']['reuse_proof_seal'] = milliseconds(proof_started)
         stage_start = time.perf_counter()
         self.store.save(result)
         if attempt is not None:

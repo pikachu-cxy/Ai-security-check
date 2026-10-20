@@ -9,7 +9,7 @@ from .hook_state import no_links
 CONTRACT = 'runtime-guidance-v1'
 MAX_BYTES = 256_000
 TOPICS = ('core', 'runtime-workflow', 'task-review', 'risk-decisions', 'repair-impact', 'deep-audit')
-_VERSIONS = dict(zip(TOPICS, ('runtime-guidance-core-v1', 'runtime-workflow-v1', 'quick-task-review-v3',
+_VERSIONS = dict(zip(TOPICS, ('runtime-guidance-core-v1', 'runtime-workflow-v2', 'quick-task-review-v3',
                             'risk-decisions-v2', 'repair-impact-v1', '1.0.0')))
 _REFERENCES = dict(zip(TOPICS, ('SKILL.md', 'references/runtime-workflow.md',
     'references/quick-task-review-v3.md', 'references/risk-decisions.md',
@@ -24,9 +24,8 @@ def _content(topic):
         from .host_guidance import RUNTIME_WORKFLOW
         return ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8')
     if topic == 'risk-decisions':
-        from .risk_decision_guidance import RISK_DECISION_GUIDANCE
-        from .risk_presentation import RISK_PRESENTATION_RULES
-        return ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE + '\n' + RISK_PRESENTATION_RULES).encode('utf-8')
+        from .host_guidance import RISK_DECISION_WORKFLOW
+        return ('# 风险交互与用户处置\n\n' + RISK_DECISION_WORKFLOW).encode('utf-8')
     if topic == 'repair-impact':
         from .review_skill import repair_impact_reference
         return repair_impact_reference().encode('utf-8')

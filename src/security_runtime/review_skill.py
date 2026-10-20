@@ -104,14 +104,13 @@ def skill_entrypoint():
 
 def skill_files():
     from .host_guidance import RUNTIME_WORKFLOW
-    from .risk_decision_guidance import RISK_DECISION_GUIDANCE
-    from .risk_presentation import RISK_PRESENTATION_RULES
+    from .host_guidance import RISK_DECISION_WORKFLOW
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
         'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review-v3.md')} | {
         'SKILL.md': skill_entrypoint(),
         'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8'),
-        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_GUIDANCE + '\n' + RISK_PRESENTATION_RULES).encode('utf-8'),
+        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_WORKFLOW).encode('utf-8'),
         'references/repair-impact.md': repair_impact_reference().encode('utf-8')}
 
 

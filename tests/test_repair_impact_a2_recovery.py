@@ -293,8 +293,8 @@ def test_public_unknown_contract_and_guidance_explain_scope_limits_without_grant
     assert 'SCOPE_LIMITATION' in json.dumps(unknown['classification'])
     instructions = server._mcp_server.instructions
     assert 'repair-impact' in instructions
-    from security_runtime.host_guidance import RUNTIME_WORKFLOW
-    assert 'SCOPE_LIMITATION' in RUNTIME_WORKFLOW and 'decision_basis' in RUNTIME_WORKFLOW
+    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    assert 'SCOPE_LIMITATION' in REPAIR_IMPACT_GUIDANCE and 'decision_basis' in REPAIR_IMPACT_GUIDANCE
     guidance = structured(asyncio.run(server.call_tool('get_runtime_guidance', {'topic':'repair-impact'})))
     assert guidance['status']=='READY'
     assert 'SCOPE_LIMITATION' in guidance['content'] and 'decision_basis' in guidance['content']

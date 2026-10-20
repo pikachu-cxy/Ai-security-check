@@ -98,14 +98,14 @@ def test_completed_host_edit_requests_repair_without_rejecting_or_repeating(setu
 
 
 def test_host_guidance_limits_ambiguous_permission_to_repair_question(setup):
-    from security_runtime.host_guidance import RUNTIME_WORKFLOW
-    assert 'has ALREADY executed' in RUNTIME_WORKFLOW
-    assert 'Do NOT retry, re-apply, or repeat' in RUNTIME_WORKFLOW
-    assert 'An immediate 修复' in RUNTIME_WORKFLOW
-    assert 'Several unselected risks require selection first' in RUNTIME_WORKFLOW
-    assert 'Do not ask an approved user to confirm again' in RUNTIME_WORKFLOW
-    assert 'approve=true for 修复 or approve=false for 忽略' in RUNTIME_WORKFLOW
-    assert 'never invent one or call confirm_remediation' in RUNTIME_WORKFLOW
+    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    assert 'has ALREADY executed' in REPAIR_IMPACT_GUIDANCE
+    assert 'Do NOT retry, re-apply, or repeat' in REPAIR_IMPACT_GUIDANCE
+    assert 'An immediate 修复' in REPAIR_IMPACT_GUIDANCE
+    assert 'Several unselected risks require selection first' in REPAIR_IMPACT_GUIDANCE
+    assert 'Do not ask an approved user to confirm again' in REPAIR_IMPACT_GUIDANCE
+    assert 'approve=true for 修复 or approve=false for 忽略' in REPAIR_IMPACT_GUIDANCE
+    assert 'never invent one or call confirm_remediation' in REPAIR_IMPACT_GUIDANCE
 
 
 def test_hook_user_message_identifies_risk_change_and_two_choices_without_protocol(setup):

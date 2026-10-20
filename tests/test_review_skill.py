@@ -74,7 +74,7 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
     entry = files['SKILL.md'].decode('utf-8')
     assert 'references/repair-impact.md' in entry
     assert {'prepare_task_risk_fix', 'cancel_task_risk_fix'} <= REQUIRED_GUIDANCE_TOOLS
-    for name in ('references/runtime-workflow.md', 'references/repair-impact.md'):
+    for name in ('references/repair-impact.md',):
         method = files[name].decode('utf-8')
         assert REPAIR_IMPACT_GUIDANCE in method
         for rule in ('不能传入任务原生风险的 ts1 引用', '不通过新 begin_security_task',
@@ -85,7 +85,9 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
     assert '不能用普通 begin_security_task 绕过' in entry
     assert '明确暂缓则直接保存 DEFER' in entry
     assert '尽早登记原修复意图' in entry
-    assert '尽早调用 prepare_task_risk_fix' in files['references/runtime-workflow.md'].decode('utf-8')
+    workflow = files['references/runtime-workflow.md'].decode('utf-8')
+    assert 'topic=repair-impact' in workflow
+    assert REPAIR_IMPACT_GUIDANCE not in workflow
 
 
 def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):

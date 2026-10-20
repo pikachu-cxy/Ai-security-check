@@ -16,21 +16,24 @@ def _agent_finding(finding: dict) -> dict:
 
 def _agent_result(result) -> dict:
     from ..target import selection_summary
+    # Reuse retains the original saved record; never rebuild a fresh scan or
+    # invent new scanner runs merely to use the same presentation adapter.
+    value = result if isinstance(result, dict) else vars(result)
     return {
-        "scan_id": result.scan_id,
-        "workspace": result.target_profile.path,
-        "status": result.status,
-        "execution_state": result.execution_state,
-        "coverage_scope": result.coverage_scope,
-        "capability_results": result.capability_results,
-        "capability_details": result.capability_details,
-        "rule_coverage": {key:value for key,value in result.rule_coverage.items() if key!='scope_files'},
-        "background_preparation": result.background_preparation,
-        "coverage": result.coverage,
-        "summary": result.summary,
-        "findings": [_agent_finding(f.__dict__) for f in result.findings],
-        "recommendation": result.release_status,
-        "duration_ms": result.duration_ms,
-        "scanner_runs": [asdict(run) for run in result.scanner_runs],
-        "target_selection": selection_summary(result.target_profile),
+        "scan_id": value['scan_id'],
+        "workspace": value['target_profile']['path'] if isinstance(result, dict) else result.target_profile.path,
+        "status": value['status'],
+        "execution_state": value.get('execution_state', 'UNKNOWN'),
+        "coverage_scope": value.get('coverage_scope', 'UNKNOWN'),
+        "capability_results": value.get('capability_results', {}),
+        "capability_details": value.get('capability_details', {}),
+        "rule_coverage": {key:item for key,item in value.get('rule_coverage', {}).items() if key!='scope_files'},
+        "background_preparation": value.get('background_preparation', {}),
+        "coverage": value['coverage'],
+        "summary": value['summary'],
+        "findings": [_agent_finding(f if isinstance(f, dict) else vars(f)) for f in value['findings']],
+        "recommendation": value['release_status'],
+        "duration_ms": value['duration_ms'],
+        "scanner_runs": [run if isinstance(run, dict) else asdict(run) for run in value['scanner_runs']],
+        "target_selection": selection_summary(value['target_profile']),
     }

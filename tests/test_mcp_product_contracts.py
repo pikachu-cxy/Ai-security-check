@@ -145,6 +145,6 @@ def test_impact_gate_cannot_be_omitted_by_custom_global_factory(sample, tmp_path
 
 
 def test_native_guidance_does_not_send_host_risks_to_scanner_verification():
-    from security_runtime.host_guidance import RUNTIME_WORKFLOW
-    assert 'do not call scanner verify_task_fix for a native risk' in RUNTIME_WORKFLOW
-    assert 'Native task repairs use their bound\nrepair_task_ref for finish/review' in RUNTIME_WORKFLOW
+    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    assert 'do not call scanner verify_task_fix for a native risk' in REPAIR_IMPACT_GUIDANCE
+    assert 'Native task repairs use their bound\nrepair_task_ref for finish/review' in REPAIR_IMPACT_GUIDANCE

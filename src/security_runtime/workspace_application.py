@@ -60,6 +60,40 @@ class WorkspaceApplication:
         return run_explicit_scan(runtime,self.bound_path(workspace),mode=mode,staged=staged,
                                  rules_path=rules_path,progress=progress,hooks=self.hooks)
 
+    def scan_project(self, workspace=None, *, force_rescan=False, progress=None):
+        """Revalidate immutable evidence before reusing a whole-project result."""
+        from .explicit_scan import run_explicit_scan
+        from .scan_reuse import try_reuse
+        if type(force_rescan) is not bool:
+            raise ValueError('Invalid force_rescan value')
+        runtime=self.runtime_provider() if callable(self.runtime_provider) else self.runtime_provider
+        root=self.bound_path(workspace)
+        decision=None
+        if not force_rescan:
+            if progress is not None:
+                progress.checkpoint()
+                progress.emit('SCAN_REUSE_CHECK_STARTED',message='正在核对源码、范围、规则及引擎数据是否仍适用。')
+            decision=try_reuse(runtime,root,hooks=self.hooks)
+            if decision.reused:
+                if progress is not None:
+                    progress.checkpoint()
+                    progress.emit('SCAN_RESULT_REUSED',message='当前证据已重新核验，复用上次扫描结果。')
+                return dict(decision.scan,result_reuse=decision.receipt)
+        result=run_explicit_scan(runtime,root,mode='release',progress=progress,hooks=self.hooks)
+        result.scanner_diagnostics['reuse_check']=(decision.receipt if decision is not None else
+            dict(reused=False,reason_code='FORCE_RESCAN_REQUESTED',scanner_run=True))
+        return result
+
+    def scan_files(self, workspace, files, *, progress=None):
+        """Check an explicit bounded worktree selection, without Git diff scope."""
+        from .explicit_scan import run_explicit_scan
+        from .scan_request import ScanInputError
+        if files is None:
+            raise ScanInputError('SCAN_FILES_SELECTION_INVALID')
+        runtime=self.runtime_provider() if callable(self.runtime_provider) else self.runtime_provider
+        return run_explicit_scan(runtime,self.bound_path(workspace),mode='feature',files=files,
+                                 progress=progress,hooks=self.hooks)
+
     def impact_owner(self, workspace, session_ref=None):
         # Session routing is verified by the same boundary as development tasks;
         # a model-supplied owner is never accepted by an impact tool.

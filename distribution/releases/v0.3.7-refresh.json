@@ -1,0 +1,47 @@
+{
+  "repository": "pikachu-cxy/Ai-security-check",
+  "tag": "v0.3.7",
+  "release_id": 417991353,
+  "source_commit": "699851ea94bcce8d21cd27fdc40cff315ecf815d",
+  "original_tag_commit": "96ade76788fa76a5b31f85ce33b4356dc36d250e",
+  "build_run_id": 39381465188,
+  "test_run_id": 39381465526,
+  "assets": {
+    "ai-security-runtime-v0.3.7-macos-arm64.tar.gz": {
+      "id": 658231869,
+      "sha256": "206a14d4718537b085497804356ca14cb09d028f1a825a787ff18fde4e5216bb"
+    },
+    "ai-security-runtime-v0.3.7-macos-arm64.tar.gz.sha256": {
+      "id": 658231871,
+      "sha256": "e14806a24807b137da0abc2e2aa36f22681dd855a18d407b83582ee0dd27fec3"
+    },
+    "ai-security-runtime-v0.3.7-macos-x64.tar.gz": {
+      "id": 658231864,
+      "sha256": "d386294d0881b2b448fa7716ecdf834204ea07b9badf3dfee8f0e1e59930fafb"
+    },
+    "ai-security-runtime-v0.3.7-macos-x64.tar.gz.sha256": {
+      "id": 658231867,
+      "sha256": "80d91b544e41436295b2c5e8d8c94ffec7899e7714f7bc596359e93039baca2b"
+    },
+    "ai-security-runtime-v0.3.7-release-evidence.zip": {
+      "id": 658231886,
+      "sha256": "ea561434321bd0f7d8ea06a158d989b71f26de295c79e00869fa0583d63f2d1a"
+    },
+    "ai-security-runtime-v0.3.7-windows-x64.zip": {
+      "id": 658231894,
+      "sha256": "299dadde3edb52fc7976e3e7bbc6cc9542deff1cff25806feab2512282e42e90"
+    },
+    "ai-security-runtime-v0.3.7-windows-x64.zip.sha256": {
+      "id": 658231897,
+      "sha256": "b0fdc87ee6693f0d9af005c741a6e440fcc8e12c8fd834efad7d22fa38eddd48"
+    },
+    "release-manifest.json": {
+      "id": 658231913,
+      "sha256": "d362957e81895a819ac042245cd9d6ffa594c97bd540bca2916a54cee9484241"
+    },
+    "SHA256SUMS.txt": {
+      "id": 658231872,
+      "sha256": "d7fbb1ed6d995c22fcfe324e6baa99d622d877df1fe2144c173609edc7f73d53"
+    }
+  }
+}

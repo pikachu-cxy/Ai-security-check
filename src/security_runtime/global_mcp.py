@@ -346,7 +346,7 @@ def _scan_request_rejected(reason):
     message = {
         'WORKSPACE_DIRECTORY_REQUIRED':
             '扫描未启动：workspace_path 和旧参数 path 都只接受项目目录，不能传入文件。path 只是项目目录的旧参数别名，'
-            '不能用于指定单文件。当前工具不支持单文件扫描；不会自动改为扫描整个项目。',
+            '不能用于指定单文件。指定文件应使用文件范围检查；不会自动改为扫描整个项目。',
         'WORKSPACE_ALIAS_MISMATCH':
             '扫描未启动：workspace_path 与旧参数 path 指向了不同项目。path 只是项目目录的别名，'
             '请使用当前项目目录作为 workspace_path 并省略 path；不会改扫其他项目。',
@@ -391,7 +391,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 schema['properties']['path']['description'] = (
                     'Legacy alias of workspace_path for the same project directory. '
                     'Not a file, glob, or scan target. Prefer workspace_path and omit path. '
-                    'Single-file scans are not supported by this tool.')
+                    'For selected files use scan_files instead.')
             description = tool.description
             if tool.name in HOOKS:
                 description = 'Global cwd-routed Hook. ' + description.replace('Requires SECURITY_RUNTIME_WORKSPACE binding;', 'Requires validated workspace admission;')

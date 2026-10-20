@@ -8,11 +8,11 @@ from security_runtime.fast_fix import HOST_CONTRACT
 from security_runtime.fix_context import build
 
 def test_ambiguous_continuation_is_not_repair_approval():
-    from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
+    from security_runtime.host_guidance import HOST_INSTRUCTIONS, REPAIR_IMPACT_GUIDANCE
     from security_runtime.review_skill import skill_files
-    assert 'is analysis, not repair' in RUNTIME_WORKFLOW
-    assert 'approval. Clarify whether to fix before editing' in RUNTIME_WORKFLOW
-    assert 'For explicit fix intent 修复/修复它/把它修掉/修第一项' in RUNTIME_WORKFLOW
+    assert 'is analysis, not repair' in REPAIR_IMPACT_GUIDANCE
+    assert 'approval. Clarify whether to fix before editing' in REPAIR_IMPACT_GUIDANCE
+    assert 'For explicit fix intent 修复/修复它/把它修掉/修第一项' in REPAIR_IMPACT_GUIDANCE
     skill = skill_files()['SKILL.md'].decode('utf-8')
     for text in (HOST_INSTRUCTIONS, skill):
         assert '继续第一项/处理这个问题' in text and '只表示分析' in text

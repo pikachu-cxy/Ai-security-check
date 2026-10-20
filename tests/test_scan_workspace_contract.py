@@ -64,7 +64,7 @@ def test_file_is_rejected_before_workspace_admission(routed, projects, tool, fil
     assert out['scanner_run'] is False and out['source_modified'] is False
     assert out['security_proof'] is False and out['coverage'] == 'UNKNOWN'
     assert 'path 只是项目目录的旧参数别名' in out['message']
-    assert '不支持单文件扫描' in out['message']
+    assert '指定文件应使用文件范围检查' in out['message']
     assert str(file) not in json.dumps(out)
     # A bad argument is not a broken preparation/connection diagnosis.
     assert 'workspace_readiness' not in out
@@ -120,7 +120,7 @@ def test_scan_tool_discovery_explains_directory_alias(routed):
         properties = tool.inputSchema['properties']
         assert 'Absolute project directory' in properties['workspace_path']['description']
         assert 'Legacy alias of workspace_path' in properties['path']['description']
-        assert 'Single-file scans are not supported' in properties['path']['description']
+        assert 'For selected files use scan_files' in properties['path']['description']
         assert 'legacy directory alias' in tool.description
         assert 'workspace_path' in tool.inputSchema['required']
 
