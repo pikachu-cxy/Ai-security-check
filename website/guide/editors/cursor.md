@@ -8,11 +8,21 @@ Cursor 接入目前面向 **Windows x64、本地单根工作区的测试版**。
 
 ## 1. 执行一条安装命令
 
-核对候选包摘要、完整解压后，在能看到 `security-check` 文件夹的目录执行：
+从[下载页](../../downloads.md)选择对应平台的完整包并核对 SHA256。Mac 的 M 系列芯片选择 `macos-arm64`，Intel 芯片选择 `macos-x64`；完整解压并保留整个 `security-check` 文件夹，不要只复制可执行文件。
 
-```powershell
+在能看到 `security-check` 文件夹的目录，打开 PowerShell（Windows）或终端（macOS），执行对应命令：
+
+::: code-group
+```powershell [Windows]
 .\security-check\security-check.exe install cursor
 ```
+
+```sh [macOS · Intel / Apple Silicon]
+./security-check/security-check install cursor
+```
+:::
+
+macOS 两种芯片使用相同的安装命令，但安装包不能混用。首次启动若遇到“未知开发者”、系统策略拒绝或执行权限问题，请按 [macOS 首次启动](../installation.md#macos-首次启动)处理，不要全局关闭系统保护。提供安装步骤不代表 Cursor 的 macOS 桌面流程已经验收通过。
 
 安装器会配置用户级 MCP、编辑事件检查和配套使用指引，并自动开始准备检查组件。常规任务检查会加入精确工具白名单；团队策略仍可能要求确认。
 
