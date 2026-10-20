@@ -16,7 +16,13 @@ description: 选择编辑器，用一条命令接入，再通过连接检查和�
 
 <EditorCards />
 
-## 2. 下载、解压，执行一条安装命令
+## 2. 让助手安装，或自己执行一条命令
+
+想让 AI 帮你操作？选择实际使用的编辑器，复制安装请求并粘贴到本机助手聊天。请求包含下载、校验、接入和安装后的状态核对；WorkBuddy 与其他客户端会按项目级或手动 MCP 方式接入。
+
+<InstallRequest />
+
+### 自己安装
 
 从[下载页](../downloads.md)获取与你的系统和芯片匹配的完整包，核对 SHA256 后解压。**保留整个 `security-check` 文件夹**，不要只拿出里面的可执行文件。完整包不要求另装 Python 或 Node.js。
 
@@ -48,4 +54,4 @@ description: 选择编辑器，用一条命令接入，再通过连接检查和�
 完成后检查本次改动中的安全问题，说明检查范围和需要我决定的事项。
 ```
 
-[前往 Codex 安装 →](./editors/codex.md) · [查看支持范围](../reference/support.md)
+[Codex 安装](./editors/codex.md) · [Cursor 安装](./editors/cursor.md) · [WorkBuddy 接入](./editors/workbuddy.md) · [其他客户端](./editors/other.md)

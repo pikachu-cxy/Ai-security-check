@@ -43,4 +43,4 @@ shasum -a 256 -c ai-security-runtime-v0.3.8-macos-arm64.tar.gz.sha256
 
 Intel 换为 `macos-x64`。摘要用于检查下载完整性，不代替发布者身份、系统签名或平台兼容性验证。
 
-完整解压后按[快速开始](./guide/quickstart.md)安装，也可复制页面上的安装请求交给本地 Codex。Mac 包已保留执行权限，正常解压通常无需另行 `chmod`。当前尚未配置 Apple Developer ID 签名和公证，“未知开发者”提示仍可能出现；处理方式见[安装故障排查](./guide/installation.md)。签名、公证、真机与宿主验收不能用一次交叉编译或校验和替代。
+完整解压后按[快速开始](./guide/quickstart.md)安装，也可在该页选择 Codex、Cursor、WorkBuddy 或其他 MCP 客户端，复制对应安装请求交给本机助手。Mac 包已保留执行权限，正常解压通常无需另行 `chmod`。当前尚未配置 Apple Developer ID 签名和公证，“未知开发者”提示仍可能出现；处理方式见[安装故障排查](./guide/installation.md)。签名、公证、真机与宿主验收不能用一次交叉编译或校验和替代。

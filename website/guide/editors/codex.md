@@ -22,9 +22,9 @@
 
 如果由 Codex 帮你安装，完成当前安装任务后再重启它；安装期间不要同时编辑 Codex 配置。
 
-::: details 想让 Codex 代你下载和安装？
-<InstallRequest />
-:::
+想让 Codex 代你下载和安装？复制下方请求，粘贴到本机 Codex 聊天即可：
+
+<InstallRequest editor="codex" />
 
 ::: info macOS 出现“未知开发者”？
 当前包的签名与公证限制及处理方法见[macOS 首次启动](../installation.md#macos-首次启动)。先核对来源和摘要，再按系统的单个应用批准流程处理。
