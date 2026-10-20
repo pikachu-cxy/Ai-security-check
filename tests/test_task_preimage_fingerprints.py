@@ -39,9 +39,9 @@ def test_proof_is_sparse_private_and_old_reference_contract_is_unchanged(sample)
 
 def test_tokens_preserve_hash_slashes_inside_string_and_ignore_real_comment_changes(sample):
     store, _ = sample
-    old = b'value = "https://host/#fragment" # first private comment\n'
-    changed_comment = b'value = "https://host/#fragment" # changed private comment\n'
-    changed_literal = b'value = "https://host/#different" # first private comment\n'
+    old = b'password = "https://host/#fragment" # first private comment\n'
+    changed_comment = b'password = "https://host/#fragment" # changed private comment\n'
+    changed_literal = b'password = "https://host/#different" # first private comment\n'
     first = store.semantic_proof(FIRST, 'a.py', old)
     assert first['complete'] and set(first['semantic_lines']) == {1}
     assert first == store.semantic_proof(FIRST, 'a.py', changed_comment)
@@ -62,7 +62,7 @@ def test_private_key_ownership_precedes_comment_tokenizer(sample):
 
 def test_fingerprints_align_after_insertion_but_are_task_and_path_bound(sample):
     store, _ = sample
-    raw = b'value = "private-literal"\n'
+    raw = b'password = "private-literal"\n'
     first = store.semantic_proof(FIRST, 'a.py', raw)['semantic_lines'][1]
     shifted = store.semantic_proof(FIRST, 'a.py', b'allowed = guard.check(user)\n' + raw)
     assert shifted['semantic_lines'][2] == first
@@ -170,7 +170,7 @@ def test_writer_rolls_back_source_and_private_proof_together(sample):
     ('app.js', '//# sourceMappingURL=before.js.map', '//# sourceMappingURL=after.js.map'),
     ('app.c', '/* pragma warning before */', '/* pragma warning after */'),
 ])
-def test_directive_only_change_is_private_semantic_evidence_and_partial_after_all_reads(sample, path, first, second):
+def test_visible_directive_change_requires_reads_and_can_be_fully_reviewed(sample, path, first, second):
     from security_runtime import task_review_plan as plans
     store, _ = sample
     old, new = (first + '\nallowed = guard.check(user)\n').encode(), (second + '\nallowed = guard.check(user)\n').encode()
@@ -178,19 +178,19 @@ def test_directive_only_change_is_private_semantic_evidence_and_partial_after_al
         semantic_proofs={path: store.semantic_proof(FIRST, path, old)})
     after = dict(hashes={path: hashlib.sha256(new).hexdigest()}, texts={path: safe_source(new.decode(), source_path=path)},
         semantic_proofs={path: store.semantic_proof(FIRST, path, new)})
-    assert before['texts'] == after['texts']
-    assert 1 in before['semantic_proofs'][path]['semantic_lines']
-    assert before['semantic_proofs'] != after['semantic_proofs']
+    assert before['texts'] != after['texts']
+    assert before['semantic_proofs'][path]['semantic_lines'] == {}
+    assert after['semantic_proofs'][path]['semantic_lines'] == {}
     record = dict(task_ref=FIRST, review_protocol=3, baseline=before, end=after, changes=[dict(path=path, change='MODIFIED')], static_attempts=1)
     unit = plans.build_plan(record, now=1, protocol_version=3)['units'][0]
-    assert any(gap['reason'] == 'SANITIZED_CHANGE_UNOBSERVABLE' and gap['start_line'] == 1
-               for gap in unit['evidence_gaps'])
+    assert not unit['evidence_gaps']
+    assert {window['location_version'] for window in unit['required_windows']} == {'BEFORE_TASK', 'CURRENT_TASK_END'}
     for index, window in enumerate(unit['required_windows']):
         plans.record_read(record, dict(window, evidence_id=f'private-directive-{index}', total_lines=2), now=2)
-    assert plans.submit_units(record, [unit['unit_id']], 'REVIEWED', [], now=3)['coverage'] == 'PARTIAL'
+    assert plans.submit_units(record, [unit['unit_id']], 'REVIEWED', [], now=3)['coverage'] == 'REVIEWED'
 
 
-def test_complete_ordinary_comment_proof_still_allows_full_review_and_legacy_is_conservative(sample):
+def test_visible_comment_edit_requires_review_even_without_private_proof(sample):
     from security_runtime.task_review_windows import adaptive_windows
     store, _ = sample
     path = 'app.py'
@@ -200,22 +200,22 @@ def test_complete_ordinary_comment_proof_still_allows_full_review_and_legacy_is_
                       semantic_proofs={path: store.semantic_proof(FIRST, path, old)}),
         end=dict(hashes={path: hashlib.sha256(new).hexdigest()}, texts={path: safe_source(new.decode(), source_path=path)},
                  semantic_proofs={path: store.semantic_proof(FIRST, path, new)}))
-    assert adaptive_windows(record, dict(path=path, change='MODIFIED')) == ([], [])
+    windows, gaps = adaptive_windows(record, dict(path=path, change='MODIFIED'))
+    assert windows and not gaps
     record['baseline'].pop('semantic_proofs')
     windows, gaps = adaptive_windows(record, dict(path=path, change='MODIFIED'))
-    assert windows and any(gap['reason'] == 'SEMANTIC_LINE_PROOF_UNAVAILABLE' for gap in gaps)
+    assert windows and not gaps
 
 
 @pytest.mark.parametrize('path', ['app.js', 'app.ts'])
-def test_uncertain_javascript_regex_comment_tokens_remain_private_opaque_semantics(sample, path):
+def test_javascript_regex_remains_visible_instead_of_opaque_semantics(sample, path):
     store, _ = sample
     old = b'const pattern = /[//]first/;\n'
     new = b'const pattern = /[//]other/;\n'
-    assert safe_source(old.decode(), source_path=path) == safe_source(new.decode(), source_path=path)
+    assert safe_source(old.decode(), source_path=path) != safe_source(new.decode(), source_path=path)
     before, after = store.semantic_proof(FIRST, path, old), store.semantic_proof(FIRST, path, new)
     assert before['complete'] and after['complete']
-    assert before['semantic_lines'].keys() == {1}
-    assert before['semantic_lines'] != after['semantic_lines']
+    assert before['semantic_lines'] == after['semantic_lines'] == {}
     assert store.semantic_proof(FIRST, path, b'const checked = guard.check(user); // ordinary explanation\n')['semantic_lines'] == {}
 
 

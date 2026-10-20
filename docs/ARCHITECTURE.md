@@ -29,6 +29,16 @@ resource policy (`task_review_budget`), plan/coverage accounting
 Neither the planner nor the transport reads files, starts a scanner, authorizes
 repairs or treats a locator as evidence.
 
+Source evidence policy v2 preserves ordinary literals, comments, URLs and long
+identifiers. `source_redaction` masks credential values identified by sensitive
+field context or known token/private-key formats, URL credentials and scanner
+secret ranges. Field names, empty values and environment-variable references
+remain readable. This policy applies to source evidence; diagnostic/feedback
+redaction retains its existing separate rules. New snapshots and authenticated
+preimage references record the policy version. An existing task keeps its
+baseline policy for current source and private comparisons, including newly
+added files; old immutable evidence is never regenerated or unmasked.
+
 New task captures keep optional, keyed redacted-line change locators in a private
 side table committed with the original sanitized body. References and old body
 formats stay compatible. Locators are bound to the original task/path/hash and

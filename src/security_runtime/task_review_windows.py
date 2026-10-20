@@ -169,27 +169,20 @@ def _unknown_hidden_lines(old, new, old_proof, new_proof, changed, budget):
                 unknown_old.add(old_index+1)
                 unknown_new.add(new_index+1)
         left, right = b, d
-    # A resource-bounded ambiguous diff can deliberately keep a whole block.
-    # In that block, cancel matching private semantic identities first. A
-    # remaining old/new opaque instruction with the same sanitized form still
-    # has unobservable changed semantics, even without exact line alignment.
+    # Cancel unchanged opaque identities inside each changed block. Policy v2
+    # preserves surrounding text: a visible comment/literal edit must not hide
+    # a simultaneous credential edit just because the masked lines now differ.
+    # Whole-line proofs cannot separate those edits, so remaining old/new
+    # opaque instructions retain a conservative semantic gap.
     for a, b, c, d in changed:
-        left_rows, right_rows = {}, {}
-        for index in range(a, b):
-            if index+1 in old_proof:
-                left_rows.setdefault(old[index], []).append(index+1)
-        for index in range(c, d):
-            if index+1 in new_proof:
-                right_rows.setdefault(new[index], []).append(index+1)
-        for line in left_rows.keys() & right_rows.keys():
-            old_counts = Counter(old_proof[number] for number in left_rows[line])
-            new_counts = Counter(new_proof[number] for number in right_rows[line])
-            old_remaining, new_remaining = old_counts-new_counts, new_counts-old_counts
-            if old_remaining and new_remaining:
-                unknown_old.update(number for number in left_rows[line]
-                                   if old_proof[number] in old_remaining)
-                unknown_new.update(number for number in right_rows[line]
-                                   if new_proof[number] in new_remaining)
+        left_rows = [index+1 for index in range(a, b) if index+1 in old_proof]
+        right_rows = [index+1 for index in range(c, d) if index+1 in new_proof]
+        old_counts = Counter(old_proof[number] for number in left_rows)
+        new_counts = Counter(new_proof[number] for number in right_rows)
+        old_remaining, new_remaining = old_counts-new_counts, new_counts-old_counts
+        if old_remaining and new_remaining:
+            unknown_old.update(number for number in left_rows if old_proof[number] in old_remaining)
+            unknown_new.update(number for number in right_rows if new_proof[number] in new_remaining)
     return unknown_old, unknown_new
 
 

@@ -1,7 +1,7 @@
 """Retain only observable empty literals while keeping hidden values private."""
 import pytest
 
-from security_runtime.local_evidence import safe_source
+from security_runtime.local_evidence import legacy_safe_source as safe_source
 
 
 @pytest.mark.parametrize('literal', ["''", '""', '``', "''''''", '""""""'])

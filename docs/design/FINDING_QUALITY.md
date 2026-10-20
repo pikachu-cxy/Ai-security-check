@@ -201,10 +201,11 @@ Neither local evidence nor its live hash changes a quality observation hash,
 finding identity or persisted review decision.
 
 Secret details return only REDACTED_SECRET and do not read the source file.
-Other excerpts scrub known secret ranges, credential patterns, long tokens,
-string literals (including multiline strings) and private-key blocks before
-selecting a window. Redaction is conservative: literals useful for review may
-also be hidden. Repository text is UNTRUSTED_CODE, not instructions. There is no
+Other excerpts scrub known secret ranges, credential values and recognizable
+token/private-key formats before selecting a window. Source policy v2 retains
+ordinary literals, comments, URLs and long identifiers; sensitive field names
+remain visible while their credential values are hidden. Old tasks keep the
+policy bound to their original baseline. Repository text is UNTRUSTED_CODE, not instructions. There is no
 new source/sink inference, LLM invocation, suppression or code modification.
 
 ### Explicit access and private export

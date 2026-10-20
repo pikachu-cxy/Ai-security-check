@@ -5,6 +5,11 @@ on:
     branches: ['**']
   pull_request:
   workflow_call:
+    inputs:
+      focused:
+        description: Run release-specific regressions instead of the full development suite
+        type: boolean
+        default: false
 
 jobs:
   tests:
@@ -43,21 +48,36 @@ jobs:
       - name: Install Runtime and test dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[test,scanner-test]"
+          python -m pip install -e ".${{ inputs.focused && '[test]' || '[test,scanner-test]' }}"
       - name: Check installation and Mac release contracts before the full regression
         env:
           PYTHONUTF8: '0'
         run: python -m pytest -q tests/test_bootstrap_runtime.py tests/test_macos_installation.py tests/test_macos_release_refresh.py tests/test_macos_artifact_budget.py tests/test_node_host_preflight.py tests/test_release_assets.py
       - name: Run Runtime tests
+        if: inputs.focused != true
         env:
           SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
         run: python -m pytest -q --basetemp="${{ runner.temp }}/runtime-tests"
+      - name: Run focused source evidence and review closeout regressions
+        if: inputs.focused == true
+        run: >-
+          python -m pytest -q
+          tests/test_source_redaction.py
+          tests/test_local_evidence.py
+          tests/test_task_preimages.py
+          tests/test_task_preimage_fingerprints.py
+          tests/test_task_review_closeout.py
+          tests/test_task_review_adaptive_windows.py
+          tests/test_task_review_redacted_changes.py
+          tests/test_task_review_invariants.py
+          --basetemp="${{ runner.temp }}/focused-release-tests"
       - name: Retain actual arithmetic host execution evidence
-        if: always()
+        if: always() && inputs.focused != true
         uses: actions/upload-artifact@v4
         with:
           name: arithmetic-host-evidence-${{ matrix.os }}
           path: ${{ runner.temp }}/arithmetic-host-evidence/arithmetic-host-positive.json
           if-no-files-found: error
       - name: First-party rule quality gate
+        if: inputs.focused != true
         run: python scripts/test_rules.py

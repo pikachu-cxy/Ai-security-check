@@ -9,6 +9,7 @@ import stat
 
 from .finding_quality import relative_file
 from .redactor import SecretRedactor
+from .source_redaction import VERSION, redact_source
 
 MAX_FILE_BYTES = 1_000_000
 MAX_LINES = 80
@@ -131,7 +132,7 @@ _SHORT_CREDENTIAL_ASSIGNMENTS = re.compile(
     r'(?:(?P<safe>' + _SAFE_CREDENTIAL_VALUE + r')|[^\r\n]*)')
 
 
-def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None):
+def legacy_safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None):
     """Scrub literals over the whole bounded file before selecting nearby lines.
 
     Preserve line counts, including multiline literals and private-key blocks;
@@ -166,6 +167,28 @@ def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=No
                 lambda match: match.group(0) if match.group('safe') else '[REDACTED_SECRET]', line)
             line = SecretRedactor().redact(line)
             line = re.sub(r'\b[A-Za-z0-9+/=_-]{32,}\b', '[REDACTED_SECRET]', line)
+            if truncation_lines is not None and len(line) > MAX_LINE_CHARS:
+                truncation_lines.append(index)
+            lines[index-1] = line[:MAX_LINE_CHARS]
+    return lines
+
+
+def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None,
+                redaction_version=VERSION):
+    """Keep program semantics visible; redact credential values before slicing."""
+    if type(redaction_version) is not int or redaction_version not in {1, VERSION}:
+        raise ValueError('Unsupported source redaction policy')
+    if redaction_version == 1:
+        return legacy_safe_source(text, secret_ranges, source_path, truncation_lines=truncation_lines)
+    path = Path(source_path) if source_path is not None else None
+    tokens = (_HASH_SOURCE_TOKENS if path is not None and
+        (path.suffix.lower() in _HASH_COMMENT_SUFFIXES or path.name.lower() == 'dockerfile')
+        else _SOURCE_TOKENS)
+    lines = redact_source(text, tokens, source_path).splitlines()
+    for index, line in enumerate(lines, 1):
+        if any(start <= index <= end for start, end in secret_ranges):
+            lines[index-1] = '[REDACTED_SECRET]'
+        else:
             if truncation_lines is not None and len(line) > MAX_LINE_CHARS:
                 truncation_lines.append(index)
             lines[index-1] = line[:MAX_LINE_CHARS]
@@ -234,7 +257,7 @@ class LocalEvidenceService:
             raise ValueError('Context lines must be between 0 and 20')
         output = dict(evidence_status='UNAVAILABLE', reason=None, locator=None,
             original_evidence=None, current_context=None, trust='UNTRUSTED_CODE',
-            redaction='Known secret ranges, credential patterns and literals except fixed public constants')
+            redaction='Credential values and known secret ranges; ordinary literals and comments retained')
         try:
             locator = evidence_locator(finding)
             output['locator'] = locator

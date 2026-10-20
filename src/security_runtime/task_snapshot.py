@@ -15,6 +15,7 @@ from pathlib import Path
 
 from .local_evidence import EvidenceUnavailable, MAX_FILE_BYTES, WorkspaceReader, safe_source
 from . import task_preimages
+from .source_redaction import VERSION
 
 
 MAX_READ_BYTES = 20_000_000
@@ -199,7 +200,7 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
         inline_body_bytes=text_bytes, private_body_bytes=private_bytes,
         limitation_count=len(limitations), limitation_omitted_count=max(0,len(limitations)-MAX_LIMITATIONS),
         limitation_reason_counts=reason_counts, limits=policy.limits())
-    return dict(hashes=hashes, texts=texts, text_truncations=truncations,
+    return dict(hashes=hashes, texts=texts, text_truncations=truncations, redaction_version=VERSION,
         line_counts=line_counts, preimages=preimages, text_unavailable=unavailable,
         limitations=limitations[:MAX_LIMITATIONS], read_limitations=read_limitations[:MAX_LIMITATIONS],
         inventory=sorted(selected), inventory_complete=complete,

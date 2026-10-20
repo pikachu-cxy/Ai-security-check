@@ -69,7 +69,7 @@ def test_reader_failure_reasons_exposed_without_source(tmp_path,raw,reason):
 def test_full_file_multiline_scrub_and_public_literals(tmp_path):
     path,store,service=sample(tmp_path)
     synthetic='SyntheticMultilineCredentialOnly'
-    path.write_text('class Demo {\n String key = """\n'+synthetic+'\n""";\n void run(){ MessageDigest.getInstance("MD5"); }\n}\n')
+    path.write_text('class Demo {\n String privateKey = """\n'+synthetic+'\n""";\n void run(){ MessageDigest.getInstance("MD5"); }\n}\n')
     packet=service.prepare('scan')['packets'][0]
     text=json.dumps(packet)
     assert synthetic not in text and 'MD5' in text and 'REDACTED' in text
@@ -109,4 +109,4 @@ def test_public_constant_not_credential_allowlist(tmp_path):
     from security_runtime.local_evidence import safe_source
     lines=safe_source('MessageDigest.getInstance("MD5");\nlogin("MD5");\npassword = "TLS";\n')
     assert '"MD5"' in lines[0]
-    assert 'MD5' not in lines[1] and 'TLS' not in lines[2]
+    assert 'MD5' in lines[1] and 'TLS' not in lines[2]

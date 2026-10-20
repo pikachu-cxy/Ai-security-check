@@ -57,6 +57,9 @@ class TaskReviewCoordinator:
         except plans.ReviewPlanError as exc:
             # A rejected response was not delivered, so it is neither evidence
             # nor a permanent source gap. Remaining required windows stay unread.
+            if category != 'source':
+                from .task_review_closeout import retain_delivery_blocker
+                retain_delivery_blocker(self.service, root, record, exc.reason_code)
             raise TaskContextError(exc.reason_code, str(exc), recoverable=exc.reason_code=='TASK_CONTEXT_RESPONSE_BUDGET',
                 guidance='Keep this task and its evidence; submit PARTIAL with the remaining plan units. Do not reset the task or its cumulative limits.') from None
         record['context_bytes'] = record['review_ledger']['total_bytes']
@@ -71,6 +74,9 @@ class TaskReviewCoordinator:
                 registered.append(binding['source_ref'])
         capacity = transport.record_capacity(record)
         if not capacity['fits']:
+            if category != 'source':
+                from .task_review_closeout import retain_delivery_blocker
+                retain_delivery_blocker(self.service, root, record, 'TASK_REVIEW_RECORD_CAPACITY')
             raise TaskContextError('TASK_REVIEW_RECORD_CAPACITY',
                 'The signed review record cannot safely grow; existing delivered evidence is retained',
                 recoverable=False, guidance='Keep this task and its existing evidence; save an honest partial result without resetting its ledger.',
@@ -95,7 +101,9 @@ class TaskReviewCoordinator:
         raw, _ = WorkspaceReader(root).read(name)
         if hash_bytes(raw) != record['end']['hashes'].get(name):
             raise ValueError('Task source changed during semantic-proof planning; evidence is stale')
-        return private.semantic_proof(record['task_ref'], name, raw)
+        from .source_redaction import task_version
+        return private.semantic_proof(record['task_ref'], name, raw,
+                                      redaction_version=task_version(record))
 
     def completion_packet(self, record, *, reserve_projection_sync=False):
         """Bound final delivery too; detailed risk records remain queryable."""
@@ -341,18 +349,25 @@ class TaskReviewCoordinator:
                     if lines is None:
                         raise TaskPreimageUnavailable('TASK_PREIMAGE_MISSING')
                 except (TaskPreimageUnavailable, OSError) as exc:
-                    reject(getattr(exc, 'reason_code', 'TASK_PREIMAGE_UNAVAILABLE'), 'Task-start source is unavailable; it cannot be reconstructed after editing', False)
+                    reason = getattr(exc, 'reason_code', 'TASK_PREIMAGE_UNAVAILABLE')
+                    service._context_gap(root, record, reason, name,
+                        location_version='BEFORE_DELETION' if deleted else 'BEFORE_TASK')
+                    reject(reason, 'Task-start source is unavailable; it cannot be reconstructed after editing', False)
                 location = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
                 truncated = snapshot.get('text_truncations', {}).get(name)
             else:
                 try:
                     raw, text = WorkspaceReader(root).read(name)
                 except (OSError, EvidenceUnavailable, UnicodeError):
+                    service._context_gap(root, record, 'TASK_CONTEXT_SOURCE_UNAVAILABLE', name,
+                        location_version='CURRENT_TASK_END')
                     reject('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Current task source is unavailable', False)
                 if hash_bytes(raw) != snapshot['hashes'][name]:
                     raise ValueError('Task source changed during context read; evidence is stale')
                 long_lines = []
-                lines = safe_source(text, source_path=name, truncation_lines=long_lines)
+                from .source_redaction import task_version
+                lines = safe_source(text, source_path=name, truncation_lines=long_lines,
+                                    redaction_version=task_version(record))
                 truncated = dict(line_count=len(long_lines), lines=long_lines) if long_lines else None
                 location = 'CURRENT_TASK_END'
             if start_line > len(lines):
@@ -415,11 +430,19 @@ class TaskReviewCoordinator:
             source_bytes = len(json.dumps(packet['lines'], ensure_ascii=False).encode('utf-8'))
             return self._charge(root, record, packet, 'source', source_bytes)
         except plans.ReviewPlanError as exc:
+            from .task_review_closeout import DELIVERY_BLOCKERS
+            if exc.reason_code in DELIVERY_BLOCKERS:
+                refused['review_delivery_blocker'] = dict(reason=exc.reason_code,
+                    review_revision=record.get('review_revision', 1))
             service.store(root).save(refused)
             raise TaskContextError(exc.reason_code, str(exc), recoverable=False,
                 guidance='Keep this task, source bindings and delivered evidence; correct the named capacity or range limitation without resetting its ledger.') from None
-        except TaskContextError:
+        except TaskContextError as exc:
             # Rejecting a packet cannot publish its source coverage or renew the
             # activity lease. The original requested interval is still retained.
+            from .task_review_closeout import DELIVERY_BLOCKERS
+            if exc.reason_code in DELIVERY_BLOCKERS:
+                refused['review_delivery_blocker'] = dict(reason=exc.reason_code,
+                    review_revision=record.get('review_revision', 1))
             service.store(root).save(refused)
             raise

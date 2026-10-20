@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from security_runtime.local_evidence import LocalEvidenceService, safe_source
+from security_runtime.local_evidence import LocalEvidenceService, legacy_safe_source as safe_source
 
 
 @pytest.mark.parametrize('comment,path', [
@@ -105,7 +105,7 @@ def test_comment_punctuation_cannot_drop_code_or_secrets_into_evidence_receipt(t
     source = ("# owner's retained comparison\n"
               'def fetch_document():\n'
               '    verify_control()\n'
-              '    return "private-synthetic-literal"\n')
+              '    password = "private-synthetic-literal"\n')
     path = tmp_path / 'client.py'
     path.write_text(source, encoding='utf-8')
     raw = path.read_bytes()

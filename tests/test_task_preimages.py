@@ -72,7 +72,8 @@ def test_raw_credentials_are_never_persisted_and_reference_is_small(sample):
     assert read(store, FIRST, 'routes.py', reference) == safe_source(raw.decode())
     persisted = store.path.read_bytes()
     assert b'test-private-password' not in persisted
-    assert b'private-business-literal' not in persisted
+    assert b'private-business-literal' in persisted
+    assert reference['redaction_version'] == 2
 
 
 def test_caller_cannot_pass_unredacted_text_as_sanitized_lines(sample):

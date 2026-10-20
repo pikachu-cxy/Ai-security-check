@@ -144,13 +144,13 @@ def test_counterevidence_empty_review_remains_scoped_and_host_reported(service):
     assert s.get(root, ref)['current_version'] is True
 
 
-def test_unread_required_plan_context_forces_partial(service):
+def test_unread_required_plan_context_keeps_review_active(service):
     s, root, _ = service
     ref, session, _ = prepared(service)
-    s.submit(root, ref, session, [], 'REVIEWED', [])
-    result = s.get(root, ref)
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['context_read_coverage']['plan_gap_count'] > 0
+    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert result['status'] == 'REVIEW_CONTINUE_REQUIRED'
+    assert result['review_required'] and not result['result_saved']
+    assert s.load(root, ref)['phase'] == 'REVIEWING'
 
 
 def test_source_changed_or_unissued_evidence_cannot_be_submitted(service):
@@ -339,12 +339,12 @@ def test_unread_requested_continuation_cannot_claim_reviewed(service):
     ref, session, _ = large_review(service, 1500)
     first = s.read(root, ref, session, 'large.py', 1, 1500)
     assert first['next_range'][0] == len(first['lines'])+1
-    s.submit(root, ref, session, [], 'REVIEWED', [])
+    receipt = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert receipt['status'] == 'REVIEW_CONTINUE_REQUIRED' and not receipt['result_saved']
     result = s.get(root, ref)
-    assert result['host_review']['coverage'] == 'PARTIAL'
     assert result['context_read_coverage']['unread_ranges']['items'] == [
         dict(path='large.py', start_line=first['next_range'][0], end_line=1500)]
-    assert any('large.py:' in value for value in s.load(root, ref)['review']['limitations'])
+    assert s.load(root, ref)['phase'] == 'REVIEWING'
     assert len(runtime.calls) == 1
 
 
@@ -512,6 +512,7 @@ def test_long_sanitized_lines_cannot_support_full_context_review(service):
     page = s.read(root, ref, packet['review_session'], 'long.py', 1, 1)
     assert page['line_truncation']['lines'] == [1]
     assert len(page['lines'][0]) <= 600
+    review_all(s, root, ref, packet)
     s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
     result = s.get(root, ref)
     assert result['host_review']['coverage'] == 'PARTIAL'
@@ -580,8 +581,9 @@ def test_related_inventory_scales_without_reset_and_unknown_source_stays_exclude
     after = s.load(root, ref)['review_ledger']
     assert after['source_bytes'] == before['source_bytes'] and after['reads'] == before['reads']
     assert after['total_bytes'] > before['total_bytes']
-    s.submit(root, ref, session, [], 'REVIEWED', [])
-    assert s.get(root, ref)['host_review']['coverage'] == 'PARTIAL'
+    result = s.submit(root, ref, session, [], 'REVIEWED', [])
+    assert result['status'] == 'REVIEW_CONTINUE_REQUIRED'
+    assert result['pending_unit_count'] == 26 and not result['result_saved']
     assert len(runtime.calls) == 1
 
 
@@ -597,8 +599,10 @@ def test_failed_final_static_does_not_turn_retained_hook_risk_into_no_findings_p
     runtime.mutate = fail
     result = s.finish(root, ref)
     assert result['static']['status'] == 'FAILED'
-    session = s.prepare(root, ref)['review_session']
+    packet = s.prepare(root, ref)
+    session = packet['review_session']
     s.read(root, ref, session, 'auth.py', 1, 2)
+    review_all(s, root, ref, packet)
     s.submit(root, ref, session, [], 'REVIEWED', [])
     complete = s.get(root, ref)
     summary = complete['development_summary']
@@ -652,8 +656,10 @@ def test_signed_hook_failure_scope_is_checked_but_recording_gap_is_preserved(ser
     assert runtime.calls == [('auth.py', 'routes.py')]
     assert result['file_hook_checks']['recording_failure']['present']
     assert any(v['reason'] == 'TASK_HOOK_RECORDING_FAILED' for v in result['limitations'])
-    session = s.prepare(root, ref)['review_session']
+    packet = s.prepare(root, ref)
+    session = packet['review_session']
     s.read(root, ref, session, 'auth.py', 1, 2)
+    review_all(s, root, ref, packet)
     s.submit(root, ref, session, [], 'REVIEWED', [])
     complete = s.get(root, ref)
     assert complete['host_review']['coverage'] == 'PARTIAL'

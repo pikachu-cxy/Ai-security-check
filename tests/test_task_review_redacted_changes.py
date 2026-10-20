@@ -27,7 +27,7 @@ def _call(server, name, **arguments):
 
 
 def _source(role='old', operation='allow', comment='before comment'):
-    lines = ['def choose(user):', f"    role = '{role}'", f"    credential = '{PRIVATE_VALUE}'"]
+    lines = ['def choose(user):', f"    role_token = '{role}'", f"    credential = '{PRIVATE_VALUE}'"]
     lines.extend(f'    value_{i} = {i}' for i in range(3, 140))
     lines[45] = '# ' + comment
     lines[123] = f'    permitted = policy.{operation}(user)'
@@ -92,7 +92,7 @@ def _covers(requirements, version, line):
 
 def _private_absent(value, commitments):
     serialized = json.dumps(value, ensure_ascii=False, sort_keys=True)
-    if PRIVATE_VALUE in serialized or "role = 'old'" in serialized or "role = 'new'" in serialized:
+    if PRIVATE_VALUE in serialized or "role_token = 'old'" in serialized or "role_token = 'new'" in serialized:
         pytest.fail('Original hidden source escaped the public/control boundary.')
     if any(item in serialized for item in commitments):
         pytest.fail('A private semantic commitment escaped the sidecar boundary.')
@@ -122,7 +122,7 @@ def _database_private_absent(tasks, root, ref, commitments):
         _private_absent(dict(metadata=json.loads(metadata), body=json.loads(body)), commitments)
     for body, in private_rows:
         serialized = body.decode('utf-8') if isinstance(body, bytes) else body
-        if PRIVATE_VALUE in serialized or "role = 'old'" in serialized or "role = 'new'" in serialized:
+        if PRIVATE_VALUE in serialized or "role_token = 'old'" in serialized or "role_token = 'new'" in serialized:
             pytest.fail('Private proof storage retained original hidden source.')
 
 

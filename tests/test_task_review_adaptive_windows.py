@@ -191,7 +191,7 @@ def private_record(old, new):
 
 
 def mixed_source():
-    return ['def access_policy(user):', '    role = "fixture-reader-role"', '    return user.role == role',
+    return ['def access_policy(user):', '    role_token = "fixture-reader-role"', '    return user.role == role_token',
         *[f'padding_{index} = helper_{index}(value_{index})' for index in range(60)],
         'def entry(user):', '    return policy.allow(user)']
 
@@ -199,7 +199,7 @@ def mixed_source():
 def test_native_private_proof_locates_hidden_and_visible_changes_in_the_same_file():
     old = mixed_source()
     new = old.copy()
-    new[1] = '    role = "fixture-admin-role"'
+    new[1] = '    role_token = "fixture-admin-role"'
     new[-1] = '    return policy.enforce(user)'
     source, change = private_record(old, new)
     original = copy.deepcopy(source)
@@ -231,7 +231,9 @@ def test_native_proof_excludes_comment_only_changes_from_hidden_uncertainty():
     old = mixed_source()+['# previous explanatory note']
     new = old[:-1]+['# updated explanatory note with another length']
     result, gaps = windows.adaptive_windows(*private_record(old, new))
-    assert not gaps and not result
+    assert not gaps and result
+    assert selected(result, 'BEFORE_TASK', len(old))
+    assert selected(result, 'CURRENT_TASK_END', len(new))
 
 
 def test_an_inserted_line_moves_unchanged_private_fingerprints_without_a_false_hidden_gap():
@@ -250,11 +252,20 @@ def test_new_log_string_is_visible_new_code_rather_than_a_blanket_hidden_change_
     assert not gaps and selected(result, 'CURRENT_TASK_END', len(new)-1)
 
 
+def test_visible_edit_on_same_line_cannot_hide_a_simultaneous_credential_edit():
+    old = ['client(password="synthetic-old", endpoint="before")']
+    new = ['client(password="synthetic-new", endpoint="after")']
+    result, gaps = windows.adaptive_windows(*private_record(old, new))
+    assert {item['location_version'] for item in gaps
+            if item['reason'] == 'SANITIZED_CHANGE_UNOBSERVABLE'} == {'BEFORE_TASK', 'CURRENT_TASK_END'}
+    assert selected(result, 'BEFORE_TASK', 1) and selected(result, 'CURRENT_TASK_END', 1)
+
+
 @pytest.mark.parametrize('bad_proof', ['missing', 'incomplete', 'missing-marker-line'])
 def test_legacy_or_unverifiable_before_proof_keeps_all_potential_hidden_ranges(bad_proof):
     old = mixed_source()
     new = old.copy()
-    new[1], new[-1] = '    role = "fixture-admin-role"', '    return policy.enforce(user)'
+    new[1], new[-1] = '    role_token = "fixture-admin-role"', '    return policy.enforce(user)'
     source, change = private_record(old, new)
     if bad_proof == 'missing':
         source['baseline'].pop('semantic_proofs')

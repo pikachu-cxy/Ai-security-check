@@ -138,7 +138,7 @@ def test_line_and_context_budgets(tmp_path):
 
 def test_secret_never_read_and_adjacent_literals_redacted(tmp_path, monkeypatch):
     secret = 'syntheticCredentialLocalEvidence999'
-    text = f'class App {{\n String label = "{secret}";\n Runtime.getRuntime().exec(cmd);\n token = tiny;\n}}\n'
+    text = f'class App {{\n String password = "{secret}";\n Runtime.getRuntime().exec(cmd);\n token = "tiny";\n}}\n'
     _, finding, scan = fixture(tmp_path, text=text)
     result = LocalEvidenceService(scan).detail(finding)
     assert secret not in json.dumps(result) and 'tiny' not in json.dumps(result)
@@ -152,7 +152,7 @@ def test_secret_never_read_and_adjacent_literals_redacted(tmp_path, monkeypatch)
     assert result['reason'] == 'SECRET_REDACTED' and '[REDACTED_SECRET]' in json.dumps(result)
 
 
-@pytest.mark.parametrize('text', ['String value = """\nprivateLiteralMiddle\nprivateLiteralEnd\n""";\nrun(cmd);\n',
+@pytest.mark.parametrize('text', ['String privateKey = """\nprivateLiteralMiddle\nprivateLiteralEnd\n""";\nrun(cmd);\n',
     '-----BEGIN PRIVATE KEY-----\nprivateKeyMiddle\nprivateKeyEnd\n-----END PRIVATE KEY-----\nrun(cmd);\n'])
 def test_multiline_secret_window_redaction(tmp_path, text):
     _, finding, scan = fixture(tmp_path, text=text)
@@ -220,7 +220,7 @@ def test_private_export_local_evidence_leaves_database_intact(tmp_path, capsys):
     from scripts.finding_quality import main
     from security_runtime.models import Finding
     private = 'syntheticPrivateExportLiteralOnly'
-    _, raw, _ = fixture(tmp_path, text=f'class App {{\n String text="{private}";\n Runtime.getRuntime().exec(cmd);\n}}\n')
+    _, raw, _ = fixture(tmp_path, text=f'class App {{\n String password="{private}";\n Runtime.getRuntime().exec(cmd);\n}}\n')
     store = SQLiteStore(tmp_path/'state.db')
     store.save(ScanResult('s1', 'release', TargetProfile(str(tmp_path)), 'COMPLETED',
         [Finding(**raw)], [], 'Synthetic', 'REVIEW', 1, coverage='FULL'))

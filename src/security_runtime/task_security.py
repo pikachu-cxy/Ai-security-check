@@ -300,11 +300,13 @@ class TaskSecurityService:
             record['baseline']['hashes'][path], reference)
 
     def end_lines(self, root, record, path):
+        from .source_redaction import task_version
         raw, text = WorkspaceReader(root).read(path)
         if hash_bytes(raw) != record['end']['hashes'].get(path):
             raise ValueError('Task source changed; submitted evidence is stale')
         truncated = []
-        lines = safe_source(text, source_path=path, truncation_lines=truncated)
+        lines = safe_source(text, source_path=path, truncation_lines=truncated,
+                            redaction_version=task_version(record))
         if truncated:
             record['end'].setdefault('text_truncations', {})[path] = dict(line_count=len(truncated), lines=truncated)
         return lines
@@ -804,8 +806,10 @@ class TaskSecurityService:
         from .task_review import TaskReviewCoordinator
         return TaskReviewCoordinator(self).read(workspace, ref, session, path, start_line, end_line, source_version)
 
-    def _context_gap(self, root, record, reason_code, path):
+    def _context_gap(self, root, record, reason_code, path, *, location_version=None):
         gap = dict(reason=reason_code, path=path)
+        if location_version is not None:
+            gap['location_version'] = location_version
         gaps = record.setdefault('context_gaps', [])
         if gap not in gaps and len(gaps) < record['review_ledger']['limits']['reads']:
             gaps.append(gap)
@@ -919,6 +923,10 @@ class TaskSecurityService:
                 clean_limitations.extend(_coverage_gaps(record['limitations']))
             from .task_review_plan import finalize_plan
             completion = finalize_plan(record, now=self.now())
+            from .task_review_closeout import continuation
+            pending = continuation(record)
+            if pending is not None:
+                return pending
             record['review_completion'] = completion
             if completion['coverage'] != 'REVIEWED':
                 coverage = 'PARTIAL'

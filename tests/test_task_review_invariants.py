@@ -67,13 +67,17 @@ def test_unrelated_long_line_does_not_poison_a_completed_hunk_review(service):
     assert_reviewed(s, root, ref, packet)
 
 
-def test_fully_masked_long_comment_is_not_a_character_truncation_gap(service):
+def test_retained_long_comment_reports_a_real_character_truncation_gap(service):
     s, root, _ = service
     ref = s.begin(root, 'masked-comment-is-complete')['task_ref']
     (root/'added.py').write_text('# '+ 'context '*100+'\ndef allowed(user):\n    return auth.check(user)\n')
     packet = s.prepare(root, ref, protocol_version=3)
     review_all(s, root, ref, packet)
-    assert_reviewed(s, root, ref, packet)
+    receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert receipt['result_saved']
+    result = s.get(root, ref)
+    assert result['host_review']['coverage'] == 'PARTIAL'
+    assert result['host_review']['limitations']['total_count'] > 0
 
 
 def test_719_file_project_reviews_all_fourteen_changes_without_old_preimage_ceiling(service):
@@ -128,13 +132,13 @@ def test_an_unrequested_second_plan_page_prevents_a_full_review_claim(service):
     # The last unit was never navigated to or requested. Runtime still owns
     # the fixed complete plan and must not equate first-page completion to all.
     receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
-    assert receipt['result_saved'] is True
-    result = s.get(root, ref)
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['host_review']['limitations']
+    assert receipt['status'] == 'REVIEW_CONTINUE_REQUIRED'
+    assert receipt['result_saved'] is False and receipt['review_required']
     record = s.load(root, ref)
     pending = [unit for unit in record['review_plan']['units'] if unit['submitted_at'] is None]
     assert len(pending) == 1 and pending[0]['path'] == 'changed_5.py'
+    review_units(s, root, ref, packet['review_session'], pending)
+    assert_reviewed(s, root, ref, packet)
     assert len(runtime.calls) == 1
 
 

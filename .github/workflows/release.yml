@@ -2,6 +2,12 @@ name: Developer Alpha release
 
 on:
   workflow_dispatch:
+    inputs:
+      validation:
+        description: Validation scope (focused reuses completed development regressions)
+        type: choice
+        options: [full, focused]
+        default: full
   push:
     tags: ['v*']
 
@@ -23,6 +29,8 @@ jobs:
   tests:
     needs: version
     uses: ./.github/workflows/tests.yml
+    with:
+      focused: ${{ inputs.validation == 'focused' }}
   compliance:
     needs: tests
     uses: ./.github/workflows/compliance.yml

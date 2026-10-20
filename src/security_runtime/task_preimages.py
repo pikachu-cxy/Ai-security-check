@@ -22,6 +22,7 @@ import time
 from .closeout_state import digest, encode, readonly_uri
 from .hook_state import identity, no_links
 from .local_evidence import MAX_FILE_BYTES, MAX_LINE_CHARS, _relative, safe_source
+from .source_redaction import VERSION
 
 CONTRACT = 'task-preimage-v1'
 SOURCE = 'SANITIZED_WORKSPACE_BEFORE_TASK'
@@ -227,7 +228,7 @@ class TaskPreimageStore:
             valid = (metadata['contract'] == CONTRACT and metadata['workspace_id'] == self.workspace_id
                 and metadata['task_ref'] == task_ref and metadata['path'] == path
                 and metadata['raw_sha256'] == expected_hash and metadata['source'] == SOURCE
-                and metadata['redaction_version'] == 1
+                and type(metadata['redaction_version']) is int and metadata['redaction_version'] in {1, VERSION}
                 and isinstance(metadata['body_sha256'], str) and SHA256.fullmatch(metadata['body_sha256'])
                 and type(metadata['body_bytes']) is int and 0 < metadata['body_bytes'] <= MAX_FILE_BODY_BYTES
                 and type(metadata['line_count']) is int and 0 <= metadata['line_count'] <= MAX_FILE_BYTES
@@ -291,7 +292,7 @@ class TaskPreimageStore:
         except (json.JSONDecodeError, UnicodeError, RecursionError):
             _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
 
-    def semantic_proof(self, task_ref, path, raw_bytes):
+    def semantic_proof(self, task_ref, path, raw_bytes, *, redaction_version=VERSION):
         """Current private comparison material; never a source/ownership proof."""
         from .task_preimage_fingerprints import make_proof
         task_ref, path = _task_ref(task_ref), _path(path)
@@ -299,7 +300,8 @@ class TaskPreimageStore:
                 or any(byte < 32 and byte not in (9, 10, 12, 13) for byte in raw_bytes)):
             _fail('TASK_PREIMAGE_SOURCE_REJECTED')
         try:
-            return make_proof(self._key(), self.workspace_id, task_ref, path, raw_bytes)
+            return make_proof(self._key(), self.workspace_id, task_ref, path, raw_bytes,
+                              redaction_version=redaction_version)
         except UnicodeError:
             _fail('TASK_PREIMAGE_SOURCE_REJECTED')
 
@@ -435,7 +437,7 @@ class _PreimageWriter:
         metadata = dict(contract=CONTRACT, workspace_id=self.store.workspace_id,
             task_ref=self.task_ref, path=path, raw_sha256=raw_hash,
             body_sha256=_sha(body), body_bytes=len(body), line_count=len(sanitized_lines),
-            source=SOURCE, redaction_version=1, created_at=self.created, expires_at=self.created+TTL)
+            source=SOURCE, redaction_version=VERSION, created_at=self.created, expires_at=self.created+TTL)
         mac = digest(self.key, metadata)
         reference = dict(metadata, mac=mac)
         if len(encode(reference)) > MAX_REFERENCE_BYTES:

@@ -137,7 +137,7 @@ def test_private_store_limits_are_reported_without_making_hash_coverage_fail(tmp
     assert not snapshot['preimages']
 
 
-def test_private_store_prepares_once_and_never_persists_raw_literals(tmp_path, monkeypatch):
+def test_private_store_prepares_once_and_persists_ordinary_literals_without_credentials(tmp_path, monkeypatch):
     root, names = project(tmp_path, 1)
     (root/names[0]).write_text("password = 'private-canary-secret'\nvalue = 'business-data'\n", encoding='utf-8')
     store = private_store(tmp_path, root)
@@ -155,7 +155,8 @@ def test_private_store_prepares_once_and_never_persists_raw_literals(tmp_path, m
     assert snapshot['capture_stats']['body_complete']
     assert b'private-canary-secret' not in store.path.read_bytes()
     assert 'private-canary-secret' not in json.dumps(snapshot)
-    assert b'business-data' not in store.path.read_bytes()
+    assert b'business-data' in store.path.read_bytes()
+    assert snapshot['redaction_version'] == 2
 
 
 def test_body_preparation_new_entry_keeps_closed_writer_and_source_guards(tmp_path):
