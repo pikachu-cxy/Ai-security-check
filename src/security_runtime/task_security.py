@@ -382,6 +382,8 @@ class TaskSecurityService:
             if response is not None:
                 return response
             capture_started_at = self.now()
+            from .task_attribution import observe_start
+            attribution_start = observe_start(self.store(root).records(active=True), capture_started_at)
         # Preimages use their independent bounded transaction. Capture source
         # outside the workspace lock, then recheck owner/intent/task membership.
         ref = 'ts1-'+uuid.uuid4().hex
@@ -404,6 +406,7 @@ class TaskSecurityService:
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=capture_started_at,
                 review_protocol=PROTOCOL_VERSION,
+                attribution_start=attribution_start,
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
                 # A short-lived command Hook is not the conversation's owner process.
                 # Its normal exit can never prove that the editing task ended.
@@ -606,8 +609,8 @@ class TaskSecurityService:
             # Independent tasks may share a checkout, never each other's verdict.
             # Conservatively retain a gap if editing intervals overlap; do not
             # infer exclusive attribution from a whole-workspace snapshot.
-            overlaps=[v for v in self.store(root).records() if v['task_ref']!=record['task_ref'] and
-                      v.get('closed_at',float('inf'))>record['created_at'] and v['created_at']<=self.now()]
+            from .task_attribution import overlapping_tasks
+            overlaps = overlapping_tasks(record, self.store(root).records(), self.now())
             # Keep historical risk membership before staging a new current view.
             from .task_risk_ledger import TaskRiskLedger
             if record.get('end'):
