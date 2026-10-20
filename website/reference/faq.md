@@ -38,11 +38,26 @@ Git 拉取与正常开发都按真实修改前记录和实际改动范围核对�
 
 ## Cursor 支持哪些系统，如何确认能用？
 
-Cursor 安装页提供 Windows 完整包和 [Mac 独立环境试用入口](../guide/macos-trial.md)，Mac 安装器会自动选择 Apple Silicon 或 Intel。安装后重启 Cursor，先核对连接、版本、组件与项目路径，再完成一次小任务检查。可直接使用 [Cursor 安装与使用](../guide/editors/cursor.md)中的请求和示例。具体桌面验收记录与尚未覆盖的环境见[支持状态](./support.md#cursor-接入与桌面验证)。
+[Cursor 安装页](../guide/editors/cursor.md)同时提供 Windows 完整包和 Mac 自动安装，Mac 安装器会识别 Apple Silicon 或 Intel。安装后重启 Cursor，先核对连接、版本、组件与项目路径，再完成一次小任务检查。可直接使用 [Cursor 安装与使用](../guide/editors/cursor.md)中的请求和示例。具体桌面验收记录与尚未覆盖的环境见[支持状态](./support.md#cursor-接入与桌面验证)。
+
+## Mac 提示“可能是恶意软件，已阻止粘贴”，怎么办？ {#macos-paste}
+
+这是 macOS 终端针对可疑粘贴场景的防诈骗提醒。Apple 说明：不常使用终端、从浏览器或聊天等应用复制内容时可能出现；该类提醒可以不依据命令的具体内容触发。**单凭这个弹窗，不能判定安装脚本已被检出为恶意软件。** 它发生在粘贴阶段，也不能证明安装已开始或成功。依据：[Apple 处理指引](https://support.apple.com/zh-cn/127377)、[终端与脚本保护说明](https://support.apple.com/en-ie/guide/security/sece3b202c4b/web)。
+
+遇到时按这个顺序处理：
+
+1. 核对只复制了对应编辑器页面的一条 Shell 命令，未混入提示符、其他命令或聊天说明。
+2. 核对下载地址是 `https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh`，末尾是你要接入的 `codex` 或 `cursor`。
+3. 理解用途：`curl` 下载脚本，管道将脚本交给 `bash` 执行；脚本准备专用运行环境、校验产品包并配置所选编辑器。可以先打开[脚本原文](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)查看。
+4. 只有确认来源可靠、理解用途且确实要安装时，才由你选择“仍然粘贴”，再次核对终端中的内容后执行。不确定就选择“不粘贴”。
+
+**若原文是“检测到恶意软件，粘贴被阻止”或“已阻止恶意脚本”**，请停止并保留提示，不套用普通粘贴提醒的继续步骤。这个区别同样见上述 Apple 指引。无需关闭系统保护、修改 TLS 校验或改用另一种复制方式规避提醒。
+
+自然语言“安装请求”应粘贴到 Codex / Cursor 聊天；只有代码块中的安装命令粘贴到终端。
 
 ## Mac 安装提示 Python 动态库被系统拒绝，怎么办？
 
-原完整包如果出现 `Failed to load Python shared library` 或 `library load disallowed by system policy`，可以尝试 [Mac 独立环境安装](../guide/macos-trial.md)。它自动下载产品专用 Python 与产品包，无需预装 Python、Git 或 Homebrew，避开原包内嵌 Python 的加载路径。这个新入口仍处于试用阶段，请按页面核对真实连接与组件状态，失败时提供脱敏诊断，不关闭系统安全保护。
+原完整包如果出现 `Failed to load Python shared library` 或 `library load disallowed by system policy`，可以改用 [Codex 的 Mac 安装](../guide/editors/codex.md#macos)或 [Cursor 的 Mac 安装](../guide/editors/cursor.md#macos)。它自动下载产品专用 Python 与产品包，无需预装 Python、Git 或 Homebrew，避开原包内嵌 Python 的加载路径。请按对应编辑器页核对真实连接、构建和组件状态，失败时提供脱敏诊断。运行时加载失败与[终端粘贴提醒](#macos-paste)发生在不同阶段。
 
 ## Windows TEMP 路径太长怎么办？
 
@@ -52,6 +67,19 @@ Cursor 安装页提供 Windows 完整包和 [Mac 独立环境试用入口](../gu
 
 不是。安装、组件准备、MCP 连接、项目检查与原风险复查分别记录。普通测试成功也不等于漏洞已修复。
 
-## 如何报告问题？
+## 如何报告问题？ {#report}
 
-到 [GitHub Issues](https://github.com/pikachu-cxy/Ai-security-check/issues) 提供脱敏后的系统架构、宿主版本、实际构建身份、失败步骤与具体诊断。不要公开真实凭据、原始聊天或私有源码。
+向 [GitHub Issues](https://github.com/pikachu-cxy/Ai-security-check/issues) 提供以下记录。Mac 的系统版本与芯片可在苹果菜单“关于本机”中查看；无法查询的项目填写“无法确认”。
+
+```text
+系统与版本：Windows / macOS
+芯片：x64 / Apple Silicon（具体 M 型号）/ Intel Mac
+编辑器与版本：Codex / Cursor / 其他
+安装方式：Windows 完整包 / Mac 自动安装 / Mac 完整包
+Runtime 版本 / build_id / 来源提交：
+结果：安装完成 / 真实连接成功 / 组件就绪 / Demo 完成（分别填写）
+失败阶段与组件：粘贴 / 下载 / 校验 / 安装 / 重启连接 / 组件准备 / 检查
+脱敏后的完整报错：
+```
+
+删除日志中的用户名、私人目录、令牌等敏感内容，不上传业务源码、真实密钥或原始聊天。请保留具体错误和失败阶段，不只写“安装失败”。

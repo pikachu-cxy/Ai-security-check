@@ -10,19 +10,20 @@
 | Windows x64 + Cursor | 提供 `install cursor` 完整接入，包含用户级 MCP、Skill、Hook 和常规工具白名单；桌面验证范围见下文 |
 | macOS Apple Silicon | 独立 `macos-arm64` 原生构建与验收；桌面真机验收仍待独立完成 |
 | macOS Intel | 独立 `macos-x64` 原生构建与验收；不以 ARM 结果代替 Intel，桌面真机验收仍待完成 |
-| Linux | 当前不作为公开发行的受支持目标 |
 
-macOS 两种架构使用对应的原生完整包，不以 Rosetta 作为默认兼容策略。Windows 机器可以提交代码并触发 macOS runner 构建，但不能在本机直接运行 macOS 原生可执行文件来证明兼容。
+macOS 自动安装会识别两种架构；手动完整包则需选择对应芯片，不以 Rosetta 作为默认兼容策略。Windows 机器可以提交代码并触发 macOS runner 构建，但不能在本机直接运行 macOS 原生可执行文件来证明兼容。
 
 0.3.8 三平台包来自同一版本和同一发布提交，当前更新记录与 CI 证据见[下载页](../downloads.md)，源码身份及校验值以 Release 的 `release-manifest.json` 和 `SHA256SUMS.txt` 为准。源码证据脱敏规则共用一套实现，平台差异在构建、系统接入和扫描组件运行环境。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
 
 0.3.8 发行包中的指导去重、文件范围扫描与结果核验复用使用共用核心逻辑；MCP 阶段通知由支持进度令牌的宿主显示，缺少该能力仍返回相同的最终结果。本次 Windows/macOS 原生构建已有各自的 CI 记录，Codex/Cursor 桌面验收仍单独记录。
 
-## Mac 独立环境安装试用
+## macOS 安装与验证 {#macos-installation}
 
-[Mac 试用入口](../guide/macos-trial.md)面向本地 Cursor / Codex，使用独立预发行 `macos-trial-v0.3.8.1`，自动准备固定版本 Python 与产品包。它与上表 0.3.8 原生完整包分开记录；原完整包的验收结果不能代替这条新安装路径的验收。
+[Codex](../guide/editors/codex.md#macos)和 [Cursor](../guide/editors/cursor.md#macos) 的 Mac 安装直接写在各自页面。自动安装使用独立发行 `macos-trial-v0.3.8.1`，准备固定版本 Python 与产品包，与 0.3.8 原生完整包分别记录。
 
-当前真实 M 系列 Mac 的浏览器下载、首次安装、桌面连接与检查体验仍待用户试用确认。该路径没有 Apple Developer ID 签名或公证保证。已有所选编辑器的全局连接可能更新为试用版本，具体影响、状态验证和切回步骤见试用页。
+Apple Silicon 和 Intel 均已在 [Mac CI](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39407281204)完成首次安装、构建核对、Cursor / Codex 配置自检和重复安装；每个平台 61 项定向测试通过。这是隔离用户目录中的安装验收，检查组件采用明确离线状态，不宣称已运行全部扫描器。
+
+真实用户电脑的系统策略、终端粘贴提醒、编辑器桌面连接及组件实际检查仍需分别确认；当前没有 Apple Developer ID 签名或公证保证。已有所选编辑器的连接可能切换到此次版本，影响与切回方法均在对应编辑器页说明。
 
 ## Cursor 接入与桌面验证
 

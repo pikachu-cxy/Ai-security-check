@@ -1,55 +1,84 @@
-# 在 Codex 中使用
+---
+description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，验证连接并完成第一个小任务。
+---
 
-在本地 Codex 中接入后，你可以照常让 AI 修改项目，并在任务结果里查看本次改动的安全问题。安装器会一起配置 MCP 服务、配套使用指引和编辑事件检查。
+# 在 Codex 中安装与使用
 
-## 1. 选择安装方式
+接入后，照常在本地 Codex 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
 
-**Mac 用户**：可以使用 [Mac 独立环境安装（试用）](../macos-trial.md)，自动准备产品专用 Python，不需要预装 Python、Git 或 Homebrew。页面说明了真实桌面验收状态，以及已有 Codex 连接切换到试用版的影响。
+## 1. 安装到这台电脑
 
-**Windows 用户**：从[下载页](../../downloads.md)选择 Windows x64 完整包，核对 SHA256 并完整解压。在能看到 `security-check` 文件夹的目录打开终端。
+安装会配置用户级 MCP 连接、配套 Skill 和 Hook，并自动开始准备检查组件。首次需要联网；安装期间不会扫描或修改业务项目。选择你的系统，只执行对应的一条命令。
 
-## 2. 执行一条安装命令
+### Windows {#windows}
 
-::: code-group
-```powershell [Windows]
+从[下载页](../../downloads.md#windows)下载 Windows x64 完整包和配套 SHA256，核对后完整解压。保留整个 `security-check` 文件夹，在能看到该文件夹的目录打开 PowerShell：
+
+```powershell
 .\security-check\security-check.exe install codex
 ```
 
-```sh [macOS · 独立环境试用]
+完整包自带运行环境，不要求另装 Python 或 Node.js。找不到程序时，先核对解压层级和终端所在目录。
+
+### macOS {#macos}
+
+在 Mac 的“终端”中执行下面这一条命令。安装器自动识别 **M 系列（Apple Silicon）或 Intel**，下载并校验专用 Python 与产品包，**无需预装 Python、Git、Homebrew 或配置环境变量**。
+
+```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- codex
 ```
+
+可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)。程序保存在 `~/.local/share/AI-Security-Runtime-macos-trial`，请保留该目录；从任何终端目录都可以运行上面的命令。
+
+<!--@include: ../../.vitepress/snippets/macos-paste.md-->
+
+::: details Mac 当前版本与已有安装
+这条命令使用独立发行 [macos-trial-v0.3.8.1](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.8.1)，Runtime 版本为 0.3.8。Apple Silicon 和 Intel 的安装、构建身份及重复安装已通过 Mac CI；真实用户电脑上的系统策略、Codex 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
+
+已有 Codex 连接、Skill 和 Hook 可能更新到本次版本。请先结束正在运行的检查任务，安装期间不要同时编辑配置。安装器按现有归属与冲突规则保护其他服务和用户修改。
+
+如需切回原完整包，使用原已验证包重新执行 `install codex`，再重启 Codex 并核对实际构建。若原包本来就被系统拒绝，仍可能启动失败，不能仅凭执行过命令就认定已恢复。
 :::
 
-这条命令会安装到当前用户的稳定目录、配置 Codex 并自动开始准备检查组件。首次准备需要联网；安装进程返回后，组件仍可能在后台下载。查看进度是可选操作，Mac 试用版见[试用安装验证](../macos-trial.md#_2-重启编辑器-确认真的能用)，Windows 完整包见[高级命令](../installation.md#查看准备进度)。
+::: details 继续使用 macOS 完整包
+从[完整包下载](../../downloads.md#macos-packages)选择对应芯片的包并核验，完整解压后，在能看到 `security-check` 文件夹的目录执行：
 
-如果由 Codex 帮你安装，完成当前安装任务后再重启它；安装期间不要同时编辑 Codex 配置。
+```sh
+./security-check/security-check install codex
+```
 
-想让 Codex 代你下载和安装？复制下方请求，粘贴到本机 Codex 聊天即可：
+完整包与上面的自动安装入口不同，查询时请使用[对应的程序路径](../installation.md#runtime-path)。若出现 Python 动态库被系统策略拒绝，可尝试上面的自动安装方式，保留具体报错。
+:::
+
+### 希望让助手代为安装？
+
+复制下面的**安装请求到本地 Codex 聊天**，由助手按本页下载、校验并接入。自然语言请求用于聊天，Shell 命令用于终端，选择一种方式即可。
 
 <InstallRequest editor="codex" />
 
-::: details 继续使用 macOS 完整包
-从[下载页](../../downloads.md)选择芯片对应的完整包，核验 SHA256 并完整解压后，仍可执行 `./security-check/security-check install codex`。完整包与独立环境试用版的路径和构建身份不同；不要混用查询路径。系统拒绝启动时见[macOS 首次启动](../installation.md#macos-首次启动)。
-:::
+## 2. 重启并确认安装成功
 
-## 3. 确认安装成功
+完全退出并重新打开 Codex，在本地项目中开始新聊天。按宿主提示审核连接和 Hook 信任。
 
-完全退出并重新打开 Codex，在实际项目的新聊天中发送：
+<!--@include: ../../.vitepress/snippets/check-install.md-->
 
-```text
-请确认 AI Security Runtime 已连接，并检查版本、配套使用指引和检查组件状态。
-不要扫描或修改项目；如果有未完成项，请告诉我下一步。
-```
+首次组件下载可能在后台继续。仍在准备时，按[准备进度](../installation.md#查看准备进度)查询；不需要再执行第二条安装命令。遇到调用失败或路径不符，见[安装验证与排查](../verify.md)。
 
-**成功时应看到**：服务调用成功，实际版本与所装包一致，组件准备完成，配套使用指引可用。若提示未连接、下载中或组件失败，按[安装验证与排查](../verify.md)处理。
+如果由 Codex 帮你安装，先等当前安装任务结束，再完全退出并重启它。
 
-## 4. 开始使用
+## 3. 做一个独立的小任务
 
-```text
-请给当前项目的文件导出功能增加输入校验，保持现有接口。
-完成后检查这次改动；如果发现安全问题，先说明位置、影响和修复建议。
-```
+<!--@include: ../../.vitepress/snippets/editor-demo.md-->
 
-你可以先阅读结果，再决定修复哪一项。同一范围已经批准的修复无需重新授权；后续复查应继续对应原问题。
+## 遇到安装问题
 
-[试一个完整 Demo →](../demo.md) · [安装参数与升级](../installation.md)
+| 你看到的情况 | 下一步 |
+| --- | --- |
+| Mac 阻止粘贴命令 | 核对提醒的原文，按[粘贴提醒说明](../../reference/faq.md#macos-paste)处理 |
+| 下载失败、校验不一致或安装中断 | 保留失败阶段和具体报错；处理网络或诊断后可重试同一条命令 |
+| 安装结束但组件未就绪 | 查看[准备进度](../installation.md#查看准备进度)，分别记录下载中、失败和数据过期项 |
+| 重启后未连接或版本仍旧 | 核对服务启用状态、实际启动错误和 `build_id`，按[连接排查](../verify.md#connection)处理 |
+
+需要帮助时，按[反馈模板](../../reference/faq.md#report)提供脱敏后的系统、芯片、编辑器版本、安装方式和失败阶段。
+
+[日常怎么用](../workflow.md) · [仅 MCP 接入](../mcp.md) · [安装参数与升级](../installation.md)

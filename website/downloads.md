@@ -1,56 +1,72 @@
-# 下载与构建状态
+# 下载与安装
 
-## Mac 用户：独立环境安装试用
+选择编辑器后，按同一页面中的 Windows 或 macOS 步骤安装，再重启并验证连接。
 
-使用 **Cursor 或 Codex** 的 Mac 用户可前往 [Mac 一条命令安装](./guide/macos-trial.md)。安装器会自动准备专用 Python 和产品包，无需预装 Python、Git 或 Homebrew；适合首次试用，也适合原完整包启动时被系统拒绝的用户。
+| 你使用的系统 | 安装入口 | 是否需要额外环境 |
+| --- | --- | --- |
+| Windows x64 | [Codex](./guide/editors/codex.md#windows) / [Cursor](./guide/editors/cursor.md#windows)：下载下面的完整包 | 不要求另装 Python 或 Node.js |
+| macOS · Apple Silicon 或 Intel | [Codex](./guide/editors/codex.md#macos) / [Cursor](./guide/editors/cursor.md#macos)：一条命令自动安装 | 自动准备专用 Python，无需 Git、Homebrew 或环境配置 |
 
-该入口使用独立预发行 `macos-trial-v0.3.8.1`，不替换下方 0.3.8 完整包。真实 M 系列 Mac 桌面验收仍待用户试用；已有所选编辑器的连接可能更新为试用版本，安装前请阅读[适用范围与恢复说明](./guide/macos-trial.md)。
+WorkBuddy 和其他 MCP 客户端按[对应接入指南](./guide/quickstart.md#choose-editor)配置。项目检查与示例练习需要 Git；安装 Runtime 本身不要求 Git。
 
-## 当前发行：0.3.8 · Developer Alpha
+## Windows 完整包 {#windows}
 
-[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 已公开发布并于 2026-10-20 替换更新。Windows、Mac Apple Silicon 与 Mac Intel 的当前包来自同一产品源码提交 [`8d5d9a6`](https://github.com/pikachu-cxy/Ai-security-check/commit/8d5d9a694529c7d29cb1fa79c6843ea0763576a9)，实际构建身份以各平台包的 `build_id` 为准。
+当前为 **0.3.8 Developer Alpha**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
 
-0.3.8 包含工作流指导去重、MCP 阶段进度与计时、明确文件范围扫描，以及经过身份核验的完整项目扫描结果复用。必要复核、修复授权与强制重扫行为保留，Windows/macOS、Codex/Cursor 共用核心实现；实时进度显示取决于宿主支持。
+| 平台 | 安装包 | 校验 |
+| --- | --- | --- |
+| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-windows-x64.zip.sha256) |
 
-更新包还包含紧凑摘要、完整证据交接预算、重复及重叠源码共享，以及[上下文开销与 token 监测](./guide/context-cost.md)。公共优化不按编辑器或系统分叉；Codex CLI 用量导入独立启用，其他宿主没有真实用量时保持未知。
-
-**2026-10-20 更新状态：九项资产已替换。** [本次三平台构建与原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)通过；同一源码的合规、Windows/Ubuntu 包完整性检查通过。复用已有 204 项相关定向测试，文档打包契约另有 13 项通过；本次替换不以重复全库回归为门槛，不沿用旧包原生验收结论。
-
-已有 0.3.8 用户也需要重新下载包与配套 SHA256。当前 Windows 构建 ID 为 `7abf1b6e2d587bd87d5d577122ef71c51288f6c46f75ffdddaf40f7cc24e309d`；安装后重启宿主并核对真实构建，不能只看版本号。
-
-| 平台 | 完整安装包 | 校验 | 当前状态 |
-| --- | --- | --- | --- |
-| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-windows-x64.zip.sha256) | 原生 CI 验收通过 |
-| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-arm64.tar.gz.sha256) | ARM 原生 CI 验收通过 |
-| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-x64.tar.gz.sha256) | Intel 原生 CI 验收通过 |
-
-[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-release-evidence.zip)
-
-原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。各项实际结果以本次工作流和证据 ZIP 为准。安装包可用性验收不代表任何用户项目已完成漏洞检查。
-
-本版仍为 Developer Alpha 预发行试用版。合成 SDK / Hook 场景不等于实际桌面操作；macOS 真机、Cursor 桌面、苹果签名与公证等仍按[支持边界](./reference/support.md)单独认定。
-
-::: warning 使用同一发行的包与校验
-0.3.7 及更早发行、本地临时候选与本次 0.3.8 发行分别记录。请使用本页平台包及其配套校验，不将旧候选的 SHA256 或其他版本 Skill 套用到新包。源码拉取不会自动更新已安装产品，安装后重新连接宿主并核对实际版本与 `build_id`。
-:::
-
-## 校验后再安装
-
-下载包与同名 SHA256 文件后，核对文件名与摘要。
-
-Windows：
+在下载目录的 PowerShell 中对照摘要：
 
 ```powershell
 Get-FileHash .\ai-security-runtime-v0.3.8-windows-x64.zip -Algorithm SHA256
 Get-Content .\ai-security-runtime-v0.3.8-windows-x64.zip.sha256
 ```
 
-macOS：在对应包与 `.sha256` 文件所在目录执行：
+然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。0.3.8 曾更新同号安装包，已有用户也要核对实际 `build_id`，不能只看版本号。
+
+## Mac 安装
+
+Codex / Cursor 用户直接在对应编辑器页查看 Mac 命令，无需先下载下方的完整包，也无需预装 Python。安装器会自动识别芯片并准备专用环境。
+
+当前自动安装使用独立发行 [macos-trial-v0.3.8.1](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.8.1)。它与完整包的程序路径、来源提交和构建身份分别记录，已有所选编辑器的连接可能更新。真实用户 Mac 的系统策略、桌面连接和组件检查仍需实际验证，详见[支持状态](./reference/support.md#macos-installation)。
+
+粘贴时遇到系统提醒，先按[提醒原因与处理方式](./reference/faq.md#macos-paste)核对原文。
+
+### 需要手动完整包？ {#macos-packages}
+
+仅在选择手动完整包或其他 MCP 接入方式时下载。M 系列选择 Apple Silicon，Intel Mac 选择 Intel；核验并完整解压，保留执行权限和整个目录。
+
+| 芯片 | 完整安装包 | 校验 |
+| --- | --- | --- |
+| Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-arm64.tar.gz.sha256) |
+| Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-x64.tar.gz.sha256) |
+
+在包与 `.sha256` 文件所在目录执行，Intel 将文件名中的 `macos-arm64` 换成 `macos-x64`：
 
 ```sh
 shasum -a 256 -c ai-security-runtime-v0.3.8-macos-arm64.tar.gz.sha256
 ```
 
-Intel 换为 `macos-x64`。摘要用于检查下载完整性，不代替发布者身份、系统签名或平台兼容性验证。
+当前没有 Apple Developer ID 签名与公证保证。原完整包出现 Python 动态库或系统策略错误时，保留报错并查看[Mac 首次启动排查](./guide/installation.md#macos-首次启动)。
 
-完整解压后按[快速开始](./guide/quickstart.md)安装，也可在该页选择 Codex、Cursor、WorkBuddy 或其他 MCP 客户端，复制对应安装请求交给本机助手。Mac 包已保留执行权限，正常解压通常无需另行 `chmod`。当前尚未配置 Apple Developer ID 签名和公证，“未知开发者”提示仍可能出现；处理方式见[安装故障排查](./guide/installation.md)。签名、公证、真机与宿主验收不能用一次交叉编译或校验和替代。
+## 安装后还要做什么？
+
+完全退出并重启编辑器，按[安装验证](./guide/verify.md)核对真实连接、构建、组件和项目路径，然后做[独立 Demo](./guide/demo.md)。摘要匹配只证明下载内容一致，不代表项目已通过安全检查。
+
+## 构建与验收记录 {#build-details}
+
+::: details 查看发行身份与工程证据
+**0.3.8 完整包**：[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 于 2026-10-20 替换更新，Windows、Apple Silicon、Intel 包对应同一源码提交 [`8d5d9a6`](https://github.com/pikachu-cxy/Ai-security-check/commit/8d5d9a694529c7d29cb1fa79c6843ea0763576a9)。当前 Windows 构建 ID 为 `7abf1b6e2d587bd87d5d577122ef71c51288f6c46f75ffdddaf40f7cc24e309d`，其他平台以发行清单为准。
+
+[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-release-evidence.zip) · [原生构建与验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)
+
+该次完整包更新复用 204 项相关定向测试，文档打包契约另有 13 项通过；Windows 包完整性检查和对应原生验收已有记录。检查范围包括启动、组件准备、样例扫描、MCP、受管 Skill 及隔离安装生命周期，合成场景不能替代真实桌面记录。
+
+**Mac 自动安装**：Runtime 版本 0.3.8，发行 `macos-trial-v0.3.8.1`，来源提交 [`9b65b6e`](https://github.com/pikachu-cxy/Ai-security-check/commit/9b65b6e0d9dfb5cb3a5b362063d5e699192fc4b0)，产品构建 ID `a2a3f8a9d5dc95a631cab30630a2900673df91ac82e21c086ca33d01a66b8caa`。
+
+[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39407281204)中，两种芯片各有 61 项定向测试通过，并完成 Cursor / Codex 的首次安装、构建身份和重复安装验收。该验收使用离线组件状态与发布下载的本地传输夹具，不等于用户桌面连接、系统首次下载提示或全部扫描器已运行。
+
+完整包与自动安装分别记录，不混用构建 ID 或 SHA256。产品更新内容见[版本与进展](./reference/changelog.md)，上下文优化见[上下文开销说明](./guide/context-cost.md)。
+:::

@@ -21,7 +21,7 @@ const steps = [
           <a class="primary-action" :href="withBase('/guide/quickstart.html')">开始使用 <span aria-hidden="true">↗</span></a>
           <a class="secondary-action" :href="withBase('/guide/overview.html')">了解工作方式 <span aria-hidden="true">→</span></a>
         </div>
-        <p class="hero-note">Codex / Cursor 一条命令接入 · Windows 完整包 · <a :href="withBase('/guide/macos-trial.html')">Mac 独立环境安装试用 →</a></p>
+        <p class="hero-note">Windows / macOS · <a :href="withBase('/guide/editors/codex.html')">Codex 安装</a> · <a :href="withBase('/guide/editors/cursor.html')">Cursor 安装</a></p>
       </div>
       <div class="review-example" aria-label="示意：一次开发任务的风险说明和用户选择">
         <div class="example-heading"><span class="example-dots" aria-hidden="true">● ● ●</span><span>一次开发任务 / 示例</span><span class="example-tag">REVIEW</span></div>

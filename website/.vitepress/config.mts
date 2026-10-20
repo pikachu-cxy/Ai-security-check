@@ -28,7 +28,6 @@ export default defineConfig({
     sidebar: [
       { text: '开始使用', collapsed: false, items: [
         { text: '快速开始', link: '/guide/quickstart' },
-        { text: 'Mac 一条命令安装（试用）', link: '/guide/macos-trial' },
         { text: '安装成功了吗？', link: '/guide/verify' },
         { text: '第一个使用 Demo', link: '/guide/demo' },
         { text: '获取安装包', link: '/downloads' }

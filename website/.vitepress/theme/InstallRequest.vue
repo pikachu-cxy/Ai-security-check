@@ -8,15 +8,15 @@ const editors = {
     name: 'Codex',
     target: '接入本地 Codex',
     page: 'codex',
-    steps: 'Windows 使用完整包的 install codex 入口；macOS 使用官方 Mac 独立环境试用安装器并选择 codex，先说明试用范围及已有 Codex 连接可能更新。配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
-    note: '粘贴到本机 Codex 聊天。Windows 使用完整包，Mac 使用独立环境试用入口；已有 Codex 连接可能更新为所选版本。'
+    steps: 'Windows 使用完整包的 install codex 入口；macOS 按本页命令自动安装并选择 codex，先说明验证范围及已有 Codex 连接可能更新。配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
+    note: '粘贴到本机 Codex 聊天。Windows 使用完整包，Mac 自动准备专用运行环境；已有 Codex 连接可能更新为所选版本。'
   },
   cursor: {
     name: 'Cursor',
     target: '接入本地 Cursor',
     page: 'cursor',
-    steps: '阅读 Cursor 接入指南中的支持说明。Windows 使用完整包的 install cursor 入口；macOS 使用官方 Mac 独立环境试用安装器并选择 cursor，先说明试用范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
-    note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 使用完整包，Mac 使用独立环境试用入口；已有 Cursor 连接可能更新为所选版本。'
+    steps: '阅读 Cursor 接入指南中的支持说明。Windows 使用完整包的 install cursor 入口；macOS 按本页命令自动安装并选择 cursor，先说明验证范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
+    note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 使用完整包，Mac 自动准备专用运行环境；已有 Cursor 连接可能更新为所选版本。'
   },
   workbuddy: {
     name: 'WorkBuddy',
@@ -35,7 +35,7 @@ const editors = {
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
 const installSource = computed(() => ['codex', 'cursor'].includes(editor.value.page)
-  ? '自动识别系统与芯片。Windows 选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。macOS 按 https://pikachu-cxy.github.io/Ai-security-check/guide/macos-trial.html 使用独立预发行 macos-trial-v0.3.8.1 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。该试用尚未完成真实 M 系列 Mac 桌面验收，不宣称 Apple 签名或公证已验证。'
+  ? '自动识别系统与芯片。Windows 选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。macOS 按当前编辑器页面使用发行 macos-trial-v0.3.8.1 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。该试用尚未完成真实 M 系列 Mac 桌面验收，不宣称 Apple 签名或公证已验证。'
   : '自动识别系统与芯片，选择官方最新发行的完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
 
 const copied = ref(false)
@@ -43,7 +43,7 @@ const copyFailed = ref(false)
 const request = computed(() => `请根据 https://pikachu-cxy.github.io/Ai-security-check/guide/editors/${editor.value.page}.html 的官方安装说明，在当前电脑安装 AI Security Runtime，并${editor.value.target}。
 ${installSource.value}备份并保留现有配置、其他 MCP 服务及用户修改。
 ${editor.value.steps}
-等待组件及漏洞数据就绪；不要自行用源码开发安装替代官方发行或官方试用入口，不关闭系统安全保护或 TLS 校验。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
+核对组件及漏洞数据状态，仍在后台准备时明确说明；不要自行用源码开发安装替代官方发行或官方试用入口，不关闭系统安全保护或 TLS 校验。遇到 macOS 粘贴保护提示时，让我核对命令与来源并自行决定；检测到恶意软件时停止。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
 安装期间保持当前聊天，完成后核对版本、build_id、组件状态与漏洞库有效期，分别说明安装结果和仍待验证的步骤，并提示我重启${editor.value.name === '其他 MCP 客户端' ? '实际使用的客户端' : editor.value.name}生效。重启后通过实际工具调用确认连接和项目路径；无法确认的部分明确列出。不扫描或修改我的业务项目。`)
 
 watch(editor, () => {
@@ -69,7 +69,7 @@ async function copyRequest() {
 <template>
   <section class="install-request" aria-label="让 AI 帮你安装和接入">
     <div class="install-request-heading">
-      <strong>让 AI 帮你安装和接入</strong>
+      <strong>把安装请求发给助手</strong>
       <button type="button" @click="copyRequest">{{ copied ? '已复制安装请求' : '复制安装请求' }}</button>
     </div>
     <label v-if="!props.editor" class="editor-select">
@@ -78,7 +78,7 @@ async function copyRequest() {
         <option v-for="(option, key) in editors" :key="key" :value="key">{{ option.name }}</option>
       </select>
     </label>
-    <p>{{ editor.note }} 联网或写入配置时，可能需要你确认权限。</p>
+    <p>{{ editor.note }} 这是发给聊天的请求，请勿粘贴到终端。联网或写入配置时，按宿主提示确认权限。</p>
     <p role="status" aria-live="polite">{{ copied ? `已复制 ${editor.name} 安装请求，请粘贴到对应助手的聊天。` : copyFailed ? '浏览器未允许复制，请展开下方请求并手动复制。' : '安装完成后重启对应客户端，再检查连接、版本、组件和项目路径。' }}</p>
     <details :open="copyFailed">
       <summary>查看安装请求</summary>
