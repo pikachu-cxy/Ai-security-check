@@ -117,12 +117,20 @@ class TriageService:
             except (ValueError,OSError) as exc:
                 errors.append({'finding_id':finding['id'],'error':'Evidence unavailable or violates workspace/size/line bounds',
                     'reason':getattr(exc,'reason','FILE_MISSING' if isinstance(exc,FileNotFoundError) else 'EVIDENCE_UNAVAILABLE')})
-        return {'scan_id':scan_id,'packets':packets,'cached_finding_ids':cached,'errors':errors,
+        result={'scan_id':scan_id,'packets':packets,'cached_finding_ids':cached,'errors':errors,
             'required_output_schema':RESULT_SCHEMA,'triage_instructions':INSTRUCTIONS,'prompt_version':PROMPT_VERSION,
             'provider':{'provider_type':provider.provider_type,'provider_name':provider.provider_name,'model':provider.model},
             'dependency_groups':dependency_groups(examined),'selected':len(examined),
             'remaining':max(0,len(selected)-len(examined)),
             'retained_finding_ids':retained,'deferred_failed_finding_ids':deferred}
+        if provider.provider_type=='AGENT_NATIVE':
+            from .triage_handoff import bound_handoff
+            # Keep only current packet groups in host navigation, avoiding an
+            # unbounded replay of cached finding/advisory metadata.
+            included={packet['finding_id'] for packet in packets}
+            result['dependency_groups']=dependency_groups([f for f in examined if f['id'] in included])
+            result=bound_handoff(result,budget.max_handoff_bytes)
+        return result
 
     def submit(self,scan_id,results,*,provider=None,compact=False):
         provider=provider or AgentNativeProvider()

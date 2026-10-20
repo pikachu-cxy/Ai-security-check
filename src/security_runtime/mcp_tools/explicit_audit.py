@@ -9,7 +9,7 @@ from mcp.types import ToolAnnotations
 from ..integration_state import DogfoodEvent
 from ..explicit_scan import ExplicitScanBusy, cancelled_scan
 from ..progress import ScanCancelled
-from .presentation import _agent_finding, _agent_result
+from .presentation import _agent_finding, _agent_result, selected_scope_summary
 from ..mcp_scan_progress import run_mcp_scan, scan_timing
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return data
 
     @server.tool()
-    async def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = False) -> dict:
+    async def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = True) -> dict:
         """Scan changed files in a local Git repository. workspace_path is the project directory; path is its legacy directory alias, not a file/glob/scan target. Prefer workspace_path and omit path. For explicitly selected files use scan_files."""
         if mode not in {"quick", "feature"}:
             raise ValueError("mode must be quick or feature")
@@ -55,7 +55,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return scan_response(result, summary, timing)
 
     @server.tool()
-    async def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = False,
+    async def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = True,
                            force_rescan: bool = False) -> dict:
         """Check a full local project, reusing only explicitly revalidated complete proof. Set force_rescan=true for an explicit rescan. workspace_path is the project directory; path is its legacy directory alias, never a file/glob. For selected files use scan_files; never expand a file request to the project."""
         if workspace_path is not None and path is not None and workspace_path != path:
@@ -77,7 +77,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return scan_response(result, summary, timing)
 
     @server.tool()
-    async def scan_files(files: list[str], workspace_path: str | None = None, summary: bool = False) -> dict:
+    async def scan_files(files: list[str], workspace_path: str | None = None, summary: bool = True) -> dict:
         """Scan 1-100 exact workspace-relative files using '/' separators. No globs, directories, traversal or absolute paths; no implicit project expansion. Reports requested files, actual targets, supporting context and exclusions. Never proves whole-project coverage."""
         root = bound_path(workspace_path)
         from ..target import DiscoveryLimitError
@@ -98,7 +98,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     registry.harden(('scan_files', 'scan_project', 'scan_diff'))
 
     def scan_response(result, summary, timing):
-        data = _agent_result(result)
+        data = _agent_result(result, summary=summary)
         diagnostics = result.get('scanner_diagnostics', {}) if isinstance(result, dict) else result.scanner_diagnostics
         reused = isinstance(result, dict)
         # A reuse request performs no new scan publication. Historical records
@@ -108,7 +108,9 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             if reused else diagnostics.get('execution_publication',
                 dict(publication='UNAVAILABLE', current_task_proof=False)))
         data['timing'] = scan_timing(result, timing, reused=reused)
-        ran = not reused and any(run['status'] in {'SUCCESS', 'FAILED', 'TIMEOUT'} for run in data['scanner_runs'])
+        runs = result['scanner_runs'] if reused else result.scanner_runs
+        ran = not reused and any((run.get('status') if isinstance(run, dict) else run.status)
+                                in {'SUCCESS', 'FAILED', 'TIMEOUT'} for run in runs)
         data['execution'] = dict(scanner_run=ran, result_reused=reused,
                                  host_review_completed=False, repair_authorized=False)
         if reused:
@@ -116,16 +118,13 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         elif diagnostics.get('reuse_check'):
             data['result_reuse'] = diagnostics['reuse_check']
         if diagnostics.get('selected_scope'):
-            data['scan_scope'] = diagnostics['selected_scope']
-        if summary:
-            data['finding_count'] = len(data.pop('findings'))
-            data['findings_access'] = {'tool':'get_findings', 'arguments':{
-                'scan_id':data['scan_id'], 'view':'summary', 'limit':20}}
+            data['scan_scope'] = (selected_scope_summary(diagnostics['selected_scope'])
+                                  if summary else diagnostics['selected_scope'])
         return data
 
     @server.tool()
     def get_findings(scan_id: str, include_evidence: bool = False, finding_id: str | None = None, context_lines: int = 5,
-                     view: str = 'full', offset: int = 0, limit: int | None = None) -> list[dict] | dict:
+                     view: str = 'summary', offset: int = 0, limit: int | None = None) -> list[dict] | dict:
         """List findings/review state; opt into bounded redacted local evidence, optionally for one existing scanner id. Evidence distinguishes original EXACT code from STALE/unverifiable current_context. quality.finding_id remains review-only."""
         check_scan(scan_id)
         from ..mcp_views import page_bounds, finding_summary, paged
@@ -183,7 +182,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             'finding_id':finding_id, 'context_lines':context_lines})
 
     @server.tool()
-    def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 20,
+    def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 5,
                        pending_only: bool = False, retry_failed: bool = False) -> dict:
         """Return bounded redacted UNTRUSTED_CODE evidence to this host agent; does not invoke AI."""
         check_scan(scan_id)
@@ -195,7 +194,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             'pending_only':True,'retry_failed':retry_failed})
 
     @server.tool()
-    def submit_triage(scan_id: str, results: list[dict], triage_session: str, compact: bool = False) -> dict:
+    def submit_triage(scan_id: str, results: list[dict], triage_session: str, compact: bool = True) -> dict:
         """Validate structured host analysis and evidence references; preserves every raw finding."""
         check_scan(scan_id)
         session=triage_sessions.get(triage_session)
@@ -278,8 +277,8 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             workspace_path, scan_id, details=details, bound_workspace=binding.root if binding else None)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 20, retry_failed: bool = False,
-                            include_existing_reviews: bool = True) -> dict:
+    def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 5, retry_failed: bool = False,
+                            include_existing_reviews: bool = False) -> dict:
         """Continue the displayed task using its task_ref, never T01 or user UUIDs. Host analyzes packets then submit_triage; no model invocation here."""
         from ..task_triage import TaskTriageService
         from ..storage import ReadOnlySQLiteStore, SQLiteStore
@@ -288,14 +287,12 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         service=TaskTriageService(ReadOnlySQLiteStore(path))
         resolved=service.resolve(task_ref,workspace_path,bound_workspace=binding.root if binding else None)
         if resolved['status']!='RESOLVED': return resolved
-        data=service.prepare(resolved,TriageService(runtime_engine().store),limit=limit,retry_failed=retry_failed)
-        if not include_existing_reviews:
-            data.pop('existing_reviews',None)
-            data['existing_reviews_truncated'] = bool(data['existing_review_count'])
+        data=service.prepare(resolved,TriageService(runtime_engine().store),limit=limit,retry_failed=retry_failed,
+                             include_existing_reviews=include_existing_reviews)
         return register_handoff(data,(task_ref,resolved['workspace'])) if data['packets'] else data
 
     @server.tool()
-    def get_triage(scan_id: str, view: str = 'full', offset: int = 0, limit: int | None = None) -> dict:
+    def get_triage(scan_id: str, view: str = 'summary', offset: int = 0, limit: int | None = None) -> dict:
         """Independent triage coverage and grouped view; never changes scan coverage."""
         check_scan(scan_id)
         from ..triage import TriageService

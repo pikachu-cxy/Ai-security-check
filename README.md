@@ -26,6 +26,10 @@
 Windows/macOS、Codex/Cursor 共用核心实现，实时进度显示取决于宿主支持。
 范围、复用条件和计时含义见[扫描体验与范围](docs/guides/SCAN_EXPERIENCE.zh-CN.md)。
 
+当前 0.3.8 源码新增紧凑扫描摘要、完整证据交接预算与重复源码共享，以及本地上下文开销监测。
+Codex CLI 实际 token 用量通过独立的显式导入读取，不影响其他 MCP 宿主；
+监测只保存统计元数据，字节缩减与真实 token 节省分开报告。用法见[监测指南](docs/guides/CONTEXT_COST_MONITORING.zh-CN.md)。
+
 0.3.7 已发布修复：
 
 - 收窄源码证据脱敏：保留普通字符串、注释、字段名及普通网址，对识别出的密码、令牌、私钥等凭据值继续脱敏。Windows 与 macOS 共用同一实现。

@@ -21,6 +21,7 @@ STANDALONE_DOCUMENTS = (
     'docs/guides/WINDOWS_EXPERIENCE.md',
     'docs/guides/WINDOWS_EXPERIENCE.zh-CN.md',
     'docs/guides/PERSONAL_INSTALL_AND_GUIDANCE.zh-CN.md',
+    'docs/guides/CONTEXT_COST_MONITORING.zh-CN.md',
     'docs/RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md',
     'docs/design/SCAN_TARGET_SELECTION.md',
     'docs/design/RULE_FOUNDATION.md',

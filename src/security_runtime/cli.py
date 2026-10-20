@@ -155,6 +155,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     parser = argparse.ArgumentParser(prog="security-check")
     parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
+    from .context_cost_cli import register as register_context_usage
+    register_context_usage(sub)
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
     skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
@@ -351,6 +353,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'context-usage':
+            from .context_cost_cli import execute as execute_context_usage
+            return execute_context_usage(args)
         if args.command == 'preparation-worker':
             from .background_preparation import run_worker
             return run_worker(args.job, args.ticket)

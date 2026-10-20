@@ -145,7 +145,8 @@ def test_current_valid_members_are_retained_without_new_analysis(sample):
         data=prepare(sample)
     assert not data['packets'] and len(data['retained_finding_ids'])==2
     assert data['status']=='AWAITING_BUSINESS_FACTS' and len(data['business_questions'])==1
-    assert len(data['existing_reviews'])==2 and 'UNTRUSTED_CODE' in data['triage_instructions']
+    assert data['existing_reviews']==[] and data['existing_review_count']==2
+    assert 'UNTRUSTED_CODE' in data['triage_instructions']
     assert snapshot(sample[0])==before and SECRET not in json.dumps(data)
 
 
@@ -285,10 +286,11 @@ def test_actual_stdio_user_first_task_to_host_submit_to_retained_review(sample):
                     data=unwrap(await client.call_tool(first['mcp_tool'],first['arguments']))
                     submitted=unwrap(await client.call_tool('submit_triage',{'scan_id':data['scan_id'],
                         'results':[value(p) for p in data['packets']],'triage_session':data['triage_session']}))
-                    assert submitted['accepted']==2 and submitted['view']['scan_coverage']=='PARTIAL'
+                    assert submitted['accepted']==2 and submitted['scan_coverage_changed'] is False
                     next_data=unwrap(await client.call_tool(first['mcp_tool'],first['arguments']))
                     assert next_data['status']=='AWAITING_BUSINESS_FACTS' and not next_data['packets']
-                    assert len(next_data['existing_reviews'])==2 and 'triage_session' not in next_data
+                    assert next_data['existing_reviews']==[] and next_data['existing_review_count']==2
+                    assert 'triage_session' not in next_data
                     assert SECRET not in json.dumps(next_data)
             stderr.seek(0);assert not stderr.read()
     asyncio.run(run())
@@ -310,11 +312,12 @@ def test_existing_review_context_has_explicit_count_and_size_caps(sample):
         result['attack_path']=('Unknown conditional local behavior. '*70)[:2000]
         result['preconditions_unknown']=[(f'Production unknown {fid} condition {i}. '*10)[:300] for i in range(20)]
         service.submit('scan-a',[result])
-    before=snapshot(root);data=prepare(sample,task(sample,'dependency'))
+    before=snapshot(root);data=prepare(sample,task(sample,'dependency'),include_existing_reviews=True)
     assert data['existing_review_count']==25 and data['existing_reviews_truncated']
     assert len(data['existing_reviews'])<=20 and len(json.dumps(data['existing_reviews'],ensure_ascii=False,separators=(',',':')).encode())<=65536
     assert len(data['unknown_conditions'])==20 and data['unknown_conditions_truncated']
-    assert not data['packets'] and len(data['retained_finding_ids'])==25
+    assert not data['packets'] and data['retained_finding_count']==25
+    assert len(data['retained_finding_ids'])==20 and data['retained_finding_ids_truncated']
     assert snapshot(root)==before and data['existing_review_access']['arguments']['details']
 
 

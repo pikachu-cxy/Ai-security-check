@@ -44,21 +44,21 @@ def test_real_stdio_host_agent_mock_model(tmp_path):
                     assert not accepted.isError
                     rejected=await client.call_tool('submit_triage',{'scan_id':sid,'results':[value],'triage_session':data['triage_session']})
                     assert rejected.isError
-                    found=unpack(await client.call_tool('get_findings',{'scan_id':sid}))
+                    found=unpack(await client.call_tool('get_findings',{'scan_id':sid,'view':'full'}))
                     assert len(found)==2 and secret not in json.dumps(found)
                     assert {f['triage_status'] for f in found}=={'VALID','UNTRIAGED'}
                     assert all(f['quality']['finding_id'].startswith('fq1-') for f in found)
                     assert {f['quality']['triage_status'] for f in found}=={'UNREVIEWED'}
                     assert {f['quality']['evidence']['evidence_level'] for f in found}=={'DIRECT_MATCH','SECRET_MATCH'}
                     assert all(f['quality']['evidence']['trace']==[] for f in found)
-                    detailed=unpack(await client.call_tool('get_findings',{'scan_id':sid,'include_evidence':True}))
+                    detailed=unpack(await client.call_tool('get_findings',{'scan_id':sid,'include_evidence':True,'view':'full'}))
                     assert len(detailed)==2 and secret not in json.dumps(detailed)
                     local=next(f for f in detailed if f['category']!='secret')['local_evidence']
                     assert local['reason']=='SNAPSHOT_FINGERPRINT_MISSING'
                     assert 'verify()' in local['current_context']['matched_code']
                     assert local['original_evidence'] is None
                     assert next(f for f in detailed if f['category']=='secret')['local_evidence']['reason']=='SECRET_REDACTED'
-                    one=unpack(await client.call_tool('get_findings',{'scan_id':sid,'include_evidence':True,'finding_id':detailed[0]['id'],'context_lines':0}))
+                    one=unpack(await client.call_tool('get_findings',{'scan_id':sid,'include_evidence':True,'finding_id':detailed[0]['id'],'context_lines':0,'view':'full'}))
                     assert len(one)==1 and one[0]['id']==detailed[0]['id']
                     rejected=await client.call_tool('get_findings',{'scan_id':sid,'finding_id':'not-in-scan'})
                     assert rejected.isError
@@ -71,7 +71,7 @@ def test_real_stdio_host_agent_mock_model(tmp_path):
                     FindingQualityService(review_store).review(sid,[dict(
                         finding_id=row['finding_id'],observation_hash=row['observation_hash'],
                         triage_status='TRUE_POSITIVE',triage_reason='Synthetic human review',triage_source='HUMAN')])
-                    refreshed=unpack(await client.call_tool('get_findings',{'scan_id':sid}))
+                    refreshed=unpack(await client.call_tool('get_findings',{'scan_id':sid,'view':'full'}))
                     reviewed=next(f for f in refreshed if f['category']!='secret')
                     assert reviewed['quality']['triage_status']=='TRUE_POSITIVE'
                     assert reviewed['quality']['triage_source']=='HUMAN' and reviewed['verdict']=='LIKELY'
@@ -102,7 +102,7 @@ def test_real_stdio_local_evidence_freshness(tmp_path):
                 async with ClientSession(read,write) as client:
                     await asyncio.wait_for(client.initialize(),20)
                     scan=unpack(await client.call_tool('scan_project',{}))
-                    args={'scan_id':scan['scan_id'],'include_evidence':True}
+                    args={'scan_id':scan['scan_id'],'include_evidence':True,'view':'full'}
                     found=unpack(await client.call_tool('get_findings',args))
                     code=next(row for row in found if row['category']!='secret')
                     local=code['local_evidence']

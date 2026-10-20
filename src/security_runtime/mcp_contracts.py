@@ -175,6 +175,19 @@ class MCPRegistry:
                 request.params.name, request.params.arguments)
         self.low_level.request_handlers[CallToolRequest] = request_handler
 
+    def observe_context_cost(self, *, workspace=None):
+        """Observe each external response once, after SDK normalization."""
+        from mcp.types import CallToolRequest
+        from uuid import uuid4
+        from .context_cost_mcp import observe_response
+        original = self.low_level.request_handlers[CallToolRequest]
+        connection_id = uuid4().hex
+
+        async def request_handler(request):
+            return await observe_response(original, request, connection_id=connection_id,
+                                          workspace=workspace)
+        self.low_level.request_handlers[CallToolRequest] = request_handler
+
 
 def schema_specifications(tools):
     """Project registered or routed tools to a common, serializable description."""

@@ -253,6 +253,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)
+    registry.observe_context_cost(workspace=binding.root if binding is not None else None)
     return server
 
 

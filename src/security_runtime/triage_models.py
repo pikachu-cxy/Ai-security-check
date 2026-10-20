@@ -64,11 +64,14 @@ class TriageBudget:
     max_concurrency: int = 1
     provider_timeout: float = 30
     max_response_bytes: int = 65536
+    max_handoff_bytes: int = 65536
 
     def __post_init__(self):
+        if type(self.max_handoff_bytes) is not int or self.max_handoff_bytes<8192:
+            raise ValueError('Host triage handoff budget must allow the fixed evidence contract (8192 bytes)')
         for value, ceiling in ((self.max_context_bytes_per_finding,32768),(self.max_related_files,5),
             (self.max_lines_per_file,120),(self.max_findings_per_batch,20),(self.max_concurrency,1),
-            (self.provider_timeout,120),(self.max_response_bytes,262144)):
+            (self.provider_timeout,120),(self.max_response_bytes,262144),(self.max_handoff_bytes,65536)):
             if not 0 < value <= ceiling:
                 raise ValueError('Triage budget exceeds supported bounds')
 

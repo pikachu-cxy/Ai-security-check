@@ -34,9 +34,11 @@ class TaskTriageService:
                 'refresh': {'mcp_tool': 'get_security_summary', 'arguments': {'workspace_path': str(root)}},
                 'automatic_execution': False}
 
-    def prepare(self, resolved, triage, *, limit=20, retry_failed=False):
+    def prepare(self, resolved, triage, *, limit=5, retry_failed=False,include_existing_reviews=False):
         if type(retry_failed) is not bool:
             raise ValueError('retry_failed must be boolean')
+        if type(include_existing_reviews) is not bool:
+            raise ValueError('include_existing_reviews must be boolean')
         task = resolved['task']
         # The existing prepare method controls packet/redaction/cache/budgets.
         data = triage.prepare(resolved['scan_id'], [m['finding_id'] for m in task['members']],
@@ -52,7 +54,7 @@ class TaskTriageService:
                     'trust': 'UNTRUSTED_AI_ANALYSIS',
                     'review': m['ai_review']} for m in task['members'] if m['review_status'] == 'VALID']
         reviews=[]
-        for candidate in all_reviews:
+        for candidate in all_reviews if include_existing_reviews else []:
             if len(reviews)==20 or len(encoded(reviews+[candidate]))>65536: break
             reviews.append(candidate)
         all_unknown = list(dict.fromkeys(condition for r in all_reviews
@@ -80,7 +82,7 @@ class TaskTriageService:
             steps.append('先复核已有审阅中哪些条件可由当前受限证据回答；仅询问仍必要的业务/部署状态，不索取 Secret 原值。')
         elif unknown and not pending:
             steps.append('现有审阅仍有证据缺口；保留未知，不为推进重复同一分析或编造业务事实/修复版本。')
-        return dict(data, status=status, workspace=resolved['workspace'], task_ref=task['task_ref'],
+        result=dict(data, status=status, workspace=resolved['workspace'], task_ref=task['task_ref'],
                     task_title=task['title'], basis=task['basis'], existing_reviews=reviews,
                     existing_review_count=len(all_reviews), existing_reviews_truncated=len(reviews)<len(all_reviews),
                     existing_review_access={'mcp_tool':'get_security_summary','arguments':{
@@ -96,6 +98,13 @@ class TaskTriageService:
                     execution={'evidence_prepared':bool(data['packets']), 'existing_reviews_reused':len(all_reviews),
                                'host_result_submitted':False,'patch_applied':False,'target_build':False,
                                'tests_or_scanner_recheck':False},automatic_execution=False)
+        from .triage_handoff import bound_handoff
+        result['checkpoint']={'prepared_finding_ids':[p['finding_id'] for p in result['packets']],
+            'remaining':result.get('remaining',0),'accepted_review_count':len(all_reviews),
+            'review_state_counts':task['review_states'],'source':'RUNTIME_ACCEPTED_RECORDS',
+            'scan_coverage_changed':False,'review_completion_attested':False}
+        # Include the checkpoint itself in the aggregate accounting as well.
+        return bound_handoff(result,triage.budget.max_handoff_bytes)
 
     @staticmethod
     def business_questions(topic, unknown):

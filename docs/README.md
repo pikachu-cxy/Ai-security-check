@@ -12,6 +12,7 @@
 | 宿主与平台 | [支持状态](HOST_SUPPORT.md)、[Cursor 安装](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)、[操作指南](guides/README.md) |
 | 恢复开发 | [开发交接](DEVELOPMENT_HANDOFF.zh-CN.md)、[项目上下文](PROJECT_CONTEXT.md) |
 | 规则、设计及性能 | [设计导航](design/README.md)、[性能数据](ARCHITECTURE_PERFORMANCE.zh-CN.md) |
+| 上下文开销与实际 token 对比 | [监测、导入与实验方法（当前源码）](guides/CONTEXT_COST_MONITORING.zh-CN.md) |
 | 产品和企业边界 | [产品规划](PRODUCT_ROADMAP.md)、[功能验证](FUNCTIONAL_VERIFICATION.md) |
 | 旧发行说明 | [历史发行](archive/2026-10/README.md) |
 

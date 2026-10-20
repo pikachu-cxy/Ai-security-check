@@ -793,4 +793,5 @@ def create_global_server(*, workspaces=None, host='codex'):
                       if isinstance(arguments, dict) else None)
     registry.install_router(listed, call)
     registry.close_with(lambda: pool.close())
+    registry.observe_context_cost()
     return server
