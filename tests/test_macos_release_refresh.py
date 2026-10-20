@@ -10,6 +10,7 @@ import zipfile
 import pytest
 
 from scripts import refresh_macos_release as refresh
+from scripts import update_homebrew_formula as homebrew
 
 SOURCE = 'a' * 40
 OLD_SOURCE = 'b' * 40
@@ -21,6 +22,8 @@ def sha(data):
 
 @pytest.fixture
 def refresh_case(tmp_path, monkeypatch):
+    # Replay the historical v0.3.6 refresh independently of the current release.
+    monkeypatch.setattr(homebrew, '__version__', refresh.TAG.removeprefix('v'))
     original_files = tmp_path / 'original'
     original_files.mkdir()
     manifest = dict(version='0.3.6', source_commit=OLD_SOURCE, artifacts={})
