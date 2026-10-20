@@ -2,7 +2,12 @@
 
 ## 0.3.8 · Developer Alpha
 
-2026-10-20：[0.3.8 发布构建](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39386551651)已通过，[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8)已公开九项资产。Windows、Mac Apple Silicon 与 Mac Intel 使用同一版本及发布提交 `be65833`，下载及校验入口见[下载页](../downloads.md)。
+2026-10-20：[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8)的九项资产已同版本更新。Windows、Mac Apple Silicon 与 Mac Intel 统一使用产品源码提交 `8d5d9a6`，[三平台构建及原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)通过，下载及校验入口见[下载页](../downloads.md)。此前下载过 0.3.8 的用户需重新下载配套文件，安装后重启宿主核对 `build_id`。
+
+- 紧凑扫描摘要、分页查询与简短复核回执成为默认，完整内容仍可显式请求。
+- 原生 Agent 证据交接增加完整响应预算，重复及重叠源码共享；延后成员继续待复核，保留原证据身份、复核和修复授权。
+- 新增[本地上下文开销监测](../guide/context-cost.md)，区分响应字节和宿主实际 token；Codex CLI 日志解析独立导入，不影响其他 MCP 宿主。
+- 本轮相关定向测试 204 项通过、1 项跳过，文档打包契约 13 项通过；字节缩减基准不冒充真实模型 token 节省。
 
 - 工作流指导按需加载、去重，并按版本、摘要和实际构建身份复用已读内容。
 - MCP 接通共用扫描阶段进度与计时，区分本次核验、历史扫描和宿主侧未知耗时。

@@ -2,11 +2,15 @@
 
 ## 当前发行：0.3.8 · Developer Alpha
 
-[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 已公开发布。Windows、Mac Apple Silicon 与 Mac Intel 来自同一源码提交 [`be65833`](https://github.com/pikachu-cxy/Ai-security-check/commit/be658339322d8b74554219901e1265034a146ae7)，实际构建身份以各平台包的 `build_id` 为准。
+[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 已公开发布并于 2026-10-20 替换更新。Windows、Mac Apple Silicon 与 Mac Intel 的当前包来自同一产品源码提交 [`8d5d9a6`](https://github.com/pikachu-cxy/Ai-security-check/commit/8d5d9a694529c7d29cb1fa79c6843ea0763576a9)，实际构建身份以各平台包的 `build_id` 为准。
 
 0.3.8 包含工作流指导去重、MCP 阶段进度与计时、明确文件范围扫描，以及经过身份核验的完整项目扫描结果复用。必要复核、修复授权与强制重扫行为保留，Windows/macOS、Codex/Cursor 共用核心实现；实时进度显示取决于宿主支持。
 
-**2026-10-20 发布状态：已公开发布。** [本次 GitHub Release 工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39386551651)通过 Windows/macOS 精简相关回归、合规、包完整性和三平台原生验收，共公开九项资产。此次采用精简发布模式，未重复执行全库回归；不沿用旧版本的原生验收结论。
+更新包还包含紧凑摘要、完整证据交接预算、重复及重叠源码共享，以及[上下文开销与 token 监测](./guide/context-cost.md)。公共优化不按编辑器或系统分叉；Codex CLI 用量导入独立启用，其他宿主没有真实用量时保持未知。
+
+**2026-10-20 更新状态：九项资产已替换。** [本次三平台构建与原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)通过；同一源码的合规、Windows/Ubuntu 包完整性检查通过。复用已有 204 项相关定向测试，文档打包契约另有 13 项通过；本次替换不以重复全库回归为门槛，不沿用旧包原生验收结论。
+
+已有 0.3.8 用户也需要重新下载包与配套 SHA256。当前 Windows 构建 ID 为 `7abf1b6e2d587bd87d5d577122ef71c51288f6c46f75ffdddaf40f7cc24e309d`；安装后重启宿主并核对真实构建，不能只看版本号。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |
