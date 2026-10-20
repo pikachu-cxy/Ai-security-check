@@ -26,7 +26,7 @@ export default defineConfig({
       { text: '版本与进展', link: '/reference/changelog' }
     ],
     sidebar: [
-      { text: '开始使用', items: [
+      { text: '开始使用', collapsed: false, items: [
         { text: '快速开始', link: '/guide/quickstart' },
         { text: '安装成功了吗？', link: '/guide/verify' },
         { text: '第一个使用 Demo', link: '/guide/demo' },
@@ -38,7 +38,7 @@ export default defineConfig({
         { text: 'WorkBuddy', link: '/guide/editors/workbuddy' },
         { text: '其他 MCP 客户端', link: '/guide/editors/other' }
       ] },
-      { text: '使用与练习', items: [
+      { text: '使用与练习', collapsed: false, items: [
         { text: '日常怎么用', link: '/guide/workflow' },
         { text: '理解与处理风险', link: '/guide/risk-handling' },
         { text: '动手测试用例', link: '/guide/playground' },
