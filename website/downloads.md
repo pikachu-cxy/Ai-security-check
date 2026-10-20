@@ -1,16 +1,16 @@
 # 下载与构建状态
 
-## 当前版本：0.3.7 · Developer Alpha
+## 当前发行：0.3.7 · Developer Alpha
 
 [v0.3.7 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.7) 使用固定提交 [`96ade76`](https://github.com/pikachu-cxy/Ai-security-check/commit/96ade76788fa76a5b31f85ce33b4356dc36d250e)，Windows、Mac Apple Silicon 与 Mac Intel 来自同一版本和同一源码提交。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
 
-**2026-10-20 发布状态：构建与验收中。** [本次 GitHub Release 工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39365932407)通过后自动公开下面的平台包。下载链接仅在资产实际发布后可用；不要将构建已启动视为安装包已发布。
+**2026-10-20 发布状态：已公开发布。** [本次 GitHub Release 工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39365932407)的精简回归、合规、包完整性和三平台原生验收均已通过。九项公开资产已生成，发行清单中的 Windows 包摘要已与本机安装使用的同一 CI 产物核对一致。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |
-| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip.sha256) | 等待本次 CI 完成 |
-| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz.sha256) | 等待本次 CI 完成 |
-| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz.sha256) | 等待本次 CI 完成 |
+| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip.sha256) | 原生 CI 验收通过 |
+| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz.sha256) | ARM 原生 CI 验收通过 |
+| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz.sha256) | Intel 原生 CI 验收通过 |
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-release-evidence.zip)
 
