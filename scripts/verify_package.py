@@ -83,7 +83,7 @@ assert runtime_info()['features']['task_fix_verify'] == 'v0.1'
 assert runtime_info()['capability_contract'] == 'developer-guidance-v0.3'
 assert runtime_info()['remediation']['user_consent_required'] is True
 assert runtime_info()['remediation']['automatic_fix_without_user_consent'] is False
-assert 'is analysis, not repair' in RUNTIME_WORKFLOW
+assert '扫描、分析、进度报告、指导读取都不授予漏洞编辑权限。' in RUNTIME_WORKFLOW
 assert '沉默和计划均不授权' in HOST_INSTRUCTIONS
 from security_runtime.remediation_policy import RemediationConfig, RemediationPolicy, RULE
 policy = RemediationConfig(Path.cwd()/'isolated-policy.json')
