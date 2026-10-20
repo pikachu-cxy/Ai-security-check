@@ -39,6 +39,9 @@ jobs:
     uses: ./.github/workflows/package.yml
   build:
     needs: package
+    permissions:
+      actions: read
+      contents: write
     uses: ./.github/workflows/standalone.yml
   publish:
     needs: build
