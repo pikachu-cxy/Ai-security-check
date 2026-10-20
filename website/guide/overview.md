@@ -2,7 +2,7 @@
 
 AI Security Runtime 是面向 AI 编程工作流的本地安全检查运行时。它不替代编程 Agent，也不宣称自动证明整个项目安全：它把本次改动、静态检查、关联代码复核和风险处置放在同一条可恢复的任务链中。
 
-当前为 **0.3.6 / Developer Alpha**。主要使用路径是 Codex；其他宿主与平台的真实验证范围见[支持状态](../reference/support.md)。
+当前为 **0.3.7 / Developer Alpha**，安装包状态见[下载页](../downloads.md)。主要使用路径是 Codex；其他宿主与平台的真实验证范围见[支持状态](../reference/support.md)。
 
 ## 适合什么场景
 

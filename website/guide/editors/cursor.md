@@ -3,7 +3,7 @@
 Cursor 接入目前面向 **Windows x64、本地单根工作区的测试版**。先确认安装包来源与接入方式，再在隔离示例项目中试用。
 
 ::: warning 先确认你拿到的包
-公开 v0.3.6 包与 Cursor 自动接入候选不是同一交付。下面的 `install cursor` 需要支持该入口的完整候选包；本页不提供尚未发布的下载链接。只有公开包时，可参考[手动 MCP 配置](../mcp.md)，但这不包含自动任务检查。候选与桌面验收记录见[Cursor 接入状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
+下面的 `install cursor` 需要支持该入口的完整包，0.3.7 发行进度和下载入口见[下载页](../../downloads.md)。命令入口、连接配置和实际桌面任务验收分别认定，当前仍需独立 Cursor 桌面验收。仅需工具连接时可参考[手动 MCP 配置](../mcp.md)，但这不包含自动任务检查。详细记录见[Cursor 接入状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)。
 :::
 
 ## 1. 执行一条安装命令

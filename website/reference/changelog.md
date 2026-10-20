@@ -1,5 +1,15 @@
 # 版本与进度
 
+## 0.3.7 · Developer Alpha
+
+2026-10-20：[0.3.7 发布构建](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39365932407)正在进行，实际可下载状态见[下载页](../downloads.md)。Windows、Mac Apple Silicon 与 Mac Intel 使用同一版本和同一发布提交。
+
+- 收窄源码证据脱敏，保留普通字符串、注释、字段名及普通网址，对识别出的密码、令牌和私钥等凭据值继续脱敏；Windows/macOS 共用同一规则。
+- 必需源码窗口未读完或复核单元未提交时要求 Agent 继续，防止 Git 拉取或正常开发后提前结束复核。
+- 新任务使用新脱敏策略，旧任务保留原策略和比较记录，不重建历史证据。
+- 本次复用已完成的 697 项相关开发回归及补充边界验证，在 GitHub 运行 Windows/macOS 精简回归，并保留合规、包完整性和三平台原生验收。未重复执行全库回归。
+- README、下载入口、隐私、工作流程和常见问题同步更新；更新安装后仍需重新连接宿主。
+
 ## 0.3.6 · Developer Alpha
 
 2026-10-19 已公开发布 [v0.3.6 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，原始版本标签与 Windows 包对应提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。Mac 后续兼容修订分别记录源码与原生验收，不因版本号相同就认为构建相同。

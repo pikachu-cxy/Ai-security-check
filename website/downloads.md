@@ -1,25 +1,25 @@
 # 下载与构建状态
 
-## 当前发行：0.3.6 · Developer Alpha
+## 当前版本：0.3.7 · Developer Alpha
 
-[v0.3.6 已公开发布](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.6)，原始版本标签与 Windows 包对应提交 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
+[v0.3.7 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.7) 使用固定提交 [`96ade76`](https://github.com/pikachu-cxy/Ai-security-check/commit/96ade76788fa76a5b31f85ce33b4356dc36d250e)，Windows、Mac Apple Silicon 与 Mac Intel 来自同一版本和同一源码提交。这是 Developer Alpha 预发行版，不是稳定版或桌面兼容性认证。
 
-**2026-10-20 Mac 修订已发布：** Intel 与 Apple Silicon 两套包已由干净提交 [`c1641b7`](https://github.com/pikachu-cxy/Ai-security-check/commit/c1641b799b0ec537ae4a8e2ba5280e3969ea471a) 重新构建并替换，Windows 公开包保持不变。[原生验收及发布](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298842869)和[同提交全量回归](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39298843038)通过；公开下载的包摘要、包内清单与 [Mac 修订回执](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/macos-refresh.json)已核对一致。请重新下载 Mac 完整包及 SHA256 文件，解压到新目录，避免混入旧 `_internal` 文件。机器清单的 `artifact_source_commits` 分别记录各平台实际源码，原始标签不代表修订后的 Mac 包源码。
+**2026-10-20 发布状态：构建与验收中。** [本次 GitHub Release 工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39365932407)通过后自动公开下面的平台包。下载链接仅在资产实际发布后可用；不要将构建已启动视为安装包已发布。
 
 | 平台 | 完整安装包 | 校验 | 当前状态 |
 | --- | --- | --- | --- |
-| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-windows-x64.zip.sha256) | 原生全量 CI 验收通过 |
-| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-arm64.tar.gz.sha256) | ARM 原生全量 CI 验收通过 |
-| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-macos-x64.tar.gz.sha256) | Intel 原生全量 CI 验收通过 |
+| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-windows-x64.zip.sha256) | 等待本次 CI 完成 |
+| macOS Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-arm64.tar.gz.sha256) | 等待本次 CI 完成 |
+| macOS Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-macos-x64.tar.gz.sha256) | 等待本次 CI 完成 |
 
-[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.6/ai-security-runtime-v0.3.6-release-evidence.zip)
+[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/SHA256SUMS.txt) · [机器可读发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.7/ai-security-runtime-v0.3.7-release-evidence.zip)
 
-原始 [0.3.6 发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)的记录保留。当前 Mac 修订另完成 Windows / macOS 全量测试（最终分别 5,103 / 5,086 项通过，平台跳过与预期失败见 CI）、规则质量、合规、包完整性与三套原生包验收。原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。
+本次复用已完成的 697 项相关开发回归及补充边界验证，在 GitHub 执行 Windows/macOS 精简回归、合规、包完整性和三平台原生验收，未重复执行全库回归。原生验收包含无外部 Python 启动、扫描组件准备、样例扫描、受管 Skill、MCP、隔离安装生命周期及合成修复与 Hook 流程。各项实际结果以本次工作流和证据 ZIP 为准，不沿用 0.3.6 的全量回归结论。
 
 合成 SDK / Hook 场景不是实际桌面操作；macOS 真机、Cursor 桌面、苹果签名与公证等仍按[支持边界](./reference/support.md)单独认定。安装包通过检查也不代表任何用户项目已完成漏洞检查。
 
 ::: warning 不要混用旧候选与新发行
-此前本地 `c526cdd` 候选和 v0.3.4 旧发行不等于本次发行。请使用本页平台包及其配套校验，不将旧候选的 SHA256 或其他版本 Skill 套用到新包。
+0.3.6 及更早发行、本地临时候选均不等于本次 0.3.7 发行。请使用本页平台包及其配套校验，不将旧候选的 SHA256 或其他版本 Skill 套用到新包。源码拉取不会自动更新已安装产品，安装后重新连接宿主并核对实际版本与 `build_id`。
 :::
 
 ## 校验后再安装
@@ -29,14 +29,14 @@
 Windows：
 
 ```powershell
-Get-FileHash .\ai-security-runtime-v0.3.6-windows-x64.zip -Algorithm SHA256
-Get-Content .\ai-security-runtime-v0.3.6-windows-x64.zip.sha256
+Get-FileHash .\ai-security-runtime-v0.3.7-windows-x64.zip -Algorithm SHA256
+Get-Content .\ai-security-runtime-v0.3.7-windows-x64.zip.sha256
 ```
 
 macOS：在对应包与 `.sha256` 文件所在目录执行：
 
 ```sh
-shasum -a 256 -c ai-security-runtime-v0.3.6-macos-arm64.tar.gz.sha256
+shasum -a 256 -c ai-security-runtime-v0.3.7-macos-arm64.tar.gz.sha256
 ```
 
 Intel 换为 `macos-x64`。摘要用于检查下载完整性，不代替发布者身份、系统签名或平台兼容性验证。

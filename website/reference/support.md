@@ -1,20 +1,20 @@
 # 支持状态与验证边界
 
-**版本范围：0.3.6 Developer Alpha 发行包及对应源码。** 版本、构建身份、CI 验证和桌面手工验收分别认定，不把历史版本的结果直接套用到新包。
+**版本范围：0.3.7 Developer Alpha 发行包及对应源码。** 发行进度见[下载页](../downloads.md)。版本、构建身份、CI 验证和桌面手工验收分别认定，不把历史版本的结果直接套用到新包。
 
 ## 系统与宿主
 
 | 组合 | 当前说明 |
 | --- | --- |
-| Windows x64 + Codex | Windows 原生完整包 CI 验收通过；Codex 为主要使用路径，CI 合成宿主不等于桌面实操 |
+| Windows x64 + Codex | 独立 Windows 原生完整包及 CI 验收；Codex 为主要使用路径，CI 合成宿主不等于桌面实操 |
 | Windows x64 + Cursor | 有连接器与接入指南；本次版本仍需独立 Cursor 桌面验收 |
-| macOS Apple Silicon | `macos-arm64` 原生完整包 CI 验收通过；桌面真机验收仍待独立完成 |
-| macOS Intel | `macos-x64` 原生完整包 CI 验收通过；不是用 ARM 结果代替 Intel，桌面真机验收仍待完成 |
+| macOS Apple Silicon | 独立 `macos-arm64` 原生构建与验收；桌面真机验收仍待独立完成 |
+| macOS Intel | 独立 `macos-x64` 原生构建与验收；不以 ARM 结果代替 Intel，桌面真机验收仍待完成 |
 | Linux | 当前不作为公开发行的受支持目标 |
 
 macOS 两种架构使用对应的原生完整包，不以 Rosetta 作为默认兼容策略。Windows 机器可以提交代码并触发 macOS runner 构建，但不能在本机直接运行 macOS 原生可执行文件来证明兼容。
 
-原始版本标签与 Windows 包对应源码 `b4fa0ab086866f5db5c59b8f5f74ec180ed43f23`，[原始发布验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39231001213)通过后公开 v0.3.6。Mac 兼容修订保留 Windows 原安装行为和公开资产，另对 Intel 与 Apple Silicon 构建验收；完成状态和实际源码以[下载页](../downloads.md)、发行清单的 `artifact_source_commits` 及 `macos-refresh.json` 为准。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
+0.3.7 三平台包来自同一版本和同一发布提交，源码身份及校验值以 Release 的 `release-manifest.json` 和 `SHA256SUMS.txt` 为准。本次发布采用精简相关回归，并保留合规、包完整性和三平台原生验收。源码证据脱敏规则共用一套实现，平台差异在构建、系统接入和扫描组件运行环境。原生 CI 通过不等于苹果签名、公证、真实桌面操作或全部项目兼容性通过。
 
 ## 检查范围
 
