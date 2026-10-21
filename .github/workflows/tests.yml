@@ -53,6 +53,14 @@ jobs:
         env:
           PYTHONUTF8: '0'
         run: python -m pytest -q tests/test_bootstrap_runtime.py tests/test_macos_installation.py tests/test_macos_release_refresh.py tests/test_macos_artifact_budget.py tests/test_node_host_preflight.py tests/test_release_assets.py
+      - name: Check monitor startup and process cleanup before the full regression
+        run: >-
+          python -m pytest -q
+          tests/test_monitoring.py
+          tests/test_monitoring_http.py
+          tests/test_monitoring_one_click.py
+          tests/test_diagnostics.py
+          --basetemp="${{ runner.temp }}/monitor-preflight"
       - name: Run Runtime tests
         if: inputs.focused != true
         env:

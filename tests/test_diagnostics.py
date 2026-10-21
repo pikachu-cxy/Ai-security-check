@@ -119,6 +119,33 @@ def test_output_bound_kills_process(stream):
         run_process([sys.executable, '-c', f"import sys; sys.{stream}.write('x' * 1000000)"], max_output=1000)
 
 
+def test_output_limit_preserved_when_process_group_kill_is_denied(monkeypatch):
+    from io import BytesIO
+    from types import SimpleNamespace
+    from security_runtime import processes
+    class Child:
+        pid = 12345
+        returncode = None
+        stdout = BytesIO(b'x' * 4096)
+        stderr = BytesIO()
+        def poll(self):
+            return self.returncode
+        def kill(self):
+            self.returncode = -9
+        def wait(self, timeout):
+            assert self.returncode == -9 and timeout == 5
+            return self.returncode
+    child = Child()
+    def denied(*args):
+        raise PermissionError('Synthetic process group denial')
+    monkeypatch.setattr(processes, 'os', SimpleNamespace(name='posix', killpg=denied))
+    monkeypatch.setattr(processes, 'signal', SimpleNamespace(SIGKILL=9))
+    monkeypatch.setattr(processes.subprocess, 'Popen', lambda *args, **kwargs: child)
+    with pytest.raises(OutputLimitError):
+        run_process(['synthetic-child'], max_output=1000)
+    assert child.returncode == -9
+
+
 @pytest.mark.parametrize('statuses,expected', [
     (['SUCCESS'], 'EXECUTED'), (['SUCCESS', 'SUCCESS'], 'EXECUTED'),
     (['SUCCESS', 'FAILED'], 'PARTIAL'), (['SUCCESS', 'UNAVAILABLE'], 'PARTIAL'),

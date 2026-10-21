@@ -143,6 +143,14 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
                     os.killpg(proc.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+                except PermissionError:
+                    # Some POSIX hosts deny group signalling during exit.
+                    # Retain the deadline/output error and reap our own child.
+                    if proc.poll() is None:
+                        try:
+                            proc.kill()
+                        except ProcessLookupError:
+                            pass
         proc.wait(timeout=5)
         for reader in readers:
             reader.join(timeout=1)

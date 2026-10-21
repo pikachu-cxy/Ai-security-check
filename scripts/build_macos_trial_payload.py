@@ -15,7 +15,7 @@ import tempfile
 import zipfile
 
 
-RELEASE_TAG = "macos-trial-v0.3.9.1"
+RELEASE_TAG = "macos-trial-v0.3.9.2"
 PLATFORMS = {"macos-arm64", "macos-x64"}
 
 

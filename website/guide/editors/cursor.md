@@ -33,7 +33,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 <!--@include: ../../.vitepress/snippets/macos-paste.md-->
 
 ::: details Mac 当前版本与已有安装
-这条命令使用独立发行 [macos-trial-v0.3.9.1](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.1)，Runtime 版本为 0.3.9。Apple Silicon 和 Intel 的安装、构建身份及重复安装由本次 Mac CI 分别核验；真实用户电脑上的系统策略、Cursor 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
+这条命令使用独立发行 [macos-trial-v0.3.9.2](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.2)，Runtime 版本为 0.3.9。Apple Silicon 和 Intel 的安装、构建身份及重复安装由本次 Mac CI 分别核验；真实用户电脑上的系统策略、Cursor 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
 
 已有 Cursor 连接、Skill 和 Hook 可能更新到本次版本。请先结束正在运行的检查任务，安装期间不要同时编辑配置。安装器按现有归属与冲突规则保护其他服务和用户修改。
 

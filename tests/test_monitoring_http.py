@@ -12,6 +12,19 @@ from security_runtime.monitoring.service import MonitorService
 urlopen = build_opener(ProxyHandler({})).open
 
 
+def test_monitor_startup_never_performs_reverse_dns(monkeypatch):
+    import socket
+    def blocked(*args):
+        raise AssertionError('Loopback monitoring must not wait for DNS')
+    monkeypatch.setattr(socket, 'getfqdn', blocked)
+    monitor = MonitorServer(MonitorService(None))
+    try:
+        assert monitor.server_name == '127.0.0.1'
+        assert monitor.server_port > 0
+    finally:
+        monitor.server_close()
+
+
 @pytest.fixture
 def server(tmp_path, monkeypatch):
     monkeypatch.delenv('SECURITY_RUNTIME_CONTEXT_MODE', raising=False)

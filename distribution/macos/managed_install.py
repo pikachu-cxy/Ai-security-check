@@ -21,7 +21,7 @@ import unicodedata
 import uuid
 import venv
 
-RELEASE_TAG = "macos-trial-v0.3.9.1"
+RELEASE_TAG = "macos-trial-v0.3.9.2"
 SCHEMA = "macos-trial-payload-v1"
 HEX = re.compile(r"[a-f0-9]{64}")
 MAX_BYTES = 1024 * 1024 * 1024

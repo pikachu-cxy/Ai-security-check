@@ -4,6 +4,7 @@ from __future__ import annotations
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import secrets
+from socketserver import TCPServer
 import threading
 from urllib.parse import parse_qs, urlsplit
 
@@ -13,6 +14,12 @@ from .page import page
 
 class MonitorServer(ThreadingHTTPServer):
     daemon_threads = True
+
+    def server_bind(self):
+        # HTTPServer resolves the numeric loopback address with getfqdn(),
+        # which can block startup on DNS. This local service needs no name.
+        TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
     def __init__(self, service, port=0):
         if type(port) is not int or not 0 <= port <= 65535:

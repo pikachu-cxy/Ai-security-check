@@ -30,7 +30,7 @@ Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
 
 Codex / Cursor 用户直接在对应编辑器页查看 Mac 命令，无需先下载下方的完整包，也无需预装 Python。安装器会自动识别芯片并准备专用环境。
 
-当前自动安装使用独立发行 [macos-trial-v0.3.9.1](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.1)。它与完整包的程序路径、来源提交和构建身份分别记录，已有所选编辑器的连接可能更新。真实用户 Mac 的系统策略、桌面连接和组件检查仍需实际验证，详见[支持状态](./reference/support.md#macos-installation)。
+当前自动安装使用独立发行 [macos-trial-v0.3.9.2](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.2)。它与完整包的程序路径、来源提交和构建身份分别记录，已有所选编辑器的连接可能更新。真实用户 Mac 的系统策略、桌面连接和组件检查仍需实际验证，详见[支持状态](./reference/support.md#macos-installation)。
 
 粘贴时遇到系统提醒，先按[提醒原因与处理方式](./reference/faq.md#macos-paste)核对原文。
 
@@ -61,7 +61,7 @@ shasum -a 256 -c ai-security-runtime-v0.3.9-macos-arm64.tar.gz.sha256
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-release-evidence.zip)
 
-**Mac 自动安装**：独立发行 [macos-trial-v0.3.9.1](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.1)，Runtime 版本 0.3.9。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
+**Mac 自动安装**：独立发行 [macos-trial-v0.3.9.2](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.2)，Runtime 版本 0.3.9。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
 本版增加[一键监控与导出报告](./guide/context-cost.md)，并修复完整脱敏长行的保存和分片交付。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
 

@@ -260,7 +260,7 @@ def test_global_workspace_claim_is_metadata_only_and_bounded(store, monkeypatch)
     monkeypatch.setattr(context_cost, 'ContextCostStore', lambda: store)
     async def call(_):
         return {'status': 'AVAILABLE'}
-    request = SimpleNamespace(params=SimpleNamespace(name='get_security_summary', arguments={'workspace_path':'/explicit/project', 'source':'PRIVATE_BODY'}))
+    request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info', arguments={'workspace_path':'/explicit/project', 'source':'PRIVATE_BODY'}))
     asyncio.run(observe_response(call, request, connection_id='connection'))
     assert store.snapshot()['events'][0]['workspace_hash'] is not None
     assert b'PRIVATE_BODY' not in store.path.read_bytes()

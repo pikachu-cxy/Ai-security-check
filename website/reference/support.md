@@ -19,7 +19,7 @@ macOS 自动安装会识别两种架构；手动完整包则需选择对应芯�
 
 ## macOS 安装与验证 {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos)和 [Cursor](../guide/editors/cursor.md#macos) 的 Mac 安装直接写在各自页面。自动安装使用独立发行 `macos-trial-v0.3.9.1`，准备固定版本 Python 与产品包，与 0.3.9 原生完整包分别记录。
+[Codex](../guide/editors/codex.md#macos)和 [Cursor](../guide/editors/cursor.md#macos) 的 Mac 安装直接写在各自页面。自动安装使用独立发行 `macos-trial-v0.3.9.2`，准备固定版本 Python 与产品包，与 0.3.9 原生完整包分别记录。
 
 Apple Silicon 和 Intel 由[本次 Mac CI](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)分别验证首次安装、构建核对、Cursor / Codex 配置及重复安装。这是隔离用户目录中的安装验收，检查组件采用明确离线状态，不宣称已运行全部扫描器。
 
