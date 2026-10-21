@@ -10,7 +10,8 @@ import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters,stdio_client
 
-from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
+from security_runtime.host_guidance import RUNTIME_WORKFLOW
+from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
 from security_runtime.review_skill import ReviewSkillManager
 from security_runtime.mcp_views import page_bounds
 
@@ -49,13 +50,13 @@ def test_official_sdk_no_hook_task_review_and_output_volume(tmp_path):
                     async def call(name,arguments):
                         return await asyncio.wait_for(client.call_tool(name,arguments),30)
                     initialized=await asyncio.wait_for(client.initialize(),20)
-                    assert initialized.instructions==HOST_INSTRUCTIONS
+                    assert initialized.instructions==MCP_INSTRUCTIONS
                     before=unpack(await call('get_security_summary',{}))
                     assert before.get('scan_id') is None
                     scan=unpack(await call('scan_project',{'summary':True}))
                     sid=scan['scan_id']
                     assert scan['finding_count']==114 and 'findings' not in scan
-                    legacy=await call('get_findings',{'scan_id':sid})
+                    legacy=await call('get_findings',{'scan_id':sid,'view':'full'})
                     full=unpack(legacy);assert len(full)==114
                     page_response=await call('get_findings',{'scan_id':sid,'view':'summary','limit':5})
                     page=unpack(page_response)
@@ -77,7 +78,8 @@ def test_official_sdk_no_hook_task_review_and_output_volume(tmp_path):
                     reference=summary['recommended_tasks'][0]['continuation']['arguments']['task_ref']
                     prepare_args={'task_ref':reference,'limit':5,'include_existing_reviews':False}
                     prepared=unpack(await call('prepare_task_triage',prepare_args))
-                    assert len(prepared['packets'])==1 and 'existing_reviews' not in prepared
+                    assert len(prepared['packets'])==1 and prepared['existing_reviews']==[]
+                    assert prepared['existing_review_count']==0
                     def claim(packet):
                         return dict(finding_id=packet['finding_id'],context_hash=packet['context_hash'],
                             verdict='NEEDS_REVIEW',confidence='LOW',exploitability='UNKNOWN',
@@ -89,7 +91,7 @@ def test_official_sdk_no_hook_task_review_and_output_volume(tmp_path):
                     other=next(p for p in generic['packets'] if p['finding_id']!=packets[0]['finding_id'])
                     submit_args={'scan_id':sid,'triage_session':prepared['triage_session']}
                     verbose_ack=await call('submit_triage',{'scan_id':sid,
-                        'triage_session':generic['triage_session'],'results':[claim(other)]})
+                        'triage_session':generic['triage_session'],'results':[claim(other)],'compact':False})
                     assert unpack(verbose_ack)['accepted']==1
                     compact_ack=await call('submit_triage',submit_args|{'results':[claim(packets[0])],'compact':True})
                     ack=unpack(compact_ack)

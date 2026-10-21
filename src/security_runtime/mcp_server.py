@@ -48,8 +48,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             closeout_engine = CloseoutService(runtime_engine(), hook_coordinator.store)
         return closeout_engine
     binding = workspace_binding or WorkspaceBinding.from_environment()
-    from .host_guidance import HOST_INSTRUCTIONS
-    server = FastMCP("AI Security Runtime", instructions=HOST_INSTRUCTIONS, log_level=mcp_log_level())
+    from .mcp_guidance import MCP_INSTRUCTIONS
+    server = FastMCP("AI Security Runtime", instructions=MCP_INSTRUCTIONS, log_level=mcp_log_level())
     registry = MCPRegistry(server)
     from .workspace_services import assemble_remediation, bind_impact_gate
     from .hook_runtime import HookCoordinator
