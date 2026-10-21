@@ -28,6 +28,7 @@ from .progress import ProgressReporter, ScanCancelled, progress_context
 ACTIVE = {'QUEUED', 'PREPARING', 'RESUMING'}
 LEASE_SECONDS = 120
 MAX_PENDING = 128
+MAX_WAITER_CANDIDATES = MAX_PENDING * 4
 RESUME_SECONDS = 300
 
 
@@ -167,9 +168,14 @@ class PreparationStore:
         if not self.path.is_file():
             return []
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
-            rows = db.execute('SELECT data, mac FROM waiting ORDER BY rowid LIMIT ?', (MAX_PENDING,)).fetchall()
+            # Completed history must not consume the pending queue's read budget.
+            # Bound malformed/unverifiable candidates independently of valid work.
+            rows = db.execute("SELECT data, mac FROM waiting WHERE CASE "
+                "WHEN length(CAST(data AS BLOB)) <= 16000 AND json_valid(data) "
+                "THEN json_extract(data,'$.status')='WAITING' ELSE 0 END "
+                "ORDER BY rowid LIMIT ?", (MAX_WAITER_CANDIDATES + 1,)).fetchall()
         result = []
-        for raw, mac in rows:
+        for raw, mac in rows[:MAX_WAITER_CANDIDATES]:
             try:
                 if len(raw) > 16_000:
                     continue
@@ -184,8 +190,13 @@ class PreparationStore:
                 import hmac
                 if len(key) == 32 and hmac.compare_digest(mac, digest(key, value)):
                     result.append(value)
+                    if len(result) == MAX_PENDING:
+                        return result
             except (ValueError, KeyError, TypeError, OSError):
                 continue
+        if len(rows) > MAX_WAITER_CANDIDATES:
+            # Never turn a bounded inspection gap into an empty/ready queue.
+            raise ValueError('Preparation continuation inspection budget exceeded')
         return result
 
     def finish_waiter(self, item, status):
