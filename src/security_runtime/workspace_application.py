@@ -20,6 +20,8 @@ class WorkspaceApplication:
         self.connection_owner = connection_owner()
         self.issued_tasks = {}
         self.native_session_bindings = set()
+        from .task_source_cache import TaskSourceCache
+        self.task_source_cache = TaskSourceCache()
 
     def bound_path(self, value: str | None) -> str | None:
         if self.binding is None:
@@ -47,7 +49,8 @@ class WorkspaceApplication:
         if prior and session_ref is None and (owner['host']=='connection' or prior==self.connection_owner): owner=prior
         from .storage import ReadOnlySQLiteStore
         service=TaskSecurityService(self.runtime_provider,self.hooks,owner=owner,
-            read_only_scan_store_provider=lambda: ReadOnlySQLiteStore(self.scan_path_provider()))
+            read_only_scan_store_provider=lambda: ReadOnlySQLiteStore(self.scan_path_provider()),
+            source_cache=self.task_source_cache)
         if ref is not None and session_ref is not None:
             service.load(root,ref)  # Reject before changing connection routing.
             if len(self.issued_tasks)>=64: self.issued_tasks.pop(next(iter(self.issued_tasks)))

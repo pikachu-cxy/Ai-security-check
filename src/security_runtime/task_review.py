@@ -366,10 +366,20 @@ class TaskReviewCoordinator:
                     reject('TASK_CONTEXT_SOURCE_UNAVAILABLE', 'Current task source is unavailable', False)
                 if hash_bytes(raw) != snapshot['hashes'][name]:
                     raise ValueError('Task source changed during context read; evidence is stale')
-                long_lines = []
                 from .source_redaction import task_version
-                lines = safe_source(text, source_path=name, truncation_lines=long_lines,
-                                    redaction_version=task_version(record))
+                version = task_version(record)
+                cache = service.source_cache
+                cache_key = (str(root), ref, session, 'CURRENT_TASK_END', name,
+                             snapshot['hashes'][name], version)
+                cached = cache.get(cache_key) if cache is not None else None
+                if cached is None:
+                    long_lines = []
+                    lines = safe_source(text, source_path=name, truncation_lines=long_lines,
+                                        redaction_version=version)
+                    if cache is not None:
+                        cache.put(cache_key, lines, long_lines)
+                else:
+                    lines, long_lines = cached
                 truncated = dict(line_count=len(long_lines), lines=long_lines) if long_lines else None
                 location = 'CURRENT_TASK_END'
             if start_line > len(lines):

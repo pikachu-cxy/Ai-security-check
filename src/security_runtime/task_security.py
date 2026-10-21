@@ -260,12 +260,13 @@ def _coverage_gaps(limitations):
 
 class TaskSecurityService:
     def __init__(self, runtime, hooks=None, *, now=time.time, owner=None,
-                 read_only_scan_store_provider=None):
+                 read_only_scan_store_provider=None, source_cache=None):
         self.runtime = runtime
         self.hooks = hooks or HookStateStore()
         self.now = now
         self.owner = owner
         self.read_only_scan_store_provider = read_only_scan_store_provider
+        self.source_cache = source_cache
 
     def _owner(self):
         from .task_ownership import valid_owner
@@ -978,6 +979,8 @@ class TaskSecurityService:
             from .task_review import TaskReviewCoordinator
             result_packet = TaskReviewCoordinator(self).completion_packet(record, reserve_projection_sync=True)
             record = self._project_risks(root, record, updates)
+            if self.source_cache is not None:
+                self.source_cache.discard_task(str(root), ref)
             from .task_projection import status as projection_status
             result_packet['risk_ledger_sync'] = projection_status(record)
             return result_packet
@@ -1087,6 +1090,8 @@ class TaskSecurityService:
 
     def _view(self, record):
         phase = record['phase']
+        if phase in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'} and self.source_cache is not None:
+            self.source_cache.discard_task(record['workspace'], record['task_ref'])
         result = dict(status=phase, task_ref=record['task_ref'], scanner_run=False,
             task_scope=('HOST_SESSION' if (record.get('task_owner') or {}).get('host') in {'cursor','codex'} else
                         'MCP_CONNECTION' if record.get('task_owner') else 'LEGACY_UNOWNED'),
