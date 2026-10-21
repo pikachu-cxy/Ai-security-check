@@ -175,7 +175,7 @@ class WorkspaceBaselineSeeds:
     def _capture(self, root, *, session_id=None, host='codex'):
         from .hook_runtime import (HookCoordinator, HookSnapshot, MAX_FILES, MAX_BYTES,
             capture_snapshot, safe_path, validate_state, _git)
-        from .target import TargetDetector, IGNORED
+        from .target import TargetDetector
         core = self.coordinator or HookCoordinator()
         if core.store.directory.absolute().is_relative_to(root):
             raise ValueError('Baseline state must be outside workspace')
@@ -189,10 +189,11 @@ class WorkspaceBaselineSeeds:
             except (ValueError, subprocess.TimeoutExpired) as exc:
                 raise BaselinePreparationError('BASELINE_GIT_SNAPSHOT_UNAVAILABLE') from exc
             names = sorted({safe_path(n.decode('utf-8')) for n in raw.split(b'\0') if n})
-            names = [n for n in names if not set(Path(n).parts) & IGNORED]
+            detector = TargetDetector(max_files=max(1, MAX_FILES))
+            names = [n for n in names if not set(Path(n).parts) & detector.ignored]
             if len(names) > MAX_FILES:
                 raise BaselinePreparationError('BASELINE_FILE_BUDGET_EXCEEDED')
-            files = TargetDetector(max_files=MAX_FILES).detect(root, names, select_scan_targets=True).files
+            files = detector.detect(root, names, select_scan_targets=True).files
             digest = hmac.new(key, b'workspace-baseline-inventory-v1', hashlib.sha256)
             size = 0
             for name in files:

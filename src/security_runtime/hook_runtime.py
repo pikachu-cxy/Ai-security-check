@@ -19,7 +19,7 @@ from .git import GitService
 from .hook_state import HookStateStore, identity
 from .hooks import HookEvent
 from .models import RunStatus
-from .target import TargetDetector, IGNORED
+from .target import TargetDetector
 from .verification_policy import local_recheck
 from .workspace import WorkspaceResolver
 from .hook_timing import timings, elapsed, core_context, ExecutionTrigger
@@ -287,10 +287,11 @@ class CapturedSnapshot(tuple):
 
 
 def capture_snapshot(root: Path, key: bytes):
+    detector = TargetDetector(max_files=max(1, MAX_FILES))
     paths = set()
     for args in (('diff','--name-only','-z','--no-renames'), ('diff','--cached','--name-only','-z','--no-renames'), ('ls-files','--others','--exclude-standard','-z')):
         paths.update(safe_path(v.decode('utf-8')) for v in _git(root,*args).split(b'\0') if v)
-    paths = sorted(name for name in paths if not set(PurePosixPath(name).parts) & IGNORED)
+    paths = sorted(name for name in paths if not set(PurePosixPath(name).parts) & detector.ignored)
     if len(paths) > MAX_FILES:
         raise ValueError('Hook snapshot file count budget exceeded')
     digest = hmac.new(key, b'hook-snapshot-v1', hashlib.sha256)
@@ -305,13 +306,13 @@ def capture_snapshot(root: Path, key: bytes):
             header,name = entry.split(b'\t',1)
             index.setdefault(name.decode('utf-8'),[]).append(header)
     inventory = sorted(set(paths) | {safe_path(name) for name in index
-        if not set(PurePosixPath(name).parts) & IGNORED})
+        if not set(PurePosixPath(name).parts) & detector.ignored})
     if len(inventory) > MAX_FILES:
         raise ValueError('Hook comparison file budget exceeded')
     # Use the same extension + magic-byte policy as scans, including boundary
     # validation before exclusion. A document renamed to text becomes eligible
     # on the next capture and therefore produces a content delta.
-    profile = TargetDetector(max_files=MAX_FILES).detect(root, inventory, select_scan_targets=True)
+    profile = detector.detect(root, inventory, select_scan_targets=True)
     excluded = {row['path'] for row in profile.skipped_files}
     paths = [name for name in paths if name not in excluded]
     inventory = [name for name in inventory if name not in excluded]
