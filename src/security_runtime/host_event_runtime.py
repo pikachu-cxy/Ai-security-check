@@ -57,9 +57,17 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             EventKind.WORKSPACE_ACTIVITY:'WORKSPACE_RECONCILIATION',
             EventKind.SESSION_STOP:'SESSION_FINALIZATION'}[event.kind]
     observe('CLAIMS_VALID', **normalized)
+    from .task_attribution import session_activity
+    owner = dict(host=context.host, session=context.session_binding)
+    if event.kind != EventKind.SESSION_STOP:
+        session_activity(coordinator.store, context.workspace, owner)
     if event.kind == EventKind.SESSION_STOP and continuation is not None:
         result = continuation.handle(context.workspace, context._session,
                                      event.stop_guard_active, host=context.host)
+        if result.get('status') == 'ALLOW_STOP' and result.get('decision') != 'block':
+            idle = (not event.stop_guard_active and coordinator.store.pending_activity(
+                context.workspace, context.host, context._session) is None)
+            session_activity(coordinator.store, context.workspace, owner, idle=idle)
         return {**result, **normalized}, None
     if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation == OperationClass.READ_ONLY:
         result = inconclusive('READ_ONLY_ACTIVITY')
@@ -150,4 +158,9 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     elif event.kind == EventKind.WORKSPACE_ACTIVITY:
         result['event_processing'] = EventClaim(None, 'CONTENT_RECONCILIATION_ONLY').facts()
     result.update(normalized)
+    if event.kind == EventKind.SESSION_STOP and result.get('status') in {
+            'SESSION_FINALIZED', 'REUSED_LAST_RESULT', 'NO_CHANGE'}:
+        idle = (not event.stop_guard_active and coordinator.store.pending_activity(
+            context.workspace, context.host, context._session) is None)
+        session_activity(coordinator.store, context.workspace, owner, idle=idle)
     return result, decision

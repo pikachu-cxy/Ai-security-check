@@ -34,6 +34,8 @@ _GAPS = {
     'TASK_CHANGE_COMPARISON_UNAVAILABLE': '部分文件的修改前后内容无法完成比较。',
     'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '部分文件未能取得本次检查所需的当前内容。',
 }
+from .task_coverage import CAPTURE_GAP, CAPTURE_LABEL, capture_gap_note, display_limitations
+_GAPS[CAPTURE_GAP] = CAPTURE_LABEL
 
 _ATTRIBUTION_REASON = 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
 _ATTRIBUTION_LABEL = '同一工作区的任务时间窗重叠，改动归属未能独立确认'
@@ -68,7 +70,8 @@ def gap_notes(values):
         if isinstance(value, str):
             note = _GAPS.get(value, value)
         elif isinstance(value, dict):
-            note = _GAPS.get(value.get('reason'), '部分代码或检查依据尚未完成核对。')
+            note = (capture_gap_note(value) if value.get('reason') == CAPTURE_GAP else
+                    _GAPS.get(value.get('reason'), '部分代码或检查依据尚未完成核对。'))
             paths = value.get('paths') or ([value['path']] if value.get('path') else [])
             if isinstance(paths, list) and paths:
                 note += ' 涉及：'+'、'.join(str(p) for p in paths[:5])+'。'
@@ -99,7 +102,7 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
             isinstance(item, dict) and item.get('reason') == _ATTRIBUTION_REASON)]
         check_gaps.extend(note for note in review.get('limitations') or []
                           if not (isinstance(note, str) and note in attribution_notes))
-        for note in gap_notes(check_gaps):
+        for note in gap_notes(display_limitations(record, check_gaps)):
             notices.append(Notice('CHECK_GAP', note))
         if details:
             notices.append(Notice('ATTRIBUTION',

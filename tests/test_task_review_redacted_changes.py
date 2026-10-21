@@ -116,7 +116,9 @@ def _database_private_absent(tasks, root, ref, commitments):
     # The private semantic table is the sole permitted location for semantic
     # HMACs. The ordinary preimage body and its existing reference stay sanitized.
     with sqlite3.connect(tasks.preimages(root).path) as connection:
-        rows = connection.execute('SELECT metadata,body FROM task_preimages WHERE task_ref=?', (ref,)).fetchall()
+        rows = connection.execute('SELECT r.metadata,CASE WHEN length(r.body)>0 THEN r.body ELSE b.body END '
+            'FROM task_preimages r LEFT JOIN task_preimage_blobs b '
+            "ON b.sha256=json_extract(r.metadata,'$.body_sha256') WHERE r.task_ref=?", (ref,)).fetchall()
         private_rows = connection.execute('SELECT body FROM task_preimage_semantics WHERE task_ref=?', (ref,)).fetchall()
     for metadata, body in rows:
         _private_absent(dict(metadata=json.loads(metadata), body=json.loads(body)), commitments)

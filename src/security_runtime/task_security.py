@@ -217,7 +217,9 @@ def finding_view(f):
 
 
 def _coverage_gaps(limitations):
+    from .task_coverage import CAPTURE_GAP, CAPTURE_LABEL, capture_gap_note
     labels = {'SOURCE_LINE_CHAR_BUDGET': '源码单行超出显示预算',
+              CAPTURE_GAP: CAPTURE_LABEL,
               'SNAPSHOT_INVENTORY_DIRECTORY_BUDGET': '文件盘点达到目录容量上限',
               'SNAPSHOT_INVENTORY_FILE_BUDGET': '文件盘点达到路径数量上限',
               'SNAPSHOT_INVENTORY_ENTRY_BUDGET': '文件盘点达到目录条目处理容量上限，剩余数量未知',
@@ -242,12 +244,15 @@ def _coverage_gaps(limitations):
     result = []
     for limitation in limitations[:10]:
         message = labels.get(limitation.get('reason'), '部分任务源码或盘点不可用')
+        capture_gap = limitation.get('reason') == CAPTURE_GAP
+        if capture_gap:
+            message = capture_gap_note(limitation)
         paths = ([limitation['path']] if limitation.get('path') else limitation.get('paths', []))
         if paths:
             message += '：'+ '、'.join(str(p) for p in paths[:5])
             if len(paths)>5:
                 message += f' 等 {len(paths)} 个记录路径'
-        if limitation.get('count'):
+        if limitation.get('count') and not capture_gap:
             message += f"（{limitation['count']} 项）"
         result.append(message[:500])
     return result
@@ -362,6 +367,8 @@ class TaskSecurityService:
             existing = store.get(task_key=self.key(task_key,owner))
             if existing:
                 require_record_protocol(existing)
+                if existing.get('session_idle'):
+                    existing = store.save(existing)
                 if _native_preparation is not None:
                     if existing.get('native_repair') != _native_preparation:
                         raise ValueError('NATIVE_REPAIR_TASK_KEY_CONFLICT')
@@ -843,6 +850,16 @@ class TaskSecurityService:
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
                 return self.get(workspace, ref, completion_revision=old.get('review_revision', 1))  # no scan/model.
             record = self._session(root, ref, session)
+            # A session resuming during source review invalidates the original
+            # idle witness too. Never let a finish-time exemption close risks
+            # after concurrent activity has resumed.
+            from .task_attribution import overlapping_tasks
+            overlaps = overlapping_tasks(record, self.store(root).records(), self.now())
+            if overlaps and record.get('changes') and not any(
+                    item.get('reason') == 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
+                    for item in record['limitations']):
+                record['limitations'].append(dict(reason='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE',
+                                                  count=len(overlaps)))
             from .task_review_contract import validate_task_review_body, evidence_error, TaskReviewInputError
             body = validate_task_review_body(findings, coverage, limitations)
             findings, coverage, limitations = body['findings'], body['coverage'], body['limitations']
@@ -923,7 +940,8 @@ class TaskSecurityService:
                     '；'.join(f"{v['path']} ({v['reason']})" for v in record['context_gaps'][:10])+'。')
             if record['limitations']:
                 coverage = 'PARTIAL'
-                clean_limitations.extend(_coverage_gaps(record['limitations']))
+                from .task_coverage import display_limitations
+                clean_limitations.extend(_coverage_gaps(display_limitations(record, record['limitations'])))
             from .task_review_plan import finalize_plan
             completion = finalize_plan(record, now=self.now())
             from .task_review_closeout import continuation

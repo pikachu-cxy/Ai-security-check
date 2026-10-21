@@ -244,10 +244,10 @@ def test_file_task_workspace_and_task_count_quotas_are_separate(sample, monkeypa
             put(writer, 'extra.py', raw)
         assert reason(error) == 'TASK_PREIMAGE_TASK_BYTE_BUDGET'
     with store.writer(SECOND) as writer:
-        second = put(writer, raw=raw)
+        second = put(writer, raw=raw.replace(b'user', b'peer'))
     with pytest.raises(TaskPreimageUnavailable) as error:
         with store.writer(THIRD) as writer:
-            put(writer, raw=raw)
+            put(writer, raw=raw.replace(b'user', b'next'))
     assert reason(error) == 'TASK_PREIMAGE_WORKSPACE_BYTE_BUDGET'
     monkeypatch.setattr(preimages, 'MAX_TASKS', 2)
     with pytest.raises(TaskPreimageUnavailable) as error:

@@ -84,6 +84,8 @@ class CursorTaskBridge:
             mutating = not isinstance(command, str) or classify_bash_command({'command': command}) != 'READ_ONLY'
         if not mutating:
             return dict(status='READ_ONLY_OR_UNSUPPORTED', scanner_run=False)
+        from .task_attribution import session_activity
+        session_activity(self.core.store, self.root, self.owner)
         record = None if preparing else self.current()
         if record is None and not preparing:
             historical = self._historical_rejection()

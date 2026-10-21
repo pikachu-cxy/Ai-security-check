@@ -48,6 +48,8 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if event == 'preToolUse':
             result = bridge.before(payload)
         elif event == 'postToolUse':
+            from .task_attribution import session_activity
+            session_activity(core.store, root, bridge.owner)
             record = bridge.current()
             context = bridge.context(record)
             if context:
@@ -61,6 +63,10 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 result['response_prepared'] = True
         elif event == 'stop':
             message = bridge.followup(payload)
+            from .task_attribution import session_activity
+            idle = (not message and payload['status'] == 'completed' and payload['loop_count'] == 0
+                    and core.store.pending_activity(root, 'cursor', bridge.session) is None)
+            session_activity(core.store, root, bridge.owner, idle=idle)
             if message:
                 output['followup_message'] = message
             result = dict(status='FOLLOWUP' if message else 'NOT_APPLICABLE', scanner_run=False)

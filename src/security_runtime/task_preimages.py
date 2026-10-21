@@ -174,6 +174,8 @@ class TaskPreimageStore:
                        '(task_ref TEXT NOT NULL, path TEXT NOT NULL, created REAL NOT NULL, '
                        'expires REAL NOT NULL, metadata TEXT NOT NULL, mac TEXT NOT NULL, '
                        'body BLOB NOT NULL, PRIMARY KEY(task_ref,path))')
+            db.execute('CREATE TABLE IF NOT EXISTS task_preimage_blobs '
+                       '(sha256 TEXT PRIMARY KEY, body BLOB NOT NULL)')
             self._paths()
             return db
         except BaseException:
@@ -192,6 +194,7 @@ class TaskPreimageStore:
             db.execute('DELETE FROM task_preimages WHERE expires<=?', (created,))
             db.execute('DELETE FROM task_preimage_semantics WHERE expires<=?', (created,))
             db.execute('DELETE FROM task_preimage_batches WHERE expires<=?', (created,))
+            self._share_bodies(db, key)
             if db.execute('SELECT 1 FROM task_preimage_batches WHERE task_ref=?', (task_ref,)).fetchone():
                 _fail('TASK_PREIMAGE_TASK_ALREADY_CAPTURED')
             if db.execute('SELECT count(*) FROM task_preimage_batches').fetchone()[0] >= MAX_TASKS:
@@ -216,6 +219,53 @@ class TaskPreimageStore:
                 writer.closed = True
             if db is not None:
                 db.close()
+
+    def _share_bodies(self, db, key):
+        """Move authentic legacy bodies once, without changing signed references.
+
+        Empty row bodies refer to the content-addressed table. References still
+        bind workspace/task/path/hash/TTL independently; sharing is not adoption.
+        Release each old BLOB before insertion so migration can reuse its pages
+        even near the unchanged database ceiling. The transaction is atomic.
+        """
+        rows = db.execute('SELECT task_ref,path,CASE WHEN length(metadata)<=? THEN metadata END,mac '
+                          'FROM task_preimages WHERE length(body)>0 LIMIT ?',
+                          (MAX_REFERENCE_BYTES, MAX_TASKS*MAX_TASK_FILES+1)).fetchall()
+        if len(rows) > MAX_TASKS*MAX_TASK_FILES:
+            _fail('TASK_PREIMAGE_FILE_COUNT_BUDGET')
+        for task, path, raw_metadata, mac in rows:
+            if not isinstance(raw_metadata, str) or len(raw_metadata.encode()) > MAX_REFERENCE_BYTES:
+                _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
+            try:
+                reference = dict(json.loads(raw_metadata), mac=mac)
+                metadata = self._reference(task, path, reference.get('raw_sha256'), reference, key)
+            except (ValueError, TypeError):
+                _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
+            row = db.execute('SELECT CASE WHEN length(body)<=? THEN body END,created,expires '
+                             'FROM task_preimages WHERE task_ref=? AND path=?',
+                             (MAX_FILE_BODY_BYTES, task, path)).fetchone()
+            body, created, expires = row
+            if (not isinstance(body, bytes) or len(body) != metadata['body_bytes']
+                    or _sha(body) != metadata['body_sha256']
+                    or raw_metadata != encode(metadata).decode()
+                    or created != metadata['created_at'] or expires != metadata['expires_at']):
+                _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
+            db.execute("UPDATE task_preimages SET body=X'' WHERE task_ref=? AND path=?", (task, path))
+            db.execute('INSERT OR IGNORE INTO task_preimage_blobs VALUES(?,?)',
+                       (metadata['body_sha256'], body))
+            shared = db.execute('SELECT CASE WHEN length(body)<=? THEN body END '
+                'FROM task_preimage_blobs WHERE sha256=?',
+                (MAX_FILE_BODY_BYTES, metadata['body_sha256'])).fetchone()
+            if shared is None or shared[0] != body:
+                _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
+        # Metadata is authenticated again on read. Garbage collection follows
+        # live references, never a shared body's first task expiry.
+        db.execute('DELETE FROM task_preimage_blobs WHERE sha256 NOT IN '
+                   "(SELECT json_extract(metadata,'$.body_sha256') FROM task_preimages)")
+        if db.execute('SELECT 1 FROM task_preimages r LEFT JOIN task_preimage_blobs b '
+                "ON b.sha256=json_extract(r.metadata,'$.body_sha256') "
+                'WHERE b.sha256 IS NULL LIMIT 1').fetchone():
+            _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
 
     def _reference(self, task_ref, path, expected_hash, reference, key):
         if (not isinstance(expected_hash, str) or SHA256.fullmatch(expected_hash) is None
@@ -271,6 +321,11 @@ class TaskPreimageStore:
                     'CASE WHEN length(body)<=? THEN body END,created,expires FROM task_preimages '
                     'WHERE task_ref=? AND path=?',
                     (MAX_REFERENCE_BYTES, MAX_FILE_BODY_BYTES, task_ref, path)).fetchone()
+                if row is not None and row[2] == b'':
+                    shared = db.execute('SELECT CASE WHEN length(body)<=? THEN body END '
+                        'FROM task_preimage_blobs WHERE sha256=?',
+                        (MAX_FILE_BODY_BYTES, metadata['body_sha256'])).fetchone()
+                    row = (*row[:2], shared[0] if shared else None, *row[3:])
             if row is None:
                 _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
             raw_metadata, mac, body, created, expires = row
@@ -365,6 +420,8 @@ class TaskPreimageStore:
                 db.execute('DELETE FROM task_preimages WHERE task_ref=?', (task_ref,))
                 db.execute('DELETE FROM task_preimage_semantics WHERE task_ref=?', (task_ref,))
                 db.execute('DELETE FROM task_preimage_batches WHERE task_ref=?', (task_ref,))
+                db.execute('DELETE FROM task_preimage_blobs WHERE sha256 NOT IN '
+                           "(SELECT json_extract(metadata,'$.body_sha256') FROM task_preimages)")
         except (sqlite3.Error, OSError):
             _fail('TASK_PREIMAGE_STORE_UNAVAILABLE')
 
@@ -375,7 +432,7 @@ class _PreimageWriter:
         self.task_ref, self.created, self.closed = task_ref, created, False
         self.references = {}
         self.task_bytes = 0
-        self.workspace_bytes = db.execute('SELECT coalesce(sum(length(body)),0) FROM task_preimages').fetchone()[0]
+        self.workspace_bytes = db.execute('SELECT coalesce(sum(length(body)),0) FROM task_preimage_blobs').fetchone()[0]
         self.proof_bytes = 0
         from .task_preimage_fingerprints import ROW_FRAMING_BYTES
         self.workspace_proof_bytes = db.execute(
@@ -419,6 +476,13 @@ class _PreimageWriter:
         return self._put_sanitized(path, raw_bytes, sanitized_lines)
 
     def _put_sanitized(self, path, raw_bytes, sanitized_lines):
+        try:
+            return self._persist_sanitized(path, raw_bytes, sanitized_lines)
+        except sqlite3.Error:
+            self.closed = True
+            raise
+
+    def _persist_sanitized(self, path, raw_bytes, sanitized_lines):
         body = _body(sanitized_lines)
         if len(body) > MAX_FILE_BODY_BYTES:
             _fail('TASK_PREIMAGE_FILE_BUDGET')
@@ -432,7 +496,13 @@ class _PreimageWriter:
             _fail('TASK_PREIMAGE_FILE_COUNT_BUDGET')
         if self.task_bytes+len(body) > MAX_TASK_BYTES:
             _fail('TASK_PREIMAGE_TASK_BYTE_BUDGET')
-        if self.workspace_bytes+len(body) > MAX_WORKSPACE_BYTES:
+        body_hash = _sha(body)
+        shared = self.db.execute('SELECT CASE WHEN length(body)<=? THEN body END '
+            'FROM task_preimage_blobs WHERE sha256=?', (MAX_FILE_BODY_BYTES, body_hash)).fetchone()
+        if shared and (not isinstance(shared[0], bytes) or not hmac.compare_digest(shared[0], body)):
+            _fail('TASK_PREIMAGE_CONTENT_UNVERIFIED')
+        added_bytes = 0 if shared else len(body)
+        if self.workspace_bytes+added_bytes > MAX_WORKSPACE_BYTES:
             _fail('TASK_PREIMAGE_WORKSPACE_BYTE_BUDGET')
         metadata = dict(contract=CONTRACT, workspace_id=self.store.workspace_id,
             task_ref=self.task_ref, path=path, raw_sha256=raw_hash,
@@ -443,8 +513,9 @@ class _PreimageWriter:
         if len(encode(reference)) > MAX_REFERENCE_BYTES:
             _fail('TASK_PREIMAGE_REFERENCE_BUDGET')
         try:
+            self.db.execute('INSERT OR IGNORE INTO task_preimage_blobs VALUES(?,?)', (body_hash, body))
             self.db.execute('INSERT INTO task_preimages VALUES(?,?,?,?,?,?,?)',
-                (self.task_ref, path, self.created, self.created+TTL, encode(metadata).decode(), mac, body))
+                (self.task_ref, path, self.created, self.created+TTL, encode(metadata).decode(), mac, b''))
             self._put_semantics(path, raw_bytes, sanitized_lines, reference)
         except sqlite3.Error:
             # A full disk or SQLite rollback must invalidate the whole writer,
@@ -453,7 +524,7 @@ class _PreimageWriter:
             raise
         self.references[path] = reference
         self.task_bytes += len(body)
-        self.workspace_bytes += len(body)
+        self.workspace_bytes += added_bytes
         return dict(reference)
 
     def _put_semantics(self, path, raw_bytes, sanitized_lines, reference):

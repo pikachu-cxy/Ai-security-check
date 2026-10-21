@@ -198,7 +198,7 @@ class TaskSecurityStore:
                        (raw.decode(), digest(self.key(), updated), updated['task_ref'], row[0], row[1]))
             return updated
 
-    def save(self, value, *, new=False):
+    def save(self, value, *, new=False, session_idle=False):
         if new:
             require_record_protocol(value)
         no_links(self.path)
@@ -224,6 +224,15 @@ class TaskSecurityStore:
                     raise ValueError('Task history budget exceeded')
             from .task_ownership import ACTIVE, LEASE_SECONDS
             value = dict(value, generation=value['generation']+1, activity_at=self.now())
+            value.pop('session_idle', None)
+            if session_idle:
+                from .task_ownership import record_owner, valid_owner
+                owner = record_owner(value)
+                if (not is_v3_record(value) or value['phase'] != 'ACTIVE'
+                        or not valid_owner(owner) or owner['host'] not in {'codex', 'cursor'}):
+                    raise ValueError('Invalid task session idle checkpoint')
+                value['session_idle'] = dict(contract='task-session-idle-v1',
+                    observed_at=value['activity_at'], generation=value['generation'])
             if value['phase'] in ACTIVE:
                 value['lease_until']=self.now()+LEASE_SECONDS
                 value.pop('closed_at',None)
