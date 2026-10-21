@@ -31,6 +31,7 @@ MAX_EVENTS = 10_000
 RETENTION_SECONDS = 14 * 86400
 MAX_HOST_IMPORTS = 1_000
 MAX_MEASURE_BYTES = 64 * 1024 * 1024
+MAX_OBSERVATION_TEXT_BYTES = 256 * 1024
 MONITOR_MODES = ('off', 'basic', 'debug')
 RUN_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z')
 TOOL_NAMES = frozenset('''scan_diff scan_project scan_files get_findings prepare_triage submit_triage
@@ -131,15 +132,47 @@ def _measure(result):
                         measurement_limited=limited or structured_limited)
 
 
-def _observations(mapped, digest):
+def _observation_input(mapped, tool_name):
+    """Prefer one structured payload; decode only a bounded Runtime JSON reply.
+
+    Bare ``dict`` SDK tools can return just one JSON TextContent block. Parsing
+    that block is transient: neither it nor the decoded body enters storage.
+    Ambiguous/malformed content stays unknown, rather than looking like zero.
+    """
+    if 'content' not in mapped:
+        return mapped
+    structured = mapped.get('structuredContent')
+    if structured is not None:
+        return structured if isinstance(structured, (dict, list)) else None
+    content = mapped.get('content')
+    if tool_name not in TOOL_NAMES or not isinstance(content, list) or len(content) != 1:
+        return None
+    item = content[0]
+    if not isinstance(item, dict) or item.get('type') != 'text':
+        return None
+    value = item.get('text')
+    if (not isinstance(value, str) or len(value) > MAX_OBSERVATION_TEXT_BYTES
+            or len(value.encode('utf-8')) > MAX_OBSERVATION_TEXT_BYTES):
+        return None
+    try:
+        decoded = json.loads(value)
+    except (ValueError, TypeError, RecursionError):
+        return None
+    return decoded if isinstance(decoded, (dict, list)) else None
+
+
+def _observations(mapped, digest, *, tool_name=None):
     """Extract only bounded typed counters and keyed evidence identities."""
-    pending, visited = [mapped], 0
+    payload = _observation_input(mapped, tool_name)
+    pending, visited = [payload] if payload is not None else [], 0
+    limited = payload is None
     evidence, flags = set(), {}
     lines, duplicates = 0, 0
     while pending and visited < 20_000:
         node = pending.pop()
         visited += 1
         if isinstance(node, dict):
+            limited |= len(node) > 2000
             if node.get('status') == 'ALREADY_DELIVERED':
                 duplicates += 1
             for name in _FLAGS:
@@ -161,9 +194,12 @@ def _observations(mapped, digest):
             pending.extend(value for key, value in list(node.items())[:2000]
                            if key not in {'lines', 'text', 'arguments'} and isinstance(value, (dict, list)))
         elif isinstance(node, list):
+            limited |= len(node) > 2000
             pending.extend(node[:2000])
+    limited |= bool(pending)
     return dict(source_lines_delivered=min(lines, 10_000_000), duplicate_receipts=duplicates,
-                evidence_hashes=sorted(evidence), flags=flags, inspection_limited=bool(pending))
+                evidence_hashes=sorted(evidence), flags=flags, inspection_limited=limited,
+                observation_status='UNKNOWN' if payload is None else 'PARTIAL' if limited else 'COMPLETE')
 
 
 class ContextCostStore:
@@ -304,7 +340,7 @@ class ContextCostStore:
                               succeeded=succeeded is True, elapsed_ms=max(0, min(elapsed, 86_400_000)),
                               connection_hash=digest('connection', connection_id) if connection_id else None,
                               workspace_hash=digest('workspace', os.path.normcase(os.path.abspath(str(workspace)))) if workspace else None,
-                              build=_build_metadata(), **sizes, **_observations(mapped, digest))
+                              build=_build_metadata(), **sizes, **_observations(mapped, digest, tool_name=tool_name))
                 record.update(run_label=label, mode='debug' if debug else 'basic')
                 if debug:
                     valid_time = (type(started_at) in (int, float) and type(finished_at) in (int, float)
@@ -458,8 +494,12 @@ class ContextCostStore:
         if reports and not usage_ambiguous:
             actual = {name: sum(item['usage'][name] for item in reports) for name in
                       ('input_tokens', 'cached_input_tokens', 'output_tokens', 'reasoning_output_tokens', 'total_tokens')}
+        observed = sum(item.get('observation_status') == 'COMPLETE' for item in events)
+        partially_observed = any(item.get('observation_status') == 'PARTIAL' for item in events)
         return dict(schema_version=1, status='PARTIAL' if invalid else 'AVAILABLE', run_label=label,
                     calls=len(events), failed_calls=sum(not item['succeeded'] for item in events), **totals,
+                    observation_status='COMPLETE' if observed == len(events) else 'PARTIAL' if observed or partially_observed else 'UNKNOWN',
+                    observation_incomplete_calls=len(events) - observed,
                     repeated_evidence_deliveries=sum(count - 1 for count in evidence.values()),
                     scanner_runs=sum(item['flags'].get('scanner_run', False) for item in events),
                     cache_reuse_calls=sum(any(item['flags'].get(name, False) for name in _FLAGS[1:]) for item in events),
