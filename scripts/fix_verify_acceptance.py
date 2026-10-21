@@ -16,7 +16,7 @@ from security_runtime.verification_policy import local_recheck
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.task_fix import TaskFixService
 from security_runtime.sast import SemgrepEngineProvider
-from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
 if __package__:
     from .tls_impact_fixture import assess_tls_fixture
 else:
@@ -73,7 +73,7 @@ async def native_sdk_acceptance(executable):
         async with stdio_client(params) as (read, write):
             async with ClientSession(read, write) as client:
                 initialized = await client.initialize()
-                assert initialized.instructions == HOST_INSTRUCTIONS
+                assert initialized.instructions == MCP_INSTRUCTIONS
                 names = {t.name for t in (await client.list_tools()).tools}
                 assert {'prepare_task_fix','verify_task_fix','get_runtime_info'} <= names
                 async def call(name, args):
@@ -83,6 +83,12 @@ async def native_sdk_acceptance(executable):
                     return data.get('result', data)
                 info = await call('get_runtime_info', {})
                 assert info['features']['task_fix_verify'] == 'v0.1'
+                from security_runtime.guidance_catalog import get_runtime_guidance
+                guidance = await call('get_runtime_guidance', {'topic': 'repair-impact'})
+                expected = get_runtime_guidance('repair-impact')
+                assert guidance['status'] == 'READY' and guidance['content'] == expected['content']
+                assert guidance['sha256'] == info['guidance_catalog']['topics']['repair-impact']['sha256']
+                assert not guidance['authority']['repair_authorized']
                 summary = await call('get_security_summary', {})
                 chosen = summary['recommended_tasks']
                 assert len(chosen) == 2 and all(t['finding_count'] == 1 for t in chosen)
