@@ -57,11 +57,11 @@ shasum -a 256 -c ai-security-runtime-v0.3.9-macos-arm64.tar.gz.sha256
 
 ## 构建与验收记录 {#build-details}
 
-**0.3.9 完整包**：[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 使用同一源码提交生成三平台包。公开资产须通过 Windows/macOS 回归、合规、包完整性和三平台原生验收；状态见[本次发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)。
+**0.3.9 完整包**：[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 使用同一源码提交 [`6ceaf31`](https://github.com/pikachu-cxy/Ai-security-check/commit/6ceaf31c1324fbc22fb13729a4558563699c455e) 生成三平台包。公开资产须通过 Windows/macOS 回归、合规、包完整性和三平台原生验收；状态见[本次发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39584810380)。
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-release-evidence.zip)
 
-**Mac 自动安装**：独立发行 [macos-trial-v0.3.9.2](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.2)，Runtime 版本 0.3.9。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
+**Mac 自动安装**：独立发行 [macos-trial-v0.3.9.2](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.2)，Runtime 版本 0.3.9，来源提交同为 `6ceaf31`，产品构建 ID 为 `b079afc2d928f2ccdcdc117350b72ba75f58a373993ff31d34322835e1d981d5`。两种架构已分别通过首次安装、构建身份、Codex / Cursor 接入及重复安装的合成验收，见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39584786148)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
 本版增加[一键监控与导出报告](./guide/context-cost.md)，并修复完整脱敏长行的保存和分片交付。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
 
