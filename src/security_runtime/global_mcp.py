@@ -436,8 +436,10 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
+            from .runtime_info_view import runtime_info_view
             info = global_runtime_info(tools=await listed(), host=active_host)
             info['host_connector'] = active_host
+            info = runtime_info_view(info, arguments.get('view', 'full'))
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_runtime_guidance':
             from .guidance_catalog import get_runtime_guidance

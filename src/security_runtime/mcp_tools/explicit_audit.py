@@ -227,15 +227,16 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return data
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def get_runtime_info() -> dict:
-        """Read runtime version/features and same-environment reconnect guidance. Check required tool subset, not exact count; never scans or writes state."""
+    def get_runtime_info(view: Literal['full', 'summary'] = 'full') -> dict:
+        """Read runtime capabilities. Opt into summary for discovery; full remains the default. Check required tool subset, not exact count; never scans or writes state."""
         from ..host_guidance import runtime_info
         from ..delivery_manifest import delivery_manifest
+        from ..runtime_info_view import runtime_info_view
         info = runtime_info(remediation_config=remediation.config,
                             include_functional_verification=include_functional_verification)
         info['host_connector'] = getattr(binding, 'host', None)
         info['delivery_manifest'] = delivery_manifest(info, registry.tools())
-        return info
+        return runtime_info_view(info, view)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_runtime_guidance(topic: Literal['core', 'runtime-workflow', 'task-review',
