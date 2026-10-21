@@ -1,109 +1,128 @@
 # AI Security Runtime
 
-在 AI 编程过程中检查本次开发改动，结合静态检查与 Agent 对关联代码的复核，说明具体风险、已有防护和未知范围。用户选择修复、稍后处理或排除；Agent 在授权范围内编辑，Runtime 保存原问题与复查记录。
+English | [简体中文](README.zh-CN.md)
 
-当前源码版本为 **0.3.9 / Developer Alpha**，公开安装包以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
+Security checks, contextual review, and traceable fix verification for AI coding workflows.
 
-## 产品与使用文档
+AI Security Runtime checks the changes made during a development task, combines scanner results with your host agent's review of relevant code, and explains concrete risks, existing safeguards, and unknowns. You choose whether to fix, defer, or exclude a finding. The agent makes authorized changes; the Runtime retains the original finding and verification evidence.
 
-**默认完整接入 Runtime + MCP + Skill + Hook**，不需要在安装时选择版本；仅需要 MCP 时可手动配置，不执行完整接入。
+**Current source: 0.3.9 / Developer Alpha.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
-- [产品介绍](website/guide/overview.md)、[快速开始](website/guide/quickstart.md)、[安装与升级](website/guide/installation.md)、[仅 MCP 接入](website/guide/mcp.md)。
-- [工作流程](website/guide/workflow.md)、[风险处置](website/guide/risk-handling.md)、[支持范围](website/reference/support.md)、[隐私与联网](website/reference/privacy.md)、[常见问题](website/reference/faq.md)。
-- [当前安装包状态与校验](website/downloads.md)、[版本进展](website/reference/changelog.md)。
+## Documentation
 
-独立文档站已上线：[AI Security Runtime 产品与使用文档](https://pikachu-cxy.github.io/Ai-security-check/)。使用 **VitePress + GitHub Pages**，源码在 `website/`，配套导航、站内搜索与移动端布局。后续维护见[部署指南](website/contributing/deployment.md)。
+[English documentation](https://pikachu-cxy.github.io/Ai-security-check/en/) · [中文文档](https://pikachu-cxy.github.io/Ai-security-check/)
 
-## 当前源码状态
+- [Overview](website/en/guide/overview.md) · [Quick start](website/en/guide/quickstart.md) · [Downloads](website/en/downloads.md)
+- [Codex setup](website/en/guide/editors/codex.md) · [Cursor setup](website/en/guide/editors/cursor.md) · [Manual MCP](website/en/guide/mcp.md)
+- [Daily workflow](website/en/guide/workflow.md) · [Handle findings](website/en/guide/risk-handling.md) · [First demo](website/en/guide/demo.md)
+- [Usage monitoring](website/en/guide/context-cost.md) · [Privacy](website/en/reference/privacy.md) · [Troubleshooting](website/en/reference/faq.md)
 
-0.3.9 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
+The documentation site uses VitePress and GitHub Pages. Its source is in `website/`; engineering contracts and acceptance records remain in `docs/`, primarily in Chinese.
 
-监控是可选模块：失败、停止或从源码交付中整体移除，不改变扫描、任务复核和修复授权。报告区分聊天 token、工具耗时和观察窗口时长；不能可靠拆分的纯开发 / 纯安全 token 保持未知。
+## What it does
 
-本版同时修复长行证据截断：新任务完整保存脱敏代码，超大单行按实际响应大小分片，全部字符交付后才满足整行覆盖。保留响应和存储容量上限、源码版本校验及凭据脱敏；旧任务已经丢失的前像不补造。相关变更见[版本与进展](website/reference/changelog.md)。
+1. **Capture the real workspace before editing.** Existing uncommitted changes remain part of the task's starting state; no Git commit is required first.
+2. **Check the actual changes.** Review added, modified, and deleted files with the context needed to assess safeguards and trigger conditions.
+3. **Explain the evidence.** Keep file locations, potential impact, existing protections, and unverified assumptions visible.
+4. **Let the user decide.** A request for impact analysis remains read-only. Fixing a selected issue requires authorization; deferral and exclusion retain their own records.
+5. **Verify the original finding.** A new task with zero findings, ordinary passing tests, or an exclusion does not prove an earlier issue was fixed.
 
-保留 0.3.8 已有的指导按需加载、紧凑摘要、分页、明确文件范围和有证据的扫描结果复用。复用不代替必要复核或修复授权。Windows/macOS、Codex/Cursor 共用核心实现，宿主实际 token 适配目前仅实现 Codex 本机日志。
+Full integration includes **Runtime + MCP + companion Skill + Hooks**. [MCP-only setup](website/en/guide/mcp.md) is available when you manage orchestration yourself. Ordinary chat, read-only requests, and unchanged tasks should not trigger a project scan.
 
-发行流程先运行 Windows/macOS 回归、合规和包完整性检查，再执行 Windows x64、Mac Apple Silicon 与 Mac Intel 三平台构建和原生验收，最后上传九项 Release 资产。公开完成状态以 Release 与 Actions 为准，不把源码提交或候选构建当作安装包发布。
+## Install
 
-该版本同时包含已有兼容与恢复修复：
+Native bundles for source version 0.3.9 use the following names. Availability is determined by the public release assets, not this naming table:
 
-- Windows 扫描私有输入路径过长导致进程启动失败；固定输入、规则和产物继续保留权限、身份与清理校验。
-- Windows Semgrep 使用独立的短私有临时目录，处理超长或中文 TEMP；就绪探测包含有界合成扫描，区分本地通信权限与组件下载失败。
-- macOS 托管 Semgrep 的解释器链接仅允许指向匹配固定版本、清单与实际字节校验的托管 Python；外部链接仍被拒绝。
-- Cursor 会话基线捕获失败时保留明确失败原因，不重复捕获或发布不可核验基线。
-- 执行初始化、发布锁竞争、中断及取消后的恢复；已完成结果沿原任务恢复，不重复扫描或消耗预算。
-- 本轮风险交付恢复位置及“问题／可能影响／建议修复／尚未确认”四段说明；历史查询不重复索取处置选择。
-- 静态发现与代码复核风险共用当前处置投影；处置暂时不可读时保留详情并标记未知。
-- 升级事务覆盖退役受管 Skill 文件；保护用户修改。补齐超长 Hook 上下文和打包规则身份校验。
+| Platform | Bundle |
+| --- | --- |
+| Windows x64 | `ai-security-runtime-v0.3.9-windows-x64.zip` |
+| Mac Apple Silicon | `ai-security-runtime-v0.3.9-macos-arm64.tar.gz` |
+| Mac Intel | `ai-security-runtime-v0.3.9-macos-x64.tar.gz` |
 
-[开发进度](docs/DEVELOPMENT_PROGRESS.md)记录当前验证边界，[架构说明](docs/ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)记录执行链与耦合边界，[手工验收](docs/RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)覆盖发现、影响分析、修复、复查和误报。
+### Windows x64
 
-## 安装当前开发源码（Windows）
+Download the full bundle and its matching SHA256 file from the [downloads page](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Verify and extract the complete archive. In PowerShell, from the directory containing the `security-check` folder, run **one** command for your editor:
 
-需要 Python 3.12 或更高版本、Git。完全退出 Codex 后，在普通 PowerShell 中执行：
-
-~~~powershell
-git clone --branch feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
-Set-Location .\Ai-security-check
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\security-check.exe install codex --dev
-if ($LASTEXITCODE -ne 0) { throw '接入未完成，请保留诊断' }
-.\.venv\Scripts\security-check.exe preparation watch
-~~~
-
-已有源码目录先保存自己的改动，再更新分支；开发安装使用可编辑源码，目录应保持稳定。开发安装的 --dev 是显式开发模式，不等同于完整发行包安装。
-
-重新打开 Codex，在实际项目的新聊天中发送：
-
-> 请只核对已连接的 ai_security_runtime 的版本、构建身份、v3 任务工具及 task-result-delivery-v1 能力，不扫描、不修改代码。
-
-应确认同一 Runtime 提供 task-review-plan-v3、task-result-delivery-v1 和九项必需任务工具。版本号相同也可能是不同构建；以实际能力、build_id 和配套 Skill 为准。
-
-首次准备需要下载扫描组件和漏洞数据，不安装你的项目依赖或启动项目服务。preparation status / watch 显示准备状态；准备成功不代表项目已检查。
-
-Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临时目录中的短私有子目录；特殊账户可将 `SECURITY_RUNTIME_ENGINE_TEMP_ROOT` 指向项目外已存在的短本地目录。路径仍超限或权限不足时会返回具体诊断。沙箱拒绝本地通信时，应在获准支持该能力的环境执行检查。[设计与边界](docs/ARCHITECTURE.md#windows-native-engine-execution)
-
-## 使用完整安装包
-
-[v0.3.9 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
-
-- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip)
-- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz)
-- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz)
-
-三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
-
-拿到与所需能力匹配的完整包后，保留全部 security-check 目录，在解压目录执行下列命令。由 Codex 辅助安装时保留当前聊天，安装及准备完成后再退出并重启，使新连接生效：
-
-~~~powershell
+```powershell
+# Codex
 .\security-check\security-check.exe install codex
-.\security-check\security-check.exe preparation watch
-~~~
 
-完整包自带 Python，无需另装 Python、pip 或 venv。不要只复制一个可执行文件。Windows、macOS、SHA256 校验及仅 MCP 模式见[详细安装指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)。macOS CI、候选构建和真机验收分别记录；Linux 暂不发行。
+# Or Cursor
+.\security-check\security-check.exe install cursor
+```
 
-首次组件准备仍可能下载漏洞数据库；在线 / 本地双模式与一条命令安装尚未交付，不作为本版宣传能力。当前完整包不要求 Node.js，也没有正式 `npx` 安装入口。
+The full bundle includes Python; no separate Python, pip, Node.js, or virtual environment is required. Keep the entire folder. Installation starts preparing scanner components; initial downloads may continue in the background.
 
-## 日常流程
+### macOS: Apple Silicon or Intel
 
-1. 在项目聊天中正常提出开发需求。编辑前保存真实任务基线，开发后检查当前改动和必要关联代码；不要求用户先提交 Git。
-2. 风险说明保留位置、防护、触发条件和未知。明确选择具体风险后批准修复；已有同范围授权不重复确认。
-3. 只问修复影响时不编辑。稍后处理保留风险，明确误报或不再提醒保存为排除；用户决定与 AI 技术评估分别记录。
-4. 修复后沿原风险复查。新任务零发现、普通测试通过、暂缓或排除都不等于原漏洞已验证修复。
-5. 历史查询只读，不重扫、不重复追问。普通聊天、只读操作和无改动不追加通用安全提示。
+Choose **one** command for your editor:
 
-支持 Java、Python、JavaScript / TypeScript 的已安装规则子集、密钥检查、可识别依赖及有界关联分析。零发现不证明项目安全；不完整范围和失败原因应如实保留。检查在本机运行，语义分析由宿主 Agent 完成。
+```sh
+# Codex
+curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- codex
 
-## 开发与支持
+# Or Cursor
+curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
+```
 
-文档本地预览：进入 `website/` 后执行 `npm ci`、`npm run docs:dev`；构建使用 `npm run docs:build`。Node.js 仅为文档开发依赖。GitHub 默认分支推送会按变更路径触发文档工作流；三平台包工作流也支持独立手动构建，不必触发 Release 发布。
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) before running it. This managed installation uses the separate `macos-trial-v0.3.9.2` release, detects your architecture, and prepares a dedicated Python environment. It does not require preinstalled Python, Git, or Homebrew. Keep `~/.local/share/AI-Security-Runtime-macos-trial`; an existing connection for the selected editor may be updated.
 
-- [开发进度](docs/DEVELOPMENT_PROGRESS.md)、[近期计划](docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)、[开发交接](docs/DEVELOPMENT_HANDOFF.zh-CN.md)。
-- [架构与恢复](docs/ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)、[持久化契约](docs/PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)、[v3 升级边界](docs/TASK_REVIEW_V3_ONLY.zh-CN.md)。
-- [Cursor 安装测试](docs/guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)、[宿主支持状态](docs/HOST_SUPPORT.md)。
-- [文档导航](docs/README.md)、[规则范围](docs/design/RULE_FOUNDATION.md)、[覆盖矩阵](docs/design/RULE_COVERAGE_MATRIX.md)。
-- [许可](LICENSING.md)、[使用条款](EULA.md)、[第三方声明](THIRD_PARTY_NOTICES.md)。
+Apple Developer ID signing, notarization, and real desktop compatibility are separate validation items. If macOS blocks pasting or launching, read the [troubleshooting guide](website/en/reference/faq.md#macos-paste) and retain the exact message.
 
-反馈到 [Issues](https://github.com/pikachu-cxy/Ai-security-check/issues)时提供系统、实际构建身份、失败步骤和脱敏诊断。扫描记录、原始聊天、凭据、缓存、临时样例与构建产物不进入 Git。自动回归需要的合成 fixture 和测试保留；已淘汰的手工实验及重复阶段文档从工作树移除，历史可通过 Git 查阅。
+### Restart and verify
+
+Completely quit and reopen the editor after installation. In a new chat in the intended local project, ask:
+
+> Use actual AI Security Runtime tool calls to check the connection, version, build_id, source commit, scanner readiness, vulnerability data, and bound project path. Confirm companion guidance is available. Do not scan or modify the project. Explain any missing information.
+
+Matching version numbers do not guarantee matching builds. Installation, component preparation, a working editor connection, and a completed project check are separate facts. See [verification](website/en/guide/verify.md), then try the [isolated demo](website/en/guide/demo.md).
+
+## Source version 0.3.9
+
+- One-step monitoring for the current Codex chat, with verified local session matching and HTML/JSON report export. Manual log selection is not required for this flow.
+- Separate reporting of chat tokens, observation time, and associated tool duration. Token use cannot reliably be split into development-only and security-only portions; unsupported measurements remain unknown.
+- Optional monitoring that can stop, fail, or be omitted from a source distribution without changing core scans, task review, or fix authorization. Keep managed installation packages intact.
+- Complete sanitized long-line evidence for new tasks, fragmented to fit response budgets. Historical evidence already lost by older tasks is not reconstructed.
+- Existing guidance deduplication, compact summaries, explicit file scopes, and verified scan-result reuse. Reuse does not replace required review or authorize a fix.
+
+See the [changelog](website/en/reference/changelog.md) and [release workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml). A source commit or candidate build is not proof that a native bundle has been published.
+
+## Coverage and data handling
+
+Installed rule subsets cover Java, Python, and JavaScript/TypeScript. Secret detection, recognizable dependency manifests, and bounded contextual analysis depend on the available engines, data, and actual review scope. No findings does not establish that a project is secure. Go or PHP dependency recognition does not imply complete SAST support for those languages.
+
+The Runtime and scanners run locally. Semantic analysis is performed by the host agent, whose own model service and account policies govern its data handling. Local task records may contain code snapshots. Component preparation and vulnerability data can require network access. See [coverage](website/en/reference/support.md) and [privacy](website/en/reference/privacy.md).
+
+## Develop from source
+
+Requires Python 3.12+ and Git. Keep the checkout in a stable directory. This development installation is separate from a published bundle:
+
+```sh
+git clone --branch feature/runtime-mvp https://github.com/pikachu-cxy/Ai-security-check.git
+cd Ai-security-check
+python3 -m venv .venv
+.venv/bin/python -m pip install -e .
+.venv/bin/security-check install codex --dev
+```
+
+On Windows, use `py -3.12 -m venv .venv`, `.\.venv\Scripts\python.exe`, and `.\.venv\Scripts\security-check.exe` instead. Pulling source does not automatically update an installed Runtime. Restart the host and verify its actual build after changing the installation.
+
+For the documentation site:
+
+```sh
+cd website
+npm ci
+npm run docs:dev
+# Production build, including internal link checks:
+npm run docs:build
+```
+
+Node.js is a documentation-development dependency, not a bundled Runtime requirement. See [documentation maintenance](website/en/contributing/deployment.md).
+
+## Licensing and support
+
+AI Security Runtime uses a **closed-core, open-ecosystem** licensing model. The Runtime Core is proprietary. Explicitly marked components, the public scanner/plugin extension contract, and the `ai-security-core` community rule pack are Apache-2.0 licensed. Third-party engines and dependencies retain their own licenses. A public repository does not make the entire Runtime open source.
+
+Read [LICENSE](LICENSE), [licensing](LICENSING.md), [EULA](EULA.md), [third-party notices](THIRD_PARTY_NOTICES.md), and [source offer](SOURCE_OFFER.md) for the applicable terms.
+
+Report issues through [GitHub Issues](https://github.com/pikachu-cxy/Ai-security-check/issues) with your OS, architecture, editor version, actual build identity, reproduction steps, and sanitized diagnostics. Do not commit credentials, raw chats, private source snapshots, scanner databases, or local runtime state.

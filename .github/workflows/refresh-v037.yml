@@ -58,7 +58,7 @@ jobs:
           python scripts/update_homebrew_formula.py --manifest dist/release/release-manifest.json
           python scripts/generate_winget_manifest.py --manifest dist/release/release-manifest.json
           python scripts/validate_manager_metadata.py --manifest dist/release/release-manifest.json
-          cp README.md dist/release/INSTALL.zh-CN.md
+          cp README.zh-CN.md dist/release/INSTALL.zh-CN.md
           cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
           python scripts/prepare_release_assets.py
       - name: Verify exact old release identity and back up all replaced assets

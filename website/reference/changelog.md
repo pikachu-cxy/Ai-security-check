@@ -1,5 +1,11 @@
 # 版本与进度
 
+## 英文文档 · 2026-10-21
+
+- GitHub 主 README 增加英文项目介绍、安装、使用流程、支持范围及许可说明，完整中文内容保留在 `README.zh-CN.md`。
+- 文档站新增 `/en/` 英文入口、语言切换、导航与英文使用指南，覆盖安装、验证、Demo、工作流程、监控、隐私和故障排查。
+- 英文说明沿用相同功能和验证边界，区分源码版本、公开安装包及独立 Mac 发行，不扩大专有核心或 Apache-2.0 组件的许可范围。
+
 ## 0.3.9 · Developer Alpha
 
 2026-10-21：[v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 使用新版本号交付当前源码；完整包和 Mac 自动安装分别构建、校验和验收，实际公开状态见[下载页](../downloads.md)。

@@ -10,6 +10,74 @@ export default defineConfig({
   base,
   cleanUrls: false,
   lastUpdated: true,
+  locales: {
+    root: { label: '简体中文', lang: 'zh-CN' },
+    en: {
+      label: 'English',
+      lang: 'en',
+      description: 'Security checks, evidence, and fix verification for AI coding workflows.',
+      head: [
+        ['meta', { property: 'og:title', content: 'AI Security Runtime · Security checks for AI coding' }],
+        ['meta', { property: 'og:description', content: 'Review changes, understand risks, approve fixes, and verify the original finding.' }]
+      ],
+      themeConfig: {
+        nav: [
+          { text: 'Overview', link: '/en/guide/overview' },
+          { text: 'Get started', link: '/en/guide/quickstart' },
+          { text: 'Downloads', link: '/en/downloads' },
+          { text: 'Changelog', link: '/en/reference/changelog' }
+        ],
+        sidebar: [
+          { text: 'Getting started', collapsed: false, items: [
+            { text: 'Quick start', link: '/en/guide/quickstart' },
+            { text: 'Verify installation', link: '/en/guide/verify' },
+            { text: 'Your first demo', link: '/en/guide/demo' },
+            { text: 'Downloads', link: '/en/downloads' }
+          ] },
+          { text: 'Connect your editor', collapsed: false, items: [
+            { text: 'Codex', link: '/en/guide/editors/codex' },
+            { text: 'Cursor', link: '/en/guide/editors/cursor' },
+            { text: 'WorkBuddy', link: '/en/guide/editors/workbuddy' },
+            { text: 'Other MCP clients', link: '/en/guide/editors/other' }
+          ] },
+          { text: 'Using the runtime', collapsed: false, items: [
+            { text: 'Daily workflow', link: '/en/guide/workflow' },
+            { text: 'Usage monitoring and reports', link: '/en/guide/context-cost' },
+            { text: 'Handle findings', link: '/en/guide/risk-handling' },
+            { text: 'Practice checklist', link: '/en/guide/playground' },
+            { text: 'Troubleshooting', link: '/en/reference/faq' }
+          ] },
+          { text: 'Advanced setup', collapsed: true, items: [
+            { text: 'Preparation and upgrades', link: '/en/guide/installation' },
+            { text: 'Manual MCP setup', link: '/en/guide/mcp' }
+          ] },
+          { text: 'Product and support', collapsed: true, items: [
+            { text: 'Product overview', link: '/en/guide/overview' },
+            { text: 'Platforms and coverage', link: '/en/reference/support' },
+            { text: 'Data and privacy', link: '/en/reference/privacy' },
+            { text: 'Changelog', link: '/en/reference/changelog' },
+            { text: 'Licensing', link: '/en/reference/legal' },
+            { text: 'Maintain the documentation', link: '/en/contributing/deployment' }
+          ] }
+        ],
+        langMenuLabel: 'Language',
+        sidebarMenuLabel: 'Menu',
+        returnToTopLabel: 'Back to top',
+        skipToContentLabel: 'Skip to content',
+        darkModeSwitchLabel: 'Appearance',
+        lightModeSwitchTitle: 'Switch to light theme',
+        darkModeSwitchTitle: 'Switch to dark theme',
+        outline: { label: 'On this page', level: [2, 3] },
+        docFooter: { prev: 'Previous page', next: 'Next page' },
+        lastUpdated: { text: 'Last updated' },
+        editLink: { pattern: `${repository}/edit/feature/runtime-mvp/website/:path`, text: 'Edit this page on GitHub' },
+        footer: {
+          message: 'Developer Alpha · Check the installed build and actual review coverage.',
+          copyright: 'Runtime Core and third-party components have separate licenses.'
+        }
+      }
+    }
+  },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
     ['meta', { name: 'theme-color', content: '#087f5b' }],

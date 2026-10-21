@@ -76,7 +76,8 @@ def prepare(root: Path) -> tuple[Path, Path]:
         "| 下载入口 | 怎么选 | 校验 |\n| --- | --- | --- |\n"
         + "\n".join(rows)
         + f"\n\nMac 在「关于本机」查看芯片；也可运行 `uname -m`：`arm64` 选 Apple Silicon，`x86_64` 选 Intel。\n\n"
-        f"[安装与使用说明](https://github.com/{REPOSITORY}/blob/v{__version__}/README.md) · "
+        f"[安装与使用说明](https://github.com/{REPOSITORY}/blob/v{__version__}/README.zh-CN.md) · "
+        f"[English guide](https://github.com/{REPOSITORY}/blob/v{__version__}/README.md) · "
         f"[完整校验清单]({base}/SHA256SUMS.txt)\n\n"
         "GitHub 的 **Source code** 是源码压缩包，安装请选择上面的平台包。当前为 Developer Alpha 试用版。\n\n"
         "<details>\n<summary>维护者：验收证据与机器元数据</summary>\n\n"

@@ -1,0 +1,47 @@
+# Install and use with Cursor
+
+Full integration configures the user-level MCP connection, companion Skill, edit-event Hooks, and the routine-tool allowlist, then starts scanner preparation. Installation does not scan or modify your project. Start with a local, single-root Git workspace; remote and multi-root workflows are not listed as validated.
+
+## Windows {#windows}
+
+[Download and verify the Windows x64 bundle](../../downloads.md#windows). Fully extract it and keep the complete `security-check` directory. From its parent directory, run in PowerShell:
+
+```powershell
+.\security-check\security-check.exe install cursor
+```
+
+The bundle includes Python and does not require Node.js.
+
+## macOS {#macos}
+
+Run in Terminal:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
+```
+
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh). It detects Apple Silicon or Intel and prepares dedicated Python without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-macos-trial`.
+
+This uses the separate `macos-trial-v0.3.9.2` / Runtime 0.3.9 release. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
+
+For a verified [manual native bundle](../../downloads.md#macos-packages), run `./security-check/security-check install cursor` from its parent directory. To switch back, reinstall from the original verified bundle, restart Cursor, and verify the build. Signing, notarization, and real desktop operation require separate validation.
+
+## Ask your assistant to install
+
+Paste this into **Cursor's Agent chat**, not a terminal:
+
+```text
+Install AI Security Runtime for Cursor using this guide:
+https://pikachu-cxy.github.io/Ai-security-check/en/guide/editors/cursor.html
+Verify the correct platform downloads and checksums, preserve unrelated services
+and user changes, and report the installed build and component preparation status.
+Do not scan or modify my project. Tell me when installation is finished so I can restart.
+```
+
+## Restart, verify, and try a task
+
+Completely quit and reopen Cursor. In a new project chat, follow [installation verification](../verify.md), then try the [small development task](../quickstart.md#_3-try-a-small-development-task) and [first demo](../demo.md).
+
+Whether routine tool calls need confirmation still depends on Cursor's mode and team policy. Fixes require your explicit authorization. Full integration describes installed components, not proof that every Cursor version, model, and desktop flow has passed acceptance. See [support](../../reference/support.md).
+
+[Preparation and upgrades](../installation.md) · [Daily workflow](../workflow.md)
