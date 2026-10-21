@@ -79,7 +79,7 @@ def prepare(root: Path) -> tuple[Path, Path]:
         f"[安装与使用说明](https://github.com/{REPOSITORY}/blob/v{__version__}/README.zh-CN.md) · "
         f"[English guide](https://github.com/{REPOSITORY}/blob/v{__version__}/README.md) · "
         f"[完整校验清单]({base}/SHA256SUMS.txt)\n\n"
-        "GitHub 的 **Source code** 是源码压缩包，安装请选择上面的平台包。当前为 Developer Alpha 试用版。\n\n"
+        f"GitHub 的 **Source code** 是源码压缩包，安装请选择上面的平台包。本次为 {__version__} 正式版，支持 Windows x64、Mac Apple Silicon（M 系列）及 Intel。\n\n"
         "<details>\n<summary>维护者：验收证据与机器元数据</summary>\n\n"
         f"[验收证据 ZIP]({base}/{evidence_name}) 包含原生及专项验收 JSON、安装指南、Homebrew Formula 和 WinGet YAML；普通安装无需下载。\n\n"
         f"[release-manifest.json]({base}/release-manifest.json) 保留供工具读取。证据 ZIP 校验值在完整校验清单中。\n\n"

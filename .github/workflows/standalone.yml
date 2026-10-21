@@ -29,6 +29,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v0.3.9]')
     name: Standalone artifact (${{ matrix.platform }})
     timeout-minutes: 45
     strategy:

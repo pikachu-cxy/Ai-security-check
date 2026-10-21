@@ -11,7 +11,7 @@ WorkBuddy 和其他 MCP 客户端按[对应接入指南](./guide/quickstart.md#c
 
 ## Windows 完整包 {#windows}
 
-当前为 **0.3.9 Developer Alpha**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
+当前为 **0.3.9 正式版**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
 
 | 平台 | 安装包 | 校验 |
 | --- | --- | --- |
@@ -27,6 +27,8 @@ Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
 然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。从 0.3.8 升级时重新下载完整包和配套校验文件，并核对实际 `build_id`。
 
 ## Mac 安装
+
+正式版完整包见[下方三平台发行的 Mac 下载](#macos-packages)。以下自动安装命令仍使用独立试用发行，与正式版完整包分别核对来源。
 
 Codex / Cursor 用户直接在对应编辑器页查看 Mac 命令，无需先下载下方的完整包，也无需预装 Python。安装器会自动识别芯片并准备专用环境。
 
@@ -47,6 +49,9 @@ Codex / Cursor 用户直接在对应编辑器页查看 Mac 命令，无需先下
 
 ```sh
 shasum -a 256 -c ai-security-runtime-v0.3.9-macos-arm64.tar.gz.sha256
+tar -xzf ai-security-runtime-v0.3.9-macos-arm64.tar.gz
+./security-check/security-check install codex
+# Cursor 用户将上一行的 codex 替换为 cursor
 ```
 
 当前没有 Apple Developer ID 签名与公证保证。原完整包出现 Python 动态库或系统策略错误时，保留报错并查看[Mac 首次启动排查](./guide/installation.md#macos-首次启动)。

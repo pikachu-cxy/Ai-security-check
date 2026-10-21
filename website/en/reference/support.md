@@ -1,6 +1,6 @@
 # Platforms and coverage
 
-Scope: **0.3.9 Developer Alpha source and corresponding releases**. Source version, public assets, build identity, CI acceptance, and desktop validation are separate facts. Consult [downloads](../downloads.md) and each workflow's actual results.
+Scope: **0.3.9 Official release source and corresponding releases**. Source version, public assets, build identity, CI acceptance, and desktop validation are separate facts. Consult [downloads](../downloads.md) and each workflow's actual results.
 
 ## Platforms and editors
 

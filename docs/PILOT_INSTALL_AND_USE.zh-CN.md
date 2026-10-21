@@ -1,18 +1,12 @@
 # 安装、使用与反馈
 
-当前源码为 0.3.6，开发安装见[README](../README.md#安装当前开发源码windows)。以下完整包步骤需使用与所需能力匹配的实际构建；v0.3.4 是旧发行，不包含本分支后续 v3 与恢复修复。
+更新：2026-10-21。当前版本为 **0.3.9 正式版**，支持 Windows x64、Mac Apple Silicon（M 系列）与 Intel。下载以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际公开资产为准；三平台使用同一发布提交。
 
-更新：2026-10-14。Developer Alpha，面向受邀试用。程序在本机检查项目，不向产品服务上传源码；宿主聊天工具自身的数据处理仍按其设置。
-本批 Windows 本机验收与 macOS CI/真机验收分开记录；没有 Mac 真机，macOS 包必须以同提交 CI 构建和对应架构回执为准。不能用 Windows 包改名作为 Mac 包。
-维护者确认旧GitHub作业因私有仓库Actions额度耗尽而未执行；2026-10-14仓库改为公开后，标准runner重新开始执行。Mac ARM/Intel在包完整性校验阶段暴露PyInstaller符号链接兼容问题，本批补齐包内相对链接清单、越界拒绝、复制保留与安全解包；发布验证也区分源码快速检查与声明依赖的部分图覆盖。修复提交仍须实际CI通过后才分发Mac包，真机验收待试用者完成。
-
-首版发行范围为Windows x64、Mac Apple Silicon与Mac Intel；Linux发行和验收暂缓。
-
-保留的历史下载版为 [v0.3.4](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.4)，对应源码提交 `88fe6db9d9b1b4e0b5bbce689c3f79d7b0134727`。日常安装可先按 [README 三步入口](../README.md#使用完整安装包)操作；下面保留完整校验、状态与诊断步骤。原生完整包会自动定位自身目录，因此 README 的 `install codex` 可省略 `--bundle`，不加 `--json` 时显示中文安装结果。
+程序在本机检查项目，宿主聊天工具自身的数据处理按其设置。源码开发安装、原生完整包和独立 Mac 自动安装分别核对构建身份；原生 CI 验收与真实桌面、Apple 签名和公证分别认定。
 
 ## 选择模式和安装包
 
-当前发行版本为 0.3.9 / Developer Alpha。平台包命名示例为 `ai-security-runtime-v0.3.9-macos-arm64.tar.gz`；
+当前发行版本为 0.3.9 / 正式版。平台包命名示例为 `ai-security-runtime-v0.3.9-macos-arm64.tar.gz`；
 请从 README 或文档站下载页选择已发布的完整平台包，并核对同版本配套 SHA256 文件。
 
 | 模式 | 内容 | 适用 |
@@ -51,8 +45,8 @@ if ($LASTEXITCODE -ne 0) { throw '安装未完成：保留回执，不删除其�
 终端在收到的文件目录执行（替换成实际文件名）：
 ```bash
 uname -m
-shasum -a 256 ai-security-runtime-v0.3.4-macos-arm64.tar.gz
-tar -xzf ai-security-runtime-v0.3.4-macos-arm64.tar.gz
+shasum -a 256 ai-security-runtime-v0.3.9-macos-arm64.tar.gz
+tar -xzf ai-security-runtime-v0.3.9-macos-arm64.tar.gz
 cd security-check
 bundle="$(pwd)"
 exe="$bundle/security-check"

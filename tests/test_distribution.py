@@ -42,7 +42,7 @@ def test_current_install_examples_follow_single_version_source():
     for platform, extension in [('windows-x64', '.zip'), ('macos-arm64', '.tar.gz'), ('macos-x64', '.tar.gz')]:
         assert f'ai-security-runtime-v{__version__}-{platform}{extension}' in readme
     assert f'ai-security-runtime-v{__version__}-macos-arm64.tar.gz' in guide
-    assert 'Developer Alpha' in readme
+    assert f'{__version__} / Official release' in readme
 
 
 def test_generators_require_real_versioned_release_metadata(tmp_path):

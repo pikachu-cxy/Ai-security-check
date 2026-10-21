@@ -6,7 +6,7 @@ Security checks, contextual review, and traceable fix verification for AI coding
 
 AI Security Runtime checks the changes made during a development task, combines scanner results with your host agent's review of relevant code, and explains concrete risks, existing safeguards, and unknowns. You choose whether to fix, defer, or exclude a finding. The agent makes authorized changes; the Runtime retains the original finding and verification evidence.
 
-**Current source: 0.3.9 / Developer Alpha.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
+**Current source: 0.3.9 / Official release.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
 ## Documentation
 
@@ -33,13 +33,13 @@ Full integration includes **Runtime + MCP + companion Skill + Hooks**. [MCP-only
 
 ## Install
 
-Native bundles for source version 0.3.9 use the following names. Availability is determined by the public release assets, not this naming table:
+Version 0.3.9 is the official release for Windows x64, Mac Apple Silicon (M series), and Mac Intel. The release pipeline publishes these downloads only after regression, compliance, package-integrity, and all three native acceptance gates pass:
 
 | Platform | Bundle |
 | --- | --- |
-| Windows x64 | `ai-security-runtime-v0.3.9-windows-x64.zip` |
-| Mac Apple Silicon | `ai-security-runtime-v0.3.9-macos-arm64.tar.gz` |
-| Mac Intel | `ai-security-runtime-v0.3.9-macos-x64.tar.gz` |
+| Windows x64 | [ai-security-runtime-v0.3.9-windows-x64.zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip) |
+| Mac Apple Silicon | [ai-security-runtime-v0.3.9-macos-arm64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz) |
+| Mac Intel | [ai-security-runtime-v0.3.9-macos-x64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz) |
 
 ### Windows x64
 
@@ -56,6 +56,8 @@ Download the full bundle and its matching SHA256 file from the [downloads page](
 The full bundle includes Python; no separate Python, pip, Node.js, or virtual environment is required. Keep the entire folder. Installation starts preparing scanner components; initial downloads may continue in the background.
 
 ### macOS: Apple Silicon or Intel
+
+For the official full bundle, download the matching archive above, verify its `.sha256`, extract it, and run `./security-check/security-check install codex` (or `install cursor`) from the extraction directory. The commands below remain a separate optional managed-installation trial.
 
 Choose **one** command for your editor:
 

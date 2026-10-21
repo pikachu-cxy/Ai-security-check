@@ -14,6 +14,10 @@ on:
       - 'website/**'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Official release']
+    types: [completed]
+    branches: [feature/runtime-mvp]
 
 permissions:
   contents: read
@@ -24,6 +28,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     outputs:
       trial_ready: ${{ steps.trial-assets.outputs.ready }}
