@@ -27,14 +27,31 @@ def register(subparsers):
     dashboard.add_argument('--project', type=Path, help='Explicit project selector; never a scan target')
     dashboard.add_argument('--chat-log', type=Path, help='Explicit current chat usage log; no directory discovery')
     dashboard.add_argument('--port', type=int, default=0, help='Local port; 0 selects a free port')
-    for child in (status, compare, imported, monitor, report, dashboard):
+    start = actions.add_parser('start', help='Open monitoring for the launching Codex chat; automatically match its log')
+    start.add_argument('--project', type=Path)
+    worker = actions.add_parser('monitor-worker', help=__import__('argparse').SUPPRESS)
+    worker.add_argument('--job', type=Path, required=True)
+    for child in (status, compare, imported, monitor, report, dashboard, start):
         child.add_argument('--db', type=Path, help='Explicit metrics database for an isolated experiment')
         child.add_argument('--json', action='store_true')
 
 
 def execute(args):
     from .context_cost import ContextCostStore
-    store = ContextCostStore(args.db)
+    store = ContextCostStore(getattr(args, 'db', None))
+    if args.context_action == 'monitor-worker':
+        from .monitoring.launch import run_worker
+        run_worker(args.job)
+        return 0
+    if args.context_action == 'start':
+        from .monitoring.launch import start_from_environment
+        try:
+            data = start_from_environment(args.project, store=store)
+        except (OSError, ValueError, TypeError, KeyError):
+            data = dict(status='UNAVAILABLE', reason_code='MONITOR_START_UNAVAILABLE',
+                message='请在要监控的 Codex 聊天中启动；无法确认聊天时不会猜测日志。')
+        print(json.dumps(data, ensure_ascii=False))
+        return 0 if data['status'] == 'AVAILABLE' else 2
     if args.context_action == 'dashboard':
         from .monitoring.server import serve
         serve(store, project=args.project, chat_log=args.chat_log, port=args.port)

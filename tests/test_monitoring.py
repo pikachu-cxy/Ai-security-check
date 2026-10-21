@@ -279,12 +279,36 @@ def test_product_starts_with_monitor_source_files_physically_absent(tmp_path):
     shutil.copytree(source, tmp_path/'security_runtime',
                     ignore=lambda directory, names: set(names) & optional)
     env = dict(os.environ, PYTHONPATH=str(tmp_path))
-    command = ('import asyncio,json; from security_runtime.cli import main; '
-               'assert main(["runtime-info","--json"])==0; '
-               'from security_runtime.global_mcp import create_global_server; '
-               's=create_global_server(workspaces=object(),host="codex"); '
-               'names={t.name for t in asyncio.run(s.list_tools())}; '
-               'assert {"get_runtime_info","scan_project","begin_security_task"} <= names')
+    command = '''
+import asyncio
+from pathlib import Path
+from security_runtime.cli import main
+assert main(['runtime-info', '--json']) == 0
+from security_runtime.global_mcp import create_global_server
+s = create_global_server(workspaces=object(), host='codex')
+names = {t.name for t in asyncio.run(s.list_tools())}
+assert {'get_runtime_info', 'scan_project', 'begin_security_task'} <= names
+assert 'start_usage_monitor' not in names
+from security_runtime.runtime import SecurityRuntime
+from security_runtime.scanners import ScannerRegistry
+from security_runtime.dynamic_function import NativeFunctionScanner
+from security_runtime.storage import SQLiteStore
+from security_runtime.scan_input import scoped_request
+import tempfile
+temporary = tempfile.TemporaryDirectory(prefix='monitor-removal-')
+project = Path(temporary.name).resolve()
+(project / 'demo.js').write_text('eval(userInput);', encoding='utf-8')
+engine = SecurityRuntime(ScannerRegistry([NativeFunctionScanner()]), store=SQLiteStore(Path('scan.sqlite3')))
+result = engine.scan(project, 'quick', request=scoped_request(project, ['demo.js']))
+assert any(run.scanner == NativeFunctionScanner.scanner_id and run.status == 'SUCCESS' for run in result.scanner_runs), str(result.scanner_runs) + str(result.scanner_diagnostics)
+from security_runtime.task_security import TaskSecurityService
+from security_runtime.hook_state import HookStateStore
+tasks = TaskSecurityService(engine, HookStateStore(Path('hooks').absolute()))
+task = tasks.begin(project, 'without-monitor')
+assert task['status'] == 'ACTIVE'
+assert tasks.finish(project, task['task_ref'])['status'] == 'NO_CHANGES'
+temporary.cleanup()
+'''
     result = subprocess.run([sys.executable, '-c', command], cwd=tmp_path, env=env,
                             capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

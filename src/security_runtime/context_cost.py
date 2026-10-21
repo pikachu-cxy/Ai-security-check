@@ -34,7 +34,7 @@ MAX_MEASURE_BYTES = 64 * 1024 * 1024
 MAX_OBSERVATION_TEXT_BYTES = 256 * 1024
 MONITOR_MODES = ('off', 'basic', 'debug')
 RUN_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}\Z')
-TOOL_NAMES = frozenset('''scan_diff scan_project scan_files get_findings prepare_triage submit_triage
+TOOL_NAMES = frozenset('''start_usage_monitor scan_diff scan_project scan_files get_findings prepare_triage submit_triage
 get_runtime_info get_runtime_guidance get_professional_guidance get_scan_preparation_status
 get_security_summary prepare_task_triage get_triage begin_security_task finish_security_task
 prepare_task_security_review get_task_review_plan get_task_review_method submit_task_review_batch
@@ -322,7 +322,7 @@ class ContextCostStore:
 
     def record_call(self, tool_name, result, *, elapsed_ms=0, transport='workspace',
                     connection_id='', workspace=None, run_label=None, succeeded=True,
-                    started_at=None, finished_at=None, mode=None):
+                    started_at=None, finished_at=None, mode=None, chat_owner=None):
         try:
             setting = self.monitoring()
             if setting['status'] != 'AVAILABLE':
@@ -331,6 +331,12 @@ class ContextCostStore:
                 return {'status': 'DISABLED'}
             # A call started in basic mode cannot acquire details after a switch.
             debug = setting['mode'] == 'debug' and mode in (None, 'debug')
+            if not debug and chat_owner is not None:
+                try:
+                    from .monitoring.active import enabled
+                    debug = enabled(self, chat_owner)
+                except Exception:
+                    pass
             observation_started = time.monotonic()
             label = globals()['run_label'](run_label if run_label is not None else setting.get('run'))
             mapped, sizes = _measure(result)
@@ -345,6 +351,10 @@ class ContextCostStore:
                               workspace_hash=digest('workspace', os.path.normcase(os.path.abspath(str(workspace)))) if workspace else None,
                               build=_build_metadata(), **sizes, **_observations(mapped, digest, tool_name=tool_name))
                 record.update(run_label=label, mode='debug' if debug else 'basic')
+                if chat_owner is not None:
+                    from .task_ownership import valid_owner
+                    if valid_owner(chat_owner) and chat_owner['host'] in {'codex', 'cursor'}:
+                        record['chat_hash'] = digest('chat', chat_owner['host'] + ':' + chat_owner['session'])
                 if debug:
                     valid_time = (type(started_at) in (int, float) and type(finished_at) in (int, float)
                                   and math.isfinite(started_at) and math.isfinite(finished_at)

@@ -23,8 +23,9 @@ def canonical_project(path):
 
 
 class HostReader:
-    def __init__(self, path=None, project=None):
+    def __init__(self, path=None, project=None, *, expected_identity=None):
         self.path = Path(path) if path is not None else None
+        self.expected_identity = expected_identity
         self.project = canonical_project(project) if project is not None else None
         self.offset = 0
         self.identity = None
@@ -51,6 +52,8 @@ class HostReader:
             value = payload.get('id') if kind == 'session_meta' else row.get('thread_id')
             if isinstance(value, str) and 0 < len(value) <= 256:
                 identity = hashlib.sha256(value.encode()).hexdigest()
+                if self.expected_identity is not None and identity != self.expected_identity:
+                    raise ValueError('CHAT_IDENTITY_MISMATCH')
                 if self.identity is not None and self.identity != identity:
                     raise ValueError('CHAT_IDENTITY_CHANGED')
                 self.identity = identity

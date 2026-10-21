@@ -64,6 +64,12 @@ class CodexEventAdapter:
         context = VerifiedHostContext(self.host, root, identity(os.path.normcase(str(root))),
             identity(arguments['session_id']), identity(invocation) if invocation else None,
             self.capabilities, arguments['session_id'])
+        if not legacy:
+            try:
+                from .context_cost_mcp import bind_verified_chat
+                bind_verified_chat(dict(host=self.host, session=context.session_binding))
+            except Exception:
+                pass  # Optional attribution never changes validated Hook behavior.
         return NormalizedHostEvent(self.events[expected], context, operation,
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
             stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)

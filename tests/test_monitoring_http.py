@@ -100,3 +100,21 @@ def test_stopping_page_only_stops_sidecar(server):
     with request(server, 'api/stop', {}, server.origin) as r:
         assert json.load(r)['stopped'] == 'MONITOR_ONLY'
     assert store.monitoring()['mode'] == 'debug'
+
+
+def test_finish_export_requires_same_origin_and_downloads_only_metadata(server):
+    from io import BytesIO
+    from zipfile import ZipFile
+    server, _ = server
+    with request(server, 'api/task', {'action':'start'}, server.origin):
+        pass
+    with pytest.raises(HTTPError) as error:
+        request(server, 'api/finish-export', {}, 'https://attacker.example')
+    assert error.value.code == 403
+    with request(server, 'api/finish-export', {}, server.origin) as response:
+        assert response.headers['Content-Type'] == 'application/zip'
+        assert 'attachment' in response.headers['Content-Disposition']
+        with ZipFile(BytesIO(response.read())) as archive:
+            report = json.loads(archive.read('usage-report.json'))
+    assert report['trial']['usage'] is None
+    assert report['trial']['window']['finished_at'] is not None

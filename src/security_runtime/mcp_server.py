@@ -159,6 +159,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     impact_service = application.impact_service
     issued_tasks = application.issued_tasks
     native_session_bindings = application.native_session_bindings
+    try:
+        from .monitoring.mcp import register as register_usage_monitor
+        register_usage_monitor(server, registry, application=application)
+    except Exception:
+        pass  # Missing/broken optional monitoring never prevents Core startup.
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_closeout_check(workspace_path: str | None = None, files: list[str] | None = None,

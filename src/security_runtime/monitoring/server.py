@@ -33,10 +33,12 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Never log capability URLs, input or paths.
 
     def reply(self, status, value, content_type='application/json; charset=utf-8'):
-        payload = value.encode('utf-8') if isinstance(value, str) else json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8')
+        payload = value if isinstance(value, bytes) else value.encode('utf-8') if isinstance(value, str) else json.dumps(value, ensure_ascii=False, allow_nan=False).encode('utf-8')
         self.send_response(status)
         self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(payload)))
+        if content_type == 'application/zip':
+            self.send_header('Content-Disposition', 'attachment; filename="trial-consumption-report.zip"')
         self.send_header('Cache-Control', 'no-store')
         self.send_header('Referrer-Policy', 'no-referrer')
         self.send_header('X-Content-Type-Options', 'nosniff')
@@ -89,7 +91,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, self.server.service.set_mode(body['mode']))
             if route[0] == '/api/task' and set(body) == {'action'}:
                 return self.reply(200, self.server.service.task(body['action']))
+            if route[0] == '/api/finish-export' and not body:
+                from .report import report_bundle
+                return self.reply(200, report_bundle(self.server.service.finish_report()), 'application/zip')
             if route[0] == '/api/stop' and not body:
+                release = getattr(self.server.service, 'release_monitor', None)
+                if release is not None:
+                    release()
                 self.reply(200, dict(status='AVAILABLE', stopped='MONITOR_ONLY'))
                 threading.Thread(target=self.server.shutdown, daemon=True).start()
                 return

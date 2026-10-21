@@ -27,11 +27,13 @@ def entry_kind(tool):
 
 
 class MonitorService:
-    def __init__(self, store, *, project=None, chat_log=None, run=None):
+    def __init__(self, store, *, project=None, chat_log=None, run=None, chat_owner=None):
         self.store = store
         self.project = canonical_project(project) if project is not None else None
         self.run = run
-        self.reader = HostReader(chat_log, project)
+        self.chat_owner = chat_owner
+        self.reader = HostReader(chat_log, project,
+            expected_identity=chat_owner['session'] if chat_owner else None)
         self.lock = threading.RLock()
         self.started_at = time.time()
         self.window = None
@@ -40,14 +42,18 @@ class MonitorService:
         self.window_host_end = None
         self.window_monotonic_start = None
         self.window_elapsed_ms = None
+        self.window_token_gap = False
         self.samples = []
+        self.exported_report = None
 
     def task(self, action):
         with self.lock:
             host = self.reader.poll()
             if action == 'start':
+                self.exported_report = None
                 self.window = dict(started_at=time.time(), finished_at=None)
                 self.window_baseline = host['usage'] if host['status'] == 'AVAILABLE' else None
+                self.window_token_gap = self.window_baseline is None
                 self.window_host_identity = self.reader.identity
                 self.window_host_end = None
                 self.window_monotonic_start = time.monotonic()
@@ -78,6 +84,40 @@ class MonitorService:
         except Exception:
             return []
 
+    def _chat_events(self, events):
+        if not self.chat_owner or not events:
+            return []
+        try:
+            selector = self.store._digest(self.store._key(), 'chat',
+                self.chat_owner['host'] + ':' + self.chat_owner['session'])
+            return [item for item in events if item.get('chat_hash') == selector]
+        except Exception:
+            return []
+
+    def finish_report(self):
+        """Freeze one report at the last observed usage; a repeat is idempotent."""
+        with self.lock:
+            if self.exported_report is not None:
+                return self.exported_report
+            if self.window is None:
+                raise ValueError('MONITOR_WINDOW_REQUIRED')
+            if self.window['finished_at'] is None:
+                self.task('stop')
+            from ..context_cost import _build_metadata
+            self.exported_report = dict(schema_version=1, kind='TRIAL_CONSUMPTION_REPORT',
+                build=_build_metadata(), trial=self.snapshot('task'),
+                project_tools=self.snapshot('project'),
+                measurement_notes=[
+                    'token 为本聊天起止最近已报告计数的差值；不是产品专属 token 或最终账单。',
+                    '宿主用量可能延迟更新；报告保留用量更新时间与实际结束时间。',
+                    '工具仅列可关联的保留记录；无会话关联的项目调用不能归入本聊天。',
+                    '累计工具耗时可能并发重叠；窗口时长包含用户等待。',
+                    '开发/安全专属 token、模型纯计算及未测内部阶段保持未知。'])
+            release = getattr(self, 'release_monitor', None)
+            if release is not None:
+                release()
+            return self.exported_report
+
     def snapshot(self, scope='all'):
         if scope not in SCOPES:
             raise ValueError('INVALID_SCOPE')
@@ -85,14 +125,21 @@ class MonitorService:
             started = time.monotonic()
             now = time.time()
             host = self.reader.poll()
+            if (self.window is not None and self.window['finished_at'] is None
+                    and self.window_baseline is None and host['status'] == 'AVAILABLE'):
+                # A newly opened chat may report its first usage after launch.
+                # Start from that observation and retain the unmeasured prefix.
+                self.window_baseline = host['usage']
+                self.window_host_identity = self.reader.identity
             saved = self.store.snapshot(self.run)
             events = saved.get('events', [])
             unassociated = sum(not item.get('workspace_hash') for item in events)
             matching = self._project_events(events)
+            chat_events = self._chat_events(events)
             window = dict(self.window) if self.window is not None else None
             window_untimed = 0
             selected = events if scope == 'all' else matching if scope == 'project' else [
-                item for item in events if item['tool'] in SCAN_ENTRIES] if scope == 'scan' else []
+                item for item in events if item['tool'] in SCAN_ENTRIES] if scope == 'scan' else chat_events if scope == 'chat' else []
             host_usage = host['usage'] if scope in {'all', 'chat'} else host['project_usage'] if scope == 'project' else None
             token_scope = 'CURRENT_CHAT_CUMULATIVE' if scope in {'all', 'chat'} else 'SELECTED_CHAT_PROJECT_DELTAS_PARTIAL'
             if scope == 'scan':
@@ -100,7 +147,7 @@ class MonitorService:
             if scope == 'task':
                 token_scope = 'MANUAL_WINDOW_CURRENT_CHAT_COUNTER_DELTA; NOT_PRODUCT_TASK_IDENTITY'
                 if window:
-                    candidates = matching if self.project else events
+                    candidates = self._chat_events(matching if self.project else events) if self.chat_owner else matching if self.project else events
                     # Basic/legacy records cannot be assigned to or excluded
                     # from a manual window. Keep timed details, not false totals.
                     window_untimed = sum(item.get('started_at') is None or item.get('finished_at') is None
@@ -144,13 +191,29 @@ class MonitorService:
                 self.window_elapsed_ms is not None else max(0, (time.monotonic()-self.window_monotonic_start)*1000), 3)
             known = (saved['status'] == 'AVAILABLE' and scope != 'chat'
                      and (scope != 'task' or window is not None and not window_untimed))
-            return dict(status='AVAILABLE' if saved['status'] == 'AVAILABLE' and not saved.get('invalid') and not window_untimed else 'PARTIAL',
-                generated_at=now, scope=scope, monitoring=self.store.monitoring(),
+            if scope == 'chat' and self.chat_owner:
+                known = saved['status'] == 'AVAILABLE'
+            monitoring_state = self.store.monitoring()
+            collection_disabled = self.chat_owner is not None and monitoring_state.get('mode') == 'off'
+            if collection_disabled and scope in {'chat', 'task'}:
+                known = False
+            unlinked = []
+            if self.chat_owner and scope in {'chat', 'task'}:
+                unlinked = [item for item in (matching if self.project else events) if not item.get('chat_hash')
+                    and (scope != 'task' or window is not None and
+                        (item.get('started_at') is None or item.get('finished_at') is None or
+                         item['started_at'] >= window['started_at'] and item['finished_at'] <= (window['finished_at'] or now)))]
+            if scope == 'task' and self.chat_owner:
+                token_scope = 'EXACT_CHAT_OBSERVED_WINDOW_DELTA; NOT_PRODUCT_ONLY'
+            token_gap = self.chat_owner is not None and scope == 'task' and (self.window_token_gap or host_usage is None)
+            return dict(status='AVAILABLE' if saved['status'] == 'AVAILABLE' and not saved.get('invalid') and not window_untimed and not unlinked and not token_gap and not collection_disabled else 'PARTIAL',
+                generated_at=now, scope=scope, monitoring=monitoring_state,
                 project_name=self.project.rsplit('/', 1)[-1].rsplit('\\', 1)[-1] if self.project else None,
                 run=self.run, host=host, usage=host_usage, token_scope=token_scope,
                 tool_scope='EXPLICIT_SCAN_ENTRY_CALLS; NOT_ALL_INTERNAL_SCANS; NOT_ENGINE_TIME' if scope == 'scan' else
                     'SELECTED_RETAINED_RUNS' if scope == 'all' else
                     'WORKSPACE_PARAMETER_ASSOCIATION' if scope == 'project' else
+                    'EXACT_CHAT_LINKED_RECORDS_ONLY; PARTIAL_COVERAGE' if self.chat_owner and scope in {'chat', 'task'} else
                     'UNLINKED_TO_CHAT' if scope == 'chat' else 'TIME_WINDOW_NOT_PROVEN_TASK_OWNERSHIP',
                 tools_known=known, calls=len(selected) if known else None,
                 elapsed_ms=sum(item['elapsed_ms'] for item in selected) if known else None,
@@ -165,6 +228,11 @@ class MonitorService:
                 invalid_records=saved.get('invalid', 0), unassociated_project_calls=unassociated,
                 project_observed_calls=len(matching), timing=timing_data, window=window,
                 window_untimed_retained_calls=window_untimed,
+                window_token_prefix_unmeasured=self.window_token_gap if scope == 'task' else False,
+                collection_disabled=collection_disabled,
+                unassociated_chat_calls=len(unlinked),
+                chat_binding='EXACT_SESSION_ID' if self.chat_owner else 'EXPLICIT_FILE',
+                automatic_window=self.chat_owner is not None,
                 window_elapsed_ms=window_elapsed,
                 host_samples=list(self.samples) if scope in {'all', 'chat'} else [],
                 monitor_read_ms=round((time.monotonic()-started)*1000, 3),
