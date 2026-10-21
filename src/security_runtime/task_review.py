@@ -267,9 +267,11 @@ class TaskReviewCoordinator:
     def method(self, workspace, ref, session):
         service = self.service
         root = service.root(workspace)
-        require_record_protocol(service.load(root, ref))
         with service.hooks.lock(root) as acquired:
             if not acquired:
+                # Preserve owner/protocol rejection even under contention;
+                # the successful path authenticates its one locked record.
+                require_record_protocol(service.load(root, ref))
                 return dict(status='BUSY', scanner_run=False)
             record = service._session(root, ref, session, full_fresh=False)
             guide = self._method()
@@ -280,9 +282,9 @@ class TaskReviewCoordinator:
     def page(self, workspace, ref, session, cursor=0, limit=10):
         service = self.service
         root = service.root(workspace)
-        require_record_protocol(service.load(root, ref))
         with service.hooks.lock(root) as acquired:
             if not acquired:
+                require_record_protocol(service.load(root, ref))
                 return dict(status='BUSY', scanner_run=False)
             record = service._session(root, ref, session, full_fresh=False)
             packet = plans.plan_page(record, cursor, limit)
@@ -296,9 +298,9 @@ class TaskReviewCoordinator:
         from .task_security import _clean
         service = self.service
         root = service.root(workspace)
-        require_record_protocol(service.load(root, ref))
         with service.hooks.lock(root) as acquired:
             if not acquired:
+                require_record_protocol(service.load(root, ref))
                 return dict(status='BUSY', scanner_run=False)
             record = service._session(root, ref, session, full_fresh=False)
             if not isinstance(limitations, list) or len(limitations) > 30:
@@ -313,9 +315,9 @@ class TaskReviewCoordinator:
         from .task_security import TaskContextError, _supported, _environment, hash_bytes, digest_value, _merge_spans
         service = self.service
         root = service.root(workspace)
-        require_record_protocol(service.load(root, ref))
         with service.hooks.lock(root) as acquired:
             if not acquired:
+                require_record_protocol(service.load(root, ref))
                 return dict(status='BUSY', scanner_run=False)
             record = service._session(root, ref, session, full_fresh=False)
             def reject(reason, message, recoverable=True, details=None):
