@@ -90,6 +90,7 @@ class MonitorService:
             unassociated = sum(not item.get('workspace_hash') for item in events)
             matching = self._project_events(events)
             window = dict(self.window) if self.window is not None else None
+            window_untimed = 0
             selected = events if scope == 'all' else matching if scope == 'project' else [
                 item for item in events if item['tool'] in SCAN_ENTRIES] if scope == 'scan' else []
             host_usage = host['usage'] if scope in {'all', 'chat'} else host['project_usage'] if scope == 'project' else None
@@ -99,8 +100,13 @@ class MonitorService:
             if scope == 'task':
                 token_scope = 'MANUAL_WINDOW_CURRENT_CHAT_COUNTER_DELTA; NOT_PRODUCT_TASK_IDENTITY'
                 if window:
+                    candidates = matching if self.project else events
+                    # Basic/legacy records cannot be assigned to or excluded
+                    # from a manual window. Keep timed details, not false totals.
+                    window_untimed = sum(item.get('started_at') is None or item.get('finished_at') is None
+                                        for item in candidates)
                     # A tool must start and end inside this observation window.
-                    selected = [item for item in (matching if self.project else events)
+                    selected = [item for item in candidates
                                 if item.get('started_at') is not None and item.get('finished_at') is not None
                                 and item['started_at'] >= window['started_at']
                                 and item['finished_at'] <= (window['finished_at'] or now)]
@@ -136,8 +142,9 @@ class MonitorService:
             timing_data = timing(selected)
             window_elapsed = None if window is None else round(self.window_elapsed_ms if
                 self.window_elapsed_ms is not None else max(0, (time.monotonic()-self.window_monotonic_start)*1000), 3)
-            known = saved['status'] == 'AVAILABLE' and scope != 'chat' and (scope != 'task' or window is not None)
-            return dict(status='AVAILABLE' if saved['status'] == 'AVAILABLE' and not saved.get('invalid') else 'PARTIAL',
+            known = (saved['status'] == 'AVAILABLE' and scope != 'chat'
+                     and (scope != 'task' or window is not None and not window_untimed))
+            return dict(status='AVAILABLE' if saved['status'] == 'AVAILABLE' and not saved.get('invalid') and not window_untimed else 'PARTIAL',
                 generated_at=now, scope=scope, monitoring=self.store.monitoring(),
                 project_name=self.project.rsplit('/', 1)[-1].rsplit('\\', 1)[-1] if self.project else None,
                 run=self.run, host=host, usage=host_usage, token_scope=token_scope,
@@ -157,6 +164,7 @@ class MonitorService:
                 events=details, details_omitted=max(0, len(selected)-len(details)),
                 invalid_records=saved.get('invalid', 0), unassociated_project_calls=unassociated,
                 project_observed_calls=len(matching), timing=timing_data, window=window,
+                window_untimed_retained_calls=window_untimed,
                 window_elapsed_ms=window_elapsed,
                 host_samples=list(self.samples) if scope in {'all', 'chat'} else [],
                 monitor_read_ms=round((time.monotonic()-started)*1000, 3),
