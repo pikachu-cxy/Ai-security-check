@@ -94,7 +94,7 @@ class PluginE2ETests(unittest.TestCase):
                 async with stdio_client(params) as (read, write):
                     async with ClientSession(read, write) as client:
                         await client.initialize()
-                        response = await client.call_tool("scan_diff", {"workspace_path": str(root)})
+                        response = await client.call_tool("scan_diff", {"workspace_path": str(root), "summary": False})
                         self.assertFalse(response.isError, response)
                         payload = response.structuredContent or json.loads(response.content[0].text)
                         payload = payload.get("result", payload)

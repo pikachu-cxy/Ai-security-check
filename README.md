@@ -2,7 +2,7 @@
 
 在 AI 编程过程中检查本次开发改动，结合静态检查与 Agent 对关联代码的复核，说明具体风险、已有防护和未知范围。用户选择修复、稍后处理或排除；Agent 在授权范围内编辑，Runtime 保存原问题与复查记录。
 
-当前源码及最新公开发行版本为 **0.3.8 / Developer Alpha**，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
+当前源码版本为 **0.3.9 / Developer Alpha**，公开安装包以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
 
 ## 产品与使用文档
 
@@ -16,27 +16,15 @@
 
 ## 当前源码状态
 
-0.3.8 已公开发布，三平台完整包及配套校验入口见下方「使用完整安装包」：
-`ai-security-runtime-v0.3.8-windows-x64.zip`、`ai-security-runtime-v0.3.8-macos-arm64.tar.gz`、
-`ai-security-runtime-v0.3.8-macos-x64.tar.gz`。
+0.3.9 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
 
-0.3.8 已包含扫描体验改进：按需加载并去重工作流指导、
-共用 MCP 阶段进度与计时、明确文件范围扫描，以及验证源码/规则/引擎/数据身份后复用完整项目扫描结果。
-明确要求重新扫描时始终重跑；不能验证复用条件时回退扫描。复用不代替必要的风险复核或修复授权。
-Windows/macOS、Codex/Cursor 共用核心实现，实时进度显示取决于宿主支持。
-范围、复用条件和计时含义见[扫描体验与范围](docs/guides/SCAN_EXPERIENCE.zh-CN.md)。
+监控是可选模块：失败、停止或从源码交付中整体移除，不改变扫描、任务复核和修复授权。报告区分聊天 token、工具耗时和观察窗口时长；不能可靠拆分的纯开发 / 纯安全 token 保持未知。
 
-本次 0.3.8 更新包新增紧凑扫描摘要、完整证据交接预算与重复源码共享，以及本地上下文开销监测。
-Codex CLI 实际 token 用量通过独立的显式导入读取，不影响其他 MCP 宿主；
-监测只保存统计元数据，字节缩减与真实 token 节省分开报告。用法见[监测指南](docs/guides/CONTEXT_COST_MONITORING.zh-CN.md)。
+本版同时修复长行证据截断：新任务完整保存脱敏代码，超大单行按实际响应大小分片，全部字符交付后才满足整行覆盖。保留响应和存储容量上限、源码版本校验及凭据脱敏；旧任务已经丢失的前像不补造。相关变更见[版本与进展](website/reference/changelog.md)。
 
-0.3.7 已发布修复：
+保留 0.3.8 已有的指导按需加载、紧凑摘要、分页、明确文件范围和有证据的扫描结果复用。复用不代替必要复核或修复授权。Windows/macOS、Codex/Cursor 共用核心实现，宿主实际 token 适配目前仅实现 Codex 本机日志。
 
-- 收窄源码证据脱敏：保留普通字符串、注释、字段名及普通网址，对识别出的密码、令牌、私钥等凭据值继续脱敏。Windows 与 macOS 共用同一实现。
-- 防止复核提前结束：必需源码窗口尚未读完或复核单元尚未提交时，要求 Agent 继续；真实证据缺失或预算耗尽时仍如实报告部分覆盖。
-- 新任务使用新脱敏策略；旧任务保持原策略和修改前证据，避免混用。更新安装后须重新连接宿主，Git 拉取源码不会自动升级独立安装的产品。
-
-0.3.7 的相关源码回归已有 697 项通过；0.3.8 的扫描体验改动也已完成相应开发回归。[首次 0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39386551651)使用精简发布模式。2026-10-20 的同版本安装包更新来自 `8d5d9a6`，复用已完成的 204 项相关定向测试，新增文档打包契约 13 项通过，并通过合规、包完整性及[三平台原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)。此前下载过 0.3.8 的用户请重新下载平台包及配套 SHA256，安装后重启宿主核对实际 `build_id`。普通发布默认仍执行完整回归。
+发行流程先运行 Windows/macOS 回归、合规和包完整性检查，再执行 Windows x64、Mac Apple Silicon 与 Mac Intel 三平台构建和原生验收，最后上传九项 Release 资产。公开完成状态以 Release 与 Actions 为准，不把源码提交或候选构建当作安装包发布。
 
 该版本同时包含已有兼容与恢复修复：
 
@@ -79,13 +67,13 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 使用完整安装包
 
-[v0.3.8 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 的平台包由[本次发布工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39386551651)构建，已通过精简回归、合规、包完整性及三平台原生验收，以下资产已公开：
+[v0.3.9 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
 
-- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-windows-x64.zip)
-- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-arm64.tar.gz)
-- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-macos-x64.tar.gz)
+- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip)
+- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz)
+- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz)
 
-三平台包来自同一发布提交 [`be65833`](https://github.com/pikachu-cxy/Ai-security-check/commit/be658339322d8b74554219901e1265034a146ae7)，源码身份和校验值见 Release 的 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/SHA256SUMS.txt)。升级时重新下载完整包及对应校验文件，不混用旧候选、旧摘要或不同版本 Skill。当前仍为预发行试用版，签名、公证、macOS 真机和 Cursor 桌面验收单独记录。
+三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，在解压目录执行下列命令。由 Codex 辅助安装时保留当前聊天，安装及准备完成后再退出并重启，使新连接生效：
 

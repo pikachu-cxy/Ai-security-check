@@ -42,7 +42,7 @@ Mac 的两种安装方式路径不同，不要混用。以下默认展示 Window
 ```
 :::
 
-核对 `version`、`build_id` 和 `source_commit`。同样的 0.3.8 版本号可能对应完整包或 Mac 自动安装的不同构建，以[对应发行记录](../downloads.md#build-details)为准。
+核对 `version`、`build_id` 和 `source_commit`。完整包与 Mac 自动安装使用不同交付方式，版本相同也可能有不同构建，以[对应发行记录](../downloads.md#build-details)为准。
 
 ## 查看接入状态
 

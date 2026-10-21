@@ -258,3 +258,36 @@ print(json.dumps(service.begin(sys.argv[1], 'exited-process')))
     result = call(server, 'finish_security_task', workspace_path=str(root), task_ref=fresh)
     assert result['status'] == 'READY' and not result['limitations']
     assert legacy.store(root).get(ref) == before
+
+
+@pytest.mark.parametrize('code,output,error,expected', [
+    (0, 'Wed Oct 21 08:00:00 2026\n', '', 'darwin-Wed Oct 21 08:00:00 2026'),
+    (1, '', '', False),
+    (1, '', 'permission denied', None),
+    (0, 'unexpected', '', None),
+])
+def test_darwin_process_creation_probe_preserves_unknown_and_absent(
+        monkeypatch, code, output, error, expected):
+    monkeypatch.setattr(own.os, 'name', 'posix')
+    monkeypatch.setattr(own.sys, 'platform', 'darwin')
+    monkeypatch.setattr(own.Path, 'is_dir', lambda self: False)
+    seen = []
+    def run(command, **options):
+        seen.append((command, options))
+        return subprocess.CompletedProcess(command, code, output, error)
+    monkeypatch.setattr(subprocess, 'run', run)
+    assert own.process_stamp(12345) == expected
+    assert seen[0][0] == ['/bin/ps', '-p', '12345', '-o', 'lstart=']
+    assert seen[0][1]['timeout'] == 1 and seen[0][1]['env']['LC_ALL'] == 'C'
+    assert own.process_stamp(True) is None and len(seen) == 1
+
+
+def test_darwin_process_probe_timeout_keeps_writer_unknown(monkeypatch):
+    monkeypatch.setattr(own.os, 'name', 'posix')
+    monkeypatch.setattr(own.sys, 'platform', 'darwin')
+    monkeypatch.setattr(own.Path, 'is_dir', lambda self: False)
+    def timeout(command, **options):
+        raise subprocess.TimeoutExpired(command, options['timeout'])
+    monkeypatch.setattr(subprocess, 'run', timeout)
+    assert own.process_stamp(12345) is None
+    assert not own.writer_gone({'pid': 12345, 'stamp': 'previous'})

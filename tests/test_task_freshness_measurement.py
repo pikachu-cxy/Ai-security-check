@@ -12,8 +12,8 @@ from test_task_security import service, prepared
 def test_hash_only_capture_preserves_inventory_hashes_and_failures(service, monkeypatch):
     s, root, _ = service
     (root/'binary.py').write_bytes(b'\0binary')
-    # A long identifier is fully masked as a possible credential. Exercise
-    # actual display truncation with ordinary source operators instead.
+    # Long public source is retained in full, while hash-only capture must
+    # produce the same source identities without materializing any text.
     (root/'wide.py').write_text('value = '+'1 + '*200+'1\n')
     text = ts.capture(root)
     calls = []
@@ -22,7 +22,8 @@ def test_hash_only_capture_preserves_inventory_hashes_and_failures(service, monk
     assert not calls and digest['texts'] == {} and digest['text_truncations'] == {}
     for key in ('hashes','limitations','inventory','inventory_complete','read_priority'):
         assert digest[key] == text[key]
-    assert text['text_truncations']['wide.py']
+    assert not text['text_truncations']
+    assert len(text['texts']['wide.py'][0]) > 600
 
 
 def test_v3_read_checks_and_sanitizes_only_requested_source(service, monkeypatch):

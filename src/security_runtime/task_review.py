@@ -165,8 +165,12 @@ class TaskReviewCoordinator:
             if record.get('review_plan'):
                 if service.now() > record['review_deadline']:
                     plans.renew_activity(record, now=service.now(), resume=True)
-            elif record.get('review_deadline', float('inf')) < service.now():
+            elif (record.get('review_deadline', float('inf')) < service.now()
+                    and not record.get('pending_review_revision')):
                 return dict(status='EXPIRED', task_ref=ref, review_required=False)
+            # A refinish archives the old plan. Its signed pending revision is
+            # validated by revision_ledger below, which renews only the idle
+            # lease and retains the original baseline and cumulative spending.
             if not record.get('review_plan'):
                 unplanned = copy.deepcopy(record)
                 # Hydrate only task changes for hunk planning, never copy whole

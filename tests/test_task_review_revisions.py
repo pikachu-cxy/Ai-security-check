@@ -142,6 +142,30 @@ def test_new_revision_resumes_idle_activity_without_resetting_task_spending():
     assert ledger['total_bytes'] == original['review_ledger']['total_bytes']
 
 
+def test_service_refinish_after_idle_resumes_original_revision_and_ledger(service):
+    tasks, root, _ = service
+    clock = [tasks.now()]
+    tasks.now = lambda: clock[0]
+    ref = tasks.begin(root, 'idle-refinish')['task_ref']
+    (root/'routes.py').write_text('allowed = policy.check(user)\n')
+    first = tasks.prepare(root, ref, protocol_version=3)
+    review_all(tasks, root, ref, first)
+    original = tasks.load(root, ref)
+    clock[0] = original['review_deadline'] + 1
+    (root/'routes.py').write_text('allowed = policy.enforce(user)\n')
+    assert tasks.finish(root, ref)['status'] == 'READY'
+    resumed = tasks.prepare(root, ref, protocol_version=3)
+    assert resumed['status'] == 'REVIEW_REQUIRED'
+    current = tasks.load(root, ref)
+    assert current['baseline'] == original['baseline']
+    assert current['review_revision'] == 2
+    assert current['review_ledger']['reads'] == original['review_ledger']['reads']
+    assert current['review_ledger']['total_bytes'] > original['review_ledger']['total_bytes']
+    assert current['review_ledger']['activity_lease']['resumes'] == 1
+    assert all(unit['status'] == 'PENDING' for unit in current['review_plan']['units'])
+    _review_all(tasks, root, ref, resumed)
+
+
 def _review_all(tasks, root, ref, packet):
     review_all(tasks, root, ref, packet)
     result = tasks.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])

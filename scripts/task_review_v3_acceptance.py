@@ -101,6 +101,11 @@ class V3Review:
         """A fixture can record partial work, never claim observed host reasoning."""
         assert limitations
         for unit in await self.plan():
+            # Partial host reasoning does not excuse readable source obligations.
+            for window in unit['required_windows']:
+                source = self.sources[window['source_ref']]
+                version = 'CURRENT' if source['location_version'] == 'CURRENT_TASK_END' else 'BEFORE_TASK'
+                await self.read(source['path'], window['start_line'], window['end_line'], source_version=version)
             batch = await self._call('submit_task_review_batch', review_session=self.session,
                 unit_ids=[unit['unit_id']], coverage='PARTIAL', limitations=limitations)
             assert batch['status'] == 'BATCH_RECORDED' and not batch['scanner_run']

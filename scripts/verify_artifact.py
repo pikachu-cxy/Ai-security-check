@@ -53,8 +53,8 @@ def verify_skill_payload(skill_root: Path) -> None:
 
 
 def verify_host_instructions(instructions: str | None) -> None:
-    from security_runtime.host_guidance import HOST_INSTRUCTIONS
-    if instructions != HOST_INSTRUCTIONS:
+    from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
+    if instructions != MCP_INSTRUCTIONS:
         raise ValueError('Standalone host workflow instructions mismatch')
 
 
@@ -75,6 +75,18 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 if runtime.isError:raise ValueError('Standalone runtime capability discovery failed')
                 runtime_data=runtime.structuredContent or json.loads(runtime.content[0].text)
                 runtime_data=runtime_data.get('result',runtime_data)
+                from security_runtime.guidance_catalog import get_runtime_guidance
+                for topic in ('core', 'runtime-workflow', 'repair-impact'):
+                    delivered = await client.call_tool('get_runtime_guidance', {'topic': topic})
+                    if delivered.isError:
+                        raise ValueError(f'Standalone complete guidance unavailable: {topic}')
+                    guidance = delivered.structuredContent or json.loads(delivered.content[0].text)
+                    guidance = guidance.get('result', guidance)
+                    expected = get_runtime_guidance(topic)
+                    if (guidance['status'] != 'READY' or guidance['content'] != expected['content']
+                            or guidance['sha256'] != runtime_data['guidance_catalog']['topics'][topic]['sha256']
+                            or guidance['sha256'] != hashlib.sha256(guidance['content'].encode('utf-8')).hexdigest()):
+                        raise ValueError(f'Standalone complete guidance mismatch: {topic}')
                 compatibility = task_review_compatibility(runtime_data, names)
                 if compatibility['status'] != 'SUPPORTED':
                     raise ValueError(f"Standalone task review incompatible: {compatibility['reasons']}")
@@ -82,7 +94,7 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 if runtime_data['features']['task_fix_verify']!='v0.1':raise ValueError('Standalone task fix capability missing')
                 summary_before=await client.call_tool('get_security_summary',{})
                 if summary_before.isError: raise ValueError('Standalone security summary failed')
-                response = await asyncio.wait_for(client.call_tool("scan_diff", {}), timeout=120)
+                response = await asyncio.wait_for(client.call_tool("scan_diff", {'summary': False}), timeout=120)
                 if response.isError:
                     raise ValueError("Standalone MCP scan_diff failed")
                 payload = response.structuredContent or json.loads(response.content[0].text)

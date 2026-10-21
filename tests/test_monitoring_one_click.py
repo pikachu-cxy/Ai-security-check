@@ -116,7 +116,7 @@ def test_parallel_observations_are_bound_only_by_validated_context(source, monke
             bind_verified_chat(session_owner('codex', chat))
             await asyncio.sleep(delay)
             return {'status': 'AVAILABLE'}
-        request = SimpleNamespace(params=SimpleNamespace(name='get_security_summary', arguments={'workspace_path': str(project)}))
+        request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info', arguments={'workspace_path': str(project)}))
         return await observe_response(call, request, connection_id='SHARED_CONNECTION')
     async def both():
         return await asyncio.gather(run(CHAT, .02), run(OTHER, 0))

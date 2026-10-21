@@ -117,7 +117,7 @@ def start_monitor(project, owner, *, store=None, home=None, open_browser=True):
         unregister(store, owner, directory.name)
         raise
     ready = directory / 'ready.json'
-    deadline = time.monotonic() + 10
+    deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
         if ready.exists():
             no_links(ready)

@@ -309,7 +309,7 @@ def test_review_continuation_uses_current_assessment_and_keeps_saved_choices_qui
     server, _ = make_server(store, tmp_path)
     monkeypatch.setattr('security_runtime.finding_feedback.FindingFeedbackService.status',
                         lambda *args, **kwargs: state)
-    record = local_call(server, 'get_findings', scan_id='s1')[0]
+    record = local_call(server, 'get_findings', scan_id='s1', view='full')[0]
     assert ('review_continuation' in record) is expected
     if expected:
         assert record['review_continuation']['arguments'] == dict(scan_id='s1', finding_id=finding.id)

@@ -19,6 +19,10 @@ def bind_verified_chat(owner):
 
 
 async def observe_response(call, request, *, connection_id, workspace=None):
+    # Security summaries promise not to initialize or mutate local state. The
+    # optional observer must preserve that promise, including its own database.
+    if getattr(getattr(request, 'params', None), 'name', None) == 'get_security_summary':
+        return await call(request)
     if os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR', '1') == '0':
         return await call(request)
     try:

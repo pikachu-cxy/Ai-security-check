@@ -49,9 +49,10 @@ def fail_ack_for(ref):
 
 def create_host_risk(sample):
     tasks, root, _ = sample
-    ref, session, _ = prepared(sample)
+    ref, session, packet = prepared(sample)
     primary = tasks.read(root, ref, session, 'routes.py', 2, 2)
     related = tasks.read(root, ref, session, 'auth.py', 1, 2)
+    review_all(tasks, root, ref, packet)
     result = tasks.submit(root, ref, session,
                           [candidate(primary['evidence_id'], related['evidence_id'])], 'REVIEWED', [])
     assert result['result_saved'] is True
@@ -121,11 +122,12 @@ def test_ledger_written_before_ack_failure_replays_without_duplicate_or_replaced
 
 def test_final_host_review_survives_projection_failure_and_idempotent_submit(service):
     tasks, root, runtime = service
-    ref, session, _ = prepared(service)
+    ref, session, packet = prepared(service)
     baseline = copy.deepcopy(tasks.load(root, ref)['baseline'])
     primary = tasks.read(root, ref, session, 'routes.py', 2, 2)
     related = tasks.read(root, ref, session, 'auth.py', 1, 2)
     findings = [candidate(primary['evidence_id'], related['evidence_id'])]
+    review_all(tasks, root, ref, packet)
     with patch.object(TaskRiskLedger, 'register', side_effect=OSError('fixture ledger unavailable')):
         result = tasks.submit(root, ref, session, findings, 'REVIEWED', [])
     assert result['status'] == 'COMPLETE' and result['risk_ledger_sync']['pending']

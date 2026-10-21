@@ -6,6 +6,7 @@ import pytest
 
 from security_runtime.review_skill import RETIRED_METHODS, skill_files
 from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
 
 
 artifact_verifier = runpy.run_path(
@@ -29,11 +30,12 @@ def test_current_managed_skill_passes(installed_skill):
 
 
 def test_current_host_instructions_pass():
-    verify_host_instructions(HOST_INSTRUCTIONS)
+    from security_runtime.mcp_server import create_server
+    verify_host_instructions(create_server(global_mode=False).instructions)
 
 
 @pytest.mark.parametrize('instructions', [None, '', 'Do not ask users for Finding UUIDs',
-                                          HOST_INSTRUCTIONS + 'changed'])
+                                          HOST_INSTRUCTIONS, MCP_INSTRUCTIONS + 'changed'])
 def test_missing_or_stale_host_instructions_fail(instructions):
     with pytest.raises(ValueError, match='workflow instructions mismatch'):
         verify_host_instructions(instructions)

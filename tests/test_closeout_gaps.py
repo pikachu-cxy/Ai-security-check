@@ -106,6 +106,7 @@ def test_host_cannot_close_without_original_paths_or_forge_native_proof(service)
     original,fid=register_host(service)
     ref=s.begin(root,'fix')['task_ref']; (root/'routes.py').write_text('fixed\n')
     p=s.prepare(root,ref); e=s.read(root,ref,p['review_session'],'routes.py',1,1)
+    review_all(s, root, ref, p)
     row=dict(original_task_ref=original,finding_id=fid,evidence_refs=[evidence_id(e)],
         outcome='CODE_REVIEWED_RESOLVED',rationale='fixed',tests='test')
     with pytest.raises(ValueError,match='call/control'):

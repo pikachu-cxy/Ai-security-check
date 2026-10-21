@@ -22,7 +22,7 @@ Install the development extras `.[test,build-standalone]`, then run:
 ```text
 python scripts/build_standalone.py
 python scripts/package_artifact.py --platform windows-x64
-python scripts/verify_artifact.py --full dist/release/ai-security-runtime-v0.3.8-windows-x64.zip
+python scripts/verify_artifact.py --full dist/release/ai-security-runtime-v0.3.9-windows-x64.zip
 ```
 
 Use the matching native host and archive for macOS; Linux is not a public release target. The verifier extracts to a fresh

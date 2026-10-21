@@ -186,7 +186,7 @@ def private_record(old, new):
         return dict(hashes={'main.py': hashlib.sha256(raw).hexdigest()}, texts={'main.py': sanitized},
             text_truncations={'main.py': dict(lines=truncated)} if truncated else {},
             semantic_proofs={'main.py': make_proof(b'fixture-key-for-line-proof-only!!', 'fixture-workspace',
-                'ts1-'+'f'*32, 'main.py', raw)})
+                'ts1-'+'f'*32, 'main.py', raw, sanitized_lines=sanitized)})
     return dict(baseline=snapshot(old), end=snapshot(new)), dict(path='main.py', change='MODIFIED')
 
 

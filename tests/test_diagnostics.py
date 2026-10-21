@@ -320,8 +320,8 @@ def test_bound_generic_mcp_accepts_safe_non_git_project(tmp_path, monkeypatch):
     monkeypatch.setenv('SECURITY_RUNTIME_INTEGRATION', 'generic-mcp')
     server = create_server(SecurityRuntime(ScannerRegistry(adapters=[]), SQLiteStore(tmp_path / '.security-runtime' / 'test.db')))
     tool = server._tool_manager.get_tool('scan_project')
-    assert tool.fn()['workspace'] == str(tmp_path.resolve())
+    assert __import__('asyncio').run(tool.fn())['workspace'] == str(tmp_path.resolve())
     outside = tmp_path.parent / 'outside-project'
     outside.mkdir()
     with pytest.raises(ValueError, match='outside'):
-        tool.fn(str(outside))
+        __import__('asyncio').run(tool.fn(str(outside)))

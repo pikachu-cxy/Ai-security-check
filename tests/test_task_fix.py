@@ -199,7 +199,7 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
                 initialized = await client.initialize()
                 instructions = ' '.join(initialized.instructions.split())
                 assert 'task-review-plan-v3' in instructions and 'get_runtime_guidance' in instructions
-                assert 'prepare_task_risk_fix' in instructions
+                assert 'get_runtime_guidance' in instructions
                 tools = {t.name:t for t in (await client.list_tools()).tools}
                 from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
                 assert REQUIRED_GUIDANCE_TOOLS <= set(tools)
@@ -212,11 +212,15 @@ def test_actual_sdk_initialize_prepare_verify_failure_and_refresh(sample):
                     return data.get('result', data)
                 info = await call('get_runtime_info', {})
                 workflow = await call('get_runtime_guidance', {'topic':'runtime-workflow'})
+                assert 'prepare_task_risk_fix' in workflow['content']
                 assert workflow['status'] == 'READY'
                 assert workflow['authority']['repair_authorized'] is False
                 assert workflow['sha256'] == info['guidance_catalog']['topics']['runtime-workflow']['sha256']
                 assert workflow['sha256'] == __import__('hashlib').sha256(workflow['content'].encode('utf-8')).hexdigest()
-                instructions = ' '.join(workflow['content'].split())
+                repair = await call('get_runtime_guidance', {'topic':'repair-impact'})
+                assert repair['status'] == 'READY'
+                assert repair['sha256'] == info['guidance_catalog']['topics']['repair-impact']['sha256']
+                instructions = ' '.join(repair['content'].split())
                 assert 'The host coding agent edits selected local code' in instructions
                 assert 'Scanner repairs then use verify_task_fix with the originating scanner.' in instructions
                 assert 'Native task repairs use their bound repair_task_ref for finish/review' in instructions

@@ -57,6 +57,7 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
         'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
         'confirm_remediation', 'refresh_remediation_confirmation',
         'generate_fix', 'verify', 'verify_task_fix',
+        'start_usage_monitor',  # User-requested local process and log observation.
     }
     # Host event adapters are invoked by installed hooks, not routine chat.
     host_events = {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}

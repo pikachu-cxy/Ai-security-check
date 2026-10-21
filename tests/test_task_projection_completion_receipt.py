@@ -10,6 +10,7 @@ import pytest
 from security_runtime.task_risk_ledger import TaskRiskLedger
 from security_runtime.task_security_state import TaskSecurityStore
 from test_task_security import service  # noqa: F401
+from task_review_helpers import review_all
 
 
 def planned(sample, exhausted):
@@ -17,6 +18,8 @@ def planned(sample, exhausted):
     ref = tasks.begin(root, 'projection-terminal')['task_ref']
     (root / 'routes.py').write_text('def route(user):\n    return access.check(user)\n')
     prepared = tasks.prepare(root, ref, protocol_version=3)
+    if not exhausted:
+        review_all(tasks, root, ref, prepared)
     if exhausted:
         record = tasks.load(root, ref)
         ledger = record['review_ledger']

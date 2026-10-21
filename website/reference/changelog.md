@@ -1,5 +1,18 @@
 # 版本与进度
 
+## 0.3.9 · Developer Alpha
+
+2026-10-21：[v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 使用新版本号交付当前源码；完整包和 Mac 自动安装分别构建、校验和验收，实际公开状态见[下载页](../downloads.md)。
+
+- 新增一键启动当前 Codex 聊天消耗监控，校验身份后自动关联，结束后一键导出 HTML / JSON 报告 ZIP，无需试用者查找日志。
+- 报告区分聊天 token、观察窗口时长、工具累计耗时与并发区间并集；无法可靠拆分的纯开发 / 纯安全 token 保持未知。无基线或记录缺失时说明部分覆盖，不估算费用或虚构节省。
+- 监控是可移除的可选模块；失败、停止或缺席不改变核心扫描、任务复核和修复授权，不保存聊天正文或源码。
+- 新任务完整保存脱敏长行，超大单行按实际序列化响应大小分片，全部字符交付后才计整行已读；源码哈希、版本、脱敏及容量校验继续保留。
+- 原任务、断点和累计交付账本可继续使用；重复读取不重复送出已读片段，旧版已截断前像不补造，保留不可恢复缺口。
+- 文档站同步安装、监控、计量边界、隐私和支持状态。页面部署等待完整包与 Mac 自动安装下载均公开，避免把未发布链接作为安装入口。
+
+发布流程保留 Windows/macOS 回归、合规、包完整性及三平台原生验收，结果以对应 Actions 记录为准。实际桌面、Apple 签名和公证仍需独立验收。
+
 ## 0.3.8 · Developer Alpha
 
 2026-10-20：[v0.3.8 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8)的九项资产已同版本更新。Windows、Mac Apple Silicon 与 Mac Intel 统一使用产品源码提交 `8d5d9a6`，[三平台构建及原生验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)通过，下载及校验入口见[下载页](../downloads.md)。此前下载过 0.3.8 的用户需重新下载配套文件，安装后重启宿主核对 `build_id`。

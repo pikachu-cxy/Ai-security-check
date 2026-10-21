@@ -9,6 +9,7 @@ import time
 import os
 from pathlib import Path
 import secrets
+import sys
 
 _owner = ContextVar('security_task_owner', default=None)
 ACTIVE = frozenset({'ACTIVE', 'STATIC_RUNNING', 'READY', 'REVIEWING'})
@@ -136,6 +137,21 @@ def process_stamp(pid):
             try: text=Path(f'/proc/{pid}/stat').read_text(encoding='utf-8')
             except FileNotFoundError: return False
             return text[text.rfind(')')+2:].split()[19]
+        if sys.platform == 'darwin':
+            import re
+            import subprocess
+            try:
+                result = subprocess.run(['/bin/ps', '-p', str(pid), '-o', 'lstart='],
+                    capture_output=True, text=True, timeout=1,
+                    env={**os.environ, 'LC_ALL': 'C'})
+            except subprocess.SubprocessError:
+                return None
+            value = result.stdout.strip()
+            if result.returncode == 1 and not value and not result.stderr.strip():
+                return False
+            if (result.returncode == 0 and not result.stderr.strip()
+                    and re.fullmatch(r'[A-Z][a-z]{2}\s+[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}', value)):
+                return 'darwin-' + ' '.join(value.split())
     except (OSError,ValueError,IndexError): pass
     return None
 

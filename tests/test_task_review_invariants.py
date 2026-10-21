@@ -67,7 +67,7 @@ def test_unrelated_long_line_does_not_poison_a_completed_hunk_review(service):
     assert_reviewed(s, root, ref, packet)
 
 
-def test_retained_long_comment_reports_a_real_character_truncation_gap(service):
+def test_retained_long_comment_is_delivered_without_a_character_truncation_gap(service):
     s, root, _ = service
     ref = s.begin(root, 'masked-comment-is-complete')['task_ref']
     (root/'added.py').write_text('# '+ 'context '*100+'\ndef allowed(user):\n    return auth.check(user)\n')
@@ -76,8 +76,8 @@ def test_retained_long_comment_reports_a_real_character_truncation_gap(service):
     receipt = s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
     assert receipt['result_saved']
     result = s.get(root, ref)
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert result['host_review']['limitations']['total_count'] > 0
+    assert result['host_review']['coverage'] == 'REVIEWED'
+    assert result['host_review']['limitations']['total_count'] == 0
 
 
 def test_719_file_project_reviews_all_fourteen_changes_without_old_preimage_ceiling(service):

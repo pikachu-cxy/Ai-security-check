@@ -40,6 +40,7 @@ export default defineConfig({
       ] },
       { text: '使用与练习', collapsed: false, items: [
         { text: '日常怎么用', link: '/guide/workflow' },
+        { text: '一键监控与导出报告', link: '/guide/context-cost' },
         { text: '理解与处理风险', link: '/guide/risk-handling' },
         { text: '动手测试用例', link: '/guide/playground' },
         { text: '常见问题与故障排查', link: '/reference/faq' }

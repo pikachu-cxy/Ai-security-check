@@ -348,6 +348,6 @@ def test_mcp_tools_default_no_cli_progress(tmp_path,monkeypatch,capsys):
     with capsys.disabled():
         server=create_server(runtime)
     assert {'scan_diff','scan_project','get_findings','generate_fix','verify','prepare_triage','submit_triage','get_triage','get_security_summary','prepare_task_triage','get_runtime_info'} <= {tool.name for tool in server._tool_manager.list_tools()}
-    result=server._tool_manager.get_tool('scan_project').fn(str(tmp_path))
+    result=__import__('asyncio').run(server._tool_manager.get_tool('scan_project').fn(str(tmp_path)))
     assert result['status']=='COMPLETED' or result['status']=='PARTIAL'
     assert capsys.readouterr() == ('','')
