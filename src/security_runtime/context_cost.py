@@ -250,7 +250,9 @@ class ContextCostStore:
             if write:
                 db.execute('CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY, at REAL, run TEXT, record BLOB, mac TEXT)')
                 db.execute('CREATE INDEX IF NOT EXISTS cost_events_run ON events(run,at)')
+                db.execute('CREATE INDEX IF NOT EXISTS cost_events_at ON events(at)')
                 db.execute('CREATE TABLE IF NOT EXISTS host_usage (source TEXT PRIMARY KEY, at REAL, run TEXT, record BLOB, mac TEXT)')
+                db.execute('CREATE INDEX IF NOT EXISTS cost_host_usage_at ON host_usage(at)')
                 db.execute('CREATE TABLE IF NOT EXISTS monitor_settings (id INTEGER PRIMARY KEY CHECK(id=1), record BLOB, mac TEXT)')
                 db.commit()
                 db.execute('BEGIN IMMEDIATE')
@@ -274,9 +276,10 @@ class ContextCostStore:
     def _prune(db):
         cutoff = time.time() - RETENTION_SECONDS
         db.execute('DELETE FROM events WHERE at < ?', (cutoff,))
-        db.execute('DELETE FROM events WHERE id NOT IN (SELECT id FROM events ORDER BY id DESC LIMIT ?)', (MAX_EVENTS,))
+        # Delete only overflow keys. NOT IN visits every retained row per call.
+        db.execute('DELETE FROM events WHERE id <= (SELECT id FROM events ORDER BY id DESC LIMIT 1 OFFSET ?)', (MAX_EVENTS,))
         db.execute('DELETE FROM host_usage WHERE at < ?', (cutoff,))
-        db.execute('DELETE FROM host_usage WHERE source NOT IN (SELECT source FROM host_usage ORDER BY at DESC LIMIT ?)', (MAX_HOST_IMPORTS,))
+        db.execute('DELETE FROM host_usage WHERE source IN (SELECT source FROM host_usage ORDER BY at DESC LIMIT -1 OFFSET ?)', (MAX_HOST_IMPORTS,))
 
     def monitoring(self):
         """Read the live setting without initializing storage; environment wins."""
