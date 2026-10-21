@@ -12,6 +12,8 @@ AI Security Runtime checks the changes made during a development task, combines 
 
 [English documentation](https://pikachu-cxy.github.io/Ai-security-check/en/) · [中文文档](https://pikachu-cxy.github.io/Ai-security-check/)
 
+If the English website is awaiting deployment, [read the English quick start in this repository](website/en/guide/quickstart.md). Website publication waits for the documented installation packages to be public.
+
 - [Overview](website/en/guide/overview.md) · [Quick start](website/en/guide/quickstart.md) · [Downloads](website/en/downloads.md)
 - [Codex setup](website/en/guide/editors/codex.md) · [Cursor setup](website/en/guide/editors/cursor.md) · [Manual MCP](website/en/guide/mcp.md)
 - [Daily workflow](website/en/guide/workflow.md) · [Handle findings](website/en/guide/risk-handling.md) · [First demo](website/en/guide/demo.md)
