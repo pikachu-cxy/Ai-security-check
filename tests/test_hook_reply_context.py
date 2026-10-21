@@ -142,6 +142,7 @@ def test_issuer_maximum_ticket_survives_without_repeated_workflow_guidance():
                                    decision, '已收到修复确认，正在修复这个问题；完成后会重新检查。')
     _, control = parse(rendered)
     assert control['remediation']['agent_fix_ticket'] == ticket
+    assert '宿主按用户当前语言或明确偏好翻译标题、正文和选择' in rendered
     assert control['remediation']['prepare'] == decision['prepare']
     assert control['remediation']['verify'] == decision['verify']
     assert 'guidance' not in control['remediation']

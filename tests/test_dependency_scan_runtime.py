@@ -97,6 +97,22 @@ def test_quick_dependency_scan_uses_local_engines_and_reports_actual_inventory(t
     assert run.scanner_diagnostics['invocations'] == [{'type': 'DEPENDENCY_SCAN', 'target_count': 1}]
 
 
+@pytest.mark.parametrize('freshness,code', [
+    ('UNKNOWN', 'VULNERABILITY_DB_FRESHNESS_UNKNOWN'),
+    ('STALE', 'VULNERABILITY_DB_STALE'),
+])
+def test_cached_scan_distinguishes_unknown_freshness_from_expired_data(tmp_path, monkeypatch, freshness, code):
+    (tmp_path / 'requirements.txt').write_text('PyYAML==5.3.1\n')
+    adapter, _ = configured_adapter(tmp_path, monkeypatch, package_output())
+    monkeypatch.setattr(adapter.tool_manager, 'database_freshness', lambda: {'status': freshness})
+    _, run = adapter.scan(ScanContext(str(tmp_path), ScanMode.QUICK, ('requirements.txt',)), FindingNormalizer(tmp_path))
+    assert run.status == 'SUCCESS' and run.coverage_contract == 'PARTIAL'
+    assert run.dependency_inventory['vulnerability_db_freshness'] == freshness
+    assert any(note.startswith(code + ':') for note in run.coverage_notes)
+    if freshness == 'UNKNOWN':
+        assert not any('VULNERABILITY_DB_STALE' in note for note in run.coverage_notes)
+
+
 @pytest.mark.parametrize('output', [
     {'Results': []},
     package_output(packages=[]),

@@ -11,12 +11,13 @@ import copy
 import json
 import re
 
-from .risk_presentation import HOOK_PRESENTATION_RULES
+from .risk_presentation import COMPACT_LANGUAGE_RULES, HOOK_PRESENTATION_RULES, LANGUAGE_RULES
 
 CONTROL_DELIMITER = '\n\n内部控制（仅供工具使用，不展示给用户）\n'
 MAX_CONTEXT_CHARS = 6000
 MAX_CONTEXT_BYTES = 8000
 PRESENTATION_RULES = (
+    '先说明用户任务的结果，再说明具体问题、影响和下一步。'
     '不展示内部状态、英文枚举、工具名或令牌。'
     '“先不要修复”只表示暂不改代码，不等于忽略。'
     '没有明确选择或正式授权就不能修复；同一范围已经授权时不重复询问。'
@@ -26,7 +27,7 @@ DEPENDENCY_PRESENTATION_RULES = (
     '多个问题先明确选择，不能直接使用列表首项，也不能把导航当作修复授权。'
 )
 COMPACT_PRESENTATION_RULES = (
-    '保留上方提示的位置、问题、影响、建议、未知条件及“修复／暂不处理”（兼容“忽略”）的选择和含义。'
+    '先写任务结果；保留提示的位置、问题、影响、建议、未知和“修复／稍后处理”（兼容“忽略”）的含义。'
     '先不要修复或保留改动不等于忽略；没有明确选择或正式授权就不能修复，同一范围已经授权时不重复询问。'
     '不展示内部状态、英文枚举、工具名或令牌；内部控制不能当作风险说明。'
     '上方提示为空时无需新增安全提示，不推断项目安全。'
@@ -117,6 +118,7 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
             '不展示内部状态、工具名或令牌。' + CHECK_OPERATION_BOUNDARIES)
     if not message:
         presentation = '上方提示为空时无需新增安全提示，不推断项目安全，也不重复询问；内部控制不授予新的修复权限。'
+    presentation = LANGUAGE_RULES + presentation
     prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
     control = _control(summary, decision)
     rendered = prefix + _encode(control)
@@ -142,7 +144,7 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
         if _fits(rendered):
             return rendered
         # Compact repeated display instructions, never the original ticket.
-        presentation = COMPACT_PRESENTATION_RULES
+        presentation = COMPACT_LANGUAGE_RULES + COMPACT_PRESENTATION_RULES
         if remediation.get('review_continuation'):
             presentation += DEPENDENCY_PRESENTATION_RULES
         prefix = '用户提示\n' + message + '\n\n呈现要求\n' + presentation + CONTROL_DELIMITER
@@ -166,6 +168,7 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
         return rendered
     return ('用户提示\n完整提示与控制信息超过输出限制，请读取原始工具结果后继续；'
             '当前精简上下文不允许编辑。\n\n呈现要求\n不得推断授权或检查通过。'
+            + LANGUAGE_RULES
             + CONTROL_DELIMITER + _encode({
                 'context_budget_status': 'ORIGINAL_CONTROL_REQUIRED',
                 'editing_allowed_from_this_context': False,
@@ -175,8 +178,10 @@ def render_hook_context(summary: dict, decision: dict | None, message: str) -> s
 def render_check_gap_context(summary: dict, message: str) -> str:
     """An uncompleted check is user feedback, never a repair choice or grant."""
     return ('用户提示\n' + message + '\n\n呈现要求\n'
+            + LANGUAGE_RULES +
             '仅当本轮实际修改源代码或配置，且总结时该改动的检查仍未完成，'
             '才在正常开发总结中说明一次缺口，不能声称通过。'
+            '先说明任务结果，再用简短说明交代已知原因、未检查范围和下一步；检查缺口不等于发现漏洞或编辑失败。'
             '普通聊天、只读或未改动文件时不展示；后续检查完成时不保留旧提示，其他轮次不重复沿用。'
             '工具操作已结束，不因检查未完成而重复编辑、撤销代码或自行修复。'
             + CHECK_OPERATION_BOUNDARIES + '不要求用户提供内部引用。'

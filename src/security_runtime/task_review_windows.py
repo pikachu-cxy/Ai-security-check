@@ -113,7 +113,7 @@ def _truncations(snapshot, path):
 def _semantic_proof(snapshot, path, lines):
     """Validate only private caller-supplied proof; never reconstruct history."""
     proof = snapshot.get('semantic_proofs', {}).get(path)
-    if (not isinstance(proof, dict) or proof.get('version') != 1 or type(proof.get('version')) is not int
+    if (not isinstance(proof, dict) or type(proof.get('version')) is not int or proof['version'] not in {1, 2}
             or proof.get('complete') is not True or type(proof.get('line_count')) is not int
             or proof['line_count'] != len(lines) or not isinstance(proof.get('semantic_lines'), dict)):
         return None
@@ -131,6 +131,13 @@ def _semantic_proof(snapshot, path, lines):
     # conservative heuristic.
     required = {number for number, line in enumerate(lines, 1)
                 if '[REDACTED_LITERAL]' in line or '[REDACTED_SECRET]' in line}
+    if proof['version'] == 2:
+        markers = proof.get('literal_marker_lines')
+        if (not isinstance(markers, list)
+                or any(type(number) is not int or number not in required for number in markers)
+                or markers != sorted(set(markers)) or set(markers) & normalized.keys()):
+            return None
+        required.difference_update(markers)
     required.update(_truncations(snapshot, path))
     if not required <= normalized.keys():
         return None

@@ -124,12 +124,12 @@ _EMPTY_LITERALS = frozenset({'""', "''", '``', '""""""', "''''''"})
 # Only an entire safe value may bypass credential masking. Matching the safe
 # alternative consumes just that value, so a later assignment on the same line
 # is still checked. Unknown expressions retain the conservative tail mask.
-_SAFE_CREDENTIAL_VALUE = (
+_SAFE_CREDENTIAL_PATTERN = (
     r'(?:\[REDACTED_(?:LITERAL|SECRET|COMMENT)\]|\x22{6}|\x27{6}|\x22{2}|\x27{2}|`{2})'
     r'(?=[ \t]*(?:$|[;,)}\]]|\[REDACTED_COMMENT\][ \t]*$))')
 _SHORT_CREDENTIAL_ASSIGNMENTS = re.compile(
     r'(?i)\b(?:password|passwd|token|api[_-]?key|secret)[ \t]*[:=][ \t]*'
-    r'(?:(?P<safe>' + _SAFE_CREDENTIAL_VALUE + r')|[^\r\n]*)')
+    r'(?:(?P<safe>' + _SAFE_CREDENTIAL_PATTERN + r')|[^\r\n]*)')
 
 
 def _line_budget(max_line_chars):

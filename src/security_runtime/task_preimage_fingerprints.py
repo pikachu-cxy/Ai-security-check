@@ -23,7 +23,8 @@ MAX_TASK_PROOF_BYTES = 8_000_000
 MAX_WORKSPACE_PROOF_BYTES = 16_000_000
 ROW_FRAMING_BYTES = 256
 _SEPARATORS = r'[^\r\n\v\f\x1c-\x1e\x85\u2028\u2029]+'
-_PRIVATE_KEY = r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)'
+_PRIVATE_KEY_PATTERN = r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)'
+_MARKERS = ('[REDACTED_LITERAL]', '[REDACTED_SECRET]')
 _DIRECTIVE = re.compile(
     r'^[\t ]*(?:(?:/{1,3}|/\*+|\*+|#+)[\t ]*)*(?:'
     r'!|(?:-\*-\s*)?coding\s*[:=]|noqa\b|nosec\b|nosemgrep\b|gitleaks\b|'
@@ -72,7 +73,7 @@ def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=
               or source_path.name.lower() == 'dockerfile' else _SOURCE_TOKENS)
     # safe_source treats private-key blocks before its ordinary tokenizer.
     # Preserve that ownership here too, including a base64 line containing //.
-    semantic_tokens = re.compile('(?:' + _PRIVATE_KEY + ')|' + tokens.pattern)
+    semantic_tokens = re.compile('(?:' + _PRIVATE_KEY_PATTERN + ')|' + tokens.pattern)
     semantic_text = semantic_tokens.sub(lambda match: re.sub(_SEPARATORS, ' ', match.group(0))
         if match.lastgroup == 'comment' and not _semantic_comment(match, text, source_path)
         else match.group(0), text)
@@ -84,7 +85,14 @@ def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=
     domain = json.dumps([CONTRACT, workspace_id, task_ref, path],
                         ensure_ascii=True, separators=(',', ':')).encode('utf-8')
     derived = hmac.new(key, domain, hashlib.sha256).digest()
-    fingerprints, size = {}, 128
+    # Signed provenance distinguishes source-code marker literals from text
+    # that the sanitizer actually replaced. Never infer this from public text.
+    literal_marker_lines = [number for number, (raw, public) in
+        enumerate(zip(text.splitlines(), original_lines), 1)
+        if raw == public and any(marker in public for marker in _MARKERS)]
+    fingerprints, size = {}, 160 + len(json.dumps(literal_marker_lines))
+    if size > MAX_FILE_PROOF_BYTES:
+        return incomplete(len(original_lines))
     for number, (private, public) in enumerate(zip(private_lines, sanitized), 1):
         if private == public:
             continue
@@ -95,7 +103,8 @@ def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=
         size += len(str(number)) + 70
         if size > MAX_FILE_PROOF_BYTES:
             return incomplete(len(original_lines))
-    return dict(version=1, complete=True, line_count=len(original_lines), semantic_lines=fingerprints)
+    return dict(version=2, complete=True, line_count=len(original_lines), semantic_lines=fingerprints,
+                literal_marker_lines=literal_marker_lines)
 
 
 def encode_proof(proof):
@@ -104,8 +113,10 @@ def encode_proof(proof):
 
 def decode_proof(body, expected_count):
     proof = json.loads(body)
-    if (not isinstance(proof, dict) or set(proof) != {'version', 'complete', 'line_count', 'semantic_lines'}
-            or type(proof['version']) is not int or proof['version'] != 1
+    fields = {'version', 'complete', 'line_count', 'semantic_lines'}
+    if (not isinstance(proof, dict) or type(proof.get('version')) is not int
+            or proof['version'] not in {1, 2}
+            or set(proof) != fields | ({'literal_marker_lines'} if proof['version'] == 2 else set())
             or type(proof['complete']) is not bool or type(proof['line_count']) is not int
             or proof['line_count'] != expected_count or not isinstance(proof['semantic_lines'], dict)):
         raise ValueError('Invalid private semantic proof')
@@ -118,5 +129,12 @@ def decode_proof(body, expected_count):
         converted[int(number)] = fingerprint
     if not proof['complete'] and converted:
         raise ValueError('Incomplete private proof cannot claim semantic lines')
+    if proof['version'] == 2:
+        markers = proof['literal_marker_lines']
+        if (not isinstance(markers, list)
+                or any(type(number) is not int or not 1 <= number <= expected_count for number in markers)
+                or markers != sorted(set(markers)) or set(markers) & converted.keys()
+                or (markers and not proof['complete'])):
+            raise ValueError('Invalid literal marker provenance')
     proof['semantic_lines'] = converted
     return proof

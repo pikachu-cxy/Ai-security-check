@@ -106,6 +106,41 @@ def test_macos_semgrep_first_start_has_bounded_loading_allowance(tmp_path, monke
     assert calls == [timeout]
 
 
+@pytest.mark.parametrize('platform,engine,timeout', [
+    ('darwin', 'semgrep', 90), ('darwin', 'gitleaks', 8), ('win32', 'semgrep', 8),
+])
+def test_extra_cold_start_allowance_is_only_for_macos_semgrep_installation(
+        tmp_path, monkeypatch, platform, engine, timeout):
+    from security_runtime.processes import ProcessResult
+    manager = toolchain.ToolManager(tmp_path)
+    calls = []
+    def process(args, **kwargs):
+        calls.append((args, kwargs['timeout']))
+        return ProcessResult(0, manager.versions[engine], '', 1)
+    monkeypatch.setattr(toolchain.sys, 'platform', platform)
+    monkeypatch.setattr(toolchain, 'run_process', process)
+    monkeypatch.setattr('security_runtime.engine_probe.probe_semgrep', lambda *_args, **_kwargs: None)
+    assert manager._probe_version(engine, tmp_path / engine, initial_install=True) == manager.versions[engine]
+    assert calls == [([str((tmp_path / engine).resolve()), '--version'], timeout)]
+
+
+def test_cold_start_probe_still_obeys_overall_preparation_budget(tmp_path, monkeypatch):
+    from security_runtime.preparation_budget import preparation_budget
+    from security_runtime import processes
+    manager = toolchain.ToolManager(tmp_path)
+    monkeypatch.setattr(toolchain.sys, 'platform', 'darwin')
+    observed = []
+    def process(args, **kwargs):
+        # This is the same budget bound applied before process creation.
+        observed.append(processes.bounded_timeout(kwargs['timeout']))
+        raise TimeoutError('synthetic cold startup exceeds remaining budget')
+    monkeypatch.setattr(toolchain, 'run_process', process)
+    with preparation_budget(5):
+        assert manager._probe_version('semgrep', tmp_path / 'semgrep', initial_install=True) == ''
+    assert len(observed) == 1 and 0 < observed[0] <= 5
+    assert manager._probe_diagnostics[('semgrep', str(tmp_path / 'semgrep'))].error_code == 'COMPONENT_START_TIMEOUT'
+
+
 def test_failed_python_update_preserves_existing_component(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, 'platform', 'darwin')
     manager = toolchain.ToolManager(tmp_path / 'managed')

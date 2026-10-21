@@ -213,7 +213,8 @@ def test_original_record_cannot_be_presented_as_recurrent_even_with_existing_rea
 
 def test_unknown_evidence_scope_never_becomes_copy_or_changes_default_semantics():
     output = issue_feedback(tls_finding(), evidence_scope='PRIVATE_CANARY')
-    assert '发现安全风险' in output['message']
+    assert '安全检查提示（待核实）' in output['message']
+    assert '发现安全风险' not in output['message']
     assert 'PRIVATE_CANARY' not in output['message']
 
 
@@ -226,7 +227,8 @@ def scan_result(**overrides):
 
 def test_scan_message_and_adapter_use_only_safe_chinese_summary_without_blocking():
     output = CodexHookAdapter().output({'hook_event_name': 'PostToolUse'}, scan_result())
-    assert '发现 1 个新增风险、1 个持续风险' in output['systemMessage']
+    assert '发现 1 个新增检查提示、1 个仍存在的检查提示' in output['systemMessage']
+    assert '实际影响需结合代码核实' in output['systemMessage']
     assert not any(key in output for key in ('continue', 'decision', 'stopReason'))
     assert 'PRIVATE_CANARY' not in json.dumps(output)
     context = json.loads(output['hookSpecificOutput']['additionalContext'])
@@ -237,7 +239,7 @@ def test_scan_message_and_adapter_use_only_safe_chinese_summary_without_blocking
 def test_invalid_risk_count_is_not_reinterpreted_as_zero_or_reflected(bad_count):
     result = scan_result(delta={'new': bad_count, 'persisting': 0, 'additional_occurrences': 0})
     message = scan_status_message(result)
-    assert '风险数量尚未确认' in message and '未发现新增风险' not in message
+    assert '提示数量尚未确认' in message and '未发现新增检查提示' not in message
     assert 'PRIVATE_CANARY' not in message
 
 
@@ -249,7 +251,7 @@ def test_partial_cache_baseline_and_empty_delta_cannot_become_safe_claim():
     baseline = scan_status_message(scan_result(status='BASELINE_ESTABLISHED'))
     assert '首次比较基线' in baseline and '不能说明项目安全' in baseline
     no_new = scan_status_message(scan_result(delta={'new': 0, 'persisting': 0, 'additional_occurrences': 0}))
-    assert '在本次检查范围内未发现新增风险' in no_new and '不能据此认定项目安全' in no_new
+    assert '在本次检查范围内未发现新增检查提示' in no_new and '不能据此认定项目安全' in no_new
     unknown = scan_status_message(scan_result(status='PRIVATE_CANARY', coverage='PRIVATE_CANARY'))
     assert '结果尚未确认' in unknown and 'PRIVATE_CANARY' not in unknown
 

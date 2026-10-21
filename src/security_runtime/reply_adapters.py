@@ -26,7 +26,10 @@ def finding_fact(finding, *, source='SCANNER', feedback=None, choice_required=Tr
         related=finding.get('risk_scope') == 'RELATED_EXISTING',
         deleted=finding.get('location_version') == 'BEFORE_DELETION',
         suppressed=bool(feedback.get('reminder_suppressed', feedback.get('folded', False))),
-        choice_required=choice_required)
+        choice_required=choice_required,
+        reviewed=context or (feedback.get('state') == 'STILL_RISK'
+                             and feedback.get('agent_review_current') is True
+                             and feedback.get('technical_assessment_current') is True))
 
 
 _GAPS = {
@@ -39,6 +42,38 @@ _GAPS[CAPTURE_GAP] = CAPTURE_LABEL
 
 _ATTRIBUTION_REASON = 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
 _ATTRIBUTION_LABEL = '同一工作区的任务时间窗重叠，改动归属未能独立确认'
+
+# Closed diagnostic codes only: scanner prose may contain sensitive or
+# untrusted text and must not become instructions or a vulnerability finding.
+_CAPABILITY_GAPS = {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}
+_CHECK_REASONS = {
+    'SCAN_EXECUTION_IDENTITY_UNAVAILABLE': '无法确认检查工具的运行环境；需核对工具安装入口后重试。',
+    'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE': '无法确认检查工具的运行环境；需核对工具安装入口后重试。',
+    'ENGINE_MISSING_OFFLINE': '本地检查工具尚未安装，本次仅使用本地组件；安装该工具后重试。',
+    'OSV_DATABASE_MISSING': '备用依赖检查工具缺少本地漏洞数据；补齐所需数据后重试。',
+    'VULNERABILITY_DB_UNAVAILABLE': '本地没有可用的依赖漏洞数据；准备数据后重试。',
+    'VULNERABILITY_DB_FRESHNESS_UNKNOWN': '本地漏洞数据的更新时间无法确认；核对或更新数据后重试。',
+    'VULNERABILITY_DB_STALE': '本地漏洞数据已经过期，可能遗漏新的漏洞；更新数据后重试。',
+}
+
+
+def _capability_notices(static):
+    providers = {'CODE_SAST': {'semgrep'},
+                 'DEPENDENCY_VULN': {'trivy', 'trivy-vuln', 'osv-scanner'}}
+    labels = {'CODE_SAST': '代码安全检查', 'DEPENDENCY_VULN': '依赖检查'}
+    runs = static.get('scanner_runs') or []
+    runs = runs if isinstance(runs, list) else []
+    for capability, scanners in providers.items():
+        state = (static.get('capability_results') or {}).get(capability)
+        if state not in _CAPABILITY_GAPS:
+            continue
+        reasons = tuple(dict.fromkeys(_CHECK_REASONS[run['error_code']]
+            for run in runs[:50] if isinstance(run, dict)
+            and isinstance(run.get('scanner'), str) and run['scanner'] in scanners
+            and isinstance(run.get('error_code'), str) and run['error_code'] in _CHECK_REASONS))
+        if reasons:
+            status = '未启动' if capability == 'CODE_SAST' and state == 'UNAVAILABLE' else '未完成'
+            yield Notice('CHECK_GAP', labels[capability]+status+'：'+' '.join(reasons), capability)
 
 
 def _attribution_details(record, limitations, static_complete):
@@ -96,7 +131,11 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
         state = 'PARTIAL'
     notices = []
     if phase in {'COMPLETE', 'INCOMPLETE'}:
-        if not complete:
+        notices.extend(_capability_notices(static))
+        capability_gaps = any(key in {'CODE_SAST', 'SECRET_SCAN', 'DEPENDENCY_VULN', 'IAC_MISCONFIG'}
+                              and value in _CAPABILITY_GAPS
+                              for key, value in (static.get('capability_results') or {}).items())
+        if not complete and not capability_gaps:
             notices.append(Notice('CHECK_GAP', '静态检查未完成或覆盖受限，未检查范围的风险尚待核实。'))
         check_gaps = [item for item in limitations if not (
             isinstance(item, dict) and item.get('reason') == _ATTRIBUTION_REASON)]

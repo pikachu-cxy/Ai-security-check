@@ -203,7 +203,7 @@ def bucket(kind, scope=''):
     return original_bucket(kind, scope)
 t.ToolManager.__init__ = init
 t.ToolManager.resolve = resolve
-t.ToolManager._probe_identity = lambda self, name, path: (name, str(path), path.stat().st_mtime_ns)
+t.ToolManager._probe_identity = lambda self, name, path, **kwargs: (name, str(path), path.stat().st_mtime_ns)
 scanner_cache.preparation_bucket = bucket
 from security_runtime.cli import main
 main(['mcp'])

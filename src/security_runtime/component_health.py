@@ -37,6 +37,8 @@ ISSUES = {
     'COMPONENT_START_FAILED': ('组件已安装，但启动检查失败，具体原因尚未确认。', '查看本机组件环境；不会把启动失败当作未安装而重新下载。'),
     'COMPONENT_PACKAGE_INCOMPLETE': ('组件安装文件或归属记录不完整。', '核对安装目录；确需重装时显式选择该组件，现有文件不自动删除。'),
     'COMPONENT_INTEGRITY_FAILED': ('组件文件未通过完整性校验。', '保留当前文件并核对来源；不要绕过校验，重装需要明确选择。'),
+    'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE': ('组件版本可读取，但无法核实实际执行程序及其 Python 包。', '将 Semgrep 路径指向完整虚拟环境中的 bin/semgrep 或 Scripts/semgrep.exe，并使用受管或复制到该环境的解释器；外部包装脚本不会自动获准。'),
+    'ENGINE_MISSING_OFFLINE': ('本地尚未安装所需检查组件，本轮仅使用本地组件。', '联网时单独准备缺少的组件，再重试检查；本轮不会自动下载。'),
     'NETWORK_TIMEOUT': ('组件下载连接超时。', '检查网络后再重试准备；不要重新安装整个产品。'),
     'DOWNLOAD_STALLED': ('组件下载长时间没有可验证进度。', '检查网络或代理后再重试准备。'),
     'PREPARATION_BUDGET_EXHAUSTED': ('本次组件准备时间已耗尽。', '保留已有缓存，确认网络后再重试准备。'),

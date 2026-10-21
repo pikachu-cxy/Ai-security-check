@@ -27,7 +27,7 @@ def explicit_test_network_mode(monkeypatch):
     monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE','0')
 
 
-@pytest.mark.parametrize('code',['MAVEN_RATE_LIMITED','NETWORK_TIMEOUT','DNS_RESOLUTION_FAILED','PROXY_CONNECTION_FAILED','HTTP_5XX','DEPENDENCY_RESOLUTION_FAILED','ENGINE_UNAVAILABLE','OFFLINE_MODE'])
+@pytest.mark.parametrize('code',['MAVEN_RATE_LIMITED','NETWORK_TIMEOUT','DNS_RESOLUTION_FAILED','PROXY_CONNECTION_FAILED','HTTP_5XX','DEPENDENCY_RESOLUTION_FAILED','ENGINE_UNAVAILABLE','OFFLINE_MODE','ENGINE_MISSING_OFFLINE'])
 def test_eligible_failures(code):
     assert should_fallback(ScannerRun('trivy-vuln','','FAILED',1,error_code=code))
 
@@ -225,7 +225,9 @@ def test_offline_installed_without_database_never_queries(tmp_path,monkeypatch):
     monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE','1')
     with patch('security_runtime.osv.run_process',side_effect=AssertionError('network attempted')):
         found,run=adapter.scan(context,n)
-    assert not found and run.status=='UNAVAILABLE' and run.error_code=='OFFLINE_MODE'
+    assert not found and run.status=='UNAVAILABLE' and run.error_code=='OSV_DATABASE_MISSING'
+    assert 'npm' in run.error_summary
+    assert 'Installing osv-scanner alone does not download' in run.remediation
 
 
 def test_normalized_aliases_match_trivy_without_merging_packages_versions_manifests(tmp_path):
@@ -396,7 +398,9 @@ def test_missing_osv_offline_never_downloads_or_executes(tmp_path,monkeypatch):
     context=ScanContext(str(tmp_path),ScanMode.RELEASE,('package-lock.json',))
     with patch.object(manager.provider,'download',side_effect=AssertionError('download attempted')),patch('security_runtime.osv.run_process',side_effect=AssertionError('scanner called')):
         found,run=OSVDependencyAdapter(manager).scan(context,FindingNormalizer(tmp_path))
-    assert not found and run.status=='UNAVAILABLE' and run.error_code=='OFFLINE_MODE'
+    assert not found and run.status=='UNAVAILABLE' and run.error_code=='ENGINE_MISSING_OFFLINE'
+    assert 'not installed locally' in run.error_summary
+    assert 'security-check tools install osv-scanner' in run.remediation
 
 
 def test_malformed_pom_is_scanner_config_failure(tmp_path):

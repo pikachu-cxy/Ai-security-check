@@ -29,6 +29,10 @@ def local_executable(root: Path, tool: str) -> Path:
     path = root / (tool + (".exe" if os.name == "nt" else ""))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"local test executable")
+    if tool == 'semgrep':
+        package = root.parent / 'Lib/site-packages/semgrep'
+        package.mkdir(parents=True, exist_ok=True)
+        (package / '__init__.py').write_bytes(b'package identity fixture; execution is mocked')
     return path
 
 
@@ -36,6 +40,10 @@ def managed_executable(manager: ToolManager, tool: str) -> Path:
     path = manager.managed_path(tool)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"managed test executable")
+    if tool == 'semgrep':
+        package = path.parent.parent / 'Lib/site-packages/semgrep'
+        package.mkdir(parents=True, exist_ok=True)
+        (package / '__init__.py').write_bytes(b'package identity fixture; execution is mocked')
     install_dir = path.parents[2] if tool == "semgrep" else path.parent
     (install_dir / "LICENSE").write_text("test license", encoding="utf-8")
     (install_dir / "NOTICE").write_text("test notice", encoding="utf-8")
