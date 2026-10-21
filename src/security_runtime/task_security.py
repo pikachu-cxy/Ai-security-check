@@ -61,12 +61,13 @@ def _merge_spans(spans):
 
 def _unread_context(record):
     """Only Runtime-issued windows satisfy a requested current-version span."""
+    from .task_review_coverage import complete_spans
     missing = []
     for request in record.get('context_requests', {}).values():
         spans = request['spans']
         evidence = [e for e in record['evidence'].values()
                     if all(e[k] == request[k] for k in ('path', 'file_sha256', 'location_version'))]
-        covered = _merge_spans([[e['start_line'], e['end_line']] for e in evidence])
+        covered = complete_spans(evidence)
         for low, high in spans:
             cursor = low
             for start, end in covered:
@@ -219,6 +220,7 @@ def finding_view(f):
 def _coverage_gaps(limitations):
     from .task_coverage import CAPTURE_GAP, CAPTURE_LABEL, capture_gap_note
     labels = {'SOURCE_LINE_CHAR_BUDGET': '源码单行超出显示预算',
+              'TASK_PREIMAGE_LINE_TRUNCATED': '旧版修改前记录已截断，原始长行无法恢复',
               CAPTURE_GAP: CAPTURE_LABEL,
               'SNAPSHOT_INVENTORY_DIRECTORY_BUDGET': '文件盘点达到目录容量上限',
               'SNAPSHOT_INVENTORY_FILE_BUDGET': '文件盘点达到路径数量上限',
@@ -312,7 +314,7 @@ class TaskSecurityService:
             raise ValueError('Task source changed; submitted evidence is stale')
         truncated = []
         lines = safe_source(text, source_path=path, truncation_lines=truncated,
-                            redaction_version=task_version(record))
+                            redaction_version=task_version(record), max_line_chars=None)
         if truncated:
             record['end'].setdefault('text_truncations', {})[path] = dict(line_count=len(truncated), lines=truncated)
         return lines
@@ -922,7 +924,9 @@ class TaskSecurityService:
                     risk_scope=risk_scope, task_evidence=task_evidence,
                     current_protections=[_clean(v, 500) for v in protections],
                     evidence_locations=[dict(evidence_ref=e, **{k: record['evidence'][e][k]
-                        for k in ('path', 'start_line', 'end_line', 'location_version')}) for e in dict.fromkeys(refs)],
+                        for k in ('path', 'start_line', 'end_line', 'location_version',
+                                  'start_char', 'end_char', 'line_chars')
+                        if k in record['evidence'][e]}) for e in dict.fromkeys(refs)],
                     file_path=location['path'], line_start=location['start_line'], line_end=location['end_line'],
                     location_version=location['location_version'],
                     evidence_refs=list(dict.fromkeys(refs)), source='HOST_TASK_REVIEW', validation='STRUCTURE_AND_VERSION_VALIDATED',

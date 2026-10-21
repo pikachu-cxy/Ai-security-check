@@ -152,7 +152,8 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
                     reference, truncated = prepared['reference'], prepared['truncated_lines']
                 else:
                     truncated = []
-                    lines = sanitizer(text, source_path=name, truncation_lines=truncated)
+                    lines = sanitizer(text, source_path=name, truncation_lines=truncated,
+                                      max_line_chars=None)
                     reference = preimage_writer.put(name, raw, lines)
                 preimages[name] = reference
                 private_bytes += reference['body_bytes']
@@ -163,7 +164,8 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
                 limit(exc.reason_code, path=name)
             continue
         truncated = []
-        lines = sanitizer(text, source_path=name, truncation_lines=truncated)
+        lines = sanitizer(text, source_path=name, truncation_lines=truncated,
+                          max_line_chars=None)
         if truncated:
             truncations[name] = dict(line_count=len(truncated), lines=truncated)
         cost = len(json.dumps(lines, ensure_ascii=True).encode('utf-8'))

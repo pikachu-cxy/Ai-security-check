@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 
+from .task_review_coverage import complete_spans
+
 
 def packet_bytes(packet):
     return len(json.dumps(packet, ensure_ascii=False).encode('utf-8'))
@@ -24,7 +26,7 @@ def record_capacity(record):
 
 def delivered_ranges(record, path, file_sha256, location_version, low, high):
     """Return exact unread spans and references to previously sent evidence."""
-    covered, references = [], []
+    matching, references = [], []
     for identifier, item in record.get('evidence', {}).items():
         if (item.get('path'), item.get('file_sha256'), item.get('location_version')) != (
                 path, file_sha256, location_version):
@@ -32,8 +34,10 @@ def delivered_ranges(record, path, file_sha256, location_version, low, high):
         first, last = item['start_line'], item['end_line']
         if last < low or first > high:
             continue
-        covered.append((max(low, first), min(high, last)))
+        matching.append(item)
         references.append(identifier)
+    covered = [(max(low, first), min(high, last))
+               for first, last in complete_spans(matching)]
     cursor, missing = low, []
     for first, last in sorted(covered):
         if first > cursor:
@@ -57,9 +61,17 @@ def source_packet(evidence, source_ref, lines, *, requested_high, remaining_rang
     low, high = evidence['start_line'], evidence['end_line']
     packet = dict(evidence_id=evidence['evidence_id'], source_ref=source_ref,
                   start_line=low, lines=list(lines[low - 1:high]))
+    if 'start_char' in evidence:
+        first, last = evidence['start_char'], evidence['end_char']
+        packet['lines'] = [lines[low - 1][first:last]]
+        packet.update({key: evidence[key] for key in
+                       ('start_char', 'end_char', 'line_chars')})
+        packet['char_coordinates'] = 'UNICODE_CODEPOINTS_ZERO_BASED_HALF_OPEN'
     # A single continuation range is enough to resume the same original request.
     # The coordinator will subtract existing deliveries again on that request.
-    if high < requested_high:
+    if evidence.get('end_char', 0) < evidence.get('line_chars', 0):
+        packet['next_range'] = [low, requested_high]
+    elif high < requested_high:
         packet['next_range'] = [high + 1, requested_high]
     if remaining_ranges:
         packet['unread_ranges'] = [list(span) for span in remaining_ranges]

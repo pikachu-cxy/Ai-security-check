@@ -72,7 +72,15 @@ Request at most 80 lines at a time. Runtime caps each source response at 600
 lines and 16000 serialized UTF-8 bytes and may return a smaller interval.
 Read its plain lines array; line number = start_line + array index. Follow
 next_range and unread_ranges with the SAME task/session/path/version, retaining
-the source dictionary from the plan. For a related source not registered before,
+the source dictionary from the plan. An oversized single line is delivered in
+fragments: lines contains one substring, and start_char/end_char/line_chars use
+zero-based, half-open Unicode codepoint coordinates in the complete sanitized
+line. Follow next_range even when it repeats the same line; the next call sends
+its first unread fragment. Only all fragments together cover that line. Preserve
+their order and inspect the complete code, including the tail, before submitting
+REVIEWED. Old task-start sources already truncated by an older Runtime retain
+their explicit gap; an upgrade cannot reconstruct missing original characters.
+For a related source not registered before,
 the response includes its binding. The response is readable sanitized code, not
 base64/gzip, a summary, or an assertion that omitted code was reviewed. A fully
 overlapping request returns ALREADY_DELIVERED and original evidence_refs only;

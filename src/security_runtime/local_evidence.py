@@ -132,12 +132,20 @@ _SHORT_CREDENTIAL_ASSIGNMENTS = re.compile(
     r'(?:(?P<safe>' + _SAFE_CREDENTIAL_VALUE + r')|[^\r\n]*)')
 
 
-def legacy_safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None):
+def _line_budget(max_line_chars):
+    if max_line_chars is not None and (type(max_line_chars) is not int or max_line_chars < 1):
+        raise ValueError('Invalid source line budget')
+
+
+def legacy_safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None,
+                       max_line_chars=MAX_LINE_CHARS):
     """Scrub literals over the whole bounded file before selecting nearby lines.
 
     Preserve line counts, including multiline literals and private-key blocks;
     a context window cutting through such a block must not reveal its middle.
     """
+    _line_budget(max_line_chars)
+
     def mask(match):
         value = match.group(0)
         if match.lastgroup != 'comment' and value in _EMPTY_LITERALS:
@@ -167,19 +175,26 @@ def legacy_safe_source(text, secret_ranges=(), source_path=None, *, truncation_l
                 lambda match: match.group(0) if match.group('safe') else '[REDACTED_SECRET]', line)
             line = SecretRedactor().redact(line)
             line = re.sub(r'\b[A-Za-z0-9+/=_-]{32,}\b', '[REDACTED_SECRET]', line)
-            if truncation_lines is not None and len(line) > MAX_LINE_CHARS:
+            if (truncation_lines is not None and max_line_chars is not None
+                    and len(line) > max_line_chars):
                 truncation_lines.append(index)
-            lines[index-1] = line[:MAX_LINE_CHARS]
+            lines[index-1] = line if max_line_chars is None else line[:max_line_chars]
     return lines
 
 
 def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None,
-                redaction_version=VERSION):
-    """Keep program semantics visible; redact credential values before slicing."""
+                redaction_version=VERSION, max_line_chars=MAX_LINE_CHARS):
+    """Redact credentials before optional display slicing.
+
+    ``None`` keeps complete sanitized task evidence within the caller's file
+    and delivery budgets. Ordinary finding excerpts retain the default cap.
+    """
     if type(redaction_version) is not int or redaction_version not in {1, VERSION}:
         raise ValueError('Unsupported source redaction policy')
+    _line_budget(max_line_chars)
     if redaction_version == 1:
-        return legacy_safe_source(text, secret_ranges, source_path, truncation_lines=truncation_lines)
+        return legacy_safe_source(text, secret_ranges, source_path, truncation_lines=truncation_lines,
+                                  max_line_chars=max_line_chars)
     path = Path(source_path) if source_path is not None else None
     tokens = (_HASH_SOURCE_TOKENS if path is not None and
         (path.suffix.lower() in _HASH_COMMENT_SUFFIXES or path.name.lower() == 'dockerfile')
@@ -189,9 +204,10 @@ def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=No
         if any(start <= index <= end for start, end in secret_ranges):
             lines[index-1] = '[REDACTED_SECRET]'
         else:
-            if truncation_lines is not None and len(line) > MAX_LINE_CHARS:
+            if (truncation_lines is not None and max_line_chars is not None
+                    and len(line) > max_line_chars):
                 truncation_lines.append(index)
-            lines[index-1] = line[:MAX_LINE_CHARS]
+            lines[index-1] = line if max_line_chars is None else line[:max_line_chars]
     return lines
 
 

@@ -64,7 +64,8 @@ def opaque_semantic_lines(lines, truncation_lines=()):
 
 def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=None, redaction_version=VERSION):
     text = raw_bytes.decode('utf-8-sig', errors='strict')
-    original_lines = (safe_source(text, source_path=path, redaction_version=redaction_version)
+    original_lines = (safe_source(text, source_path=path, redaction_version=redaction_version,
+                                  max_line_chars=None)
                       if sanitized_lines is None else sanitized_lines)
     source_path = Path(path)
     tokens = (_HASH_SOURCE_TOKENS if source_path.suffix.lower() in _HASH_COMMENT_SUFFIXES
@@ -77,7 +78,7 @@ def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=
         else match.group(0), text)
     private_lines = semantic_text.splitlines()
     sanitized = original_lines if semantic_text == text else safe_source(semantic_text,
-        source_path=path, redaction_version=redaction_version)
+        source_path=path, redaction_version=redaction_version, max_line_chars=None)
     if len(private_lines) != len(original_lines) or len(sanitized) != len(original_lines):
         return incomplete(len(original_lines))
     domain = json.dumps([CONTRACT, workspace_id, task_ref, path],

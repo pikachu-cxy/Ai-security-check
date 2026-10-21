@@ -14,6 +14,7 @@ import time
 
 
 from .task_review_protocol import PROTOCOL_VERSION, validate_protocol, require_record_protocol
+from .task_review_coverage import adds_read_coverage, complete_spans, evidence_fields
 
 CONTRACT = 'task-review-plan-v3'
 DEFAULT_LIMITS = dict(response_bytes=16_000)
@@ -450,9 +451,9 @@ def record_read(record, evidence, *, now=None):
     """Record a Runtime-issued window; merely reading does not submit a unit."""
     plan = _plan(record)
     _live(plan, now)
-    fields = ('path', 'file_sha256', 'location_version', 'start_line', 'end_line')
-    if not isinstance(evidence, dict) or any(k not in evidence for k in ('evidence_id', *fields)):
+    if not isinstance(evidence, dict) or 'evidence_id' not in evidence:
         raise ValueError('Invalid source evidence')
+    item = evidence_fields(evidence)
     version = evidence['location_version']
     if version not in _VERSIONS or record[_VERSIONS[version]]['hashes'].get(evidence['path']) != evidence['file_sha256']:
         raise ValueError('Evidence source version does not match the task')
@@ -465,7 +466,6 @@ def record_read(record, evidence, *, now=None):
     identifier = evidence['evidence_id']
     if not isinstance(identifier, str) or not identifier:
         raise ValueError('Invalid evidence identifier')
-    item = {key: evidence[key] for key in fields}
     binding = _digest(item)
     historical = plan['budget']['evidence_bindings'].get(identifier)
     if historical is not None and historical != binding:
@@ -474,9 +474,7 @@ def record_read(record, evidence, *, now=None):
     if prior is not None and prior != item:
         raise ValueError('An evidence identifier cannot change its range')
     from . import task_review_budget as adaptive
-    covered = _merge([[old['start_line'], old['end_line']] for old in plan['evidence'].values()
-                      if all(old[key] == item[key] for key in ('path', 'file_sha256', 'location_version'))])
-    adds_coverage = bool(adaptive._uncovered(low, high, covered))
+    adds_coverage = adds_read_coverage(plan['evidence'].values(), item)
     _source_binding(record, plan, item['path'], item['file_sha256'], version, count)
     unresolved = [dict(requirement, end_line=count) for unit in plan['units']
         for requirement in unit['required_windows'] if count is not None and requirement['end_line'] is None
@@ -512,8 +510,8 @@ def _unit_gaps(plan, unit):
         if requirement['end_line'] is None:
             gaps.append(dict(reason='SOURCE_RANGE_UNKNOWN', **requirement))
             continue
-        covered = _merge([[e['start_line'], e['end_line']] for e in plan['evidence'].values()
-                          if all(e[key] == requirement[key] for key in ('path', 'file_sha256', 'location_version'))])
+        covered = complete_spans(e for e in plan['evidence'].values()
+                                 if all(e[key] == requirement[key] for key in ('path', 'file_sha256', 'location_version')))
         cursor, high = requirement['start_line'], requirement['end_line']
         for low, end in covered:
             if end < cursor or low > high:

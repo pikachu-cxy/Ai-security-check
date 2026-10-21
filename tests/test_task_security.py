@@ -504,19 +504,19 @@ def test_hook_omitted_or_excluded_current_scope_is_a_coverage_gap(service):
     assert runtime.calls == []
 
 
-def test_long_sanitized_lines_cannot_support_full_context_review(service):
+def test_long_sanitized_lines_support_full_context_review(service):
     s, root, _ = service
     ref = begin(service)
     (root/'long.py').write_text('value = '+ '1 + '*200 + '1\n')
     packet = s.prepare(root, ref)
     page = s.read(root, ref, packet['review_session'], 'long.py', 1, 1)
-    assert page['line_truncation']['lines'] == [1]
-    assert len(page['lines'][0]) <= 600
+    assert 'line_truncation' not in page
+    assert page['lines'][0] == 'value = '+ '1 + '*200 + '1'
     review_all(s, root, ref, packet)
     s.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
     result = s.get(root, ref)
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations']['items'])
+    assert result['host_review']['coverage'] == 'REVIEWED'
+    assert not any(v['reason'] == 'SOURCE_LINE_CHAR_BUDGET' for v in result['limitations']['items'])
 
 
 def test_unrelated_unread_long_lines_do_not_widen_scoped_review_gaps(service):

@@ -314,3 +314,111 @@ def test_real_service_record_capacity_preflight_preserves_all_changes_and_histor
     with pytest.raises(ValueError):
         tasks.submit(root, ref, 'nonexistent-review-session', [], 'REVIEWED', [])
     assert len(runtime.calls) == 1
+
+
+@pytest.mark.parametrize('source', [
+    'value = ' + '1 + ' * 25_000 + '1',
+    '# ' + '中😀"\\' * 8_000,
+], ids=['ascii-100kb', 'unicode-escaped'])
+def test_long_line_fragments_resume_after_restart_without_false_full_coverage(coordinator, source):
+    from security_runtime.local_evidence import safe_source
+    c, tasks, root, runtime = coordinator
+    ref, session, prepared_packet = prepared(coordinator, source + '\n')
+    unit = prepared_packet['plan']['units'][0]['unit_id']
+    first = c.read(root, ref, session, 'added.py', 1, 1)
+    assert first['start_char'] == 0 and first['end_char'] < first['line_chars']
+    assert first['next_range'] == [1, 1]
+    assert c.submit_batch(root, ref, session, [unit], 'REVIEWED', [])['coverage'] == 'PARTIAL'
+    pages = [first]
+    # Recreate service/cache/coordinator to prove persisted character progress.
+    restarted = TaskSecurityService(runtime, tasks.hooks, owner=tasks.owner)
+    c = TaskReviewCoordinator(restarted)
+    while 'next_range' in pages[-1]:
+        pages.append(c.read(root, ref, session, 'added.py', *pages[-1]['next_range']))
+        assert len(pages) < 100
+    assert ''.join(page['lines'][0] for page in pages) == safe_source(source, max_line_chars=None)[0]
+    assert all(transport.packet_bytes(page) <= 16_000 for page in pages)
+    assert all(left['end_char'] == right['start_char'] for left, right in zip(pages, pages[1:]))
+    assert pages[-1]['end_char'] == pages[-1]['line_chars']
+    assert len({page['evidence_id'] for page in pages}) == len(pages)
+    duplicate = c.read(root, ref, session, 'added.py', 1, 1)
+    assert duplicate['status'] == 'ALREADY_DELIVERED' and 'lines' not in duplicate
+    assert c.submit_batch(root, ref, session, [unit], 'REVIEWED', [])['coverage'] == 'REVIEWED'
+    assert tasks.load(root, ref)['review_ledger']['reads'] == len(pages)
+    assert len(runtime.calls) == 1
+
+
+@pytest.mark.parametrize('deleted', [False, True])
+def test_long_before_task_and_deleted_sources_deliver_the_full_original_line(service, deleted):
+    tasks, root, _ = service
+    original = 'value = ' + '1 + ' * 15_000 + '1'
+    (root / 'long.py').write_text(original + '\n', encoding='utf-8')
+    ref = tasks.begin(root, 'long-before')['task_ref']
+    if deleted:
+        (root / 'long.py').unlink()
+    else:
+        (root / 'long.py').write_text('value = 2\n', encoding='utf-8')
+    packet = tasks.prepare(root, ref)
+    delivered = complete_service_plan(tasks, root, ref, packet)
+    record = tasks.load(root, ref)
+    location = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
+    originals = [page for page in delivered if 'start_char' in page and
+                 record['evidence'][page['evidence_id']]['location_version'] == location]
+    assert ''.join(page['lines'][0] for page in originals) == original
+    saved = tasks.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert saved['review_progress']['coverage'] == 'REVIEWED'
+    assert not any(item.get('reason') == 'SOURCE_LINE_CHAR_BUDGET' for item in record['limitations'])
+
+
+def test_old_truncated_preimage_retains_its_honest_gap(service):
+    from security_runtime.local_evidence import safe_source
+    tasks, root, _ = service
+    original = 'value = ' + '1 + ' * 200 + '1'
+    (root / 'long.py').write_text(original + '\n', encoding='utf-8')
+    ref = tasks.begin(root, 'legacy-truncated')['task_ref']
+    # Simulate the signed inline snapshot produced by an older Runtime. Its
+    # lost tail cannot be supplied by the now changed source file.
+    record = tasks.load(root, ref)
+    record['baseline']['preimages'].pop('long.py')
+    record['baseline'].setdefault('texts', {})['long.py'] = safe_source(original)
+    record['baseline'].setdefault('text_truncations', {})['long.py'] = dict(lines=[1], line_count=1)
+    tasks.store(root).save(record)
+    (root / 'long.py').write_text('value = 2\n', encoding='utf-8')
+    packet = tasks.prepare(root, ref)
+    with pytest.raises(TaskContextError) as rejected:
+        tasks.read(root, ref, packet['review_session'], 'long.py', 1, 1,
+                   source_version='BEFORE_TASK')
+    assert rejected.value.reason_code == 'TASK_PREIMAGE_LINE_TRUNCATED'
+    assert not tasks.load(root, ref)['evidence']
+    tasks.read(root, ref, packet['review_session'], 'long.py', 1, 1)
+    tasks.submit_batch(root, ref, packet['review_session'],
+                       [packet['plan']['units'][0]['unit_id']], 'PARTIAL', ['Old truncated preimage.'])
+    saved = tasks.submit(root, ref, packet['review_session'], [], 'PARTIAL', ['Old truncated preimage.'])
+    assert saved['review_progress']['coverage'] == 'PARTIAL'
+    assert any(item.get('reason') == 'TASK_PREIMAGE_LINE_TRUNCATED'
+               for item in tasks.load(root, ref)['context_gaps'])
+
+
+def test_real_monitoring_page_has_no_long_line_evidence_gap(coordinator):
+    from pathlib import Path
+    from security_runtime.local_evidence import safe_source
+    c, tasks, root, _ = coordinator
+    path = Path(__file__).parents[1] / 'src/security_runtime/monitoring/page.py'
+    source = path.read_text(encoding='utf-8')
+    expected = safe_source(source, source_path='added.py', max_line_chars=None)
+    assert len(expected[50]) > 600 and len(expected[51]) > 600
+    ref, session, packet = prepared(coordinator, source)
+    pages = complete_service_plan(tasks, root, ref, packet)
+    recovered = [''] * len(expected)
+    for page in pages:
+        if page.get('status') == 'ALREADY_DELIVERED':
+            continue
+        low = page['start_line'] - 1
+        if 'start_char' in page:
+            assert len(recovered[low]) == page['start_char']
+            recovered[low] += page['lines'][0]
+        else:
+            recovered[low:low + len(page['lines'])] = page['lines']
+    assert recovered == expected
+    saved = tasks.submit(root, ref, session, [], 'REVIEWED', [])
+    assert saved['review_progress']['coverage'] == 'REVIEWED'

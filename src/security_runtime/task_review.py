@@ -13,6 +13,7 @@ from . import task_review_plan as plans
 from .local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source, MAX_LINE_CHARS
 from .task_preimages import TaskPreimageUnavailable
 from . import task_review_transport as transport
+from .task_review_coverage import evidence_fields, first_unread_char
 from .task_review_protocol import PROTOCOL_VERSION, validate_protocol, require_record_protocol
 
 
@@ -375,13 +376,18 @@ class TaskReviewCoordinator:
                 if cached is None:
                     long_lines = []
                     lines = safe_source(text, source_path=name, truncation_lines=long_lines,
-                                        redaction_version=version)
+                                        redaction_version=version, max_line_chars=None)
                     if cache is not None:
                         cache.put(cache_key, lines, long_lines)
                 else:
                     lines, long_lines = cached
                 truncated = dict(line_count=len(long_lines), lines=long_lines) if long_lines else None
                 location = 'CURRENT_TASK_END'
+            if truncated:
+                service._context_gap(root, record, 'TASK_PREIMAGE_LINE_TRUNCATED', name,
+                                     location_version=location)
+                reject('TASK_PREIMAGE_LINE_TRUNCATED',
+                       'An older snapshot lost source characters; its prefix cannot prove full source coverage', False)
             if start_line > len(lines):
                 reject('TASK_CONTEXT_RANGE_UNAVAILABLE', 'Source range unavailable', details=dict(total_lines=len(lines)))
             requested_high = min(end_line, len(lines))
@@ -409,22 +415,55 @@ class TaskReviewCoordinator:
         low, first_high = missing[0]
         high = min(first_high, low + 599)
         registered = binding['source_ref'] in record.get('review_transport', {}).get('source_refs', [])
-        while True:
-            identifier = 'te3-' + digest_value([ref, name, file_hash, low, high, location])[:32]
+        def pack(last_line, fragment=None):
+            identity = [ref, name, file_hash, low, last_line, location]
+            if fragment is not None:
+                identity.extend(fragment)
+            identifier = 'te3-' + digest_value(identity)[:32]
             evidence = dict(evidence_id=identifier, path=name, file_sha256=file_hash,
-                            location_version=location, start_line=low, end_line=high,
+                            location_version=location, start_line=low, end_line=last_line,
                             total_lines=len(lines))
-            truncated_window = [i for i in (truncated or {}).get('lines', []) if low <= i <= high]
+            if fragment is not None:
+                evidence.update(zip(('start_char', 'end_char', 'line_chars'), fragment))
+            truncated_window = [i for i in (truncated or {}).get('lines', []) if low <= i <= last_line]
             truncation = dict(lines=truncated_window, max_line_chars=MAX_LINE_CHARS) if truncated_window else None
             packet = transport.source_packet(evidence, binding['source_ref'], lines,
                 requested_high=requested_high, registered_source=None if registered else binding,
                 line_truncation=truncation)
-            if (transport.packet_bytes(packet) <= record['review_ledger']['limits']['response_bytes']
-                    or high == low):
+            return evidence, packet, truncated_window
+
+        matching = [item for item in record.get('evidence', {}).values()
+                    if (item['path'], item['file_sha256'], item['location_version']) ==
+                    (name, file_hash, location)]
+        partial = any(item['start_line'] == low and 'start_char' in item for item in matching)
+        limit = record['review_ledger']['limits']['response_bytes']
+        while True:
+            evidence, packet, truncated_window = pack(high)
+            if transport.packet_bytes(packet) <= limit or high == low:
                 break
             high = low + (high - low) // 2
+        if lines[low - 1] and (partial or transport.packet_bytes(packet) > limit):
+            # Repeated requests resume the same immutable line. A fragment is
+            # real evidence, but coverage only advances after all its chars arrive.
+            count = len(lines[low - 1])
+            first = first_unread_char(matching, low, count)
+            left, right, best = first + 1, count, None
+            while left <= right:
+                last = (left + right) // 2
+                candidate = pack(low, (first, last, count))
+                if transport.packet_bytes(candidate[1]) <= limit:
+                    best = candidate
+                    left = last + 1
+                else:
+                    right = last - 1
+            if best is None:
+                # Preserve the usual bounded-delivery failure/rollback path.
+                best = pack(low, (first, first + 1, count))
+            evidence, packet, truncated_window = best
+        identifier = evidence['evidence_id']
         if truncated_window:
-            limitation = dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET', lines=truncated_window[:20])
+            limitation = dict(path=name, reason='SOURCE_LINE_CHAR_BUDGET',
+                              location_version=location, lines=truncated_window[:20])
             if not any(v.get('path') == name and v.get('reason') == 'SOURCE_LINE_CHAR_BUDGET'
                        for v in record['limitations']):
                 record['limitations'].append(limitation)
@@ -435,8 +474,7 @@ class TaskReviewCoordinator:
                 plans.register_related(record, None, name, file_hash, start_line,
                                        requested_high, location, now=service.now(), source_lines=lines)
             plans.record_read(record, evidence, now=service.now())
-            record['evidence'][identifier] = {key: evidence[key] for key in
-                ('path', 'file_sha256', 'location_version', 'start_line', 'end_line')}
+            record['evidence'][identifier] = evidence_fields(evidence)
             if name not in changes and name not in record['related_files']:
                 record['related_files'].append(name)
             source_bytes = len(json.dumps(packet['lines'], ensure_ascii=False).encode('utf-8'))

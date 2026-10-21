@@ -76,7 +76,17 @@ def register(server, registry, *, application):
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
                                  source_version: str = 'CURRENT', session_ref: str | None = None) -> dict:
-        """Read a v3 sanitized before/current source window, at most 80 lines. Follow next_range/unread_ranges using the exact task/session/version. ALREADY_DELIVERED reuses only real issued evidence. Plan-derived finite source/navigation/control allowances and size-scheduled batches never reset on pagination or reconnect. Missing source, unread ranges and incomplete coverage remain gaps. No old-protocol reads, .env content, links, path escapes, commands or network."""
+        """Read a v3 sanitized before/current window, at most 80 lines.
+
+        Follow next_range/unread_ranges with the exact task/session/version.
+        Oversized lines use start_char/end_char/line_chars: zero-based half-open
+        Unicode codepoint offsets. Repeat the same next_range to receive the
+        next unread fragment; only all fragments together cover a whole line.
+        ALREADY_DELIVERED reuses only real issued evidence. Finite task-wide
+        source/navigation/control allowances never reset on pagination or
+        reconnect. Missing source and unread ranges remain gaps. No old-protocol
+        reads, .env content, links, path escapes, commands or network.
+        """
         from ..task_security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)

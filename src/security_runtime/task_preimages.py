@@ -21,7 +21,7 @@ import time
 
 from .closeout_state import digest, encode, readonly_uri
 from .hook_state import identity, no_links
-from .local_evidence import MAX_FILE_BYTES, MAX_LINE_CHARS, _relative, safe_source
+from .local_evidence import MAX_FILE_BYTES, _relative, safe_source
 from .source_redaction import VERSION
 
 CONTRACT = 'task-preimage-v1'
@@ -85,8 +85,10 @@ def _body(lines):
 
 
 def _valid_lines(lines):
+    # The complete serialized body is bounded before persistence and before
+    # read materialization. A display-line cap would irreversibly lose source.
     return (isinstance(lines, list) and all(isinstance(line, str)
-            and '\n' not in line and '\r' not in line and len(line) <= MAX_LINE_CHARS
+            and '\n' not in line and '\r' not in line
             for line in lines))
 
 
@@ -451,7 +453,7 @@ class _PreimageWriter:
                 _fail('TASK_PREIMAGE_SOURCE_REJECTED')
             truncated = []
             lines = safe_source(raw_bytes.decode('utf-8-sig'), source_path=path,
-                                truncation_lines=truncated)
+                                truncation_lines=truncated, max_line_chars=None)
         except UnicodeError:
             _fail('TASK_PREIMAGE_SOURCE_REJECTED')
         return path, lines, truncated

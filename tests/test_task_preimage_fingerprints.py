@@ -70,14 +70,18 @@ def test_fingerprints_align_after_insertion_but_are_task_and_path_bound(sample):
     assert store.semantic_proof(FIRST, 'b.py', raw)['semantic_lines'][1] != first
 
 
-def test_truncated_semantic_suffix_has_private_comparison_without_persisting_suffix(sample):
+def test_long_public_suffix_is_visible_without_private_comparison(sample):
     store, _ = sample
     raw = ('result = ' + 'value + ' * 120 + 'first\n').encode()
     changed = raw.replace(b'first\n', b'other\n')
     old = store.semantic_proof(FIRST, 'a.py', raw)
     new = store.semantic_proof(FIRST, 'a.py', changed)
-    assert old['complete'] and set(old['semantic_lines']) == {1}
-    assert old['semantic_lines'] != new['semantic_lines']
+    assert old['complete'] and new['complete']
+    assert old['semantic_lines'] == new['semantic_lines'] == {}
+    with store.writer(FIRST) as writer:
+        reference = writer.put_source('routes.py', raw)['reference']
+    original = store.read(FIRST, 'routes.py', reference['raw_sha256'], reference)
+    assert original[0].endswith('first') and len(original[0]) > 600
 
 
 @pytest.mark.parametrize('missing', ['row', 'table'])
