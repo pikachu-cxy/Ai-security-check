@@ -160,14 +160,18 @@ def test_invalid_sdk_claims_use_plain_copy_without_source_or_missing_names(conne
     assert len(runtimes[root].calls) == before
 
 
-def test_readonly_configuration_failure_keeps_diagnostics_without_chat_warning(connected, projects, monkeypatch):
+@pytest.mark.parametrize('command', ['git status',
+    'Get-ChildItem -Force | Select-Object Name,Mode', 'rg -n "copy|New-Item" src'])
+def test_readonly_configuration_failure_keeps_diagnostics_without_chat_warning(connected, projects, monkeypatch, command):
     server, pool, runtimes = connected
     root = projects[0]
     before = len(runtimes[root].calls)
     def rejected(*args):
         raise ValueError('GLOBAL_CONFIGURATION_NOT_READY')
     monkeypatch.setattr(pool, 'validate_layers', rejected)
-    output = asyncio.run(server.call_tool('handle_hook_event', claims(root)))
+    args = claims(root)
+    args['tool_input'] = {'command': command}
+    output = asyncio.run(server.call_tool('handle_hook_event', args))
     assert output.structuredContent['reason_code'] == 'GLOBAL_CONFIGURATION_NOT_READY'
     assert output.structuredContent['scanner_run'] is False
     assert 'user_feedback' not in output.structuredContent
@@ -193,6 +197,11 @@ def test_gap_notice_once_per_turn_and_new_turn_can_report(connected, projects, m
         assert output.structuredContent['scanner_run'] is False
         replies.append(output)
     first = json.loads(replies[0].content[0].text)
+    if tool == 'Bash':
+        assert '本次修改尚未检查' not in first['systemMessage']
+        assert '尚不能确认本次操作是否改动了项目文件' in first['systemMessage']
+    else:
+        assert '本次修改尚未检查' in first['systemMessage']
     assert '仅当本轮实际修改' in first['hookSpecificOutput']['additionalContext']
     assert json.loads(replies[1].content[0].text) == {}
     assert 'user_feedback' not in replies[1].structuredContent

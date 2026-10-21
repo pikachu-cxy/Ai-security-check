@@ -755,7 +755,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                             content=[TextContent(type='text', text='{}')])
                     if event == 'PostToolUse':
                         if data.get('reason_code') in {'WORKSPACE_INITIALIZING', 'WORKSPACE_DEGRADED', 'WORKSPACE_ERROR'}:
-                            message += '本次修改尚未检查。'
+                            if (operation == OperationClass.DIRECT_FILE_MUTATION.value
+                                    or data.get('workspace_mutation_observed') is True):
+                                message += '本次修改尚未检查。'
+                            else:
+                                message += '尚不能确认本次操作是否改动了项目文件；如有改动，其检查尚未完成。'
                     from .hook_user_feedback import check_gap_feedback
                     from .hook_reply_context import CHECK_OPERATION_BOUNDARIES
                     data['user_feedback'] = check_gap_feedback(message)

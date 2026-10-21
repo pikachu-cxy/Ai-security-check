@@ -18,17 +18,8 @@ def classify_bash_command(tool_input) -> str:
     command = tool_input.get('command') or tool_input.get('cmd')
     if not isinstance(command, str) or not command.strip() or len(command) > 12000:
         return 'UNKNOWN'
-    import re
-    # Exact command only: compound scripts still require reconciliation.
-    if command.strip().casefold() == 'get-location':
-        return 'READ_ONLY'
-    readonly = re.compile(r'(^|[;&|])\s*(git\s+(status|diff|log|show|branch)\b|(?:cat|type|Get-Content|gc|ls|dir|rg|grep|findstr)\b)', re.I)
-    mutation = re.compile(r'(Set-Content|Add-Content|Out-File|>>|(?<![<>])>(?!=)|\b(?:rm|del|erase|remove-item|mv|move|rename|copy|cp|New-Item|mkdir)\b|\b(?:python|python3|node|perl|ruby)\b.*(?:open\(|write\(|unlink\(|rename\())', re.I)
-    if mutation.search(command):
-        return 'POSSIBLE_WORKSPACE_MUTATION'
-    if readonly.search(command):
-        return 'READ_ONLY'
-    return 'UNKNOWN'
+    from .shell_classification import classify_command
+    return classify_command(command)
 
 
 class CodexEventAdapter:

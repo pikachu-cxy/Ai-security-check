@@ -98,7 +98,8 @@ def test_missing_binding_cannot_scan(repo, tmp_path):
     assert result['reason'] == 'WORKSPACE_BINDING_REQUIRED' and not runtime.calls
 
 
-@pytest.mark.parametrize('command', ['git status', 'Get-Content src/A.java', 'rg danger src'])
+@pytest.mark.parametrize('command', ['git status', 'Get-Content src/A.java', 'rg danger src',
+    'Get-ChildItem -Force | Select-Object Name,Mode', 'rg -n "copy|New-Item" src'])
 def test_bash_read_only_skips_scanner(repo, tmp_path, command):
     runtime = FakeRuntime()
     result = handle_codex_hook(**(claims(repo) | {'tool_name': 'Bash', 'tool_input': {'command': command}}),
@@ -108,16 +109,20 @@ def test_bash_read_only_skips_scanner(repo, tmp_path, command):
     assert not result['scanner_run'] and not runtime.calls
 
 
-def test_bash_mutation_and_unknown_are_scanned(repo, tmp_path):
-    for tool_input, classification in ({'command': 'Set-Content x.java value'}, 'POSSIBLE_WORKSPACE_MUTATION'), ({'command': 'make'}, 'UNKNOWN'):
-        runtime = FakeRuntime()
-        state_root = tmp_path / classification
-        state_root.mkdir()
-        dirty(repo, 'bash-change\n')
-        result = handle_codex_hook(**(claims(repo) | {'tool_name': 'Bash', 'tool_input': tool_input}),
-                                   binding=binding(repo), coordinator=coordinator(state_root, runtime))
-        assert result['tool_classification'] == classification
-        assert len(runtime.calls) == 1, result
+@pytest.mark.parametrize('command,classification', [
+    ('Set-Content x.java value', 'POSSIBLE_WORKSPACE_MUTATION'), ('make', 'UNKNOWN'),
+    ('git status; npm install', 'UNKNOWN'),
+    ('Get-Content README.md; git checkout -- src/app.py', 'UNKNOWN'),
+])
+def test_bash_mutation_and_unknown_are_scanned(repo, tmp_path, command, classification):
+    runtime = FakeRuntime()
+    state_root = tmp_path / classification
+    state_root.mkdir()
+    dirty(repo, 'bash-change\n')
+    result = handle_codex_hook(**(claims(repo) | {'tool_name': 'Bash', 'tool_input': {'command': command}}),
+                               binding=binding(repo), coordinator=coordinator(state_root, runtime))
+    assert result['tool_classification'] == classification
+    assert len(runtime.calls) == 1, result
 
 
 @pytest.mark.parametrize('foreign', ['parent', 'unc'])
