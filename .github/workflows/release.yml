@@ -33,7 +33,7 @@ jobs:
     needs: version
     uses: ./.github/workflows/tests.yml
     with:
-      # Focused regressions include a real offline Semgrep check; retain scanner-test dependencies.
+      # Use an isolated interpreter and pinned scanner dependencies for real offline checks.
       focused: ${{ inputs.validation == 'focused' || contains(github.event.head_commit.message, '[release-v0.3.9]') }}
   compliance:
     needs: tests

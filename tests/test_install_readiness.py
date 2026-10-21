@@ -128,6 +128,26 @@ def test_version_mismatch_replaced_by_supported_version():
     assert_valid(receipt)
 
 
+@pytest.mark.parametrize('source,offline,install', [
+    (ToolSource.SYSTEM, False, True),
+    (ToolSource.SYSTEM, True, False),
+    (ToolSource.EXPLICIT, False, False),
+    (ToolSource.MANAGED, False, False),
+])
+def test_readiness_only_prepares_unverified_system_semgrep_online(source, offline, install):
+    from security_runtime.component_health import diagnosis
+    manager = Manager()
+    problem = diagnosis('COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
+    manager.tools['semgrep'] = ResolvedTool('semgrep', VERSIONS['semgrep'], '/external/semgrep',
+        source, ToolStatus.BROKEN, problem.error_summary, problem)
+    receipt = prepare_installation_readiness(manager=manager, offline=offline)
+    assert receipt['ready'] is install
+    assert (('ensure', 'semgrep', False) in manager.calls) is install
+    assert validate_readiness_receipt(receipt)
+    if not install:
+        assert receipt['tools']['semgrep']['diagnostic']['code'] == problem.error_code
+
+
 @pytest.mark.parametrize('freshness', ['STALE', 'UNKNOWN', 'MISSING'])
 def test_non_current_data_refreshed_online(freshness):
     manager = Manager(freshness=freshness)

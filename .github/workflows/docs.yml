@@ -52,7 +52,7 @@ jobs:
       - name: Check that all documented downloads are public
         id: trial-assets
         run: |
-          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.9.2
+          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.9.3
           native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9
           ready=true
           for platform in macos-arm64 macos-x64; do

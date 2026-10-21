@@ -18,7 +18,7 @@ import time
 
 from .install_progress import report_progress
 from .progress import ScanCancelled, checkpoint
-from .toolchain import ToolManager, ToolStatus, ResolvedTool, VERSIONS
+from .toolchain import ToolManager, ToolStatus, ResolvedTool, VERSIONS, can_prepare_managed_semgrep
 from .preparation_budget import preparation_budget, current_budget
 
 
@@ -375,7 +375,8 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
             _failure(failures, 'INSTALL_TOOLS', name, exc)
             current = _probe_failed(name, exc, 'RESOLVE')
         if (not _component(current, expected, name)['ready'] and not offline
-                and getattr(current, 'status', None) in {ToolStatus.MISSING, ToolStatus.VERSION_MISMATCH}):
+                and (getattr(current, 'status', None) in {ToolStatus.MISSING, ToolStatus.VERSION_MISMATCH}
+                     or can_prepare_managed_semgrep(current))):
             budget = current_budget()
             if budget:
                 budget.report(dict(event='COMPONENT_STARTED', component=name))

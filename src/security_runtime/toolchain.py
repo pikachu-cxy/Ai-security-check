@@ -94,6 +94,18 @@ class ResolvedTool:
         return value
 
 
+def can_prepare_managed_semgrep(result: ResolvedTool | None) -> bool:
+    """An unverified auto-discovered tool may be replaced by our own environment.
+
+    Never alter the external tool, accept its identity, or override an explicit
+    selection. Managed failures and other diagnoses retain their repair path.
+    """
+    return bool(result is not None and result.tool_id == 'semgrep'
+        and result.source == ToolSource.SYSTEM and result.status == ToolStatus.BROKEN
+        and result.diagnostic is not None
+        and result.diagnostic.error_code == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
+
+
 def _manifest(tool: str, version: str, platform_name: str, arch: str, asset: str, digest: str, homepage: str, license_name: str) -> ToolManifest:
     owner = {"gitleaks": "gitleaks/gitleaks", "trivy": "aquasecurity/trivy", "osv-scanner": "google/osv-scanner"}[tool]
     return ToolManifest(tool, tool.title(), version, platform_name, arch,
@@ -762,7 +774,8 @@ class ToolManager:
             return current
         # A present engine failing to start needs diagnosis, not another
         # download of the same bytes. Reinstallation is an explicit CLI choice.
-        if current.status == ToolStatus.BROKEN and not reinstall:
+        if (current.status == ToolStatus.BROKEN and not reinstall
+                and not can_prepare_managed_semgrep(current)):
             return current
         if tool_id == 'semgrep':
             from .component_health import settings_problem

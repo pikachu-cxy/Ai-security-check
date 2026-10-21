@@ -10,6 +10,8 @@ Source versions, published assets, CI acceptance, and real desktop validation ar
 
 ## 0.3.9 · Official release
 
+- If an automatically discovered system Semgrep cannot provide a verifiable execution identity, online installation prepares a separate managed environment. Offline mode, explicit selections, and broken managed components retain their diagnostics. The macOS installation script updates to managed delivery `macos-trial-v0.3.9.3` with the same fix.
+
 This release uses focused regressions for current changes plus native platform acceptance; it does not rerun the complete development test suite.
 
 - Official release with Windows x64, Mac Apple Silicon, and Mac Intel bundles, matching SHA256 files, source metadata, and acceptance evidence. Publication waits for the complete release gates; documentation deploys again after successful publication.
