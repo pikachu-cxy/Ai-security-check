@@ -273,9 +273,9 @@ class TaskReviewCoordinator:
                 return dict(status='BUSY', scanner_run=False)
             record = service._session(root, ref, session, full_fresh=False)
             guide = self._method()
-            if guide['sha256'] != record['packet']['quick_skill']['sha256']:
+            if any(guide[key] != record['packet']['quick_skill'][key] for key in ('version', 'sha256')):
                 raise ValueError('Review method changed; task review is stale')
-            return self._charge(root, record, dict(quick_skill=guide))
+            return self._charge(root, record, dict(quick_skill=guide), 'method')
 
     def page(self, workspace, ref, session, cursor=0, limit=10):
         service = self.service

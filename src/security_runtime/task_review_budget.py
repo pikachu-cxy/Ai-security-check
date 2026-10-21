@@ -9,9 +9,14 @@ import hashlib
 import json
 import math
 
+from .guidance_catalog import MAX_BYTES as METHOD_CONTENT_BYTES
+
 
 CONTRACT = 'adaptive-review-budget-v3'
 RESPONSE_BYTES = 16_000
+# Fixed bundled guidance has its own bounded envelope; it still spends the
+# original task's control and total allowances, never source allowance.
+METHOD_RESPONSE_BYTES = METHOD_CONTENT_BYTES + 4_096
 WINDOW_LINES = 80
 ACTIVITY_SECONDS = 900
 BATCH_TARGET_BYTES = 128_000
@@ -197,7 +202,8 @@ def allocate_windows(ledger, record, windows, *, new_units=0, metadata_bytes=0):
 
 
 def charge(ledger, cost, category, source_bytes, batch_id):
-    if cost > ledger['limits']['response_bytes']:
+    response_limit = METHOD_RESPONSE_BYTES if category == 'method' else ledger['limits']['response_bytes']
+    if cost > response_limit:
         raise AdaptiveBudgetError('TASK_CONTEXT_RESPONSE_BUDGET', 'Task response byte budget exceeded; request a smaller page')
     source = cost if category == 'source' and not source_bytes else source_bytes
     other = cost-source

@@ -310,8 +310,21 @@ def charge_packet(record, packet, category='control', source_bytes=0, *, now=Non
     from . import task_review_budget as adaptive
     plan = _plan(record)
     _live(plan, now)
-    if category not in {'control', 'navigation', 'source'}:
+    if category not in {'control', 'navigation', 'source', 'method'}:
         raise ValueError('Invalid context byte category')
+    if category == 'method':
+        # This exception is only for the complete fixed method already bound
+        # to the task. Arbitrary control/source packets retain the 16KB limit.
+        expected = record.get('packet', {}).get('quick_skill', {})
+        guide = packet.get('quick_skill') if isinstance(packet, dict) else None
+        if (not isinstance(packet, dict) or set(packet) != {'quick_skill'}
+                or not isinstance(guide, dict) or set(guide) != {'version', 'sha256', 'content'}
+                or not isinstance(guide['content'], str) or not guide['content']
+                or source_bytes != 0 or batch_id is not None
+                or any(guide[key] != expected.get(key) for key in ('version', 'sha256'))
+                or len(guide['content'].encode('utf-8')) > adaptive.METHOD_CONTENT_BYTES
+                or hashlib.sha256(guide['content'].encode('utf-8')).hexdigest() != guide['sha256']):
+            raise ValueError('Method delivery must match the fixed task-bound version and digest')
     raw = packet if isinstance(packet, bytes) else json.dumps(packet, ensure_ascii=False).encode('utf-8')
     cost = len(raw)
     if type(source_bytes) is not int or not 0 <= source_bytes <= cost:
