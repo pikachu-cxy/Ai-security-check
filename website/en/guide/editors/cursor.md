@@ -22,7 +22,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 
 [Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh). It detects Apple Silicon or Intel and prepares dedicated Python without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-macos-trial`.
 
-This uses the separate `macos-trial-v0.3.9.2` / Runtime 0.3.9 release. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
+This uses the separate `macos-trial-v0.3.9.3` / Runtime 0.3.9 release. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
 
 For a verified [manual native bundle](../../downloads.md#macos-packages), run `./security-check/security-check install cursor` from its parent directory. To switch back, reinstall from the original verified bundle, restart Cursor, and verify the build. Signing, notarization, and real desktop operation require separate validation.
 

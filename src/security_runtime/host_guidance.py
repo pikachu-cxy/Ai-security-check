@@ -2,7 +2,7 @@
 import sys
 
 from ._version import __version__
-from .risk_presentation import RISK_PRESENTATION_RULES
+from .risk_presentation import RESPONSE_STYLE_RULES, RISK_PRESENTATION_RULES
 from .risk_decision_guidance import RISK_DECISION_GUIDANCE
 from .repair_impact_policy import UNKNOWN_CLASSIFICATION_CONTRACT, UNKNOWN_CLASSIFICATION_GUIDANCE
 
@@ -285,7 +285,7 @@ RISK_DECISION_WORKFLOW = RISK_DECISION_GUIDANCE + "\n" + RISK_PRESENTATION_RULES
 已排除、已暂缓的项目不重复展示或索取选择；处置状态不可读取时说明读取缺口，不能回退旧提示重问。
 对仍需提醒的项目，必须完整保留其中的
 位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
-“修复／稍后处理”选择。可以调整换行或文件链接，不得只摘取风险标题、统计数量，
+“修复／稍后处理”含义。按用户语言自然改写，可合并相关事实、调整段落或文件链接，不得只摘取风险标题、统计数量，
 不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”或非空风险
 内容时不添加通用检查消息；任务核查内容合并到开发总结，不单独刷回复。
 internal_control 仅供内部流程使用。普通用户回复和进度说明不得展示内部
@@ -315,7 +315,10 @@ or Runtime-issued user_feedback.message when that section is absent, in the user
 Do not redisplay excluded/deferred items or ask for their choice again. If saved
 handling is unavailable, report that gap without falling back to an old risk prompt.
 Preserve every supplied location/problem/conditional impact/recommendation,
-unknown and pending 修复／稍后处理 choice; formatting and file links may be adapted,
+unknown and pending 修复／稍后处理 choice; translate all headings, explanations and
+choices into the user's current language or explicit language preference. The
+Chinese fallback is source material, not a required response language. Runtime
+does not infer conversation language. Formatting and file links may be adapted,
 but do not summarize away any of those facts or replace them with diagnostics.
 Describe the affected file/line or dependency
 version owner, the specific unsafe behavior, its conditional impact, the concrete
@@ -607,7 +610,7 @@ internal_control、凭据、工具名与内部枚举不用于普通反馈；只�
 
 仅在明确深度审计/攻击链分析时必读 [深度审计方法](references/deep-audit.md)，topic=deep-audit；
 可沿原 get_professional_guidance 契约复用同版本摘要。指导不授予目标执行、网络、源码上传或额外扫描权限。
-真实双宿主自然语言可用性仍需独立实机验收；能力声明和合成测试不冒充实机通过。'''
+真实双宿主自然语言可用性仍需独立实机验收；能力声明和合成测试不冒充实机通过。''' + '\n\n' + RESPONSE_STYLE_RULES
 
 
 def runtime_info(*, remediation_config=None, include_functional_verification=False):

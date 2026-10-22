@@ -5,7 +5,7 @@ description: Review changes, understand risks, approve fixes, and verify the ori
 hero:
   name: AI Security Runtime
   text: AI writes code. Keep security evidence in the workflow.
-  tagline: Local checks, contextual review, and traceable fix verification for AI coding assistants. Developer Alpha for Windows and macOS.
+  tagline: Local checks, contextual review, and traceable fix verification for AI coding assistants. Version 0.3.9 for Windows x64, Mac Apple Silicon, and Mac Intel.
   image:
     src: /logo.svg
     alt: AI Security Runtime

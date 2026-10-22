@@ -13,6 +13,7 @@ on:
 
 jobs:
   tests:
+    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v0.3.9]')
     name: Runtime tests (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -46,9 +47,21 @@ jobs:
           path: ${{ runner.temp }}/node-host-preflight.json
           if-no-files-found: error
       - name: Install Runtime and test dependencies
+        shell: bash
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e ".${{ inputs.focused && '[test]' || '[test,scanner-test]' }}"
+          python -m venv --copies "$RUNNER_TEMP/runtime-test-env"
+          if [ "$RUNNER_OS" = Windows ]; then
+            test_bin="$RUNNER_TEMP/runtime-test-env/Scripts"
+            test_python="$test_bin/python.exe"
+          else
+            test_bin="$RUNNER_TEMP/runtime-test-env/bin"
+            test_python="$test_bin/python"
+          fi
+          "$test_python" -m pip install --upgrade pip
+          "$test_python" -m pip install -e ".[test,scanner-test]"
+          echo "$test_bin" >> "$GITHUB_PATH"
+      - name: Verify offline scanner identity before regressions
+        run: python -c "from security_runtime.toolchain import ToolManager, ToolStatus; tool = ToolManager().ensure('semgrep', offline=True); assert tool.status == ToolStatus.READY, tool.detail"
       - name: Check installation and Mac release contracts before the full regression
         env:
           PYTHONUTF8: '0'
@@ -78,6 +91,16 @@ jobs:
           tests/test_task_review_adaptive_windows.py
           tests/test_task_review_redacted_changes.py
           tests/test_task_review_invariants.py
+          tests/test_component_probe.py
+          tests/test_dependency_fallback.py
+          tests/test_dependency_scan_runtime.py
+          tests/test_hook_reply_context.py
+          tests/test_hook_user_feedback.py
+          tests/test_install_readiness.py
+          tests/test_reply_experience.py
+          tests/test_scanner_execution_identity.py
+          tests/test_tool_resolution.py
+          tests/test_distribution.py
           --basetemp="${{ runner.temp }}/focused-release-tests"
       - name: Retain actual arithmetic host execution evidence
         if: always() && inputs.focused != true

@@ -94,6 +94,18 @@ class ResolvedTool:
         return value
 
 
+def can_prepare_managed_semgrep(result: ResolvedTool | None) -> bool:
+    """An unverified auto-discovered tool may be replaced by our own environment.
+
+    Never alter the external tool, accept its identity, or override an explicit
+    selection. Managed failures and other diagnoses retain their repair path.
+    """
+    return bool(result is not None and result.tool_id == 'semgrep'
+        and result.source == ToolSource.SYSTEM and result.status == ToolStatus.BROKEN
+        and result.diagnostic is not None
+        and result.diagnostic.error_code == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
+
+
 def _manifest(tool: str, version: str, platform_name: str, arch: str, asset: str, digest: str, homepage: str, license_name: str) -> ToolManifest:
     owner = {"gitleaks": "gitleaks/gitleaks", "trivy": "aquasecurity/trivy", "osv-scanner": "google/osv-scanner"}[tool]
     return ToolManifest(tool, tool.title(), version, platform_name, arch,
@@ -563,7 +575,7 @@ class ToolManager:
                         bucket.values[key] = output
             return output
 
-    def _probe_version(self, tool_id: str, path: Path) -> str:
+    def _probe_version(self, tool_id: str, path: Path, *, initial_install=False) -> str:
         from .component_health import diagnosis
         key = (tool_id, str(path))
         self._probe_diagnostics.pop(key, None)
@@ -578,9 +590,15 @@ class ToolManager:
                     environment = tool_environment(path)
                     if tool_id == 'semgrep':
                         environment.update(SEMGREP_ENABLE_VERSION_CHECK='0', SEMGREP_SEND_METRICS='off')
-                    # macOS can spend more than eight seconds loading Semgrep
-                    # for the first time. Keep a finite allowance for that probe.
-                    timeout = 30 if sys.platform == 'darwin' and tool_id == 'semgrep' else 8
+                    # The first macOS Semgrep CLI startup imports its complete
+                    # Python dependency graph and native modules. Killing and
+                    # deleting that fresh environment after 30 seconds repeats
+                    # the cold-start work on every installation attempt.
+                    # Only this installation validation gets extra time; normal
+                    # status probes stay at 30 seconds. run_process also bounds
+                    # this by the current overall preparation budget.
+                    macos_semgrep = sys.platform == 'darwin' and tool_id == 'semgrep'
+                    timeout = (90 if initial_install else 30) if macos_semgrep else 8
                     proc = run_process([str(path.resolve()), "--version"], timeout=timeout, max_output=16_000,
                                        env=environment)
             if proc.returncode:
@@ -683,6 +701,14 @@ class ToolManager:
         expected = self.versions[tool_id]
         if not matches_version(expected, output):
             return ResolvedTool(tool_id, output, str(path), source, ToolStatus.VERSION_MISMATCH, f"expected {expected}", diagnosis('COMPONENT_VERSION_MISMATCH'), probe)
+        # A wrapper can report the pinned version while hiding the Python
+        # package/interpreter used by a real scan. Detect that during readiness,
+        # not only after project input has already been captured. Never infer
+        # or execute a wrapper's target to make its identity appear valid.
+        if tool_id == 'semgrep' and self.execution_identity(tool_id, path) is None:
+            problem = diagnosis('COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
+            return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.BROKEN,
+                problem.error_summary, problem, probe)
         return ResolvedTool(tool_id, expected, str(path), source, ToolStatus.READY, probe=probe)
 
     def resolve(self, tool_id: str) -> ResolvedTool:
@@ -748,7 +774,8 @@ class ToolManager:
             return current
         # A present engine failing to start needs diagnosis, not another
         # download of the same bytes. Reinstallation is an explicit CLI choice.
-        if current.status == ToolStatus.BROKEN and not reinstall:
+        if (current.status == ToolStatus.BROKEN and not reinstall
+                and not can_prepare_managed_semgrep(current)):
             return current
         if tool_id == 'semgrep':
             from .component_health import settings_problem
@@ -766,7 +793,9 @@ class ToolManager:
         if offline and not (requirement and requirement[1]):
             if current.source is not None and current.status != ToolStatus.MISSING:
                 return current
-            diagnostic = classify_network_error(offline=True)
+            diagnostic = ErrorDiagnostic('ENGINE_MISSING_OFFLINE',
+                f'{tool_id} is not installed locally; this check only uses local components.',
+                f'While online, run security-check tools install {tool_id}, then retry the local check.')
             return ResolvedTool(tool_id, "", "", None, ToolStatus.OFFLINE, diagnostic.error_summary, diagnostic)
         try:
             if requirement:
@@ -969,7 +998,10 @@ class ToolManager:
             executable = environment / ("Scripts" if os.name == "nt" else "bin") / (executable_name or tool_id + (".exe" if os.name == "nt" else ""))
             if not executable.is_file():
                 raise ValueError("Python package engine did not provide the expected command")
-            if not matches_version(version, self._version(tool_id, executable)):
+            actual_version = (self._probe_version(tool_id, executable, initial_install=True)
+                if sys.platform == 'darwin' and tool_id == 'semgrep'
+                else self._version(tool_id, executable))
+            if not matches_version(version, actual_version):
                 if sys.platform == 'darwin':
                     diagnostic = self._probe_diagnostics.get((tool_id, str(executable)))
                     if diagnostic is not None:
@@ -1046,10 +1078,14 @@ class ToolManager:
         if offline is None:
             offline = os.getenv("SECURITY_RUNTIME_OFFLINE") == "1"
         if offline:
-            self.data_diagnostics['vulnerability_db'] = (ErrorDiagnostic('VULNERABILITY_DB_STALE',
-                'Offline scan uses a cached database whose freshness is not current.',
-                'Reconnect and refresh vulnerability data before treating the result as current.')
-                if available else classify_network_error(offline=True))
+            freshness = self.database_freshness()['status']
+            code = ('VULNERABILITY_DB_STALE' if freshness == 'STALE'
+                else 'VULNERABILITY_DB_FRESHNESS_UNKNOWN') if available else 'VULNERABILITY_DB_UNAVAILABLE'
+            summary = (('Local vulnerability data is past its recorded update deadline.' if freshness == 'STALE'
+                else 'Local vulnerability data is present, but its update time cannot be verified.')
+                if available else 'The local Trivy vulnerability database is missing or unusable.')
+            self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic(code, summary,
+                'While online, run security-check tools install trivy to prepare public vulnerability data, then retry the local check.')
             return ToolStatus.READY if available else ToolStatus.OFFLINE
         cache = self.trivy_cache_dir()
         cache.mkdir(parents=True, exist_ok=True)
@@ -1191,7 +1227,9 @@ class ToolManager:
         if (available and self.database_status() == ToolStatus.READY
                 and (validate_database is None or validate_database(cache / 'db'))):
             original = self.data_diagnostics.get('vulnerability_db')
-            self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic('VULNERABILITY_DB_STALE',
+            code = ('VULNERABILITY_DB_STALE' if self.database_freshness()['status'] == 'STALE'
+                else 'VULNERABILITY_DB_FRESHNESS_UNKNOWN')
+            self.data_diagnostics['vulnerability_db'] = ErrorDiagnostic(code,
                 'Database refresh failed; scanning uses the previous cached vulnerability data.',
                 'Retry the data update online; current vulnerability coverage is incomplete.',
                 source=original.source if original else '')

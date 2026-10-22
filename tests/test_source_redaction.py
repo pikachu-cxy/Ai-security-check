@@ -2,6 +2,7 @@
 import hashlib
 import json
 import sqlite3
+from pathlib import Path
 
 import pytest
 
@@ -205,3 +206,78 @@ def test_all_parts_of_concatenated_and_escaped_credentials_are_hidden():
                    '# password="synthetic-first\\"synthetic-tail"']:
         result = '\n'.join(safe_source(source, source_path='a.py'))
         assert 'synthetic-first' not in result and 'synthetic-tail' not in result
+
+
+@pytest.mark.parametrize('source', [
+    'GH_TOKEN: ${{ github.token }}',
+    'GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}',
+    '"GH_TOKEN": ${{ env.RELEASE_TOKEN }}',
+    'GH_TOKEN: "${{ github.token }}"',
+    'GH_TOKEN: ${{ inputs.token }}   ',
+])
+def test_pure_github_variable_references_remain_readable(source):
+    assert safe_source(source, source_path='workflow.yml') == [source]
+
+
+@pytest.mark.parametrize('source', [
+    "GH_TOKEN: ${{ github.token || 'synthetic-private-value' }}",
+    'GH_TOKEN: ${{ "synthetic-private-value" }}',
+    "GH_TOKEN: ${{ format('{0}', 'synthetic-private-value') }}",
+    'GH_TOKEN: ${{ github.token }}synthetic-private-value',
+    'GH_TOKEN: ${{ github.token }} + synthetic-private-value',
+    'GH_TOKEN: ${{ synthetic-private-value',
+    'token = "${TOKEN:-synthetic-private-value}"',
+    'token = "{{ token or synthetic-private-value }}"',
+    'private_key = r"synthetic-private-value"',
+    "GH_TOKEN: ${{\n github.token || 'synthetic-private-value'\n }}",
+    "GH_TOKEN: ${{ '}}' ||\n 'synthetic-private-value'\n }}",
+])
+def test_template_expressions_and_raw_credentials_are_not_reference_exemptions(source):
+    result = '\n'.join(safe_source(source, source_path='workflow.yml'))
+    assert 'synthetic-private-value' not in result
+    assert '[REDACTED_SECRET]' in result
+
+
+def test_security_pattern_constants_are_readable_without_a_regex_exemption():
+    package = Path(__file__).parents[1] / 'src' / 'security_runtime'
+    for name, marker in [('local_evidence.py', '_SAFE_CREDENTIAL_PATTERN = ('),
+                         ('task_preimage_fingerprints.py', '_PRIVATE_KEY_PATTERN = ' )]:
+        text = (package / name).read_text(encoding='utf-8')
+        raw = text.splitlines()
+        safe = safe_source(text, source_path=name, max_line_chars=None)
+        index = next(index for index, line in enumerate(raw) if marker in line)
+        assert safe[index:index+2] == raw[index:index+2]
+
+
+@pytest.mark.parametrize('newline', ['\n', '\r\n', '\r'])
+@pytest.mark.parametrize('blank_lines', [0, 1])
+def test_sensitive_yaml_plain_scalar_on_following_line_is_redacted(newline, blank_lines):
+    prefix = 'GH_TOKEN:' + newline * (blank_lines + 1) + '  '
+    source = prefix + "${{ github.token || 'probe-private-canary' }}" + newline + 'MODE: development'
+    result = safe_source(source, source_path='workflow.yml')
+    assert 'probe-private-canary' not in '\n'.join(result)
+    assert '[REDACTED_SECRET]' in '\n'.join(result)
+    assert len(result) == len(source.splitlines())
+    assert result[-1] == 'MODE: development'
+    reference = prefix + '${{ github.token }}'
+    assert safe_source(reference, source_path='workflow.yml') == reference.splitlines()
+
+
+def test_yaml_template_lookup_does_not_cross_an_intervening_field():
+    source = "GH_TOKEN: # no value\nOTHER: ${{ inputs.name || 'public-label' }}\nMODE: development"
+    assert safe_source(source, source_path='workflow.yml') == source.splitlines()
+
+
+@pytest.mark.parametrize('quote', ['', '"', "'"])
+def test_yaml_template_after_comment_lines_keeps_credential_ownership(quote):
+    prefix = 'GH_TOKEN: # release credential\n  # selected below\n  '
+    expression = "${{ github.token || 'probe-private-canary' }}"
+    if quote == "'":
+        expression = expression.replace("'", "''")
+    source = prefix + quote + expression + quote + '\nMODE: development'
+    result = safe_source(source, source_path='workflow.yml')
+    assert 'probe-private-canary' not in '\n'.join(result)
+    assert '[REDACTED_SECRET]' in '\n'.join(result)
+    assert len(result) == len(source.splitlines()) and result[-1] == 'MODE: development'
+    reference = prefix + quote + '${{ github.token }}' + quote
+    assert safe_source(reference, source_path='workflow.yml') == reference.splitlines()

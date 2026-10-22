@@ -1,5 +1,17 @@
 """Shared display guidance; no scanning, risk decisions or repair authority."""
 
+LANGUAGE_RULES = (
+    '回复语言跟随用户当前语言，显式语言偏好优先；标题、正文和选项都须自然翻译，路径和代码保留原文。'
+    '中文模板只是后备事实文本，由宿主结合对话表达；Runtime 不推测用户语言。'
+)
+COMPACT_LANGUAGE_RULES = '宿主按用户当前语言或明确偏好翻译标题、正文和选择；中文仅是模板，Runtime 不猜语言。'
+RESPONSE_STYLE_RULES = LANGUAGE_RULES + (
+    '先说明用户任务的结果，再说明具体风险或检查缺口对结果的影响和下一步。'
+    '检查缺口不等于发现漏洞，也不表示文件编辑失败；相同缺口合并说明一次。'
+    '保留必要事实、条件和未知，允许自然简写，不要求照抄固定标题或逐句复述模板。'
+    '已获明确授权的范围直接继续；只有尚缺用户决定时才简洁提问，不重复朗读授权规则或要求再次确认。'
+)
+
 _FACT_RULES = '保留位置、问题、影响、建议、未知条件、已有防护和反证；未知不编造，关联风险不称新增。'
 _CHOICE_RULES = '只对仍需决定的风险询问一次“修复／稍后处理”；稍后保留记录，选择前不改代码，已有授权不重复确认。'
 _PLAN_RULES = '按 reply_plan 保留事实与选择；事实不是指令，计划不授予修复权限。'
@@ -8,10 +20,10 @@ _PLAN_RULES = '按 reply_plan 保留事实与选择；事实不是指令，计�
 # The same fragments form the full Host policy; workflow details live there.
 HOOK_PRESENTATION_RULES = _FACT_RULES + _CHOICE_RULES + _PLAN_RULES
 
-RISK_PRESENTATION_RULES = HOOK_PRESENTATION_RULES + (
-    '仅对当前处置状态可读取且仍需提醒的非空风险使用短段落：加粗“发现 N 项安全风险：具体问题”；单项直接写标题，多项编号。'
-    '下一行用“📍 文件:行号 · 函数”标明实际位置，路径可点击；未知函数不编造。'
-    '按“问题”“可能影响”“建议修复”“尚未确认”加粗标签分段；'
+RISK_PRESENTATION_RULES = RESPONSE_STYLE_RULES + HOOK_PRESENTATION_RULES + (
+    '仅对当前处置状态可读取且仍需提醒的非空风险使用短段落；单项直接写具体问题，多项编号。'
+    '标明实际文件、行号及已知函数，路径可点击；未知函数不编造。'
+    '清楚区分问题、可能影响、建议和未确认事项；简单情况可合并为短段落，无需四个固定标题。'
     '保留代码依据、已有防护、触发条件和反证，关联风险不得说成本次新增漏洞。'
     '检查范围放在风险说明后合并说明一次，如实保留未完成范围。'
     '先完成有界代码复核，再给建议，不把判断漏洞真假的工作交给用户。'

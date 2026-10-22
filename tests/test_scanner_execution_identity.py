@@ -14,7 +14,7 @@ from security_runtime.models import ScanContext, ScanMode
 from security_runtime.scan_input import capture_scan_input
 from security_runtime.scan_request import ScanRequest, SourceKind
 from security_runtime.scanners import BaseScanner, _snapshot
-from security_runtime.toolchain import ResolvedTool, ToolManager, ToolStatus, platform_key, sha256_file
+from security_runtime.toolchain import ResolvedTool, ToolManager, ToolSource, ToolStatus, platform_key, sha256_file
 from security_runtime import toolchain
 from link_fixture import linked_directory
 
@@ -43,6 +43,36 @@ def rewrite(path,raw):
     replacement=path.with_suffix('.replacement')
     replacement.write_bytes(raw)
     replacement.replace(path)
+
+
+def test_matching_version_wrapper_is_not_scan_ready(tmp_path, monkeypatch):
+    from security_runtime.install_readiness import prepare_installation_readiness, validate_readiness_receipt
+    wrapper = tmp_path / 'external/semgrep'
+    wrapper.parent.mkdir()
+    wrapper.write_bytes(b'#!/bin/sh\nexec /unbound/python -m semgrep "$@"\n')
+    manager = ToolManager(tmp_path / 'tool-state')
+    monkeypatch.setenv('SEMGREP_SETTINGS_FILE', str(tmp_path / 'settings.yml'))
+    monkeypatch.setenv('SECURITY_RUNTIME_SEMGREP_PATH', str(wrapper))
+    monkeypatch.setattr(manager, '_version', lambda *a: manager.versions['semgrep'])
+    monkeypatch.setattr('security_runtime.toolchain.shutil.which', lambda *a: None)
+    monkeypatch.setattr(manager, 'ensure', lambda *a, **kw: pytest.fail('readiness must not install'))
+    result = manager.resolve('semgrep')
+    assert result.status == ToolStatus.BROKEN
+    assert result.diagnostic.error_code == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'
+    assert result.path == str(wrapper.resolve())
+    receipt = prepare_installation_readiness(manager=manager, offline=True)
+    assert validate_readiness_receipt(receipt)
+    component = receipt['tools']['semgrep']
+    assert component['ready'] is False
+    assert component['diagnostic']['code'] == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'
+    assert component['diagnostic']['automatic_download'] is False
+    assert wrapper.read_bytes().startswith(b'#!/bin/sh')
+
+
+def test_verified_package_layout_can_be_scan_ready(identity, monkeypatch):
+    _, binary, _, manager = identity
+    monkeypatch.setattr(manager, '_version', lambda *a: manager.versions['semgrep'])
+    assert manager._check('semgrep', binary, ToolSource.EXPLICIT).status == ToolStatus.READY
 
 
 @pytest.mark.skipif(os.name == 'nt', reason='POSIX virtual environment interpreter layout')

@@ -38,7 +38,7 @@ class OSVDependencyAdapter(BaseScanner):
         worker.inventory = {}
         emit('FALLBACK_PREPARING',scanner=self.name,capability=tuple(self.capabilities))
         found, run = BaseScanner.scan(worker, context, normalizer)
-        if run.error_code == 'OFFLINE_MODE':
+        if run.error_code in {'OFFLINE_MODE', 'OSV_DATABASE_MISSING'}:
             run.status = RunStatus.UNAVAILABLE
         run.provider = self.engine_id
         run.provider_role = 'FALLBACK'
@@ -73,8 +73,16 @@ class OSVDependencyAdapter(BaseScanner):
         environment['OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY'] = str(db_root)
         if offline:
             ecosystems = {'Maven' if Path(f).name.endswith('.xml') or 'gradle' in Path(f).name else 'Go' if Path(f).name=='go.mod' else 'PyPI' if Path(f).name in {'requirements.txt', 'pyproject.toml'} else 'npm' for f in supported}
-            if any(not (db_root/'osv-scalibr'/eco/'all.zip').is_file() for eco in ecosystems):
-                raise DiagnosticError(ErrorDiagnostic('OFFLINE_MODE', 'OSV local vulnerability data is unavailable in offline mode.', 'Prepare local OSV ecosystem databases online before offline scanning.'))
+            # Pinned OSV 2.6.0 delegates to osv-scalibr 3090dbb7aaa2, whose
+            # osvlocal/matcher.go appends "osv-scalibr" to this cache root.
+            # The upstream offline guide still documents the older folder.
+            missing = sorted(eco for eco in ecosystems if not (db_root/'osv-scalibr'/eco/'all.zip').is_file())
+            if missing:
+                raise DiagnosticError(ErrorDiagnostic('OSV_DATABASE_MISSING',
+                    'OSV-Scanner is available, but local vulnerability databases are missing for: ' + ', '.join(missing) + '.',
+                    'Download https://osv-vulnerabilities.storage.googleapis.com/<ecosystem>/all.zip to '
+                    'data/osv/osv-scalibr/<ecosystem>/all.zip under the Runtime data directory, then retry. '
+                    'Installing osv-scanner alone does not download these databases.'))
         with _snapshot(replace(context, files=scope, context_files=())) as scoped:
             from .python_manifest import stage_python_manifests, manifest_target
             aliases, python_reports = stage_python_manifests(scoped, scope)

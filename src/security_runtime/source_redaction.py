@@ -18,13 +18,16 @@ _XML_NAME = re.compile(r'''\b(?:name|key)\s*=\s*(["'])(?P<key>[^"']+)\1''', re.I
 _XML_ATTRIBUTE = re.compile(r'''(?P<prefix>\bvalue\s*=\s*)(?P<value>"[^"<>]*"|'[^'<>]*')''', re.I)
 _ESCAPES = re.compile(r'\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|U([0-9a-fA-F]{8}))')
 _QUOTED = re.compile(r'''(?i)(?:[rubf]{0,2})(?P<quote>"{3}|'{3}|"|'|`)''')
-_REFERENCE = re.compile(r'(?:\$\{[^{}\r\n]+\}|\$[A-Za-z_]\w*|%[A-Za-z_]\w*%|\{\{[^{}\r\n]+\}\})')
+_REFERENCE = re.compile(r'(?:\$\{[A-Za-z_]\w*\}|\$[A-Za-z_]\w*|%[A-Za-z_]\w*%|\$?\{\{[ \t]*[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*[ \t]*\}\})')
+_CONFIG_TEMPLATE = re.compile(
+    r'''(?P<prefix>\b(?P<key>[A-Za-z_][\w.-]*)["']?[ \t]*[:=][ \t]*'''
+    r'''(?:(?:\#[^\r\n]*)?(?:\r\n?|\n)[ \t]*)*)(?P<value>["']?\$\{\{)''')
 _KNOWN = re.compile(r'(?<![\w-])(?:sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,}|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,})(?![\w-])')
 _PEM = re.compile(r'-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|\Z)')
 _AUTH = re.compile(r'\b(?P<scheme>Bearer|Basic)(?P<space>[ \t]+)(?P<value>[A-Za-z0-9+/_.~=-]{8,})', re.I)
 _USERINFO = re.compile(r'''(?<![a-z0-9+.-])(?P<scheme>[a-z][a-z0-9+.-]*://)(?P<value>[^/@\s"'`]+)@''', re.I)
 _QUERY = re.compile(r'''(?P<prefix>[?&](?P<key>[\w.-]+)=)(?P<value>[^&#\s"'`]+)''')
-_FREE_ASSIGNMENT = re.compile(r'''(?P<prefix>\b(?P<key>[A-Za-z_][\w.-]*)[ \t]*[:=][ \t]*)(?P<value>"(?:\\[\s\S]|[^"\\])*(?:"|\Z)|'(?:\\[\s\S]|[^'\\])*(?:'|\Z)|`(?:\\[\s\S]|[^`\\])*(?:`|\Z)|[^\s;,}]+)''')
+_FREE_ASSIGNMENT = re.compile(r'''(?P<prefix>\b(?P<key>[A-Za-z_][\w.-]*)[ \t]*[:=][ \t]*)(?P<value>\$\{\{[^\r\n]*|"(?:\\[\s\S]|[^"\\])*(?:"|\Z)|'(?:\\[\s\S]|[^'\\])*(?:'|\Z)|`(?:\\[\s\S]|[^`\\])*(?:`|\Z)|[^\s;,}]+)''')
 _CONFIG = frozenset({'.env', '.yaml', '.yml', '.properties', '.ini', '.conf', '.sh', '.bash', '.zsh', '.ps1', '.psm1', '.md', '.txt'})
 
 
@@ -53,7 +56,7 @@ def _decode(value):
 def _literal(value):
     opening = _QUOTED.match(value)
     if opening is None:
-        return value if value == _MARKER or _REFERENCE.fullmatch(value) or value.lower() in {'true', 'false', 'none', 'null', 'nil'} else _mask(value)
+        return value if value == _MARKER or _REFERENCE.fullmatch(value.strip()) or value.lower() in {'true', 'false', 'none', 'null', 'nil'} else _mask(value)
     quote = opening['quote']
     closed = len(value) >= opening.end() + len(quote) and value.endswith(quote)
     end = len(value) - len(quote) if closed else len(value)
@@ -100,6 +103,42 @@ def _xml_property(match):
     return _XML_ATTRIBUTE.sub(lambda attr: attr['prefix'] + _literal(attr['value']), match[0])
 
 
+def _config_templates(text):
+    """Inspect a whole sensitive template before splitting quoted literals.
+
+    Only whitespace and complete comment lines may separate the key and value;
+    another field cannot become part of this credential's prefix.
+    """
+    parts, end = [], 0
+    for match in _CONFIG_TEMPLATE.finditer(text):
+        if match.start() < end or not _sensitive(match['key']):
+            continue
+        cursor, quote = match.end(), None
+        while cursor < len(text):
+            character = text[cursor]
+            if quote:
+                if character == '\\' or (character == quote and text[cursor:cursor+2] == quote*2):
+                    cursor = min(len(text), cursor+2)
+                    continue
+                if character == quote:
+                    quote = None
+            elif character in {'"', "'"}:
+                quote = character
+            elif text.startswith('}}', cursor):
+                cursor += 2
+                # A suffix may itself contain a credential. Keep it in the
+                # same decision rather than exempting only a public prefix.
+                while cursor < len(text) and text[cursor] not in '\r\n':
+                    cursor += 1
+                break
+            cursor += 1
+        parts.extend((text[end:match.start()], match['prefix'],
+                      _literal(text[match.start('value'):cursor])))
+        end = cursor
+    parts.append(text[end:])
+    return ''.join(parts)
+
+
 def redact_source(text, tokens, source_path=None):
     # Private-key blocks take precedence over quote/comment tokenization. A
     # window in the middle of a block must never expose a credential fragment.
@@ -110,6 +149,11 @@ def redact_source(text, tokens, source_path=None):
     if path is not None and path.suffix.lower() in {'.yaml', '.yml'}:
         text = _yaml_blocks(text)
     config = path is None or path.suffix.lower() in _CONFIG or path.name == '.env' or path.name.startswith('.env.')
+    if config:
+        # Inspect the whole unquoted template before tokenization can separate
+        # a quoted credential inside an expression. Only a pure variable path
+        # is public; expressions, fallbacks and trailing values stay masked.
+        text = _config_templates(text)
     for match in tokens.finditer(text):
         gap = text[end:match.start()]
         parts.append(_free_text(gap, assignments=config))

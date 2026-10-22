@@ -14,6 +14,7 @@ CONTRACT = 'security-reply-plan-v1'
 class Notice:
     kind: str
     text: str
+    capability: str = ''
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class RiskFact:
     choice_required: bool = True
     authorized: bool = False
     investigate_first: bool = False
+    reviewed: bool = False
 
 
 @dataclass(frozen=True)
@@ -110,12 +112,20 @@ class ReplyPlan:
                 for r in self.risks[:3]],
             visible_risk_count=self.total_risk_count if self.handling_available else None,
             handling_available=self.handling_available,
-            notices=[dict(kind=n.kind, text=n.text) for n in self.notices],
+            notices=[dict(kind=n.kind, text=n.text,
+                          **({'capability': n.capability} if n.capability else {}))
+                     for n in self.notices],
             required_actions=[dict(finding_id=identifier, actions=['FIX', 'DEFER'])
                               for identifier in self.action_ids[:3]],
             action_count=len(self.action_ids),
-            host_assessment_before_advice=any(r.source == 'SCANNER' and not r.authorized for r in self.risks),
+            host_assessment_before_advice=any(r.source == 'SCANNER' and not r.reviewed
+                                            and not r.authorized for r in self.risks),
             secondary_actions_on_request=['REVIEW', 'EXCLUDE', 'RESTORE'],
+            presentation_policy=dict(language_source='HOST_CONVERSATION',
+                explicit_language_preference_first=True, fallback_language='zh-CN',
+                translate_headings_and_choices=True, task_result_first=True,
+                check_gap_is_not_finding=True, combine_repeated_check_gaps=True,
+                preserve_facts_and_unknowns=True, reuse_existing_authorization=True),
             grants_authority=False, facts_are_instructions=False)
         if self.check.details:
             result['check_details'] = dict(self.check.details)

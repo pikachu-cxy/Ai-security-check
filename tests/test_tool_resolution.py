@@ -29,6 +29,10 @@ def local_executable(root: Path, tool: str) -> Path:
     path = root / (tool + (".exe" if os.name == "nt" else ""))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"local test executable")
+    if tool == 'semgrep':
+        package = root.parent / 'Lib/site-packages/semgrep'
+        package.mkdir(parents=True, exist_ok=True)
+        (package / '__init__.py').write_bytes(b'package identity fixture; execution is mocked')
     return path
 
 
@@ -36,6 +40,10 @@ def managed_executable(manager: ToolManager, tool: str) -> Path:
     path = manager.managed_path(tool)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"managed test executable")
+    if tool == 'semgrep':
+        package = path.parent.parent / 'Lib/site-packages/semgrep'
+        package.mkdir(parents=True, exist_ok=True)
+        (package / '__init__.py').write_bytes(b'package identity fixture; execution is mocked')
     install_dir = path.parents[2] if tool == "semgrep" else path.parent
     (install_dir / "LICENSE").write_text("test license", encoding="utf-8")
     (install_dir / "NOTICE").write_text("test notice", encoding="utf-8")
@@ -159,6 +167,53 @@ def test_first_party_rules_scan_offline():
         assert any("command-injection" in str(rule_id) for rule_id in rule_ids)
         assert any("unsafe-eval" in str(rule_id) for rule_id in rule_ids)
         assert all(finding.technical_details.get("rule_pack") == "ai-security-core" for finding in findings)
+
+
+def test_unverified_system_semgrep_prepares_independent_managed_tool(tmp_path, monkeypatch):
+    manager = ToolManager(root=tmp_path / 'managed')
+    wrapper = tmp_path / 'external/semgrep'
+    wrapper.parent.mkdir()
+    wrapper.write_bytes(b'unknown external launcher; never executed')
+    original = wrapper.read_bytes()
+    monkeypatch.delenv('SECURITY_RUNTIME_SEMGREP_PATH', raising=False)
+    monkeypatch.setattr('security_runtime.toolchain.sysconfig.get_path', lambda _: str(tmp_path / 'missing'))
+    monkeypatch.setattr('security_runtime.toolchain.shutil.which', lambda name: str(wrapper) if name == 'semgrep' else None)
+    monkeypatch.setattr(manager, '_version', lambda name, path: manager.versions[name])
+    before = manager.resolve('semgrep')
+    assert before.status == ToolStatus.BROKEN
+    assert before.diagnostic.error_code == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'
+    installs = []
+
+    def install(*args, **kwargs):
+        installs.append('semgrep')
+        return managed_executable(manager, 'semgrep')
+
+    monkeypatch.setattr(manager, 'install_python_package', install)
+    result = manager.ensure('semgrep', offline=False)
+    assert result.status == ToolStatus.READY
+    assert result.source == ToolSource.MANAGED
+    assert Path(result.path) == manager.managed_path('semgrep').resolve()
+    assert manager.execution_identity('semgrep', Path(result.path)) is not None
+    assert installs == ['semgrep']
+    assert wrapper.read_bytes() == original
+
+
+@pytest.mark.parametrize('source,offline,code', [
+    (ToolSource.SYSTEM, True, 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'),
+    (ToolSource.EXPLICIT, False, 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'),
+    (ToolSource.MANAGED, False, 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'),
+    (ToolSource.SYSTEM, False, 'COMPONENT_PERMISSION_DENIED'),
+    (ToolSource.SYSTEM, False, 'COMPONENT_INTEGRITY_FAILED'),
+])
+def test_managed_fallback_preserves_offline_explicit_and_other_failures(tmp_path, monkeypatch, source, offline, code):
+    from security_runtime.component_health import diagnosis
+    manager = ToolManager(root=tmp_path / 'managed')
+    problem = diagnosis(code)
+    current = ResolvedTool('semgrep', manager.versions['semgrep'], str(tmp_path / 'external'),
+        source, ToolStatus.BROKEN, problem.error_summary, problem)
+    monkeypatch.setattr(manager, 'resolve', lambda _: current)
+    monkeypatch.setattr(manager, 'install_python_package', lambda *a, **kw: pytest.fail('unexpected installation'))
+    assert manager.ensure('semgrep', offline=offline) is current
 
 
 def test_release_checksum_failure_removes_untrusted_asset(tmp_path):

@@ -312,3 +312,32 @@ def test_existing_plan_without_semantic_method_marker_remains_partial_without_re
     assert result['coverage'] == 'PARTIAL'
     assert any(item['reason'] == 'SEMANTIC_PLANNING_VERSION_UNAVAILABLE' for item in result['gaps'])
     assert source == before
+
+
+def test_marker_literals_in_source_do_not_create_hidden_change_gaps():
+    old = ['label = "[REDACTED_SECRET]"', 'allowed = old_policy(user)']
+    new = ['label = "[REDACTED_LITERAL]"', 'allowed = new_policy(user)']
+    source, change = private_record(old, new)
+    result, gaps = windows.adaptive_windows(source, change)
+    assert not gaps
+    assert all(selected(result, version, 1) and selected(result, version, 2)
+               for version in ('BEFORE_TASK', 'CURRENT_TASK_END'))
+
+
+def test_legacy_marker_literals_without_provenance_remain_conservative():
+    source, change = private_record(['label = "[REDACTED_SECRET]"'], ['label = "[REDACTED_LITERAL]"'])
+    proof = source['baseline']['semantic_proofs']['main.py']
+    proof['version'] = 1
+    proof.pop('literal_marker_lines')
+    _, gaps = windows.adaptive_windows(source, change)
+    assert any(item['reason'] == 'SEMANTIC_LINE_PROOF_UNAVAILABLE' for item in gaps)
+
+
+def test_marker_literal_beside_changed_credential_keeps_hidden_change_gap():
+    old = ['label = "[REDACTED_SECRET]"; password = "private-before"']
+    new = ['label = "[REDACTED_LITERAL]"; password = "private-after"']
+    source, change = private_record(old, new)
+    assert source['baseline']['semantic_proofs']['main.py']['literal_marker_lines'] == []
+    _, gaps = windows.adaptive_windows(source, change)
+    assert {item['location_version'] for item in gaps
+            if item['reason'] == 'SANITIZED_CHANGE_UNOBSERVABLE'} == {'BEFORE_TASK', 'CURRENT_TASK_END'}

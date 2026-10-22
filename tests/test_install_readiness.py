@@ -128,6 +128,26 @@ def test_version_mismatch_replaced_by_supported_version():
     assert_valid(receipt)
 
 
+@pytest.mark.parametrize('source,offline,install', [
+    (ToolSource.SYSTEM, False, True),
+    (ToolSource.SYSTEM, True, False),
+    (ToolSource.EXPLICIT, False, False),
+    (ToolSource.MANAGED, False, False),
+])
+def test_readiness_only_prepares_unverified_system_semgrep_online(source, offline, install):
+    from security_runtime.component_health import diagnosis
+    manager = Manager()
+    problem = diagnosis('COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
+    manager.tools['semgrep'] = ResolvedTool('semgrep', VERSIONS['semgrep'], '/external/semgrep',
+        source, ToolStatus.BROKEN, problem.error_summary, problem)
+    receipt = prepare_installation_readiness(manager=manager, offline=offline)
+    assert receipt['ready'] is install
+    assert (('ensure', 'semgrep', False) in manager.calls) is install
+    assert validate_readiness_receipt(receipt)
+    if not install:
+        assert receipt['tools']['semgrep']['diagnostic']['code'] == problem.error_code
+
+
 @pytest.mark.parametrize('freshness', ['STALE', 'UNKNOWN', 'MISSING'])
 def test_non_current_data_refreshed_online(freshness):
     manager = Manager(freshness=freshness)
@@ -567,3 +587,26 @@ def test_validator_rejects_inconsistent_or_malformed_receipts(mutate):
     receipt = deepcopy(prepare_installation_readiness(manager=Manager()))
     mutate(receipt)
     assert validate_readiness_receipt(receipt) is False
+
+
+@pytest.mark.parametrize('available,freshness,code', [
+    (False, 'MISSING', 'VULNERABILITY_DB_UNAVAILABLE'),
+    (True, 'STALE', 'VULNERABILITY_DB_STALE'),
+    (True, 'UNKNOWN', 'VULNERABILITY_DB_FRESHNESS_UNKNOWN'),
+])
+def test_offline_database_diagnosis_separates_missing_expired_and_unconfirmed(
+        tmp_path, monkeypatch, available, freshness, code):
+    manager = ToolManager(tmp_path / 'tools')
+    monkeypatch.setattr(manager, 'database_status',
+        lambda: ToolStatus.READY if available else ToolStatus.MISSING)
+    monkeypatch.setattr(manager, 'database_freshness', lambda: {'status': freshness})
+    monkeypatch.setattr(manager, '_download_trivy_database',
+        lambda *a: pytest.fail('offline preparation must not download'))
+    result = manager.prepare_trivy_database('unused-trivy', offline=True)
+    assert result == (ToolStatus.READY if available else ToolStatus.OFFLINE)
+    diagnostic = manager.data_diagnostics['vulnerability_db']
+    assert diagnostic.error_code == code
+    assert 'security-check tools install trivy' in diagnostic.remediation
+    if freshness == 'UNKNOWN':
+        assert 'cannot be verified' in diagnostic.error_summary
+        assert 'past' not in diagnostic.error_summary

@@ -2,7 +2,7 @@
 
 AI Security Runtime connects security checks to your coding assistant. Ask for a development change in Codex or Cursor, review the evidence and potential impact, decide which finding to address, and verify the fix against the original issue.
 
-The current source version is **0.3.9 / Developer Alpha**. Native bundles and the managed macOS installer are separate releases. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
+The current source version is **0.3.9 / Official release**. Native bundles and the managed macOS installer are separate releases. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
 
 ## When to use it
 

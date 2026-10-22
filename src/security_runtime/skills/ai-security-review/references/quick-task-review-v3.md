@@ -236,10 +236,16 @@ evidence or declare a masked value reviewed merely because the policy changed.
 
 For actual risks preserve position, concrete problem, conditional impact, current
 protections, strongest counterevidence, unknowns and proposed fix. Show at most
-three risks by default with full records accessible. Use a bold finding heading,
-actual file:line/function, and separate 问题 / 可能影响 / 建议修复 / 尚未确认
-paragraphs. State actual scope after risk details. Ask once to select a specific
-risk and reply 修复 or 暂不处理 only when repair approval is still needed.
+three risks by default with full records accessible. Follow the user's current
+language or explicit language preference for headings, explanations and choices;
+Chinese templates are fallback facts, not a required response language. Runtime
+does not infer conversation language. Lead with the requested task's result, then
+explain the issue, its effect and the next step in concise natural paragraphs.
+Include actual file:line/function where known; preserve the problem, conditional
+impact, advice and unknowns without requiring four fixed headings. State actual
+scope once after risk details. A check gap is not a vulnerability finding or an
+edit failure. Ask once to select a specific risk and choose repair or defer, in
+the user's language, only when repair approval is still needed.
 Deferral retains the risk and is not resolution; legacy 忽略 remains compatible.
 Existing approval persists within its scope. A scan/development request alone
 does not authorize an unrelated vulnerability repair. No risks means no repair

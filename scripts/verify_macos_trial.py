@@ -56,7 +56,7 @@ def verify(archive: Path, platform: str, output: Path) -> None:
         # all interpreter execution, hashing, extraction and setup are real.
         fixture_bin = base / "transport-fixture"
         fixture_bin.mkdir()
-        release_base = "https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.9.2"
+        release_base = "https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.9.3"
         routes = {
             entry["url"]: str(python_archive),
             f"{release_base}/{archive.name}": str(archive.resolve()),

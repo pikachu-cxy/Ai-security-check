@@ -6,7 +6,7 @@ Security checks, contextual review, and traceable fix verification for AI coding
 
 AI Security Runtime checks the changes made during a development task, combines scanner results with your host agent's review of relevant code, and explains concrete risks, existing safeguards, and unknowns. You choose whether to fix, defer, or exclude a finding. The agent makes authorized changes; the Runtime retains the original finding and verification evidence.
 
-**Current source: 0.3.9 / Developer Alpha.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
+**Current source: 0.3.9 / Official release.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
 ## Documentation
 
@@ -33,13 +33,13 @@ Full integration includes **Runtime + MCP + companion Skill + Hooks**. [MCP-only
 
 ## Install
 
-Native bundles for source version 0.3.9 use the following names. Availability is determined by the public release assets, not this naming table:
+Version 0.3.9 is the official release for Windows x64, Mac Apple Silicon (M series), and Mac Intel. The release pipeline publishes these downloads only after regression, compliance, package-integrity, and all three native acceptance gates pass:
 
 | Platform | Bundle |
 | --- | --- |
-| Windows x64 | `ai-security-runtime-v0.3.9-windows-x64.zip` |
-| Mac Apple Silicon | `ai-security-runtime-v0.3.9-macos-arm64.tar.gz` |
-| Mac Intel | `ai-security-runtime-v0.3.9-macos-x64.tar.gz` |
+| Windows x64 | [ai-security-runtime-v0.3.9-windows-x64.zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip) |
+| Mac Apple Silicon | [ai-security-runtime-v0.3.9-macos-arm64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz) |
+| Mac Intel | [ai-security-runtime-v0.3.9-macos-x64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz) |
 
 ### Windows x64
 
@@ -57,6 +57,8 @@ The full bundle includes Python; no separate Python, pip, Node.js, or virtual en
 
 ### macOS: Apple Silicon or Intel
 
+For the official full bundle, download the matching archive above, verify its `.sha256`, extract it, and run `./security-check/security-check install codex` (or `install cursor`) from the extraction directory. The commands below remain a separate optional managed-installation trial.
+
 Choose **one** command for your editor:
 
 ```sh
@@ -67,7 +69,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
 ```
 
-[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) before running it. This managed installation uses the separate `macos-trial-v0.3.9.2` release, detects your architecture, and prepares a dedicated Python environment. It does not require preinstalled Python, Git, or Homebrew. Keep `~/.local/share/AI-Security-Runtime-macos-trial`; an existing connection for the selected editor may be updated.
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) before running it. This managed installation uses the separate `macos-trial-v0.3.9.3` release, detects your architecture, and prepares a dedicated Python environment. It does not require preinstalled Python, Git, or Homebrew. Keep `~/.local/share/AI-Security-Runtime-macos-trial`; an existing connection for the selected editor may be updated.
 
 Apple Developer ID signing, notarization, and real desktop compatibility are separate validation items. If macOS blocks pasting or launching, read the [troubleshooting guide](website/en/reference/faq.md#macos-paste) and retain the exact message.
 

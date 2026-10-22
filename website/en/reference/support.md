@@ -1,6 +1,6 @@
 # Platforms and coverage
 
-Scope: **0.3.9 Developer Alpha source and corresponding releases**. Source version, public assets, build identity, CI acceptance, and desktop validation are separate facts. Consult [downloads](../downloads.md) and each workflow's actual results.
+Scope: **0.3.9 Official release source and corresponding releases**. Source version, public assets, build identity, CI acceptance, and desktop validation are separate facts. Consult [downloads](../downloads.md) and each workflow's actual results.
 
 ## Platforms and editors
 
@@ -15,7 +15,7 @@ Linux bundles are not currently distributed. Remote and multi-root workspaces ar
 
 ## Managed macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) setup uses the separate `macos-trial-v0.3.9.2` release and dedicated Python. Both architectures have their own installation and build checks in the [macOS workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml).
+[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) setup uses the separate `macos-trial-v0.3.9.3` release and dedicated Python. Both architectures have their own installation and build checks in the [macOS workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml).
 
 Isolated installation acceptance uses explicit offline component state; it does not establish that every scanner ran. Real system-policy behavior, paste warnings, editor desktop connections, and component execution need their own validation. There is no Apple Developer ID signing or notarization guarantee.
 

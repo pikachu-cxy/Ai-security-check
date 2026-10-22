@@ -235,3 +235,40 @@ def test_small_proof_long_metadata_is_counted_against_optional_budget(sample, mo
     assert proof(store, reference)['complete'] is False
     with sqlite3.connect(store.path) as db:
         assert db.execute('SELECT count(*) FROM task_preimage_semantics').fetchone()[0] == 0
+
+
+def test_literal_marker_provenance_round_trips_in_authenticated_private_proof(sample):
+    store, _ = sample
+    raw = b'label = "[REDACTED_SECRET]"\npassword = "private-literal"\n'
+    reference = captured(store, raw)
+    result = proof(store, reference)
+    assert result['version'] == 2
+    assert result['literal_marker_lines'] == [1]
+    assert set(result['semantic_lines']) == {2}
+    assert result == store.semantic_proof(FIRST, 'routes.py', raw)
+    with sqlite3.connect(store.path) as db:
+        body = json.loads(db.execute('SELECT body FROM task_preimage_semantics').fetchone()[0])
+        body['literal_marker_lines'] = [1, 2]
+        db.execute('UPDATE task_preimage_semantics SET body=?', (json.dumps(body).encode(),))
+    with pytest.raises(TaskPreimageUnavailable) as rejected:
+        proof(store, reference)
+    assert rejected.value.reason_code == 'TASK_PREIMAGE_SEMANTICS_UNVERIFIED'
+
+
+def test_legacy_private_proof_decodes_without_inventing_marker_provenance():
+    legacy = dict(version=1, complete=True, line_count=1, semantic_lines={})
+    assert fingerprints.decode_proof(fingerprints.encode_proof(legacy), 1) == legacy
+
+
+@pytest.mark.parametrize('markers', [[0], [2], [True], [1, 1], ['1'], {'1': True}])
+def test_invalid_literal_marker_provenance_is_rejected(markers):
+    value = dict(version=2, complete=True, line_count=1, semantic_lines={}, literal_marker_lines=markers)
+    with pytest.raises(ValueError, match='marker provenance'):
+        fingerprints.decode_proof(fingerprints.encode_proof(value), 1)
+
+
+def test_literal_marker_provenance_obeys_existing_proof_budget(monkeypatch):
+    monkeypatch.setattr(fingerprints, 'MAX_FILE_PROOF_BYTES', 180)
+    raw = b'label = "[REDACTED_SECRET]"\n' * 20
+    result = fingerprints.make_proof(b'key', 'workspace', FIRST, 'a.py', raw)
+    assert result['complete'] is False and result['semantic_lines'] == {}

@@ -222,7 +222,7 @@ class BaseScanner:
                     if execution_identity['tool'] is None:
                         return failed(RunStatus.UNAVAILABLE, ErrorDiagnostic(
                             'SCAN_EXECUTION_IDENTITY_UNAVAILABLE', 'Actual scanner executable identity is unavailable.',
-                            'Restore the bounded local tool identity before retrying.'), resolved.version)
+                            'Run security-check prepare-scanners --status to identify the affected component. For Semgrep, select its actual virtual-environment entry point with a verifiable Python package and interpreter, then retry.'), resolved.version)
                 emit('SCANNER_STARTED', scanner=self.name, scanner_version=resolved.version, capability=tuple(self.capabilities))
                 token = _executing_engine.set((self.name, resolved.version, resolved.path))
                 environment_token = _executing_environment.set(environment)
@@ -671,8 +671,11 @@ class TrivyAdapter(BaseScanner):
             run.dependency_inventory['vulnerability_db_freshness'] = fresh if fresh in {'FRESH', 'STALE', 'UNKNOWN', 'MISSING'} else 'UNKNOWN'
             if fresh != 'FRESH':
                 run.coverage_contract = 'PARTIAL'
+                data_note = ('VULNERABILITY_DB_STALE: Local vulnerability data is past its recorded update deadline.'
+                    if fresh == 'STALE' else
+                    'VULNERABILITY_DB_FRESHNESS_UNKNOWN: Local vulnerability database freshness could not be verified.')
                 run.coverage_notes = [*(run.coverage_notes or []),
-                    'VULNERABILITY_DB_STALE: 漏洞库更新未完成或新鲜度无法确认；本次使用缓存数据，不能代表最新漏洞覆盖。']
+                    data_note + ' Cached results do not attest current vulnerability coverage.']
         return found,run
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:

@@ -319,13 +319,13 @@ def _base_scan_status_message(result: dict) -> str:
     if status == 'SCANNED' and coverage == 'FULL':
         if new is not None and persisting is not None:
             if new or persisting or (additional is not None and additional > 0):
-                counts = f'发现 {new} 个新增风险、{persisting} 个持续风险'
+                counts = f'发现 {new} 个新增检查提示、{persisting} 个仍存在的检查提示'
                 if additional:
-                    counts += f'，已有风险还新增 {additional} 处出现位置'
-                return f'本次检查完成：{counts}。建议查看具体问题、影响和修复建议。'
+                    counts += f'，已有提示还新增 {additional} 处出现位置'
+                return f'本次检查完成：{counts}；实际影响需结合代码核实。'
             if additional == 0:
-                return '本次检查完成，在本次检查范围内未发现新增风险；已有风险是否解决仍需对应的验证结果，不能据此认定项目安全。'
-        return '本次检查完成；风险数量尚未确认，请查看具体风险与检查范围。'
+                return '本次检查完成，在本次检查范围内未发现新增检查提示；已有风险是否解决仍需对应的验证结果，不能据此认定项目安全。'
+        return '本次检查完成；提示数量尚未确认，请查看具体提示与检查范围。'
     if status == 'SCANNED' and coverage == 'SCOPED':
         return '本次已完成适用范围的安全检查；未执行的检查范围仍需单独确认。'
     return '本次安全检查结果尚未确认，请重新检查；这不代表风险已消除。'
@@ -394,6 +394,12 @@ def dependency_status_message(result: dict) -> str:
                         '确认或更新漏洞数据后，需要重新检查。')
     if 'VULNERABILITY_DB_UNAVAILABLE' in errors:
         return start + '本地没有可用的依赖漏洞数据；需要先准备漏洞数据，再重新检查。'
+    if 'ENGINE_MISSING_OFFLINE' in errors:
+        return start + '本地依赖检查工具尚未安装，本次仅使用本地组件；安装该工具后再检查。'
+    if 'OSV_DATABASE_MISSING' in errors:
+        return start + '备用依赖检查工具已就绪，但缺少所需的本地漏洞数据；补齐数据后再检查。'
+    if errors & {'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE', 'SCAN_EXECUTION_IDENTITY_UNAVAILABLE'}:
+        return start + '无法确认依赖检查工具的运行环境；核对工具安装入口后再检查。'
     if 'ENGINE_UNAVAILABLE' in errors:
         return start + '本地依赖检查工具尚未就绪；准备检查工具后，需要重新检查。'
     if 'OFFLINE_MODE' in errors:

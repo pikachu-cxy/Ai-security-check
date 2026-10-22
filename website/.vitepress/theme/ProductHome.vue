@@ -14,7 +14,7 @@ const steps = [
   <main id="main-content" class="product-home">
     <section class="hero-section" aria-labelledby="product-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / DEVELOPER ALPHA</p>
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / 0.3.9</p>
         <h1 id="product-title">让 AI 写代码，<br>也让风险<span>有据可查。</span></h1>
         <p class="hero-description">在 Codex、Cursor 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
         <div class="hero-actions">
@@ -67,6 +67,6 @@ const steps = [
       </div>
     </section>
 
-    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">了解这次检查覆盖了什么。</h2><p>检查结果会说明发现的问题、实际覆盖范围和未完成项。当前产品处于 Developer Alpha 阶段，各系统与编辑器的验证记录见支持范围；零发现不代表整个项目安全。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
+    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">了解这次检查覆盖了什么。</h2><p>检查结果会说明发现的问题、实际覆盖范围和未完成项。当前正式版为 0.3.9，各系统与编辑器的验证记录见支持范围；零发现不代表整个项目安全。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
   </main>
 </template>

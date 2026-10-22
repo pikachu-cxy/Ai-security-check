@@ -4,7 +4,7 @@
 
 在 AI 编程过程中检查本次开发改动，结合静态检查与 Agent 对关联代码的复核，说明具体风险、已有防护和未知范围。用户选择修复、稍后处理或排除；Agent 在授权范围内编辑，Runtime 保存原问题与复查记录。
 
-当前源码版本为 **0.3.9 / Developer Alpha**，公开安装包以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
+当前源码版本为 **0.3.9 / 正式版**，公开安装包以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
 
 ## 产品与使用文档
 
@@ -69,7 +69,7 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 使用完整安装包
 
-[v0.3.9 Developer Alpha](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
+[v0.3.9 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
 
 - [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip)
 - [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz)

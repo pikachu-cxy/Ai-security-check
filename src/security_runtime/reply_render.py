@@ -3,6 +3,10 @@ from .reply_plan import ReplyPlan
 from .risk_decision_guidance import PRIMARY_CHOICES
 
 
+def _candidate(risk):
+    return risk.source == 'SCANNER' and not risk.reviewed
+
+
 def choice_prompt(total, *, issue=False, investigate_first=False):
     if issue and total == 1:
         return ('回复“修复”，我会先核查再处理并重新检查；回复“稍后处理”，保留记录，本次不再追问。'
@@ -23,6 +27,8 @@ def risk_details(risk, *, issue=False, number=None):
         source = '上下文核查线索' if risk.source == 'HOST_REVIEW' else '静态检查提示'
         where = f'{risk.file}:{risk.line}' if risk.file and risk.line else risk.file or '当前改动的代码'
         parts.append(f'📍 `{where}` · {source}')
+    if _candidate(risk) and not risk.original:
+        parts.append('这是一项待核实的检查提示，尚未确认实际影响。')
     if risk.deleted:
         parts.append('位置对应删除前的代码。')
     parts.extend(['**问题**\n'+risk.problem, '**可能影响**\n'+risk.impact])
@@ -123,10 +129,14 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
     total = plan.total_risk_count if include_risks else 0
     if total:
         if plan.intent == 'ISSUE':
-            parts.append((risks[0].title+'。') if risks[0].original else '发现安全风险：'+risks[0].title+'。')
+            prefix = '安全检查提示（待核实）：' if _candidate(risks[0]) else '发现安全风险：'
+            parts.append((risks[0].title+'。') if risks[0].original else prefix+risks[0].title+'。')
         else:
             related = sum(r.related for r in risks)
-            label = '关联风险' if related == total else '安全风险'
+            candidates = sum(_candidate(r) for r in risks)
+            label = ('待核实的安全提示' if candidates == len(risks) and candidates else
+                     '安全检查提示' if candidates else
+                     '关联风险' if related == total else '安全风险')
             detail = f'（其中 {related} 项关联风险）' if 0 < related < total else ''
             title = '：'+risks[0].title if total == 1 else ''
             parts.append(f'**发现 {total} 项{label}{detail}{title}**')
@@ -147,8 +157,10 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
                      '；必读代码复核：'+labels.get(details.get('source_review'), '尚未确认')+'。')
     capability_labels = {'CODE_SAST': '代码安全检查', 'SECRET_SCAN': '密钥检查',
                          'DEPENDENCY_VULN': '依赖检查', 'IAC_MISCONFIG': '配置安全检查'}
+    explained = {notice.capability for notice in plan.notices if notice.kind == 'CHECK_GAP'}
     unavailable = [capability_labels[key]+'未完成' for key, state in plan.check.capabilities
-                   if key in capability_labels and state in {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}]
+                   if key in capability_labels and key not in explained
+                   and state in {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}]
     labels = {'CHECK_GAP': '检查未完成', 'PRIOR_VERIFICATION': '原问题复查',
               'HANDLING_RECEIPT': '处置结果', 'HANDLING_UNAVAILABLE': '处置记录',
               'APPLICABILITY': '结果适用范围', 'CHECK_RESULT': '处置状态', 'SCOPE': '检查范围',
