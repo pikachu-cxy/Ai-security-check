@@ -28,6 +28,20 @@ For full bundles, check that extraction is complete and the terminal is in the p
 
 Read actual coverage and limitations. Missing components, stale data, file limits, unreadable source, and missing pre-edit evidence are different causes. Incomplete does not mean a vulnerability was found; zero findings does not prove security or remediation of an earlier issue. See [the workflow](../guide/workflow.md).
 
+## NEEDS_SCAN or a rejected project path
+
+`NEEDS_SCAN` means no scan has been recorded. If components are `READY` and the actual source root is accepted, installation is usable; request a scan when needed. There is no need to reinstall to clear that state.
+
+For a rejected path, first confirm that the editor opened the source and Git repository root rather than an outer extraction folder. Supply that absolute root explicitly in a read-only status query. A rejection code alone does not identify the cause. Keep the returned diagnostic if it persists; see [verification](../guide/verify.md).
+
+## A tool reports its version but is not ready
+
+Version 0.3.9 verifies Semgrep's executable, interpreter, and package identity. An unknown wrapper cannot establish readiness by reporting the expected version. Online preparation may create a separate managed environment for an automatically discovered system tool, while explicit paths and managed-component failures retain their diagnostics. Missing OSV databases, expired data, and an unknown update time have separate messages. See [preparation](../guide/installation.md#manual-preparation).
+
+## Uninstall before reinstalling
+
+Quit the editor and use the product's owned-integration removal command. Remove the shared Skill only when other hosts no longer need it. Program slots, caches, and history remain; routine upgrades do not require clearing them. Follow [removal and reinstallation](../guide/installation.md#uninstall), preserving unrelated editor settings and source.
+
 ## Are all code and logs local?
 
 The Runtime and scanners run locally, but the host agent follows its own data policies. Review records can contain code snapshots. Optional usage-monitoring records have a different data scope. See [privacy](./privacy.md).

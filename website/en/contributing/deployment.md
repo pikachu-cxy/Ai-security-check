@@ -38,3 +38,5 @@ The workflow uses Pages-specific permissions and does not require committing a p
 ## Content maintenance
 
 Keep source commits, candidate builds, published packages, and real desktop acceptance distinct. Use actual release assets and matching checksums. Do not publish private paths, secrets, raw diagnostics, or unsupported claims about performance, users, or security coverage.
+
+Audit shared footers, copyable installation requests, public redirects, daily workflows, and FAQs in both languages rather than updating downloads alone. Keep product and managed-macOS identifiers separate: currently 0.3.9 / `macos-trial-v0.3.9.3`. Describe current behavior in user guides and retain old capabilities and acceptance records in the changelog. Source commits, manifests, and successful release runs must identify the same delivery; cancelled or failed candidates are not its evidence.

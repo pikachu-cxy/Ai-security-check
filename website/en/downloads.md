@@ -1,10 +1,10 @@
 # Downloads and installation
 
-Source version: **0.3.9 Official release**. Native full bundles and managed macOS installation have separate release and build identities. Only assets visible on a public release are available downloads; a source version or a running workflow does not establish publication.
+Current product: **0.3.9 Official release**, published on 2026-10-21. Native full bundles and managed macOS installation have separate release and build identities. Use the matching assets and checksums below.
 
 ## Official 0.3.9 full bundles {#windows}
 
-The [v0.3.9 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) publishes these assets after all release gates pass. All three platforms use the same source commit.
+The [v0.3.9 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) has published all three bundles and their companion checksums. They use source commit [`fa1a26b`](https://github.com/pikachu-cxy/Ai-security-check/commit/fa1a26bbc4db4eb8faae7281b689ec3205f10c26).
 
 | Platform | Full bundle | Checksum |
 | --- | --- | --- |
@@ -43,7 +43,7 @@ Restart the editor, [verify the real connection](./guide/verify.md), and try the
 
 ## Build and acceptance evidence {#build-details}
 
-The current native release process runs regression, compliance, package-integrity, and platform-native acceptance checks before publishing assets. See [release Actions](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml). Read the selected release's `release-manifest.json` and `SHA256SUMS.txt` for actual source and artifact identities.
+The [successful 0.3.9 release run](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39623506500) completed focused Windows/macOS regressions for the current changes, compliance, package-integrity, and native acceptance on all three platforms. It did not rerun the complete development suite. Read the matching `release-manifest.json` and `SHA256SUMS.txt` for source and artifact identities; do not use earlier candidate-build records.
 
 The [managed macOS workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml) separately validates installation and build identity on both architectures. Isolated CI acceptance does not replace real desktop, first-download, signing, or scanner validation. See [support boundaries](./reference/support.md).
 

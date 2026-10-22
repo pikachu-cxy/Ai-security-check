@@ -8,7 +8,7 @@
 
 ```powershell
 .\security-check\security-check.exe prepare-scanners
-.\security-check\security-check.exe mcp config --path C:\work\your-project --toml
+.\security-check\security-check.exe mcp config --path "C:\work\your-project" --toml
 ```
 
 需要 JSON 配置时，将 `--toml` 换为 `--json`。macOS 将命令换为 `./security-check/security-check`，项目路径换为实际 Git 项目的绝对路径。

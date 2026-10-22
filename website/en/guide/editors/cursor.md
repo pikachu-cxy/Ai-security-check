@@ -44,4 +44,4 @@ Completely quit and reopen Cursor. In a new project chat, follow [installation v
 
 Whether routine tool calls need confirmation still depends on Cursor's mode and team policy. Fixes require your explicit authorization. Full integration describes installed components, not proof that every Cursor version, model, and desktop flow has passed acceptance. See [support](../../reference/support.md).
 
-[Preparation and upgrades](../installation.md) · [Daily workflow](../workflow.md)
+[Preparation and upgrades](../installation.md) · [Removal](../installation.md#uninstall) · [Daily workflow](../workflow.md)

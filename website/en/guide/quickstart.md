@@ -1,6 +1,6 @@
 # Quick start
 
-Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
+Use the **0.3.9 official release**. Managed macOS installation uses the separate **macos-trial-v0.3.9.3** release, with Runtime version 0.3.9. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
 
 ## 1. Choose your editor {#choose-editor}
 

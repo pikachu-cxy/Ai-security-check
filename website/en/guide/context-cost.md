@@ -1,6 +1,6 @@
 # Usage monitoring and reports
 
-Source version 0.3.9 adds one-step monitoring for the current Codex chat and report export. Install a build containing this capability and its companion Skill, restart Codex, and verify the actual build.
+The 0.3.9 release includes one-step monitoring for the current Codex chat and report export. Install its Runtime and companion Skill, restart Codex, and verify the actual build.
 
 ## Start and export
 
@@ -29,6 +29,8 @@ Monitoring is optional. Stopping, failing, or omitting it from a source distribu
 Automatic association reads bounded local log metadata and usage counts for the verified session. Monitoring records and exports exclude source code, prompts, response bodies, raw session identity, and log paths. It does not upload statistics or write host configuration. A temporary detailed-recording lease is released at the end.
 
 Generic MCP statistics retain counts, bytes, timing, and opaque identity metadata for up to 14 days and 10,000 call events. Task-review source snapshots are separate records with different sensitivity; see [privacy](../reference/privacy.md).
+
+Strictly read-only security-summary queries do not create monitoring records or local state. Their tool time and response bytes are excluded from tool statistics; chat token counts still include the corresponding host activity.
 
 ## Maintainer queries
 

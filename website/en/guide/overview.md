@@ -2,7 +2,7 @@
 
 AI Security Runtime connects security checks to your coding assistant. Ask for a development change in Codex or Cursor, review the evidence and potential impact, decide which finding to address, and verify the fix against the original issue.
 
-The current source version is **0.3.9 / Official release**. Native bundles and the managed macOS installer are separate releases. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
+The current product release is **0.3.9**. Native bundles and the managed macOS installer have separate build identities. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
 
 ## When to use it
 
@@ -29,7 +29,7 @@ Ordinary chat, read-only questions, and unchanged tasks should not trigger a pro
 
 ## Current scope
 
-Installed rule subsets cover Java, Python, and JavaScript/TypeScript, alongside secret checks, recognizable dependency manifests, and bounded contextual review. This is a developer preview, not proof that a project is secure.
+The official 0.3.9 release includes installed rule subsets for Java, Python, and JavaScript/TypeScript, alongside secret checks, recognizable dependency manifests, and bounded contextual review. These checks do not establish that a project is secure or replace a compliance assessment or penetration test.
 
 Community rules and the public scanner extension API are Apache-2.0 licensed. The Runtime Core is proprietary; see [licensing](../reference/legal.md).
 

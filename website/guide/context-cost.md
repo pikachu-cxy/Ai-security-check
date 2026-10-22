@@ -2,7 +2,7 @@
 
 0.3.9 提供一键启动当前聊天监控及结束后导出报告。安装新版 Runtime 和 Skill 后，完全退出并重启 Codex，确认连接的版本与构建。
 
-## 试用者：一键开始，一键导出
+## 日常使用：一键开始，一键导出
 
 1. 在当前项目的 Codex 聊天中说：**“启动本聊天的消耗监控。”**
 2. 助手打开本机页面并自动开始观察，不需要你输入命令、采集标签或查找日志。
@@ -28,7 +28,7 @@
 
 自动关联只检查匹配身份所需的有界本机日志元数据，并读取计数；不保存聊天正文、源码、日志路径或原始会话身份。监控为当前聊天建立有期限的详细记录租约，结束后释放，不改写共享采集模式。受管安装包仍需保持内容完整，不应直接删除包内文件。
 
-下列命令供维护者进行历史导入、对比或诊断，普通试用者使用上面的按钮流程即可。更多边界见[实时监控工程指南](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/LIVE_MONITORING.zh-CN.md)。
+下列命令供维护者进行历史导入、对比或诊断，日常使用上面的按钮流程即可。更多边界见[实时监控工程指南](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/guides/LIVE_MONITORING.zh-CN.md)。
 
 ## 监测什么
 
@@ -116,7 +116,7 @@ AGENT_NATIVE 每批领域 JSON 预算为 64 KiB，含指导、schema 和检查�
 公共统计依赖通用 token 计数契约；Codex 日志适配只在用户启动本聊天监控或显式导入时执行。
 Cursor 及其他 MCP 宿主可以使用字节统计，无真实 usage 适配器时保持 token 未知。
 这些变更没有修改编辑器配置、审批开关或宿主的上下文管理。
-Windows/macOS 使用相同代码；本轮定向测试运行在 Windows，macOS 实机尚未验收。
+Windows/macOS 使用相同代码；实际平台与编辑器的验证范围以[支持状态](../reference/support.md)为准，不将历史 Windows 定向测试等同于当前 Mac 桌面验收。
 
 ## 可重复的本地基准
 
@@ -126,4 +126,4 @@ python scripts/context_cost_benchmark.py --output artifacts/context-cost/optimiz
 
 脚本从固定旧提交读取投影实现，用同一份合成数据比较当前实现，校验覆盖状态及完整证据一致。
 只生成 JSON 和 HTML，不调用扫描器、模型或网络。报告明确将实际 token 节省保留为未知，
-不能用合成数据的字节缩减代替试用者的真实用量结论。
+不能用合成数据的字节缩减代替用户的真实用量结论。

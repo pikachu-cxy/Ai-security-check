@@ -10,7 +10,7 @@ Completely quit and reopen the editor. In a new chat in your intended project, s
 Use actual AI Security Runtime tool calls to check installation status:
 1. Is it connected? Report the version, build_id, and source commit.
 2. Are code, secret, and dependency checks ready? List downloads, failures, or stale data.
-3. Does the bound absolute project path match this project?
+3. Explicitly query the actual source root's absolute path. Is it accepted and correct?
 4. Is the companion guidance available?
 Do not scan or modify the project. Explain anything unverified and the next step.
 ```
@@ -25,6 +25,13 @@ Do not scan or modify the project. Explain anything unverified and the next step
 | Same version but different build or source | Compare the actual executable with the selected release. |
 | Missing engine, startup failure, or stale data | Retain the specific component diagnostic and unavailable scope. |
 | Different bound project | Open the right project and check the configuration scope. |
+| `READY` with project state `NEEDS_SCAN` | Components are available; no project scan has been recorded. Request one when needed. |
+
+### Select the actual project root
+
+Open the directory containing the source and Git repository rather than an outer ZIP extraction folder. Ask the agent to supply that absolute root explicitly in the read-only status query. If rejected, check the directory, Git status, and returned diagnostic. A rejection code alone does not establish its cause or require reinstallation.
+
+After switching from source development to a downloaded release, check that the editor starts the managed executable rather than Python in the old source directory. The default full-bundle installation root is `%LOCALAPPDATA%\AI-Security-Runtime-install` on Windows. Compare build ID and source commit even when the version number matches.
 
 ## 3. Perform a real check
 

@@ -81,4 +81,4 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 
 需要帮助时，按[反馈模板](../../reference/faq.md#report)提供脱敏后的系统、芯片、编辑器版本、安装方式和失败阶段。
 
-[日常怎么用](../workflow.md) · [仅 MCP 接入](../mcp.md) · [安装参数与升级](../installation.md)
+[日常怎么用](../workflow.md) · [仅 MCP 接入](../mcp.md) · [升级与卸载](../installation.md#卸载与重新安装)

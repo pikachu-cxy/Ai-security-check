@@ -72,7 +72,7 @@ export default defineConfig({
         lastUpdated: { text: 'Last updated' },
         editLink: { pattern: `${repository}/edit/feature/runtime-mvp/website/:path`, text: 'Edit this page on GitHub' },
         footer: {
-          message: 'Developer Alpha · Check the installed build and actual review coverage.',
+          message: '0.3.9 · Official release · Check the installed build and actual review coverage.',
           copyright: 'Runtime Core and third-party components have separate licenses.'
         }
       }
@@ -137,7 +137,7 @@ export default defineConfig({
     lastUpdated: { text: '最近更新' },
     editLink: { pattern: `${repository}/edit/feature/runtime-mvp/website/:path`, text: '在 GitHub 上改进此页' },
     footer: {
-      message: 'Developer Alpha · 实际能力以所用构建与检查记录为准。',
+      message: '0.3.9 正式版 · 实际能力以所用构建与检查记录为准。',
       copyright: 'Runtime Core 许可与第三方组件许可分别适用。'
     }
   }

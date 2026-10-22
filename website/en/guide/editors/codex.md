@@ -44,4 +44,4 @@ Completely quit and reopen Codex after installation finishes. Open a new chat in
 
 Then try the [small development task](../quickstart.md#_3-try-a-small-development-task) and the [security demo](../demo.md).
 
-[Daily workflow](../workflow.md) · [MCP-only setup](../mcp.md) · [Upgrades](../installation.md)
+[Daily workflow](../workflow.md) · [MCP-only setup](../mcp.md) · [Upgrades and removal](../installation.md#uninstall)

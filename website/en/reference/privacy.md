@@ -16,6 +16,8 @@ Evidence retains ordinary strings, comments, field names, and URLs while masking
 
 New tasks use the current evidence policy; existing tasks retain their original policy and baseline. Version 0.3.9 preserves complete sanitized long lines for new tasks and fragments large responses. Upgrading does not recover characters already lost from historical evidence. If a hidden value affects the security judgment, its semantics remain unknown.
 
+Version 0.3.9 also distinguishes pure variable references from credential-bearing template expressions and retains provenance for literal redaction markers in source. This reduces false hidden-change gaps for ordinary pattern constants. An upgrade cannot reconstruct missing historical provenance.
+
 Protect local task databases, snapshots, backups, and shared-machine accounts according to the project's sensitivity. Do not commit runtime caches, private evidence, raw diagnostics, or credentials to Git.
 
 ## Usage monitoring is separate

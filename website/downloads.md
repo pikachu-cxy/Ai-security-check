@@ -24,7 +24,7 @@ Get-FileHash .\ai-security-runtime-v0.3.9-windows-x64.zip -Algorithm SHA256
 Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
 ```
 
-然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。从 0.3.8 升级时重新下载完整包和配套校验文件，并核对实际 `build_id`。
+然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。旧版本升级或从源码开发版切换时，下载本页完整包和配套校验文件，重启编辑器后核对实际程序路径、来源提交与 `build_id`。
 
 ## Mac 安装
 
@@ -36,9 +36,9 @@ Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
 
 粘贴时遇到系统提醒，先按[提醒原因与处理方式](./reference/faq.md#macos-paste)核对原文。
 
-### 需要手动完整包？ {#macos-packages}
+### Mac 原生完整包 {#macos-packages}
 
-仅在选择手动完整包或其他 MCP 接入方式时下载。M 系列选择 Apple Silicon，Intel Mac 选择 Intel；核验并完整解压，保留执行权限和整个目录。
+需要原生完整包时，M 系列选择 Apple Silicon，Intel Mac 选择 Intel；核验并完整解压，保留执行权限和整个目录。原生完整包和独立环境自动安装都是可选入口，请选择一种并使用对应的程序路径。
 
 | 芯片 | 完整安装包 | 校验 |
 | --- | --- | --- |
@@ -62,27 +62,14 @@ tar -xzf ai-security-runtime-v0.3.9-macos-arm64.tar.gz
 
 ## 构建与验收记录 {#build-details}
 
-**0.3.9 完整包**：[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 使用同一源码提交 [`6ceaf31`](https://github.com/pikachu-cxy/Ai-security-check/commit/6ceaf31c1324fbc22fb13729a4558563699c455e) 生成三平台包。公开资产须通过 Windows/macOS 回归、合规、包完整性和三平台原生验收；状态见[本次发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39584810380)。
+**0.3.9 正式版完整包**：2026-10-21 公开发布，[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的三平台包均对应源码提交 [`fa1a26b`](https://github.com/pikachu-cxy/Ai-security-check/commit/fa1a26bbc4db4eb8faae7281b689ec3205f10c26)。[本次成功的发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39623506500)完成当前改动相关的 Windows/macOS 定向回归、合规、包完整性与三平台原生验收，未重复执行全库回归。以配套发行清单、校验值和验收证据为准，不沿用更早候选构建的记录。
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-release-evidence.zip)
 
 **Mac 自动安装**：独立发行 [macos-trial-v0.3.9.3](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.3)，Runtime 版本 0.3.9。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
-本版增加[一键监控与导出报告](./guide/context-cost.md)，并修复完整脱敏长行的保存和分片交付。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
+本版包含[一键监控与导出报告](./guide/context-cost.md)、完整脱敏长行保存与分片交付、Semgrep 执行身份核对和受管环境准备，以及更明确的组件与漏洞数据诊断。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
 
-### 历史 0.3.8 记录
+### 历史版本
 
-
-::: details 查看发行身份与工程证据
-**0.3.8 完整包**：[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8) 于 2026-10-20 替换更新，Windows、Apple Silicon、Intel 包对应同一源码提交 [`8d5d9a6`](https://github.com/pikachu-cxy/Ai-security-check/commit/8d5d9a694529c7d29cb1fa79c6843ea0763576a9)。当前 Windows 构建 ID 为 `7abf1b6e2d587bd87d5d577122ef71c51288f6c46f75ffdddaf40f7cc24e309d`，其他平台以发行清单为准。
-
-[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.8/ai-security-runtime-v0.3.8-release-evidence.zip) · [原生构建与验收](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39398870803)
-
-该次完整包更新复用 204 项相关定向测试，文档打包契约另有 13 项通过；Windows 包完整性检查和对应原生验收已有记录。检查范围包括启动、组件准备、样例扫描、MCP、受管 Skill 及隔离安装生命周期，合成场景不能替代真实桌面记录。
-
-**Mac 自动安装**：Runtime 版本 0.3.8，发行 `macos-trial-v0.3.8.1`，来源提交 [`9b65b6e`](https://github.com/pikachu-cxy/Ai-security-check/commit/9b65b6e0d9dfb5cb3a5b362063d5e699192fc4b0)，产品构建 ID `a2a3f8a9d5dc95a631cab30630a2900673df91ac82e21c086ca33d01a66b8caa`。
-
-[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39407281204)中，两种芯片各有 61 项定向测试通过，并完成 Cursor / Codex 的首次安装、构建身份和重复安装验收。该验收使用离线组件状态与发布下载的本地传输夹具，不等于用户桌面连接、系统首次下载提示或全部扫描器已运行。
-
-完整包与自动安装分别记录，不混用构建 ID 或 SHA256。产品更新内容见[版本与进展](./reference/changelog.md)，上下文优化见[上下文开销说明](./guide/context-cost.md)。
-:::
+旧版本的发布、构建与验收记录见[版本与进展](./reference/changelog.md)。本页安装入口统一使用当前 0.3.9，旧版本记录不作为当前下载或安装依据。

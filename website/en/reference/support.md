@@ -34,6 +34,8 @@ WorkBuddy uses project-level MCP. Other clients use conditional manual stdio MCP
 
 Recognizing an ecosystem for dependencies does not establish full SAST coverage for its language. Go and PHP are not advertised as having full code-rule coverage. Large or binary files, unsupported types, unreadable paths, and failed engines retain their actual coverage limitations. No findings is not proof of security.
 
+Version 0.3.9 verifies Semgrep's actual execution identity and distinguishes missing engines, missing OSV databases, expired data, and unknown update times. Ready components and valid data do not establish that every project file was checked. See [preparation diagnostics](../guide/installation.md#manual-preparation).
+
 ## Monitoring and evidence
 
 Automatic token association currently supports local Codex logs. Other hosts can use generic byte statistics; actual tokens remain unknown without an adapter. Monitoring failure does not block core functionality.

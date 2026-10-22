@@ -4,6 +4,8 @@
 
 A useful finding identifies the location, concrete problem, trigger conditions, potential impact, existing safeguards, proposed fix, and remaining unknowns. A severity label does not replace this evidence.
 
+Version 0.3.9 distinguishes unverified scanner candidates from risks assessed against code. Missing tools, stale data, and incomplete coverage are check states, not vulnerability findings or reasons to ask for a repair decision. Explanations follow the conversation language rather than requiring fixed headings.
+
 ## Choose a disposition
 
 | Choice | Meaning |
@@ -13,6 +15,8 @@ A useful finding identifies the location, concrete problem, trigger conditions, 
 | Exclude | Record a false-positive assessment or explicit decision not to remind, with its rationale. |
 
 User decisions and technical assessments are recorded separately. Deferral or exclusion is not proof of remediation.
+
+Existing explicit authorization for the same issue and scope carries forward without another choice. "Do not edit yet" alone does not establish that a deferral or exclusion was saved. Saved deferred or excluded items should not prompt again on every query.
 
 ## Assess impact before editing
 
