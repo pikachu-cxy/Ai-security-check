@@ -4,6 +4,8 @@ AI Security Runtime 把安全检查接入你正在使用的编程助手。你在
 
 当前产品版本为 **0.3.9 / 正式版**。Codex 与 Cursor 均提供一条命令完整接入，Windows、macOS Apple Silicon 和 macOS Intel 使用各自的原生完整包。安装与校验入口见[下载页](../downloads.md)，各编辑器和平台的实际验证范围见[支持状态](../reference/support.md)。
 
+代码规则当前覆盖 Java、Python、JavaScript / TypeScript 的明确子集；Vue 单文件组件和 Go、PHP 等没有自带对应 SAST 规则。密钥检查、依赖生态与 AI 分析分别说明，详见[语言覆盖矩阵](../reference/support.md#语言覆盖)。
+
 ## 适合什么场景
 
 - 让 Agent 完成需求时，同时检查本次代码与配置改动。

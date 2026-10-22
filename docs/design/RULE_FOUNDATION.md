@@ -1,5 +1,7 @@
 # Java / JavaScript / TypeScript rule foundation
 
+For current 0.3.9 language coverage and rule counts, read the
+[product coverage reference (Chinese)](../PRODUCT_COVERAGE.zh-CN.md).
 This document preserves the earlier Java foundation milestone and its evidence.
 Its release counts are historical; current catalog counts and acceptance status
 are recorded in the source repository's

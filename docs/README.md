@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-20。当前资料已合并过时阶段教程和重复验收记录，旧版本通过 Git 历史查阅。
+更新日期：2026-10-22。当前用户能力以 0.3.9 的[语言与检测覆盖](PRODUCT_COVERAGE.zh-CN.md)为准；阶段设计和合成验收记录保留各自版本边界，旧版本通过 Git 历史查阅。
 
 | 目标 | 入口 |
 | --- | --- |
@@ -10,6 +10,7 @@
 | 本轮发现、修复、复查与误报手测 | [当前验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md) |
 | 持久化、版本与诊断 | [恢复清单](PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)、[v3 升级](TASK_REVIEW_V3_ONLY.zh-CN.md)、[核查诊断](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md) |
 | 宿主与平台 | [支持状态](HOST_SUPPORT.md)、[Cursor 安装](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)、[操作指南](guides/README.md) |
+| 当前产品覆盖的语言与检测类型 | [0.3.9 产品覆盖](PRODUCT_COVERAGE.zh-CN.md)、[文档站语言矩阵](../website/reference/support.md#语言覆盖) |
 | 恢复开发 | [开发交接](DEVELOPMENT_HANDOFF.zh-CN.md)、[项目上下文](PROJECT_CONTEXT.md) |
 | 规则、设计及性能 | [设计导航](design/README.md)、[性能数据](ARCHITECTURE_PERFORMANCE.zh-CN.md) |
 | 上下文开销与实际 token 对比 | [监测、导入与实验方法（当前源码）](guides/CONTEXT_COST_MONITORING.zh-CN.md) |

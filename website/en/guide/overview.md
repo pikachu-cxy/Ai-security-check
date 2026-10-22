@@ -4,6 +4,8 @@ AI Security Runtime connects security checks to your coding assistant. Ask for a
 
 The current product release is **0.3.9**. Native bundles and the managed macOS installer have separate build identities. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
 
+Code rules cover defined subsets of Java, Python, and JavaScript/TypeScript. Vue single-file components, Go, PHP, and other languages have no corresponding bundled SAST rules. Secret checks, dependency ecosystems, and AI analysis have separate scope; see the [language matrix](../reference/support.md#languages).
+
 ## When to use it
 
 - Review code and configuration changes while an agent implements a feature.

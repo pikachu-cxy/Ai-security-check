@@ -27,12 +27,34 @@ WorkBuddy uses project-level MCP. Other clients use conditional manual stdio MCP
 
 ## Detection scope
 
-- Code checks: installed rule subsets for Java, Python, and JavaScript/TypeScript.
-- Secrets: patterns supported by installed detectors and files actually included.
-- Dependencies: recognizable manifests, ecosystems, versions, and available vulnerability data.
-- Contextual analysis: bounded review by the host agent of inputs, safeguards, and trigger conditions.
+### Language coverage {#languages}
 
-Recognizing an ecosystem for dependencies does not establish full SAST coverage for its language. Go and PHP are not advertised as having full code-rule coverage. Large or binary files, unsupported types, unreadable paths, and failed engines retain their actual coverage limitations. No findings is not proof of security.
+Release 0.3.9 bundles `ai-security-core 1.3.2`: **56 distinct rules, 48 enabled by default**. This is a rule subset, not complete language or framework security coverage.
+
+| Language / files | Default-on / installed | Selected detection areas |
+| --- | --- | --- |
+| Java `.java` | 26 / 34 | SQL, commands, SSRF, paths / file I/O, XXE, deserialization, TLS, Servlet XSS, Spring CSRF; selected JDK, Spring, MyBatis, JPA / Hibernate, Apache APIs |
+| Python `.py` | 16 / 16 | Commands, eval, SQL, SSRF, paths, pickle / YAML, TLS, Flask debug, Django CSRF / weak password hashing, HTML / templates, JWT, lxml XXE |
+| JavaScript `.js` / `.jsx` | 6 / 6 | Selected Express / Node.js input flows into SQL, shells, outbound HTTP, paths, and file I/O |
+| TypeScript `.ts` / `.tsx` | Shares those 6 JS rules | Execution is reported per language without counting six more distinct rules |
+| MyBatis Mapper `.xml` | Counted under Java | Applicable SQL mapper patterns, not general XML coverage |
+| Vue `.vue` | No corresponding default SAST rules | A scanned `.js` file does not establish coverage for `.vue` |
+| Go, PHP, C / C++, C#, Ruby, Rust, and others | No bundled language-specific SAST rules | Host AI analysis is possible but does not establish scanner-rule execution |
+
+Eight historical Java experimental rules remain disabled by default. Shared JS/TS rules count once. Counts are not accuracy or complete OWASP Top 10 claims. Framework names identify selected modeled APIs, not every version, wrapper, or cross-file call chain.
+
+### Secrets, dependencies, and AI analysis
+
+- **Secrets:** Gitleaks patterns apply to included text files independently of language-specific code rules. They do not guarantee recognition of every custom credential format.
+- **Dependencies:** Python `requirements.txt`, `pyproject.toml`, `poetry.lock`, `Pipfile.lock`; JS/TS `package.json` and npm/Yarn/pnpm lockfiles; Java `pom.xml` and Gradle build/lock files; Go `go.mod` and `go.sum`. Actual coverage depends on engines, extracted package versions, and valid vulnerability data.
+- **Other dependency ecosystems:** Composer, Cargo, Bundler, and .NET manifests are not in the current product dependency-input list. An underlying engine's broader capabilities do not establish product integration.
+- **Contextual analysis:** bounded host-agent review of inputs, safeguards, and trigger conditions. Reading another language does not add SAST rules for it.
+
+Go dependency recognition is not Go code checking. Recognized filenames do not prove a complete transitive or installed dependency graph. Dynamic, unpinned, and unresolved versions remain explicit gaps.
+
+### Actual coverage of a check
+
+Distinguish detected languages, available rules, selected rules, executed rules, and scanned files. File recognition, component readiness, no findings, and AI advice do not replace execution evidence. Large or binary files, unsupported types, unreadable paths, and failed engines retain their actual limitations.
 
 Version 0.3.9 verifies Semgrep's actual execution identity and distinguishes missing engines, missing OSV databases, expired data, and unknown update times. Ready components and valid data do not establish that every project file was checked. See [preparation diagnostics](../guide/installation.md#manual-preparation).
 
@@ -42,4 +64,4 @@ Automatic token association currently supports local Codex logs. Other hosts can
 
 New 0.3.9 tasks preserve full sanitized long lines and fragment delivery within budgets. Missing historical preimages, unreadable source, and relevant redacted semantics remain explicit gaps.
 
-See the [rule matrix](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md) and [host engineering records](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md), primarily in Chinese.
+See the [current coverage reference (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/PRODUCT_COVERAGE.zh-CN.md), [rule catalog](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/src/security_runtime/rules/catalog.json), and [host engineering records (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md). The [historical rule-quality matrix](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md) retains sample evidence and accuracy limitations rather than the current language inventory.

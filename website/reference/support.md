@@ -43,15 +43,37 @@ Cursor 的完整接入入口为 `install cursor`，Windows 使用完整包，mac
 
 ## 检查范围
 
-- 代码检查：Java、Python、JavaScript / TypeScript 的已安装规则子集。
-- 密钥检查：已安装检查组件支持的模式与当前实际纳入的文件。
-- 依赖检查：可识别清单、生态与版本，结果依赖检查组件和漏洞数据的可用性。
-- 关联分析：在有界上下文内，由宿主 Agent 阅读代码并复核防护与触发条件。
+### 语言覆盖 {#语言覆盖}
 
-不能因为依赖工具能够识别某种生态，就宣称该语言具备完整 SAST 规则。Go、PHP 等未提供对应规则覆盖的路径，不作为完整代码检查支持宣传。
+0.3.9 自带规则包 `ai-security-core 1.3.2`，共 **56 条独立规则，48 条默认启用**。以下是已交付规则范围，不代表某种语言或框架的全部安全问题均能检测：
+
+| 语言 / 文件 | 默认启用 / 已安装 | 规则方向与适用示例 |
+| --- | --- | --- |
+| Java `.java` | 26 / 34 | SQL、命令注入、SSRF、路径 / 文件读写、XXE、反序列化、TLS、Servlet XSS、Spring CSRF；部分 JDK、Spring、MyBatis、JPA / Hibernate、Apache API |
+| Python `.py` | 16 / 16 | 命令执行、eval、SQL、SSRF、路径、pickle / YAML、TLS、Flask debug、Django CSRF / 弱密码哈希、HTML / 模板、JWT、lxml XXE |
+| JavaScript `.js` / `.jsx` | 6 / 6 | 部分 Express / Node.js 输入到 SQL、Shell、外部 HTTP、路径和文件读写的规则 |
+| TypeScript `.ts` / `.tsx` | 与 JS 共用上述 6 条 | 分语言记录实际执行，不另计 6 条独立规则 |
+| MyBatis Mapper `.xml` | 计入 Java | 仅适用的 MyBatis SQL 映射规则，不是通用 XML 覆盖 |
+| Vue `.vue` | 无对应默认 SAST 规则 | `.js` 已扫描不能代表 `.vue` 已覆盖 |
+| Go、PHP、C / C++、C#、Ruby、Rust 等 | 无自带对应 SAST 规则 | 宿主 AI 可分析代码，但不能据此声称已执行产品语言规则 |
+
+Java 的 8 条历史实验规则默认关闭。JS / TS 共用规则只计一次；条数不表示准确率或完整 OWASP Top 10 覆盖。框架名称仅说明部分已建模 API，不覆盖任意包装函数、所有版本或完整跨文件调用链。
+
+### 密钥、依赖与 AI 分析
+
+- **密钥检查**：Gitleaks 按检测模式检查纳入范围的文本文件，不依赖代码语言规则；不保证识别全部自定义凭据。
+- **依赖检查**：Python 的 `requirements.txt` / `pyproject.toml` / `poetry.lock` / `Pipfile.lock`；JS / TS 的 `package.json` / npm、Yarn、pnpm 锁文件；Java / Gradle 的 `pom.xml`、Gradle 构建与锁文件；Go 的 `go.mod` / `go.sum`。实际结果依赖引擎、包版本提取和有效漏洞数据。
+- **其他依赖生态**：当前产品依赖输入清单未包含 Composer、Cargo、Bundler、.NET 清单，不把底层工具自身支持当作本产品已接入。
+- **关联分析**：宿主 Agent 在有界上下文内复核代码、防护与触发条件；能阅读其他语言不等于这些语言已有 SAST 规则。
+
+Go 的依赖清单识别不等于 Go 代码检查；识别清单也不保证完整传递依赖或实际安装版本已确认。动态、未固定或解析失败的版本应保留缺口。
+
+### 一次检查实际覆盖多少
+
+结果应区分检测到的语言、可用 / 选中 / 实际执行规则及实际扫描文件。只发现扩展名、组件就绪、零发现或 AI 建议都不能代替执行证据。混合语言项目中，不支持的文件仍需明确列出。
 
 0.3.9 会核对 Semgrep 实际执行身份，并分别报告工具缺失、OSV 数据库缺失、漏洞数据过期或更新时间未知。组件就绪和数据有效不代表所有项目文件已被检查；诊断与处理见[组件准备](../guide/installation.md#手动准备组件)。
 
 大文件、二进制、不支持类型、不可读路径与失败组件按实际诊断保留覆盖边界。零发现不是安全证明。
 
-完整工程信息见 [规则覆盖矩阵](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md)、[宿主支持状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md)。
+完整依据见[当前产品覆盖说明](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/PRODUCT_COVERAGE.zh-CN.md)、[规则目录](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/src/security_runtime/rules/catalog.json)及[宿主支持状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md)。[历史规则质量矩阵](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md)仅用于了解历史样本与准确率限制。

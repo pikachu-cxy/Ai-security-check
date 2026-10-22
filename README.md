@@ -12,7 +12,7 @@ AI Security Runtime checks the changes made during a development task, combines 
 
 [English documentation](https://pikachu-cxy.github.io/Ai-security-check/en/) · [中文文档](https://pikachu-cxy.github.io/Ai-security-check/)
 
-If the English website is awaiting deployment, [read the English quick start in this repository](website/en/guide/quickstart.md). Website publication waits for the documented installation packages to be public.
+The [English quick start is also available in this repository](website/en/guide/quickstart.md). Website publication waits for the documented installation packages to be public.
 
 - [Overview](website/en/guide/overview.md) · [Quick start](website/en/guide/quickstart.md) · [Downloads](website/en/downloads.md)
 - [Codex setup](website/en/guide/editors/codex.md) · [Cursor setup](website/en/guide/editors/cursor.md) · [Manual MCP](website/en/guide/mcp.md)
@@ -93,7 +93,18 @@ See the [changelog](website/en/reference/changelog.md) and [release workflow](ht
 
 ## Coverage and data handling
 
-Installed rule subsets cover Java, Python, and JavaScript/TypeScript. Secret detection, recognizable dependency manifests, and bounded contextual analysis depend on the available engines, data, and actual review scope. No findings does not establish that a project is secure. Go or PHP dependency recognition does not imply complete SAST support for those languages.
+The 0.3.9 release bundles `ai-security-core 1.3.2`, with **56 distinct code rules, 48 default-on**:
+
+| Language / files | Default-on / installed | Scope |
+| --- | --- | --- |
+| Java `.java` | 26 / 34 | Selected JDK, Spring, MyBatis, JPA / Hibernate, and Apache API patterns; applicable MyBatis XML is included |
+| Python `.py` | 16 / 16 | Selected standard-library, Flask, Django, Requests / HTTPX, PyYAML, PyJWT, and lxml patterns |
+| JavaScript `.js` / `.jsx` and TypeScript `.ts` / `.tsx` | 6 shared / 6 | Selected Express / Node.js SQL, command, SSRF, path, and file-I/O flows; shared rules count once |
+| Vue `.vue`, Go, PHP, C / C++, C#, Ruby, Rust, and others | No corresponding bundled SAST rules | Host AI review does not establish scanner coverage |
+
+Eight Java experimental rules are default-off. Rule counts do not establish complete language, framework, OWASP, or production-accuracy coverage. Gitleaks secret checks apply to included text files independently of these code rules. Dependency inputs currently cover Python, npm/Yarn/pnpm, Maven/Gradle, and Go manifests or lockfiles; recognition does not prove a complete dependency graph. Composer, Cargo, Bundler, and .NET manifests are not in the product's current dependency-input list.
+
+See the [language and detection matrix](website/en/reference/support.md#languages) and [current source evidence (Chinese)](docs/PRODUCT_COVERAGE.zh-CN.md). Engines, data, actual file scope, and contextual review determine each result; no findings is not proof of security.
 
 The Runtime and scanners run locally. Semantic analysis is performed by the host agent, whose own model service and account policies govern its data handling. Local task records may contain code snapshots. Component preparation and vulnerability data can require network access. See [coverage](website/en/reference/support.md) and [privacy](website/en/reference/privacy.md).
 

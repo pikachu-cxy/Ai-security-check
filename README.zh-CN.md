@@ -35,7 +35,7 @@
 - macOS 托管 Semgrep 的解释器链接仅允许指向匹配固定版本、清单与实际字节校验的托管 Python；外部链接仍被拒绝。
 - Cursor 会话基线捕获失败时保留明确失败原因，不重复捕获或发布不可核验基线。
 - 执行初始化、发布锁竞争、中断及取消后的恢复；已完成结果沿原任务恢复，不重复扫描或消耗预算。
-- 本轮风险交付恢复位置及“问题／可能影响／建议修复／尚未确认”四段说明；历史查询不重复索取处置选择。
+- 风险交付保留位置、问题、可能影响、建议与未知，随用户语言自然表达；历史查询不重复索取处置选择。
 - 静态发现与代码复核风险共用当前处置投影；处置暂时不可读时保留详情并标记未知。
 - 升级事务覆盖退役受管 Skill 文件；保护用户修改。补齐超长 Hook 上下文和打包规则身份校验。
 
@@ -86,7 +86,7 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 完整包自带 Python，无需另装 Python、pip 或 venv。不要只复制一个可执行文件。Windows、macOS、SHA256 校验及仅 MCP 模式见[详细安装指南](docs/PILOT_INSTALL_AND_USE.zh-CN.md)。macOS CI、候选构建和真机验收分别记录；Linux 暂不发行。
 
-首次组件准备仍可能下载漏洞数据库；在线 / 本地双模式与一条命令安装尚未交付，不作为本版宣传能力。当前完整包不要求 Node.js，也没有正式 `npx` 安装入口。
+首次组件准备仍可能下载漏洞数据库；用户可选在线 / 本地双模式尚未交付。Mac 已提供按编辑器选择的一条命令安装，Windows 使用解压后 `install codex` / `install cursor` 入口；当前完整包不要求 Node.js，也没有正式 `npx` 或远程 PowerShell 安装入口。
 
 ## 日常流程
 
@@ -96,7 +96,20 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 4. 修复后沿原风险复查。新任务零发现、普通测试通过、暂缓或排除都不等于原漏洞已验证修复。
 5. 历史查询只读，不重扫、不重复追问。普通聊天、只读操作和无改动不追加通用安全提示。
 
-支持 Java、Python、JavaScript / TypeScript 的已安装规则子集、密钥检查、可识别依赖及有界关联分析。零发现不证明项目安全；不完整范围和失败原因应如实保留。检查在本机运行，语义分析由宿主 Agent 完成。
+## 语言与检测覆盖
+
+0.3.9 自带规则包 `ai-security-core 1.3.2`，共 **56 条独立代码规则，48 条默认启用**：
+
+| 语言 / 文件 | 默认启用 / 已安装 | 覆盖边界 |
+| --- | --- | --- |
+| Java `.java` | 26 / 34 | 部分 JDK、Spring、MyBatis、JPA / Hibernate、Apache API；适用的 MyBatis XML 规则计入 Java |
+| Python `.py` | 16 / 16 | 部分标准库、Flask、Django、Requests / HTTPX、PyYAML、PyJWT、lxml 模式 |
+| JavaScript `.js` / `.jsx`、TypeScript `.ts` / `.tsx` | 共用 6 / 6 | 部分 Express / Node.js 的 SQL、命令、SSRF、路径与文件读写；共享规则只计一次 |
+| Vue `.vue`、Go、PHP、C / C++、C#、Ruby、Rust 等 | 无自带对应 SAST 规则 | 宿主 AI 可以分析代码，但不能据此认为已执行这些语言的扫描规则 |
+
+Java 的 8 条实验规则默认关闭。规则数量不代表完整语言、框架、OWASP 或生产准确率覆盖。Gitleaks 按模式检查纳入范围的文本文件，与代码语言规则分开；依赖输入当前包括 Python、npm/Yarn/pnpm、Maven/Gradle、Go 的清单或锁文件，识别文件名不保证完整依赖图。Composer、Cargo、Bundler、.NET 清单尚未纳入本产品依赖输入清单。
+
+完整规则方向、文件范围和依据见[当前产品覆盖说明](docs/PRODUCT_COVERAGE.zh-CN.md)及[文档站语言矩阵](website/reference/support.md#语言覆盖)。零发现不证明项目安全；不完整范围和失败原因应如实保留。检查在本机运行，语义分析由宿主 Agent 完成。
 
 ## 开发与支持
 
