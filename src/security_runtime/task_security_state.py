@@ -243,7 +243,12 @@ class TaskSecurityStore:
                 raise ValueError('Task record budget exceeded')
             db.execute('INSERT OR REPLACE INTO security_tasks VALUES(?,?,?,?,?,?)',
                        (value['task_ref'], value['task_key'], value['phase'], value['created_at'], raw.decode(), digest(self.key(), value)))
-            return value
+        try:
+            from .product_metrics import task_record_observed
+            task_record_observed(value)
+        except Exception:
+            pass  # Already committed; optional observation never controls it.
+        return value
 
     def for_scan(self, scan_id):
         """Bounded read-only migration lookup, retaining signed legacy facts."""

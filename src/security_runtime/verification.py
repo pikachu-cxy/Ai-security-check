@@ -285,6 +285,10 @@ class VerificationService:
                 covered = (covered and bool(compatible) and rule in plan.confirmed_rules
                     and path in plan.scanned_files and path not in plan.errored_files
                     and path not in getattr(plan, 'skipped_files', {}) and not plan.unscoped_error)
+                if Path(path).suffix.lower() == '.vue':
+                    # Script projections currently prove candidates only; a
+                    # template/block/language change cannot attest absence.
+                    covered = False
                 if getattr(plan.pack, 'program', None):
                     required = set(plan.pack.program.family_rules(rule))
                     applicable = {r.rule_id for r in plan.pack.catalog if r.rule_id in required and

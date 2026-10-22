@@ -53,6 +53,16 @@ class CursorTaskBridge:
             "MCP:mcp_ai_security_runtime_begin_security_task",
         }
 
+    @staticmethod
+    def may_mutate(payload):
+        name, inputs = payload.get('tool_name'), payload.get('tool_input', {})
+        if name == 'Shell':
+            from .codex_event_adapter import classify_bash_command
+            command = inputs.get('command') if isinstance(inputs, dict) else None
+            # An absent/unknown command is possible activity, never execution.
+            return not isinstance(command, str) or classify_bash_command({'command': command}) != 'READ_ONLY'
+        return name in {'Write', 'Edit', 'Delete'}
+
     def before(self, payload):
         name, inputs = payload['tool_name'], payload.get('tool_input', {})
         task_key = self.key
@@ -76,12 +86,7 @@ class CursorTaskBridge:
                 return dict(status='MCP_PREPARATION_DELEGATED',scanner_run=False)
             if verify_session_ref(self.core.store,self.root,token)!=self.owner:
                 return dict(status='BASELINE_UNAVAILABLE',scanner_run=False)
-        mutating = preparing or name in {'Write', 'Edit', 'Delete'}
-        if name == 'Shell':
-            from .codex_event_adapter import classify_bash_command
-            # Missing/unknown shell inputs are potentially mutating. Never execute them.
-            command = inputs.get('command') if isinstance(inputs, dict) else None
-            mutating = not isinstance(command, str) or classify_bash_command({'command': command}) != 'READ_ONLY'
+        mutating = preparing or self.may_mutate(payload)
         if not mutating:
             return dict(status='READ_ONLY_OR_UNSUPPORTED', scanner_run=False)
         from .task_attribution import session_activity
@@ -145,6 +150,7 @@ class CursorTaskBridge:
             '用 submit_task_review_batch 逐批记录，最后 submit_task_security_review；静态零发现也核查。'
             '未请求的必读项仍未完成；同一任务累计额度不因分页或重连重置。旧协议任务仅供历史查询，不得续办。'
             '把实际风险和未完成范围合并进正常总结。只读工具不会开始新任务。'
+            '最终当前检查完成后，以当前结果替代本轮早先的未完成提示；其他轮次不沿用旧提示。'
             '自动消息不是用户同意；修复仍须明确选择风险并通过现有 MCP 授权与复核。'
         )
         # Rendering a response is not proof that stdout was written or that a

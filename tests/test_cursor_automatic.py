@@ -348,6 +348,88 @@ def test_read_only_chat_cancel_and_missing_pre_never_invent_task(repo,tmp_path):
     assert not runtime.calls
 
 
+@pytest.mark.parametrize('name,inputs', [('Read', {}), ('Shell', {'command': 'git status'}),
+                                      ('Shell', {'command': 'rg -n pattern A.java'})])
+@pytest.mark.parametrize('failure', [None, 'task', 'binding', 'coordinator'])
+def test_readonly_post_never_adds_check_gap_even_when_runtime_fails(repo, tmp_path, monkeypatch,
+                                                                  name, inputs, failure):
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime)
+    tool(repo, tmp_path, core, name, **inputs)
+    def unavailable(*args, **kwargs):
+        raise OSError('fixture unavailable')
+    if failure == 'task':
+        monkeypatch.setattr(CursorTaskBridge, 'current', unavailable)
+    elif failure == 'binding':
+        monkeypatch.setattr(CursorBindings, 'verify_feedback', unavailable)
+    elif failure == 'coordinator':
+        monkeypatch.setattr('security_runtime.cursor_hook.coordinator', unavailable)
+        core = None
+    output, result = ingress(repo, tmp_path, core, 'postToolUse', tool_name=name, tool_input=inputs)
+    assert output == {} and not result['scanner_run'] and not runtime.calls
+
+
+@pytest.mark.parametrize('name,inputs', [('Write', {}), ('Edit', {}), ('Delete', {}),
+                                      ('Shell', {'command': 'formatter A.java'}), ('Shell', {})])
+@pytest.mark.parametrize('exception', [False, True])
+def test_missing_record_gap_is_persistent_once_per_conversation_generation(repo, tmp_path, monkeypatch,
+                                                                         name, inputs, exception):
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime)
+    # Establish the binding with a read: intentionally no editing-task baseline.
+    tool(repo, tmp_path, core, 'Read')
+    if exception:
+        def unavailable(*args):
+            raise OSError('fixture unavailable')
+        monkeypatch.setattr(CursorTaskBridge, 'current', unavailable)
+    def post(**fields):
+        # A fresh coordinator, bindings and observation object on each call,
+        # just as independent command Hook processes reopen their stores.
+        return ingress(repo, tmp_path, coordinator(tmp_path, runtime), 'postToolUse',
+                       tool_name=name, tool_input=inputs, **fields)
+    first, result = post()
+    assert '仅当本轮实际修改' in first['additional_context']
+    assert '最终当前检查完成后不保留旧提示' in first['additional_context']
+    assert result['gap_notice_recording'] == 'RECORDED'
+    assert post()[0] == {}
+    bindings = CursorBindings(tmp_path/'bindings')
+    bindings.accept(repo, 'private-cursor-conversation', 'new-generation')
+    assert post(generation_id='new-generation')[0]['additional_context'] == first['additional_context']
+    bindings.accept(repo, 'another-conversation', 'new-generation')
+    assert post(conversation_id='another-conversation', generation_id='new-generation')[0]
+    assert post(conversation_id='another-conversation', generation_id='new-generation')[0] == {}
+    assert not runtime.calls
+
+
+def test_generic_gap_dedup_does_not_hide_following_task_handoff(repo, tmp_path):
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime)
+    tool(repo, tmp_path, core, 'Read')
+    assert ingress(repo, tmp_path, core, 'postToolUse', tool_name='Write')[0]
+    started = tool(repo, tmp_path, core)[1]
+    output, result = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Write')
+    assert started['task_ref'] in output['additional_context']
+    assert '以当前结果替代本轮早先的未完成提示' in output['additional_context']
+    assert result['task_delivery']['task_ref'] == started['task_ref']
+    assert not runtime.calls
+
+
+@pytest.mark.parametrize('failure', [OSError('unavailable'), RecursionError('invalid saved JSON')])
+def test_unavailable_gap_bookkeeping_preserves_gap_without_changing_task_or_authority(repo, tmp_path,
+                                                                                   monkeypatch, failure):
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime)
+    tool(repo, tmp_path, core, 'Read')
+    def unavailable(*args):
+        raise failure
+    monkeypatch.setattr('security_runtime.cursor_gap_notices.claim_gap_notice', unavailable)
+    output, result = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Write')
+    assert '仅当本轮实际修改' in output['additional_context']
+    assert result['gap_notice_recording'] == 'UNAVAILABLE'
+    assert CursorTaskBridge(core, repo, 'private-cursor-conversation', 'private-generation').current() is None
+    assert not runtime.calls and not result['scanner_run']
+
+
 def test_stop_once_persists_reuses_ref_across_generation_and_next_task_works(repo,tmp_path):
     runtime=FakeRuntime();core=coordinator(tmp_path,runtime)
     first=tool(repo,tmp_path,core)[1]['task_ref']

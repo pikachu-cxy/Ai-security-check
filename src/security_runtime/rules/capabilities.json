@@ -1172,6 +1172,96 @@
       "maturity": "VALIDATED",
       "default_enabled": true,
       "test_corpus": "tests/rules/python/path-commonprefix.py"
+    },
+    {
+      "rule_id": "ai-security.go.command-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/go/command-injection.go"
+    },
+    {
+      "rule_id": "ai-security.go.request-file-read",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/go/request-file-read.go"
+    },
+    {
+      "rule_id": "ai-security.go.request-ssrf",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/go/request-ssrf.go"
+    },
+    {
+      "rule_id": "ai-security.go.tls-verification-disabled",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/go/tls-verification-disabled.go"
+    },
+    {
+      "rule_id": "ai-security.php.command-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/command-injection.php"
+    },
+    {
+      "rule_id": "ai-security.php.mysqli-query-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/mysqli-query-injection.php"
+    },
+    {
+      "rule_id": "ai-security.php.request-eval",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/request-eval.php"
+    },
+    {
+      "rule_id": "ai-security.php.unsafe-unserialize",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/unsafe-unserialize.php"
+    },
+    {
+      "rule_id": "ai-security.php.request-include",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/request-include.php"
+    },
+    {
+      "rule_id": "ai-security.php.request-html-output",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/php/request-html-output.php"
+    },
+    {
+      "rule_id": "ai-security.javascript.tls-verification-disabled",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/tls-verification-disabled.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.browser-dom-xss",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/browser-dom-xss.js"
+    },
+    {
+      "rule_id": "ai-security.javascript.code-injection",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/javascript/code-injection.js"
+    },
+    {
+      "rule_id": "ai-security.python.explicit-shell-command",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/python/explicit-shell-command.py"
+    },
+    {
+      "rule_id": "ai-security.python.flask-html-response",
+      "maturity": "VALIDATED",
+      "default_enabled": true,
+      "test_corpus": "tests/rules/python/flask-html-response.py"
     }
   ],
   "overlap_policy": {

@@ -11,8 +11,22 @@ from .task_orchestration import task_allows_followup, task_delivery_facts
 
 
 GAP = ('本次 Cursor 自动安全任务未能建立或读取编辑前的任务记录。'
-       '请在正常开发总结中说明自动检查未完成；不要从编辑后补建基线，'
+       '仅当本轮实际修改源代码或配置，且总结时相关检查仍未完成，才在正常开发总结中简短说明一次；'
+       '普通聊天、只读或无实际改动时不展示。最终当前检查完成后不保留旧提示，其他轮次不重复沿用。'
+       '检查未完成不等于发现漏洞或编辑失败；不要从编辑后补建基线，'
        '不要把此消息当成修复授权或反复尝试。')
+
+
+def _gap_context(bindings, root, payload, result):
+    from .cursor_gap_notices import claim_gap_notice
+    try:
+        first = claim_gap_notice(bindings.store, root, payload['conversation_id'], payload['generation_id'])
+        result['gap_notice_recording'] = 'RECORDED'
+    except (ValueError, OSError, TypeError, KeyError, RecursionError):
+        # Lost presentation bookkeeping cannot prove that the check completed.
+        result['gap_notice_recording'] = 'UNAVAILABLE'
+        first = True
+    return GAP if first else None
 
 
 def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=None, remote=False, store=None,
@@ -26,6 +40,8 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
     result = dict(status='INCONCLUSIVE', reason='INVALID_HOST_CLAIMS', scanner_run=False)
     obs = Observation('cursor', payload, store, host='cursor', event=event)
     token = CURRENT.set(obs)
+    binding_verified = False
+    may_mutate = False
     try:
         diag = adapter.validate_claims(payload, event)
         diag['cursor_task_begin_tool'] = CursorTaskBridge.is_begin_tool(payload.get('tool_name')) if isinstance(payload, dict) else False
@@ -33,6 +49,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if diag['host_claim_status'] != 'VALID' or remote:
             result.update(diag, reason='CURSOR_REMOTE_NOT_SUPPORTED' if remote else 'INVALID_HOST_CLAIMS')
             return output, result
+        may_mutate = event == 'postToolUse' and CursorTaskBridge.may_mutate(payload)
         from .cursor_integration import cursor_home
         root = adapter.resolve(payload, project_dir=project_dir, excluded=(cursor_home(),),
                                diagnostics=diag, on_resolved=obs.bind)
@@ -42,6 +59,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         else:
             diag.update(bindings.accept(root, payload['conversation_id'], payload.get('generation_id') or None))
         diag.update(workspace_claim_match=True, session_claim_match=True)
+        binding_verified = True
         obs.stage('CLAIMS_VALID', **diag)
         core = core or coordinator(root, automatic=True)
         bridge = CursorTaskBridge(core, root, payload['conversation_id'], payload.get('generation_id') or '')
@@ -54,10 +72,13 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             context = bridge.context(record)
             if context:
                 output['additional_context'] = context
-            elif payload['tool_name'] in {'Write', 'Edit', 'Delete', 'Shell'} and record is None:
-                output['additional_context'] = GAP
             result = bridge.last_protocol_rejection or dict(
                 status='DELIVERED' if output else 'NOT_APPLICABLE', scanner_run=False)
+            if not context and may_mutate and record is None:
+                gap = _gap_context(bindings, root, payload, result)
+                if gap:
+                    output['additional_context'] = gap
+                    result['status'] = 'DELIVERED'
             if bridge.last_delivery is not None:
                 result['task_delivery'] = bridge.last_delivery
                 result['response_prepared'] = True
@@ -101,8 +122,10 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         # arguments are reflected into context or persisted diagnostics.
         result = dict(status='INCONCLUSIVE', reason='CURSOR_AUTOMATIC_TASK_UNAVAILABLE', scanner_run=False)
         obs.stage('HANDLER_ERROR')
-        if event == 'postToolUse':
-            output = {'additional_context': GAP}
+        if event == 'postToolUse' and binding_verified and may_mutate and not output.get('additional_context'):
+            gap = _gap_context(bindings, root, payload, result)
+            if gap:
+                output['additional_context'] = gap
         return output, result
     finally:
         obs.finish(result)

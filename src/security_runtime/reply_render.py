@@ -124,6 +124,8 @@ def _check_message(plan):
 
 
 def render_reply(plan: ReplyPlan, *, include_risks=True):
+    if plan.silent_completion:
+        return ''
     parts = []
     risks = plan.risks if include_risks else ()
     total = plan.total_risk_count if include_risks else 0

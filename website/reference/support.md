@@ -45,19 +45,34 @@ Cursor 的完整接入入口为 `install cursor`，Windows 使用完整包，mac
 
 ### 语言覆盖 {#语言覆盖}
 
-0.3.9 自带规则包 `ai-security-core 1.3.2`，共 **56 条独立规则，48 条默认启用**。以下是已交付规则范围，不代表某种语言或框架的全部安全问题均能检测：
+当前源码自带规则包 `ai-security-core 1.6.0`，共 **71 条独立规则，63 条默认启用**；已发布的 0.3.9 安装包仍以包内版本为准。以下是当前源码规则范围，不代表某种语言或框架的全部安全问题均能检测：
 
 | 语言 / 文件 | 默认启用 / 已安装 | 规则方向与适用示例 |
 | --- | --- | --- |
 | Java `.java` | 26 / 34 | SQL、命令注入、SSRF、路径 / 文件读写、XXE、反序列化、TLS、Servlet XSS、Spring CSRF；部分 JDK、Spring、MyBatis、JPA / Hibernate、Apache API |
-| Python `.py` | 16 / 16 | 命令执行、eval、SQL、SSRF、路径、pickle / YAML、TLS、Flask debug、Django CSRF / 弱密码哈希、HTML / 模板、JWT、lxml XXE |
-| JavaScript `.js` / `.jsx` | 6 / 6 | 部分 Express / Node.js 输入到 SQL、Shell、外部 HTTP、路径和文件读写的规则 |
-| TypeScript `.ts` / `.tsx` | 与 JS 共用上述 6 条 | 分语言记录实际执行，不另计 6 条独立规则 |
+| Python `.py` | 18 / 18 | 命令执行、eval / exec、SQL、SSRF、路径、pickle / YAML、TLS、Flask debug、Django CSRF / 弱密码哈希、HTML / 模板、Flask 直接字符串响应、JWT、lxml XXE |
+| JavaScript `.js` / `.jsx` | 9 / 9 | 部分 Express / Node.js 输入到 SQL、Shell、外部 HTTP、路径和文件读写；补充 location 到 DOM HTML、HTTPS 校验关闭；请求输入到 eval / Function / vm 代码参数 |
+| TypeScript `.ts` / `.tsx` | 与 JS 共用上述 9 条 | 分语言记录实际执行，不另计 9 条独立规则 |
 | MyBatis Mapper `.xml` | 计入 Java | 仅适用的 MyBatis SQL 映射规则，不是通用 XML 覆盖 |
-| Vue `.vue` | 无对应默认 SAST 规则 | `.js` 已扫描不能代表 `.vue` 已覆盖 |
-| Go、PHP、C / C++、C#、Ruby、Rust 等 | 无自带对应 SAST 规则 | 宿主 AI 可分析代码，但不能据此声称已执行产品语言规则 |
+| Vue `.vue` | 脚本复用 JS/TS 规则，不增加独立条数 | 提取顶层 script / script setup 的 JS/TS，映射原文件位置；模板、样式、外链脚本未覆盖，整体最多部分覆盖 |
+| Go `.go` | 4 / 4 | 部分 net/http 输入到 Shell、文件读取、HTTP 请求，以及 crypto/tls 校验关闭 |
+| PHP `.php` | 6 / 6 | 超全局输入到命令、mysqli SQL、eval、unserialize、include/require、HTML 输出 |
+| C / C++、C#、Ruby、Rust 等 | 无自带对应 SAST 规则 | 宿主 AI 可分析代码，但不能据此声称已执行产品语言规则 |
 
 Java 的 8 条历史实验规则默认关闭。JS / TS 共用规则只计一次；条数不表示准确率或完整 OWASP Top 10 覆盖。框架名称仅说明部分已建模 API，不覆盖任意包装函数、所有版本或完整跨文件调用链。
+
+上表仅统计核心 YAML 包。feature/release 另有 1 条原生 Go SQL 规则，跟踪同包最多两条调用边的 net/http → database/sql 查询文本；最多 64 个已捕获文件、2 MB、100000 步及 3 秒软预算。quick 不启用；接口分派、跨包和复杂语法等缺口仍属于部分覆盖。
+
+
+`1.5.0` 增加 Python 显式 shell 命令槽与 JS/TS 代码执行污点规则；显式 Express Request 处理器补充 SQL、命令和删除路径来源。JS/TS 局部赋值、拼接、覆盖及参数绑定使用 Semgrep 污点语义，不新增跨文件调用图。引擎提供路径时只保留有界脱敏位置；未提供则标明路径不可用，不编造传播链。未知函数返回值不由新代码执行规则自动传播。
+
+Vue 投影限制为每文件 512 KiB、每次 64 文件及 4 MiB 输入；两个 script 独立分析，不连通数据流。无法提取、超预算或引擎失败均保留缺口；模板始终未覆盖。用户规则包含路径 include/exclude 时暂不投影 Vue，并说明原因，以免影子文件改变路径限制；普通 JS/TS 和无路径限制的本地 Vue 规则仍可使用。
+
+上述 YAML 数量不含已有 Java/Python 原生有界分析：默认各启用 SQL、路径两类规则；也不含 JS/TS 动态代码词法候选。原生候选、污点证据和真实可利用性分别认定。
+
+`1.6.0` 新增 Flask 路由直接返回格式化字符串的局部 XSS 检测，并补充一类显式 shell 列表取值。JSON、显式纯文本、模板和已知转义作为负例；未知帮助函数与间接响应仍有缺口。产品本地证明过滤只抑制完整操作数可证明固定的候选，不把未知导入路径前缀当成常量。
+
+原生有界数据流维持 `1.5.0`：默认 Python 路径检测要求已解析跨文件调用或精确的 `io.open/codecs.open`，文件内 `pathlib.Path.read_text/read_bytes` 仍为实验能力。路径部件替换、绝对后段覆盖前段的精确语义与安全负例是后续工作，不在本轮默认开启。跨文件范围、预算和默认命令模型开关不变。原始规则候选、产品合并命中与真实可利用性仍分别记录。
 
 ### 密钥、依赖与 AI 分析
 
@@ -77,3 +92,5 @@ Go 的依赖清单识别不等于 Go 代码检查；识别清单也不保证完�
 大文件、二进制、不支持类型、不可读路径与失败组件按实际诊断保留覆盖边界。零发现不是安全证明。
 
 完整依据见[当前产品覆盖说明](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/PRODUCT_COVERAGE.zh-CN.md)、[规则目录](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/src/security_runtime/rules/catalog.json)及[宿主支持状态](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md)。[历史规则质量矩阵](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md)仅用于了解历史样本与准确率限制。
+
+Vue 的本次支持用于发现脚本候选；内置和本地 SAST 规则的零发现暂不作为自动确认修复的依据，复查保留不确定状态。完整模板/脚本组合语义尚未建立。

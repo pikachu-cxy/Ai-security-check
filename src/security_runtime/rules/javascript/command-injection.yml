@@ -61,6 +61,23 @@ rules:
       - pattern: $REQ.cookies
       - pattern: $REQ.get(...)
     exact: true
+  - patterns:
+    - pattern-either:
+      - pattern-inside: import { Request } from "express"; ...
+      - pattern-inside: import type { Request } from "express"; ...
+    - pattern-either:
+      - pattern-inside: '($REQ: Request, ...) => { ... }'
+      - pattern-inside: 'async ($REQ: Request, ...) => { ... }'
+      - pattern-inside: 'function $HANDLER($REQ: Request, ...) { ... }'
+      - pattern-inside: 'async function $HANDLER($REQ: Request, ...) { ... }'
+    - pattern-either:
+      - pattern: $REQ.query
+      - pattern: $REQ.params
+      - pattern: $REQ.body
+      - pattern: $REQ.headers
+      - pattern: $REQ.cookies
+      - pattern: $REQ.get(...)
+    exact: true
   pattern-sinks:
   - patterns:
     - pattern-either:
@@ -458,7 +475,7 @@ rules:
   metadata:
     publisher: AI Security Runtime
     rule_pack: ai-security-core
-    rule_version: 1.2.0
+    rule_version: 1.2.1
     language: javascript
     category: command-injection
     cwe:

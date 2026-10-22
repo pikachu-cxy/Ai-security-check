@@ -327,6 +327,11 @@ class TaskSecurityService:
         owner=self._owner()
         if not read_only and owner is not None and record_owner(record)!=owner:
             raise ownership_error(record_owner(record), owner)
+        try:
+            from .observation import bind_product
+            bind_product('task', record['task_ref'], relation='TASK_RECORD_READ')
+        except Exception:
+            pass  # A readable record is a reference, never a new owner binding.
         return record
 
     def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None):
@@ -428,6 +433,11 @@ class TaskSecurityService:
             if _owner is not None:
                 record['connector_owner'] = _owner
             record = self.store(root).save(record, new=True)
+            try:
+                from .observation import bind_product
+                bind_product('task', record['task_ref'], relation='TASK_CREATED')
+            except Exception:
+                pass  # An optional observation cannot affect the saved baseline.
             if _native_preparation is not None:
                 native.bind(record['task_ref'])
             return self._view(record)
@@ -987,6 +997,11 @@ class TaskSecurityService:
                 self.source_cache.discard_task(str(root), ref)
             from .task_projection import status as projection_status
             result_packet['risk_ledger_sync'] = projection_status(record)
+            try:
+                from .product_metrics import proposals_saved
+                proposals_saved(ref, accepted, root)
+            except Exception:
+                pass
             return result_packet
 
     def get(self, workspace, ref, finding_offset=0, finding_limit=20, *, completion_revision=None):
@@ -1187,4 +1202,16 @@ class TaskSecurityService:
         if plan.check.state == 'CAPACITY_REQUIRED':
             result.update(status='CAPACITY_REQUIRED', review_required=False,
                           review_capacity=record['review_capacity'])
+        try:
+            from .observation import bind_product
+            bind_product('task', record['task_ref'], relation='TASK_RESULT_RETURNED')
+        except Exception:
+            pass  # Reporting a task reference grants no ownership or authority.
+        try:
+            from .product_metrics import task_observed
+            task_observed(result, record['workspace'], record.get('generation',0), handling=(
+                ((record.get('static') or {}).get('scan_id'), static_feedback),
+                (record['task_ref'], host_feedback)))
+        except Exception:
+            pass  # Optional receipt; never affects task lifecycle or authority.
         return result

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 from security_runtime.context_cost import ContextCostStore
+from security_runtime.context_cost_worker import ObservationWorker
 from security_runtime.monitoring.host_reader import HostReader
 from security_runtime.monitoring.service import MonitorService
 
@@ -41,6 +42,17 @@ def store(tmp_path, monkeypatch):
     store = ContextCostStore(tmp_path/'metrics.sqlite3')
     store.set_monitoring('debug')
     return store
+
+
+@pytest.fixture
+def observer_worker(store):
+    worker = ObservationWorker(lambda: store).start()
+    try:
+        assert worker.wait_ready(3)
+        yield worker
+        assert worker.wait_idle(3)
+    finally:
+        worker.close()
 
 
 def test_host_reader_is_incremental_and_does_not_count_cumulative_snapshots_twice(source):
@@ -211,7 +223,9 @@ def test_product_cli_works_when_all_monitoring_modules_removed(monkeypatch, caps
     from security_runtime import cli
     original = builtins.__import__
     def missing(name, *args, **kwargs):
-        if name.rsplit('.', 1)[-1] in {'context_cost_cli', 'context_cost_mcp', 'context_cost', 'context_report', 'monitoring'}:
+        if name.rsplit('.', 1)[-1] in {'context_cost_cli', 'context_cost_mcp', 'context_cost', 'context_report',
+                                     'context_cost_worker', 'context_cost_capture', 'observation', 'monitoring',
+                                     'context_cost_sync', 'model_observation', 'model_report', 'model_panel', 'collector_health', 'product_metrics', 'monitor_history', 'monitor_checks', 'monitor_risks'}:
             raise ImportError('optional monitor removed')
         return original(name, *args, **kwargs)
     monkeypatch.setattr(builtins, '__import__', missing)
@@ -239,10 +253,8 @@ def test_product_mcp_handler_unchanged_when_observer_missing_or_broken(monkeypat
     assert registry.low_level.request_handlers[CallToolRequest] is before
 
 
-def test_response_introspection_failure_cannot_change_product_reply(store, monkeypatch):
-    from security_runtime import context_cost
+def test_response_introspection_failure_cannot_change_product_reply(observer_worker):
     from security_runtime.context_cost_mcp import observe_response
-    monkeypatch.setattr(context_cost, 'ContextCostStore', lambda: store)
     class Response:
         @property
         def root(self):
@@ -250,18 +262,18 @@ def test_response_introspection_failure_cannot_change_product_reply(store, monke
     expected = Response()
     async def call(_):
         return expected
-    result = asyncio.run(observe_response(call, SimpleNamespace(params=SimpleNamespace(name='get_runtime_info')), connection_id='a'))
+    result = asyncio.run(observe_response(call, SimpleNamespace(params=SimpleNamespace(name='get_runtime_info')),
+        connection_id='a', worker=observer_worker))
     assert result is expected
 
 
-def test_global_workspace_claim_is_metadata_only_and_bounded(store, monkeypatch):
-    from security_runtime import context_cost
+def test_global_workspace_claim_is_metadata_only_and_bounded(store, observer_worker):
     from security_runtime.context_cost_mcp import observe_response
-    monkeypatch.setattr(context_cost, 'ContextCostStore', lambda: store)
     async def call(_):
         return {'status': 'AVAILABLE'}
     request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info', arguments={'workspace_path':'/explicit/project', 'source':'PRIVATE_BODY'}))
-    asyncio.run(observe_response(call, request, connection_id='connection'))
+    asyncio.run(observe_response(call, request, connection_id='connection', worker=observer_worker))
+    assert observer_worker.wait_idle(3)
     assert store.snapshot()['events'][0]['workspace_hash'] is not None
     assert b'PRIVATE_BODY' not in store.path.read_bytes()
     assert b'/explicit/project' not in store.path.read_bytes()
@@ -274,8 +286,10 @@ def test_product_starts_with_monitor_source_files_physically_absent(tmp_path):
     import sys
     import security_runtime
     source = Path(security_runtime.__file__).parent
-    optional = {'monitoring', 'context_cost.py', 'context_cost_cli.py', 'context_cost_mcp.py',
-                'context_report.py', 'codex_usage.py', 'token_usage.py', '__pycache__'}
+    optional = {'monitoring', 'observation.py', 'context_cost_worker.py', 'context_cost_capture.py',
+                'context_cost.py', 'context_cost_cli.py', 'context_cost_mcp.py',
+                'context_report.py', 'codex_usage.py', 'token_usage.py', 'context_cost_sync.py',
+                'model_observation.py', 'model_report.py', 'model_panel.py', 'collector_health.py', 'product_metrics.py', 'monitor_history.py', 'monitor_checks.py', 'monitor_risks.py', '__pycache__'}
     shutil.copytree(source, tmp_path/'security_runtime',
                     ignore=lambda directory, names: set(names) & optional)
     env = dict(os.environ, PYTHONPATH=str(tmp_path))
@@ -295,8 +309,10 @@ from security_runtime.dynamic_function import NativeFunctionScanner
 from security_runtime.storage import SQLiteStore
 from security_runtime.scan_input import scoped_request
 import tempfile
+import subprocess
 temporary = tempfile.TemporaryDirectory(prefix='monitor-removal-')
 project = Path(temporary.name).resolve()
+subprocess.run(['git', 'init', '-q', str(project)], check=True)
 (project / 'demo.js').write_text('eval(userInput);', encoding='utf-8')
 engine = SecurityRuntime(ScannerRegistry([NativeFunctionScanner()]), store=SQLiteStore(Path('scan.sqlite3')))
 result = engine.scan(project, 'quick', request=scoped_request(project, ['demo.js']))

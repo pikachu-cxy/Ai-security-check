@@ -219,8 +219,15 @@ task/finding refs, re-read required paths and current change evidence, outcome,
 rationale and tests. Host code review and reported tests are distinct from a
 native scanner recheck; scanner findings retain their original repair workflow.
 
-Merge development_summary into the normal result, once. State completed static
-scope and completed file-review units separately. Name material missing files or
+Merge a nonempty development_summary into the normal result, once. Ordinary
+development is quiet only when this task's checks are current and complete, zero
+findings were recorded, and no check or handling gaps remain. An empty summary must
+not be replaced with scan items, scope counts or a zero-finding footer. Zero
+findings do not mean previous risks were resolved. Explicit security
+checks and security status/history queries still report actual scope, results and
+gaps even with zero findings. Risks, check gaps and required original-risk
+verification results remain visible. When reporting a check, distinguish completed
+static scope from completed file-review units. Name material missing files or
 ranges and known causes; do not use vague boilerplate or infer failed importing,
 reinstallation or a vulnerability from an incomplete check. Current completed
 results replace earlier incomplete notices. Zero findings never means the entire

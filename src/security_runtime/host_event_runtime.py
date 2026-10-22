@@ -50,6 +50,13 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     event.__post_init__()
     event.context.__post_init__()
     context = event.context
+    try:
+        from .observation import bind_chat, bind_host, bind_workspace
+        bind_chat(dict(host=context.host, session=context.session_binding))
+        bind_host(context.host, context.session_binding, context.invocation_binding)
+        bind_workspace(str(context.workspace))
+    except Exception:
+        pass  # Only copy facts after the existing context validation.
     from .recent_hooks import observe
     normalized = event.diagnostics()
     if lifecycle:
@@ -89,6 +96,16 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             journal = HostEventJournal(coordinator.store, context.workspace)
             target = _event_task(coordinator.store, context.workspace, context)
             claim = journal.claim(event, task_ref=target)
+            try:
+                from .observation import bind_product
+                relation = ('HOST_EVENT_CLAIMED' if claim.state == 'CLAIMED' else
+                            'HOST_EVENT_REUSED' if claim.state == 'ALREADY_COMPLETED' else
+                            'HOST_EVENT_REFERENCED')
+                bind_product('host_event', claim.event_ref, relation=relation)
+                if claim.task_ref is not None:
+                    bind_product('task', claim.task_ref, relation='TASK_EVENT_TARGET')
+            except Exception:
+                pass  # Observation cannot admit, retry or acknowledge an event.
             if claim.state != 'CLAIMED':
                 if (claim.state == 'ALREADY_COMPLETED' and recovered_publication is not None
                         and recovered_publication.get('recovered_result') is not None):
@@ -164,3 +181,10 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             context.workspace, context.host, context._session) is None)
         session_activity(coordinator.store, context.workspace, owner, idle=idle)
     return result, decision
+
+
+try:
+    from .context_cost_sync import observed
+    handle_normalized_event = observed('normalized_host_event', transport='hook')(handle_normalized_event)
+except Exception:
+    pass

@@ -1,50 +1,49 @@
-"""Best-effort local measurements; never participate in tool authority or routing."""
+"""Optional bounded producer; tool completion never waits for monitor storage."""
 from __future__ import annotations
 
 import os
-from contextvars import ContextVar
 from time import monotonic, time
 
-_chat_observation = ContextVar('context_cost_chat', default=None)
-
-
 def bind_verified_chat(owner):
-    """Observational only: called after existing session validation succeeds."""
-    from .task_ownership import valid_owner
-    bucket = _chat_observation.get()
-    if bucket is not None and valid_owner(owner) and owner['host'] in {'codex', 'cursor'}:
-        if bucket.get('owner') not in (None, owner):
-            bucket['conflict'] = True
-        bucket['owner'] = dict(owner)
+    # Compatibility for older embeddings; the product uses the inert port.
+    try:
+        from .observation import bind_chat
+        bind_chat(owner)
+    except Exception:
+        pass
 
 
-async def observe_response(call, request, *, connection_id, workspace=None):
+async def observe_response(call, request, *, connection_id, workspace=None, worker=None):
     # Security summaries promise not to initialize or mutate local state. The
     # optional observer must preserve that promise, including its own database.
-    if getattr(getattr(request, 'params', None), 'name', None) == 'get_security_summary':
-        return await call(request)
-    if os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR', '1') == '0':
+    name = getattr(getattr(request, 'params', None), 'name', None)
+    if (name == 'get_security_summary' or os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR') == '0'
+            or os.getenv('SECURITY_RUNTIME_CONTEXT_MODE') == 'off'):
         return await call(request)
     try:
-        from .context_cost import ContextCostStore, run_label
-        store = ContextCostStore()
-        setting = store.monitoring()
-        label = run_label(setting.get('run'))
+        from . import observation
+        from .context_cost_worker import get_worker
+        from .context_cost_capture import capture_response
+        collector = None if observation.active() else worker if worker is not None else get_worker()
+        setting = collector.snapshot_settings() if collector is not None else {}
         arguments = getattr(getattr(request, 'params', None), 'arguments', None)
         # Read only the route selector, never retain the argument dictionary.
         claimed_workspace = arguments.get('workspace_path') if isinstance(arguments, dict) else None
         if not isinstance(claimed_workspace, str) or not os.path.isabs(claimed_workspace) or len(claimed_workspace) > 4096:
             claimed_workspace = None
         observed_workspace = workspace or claimed_workspace
+        capture, token = observation.begin_call() if setting.get('mode') in {'basic', 'debug'} else (None, None)
     except Exception:
         return await call(request)
-    if not isinstance(setting, dict) or setting.get('mode') not in {'basic', 'debug'}:
+    if capture is None:
         return await call(request)
+    try:
+        observation.bind_workspace(str(observed_workspace) if observed_workspace is not None else None)
+    except Exception:
+        pass
     started, started_at = monotonic(), time()
     result = None
     succeeded = False
-    bucket = {}
-    chat_token = _chat_observation.set(bucket)
     try:
         response = await call(request)
         try:
@@ -54,14 +53,16 @@ async def observe_response(call, request, *, connection_id, workspace=None):
             result = None
         return response
     finally:
+        finished_at, elapsed_ms = time(), int((monotonic() - started) * 1000)
         try:
-            store.record_call(
-                request.params.name, result, elapsed_ms=int((monotonic() - started) * 1000),
-                transport='mcp', connection_id=connection_id, workspace=observed_workspace,
-                run_label=label, chat_owner=None if bucket.get('conflict') else bucket.get('owner'),
-                succeeded=succeeded, started_at=started_at, finished_at=time(), mode=setting['mode'])
+            correlation = observation.end_call(capture, token)
+            measurements, observations = capture_response(result, tool_name=name)
+            collector.offer(dict(tool=name, transport='mcp', connection_id=connection_id,
+                workspace=observed_workspace, run_label='unobserved-start-setting'
+                if setting.get('source') == 'startup' else setting.get('run', 'default'),
+                mode=setting['mode'], chat_owner=None if correlation['chat_conflict'] else capture.owner, succeeded=succeeded,
+                elapsed_ms=elapsed_ms, started_at=started_at, finished_at=finished_at,
+                measurements=measurements, observations=observations, correlation=correlation))
         except Exception:
             # Metrics failure must preserve the original result, error and cancellation.
             pass
-        finally:
-            _chat_observation.reset(chat_token)

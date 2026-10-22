@@ -32,6 +32,67 @@ def percentile(values, fraction):
     return values[max(0, math.ceil(len(values) * fraction) - 1)] if values else None
 
 
+def association_data(events, *, limit=1000, model_requests=(), product_facts=()):
+    """Report-local aliases preserve links without exporting private store keys."""
+    aliases, rows, producers, counts = {}, [], {}, {}
+    linked = limited = legacy = 0
+
+    def alias(kind, value):
+        key = (kind, value)
+        if key not in aliases:
+            counts[kind] = counts.get(kind, 0) + 1
+            aliases[key] = kind + '_' + str(counts[kind])
+        return aliases[key]
+
+    for event in events:
+        evidence = event.get('correlation') or {}
+        links = evidence.get('links', [])
+        linked += bool(links)
+        legacy += not bool(evidence)
+        limited += bool(evidence.get('limited') or evidence.get('chat_conflict'))
+        if len(rows) < limit:
+            row = dict(call_id=event.get('call_id'), tool=event['tool'],
+                state='PARTIAL' if evidence.get('limited') or evidence.get('chat_conflict')
+                else 'LINKED' if links else 'UNLINKED',
+                links=[dict(kind=link['kind'], subject=alias(link['kind'], link['reference_hash']),
+                            relation=link['relation'], evidence='SAME_OBSERVED_CALL') for link in links])
+            if evidence.get('trigger_invocation_hash'):
+                row['host_trigger'] = dict(subject=alias('host_tool', evidence['trigger_invocation_hash']),
+                    relation='TRIGGERED_BY_HOST_TOOL', evidence='BINDING_CONSISTENT_NOT_HOST_ATTESTATION')
+            if evidence.get('turn_hash'):
+                row['host_turn'] = alias('host_turn', evidence['turn_hash'])
+            rows.append(row)
+        collection = event.get('collection') or {}
+        if collection.get('producer_id'):
+            previous = producers.setdefault(collection['producer_id'], dict(dropped=0, errors=0))
+            previous['dropped'] = max(previous['dropped'], collection.get('dropped_before', 0))
+            previous['errors'] = max(previous['errors'], collection.get('write_errors_before', 0))
+    request_links = []
+    for event in model_requests[:limit]:
+        evidence = event.get('correlation') or {}
+        request_links.append(dict(attempt_id=event['model_request']['attempt_id'],
+            links=[dict(kind=link['kind'], subject=alias(link['kind'], link['reference_hash']),
+                relation=link['relation'], evidence='SAME_OBSERVED_REQUEST') for link in evidence.get('links', [])]))
+    outcomes = []
+    for event in product_facts[:limit]:
+        fact = event['product_fact']
+        outcomes.append(dict(kind=fact['kind'], source=fact['source'], parent_call_id=event.get('call_id'),
+            subject=alias('outcome_scope', fact['reference']),
+            links=[dict(kind=link['kind'], subject=alias(link['kind'], link['reference_hash']),
+                relation=link['relation']) for link in event.get('correlation', {}).get('links', [])]))
+    return dict(observed_calls=len(events), linked_calls=linked, unlinked_calls=len(events)-linked,
+        limited_calls=limited, legacy_calls=legacy, calls=rows,
+        details_omitted=max(0, len(events)-len(rows)),
+        producer_drops_reported=sum(item['dropped'] for item in producers.values()),
+        producer_write_errors_reported=sum(item['errors'] for item in producers.values()),
+        loss_counter_scope='PRODUCER_LIFETIME_WATERMARKS; NOT_SELECTED_RUN_TOTALS',
+        coverage='INSTRUMENTED_MCP_WORKSPACE_HOOK_CALLS; UNFLUSHED_TAIL_UNKNOWN',
+        identity_scope='REPORT_LOCAL_ALIASES; NOT_AUTHORITY_OR_CROSS_REPORT_IDENTITIES',
+        request_links=request_links,
+        product_outcomes=outcomes, product_outcomes_omitted=max(0,len(product_facts)-len(outcomes)),
+        model_usage_link='EXPLICIT_BYOK_EXCHANGES' if model_requests else 'UNAVAILABLE')
+
+
 def timing(events):
     intervals = sorted((item['started_at'] * 1000, item['finished_at'] * 1000)
                        for item in events if item.get('started_at') is not None
@@ -73,15 +134,27 @@ def report_data(store, run=None, *, limit=2000):
     # Only this allowlist is exported; no source, raw refs or keyed identities.
     fields = ('tool', 'elapsed_ms', 'wire_bytes', 'text_bytes', 'structured_bytes', 'succeeded',
               'started_at', 'finished_at', 'call_id', 'run_label', 'mode', 'observation_prewrite_ms',
-              'duplicate_receipts', 'source_lines_delivered')
+              'duplicate_receipts', 'source_lines_delivered', 'measurement_limited')
     rows = [dict({name: event.get(name) for name in fields}, phase=phase_for(event['tool']))
             for event in events[:limit]]
+    for row in rows:
+        if row['measurement_limited']:
+            row.update(wire_bytes=None, text_bytes=None, structured_bytes=None)
+    from .model_report import request_data, latest_attempts
+    from .collector_health import health_data
+    from .product_metrics import report as product_report
+    models = latest_attempts(snapshot.get('model_requests', []))
+    associations = association_data(events, limit=limit, model_requests=models, product_facts=snapshot.get('product_facts', []))
     return dict(status=summary['status'], schema_version=1, monitoring=store.monitoring(), summary=summary,
                 timing=timing(events), tools=sorted(groups.values(), key=lambda x: x['elapsed_ms'], reverse=True),
-                events=rows, exported_events=len(rows), omitted_events=max(0, len(events) - len(rows)),
+                events=rows, associations=associations,
+                model_requests=request_data(models, links=associations['request_links'], limit=limit),
+                product_metrics=product_report(snapshot.get('product_facts', [])),
+                collector_health=health_data(snapshot.get('collector_checkpoints', [])),
+                exported_events=len(rows), omitted_events=max(0, len(events) - len(rows)),
                 token_scope='WHOLE_SELECTED_RUN; NOT_ATTRIBUTABLE_TO_TOOLS_OR_PHASES',
                 phase_scope='TOOL_CATEGORY; NOT_INTERNAL_PHASE_TIMING',
-                observation_scope='MCP_ONLY; NO_HOST_FILE_READS_HOOKS_OR_MODEL_TRACES',
+                observation_scope='INSTRUMENTED_PRODUCT_CALLS_AND_BYOK_REQUESTS; NATIVE_MODEL_INPUT_UNKNOWN',
                 retention_scope='RETAINED_VALID_RECORDS_ONLY; PRUNED_HISTORY_UNAVAILABLE',
                 export_scope='LOCAL_METADATA_SNAPSHOT; NO_LIVE_CONTROL',
                 overhead_scope='PREWRITE_ONLY; EXCLUDES_COMMIT_AND_CONFIGURATION_READS')
@@ -129,7 +202,7 @@ th{color:#a5bbd8;position:sticky;top:0;background:#142137}.bar{height:8px;border
 <div class="controls"><label>采集模式 <select id="switch"><option value="debug">详细调试</option><option value="basic">基础统计</option><option value="off">关闭采集</option></select></label><code id="command"></code><button id="copy">复制切换命令</button></div>
 <p id="scope"></p></section>
 <div class="cards"><div class="card">真实 token · 所选运行整体<span class="value" id="tokens"></span><small id="tokenDetail"></small></div>
-<div class="card">MCP 返回量<span class="value" id="bytes"></span><small>字节不是模型 token</small></div>
+<div class="card">工具返回量<span class="value" id="bytes"></span><small>字节不是模型 token</small></div>
 <div class="card">工具累计耗时<span class="value" id="duration"></span><small>并发调用可能重叠</small></div>
 <div class="card">调用次数<span class="value" id="calls"></span><small id="failures"></small></div></div>
 <section class="panel"><strong>时间覆盖与数据质量</strong><p id="quality"></p><p class="warn">端到端任务用时、模型处理及锁/队列等待：未知。阶段按工具类别归组，不代表内部阶段计时。监控预写入耗时不包括配置读取、提交和完整监控开销。</p><p id="builds"></p></section>
@@ -152,14 +225,17 @@ const u=s.actual_model_tokens;$('tokens').textContent=u?fmt(u.total_tokens):'未
 $('tokenDetail').textContent=u?'输入 '+fmt(u.input_tokens)+'（缓存 '+fmt(u.cached_input_tokens)+'）/ 输出 '+fmt(u.output_tokens)+'（推理 '+fmt(u.reasoning_output_tokens)+'） · '+s.actual_model_tokens_status:'尚未显式导入宿主 usage；不推算费用';
 $('bytes').textContent=bytes(s.wire_bytes);$('duration').textContent=ms(s.elapsed_ms);$('calls').textContent=fmt(s.calls);$('failures').textContent='错误/中断 '+fmt(s.failed_calls)+' · 按实际保留记录';
 $('quality').textContent='有时间线 '+fmt(data.timing.timed_calls)+' / 无时间线 '+fmt(data.timing.untimed_calls)+'；观测窗口 '+ms(data.timing.observed_window_ms)+'；工具区间并集 '+ms(data.timing.tool_active_wall_ms)+'。无效记录 '+fmt(s.invalid_records)+'，测量受限 '+fmt(s.limited_measurements)+'，明细省略 '+fmt(data.omitted_events)+'。历史可能已按保留期/数量上限清理；未观测调用不可恢复。';
-$('builds').textContent='构建：'+s.builds.map(b=>b.version+' / '+(b.build_id??b.build_status)).join('；')+'。仅覆盖 MCP；宿主读文件、Hook、模型处理和完整任务计时不在此范围。';
+$('builds').textContent='构建：'+s.builds.map(b=>b.version+' / '+(b.build_id??b.build_status)).join('；')+'。覆盖已接入的 MCP、直接调用与 Hook；BYOK 请求另列。宿主原生工具与完整模型过程仍不在此范围。';
 for(const v of [...new Set(data.events.map(e=>e.tool))].sort())$('tool').appendChild(new Option(v,v));for(const p of Object.keys(phases))$('phase').appendChild(new Option(phases[p],p));
 function matches(e){return (!$('tool').value||e.tool===$('tool').value)&&(!$('phase').value||e.phase===$('phase').value)&&e.tool.includes($('search').value)&&(!$('state').value||e.succeeded===($('state').value==='ok'))}
 function render(){const rows=data.events.filter(matches);$('events').replaceChildren();for(const e of rows){const tr=document.createElement('tr');for(const v of [e.started_at==null?'未知':new Date(e.started_at*1000).toLocaleString(),e.tool+' / '+phases[e.phase],e.run_label??'旧版未记录',e.succeeded?'成功返回':'错误/中断',ms(e.elapsed_ms),bytes(e.wire_bytes),e.observation_prewrite_ms==null?'未知':e.observation_prewrite_ms+' ms'])tr.appendChild(text('td',v));$('events').appendChild(tr)}
-$('filterNote').textContent='明细匹配 '+fmt(rows.length)+' / 已导出 '+fmt(data.events.length)+' 条。筛选仅影响明细与时间线；顶部总览及排名始终为所选运行完整保留样本，token 无调用级归因。';
+$('filterNote').textContent='明细匹配 '+fmt(rows.length)+' / 已导出 '+fmt(data.events.length)+' 条。筛选仅影响明细与时间线；顶部总览及排名始终为所选运行完整保留样本，宿主累计 token 不按调用分摊；BYOK 明确请求的用量单独展示。';
 const key=$('sort').value,groups=[...data.tools].sort((a,b)=>b[key]-a[key]);$('ranking').replaceChildren();for(const g of groups){const tr=document.createElement('tr'),name=text('td',g.tool+' / '+phases[g.phase]),bar=text('div','');bar.className='bar';bar.style.width=(100*g[key]/Math.max(1,...groups.map(x=>x[key])))+'%';name.appendChild(bar);tr.appendChild(name);for(const v of [fmt(g.calls)+' / '+fmt(g.failed_calls),bytes(g.wire_bytes),ms(g.elapsed_ms),ms(g.p50_ms)+' / '+ms(g.p95_ms)+' / '+ms(g.max_ms)])tr.appendChild(text('td',v));$('ranking').appendChild(tr)}
 const timed=rows.filter(e=>e.started_at!=null&&e.finished_at!=null).sort((a,b)=>a.started_at-b.started_at);$('timeline').replaceChildren();if(!timed.length)$('timeline').appendChild(text('p','暂无详细时间线。开启详细调试后，新的调用会记录起止时间。'));
 const first=Math.min(...timed.map(e=>e.started_at)),last=Math.max(...timed.map(e=>e.finished_at)),range=Math.max(.001,last-first);for(const e of timed){const lane=text('div','');lane.className='lane';lane.appendChild(text('small',e.tool+' · '+ms(e.elapsed_ms)));const track=text('div','');track.className='track';const span=text('div','');span.className='span';span.style.left=(100*(e.started_at-first)/range)+'%';span.style.width=(100*(e.finished_at-e.started_at)/range)+'%';span.title=e.tool+' · '+ms(e.elapsed_ms);track.appendChild(span);lane.appendChild(track);$('timeline').appendChild(lane)}}
 for(const id of ['tool','phase','state','search','sort'])$(id).addEventListener('input',render);render();
 $('download').onclick=()=>{const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='runtime-consumption.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 </script></body></html>'''
+
+from .model_panel import SCRIPT as _MODEL_SCRIPT
+HTML = HTML.replace('</script></body>', _MODEL_SCRIPT + '\nrenderModelEvidence(data, document.body);\n</script></body>')

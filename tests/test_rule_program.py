@@ -141,11 +141,11 @@ def test_program_change_invalidates_pack_cache_and_does_not_reuse_proof(tmp_path
 
 
 def test_zero_applicable_language_and_maturity_planning():
-    assert not plan_rules(PACK,['main.go','README.md']).rules
+    assert not plan_rules(PACK,['main.rs','README.md']).rules
     javascript=plan_rules(PACK,['main.js','main.ts'])
-    assert len(javascript.rules)==6 and javascript.files==('main.js','main.ts')
+    assert len(javascript.rules)==9 and javascript.files==('main.js','main.ts')
     python=plan_rules(PACK,['main.py'])
-    assert all(r.language=='python' for r in python.rules) and len(python.rules)==16
+    assert all(r.language=='python' for r in python.rules) and len(python.rules)==18
     assert 'ai-security.python.path-commonprefix-stat-lookup' in {r.rule_id for r in python.rules}
     java=plan_rules(PACK,['A.java','other.js'])
     assert java.files==('A.java','other.js')
@@ -156,7 +156,7 @@ def test_zero_applicable_language_and_maturity_planning():
 def test_mapper_only_framework_scope_without_repository_discovery():
     # JS now has applicable shared rules; keep this mapper-only fixture paired
     # with a language that still has no installed execution rule.
-    plan=plan_rules(PACK,['mapper.xml','uncovered.go','README.md'])
+    plan=plan_rules(PACK,['mapper.xml','uncovered.rs','README.md'])
     assert plan.files==('mapper.xml',)
     assert [r.rule_id for r in plan.rules]==['ai-security.java.mybatis-xml']
     coverage=plan.coverage()

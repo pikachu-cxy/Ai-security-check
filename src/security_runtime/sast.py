@@ -30,4 +30,4 @@ class SemgrepEngineProvider:
             raise ValueError("Local rule pack is missing")
         return [str(Path(executable).resolve()), "scan", "--config", str(request.config_path or request.rule_pack.path),
                 "--json", "--time", "--quiet", "--metrics", "off", "--disable-version-check",
-                "--no-rewrite-rule-ids", "--no-git-ignore", *request.scan_scope]
+                "--no-rewrite-rule-ids", "--dataflow-traces", "--no-git-ignore", *request.scan_scope]

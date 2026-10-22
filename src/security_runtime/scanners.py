@@ -318,7 +318,7 @@ class PatternSASTScanner(BaseScanner):
     """Local rule-pack scanner whose execution engine is replaceable."""
 
     capabilities = frozenset({Capability.CODE_SAST})
-    supported_languages = frozenset({"Python", "JavaScript", "TypeScript", "Java", "Go", "PHP"})
+    supported_languages = frozenset({"Python", "JavaScript", "TypeScript", "Vue", "Java", "Go", "PHP"})
     filter_changed_lines = True
     timeout = 45
 
@@ -369,7 +369,7 @@ class PatternSASTScanner(BaseScanner):
             if hit:
                 template=self._plan_cache[key]
             return replace(template, pack=pack, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
-                unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
+                embedded_coverage={},unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
                     'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
                     'rule_plan_cache':'HIT' if hit else 'MISS',
                     'rule_planning_ms':round((time.perf_counter()-started)*1000,3)})
@@ -396,6 +396,9 @@ class PatternSASTScanner(BaseScanner):
         self._bind_preparations()
         plan=context.rule_plan
         rule_pack=plan.pack
+        constant_seconds=0.0
+        constant_suppressed=[]
+        vue_budget={'files':0,'bytes':0}
         with span('rule_config_preparation'):
             current=(self.rule_packs.bind_input(rule_pack, rule_pack.path) if context.bound_rule_pack
                 else self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None))
@@ -420,29 +423,54 @@ class PatternSASTScanner(BaseScanner):
                 else:
                     config_text=self._config_cache[key]
         findings=[]
+        # Shadow paths cannot preserve custom rule include/exclude semantics.
+        # Fail closed for Vue instead of silently widening or losing that scope.
+        vue_path_filters=any('paths' in rule and set(rule.get('languages',[])) & {'javascript','typescript'}
+            for rule in yaml.safe_load(config_text)['rules']) if any(
+            Path(name).suffix.lower()=='.vue' for name in plan.files) else False
         # Serialize selected execution rules, without copying source files.
         with _artifacts(context, prefix='security-runtime-rules-') as temporary:
             config=Path(temporary)/'selected.yml'
             with span('rule_config_preparation'):
                 config.write_text(config_text,encoding='utf-8')
-            for batch in sast_batches(plan.files):
-                request=SASTRequest(Path(context.root),rule_pack,batch,config)
+            for batch_index, batch in enumerate(sast_batches(plan.files)):
                 # Hash bounded safe files before execution, then verify again
                 # after it. Source never enters the finding store through this.
                 before = {name: snapshot_fingerprint(context.root, name) for name in batch}
-                invocation('SAST_SCAN', len(batch))
-                process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
-                if process.return_code not in (0,1):
-                    _process_failure(process)
+                projection = None
+                if any(Path(name).suffix.lower() == '.vue' for name in batch):
+                    from .vue_scan import VueProjection
+                    projection = VueProjection(context.root, batch, Path(temporary)/f'vue-{batch_index}',
+                        plan, vue_budget, path_filters=vue_path_filters)
+                payloads = []
+                for engine_batch in sast_batches(projection.scope if projection else batch):
+                    request=SASTRequest(Path(context.root),rule_pack,engine_batch,config)
+                    invocation('SAST_SCAN', len(engine_batch))
+                    process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
+                    if process.return_code not in (0,1):
+                        _process_failure(process)
+                    payloads.append(json.loads(process.stdout))
                 with span('parsing_normalization'):
-                    data=json.loads(process.stdout)
+                    data=projection.finish(payloads) if projection else payloads[0]
                     plan.observe(data,batch)
+                    if rule_pack.descriptor.bundled and rule_pack.descriptor.rule_pack_id=='ai-security-core':
+                        from .python_constants import filter_results
+                        # The budget covers proof work, excluding external-engine startup.
+                        proof_started=time.monotonic()
+                        data,suppressed=filter_results(data,Path(context.root),before,
+                            proof_started+max(0,1.0-constant_seconds))
+                        constant_seconds+=time.monotonic()-proof_started
+                        constant_suppressed.extend(suppressed)
                     normalized = self.normalize(data,n)
                     after = {f.file_path: snapshot_fingerprint(context.root, f.file_path) for f in normalized}
                     for finding in normalized:
                         initial = before.get(finding.file_path, {})
                         final = after[finding.file_path]
                         valid = initial.get('file_sha256') and initial.get('file_sha256') == final['file_sha256']
+                        if projection and finding.file_path in projection.details:
+                            valid = valid and initial.get('file_sha256') == projection.fingerprints.get(finding.file_path)
+                            finding.technical_details['embedded_source'] = {'format':'VUE_SFC',
+                                'scope':'SCRIPT_BLOCKS_ONLY','template_status':'NOT_COVERED'}
                         finding.technical_details['evidence_locator'].update(
                             file_sha256=initial['file_sha256'] if valid else None,
                             snapshot_reason=None if valid else initial.get('reason') or final.get('reason') or 'SCAN_FILE_CHANGED')
@@ -454,6 +482,11 @@ class PatternSASTScanner(BaseScanner):
                 for key in ('config_time','core_time','ignores_time','total_time'):
                     if isinstance(profiling.get(key),(int,float)):
                         add_time('engine_reported_'+key,profiling[key]*1000)
+        plan.planning_diagnostics['constant_proof']={'seconds':round(constant_seconds,4),
+            'suppressed_count':len(constant_suppressed),'suppressed_candidates':constant_suppressed[:20],
+            'truncated':len(constant_suppressed)>20,'unknown_policy':'RETAIN_ORIGINAL_ALERT'}
+        plan.planning_diagnostics['vue_projection'] = dict(vue_budget,
+            max_files=64,max_bytes=4*1024*1024,template_status='NOT_COVERED')
         catalog={rule.rule_id:rule for rule in plan.rules}
         for finding in findings:
             rule_id=finding.technical_details.get('rule_id','')
@@ -466,6 +499,12 @@ class PatternSASTScanner(BaseScanner):
                 finding.technical_details.update(rule_category=record.category,cwe=list(record.cwe),
                     rule_confidence=record.confidence,rule_maturity=record.maturity,rule_severity=record.severity,
                     rule_version=record.rule_version,framework=record.framework,validation_status='NOT_VALIDATED')
+                if record.mode == 'taint':
+                    trace=finding.technical_details.get('scanner_evidence_metadata',{}).get('dataflow_trace')
+                    finding.technical_details['dataflow_support'] = {
+                        'basis':'SEMGREP_TAINT_RULE', 'scope':'ENGINE_LOCAL_ANALYSIS',
+                        'trace_status':'PROVIDED' if trace else 'NOT_PROVIDED',
+                        'runtime_execution':False, 'cross_file_expansion':False}
                 if rule_pack.program:
                     capability = rule_pack.program.capability(rule_id)
                     if capability:
@@ -821,12 +860,13 @@ class ScannerRegistry:
         from .osv import OSVDependencyAdapter
         from .dynamic_function import NativeFunctionScanner
         from .dataflow import BoundedDataflowScanner
+        from .go_sql import GoSQLScanner
         self.fallback_adapters = fallback_adapters if fallback_adapters is not None else ([OSVDependencyAdapter(self.tool_manager)] if adapters is None else [])
-        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GoSQLScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []
-        used_ids = {"semgrep", "native-js-function", "native-dataflow", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
+        used_ids = {"semgrep", "native-js-function", "native-dataflow", "native-go-sql", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
         for entry in importlib.metadata.entry_points(group=SCANNER_ENTRY_POINT):
             try:
                 loaded = entry.load()

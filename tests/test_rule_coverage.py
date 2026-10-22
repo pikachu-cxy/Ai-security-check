@@ -99,11 +99,11 @@ def test_human_json_mcp_same_coverage(tmp_path):
 
 def test_catalog_actual_count_and_selection():
     pack=RulePackManager().resolve()
-    assert len(pack.catalog)==56
+    assert len(pack.catalog)==71
     assert sum(r.language=='java' for r in pack.catalog)==34
     plan=plan_rules(pack,['App.java','app.js','Mapper.xml','README.md','config.yml'])
-    assert len(plan.rules)==32 and plan.files==('App.java','app.js','Mapper.xml')
-    assert plan.coverage()['per_language']['javascript']['selected_rules']==6
+    assert len(plan.rules)==35 and plan.files==('App.java','app.js','Mapper.xml')
+    assert plan.coverage()['per_language']['javascript']['selected_rules']==9
 
 
 @pytest.mark.parametrize('field',['category','cwe','maturity','provenance','confidence','references','language'])

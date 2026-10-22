@@ -12,6 +12,7 @@ def setup(tmp_path, monkeypatch):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr('security_runtime.monitoring.service.time.time', lambda: 1000)
     store = ContextCostStore(tmp_path / 'metrics.sqlite3')
+    store.set_monitoring('basic')  # This fixture exercises explicitly enabled sampling.
     service = MonitorService(store)
     service.task('start')
     return store, service

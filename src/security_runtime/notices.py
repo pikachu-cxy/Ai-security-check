@@ -4,6 +4,7 @@ from __future__ import annotations
 from .engines import BUILTIN_ENGINES
 from .rulepacks import FIRST_PARTY_RULE_PACK
 from .dataflow import PACK_ID, VERSION
+from .go_sql import PACK_ID as GO_SQL_PACK_ID, VERSION as GO_SQL_VERSION
 
 
 def render_third_party_notices() -> str:
@@ -30,6 +31,7 @@ def render_third_party_notices() -> str:
         f"| {pack.display_name} (`{pack.rule_pack_id}`) | {pack.version} | {pack.copyright} | "
         f"{pack.license} | {pack.source} | First-party authored rules |",
         f"| Bounded Java/Python dataflow (`{PACK_ID}`) | {VERSION} | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; SQL, resolved cross-file Java/Python paths and exact Python io/codecs stream opens by default; other intrafile paths/command candidates experimental |",
+        f"| Bounded Go SQL dataflow (`{GO_SQL_PACK_ID}`) | {GO_SQL_VERSION} | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; same-package net/http to database/sql, at most two resolved call edges |",
         "",
         "The bundled rule pack is independently authored. Semgrep Community Rules and Semgrep Registry Rules "
         "are not bundled or fetched by default. User-provided rules remain under the user's own license "

@@ -9,17 +9,20 @@ from security_runtime.mcp_contracts import MCPRegistry
 
 
 def test_final_response_measured_once_in_global_router(monkeypatch):
-    from security_runtime import context_cost
+    from security_runtime import context_cost_worker
+    from security_runtime.context_cost_worker import ObservationWorker
     calls = []
 
     class Store:
         def monitoring(self):
             return dict(status='AVAILABLE', mode='basic')
 
-        def record_call(self, name, result, **metadata):
-            calls.append((name, result, metadata))
+        def record_observation(self, record):
+            calls.append(record)
+            return dict(status='RECORDED')
 
-    monkeypatch.setattr(context_cost, 'ContextCostStore', Store)
+    worker = ObservationWorker(Store).start()
+    monkeypatch.setattr(context_cost_worker, 'get_worker', lambda: worker)
     child = FastMCP('child')
 
     @child.tool()
@@ -43,38 +46,44 @@ def test_final_response_measured_once_in_global_router(monkeypatch):
     response = asyncio.run(registry.low_level.request_handlers[CallToolRequest](request))
     payload = response.root.structuredContent or json.loads(response.root.content[0].text)
     assert payload['status'] == 'OK'
+    assert worker.wait_idle(2)
+    worker.close()
     assert len(calls) == 1
-    assert calls[0][1] is response.root
-    assert calls[0][2]['succeeded'] is True
-    assert calls[0][2]['transport'] == 'mcp'
-    assert calls[0][2]['workspace'] is None
+    assert calls[0]['measurements']['wire_bytes'] > 0
+    assert 'safe result' not in json.dumps(calls)
+    assert calls[0]['succeeded'] is True
+    assert calls[0]['transport'] == 'mcp'
+    assert calls[0].get('workspace') is None
 
 
 def test_metrics_failure_never_changes_result_or_cancellation(monkeypatch):
-    from security_runtime import context_cost
+    from security_runtime.context_cost_worker import ObservationWorker
     from security_runtime.context_cost_mcp import observe_response
 
     class BrokenStore:
         def monitoring(self):
             return dict(status='AVAILABLE', mode='debug')
 
-        def record_call(self, *args, **kwargs):
+        def record_observation(self, *args, **kwargs):
             raise OSError('private exception text')
 
-    monkeypatch.setattr(context_cost, 'ContextCostStore', BrokenStore)
+    worker = ObservationWorker(BrokenStore).start()
     request = CallToolRequest(params=CallToolRequestParams(name='sample', arguments={}))
     expected = object()
 
     async def success(request):
         return expected
 
-    assert asyncio.run(observe_response(success, request, connection_id='one')) is expected
+    assert asyncio.run(observe_response(success, request, connection_id='one', worker=worker)) is expected
 
     async def cancelled(request):
         raise asyncio.CancelledError()
 
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(observe_response(cancelled, request, connection_id='one'))
+        asyncio.run(observe_response(cancelled, request, connection_id='one', worker=worker))
+    assert worker.wait_idle(2)
+    assert worker.stats()['write_errors'] == 2
+    worker.close()
 
 
 def test_monitor_can_be_disabled_without_store_access(monkeypatch):

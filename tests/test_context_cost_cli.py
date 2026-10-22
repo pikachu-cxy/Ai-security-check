@@ -8,6 +8,7 @@ def test_cli_status_and_comparison_keep_tokens_unknown_without_host_data(tmp_pat
     monkeypatch.setattr(cli, 'configure_logging', lambda **kwargs: None)
     path = tmp_path / 'metrics.sqlite3'
     store = ContextCostStore(path)
+    assert store.set_monitoring('basic')['status'] == 'AVAILABLE'
     store.record_call('scan_project', {'result': 'x'*1000}, run_label='before')
     store.record_call('scan_project', {'result': 'x'*100}, run_label='after')
     assert cli.main(['context-usage', 'status', '--run', 'after', '--db', str(path), '--json']) == 0

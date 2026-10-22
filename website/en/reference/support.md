@@ -29,19 +29,23 @@ WorkBuddy uses project-level MCP. Other clients use conditional manual stdio MCP
 
 ### Language coverage {#languages}
 
-Release 0.3.9 bundles `ai-security-core 1.3.2`: **56 distinct rules, 48 enabled by default**. This is a rule subset, not complete language or framework security coverage.
+The current source tree bundles `ai-security-core 1.6.0`: **71 distinct rules, 63 enabled by default**. Published 0.3.9 installers retain their bundled version until rebuilt. This is a rule subset, not complete language or framework security coverage.
 
 | Language / files | Default-on / installed | Selected detection areas |
 | --- | --- | --- |
 | Java `.java` | 26 / 34 | SQL, commands, SSRF, paths / file I/O, XXE, deserialization, TLS, Servlet XSS, Spring CSRF; selected JDK, Spring, MyBatis, JPA / Hibernate, Apache APIs |
-| Python `.py` | 16 / 16 | Commands, eval, SQL, SSRF, paths, pickle / YAML, TLS, Flask debug, Django CSRF / weak password hashing, HTML / templates, JWT, lxml XXE |
-| JavaScript `.js` / `.jsx` | 6 / 6 | Selected Express / Node.js input flows into SQL, shells, outbound HTTP, paths, and file I/O |
-| TypeScript `.ts` / `.tsx` | Shares those 6 JS rules | Execution is reported per language without counting six more distinct rules |
+| Python `.py` | 18 / 18 | Commands, eval / exec, SQL, SSRF, paths, pickle / YAML, TLS, Flask debug, Django CSRF / weak password hashing, HTML / templates, direct Flask string responses, JWT, lxml XXE |
+| JavaScript `.js` / `.jsx` | 9 / 9 | Selected Express / Node.js input flows into SQL, shells, outbound HTTP, paths, and file I/O; location-to-DOM HTML flows and explicit HTTPS verification disablement |
+| TypeScript `.ts` / `.tsx` | Shares those 9 JS rules | Execution is reported per language without counting nine more distinct rules |
 | MyBatis Mapper `.xml` | Counted under Java | Applicable SQL mapper patterns, not general XML coverage |
-| Vue `.vue` | No corresponding default SAST rules | A scanned `.js` file does not establish coverage for `.vue` |
-| Go, PHP, C / C++, C#, Ruby, Rust, and others | No bundled language-specific SAST rules | Host AI analysis is possible but does not establish scanner-rule execution |
+| Vue `.vue` | Reuses JS/TS rules for scripts | Top-level script / script setup blocks retain original coordinates; templates, styles and external scripts remain uncovered, so Vue is at most partially covered |
+| Go `.go` | 4 / 4 | Selected net/http request flows into shells, file reads and outbound HTTP; crypto/tls verification disablement |
+| PHP `.php` | 6 / 6 | Superglobal input to shell commands, mysqli SQL, eval, unserialize, include/require and HTML output |
+| C / C++, C#, Ruby, Rust, and others | No bundled language-specific SAST rules | Host AI analysis is possible but does not establish scanner-rule execution |
 
 Eight historical Java experimental rules remain disabled by default. Shared JS/TS rules count once. Counts are not accuracy or complete OWASP Top 10 claims. Framework names identify selected modeled APIs, not every version, wrapper, or cross-file call chain.
+
+The table counts core YAML rules only. Feature/release scans also have one native Go SQL rule for net/http inputs entering database/sql query text, following at most two same-package call edges. Limits are 64 captured files, 2 MB, 100000 steps and a 3-second soft deadline. Quick scans omit it; unresolved dispatch, cross-package calls and unsupported syntax remain coverage gaps.
 
 ### Secrets, dependencies, and AI analysis
 
@@ -65,3 +69,13 @@ Automatic token association currently supports local Codex logs. Other hosts can
 New 0.3.9 tasks preserve full sanitized long lines and fragment delivery within budgets. Missing historical preimages, unreadable source, and relevant redacted semantics remain explicit gaps.
 
 See the [current coverage reference (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/PRODUCT_COVERAGE.zh-CN.md), [rule catalog](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/src/security_runtime/rules/catalog.json), and [host engineering records (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/HOST_SUPPORT.md). The [historical rule-quality matrix](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/design/RULE_COVERAGE_MATRIX.md) retains sample evidence and accuracy limitations rather than the current language inventory.
+
+Source rule pack 1.5.0 adds explicit Python shell-command slots and JS/TS request-to-eval/Function/vm taint, plus typed Express Request sources for SQL, commands and deletion paths. Local taint uses the existing Semgrep analysis; it does not add a cross-file call graph. Trace metadata retains bounded, sanitized locations only when the engine provides it; missing traces are explicitly unavailable.
+
+Vue projections are limited to 512 KiB per file, 64 files and 4 MiB of input per scan. Script blocks are analyzed separately. Rules with path include/exclude filters currently leave Vue uncovered to preserve original-path semantics; ordinary JS/TS and local rules without path filters still work. Existing native Java/Python SQL and path analysis and JS/TS lexical dynamic-code candidates are separate from the YAML count.
+
+Vue SAST supports candidate discovery only in this release. Zero findings from bundled or local rules do not automatically verify remediation; the recheck remains inconclusive until complete SFC evidence is supported.
+
+Source rule pack 1.6.0 adds local detection for directly returned formatted strings in Flask routes and one bounded adjacent append/pop/index flow into explicit shell arguments. JSON, explicit plain-text responses, templates and modeled escaping have negative controls; unknown helpers and indirect response construction remain gaps. The bundled product suppresses candidates only when the complete operand has a local constant proof. A fixed filename does not establish that an imported path prefix is fixed.
+
+Native bounded dataflow remains at 1.5.0. Default Python path detection requires resolved cross-file calls or exact `io.open/codecs.open` sinks; intrafile `pathlib.Path.read_text/read_bytes` stays experimental. Precise path-component replacement and absolute-tail reset semantics, with safe negative controls, are required before considering default promotion. Cross-file scope, analysis budgets and the default-disabled command model remain unchanged. Raw YAML candidates, combined product findings and exploitability are assessed separately.

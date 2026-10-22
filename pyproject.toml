@@ -21,6 +21,9 @@ build-standalone = ["pyinstaller==6.22.3"]
 [project.scripts]
 security-check = "security_runtime.cli:main"
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

@@ -39,10 +39,11 @@ def test_two_languages_share_rule_identity_but_need_both_file_proofs():
 
 def test_unsupported_vue_is_not_hidden_beside_supported_javascript():
     plan = plan_rules(shared_pack(), ['app.js','component.vue'])
-    assert plan.files == ('app.js',)
+    assert plan.files == ('app.js','component.vue')
     plan.observe({'time':{'rules':['test.shared']},'paths':{'scanned':['app.js']}}, plan.files)
     coverage = plan.coverage('SUCCESS')
-    assert coverage['per_language']['javascript']['target_files'] == 2
+    assert coverage['per_language']['javascript']['target_files'] == 1
+    assert coverage['per_language']['vue']['status'] == 'NOT_COVERED'
     assert coverage['status'] == 'PARTIAL'
 
 
@@ -51,7 +52,7 @@ def test_rule_release_preserves_versions_of_unchanged_rules():
     pack = RulePackManager().resolve()
     rule = yaml.safe_load((pack.path/'java/trust-all-hostname.yml').read_text(encoding='utf-8'))['rules'][0]
     assert rule['metadata']['rule_version'] == '1.1.0'
-    assert pack.descriptor.version == '1.3.2'
+    assert pack.descriptor.version == '1.6.0'
     validate_rule(rule, pack.descriptor)
     for version in ('', 'latest', '1.2', '1.2.3-extra', 123, '1234567.1.0'):
         rule['metadata']['rule_version'] = version

@@ -1,0 +1,44 @@
+rules:
+- id: ai-security.go.request-ssrf
+  languages:
+  - go
+  severity: WARNING
+  message: HTTP input controls an outbound URL. Restrict allowed schemes, hosts and
+    resolved addresses.
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-inside: func $HANDLER(..., $REQ *http.Request, ...) { ... }
+    - pattern-either:
+      - pattern: $REQ.URL.Query().Get(...)
+      - pattern: $REQ.FormValue(...)
+      - pattern: $REQ.PostFormValue(...)
+    exact: true
+  pattern-sinks:
+  - patterns:
+    - pattern: http.Get($URL)
+    - focus-metavariable: $URL
+  - patterns:
+    - pattern: http.Post($URL, ...)
+    - focus-metavariable: $URL
+  metadata:
+    publisher: AI Security Runtime
+    rule_pack: ai-security-core
+    rule_version: 1.0.0
+    language: go
+    category: request-ssrf
+    cwe:
+    - CWE-918
+    confidence: MEDIUM
+    maturity: BETA
+    framework: Go net/http
+    license: Apache-2.0
+    references: &id001
+    - https://cwe.mitre.org/data/definitions/918.html
+    provenance:
+      origin: FIRST_PARTY
+      author: AI Security Runtime contributors
+      created_at: '2026-10-22'
+      references: *id001
+      license: Apache-2.0
+      derived_from: ''

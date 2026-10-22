@@ -88,6 +88,11 @@ class SQLiteStore:
             with db:
                 db.execute('INSERT OR REPLACE INTO triage_records(scan_id,finding_id,cache_key,data) VALUES (?,?,?,?)',
                     (record.scan_id,record.finding_id,cache_key,json.dumps(data)))
+        try:
+            from .product_metrics import triage_saved
+            triage_saved(record)
+        except Exception:
+            pass  # A committed assessment is independent of monitoring.
 
     def triage_records(self, scan_id):
         with closing(self._connect()) as db:

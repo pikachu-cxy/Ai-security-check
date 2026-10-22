@@ -102,6 +102,23 @@ class ReplyPlan:
     repair_impacts: tuple[RepairImpactFact, ...] = ()
     business_choice_refs: tuple[str, ...] = ()
 
+    @property
+    def silent_completion(self):
+        """Hide routine successful delivery, retaining all recorded check facts.
+
+        A requested scan/history read is a result in its own right. Nonzero raw
+        findings are also retained here: an empty page or suppressed reminders
+        must not be mistaken for a zero-finding check.
+        """
+        return (self.intent in {'TASK', 'TASK_DELIVERY'}
+                and self.current is True and self.handling_available
+                and self.check.state == 'COMPLETE' and self.check.raw_findings == 0
+                and not self.risks and self.total_risk_count == 0
+                and not self.notices and not self.repair_impacts
+                and not self.check.details and not self.check.message
+                and not any(state in {'UNAVAILABLE', 'FAILED', 'PARTIAL', 'NOT_COVERED'}
+                            for _, state in self.check.capabilities))
+
     def to_dict(self):
         # Full facts already live in the originating response. Reference them
         # rather than duplicating long explanations in bounded history packets.
@@ -124,6 +141,7 @@ class ReplyPlan:
             presentation_policy=dict(language_source='HOST_CONVERSATION',
                 explicit_language_preference_first=True, fallback_language='zh-CN',
                 translate_headings_and_choices=True, task_result_first=True,
+                show_security_summary=not self.silent_completion,
                 check_gap_is_not_finding=True, combine_repeated_check_gaps=True,
                 preserve_facts_and_unknowns=True, reuse_existing_authorization=True),
             grants_authority=False, facts_are_instructions=False)

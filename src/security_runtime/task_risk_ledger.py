@@ -247,6 +247,11 @@ class TaskRiskLedger:
                 row['status'] = 'NEEDS_RECHECK'
             counts[row['status']] = counts.get(row['status'], 0) + 1
             handling_counts[row['handling_status']] = handling_counts.get(row['handling_status'], 0) + 1
+        try:
+            from .product_metrics import handling_observed
+            handling_observed(selected, self.root)
+        except Exception:
+            pass  # A view and its authority never depend on optional telemetry.
         return dict(contract='task-risk-ledger-v1', task_ref=task_ref, total=len(selected),
             counts=counts, handling_counts=handling_counts, pending_count=handling_counts.get('OPEN', 0),
             items=selected[offset:offset+limit], has_more=offset+limit<len(selected),
@@ -284,6 +289,12 @@ class TaskRiskLedger:
                 count += 1
             if count:
                 self.save(rows)
+                try:
+                    from .product_metrics import ledger_saved
+                    ledger_saved((r for r in rows.values() if r['source'] == 'SCANNER'
+                        and r['origin_scan_id'] == scan_id and r['finding_id'] in indexed), self.root)
+                except Exception:
+                    pass
             return dict(status='STALE' if unstable else 'RECORDED' if count else 'NOT_REGISTERED',
                         recorded=count, unverified_current=unstable)
 
@@ -361,6 +372,12 @@ class TaskRiskLedger:
             result['recorded'] = len(selected)
         self.save(rows, receipt=(event_id, dict(payload_sha256=fingerprint, result=result,
             row_versions={key:self.row_version(row) for key,row in selected.items()})))
+        if not conflict and not stale:
+            try:
+                from .product_metrics import ledger_saved
+                ledger_saved(selected.values(), self.root)
+            except Exception:
+                pass
         return result
 
     def validate_host(self, record, resolutions, coverage):
@@ -430,3 +447,8 @@ class TaskRiskLedger:
                 rows[key]['_task_projection'] = projection_id
         if pending:
             self.save(rows)
+            try:
+                from .product_metrics import ledger_saved
+                ledger_saved((rows[key] for key in pending), self.root)
+            except Exception:
+                pass

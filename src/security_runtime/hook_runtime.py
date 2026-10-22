@@ -440,6 +440,10 @@ def covered(family, runs, plans):
         plan = plans.get(name)
         if not run or run.status != RunStatus.SUCCESS or run.coverage_contract != 'FULL' or not plan:
             return False
+        if Path(family['file_path']).suffix.lower() == '.vue':
+            # Inline-script findings are useful, but partial SFC coverage is
+            # not a proof that an earlier occurrence has been removed.
+            return False
         program = getattr(plan.pack, 'program', None)
         required = program.family_rules(family['rule_id']) if program else (family['rule_id'],)
         selected = {}

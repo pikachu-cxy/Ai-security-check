@@ -6,8 +6,8 @@ import re
 
 
 LANGUAGES = {'python', 'java', 'javascript', 'typescript', 'go', 'php', 'generic'}
-EXTENSIONS = {'python': {'.py'}, 'java': {'.java'}, 'javascript': {'.js', '.jsx', '.vue'},
-              'typescript': {'.ts', '.tsx'}, 'go': {'.go'}, 'php': {'.php'}}
+EXTENSIONS = {'python': {'.py'}, 'java': {'.java'}, 'javascript': {'.js', '.jsx'},
+              'typescript': {'.ts', '.tsx'}, 'vue': {'.vue'}, 'go': {'.go'}, 'php': {'.php'}}
 
 
 @dataclass(frozen=True)
@@ -38,7 +38,16 @@ def supports_language(record, language):
     The canonical catalog language remains its identity, including Java-owned
     generic mapper rules. Engine languages do not duplicate the rule ID.
     """
+    if language == 'vue':
+        return bool(set(record.engine_languages) & {'javascript', 'typescript'})
     return language == record.language or language in record.engine_languages
+
+
+def supports_file(record, name):
+    extension = Path(name).suffix.lower()
+    if extension == '.vue':
+        return supports_language(record, 'vue') and bool(set(record.target_extensions) & {'.js', '.jsx', '.ts', '.tsx'})
+    return extension in record.target_extensions
 
 
 def validate_rule(rule, descriptor, *, first_party=True):

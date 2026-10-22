@@ -1,7 +1,7 @@
 """Plan applicable rules/files before preparation; account for engine evidence."""
 from dataclasses import dataclass, field
 from pathlib import Path
-from .rule_catalog import EXTENSIONS, supports_language
+from .rule_catalog import EXTENSIONS, supports_language, supports_file
 
 
 @dataclass
@@ -17,6 +17,7 @@ class SASTRulePlan:
     unscoped_error: bool = False
     planning_diagnostics: dict = field(default_factory=dict)
     skipped_files: dict[str, str] = field(default_factory=dict)
+    embedded_coverage: dict = field(default_factory=dict)
 
     def observe(self, data, batch):
         def relative(value):
@@ -55,7 +56,15 @@ class SASTRulePlan:
             selected=[r for r in self.rules if supports_language(r, language)]
             targets=set(self.language_files[language])
             clean=(self.scanned_files-self.errored_files-set(self.skipped_files))&targets
-            executed=[r for r in selected if r.rule_id in self.confirmed_rules and any(Path(p).suffix.lower() in r.target_extensions for p in clean)]
+            if language == 'vue':
+                # A failing second script must not erase the first script's
+                # actual execution. Vue remains PARTIAL, never EXECUTED.
+                clean={p for p in self.scanned_files & targets if
+                    self.embedded_coverage.get(p,{}).get('scanned_script_blocks',0)>0}
+            executed=[r for r in selected if r.rule_id in self.confirmed_rules and any(supports_file(r,p) for p in clean)]
+            if language == 'vue':
+                executed=[r for r in executed if any(set(r.engine_languages) &
+                    set(self.embedded_coverage.get(p,{}).get('scanned_languages',[])) for p in clean)]
             if self.unscoped_error:
                 executed=[]
             if not selected:
@@ -70,11 +79,17 @@ class SASTRulePlan:
                 state='PARTIAL'
             else:
                 state='FAILED'
+            if language == 'vue' and status not in {'PLANNED', 'UNAVAILABLE'}:
+                # Script extraction is deliberately not template/CSS coverage.
+                state='PARTIAL' if executed else 'NOT_COVERED'
             per_language[language]={'language':language,'available_rules':len(available),'selected_rules':len(selected),
                 'executed_rules':len(executed),'selected_rule_ids':[r.rule_id for r in selected],
                 'executed_rule_ids':[r.rule_id for r in executed],'applicable_categories':sorted({r.category for r in selected}),
                 'frameworks':sorted({r.framework for r in selected if r.framework}), 'status':state,
                 'target_files':len(targets),'scanned_files':len(clean)}
+            if language == 'vue':
+                per_language[language].update(template_status='NOT_COVERED',
+                    scope='SCRIPT_BLOCKS_ONLY', files=dict(self.embedded_coverage))
         states=[row['status'] for row in per_language.values()]
         aggregate=('NOT_APPLICABLE' if not states else 'EXECUTED' if all(s=='EXECUTED' for s in states)
             else 'PARTIAL' if any(s in {'EXECUTED','PARTIAL'} for s in states)
@@ -123,9 +138,9 @@ def plan_rules(pack, files):
     selected=tuple(rule for rule in pack.catalog if (rule.maturity!='EXPERIMENTAL' or not pack.descriptor.bundled)
         and (program is None or program.enabled(rule.rule_id))
         and any(supports_language(rule, language) and
-                any(Path(name).suffix.lower() in rule.target_extensions for name in names)
+                any(supports_file(rule,name) for name in names)
                 for language, names in language_files.items()))
-    targets=tuple(name for name in files if any(Path(name).suffix.lower() in rule.target_extensions for rule in selected))
+    targets=tuple(name for name in files if any(supports_file(rule,name) for rule in selected))
     # Uncovered files are described in the plan but never passed to the engine.
     # Keep recognized inputs without an applicable parser/rule in the coverage
     # denominator (for example .vue beside .js); never silently discard them.

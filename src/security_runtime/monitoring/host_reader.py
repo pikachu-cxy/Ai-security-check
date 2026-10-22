@@ -41,6 +41,8 @@ class HostReader:
         self.model = None
         self.last_at = None
         self.status = 'NOT_CONNECTED'
+        from .host_context import VisibleContext
+        self.visible_context = VisibleContext()
 
     def _consume(self, row):
         if not isinstance(row, dict):
@@ -60,6 +62,8 @@ class HostReader:
             cwd = payload.get('cwd')
             if isinstance(cwd, str) and len(cwd) <= 4096 and os.path.isabs(cwd):
                 self.cwd = cwd
+        if self.identity is not None:
+            self.visible_context.consume(row)
         if kind == 'turn_context':
             cwd = payload.get('cwd')
             if isinstance(cwd, str) and len(cwd) <= 4096 and os.path.isabs(cwd):
@@ -129,6 +133,8 @@ class HostReader:
 
     def view(self):
         return dict(status=self.status, usage=dict(self.usage) if self.usage is not None and self.status != 'UNAVAILABLE' else None,
+                    visible_context=self.visible_context.view() if self.status != 'UNAVAILABLE' else
+                        dict(status='UNAVAILABLE', inputs=[], scope='HOST_SOURCE_UNAVAILABLE'),
                     as_of=self.at, model=self.model, invalid_records=self.invalid,
                     identity_known=self.identity is not None,
                     project_usage=dict(self.project_usage) if self.project_samples and self.status != 'UNAVAILABLE' else None,

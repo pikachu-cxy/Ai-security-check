@@ -18,7 +18,7 @@ def store(tmp_path, monkeypatch):
 
 
 def test_mode_switch_is_live_across_instances_and_off_retains_history(store):
-    assert store.monitoring()['mode'] == 'basic'
+    assert store.monitoring()['mode'] == 'off'
     assert not store.path.exists()
     assert store.set_monitoring('debug')['effective']['mode'] == 'debug'
     other = ContextCostStore(store.path)
@@ -59,11 +59,13 @@ def test_env_override_and_invalid_settings_fail_closed(store, monkeypatch):
 
 
 def test_old_database_without_setting_table_remains_readable(store):
+    store.set_monitoring('basic')
     store.record_call('get_runtime_info', {})
     with sqlite3.connect(store.path) as db:
         db.execute('DROP TABLE monitor_settings')
-    assert store.monitoring()['mode'] == 'basic'
+    assert store.monitoring()['mode'] == 'off'
     assert store.summary()['calls'] == 1
+    assert store.record_call('get_runtime_info', {})['status'] == 'DISABLED'
 
 
 def test_overlapping_calls_union_is_distinct_from_cumulative_and_unknown_task_time(store):
@@ -83,6 +85,7 @@ def test_overlapping_calls_union_is_distinct_from_cumulative_and_unknown_task_ti
 
 
 def test_unknown_timings_invalid_clock_and_percentiles(store):
+    store.set_monitoring('basic')
     store.record_call('get_runtime_info', {}, elapsed_ms=2)
     store.set_monitoring('debug')
     store.record_call('get_runtime_info', {}, started_at=200, finished_at=100, elapsed_ms=10)
@@ -95,6 +98,7 @@ def test_unknown_timings_invalid_clock_and_percentiles(store):
 
 
 def test_snapshot_run_filter_and_tampered_records(store):
+    store.set_monitoring('basic')
     for label in ('before', 'after'):
         store.record_call('get_runtime_info', {}, run_label=label)
     assert report_data(store, 'before')['summary']['calls'] == 1
@@ -107,6 +111,7 @@ def test_snapshot_run_filter_and_tampered_records(store):
 
 
 def test_report_uses_real_imported_usage_without_assigning_it_to_tools(store, tmp_path):
+    store.set_monitoring('basic')
     from security_runtime.codex_usage import parse_codex_usage
     log = tmp_path / 'usage.jsonl'
     log.write_text(json.dumps({'type': 'thread.started', 'thread_id': 'explicit-fixture'})+'\n'+
@@ -171,16 +176,18 @@ def test_report_rejects_link_output(store, tmp_path):
 
 
 def test_wrapper_preserves_errors_and_live_off_switch_during_call(store, monkeypatch):
-    from security_runtime import context_cost
-    monkeypatch.setattr(context_cost, 'ContextCostStore', lambda: store)
+    from security_runtime.context_cost_worker import ObservationWorker
     store.set_monitoring('debug')
+    worker = ObservationWorker(lambda: store).start()
+    assert worker.wait_ready(2)
     request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info'))
     response = {'isError': True, 'content': [{'type': 'text', 'text': 'private error'}]}
 
     async def error(_):
         return response
 
-    assert asyncio.run(observe_response(error, request, connection_id='session')) is response
+    assert asyncio.run(observe_response(error, request, connection_id='session', worker=worker)) is response
+    assert worker.wait_idle(2)
     assert store.summary()['failed_calls'] == 1
     assert report_data(store)['timing']['timed_calls'] == 1
 
@@ -188,21 +195,26 @@ def test_wrapper_preserves_errors_and_live_off_switch_during_call(store, monkeyp
         store.set_monitoring('off')
         return response
 
-    asyncio.run(observe_response(switched_off, request, connection_id='session'))
+    asyncio.run(observe_response(switched_off, request, connection_id='session', worker=worker))
+    assert worker.wait_idle(2)
+    worker.close()
     assert store.summary()['calls'] == 1
 
 
 def test_inflight_call_keeps_starting_run_when_user_switches_label(store, monkeypatch):
-    from security_runtime import context_cost
-    monkeypatch.setattr(context_cost, 'ContextCostStore', lambda: store)
+    from security_runtime.context_cost_worker import ObservationWorker
     store.set_monitoring('debug', 'first')
+    worker = ObservationWorker(lambda: store).start()
+    assert worker.wait_ready(2)
     request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info'))
 
     async def switch_run(_):
         store.set_monitoring('debug', 'second')
         return {'status': 'AVAILABLE'}
 
-    asyncio.run(observe_response(switch_run, request, connection_id='session'))
+    asyncio.run(observe_response(switch_run, request, connection_id='session', worker=worker))
+    assert worker.wait_idle(2)
+    worker.close()
     assert store.summary('first')['calls'] == 1
     assert store.summary('second')['calls'] == 0
 

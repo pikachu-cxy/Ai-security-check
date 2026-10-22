@@ -513,6 +513,11 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
                     raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
                 _write(rules if role == 'RULES' else execution, name, raw)
                 manifest.append(InputEntry(name, role, len(raw), _digest(key, raw), oid, mode))
+                try:
+                    from .product_metrics import observe_input
+                    observe_input(name, role, raw)
+                except Exception:
+                    pass  # Optional counts never change the captured input.
 
             for name in request.source_paths:
                 checkpoint()

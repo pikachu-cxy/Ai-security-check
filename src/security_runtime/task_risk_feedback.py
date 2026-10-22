@@ -381,6 +381,14 @@ class TaskRiskFeedbackService:
             # Feedback facts and their exact target expectations share one
             # signed authority publication; a failed target never loses intent.
             ledger.save(rows, effects=effects)
+            if event.get('evidence_type') == 'HOST_CODE_REVIEW_NOT_SCANNER_PROOF' or event['status'] == 'REVOKED':
+                try:
+                    from .product_metrics import feedback_saved
+                    feedback_saved(row.get('origin_scan_id') if row['source'] == 'SCANNER' else task_ref,
+                        row['finding_id'], {'STILL_PRESENT':'CONFIRMED',
+                        'HOST_FALSE_POSITIVE':'FALSE_POSITIVE'}.get(event['status'], 'UNKNOWN'), root)
+                except Exception:
+                    pass
             sync = self.reconcile_effects(service, root, ledger=ledger)
             result = project_feedback(row, root)
             return dict(status='FEEDBACK_RECORDED', task_ref=task_ref, finding_id=finding_id,

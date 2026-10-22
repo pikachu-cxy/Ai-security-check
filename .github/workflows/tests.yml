@@ -78,7 +78,7 @@ jobs:
         if: inputs.focused != true
         env:
           SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
-        run: python -m pytest -q --basetemp="${{ runner.temp }}/runtime-tests"
+        run: python -m pytest -q tests --basetemp="${{ runner.temp }}/runtime-tests"
       - name: Run focused source evidence and review closeout regressions
         if: inputs.focused == true
         run: >-
@@ -112,3 +112,10 @@ jobs:
       - name: First-party rule quality gate
         if: inputs.focused != true
         run: python scripts/test_rules.py
+      - name: Product rule and Vue coverage gates
+        if: inputs.focused != true
+        shell: bash
+        run: |
+          python scripts/test_python_rule_product.py
+          python scripts/test_javascript_rule_product.py
+          python scripts/test_vue_rule_product.py

@@ -5,13 +5,17 @@ The 0.3.9 release includes one-step monitoring for the current Codex chat and re
 ## Start and export
 
 1. In the current project chat, ask **"Start usage monitoring for this chat."**
-2. The assistant opens a local page and starts observation without asking you to find log files.
+2. The assistant opens a local page. In the latest source, collection is off by default; explicitly enable basic or detailed monitoring when prompted by the page. Opening a dashboard alone does not enable collection. Older installed builds may behave differently: verify the Runtime build before testing this workflow.
 3. Continue the development or review task normally.
 4. Use the stop-and-export control to download a ZIP containing an offline HTML report, JSON statistics, and measurement notes.
 
 The page listens on loopback with a random access path. Monitoring does not request a model, start a scan, or authorize repairs. Missing identity, ambiguous logs, and unsupported hosts are reported rather than substituted with another recent chat. Automatic token association currently supports local Codex logs only.
 
 ## Interpret the measurements
+
+The scan overview separates cumulative finding occurrences from the deduplicated current pending risk count. Repeated scans may increase occurrences without adding a new risk. Missing handling state, incomplete history, or incomplete checks keep the current pending count unknown; observed unclosed candidates are shown separately. A scan with no findings does not automatically resolve an earlier risk.
+
+Check status includes unfinished reasons and uncovered scope. Recognizing a file, installing a rule, or having a tool ready is not proof of execution. Vue script analysis is partial coverage: templates, styles, and unsupported script blocks remain visible as gaps. Development task checks have their own status and do not inflate scan totals.
 
 | Measurement | Meaning |
 | --- | --- |

@@ -16,6 +16,12 @@ def register(subparsers):
     imported = actions.add_parser('import-codex', help='Import usage counters from a local Codex JSONL log, without saving its content')
     imported.add_argument('--path', type=Path, required=True)
     imported.add_argument('--run', required=True)
+    history = actions.add_parser('import-history', help='Read existing scan/triage history into monitoring without changing product state')
+    history.add_argument('--source-db', type=Path, required=True)
+    history.add_argument('--workspace', type=Path, required=True)
+    history.add_argument('--before', type=int)
+    history.add_argument('--limit', type=int, default=100)
+    history.add_argument('--run', default='history')
     monitor = actions.add_parser('monitor', help='Switch collection live: off, basic, or debug; retain historical data')
     monitor.add_argument('--mode', choices=('off', 'basic', 'debug'))
     monitor.add_argument('--run', help='Label subsequent calls without restarting the MCP process')
@@ -31,7 +37,7 @@ def register(subparsers):
     start.add_argument('--project', type=Path)
     worker = actions.add_parser('monitor-worker', help=__import__('argparse').SUPPRESS)
     worker.add_argument('--job', type=Path, required=True)
-    for child in (status, compare, imported, monitor, report, dashboard, start):
+    for child in (status, compare, imported, history, monitor, report, dashboard, start):
         child.add_argument('--db', type=Path, help='Explicit metrics database for an isolated experiment')
         child.add_argument('--json', action='store_true')
 
@@ -68,6 +74,13 @@ def execute(args):
         except (OSError, ValueError, TypeError, KeyError):
             data = dict(status='UNAVAILABLE', reason_code='CONTEXT_REPORT_EXPORT_FAILED',
                         hint='Use valid measurements, a limit of 1–10000, and a new .html/.json file in an existing directory.')
+    elif args.context_action == 'import-history':
+        from .monitor_history import import_history
+        try:
+            data = import_history(store, args.source_db, workspace=args.workspace,
+                before=args.before, limit=args.limit, run=args.run)
+        except (OSError, ValueError, TypeError, KeyError):
+            data = dict(status='UNAVAILABLE', reason_code='HISTORY_IMPORT_FAILED')
     elif args.context_action == 'import-codex':
         from .codex_usage import parse_codex_usage
         data = store.record_host_usage(args.run, parse_codex_usage(args.path))

@@ -128,6 +128,13 @@ class OpenAICompatibleProvider:
         if len(body)>262144: raise ValueError('AI request exceeds total batch context budget')
         request=Request(self.provider_name+'/chat/completions',data=body,
             headers={'Content-Type':'application/json','Authorization':'Bearer '+key},method='POST')
+        observation = None
+        try:
+            from .model_observation import begin_request
+            observation = begin_request(body)
+        except Exception:
+            pass  # Optional metadata cannot authorize or prevent a request.
+        completed = False
         try:
             with build_opener(NoRedirect()).open(request,timeout=self.budget.provider_timeout) as response:
                 raw=response.read(self.budget.max_response_bytes+1)
@@ -136,6 +143,11 @@ class OpenAICompatibleProvider:
             # Prevent even a malicious server from echoing the key into output.
             raw=raw.replace(key.encode(),'[REDACTED_SECRET]'.encode())
             data=json.loads(raw)
+            try:
+                if observation is not None:
+                    observation.response(data)
+            except Exception:
+                pass
             content=data['choices'][0]['message']['content']
             if not isinstance(content,str): raise ValueError('Invalid AI structured response')
             result=json.loads(content)
@@ -144,7 +156,9 @@ class OpenAICompatibleProvider:
                 if isinstance(value,list): return [scrub(item) for item in value]
                 if isinstance(value,dict): return {name:scrub(item) for name,item in value.items()}
                 return value
-            return scrub(result)
+            cleaned = scrub(result)
+            completed = True
+            return cleaned
         except HTTPError:
             raise ValueError('AI provider HTTP error; no response body retained') from None
         except (TimeoutError,socket.timeout):
@@ -153,3 +167,9 @@ class OpenAICompatibleProvider:
             raise ValueError('AI provider connection failed; credentials and response omitted') from None
         except (KeyError,TypeError,json.JSONDecodeError):
             raise ValueError('AI provider returned malformed structured JSON') from None
+        finally:
+            try:
+                if observation is not None:
+                    observation.publish('COMPLETED' if completed else 'FAILED')
+            except Exception:
+                pass  # Preserve the original result, exception and cancellation.

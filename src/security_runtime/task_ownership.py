@@ -70,8 +70,8 @@ def verify_session_ref(hooks, root, token, *, now=None):
                 or type(data['issued']) not in {float,int} or type(data['expires']) not in {float,int}
                 or not data['issued']<=instant<data['expires']<=data['issued']+SESSION_TTL): raise ValueError()
         try:
-            from .context_cost_mcp import bind_verified_chat
-            bind_verified_chat(data['owner'])
+            from .observation import bind_chat
+            bind_chat(data['owner'])
         except Exception:
             pass  # Optional measurements cannot affect session routing.
         return data['owner']

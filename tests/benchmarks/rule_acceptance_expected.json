@@ -1,0 +1,640 @@
+{
+  "schema_version": 1,
+  "origin": "2026-10-22 accepted core 1.5.0 fixed cohort; native defaults; not whole-project production accuracy",
+  "projects": {
+    "benchmark-python": {
+      "identities": {
+        "semgrep": [
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00166.py",
+            53
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00167.py",
+            53
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00168.py",
+            60
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00431.py",
+            51
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00432.py",
+            53
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest00606.py",
+            51
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest01098.py",
+            53
+          ],
+          [
+            "ai-security.python.command-injection",
+            "testcode/BenchmarkTest01173.py",
+            51
+          ],
+          [
+            "ai-security.python.explicit-shell-command",
+            "testcode/BenchmarkTest00268.py",
+            53
+          ],
+          [
+            "ai-security.python.path-traversal",
+            "testcode/BenchmarkTest00085.py",
+            45
+          ],
+          [
+            "ai-security.python.path-traversal",
+            "testcode/BenchmarkTest00086.py",
+            52
+          ],
+          [
+            "ai-security.python.sql-injection",
+            "testcode/BenchmarkTest00099.py",
+            49
+          ],
+          [
+            "ai-security.python.sql-injection",
+            "testcode/BenchmarkTest00454.py",
+            44
+          ],
+          [
+            "ai-security.python.sql-injection",
+            "testcode/BenchmarkTest00455.py",
+            46
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00074.py",
+            51
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00159.py",
+            45
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00160.py",
+            49
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00161.py",
+            40
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00342.py",
+            48
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00343.py",
+            44
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00422.py",
+            43
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00425.py",
+            43
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00503.py",
+            40
+          ],
+          [
+            "ai-security.python.unsafe-eval",
+            "testcode/BenchmarkTest00599.py",
+            47
+          ]
+        ],
+        "native-dataflow": [
+          [
+            "ai-security.dataflow.python.path-traversal",
+            "testcode/BenchmarkTest00001.py",
+            47
+          ],
+          [
+            "ai-security.dataflow.python.path-traversal",
+            "testcode/BenchmarkTest00002.py",
+            49
+          ],
+          [
+            "ai-security.dataflow.python.path-traversal",
+            "testcode/BenchmarkTest00171.py",
+            46
+          ],
+          [
+            "ai-security.dataflow.python.path-traversal",
+            "testcode/BenchmarkTest00172.py",
+            45
+          ],
+          [
+            "ai-security.dataflow.python.sql-injection",
+            "testcode/BenchmarkTest00099.py",
+            49
+          ],
+          [
+            "ai-security.dataflow.python.sql-injection",
+            "testcode/BenchmarkTest00283.py",
+            49
+          ],
+          [
+            "ai-security.dataflow.python.sql-injection",
+            "testcode/BenchmarkTest00284.py",
+            47
+          ],
+          [
+            "ai-security.dataflow.python.sql-injection",
+            "testcode/BenchmarkTest00454.py",
+            44
+          ],
+          [
+            "ai-security.dataflow.python.sql-injection",
+            "testcode/BenchmarkTest00455.py",
+            46
+          ]
+        ]
+      },
+      "semgrep_cases": {
+        "BenchmarkTest00001": "FN",
+        "BenchmarkTest00002": "FN",
+        "BenchmarkTest00003": "FN",
+        "BenchmarkTest00004": "TN",
+        "BenchmarkTest00005": "TN",
+        "BenchmarkTest00006": "TN",
+        "BenchmarkTest00007": "TN",
+        "BenchmarkTest00008": "FN",
+        "BenchmarkTest00009": "TN",
+        "BenchmarkTest00010": "TN",
+        "BenchmarkTest00011": "TN",
+        "BenchmarkTest00012": "TN",
+        "BenchmarkTest00073": "TN",
+        "BenchmarkTest00074": "TP",
+        "BenchmarkTest00075": "TN",
+        "BenchmarkTest00082": "TN",
+        "BenchmarkTest00083": "TN",
+        "BenchmarkTest00084": "TN",
+        "BenchmarkTest00085": "TP",
+        "BenchmarkTest00086": "FP",
+        "BenchmarkTest00087": "FN",
+        "BenchmarkTest00088": "TN",
+        "BenchmarkTest00089": "FN",
+        "BenchmarkTest00090": "TN",
+        "BenchmarkTest00091": "TN",
+        "BenchmarkTest00092": "FN",
+        "BenchmarkTest00096": "FN",
+        "BenchmarkTest00097": "FN",
+        "BenchmarkTest00098": "FN",
+        "BenchmarkTest00099": "TP",
+        "BenchmarkTest00100": "TN",
+        "BenchmarkTest00149": "TN",
+        "BenchmarkTest00150": "TN",
+        "BenchmarkTest00156": "TN",
+        "BenchmarkTest00157": "TN",
+        "BenchmarkTest00158": "TN",
+        "BenchmarkTest00159": "TP",
+        "BenchmarkTest00160": "TP",
+        "BenchmarkTest00161": "TP",
+        "BenchmarkTest00162": "TN",
+        "BenchmarkTest00163": "TN",
+        "BenchmarkTest00165": "FN",
+        "BenchmarkTest00166": "TP",
+        "BenchmarkTest00167": "TP",
+        "BenchmarkTest00168": "TP",
+        "BenchmarkTest00169": "FN",
+        "BenchmarkTest00171": "FN",
+        "BenchmarkTest00172": "FN",
+        "BenchmarkTest00185": "TN",
+        "BenchmarkTest00186": "TN",
+        "BenchmarkTest00187": "FN",
+        "BenchmarkTest00188": "FN",
+        "BenchmarkTest00189": "FN",
+        "BenchmarkTest00190": "TN",
+        "BenchmarkTest00191": "TN",
+        "BenchmarkTest00192": "TN",
+        "BenchmarkTest00256": "TN",
+        "BenchmarkTest00263": "TN",
+        "BenchmarkTest00264": "TN",
+        "BenchmarkTest00267": "FN",
+        "BenchmarkTest00268": "TP",
+        "BenchmarkTest00272": "FN",
+        "BenchmarkTest00278": "FN",
+        "BenchmarkTest00281": "FN",
+        "BenchmarkTest00283": "FN",
+        "BenchmarkTest00284": "FN",
+        "BenchmarkTest00285": "TN",
+        "BenchmarkTest00286": "TN",
+        "BenchmarkTest00287": "TN",
+        "BenchmarkTest00342": "TP",
+        "BenchmarkTest00343": "TP",
+        "BenchmarkTest00344": "TN",
+        "BenchmarkTest00350": "TN",
+        "BenchmarkTest00422": "TP",
+        "BenchmarkTest00425": "TP",
+        "BenchmarkTest00431": "TP",
+        "BenchmarkTest00432": "TP",
+        "BenchmarkTest00454": "TP",
+        "BenchmarkTest00455": "TP",
+        "BenchmarkTest00503": "TP",
+        "BenchmarkTest00511": "FN",
+        "BenchmarkTest00512": "TN",
+        "BenchmarkTest00599": "TP",
+        "BenchmarkTest00606": "TP",
+        "BenchmarkTest00736": "TN",
+        "BenchmarkTest00755": "TN",
+        "BenchmarkTest00900": "TN",
+        "BenchmarkTest01021": "TN",
+        "BenchmarkTest01097": "TN",
+        "BenchmarkTest01098": "FP",
+        "BenchmarkTest01173": "FP",
+        "BenchmarkTest01203": "TN"
+      },
+      "combined_cases": {
+        "BenchmarkTest00001": "TP",
+        "BenchmarkTest00002": "TP",
+        "BenchmarkTest00003": "FN",
+        "BenchmarkTest00004": "TN",
+        "BenchmarkTest00005": "TN",
+        "BenchmarkTest00006": "TN",
+        "BenchmarkTest00007": "TN",
+        "BenchmarkTest00008": "FN",
+        "BenchmarkTest00009": "TN",
+        "BenchmarkTest00010": "TN",
+        "BenchmarkTest00011": "TN",
+        "BenchmarkTest00012": "TN",
+        "BenchmarkTest00073": "TN",
+        "BenchmarkTest00074": "TP",
+        "BenchmarkTest00075": "TN",
+        "BenchmarkTest00082": "TN",
+        "BenchmarkTest00083": "TN",
+        "BenchmarkTest00084": "TN",
+        "BenchmarkTest00085": "TP",
+        "BenchmarkTest00086": "FP",
+        "BenchmarkTest00087": "FN",
+        "BenchmarkTest00088": "TN",
+        "BenchmarkTest00089": "FN",
+        "BenchmarkTest00090": "TN",
+        "BenchmarkTest00091": "TN",
+        "BenchmarkTest00092": "FN",
+        "BenchmarkTest00096": "FN",
+        "BenchmarkTest00097": "FN",
+        "BenchmarkTest00098": "FN",
+        "BenchmarkTest00099": "TP",
+        "BenchmarkTest00100": "TN",
+        "BenchmarkTest00149": "TN",
+        "BenchmarkTest00150": "TN",
+        "BenchmarkTest00156": "TN",
+        "BenchmarkTest00157": "TN",
+        "BenchmarkTest00158": "TN",
+        "BenchmarkTest00159": "TP",
+        "BenchmarkTest00160": "TP",
+        "BenchmarkTest00161": "TP",
+        "BenchmarkTest00162": "TN",
+        "BenchmarkTest00163": "TN",
+        "BenchmarkTest00165": "FN",
+        "BenchmarkTest00166": "TP",
+        "BenchmarkTest00167": "TP",
+        "BenchmarkTest00168": "TP",
+        "BenchmarkTest00169": "FN",
+        "BenchmarkTest00171": "TP",
+        "BenchmarkTest00172": "TP",
+        "BenchmarkTest00185": "TN",
+        "BenchmarkTest00186": "TN",
+        "BenchmarkTest00187": "FN",
+        "BenchmarkTest00188": "FN",
+        "BenchmarkTest00189": "FN",
+        "BenchmarkTest00190": "TN",
+        "BenchmarkTest00191": "TN",
+        "BenchmarkTest00192": "TN",
+        "BenchmarkTest00256": "TN",
+        "BenchmarkTest00263": "TN",
+        "BenchmarkTest00264": "TN",
+        "BenchmarkTest00267": "FN",
+        "BenchmarkTest00268": "TP",
+        "BenchmarkTest00272": "FN",
+        "BenchmarkTest00278": "FN",
+        "BenchmarkTest00281": "FN",
+        "BenchmarkTest00283": "TP",
+        "BenchmarkTest00284": "TP",
+        "BenchmarkTest00285": "TN",
+        "BenchmarkTest00286": "TN",
+        "BenchmarkTest00287": "TN",
+        "BenchmarkTest00342": "TP",
+        "BenchmarkTest00343": "TP",
+        "BenchmarkTest00344": "TN",
+        "BenchmarkTest00350": "TN",
+        "BenchmarkTest00422": "TP",
+        "BenchmarkTest00425": "TP",
+        "BenchmarkTest00431": "TP",
+        "BenchmarkTest00432": "TP",
+        "BenchmarkTest00454": "TP",
+        "BenchmarkTest00455": "TP",
+        "BenchmarkTest00503": "TP",
+        "BenchmarkTest00511": "FN",
+        "BenchmarkTest00512": "TN",
+        "BenchmarkTest00599": "TP",
+        "BenchmarkTest00606": "TP",
+        "BenchmarkTest00736": "TN",
+        "BenchmarkTest00755": "TN",
+        "BenchmarkTest00900": "TN",
+        "BenchmarkTest01021": "TN",
+        "BenchmarkTest01097": "TN",
+        "BenchmarkTest01098": "FP",
+        "BenchmarkTest01173": "FP",
+        "BenchmarkTest01203": "TN"
+      },
+      "execution": {
+        "native-dataflow": {
+          "status": "SUCCESS",
+          "minimum_parsed_files": 92
+        }
+      }
+    },
+    "nodegoat": {
+      "identities": {
+        "semgrep": [
+          [
+            "ai-security.javascript.code-injection",
+            "app/routes/contributions.js",
+            32
+          ],
+          [
+            "ai-security.javascript.code-injection",
+            "app/routes/contributions.js",
+            33
+          ],
+          [
+            "ai-security.javascript.code-injection",
+            "app/routes/contributions.js",
+            34
+          ],
+          [
+            "ai-security.javascript.ssrf",
+            "app/routes/research.js",
+            16
+          ]
+        ],
+        "native-js-function": [
+          [
+            "ai-security.javascript.dynamic-function",
+            "app/routes/contributions.js",
+            32
+          ],
+          [
+            "ai-security.javascript.dynamic-function",
+            "app/routes/contributions.js",
+            33
+          ],
+          [
+            "ai-security.javascript.dynamic-function",
+            "app/routes/contributions.js",
+            34
+          ]
+        ]
+      },
+      "execution": {
+        "native-js-function": {
+          "status": "SUCCESS",
+          "minimum_parsed_files": null
+        }
+      }
+    },
+    "juice-shop": {
+      "identities": {
+        "semgrep": [
+          [
+            "ai-security.javascript.ssrf",
+            "routes/profileImageUrlUpload.ts",
+            24
+          ]
+        ],
+        "native-js-function": [
+          [
+            "ai-security.javascript.dynamic-function",
+            "routes/captcha.ts",
+            23
+          ],
+          [
+            "ai-security.javascript.dynamic-function",
+            "routes/userProfile.ts",
+            62
+          ]
+        ]
+      },
+      "execution": {
+        "native-js-function": {
+          "status": "SUCCESS",
+          "minimum_parsed_files": null
+        }
+      }
+    },
+    "dvwa": {
+      "identities": {
+        "semgrep": [
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/high.php",
+            26
+          ],
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/high.php",
+            30
+          ],
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/low.php",
+            10
+          ],
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/low.php",
+            14
+          ],
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/medium.php",
+            19
+          ],
+          [
+            "ai-security.php.command-injection",
+            "vulnerabilities/exec/source/medium.php",
+            23
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/low.php",
+            23
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/low.php",
+            36
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/low.php",
+            81
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/medium.php",
+            22
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/medium.php",
+            29
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/bac/source/medium.php",
+            73
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/brute/source/high.php",
+            20
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/brute/source/low.php",
+            13
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/brute/source/medium.php",
+            15
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/captcha/source/high.php",
+            31
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/captcha/source/low.php",
+            61
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/captcha/source/medium.php",
+            69
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/csrf/source/high.php",
+            44
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/csrf/source/low.php",
+            17
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/csrf/source/medium.php",
+            19
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/csrf/test_credentials.php",
+            22
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/sqli/source/low.php",
+            11
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/sqli/source/medium.php",
+            12
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/sqli_blind/source/high.php",
+            13
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/sqli_blind/source/low.php",
+            13
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/sqli_blind/source/medium.php",
+            15
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/xss_s/source/high.php",
+            19
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/xss_s/source/low.php",
+            17
+          ],
+          [
+            "ai-security.php.mysqli-query-injection",
+            "vulnerabilities/xss_s/source/medium.php",
+            19
+          ],
+          [
+            "ai-security.php.request-eval",
+            "vulnerabilities/view_help.php",
+            20
+          ],
+          [
+            "ai-security.php.request-eval",
+            "vulnerabilities/view_help.php",
+            22
+          ],
+          [
+            "ai-security.php.request-html-output",
+            "vulnerabilities/csp/source/jsonp.php",
+            12
+          ]
+        ]
+      }
+    },
+    "govwa": {
+      "identities": {
+        "semgrep": [],
+        "native-go-sql": [
+          [
+            "ai-security.dataflow.go.sql-injection",
+            "vulnerability/sqli/function.go",
+            41
+          ]
+        ]
+      },
+      "execution": {
+        "native-go-sql": {
+          "status": "PARTIAL",
+          "minimum_parsed_files": 17
+        }
+      }
+    }
+  }
+}

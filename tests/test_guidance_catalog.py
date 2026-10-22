@@ -54,6 +54,26 @@ def test_fixed_topics_match_generated_and_installed_bytes(tmp_path):
         assert result['authority']==dict(guidance_is_not_authorization=True,repair_authorized=False,scanner_proof=False)
 
 
+def test_quiet_development_and_requested_security_reports_have_distinct_guidance():
+    files = skill_files()
+    core = files['SKILL.md'].decode('utf-8')
+    workflow = files['references/runtime-workflow.md'].decode('utf-8')
+    for content in (HOST_INSTRUCTIONS, RUNTIME_WORKFLOW, core, workflow):
+        assert '当前任务核查完整、零发现且无检查或处置缺口时静默' in content
+        assert '扫描项、覆盖范围或“未发现风险”尾注' in content
+        assert '显式安全检查或安全状态/历史查询即使零发现也报告' in content
+        assert '风险、检查缺口及需报告的原问题复查不静默' in content
+    assert 'development_summary 为空时不自行补写' in workflow
+    assert '零发现不代表已有风险已修复' in workflow
+    assert '仅将非空 development_summary 合并进正常开发总结' in workflow
+    method = files['references/quick-task-review-v3.md'].decode('utf-8')
+    for required in ('Merge a nonempty development_summary', 'current and complete, zero',
+                     'no check or handling gaps remain', 'zero-finding footer',
+                     'security status/history queries still report actual scope',
+                     'verification results remain visible'):
+        assert required in method
+
+
 def test_existing_task_and_deep_methods_keep_the_same_version_and_digest():
     from security_runtime.task_security import method
     from security_runtime.professional_guidance import get_professional_guidance

@@ -13,6 +13,7 @@ def store(tmp_path, monkeypatch):
     for name in ('SECURITY_RUNTIME_CONTEXT_MODE', 'SECURITY_RUNTIME_CONTEXT_MONITOR',
                  'SECURITY_RUNTIME_CONTEXT_RUN'):
         monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('SECURITY_RUNTIME_CONTEXT_MODE', 'basic')
     return ContextCostStore(tmp_path / 'metrics.sqlite3')
 
 

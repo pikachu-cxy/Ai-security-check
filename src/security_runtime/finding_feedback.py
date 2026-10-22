@@ -433,6 +433,12 @@ class FindingFeedbackService:
                           evidence_revision=scope['evidence_revision'], assessment_id=None, fresh=fresh,
                           evidence_backed=bool(covers_observation and confidence == 'HIGH' and context_complete
                               and not unknowns and not packet['evidence_gaps']), metadata=scope['metadata'])))
+        try:
+            from .product_metrics import feedback_saved
+            feedback_saved(scan_id, finding['id'], {'STILL_RISK':'CONFIRMED',
+                'FALSE_POSITIVE':'FALSE_POSITIVE'}.get(verdict, 'UNKNOWN'), self.workspace)
+        except Exception:
+            pass
         return self.status(scan_id, finding['id'])
 
     def revoke(self, scan_id, finding_id, reason, source='ALL'):
@@ -451,6 +457,12 @@ class FindingFeedbackService:
                 pass
         self._append(scan_id, row, 'HUMAN', 'UNREVIEWED', self._safe_reason(scan, reason),
                      event_kind='REVOKE', revoked_source=source, effect_template=effect_template)
+        if source in ('ALL', 'AI'):
+            try:
+                from .product_metrics import feedback_saved
+                feedback_saved(scan_id, finding_id, 'UNKNOWN', self.workspace)
+            except Exception:
+                pass
         return self.status(scan_id, finding['id'])
 
     def status(self, scan_id, finding_id, include_history=False):

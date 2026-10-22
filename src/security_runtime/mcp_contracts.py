@@ -182,6 +182,8 @@ class MCPRegistry:
             return
         try:
             from .context_cost_mcp import observe_response
+            from .context_cost_worker import get_worker
+            collector = get_worker()
         except Exception:
             return
         from mcp.types import CallToolRequest
@@ -191,7 +193,7 @@ class MCPRegistry:
 
         async def request_handler(request):
             return await observe_response(original, request, connection_id=connection_id,
-                                          workspace=workspace)
+                                          workspace=workspace, worker=collector)
         self.low_level.request_handlers[CallToolRequest] = request_handler
 
 

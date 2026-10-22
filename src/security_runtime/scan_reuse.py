@@ -50,11 +50,12 @@ def _result_data(scan):
 def _known_adapters():
     from .dataflow import BoundedDataflowScanner
     from .dynamic_function import NativeFunctionScanner
+    from .go_sql import GoSQLScanner
     from .osv import OSVDependencyAdapter
     from .scanners import (SemgrepAdapter, GitleaksAdapter, TrivyAdapter,
                            TrivyMisconfigAdapter)
     return {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter,
-            NativeFunctionScanner, BoundedDataflowScanner, OSVDependencyAdapter}
+            NativeFunctionScanner, BoundedDataflowScanner, GoSQLScanner, OSVDependencyAdapter}
 
 
 def _adapter_identity(adapter):
@@ -180,7 +181,7 @@ def _complete_scan(scan):
     for run in runs:
         if run.get('status') == 'NOT_APPLICABLE':
             continue
-        if run.get('scanner') in {'native-dataflow', 'native-js-function'}:
+        if run.get('scanner') in {'native-dataflow', 'native-js-function', 'native-go-sql'}:
             continue
         binding = context.get('execution_bindings', {}).get(run.get('scanner'), {})
         if (binding.get('contract') != 'scanner-execution-binding-v1' or binding.get('verified') is not True

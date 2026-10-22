@@ -13,8 +13,9 @@ This Runtime installs or invokes the independently licensed scanner engines belo
 
 | Component | Version | Copyright | License | Source | Attribution |
 | --- | --- | --- | --- | --- | --- |
-| AI Security Runtime Core Rules (`ai-security-core`) | 1.3.2 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
+| AI Security Runtime Core Rules (`ai-security-core`) | 1.6.0 | Copyright AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored rules |
 | Bounded Java/Python dataflow (`ai-security-bounded-dataflow`) | 1.5.0 | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; SQL, resolved cross-file Java/Python paths and exact Python io/codecs stream opens by default; other intrafile paths/command candidates experimental |
+| Bounded Go SQL dataflow (`ai-security-go-sql`) | 1.0.0 | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; same-package net/http to database/sql, at most two resolved call edges |
 
 The bundled rule pack is independently authored. Semgrep Community Rules and Semgrep Registry Rules are not bundled or fetched by default. User-provided rules remain under the user's own license and are never copied into the managed tool directory.
 

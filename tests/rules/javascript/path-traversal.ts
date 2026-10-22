@@ -29,3 +29,13 @@ app.delete("/esm-delete", async (req: any, res: any) => {
   // ok: ai-security.javascript.path-traversal
   await esmUnlink("/srv/synthetic/temporary.txt");
 });
+
+// Standalone handler requires an explicitly imported Express Request type.
+import { type Request, type Response } from 'express';
+import * as typedFs from 'node:fs';
+export function typedQualityHandler(request: Request, response: Response) {
+  // ruleid: ai-security.javascript.path-traversal
+  typedFs.unlinkSync(request.body.name);
+  // ok: ai-security.javascript.path-traversal
+  typedFs.unlinkSync('/fixed/file');
+}

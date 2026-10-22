@@ -67,6 +67,12 @@ class TriageService:
     def scan(self,scan_id):
         scan=self.store.get_scan(scan_id)
         if scan is None: raise ValueError('Scan does not exist')
+        try:
+            from .observation import bind_product, bind_workspace
+            bind_product('scan', scan_id, relation='SCAN_RECORD_READ')
+            bind_workspace(scan.get('target_profile', {}).get('path'))
+        except Exception:
+            pass
         return scan
 
     def prepare(self,scan_id,finding_ids=None,categories=None,limit=None,severities=None,provider=None,
@@ -256,3 +262,10 @@ class TriageService:
             emit('TRIAGE_COMPLETED',message=f'已完成 {done}；失败 {len(failures)}')
         return {'view':self.view(scan_id),'failures':failures,'evidence_errors':prepared['errors'],
                 'cache_hits':len(prepared['cached_finding_ids']),'completed':done}
+
+
+try:
+    from .context_cost_sync import observed
+    TriageService.run = observed('run_triage')(TriageService.run)
+except Exception:
+    pass  # Optional observation is removable, including at import time.

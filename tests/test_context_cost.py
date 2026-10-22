@@ -9,7 +9,9 @@ from security_runtime.context_cost import ContextCostStore
 
 
 def _store(tmp_path):
-    return ContextCostStore(tmp_path / 'private' / 'context-cost.sqlite3')
+    store = ContextCostStore(tmp_path / 'private' / 'context-cost.sqlite3')
+    assert store.set_monitoring('basic')['status'] == 'AVAILABLE'
+    return store
 
 
 def _exec(path, counts, *, thread='thread-one'):

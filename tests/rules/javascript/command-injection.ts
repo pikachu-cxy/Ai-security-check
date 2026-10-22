@@ -45,3 +45,13 @@ app.post("/esm-command", (req: any, res: any) => {
   // ok: ai-security.javascript.command-injection
   esmExecFile("/usr/bin/printf", ["%s", req.body.value]);
 });
+
+// Standalone handler requires an explicitly imported Express Request type.
+import { type Request, type Response } from 'express';
+import * as typedCp from 'node:child_process';
+export function typedQualityHandler(request: Request, response: Response) {
+  // ruleid: ai-security.javascript.command-injection
+  typedCp.exec(request.query.command);
+  // ok: ai-security.javascript.command-injection
+  typedCp.execFile('/usr/bin/printf', ['%s', request.query.value]);
+}

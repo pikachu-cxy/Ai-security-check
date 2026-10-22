@@ -66,8 +66,11 @@ class CodexEventAdapter:
             self.capabilities, arguments['session_id'])
         if not legacy:
             try:
-                from .context_cost_mcp import bind_verified_chat
-                bind_verified_chat(dict(host=self.host, session=context.session_binding))
+                from .observation import bind_chat, bind_host
+                bind_chat(dict(host=self.host, session=context.session_binding))
+                turn = arguments.get('turn_id')
+                bind_host(self.host, context.session_binding, context.invocation_binding,
+                          identity(turn) if turn else None)
             except Exception:
                 pass  # Optional attribution never changes validated Hook behavior.
         return NormalizedHostEvent(self.events[expected], context, operation,

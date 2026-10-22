@@ -115,6 +115,11 @@ class SecurityRuntime:
         emit('WORKSPACE_DISCOVERY_STARTED')
         scan_mode = ScanMode(mode)
         workspace = WorkspaceResolver().resolve(repository_path, allow_non_git_explicit=True, allow_non_git_source=True)
+        try:
+            from .observation import bind_workspace
+            bind_workspace(str(workspace.path))
+        except Exception:
+            pass
         if staged and not workspace.is_git:
             raise WorkspaceError('Staged scans require Git; use release mode without --staged for a source directory.')
         if staged and scan_mode != ScanMode.QUICK:
@@ -538,6 +543,16 @@ class SecurityRuntime:
         observed['timing_ms']['total'] = milliseconds(observed_start)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})
+        try:
+            from .observation import bind_product
+            bind_product('scan', result.scan_id, relation='SCAN_PERSISTED')
+        except Exception:
+            pass  # Persistence and scan control never depend on observation.
+        try:
+            from .product_metrics import scan_completed
+            scan_completed(result, rule_plans)
+        except Exception:
+            pass
         return result
 
     def get_findings(self, scan_id: str) -> list[dict]:
@@ -560,4 +575,24 @@ class SecurityRuntime:
         if workspace_path is not None and WorkspaceResolver().resolve(workspace_path, allow_non_git_explicit=True).path != root:
             raise WorkspaceError("Finding does not belong to the requested workspace")
         from .verification import VerificationService
-        return VerificationService(self.registry).verify_many(root, [finding], scan)[0]
+        result = VerificationService(self.registry).verify_many(root, [finding], scan)[0]
+        try:
+            from .product_metrics import ledger_saved
+            ledger_saved([dict(source='SCANNER', origin_scan_id=scan['scan_id'],
+                finding_id=finding['id'], status=result['verification_status'])], root)
+        except Exception:
+            pass
+        return result
+
+
+try:
+    from .product_metrics import observe_scan
+    SecurityRuntime.scan = observe_scan(SecurityRuntime.scan)
+except Exception:
+    pass
+
+try:
+    from .context_cost_sync import observed
+    SecurityRuntime.scan = observed('runtime_scan')(SecurityRuntime.scan)
+except Exception:
+    pass  # A missing monitor cannot prevent CLI or embedded scanning.

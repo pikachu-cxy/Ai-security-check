@@ -56,3 +56,14 @@ app.get("/esm-sql", async (req: any, res: any) => {
   // ok: ai-security.javascript.sql-injection
   promiseDb.query("SELECT id FROM users WHERE name=?", [req.query.name]);
 });
+
+// Standalone handler requires an explicitly imported Express Request type.
+import { type Request, type Response } from 'express';
+import { Pool } from 'pg';
+const typedDb = new Pool();
+export function typedQualityHandler(request: Request, response: Response) {
+  // ruleid: ai-security.javascript.sql-injection
+  typedDb.query("SELECT * FROM users WHERE id=" + request.query.id);
+  // ok: ai-security.javascript.sql-injection
+  typedDb.query("SELECT * FROM users WHERE id=$1", [request.query.id]);
+}

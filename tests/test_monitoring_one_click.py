@@ -11,6 +11,7 @@ from zipfile import ZipFile
 import pytest
 
 from security_runtime.context_cost import ContextCostStore
+from security_runtime.context_cost_worker import ObservationWorker
 from security_runtime.context_cost_mcp import observe_response, bind_verified_chat
 from security_runtime.monitoring.host_reader import HostReader
 from security_runtime.monitoring.launch import find_chat_log, start_monitor
@@ -50,6 +51,18 @@ def source(tmp_path, monkeypatch):
     path = log(home, project)
     store = ContextCostStore(tmp_path / 'metrics.sqlite3')
     return home, project, path, store
+
+
+@pytest.fixture
+def observer_worker(source):
+    source[3].set_monitoring('debug')  # These observation tests explicitly opt in.
+    worker = ObservationWorker(lambda: source[3]).start()
+    try:
+        assert worker.wait_ready(3)
+        yield worker
+        assert worker.wait_idle(3)
+    finally:
+        worker.close()
 
 
 def test_discovery_matches_identity_not_recency_and_rejects_duplicate(source):
@@ -107,20 +120,20 @@ def test_late_first_usage_keeps_unmeasured_prefix_explicit(source):
     assert after['usage']['input_tokens'] == 50 and after['window_token_prefix_unmeasured']
 
 
-def test_parallel_observations_are_bound_only_by_validated_context(source, monkeypatch):
+def test_parallel_observations_are_bound_only_by_validated_context(source, observer_worker):
     _, project, _, store = source
     store.set_monitoring('debug')
-    monkeypatch.setattr('security_runtime.context_cost.ContextCostStore', lambda: store)
     async def run(chat, delay):
         async def call(request):
             bind_verified_chat(session_owner('codex', chat))
             await asyncio.sleep(delay)
             return {'status': 'AVAILABLE'}
         request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info', arguments={'workspace_path': str(project)}))
-        return await observe_response(call, request, connection_id='SHARED_CONNECTION')
+        return await observe_response(call, request, connection_id='SHARED_CONNECTION', worker=observer_worker)
     async def both():
         return await asyncio.gather(run(CHAT, .02), run(OTHER, 0))
     asyncio.run(both())
+    assert observer_worker.wait_idle(3)
     events = store.snapshot()['events']
     assert len(events) == 2 and len({e['chat_hash'] for e in events}) == 2
     service = MonitorService(store, project=project, chat_owner=session_owner('codex', CHAT))
@@ -129,15 +142,15 @@ def test_parallel_observations_are_bound_only_by_validated_context(source, monke
     assert CHAT.encode() not in raw and b'SHARED_CONNECTION' not in raw
 
 
-def test_conflicting_or_unvalidated_session_claim_is_never_attributed(source, monkeypatch):
+def test_conflicting_or_unvalidated_session_claim_is_never_attributed(source, observer_worker):
     _, project, _, store = source
-    monkeypatch.setattr('security_runtime.context_cost.ContextCostStore', lambda: store)
     async def call(request):
         bind_verified_chat(session_owner('codex', CHAT))
         bind_verified_chat(session_owner('codex', OTHER))
         return {}
     request = SimpleNamespace(params=SimpleNamespace(name='get_runtime_info', arguments={'session_id': CHAT}))
-    asyncio.run(observe_response(call, request, connection_id='shared'))
+    asyncio.run(observe_response(call, request, connection_id='shared', worker=observer_worker))
+    assert observer_worker.wait_idle(3)
     assert 'chat_hash' not in store.snapshot()['events'][0]
 
 
@@ -148,6 +161,9 @@ def test_scoped_details_do_not_change_global_settings_and_off_is_respected(sourc
     before = store.monitoring()
     register(store, owner, 'monitor-one')
     assert store.monitoring() == before
+    assert before['mode'] == 'off'
+    assert store.record_call('get_runtime_info', {}, chat_owner=owner)['status'] == 'DISABLED'
+    store.set_monitoring('basic')  # Registering a page never enables collection.
     store.record_call('get_runtime_info', {}, chat_owner=owner, workspace=project,
         started_at=100, finished_at=101, mode='basic')
     store.record_call('get_runtime_info', {}, chat_owner=session_owner('codex', OTHER),
@@ -268,7 +284,7 @@ def test_missing_observer_does_not_change_verified_session_routing(source, monke
     token = issue_session_ref(hooks, project, 'codex', CHAT)
     original = builtins.__import__
     def missing(name, *args, **kwargs):
-        if name.endswith('context_cost_mcp'):
+        if name.endswith('context_cost_mcp') or name.endswith('observation'):
             raise ImportError('removed optional observer')
         return original(name, *args, **kwargs)
     monkeypatch.setattr(builtins, '__import__', missing)

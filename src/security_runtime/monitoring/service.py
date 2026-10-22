@@ -8,7 +8,7 @@ from __future__ import annotations
 import threading
 import time
 
-from ..context_report import phase_for, percentile, timing
+from ..context_report import phase_for, percentile, timing, association_data
 from ..token_usage import TOKEN_FIELDS
 from .host_reader import HostReader, canonical_project
 
@@ -180,9 +180,44 @@ class MonitorService:
             for row in groups.values():
                 values = row.pop('samples')
                 row.update(p50_ms=percentile(values, .5), p95_ms=percentile(values, .95))
-            fields = ('tool', 'run_label', 'started_at', 'finished_at', 'elapsed_ms', 'wire_bytes', 'succeeded')
+            fields = ('tool', 'run_label', 'started_at', 'finished_at', 'elapsed_ms', 'wire_bytes', 'succeeded',
+                      'call_id', 'measurement_limited')
             details = [dict({name: event.get(name) for name in fields}, phase=phase_for(event['tool']))
                        for event in selected[:1000]]
+            for detail in details:
+                if detail['measurement_limited']:
+                    detail['wire_bytes'] = None
+            from ..model_report import request_data, latest_attempts
+            from ..collector_health import health_data
+            models = latest_attempts(saved.get('model_requests', []))
+            from ..product_metrics import report as product_report
+            product_facts = saved.get('product_facts', [])
+            if scope == 'project':
+                product_facts = self._project_events(product_facts)
+            elif scope == 'chat':
+                product_facts = self._chat_events(product_facts)
+            elif scope == 'task':
+                product_facts = self._chat_events(product_facts) if self.chat_owner else self._project_events(product_facts) if self.project else product_facts
+                product_facts = [item for item in product_facts if item['product_fact']['source'] != 'HISTORY'
+                    and window and item.get('started_at') is not None
+                    and item.get('finished_at') is not None and item['started_at'] >= window['started_at']
+                    and item['finished_at'] <= (window['finished_at'] or now)]
+            if scope == 'project':
+                models = self._project_events(models)
+            elif scope == 'chat':
+                models = self._chat_events(models)
+            elif scope == 'scan':
+                # A triage request may refer to a scan without being a scanner
+                # invocation. Keep the explicit product reference as evidence.
+                models = [item for item in models if any(link['kind'] == 'scan'
+                          for link in item.get('correlation', {}).get('links', []))]
+            elif scope == 'task':
+                models = self._chat_events(models) if self.chat_owner else self._project_events(models) if self.project else models
+                models = [item for item in models if window and item.get('started_at') is not None
+                          and item.get('finished_at') is not None and item['started_at'] >= window['started_at']
+                          and item['finished_at'] <= (window['finished_at'] or now)]
+            associations = association_data(selected, model_requests=models, product_facts=product_facts)
+            measurement_gaps = sum(bool(item.get('measurement_limited')) for item in selected)
             if host['usage'] is not None and (not self.samples or self.samples[-1]['total_tokens'] != host['usage']['total_tokens']):
                 self.samples.append(dict(at=host['as_of'] or now, total_tokens=host['usage']['total_tokens']))
                 self.samples = self.samples[-240:]
@@ -224,7 +259,13 @@ class MonitorService:
                 attribution=dict(chat_total_tokens=host['usage'], development_only_tokens=None,
                     product_scan_tokens=None, engine_elapsed_ms=None,
                     reason='NO_VERIFIED_MODEL_USAGE_TO_SCAN_OR_DEVELOPMENT_LINK'),
-                events=details, details_omitted=max(0, len(selected)-len(details)),
+                events=details, associations=associations,
+                model_requests=request_data(models, links=associations['request_links']),
+                product_metrics=product_report(product_facts),
+                collector_health=health_data(saved.get('collector_checkpoints', [])),
+                response_measurement_gaps=measurement_gaps,
+                response_bytes_scope='MEASURED_RESPONSES_ONLY; OMITTED_RESPONSES_UNKNOWN',
+                details_omitted=max(0, len(selected)-len(details)),
                 invalid_records=saved.get('invalid', 0), unassociated_project_calls=unassociated,
                 project_observed_calls=len(matching), timing=timing_data, window=window,
                 window_untimed_retained_calls=window_untimed,
