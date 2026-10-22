@@ -24,6 +24,7 @@ export default defineConfig({
         nav: [
           { text: 'Overview', link: '/en/guide/overview' },
           { text: 'Get started', link: '/en/guide/quickstart' },
+          { text: 'Language coverage', link: '/en/reference/support#languages' },
           { text: 'Downloads', link: '/en/downloads' },
           { text: 'Changelog', link: '/en/reference/changelog' }
         ],
@@ -90,6 +91,7 @@ export default defineConfig({
     nav: [
       { text: '了解产品', link: '/guide/overview' },
       { text: '使用文档', link: '/guide/quickstart' },
+      { text: '语言覆盖', link: '/reference/support#语言覆盖' },
       { text: '获取安装包', link: '/downloads' },
       { text: '版本与进展', link: '/reference/changelog' }
     ],

@@ -4,6 +4,10 @@ description: 选择你的编辑器和系统，完成安装、连接验证和第�
 
 # 快速开始
 
+::: info 安装前先看语言覆盖
+**代码规则：Java、Python、JavaScript / TypeScript 的明确子集**，共 56 条独立规则、48 条默认启用。Vue 单文件组件、Go、PHP 等暂无自带 SAST 规则；密钥检查与依赖生态另计。[查看语言、文件后缀与检测覆盖 →](../reference/support.md#语言覆盖)
+:::
+
 当前使用 **0.3.9 正式版**。让 AI 帮你改代码时，同时查看这次改动里的安全问题；接入后照常提出需求、查看风险，再决定如何处理。Mac 自动安装使用独立发行 `macos-trial-v0.3.9.3`，Runtime 版本同为 0.3.9。
 
 <div class="doc-journey" aria-label="开始使用的四个步骤">

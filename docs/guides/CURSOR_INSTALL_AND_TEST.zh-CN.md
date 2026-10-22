@@ -1,12 +1,12 @@
 # Cursor 本地自动接入与验收
 
-2026-10-20：当前完整接入及下述常规工具白名单已包含在 [0.3.8 Developer Alpha 发行包](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.8)中；Cursor 桌面免确认体验仍需独立验收。
+2026-10-22：当前完整接入及下述常规工具白名单已包含在 [0.3.9 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9)中；Mac 自动安装使用独立发行 `macos-trial-v0.3.9.3`。按系统安装与卸载入口见[Cursor 用户指南](../../website/guide/editors/cursor.md)，语言范围见[产品覆盖](../PRODUCT_COVERAGE.zh-CN.md)。桌面免确认体验仍需按实际 Cursor 版本与团队策略验证。
 最初开发基线为 `fix/codex-acceptance-hidden-functional` 的
 `3ed0841af613c1e18b908bdfb7a84f74a2129347`，原开发分支为 `codex/cursor-integration`，仅作历史记录。
 
 ## 安装
 
-完整解压 0.3.8 对应平台包后，进入 `security-check` 目录运行（Windows）：
+完整解压 0.3.9 对应平台包后，进入 `security-check` 目录运行（Windows）：
 
 ```powershell
 .\security-check.exe install cursor

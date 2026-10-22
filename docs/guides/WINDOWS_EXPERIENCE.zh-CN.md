@@ -1,5 +1,21 @@
 # Windows 本地升级与安全核查体验
 
+## 当前 0.3.9 正式版入口
+
+普通用户请按[Windows 安装与维护](../../website/guide/installation.md)及[Codex](../../website/guide/editors/codex.md#windows) / [Cursor](../../website/guide/editors/cursor.md#windows)页面操作。核验完整包后，在能看到 `security-check` 文件夹的目录执行对应的一条命令：
+
+```powershell
+.\security-check\security-check.exe install codex
+# 使用 Cursor 时改为：
+.\security-check\security-check.exe install cursor
+```
+
+只执行所用编辑器的入口；安装自动开始准备组件，查看进度可用 `preparation watch`。当前语言覆盖、56 条独立规则和 48 条默认启用规则见[产品覆盖](../PRODUCT_COVERAGE.zh-CN.md)。
+
+## 历史开发与体验记录（不是当前安装指引）
+
+以下保留原阶段的构建、版本、规则数量与验收事实，包括 0.3.1 体验包和 1.3.0 规则包。文中的“本轮”“当前”指对应历史阶段，不能用于选择当前下载、推定 0.3.9 的规则数量或证明当前安装。
+
 [English](WINDOWS_EXPERIENCE.md) | 简体中文
 
 ## 新安装入口：Runtime、全局连接和专业 Skill 一起安装

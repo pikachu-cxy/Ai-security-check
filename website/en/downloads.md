@@ -1,5 +1,9 @@
 # Downloads and installation
 
+::: info Which languages can it check?
+**Code rules cover defined Java, Python, and JavaScript/TypeScript subsets**: 56 distinct rules, 48 default-on. Vue SFC, Go, PHP, and others have no corresponding bundled SAST rules; secrets and dependencies have separate scope. [View full language coverage before downloading →](./reference/support.md#languages)
+:::
+
 Current product: **0.3.9 Official release**, published on 2026-10-21. Native full bundles and managed macOS installation have separate release and build identities. Use the matching assets and checksums below.
 
 ## Official 0.3.9 full bundles {#windows}

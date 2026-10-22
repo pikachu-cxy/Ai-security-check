@@ -7,7 +7,7 @@
 | 安装当前源码、日常使用 | [项目 README](../README.md)、[详细安装指南](PILOT_INSTALL_AND_USE.zh-CN.md) |
 | 当前实现、验证及缺口 | [开发进度](DEVELOPMENT_PROGRESS.md)、[近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md) |
 | 架构、流程与历史冻结交付 | [架构实施记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)、[技术架构](ARCHITECTURE.md)、[总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md) |
-| 本轮发现、修复、复查与误报手测 | [当前验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md) |
+| 当前操作与历史手测依据 | [日常使用](../website/guide/workflow.md)、[独立 Demo](../website/guide/demo.md)、[历史架构验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md) |
 | 持久化、版本与诊断 | [恢复清单](PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)、[v3 升级](TASK_REVIEW_V3_ONLY.zh-CN.md)、[核查诊断](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md) |
 | 宿主与平台 | [支持状态](HOST_SUPPORT.md)、[Cursor 安装](guides/CURSOR_INSTALL_AND_TEST.zh-CN.md)、[操作指南](guides/README.md) |
 | 当前产品覆盖的语言与检测类型 | [0.3.9 产品覆盖](PRODUCT_COVERAGE.zh-CN.md)、[文档站语言矩阵](../website/reference/support.md#语言覆盖) |

@@ -1,5 +1,7 @@
 # 架构统一后续实施与验收记录
 
+**历史工程记录**：下文为 2026-10-19、0.3.6 阶段的实施和验收，保留原始结论；其中“当前”指该阶段。当前产品已为 0.3.9 正式版，见[项目上下文](PROJECT_CONTEXT.md)、[当前进度](DEVELOPMENT_PROGRESS.md)及[语言覆盖](PRODUCT_COVERAGE.zh-CN.md)。
+
 更新日期：2026-10-19。源码版本：0.3.6；分支：feature/runtime-mvp。本文记录当前边界和前一冻结阶段，实施目标见[总计划](ARCHITECTURE_UNIFICATION_PLAN.zh-CN.md)。后续修复的定向回归与前一冻结全库分别认定，不能用源码测试推定安装已生效。
 
 用户已授权最新源码、文档清理和 GitHub 同步。Codex 正在由用户手工验收，完整结果尚未反馈；Cursor 仍待独立桌面验证。源码推送不自动更新已运行进程、外部 Skill 或公开 Release。

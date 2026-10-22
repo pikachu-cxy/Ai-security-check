@@ -2,6 +2,22 @@
 
 English | [简体中文](WINDOWS_EXPERIENCE.zh-CN.md)
 
+## Current 0.3.9 installation
+
+Use the current [Codex](../../website/en/guide/editors/codex.md#windows) or [Cursor](../../website/en/guide/editors/cursor.md#windows) guide and [installation maintenance](../../website/en/guide/installation.md). From the verified bundle's parent directory, run only your editor's command:
+
+```powershell
+.\security-check\security-check.exe install codex
+# For Cursor instead:
+.\security-check\security-check.exe install cursor
+```
+
+Installation starts component preparation. Use `preparation watch` to observe progress. See [current language coverage](../../website/en/reference/support.md#languages): 56 distinct rules, 48 default-on.
+
+## Historical experience records
+
+The remainder retains earlier local builds, versions, rule counts, and acceptance boundaries. References to a current/local build below describe their dated stage, not the 0.3.9 release or its installation instructions.
+
 For current installation, use [README](../../README.md). Every vulnerability repair
 requires a clear report and explicit user choice. Legacy `smart_auto` settings
 normalize to `ask_before_fix`; `AUTO_FIX` only continues an already approved,

@@ -1,6 +1,6 @@
 # 开发交接
 
-更新日期：2026-10-19。版本 0.3.6，分支 feature/runtime-mvp；最新事实以[开发进度](DEVELOPMENT_PROGRESS.md)为准。
+更新日期：2026-10-22。当前产品 0.3.9 正式版，分支 `feature/runtime-mvp`；程序包源码为 `fa1a26b`，Mac 独立安装为 `macos-trial-v0.3.9.3`。当前用法、语言覆盖和发布事实见[开发进度](DEVELOPMENT_PROGRESS.md)及[产品覆盖](PRODUCT_COVERAGE.zh-CN.md)。下述架构与恢复约束继续适用，历史测试与会话状态不继承为新任务结论。
 
 ## 恢复工作前
 
@@ -24,7 +24,7 @@
 
 已记录的定向回归、当前同步验证和跳过原因见[验收记录](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)。前一冻结全库及候选身份见[架构记录](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)，不直接转用于新改动。
 
-当前用户已安装重启，正在手工验证新链路与误报；完整桌面结果尚未反馈。本次源码同步不构建或发布新安装包，也不自动重装当前接入。
+三平台正式包已发布；本轮文档提交不构建或替换安装包，也不自动重装当前接入。完整桌面验收按真实平台、宿主与构建分别记录，不用旧会话或历史候选结果代替。
 
 下一步先完成 Codex 样例验收，再按冻结提交构建独立候选及跨宿主验证。新增能力只按真实证据承诺，见[计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)和[宿主状态](HOST_SUPPORT.md)。
 

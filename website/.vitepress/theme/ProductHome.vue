@@ -17,6 +17,11 @@ const steps = [
         <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / 0.3.9</p>
         <h1 id="product-title">让 AI 写代码，<br>也让风险<span>有据可查。</span></h1>
         <p class="hero-description">在 Codex、Cursor 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
+        <div class="hero-coverage" aria-label="当前语言与检测覆盖">
+          <strong>代码规则覆盖 Java、Python、JavaScript / TypeScript</strong>
+          <p>56 条独立规则 · 48 条默认启用。Vue 单文件组件、Go、PHP 等暂无自带 SAST 规则；密钥与依赖检查另有范围。</p>
+          <a :href="withBase('/reference/support.html#语言覆盖')">查看语言、框架与检测覆盖 →</a>
+        </div>
         <div class="hero-actions">
           <a class="primary-action" :href="withBase('/guide/quickstart.html')">开始使用 <span aria-hidden="true">↗</span></a>
           <a class="secondary-action" :href="withBase('/guide/overview.html')">了解工作方式 <span aria-hidden="true">→</span></a>

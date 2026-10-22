@@ -5,7 +5,7 @@ description: Review changes, understand risks, approve fixes, and verify the ori
 hero:
   name: AI Security Runtime
   text: AI writes code. Keep security evidence in the workflow.
-  tagline: Local checks, contextual review, and traceable fix verification for AI coding assistants. Version 0.3.9 for Windows x64, Mac Apple Silicon, and Mac Intel.
+  tagline: Version 0.3.9 for Windows and Mac. Code rules cover defined Java, Python, and JavaScript/TypeScript subsets. 56 distinct rules, 48 default-on. Vue SFC, Go, PHP, and other languages have no corresponding bundled SAST rules; secret and dependency checks have separate scope.
   image:
     src: /logo.svg
     alt: AI Security Runtime
@@ -17,8 +17,8 @@ hero:
       text: How it works
       link: /en/guide/overview
     - theme: alt
-      text: GitHub
-      link: https://github.com/pikachu-cxy/Ai-security-check
+      text: Language coverage
+      link: /en/reference/support#languages
 features:
   - title: Review the actual changes
     details: Start with the real workspace before editing, then check additions, modifications, and deletions with necessary context.

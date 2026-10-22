@@ -1,5 +1,9 @@
 # Quick start
 
+::: info Check language coverage before installing
+**Code rules cover defined Java, Python, and JavaScript/TypeScript subsets**: 56 distinct rules, 48 default-on. Vue single-file components, Go, PHP, and others have no corresponding bundled SAST rules. Secrets and dependencies have separate scope. [View languages, file types, and detection coverage →](../reference/support.md#languages)
+:::
+
 Use the **0.3.9 official release**. Managed macOS installation uses the separate **macos-trial-v0.3.9.3** release, with Runtime version 0.3.9. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
 
 ## 1. Choose your editor {#choose-editor}

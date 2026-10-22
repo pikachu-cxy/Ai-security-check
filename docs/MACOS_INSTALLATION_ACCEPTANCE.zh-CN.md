@@ -1,5 +1,7 @@
 # macOS 安装优化与验收
 
+**历史验收记录**：以下保留 2026-10-20 及更早的 Mac 候选和 0.3.6 资产替换事实，不作为当前下载、版本或 Windows 包身份。当前产品为 0.3.9 正式版，Mac 自动安装为 `macos-trial-v0.3.9.3`，请按[当前 Mac 安装指南](../website/guide/editors/codex.md#macos)与[支持状态](../website/reference/support.md#macos-installation)操作。
+
 更新：2026-10-20。Mac 兼容修订已发布，Windows 保持原安装行为和公开安装包。本轮未增加 Linux 产品构建或验收。本地通过、源码推送与 Release 资产替换分别记录。
 
 ## 同类工具的安装方式
