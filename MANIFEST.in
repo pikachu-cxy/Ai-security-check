@@ -2,7 +2,6 @@ recursive-include tests/rules *.java *.xml *.py
 recursive-include samples/java-benchmarks *.java
 include scripts/test_rules.py
 include scripts/osv_fallback_acceptance.py
-include scripts/jeepay_triage_benchmark.py
 include scripts/benchmarks/rule_benchmark.py
 include scripts/progress_acceptance.py
 recursive-include tests/triage *.py *.json *.md
@@ -35,10 +34,18 @@ recursive-include tests/rule_program *.java *.xml *.txt *.json
 include scripts/rule_program_acceptance.py
 include tests/test_rule_program.py
 include tests/test_cursor_cleanup.py
-include docs/RULE_PROGRAM.md
-include docs/RULE_COVERAGE_MATRIX.md
+include docs/design/RULE_PROGRAM.md
+include docs/design/RULE_COVERAGE_MATRIX.md
 
 include scripts/task_review_v3_acceptance.py
 include tests/task_review/task_review_helpers.py
 include tests/task_review/test_task_review_acceptance_driver.py
 include tests/tasks/test_task_history_capacity.py
+include scripts/maintenance/check_repository_layout.py
+include tests/test_repository_layout.py
+recursive-include scripts/build *.py
+recursive-include scripts/release *.py
+recursive-include tests/distribution *.py
+recursive-include docs *.md *.json
+include scripts/README.md
+include tests/README.md

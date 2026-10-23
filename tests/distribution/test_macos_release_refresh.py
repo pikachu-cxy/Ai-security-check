@@ -9,8 +9,8 @@ import zipfile
 
 import pytest
 
-from scripts import refresh_macos_release as refresh
-from scripts import update_homebrew_formula as homebrew
+from scripts.release import refresh_macos_release as refresh
+from scripts.release import update_homebrew_formula as homebrew
 
 SOURCE = 'a' * 40
 OLD_SOURCE = 'b' * 40

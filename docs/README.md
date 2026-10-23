@@ -1,6 +1,6 @@
 # 项目文档
 
-更新日期：2026-10-22。先按目标选择一个入口；当前产品能力以 [0.3.9 产品覆盖](PRODUCT_COVERAGE.zh-CN.md)为准。
+更新日期：2026-10-23。先按目标选择一个入口；当前产品能力以 [0.3.9 产品覆盖](PRODUCT_COVERAGE.zh-CN.md)为准。
 
 ## 安装与使用
 
@@ -17,6 +17,7 @@
 | 恢复开发 | [项目上下文](PROJECT_CONTEXT.md)：产品职责与关键约束；[开发交接](DEVELOPMENT_HANDOFF.zh-CN.md)：接手步骤 |
 | 判断完成情况、安排后续 | [开发进度](DEVELOPMENT_PROGRESS.md)：证据与缺口；[近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)：后续顺序 |
 | 理解实现与维护契约 | [技术架构](ARCHITECTURE.md)、[设计导航](design/README.md) |
+| 维护脚本、测试与仓库引用 | [脚本导航](../scripts/README.md)、[测试导航](../tests/README.md)；迁移时同步校验调用路径、CI 和源码清单 |
 | 验证与诊断 | [链路验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)、[核查诊断](ARCHITECTURE_REVIEW_DIAGNOSIS.zh-CN.md)、[事务恢复](PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md) |
 | 协议与宿主兼容 | [v3 兼容边界](TASK_REVIEW_V3_ONLY.zh-CN.md)、[宿主支持](HOST_SUPPORT.md) |
 

@@ -7,10 +7,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts import make_release_metadata
-from scripts.prepare_release_assets import PLATFORMS, prepare
-from scripts.generate_winget_manifest import generate as winget
-from scripts.update_homebrew_formula import generate as homebrew
+from scripts.release import make_release_metadata
+from scripts.release.prepare_release_assets import PLATFORMS, prepare
+from scripts.release.generate_winget_manifest import generate as winget
+from scripts.release.update_homebrew_formula import generate as homebrew
 from scripts.maintenance.validate_manager_metadata import validate
 from security_runtime._version import __version__
 
@@ -30,7 +30,7 @@ def release_root(tmp_path, monkeypatch):
         (release / (name + ".verification.json")).write_text(json.dumps(record), encoding="utf-8")
         for suffix in ("hooks", "codex-integration", "osv-fallback", "fix-verify", "remediation", "confirmation-restart", "functional"):
             (release / (name + f".{suffix}.json")).write_text('{"fixture": true}', encoding="utf-8")
-    monkeypatch.setattr(make_release_metadata, "__file__", str(tmp_path / "scripts/make_release_metadata.py"))
+    monkeypatch.setattr(make_release_metadata, "__file__", str(tmp_path / "scripts/release/make_release_metadata.py"))
     monkeypatch.setattr(make_release_metadata.subprocess, "check_output", lambda *a, **kw: "a" * 40)
     make_release_metadata.main()
     manifest = release / "release-manifest.json"
@@ -116,7 +116,7 @@ def test_stale_verification_still_blocks_metadata(release_root):
 
 
 def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     jobs = workflow["jobs"]
     for job, needs in (("tests", "version"), ("compliance", "tests"), ("package", "compliance"), ("build", "package"), ("publish", "build")):

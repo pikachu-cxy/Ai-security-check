@@ -28,6 +28,6 @@ jobs:
       - name: Build source and wheel distributions
         run: python -m build
       - name: Verify wheel contents
-        run: python scripts/check_wheel.py
+        run: python scripts/build/check_wheel.py
       - name: Install wheel in a clean environment and verify CLI
-        run: python scripts/verify_package.py
+        run: python scripts/build/verify_package.py

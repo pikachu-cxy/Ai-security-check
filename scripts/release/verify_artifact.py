@@ -361,14 +361,14 @@ def verify_doctors(executable: Path, root: Path, project: Path, env: dict[str, s
 def verify_hook_acceptances(executable, root, env, archive, *, hooks, git_pre_commit, codex_integration):
     """Keep optional Git dispatch separate from the core Codex acceptance chain."""
     if hooks or git_pre_commit:
-        script = Path(__file__).with_name('hook_acceptance.py').resolve()
+        script = Path(__file__).resolve().parents[1] / 'hook_acceptance.py'
         evidence = archive.resolve().with_name(archive.name + '.hooks.json')
         command = [sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)]
         if git_pre_commit:
             command.append('--git-pre-commit')
         run(command, cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=360 if git_pre_commit else 180)
     if codex_integration:
-        script = Path(__file__).with_name('codex_integration_acceptance.py').resolve()
+        script = Path(__file__).resolve().parents[1] / 'codex_integration_acceptance.py'
         evidence = archive.resolve().with_name(archive.name + '.codex-integration.json')
         run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
             cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
@@ -505,7 +505,7 @@ def main() -> None:
                 # An explicit acceptance operation, after proving a healthy
                 # normal scan did not prepare the optional engine.
                 run([str(executable),'tools','install','osv-scanner'],cwd=project,env=env,timeout=180)
-                script=Path(__file__).with_name('osv_fallback_acceptance.py').resolve()
+                script=Path(__file__).resolve().parents[1] / 'osv_fallback_acceptance.py'
                 evidence=args.archive.resolve().with_name(args.archive.name+'.osv-fallback.json')
                 run([sys.executable,str(script),'--executable',str(executable),'--output',str(evidence)],cwd=root,env=env,timeout=120)
             plugin = Path(env["SECURITY_RUNTIME_PLUGIN_DIR"])
@@ -523,12 +523,12 @@ def main() -> None:
                 raise ValueError("Standalone external entry-point plugin discovery failed")
         mcp_tools = asyncio.run(verify_mcp(executable, root, project, env))
         if args.fix_verify:
-            script = Path(__file__).with_name('fix_verify_acceptance.py').resolve()
+            script = Path(__file__).resolve().parents[1] / 'fix_verify_acceptance.py'
             evidence = args.archive.resolve().with_name(args.archive.name + '.fix-verify.json')
             run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=fix_verification_timeout())
         if args.remediation:
-            script = Path(__file__).with_name('remediation_acceptance.py').resolve()
+            script = Path(__file__).resolve().parents[1] / 'remediation_acceptance.py'
             evidence = args.archive.resolve().with_name(args.archive.name + '.remediation.json')
             run([sys.executable, str(script), '--runtime', str(executable), '--output', str(evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=600)
@@ -538,7 +538,7 @@ def main() -> None:
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=480)
             # Existing artifact gate only: no new CI workflow/enterprise policy.
             # Unsupported isolation yields explicit Pending, never functional PASS.
-            functional_script = Path(__file__).with_name('functional_acceptance.py').resolve()
+            functional_script = Path(__file__).resolve().parents[1] / 'functional_acceptance.py'
             functional_evidence = args.archive.resolve().with_name(args.archive.name + '.functional.json')
             run([sys.executable,str(functional_script),'--runtime',str(executable),'--output',str(functional_evidence)],
                 cwd=root,env=dict(env,SECURITY_RUNTIME_OFFLINE='1'),timeout=480)

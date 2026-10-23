@@ -20,7 +20,7 @@ from security_runtime.managed_identity import (
     marker_content,
 )
 
-SCRIPT_PATH = Path(__file__).resolve().parents[1] / 'scripts/build_managed_wheel.py'
+SCRIPT_PATH = Path(__file__).resolve().parents[2] / 'scripts/build/build_managed_wheel.py'
 SPEC = importlib.util.spec_from_file_location('build_managed_wheel', SCRIPT_PATH)
 builder = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(builder)

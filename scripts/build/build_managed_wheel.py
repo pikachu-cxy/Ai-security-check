@@ -20,7 +20,7 @@ import sys
 import zipfile
 
 # Permit running this repository-owned build script before installing the wheel.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 
 from security_runtime.hook_state import no_links
 from security_runtime.managed_identity import (

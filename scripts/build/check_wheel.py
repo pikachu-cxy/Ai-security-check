@@ -134,7 +134,7 @@ def check(wheel: Path, project: Path) -> None:
 
 
 if __name__ == "__main__":
-    repository = Path(__file__).resolve().parents[1]
+    repository = Path(__file__).resolve().parents[2]
     wheels = list((repository / "dist").glob(f"ai_security_runtime-{__version__}-*.whl")) if len(sys.argv) == 1 else [Path(sys.argv[1])]
     if len(wheels) != 1:
         raise SystemExit("Expected exactly one wheel in dist/")

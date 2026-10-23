@@ -23,7 +23,7 @@ security-check = "security_runtime.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tests", "tests/guidance", "tests/task_review", "tests/tasks"]
+pythonpath = ["tests", "tests/guidance", "tests/task_review", "tests/tasks", "tests/distribution"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

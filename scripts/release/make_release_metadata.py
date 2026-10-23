@@ -13,7 +13,7 @@ REPOSITORY = "pikachu-cxy/Ai-security-check"
 
 
 def main() -> None:
-    release = Path(__file__).resolve().parents[1] / "dist" / "release"
+    release = Path(__file__).resolve().parents[2] / "dist" / "release"
     artifacts = {}
     lines = []
     source_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()

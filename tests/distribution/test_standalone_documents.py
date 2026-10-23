@@ -6,7 +6,7 @@ import shutil
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 EXPECTED_NAMES = {
     'CURSOR_INSTALL_AND_TEST.zh-CN.md',
     'PILOT_INSTALL_AND_USE.zh-CN.md',
@@ -25,8 +25,8 @@ EXPECTED_NAMES = {
 
 @pytest.fixture
 def builder(monkeypatch):
-    monkeypatch.syspath_prepend(str(ROOT / 'scripts'))
-    return runpy.run_path(str(ROOT / 'scripts/build_standalone.py'))
+    monkeypatch.syspath_prepend(str(ROOT / 'scripts/build'))
+    return runpy.run_path(str(ROOT / 'scripts/build/build_standalone.py'))
 
 
 def test_repository_documents_copy_to_stable_bundle_names(builder, tmp_path):

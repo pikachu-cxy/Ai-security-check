@@ -8,7 +8,7 @@ import shutil
 import pytest
 from pathlib import Path
 
-from scripts import verify_artifact
+from scripts.release import verify_artifact
 
 
 @pytest.mark.skipif(os.name != 'nt', reason='Real Git for Windows dispatcher')

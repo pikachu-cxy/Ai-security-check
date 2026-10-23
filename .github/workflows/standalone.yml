@@ -9,12 +9,12 @@ on:
       - 'src/**'
       - 'scripts/**'
       - 'distribution/**'
-      - 'tests/test_bootstrap_runtime.py'
-      - 'tests/test_macos_installation.py'
-      - 'tests/test_macos_artifact_budget.py'
-      - 'tests/test_macos_release_refresh.py'
+      - 'tests/distribution/test_bootstrap_runtime.py'
+      - 'tests/distribution/test_macos_installation.py'
+      - 'tests/distribution/test_macos_artifact_budget.py'
+      - 'tests/distribution/test_macos_release_refresh.py'
       - 'tests/test_node_host_preflight.py'
-      - 'tests/test_release_assets.py'
+      - 'tests/distribution/test_release_assets.py'
       - 'pyproject.toml'
       - '.github/workflows/standalone.yml'
       - '.github/workflows/tests.yml'
@@ -50,12 +50,12 @@ jobs:
           python-version: '3.12'
           cache: pip
       - run: python -m pip install -e ".[build-standalone]"
-      - run: python scripts/build_standalone.py
-      - run: python scripts/package_artifact.py --platform ${{ matrix.platform }}
+      - run: python scripts/build/build_standalone.py
+      - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
       - name: Verify native archive, MCP, and first managed scanner preparation
         shell: bash
         run: |
-          python scripts/verify_artifact.py --full --osv-fallback --fix-verify --hooks --remediation --codex-integration $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+          python scripts/release/verify_artifact.py --full --osv-fallback --fix-verify --hooks --remediation --codex-integration $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}
@@ -92,7 +92,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PYTHONPATH: src
           SOURCE_COMMIT: ${{ github.sha }}
-        run: python -m scripts.refresh_macos_release prepare --source-commit "$SOURCE_COMMIT"
+        run: python -m scripts.release.refresh_macos_release prepare --source-commit "$SOURCE_COMMIT"
       - name: Save old assets and exact proposed replacements before any release write
         uses: actions/upload-artifact@v4
         with:
@@ -123,7 +123,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_COMMIT: ${{ github.sha }}
-        run: python -m scripts.refresh_macos_release publish --source-commit "$SOURCE_COMMIT"
+        run: python -m scripts.release.refresh_macos_release publish --source-commit "$SOURCE_COMMIT"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

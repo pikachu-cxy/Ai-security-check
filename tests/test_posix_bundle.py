@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts import verify_artifact
+from scripts.release import verify_artifact
 from security_runtime.build_identity import STATE_SCHEMA
 from security_runtime.delivery import (
     CONTRACT, EXE, StableDelivery, bundle_link_name, encode, package_inventory,

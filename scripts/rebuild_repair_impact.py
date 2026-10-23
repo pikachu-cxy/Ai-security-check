@@ -30,8 +30,10 @@ import security_runtime
 if Path(security_runtime.__file__).resolve().parent != ROOT / 'src/security_runtime':
     raise SystemExit('The build environment must import this checkout through its local editable install.')
 
-from dependency_notices import preflight
-from build_standalone import STANDALONE_DOCUMENTS
+# Keep direct script execution independent of the third-party `build` package.
+sys.path.insert(0, str(ROOT))
+from scripts.build.dependency_notices import preflight
+from scripts.build.build_standalone import STANDALONE_DOCUMENTS
 from security_runtime.delivery import package_metadata
 from security_runtime.hook_state import no_links
 
@@ -65,7 +67,7 @@ REGRESSIONS = (
     'tests/test_agent_fix_ticket.py', 'tests/test_fix_context.py',
     'tests/test_hook_advice_feedback.py', 'tests/test_hook_user_feedback.py',
     'tests/test_check_operation_boundaries.py', 'tests/test_hook_reply_context.py',
-    'tests/test_bootstrap_recovery.py', 'tests/test_codex_host_claims.py',
+    'tests/distribution/test_bootstrap_recovery.py', 'tests/test_codex_host_claims.py',
     'tests/test_hook_dispositions.py', 'tests/guidance/test_host_feedback_contract.py',
     'tests/test_host_orchestration.py', 'tests/test_codex_code_mode_contract.py',
     'tests/test_review_mcp.py', 'tests/guidance/test_review_skill.py',
@@ -77,9 +79,9 @@ REGRESSIONS = (
     'tests/task_review/test_task_review_results.py', 'tests/test_review_evidence.py',
     'tests/test_local_evidence_comments.py', 'tests/test_post_fix_functional_prompt.py',
     'tests/test_functional_remediation.py',
-    'tests/test_personal_install.py', 'tests/test_distribution.py',
-    'tests/test_standalone_documents.py', 'tests/test_cli_json_encoding.py',
-    'tests/test_dependency_notices.py',
+    'tests/test_personal_install.py', 'tests/distribution/test_distribution.py',
+    'tests/distribution/test_standalone_documents.py', 'tests/test_cli_json_encoding.py',
+    'tests/distribution/test_dependency_notices.py',
 )
 SOURCE_PREFIXES = ('src/', 'distribution/', 'scripts/', 'tests/')
 SOURCE_NAMES = {'pyproject.toml', 'LICENSE', 'EULA.md', 'LICENSING.md',
@@ -487,7 +489,7 @@ def main(argv=None):
                 'No new candidate was built; latest was not updated.')
         same_inputs(snapshot, source_snapshot())
         stage = 'BUILD_STANDALONE'
-        command = [sys.executable, str(ROOT / 'scripts/build_standalone.py'),
+        command = [sys.executable, str(ROOT / 'scripts/build/build_standalone.py'),
             '--output-dir', 'dist/' + candidate, '--work-dir', 'build/' + candidate]
         if args.launcher_bundle is not None:
             command.extend(['--launcher-bundle', str(args.launcher_bundle.resolve(strict=True))])

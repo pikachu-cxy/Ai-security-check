@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts import refresh_release_v037 as refresh
+from scripts.release import refresh_release_v037 as refresh
 
 
 @pytest.fixture
@@ -118,7 +118,7 @@ def test_partial_upload_can_resume_only_known_original_or_staged_bytes(publicati
 
 
 def test_workflow_has_backup_gate_before_write_permission_and_pins_source():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     workflow = yaml.load((root / '.github/workflows/refresh-v037.yml').read_text(), Loader=yaml.BaseLoader)
     assert workflow['permissions'] == {'contents': 'read'}
     stage, publish = workflow['jobs']['stage'], workflow['jobs']['publish']

@@ -8,7 +8,7 @@ import pytest
 
 from security_runtime.rulepacks import RulePackManager
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
@@ -31,7 +31,7 @@ def check_wheel(wheel):
     with zipfile.ZipFile(path, 'w') as archive:
         for name, data in payload.items():
             archive.writestr(name, data)
-    runpy.run_path(str(ROOT / 'scripts/check_wheel.py'))['check'](path, ROOT)
+    runpy.run_path(str(ROOT / 'scripts/build/check_wheel.py'))['check'](path, ROOT)
 
 
 def test_current_source_rule_inventory_is_accepted(wheel):
@@ -59,7 +59,7 @@ def test_stale_or_modified_rule_payload_cannot_pass_wheel_gate(wheel, changed):
 
 
 def test_rule_release_contract_follows_validated_source_without_version_or_count_literals():
-    contract = runpy.run_path(str(ROOT / 'scripts/verify_package.py'))['rule_contract']
+    contract = runpy.run_path(str(ROOT / 'scripts/build/verify_package.py'))['rule_contract']
     pack = RulePackManager().resolve()
     original = contract(pack)
     upgraded = replace(pack, descriptor=replace(pack.descriptor, version='99.1.0'),
@@ -74,7 +74,7 @@ def test_rule_release_contract_follows_validated_source_without_version_or_count
 def test_install_verifier_passes_source_contract_to_isolated_interpreter(tmp_path, monkeypatch):
     import json
     from types import SimpleNamespace
-    namespace = runpy.run_path(str(ROOT / 'scripts/verify_package.py'))
+    namespace = runpy.run_path(str(ROOT / 'scripts/build/verify_package.py'))
     main = namespace['main']
     commands = []
 

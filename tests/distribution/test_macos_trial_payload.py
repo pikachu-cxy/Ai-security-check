@@ -7,8 +7,8 @@ import zipfile
 import pytest
 
 
-ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("trial_payload", ROOT / "scripts/build_macos_trial_payload.py")
+ROOT = Path(__file__).resolve().parents[2]
+spec = importlib.util.spec_from_file_location("trial_payload", ROOT / "scripts/build/build_macos_trial_payload.py")
 payload = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(payload)
 

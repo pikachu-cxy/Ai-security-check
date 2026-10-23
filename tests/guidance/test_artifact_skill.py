@@ -10,7 +10,7 @@ from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
 
 
 artifact_verifier = runpy.run_path(
-    str(Path(__file__).resolve().parents[2] / 'scripts' / 'verify_artifact.py')
+    str(Path(__file__).resolve().parents[2] / 'scripts/release/verify_artifact.py')
 )
 verify_skill_payload = artifact_verifier['verify_skill_payload']
 verify_host_instructions = artifact_verifier['verify_host_instructions']

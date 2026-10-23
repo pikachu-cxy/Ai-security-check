@@ -16,6 +16,9 @@ scan, repair and persistence boundaries. CLI and MCP public entrypoints remain
 | `tests/task_review/` | Task review regressions and shared review helpers |
 | `src/security_runtime/tasks/` | Task lifecycle, ownership, snapshots, immutable evidence, projection, risk handling and verification |
 | `tests/tasks/` | Task service regressions and the task-fix stdio fixture |
+| `tests/distribution/` | Wheel, native package, bootstrap, release and recovery regressions |
+| `scripts/build/` | Wheel and standalone construction, package contents and isolated installation verification |
+| `scripts/release/` | Native archive verification, release metadata, package-manager generators and controlled publication |
 | `scripts/maintenance/` | Repository content synchronization and metadata checks |
 | `scripts/benchmarks/` | Reproducible architecture, context, rule and scanner measurements |
 
@@ -35,6 +38,14 @@ protocol identifiers, quotas and MCP tool schemas do not change with this move.
 
 Further groups should follow actual dependencies, with imports, resource paths,
 CI, package manifests and callers migrated in the same batch.
+
+Repository maintenance commands and test isolation rules are documented in
+[scripts](../scripts/README.md) and [tests](../tests/README.md). The read-only
+`scripts/maintenance/check_repository_layout.py` checks Runtime imports in scripts
+and parseable embedded Python, workflow entrypoints, source-manifest paths and
+the maintained navigation links. It never executes the inspected code. Release
+verification resolves shared acceptance scripts from `scripts/`, independently
+of the verifier's own `release/` directory. Bundle document names remain stable.
 
 Risk handling separates four facts: technical assessment, the user's handling
 decision, effective reminder state and repair verification. `risk_disposition`

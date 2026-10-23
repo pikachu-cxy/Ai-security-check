@@ -12,7 +12,7 @@ import tarfile
 
 import pytest
 
-SOURCE = Path(__file__).resolve().parents[1] / "distribution/macos/managed_install.py"
+SOURCE = Path(__file__).resolve().parents[2] / "distribution/macos/managed_install.py"
 SPEC = importlib.util.spec_from_file_location("macos_managed_install", SOURCE)
 installer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(installer)

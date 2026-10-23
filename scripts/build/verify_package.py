@@ -27,7 +27,7 @@ def run(*command: str, cwd: Path) -> None:
 
 
 def main(wheel: Path | None = None, *, offline=False) -> None:
-    repository = Path(__file__).resolve().parents[1]
+    repository = Path(__file__).resolve().parents[2]
     expected_rules = rule_contract()
     wheels = [wheel.resolve()] if wheel else list((repository / "dist").glob(f"ai_security_runtime-{__version__}-*.whl"))
     if len(wheels) != 1:
@@ -68,7 +68,8 @@ for target, expected_ids in expected['plans'].items():
     plan = plan_rules(pack, [target])
     assert plan.files == (target,) and sorted(rule.rule_id for rule in plan.rules) == expected_ids, target
 assert any(rule.rule_id == 'ai-security.java.spring-named-jdbc' for rule in pack.catalog)
-from security_runtime import task_fix, equivalence, verification, verification_policy
+from security_runtime.tasks import fix as task_fix
+from security_runtime import equivalence, verification, verification_policy
 from security_runtime import hook_runtime, hook_state, hook_adapters
 for module in (hook_runtime, hook_state, hook_adapters):
     assert Path(module.__file__).resolve().is_relative_to(package)

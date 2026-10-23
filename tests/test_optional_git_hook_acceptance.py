@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts import verify_artifact
+from scripts.release import verify_artifact
 from security_runtime.cli import main
 
 

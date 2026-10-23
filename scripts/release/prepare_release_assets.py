@@ -89,7 +89,7 @@ def prepare(root: Path) -> tuple[Path, Path]:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args()
     public, notes = prepare(args.root)
     print(public)

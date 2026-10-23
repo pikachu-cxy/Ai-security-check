@@ -43,7 +43,7 @@ def verify(archive: Path, platform: str, output: Path) -> None:
                 raise ValueError("Unexpected archive entry")
             manifest = json.load(tar.extractfile("manifest.json"))
             (payload / "managed_install.py").write_bytes(tar.extractfile("managed_install.py").read())
-        repository = Path(__file__).resolve().parents[1]
+        repository = Path(__file__).resolve().parents[2]
         entry = json.loads((repository / "src/security_runtime/python_downloads.json").read_text())[platform]
         python_archive = base / "python.tar.gz"
         with urlopen(entry["url"], timeout=120) as response, python_archive.open("wb") as target:

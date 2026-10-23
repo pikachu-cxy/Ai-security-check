@@ -9,7 +9,7 @@ from security_runtime import dataflow
 
 
 def test_frozen_dataflow_source_identity_matches_development(tmp_path, monkeypatch):
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     hooks = ModuleType('PyInstaller.utils.hooks')
     hooks.collect_data_files = lambda *a, **k: []
     hooks.copy_metadata = lambda *a, **k: []

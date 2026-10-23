@@ -161,7 +161,7 @@ if __name__ == '__main__':
     parser.add_argument('action', choices=('wait', 'prepare', 'publish'))
     parser.add_argument('--root', type=Path, default=Path.cwd())
     args = parser.parse_args()
-    approval = json.loads((Path(__file__).resolve().parents[1] / 'distribution/releases/v0.3.7-refresh.json').read_text(encoding='utf-8'))
+    approval = json.loads((Path(__file__).resolve().parents[2] / 'distribution/releases/v0.3.7-refresh.json').read_text(encoding='utf-8'))
     validate_approval(approval)
     if args.action == 'wait':
         check_runs(approval, wait=True)

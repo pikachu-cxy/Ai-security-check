@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture
 def notices():
-    path = Path(__file__).resolve().parents[1] / 'scripts/dependency_notices.py'
+    path = Path(__file__).resolve().parents[2] / 'scripts/build/dependency_notices.py'
     spec = importlib.util.spec_from_file_location('dependency_notices_test', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -16,7 +16,7 @@ def notices():
 
 
 def distribution(tmp_path, *, version='0.13.0', label='UNKNOWN', text=None):
-    source = Path(__file__).resolve().parents[1] / 'src/security_runtime/licenses/javalang/LICENSE'
+    source = Path(__file__).resolve().parents[2] / 'src/security_runtime/licenses/javalang/LICENSE'
     license_file = tmp_path / 'javalang.dist-info/LICENSE.txt'
     license_file.parent.mkdir(exist_ok=True)
     license_file.write_bytes(source.read_bytes() if text is None else text)

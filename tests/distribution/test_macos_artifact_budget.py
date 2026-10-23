@@ -1,7 +1,7 @@
 """The Intel Mac harness allowance must not change Windows or product budgets."""
 import pytest
 
-from scripts import verify_artifact
+from scripts.release import verify_artifact
 
 
 @pytest.mark.parametrize('platform,expected', [

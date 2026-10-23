@@ -12,7 +12,10 @@ import stat
 from pathlib import Path
 
 from security_runtime._version import __version__
-from dependency_notices import inventory
+if __package__:
+    from .dependency_notices import inventory
+else:
+    from dependency_notices import inventory
 
 
 STANDALONE_DOCUMENTS = (
@@ -40,7 +43,7 @@ def copy_standalone_documents(root: Path, bundle: Path) -> None:
 
 def main(output_dir: Path | None = None, work_dir: Path | None = None,
          launcher_bundle: Path | None = None) -> None:
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     output = root / "dist" / "standalone" if output_dir is None else root / output_dir
     from security_runtime.hook_state import no_links
     no_links(output.absolute())

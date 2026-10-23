@@ -5,9 +5,9 @@ on:
     branches: [codex/release-v0.3.7-refresh]
     paths:
       - '.github/workflows/refresh-v037.yml'
-      - 'scripts/refresh_release_v037.py'
+      - 'scripts/release/refresh_release_v037.py'
       - 'distribution/releases/v0.3.7-refresh.json'
-      - 'tests/test_release_v037_refresh.py'
+      - 'tests/distribution/test_release_v037_refresh.py'
   workflow_dispatch:
 
 permissions:
@@ -42,8 +42,8 @@ jobs:
           PYTHONPATH: refresh-control
         run: |
           python -m pip install pytest PyYAML
-          python -m pytest -q refresh-control/tests/test_release_v037_refresh.py
-          python refresh-control/scripts/refresh_release_v037.py wait
+          python -m pytest -q refresh-control/tests/distribution/test_release_v037_refresh.py
+          python refresh-control/scripts/release/refresh_release_v037.py wait
       - uses: actions/download-artifact@v4
         with:
           github-token: ${{ github.token }}
@@ -54,17 +54,17 @@ jobs:
       - name: Prepare matching downloads, checksums, package-manager metadata and evidence
         run: |
           python -m pip install -e . jsonschema
-          python scripts/make_release_metadata.py
-          python scripts/update_homebrew_formula.py --manifest dist/release/release-manifest.json
-          python scripts/generate_winget_manifest.py --manifest dist/release/release-manifest.json
+          python scripts/release/make_release_metadata.py
+          python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
+          python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
           python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
           cp README.zh-CN.md dist/release/INSTALL.zh-CN.md
           cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
-          python scripts/prepare_release_assets.py
+          python scripts/release/prepare_release_assets.py
       - name: Verify exact old release identity and back up all replaced assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python refresh-control/scripts/refresh_release_v037.py prepare
+        run: python refresh-control/scripts/release/refresh_release_v037.py prepare
       - uses: actions/upload-artifact@v4
         with:
           name: release-v037-backup-and-staged-${{ github.sha }}
@@ -97,7 +97,7 @@ jobs:
       - name: Replace approved downloads and update source tag with a lease
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python refresh-control/scripts/refresh_release_v037.py publish
+        run: python refresh-control/scripts/release/refresh_release_v037.py publish
       - uses: actions/upload-artifact@v4
         if: always()
         with:

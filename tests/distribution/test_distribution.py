@@ -10,10 +10,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from scripts.generate_winget_manifest import generate as generate_winget
-from scripts.update_homebrew_formula import generate as generate_homebrew
+from scripts.release.generate_winget_manifest import generate as generate_winget
+from scripts.release.update_homebrew_formula import generate as generate_homebrew
 from scripts.maintenance.validate_manager_metadata import validate
-from scripts.check_wheel import check_python_modules
+from scripts.build.check_wheel import check_python_modules
 from security_runtime._version import __version__
 from security_runtime.cli import main
 from security_runtime.engines import BUILTIN_ENGINES
@@ -49,13 +49,13 @@ def test_runtime_version_and_semgrep_delivery(capsys):
     assert LicensePolicy.permission(MANAGED_PYTHON_LICENSE, LicenseAction.AUTO_DOWNLOAD) != Permission.NO
     assert LicensePolicy.permission(MANAGED_PYTHON_LICENSE, LicenseAction.BUNDLE) == Permission.NO
     assert LicensePolicy.permission(PYINSTALLER_BOOTLOADER_LICENSE, LicenseAction.BUNDLE) != Permission.NO
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     assert "PROPRIETARY LICENSE" in (root / "LICENSE").read_text(encoding="utf-8")
     assert FIRST_PARTY_RULE_PACK.license == "Apache-2.0"
 
 
 def test_current_install_examples_follow_single_version_source():
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     readme = (root / 'README.md').read_text(encoding='utf-8')
     guide = (root / 'docs/PILOT_INSTALL_AND_USE.zh-CN.md').read_text(encoding='utf-8')
     for platform, extension in [('windows-x64', '.zip'), ('macos-arm64', '.tar.gz'), ('macos-x64', '.tar.gz')]:

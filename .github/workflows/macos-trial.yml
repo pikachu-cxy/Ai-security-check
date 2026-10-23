@@ -8,12 +8,12 @@ on:
       - 'distribution/macos/**'
       - 'src/security_runtime/managed_identity.py'
       - 'src/security_runtime/build_identity.py'
-      - 'scripts/build_managed_wheel.py'
-      - 'scripts/build_macos_trial_payload.py'
-      - 'scripts/verify_macos_trial.py'
-      - 'tests/test_managed_wheel_identity.py'
-      - 'tests/test_macos_managed_install.py'
-      - 'tests/test_macos_trial_payload.py'
+      - 'scripts/build/build_managed_wheel.py'
+      - 'scripts/build/build_macos_trial_payload.py'
+      - 'scripts/release/verify_macos_trial.py'
+      - 'tests/distribution/test_managed_wheel_identity.py'
+      - 'tests/distribution/test_macos_managed_install.py'
+      - 'tests/distribution/test_macos_trial_payload.py'
       - '.github/workflows/macos-trial.yml'
 
 permissions:
@@ -43,16 +43,16 @@ jobs:
       - name: Check managed delivery boundaries
         run: |
           bash -n distribution/macos/install.sh
-          python -m pytest -q tests/test_managed_wheel_identity.py tests/test_macos_managed_install.py tests/test_macos_trial_payload.py tests/test_build_identity.py tests/test_standalone_identity.py
+          python -m pytest -q tests/distribution/test_managed_wheel_identity.py tests/distribution/test_macos_managed_install.py tests/distribution/test_macos_trial_payload.py tests/test_build_identity.py tests/distribution/test_standalone_identity.py
       - name: Build the immutable managed wheel
         run: |
           python -m build --wheel --outdir dist/wheel
-          python scripts/build_managed_wheel.py --wheel dist/wheel/*.whl --source-commit "$GITHUB_SHA" --output dist/managed
+          python scripts/build/build_managed_wheel.py --wheel dist/wheel/*.whl --source-commit "$GITHUB_SHA" --output dist/managed
       - name: Resolve binary dependencies and build offline payload
-        run: python scripts/build_macos_trial_payload.py --wheel dist/managed/*.whl --platform "${{ matrix.platform }}"
+        run: python scripts/build/build_macos_trial_payload.py --wheel dist/managed/*.whl --platform "${{ matrix.platform }}"
       - name: Verify both editor installations and repeat installation
         run: |
-          python scripts/verify_macos_trial.py \
+          python scripts/release/verify_macos_trial.py \
             --archive "dist/macos-trial/ai-security-runtime-macos-trial-${{ matrix.platform }}.tar.gz" \
             --platform "${{ matrix.platform }}" \
             --output "dist/macos-trial/acceptance-${{ matrix.platform }}.json"

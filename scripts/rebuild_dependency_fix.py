@@ -5,6 +5,7 @@ the repository's test/build dependencies into the selected Python environment.
 """
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,9 @@ import tempfile
 from datetime import datetime
 import uuid
 
-from dependency_notices import preflight
+# Resolve the repository namespace, not the third-party `build` package.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from scripts.build.dependency_notices import preflight
 
 
 TESTS = (
@@ -34,7 +37,7 @@ TESTS = (
     'tests/test_fix_context.py',
     'tests/tasks/test_task_triage.py',
     'tests/tasks/test_task_risk_feedback.py',
-    'tests/test_distribution.py',
+    'tests/distribution/test_distribution.py',
     'tests/test_finding_quality.py',
     'tests/test_hook_user_feedback.py',
     'tests/test_hook_advice_feedback.py',
@@ -53,7 +56,7 @@ TESTS = (
     'tests/guidance/test_host_feedback_contract.py',
     'tests/test_codex_mcp_hook.py',
     'tests/test_cli_json_encoding.py',
-    'tests/test_bootstrap_recovery.py',
+    'tests/distribution/test_bootstrap_recovery.py',
     'tests/test_global_startup_wait.py',
     'tests/test_global_integration.py',
     'tests/test_hook_readiness_feedback.py',
@@ -85,7 +88,7 @@ TESTS = (
     'tests/test_cursor_automatic.py',
     'tests/test_codex_host_claims.py',
     'tests/test_python_manifest.py',
-    'tests/test_dependency_notices.py',
+    'tests/distribution/test_dependency_notices.py',
     'tests/test_dependency_fallback.py',
     'tests/test_trivy_capabilities.py',
     'tests/test_quick_dependency_runtime.py',
@@ -94,7 +97,7 @@ TESTS = (
     'tests/test_preparation_download.py',
     'tests/test_adaptive_preparation_budget.py',
     'tests/test_background_preparation.py',
-    'tests/test_standalone_documents.py',
+    'tests/distribution/test_standalone_documents.py',
     'tests/test_compliance.py::ComplianceTests::test_all_builtin_engines_have_reviewed_metadata_and_notices',
 )
 
@@ -109,7 +112,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='ai-security-fix-tests-') as temporary:
         subprocess.run([sys.executable, '-m', 'pytest', '-q', '-p', 'no:cacheprovider', '--basetemp',
                         str(Path(temporary) / 'cases'), *TESTS], cwd=root, check=True)
-    subprocess.run([sys.executable, str(root / 'scripts/build_standalone.py'),
+    subprocess.run([sys.executable, str(root / 'scripts/build/build_standalone.py'),
                     '--output-dir', 'dist/' + candidate,
                     '--work-dir', 'build/' + candidate], cwd=root, check=True)
     bundle = root / 'dist' / candidate / 'security-check'
@@ -127,4 +130,5 @@ def main():
 
 
 if __name__ == '__main__':
+    argparse.ArgumentParser(description=__doc__).parse_args()
     main()

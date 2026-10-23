@@ -27,7 +27,7 @@ def main() -> None:
     actual = "-".join(platform_key())
     if args.platform != actual:
         raise ValueError(f"Cannot label {actual} build as {args.platform}")
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     bundle = root / "dist" / "standalone" / "security-check" if args.bundle is None else (root / args.bundle).absolute()
     from security_runtime.hook_state import no_links
     no_links(bundle)

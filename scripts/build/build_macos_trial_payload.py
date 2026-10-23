@@ -100,7 +100,7 @@ def main() -> None:
     parser.add_argument("--platform", choices=sorted(PLATFORMS), required=True)
     parser.add_argument("--output", type=Path, default=Path("dist/macos-trial"))
     args = parser.parse_args()
-    repository = Path(__file__).resolve().parents[1]
+    repository = Path(__file__).resolve().parents[2]
     with tempfile.TemporaryDirectory(prefix="macos-trial-wheels-") as directory:
         wheelhouse = Path(directory)
         # Resolve on the target macOS runner. Missing wheels fail the build;

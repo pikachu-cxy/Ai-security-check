@@ -128,7 +128,10 @@ def prepare(root, source, approval):
         artifacts={key: manifest['artifacts'][key] for key in MACS},
         apple_developer_id_and_notarization='NOT_CONFIGURED; NATIVE_CI_IS_NOT_GATEKEEPER_ACCEPTANCE')
     (staged / RECEIPT).write_text(json.dumps(receipt, indent=2) + '\n', encoding='utf-8')
-    from scripts.update_homebrew_formula import generate
+    if __package__:
+        from .update_homebrew_formula import generate
+    else:
+        from update_homebrew_formula import generate
     formula = work / 'ai-security-runtime.rb'
     generate(staged / 'release-manifest.json', formula)
     with zipfile.ZipFile(previous / EVIDENCE) as old, zipfile.ZipFile(staged / EVIDENCE, 'w', zipfile.ZIP_DEFLATED) as new:
@@ -225,7 +228,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if not re.fullmatch(r'[0-9a-f]{40}', args.source_commit):
         raise ValueError('A complete source commit is required')
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     approval = json.loads((root / 'distribution/releases/v0.3.6-macos-refresh.json').read_text(encoding='utf-8'))
     if approval['tag'] != TAG or approval['repository'] != REPOSITORY:
         raise ValueError('Unexpected refresh approval')

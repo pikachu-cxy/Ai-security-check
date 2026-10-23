@@ -113,9 +113,9 @@ flowchart TD
 | 全量回归 | 5021 个唯一用例：4978 passed、17 skipped、26 xfail；零失败、零错误、零收集错误，四片均 exit 0 |
 | 回执与身份 | 本地 `artifacts/architecture-final-20261019-runner/run-20261019-012537-03a78d9d/summary.json`；无重复用例、无运行中源码漂移 |
 | 冻结摘要 | `3f32d8a416c755c50e342b4edaf2a86eb0a9417f4e5e45cf30ebbdf778775bc6`，范围 src、scripts、tests、pyproject.toml |
-| 冻结后校验与格式整理 | scripts/verify_package.py 的规则包断言从过期 1.3.0 改为实际 1.3.2；另移除五个公共模块的多余 EOF 空行，逐文件确认仅尾部空行变化且 AST 相同。测试字节不变；最终 wheel 另作实际安装验证 |
+| 冻结后校验与格式整理 | scripts/build/verify_package.py 的规则包断言从过期 1.3.0 改为实际 1.3.2；另移除五个公共模块的多余 EOF 空行，逐文件确认仅尾部空行变化且 AST 相同。测试字节不变；最终 wheel 另作实际安装验证 |
 | 最终源码摘要 | `b66396e971124bd037eb7e08f1c17e7586bbaf4c40b30fc6466c3b8ea8300280`；范围同上，文档另随 Git 保存 |
-| wheel 隔离安装 | 正式 scripts/verify_package.py 离线验证通过：CLI、许可、56 项规则、7 个 Skill 文件与 6 个固定方法、v3 契约及隔离 Hook 安装/移除；未修改当前安装 |
+| wheel 隔离安装 | 正式 scripts/build/verify_package.py 离线验证通过：CLI、许可、56 项规则、7 个 Skill 文件与 6 个固定方法、v3 契约及隔离 Hook 安装/移除；未修改当前安装 |
 | Windows 候选 | 干净提交的独立构建与隔离 self-test stdio MCP 契约自检通过；具体身份如下 |
 
 固定输入与真实执行身份、短锁并发、跨进程崩溃恢复、账本旧 writer 围栏、历史只读、无工作区 admission 的指导读取、非法参数不回显、旧方法受管清理及用户修改保护均纳入此次全量。三个真实 MANAGED 性能用例也全部通过；跳过项及预期失败不计入通过数量。
