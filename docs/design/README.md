@@ -6,6 +6,7 @@
 | --- | --- |
 | 核心原则 | [架构决策](DECISIONS.md)、[扩展接口](EXTENDING.md) |
 | 开发核查 | [核查契约](SECURITY_REVIEW.md)、[任务设计](TASK_SECURITY_REVIEW_DESIGN.zh-CN.md)、[会话归属](TASK_SESSION_OWNERSHIP_20261016.md) |
+| 当前改造计划 | [V3 原文证据](RAW_SOURCE_EVIDENCE_V3_2026-10-23.zh-CN.md)、[统一扫描与风险归属](unified-scan-attribution-v1.md)、[任务收尾](task-closeout-v1.md)、[后台收尾与隔离](task-dispatch-isolation-v1.md) |
 | 运行及恢复 | [证据与恢复](RUNTIME_EVIDENCE_AND_RECOVERY.zh-CN.md)、[持久事务](../PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md) |
 | 修复与影响 | [修复授权](SMART_AUTO_REMEDIATION.md)、[影响评估](REPAIR_IMPACT_ASSESSMENT_DESIGN.zh-CN.md) |
 | 规则范围 | [当前产品语言覆盖](../PRODUCT_COVERAGE.zh-CN.md)、[历史规则基础](RULE_FOUNDATION.md)、[规则计划](RULE_PROGRAM.md)、[历史质量矩阵](RULE_COVERAGE_MATRIX.md)、[来源](RULE_SOURCE_INVENTORY.md) |

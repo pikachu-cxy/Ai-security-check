@@ -35,6 +35,7 @@ def secret_engine(tmp_path, monkeypatch):
     def execute(argv, cwd, timeout):
         from security_runtime.verification_policy import scanner_process_observed
         scanner_process_observed()
+        assert '--redact=0' in argv
         state['calls'] += 1
         target = Path(argv[2])
         files = [target] if target.is_file() else sorted(p for p in target.rglob('*') if p.is_file())
@@ -49,7 +50,8 @@ def secret_engine(tmp_path, monkeypatch):
                 'rules': [{'id': rule} for rule in state['rules']]}},
                 'results': [{'ruleId': item['RuleID'], 'locations': [{'physicalLocation': {
                     'artifactLocation': {'uri': item['File']},
-                    'region': {'startLine': 1, 'endLine': 1}}}]} for item in items]}]}
+                    'region': {'startLine': 1, 'endLine': 1,
+                               'snippet': {'text': 'fixture-canary'}}}}]} for item in items]}]}
         else:
             payload = items
         if not state['missing_report']:
@@ -137,10 +139,10 @@ def test_legacy_record_without_identity_remains_unconfirmed(secret_engine):
     assert all(r['status'] == 'INCONCLUSIVE' for r in recheck(secret_engine, findings, run))
 
 
-def test_proof_contains_no_source_or_credential_value(secret_engine):
+def test_match_is_preserved_while_execution_receipt_stays_source_free(secret_engine):
     findings, run = original(secret_engine)
     assert 'fixture-canary' not in json.dumps(asdict(run))
-    assert 'fixture-canary' not in json.dumps([asdict(f) for f in findings])
+    assert all(finding.evidence == 'fixture-canary' for finding in findings)
 
 
 def test_static_sarif_version_cannot_override_actual_executed_engine(secret_engine):

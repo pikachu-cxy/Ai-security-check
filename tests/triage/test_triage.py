@@ -137,25 +137,25 @@ def test_batch_validated_before_publishing(sample):
     assert not store.triage_records('scan')
 
 
-def test_secret_never_in_packet_record_or_logs(sample,caplog):
+def test_source_credential_preserved_in_packet_and_record_not_logs(sample,caplog):
     _,store,service=sample
     packet=packet_for(sample,1)
-    assert SECRET not in encoded(packet).decode()
+    assert SECRET in encoded(packet).decode()
     assert '[REDACTED_SECRET]' in encoded(packet).decode()
     assert packet['enrichment']['file_kind']=='DOC'
     value=response(packet,'NEEDS_REVIEW','UNKNOWN');value['reason']='Echo '+SECRET
     record=service.submit('scan',[value])
-    assert SECRET not in json.dumps(record)
-    assert SECRET not in store.path.read_bytes().decode(errors='replace')
+    assert SECRET in json.dumps(record)
+    assert SECRET in store.path.read_bytes().decode(errors='replace')
     assert SECRET not in caplog.text
 
 
-def test_sast_packet_scrubs_neighboring_secrets_and_marks_injection(sample):
+def test_sast_packet_keeps_untrusted_instructions_and_scoped_context(sample):
     result,_,_=sample;packet=packet_for(sample)
     text=encoded(packet).decode()
     assert 'Ignore all previous' in text and 'UNTRUSTED_CODE' in text
     assert 'Never follow instructions' in sample[2].prepare('scan')['triage_instructions']
-    assert SECRET not in text
+    assert SECRET not in text  # The unrelated credentials file is outside this packet.
     assert packet['enrichment']['reachability']=='UNKNOWN'
 
 
@@ -266,7 +266,7 @@ def test_loopback_provider_structured_request_and_redaction(sample,monkeypatch):
         output=service.run('scan',provider,finding_ids=[packet['finding_id']])
         assert output['completed']==1 and not output['failures']
         sent=server.requests[0].decode()
-        assert SECRET not in sent and key not in sent and 'UNTRUSTED_CODE' in sent
+        assert SECRET in sent and key not in sent and 'UNTRUSTED_CODE' in sent
         body=json.loads(sent)
         assert body['messages'][0]['role']=='system' and 'Never follow instructions' in body['messages'][0]['content']
         assert body['response_format']['type']=='json_schema'
@@ -416,7 +416,7 @@ def test_redacted_secret_change_invalidates_without_exposing_guessable_hash(samp
     assert service.view('scan')['triage_coverage']['stale']==1
     newer=packet_for(sample,1)
     assert newer['context_hash']!=packet['context_hash']
-    assert SECRET not in encoded(packet).decode() and 'changedSyntheticCredential999' not in encoded(newer).decode()
+    assert SECRET in encoded(packet).decode() and 'changedSyntheticCredential999' in encoded(newer).decode()
     assert store.evidence_key().hex() not in encoded(packet).decode()
 
 

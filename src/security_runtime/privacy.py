@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .models import Finding, ScanResult
-from .redactor import SecretRedactor
+from .diagnostics import evidence_text
 
 
 class ContextProvider(Protocol):
@@ -20,7 +20,7 @@ class LocalContextProvider:
             return ""
         lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
         start, end = max(0, finding.line_start - 6), min(len(lines), finding.line_end + 5)
-        return SecretRedactor().redact("\n".join(lines[start:end]))[:4000]
+        return evidence_text("\n".join(lines[start:end]), 4000)
 
 
 class CloudSyncAdapter(Protocol):
@@ -36,4 +36,4 @@ class DisabledCloudSync:
 
 
 class AIProvider(Protocol):
-    def generate_fix(self, finding: Finding, redacted_context: str) -> dict: ...
+    def generate_fix(self, finding: Finding, code_context: str) -> dict: ...

@@ -226,7 +226,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     explicit_audit.register(server, registry, application=application, runtime_engine=runtime_engine,
         hook_coordinator=hook_coordinator, remediation=remediation,
         include_functional_verification=include_functional_verification, check_scan=check_scan, event=event)
-    for task_tool_name in ('begin_security_task', 'prepare_task_risk_fix', 'cancel_task_risk_fix',
+    for task_tool_name in ('begin_security_task', 'switch_security_task', 'prepare_task_risk_fix', 'cancel_task_risk_fix',
+                           'prepare_task_workspace', 'get_task_isolation_capabilities',
+                           'get_task_closeout_status', 'wait_task_closeout', 'cancel_task_closeout',
                            'finish_security_task', 'prepare_task_security_review',
                            'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
                            'read_task_review_context', 'submit_task_security_review', 'get_task_security_review', 'get_task_risk_ledger',
@@ -259,6 +261,9 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)
     registry.observe_context_cost(workspace=binding.root if binding is not None else None)
+    if binding is not None:
+        from .task_closeout_worker import recover
+        recover(hook_coordinator.store, Path(binding.root))
     return server
 
 

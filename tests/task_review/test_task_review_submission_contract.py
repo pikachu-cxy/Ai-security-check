@@ -116,15 +116,21 @@ def test_optional_does_not_mean_explicit_null_is_accepted(field):
 
 
 @pytest.fixture
-def reviewing(service):
+def reviewing(service, monkeypatch):
     legacy, root, runtime = service
     core = HookCoordinator(runtime, legacy.hooks)
     server = create_server(runtime, hook_coordinator=core, global_mode=False)
     token = issue_session_ref(core.store, root, 'codex', 'submission-contract-chat')
     common = dict(workspace_path=str(root), session_ref=token)
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *a, **k:None)
     task = invoke(server, 'begin_security_task', task_key='submission-contract', **common)
     (root / 'routes.py').write_text('def get_order(order_id, user):\n    return load_order(order_id)\n')
     invoke(server, 'finish_security_task', task_ref=task['task_ref'], **common)
+    from security_runtime.tasks.queued_closeout import execute_one
+    from security_runtime.tasks.security import TaskSecurityService
+    from security_runtime.tasks.ownership import session_owner
+    execute_one(TaskSecurityService(runtime, legacy.hooks,
+        owner=session_owner('codex', 'submission-contract-chat')), root, task['task_ref'])
     packet = invoke(server, 'prepare_task_security_review', task_ref=task['task_ref'],
                     protocol_version=3, **common)
     data = dict(arguments(), task_ref=task['task_ref'], review_session=packet['review_session'], **common)

@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     triage_select.add_argument('--scan')
     triage_parser.add_argument('--path')
     triage_parser.add_argument('--provider',choices=['configured'])
-    triage_parser.add_argument('--allow-external-code-context',action='store_true',help='Authorize bounded redacted code context to configured external LLM')
+    triage_parser.add_argument('--allow-external-code-context',action='store_true',help='Authorize bounded original code context, including embedded credentials, to configured external LLM')
     triage_parser.add_argument('--category',choices=['code','secret','dependency'],action='append')
     triage_parser.add_argument('--severity',choices=['CRITICAL','HIGH','MEDIUM','LOW','UNKNOWN'],action='append')
     triage_parser.add_argument('--limit',type=int,default=20)
@@ -258,6 +258,14 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     worker_parser = sub.add_parser('preparation-worker', help=argparse.SUPPRESS)
     worker_parser.add_argument('--job', required=True)
     worker_parser.add_argument('--ticket', required=True)
+    task_worker = sub.add_parser('task-closeout-worker', help=argparse.SUPPRESS)
+    task_worker.add_argument('--workspace', required=True)
+    task_worker.add_argument('--hooks', required=True)
+    task_worker.add_argument('--ticket', required=True)
+    dispatcher = sub.add_parser('task-closeout-dispatcher', help=argparse.SUPPRESS)
+    dispatcher.add_argument('--once', action='store_true')
+    startup = sub.add_parser('task-dispatcher-startup', help='Manage automatic recovery at user login')
+    startup.add_argument('action', choices=['status', 'install', 'remove'], default='status', nargs='?')
     for preparation_command in ('prepare-scanners', 'prepare-installation'):
         preparation_parser = sub.add_parser(preparation_command,
             help='Prepare scanners and public vulnerability data independently of installation' if preparation_command == 'prepare-scanners' else argparse.SUPPRESS)
@@ -363,6 +371,16 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command == 'preparation-worker':
             from .background_preparation import run_worker
             return run_worker(args.job, args.ticket)
+        if args.command == 'task-closeout-worker':
+            from .task_closeout_worker import run_worker
+            return run_worker(args.workspace, args.hooks, args.ticket)
+        if args.command == 'task-closeout-dispatcher':
+            from .task_dispatcher import run
+            return run(once=args.once)
+        if args.command == 'task-dispatcher-startup':
+            from .task_dispatcher import autostart
+            print(json.dumps(autostart(args.action)))
+            return 0
         if args.command == 'preparation':
             from .background_preparation import read_preparation_status, start_background_preparation, watch_preparation, preparation_message
             data = (start_background_preparation() if args.action == 'retry' else
@@ -569,7 +587,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             from .triage_providers import AIConfig
             AIConfig(args.base_url,args.model,args.api_key_env,args.provider).save()
             print('BYOK 配置已保存，仅保存 API key 环境变量名。AI 默认关闭。')
-            print('将向外部 LLM Provider 发送经过限制和脱敏的代码上下文，用于安全 Finding 验证。')
+            print('将向外部 LLM Provider 发送限定范围的原文代码上下文（包括其中的凭据），用于安全 Finding 验证。')
             print('使用 triage --provider configured --allow-external-code-context 显式授权。')
             return 0
         if args.command=='triage':
@@ -590,7 +608,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             if args.provider:
                 if args.prepare: raise ValueError('Choose BYOK or agent-native prepare')
                 if not args.allow_external_code_context:
-                    raise ValueError('将向外部 LLM Provider 发送经过限制和脱敏的代码上下文。必须显式提供 --allow-external-code-context')
+                    raise ValueError('将向外部 LLM Provider 发送限定范围的原文代码上下文（包括其中的凭据）。必须显式提供 --allow-external-code-context')
                 provider=OpenAICompatibleProvider(AIConfig.load(),allow_external_code_context=True)
                 if args.no_progress: output=service.run(scan['scan_id'],provider,**selection)
                 else:

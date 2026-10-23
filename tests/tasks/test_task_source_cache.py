@@ -1,4 +1,4 @@
-"""Disposable sanitized caching cannot replace source or evidence checks."""
+"""Disposable source caching cannot replace source or evidence checks."""
 import copy
 from types import SimpleNamespace
 
@@ -21,7 +21,7 @@ def test_single_entry_is_version_bound_and_returns_independent_lists():
     body[0] = 'caller mutation'
     truncated.clear()
     assert cache.get(key()) == (['password = "[REDACTED_SECRET]"'], [1])
-    for other in (key(task='other'), key(version=1), key(path='other.py'),
+    for other in (key(task='other'), key(version=1), key(version=3), key(path='other.py'),
                   key(sha='changed'), key(session='other')):
         assert cache.get(other) is None
     cache.put(key(task='other'), ['new sanitized body'], [])
@@ -83,7 +83,7 @@ def test_new_services_reuse_sanitization_but_always_read_source_and_charge_deliv
     after_duplicate = restarted.load(root, ref)
 
     assert calls == dict(reads=3, sanitizations=1)
-    assert 'fixture-private-value' not in repr(first)
+    assert 'fixture-private-value' in repr(first)
     assert 'readable_0' in repr(first)
     assert second['start_line'] == 81 and len(second['lines']) == 80
     assert duplicate['status'] == 'ALREADY_DELIVERED'

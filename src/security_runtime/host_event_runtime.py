@@ -66,6 +66,14 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     observe('CLAIMS_VALID', **normalized)
     from .tasks.attribution import session_activity
     owner = dict(host=context.host, session=context.session_binding)
+    if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation != OperationClass.READ_ONLY:
+        from .tasks.activity import lightweight_focus, record_event
+        if lightweight_focus(coordinator.store, context.workspace, owner):
+            # New-policy tasks never acquire the scanner lane or rehash source
+            # on tool completion. The private ledger commits before this ACK.
+            recorded = record_event(event, coordinator.store)
+            if recorded is not None:
+                return recorded, None
     if event.kind != EventKind.SESSION_STOP:
         session_activity(coordinator.store, context.workspace, owner)
     if event.kind == EventKind.SESSION_STOP and continuation is not None:

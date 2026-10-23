@@ -136,29 +136,32 @@ def test_line_and_context_budgets(tmp_path):
     with pytest.raises(ValueError): LocalEvidenceService(scan).detail(finding, -1)
 
 
-def test_secret_never_read_and_adjacent_literals_redacted(tmp_path, monkeypatch):
+def test_secret_and_adjacent_literals_use_same_verified_source_revision(tmp_path):
     secret = 'syntheticCredentialLocalEvidence999'
     text = f'class App {{\n String password = "{secret}";\n Runtime.getRuntime().exec(cmd);\n token = "tiny";\n}}\n'
     _, finding, scan = fixture(tmp_path, text=text)
     result = LocalEvidenceService(scan).detail(finding)
-    assert secret not in json.dumps(result) and 'tiny' not in json.dumps(result)
+    assert secret in json.dumps(result) and 'tiny' in json.dumps(result)
     assert 'exec(cmd)' in result['original_evidence']['matched_code']
-    secret_finding = dict(finding, category='secret')
+    secret_finding = dict(finding, category='secret', line_start=2, line_end=2)
     scan['findings'].append(secret_finding)
-    def forbidden(*args):
-        raise AssertionError('Secret detail must not read any source')
-    monkeypatch.setattr(WorkspaceReader, 'read', forbidden)
     result = LocalEvidenceService(scan).detail(secret_finding)
-    assert result['reason'] == 'SECRET_REDACTED' and '[REDACTED_SECRET]' in json.dumps(result)
+    assert result['evidence_status'] == 'EXACT' and result['reason'] is None
+    assert secret in result['original_evidence']['matched_code']
+    assert result['redaction'] == 'NONE'
+    (tmp_path / 'src/App.java').write_text(text.replace(secret, 'new-synthetic-value'))
+    stale = LocalEvidenceService(scan).detail(secret_finding)
+    assert stale['evidence_status'] == 'STALE' and stale['original_evidence'] is None
+    assert 'new-synthetic-value' in stale['current_context']['matched_code']
 
 
 @pytest.mark.parametrize('text', ['String privateKey = """\nprivateLiteralMiddle\nprivateLiteralEnd\n""";\nrun(cmd);\n',
     '-----BEGIN PRIVATE KEY-----\nprivateKeyMiddle\nprivateKeyEnd\n-----END PRIVATE KEY-----\nrun(cmd);\n'])
-def test_multiline_secret_window_redaction(tmp_path, text):
+def test_multiline_secret_window_preserves_original_text(tmp_path, text):
     _, finding, scan = fixture(tmp_path, text=text)
     result = LocalEvidenceService(scan).detail(finding, 0)
     assert result['evidence_status'] == 'EXACT'
-    assert 'privateLiteral' not in json.dumps(result) and 'privateKey' not in json.dumps(result)
+    assert result['original_evidence']['matched_code'] == text.splitlines()[2]
 
 
 def test_opened_file_race_fails_before_read(tmp_path, monkeypatch):
@@ -174,8 +177,8 @@ def test_opened_file_race_fails_before_read(tmp_path, monkeypatch):
     assert 'OUTSIDE_MUST_NOT_BE_READ' not in json.dumps(result)
 
 
-def test_scanner_locator_and_actual_metadata_omit_source(tmp_path):
-    private = 'syntheticSourceSecretShouldNeverPersist'
+def test_scanner_locator_and_actual_metadata_keep_source(tmp_path):
+    private = 'syntheticSourceCredentialRemainsVisible'
     raw = dict(results=[dict(check_id='fixture.command', path='App.java',
         start=dict(line=2, col=4), end=dict(line=3, col=9), extra=dict(
         lines='requires login', fingerprint='requires login', message='Synthetic', severity='ERROR',
@@ -188,7 +191,23 @@ def test_scanner_locator_and_actual_metadata_omit_source(tmp_path):
     md = finding.technical_details['scanner_evidence_metadata']
     assert md['metavars']['$X']['start']['col'] == 5
     assert md['dataflow_trace']['taint_source'][0] == 'CliLoc'
-    assert private not in json.dumps(asdict(finding)) and str(tmp_path) not in json.dumps(md)
+    assert md['metavars']['$X']['abstract_content'] == private
+    assert md['dataflow_trace']['taint_source'][1]['content'] == private
+    assert private in json.dumps(asdict(finding)) and str(tmp_path) not in json.dumps(md)
+
+
+def test_scanner_source_metadata_keeps_text_but_retains_bounds_and_path_checks(tmp_path):
+    from security_runtime.local_evidence import scanner_evidence_metadata
+    raw = dict(metavars={'$TOKEN': dict(abstract_content='password = "synthetic-token"\x00')},
+               dataflow_trace=dict(taint_source=['CliLoc', dict(path='../outside.py',
+                    content='Authorization: Bearer synthetic-long-value')]))
+    result = scanner_evidence_metadata(raw, tmp_path)
+    assert result['metavars']['$TOKEN']['abstract_content'].startswith('password = "synthetic-token"')
+    assert '\x00' not in result['metavars']['$TOKEN']['abstract_content']
+    assert result['dataflow_trace']['taint_source'][1]['path'] == '[UNSAFE_PATH]'
+    assert result['dataflow_trace']['taint_source'][1]['content'] == 'Authorization: Bearer synthetic-long-value'
+    assert scanner_evidence_metadata(dict(metavars={'$X': 'x' * 16_000}), tmp_path) == {
+        'availability': 'SCANNER_METADATA_BUDGET_EXCEEDED'}
 
 
 def test_hydration_does_not_change_stored_scan_reviews_or_identity(tmp_path):
@@ -232,7 +251,7 @@ def test_private_export_local_evidence_leaves_database_intact(tmp_path, capsys):
     data = json.loads(baseline)
     assert data['local_evidence_summary']['status'] == dict(EXACT=1, STALE=0, MISSING=0, UNAVAILABLE=0)
     assert data['findings'][0]['observation_hash'] == original['observation_hash']
-    assert private not in baseline and store.path.read_bytes() == before
+    assert private in baseline and store.path.read_bytes() == before
     assert 'Runtime.getRuntime' not in capsys.readouterr().out
 
 

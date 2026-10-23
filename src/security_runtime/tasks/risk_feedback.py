@@ -6,11 +6,9 @@ verification, a renewed task review, or a change to the original risk status.
 from __future__ import annotations
 
 import copy
-import ast
 import hashlib
 import json
 import os
-import re
 from pathlib import PurePosixPath
 import time
 from threading import RLock
@@ -18,7 +16,8 @@ import uuid
 
 from ..local_evidence import WorkspaceReader, safe_source, EvidenceUnavailable
 from .risk_ledger import TaskRiskLedger, current_hashes, disposition_store, disposition_revision
-from ..feedback_redaction import quoted_literals as _quoted_literals
+from ..diagnostics import evidence_text
+from ..triage_evidence import SOURCE_PRESENTATION
 
 
 MAX_PACKET_BYTES = 32_000
@@ -45,74 +44,12 @@ def _policy():
             return None
         guide = method(PROTOCOL_VERSION)
         return _digest(dict(contract='task-risk-feedback-v1', build_id=build,
+            source_presentation=SOURCE_PRESENTATION,
             method_version=guide['version'], method_sha256=guide['sha256'],
             rule_identity='HOST_CONTEXT_REVIEW; NATIVE_RULES_NOT_APPLICABLE',
             excluded=os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '')))
     except (OSError, ValueError, KeyError):
         return None
-
-
-def _secret_ranges(record):
-    ranges = {}
-    for finding in (record.get('static') or {}).get('findings', []):
-        if finding.get('category') == 'secret':
-            ranges.setdefault(finding['file_path'], []).append(
-                (finding['line_start'], finding.get('line_end', finding['line_start'])))
-    return ranges
-
-
-def _known_secrets(root, record):
-    """Read bounded known-secret lines locally; never return them to the host."""
-    values, incomplete = set(), False
-    ranges = _secret_ranges(record)
-    if len(ranges) > MAX_PATHS:
-        incomplete = True
-    for path, spans in list(ranges.items())[:MAX_PATHS]:
-        if len(spans) > 20:
-            incomplete = True
-        try:
-            raw, text = WorkspaceReader(root).read(path)
-            if hashlib.sha256(raw).hexdigest() != record['end']['hashes'].get(path):
-                incomplete = True
-                continue
-            lines = text.splitlines()
-            for low, high in spans[:20]:
-                if high-low > 40:
-                    incomplete = True
-                for line in lines[max(0, low-1):min(high, low+40)]:
-                    if len(line) > 1000 or len(values)>64:
-                        incomplete = True
-                        continue
-                    if '`' in line:
-                        incomplete = True
-                        continue
-                    values.add(line.strip())
-                    for literal in _quoted_literals(line, strict=True):
-                        values.add(literal[1:-1])
-                        try:
-                            decoded = ast.literal_eval(literal)
-                            if isinstance(decoded, str):
-                                values.add(decoded)
-                        except (SyntaxError, ValueError):
-                            incomplete = True
-                    match = re.search(r'[:=]\s*([A-Za-z0-9_./+\-=]{8,})', line)
-                    if match:
-                        values.add(match.group(1))
-        except (OSError, ValueError, EvidenceUnavailable, UnicodeError):
-            incomplete = True
-    return {value for value in values if len(value)>=4}, incomplete
-
-
-def _scrub_known(value, secrets):
-    if isinstance(value, str):
-        for secret in sorted(secrets, key=len, reverse=True):
-            value = value.replace(secret, '[REDACTED_SECRET]')
-        return value
-    if isinstance(value, list):
-        return [_scrub_known(item, secrets) for item in value]
-    if isinstance(value, dict):
-        return {key: _scrub_known(item, secrets) for key, item in value.items()}
-    return value
 
 
 def _config(path):
@@ -226,16 +163,12 @@ class TaskRiskFeedbackService:
         root, record, _, rows, key, finding = self._load(service, workspace, task_ref, finding_id)
         row = rows[key]
         policy = _policy()
-        known_secrets, secret_context_unknown = _known_secrets(root, record)
-        secret_ranges = _secret_ranges(record)
         paths = row['required_source_paths']
         config_paths = sorted(path for path in record['end']['hashes'] if _config(path))
         configuration = _configuration_state(root)
         gaps = []
         if policy is None:
             gaps.append('RUNTIME_BUILD_OR_REVIEW_METHOD_UNAVAILABLE')
-        if secret_context_unknown:
-            gaps.append('KNOWN_SECRET_CONTEXT_UNAVAILABLE')
         if len(paths) > MAX_PATHS:
             gaps.append('SOURCE_PATH_LIMIT')
         if len(config_paths) > MAX_CONFIG_PATHS:
@@ -251,7 +184,7 @@ class TaskRiskFeedbackService:
             gaps.append('ORIGINAL_SOURCE_OR_CONFIGURATION_CHANGED')
         category = str(finding.get('category', '')).lower()
         if any(label in category for label in ('secret', 'credential', 'password', 'private_key', 'api_key')):
-            gaps.append('SECRET_VALUE_NOT_AVAILABLE_FOR_HOST_VERIFICATION')
+            gaps.append('CREDENTIAL_VALIDITY_NOT_VERIFIED')
         sources = []
         for path in paths[:MAX_PATHS]:
             locations = [location for location in finding.get('evidence_locations', [])
@@ -265,10 +198,7 @@ class TaskRiskFeedbackService:
             try:
                 raw, text = WorkspaceReader(root).read(path)
                 truncated = []
-                lines = safe_source(text, secret_ranges.get(path, []),
-                                    source_path=path, truncation_lines=truncated)
-                if any(start <= high and end >= low for start, end in secret_ranges.get(path, [])):
-                    gaps.append('KNOWN_SECRET_RANGE_MASKED:' + path)
+                lines = safe_source(text, source_path=path, truncation_lines=truncated)
                 high = min(high, len(lines))
                 digest = hashlib.sha256(raw).hexdigest()
                 if digest != anchors.get(path):
@@ -281,11 +211,12 @@ class TaskRiskFeedbackService:
                 sources.append(dict(path=path, start_line=low, end_line=high,
                     evidence_ref='tf-evidence-' + uuid.uuid4().hex,
                     numbered_lines=[f'{number}: {lines[number-1]}' for number in range(low, high+1)],
-                    trust='UNTRUSTED_SANITIZED_CURRENT_SOURCE'))
+                    trust='UNTRUSTED_CURRENT_SOURCE'))
             except (OSError, ValueError, EvidenceUnavailable, UnicodeError):
                 gaps.append('SOURCE_UNAVAILABLE:' + path)
         # The full packet, including original explanation, obeys one boundary.
         packet = dict(status='TASK_RISK_FEEDBACK_REVIEW_REQUIRED', task_ref=task_ref,
+            source_presentation=SOURCE_PRESENTATION,
             finding_id=finding_id, finding=_finding(finding), sources=sources,
             context_complete=not gaps, limitations=sorted(set(gaps)),
             feedback_ref='tfr1-' + uuid.uuid4().hex, expires_at=self.now()+TTL,
@@ -294,10 +225,6 @@ class TaskRiskFeedbackService:
             submission_contract=dict(verdict=['FALSE_POSITIVE', 'STILL_RISK', 'NEEDS_CONTEXT'],
                 required=['rationale', 'counterevidence', 'evidence_refs'],
                 rule='Only complete, unchanged issued source evidence can fold a host-confirmed false positive.'))
-        packet = _scrub_known(packet, known_secrets)
-        if secret_context_unknown:
-            packet['finding'] = dict(id=finding_id, title='原风险说明保留在本地；已知密钥位置无法核验，未返回自由文本。')
-            packet['sources'] = []
         while len(json.dumps(packet, ensure_ascii=False).encode()) > MAX_PACKET_BYTES and packet['sources']:
             packet['sources'].pop()
             packet.update(context_complete=False, limitations=['FEEDBACK_RESPONSE_LIMIT'])
@@ -340,15 +267,6 @@ class TaskRiskFeedbackService:
                 raise ValueError('Feedback evidence changed; prepare a fresh feedback review')
             from .security import _clean
             event = copy.deepcopy(event)
-            secrets, secret_context_unknown = _known_secrets(root, record)
-            event = _scrub_known(event, secrets)
-            if secret_context_unknown:
-                for field in ('rationale', 'reason'):
-                    if field in event:
-                        event[field] = '[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]'
-                for field in ('counterevidence', 'current_protections', 'unknowns'):
-                    if field in event:
-                        event[field] = ['[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]']
             for field in ('rationale', 'reason'):
                 if field in event:
                     event[field] = _clean(event[field], 1200)
@@ -499,9 +417,7 @@ class TaskRiskFeedbackService:
                     evidence_revision=None, metadata=dict(evidence_scope='HISTORY_REFERENCE',
                                                           material_change_confirmable=False))
                 row['disposition_scope'] = scope
-            secrets, unknown = _known_secrets(root, record)
-            safe_reason = ('[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]' if unknown
-                           else _scrub_known(reason, secrets))
+            safe_reason = evidence_text(reason, 1200)
             # Persist only locators/digests so reads can still identify the
             # selected issue when its original source later becomes unavailable.
             ledger.save(rows)

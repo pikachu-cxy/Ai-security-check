@@ -52,9 +52,8 @@ def _until(value):
 def _safe_reason(value):
     if not isinstance(value, str) or len(value) > 4000:
         raise ValueError('Reason must be a string of at most 4000 characters')
-    from .diagnostics import sanitize
-    from .redactor import SecretRedactor
-    return SecretRedactor().redact(sanitize(value, 4000))
+    from .diagnostics import evidence_text
+    return evidence_text(value, 4000)
 
 
 _TOKENS = re.compile(r'(?P<comment>//[^\r\n]*|/\*[\s\S]*?\*/)|'

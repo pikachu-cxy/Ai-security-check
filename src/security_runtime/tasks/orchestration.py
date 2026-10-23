@@ -79,7 +79,7 @@ def task_delivery_facts(record, *, scanner_run=None, recording='UNKNOWN',
     if intent not in {'TASK_FINAL_SUMMARY', 'TASK_CLOSEOUT'}:
         raise ValueError('Invalid task delivery intent')
     if recording not in {'UNKNOWN', 'RECORDED', 'ALREADY_RECORDED', 'FAILURE_MARKER_RECORDED', 'UNAVAILABLE',
-                         'NO_MUTATION', 'NOT_APPLICABLE', 'TASK_CLOSED',
+                         'NO_MUTATION', 'NOT_APPLICABLE', 'TASK_CLOSED', 'ACTIVITY_RECORDED',
                          'TASK_OWNER_MISMATCH', 'TASK_CHANGED'}:
         raise ValueError('Invalid task recording observation')
     # Facts retain the recorded protocol without treating history as executable.

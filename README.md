@@ -86,7 +86,7 @@ Matching version numbers do not guarantee matching builds. Installation, compone
 - One-step monitoring for the current Codex chat, with verified local session matching and HTML/JSON report export. Manual log selection is not required for this flow.
 - Separate reporting of chat tokens, observation time, and associated tool duration. Token use cannot reliably be split into development-only and security-only portions; unsupported measurements remain unknown.
 - Optional monitoring that can stop, fail, or be omitted from a source distribution without changing core scans, task review, or fix authorization. Keep managed installation packages intact.
-- Complete sanitized long-line evidence for new tasks, fragmented to fit response budgets. Historical evidence already lost by older tasks is not reconstructed.
+- Original source evidence for new tasks, including embedded credentials, with long lines fragmented to fit response budgets. Historical evidence already lost by older tasks is not reconstructed.
 - Existing guidance deduplication, compact summaries, explicit file scopes, and verified scan-result reuse. Reuse does not replace required review or authorize a fix.
 
 See the [changelog](website/en/reference/changelog.md) and [release workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml). A source commit or candidate build is not proof that a native bundle has been published.

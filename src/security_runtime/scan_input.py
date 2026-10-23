@@ -316,6 +316,7 @@ class CapturedScanInput:
     _inventory_reader: object = field(default=None, repr=False, compare=False)
     _limits: ScanInputLimits = field(default_factory=ScanInputLimits, repr=False, compare=False)
     _lifetime: _Lifetime = field(default_factory=_Lifetime, repr=False, compare=False)
+    _capture_root: Path | None = field(default=None, repr=False, compare=False)
 
     def _require_active(self):
         if not self._lifetime.active:
@@ -385,7 +386,7 @@ class CapturedScanInput:
             reason = 'SCAN_INPUT_CLOSED' if isinstance(error, ScanInputError) and error.reason_code == 'SCAN_INPUT_CLOSED' else 'SCAN_INPUT_VIEW_CHANGED'
             return InputApplicability(self.input_id, self.request.source_kind, 'UNVERIFIABLE', reason)
         try:
-            _verify_source(self)
+            _verify_source(self, source_root=self.request.workspace_root)
         except ScanInputError as error:
             return InputApplicability(self.input_id, self.request.source_kind, 'STALE', error.reason_code)
         except (OSError, ValueError, RuntimeError):
@@ -429,13 +430,14 @@ class CapturedScanInput:
             yield extended
 
 
-def _verify_source(view):
+def _verify_source(view, *, source_root=None):
     request = view.request
+    source_root = source_root or view._capture_root or request.workspace_root
     if request.source_kind == SourceKind.INDEX:
         if _index(view._git, view._limits)[0] != view._index_raw:
             raise ScanInputError('SCAN_INPUT_INDEX_CHANGED')
     else:
-        _absent(request.workspace_root, request.absent_files)
+        _absent(source_root, request.absent_files)
     if view._inventory_reader is not None and _inventory(view._inventory_reader) != view.source_inventory:
         raise ScanInputError('SCAN_INPUT_INVENTORY_CHANGED')
     rules = tuple(entry.path for entry in view.manifest if entry.role == 'RULES')
@@ -445,7 +447,7 @@ def _verify_source(view):
         checkpoint()
         if entry.role == 'ABSENT' or request.source_kind == SourceKind.INDEX and entry.role != 'RULES':
             continue
-        root = request.rules_path if entry.role == 'RULES' else request.workspace_root
+        root = request.rules_path if entry.role == 'RULES' else source_root
         raw = _read_file(root / entry.path, view._limits.file_bytes)
         if len(raw) != entry.size or not hmac.compare_digest(_digest(view._key, raw), entry.content_id):
             raise ScanInputError('SCAN_INPUT_SOURCE_CHANGED')
@@ -453,7 +455,7 @@ def _verify_source(view):
 
 @contextmanager
 def capture_scan_input(request, *, git=None, identity_key=None, private_parent=None,
-                       limits=None, inventory_reader=None, on_created=None, on_removed=None):
+                       limits=None, inventory_reader=None, on_created=None, on_removed=None, source_root=None):
     """Capture exact requested inputs; missing context never reads live later.
 
     A PROJECT caller supplies its bounded inventory reader to detect additions.
@@ -474,6 +476,12 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
     root = request.workspace_root.resolve(strict=True)
     if root != request.workspace_root or not root.is_dir():
         raise ScanInputError('SCAN_INPUT_WORKSPACE_INVALID')
+    copy_root = Path(source_root) if source_root is not None else root
+    no_links(copy_root)
+    if not copy_root.is_absolute() or not copy_root.is_dir():
+        raise ScanInputError('SCAN_INPUT_WORKSPACE_INVALID')
+    if source_root is not None and (request.source_kind != SourceKind.WORKTREE or inventory_reader is not None):
+        raise ScanInputError('SCAN_INPUT_FROZEN_SOURCE_MODE_INVALID')
     source_inventory = (_inventory(inventory_reader) if inventory_reader is not None
                         else tuple(sorted(request.source_paths)))
     if len(source_inventory) > limits.files or len(request.source_paths) + len(request.absent_files) > limits.files:
@@ -492,7 +500,7 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
         if any(name in index_values for name in request.absent_files):
             raise ScanInputError('SCAN_INPUT_ABSENCE_CHANGED')
     else:
-        _absent(root, request.absent_files)
+        _absent(copy_root, request.absent_files)
     with _private_directory(root, private_parent, on_created=on_created, on_removed=on_removed) as directory:
         lifetime = _Lifetime()
         try:
@@ -530,7 +538,7 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
                     retain(name, role, raw, oid=oid, mode=mode)
                 else:
                     try:
-                        raw = _read_file(root / name, limits.file_bytes)
+                        raw = _read_file(copy_root / name, limits.file_bytes)
                     except FileNotFoundError:
                         raise ScanInputError('SCAN_INPUT_REQUIRED_FILE_MISSING') from None
                     retain(name, role, raw)
@@ -550,7 +558,7 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
             view = CapturedScanInput(request, execution, 'si1-' + uuid.uuid4().hex,
                 _digest(key, _encode(serialized)), tuple(manifest), rules, source_inventory,
                 _key=key, _index_raw=index_raw, _git=git, _inventory_reader=inventory_reader,
-                _limits=limits, _lifetime=lifetime)
+                _limits=limits, _lifetime=lifetime, _capture_root=copy_root)
             _verify_source(view)
             view.assert_intact()
         except ScanInputError:

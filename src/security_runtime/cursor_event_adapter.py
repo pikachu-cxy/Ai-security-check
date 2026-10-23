@@ -214,6 +214,9 @@ class CursorHostEventAdapter:
         context = VerifiedHostContext('cursor', root, identity(os.path.normcase(str(root))),
             identity(session), None, self.capabilities, session)
         return NormalizedHostEvent(EVENTS[event], context, operation,
+            candidate_paths=((Path(arguments['file_path']).relative_to(root).as_posix(),)
+                             if event == 'afterFileEdit' else ()),
+            scope_unknown=event != 'afterFileEdit',
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
             stop_guard_active=arguments['loop_count'] > 0 if event == 'stop' else None)
 

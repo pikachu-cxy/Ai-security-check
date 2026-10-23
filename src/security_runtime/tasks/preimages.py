@@ -1,7 +1,7 @@
 """Private, immutable task preimages, separate from task/control JSON.
 
-Only the existing source sanitizer's output and private keyed comparison tokens
-are retained. A reference commits to the original bytes without retaining them;
+Source follows its recorded representation; new captures retain credential values.
+A reference commits to the original bytes and its stored representation;
 it is not authority to join another task. TaskSecurityService must still enforce
 its workspace/session ownership. Optional tokens never leave this private store.
 """
@@ -27,10 +27,11 @@ from ..hook_state import no_links
 from ..local_evidence import MAX_FILE_BYTES
 from ..local_evidence import _relative
 from ..local_evidence import safe_source
-from ..source_redaction import VERSION
+from ..source_redaction import VERSION, SUPPORTED_VERSIONS
 
 CONTRACT = 'task-preimage-v1'
 SOURCE = 'SANITIZED_WORKSPACE_BEFORE_TASK'
+RAW_SOURCE = 'WORKSPACE_SOURCE'
 REF = re.compile(r'ts1-[a-f0-9]{32}')
 SHA256 = re.compile(r'[a-f0-9]{64}')
 TTL = 24 * 3600
@@ -105,10 +106,20 @@ class TaskPreimageStore:
     One successful writer seals a task's preimages. Returned references become
     valid only after the writer context commits. Reads create no state.
     """
-    def __init__(self, hooks, root, *, now=time.time):
+    def __init__(self, hooks, root, *, now=time.time, namespace="legacy"):
         self.hooks, self.root, self.now = hooks, Path(root), now
         self.workspace_id = identity(os.path.normcase(str(self.root)))
-        self.path = hooks.workspace_directory(self.root) / 'task-preimages.db'
+        if namespace not in {'legacy', 'closeout', 'end'}:
+            raise ValueError('Invalid source store namespace')
+        self.ttl = TTL if namespace == 'legacy' else 30 * 86400
+        self.namespace = namespace
+        filename = {'legacy':'task-preimages.db', 'closeout':'task-closeout-preimages.db',
+                    'end':'task-end-versions.db'}[namespace]
+        self.path = hooks.workspace_directory(self.root) / filename
+
+    @property
+    def max_tasks(self):
+        return MAX_TASKS * 2 if self.namespace == 'end' else MAX_TASKS
 
     def _time(self):
         value = self.now()
@@ -147,6 +158,8 @@ class TaskPreimageStore:
             _fail('TASK_PREIMAGE_KEY_UNAVAILABLE')
         if len(key) != 32:
             _fail('TASK_PREIMAGE_KEY_UNAVAILABLE')
+        if self.namespace != 'legacy':
+            return hmac.new(key, ('task-preimage-namespace:'+self.namespace).encode(), hashlib.sha256).digest()
         return key
 
     def _writable(self):
@@ -190,9 +203,11 @@ class TaskPreimageStore:
             raise
 
     @contextmanager
-    def writer(self, task_ref):
+    def writer(self, task_ref, *, redaction_version=VERSION):
         """Atomically collect one immutable batch; never recapture a task later."""
         task_ref = _task_ref(task_ref)
+        if type(redaction_version) is not int or redaction_version not in SUPPORTED_VERSIONS:
+            _fail('TASK_PREIMAGE_REPRESENTATION_UNSUPPORTED')
         db = None
         writer = None
         try:
@@ -204,10 +219,10 @@ class TaskPreimageStore:
             self._share_bodies(db, key)
             if db.execute('SELECT 1 FROM task_preimage_batches WHERE task_ref=?', (task_ref,)).fetchone():
                 _fail('TASK_PREIMAGE_TASK_ALREADY_CAPTURED')
-            if db.execute('SELECT count(*) FROM task_preimage_batches').fetchone()[0] >= MAX_TASKS:
+            if db.execute('SELECT count(*) FROM task_preimage_batches').fetchone()[0] >= self.max_tasks:
                 _fail('TASK_PREIMAGE_TASK_COUNT_BUDGET')
-            db.execute('INSERT INTO task_preimage_batches VALUES(?,?,?)', (task_ref, created, created+TTL))
-            writer = _PreimageWriter(self, db, key, task_ref, created)
+            db.execute('INSERT INTO task_preimage_batches VALUES(?,?,?)', (task_ref, created, created+self.ttl))
+            writer = _PreimageWriter(self, db, key, task_ref, created, redaction_version)
             yield writer
             if writer.closed:
                 _fail('TASK_PREIMAGE_STORE_UNAVAILABLE')
@@ -237,8 +252,8 @@ class TaskPreimageStore:
         """
         rows = db.execute('SELECT task_ref,path,CASE WHEN length(metadata)<=? THEN metadata END,mac '
                           'FROM task_preimages WHERE length(body)>0 LIMIT ?',
-                          (MAX_REFERENCE_BYTES, MAX_TASKS*MAX_TASK_FILES+1)).fetchall()
-        if len(rows) > MAX_TASKS*MAX_TASK_FILES:
+                          (MAX_REFERENCE_BYTES, self.max_tasks*MAX_TASK_FILES+1)).fetchall()
+        if len(rows) > self.max_tasks*MAX_TASK_FILES:
             _fail('TASK_PREIMAGE_FILE_COUNT_BUDGET')
         for task, path, raw_metadata, mac in rows:
             if not isinstance(raw_metadata, str) or len(raw_metadata.encode()) > MAX_REFERENCE_BYTES:
@@ -284,15 +299,16 @@ class TaskPreimageStore:
             metadata = {k: v for k, v in reference.items() if k != 'mac'}
             valid = (metadata['contract'] == CONTRACT and metadata['workspace_id'] == self.workspace_id
                 and metadata['task_ref'] == task_ref and metadata['path'] == path
-                and metadata['raw_sha256'] == expected_hash and metadata['source'] == SOURCE
-                and type(metadata['redaction_version']) is int and metadata['redaction_version'] in {1, VERSION}
+                and metadata['raw_sha256'] == expected_hash
+                and type(metadata['redaction_version']) is int and metadata['redaction_version'] in SUPPORTED_VERSIONS
+                and metadata['source'] == (RAW_SOURCE if metadata['redaction_version'] == VERSION else SOURCE)
                 and isinstance(metadata['body_sha256'], str) and SHA256.fullmatch(metadata['body_sha256'])
                 and type(metadata['body_bytes']) is int and 0 < metadata['body_bytes'] <= MAX_FILE_BODY_BYTES
                 and type(metadata['line_count']) is int and 0 <= metadata['line_count'] <= MAX_FILE_BYTES
                 and type(metadata['created_at']) in (int, float) and math.isfinite(metadata['created_at'])
                 and metadata['created_at'] >= 0
                 and type(metadata['expires_at']) in (int, float) and math.isfinite(metadata['expires_at'])
-                and metadata['expires_at'] == metadata['created_at']+TTL
+                and metadata['expires_at'] == metadata['created_at']+self.ttl
                 and isinstance(reference['mac'], str) and SHA256.fullmatch(reference['mac'])
                 and hmac.compare_digest(reference['mac'], digest(key, metadata)))
         except (TypeError, ValueError, OverflowError, RecursionError):
@@ -434,9 +450,10 @@ class TaskPreimageStore:
 
 
 class _PreimageWriter:
-    def __init__(self, store, db, key, task_ref, created):
+    def __init__(self, store, db, key, task_ref, created, redaction_version):
         self.store, self.db, self.key = store, db, key
         self.task_ref, self.created, self.closed = task_ref, created, False
+        self.redaction_version = redaction_version
         self.references = {}
         self.task_bytes = 0
         self.workspace_bytes = db.execute('SELECT coalesce(sum(length(body)),0) FROM task_preimage_blobs').fetchone()[0]
@@ -458,16 +475,17 @@ class _PreimageWriter:
                 _fail('TASK_PREIMAGE_SOURCE_REJECTED')
             truncated = []
             lines = safe_source(raw_bytes.decode('utf-8-sig'), source_path=path,
-                                truncation_lines=truncated, max_line_chars=None)
+                                truncation_lines=truncated, max_line_chars=None,
+                                redaction_version=self.redaction_version)
         except UnicodeError:
             _fail('TASK_PREIMAGE_SOURCE_REJECTED')
         return path, lines, truncated
 
     def put_source(self, path, raw_bytes):
-        """Prepare and persist trusted sanitizer output once at this boundary.
+        """Prepare and persist the recorded source representation once.
 
-        Raw bytes stay ephemeral.  Callers cannot supply alleged sanitized
-        content, and receive only the existing authenticated reference plus
+        Callers cannot supply a different body from the selected representation,
+        and receive only the existing authenticated reference plus
         line numbers needed to report display truncation.
         """
         path, lines, truncated = self._prepare_source(path, raw_bytes)
@@ -476,8 +494,7 @@ class _PreimageWriter:
 
     def put(self, path, raw_bytes, sanitized_lines):
         path, expected, _ = self._prepare_source(path, raw_bytes)
-        # Defense in depth: callers cannot accidentally persist unredacted
-        # arguments merely by labelling them sanitized_lines.
+        # Verify the body against original bytes and the selected representation.
         if not _valid_lines(sanitized_lines) or sanitized_lines != expected:
             _fail('TASK_PREIMAGE_SANITIZATION_UNVERIFIED')
         return self._put_sanitized(path, raw_bytes, sanitized_lines)
@@ -514,7 +531,8 @@ class _PreimageWriter:
         metadata = dict(contract=CONTRACT, workspace_id=self.store.workspace_id,
             task_ref=self.task_ref, path=path, raw_sha256=raw_hash,
             body_sha256=_sha(body), body_bytes=len(body), line_count=len(sanitized_lines),
-            source=SOURCE, redaction_version=VERSION, created_at=self.created, expires_at=self.created+TTL)
+            source=RAW_SOURCE if self.redaction_version == VERSION else SOURCE,
+            redaction_version=self.redaction_version, created_at=self.created, expires_at=self.created+self.store.ttl)
         mac = digest(self.key, metadata)
         reference = dict(metadata, mac=mac)
         if len(encode(reference)) > MAX_REFERENCE_BYTES:
@@ -522,7 +540,7 @@ class _PreimageWriter:
         try:
             self.db.execute('INSERT OR IGNORE INTO task_preimage_blobs VALUES(?,?)', (body_hash, body))
             self.db.execute('INSERT INTO task_preimages VALUES(?,?,?,?,?,?,?)',
-                (self.task_ref, path, self.created, self.created+TTL, encode(metadata).decode(), mac, b''))
+                (self.task_ref, path, self.created, self.created+self.store.ttl, encode(metadata).decode(), mac, b''))
             self._put_semantics(path, raw_bytes, sanitized_lines, reference)
         except sqlite3.Error:
             # A full disk or SQLite rollback must invalidate the whole writer,
@@ -537,7 +555,8 @@ class _PreimageWriter:
     def _put_semantics(self, path, raw_bytes, sanitized_lines, reference):
         from . import preimage_fingerprints as fingerprints
         proof = fingerprints.make_proof(self.key, self.store.workspace_id, self.task_ref, path,
-                                       raw_bytes, sanitized_lines=sanitized_lines)
+                                       raw_bytes, sanitized_lines=sanitized_lines,
+                                       redaction_version=self.redaction_version)
         body = fingerprints.encode_proof(proof)
         metadata = dict(contract=fingerprints.CONTRACT, workspace_id=self.store.workspace_id,
             task_ref=self.task_ref, path=path, raw_sha256=reference['raw_sha256'],
@@ -555,6 +574,6 @@ class _PreimageWriter:
             # optional proof must not displace the original source body.
             return
         self.db.execute('INSERT INTO task_preimage_semantics VALUES(?,?,?,?,?,?,?)',
-            (self.task_ref, path, self.created, self.created+TTL, encoded_metadata.decode(), mac, body))
+            (self.task_ref, path, self.created, self.created+self.store.ttl, encoded_metadata.decode(), mac, body))
         self.proof_bytes += row_bytes
         self.workspace_proof_bytes += row_bytes

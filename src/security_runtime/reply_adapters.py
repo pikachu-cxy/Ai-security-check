@@ -191,7 +191,7 @@ def history_facts(record, selected, *, current=True, feedback=None,
         feedback=(item['detail'].get('feedback') or {}),
         choice_required=delivery and (item['source'] == 'HOST_TASK_REVIEW'
                                      or bool((record.get('static') or {}).get('scan_id'))))
-        for item in selected if item.get('details_complete'))
+        for item in selected if item.get('details_complete') and not item['detail'].get('prior_report'))
     # Historical pages retain the complete explanations in their existing
     # fields. They never imply a fresh check or replay a repair prompt.
     return ReplyFacts('TASK_DELIVERY' if delivery else 'HISTORY', facts.check, risks,

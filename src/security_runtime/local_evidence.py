@@ -9,7 +9,7 @@ import stat
 
 from .finding_quality import relative_file
 from .redactor import SecretRedactor
-from .source_redaction import VERSION, redact_source
+from .source_redaction import VERSION, SUPPORTED_VERSIONS, redact_source
 
 MAX_FILE_BYTES = 1_000_000
 MAX_LINES = 80
@@ -184,12 +184,12 @@ def legacy_safe_source(text, secret_ranges=(), source_path=None, *, truncation_l
 
 def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=None,
                 redaction_version=VERSION, max_line_chars=MAX_LINE_CHARS):
-    """Redact credentials before optional display slicing.
+    """Prepare source under its recorded representation before display slicing.
 
-    ``None`` keeps complete sanitized task evidence within the caller's file
+    ``None`` keeps complete task evidence within the caller's file
     and delivery budgets. Ordinary finding excerpts retain the default cap.
     """
-    if type(redaction_version) is not int or redaction_version not in {1, VERSION}:
+    if type(redaction_version) is not int or redaction_version not in SUPPORTED_VERSIONS:
         raise ValueError('Unsupported source redaction policy')
     _line_budget(max_line_chars)
     if redaction_version == 1:
@@ -199,9 +199,9 @@ def safe_source(text, secret_ranges=(), source_path=None, *, truncation_lines=No
     tokens = (_HASH_SOURCE_TOKENS if path is not None and
         (path.suffix.lower() in _HASH_COMMENT_SUFFIXES or path.name.lower() == 'dockerfile')
         else _SOURCE_TOKENS)
-    lines = redact_source(text, tokens, source_path).splitlines()
+    lines = (text if redaction_version == VERSION else redact_source(text, tokens, source_path)).splitlines()
     for index, line in enumerate(lines, 1):
-        if any(start <= index <= end for start, end in secret_ranges):
+        if redaction_version != VERSION and any(start <= index <= end for start, end in secret_ranges):
             lines[index-1] = '[REDACTED_SECRET]'
         else:
             if (truncation_lines is not None and max_line_chars is not None
@@ -223,12 +223,13 @@ def evidence_locator(finding):
 
 
 def scanner_evidence_metadata(extra, workspace):
-    """Retain actual trace/metavariable structure, never persist matched source.
+    """Retain bounded scanner trace/metavariable structure and source text.
 
-    Scanner-provided locations are data, not proof of path authorization. Text
-    payloads are omitted; detail requests rehydrate only the finding's own file.
+    Scanner-provided locations are data, not proof of path authorization. Detail
+    requests still rehydrate only the finding's own verified local file.
     """
     import json
+    from .diagnostics import evidence_text
     selected = {key: extra[key] for key in ('metavars', 'dataflow_trace') if key in extra}
     if len(json.dumps(selected).encode('utf-8')) > 16_000:
         return {'availability': 'SCANNER_METADATA_BUDGET_EXCEEDED'}
@@ -251,7 +252,7 @@ def scanner_evidence_metadata(extra, workspace):
                     return _relative(value)
                 except EvidenceUnavailable:
                     return '[UNSAFE_PATH]'
-            return value if value in ('CliLoc', 'CliCall', 'CliVar') else '[OMITTED_SCANNER_TEXT]'
+            return evidence_text(value, 16_000)
         return value
     return clean(selected)
 
@@ -273,13 +274,10 @@ class LocalEvidenceService:
             raise ValueError('Context lines must be between 0 and 20')
         output = dict(evidence_status='UNAVAILABLE', reason=None, locator=None,
             original_evidence=None, current_context=None, trust='UNTRUSTED_CODE',
-            redaction='Credential values and known secret ranges; ordinary literals and comments retained')
+            redaction='NONE', source_representation_version=VERSION)
         try:
             locator = evidence_locator(finding)
             output['locator'] = locator
-            if finding['category'] == 'secret':
-                output.update(reason='SECRET_REDACTED', original_evidence=dict(matched_code='[REDACTED_SECRET]'))
-                return output  # Never read secret findings back into MCP evidence.
             raw, text = WorkspaceReader(self.scan['target_profile']['path']).read(locator['relative_path'])
             current_hash = hashlib.sha256(raw).hexdigest()
             expected = locator['file_sha256']

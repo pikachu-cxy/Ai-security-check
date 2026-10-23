@@ -74,7 +74,8 @@ def _adapter_identity(adapter):
     return result
 
 
-def capture_reuse_identity(registry, root, *, files, context_files=(), selected=None):
+def capture_reuse_identity(registry, root, *, files, context_files=(), selected=None,
+                           mode=ScanMode.RELEASE, source_root=None):
     """Read bounded local proof inputs; never install/update data or run scans.
 
     Tool resolution may validate an engine version. The execution identity hashes
@@ -90,8 +91,9 @@ def capture_reuse_identity(registry, root, *, files, context_files=(), selected=
     if build.get('status') not in {'DEV', 'IDENTIFIED'} or not build.get('build_id'):
         raise _ProofUnavailable('BUILD_IDENTITY_UNVERIFIABLE')
     detector = TargetDetector()
-    profile = detector.detect(root, list(files), select_scan_targets=True)
-    context = ScanContext(str(root), ScanMode.RELEASE, tuple(files),
+    source = Path(source_root) if source_root is not None else root
+    profile = detector.detect(source, list(files), select_scan_targets=True)
+    context = ScanContext(str(source), mode, tuple(files),
                           context_files=tuple(context_files), logical_root=str(root))
     if selected is None:
         _, selected = ScannerPlanner(registry).plan(profile, context)
@@ -153,6 +155,7 @@ def capture_reuse_identity(registry, root, *, files, context_files=(), selected=
                         raise _ProofUnavailable('PROVIDER_DATA_IDENTITY_UNVERIFIABLE')
             providers.append(value)
     return {'workspace': os.path.normcase(str(root)), 'build': build,
+            'source_presentation': 'RAW_V3',
             'platform': [platform.system(), platform.machine()],
             'discovery': {'exclusions': sorted(detector.ignored), 'max_files': detector.max_files,
                 'max_directories': detector.max_directories, 'max_depth': detector.max_depth,

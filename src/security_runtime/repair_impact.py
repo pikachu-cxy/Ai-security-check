@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import hmac
 import math
 import os
 from pathlib import Path
@@ -113,79 +112,6 @@ class RepairImpactService:
                 windows.append(value)
         return sources, windows, truncated
 
-    def _known_secrets(self, resolved):
-        """Ephemeral exact-value scrub; matched credentials never enter metadata."""
-        values = set()
-        ranges = resolved.get('secret_ranges', {})
-        require(isinstance(ranges, dict) and len(ranges) <= MAX_FILES,
-                'REPAIR_IMPACT_SOURCE_UNRESOLVED')
-        for name, spans in ranges.items():
-            name = path(name)
-            require(isinstance(spans, (list, tuple)) and len(spans) <= 64,
-                    'REPAIR_IMPACT_SOURCE_UNRESOLVED')
-            try:
-                _, raw_text = self.reader.read(name)
-            except (OSError, ValueError):
-                raise RepairImpactError('REPAIR_IMPACT_SECRET_CONTEXT_UNAVAILABLE') from None
-            lines = raw_text.splitlines()
-            for span in spans:
-                require(isinstance(span, (list, tuple)) and len(span) == 2 and
-                        all(type(n) is int for n in span) and 1 <= span[0] <= span[1] <= len(lines),
-                        'REPAIR_IMPACT_SOURCE_UNRESOLVED')
-                for line in lines[span[0]-1:span[1]]:
-                    values.update(re.findall(r'[\"\']([^\"\'\r\n]{4,})[\"\']', line))
-                    match = re.search(r'[:=]\s*([^\s,;]{4,})', line)
-                    if match:
-                        values.add(match.group(1).strip('\"\''))
-        return sorted((v for v in values if len(v) >= 4), key=len, reverse=True)
-
-    def _scrub(self, value, secrets, field=None):
-        if isinstance(value, str):
-            if field not in {'file_path', 'evidence_refs', 'kind', 'decision', 'proposal_revision'}:
-                for secret in secrets:
-                    value = value.replace(secret, '[REDACTED_SECRET]')
-            return value
-        if isinstance(value, list):
-            return [self._scrub(v, secrets, field) for v in value]
-        if isinstance(value, dict):
-            return {k:self._scrub(v, secrets, k) for k,v in value.items()}
-        return value
-
-    def _secret_markers(self, values):
-        require(len(values) <= 128, 'REPAIR_IMPACT_SECRET_CONTEXT_CAPACITY')
-        key = self.store._key()
-        return [dict(size=len(v), digest=hmac.new(key, v.encode(), hashlib.sha256).hexdigest())
-                for v in values if len(v) <= 800]
-
-    def _scrub_marked(self, value, markers, field=None):
-        if isinstance(value, str):
-            if field in {'file_path', 'evidence_refs', 'kind', 'decision', 'proposal_revision'}:
-                return value
-            key, spans, by_size = self.store._key(), [], {}
-            for marker in markers:
-                by_size.setdefault(marker['size'], set()).add(marker['digest'])
-            for size, fingerprints in by_size.items():
-                for offset in range(max(0, len(value)-size+1)):
-                    token = value[offset:offset+size]
-                    if hmac.new(key, token.encode(), hashlib.sha256).hexdigest() in fingerprints:
-                        spans.append((offset, offset+size))
-            # Merge overlaps before replacement so one secret substring cannot
-            # shift another replacement into previously unmasked source text.
-            merged = []
-            for start, end in sorted(spans):
-                if merged and start <= merged[-1][1]:
-                    merged[-1][1] = max(end, merged[-1][1])
-                else:
-                    merged.append([start, end])
-            for start, end in reversed(merged):
-                value = value[:start]+'[REDACTED_SECRET]'+value[end:]
-            return value
-        if isinstance(value, list):
-            return [self._scrub_marked(v, markers, field) for v in value]
-        if isinstance(value, dict):
-            return {k:self._scrub_marked(v, markers, k) for k,v in value.items()}
-        return value
-
     def _record(self, db, ref, *, owned=True):
         require(isinstance(ref, str) and re.fullmatch(r'ria1-[a-f0-9]{32}', ref),
                 'REPAIR_IMPACT_REFERENCE_INVALID')
@@ -200,7 +126,8 @@ class RepairImpactService:
 
     def _fresh(self, record):
         now = self._time()
-        if now < record['created_at'] or now > record['material_expires_at']:
+        if (record.get('source_presentation') != 'RAW_V3'
+                or now < record['created_at'] or now > record['material_expires_at']):
             return False
         try:
             resolved = self._resolve(record['source'])
@@ -281,8 +208,9 @@ class RepairImpactService:
                     ('source_bytes', 'navigation_bytes', 'control_bytes', 'reads', 'category_limits')},
             capacity_required=bool(record.get('capacity_required')))
         out['superseded'] = cycle['latest'] != record['assessment_ref']
-        out['redaction'] = 'CONSERVATIVE_LITERALS_AND_KNOWN_SECRET_RANGES'
-        out['limitations'] = ['Hidden literal values and unread context cannot prove behavior preservation.',
+        out['redaction'] = 'NONE' if record.get('source_presentation') == 'RAW_V3' else 'LEGACY_SAVED_CONTENT'
+        out['source_presentation'] = record.get('source_presentation', 'LEGACY_SAVED_CONTENT')
+        out['limitations'] = ['Unread context cannot prove behavior preservation.',
                               'Accepted host analysis is not a scanner or compatibility proof.']
         rows = ([dict(row_type='IMPACT', **v) for v in record['impacts']] +
                 [dict(row_type='UNKNOWN', **v) for v in record['unknowns']] +
@@ -316,8 +244,6 @@ class RepairImpactService:
     def prepare(self, source, proposal):
         source, proposal = clean_source(source), clean_proposal(proposal)
         resolved = self._resolve(source)
-        secrets = self._known_secrets(resolved)
-        proposal = self._scrub(proposal, secrets)
         data, windows, truncated = self._sources(resolved, proposal)
         binding = resolved['binding']
         proposal_revision = digest(proposal)
@@ -357,7 +283,7 @@ class RepairImpactService:
                 proposal_revision=proposal_revision, source_hashes={n:v[0] for n,v in data.items()},
                 required_windows=windows, document_reasons={c['file_path']:c['reason'] for c in proposal['changes']},
                 evidence={}, impacts=[], unknowns=[], coverage='PARTIAL', business_choice=previous_choice,
-                secret_markers=self._secret_markers(secrets),
+                source_presentation='RAW_V3',
                 submitted=False, created_at=now, material_expires_at=now+MATERIAL_SECONDS,
                 activity_expires_at=now+ACTIVITY_SECONDS, last_progress_at=now, resumes=0,
                 truncated_ranges={n:[line for line in cuts if any(w['file_path'] == n and
@@ -418,7 +344,7 @@ class RepairImpactService:
             packet = dict(contract=CONTRACT, assessment_ref=assessment_ref, evidence_ref=ref,
                 file_path=name, file_sha256=sha, start_line=start_line, end_line=stop,
                 numbered_lines=[f'{n}: {lines[n-1]}' for n in range(start_line,stop+1)],
-                trust='UNTRUSTED_SANITIZED_CURRENT_SOURCE', repair_authorized=False,
+                trust='UNTRUSTED_CURRENT_SOURCE', repair_authorized=False,
                 next_range=dict(file_path=name, start_line=stop+1, end_line=high) if stop<high else None)
             while wire_bytes(packet) > RESPONSE_BYTES and stop > start_line:
                 stop -= 1
@@ -460,8 +386,6 @@ class RepairImpactService:
             if fresh and coverage != 'PARTIAL':
                 self._active(record)
             impacts, unknowns = reasoning(impacts, unknowns, record['evidence'])
-            markers = record.get('secret_markers', [])
-            impacts, unknowns = self._scrub_marked(impacts, markers), self._scrub_marked(unknowns, markers)
             require(coverage == 'PARTIAL' or bool(impacts), 'REPAIR_IMPACT_ANALYSIS_REQUIRED')
             if business_choice is not None:
                 require(isinstance(business_choice, dict) and set(business_choice) ==

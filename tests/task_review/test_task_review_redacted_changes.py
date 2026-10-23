@@ -1,4 +1,4 @@
-"""Real task/MCP handlers must retain hidden changes without exporting proofs.
+"""Real task/MCP handlers deliver credential changes without exporting proofs.
 
 Only the scanner is a deterministic fixture. Baselines, private preimages,
 planning, source delivery, submission and signed persistence use real services.
@@ -16,6 +16,16 @@ from task_review_helpers import read_plan, read_window
 
 
 PRIVATE_VALUE = 'acceptance-private-credential-473b8e69'
+
+
+def _closeout(tasks, root, ref):
+    from security_runtime.tasks.ownership import record_owner
+    from security_runtime.tasks.queued_closeout import enqueue, execute_one
+    from security_runtime.tasks.security import TaskSecurityService
+    owner = record_owner(tasks.load(root, ref))
+    worker = TaskSecurityService(tasks.runtime, tasks.hooks, owner=owner)
+    enqueue(worker, root, ref, launch=False)
+    execute_one(worker, root, ref)
 
 
 def _call(server, name, **arguments):
@@ -42,7 +52,7 @@ def _prepare(sample, *, hidden=False, visible=True, comment=False, missing_old_p
     base = dict(workspace_path=str(root))
     ref = _call(server, 'begin_security_task', **base, task_key='redacted-changes')['task_ref']
     baseline = tasks.load(root, ref)['baseline']
-    private = tasks.preimages(root)
+    private = tasks.preimages(root, tasks.load(root, ref))
     before = private.read_semantic_proof(ref, 'mixed.py', baseline['hashes']['mixed.py'],
                                         baseline['preimages']['mixed.py'])
     assert before['complete']
@@ -51,13 +61,14 @@ def _prepare(sample, *, hidden=False, visible=True, comment=False, missing_old_p
     after = private.semantic_proof(ref, 'mixed.py', path.read_bytes())
     assert after['complete']
     commitments = set(before['semantic_lines'].values()) | set(after['semantic_lines'].values())
-    assert commitments
+    assert not commitments
     if missing_old_proof:
         with sqlite3.connect(private.path) as connection:
             connection.execute('DELETE FROM task_preimage_semantics WHERE task_ref=? AND path=?', (ref, 'mixed.py'))
         unavailable = private.read_semantic_proof(ref, 'mixed.py', baseline['hashes']['mixed.py'],
                                                   baseline['preimages']['mixed.py'])
         assert unavailable['complete'] is False
+    _closeout(tasks, root, ref)
     packet = _call(server, 'prepare_task_security_review', **base, task_ref=ref, protocol_version=3)
     assert packet['status'] == 'REVIEW_REQUIRED' and packet['protocol_version'] == 3
     return server, tasks, root, runtime, ref, packet, commitments
@@ -92,8 +103,6 @@ def _covers(requirements, version, line):
 
 def _private_absent(value, commitments):
     serialized = json.dumps(value, ensure_ascii=False, sort_keys=True)
-    if PRIVATE_VALUE in serialized or "role_token = 'old'" in serialized or "role_token = 'new'" in serialized:
-        pytest.fail('Original hidden source escaped the public/control boundary.')
     if any(item in serialized for item in commitments):
         pytest.fail('A private semantic commitment escaped the sidecar boundary.')
     def check_keys(item):
@@ -114,8 +123,8 @@ def _database_private_absent(tasks, root, ref, commitments):
     assert row
     _private_absent(json.loads(row[0]), commitments)
     # The private semantic table is the sole permitted location for semantic
-    # HMACs. The ordinary preimage body and its existing reference stay sanitized.
-    with sqlite3.connect(tasks.preimages(root).path) as connection:
+    # HMACs. New preimage bodies retain original source values.
+    with sqlite3.connect(tasks.preimages(root, tasks.load(root, ref)).path) as connection:
         rows = connection.execute('SELECT r.metadata,CASE WHEN length(r.body)>0 THEN r.body ELSE b.body END '
             'FROM task_preimages r LEFT JOIN task_preimage_blobs b '
             "ON b.sha256=json_extract(r.metadata,'$.body_sha256') WHERE r.task_ref=?", (ref,)).fetchall()
@@ -152,7 +161,7 @@ def _complete(prepared):
     return batch, history, requirements, delivered
 
 
-def test_mixed_hidden_and_visible_changes_require_both_versions_and_keep_semantic_gap(service):
+def test_mixed_credentials_and_other_changes_require_both_versions_without_semantic_gap(service):
     prepared = _prepare(service, hidden=True)
     server, tasks, root, _, ref, packet, _ = prepared
     _, requirements = _windows(server, root, ref, packet)
@@ -160,13 +169,14 @@ def test_mixed_hidden_and_visible_changes_require_both_versions_and_keep_semanti
         assert _covers(requirements, version, 2), 'Hidden semantic change line was omitted.'
         assert _covers(requirements, version, 124), 'Distant visible change line was omitted.'
     record = tasks.load(root, ref)
-    assert any(unit['evidence_gaps'] for unit in record['review_plan']['units'])
+    assert not any(unit['evidence_gaps'] for unit in record['review_plan']['units'])
     batch, history, requirements, delivered = _complete(prepared)
-    assert delivered and batch['coverage'] == 'PARTIAL'
-    assert history['host_review']['coverage'] == 'PARTIAL'
-    assert history['context_read_coverage']['plan_gap_count'] > 0
+    assert delivered and batch['coverage'] == 'REVIEWED'
+    assert history['host_review']['coverage'] == 'REVIEWED'
+    assert history['context_read_coverage']['plan_gap_count'] == 0
     notes = json.dumps(history['host_review']['limitations'], ensure_ascii=False)
-    assert 'mixed.py' in notes and '脱敏' in notes
+    assert '脱敏' not in notes
+    assert PRIVATE_VALUE in json.dumps(delivered)
 
 
 @pytest.mark.parametrize('case', ['visible_only', 'comment_only'])
@@ -178,17 +188,17 @@ def test_unchanged_hidden_literal_and_comment_edit_do_not_permanently_block_revi
     assert history['context_read_coverage']['plan_gap_count'] == 0
 
 
-def test_missing_old_private_proof_never_uses_visible_hunk_as_complete_semantic_coverage(service):
+def test_unredacted_source_does_not_require_a_private_hidden_value_proof(service):
     prepared = _prepare(service, hidden=True, missing_old_proof=True)
     batch, history, requirements, _ = _complete(prepared)
     for version in ('BEFORE_TASK', 'CURRENT_TASK_END'):
         assert _covers(requirements, version, 2)
         assert _covers(requirements, version, 124)
-    assert batch['coverage'] == 'PARTIAL'
-    assert history['host_review']['coverage'] == 'PARTIAL'
-    assert history['context_read_coverage']['plan_gap_count'] > 0
+    assert batch['coverage'] == 'REVIEWED'
+    assert history['host_review']['coverage'] == 'REVIEWED'
+    assert history['context_read_coverage']['plan_gap_count'] == 0
     notes = json.dumps(history['host_review']['limitations'], ensure_ascii=False)
-    assert 'mixed.py' in notes and '定位' in notes
+    assert '定位' not in notes
 
 
 def _prepare_credential_change(sample, name, current_literal, *, comment_only=False):
@@ -200,7 +210,7 @@ def _prepare_credential_change(sample, name, current_literal, *, comment_only=Fa
     base = dict(workspace_path=str(root))
     ref = _call(server, 'begin_security_task', **base, task_key='credential-clear')['task_ref']
     baseline = tasks.load(root, ref)['baseline']
-    private = tasks.preimages(root)
+    private = tasks.preimages(root, tasks.load(root, ref))
     before = private.read_semantic_proof(ref, 'demo.ts', baseline['hashes']['demo.ts'],
                                         baseline['preimages']['demo.ts'])
     current = (source.replace('before comment', 'after comment') if comment_only else
@@ -209,6 +219,7 @@ def _prepare_credential_change(sample, name, current_literal, *, comment_only=Fa
     after = private.semantic_proof(ref, 'demo.ts', path.read_bytes())
     assert before['complete'] and after['complete']
     commitments = set(before['semantic_lines'].values()) | set(after['semantic_lines'].values())
+    _closeout(tasks, root, ref)
     packet = _call(server, 'prepare_task_security_review', **base, task_ref=ref, protocol_version=3)
     return server, tasks, root, runtime, ref, packet, commitments
 
@@ -227,16 +238,16 @@ def test_v3_cleared_credential_has_readable_empty_value_and_no_hidden_change_gap
     assert current and before
     assert f'export const {name} = {empty};' in '\n'.join(
         line for item in current for line in item['lines'])
-    assert PRIVATE_VALUE not in json.dumps(delivered)
+    assert PRIVATE_VALUE in json.dumps(before)
 
 
 @pytest.mark.parametrize('name', ['demoToken', 'token'])
-def test_v3_different_hidden_credential_still_forces_partial(service, name):
+def test_v3_different_credential_is_visible_and_fully_reviewable(service, name):
     prepared = _prepare_credential_change(service, name, f"'{PRIVATE_VALUE}-replacement'")
     batch, history, _, _ = _complete(prepared)
-    assert batch['coverage'] == 'PARTIAL'
-    assert history['host_review']['coverage'] == 'PARTIAL'
-    assert history['context_read_coverage']['plan_gap_count'] > 0
+    assert batch['coverage'] == 'REVIEWED'
+    assert history['host_review']['coverage'] == 'REVIEWED'
+    assert history['context_read_coverage']['plan_gap_count'] == 0
 
 
 def test_v3_unchanged_hidden_credential_and_comment_edit_remains_reviewable(service):

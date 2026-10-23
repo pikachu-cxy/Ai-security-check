@@ -73,7 +73,18 @@ class CodexEventAdapter:
                           identity(turn) if turn else None)
             except Exception:
                 pass  # Optional attribution never changes validated Hook behavior.
+        candidates = ()
+        inputs = arguments.get('tool_input')
+        if expected == 'PostToolUse' and isinstance(inputs, dict):
+            value = inputs.get('file_path') or inputs.get('path')
+            if isinstance(value, str):
+                path = Path(value)
+                try:
+                    candidates = ((path.relative_to(root).as_posix() if path.is_absolute() else value),)
+                except ValueError:
+                    pass
         return NormalizedHostEvent(self.events[expected], context, operation,
+            candidate_paths=candidates, scope_unknown=not bool(candidates),
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
             stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
 

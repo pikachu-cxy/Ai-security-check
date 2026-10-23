@@ -80,23 +80,32 @@ def test_delivered_code_still_needs_reasoning_submission(service):
     assert tasks.load(root, ref)['phase'] == 'REVIEWING'
 
 
-def test_masked_semantics_do_not_excuse_another_unread_file(service):
+def test_credential_unknowns_do_not_excuse_another_unread_file(service):
     tasks, root, _ = service
-    (root / 'masked.py').write_text("password = 'synthetic-old-credential'\n")
-    ref = tasks.begin(root, 'masked-and-readable')['task_ref']
-    (root / 'masked.py').write_text("password = 'synthetic-new-credential'\n")
+    before = "password = 'synthetic-old-credential'"
+    current = "password = 'synthetic-new-credential'"
+    (root / 'credential.py').write_text(before + '\n')
+    ref = tasks.begin(root, 'credential-and-readable')['task_ref']
+    (root / 'credential.py').write_text(current + '\n')
     (root / 'unread.py').write_text('policy.enforce(subject)\n')
     packet = tasks.prepare(root, ref, protocol_version=3)
     units, _ = read_plan(tasks, root, ref, packet)
-    masked = next(unit for unit in units if unit['path'] == 'masked.py')
-    review_units(tasks, root, ref, packet, [masked])
-    assert tasks.load(root, ref)['review_plan']['units'][0]['evidence_gaps']
-    result = tasks.submit(root, ref, packet['review_session'], [], 'PARTIAL', ['Masked values remain unknown.'])
+    credential = next(unit for unit in units if unit['path'] == 'credential.py')
+    delivered = {}
+    for window in credential['required_windows']:
+        frames = read_window(tasks, root, ref, packet['review_session'], window)
+        delivered.setdefault(window['location_version'], []).extend(
+            line for frame in frames for line in frame.get('lines', []))
+    assert delivered['BEFORE_TASK'] == [before]
+    assert delivered['CURRENT_TASK_END'] == [current]
+    tasks.submit_batch(root, ref, packet['review_session'], [credential['unit_id']], 'REVIEWED', [])
+    assert not any(unit['evidence_gaps'] for unit in tasks.load(root, ref)['review_plan']['units'])
+    result = tasks.submit(root, ref, packet['review_session'], [], 'PARTIAL', ['Credential validity remains unknown.'])
     assert result['status'] == 'REVIEW_CONTINUE_REQUIRED'
     assert result['next_action']['file_path'] == 'unread.py'
     review_all(tasks, root, ref, packet)
-    result = tasks.submit(root, ref, packet['review_session'], [], 'PARTIAL', ['Masked values remain unknown.'])
-    assert result['result_saved'] and result['review_progress']['coverage'] == 'PARTIAL'
+    result = tasks.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])
+    assert result['result_saved'] and result['review_progress']['coverage'] == 'REVIEWED'
 
 
 def test_unavailable_before_source_does_not_excuse_current_source(service, monkeypatch):

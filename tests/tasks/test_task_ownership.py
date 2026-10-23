@@ -167,7 +167,8 @@ def test_signed_session_ref_rejects_tampering_expiry_and_other_workspace(service
     assert set(legacy.hooks.directory.rglob('*'))==before
 
 
-def test_signed_session_survives_mcp_reconnect_without_new_baseline(service):
+def test_signed_session_survives_mcp_reconnect_without_new_baseline(service, monkeypatch):
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *a: None)
     legacy,root,runtime=service;core=HookCoordinator(runtime,legacy.hooks)
     token=own.issue_session_ref(core.store,root,'codex','same-chat')
     a=create_server(runtime,hook_coordinator=core,global_mode=False)
@@ -179,12 +180,17 @@ def test_signed_session_survives_mcp_reconnect_without_new_baseline(service):
     with pytest.raises(Exception,match='another session'):
         call(b,'finish_security_task',workspace_path=str(root),task_ref=ref,session_ref=wrong)
     result=call(b,'finish_security_task',workspace_path=str(root),task_ref=ref,session_ref=token)
-    assert result['status']=='READY' and legacy.store(root).get(ref)['baseline']['hashes']==baseline['hashes']
+    assert result['status']=='QUEUED'
+    from security_runtime.tasks.queued_closeout import execute_one
+    execute_one(TaskSecurityService(runtime, core.store, owner=own.session_owner('codex','same-chat')), root, ref)
+    result=call(b,'get_task_closeout_status',workspace_path=str(root),task_ref=ref,session_ref=token)
+    assert result['status']=='READY_FOR_REVIEW' and legacy.store(root).get(ref)['baseline']['hashes']==baseline['hashes']
     assert len(legacy.store(root).records())==1 and len(runtime.calls)==1
     assert call(b,'prepare_task_security_review',workspace_path=str(root),task_ref=ref,protocol_version=3)['review_session']
 
 
-def test_cursor_pre_edit_task_finishes_through_actual_mcp_connection(service):
+def test_cursor_pre_edit_task_finishes_through_actual_mcp_connection(service, monkeypatch):
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *a: None)
     from security_runtime.cursor_tasks import CursorTaskBridge
     legacy,root,runtime=service;core=HookCoordinator(runtime,legacy.hooks)
     bridge=CursorTaskBridge(core,root,'cursor-session','generation')
@@ -194,7 +200,10 @@ def test_cursor_pre_edit_task_finishes_through_actual_mcp_connection(service):
     (root/'routes.py').write_text('value = 2\n')
     server=create_server(runtime,hook_coordinator=core,global_mode=False)
     result=call(server,'finish_security_task',**args)
-    assert result['status']=='READY' and result['task_ref']==before['task_ref']
+    assert result['status']=='QUEUED' and result['task_ref']==before['task_ref']
+    from security_runtime.tasks.queued_closeout import execute_one
+    execute_one(TaskSecurityService(runtime, core.store, owner=bridge.owner), root, before['task_ref'])
+    assert call(server,'get_task_closeout_status',**args)['status']=='READY_FOR_REVIEW'
     assert legacy.store(root).get(before['task_ref'])['baseline']['hashes']==baseline['hashes']
     assert len(legacy.store(root).records())==1
 

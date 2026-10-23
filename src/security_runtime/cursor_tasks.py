@@ -33,6 +33,14 @@ class CursorTaskBridge:
 
     def current(self):
         store = self.tasks.store(self.root)
+        from .tasks.activity import ActivityStore
+        focus = ActivityStore(self.core.store, self.root).focus(self.owner)
+        if focus:
+            record = store.get(focus['task_ref']) if focus.get('task_ref') else None
+            if (record and record['phase'] in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}
+                    and record['task_key'] != self.tasks.key(self.key, self.owner)):
+                return None  # A later generation may start genuinely new work.
+            return record
         return select_task(store, self.owner, task_key=self.tasks.key(self.key, self.owner),
                            include_historical=True)
 
@@ -68,6 +76,11 @@ class CursorTaskBridge:
         name, inputs = payload['tool_name'], payload.get('tool_input', {})
         task_key = self.key
         preparing = self.is_begin_tool(name)
+        from .tasks.activity import ActivityStore, deferred
+        focus = ActivityStore(self.core.store, self.root).focus(self.owner)
+        if not preparing and focus and focus.get('task_ref') is None:
+            return dict(status='TASK_SUSPENDED', scanner_run=False,
+                        routing_generation=focus['generation'])
         if preparing:
             # Prepare the exact MCP request before it runs. Its normal begin is
             # idempotent; never adopt an unowned task or capture after an edit.
@@ -102,9 +115,14 @@ class CursorTaskBridge:
                 review_protocol(record)
             except UnsupportedTaskReviewProtocol as error:
                 return error.response(task_ref=record['task_ref'])
+            if deferred(record):
+                return dict(status='BASELINE_PARTIAL' if record['baseline']['limitations'] else 'BASELINE_CAPTURED',
+                            task_ref=record['task_ref'], scanner_run=False, baseline_available=True)
         if record is None:
             try:
-                view = self.tasks.begin(str(self.root), task_key, _owner=self.owner)
+                from .tasks.activity import POLICY
+                view = self.tasks.begin(str(self.root), task_key, _owner=self.owner, check_policy=POLICY,
+                                        background_closeout=True)
             except UnsupportedTaskReviewProtocol as error:
                 return error.response()
             if view.get('status') == UnsupportedTaskReviewProtocol.reason_code:

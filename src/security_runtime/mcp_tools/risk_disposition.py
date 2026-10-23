@@ -83,7 +83,7 @@ def register(server, registry, *, application, runtime_engine, check_scan):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_finding_feedback(scan_id: str, finding_id: str,
                                  related_files: list[str] | None = None) -> dict:
-        """Review a selected suspected false positive using bounded current redacted evidence. No scan, model call, suppression rule or repair. Returns a connection-local handoff; after reconnection prepare again for the same finding."""
+        """Review a selected suspected false positive using bounded current original evidence. No scan, model call, suppression rule or repair. Returns a connection-local handoff; after reconnection prepare again for the same finding."""
         data = finding_feedback(scan_id).prepare(scan_id, finding_id, related_files)
         if data['status'] != 'READY':
             return data

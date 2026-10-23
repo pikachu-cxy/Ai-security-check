@@ -31,7 +31,7 @@ def cancelled_scan():
 
 
 def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
-                      rules_path=None, progress=None, hooks=None, now=time.time, files=None):
+                      rules_path=None, progress=None, hooks=None, now=time.time, files=None, force_rescan=False):
     if mode not in {'quick','feature','release'} or type(staged) is not bool:
         raise ValueError('Invalid explicit scan mode')
     root=WorkspaceResolver().resolve(workspace, allow_non_git_explicit=True, allow_non_git_source=True).path
@@ -77,6 +77,7 @@ def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
         from .selected_scan import selection_captured
         validator=lambda view:selection_captured(view,request.files)
     execution=ScanAttemptExecution(attempts,lease,after_scan=publish,progress=progress,validator=validator)
+    execution.allow_artifact_reuse = not force_rescan
     try:
         arguments=dict(staged=staged,rules_path=rules_path,execution=execution)
         if request is not None:

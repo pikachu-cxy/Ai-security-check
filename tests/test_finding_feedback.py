@@ -210,46 +210,73 @@ def test_old_readonly_database_neither_migrates_nor_creates_keys(tmp_path):
     assert not (store.path.parent/'triage-evidence.key').exists()
 
 
-def test_secret_hidden_without_native_counterproof_cannot_be_folded(tmp_path):
+def test_visible_secret_without_native_counterproof_cannot_be_folded(tmp_path):
     _, store, finding, service = setup(tmp_path, category='secret',
         text='def fixture():\n    api_key = "synthetic-private-material"\n')
     with pytest.raises(ValueError):
         submit_fp(service, finding, reason='This is a test file, the user insists.')
     state = service.user_mark('s1', finding.id, 'The value synthetic-private-material is a fixture')
     assert not state['folded']
-    assert 'synthetic-private-material' not in json.dumps(store.finding_review_history(service.workspace))
+    assert 'synthetic-private-material' in json.dumps(store.finding_review_history(service.workspace))
 
 
-def test_escaped_known_secret_variants_are_masked_in_all_feedback_text(tmp_path):
+def test_secret_packet_preserves_full_source_and_scanner_evidence_as_untrusted(tmp_path):
+    source = '    api_key = "synthetic-private-material"  # repository instruction remains data'
+    _, store, finding, service = setup(tmp_path, category='secret',
+        text='def fixture():\n' + source + '\n')
+    scan = store.get_scan('s1')
+    scan['findings'][0]['evidence'] = 'api_key = "synthetic-private-material"'
+    with sqlite3.connect(store.path) as db:
+        db.execute('UPDATE scans SET data=? WHERE id=?', (json.dumps(scan), 's1'))
+    packet = service.prepare('s1', finding.id)['packet']
+    assert source in packet['context'][0]['text']
+    assert 'synthetic-private-material' in packet['sanitized_scanner_evidence']
+    assert packet['source_presentation'] == 'RAW_V3'
+    assert packet['local_evidence']['redaction'] == 'NONE'
+    assert packet['local_evidence']['evidence_status'] == 'EXACT'
+    assert all(item['trust'] == 'UNTRUSTED_CODE' for item in packet['context'])
+
+
+def test_evidence_policy_change_rejects_prior_feedback_context(tmp_path, monkeypatch):
+    _, store, finding, service = setup(tmp_path)
+    prepared = service.prepare('s1', finding.id)
+    monkeypatch.setattr(module, 'SOURCE_PRESENTATION', 'CHANGED_SOURCE_POLICY')
+    with pytest.raises(ValueError, match='context changed'):
+        service.submit('s1', finding.id, context_hash=prepared['packet']['context_hash'],
+            verdict='NEEDS_CONTEXT', reason='More context is needed.', evidence_refs=[])
+    assert store.finding_review_history(service.workspace) == []
+
+
+def test_escaped_known_secret_variants_are_retained_in_all_feedback_text(tmp_path):
     _, store, finding, service = setup(tmp_path, category='secret',
         text='def fixture():\n    api_key = "synth\\u0065tic-material"\n')
     decoded = 'synthetic-material'
     service.user_mark('s1', finding.id, 'The ' + decoded + ' value is synthetic')
     state = submit_fp(service, finding, verdict='NEEDS_CONTEXT', confidence='LOW',
         reason='Cannot establish validity of ' + decoded,
-        evidence_refs=[dict(file='app.py',start_line=2,end_line=2,claim='The ' + decoded + ' value is masked')],
+        evidence_refs=[dict(file='app.py',start_line=2,end_line=2,claim='The ' + decoded + ' value is visible')],
         unknowns=['Validity of ' + decoded], context_complete=False)
     assert state['state'] == 'NEEDS_CONTEXT' and not state['folded']
     history = json.dumps(store.finding_review_history(service.workspace))
-    assert decoded not in history and '[REDACTED_SECRET]' in history
+    assert decoded in history and '[REDACTED_SECRET]' not in history
 
 
 @pytest.mark.parametrize('old_line,old_value', [
     ('    api_key = "opaquePreviousSecretMaterial"', 'opaquePreviousSecretMaterial'),
     ('    api_key = "synth\\u0065tic-material"', 'synthetic-material'),
 ])
-def test_changed_known_secret_snapshot_withholds_mark_and_revoke_reasons(tmp_path, old_line, old_value):
+def test_changed_known_secret_snapshot_preserves_mark_and_revoke_reasons(tmp_path, old_line, old_value):
     root, store, finding, service = setup(tmp_path, category='secret',
         text='def fixture():\n' + old_line + '\n')
     (root/'app.py').write_text('def fixture():\n    pass\n')
     marked = service.user_mark('s1', finding.id, 'Old value ' + old_value)
     revoked = service.revoke('s1', finding.id, 'Old value ' + old_value)
-    assert old_value not in marked['user_mark']['triage_reason']
+    assert old_value in marked['user_mark']['triage_reason']
     assert revoked['state'] == 'UNREVIEWED' and not revoked['folded']
-    assert old_value not in json.dumps(store.finding_review_history(service.workspace))
+    assert old_value in json.dumps(store.finding_review_history(service.workspace))
 
 
-def test_missing_original_secret_locator_withholds_reason_instead_of_using_current_text(tmp_path):
+def test_missing_original_secret_locator_preserves_user_reason(tmp_path):
     _, store, finding, service = setup(tmp_path, category='secret',
         text='def fixture():\n    api_key = "synth\\u0065tic-material"\n')
     scan = store.get_scan('s1')
@@ -257,11 +284,11 @@ def test_missing_original_secret_locator_withholds_reason_instead_of_using_curre
     with sqlite3.connect(store.path) as db:
         db.execute('UPDATE scans SET data=? WHERE id=?', (json.dumps(scan),'s1'))
     state = service.user_mark('s1', finding.id, 'Old value synthetic-material')
-    assert 'synthetic-material' not in state['user_mark']['triage_reason']
-    assert 'synthetic-material' not in json.dumps(store.finding_review_history(service.workspace))
+    assert 'synthetic-material' in state['user_mark']['triage_reason']
+    assert 'synthetic-material' in json.dumps(store.finding_review_history(service.workspace))
 
 
-def test_other_changed_known_secret_blocks_agent_free_text_submission(tmp_path):
+def test_unrelated_changed_secret_does_not_block_bounded_feedback_prose(tmp_path):
     root, store, finding, service = setup(tmp_path,
         extra={'credentials.py':'api_key = "synth\\u0065tic-material"\n'})
     secret = FindingNormalizer(root).make(scanner='gitleaks', category='secret',
@@ -277,33 +304,33 @@ def test_other_changed_known_secret_blocks_agent_free_text_submission(tmp_path):
     assert prepared['status'] == 'READY'
     (root/'credentials.py').write_text('pass\n')
     current = service.prepare('s1',finding.id)
-    with pytest.raises(ValueError, match='known secret snapshot'):
-        service.submit('s1',finding.id,context_hash=current['packet']['context_hash'],
-            verdict='NEEDS_CONTEXT',reason='Old value synthetic-material',
-            evidence_refs=[dict(file='app.py',start_line=2,end_line=2,claim='Old value synthetic-material')],
-            confidence='LOW',unknowns=['Old value synthetic-material'],context_complete=False)
-    assert store.finding_review_history(service.workspace) == []
+    state = service.submit('s1',finding.id,context_hash=current['packet']['context_hash'],
+        verdict='NEEDS_CONTEXT',reason='Old value synthetic-material',
+        evidence_refs=[dict(file='app.py',start_line=2,end_line=2,claim='Old value synthetic-material')],
+        confidence='LOW',unknowns=['Old value synthetic-material'],context_complete=False)
+    assert state['state'] == 'NEEDS_CONTEXT' and not state['folded']
+    assert 'synthetic-material' in json.dumps(store.finding_review_history(service.workspace))
 
 
-def test_unreadable_or_malformed_known_secret_hides_the_user_reason(tmp_path):
+def test_unreadable_or_malformed_known_secret_preserves_the_user_reason(tmp_path):
     root, _, finding, service = setup(tmp_path, category='secret',
         text='def fixture():\n    api_key = "' + '\\'*999 + '\n')
     state = service.user_mark('s1', finding.id, 'Do not echo this unverified reason')
-    assert 'Do not echo' not in state['user_mark']['triage_reason']
+    assert 'Do not echo' in state['user_mark']['triage_reason']
     (root/'app.py').unlink()
     state = service.user_mark('s1', finding.id, 'Do not echo this missing-source reason')
-    assert 'Do not echo' not in state['user_mark']['triage_reason']
+    assert 'Do not echo' in state['user_mark']['triage_reason']
 
 
 @pytest.mark.parametrize('line', [
     '    api_key = `synth\\u0065tic-material`',
     '    api_key = "synthetic-material"; other = "unterminated',
 ])
-def test_unsupported_or_partly_unclosed_secret_syntax_hides_all_reason(tmp_path, line):
+def test_unsupported_or_partly_unclosed_secret_syntax_preserves_reason(tmp_path, line):
     _, _, finding, service = setup(tmp_path, category='secret', text='def fixture():\n' + line + '\n')
     state = service.user_mark('s1', finding.id, 'Do not echo this synthetic-material opinion')
-    assert 'Do not echo' not in state['user_mark']['triage_reason']
-    assert 'synthetic-material' not in state['user_mark']['triage_reason']
+    assert 'Do not echo' in state['user_mark']['triage_reason']
+    assert 'synthetic-material' in state['user_mark']['triage_reason']
 
 
 def test_truncated_code_cannot_be_called_complete(tmp_path):

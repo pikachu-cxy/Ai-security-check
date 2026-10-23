@@ -76,9 +76,14 @@ def parse_report(data):
         for location in item['locations']:
             physical = location['physicalLocation']
             region = physical['region']
+            # Gitleaks 8.30 places the actual match here. A missing snippet is
+            # unavailable evidence, never the rule description or a guessed key.
+            snippet = region.get('snippet', {})
+            match = snippet.get('text', '') if isinstance(snippet, dict) else ''
             findings.append({'RuleID': rule, 'Description': descriptions[rule],
                 'File': physical['artifactLocation']['uri'], 'StartLine': region['startLine'],
-                'EndLine': region.get('endLine', region['startLine'])})
+                'EndLine': region.get('endLine', region['startLine']),
+                'Match': match if isinstance(match, str) else ''})
     return findings, tuple(sorted(ids)), driver.get('semanticVersion', ''), driver.get('name', '').lower()
 
 

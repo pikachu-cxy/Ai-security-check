@@ -24,7 +24,8 @@ def submission_contract():
     """Describe submitted IDs separately from source-location metadata."""
     return dict(coverage='REVIEWED or PARTIAL',
         findings='max10; title,category,severity,primary_evidence,evidence_refs,impact,preconditions,unknowns,counterevidence,fix_advice',
-        optional='risk_scope,task_evidence,current_protections; RELATED_EXISTING needs current related and task evidence plus conditions and protections',
+        optional='risk_scope,task_evidence,current_protections,same_issue_as; host-origin assessment uses risk_origin,impact_change,attribution_rationale together',
+        risk_attributions='Original static finding_id, origin EXISTING/INTRODUCED/EXPANDED/UNKNOWN, impact UNCHANGED/EXPANDED/UNKNOWN, rationale and issued before/current evidence_refs. Existing does not imply unchanged impact; UNKNOWN stays visible. Host reasoning is not scanner proof.',
         evidence_fields=dict(
             primary_evidence='Runtime-issued evidence_id string; must occur in evidence_refs',
             task_evidence='Runtime-issued changed-file evidence_id string; must occur in evidence_refs',
@@ -91,13 +92,24 @@ class TaskReviewCoordinator:
 
     def _semantic_proof(self, root, record, name, snapshot, lines):
         """Planning-only private metadata; never returned or saved in control JSON."""
-        private = self.service.preimages(root)
+        from ..source_redaction import VERSION
+        if record[snapshot].get('redaction_version') == VERSION:
+            return dict(version=2, complete=True, line_count=len(lines), semantic_lines={},
+                        literal_marker_lines=[number for number, line in enumerate(lines, 1)
+                                              if '[REDACTED_LITERAL]' in line or '[REDACTED_SECRET]' in line])
+        private = self.service.preimages(root, record)
         if snapshot == 'baseline':
             reference = record['baseline'].get('preimages', {}).get(name)
             if reference is None:
                 return dict(version=1, complete=False, line_count=len(lines), semantic_lines={})
             return private.read_semantic_proof(record['task_ref'], name,
                 record['baseline']['hashes'][name], reference)
+        if record['end'].get('version_ref'):
+            reference = record['end'].get('preimages', {}).get(name)
+            if reference is None:
+                return dict(version=1, complete=False, line_count=len(lines), semantic_lines={})
+            return self.service.end_versions(root).read_semantic_proof(record['end']['version_ref'], name,
+                record['end']['hashes'][name], reference)
         from ..tasks.security import hash_bytes
         raw, _ = WorkspaceReader(root).read(name)
         if hash_bytes(raw) != record['end']['hashes'].get(name):
@@ -136,6 +148,14 @@ class TaskReviewCoordinator:
         root = service.root(workspace)
         initial = service.load(root, ref)
         require_record_protocol(initial)
+        if initial.get('closeout_dispatch') == 'BACKGROUND_V1':
+            from ..tasks.queued_closeout import status
+            from ..tasks.closeout_queue import PENDING
+            queued = status(service, root, ref)
+            if queued['status'] in PENDING or initial['phase'] == 'ACTIVE':
+                if queued['status'] == 'NOT_QUEUED':
+                    queued['next_action'] = 'finish_security_task'
+                return queued
         if initial['phase'] == 'ACTIVE':
             result = service.finish(workspace, ref)
             if result['status'] not in {'READY', 'NO_CHANGES'}:
@@ -246,7 +266,7 @@ class TaskReviewCoordinator:
                 review_session=record['review_session'], review_required=True,
                 static=dict(status=static['status'], coverage=static['coverage'],
                     scope_file_count=len(static.get('scope_files', [])), finding_count=len(static['findings']),
-                    findings=[{k:f[k] for k in ('id', 'title', 'severity', 'file_path', 'line_start') if k in f} for f in static['findings'][:10]]),
+                    findings=[{k:f[k] for k in ('id', 'title', 'severity', 'file_path', 'line_start', 'risk_attribution') if k in f} for f in static['findings'][:10]]),
                 changed_file_count=len(record['changes']), plan=page, quick_skill=guide,
                 method_fetch='get_task_review_method only when this exact version/digest is not already available locally',
                 workflow='Read required windows; submit each unit with submit_task_review_batch; page get_task_review_plan until next_cursor is null; then submit_task_security_review with evidence-backed findings. Related source is read when needed, not an arbitrary mandatory unrelated file.',
@@ -364,6 +384,15 @@ class TaskReviewCoordinator:
                     reject(reason, 'Task-start source is unavailable; it cannot be reconstructed after editing', False)
                 location = 'BEFORE_DELETION' if deleted else 'BEFORE_TASK'
                 truncated = snapshot.get('text_truncations', {}).get(name)
+            elif snapshot.get('version_ref'):
+                try:
+                    lines = service.end_lines(root, record, name)
+                except (TaskPreimageUnavailable, OSError, EvidenceUnavailable) as exc:
+                    reason = getattr(exc, 'reason_code', 'TASK_END_SOURCE_UNAVAILABLE')
+                    service._context_gap(root, record, reason, name, location_version='CURRENT_TASK_END')
+                    reject(reason, 'Captured task-end source is unavailable', False)
+                truncated = snapshot.get('text_truncations', {}).get(name)
+                location = 'CURRENT_TASK_END'
             else:
                 try:
                     raw, text = WorkspaceReader(root).read(name)

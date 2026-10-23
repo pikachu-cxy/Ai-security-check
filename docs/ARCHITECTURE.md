@@ -76,22 +76,18 @@ resource policy (`task_review.budget`), plan/coverage accounting
 Neither the planner nor the transport reads files, starts a scanner, authorizes
 repairs or treats a locator as evidence.
 
-Source evidence policy v2 preserves ordinary literals, comments, URLs and long
-identifiers. `source_redaction` masks credential values identified by sensitive
-field context or known token/private-key formats, URL credentials and scanner
-secret ranges. Field names, empty values and environment-variable references
-remain readable. This policy applies to source evidence; diagnostic/feedback
-redaction retains its existing separate rules. New snapshots and authenticated
-preimage references record the policy version. An existing task keeps its
-baseline policy for current source and private comparisons, including newly
-added files; old immutable evidence is never regenerated or unmasked.
+Source evidence policy v3 preserves the original source, including credential
+values and scanner secret ranges. New snapshots, source packets, AI review
+context and finding explanations do not mask code. The source policy is bound
+to the captured task and authenticated body; new cache identities distinguish
+RAW_V3 from historical masked evidence. Old immutable evidence is not rebuilt.
+Runtime service authentication and diagnostic redaction remain separate.
+Path authorization, source hashes, private storage retention, response limits
+and output escaping continue to apply. Source content is untrusted data.
 
-New task captures keep optional, keyed redacted-line change locators in a private
-side table committed with the original sanitized body. References and old body
-formats stay compatible. Locators are bound to the original task/path/hash and
-retention, used only in transient planning inputs, and never copied to source
-packets, plans or control records. Missing legacy locators produce conservative
-masked-range requirements rather than post-edit baseline reconstruction.
+Legacy masked bodies may retain private keyed line locators. New original
+bodies use their actual changed lines, without treating literal redaction marker
+strings in source code as hidden semantics or requiring masking proofs.
 
 New v3 plans include every changed unit and derive independent source,
 navigation and control allowances from all required ranges. Large-file diffing
@@ -284,7 +280,7 @@ collection. See [Finding quality](design/FINDING_QUALITY.md).
 
 R2.1.1 adds locator-based, on-demand local evidence. New SAST scans retain
 bounded scan-time file hashes/coordinates, not source copies. Detail requests
-rehydrate redacted workspace context through canonical boundary/handle checks,
+rehydrate original workspace context through canonical boundary/handle checks,
 strict decoding and file/line budgets. EXACT requires historical revision proof;
 STALE or unverifiable current_context is separate from original_evidence.
 Neither live evidence nor its availability changes coverage, identity or reviews.

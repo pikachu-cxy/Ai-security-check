@@ -22,8 +22,11 @@ from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, b
 from .mcp_contracts import MCPRegistry, raw_input_failure
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
-GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status'}
-TASK_REVIEW_TOOLS = {'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
+                'get_task_isolation_capabilities'}
+TASK_REVIEW_TOOLS = {'begin_security_task', 'switch_security_task', 'finish_security_task', 'prepare_task_security_review',
+    'prepare_task_workspace', 'get_task_isolation_capabilities',
+    'get_task_closeout_status', 'wait_task_closeout', 'cancel_task_closeout',
     'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
     'get_task_risk_ledger', 'prepare_task_risk_feedback', 'submit_task_risk_feedback',
@@ -186,6 +189,10 @@ class GlobalWorkspaces:
                  'target_selection': target_selection,
                  'baseline_reused': reused, 'security_proof': False,
                  'initial_scope': 'EXISTING_SESSION_SNAPSHOT' if reused else 'BOUNDED_QUICK_BASELINE'}
+        value.update(scanner_run=False, project_scan_status='NOT_REQUESTED',
+            task_baseline_ready=False, task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT')
+        if result['status'] == 'COMPARISON_BASELINE':
+            value['initial_scope'] = 'SESSION_COMPARISON_ONLY'
         if recovered_from in BASELINE_REASONS:
             value['recovered_from'] = recovered_from
         write_bootstrap(root, 'READY', result['status'], base=self.base, session_id=session,
@@ -213,27 +220,22 @@ class GlobalWorkspaces:
         return value
 
     def _initialize(self, root, session, core):
-        from .hooks import HookEvent
-        from .baseline_seed import WorkspaceBaselineSeeds
         from .progress import ScanCancelled
         try:
-            is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git
-            if is_git:
-                # A clean tracked file may already contain a risk. Dirty-only
-                # initialization would misattribute that risk to a later edit.
-                seeds = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core)
-                snapshot = seeds.capture_session(root, session, host=self.host)
-                return self._snapshot_readiness(root, session, snapshot,
-                    target_selection=getattr(seeds, 'target_selection', None))
-            else:
-                result = core.handle(HookEvent.SESSION_START, root, 'codex', session, _baseline_only=True)
-                persisted, _ = core.store.load(core.store.path(root, 'codex', session))
-                valid = persisted is not None and persisted['change_digest'] == result.get('change_digest')
-                status = 'READY' if valid and (result.get('baseline_comparison_usable') is True
-                    or result.get('baseline_comparison_usable') is None and result.get('coverage') in {'FULL', 'SCOPED'}
-                    or result.get('coverage') == 'NONE' and not result.get('scanner_runs')) else 'DEGRADED'
+            # Both hosts publish a filesystem comparison point. Project risk
+            # inventory is an explicit scan_project operation, never startup.
+            # Actual development still requires its synchronous task baseline.
+            result = core.handle_lifecycle(EventKind.SESSION_START, root, self.host, session)
+            persisted, _ = core.store.load(core.store.path(root, self.host, session))
+            valid = persisted is not None and result.get('baseline_publish_status') in {'PUBLISHED', 'RETAINED'}
+            status = 'READY' if valid else 'DEGRADED'
             if status == 'READY':
-                return self._snapshot_readiness(root, session, persisted, target_selection=result.get('target_selection'))
+                value = self._snapshot_readiness(root, session, persisted,
+                    reused=result.get('baseline_publish_status') == 'RETAINED')
+                value.update(initial_scope='SESSION_COMPARISON_ONLY', scanner_run=False,
+                    project_scan_status='NOT_REQUESTED', task_baseline_ready=False,
+                    task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT')
+                return value
             failure = self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_COVERAGE_INSUFFICIENT')
             failure.update(baseline_status=result['status'], baseline_coverage=result['coverage'],
                 baseline_capabilities=result['capabilities'], target_selection=result.get('target_selection'))
@@ -445,6 +447,10 @@ def create_global_server(*, workspaces=None, host='codex'):
             from .guidance.guidance_catalog import get_runtime_guidance
             guide = get_runtime_guidance(arguments['topic'])
             return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
+        if name == 'get_task_isolation_capabilities':
+            from .task_workspaces import capability
+            data = capability()
+            return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
         if name == 'get_professional_guidance':
             from .professional_guidance import get_professional_guidance
             guide = get_professional_guidance()
@@ -508,7 +514,12 @@ def create_global_server(*, workspaces=None, host='codex'):
                                   and normalized.operation == OperationClass.READ_ONLY)
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     observe('CLAIMS_VALID', tool_classification=classification, **normalized.diagnostics())
-            if name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP:
+            lightweight = False
+            if name in HOOKS and normalized.kind == EventKind.WORKSPACE_ACTIVITY:
+                from .tasks.activity import lightweight_focus
+                lightweight = bool(lightweight_focus(pool.children[root][1].store, root,
+                    dict(host=normalized.context.host, session=normalized.context.session_binding)))
+            if name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP and not lightweight:
                 binding_stage = 'BOOTSTRAPPING'
                 claim_diag['workspace_binding_stage'] = binding_stage
                 session_token = None

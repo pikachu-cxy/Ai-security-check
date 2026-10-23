@@ -1,4 +1,5 @@
-"""Source policy v2 preserves code meaning while removing synthetic credentials."""
+"""New source evidence is original text; saved v1/v2 representations still read."""
+from functools import partial
 import hashlib
 import json
 import sqlite3
@@ -9,9 +10,12 @@ import pytest
 from security_runtime.local_evidence import safe_source, legacy_safe_source
 from security_runtime.source_redaction import task_version
 from security_runtime.tasks.preimages import TaskPreimageUnavailable
-from test_task_preimages import sample, FIRST
+from test_task_preimages import sample, FIRST, SECOND
 from test_task_security import service
 from task_review_helpers import review_all
+
+
+credential_source = partial(safe_source, redaction_version=2)
 
 
 @pytest.mark.parametrize('source,path', [
@@ -55,13 +59,14 @@ def test_ordinary_source_remains_readable(source, path):
     ('"password": >-\n  synthetic-private-value\nmode: development', 'a.yml'),
     ('<property value="synthetic-private-value" name="db.password"/>', 'a.xml'),
 ])
-def test_credential_values_hidden_without_losing_all_surrounding_code(source, path):
-    lines = safe_source(source, source_path=path)
+def test_legacy_credential_values_hidden_without_losing_all_surrounding_code(source, path):
+    lines = credential_source(source, source_path=path)
     result = '\n'.join(lines)
     assert 'synthetic-private-value' not in result
     assert '[REDACTED_SECRET]' in result
     assert len(lines) == len(source.splitlines())
-    assert safe_source(result, source_path=path) == lines
+    assert credential_source(result, source_path=path) == lines
+    assert safe_source(source, source_path=path) == source.splitlines()
 
 
 @pytest.mark.parametrize('value', [
@@ -72,8 +77,9 @@ def test_credential_values_hidden_without_losing_all_surrounding_code(source, pa
 ])
 def test_known_token_shapes_hidden_even_in_an_ordinary_literal(value):
     source = 'label = "' + value + '"'
-    result = '\n'.join(safe_source(source, source_path='a.py'))
+    result = '\n'.join(credential_source(source, source_path='a.py'))
     assert value not in result and '[REDACTED_SECRET]' in result
+    assert safe_source(source, source_path='a.py') == [source]
 
 
 @pytest.mark.parametrize('newline', ['\n', '\r\n', '\r'])
@@ -82,16 +88,20 @@ def test_private_key_blocks_and_multiline_credential_values_keep_line_numbers(ne
     source = newline.join(['value = """-----BEGIN PRIVATE KEY-----', 'synthetic-middle', 'synthetic-tail'])
     if closed:
         source += newline + '-----END PRIVATE KEY-----"""'
-    result = safe_source(source, source_path='a.py')
+    result = credential_source(source, source_path='a.py')
     assert len(result) == len(source.splitlines())
     assert 'synthetic-middle' not in '\n'.join(result) and 'synthetic-tail' not in '\n'.join(result)
     credential = 'password = """' + newline + 'synthetic-middle' + newline + '"""'
-    assert 'synthetic-middle' not in '\n'.join(safe_source(credential, source_path='a.py'))
+    assert 'synthetic-middle' not in '\n'.join(credential_source(credential, source_path='a.py'))
+    assert safe_source(source, source_path='a.py') == source.splitlines()
+    assert safe_source(credential, source_path='a.py') == credential.splitlines()
 
 
-def test_scanner_secret_ranges_still_override_readable_code():
-    assert safe_source('normal = "public"\nsecret_material\nverify()', [(2, 2)], source_path='a.py') == [
+def test_only_legacy_scanner_secret_ranges_override_readable_code():
+    assert credential_source('normal = "public"\nsecret_material\nverify()', [(2, 2)], source_path='a.py') == [
         'normal = "public"', '[REDACTED_SECRET]', 'verify()']
+    assert safe_source('normal = "public"\nsecret_material\nverify()', [(2, 2)], source_path='a.py') == [
+        'normal = "public"', 'secret_material', 'verify()']
 
 
 def test_large_ordinary_identifier_is_only_truncated_not_secret_redacted():
@@ -101,22 +111,67 @@ def test_large_ordinary_identifier_is_only_truncated_not_secret_redacted():
     assert truncated == [1]
 
 
-@pytest.mark.parametrize('version', [True, False, 0, 3, '2', None])
+@pytest.mark.parametrize('version', [True, False, 0, 4, '2', None])
 def test_unsupported_policy_never_silently_falls_back(version):
     with pytest.raises(ValueError, match='Unsupported source redaction policy'):
         safe_source('password = "synthetic-private-value"', redaction_version=version)
 
 
-def test_new_preimages_label_v2_keep_ordinary_literals_and_never_persist_credentials(sample):
+def test_new_preimages_label_v3_keep_original_credentials(sample):
     store, _ = sample
     raw = b'role = "reader"\npassword = "synthetic-private-value"\n'
     with store.writer(FIRST) as writer:
         ref = writer.put_source('a.py', raw)['reference']
-    assert ref['redaction_version'] == 2
+    assert ref['redaction_version'] == 3 and ref['source'] == 'WORKSPACE_SOURCE'
     before = store.path.read_bytes()
     assert store.read(FIRST, 'a.py', ref['raw_sha256'], ref)[0] == 'role = "reader"'
-    assert b'synthetic-private-value' not in before
+    assert b'synthetic-private-value' in before
+    assert store.read(FIRST, 'a.py', ref['raw_sha256'], ref) == raw.decode().splitlines()
     assert store.path.read_bytes() == before
+
+
+def test_v2_saved_body_remains_masked_after_a_new_raw_capture(sample):
+    store, _ = sample
+    raw = b'password = "synthetic-private-value"\n'
+    with store.writer(FIRST, redaction_version=2) as writer:
+        old = writer.put_source('a.py', raw)['reference']
+    original = store.read(FIRST, 'a.py', old['raw_sha256'], old)
+    assert original == credential_source(raw.decode(), source_path='a.py')
+    with store.writer(SECOND) as writer:
+        current = writer.put_source('a.py', raw)['reference']
+    assert store.read(FIRST, 'a.py', old['raw_sha256'], old) == original
+    assert store.read(SECOND, 'a.py', current['raw_sha256'], current) == raw.decode().splitlines()
+    assert old['redaction_version'] == 2 and current['redaction_version'] == 3
+
+
+def test_raw_marker_literal_and_long_line_change_have_no_hidden_value_gap():
+    from security_runtime.task_review.windows import adaptive_windows
+    before = ['label = "[REDACTED_SECRET]"', 'password = "' + 'x' * 800 + 'old"']
+    after = [before[0], before[1].replace('old"', 'new"')]
+    record = dict(baseline=dict(redaction_version=3, hashes={'a.py': 'old'}, texts={'a.py': before}),
+                  end=dict(redaction_version=3, hashes={'a.py': 'new'}, texts={'a.py': after}))
+    windows, gaps = adaptive_windows(record, dict(path='a.py', change='MODIFIED'))
+    assert not gaps
+    assert {window['location_version'] for window in windows} == {'BEFORE_TASK', 'CURRENT_TASK_END'}
+    assert all(window['start_line'] <= 2 <= window['end_line'] for window in windows)
+
+
+@pytest.mark.parametrize('version', [1, 2, 3])
+def test_frozen_end_uses_task_representation_and_remains_immutable(service, version):
+    from security_runtime.tasks.activity import POLICY
+    from security_runtime.tasks.end_versions import capture_end
+    tasks, root, _ = service
+    tasks.hooks.key(root)
+    source = 'password = "synthetic-closeout-value"\n'
+    (root / 'credential.py').write_text(source)
+    record = dict(check_policy=POLICY, baseline=dict(redaction_version=version, hashes={}), end={})
+    end, ref = capture_end(tasks, root, record)
+    assert ref and end['redaction_version'] == version
+    reference = end['preimages']['credential.py']
+    expected = safe_source(source, source_path='credential.py', redaction_version=version)
+    assert reference['redaction_version'] == version
+    (root / 'credential.py').write_text('password = "later-workspace-value"\n')
+    assert tasks.end_versions(root).read(ref, 'credential.py', end['hashes']['credential.py'], reference) == expected
 
 
 def test_signed_legacy_preimages_are_read_as_stored_not_reconstructed(sample):
@@ -127,7 +182,8 @@ def test_signed_legacy_preimages_are_read_as_stored_not_reconstructed(sample):
         current = writer.put_source('a.py', raw)['reference']
     body = json.dumps(legacy_safe_source(raw.decode(), source_path='a.py'), ensure_ascii=False, separators=(',', ':')).encode()
     metadata = {k:v for k,v in current.items() if k != 'mac'}
-    metadata.update(redaction_version=1, body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=len(body))
+    metadata.update(redaction_version=1, source='SANITIZED_WORKSPACE_BEFORE_TASK',
+                    body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=len(body))
     mac = digest(store._key(), metadata)
     legacy = dict(metadata, mac=mac)
     with sqlite3.connect(store.path) as db:
@@ -140,7 +196,7 @@ def test_signed_legacy_preimages_are_read_as_stored_not_reconstructed(sample):
     assert task_version({'baseline': {'redaction_version': 2}}) == 2
 
 
-@pytest.mark.parametrize('version', [True, False, 0, 3, '2', None])
+@pytest.mark.parametrize('version', [True, False, 0, 4, '2', None])
 def test_even_authenticated_reference_rejects_unsupported_policy(sample, version):
     from security_runtime.closeout_state import digest
     store, _ = sample
@@ -180,7 +236,8 @@ def test_existing_task_pins_legacy_policy_for_current_and_added_files(service):
     current = record['baseline']['preimages']['a.py']
     body = json.dumps(legacy_safe_source(old.decode(), source_path='a.py'), separators=(',', ':')).encode()
     metadata = {k: v for k, v in current.items() if k != 'mac'}
-    metadata.update(redaction_version=1, body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=len(body))
+    metadata.update(redaction_version=1, source='SANITIZED_WORKSPACE_BEFORE_TASK',
+                    body_sha256=hashlib.sha256(body).hexdigest(), body_bytes=len(body))
     mac = digest(private._key(), metadata)
     with sqlite3.connect(private.path) as db:
         db.execute('UPDATE task_preimages SET metadata=?,mac=?,body=? WHERE task_ref=? AND path=?',
@@ -204,7 +261,7 @@ def test_existing_task_pins_legacy_policy_for_current_and_added_files(service):
 def test_all_parts_of_concatenated_and_escaped_credentials_are_hidden():
     for source in ['password = ("synthetic-first" + "synthetic-tail")',
                    '# password="synthetic-first\\"synthetic-tail"']:
-        result = '\n'.join(safe_source(source, source_path='a.py'))
+        result = '\n'.join(credential_source(source, source_path='a.py'))
         assert 'synthetic-first' not in result and 'synthetic-tail' not in result
 
 
@@ -233,7 +290,7 @@ def test_pure_github_variable_references_remain_readable(source):
     "GH_TOKEN: ${{ '}}' ||\n 'synthetic-private-value'\n }}",
 ])
 def test_template_expressions_and_raw_credentials_are_not_reference_exemptions(source):
-    result = '\n'.join(safe_source(source, source_path='workflow.yml'))
+    result = '\n'.join(credential_source(source, source_path='workflow.yml'))
     assert 'synthetic-private-value' not in result
     assert '[REDACTED_SECRET]' in result
 
@@ -254,7 +311,7 @@ def test_security_pattern_constants_are_readable_without_a_regex_exemption():
 def test_sensitive_yaml_plain_scalar_on_following_line_is_redacted(newline, blank_lines):
     prefix = 'GH_TOKEN:' + newline * (blank_lines + 1) + '  '
     source = prefix + "${{ github.token || 'probe-private-canary' }}" + newline + 'MODE: development'
-    result = safe_source(source, source_path='workflow.yml')
+    result = credential_source(source, source_path='workflow.yml')
     assert 'probe-private-canary' not in '\n'.join(result)
     assert '[REDACTED_SECRET]' in '\n'.join(result)
     assert len(result) == len(source.splitlines())
@@ -275,7 +332,7 @@ def test_yaml_template_after_comment_lines_keeps_credential_ownership(quote):
     if quote == "'":
         expression = expression.replace("'", "''")
     source = prefix + quote + expression + quote + '\nMODE: development'
-    result = safe_source(source, source_path='workflow.yml')
+    result = credential_source(source, source_path='workflow.yml')
     assert 'probe-private-canary' not in '\n'.join(result)
     assert '[REDACTED_SECRET]' in '\n'.join(result)
     assert len(result) == len(source.splitlines()) and result[-1] == 'MODE: development'

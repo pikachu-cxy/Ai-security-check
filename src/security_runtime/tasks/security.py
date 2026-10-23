@@ -16,7 +16,8 @@ import uuid
 from ..hook_state import HookStateStore, identity
 from ..git import GitError, GitService
 from ..local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, safe_source, MAX_LINE_CHARS
-from ..redactor import SecretRedactor
+from ..diagnostics import evidence_text
+from ..source_redaction import VERSION
 from .security_state import CONTRACT, TaskSecurityStore
 from ..task_review.protocol import PROTOCOL_VERSION, validate_protocol, require_record_protocol, is_v3_record
 from .snapshot import SnapshotPolicy
@@ -157,11 +158,13 @@ def _inventory(root, ignored):
     return sorted(selected), dirty, not limitations, limitations
 
 
-def capture(root, *, known_paths=None, priority_paths=(), include_text=True, preimage_writer=None):
+def capture(root, *, known_paths=None, priority_paths=(), include_text=True, preimage_writer=None, raw_sink=None,
+            redaction_version=VERSION):
     """Hash the actual workspace (including pre-existing dirty/new files).
 
-    Retain only sanitized text, never raw source/credentials. All budgets are
-    reported; unavailable/truncated inventory cannot attest a full task.
+    Returned task evidence uses the captured source policy. An optional private
+    raw_sink retains original scanner bytes separately under bounded retention.
+    All budgets are reported; unavailable inventory cannot attest a full task.
     Freshness-only callers may omit text preparation, but must still inventory
     and safely read/hash every current file with the same source guards.
     """
@@ -174,7 +177,8 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True, pre
         inventory_complete=complete, inventory_limits=inventory_limits,
         known_paths=known_paths, priority_paths=priority_paths, include_text=include_text,
         preimage_writer=preimage_writer, policy=policy,
-        reader_factory=WorkspaceReader, sanitizer=safe_source)
+        reader_factory=WorkspaceReader, sanitizer=safe_source, raw_sink=raw_sink,
+        redaction_version=redaction_version)
 
 
 def task_changes(root, baseline, end):
@@ -207,16 +211,15 @@ def _clean(value, limit=1000):
     if not isinstance(value, str) or not value.strip() or len(value) > limit:
         raise ValueError('Invalid bounded review text')
     # Free-form model text is data, never an instruction or authorization.
-    text = SecretRedactor().redact(value)
-    return ''.join(c for c in text if c in '\n\t' or ord(c) >= 32)
+    return evidence_text(value, limit)
 
 
 def finding_view(f):
-    """Bounded navigation/explanation; raw scanner evidence stays local."""
+    """Bounded navigation/explanation, preserving quoted code and credentials."""
     result = {k:f[k] for k in ('id','category','severity','file_path','line_start','line_end') if k in f}
     for key in ('plain_title','title','impact','fix_advice'):
         if key in f:
-            result[key] = SecretRedactor().redact(str(f[key]))[:1200]
+            result[key] = evidence_text(f[key], 1200)
     result['scanner_sources'] = f.get('scanner_sources', [])[:10]
     return result
 
@@ -234,7 +237,7 @@ def _coverage_gaps(limitations):
               'SNAPSHOT_INVENTORY_NAME_BYTE_BUDGET': '文件盘点达到路径存储容量上限',
               'SNAPSHOT_READ_FILE_BUDGET': '源码采集达到文件数量上限',
               'SNAPSHOT_READ_BYTE_BUDGET': '源码采集达到读取容量上限',
-              'SNAPSHOT_INLINE_TEXT_BYTE_BUDGET': '修改前脱敏正文超出保存容量',
+              'SNAPSHOT_INLINE_TEXT_BYTE_BUDGET': '修改前正文超出保存容量',
               'TASK_SEMANTIC_PROOF_UNVERIFIED': '脱敏行的修改前定位记录无法核验',
               'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '文件修改检查保留路径的当前源码不可用',
               'TASK_HOOK_FINAL_SCOPE_BUDGET': '文件修改检查保留路径超出最终扫描范围预算',
@@ -292,13 +295,19 @@ class TaskSecurityService:
     def store(self, root):
         return TaskSecurityStore(self.hooks, root, now=self.now)
 
-    def preimages(self, root):
+    def preimages(self, root, record=None):
         from .preimages import TaskPreimageStore
-        return TaskPreimageStore(self.hooks, root, now=self.now)
+        from .activity import deferred
+        return TaskPreimageStore(self.hooks, root, now=self.now,
+            namespace='closeout' if deferred(record) else 'legacy')
 
-    def discard_preimages(self, root, ref):
+    def end_versions(self, root):
+        from .preimages import TaskPreimageStore
+        return TaskPreimageStore(self.hooks, root, now=self.now, namespace='end')
+
+    def discard_preimages(self, root, ref, record=None):
         try:
-            self.preimages(root).discard(ref)
+            self.preimages(root, record).discard(ref)
         except (OSError, ValueError):
             pass  # TTL and the private-store hard limits remain in force.
 
@@ -310,10 +319,17 @@ class TaskSecurityService:
         reference = record['baseline'].get('preimages', {}).get(path)
         if reference is None:
             return None
-        return self.preimages(root).read(record['task_ref'], path,
+        return self.preimages(root, record).read(record['task_ref'], path,
             record['baseline']['hashes'][path], reference)
 
     def end_lines(self, root, record, path):
+        if record['end'].get('version_ref'):
+            reference = record['end'].get('preimages', {}).get(path)
+            if reference is None:
+                from .preimages import TaskPreimageUnavailable
+                raise TaskPreimageUnavailable('TASK_END_SOURCE_UNAVAILABLE')
+            return self.end_versions(root).read(record['end']['version_ref'], path,
+                record['end']['hashes'][path], reference)
         from ..source_redaction import task_version
         raw, text = WorkspaceReader(root).read(path)
         if hash_bytes(raw) != record['end']['hashes'].get(path):
@@ -333,6 +349,9 @@ class TaskSecurityService:
         owner=self._owner()
         if not read_only and owner is not None and record_owner(record)!=owner:
             raise ownership_error(record_owner(record), owner)
+        if not read_only:
+            from ..task_workspaces import validate_binding
+            validate_binding(root, record)
         try:
             from ..observation import bind_product
             bind_product('task', record['task_ref'], relation='TASK_RECORD_READ')
@@ -340,7 +359,12 @@ class TaskSecurityService:
             pass  # A readable record is a reference, never a new owner binding.
         return record
 
-    def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None):
+    def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None,
+              check_policy='PER_EDIT_V1', _switch=None, background_closeout=False, workspace_setup_ref=None):
+        from .activity import ActivityStore, POLICY, LEGACY
+        from .lifecycle import register
+        if check_policy not in {POLICY, LEGACY}:
+            raise ValueError('Unsupported task check policy')
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
         from .ownership import valid_owner, record_owner, writer_identity
@@ -348,7 +372,10 @@ class TaskSecurityService:
         if owner is not None and not valid_owner(owner):
             raise ValueError('Invalid connector owner')
         root = self.root(workspace)
+        activity = ActivityStore(self.hooks, root, now=self.now)
+        focus_generation = None
         def existing():
+            nonlocal focus_generation
             store = self.store(root)
             self._recover_persistence(root, owner)
             native = None
@@ -381,6 +408,16 @@ class TaskSecurityService:
             existing = store.get(task_key=self.key(task_key,owner))
             if existing:
                 require_record_protocol(existing)
+                if existing.get('workspace_isolation'):
+                    from ..task_workspaces import bind, validate_binding
+                    validate_binding(root, existing)
+                    bind(root, existing)
+                register(self, root, existing)
+                if _switch is not None:
+                    focus = activity.focus(owner)
+                    if not focus or (focus['task_ref'], focus['generation']) != _switch:
+                        raise ValueError('Task routing changed')
+                    register(self, root, existing, expected_generation=_switch[1])
                 if existing.get('session_idle'):
                     existing = store.save(existing)
                 if _native_preparation is not None:
@@ -388,6 +425,28 @@ class TaskSecurityService:
                         raise ValueError('NATIVE_REPAIR_TASK_KEY_CONFLICT')
                     native.bind(existing['task_ref'])
                 return self._view(existing), native
+            if check_policy == POLICY:
+                if owner is None:
+                    raise ValueError('Closeout tasks require an explicit owner')
+                if activity.read('binding:'+self.key(task_key, owner)):
+                    raise ValueError('Original task unavailable; never reconstruct a baseline')
+                focus = activity.focus(owner)
+                focus_generation = focus['generation'] if focus else 0
+                if focus is None:
+                    owned = [r for r in store.records(active=True)
+                             if record_owner(r) == owner and is_v3_record(r)]
+                    if owned:
+                        return dict(status='ACTIVE_TASK_EXISTS', scanner_run=False,
+                            task_ref=owned[0]['task_ref'] if len(owned) == 1 else None), native
+                if _switch is not None:
+                    if not focus or (focus['task_ref'], focus['generation']) != _switch:
+                        raise ValueError('Task routing changed')
+                elif focus and focus.get('task_ref'):
+                    current = store.get(focus['task_ref'])
+                    if current is None or (is_v3_record(current)
+                            and current['phase'] not in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}):
+                        return dict(status='ACTIVE_TASK_EXISTS', task_ref=focus['task_ref'],
+                            routing_generation=focus_generation, scanner_run=False), native
             active = store.get(active=True,owner=owner)
             if active and owner is None:
                 # Avoid silently joining another editing task. The host may
@@ -408,21 +467,39 @@ class TaskSecurityService:
         # Preimages use their independent bounded transaction. Capture source
         # outside the workspace lock, then recheck owner/intent/task membership.
         ref = 'ts1-'+uuid.uuid4().hex
-        with self.preimages(root).writer(ref) as writer:
+        from ..task_workspaces import admit
+        isolation = admit(root, owner, task_key, workspace_setup_ref)
+        policy_record = {'check_policy': check_policy}
+        from contextlib import nullcontext
+        from .baseline_inputs import BaselineInputs, CONTRACT as ATTRIBUTION_CONTRACT
+        original_inputs = None
+        inputs = BaselineInputs(self.hooks, root, now=self.now)
+        retain_inputs = check_policy == POLICY and _native_preparation is None
+        with self.preimages(root, policy_record).writer(ref) as writer, (inputs.writer(ref) if retain_inputs else nullcontext(None)) as raw_sink:
             baseline = capture(root, preimage_writer=writer,
+                raw_sink=raw_sink,
                 priority_paths=tuple(_native_preparation['source_hashes']) if _native_preparation else ())
+            if raw_sink is not None:
+                try:
+                    original_inputs = raw_sink.seal(baseline, self._closeout_configuration(root, baseline))
+                except (OSError, ValueError):
+                    original_inputs = dict(status='UNAVAILABLE', reason='ORIGINAL_CONFIGURATION_UNAVAILABLE')
         with self.hooks.lock(root, wait_seconds=2) as acquired:
             if not acquired:
-                self.discard_preimages(root, ref)
+                self.discard_preimages(root, ref, policy_record)
+                if (original_inputs or {}).get('ref'):
+                    inputs.discard(original_inputs['ref'])
                 return {'status': 'BUSY', 'scanner_run': False}
             response, native = existing()
             if response is not None:
-                self.discard_preimages(root, ref)
+                self.discard_preimages(root, ref, policy_record)
+                if (original_inputs or {}).get('ref'):
+                    inputs.discard(original_inputs['ref'])
                 return response
             if _native_preparation is not None and not all(
                     baseline['hashes'].get(name) == sha
                     for name, sha in _native_preparation['source_hashes'].items()):
-                self.discard_preimages(root, ref)
+                self.discard_preimages(root, ref, policy_record)
                 raise ValueError('NATIVE_REPAIR_BASELINE_MISMATCH')
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=capture_started_at,
@@ -432,13 +509,37 @@ class TaskSecurityService:
                 # A short-lived command Hook is not the conversation's owner process.
                 # Its normal exit can never prove that the editing task ended.
                 writer=writer_identity() if _owner is None else None)
+            if check_policy == POLICY:
+                record['check_policy'] = POLICY
+                if retain_inputs:
+                    record.update(attribution_contract=ATTRIBUTION_CONTRACT, before_scan_inputs=original_inputs)
+                if background_closeout:
+                    record['closeout_dispatch'] = 'BACKGROUND_V1'
             if owner is not None: record['task_owner']=owner
+            if isolation:
+                record['workspace_isolation'] = isolation
             if _native_preparation is not None:
                 import copy
                 record['native_repair'] = copy.deepcopy(_native_preparation)
             if _owner is not None:
                 record['connector_owner'] = _owner
+            if check_policy == POLICY:
+                # Persist the key tombstone before the cross-store task commit.
+                # A crash in between is unavailable, never permission to take
+                # a replacement baseline from potentially edited sources.
+                with activity.transaction() as db:
+                    activity._put(db, 'binding:'+record['task_key'],
+                        dict(task_ref=ref, owner=owner))
             record = self.store(root).save(record, new=True)
+            if isolation:
+                from ..task_workspaces import bind
+                bind(root, record)
+            register(self, root, record, expected_generation=focus_generation)
+            if _native_preparation is not None and owner is not None:
+                focus = activity.focus(owner)
+                if focus:
+                    activity.activate(owner, ref, expected_generation=focus['generation'],
+                                      created_at=record['created_at'], policy=LEGACY)
             try:
                 from ..observation import bind_product
                 bind_product('task', record['task_ref'], relation='TASK_CREATED')
@@ -459,6 +560,13 @@ class TaskSecurityService:
                 disposition_store(self.hooks, root))
 
     def _fresh(self, root, record):
+        for name, expected in record.get('end_auxiliary_hashes', {}).items():
+            try:
+                actual = hash_bytes(WorkspaceReader(root).read(name)[0]) if os.path.lexists(root/name) else None
+            except (OSError, ValueError, EvidenceUnavailable):
+                return False
+            if actual != expected:
+                return False
         if record.get('finished_hook_revision'):
             revision, _, _ = self._hook_inputs(root, record)
             if revision != record['finished_hook_revision']:
@@ -499,7 +607,7 @@ class TaskSecurityService:
         return {key: snapshot.get(key) for key in
                 ('hashes', 'inventory', 'inventory_complete', 'read_limitations', 'limitations')}
 
-    def _publish_static(self, root, ref, pending, attempts, *, fresh):
+    def _publish_static(self, root, ref, pending, attempts, *, fresh, queue_guard=None):
         """Commit completed facts only against their original task and live lane."""
         from ..scan_attempt import AttemptLease
         from ..scan_publication import ScanPublications
@@ -510,6 +618,9 @@ class TaskSecurityService:
             if not acquired:
                 return dict(status='BUSY', task_ref=ref, scanner_run=False,
                             reason='SCAN_ATTEMPT_PUBLICATION_PENDING', source_result_saved=True)
+            if queue_guard is not None and not queue_guard():
+                return dict(status='STALE', task_ref=ref, scanner_run=False,
+                            reason='CLOSEOUT_REQUEST_SUPERSEDED')
             current = self.load(root, ref)
             require_record_protocol(current)
             same_task = (current.get('static_execution') == lease.receipt
@@ -558,16 +669,19 @@ class TaskSecurityService:
                     scan_id=current['static'].get('scan_id'),
                     outcome='FAILED' if current['static']['status'] == 'FAILED' else 'COMPLETED')
             publications.acknowledge(pending)
+            from .activity import deferred, ActivityStore
+            if deferred(current):
+                ActivityStore(self.hooks, root, now=self.now).complete_queue(ref, current['closeout_revision'])
             return self._view(current)
 
-    def _recover_static(self, root, ref, end, auxiliary_hashes, attempts):
+    def _recover_static(self, root, ref, end, auxiliary_hashes, attempts, queue_guard=None):
         from ..scan_publication import ScanPublications
         rows = ScanPublications(self.hooks, root).pending('TASK', ref)
         for pending in rows:
             payload = pending['payload']
             fresh = (self._publication_source(end) == payload['end']
                      and auxiliary_hashes == payload['auxiliary_hashes'])
-            result = self._publish_static(root, ref, pending, attempts, fresh=fresh)
+            result = self._publish_static(root, ref, pending, attempts, fresh=fresh, queue_guard=queue_guard)
             if result is None:
                 continue
             result.update(scanner_run=False, publication_recovered=True)
@@ -575,15 +689,37 @@ class TaskSecurityService:
         return None
 
     def finish(self, workspace, ref):
+        from .end_versions import capture_end
         root = self.root(workspace)
-        original = self.load(root, ref)
-        require_record_protocol(original)
-        # Source IO never holds the cross-process publication lock.
-        end = capture(root, known_paths=original['baseline'].get('inventory', original['baseline']['hashes']),
-                      priority_paths=original.get('end', {}).get('read_priority', ()), include_text=False)
-        # Runtime may consume root ignore/configuration files which are outside
-        # the development snapshot's supported-source inventory. Bind their
-        # actual bytes/absence separately; never invent an original task hash.
+        record = self.load(root, ref)
+        require_record_protocol(record)
+        started = time.perf_counter()
+        end, staged_ref = capture_end(self, root, record)
+        captured_ms = round((time.perf_counter()-started)*1000)
+        try:
+            result = self._finish(workspace, ref, end=end)
+            from .activity import deferred
+            if deferred(record):
+                result['closeout_metrics'] = dict(capture_ms=captured_ms,
+                    total_ms=round((time.perf_counter()-started)*1000),
+                    hashed_file_count=end.get('capture_stats', {}).get('hashed_file_count'),
+                    accepted_source_bytes=end.get('capture_stats', {}).get('accepted_source_bytes'))
+            if deferred(record) and result.get('status') == 'BUSY':
+                result.update(closeout_pending=True, resume_tool='finish_security_task',
+                    resume_task_ref=ref, retry_after_ms=1000)
+            return result
+        finally:
+            if staged_ref:
+                saved = self.store(root).get(ref)
+                if not saved or saved.get('end', {}).get('version_ref') != staged_ref:
+                    self.end_versions(root).discard(staged_ref)
+                else:
+                    superseded = record.get('end', {}).get('version_ref')
+                    if superseded and superseded != staged_ref:
+                        self.end_versions(root).discard(superseded)
+
+    def _closeout_configuration(self, root, end):
+        """Bind scanner configuration even when it is outside source inventory."""
         auxiliary = {'.gitleaks.toml', '.gitleaksignore', '.semgrepignore'}
         for variable in ('GITLEAKS_CONFIG', 'TRIVY_CONFIG'):
             value = os.getenv(variable)
@@ -592,25 +728,44 @@ class TaskSecurityService:
                 configured = ((root/configured).resolve() if not configured.is_absolute() else configured.resolve())
                 if configured.is_relative_to(root):
                     auxiliary.add(_relative(configured.relative_to(root).as_posix()))
-        auxiliary_hashes = {}
+        hashes = {}
         for name in sorted(auxiliary):
             if name in end['hashes']:
-                auxiliary_hashes[name] = end['hashes'][name]
+                hashes[name] = end['hashes'][name]
             elif not os.path.lexists(root/name):
-                auxiliary_hashes[name] = None
+                hashes[name] = None
             else:
                 raw, _ = WorkspaceReader(root).read(name)
-                auxiliary_hashes[name] = hash_bytes(raw)
+                hashes[name] = hash_bytes(raw)
+        return hashes
+
+    def _finish(self, workspace, ref, *, end, queue_guard=None, frozen_source=None, frozen_auxiliary=None):
+        root = self.root(workspace)
+        original = self.load(root, ref)
+        require_record_protocol(original)
+        # Source IO never holds the cross-process publication lock.
+        from .activity import deferred, ActivityStore
+        closeout = deferred(original)
+        activity = ActivityStore(self.hooks, root, now=self.now)
+        # Runtime may consume root ignore/configuration files which are outside
+        # the development snapshot's supported-source inventory. Bind their
+        # actual bytes/absence separately; never invent an original task hash.
+        auxiliary_hashes = (frozen_auxiliary if frozen_source is not None else self._closeout_configuration(root, end))
+        revision = digest_value(dict(hashes=end['hashes'], inventory=end['inventory'], auxiliary=auxiliary_hashes))
+        if closeout:
+            activity.queue(ref, revision)
         from ..scan_attempt import ScanAttemptStore, ScanAttemptExecution, ScanAttemptLost, source_binding
         from ..progress import ScanCancelled, current_reporter
         attempts = ScanAttemptStore(self.hooks, root, now=self.now)
         attempts.recover_cleanup(limit=2)
-        recovered = self._recover_static(root, ref, end, auxiliary_hashes, attempts)
+        recovered = self._recover_static(root, ref, end, auxiliary_hashes, attempts, queue_guard=queue_guard)
         if recovered is not None:
             return recovered
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
+            if queue_guard is not None and not queue_guard():
+                raise ValueError('Closeout request superseded')
             record = self.load(root, ref)
             require_record_protocol(record)
             self._recover_persistence(root, self._owner())
@@ -629,9 +784,13 @@ class TaskSecurityService:
                     and end['inventory'] == record['end'].get('inventory', sorted(record['end']['hashes']))
                     and record['phase'] not in {'STATIC_RUNNING', 'STALE'}
                     and record.get('static', {}).get('status') != 'CANCELLED'
+                    and not record.get('closeout_pending')
+                    and (not closeout or record.get('end_auxiliary_hashes') == auxiliary_hashes)
                     and record.get('finished_hook_revision') == hook_revision):
+                if closeout:
+                    activity.complete_queue(ref, revision)
                 return self._view(record)
-            changes, unknown = task_changes(root, record['baseline'], end)
+            changes, unknown = task_changes(frozen_source or root, record['baseline'], end)
             # Independent tasks may share a checkout, never each other's verdict.
             # Conservatively retain a gap if editing intervals overlap; do not
             # infer exclusive attribution from a whole-workspace snapshot.
@@ -653,6 +812,9 @@ class TaskSecurityService:
                           context_requests={}, context_gaps=[],
                           finished_hook_revision=hook_revision,
                           unverified_paths=unknown, limitations=record['baseline']['limitations']+end['limitations'])
+            if closeout:
+                record.update(end_auxiliary_hashes=auxiliary_hashes, closeout_revision=revision,
+                    reconciled_through_seq=activity.summary(ref)['seq'])
             if changes and overlaps:
                 record['limitations'].append({'reason':'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE',
                     'count':len(overlaps)})
@@ -703,8 +865,12 @@ class TaskSecurityService:
                     return self._view(self.store(root).save(record))
                 # A later edit still compares with this exact original baseline.
                 record.update(phase='NO_CHANGES')
+                if closeout:
+                    activity.complete_queue(ref, revision)
                 return self._view(self.store(root).save(record))
-            if record['static_attempts'] >= 2:
+            executions = record.get('version_attempts', {})
+            used = executions.get(revision, 0) if closeout else record['static_attempts']
+            if used >= 2 or closeout and record['static_attempts'] >= 32:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
                 return self._view(self.store(root).save(record))
             eligible = sorted(set(v['path'] for v in changes if not _environment(v['path'])) | hook_paths)
@@ -722,7 +888,13 @@ class TaskSecurityService:
                 end_hashes=end['hashes'], auxiliary_hashes=auxiliary_hashes,
                 scope=scope, hook_revision=hook_revision)), owner=self._owner())
             if lease is None:
+                if closeout:
+                    record.update(phase='ACTIVE', closeout_pending=True)
+                    self.store(root).save(record)
                 return {'status': 'BUSY', 'task_ref': ref, 'scanner_run': False}
+            if closeout:
+                record['version_attempts'] = {**executions, revision: used+1}
+                record['closeout_pending'] = False
             record.update(phase='STATIC_RUNNING', static_attempts=record['static_attempts']+1,
                           static_execution=lease.receipt)
             try:
@@ -731,6 +903,8 @@ class TaskSecurityService:
                 attempts.finish(lease, outcome='FAILED')
                 raise
         def validate_input(view):
+            if queue_guard is not None and not queue_guard():
+                return False
             view.assert_intact()
             entries = {entry.path:entry for entry in view.manifest if entry.role in {'TARGET','CONTEXT'}}
             for name, expected in auxiliary_hashes.items():
@@ -749,6 +923,9 @@ class TaskSecurityService:
                     return False
             return True
         execution = ScanAttemptExecution(attempts, lease, validator=validate_input, progress=current_reporter())
+        execution.artifact_cache = record.get('attribution_contract') == 'task-risk-attribution-v1'
+        if frozen_source is not None:
+            execution.source_root = frozen_source
         started = time.perf_counter()
         pending = None
         try:
@@ -757,8 +934,12 @@ class TaskSecurityService:
                 try:
                     engine = self.runtime() if callable(self.runtime) else self.runtime
                     from ..scan_input import scoped_request
-                    result = engine.scan(root, mode='quick', request=scoped_request(root, scope,
-                        dependency_changes=[p for p in scope if is_dependency_input(p)]), execution=execution)
+                    request = scoped_request(frozen_source or root, scope,
+                        dependency_changes=[p for p in scope if is_dependency_input(p)])
+                    if frozen_source is not None:
+                        from dataclasses import replace
+                        request = replace(request, workspace_root=root)
+                    result = engine.scan(root, mode='quick', request=request, execution=execution)
                     if execution.input_id is None:
                         raise ScanAttemptLost('SCAN_ATTEMPT_INPUT_NOT_BOUND')
                     # Scanner labels/proof originate only from Runtime.
@@ -767,6 +948,13 @@ class TaskSecurityService:
                         scanner_runs=[asdict(r) for r in result.scanner_runs],
                         rule_coverage=result.rule_coverage, findings=[asdict(f) for f in result.findings],
                         capability_results=result.capability_results)
+                    if execution.artifact_cache:
+                        from .risk_attribution import compare
+                        comparison = compare(self, root, record, engine, result, execution, scope)
+                        record['static']['risk_comparison'] = {k:v for k,v in comparison.items() if k != 'findings'}
+                        record['static']['reuse'] = result.scanner_diagnostics.get('result_reuse', {})
+                        for finding in record['static']['findings']:
+                            finding['risk_attribution'] = comparison['findings'][finding['id']]
                 except ScanCancelled:
                     raise
                 except Exception:
@@ -780,9 +968,13 @@ class TaskSecurityService:
                 end=self._publication_source(record['end']), auxiliary_hashes=auxiliary_hashes,
                 static=record['static'], execution=execution.receipt))
             fresh = self._fresh(root, record)  # Expensive task inventory outside the lock.
-            view = self._publish_static(root, ref, pending, attempts, fresh=fresh)
+            if queue_guard is not None and not queue_guard():
+                raise ScanAttemptLost('CLOSEOUT_REQUEST_SUPERSEDED')
+            view = self._publish_static(root, ref, pending, attempts, fresh=fresh, queue_guard=queue_guard)
             view['scanner_run'] = any(r.get('status') in {'SUCCESS','FAILED','TIMEOUT'}
-                                      for r in record['static'].get('scanner_runs', []))
+                                      for r in record['static'].get('scanner_runs', [])) and not record['static'].get('reuse', {}).get('reused', False)
+            if record['static'].get('risk_comparison', {}).get('before_scan_run'):
+                view['scanner_run'] = True
             return view
         except (ScanCancelled, KeyboardInterrupt):
             with self.hooks.lock(root, wait_seconds=2) as acquired:
@@ -856,7 +1048,7 @@ class TaskSecurityService:
         from ..task_review import TaskReviewCoordinator
         return TaskReviewCoordinator(self).submit_batch(workspace, ref, session, unit_ids, coverage, limitations)
 
-    def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None):
+    def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None, risk_attributions=None):
         root = self.root(workspace)
         require_record_protocol(self.load(root, ref))
         with self.hooks.lock(root) as acquired:
@@ -887,8 +1079,10 @@ class TaskSecurityService:
                 raise TaskReviewInputError([dict(field='limitations', code='REQUIRED_FOR_PARTIAL',
                     correction='PARTIAL 必须列出实际未完成范围或缺少的上下文。')])
             fields = {'title','category','severity','primary_evidence','evidence_refs','impact','preconditions','unknowns','counterevidence','fix_advice'}
-            optional_fields = {'risk_scope', 'task_evidence', 'current_protections'}
+            optional_fields = {'risk_scope', 'task_evidence', 'current_protections', 'same_issue_as',
+                               'risk_origin', 'impact_change', 'attribution_rationale'}
             accepted = []
+            assessments = list(risk_attributions or [])
             scope = record['changes']
             changed = {v['path'] for v in scope}
             for index, candidate in enumerate(findings):
@@ -947,7 +1141,23 @@ class TaskSecurityService:
                     location_version=location['location_version'],
                     evidence_refs=list(dict.fromkeys(refs)), source='HOST_TASK_REVIEW', validation='STRUCTURE_AND_VERSION_VALIDATED',
                     verdict='CANDIDATE_REQUIRES_REVIEW', scanner_sources=[])
+                if candidate.get('same_issue_as'):
+                    original = next((f for f in (record.get('static') or {}).get('findings', [])
+                                     if f['id'] == candidate['same_issue_as']), None)
+                    if (original is None or original['file_path'] != location['path']
+                            or original['category'] != item['category']
+                            or not location['start_line'] <= original['line_start'] <= location['end_line']):
+                        raise ValueError('Same-issue link requires an original static risk at the issued source')
+                    item['same_issue_as'] = original['id']
                 accepted.append(item)
+                attribution_keys = {'risk_origin', 'impact_change', 'attribution_rationale'}
+                if attribution_keys.intersection(candidate):
+                    if not attribution_keys.issubset(candidate) or candidate.get('same_issue_as'):
+                        raise ValueError('Host attribution needs all three fields; linked static risks use risk_attributions')
+                    assessments.append(dict(finding_id=item['id'], origin=candidate['risk_origin'],
+                        impact=candidate['impact_change'], rationale=candidate['attribution_rationale'], evidence_refs=refs))
+            from .risk_attribution import apply_assessments
+            apply_assessments(record, accepted, assessments)
             unread = _unread_context(record)
             if unread:
                 coverage = 'PARTIAL'
@@ -1041,9 +1251,24 @@ class TaskSecurityService:
             # unknown saved decisions into pending risks, or repeat a choice.
             handling_available = False
         current_delivery = delivery and freshness['workspace_matches_snapshot'] is True
+        prior_reports = {}
+        if current_delivery and handling_available and record.get('attribution_contract'):
+            from .risk_reporting import ReportNotifications, grouped_rows
+            notifications = ReportNotifications(self.hooks, root, now=self.now)
+            try:
+                for source, finding in grouped_rows(record):
+                    handling = (static_feedback if source == 'STATIC_SCAN' else feedback).get(finding['id'], {})
+                    disposition = handling.get('disposition') or {}
+                    if disposition.get('disposition') == 'RESTORE' or disposition.get('expired') or disposition.get('reassessment_required'):
+                        continue
+                    prior = notifications.prior(finding)
+                    if prior:
+                        prior_reports[finding['id']] = prior
+            except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+                prior_reports = {}  # Missing delivery proof never hides an issue.
         result = bounded_history_result(record, finding_offset, finding_limit,
             now=self.now(), freshness=freshness, feedback=feedback, static_feedback=static_feedback,
-            handling_available=handling_available, delivery=current_delivery)
+            handling_available=handling_available, delivery=current_delivery, prior_reports=prior_reports)
         if delivery:
             result['delivery_status'] = 'CURRENT' if current_delivery else 'SOURCE_NOT_CURRENT'
             result['completion_revision'] = completion_revision
@@ -1053,7 +1278,11 @@ class TaskSecurityService:
                 result['development_summary'] += '\n'+result['delivery_notice']
         result['risk_ledger_next_action'] = dict(tool='get_task_risk_ledger', task_ref=ref)
         from .projection import status as projection_status
+        from .lifecycle import view_fields
+        result.update(view_fields(self, record))
         result['risk_ledger_sync'] = projection_status(record)
+        if record.get('workspace_isolation'):
+            result['workspace_isolation'] = record['workspace_isolation']
         return seal_history_result(result)
 
     def risk_ledger(self, workspace, ref, offset=0, limit=30):
@@ -1083,7 +1312,7 @@ class TaskSecurityService:
             record['end']['texts'] = {}
         record.pop('packet', None)
         saved = self.store(root).save(record)
-        self.discard_preimages(root, ref)
+        self.discard_preimages(root, ref, saved)
         return self._view(saved)
 
     def _current_handling(self, record, *, read_only=False):
@@ -1130,6 +1359,12 @@ class TaskSecurityService:
         result['risk_ledger_sync'] = projection_status(record)
         result['snapshot_capture'] = dict(baseline=record['baseline'].get('capture_stats'),
             current=(record.get('end') or {}).get('capture_stats'))
+        if record.get('attribution_contract'):
+            result['risk_attribution_contract'] = record['attribution_contract']
+            result['task_baseline_ready'] = True
+            result['before_scan_input_status'] = (record.get('before_scan_inputs') or {}).get('status', 'UNKNOWN')
+        from .lifecycle import view_fields
+        result.update(view_fields(self, record))
         if record.get('native_repair'):
             import copy
             result['native_repair'] = {key: copy.deepcopy(record['native_repair'][key]) for key in

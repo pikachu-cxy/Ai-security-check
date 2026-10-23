@@ -71,7 +71,17 @@ def test_other_topics_have_safe_constraints_and_unknowns(sample, topic):
     out = service(sample).prepare(task(sample, topic)['task_ref'], sample[0])
     assert out['security_goal'] and out['fix_constraints'] and out['unknown_conditions']
     assert out['execution']['scanner_recheck'] is False
-    assert SECRET not in json.dumps(out)
+    if topic == 'secret':
+        assert any('代码证据按原文引用' in constraint['requirement']
+                   for constraint in out['fix_constraints'])
+        packet = out['bounded_evidence'][0]
+        assert any(context['file'] == 'config.properties'
+                   and context['text'] == f'api_key="{SECRET}"'
+                   and context['trust'] == 'UNTRUSTED_CODE'
+                   for context in packet['context'])
+        assert packet['enrichment']['credential_validity'] == 'UNKNOWN'
+    else:
+        assert SECRET not in json.dumps(out)
 
 
 def test_valid_reviews_reused_stale_and_failed_not_promoted(sample):

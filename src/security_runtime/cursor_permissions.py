@@ -14,7 +14,9 @@ from .hook_state import atomic_bytes, no_links
 from .owned_json import encode
 
 ROUTINE_TOOLS = (
-    'begin_security_task', 'finish_security_task', 'prepare_task_security_review',
+    'get_task_isolation_capabilities',
+    'get_task_closeout_status', 'wait_task_closeout', 'cancel_task_closeout',
+    'begin_security_task', 'switch_security_task', 'finish_security_task', 'prepare_task_security_review',
     'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
     'get_task_risk_ledger', 'get_runtime_info', 'get_scan_preparation_status', 'get_security_summary',

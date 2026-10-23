@@ -15,6 +15,17 @@ from urllib.parse import urlsplit
 from .redactor import SecretRedactor
 
 
+def evidence_text(text: str, limit: int | None = 1000) -> str:
+    """Bound display prose without replacing inspected credentials or URLs.
+
+    Source bodies use their own lossless line transport. Runtime diagnostics
+    and service credentials must continue using ``sanitize`` below.
+    """
+    text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', str(text))
+    text = ''.join(c for c in text if c in '\n\t' or ord(c) >= 32)
+    return text if limit is None else text[:limit]
+
+
 def sanitize(text: str, limit: int = 1000) -> str:
     text = re.sub(r'\x1b\[[0-?]*[ -/]*[@-~]', '', str(text))
     text = re.sub(r'https?://[^\s<>"\']+', lambda match: safe_url(match.group()), text)

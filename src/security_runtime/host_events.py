@@ -75,8 +75,14 @@ class NormalizedHostEvent:
     clock_scope: str = CLOCK_SCOPE
     stop_guard_active: bool | None = None
     schema_version: str = CONTRACT
+    candidate_paths: tuple[str, ...] = ()
+    scope_unknown: bool = True
 
     def __post_init__(self):
+        if (not isinstance(self.candidate_paths, tuple) or len(self.candidate_paths) > 1000
+                or any(not isinstance(p, str) or len(p) > 4096 for p in self.candidate_paths)
+                or type(self.scope_unknown) is not bool):
+            raise ValueError('Invalid activity hints')
         if (not isinstance(self.kind, EventKind) or not isinstance(self.operation, OperationClass)
                 or not isinstance(self.context, VerifiedHostContext)
                 or self.schema_version != CONTRACT

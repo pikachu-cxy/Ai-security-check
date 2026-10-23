@@ -27,6 +27,18 @@ ReviewDetails = Annotated[list[ReviewDetail], Field(max_length=10)]
 ReviewCoverage = Literal['REVIEWED', 'PARTIAL']
 
 
+class RiskAttribution(TypedDict):
+    __pydantic_config__ = ConfigDict(extra='forbid', strict=True, hide_input_in_errors=True)
+    finding_id: ReviewEvidence
+    origin: Literal['EXISTING', 'INTRODUCED', 'EXPANDED', 'UNKNOWN']
+    impact: Literal['UNCHANGED', 'EXPANDED', 'UNKNOWN']
+    rationale: ReviewText
+    evidence_refs: ReviewEvidenceRefs
+
+
+RiskAttributions = Annotated[list[RiskAttribution], Field(max_length=100)]
+
+
 class TaskReviewCandidate(TypedDict):
     """Preserve omitted optional keys and the identity of existing valid candidates."""
     __pydantic_config__ = ConfigDict(extra='forbid', strict=True, hide_input_in_errors=True)
@@ -44,6 +56,10 @@ class TaskReviewCandidate(TypedDict):
     risk_scope: NotRequired[Literal['TASK_CHANGED', 'RELATED_EXISTING']]
     task_evidence: NotRequired[ReviewEvidence]
     current_protections: NotRequired[ReviewDetails]
+    same_issue_as: NotRequired[ReviewEvidence]
+    risk_origin: NotRequired[Literal['EXISTING', 'INTRODUCED', 'EXPANDED', 'UNKNOWN']]
+    impact_change: NotRequired[Literal['UNCHANGED', 'EXPANDED', 'UNKNOWN']]
+    attribution_rationale: NotRequired[ReviewText]
 
 
 TaskReviewFindings = Annotated[list[TaskReviewCandidate], Field(max_length=10)]
@@ -65,12 +81,15 @@ class SubmitTaskSecurityReviewInput(TaskReviewBody):
     session_ref: Annotated[str, Field(min_length=1, max_length=4096)] | None = None
     # Resolution semantics remain validated by the original risk ledger.
     risk_resolutions: list[dict] | None = None
+    risk_attributions: RiskAttributions | None = None
 
 
 _FIELDS = frozenset({'findings', 'coverage', 'limitations', 'title', 'category', 'severity',
     'primary_evidence', 'evidence_refs', 'impact', 'preconditions', 'unknowns',
     'counterevidence', 'fix_advice', 'risk_scope', 'task_evidence', 'current_protections',
-    'task_ref', 'review_session', 'workspace_path', 'session_ref', 'risk_resolutions'})
+    'task_ref', 'review_session', 'workspace_path', 'session_ref', 'risk_resolutions',
+    'risk_attributions', 'finding_id', 'origin', 'rationale', 'same_issue_as',
+    'risk_origin', 'impact_change', 'attribution_rationale'})
 _MAX_ERRORS = 6
 
 

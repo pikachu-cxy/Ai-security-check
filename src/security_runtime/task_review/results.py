@@ -10,7 +10,7 @@ import copy
 import json
 from pathlib import PurePosixPath
 
-from ..redactor import SecretRedactor
+from ..diagnostics import evidence_text, sanitize
 
 
 MAX_RESULT_BYTES = 64_000
@@ -21,7 +21,8 @@ _PUBLIC_FINDING_FIELDS = frozenset({
     'line_start', 'line_end', 'location_version', 'impact', 'fix_advice',
     'preconditions', 'unknowns', 'counterevidence', 'current_protections',
     'evidence_locations', 'evidence_refs', 'risk_scope', 'task_evidence',
-    'source', 'validation', 'verdict', 'scanner_sources',
+    'source', 'validation', 'verdict', 'scanner_sources', 'risk_attribution',
+    'related_observations', 'same_issue_as', 'prior_report',
 })
 _EXPLANATION_FIELDS = frozenset({
     'title', 'plain_title', 'impact', 'fix_advice', 'preconditions',
@@ -61,13 +62,13 @@ def _bytes(value):
     return len(json.dumps(value, ensure_ascii=False).encode('utf-8'))
 
 
-def _redact(value):
+def _display_text(value):
     if isinstance(value, str):
-        return SecretRedactor().redact(value)
+        return evidence_text(value, None)
     if isinstance(value, list):
-        return [_redact(item) for item in value]
+        return [_display_text(item) for item in value]
     if isinstance(value, dict):
-        return {key: _redact(item) for key, item in value.items()}
+        return {key: _display_text(item) for key, item in value.items()}
     return value
 
 
@@ -75,7 +76,7 @@ def _finding(finding):
     result = {key: copy.deepcopy(value) for key, value in finding.items()
               if key in _PUBLIC_FINDING_FIELDS}
     for key in _EXPLANATION_FIELDS & result.keys():
-        result[key] = _redact(result[key])
+        result[key] = _display_text(result[key])
     return result
 
 
@@ -93,12 +94,12 @@ def _sample(values, maximum=8, byte_limit=1600):
                 omitted_count=len(values)-len(selected))
 
 
-def _limit_notes(values):
-    """Keep diagnostics separate from complete risk explanations."""
+def _limit_notes(values, *, source_explanation=False):
+    """Bound notes while preserving source values in host explanations."""
     notes = []
     for value in values or []:
         if isinstance(value, str):
-            text = _redact(value)
+            text = evidence_text(value, len(value)) if source_explanation else sanitize(value, len(value))
             notes.append(text if _bytes(text) <= 400 else
                          dict(message=text[:100], display_truncated=True,
                               original_char_count=len(text)))
@@ -266,7 +267,7 @@ def _base(record, freshness=None, feedback=None, static_feedback=None, *, handli
                          validation=review.get('validation'), finding_count=len(host_findings),
                          elapsed_wall_ms=review.get('elapsed_wall_ms'),
                          submitted_at=review.get('submitted_at'),
-                         limitations=_limit_notes(review.get('limitations') or [])),
+                         limitations=_limit_notes(review.get('limitations') or [], source_explanation=True)),
         file_hook_checks=dict(check_count=len(record.get('hook_checks') or []),
                               omitted_check_count=record.get('hook_checks_omitted', 0),
                               current_recheck_files=_sample(record.get('hook_final_recheck_files') or [])),
@@ -346,7 +347,7 @@ def _base(record, freshness=None, feedback=None, static_feedback=None, *, handli
     if static.get('reason'):
         result['static']['reason'] = static['reason']
     if record.get('skip_reason'):
-        result['incomplete_reason'] = _limit_notes([record['skip_reason']])
+        result['incomplete_reason'] = _limit_notes([record['skip_reason']], source_explanation=True)
     return result
 
 
@@ -417,6 +418,24 @@ def _page(base, record, rows, offset, index, limit, selected, next_offset, *,
         result['risk_choices'].append(choice)
     result['risk_counts']['page_visible'] = plan.total_risk_count if handling_available else None
     result['development_summary'] = render_reply(plan, include_risks=delivery)
+    if delivery and record.get('attribution_contract'):
+        from ..tasks.risk_reporting import LABELS
+        lines = []
+        for item in selected:
+            detail = item.get('detail') or {}
+            if not detail or not item.get('details_complete'):
+                continue
+            choices = feedback if item['source'] == 'HOST_TASK_REVIEW' else static_feedback
+            if _suppressed(choices.get(detail.get('id'), {})) or not handling_available:
+                continue
+            attribution = detail.get('risk_attribution') or {}
+            origin = attribution.get('origin', 'UNKNOWN')
+            label = LABELS.get(origin, LABELS['UNKNOWN'])
+            lines.append(f"{detail.get('file_path', '')}:{detail.get('line_start', '')}：{label}"+
+                ('（已报告，确认影响未变；保留原报告引用）' if detail.get('prior_report') else '')+
+                ('；已有风险的影响变化尚未确认' if origin == 'EXISTING' and attribution.get('impact') != 'UNCHANGED' else ''))
+        if lines:
+            result['development_summary'] += '\n\n风险归属：\n'+'\n'.join(lines)
     if delivery and (offset or next_offset is not None):
         result['development_summary'] += ('\n\n本页返回 '+str(len(selected))+' 项原始风险记录，'
             '当前可提醒 '+str(plan.total_risk_count if handling_available else '未知')+' 项；'
@@ -446,7 +465,7 @@ def seal_history_result(packet):
 
 
 def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=None, feedback=None,
-                           static_feedback=None, handling_available=True, delivery=False):
+                           static_feedback=None, handling_available=True, delivery=False, prior_reports=None):
     """Return at most three complete risks, or an explicit detail-limit notice.
 
     ``now`` is accepted for the service's clock-compatible interface; history
@@ -456,10 +475,15 @@ def bounded_history_result(record, offset=0, limit=3, *, now=None, freshness=Non
     if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 30:
         raise ValueError('Invalid history result page')
     static, review = record.get('static') or {}, record.get('review') or {}
-    rows = [('STATIC_SCAN', finding) for finding in static.get('findings') or []]
-    rows.extend(('HOST_TASK_REVIEW', finding) for finding in review.get('findings') or [])
+    from ..tasks.risk_reporting import grouped_rows, describe
+    rows = grouped_rows(record)
+    for _, finding in rows:
+        if finding['id'] in (prior_reports or {}):
+            finding['prior_report'] = prior_reports[finding['id']]
     index = offset
     base = _base(record, freshness, feedback, static_feedback, handling_available=handling_available)
+    if record.get('attribution_contract'):
+        base['risk_report'] = describe(record)
     if delivery:
         base.update(history_read_only=False, delivery_read_only=True,
                     delivery_contract='CURRENT_TASK_COMPLETION',

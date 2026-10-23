@@ -256,10 +256,10 @@ def test_initialization_not_blocking_or_fake_ready(installed, projects, tmp_path
     blocker = threading.Event(); started = threading.Event()
     def factory(root, directory, binding):
         core = HookCoordinator(complete_runtime(), HookStateStore(directory / 'hooks'))
-        original = core._scan_scope
+        original = core._session_baseline
         def handle(*a, **k):
             started.set(); assert blocker.wait(10); return original(*a, **k)
-        core._scan_scope = handle
+        core._session_baseline = handle
         return _Child(binding).server, core
     pool = pool_fixture(installed, tmp_path, factory)
     try:
@@ -451,7 +451,7 @@ def test_non_edit_tool_does_not_bootstrap(installed, projects, tmp_path, tool):
 def test_initialization_failure_not_ready_or_proof(installed, projects, tmp_path):
     def factory(root, directory, binding):
         core = HookCoordinator(FakeRuntime(), HookStateStore(directory / 'hooks'))
-        core._scan_scope = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('private source-like error'))
+        core._session_baseline = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('private source-like error'))
         return _Child(binding).server, core
     pool = pool_fixture(installed, tmp_path, factory)
     try:
@@ -629,7 +629,7 @@ def test_old_hook_under_unknown_server_alias_is_preserved(installed, projects):
     assert path.read_bytes() == before
 
 
-def test_global_baseline_preexisting_tracked_risk_is_persisting(installed, projects, tmp_path):
+def test_global_session_baseline_does_not_invent_preexisting_scanner_facts(installed, projects, tmp_path):
     from test_hook_runtime import row
     root = projects[0]
     def factory(root, directory, binding):
@@ -640,15 +640,17 @@ def test_global_baseline_preexisting_tracked_risk_is_persisting(installed, proje
         assert ready(pool, root, 's')['status'] == 'READY'
         core = pool.children[root][1]
         snapshot, _ = core.store.load(core.store.path(root, 'codex', 's'))
-        assert snapshot['changed_files'] == [] and len(snapshot['families']) == 1
-        assert core.runtime.calls == [('src/A.java',)]
+        assert snapshot['changed_files'] == [] and snapshot['families'] == {}
+        assert snapshot['last_result']['status'] == 'COMPARISON_BASELINE'
+        assert core.runtime.calls == []
         (root / 'src/A.java').write_text('class A { int harmless; }\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
-        assert result['delta']['new'] == 0 and result['delta']['persisting'] == 1
+        assert result['delta']['new'] == 0
+        assert result['first_scan_attribution_status'] == 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
     finally: pool.close()
 
 
-def test_global_baseline_first_new_risk_remains_new(installed, projects, tmp_path):
+def test_global_session_baseline_alone_cannot_prove_new_risk(installed, projects, tmp_path):
     from test_hook_runtime import row
     pool = pool_fixture(installed, tmp_path)
     try:
@@ -658,12 +660,13 @@ def test_global_baseline_first_new_risk_remains_new(installed, projects, tmp_pat
         core.runtime.findings = [row(root, file='src/A.java')]
         (root / 'src/A.java').write_text('changed\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
-        assert result['delta']['new'] == 1
+        assert result['delta']['new'] == 0
+        assert result['first_scan_attribution_status'] == 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
     finally: pool.close()
 
 
 @pytest.mark.parametrize('cause', ['FAILED', 'PARTIAL', 'moving'])
-def test_global_incomplete_baseline_never_publishes_comparison(installed, projects, tmp_path, cause):
+def test_session_comparison_independent_of_engine_but_rejects_moving_source(installed, projects, tmp_path, cause):
     root = projects[0]
     def factory(root, directory, binding):
         runtime = complete_runtime()
@@ -675,13 +678,23 @@ def test_global_incomplete_baseline_never_publishes_comparison(installed, projec
             return result
         runtime.scan = scan
         if cause == 'FAILED': runtime.status = 'FAILED'
-        return _Child(binding).server, HookCoordinator(runtime, HookStateStore(directory / 'hooks'))
+        core = HookCoordinator(runtime, HookStateStore(directory / 'hooks'))
+        if cause == 'moving':
+            snapshot = core.snapshot_capture
+            def moving(*args):
+                value = snapshot(*args)
+                (root/'src/A.java').write_text('class A { int moved; }\n')
+                return value
+            core.snapshot_capture = moving
+        return _Child(binding).server, core
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         value = ready(pool, root, 's')
-        assert value['status'] == 'DEGRADED' and value['security_proof'] is False
+        assert value['status'] == ('DEGRADED' if cause == 'moving' else 'READY')
+        assert value['security_proof'] is False
         core = pool.children[root][1]
-        assert core.store.load(core.store.path(root, 'codex', 's'))[0] is None
+        assert core.runtime.calls == []
+        assert (core.store.load(core.store.path(root, 'codex', 's'))[0] is None) == (cause == 'moving')
     finally: pool.close()
 
 

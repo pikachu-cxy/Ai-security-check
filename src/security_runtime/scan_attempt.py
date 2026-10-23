@@ -349,6 +349,7 @@ class ScanAttemptStore:
 
 class ScanAttemptExecution:
     """Runtime port: lease checkpoints, fixed-input binding and raw-input lifetime."""
+    artifact_cache = True
     def __init__(self, store, lease, *, validator=None, after_scan=None, progress=None):
         self.store, self.lease = store, lease
         self.validator, self._after_scan = validator, after_scan

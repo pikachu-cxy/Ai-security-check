@@ -1,8 +1,6 @@
 """Host candidate feedback stays distinct from fixes and scanner proof."""
 import copy
 import json
-import subprocess
-import sys
 
 import pytest
 
@@ -136,12 +134,12 @@ def test_changed_source_between_prepare_and_submit_rejects_old_confirmation(serv
     assert feedback.get(s, root, ref, finding_id)['feedback']['status'] == 'NOT_MARKED'
 
 
-def test_masked_secret_source_cannot_be_host_confirmed_as_false_positive(service):
+def test_visible_secret_still_needs_credential_validity_evidence(service):
     s, root, ref, finding_id = host_risk(service, category='secret')
     feedback = TaskRiskFeedbackService()
     packet = feedback.prepare(s, root, ref, finding_id)
     assert not packet['context_complete']
-    assert 'SECRET_VALUE_NOT_AVAILABLE_FOR_HOST_VERIFICATION' in packet['limitations']
+    assert 'CREDENTIAL_VALIDITY_NOT_VERIFIED' in packet['limitations']
     result = submit_false_positive(feedback, s, root, ref, finding_id, packet)
     assert result['feedback']['status'] == 'INCONCLUSIVE'
     assert not result['feedback']['folded']
@@ -277,7 +275,7 @@ def test_unknown_build_identity_prevents_false_positive_confirmation(service, mo
     assert not result['feedback']['folded'] and result['feedback']['status'] == 'INCONCLUSIVE'
 
 
-def test_known_opaque_secret_lines_and_free_text_never_escape_or_persist_in_feedback(service):
+def test_known_opaque_secret_lines_and_free_text_are_preserved_in_feedback(service):
     s, root, _ = service
     opaque = 'opaqueCanaryValueForPrivacyBoundary'
     (root/'auth.py').write_text('def owns(user, order):\n    marker = '+repr(opaque)+'\n    return user.id == order.owner_id\n')
@@ -289,14 +287,16 @@ def test_known_opaque_secret_lines_and_free_text_never_escape_or_persist_in_feed
     s.store(root).save(saved)
     feedback = TaskRiskFeedbackService()
     packet = feedback.prepare(s, root, ref, finding_id)
-    assert opaque not in json.dumps(packet)
-    assert any(value.startswith('KNOWN_SECRET_RANGE_MASKED:') for value in packet['limitations'])
+    assert opaque in json.dumps(packet)
+    assert packet['source_presentation'] == 'RAW_V3'
+    assert packet['context_complete']
+    assert all(source['trust'] == 'UNTRUSTED_CURRENT_SOURCE' for source in packet['sources'])
     result = feedback.mark(s, root, ref, finding_id,
         'The original value '+opaque+' is a test marker.', user_requested=True)
-    assert opaque not in json.dumps(result)
+    assert opaque in json.dumps(result)
     raw = TaskRiskLedger(s.hooks, root).read()[ref+':'+finding_id]
-    assert opaque not in json.dumps(raw['feedback_events'])
-    assert '[REDACTED_SECRET]' in json.dumps(raw['feedback_events'])
+    assert opaque in json.dumps(raw['feedback_events'])
+    assert '[REDACTED_SECRET]' not in json.dumps(raw['feedback_events'])
 
 
 def test_feedback_audit_capacity_keeps_one_final_revocation_without_deleting_events(service):
@@ -321,7 +321,7 @@ def test_feedback_audit_capacity_keeps_one_final_revocation_without_deleting_eve
     assert len(ledger.read()[key]['feedback_events']) == 21
 
 
-def test_unverifiable_known_secret_context_withholds_source_and_reason_text(service):
+def test_changed_secret_source_retains_reason_but_does_not_approve_stale_source(service):
     s, root, _ = service
     opaque = 'opaquePrivacyCanaryFromPreviousSource'
     (root/'auth.py').write_text('def owns(user, order):\n    marker = '+repr(opaque)+'\n    return True\n')
@@ -333,59 +333,34 @@ def test_unverifiable_known_secret_context_withholds_source_and_reason_text(serv
     (root/'auth.py').write_text('def owns(user, order):\n    return user.id == order.owner_id\n')
     feedback = TaskRiskFeedbackService()
     packet = feedback.prepare(s, root, ref, finding_id)
-    assert 'KNOWN_SECRET_CONTEXT_UNAVAILABLE' in packet['limitations']
-    assert not packet['sources'] and not packet['context_complete']
+    assert 'ORIGINAL_SOURCE_OR_CONFIGURATION_CHANGED' in packet['limitations']
+    assert packet['sources'] and not packet['context_complete']
     result = feedback.mark(s, root, ref, finding_id, opaque, user_requested=True)
-    assert opaque not in json.dumps(result)
+    assert opaque in json.dumps(result)
     audit = feedback.get(s, root, ref, finding_id)['audit_events']
-    assert opaque not in json.dumps(audit)
-    assert audit[0]['reason'] == '[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]'
-
-
-def test_unclosed_thousand_character_escaped_string_has_bounded_secret_parsing(tmp_path):
-    # A child timeout protects the test run itself from reintroducing an
-    # exponential regex when untrusted source contains an unterminated string.
-    script = r'''
-import hashlib
-import json
-from pathlib import Path
-import sys
-from security_runtime.tasks.risk_feedback import _known_secrets, _quoted_literals
-root = Path(sys.argv[1])
-line = '"' + '\\' * 998
-assert len(line) == 999 and list(_quoted_literals(line)) == []
-raw = (line + '\n').encode()
-(root / 'sample.py').write_bytes(raw)
-record = {'end': {'hashes': {'sample.py': hashlib.sha256(raw).hexdigest()}},
-          'static': {'findings': [{'category': 'secret', 'file_path': 'sample.py',
-                                   'line_start': 1, 'line_end': 1}]}}
-values, incomplete = _known_secrets(root, record)
-assert incomplete and line in values
-print('linear parsing completed')
-'''
-    result = subprocess.run([sys.executable, '-c', script, str(tmp_path)],
-                            capture_output=True, text=True, timeout=5, check=True)
-    assert 'linear parsing completed' in result.stdout
+    assert opaque in json.dumps(audit)
+    assert audit[0]['reason'] == opaque
 
 
 @pytest.mark.parametrize('line', [
-    'api_key = `synth\\u0065tic-material`',
-    'api_key = "synthetic-material"; other = "unterminated',
+    '    api_key = `synthetic-material`',
+    '    api_key = "synthetic-material"; other = "unterminated',
 ])
-def test_unsupported_or_partly_unclosed_known_secret_marks_context_unknown(tmp_path, line):
-    import hashlib
-    from security_runtime.tasks.risk_feedback import _known_secrets
-    raw = (line + '\n').encode()
-    (tmp_path/'sample.py').write_bytes(raw)
-    record = {'end': {'hashes': {'sample.py': hashlib.sha256(raw).hexdigest()}},
-              'static': {'findings': [{'category':'secret', 'file_path':'sample.py',
-                                       'line_start':1, 'line_end':1}]}}
-    _, incomplete = _known_secrets(tmp_path, record)
-    assert incomplete
+def test_malformed_secret_syntax_does_not_invent_a_feedback_evidence_gap(service, line):
+    s, root, _ = service
+    (root/'auth.py').write_text('def owns(user, order):\n' + line + '\n')
+    s, root, ref, finding_id = host_risk(service)
+    record = s.load(root, ref)
+    record['static']['findings'].append(dict(id='known-secret', category='secret',
+        title='Synthetic known credential', file_path='auth.py', line_start=2, line_end=2))
+    s.store(root).save(record)
+    packet = TaskRiskFeedbackService().prepare(s, root, ref, finding_id)
+    assert packet['context_complete']
+    assert any(line in entry for source in packet['sources'] for entry in source['numbered_lines'])
 
 
 @pytest.mark.parametrize('source', ['HUMAN', 'AI'])
-def test_twenty_first_known_secret_range_never_leaks_in_feedback_text(service, source):
+def test_many_known_secret_ranges_do_not_mask_or_block_feedback_text(service, source):
     s, root, _ = service
     values = [f'opaqueKnownCredential{index:02d}' for index in range(21)]
     lines = ['def owns(user, order):']
@@ -404,11 +379,10 @@ def test_twenty_first_known_secret_range_never_leaks_in_feedback_text(service, s
             'The last value ' + values[-1] + ' is synthetic.', user_requested=True)
     else:
         packet = feedback.prepare(s, root, ref, finding_id)
-        assert 'KNOWN_SECRET_CONTEXT_UNAVAILABLE' in packet['limitations']
-        assert not packet['sources'] and not packet['context_complete']
+        assert packet['context_complete'] and packet['sources']
         result = feedback.submit(s, root, ref, finding_id, packet['feedback_ref'], 'NEEDS_CONTEXT',
             'The last value ' + values[-1] + ' is unverified.', [], [], unknowns=['Validity unknown'])
-    assert values[-1] not in json.dumps(result)
+    assert values[-1] in json.dumps(result)
     audit = feedback.get(s, root, ref, finding_id)['audit_events']
-    assert values[-1] not in json.dumps(audit)
-    assert '[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]' in json.dumps(audit)
+    assert values[-1] in json.dumps(audit)
+    assert '[REDACTED_REASON_UNVERIFIABLE_SECRET_CONTEXT]' not in json.dumps(audit)

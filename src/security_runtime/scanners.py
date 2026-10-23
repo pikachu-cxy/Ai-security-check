@@ -601,7 +601,7 @@ class GitleaksAdapter(BaseScanner):
                 report = str(Path(tmp) / "findings.json")
                 invocation('SECRET_SCAN', target_count)
                 process = _execute([binary, "dir", target, "--report-format", "sarif", "--report-path", report,
-                    "--redact=100", "--no-banner", "--no-color", "--log-level", 'trace' if trace else 'info',
+                    "--redact=0", "--no-banner", "--no-color", "--log-level", 'trace' if trace else 'info',
                     "--max-decode-depth", "5",
                     "--exit-code", "0"], context.root, self.timeout)
                 if process.return_code != 0:
@@ -656,7 +656,7 @@ class GitleaksAdapter(BaseScanner):
         except (ValueError, OSError):
             program = None
         for item in data:
-            finding=n.make(scanner=self.name, category="secret", title=item.get("Description", "Potential secret"), description="A possible secret was found in source code.", severity="HIGH", confidence="HIGH", file_path=item.get("File", ""), line=item.get("StartLine", 1), evidence="[REDACTED_SECRET]", rule_id=item.get("RuleID", ""))
+            finding=n.make(scanner=self.name, category="secret", title=item.get("Description", "Potential secret"), description="A possible secret was found in source code.", severity="HIGH", confidence="HIGH", file_path=item.get("File", ""), line=item.get("StartLine", 1), evidence=item.get("Match", ""), rule_id=item.get("RuleID", ""))
             finding.line_end=max(finding.line_start,item.get('EndLine',finding.line_start))
             if program:
                 capability = program.capability(item.get('RuleID',''), 'gitleaks')

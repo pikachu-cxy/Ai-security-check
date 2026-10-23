@@ -62,27 +62,27 @@ def test_large_project_retains_all_fourteen_late_changed_preimages(sample):
         assert references[name]['line_count'] == 1500
 
 
-def test_raw_credentials_are_never_persisted_and_reference_is_small(sample):
+def test_original_credentials_are_retained_with_small_authenticated_reference(sample):
     store, _ = sample
     raw = b"password = 'test-private-password'\nvalue = 'private-business-literal'\n"
     with store.writer(FIRST) as writer:
         reference = put(writer, raw=raw)
     assert len(json.dumps(reference).encode()) < 1000
     assert reference['raw_sha256'] == sha(raw)
-    assert reference['source'] == 'SANITIZED_WORKSPACE_BEFORE_TASK'
+    assert reference['source'] == 'WORKSPACE_SOURCE'
     assert read(store, FIRST, 'routes.py', reference) == safe_source(raw.decode())
     persisted = store.path.read_bytes()
-    assert b'test-private-password' not in persisted
+    assert b'test-private-password' in persisted
     assert b'private-business-literal' in persisted
-    assert reference['redaction_version'] == 2
+    assert reference['redaction_version'] == 3
 
 
-def test_caller_cannot_pass_unredacted_text_as_sanitized_lines(sample):
+def test_caller_cannot_pass_a_body_different_from_original_source(sample):
     store, _ = sample
     raw = b"password = 'test-secret'\n"
     with store.writer(FIRST) as writer:
         with pytest.raises(TaskPreimageUnavailable) as error:
-            writer.put('routes.py', raw, raw.decode().splitlines())
+            writer.put('routes.py', raw, ['password = "[REDACTED_SECRET]"'])
         assert reason(error) == 'TASK_PREIMAGE_SANITIZATION_UNVERIFIED'
         valid = put(writer, 'safe.py')
     assert read(store, FIRST, 'safe.py', valid)

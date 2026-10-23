@@ -88,7 +88,7 @@ class OpenAICompatibleProvider:
 
     def __init__(self,config,*,allow_external_code_context=False,budget=None):
         if not allow_external_code_context:
-            raise ValueError('External AI sends bounded, redacted code context. Explicit --allow-external-code-context is required')
+            raise ValueError('External AI sends bounded original code context, including embedded credentials. Explicit --allow-external-code-context is required')
         self.config=config
         self.model=config.model
         self.provider_name=config.base_url.rstrip('/')

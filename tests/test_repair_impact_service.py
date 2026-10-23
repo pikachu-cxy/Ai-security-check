@@ -193,14 +193,14 @@ def test_untrusted_path_denied(impact, name):
         service.read(packet['assessment_ref'], name, 1, 1, reason='related')
 
 
-def test_docs_need_reason_and_literals_stay_masked(impact):
+def test_docs_need_reason_and_literals_remain_original(impact):
     service, root, _, _, _, _ = impact
     (root/'rules.md').write_text('Use token = secret-value\nShared members may read files.\n', encoding='utf8')
     packet = prepared(impact)
     with pytest.raises(RepairImpactError, match='REPAIR_IMPACT_DOCUMENT_REASON_REQUIRED'):
         service.read(packet['assessment_ref'], 'rules.md', 1, 2)
     out = service.read(packet['assessment_ref'], 'rules.md', 1, 2, reason='Business access contract')
-    assert 'secret-value' not in json.dumps(out)
+    assert 'secret-value' in json.dumps(out)
     assert 'Shared members' in json.dumps(out)
 
 
@@ -328,7 +328,7 @@ def test_partial_results_save_even_when_control_delivery_is_exhausted(impact):
     assert service.get(packet['assessment_ref'])['unknown_count'] == 1
 
 
-def test_known_secret_is_scrubbed_from_proposal_and_stale_analysis(impact):
+def test_known_source_credential_remains_in_proposal_and_stale_analysis(impact):
     service, root, _, resolved, proposal, _ = impact
     secret = 'opaque-business-credential'
     (root/'app.py').write_text('password = "'+secret+'"\noperation()\n', encoding='utf8')
@@ -339,10 +339,10 @@ def test_known_secret_is_scrubbed_from_proposal_and_stale_analysis(impact):
     impacts[0]['summary'] = 'Previously used '+secret+'; exact value is unknown'
     (root/'app.py').write_text('changed = True\n', encoding='utf8')
     result = service.submit(packet['assessment_ref'], impacts, [], coverage='PARTIAL')
-    assert secret not in json.dumps(result)
+    assert secret in json.dumps(result)
     with sqlite3.connect(service.store.path) as db:
         saved = db.execute('SELECT record FROM assessments').fetchone()[0]
-    assert secret not in saved
+    assert secret in saved
 
 
 @pytest.mark.parametrize('bad_source', [dict(kind=[], task_ref='x'), dict(kind='SCANNER_TASK_GROUP', task_ref='x', finding_id='extra')])

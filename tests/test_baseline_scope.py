@@ -42,6 +42,11 @@ def test_oversized_relevant_text_still_rejected(repo, snapshot, name):
 
 def partial_plan(files=('app.ts', 'Component.vue')):
     plan = plan_rules(RulePackManager().resolve(), list(files))
+    # Model a provider plan with an unsupported-format gap. The current bundled
+    # pack also supports Vue, so do not infer this fixture from its live catalog.
+    plan.files = tuple(name for name in plan.files if not name.endswith('.vue'))
+    if not plan.files:
+        plan.rules = ()
     plan.observe({'time': {'rules': [r.rule_id for r in plan.rules]},
                   'paths': {'scanned': list(plan.files)}}, plan.files)
     run = ScannerRun('semgrep', '1.178.0', 'SUCCESS' if plan.rules else 'NOT_COVERED', 1,
@@ -177,17 +182,17 @@ def test_non_git_partial_baseline_readiness_and_reconnect(tmp_path, failure):
         first = pool._initialize(root, 'fixture-session', core)
         repeated = pool._initialize(root, 'fixture-session', core)
         for value in (first, repeated):
-            assert value['status'] == ('DEGRADED' if failure else 'READY')
-            assert value['baseline_coverage'] == 'PARTIAL'
-            assert value['baseline_capabilities']['CODE_SAST'] == 'PARTIAL'
-            assert value['target_selection']['excluded_count'] == 1
+            assert value['status'] == 'READY'
+            assert value['initial_scope'] == 'SESSION_COMPARISON_ONLY'
+            assert value['project_scan_status'] == 'NOT_REQUESTED'
+            assert value['scanner_run'] is False
             assert value['security_proof'] is False
-        assert len(runtime.calls) == 1
+        assert len(runtime.calls) == 0
         (root / 'app.ts').write_text('export const value = 2;\n')
         core.cooldown_ms = 0
         core.handle('FILE_CHANGED', root, 'codex', 'fixture-session')
         after_edit = pool._initialize(root, 'fixture-session', core)
-        assert after_edit['status'] == ('DEGRADED' if failure else 'READY')
+        assert after_edit['status'] == 'READY'
         assert after_edit['security_proof'] is False
     finally:
         pool.close()

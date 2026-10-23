@@ -228,10 +228,12 @@ def test_actual_review_coverage_still_controls_original_risk_closure(timeline, m
     assert not updates['original:risk']['production_safety_verified']
 
 
-def test_actual_exited_process_and_new_mcp_connection_cannot_adopt_task(service):
+def test_actual_exited_process_and_new_mcp_connection_cannot_adopt_task(service, monkeypatch):
     from security_runtime.hook_runtime import HookCoordinator
     from security_runtime.mcp_server import create_server
+    from security_runtime.tasks.queued_closeout import execute_one
     from test_task_ownership import call
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *a, **k: None)
     legacy, root, runtime = service
     script = '''
 import json, sys, time
@@ -252,11 +254,20 @@ print(json.dumps(service.begin(sys.argv[1], 'exited-process')))
     core = HookCoordinator(runtime, legacy.hooks)
     server = create_server(runtime, hook_coordinator=core, global_mode=False)
     fresh = call(server, 'begin_security_task', workspace_path=str(root), task_key='new')['task_ref']
+    original = legacy.store(root).get(fresh)
     with pytest.raises(Exception, match='another session'):
         call(server, 'finish_security_task', workspace_path=str(root), task_ref=ref)
     (root/'routes.py').write_text('value = 1\n')
     result = call(server, 'finish_security_task', workspace_path=str(root), task_ref=fresh)
-    assert result['status'] == 'READY' and not result['limitations']
+    assert result['status'] == 'QUEUED' and not runtime.calls
+    tasks = TaskSecurityService(runtime, core.store, owner=own.record_owner(original))
+    assert execute_one(tasks, root, fresh)
+    status = call(server, 'get_task_closeout_status', workspace_path=str(root), task_ref=fresh)
+    assert status['status'] == 'READY_FOR_REVIEW' and status['job_ref'] == result['job_ref']
+    reviewed = call(server, 'get_task_security_review', workspace_path=str(root), task_ref=fresh)
+    assert reviewed['status'] == 'READY' and reviewed['limitations']['total_count'] == 0
+    assert tasks.load(root, fresh)['baseline'] == original['baseline']
+    assert runtime.calls == [('routes.py',)]
     assert legacy.store(root).get(ref) == before
 
 

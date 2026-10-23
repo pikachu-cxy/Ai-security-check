@@ -14,6 +14,7 @@ def captured_scan(method):
             return method(self, root, mode, **kwargs)
         request = kwargs['request']
         with progress_context(execution), capture_scan_input(request,
+                source_root=getattr(execution, 'source_root', None),
                 private_parent=execution.private_parent, on_created=execution.input_created,
                 on_removed=execution.input_removed) as view:
             execution.input_ready(view)

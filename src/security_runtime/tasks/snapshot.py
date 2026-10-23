@@ -18,7 +18,7 @@ from ..local_evidence import MAX_FILE_BYTES
 from ..local_evidence import WorkspaceReader
 from ..local_evidence import safe_source
 from . import preimages as task_preimages
-from ..source_redaction import VERSION
+from ..source_redaction import VERSION, SUPPORTED_VERSIONS
 
 
 MAX_READ_BYTES = 20_000_000
@@ -70,7 +70,8 @@ def _environment(name):
 def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
                      inventory_limits=(), known_paths=None, priority_paths=(),
                      include_text=True, preimage_writer=None, policy=None,
-                     reader_factory=WorkspaceReader, sanitizer=safe_source):
+                     reader_factory=WorkspaceReader, sanitizer=safe_source, raw_sink=None,
+                     redaction_version=VERSION):
     """Collect one bounded before-edit or current-version snapshot.
 
     ``inventory`` comes from the caller's guarded project boundary discovery.
@@ -79,6 +80,10 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
     bytes and exception text never become part of the returned record.
     """
     policy = policy or SnapshotPolicy()
+    if type(redaction_version) is not int or redaction_version not in SUPPORTED_VERSIONS:
+        raise ValueError('Unsupported source redaction policy')
+    if preimage_writer is not None and getattr(preimage_writer, 'redaction_version', redaction_version) != redaction_version:
+        raise ValueError('Snapshot and preimage representation differ')
     root = Path(root)
     reader = reader_factory(root)
     names = list(dict.fromkeys(inventory))
@@ -148,6 +153,8 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
         accepted_bytes += len(raw)
         if not include_text or _environment(name):
             continue
+        if raw_sink is not None:
+            raw_sink.put(name, raw)
         if preimage_writer is not None:
             try:
                 if callable(getattr(preimage_writer, 'put_source', None)):
@@ -156,7 +163,7 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
                 else:
                     truncated = []
                     lines = sanitizer(text, source_path=name, truncation_lines=truncated,
-                                      max_line_chars=None)
+                                      max_line_chars=None, redaction_version=redaction_version)
                     reference = preimage_writer.put(name, raw, lines)
                 preimages[name] = reference
                 private_bytes += reference['body_bytes']
@@ -168,7 +175,7 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
             continue
         truncated = []
         lines = sanitizer(text, source_path=name, truncation_lines=truncated,
-                          max_line_chars=None)
+                          max_line_chars=None, redaction_version=redaction_version)
         if truncated:
             truncations[name] = dict(line_count=len(truncated), lines=truncated)
         cost = len(json.dumps(lines, ensure_ascii=True).encode('utf-8'))
@@ -205,7 +212,7 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
         inline_body_bytes=text_bytes, private_body_bytes=private_bytes,
         limitation_count=len(limitations), limitation_omitted_count=max(0,len(limitations)-MAX_LIMITATIONS),
         limitation_reason_counts=reason_counts, limits=policy.limits())
-    return dict(hashes=hashes, texts=texts, text_truncations=truncations, redaction_version=VERSION,
+    return dict(hashes=hashes, texts=texts, text_truncations=truncations, redaction_version=redaction_version,
         line_counts=line_counts, preimages=preimages, text_unavailable=unavailable,
         limitations=limitations[:MAX_LIMITATIONS], read_limitations=read_limitations[:MAX_LIMITATIONS],
         inventory=sorted(selected), inventory_complete=complete,

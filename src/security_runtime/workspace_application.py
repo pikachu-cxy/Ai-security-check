@@ -82,7 +82,7 @@ class WorkspaceApplication:
                     progress.checkpoint()
                     progress.emit('SCAN_RESULT_REUSED',message='当前证据已重新核验，复用上次扫描结果。')
                 return dict(decision.scan,result_reuse=decision.receipt)
-        result=run_explicit_scan(runtime,root,mode='release',progress=progress,hooks=self.hooks)
+        result=run_explicit_scan(runtime,root,mode='release',progress=progress,hooks=self.hooks, force_rescan=force_rescan)
         result.scanner_diagnostics['reuse_check']=(decision.receipt if decision is not None else
             dict(reused=False,reason_code='FORCE_RESCAN_REQUESTED',scanner_run=True))
         return result

@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
-from .diagnostics import sanitize
+from .diagnostics import evidence_text
 
 STATUSES = ('UNREVIEWED', 'TRUE_POSITIVE', 'FALSE_POSITIVE', 'NEEDS_CONTEXT',
             'ACCEPTED_RISK', 'NOT_APPLICABLE')
@@ -52,21 +52,23 @@ def quality_finding(finding):
                     md.get('package_version'), md.get('canonical_vulnerability_id', rule)]
     level = {'secret': 'SECRET_MATCH', 'dependency': 'DEPENDENCY_MATCH',
              'configuration': 'CONFIG_MATCH'}.get(kind, 'DIRECT_MATCH')
-    stored_evidence = sanitize(finding.get('evidence', ''), 2000)
+    stored_evidence = evidence_text(finding.get('evidence', ''), 2000)
     placeholder = 'semgrep' in scanner and stored_evidence.strip().lower() == 'requires login'
-    matched_status = ('REDACTED' if kind == 'secret' else 'NOT_APPLICABLE' if kind == 'dependency'
+    legacy_redacted = (md.get('source_presentation') != 'RAW_V3'
+                       and stored_evidence.strip() in {'[REDACTED_SECRET]', '[REDACTED_LITERAL]'})
+    matched_status = ('REDACTED' if legacy_redacted else 'NOT_APPLICABLE' if kind == 'dependency'
         else 'UNAVAILABLE_SCANNER_PLACEHOLDER' if placeholder else 'AVAILABLE' if stored_evidence else 'NOT_PROVIDED')
     evidence = dict(evidence_level=level, provenance='STORED_SCANNER_OUTPUT', source=None, sink=None, trace=[],
                     matched_code=stored_evidence if matched_status == 'AVAILABLE' else None,
                     matched_code_status=matched_status,
-                    scanner_evidence='[REDACTED_SECRET]' if kind == 'secret' else stored_evidence,
+                    scanner_evidence=stored_evidence,
                     rule_metadata={k: md[k] for k in ('rule_id', 'rule_pack', 'rule_pack_version',
                         'rule_pack_checksum', 'capability_id', 'capability_maturity', 'cwe', 'framework') if k in md},
                     dataflow_available=False)
     row = dict(finding_id='fq1-' + digest(identity)[:32], scanner_finding_id=finding['id'],
         rule_id=rule, scanner=scanner, capability=md.get('capability_id') or 'UNMAPPED',
         file=file, line=start, line_end=end, severity=finding['severity'],
-        confidence=finding['confidence'], message=sanitize(finding.get('description') or finding.get('plain_title', ''), 2000),
+        confidence=finding['confidence'], message=evidence_text(finding.get('description') or finding.get('plain_title', ''), 2000),
         evidence=evidence, scanner_metadata=md,
         triage_status='UNREVIEWED', triage_reason='', triage_source=None, triaged_at=None)
     # Review reuse is conservative: changed scanner observations need review.
@@ -172,7 +174,7 @@ class FindingQualityService:
             status, source, reason = (decision[k] for k in ('triage_status', 'triage_source', 'triage_reason'))
             if status not in STATUSES or source not in SOURCES or not isinstance(reason, str) or not reason.strip() or len(reason) > 4000:
                 raise ValueError('Review requires valid status, source and bounded reason')
-            records.append({**decision, 'triage_reason': sanitize(reason, 4000),
+            records.append({**decision, 'triage_reason': evidence_text(reason, 4000),
                             'triaged_at': datetime.now(timezone.utc).isoformat()})
         scan = self.store.get_scan(scan_id)
         self.store.save_finding_reviews(str(Path(scan['target_profile']['path']).resolve()), scan_id, records)

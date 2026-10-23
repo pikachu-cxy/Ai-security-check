@@ -1,7 +1,7 @@
-"""One bounded, disposable sanitized source per connection; never evidence.
+"""One bounded, disposable source representation per connection; never authority.
 
 Callers authenticate the task and re-read/hash current source before every hit.
-Raw source, credentials, records, coverage and authority never enter this cache.
+The key binds the source representation; records, coverage and authority stay out.
 """
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ class TaskSourceCache:
             if entry[0] != key:
                 return None
             # Callers may add related obligations or build responses from the
-            # returned lists. They cannot mutate the retained sanitized body.
+            # returned lists. They cannot mutate the retained source body.
             return list(entry[2]), list(entry[3])
 
     def put(self, key, lines, truncated_lines):

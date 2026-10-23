@@ -35,7 +35,7 @@ PLANS = {
     'secret': {
         'security_goal': '移除不应入库的敏感配置，并保留正常配置来源。',
         'root_cause': 'Secret detector 记录了候选位置，凭据有效性、部署使用及轮换状态未知。',
-        'constraints': ['不输出、记录或传输 Secret 原值。', '不把删除文本当作凭据已轮换。', '保留配置语义，不将示例位置自动判为无风险。'],
+        'constraints': ['代码证据按原文引用；不得把凭据额外写入应用日志或发送到未授权的服务。', '不把删除文本当作凭据已轮换。', '保留配置语义，不将示例位置自动判为无风险。'],
         'changes': ['核对用途后改用已有安全配置注入方式；轮换/停用交由有权限的负责人确认状态，不索取原值。'],
         'regression': ['检查缺少配置时明确失败及正确配置时正常工作；核对原 detector/path 家族不再命中。']},
     'dependency': {
@@ -179,7 +179,7 @@ class TaskFixService:
                     automatic_execution=False, repair_authorized=False)
         if task['topic'] == 'dependency':
             from ..dependency_context import remediation_options
-            # Evidence/text is redacted by the same bounded builder.
+            # Evidence/text retains source values through the same bounded builder.
             try:
                 if not packets: raise ValueError('Dependency evidence unavailable')
                 out['dependency_remediation'] = self._safe_dependency_options(

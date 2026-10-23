@@ -135,7 +135,8 @@ def test_pre_edit_dirty_baseline_post_context_and_no_double_scan(repo,tmp_path):
     assert bridge.tasks.before_lines(repo,record,'A.java')==['pre-existing user bytes'] and not runtime.calls
     (repo/'A.java').write_text('task bytes')
     _,result=ingress(repo,tmp_path,core,'afterFileEdit')
-    assert result['scanner_run'] and result['hook_check_recording']=='RECORDED'
+    assert not result['scanner_run'] and result['hook_check_recording']=='ACTIVITY_RECORDED'
+    assert result['status'] == 'RECORDED_PENDING'
     output,post=ingress(repo,tmp_path,core,'postToolUse',tool_name='Write',tool_use_id='opaque')
     assert before['task_ref'] in output['additional_context']
     assert 'finish_security_task' in output['additional_context']
@@ -143,8 +144,10 @@ def test_pre_edit_dirty_baseline_post_context_and_no_double_scan(repo,tmp_path):
     assert 'protocol_version=3' in output['additional_context']
     assert all(name in output['additional_context'] for name in
         ('get_task_review_plan','get_task_review_method','submit_task_review_batch'))
-    assert len(runtime.calls)==1 and not post['scanner_run']
-    assert bridge.current()['hook_checks']
+    assert not runtime.calls and not post['scanner_run']
+    from security_runtime.tasks.activity import ActivityStore
+    assert ActivityStore(core.store, repo).summary(before['task_ref'])['seq'] == 1
+    assert not bridge.current().get('hook_checks')
 
 
 def test_prepared_cursor_v3_context_preserves_original_baseline_and_budget(repo, tmp_path):
@@ -154,6 +157,10 @@ def test_prepared_cursor_v3_context_preserves_original_baseline_and_budget(repo,
     bridge = CursorTaskBridge(core, repo, 'private-cursor-conversation', 'private-generation')
     baseline = bridge.current()['baseline']
     (repo / 'A.java').write_text('class Changed { boolean allowed(User user) { return policy.check(user); } }\n')
+    from security_runtime.tasks.queued_closeout import enqueue, execute_one
+    assert bridge.tasks.prepare(repo, first, protocol_version=3)['status'] == 'NOT_QUEUED'
+    enqueue(bridge.tasks, repo, first, launch=False)
+    execute_one(bridge.tasks, repo, first)
     prepared = bridge.tasks.prepare(repo, first, protocol_version=3)
     assert prepared['review_required']
     before = bridge.current()
@@ -252,7 +259,7 @@ def test_unavailable_tool_id_keeps_pre_edit_baseline_and_context(repo,tmp_path,s
     rows=RecentHookStore(tmp_path/'recent.db').recent(repo)['records']
     pre=next(r for r in rows if r['event']=='preToolUse')
     assert pre['handler_status']=='BASELINE_CAPTURED' and pre['tool_use_id_state']==result['tool_use_id_state']
-    assert not pre['scanner_run'] and len(core.runtime.calls)==1
+    assert not pre['scanner_run'] and not core.runtime.calls
 
 
 @pytest.mark.parametrize('value', [123, True, [], {}, ' ', 'x'*501, 'private\x00value', '\ud800'])
@@ -299,8 +306,8 @@ def test_mcp_begin_prepares_same_key_before_call_and_edit(repo,tmp_path,name):
     assert tool(repo,tmp_path,core)[1]['task_ref']==before['task_ref']
     (repo/'A.java').write_text('task edit')
     result=ingress(repo,tmp_path,core,'afterFileEdit')[1]
-    assert result['scanner_run'] and result['hook_check_recording']=='RECORDED'
-    assert len(core.runtime.calls)==1 and bridge.current()['hook_checks']
+    assert not result['scanner_run'] and result['hook_check_recording']=='ACTIVITY_RECORDED'
+    assert not core.runtime.calls and not bridge.current().get('hook_checks')
 
 
 @pytest.mark.parametrize('bad', ['other-workspace','relative','missing-key','oversize-key'])
@@ -474,7 +481,7 @@ def test_cursor_router_hides_codex_hook_tools_and_routes_to_shared_workspace(int
         info=await server.call_tool('get_runtime_info',{})
         assert info.structuredContent['host_connector']=='cursor'
         result=await server.call_tool('begin_security_task',{'task_key':'test','workspace_path':str(repo)})
-        assert structured(result)['status']=='ACTIVE'
+        assert structured(result)['status']=='ACTIVE', structured(result)
         unknown=await server.call_tool('handle_stop_event',{})
         assert unknown.structuredContent['reason_code']=='INVALID_HOST_CLAIMS'
     try:

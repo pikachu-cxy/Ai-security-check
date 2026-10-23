@@ -178,15 +178,17 @@ def test_missing_text_keeps_unresolved_full_range_and_missing_hash_is_explicit()
 
 
 def private_record(old, new):
-    """Real sanitizer and native private proof, with synthetic source only."""
+    """Legacy v2 sanitizer and private proof, with synthetic source only."""
     def snapshot(lines):
         raw = ('\n'.join(lines)+'\n').encode()
         truncated = []
-        sanitized = safe_source(raw.decode(), source_path='main.py', truncation_lines=truncated)
-        return dict(hashes={'main.py': hashlib.sha256(raw).hexdigest()}, texts={'main.py': sanitized},
+        sanitized = safe_source(raw.decode(), source_path='main.py', truncation_lines=truncated,
+                                redaction_version=2)
+        return dict(redaction_version=2,
+            hashes={'main.py': hashlib.sha256(raw).hexdigest()}, texts={'main.py': sanitized},
             text_truncations={'main.py': dict(lines=truncated)} if truncated else {},
             semantic_proofs={'main.py': make_proof(b'fixture-key-for-line-proof-only!!', 'fixture-workspace',
-                'ts1-'+'f'*32, 'main.py', raw, sanitized_lines=sanitized)})
+                'ts1-'+'f'*32, 'main.py', raw, sanitized_lines=sanitized, redaction_version=2)})
     return dict(baseline=snapshot(old), end=snapshot(new)), dict(path='main.py', change='MODIFIED')
 
 

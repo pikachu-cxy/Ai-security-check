@@ -83,5 +83,5 @@ def scan_timing(result, request_timing, *, reused=False):
                 and type(value) in {int, float} and value >= 0}
     return dict(request_timing, scan_ms=0 if reused else measured.get('total', duration),
         scan_stages_ms={} if reused else measured,
-        historical_scan_ms=duration if reused else None,
+        historical_scan_ms=diagnostics.get('result_reuse', {}).get('original_duration_ms', duration) if reused else None,
         reused=reused)

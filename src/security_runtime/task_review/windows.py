@@ -1,4 +1,4 @@
-"""Pure, bounded planning of sanitized before/after review windows.
+"""Pure, bounded planning of task before/after review windows.
 
 Equal prefixes, suffixes and monotone unique-line anchors avoid a quadratic
 whole-file diff. Only small gaps use SequenceMatcher; unresolved large gaps are
@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 import re
 
 from ..tasks.preimage_fingerprints import opaque_semantic_lines
+from ..source_redaction import VERSION
 
 
 CONTEXT_LINES = 3
@@ -112,6 +113,8 @@ def _truncations(snapshot, path):
 
 def _semantic_proof(snapshot, path, lines):
     """Validate only private caller-supplied proof; never reconstruct history."""
+    if snapshot.get('redaction_version') == VERSION:
+        return {} if not _truncations(snapshot, path) else None
     proof = snapshot.get('semantic_proofs', {}).get(path)
     if (not isinstance(proof, dict) or type(proof.get('version')) is not int or proof['version'] not in {1, 2}
             or proof.get('complete') is not True or type(proof.get('line_count')) is not int
@@ -223,8 +226,10 @@ def adaptive_windows(record, change):
         # Missing legacy proofs are not new before evidence. Include every
         # potentially hidden location in both versions, even when another
         # visible hunk would otherwise hide that ambiguity.
-        old_opaque = opaque_semantic_lines(old, _truncations(before, path))
-        new_opaque = opaque_semantic_lines(new, _truncations(after, path))
+        old_opaque = (set(_truncations(before, path)) if before.get('redaction_version') == VERSION
+                      else opaque_semantic_lines(old, _truncations(before, path)))
+        new_opaque = (set(_truncations(after, path)) if after.get('redaction_version') == VERSION
+                      else opaque_semantic_lines(new, _truncations(after, path)))
         missing = ((old_proof is None and old_opaque) or (new_proof is None and new_opaque))
         raw_changed = before['hashes'].get(path) != after['hashes'].get(path)
         if missing and raw_changed:

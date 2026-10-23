@@ -69,10 +69,10 @@ def capture(root, store, *, mode, staged, rules_path, hook_scope, logical_root=N
     return value
 
 
-def complete(value, root, store, *, input_view=None):
+def complete(value, root, store, *, input_view=None, applicability=None):
     value = dict(value, finished_at=time.time(), source_consistent=False)
     if input_view is not None:
-        applicability = input_view.check_current()
+        applicability = applicability or input_view.check_current()
         value['fixed_input'] = dict(contract=input_view.contract, input_id=input_view.input_id,
             source_kind=str(input_view.request.source_kind), source_revision=input_view.source_revision,
             input_count=len(input_view.manifest), applicability=applicability.state,

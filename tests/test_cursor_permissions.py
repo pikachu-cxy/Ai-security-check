@@ -53,6 +53,7 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
     # These operations start scans, plan/authorize repairs, or recheck repairs.
     explicit = {
+        'prepare_task_workspace',
         'scan_project', 'scan_diff', 'scan_files', 'prepare_closeout_check', 'run_closeout_check',
         'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
         'confirm_remediation', 'refresh_remediation_confirmation',

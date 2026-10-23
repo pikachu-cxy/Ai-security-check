@@ -41,6 +41,11 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
     deferred/failed checks visible at task closeout and is diagnostic only;
     it never turns a historical finding into a current risk or grants repair.
     """
+    if result.get('status') == 'RECORDED_PENDING':
+        # The separate small ledger is already durable; no full task rewrite.
+        from .security_state import TaskSecurityStore
+        ref = result.get('security_task_ref')
+        return (TaskSecurityStore(hooks, root).get(ref) if ref else None), 'ACTIVITY_RECORDED'
     from .security_state import TaskSecurityStore
     from .orchestration import select_task, TaskSelectionError
     from ..host_event_journal import HostEventJournal, EVENT_REF
@@ -190,7 +195,8 @@ def _deferred_task_context(summary):
         'coverage', 'scan_id', 'scanner_run', 'new_families', 'persisting_families', 'resolved_families',
         'additional_occurrences', 'removed_occurrences', 'capabilities', 'deferred_code_providers',
         'dependency_check_reason', 'hook_check_recording', 'unpersisted_hook_scope_files',
-        'unpersisted_hook_scope_files_omitted', 'task_delivery') if key in summary}
+        'unpersisted_hook_scope_files_omitted', 'task_delivery', 'task_edit_check_policy',
+        'activity_seq') if key in summary}
     control.update(feedback_delivery='TASK_FINAL_SUMMARY', user_feedback_suppressed=True,
                    repair_authorized=False)
     failure = ('本次文件修改检查的任务记录保存失败；已保留独立失败记录，任务结束必须复查其中的范围并披露历史记录缺口。'
@@ -198,8 +204,11 @@ def _deferred_task_context(summary):
                '本次文件修改检查的任务记录与独立失败记录均未能保存；最终总结必须明确记录保存失败及可能遗漏的检查范围，'
                '不得声称这些结果已持久保留，也不得将未复查范围认定为安全。'
                if summary.get('hook_check_recording') == 'UNAVAILABLE' else '')
+    activity = ('本次仅持久记录变更线索，没有执行静态扫描；沿用原 task_ref，在任务收尾调用 '
+                'finish_security_task，然后完成 agent 复核。' if summary.get('status') == 'RECORDED_PENDING' else
+                '本次逐次静态检查与风险记录以实际工具记录为准，')
     return ('任务内检查记录（仅供工具使用，不展示给用户）\n'
-        '当前是已登记的开发任务。继续用户已授权的开发工作；本次逐次静态检查与风险记录以实际工具记录为准，'
+        '当前是已登记的开发任务。继续用户已授权的开发工作；' + activity +
         '不要立即呈现钩子反馈、暂停开发或要求用户作出安全处理选择。'
         '任务结束时完成整次任务安全核查，把当前风险、检查范围和未完成项一次合并进开发总结；'
         '仍存在的问题由用户选择处理，已经验证消除的历史问题不能作为当前待处理风险。'

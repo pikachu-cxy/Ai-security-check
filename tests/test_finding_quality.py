@@ -110,13 +110,42 @@ def test_metrics_denominator_and_source_separation(tmp_path):
 
 @pytest.mark.parametrize('category,level', [('code','DIRECT_MATCH'),('secret','SECRET_MATCH'),
     ('dependency','DEPENDENCY_MATCH'),('configuration','CONFIG_MATCH')])
-def test_evidence_never_invents_flow_or_secret(tmp_path,category,level):
+def test_evidence_preserves_observed_match_without_inventing_flow(tmp_path,category,level):
     raw=asdict(finding(tmp_path,category=category,evidence='synthetic private match'))
     row=quality_finding(raw)
     assert row['evidence']['evidence_level']==level
     assert row['evidence']['source'] is None and row['evidence']['sink'] is None
     assert row['evidence']['trace']==[] and not row['evidence']['dataflow_available']
-    if category=='secret': assert 'synthetic private match' not in json.dumps(row)
+    assert row['evidence']['scanner_evidence'] == 'synthetic private match'
+    if category == 'secret':
+        assert row['evidence']['matched_code_status'] == 'AVAILABLE'
+        assert row['evidence']['matched_code'] == 'synthetic private match'
+
+
+@pytest.mark.parametrize('value,status', [('', 'NOT_PROVIDED'),
+    ('[REDACTED_SECRET]', 'REDACTED'), ('[REDACTED_LITERAL]', 'REDACTED')])
+def test_missing_or_historical_secret_evidence_is_not_reconstructed(tmp_path, value, status):
+    raw = asdict(finding(tmp_path, category='secret', evidence=value))
+    raw['technical_details'].pop('source_presentation')
+    evidence = quality_finding(raw)['evidence']
+    assert evidence['matched_code_status'] == status
+    assert evidence['matched_code'] is None
+    assert evidence['scanner_evidence'] == value
+
+
+@pytest.mark.parametrize('value', ['[REDACTED_SECRET]', '[REDACTED_LITERAL]'])
+def test_current_literal_marker_is_real_evidence_not_a_historical_redaction(tmp_path, value):
+    raw = asdict(finding(tmp_path, category='secret', evidence=value))
+    assert raw['technical_details']['source_presentation'] == 'RAW_V3'
+    quality = quality_finding(raw)
+    assert quality['evidence']['matched_code_status'] == 'AVAILABLE'
+    assert quality['evidence']['matched_code'] == quality['evidence']['scanner_evidence'] == value
+    original_id = raw['id']
+    raw['technical_details'].pop('source_presentation')
+    historical = quality_finding(raw)
+    assert raw['id'] == original_id
+    assert historical['finding_id'] == quality['finding_id']
+    assert historical['observation_hash'] != quality['observation_hash']
 
 
 def test_mcp_preserves_legacy_id_and_triage_with_quality_view(tmp_path):

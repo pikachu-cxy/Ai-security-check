@@ -1,10 +1,11 @@
-"""Credential-only source evidence policy; ordinary program text stays readable."""
+"""Source representation versions; legacy masking is retained for saved tasks."""
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-VERSION = 2
+VERSION = 3
+SUPPORTED_VERSIONS = frozenset({1, 2, VERSION})
 _MARKER = '[REDACTED_SECRET]'
 _KEY = re.compile(r'(?:password|passwd|pwd|token|apikey|secretkey|secret|credentials?|privatekey|authorization|signingkey|accesskey)(?:id|value)?$', re.I)
 _ASSIGNMENT = re.compile(r'''(?P<key>[A-Za-z_$][\w$]*|["'][^"'\r\n]{1,80}["'])\s*\]?\s*(?::\s*[A-Za-z_$][\w$.[\]<>?, &|]*)?\s*(?:===|!==|==|!=|=|:)\s*\(?\s*[rubf]{0,2}$''', re.I)

@@ -10,6 +10,7 @@ from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
 from security_runtime.mcp_server import create_server
 from security_runtime.tasks.ownership import session_owner, verify_session_ref
+from security_runtime.tasks.queued_closeout import execute_one
 from security_runtime.tasks.security import TaskSecurityService
 from test_global_integration import complete_runtime, installed, projects, pool_fixture
 
@@ -66,7 +67,8 @@ def task_pool(installed, tmp_path):
 
 
 def test_native_task_uses_host_owner_and_resumes_exact_pre_edit_record(
-        installed, projects, tmp_path):
+        installed, projects, tmp_path, monkeypatch):
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *args: None)
     root = projects[0]
     first = task_pool(installed, tmp_path)
     server = create_global_server(workspaces=first)
@@ -99,9 +101,16 @@ def test_native_task_uses_host_owner_and_resumes_exact_pre_edit_record(
         same = startup(reconnected, root).structuredContent['task_session_ref']
         finished = call(reconnected, 'finish_security_task', task_ref=ref,
                         workspace_path=str(root), session_ref=same).structuredContent
-        assert finished['status'] == 'READY', finished
+        assert finished['status'] == 'QUEUED', finished
         core = second.children[root][1]
         service = TaskSecurityService(core.runtime, core.store, owner=session_owner('codex', 'acceptance-chat'))
+        assert execute_one(service, root, ref)
+        status = call(reconnected, 'get_task_closeout_status', task_ref=ref,
+                      workspace_path=str(root), session_ref=same).structuredContent
+        assert status['status'] == 'READY_FOR_REVIEW', status
+        prepared = call(reconnected, 'prepare_task_security_review', task_ref=ref,
+                        protocol_version=3, workspace_path=str(root), session_ref=same).structuredContent
+        assert prepared['review_session'], prepared
         record = service.load(root, ref)
         assert record['baseline']['hashes'] == before
         assert len(service.store(root).records()) == 1

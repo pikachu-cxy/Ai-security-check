@@ -47,6 +47,10 @@ def _snapshot(record):
     # even if a caller edits a file back to an earlier reviewed version.
     if record.get('review_revision', 1) > 1:
         identity['review_revision'] = record['review_revision']
+    if record['end'].get('version_ref'):
+        identity['end_version_ref'] = record['end']['version_ref']
+    if record['baseline'].get('redaction_version', 1) >= 3:
+        identity['source_representation_version'] = record['baseline']['redaction_version']
     return _digest(identity)
 
 

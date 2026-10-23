@@ -21,7 +21,7 @@ def blocked_pool(installed, tmp_path):
 
     def factory(root, directory, binding):
         core = HookCoordinator(complete_runtime(), HookStateStore(directory / 'hooks'))
-        original = core._scan_scope
+        original = core._session_baseline
 
         def scan(*args, **kwargs):
             calls.append(root)
@@ -29,7 +29,8 @@ def blocked_pool(installed, tmp_path):
             assert release.wait(10)
             return original(*args, **kwargs)
 
-        core._scan_scope = scan
+        core._session_baseline = scan
+        core._scan_scope = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('startup must not scan'))
         return _Child(binding).server, core
 
     return pool_fixture(installed, tmp_path, factory), started, release, calls
@@ -53,7 +54,9 @@ def test_session_start_waits_for_pre_edit_publication(installed, projects, tmp_p
         assert response.structuredContent['status'] == 'READY'
         core = pool.children[root][1]
         snapshot, _ = core.store.load(core.store.path(root, 'codex', 'startup'))
-        assert snapshot['last_result']['status'] == 'PRE_EXISTING_BASELINE'
+        assert snapshot['last_result']['status'] == 'COMPARISON_BASELINE'
+        assert response.structuredContent['workspace_readiness']['project_scan_status'] == 'NOT_REQUESTED'
+        assert response.structuredContent['workspace_readiness']['task_baseline_ready'] is False
         assert (root / 'src/A.java').read_bytes() == original
         assert calls == [root]
         payload=json.loads(response.content[0].text)

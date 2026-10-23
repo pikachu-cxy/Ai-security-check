@@ -8,7 +8,7 @@ import json
 
 from .storage import ReadOnlySQLiteStore
 from .triage import TriageService
-from .triage_evidence import EvidenceBuilder, encoded
+from .triage_evidence import encoded
 from .triage_models import category, dependency_groups
 from .workspace import WorkspaceResolver
 from .risk import NO_FINDINGS_MESSAGE, presentation_status
@@ -88,18 +88,10 @@ class SecuritySummaryService:
                                   'automatic_execution': False}}
         view = TriageService(self.store).view(scan['scan_id'], persist_stale=False)
         rows = {row['finding_id']: row for row in view['findings']}
-        try:
-            cleaner = EvidenceBuilder(scan)
-        except (ValueError, OSError):
-            cleaner = None
+        from .diagnostics import evidence_text
         def safe(value):
             if isinstance(value, str):
-                if cleaner is not None:
-                    try:
-                        return cleaner.safe_text(value)
-                    except (ValueError, OSError):
-                        pass
-                return '[脱敏依据不可用，内容已省略]'
+                return evidence_text(value, 8000)
             if isinstance(value, list):
                 return [safe(item) for item in value]
             if isinstance(value, dict):
@@ -220,9 +212,8 @@ class SecuritySummaryService:
         plan = plan_reply(summary_facts(result))
         result['reply_plan'] = plan.to_dict()
         result['user_feedback'] = {'message': render_reply(plan)}
-        # No packets, excerpts, scanner secret evidence or environment. Only
-        # dynamic stored text passes through the redactor; generated enums and
-        # counts stay readable even when source cannot be safely inspected.
+        # Summary fields remain bounded; source availability does not erase
+        # previously stored review prose or its credential values.
         return result
 
     @staticmethod
@@ -325,7 +316,7 @@ class SecuritySummaryService:
         if topic == 'secret':
             return ('核对敏感信息的用途与部署覆盖', '可能存在硬编码或不应入库的凭据；真实有效性未知。',
                     ['配置/代码是否实际使用、凭据是否有效、是否已轮换。'],
-                    '先核对用途与部署覆盖，只提供是否使用/已轮换等状态，不提供密钥原值。')
+                    '先核对源码中的用途与部署覆盖，再确认是否实际使用、有效或已轮换。')
         if topic == 'dependency':
             return (f"核查 {group['package'] or '未知包'} {group['version'] or '未知版本'} 的依赖风险",
                     '包版本与 advisory 的匹配是候选信号，不证明受影响 API 可达。',

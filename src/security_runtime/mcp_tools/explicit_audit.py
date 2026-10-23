@@ -100,21 +100,24 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     def scan_response(result, summary, timing):
         data = _agent_result(result, summary=summary)
         diagnostics = result.get('scanner_diagnostics', {}) if isinstance(result, dict) else result.scanner_diagnostics
-        reused = isinstance(result, dict)
+        historical = isinstance(result, dict)
+        reused = historical or diagnostics.get('result_reuse', {}).get('reused') is True
         # A reuse request performs no new scan publication. Historical records
         # can predate the post-save publication receipt attached in memory.
         data['execution_publication'] = (dict(scope='HISTORICAL_EXECUTION_ONLY',
             publication='HISTORICAL', current_execution=False, current_task_proof=False)
-            if reused else diagnostics.get('execution_publication',
+            if historical else diagnostics.get('execution_publication',
                 dict(publication='UNAVAILABLE', current_task_proof=False)))
         data['timing'] = scan_timing(result, timing, reused=reused)
-        runs = result['scanner_runs'] if reused else result.scanner_runs
+        runs = result['scanner_runs'] if historical else result.scanner_runs
         ran = not reused and any((run.get('status') if isinstance(run, dict) else run.status)
                                 in {'SUCCESS', 'FAILED', 'TIMEOUT'} for run in runs)
         data['execution'] = dict(scanner_run=ran, result_reused=reused,
                                  host_review_completed=False, repair_authorized=False)
-        if reused:
+        if historical:
             data['result_reuse'] = result['result_reuse']
+        elif reused:
+            data['result_reuse'] = diagnostics['result_reuse']
         elif diagnostics.get('reuse_check'):
             data['result_reuse'] = diagnostics['reuse_check']
         if diagnostics.get('selected_scope'):
@@ -125,7 +128,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     @server.tool()
     def get_findings(scan_id: str, include_evidence: bool = False, finding_id: str | None = None, context_lines: int = 5,
                      view: str = 'summary', offset: int = 0, limit: int | None = None) -> list[dict] | dict:
-        """List findings/review state; opt into bounded redacted local evidence, optionally for one existing scanner id. Evidence distinguishes original EXACT code from STALE/unverifiable current_context. quality.finding_id remains review-only."""
+        """List findings/review state; opt into bounded original local evidence, optionally for one existing scanner id. Evidence distinguishes original EXACT code from STALE/unverifiable current_context. quality.finding_id remains review-only."""
         check_scan(scan_id)
         from ..mcp_views import page_bounds, finding_summary, paged
         page_limit = page_bounds(view, offset, limit, evidence=include_evidence)
@@ -184,7 +187,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     @server.tool()
     def prepare_triage(scan_id: str, finding_ids: list[str] | None = None, categories: list[str] | None = None, limit: int = 5,
                        pending_only: bool = False, retry_failed: bool = False) -> dict:
-        """Return bounded redacted UNTRUSTED_CODE evidence to this host agent; does not invoke AI."""
+        """Return bounded original UNTRUSTED_CODE evidence to this host agent; does not invoke AI."""
         check_scan(scan_id)
         from ..triage import TriageService
         data=TriageService(runtime_engine().store).prepare(scan_id,finding_ids,categories,limit,

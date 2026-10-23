@@ -1029,6 +1029,8 @@ class HookCoordinator:
 
     def _session_baseline(self, result, root, host, session_id, *, transaction):
         """Publish a comparison point only; it asserts no scanner coverage."""
+        result.update(project_scan_status='NOT_REQUESTED', task_baseline_ready=False,
+            task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT', initial_scope='SESSION_COMPARISON_ONLY')
         from .recent_hooks import observe
         path = self.store.path(root, host, session_id)
         previous, recovered = transaction['previous'], transaction['recovered']

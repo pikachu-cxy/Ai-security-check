@@ -38,6 +38,7 @@ class LedgerRuntime:
         # This detector ledger is simulated; its fixed-input lifecycle is real.
         from security_runtime.scan_input import capture_scan_input
         with capture_scan_input(kwargs['request'], private_parent=execution.private_parent,
+                source_root=getattr(execution, 'source_root', None),
                 on_created=execution.input_created, on_removed=execution.input_removed) as view:
             execution.input_ready(view)
             out = result()
@@ -269,9 +270,14 @@ def test_mcp_task_contract_and_quiet_stop(service, monkeypatch):
     def call(name, **kwargs):
         return server._tool_manager.get_tool(name).fn(**kwargs)
     monkeypatch.setattr(engine, 'scan', runtime.scan)
+    monkeypatch.setattr('security_runtime.task_closeout_worker.launch_worker', lambda *args: None)
     ref = call('begin_security_task', task_key='mcp-development')['task_ref']
     (root/'routes.py').write_text('actual changed source\n')
-    assert call('finish_security_task', task_ref=ref)['review_required']
+    assert call('finish_security_task', task_ref=ref)['status'] == 'QUEUED'
+    from security_runtime.tasks.queued_closeout import execute_one
+    owner = s.store(root).get(ref)['task_owner']
+    assert execute_one(TaskSecurityService(engine, s.hooks, owner=owner), root, ref)
+    assert call('get_task_closeout_status', task_ref=ref)['status'] == 'READY_FOR_REVIEW'
     packet = call('prepare_task_security_review', task_ref=ref)
     context = call('read_task_review_context', task_ref=ref, review_session=packet['review_session'], file_path='auth.py')
     assert context['evidence_id']

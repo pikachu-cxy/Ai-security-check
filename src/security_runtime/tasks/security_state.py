@@ -64,6 +64,10 @@ class TaskSecurityStore:
             raise ValueError('Task state cannot be verified')
         return value
 
+    def expired(self, record):
+        from .lifecycle import expires_at
+        return self.now() > expires_at(record, self.hooks, self.root, now=self.now)
+
     def records(self, *, active=False):
         """Bounded signed inventory; never selects a newest foreign task."""
         no_links(self.path)
@@ -76,7 +80,7 @@ class TaskSecurityStore:
             rows=db.execute(f'SELECT data,mac FROM security_tasks {predicate} ORDER BY rowid DESC LIMIT {MAX_HISTORY_RECORDS}').fetchall()
         from .ownership import ACTIVE
         records=[self.decode(row) for row in rows]
-        return [v for v in records if v and self.now()-v['created_at']<=TTL and (not active or v['phase'] in ACTIVE)]
+        return [v for v in records if v and not self.expired(v) and (not active or v['phase'] in ACTIVE)]
 
     def get(self, ref=None, *, active=False, task_key=None, owner=None):
         no_links(self.path)
@@ -96,12 +100,18 @@ class TaskSecurityStore:
             else:
                 row = db.execute('SELECT data,mac FROM security_tasks WHERE task_key=? ORDER BY rowid DESC LIMIT 1', (task_key,)).fetchone()
             value = self.decode(row)
-            if value and self.now() - value['created_at'] > TTL:
+            if value and self.expired(value):
                 return None
             return value
 
     def for_hook(self, host, session):
-        from .ownership import record_owner
+        from .activity import ActivityStore
+        from .ownership import valid_owner, record_owner
+        owner = {'host':host, 'session':session}
+        focus = ActivityStore(self.hooks, self.root, now=self.now).focus(owner) if valid_owner(owner) else None
+        if focus:
+            selected = self.get(focus['task_ref']) if focus.get('task_ref') else None
+            return selected if selected and record_owner(selected) == owner else None
         values=[v for v in self.records(active=True) if is_v3_record(v)]
         owned=[v for v in values if record_owner(v)=={'host':host,'session':session}]
         if len(owned)==1: return owned[0]
@@ -127,6 +137,8 @@ class TaskSecurityStore:
                              (self.now()-TTL,)).fetchall()
         for ref, raw, mac in expired:
             value = self.decode((raw, mac))
+            if not self.expired(value):
+                continue
             if not status(value)['pending']:
                 continue
             previous = db.execute('SELECT data,mac FROM retained_task_projections WHERE ref=?', (ref,)).fetchone()
@@ -208,7 +220,9 @@ class TaskSecurityStore:
             db.execute('CREATE TABLE IF NOT EXISTS security_tasks (ref TEXT PRIMARY KEY, task_key TEXT NOT NULL, phase TEXT NOT NULL, created REAL NOT NULL, data TEXT NOT NULL, mac TEXT NOT NULL)')
             db.execute('BEGIN IMMEDIATE')
             self._retain_pending(db)
-            db.execute('DELETE FROM security_tasks WHERE created<?', (self.now()-TTL,))
+            for expired_ref, raw, mac in db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?', (self.now()-TTL,)).fetchall():
+                if self.expired(self.decode((raw, mac))):
+                    db.execute('DELETE FROM security_tasks WHERE ref=?', (expired_ref,))
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
                 raise ValueError('Task changed concurrently; read current task first')
@@ -248,6 +262,9 @@ class TaskSecurityStore:
             task_record_observed(value)
         except Exception:
             pass  # Already committed; optional observation never controls it.
+        from .activity import deferred, ActivityStore
+        if deferred(value):
+            ActivityStore(self.hooks, self.root, now=self.now).touch(value['task_ref'], value['activity_at'], value['phase'])
         return value
 
     def for_scan(self, scan_id):
@@ -259,7 +276,7 @@ class TaskSecurityStore:
             db.execute('PRAGMA query_only=ON')
             rows = db.execute(f'SELECT data,mac FROM security_tasks ORDER BY rowid DESC LIMIT {MAX_HISTORY_RECORDS}').fetchall()
         values = [self.decode(row) for row in rows]
-        return [v for v in values if v and self.now()-v['created_at'] <= TTL
+        return [v for v in values if v and not self.expired(v)
                 and v.get('end') and (v.get('static') or {}).get('scan_id') == scan_id]
 
     def _hook_failure_path(self, ref):

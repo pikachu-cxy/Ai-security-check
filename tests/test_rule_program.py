@@ -108,13 +108,13 @@ def test_read_write_overlap_keeps_primary_and_related_evidence(tmp_path):
     assert read.technical_details['supporting_rule_ids']==['ai-security.java.file-access']
 
 
-def test_secret_mapping_never_collapses_detector_proof_or_leaks_raw(tmp_path):
+def test_secret_mapping_preserves_detector_proof_and_original_match(tmp_path):
     from security_runtime.scanners import GitleaksAdapter
-    raw='SYNTHETIC_SECRET_CANARY_NEVER_EXPORT'
+    raw='SYNTHETIC_SECRET_EVIDENCE_CANARY'
     rows=GitleaksAdapter().normalize([{'RuleID':rid,'File':'A.java','StartLine':n,'Secret':raw,'Match':raw} for n,rid in [(1,'github-pat'),(2,'generic-api-key')]],FindingNormalizer(tmp_path))
     assert all(r.technical_details['capability_id']=='HARDCODED_SECRET' for r in rows)
     assert rows[0].equivalence_key!=rows[1].equivalence_key
-    assert raw not in json.dumps([asdict(r) for r in rows])
+    assert all(row.evidence == raw for row in rows)
     with patch('security_runtime.scanners.RulePackManager.resolve',side_effect=ValueError('Bad SAST metadata')):
         assert GitleaksAdapter().normalize([{'RuleID':'github-pat','File':'A.java','StartLine':1}],FindingNormalizer(tmp_path))
 

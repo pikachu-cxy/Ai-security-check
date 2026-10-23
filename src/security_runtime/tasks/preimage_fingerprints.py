@@ -71,6 +71,10 @@ def make_proof(key, workspace_id, task_ref, path, raw_bytes, *, sanitized_lines=
     original_lines = (safe_source(text, source_path=path, redaction_version=redaction_version,
                                   max_line_chars=None)
                       if sanitized_lines is None else sanitized_lines)
+    if redaction_version == VERSION:
+        return dict(version=2, complete=True, line_count=len(original_lines), semantic_lines={},
+                    literal_marker_lines=[number for number, line in enumerate(original_lines, 1)
+                                          if any(marker in line for marker in _MARKERS)])
     source_path = Path(path)
     tokens = (_HASH_SOURCE_TOKENS if source_path.suffix.lower() in _HASH_COMMENT_SUFFIXES
               or source_path.name.lower() == 'dockerfile' else _SOURCE_TOKENS)

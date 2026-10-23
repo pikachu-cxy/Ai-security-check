@@ -13,14 +13,51 @@ def register(server, registry, *, application):
     native_binding_required = application.native_binding_required
     issued_tasks = application.issued_tasks
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def begin_security_task(task_key: str, workspace_path: str | None = None, session_ref: str | None = None) -> dict:
+    def begin_security_task(task_key: str, workspace_path: str | None = None, session_ref: str | None = None,
+                            workspace_setup_ref: str | None = None) -> dict:
         """Before the first source/config edit of an actual development task, snapshot the current workspace (including existing dirty files). Unique task_key per task, no prompt/source. No scan/model/build/edit. Never call for ordinary chat or restart after editing to fake a baseline."""
         native_binding_required(workspace_path, session_ref)
         service=task_service(session_ref=session_ref,workspace=workspace_path)
-        result=service.begin(bound_path(workspace_path),task_key)
+        from ..tasks.activity import POLICY
+        result=service.begin(bound_path(workspace_path),task_key,check_policy=POLICY,background_closeout=True,
+                             workspace_setup_ref=workspace_setup_ref)
         if result.get('task_ref'):
             if len(issued_tasks)>=64: issued_tasks.pop(next(iter(issued_tasks)))
             issued_tasks[result['task_ref']]=service._owner()
+        return result
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def prepare_task_workspace(task_key: str, workspace_path: str | None = None,
+                               session_ref: str | None = None) -> dict:
+        """Explicitly prepare a separate task directory from current dirty sources. No baseline yet.
+        Open the returned directory in the host before begin_security_task with its setup reference.
+        Does not move this chat, constrain Shell writes, merge, or migrate an existing task.
+        """
+        from ..task_workspaces import prepare
+        native_binding_required(workspace_path, session_ref)
+        service = task_service(session_ref=session_ref, workspace=workspace_path)
+        return prepare(bound_path(workspace_path), task_key, service._owner())
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_task_isolation_capabilities() -> dict:
+        """Describe implemented directory isolation separately from unsupported host write boundaries."""
+        from ..task_workspaces import capability
+        return capability()
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def switch_security_task(from_task_ref: str | None, expected_routing_generation: int,
+                             to_task_ref: str | None = None, new_task_key: str | None = None,
+                             workspace_path: str | None = None, session_ref: str | None = None) -> dict:
+        """Explicitly suspend/switch/resume this session's task. New work captures its baseline before editing; resume never recaptures. No scan, repair or cross-session adoption."""
+        from ..tasks.lifecycle import switch
+        native_binding_required(workspace_path, session_ref)
+        service = task_service(session_ref=session_ref, workspace=workspace_path)
+        result = switch(service, bound_path(workspace_path), from_task_ref, to_ref=to_task_ref,
+                        new_key=new_task_key, generation=expected_routing_generation)
+        if result.get('task_ref'):
+            if len(issued_tasks) >= 64:
+                issued_tasks.pop(next(iter(issued_tasks)))
+            issued_tasks[result['task_ref']] = service._owner()
         return result
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
@@ -28,8 +65,54 @@ def register(server, registry, *, application):
                              session_ref: str | None = None) -> dict:
         """Before the development summary, compare against the exact task baseline. No actual changes: no checks/message. Actual changes: one bounded static check of task scope, then prepare_task_security_review even with zero scanner alerts. No repairs, model, target builds or Stop continuation."""
         if skip_review_reason is not None:
-            return task_service(task_ref,session_ref,workspace_path).skip(bound_path(workspace_path), task_ref, skip_review_reason)
-        return task_service(task_ref,session_ref,workspace_path).finish(bound_path(workspace_path), task_ref)
+            service = task_service(task_ref,session_ref,workspace_path)
+            from ..tasks.closeout_queue import CloseoutQueue, PENDING
+            root = service.root(bound_path(workspace_path))
+            service.load(root, task_ref)
+            row = CloseoutQueue(service.hooks, root).read(task_ref)
+            if row and row['state'] in PENDING:
+                from ..tasks.queued_closeout import cancel
+                result = cancel(service, root, task_ref)
+                if result['status'] == 'BUSY':
+                    return result
+            return service.skip(root, task_ref, skip_review_reason)
+        service = task_service(task_ref,session_ref,workspace_path)
+        root = service.root(bound_path(workspace_path))
+        if service.load(root, task_ref).get('closeout_dispatch') == 'BACKGROUND_V1':
+            from ..tasks.queued_closeout import enqueue
+            return enqueue(service, root, task_ref)
+        return service.finish(root, task_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_task_closeout_status(task_ref: str, workspace_path: str | None = None,
+                                session_ref: str | None = None) -> dict:
+        """Read this owner's saved queue status; never dispatch, recapture or scan."""
+        from ..tasks.queued_closeout import status
+        return status(task_service(task_ref,session_ref,workspace_path), bound_path(workspace_path), task_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def wait_task_closeout(task_ref: str, workspace_path: str | None = None,
+                          session_ref: str | None = None, timeout_seconds: int = 10) -> dict:
+        """Wait at most 30 seconds for saved queue progress. Does not execute scans or a model."""
+        import time
+        from ..tasks.queued_closeout import status
+        from ..tasks.closeout_queue import PENDING
+        if type(timeout_seconds) is not int or not 0 <= timeout_seconds <= 30:
+            raise ValueError('Wait timeout must be between 0 and 30 seconds')
+        service = task_service(task_ref,session_ref,workspace_path)
+        deadline = time.monotonic()+timeout_seconds
+        while True:
+            result = status(service, bound_path(workspace_path), task_ref)
+            if result['status'] not in PENDING or time.monotonic() >= deadline:
+                return result
+            time.sleep(min(0.25, max(0, deadline-time.monotonic())))
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def cancel_task_closeout(task_ref: str, workspace_path: str | None = None,
+                            session_ref: str | None = None) -> dict:
+        """Explicitly cancel only this owner's queued static work; preserve task and baseline."""
+        from ..tasks.queued_closeout import cancel
+        return cancel(task_service(task_ref,session_ref,workspace_path), bound_path(workspace_path), task_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None,
@@ -76,7 +159,7 @@ def register(server, registry, *, application):
     def read_task_review_context(task_ref: str, review_session: str, file_path: str,
                                  start_line: int = 1, end_line: int = 80, workspace_path: str | None = None,
                                  source_version: str = 'CURRENT', session_ref: str | None = None) -> dict:
-        """Read a v3 sanitized before/current window, at most 80 lines.
+        """Read a v3 captured before/current source window, at most 80 lines.
 
         Follow next_range/unread_ranges with the exact task/session/version.
         Oversized lines use start_char/end_char/line_chars: zero-based half-open
@@ -96,10 +179,11 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_task_security_review(task_ref: str, review_session: str, findings: task_review_models.TaskReviewFindings,
                                      coverage: task_review_models.ReviewCoverage, limitations: task_review_models.TaskReviewLimitations, workspace_path: str | None = None,
-                                    risk_resolutions: list[dict] | None = None, session_ref: str | None = None) -> dict:
+                                    risk_resolutions: list[dict] | None = None, session_ref: str | None = None,
+                                    risk_attributions: task_review_models.RiskAttributions | None = None) -> dict:
         """Submit host reasoning with Runtime-issued evidence_id strings: primary_evidence and task_evidence are strings; evidence_refs is an array of strings, never file/line objects. REVIEW_CONTINUE_REQUIRED saves no final result: follow next_action and finish readable ranges and unit reasoning on the same task/session, then resubmit findings. On field_errors correct the same active task/review version without rescanning or replacing its baseline. Follow the saved terminal receipt's next_action, preserving completion_revision and the original session_ref, for the bounded current delivery; then merge its full development_summary into the normal response. Saving never proves exploitability or grants repair authority."""
         try:
-            return task_service(task_ref,session_ref,workspace_path).submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions)
+            return task_service(task_ref,session_ref,workspace_path).submit(bound_path(workspace_path), task_ref, review_session, findings, coverage, limitations, risk_resolutions, risk_attributions)
         except task_review_models.TaskReviewInputError as exc:
             return exc.response()
 

@@ -8,8 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import ast
-import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,8 +17,8 @@ from ._version import __version__
 from .build_identity import build_identity
 from .finding_quality import digest, quality_finding, relative_file
 from .local_evidence import safe_source, evidence_locator
-from .feedback_redaction import quoted_literals
-from .triage_evidence import EvidenceBuilder, encoded
+from .diagnostics import evidence_text
+from .triage_evidence import EvidenceBuilder, encoded, SOURCE_PRESENTATION
 from .triage_models import PROMPT_VERSION
 from .risk_disposition import (DispositionUnavailable, RiskDispositionStore, issue_scope,
                                refresh_scope, source_revision)
@@ -32,56 +30,8 @@ VERDICTS = ('FALSE_POSITIVE', 'STILL_RISK', 'NEEDS_CONTEXT')
 
 
 def _feedback_text(builder, value):
-    """Mask known source literals before generic sanitizing changes their text.
-
-    The existing evidence builder already masks original scanner matches. This
-    extra layer covers decoded escape spellings in a host/user explanation.
-    It never evaluates expressions or treats source as instructions.
-    """
-    if not hasattr(builder, '_feedback_literal_values'):
-        values = set()
-        if len(builder.secret_ranges) > 10:
-            raise ValueError('Known secret context exceeds the bounded redaction scope')
-        for name, spans in builder.secret_ranges.items():
-            lines = builder.read(name)
-            expected = [evidence_locator(finding)['file_sha256']
-                        for finding in builder.scan['findings']
-                        if finding.get('category') == 'secret' and finding.get('file_path') == name]
-            if not expected or any(not value or value != builder._file_hashes[name] for value in expected):
-                # The old observation identifies the secret, not its current
-                # line number. Reading new benign text at that location cannot
-                # establish the old credential's raw or decoded spellings.
-                raise ValueError('Original known secret snapshot is stale or unverifiable')
-            if len(spans) > 20:
-                raise ValueError('Known secret context exceeds the bounded redaction scope')
-            for start, end in spans:
-                if end-start > 40:
-                    raise ValueError('Known secret context exceeds the bounded redaction scope')
-                for line in lines[max(0, start-1):end]:
-                    if len(line) > 4000:
-                        raise ValueError('Known secret line exceeds the bounded redaction scope')
-                    if '`' in line:
-                        raise ValueError('Known secret uses unsupported quoted syntax')
-                    values.add(line.strip())
-                    literals = list(quoted_literals(line, strict=True))
-                    if ('\'' in line or '"' in line) and not literals:
-                        raise ValueError('Known quoted secret cannot be decoded safely')
-                    for literal in literals:
-                        values.add(literal[1:-1])
-                        try:
-                            decoded = ast.literal_eval(literal)
-                        except (SyntaxError, ValueError):
-                            raise ValueError('Known quoted secret cannot be decoded safely') from None
-                        if isinstance(decoded, str):
-                            values.add(decoded)
-                    if len(values) > 128:
-                        raise ValueError('Known secret context exceeds the bounded redaction scope')
-        variants = sorted((v for v in values if v), key=len, reverse=True)
-        builder._feedback_literal_values = re.compile('|'.join(re.escape(v) for v in variants)) if variants else None
-    text = str(value)
-    if builder._feedback_literal_values is not None:
-        text = builder._feedback_literal_values.sub('[REDACTED_SECRET]', text)
-    return builder.safe_text(text)
+    """Bound evidence prose without substituting source credential literals."""
+    return builder.safe_text(value)
 
 
 class FindingFeedbackService:
@@ -185,7 +135,7 @@ class FindingFeedbackService:
                              file=finding['file_path'], category=finding['category'],
                              historical_only=True, evidence_scope='HISTORICAL_REFERENCE_ONLY',
                              material_change_confirmable=False))
-        # Optional reasons use the same known-secret protection as opinions.
+        # Optional reasons use the same bounded evidence prose policy as opinions.
         safe_reason = self._safe_reason(scan, reason) if reason.strip() else ''
         self.dispositions.set(self.workspace, scope['issue_key'], disposition, safe_reason,
             user_requested=True, until=until, request_id=request_id,
@@ -223,8 +173,7 @@ class FindingFeedbackService:
         packet['evidence_gaps'] = []
         for name, lines in builder._lines.items():
             truncated = []
-            safe_source('\n'.join(lines), builder.secret_ranges.get(name, []),
-                        source_path=name, truncation_lines=truncated)
+            safe_source('\n'.join(lines), source_path=name, truncation_lines=truncated)
             for number in truncated:
                 if any(item['file'] == name and item['start_line'] <= number <= item['end_line']
                        for item in packet['context'] + packet['related_evidence']):
@@ -244,6 +193,7 @@ class FindingFeedbackService:
         semantic_packet['enrichment'] = {k: v for k, v in packet['enrichment'].items()
                                           if k != 'symbol_search_bytes'}
         revision = digest(dict(contract=VERSION, runtime=__version__, method=PROMPT_VERSION,
+                               source_presentation=SOURCE_PRESENTATION,
                                runtime_build=identity.get('build_id'),
                                observation=quality_finding(finding)['observation_hash'],
                                context=digest(semantic_packet), versions=versions,
@@ -281,8 +231,8 @@ class FindingFeedbackService:
                         'Use FALSE_POSITIVE, STILL_RISK or NEEDS_CONTEXT. FALSE_POSITIVE requires HIGH '
                         'confidence, no unknown preconditions, complete relevant context and references '
                         'covering the finding plus concrete counterevidence. Test location, user insistence '
-                        'and not wanting a fix are not counterevidence. Hidden literals cannot establish '
-                        'value-dependent claims. Runtime validates identities and freshness only; '
+                        'and not wanting a fix are not counterevidence. Source values alone cannot establish '
+                        'credential validity. Runtime validates identities and freshness only; '
                         'the semantic conclusion remains HOST_CODE_REVIEW, never scanner proof.'),
                     submission_fields=['context_hash', 'verdict', 'reason', 'evidence_refs',
                                        'confidence', 'unknowns', 'context_complete'],
@@ -297,18 +247,10 @@ class FindingFeedbackService:
     def _reason(reason):
         if not isinstance(reason, str) or not reason.strip() or len(reason) > 4000:
             raise ValueError('A bounded, nonempty review reason is required')
-        from .redactor import SecretRedactor
-        from .diagnostics import sanitize
-        return SecretRedactor().redact(sanitize(reason, 4000))
+        return evidence_text(reason, 4000)
 
     def _safe_reason(self, scan, reason):
-        self._reason(reason)  # Validate the original size before replacement.
-        try:
-            return _feedback_text(EvidenceBuilder(scan), reason)
-        except (OSError, ValueError):
-            # Do not echo possible known credentials if their source cannot be
-            # re-read to mask them. The user's label can still be recorded.
-            return '理由已隐藏：当前无法读取用于脱敏的原始证据。'
+        return self._reason(reason)
 
     def reconcile_pending(self, *, limit=16):
         """Bounded fact replay only; an unavailable projection stays pending."""
@@ -396,8 +338,8 @@ class FindingFeedbackService:
                 and detail.get('package_version') == md.get('package_version')
                 and detail.get('canonical_vulnerability_id') == md.get('canonical_vulnerability_id')
                 and any(ref['file'] in owners for ref in refs))
-        # In a masked secret range the host cannot determine credential validity.
-        # Existing Runtime placeholder evidence is the sole native exception.
+        # Visible credential values alone do not establish validity or non-use.
+        # Existing Runtime placeholder evidence remains the native exception.
         secret_proof = (packet['category'] != 'secret' or
                         bool(packet['enrichment']['verified_counterevidence']))
         # No executable/advisory reachability proof is available in the bounded

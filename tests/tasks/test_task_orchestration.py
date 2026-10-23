@@ -5,6 +5,7 @@ import json
 import pytest
 
 from security_runtime.cursor_tasks import CursorTaskBridge, DELIVERY_CONTEXT_MARKER
+from security_runtime.tasks.activity import ActivityStore
 from security_runtime.tasks.orchestration import (
     select_task, TaskSelectionError, review_protocol, task_needs_handoff, task_allows_followup, task_delivery_facts,
 )
@@ -153,9 +154,12 @@ def test_cursor_check_context_and_bounded_followup_share_observations(repo, tmp_
     before = copy.deepcopy(bridge.current()['baseline'])
     (repo / 'A.java').write_text('task bytes')
     output, checked = ingress(repo, tmp_path, core, 'afterFileEdit')
-    assert output == {} and checked['task_delivery']['task_recording'] == 'RECORDED'
-    assert checked['task_delivery']['check_execution'] == 'EXECUTED'
+    assert output == {} and checked['task_delivery']['task_recording'] == 'ACTIVITY_RECORDED'
+    assert checked['status'] == 'RECORDED_PENDING' and not checked['scanner_run']
+    assert checked['task_delivery']['check_execution'] == 'NOT_EXECUTED'
     assert checked['task_delivery']['context_returned'] is False
+    activity = ActivityStore(core.store, repo)
+    assert activity.summary(first)['seq'] == checked['activity_seq'] == 1
     output, delivered = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Write', tool_use_id='opaque')
     assert first in output['additional_context']
     encoded = output['additional_context'].split('\n', 2)[1]
@@ -174,4 +178,5 @@ def test_cursor_check_context_and_bounded_followup_share_observations(repo, tmp_
     assert json.loads(metadata)['task_delivery'] == stopped['task_delivery']
     assert stopped['task_delivery']['delivery_intent'] == 'TASK_CLOSEOUT'
     assert ingress(repo, tmp_path, core, 'stop')[0] == {}
-    assert bridge.current()['baseline'] == before and len(runtime.calls) == 1
+    assert bridge.current()['baseline'] == before and not runtime.calls
+    assert activity.summary(first)['seq'] == 1

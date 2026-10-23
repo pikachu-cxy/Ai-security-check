@@ -5,15 +5,22 @@ import sqlite3
 
 import pytest
 
-from security_runtime.local_evidence import safe_source
+from functools import partial
+from security_runtime.local_evidence import safe_source as original_source
+
+safe_source = partial(original_source, redaction_version=2)
 from security_runtime.tasks import preimage_fingerprints as fingerprints
 from security_runtime.tasks import preimages as preimages
 from security_runtime.tasks.preimages import TaskPreimageUnavailable
 from test_task_preimages import sample, FIRST, SECOND  # noqa: F401
 
 
+def legacy_semantic_proof(store, *args):
+    return store.semantic_proof(*args, redaction_version=2)
+
+
 def captured(store, raw, path='routes.py', task=FIRST):
-    with store.writer(task) as writer:
+    with store.writer(task, redaction_version=2) as writer:
         reference = writer.put(path, raw, safe_source(raw.decode('utf-8-sig'), source_path=path))
     return reference
 
@@ -34,7 +41,7 @@ def test_proof_is_sparse_private_and_old_reference_contract_is_unchanged(sample)
     assert b'leaf-private-secret' not in store.path.read_bytes()
     for value in result['semantic_lines'].values():
         assert value not in json.dumps(reference)
-    assert result == store.semantic_proof(FIRST, 'routes.py', raw)
+    assert result == legacy_semantic_proof(store, FIRST, 'routes.py', raw)
 
 
 def test_tokens_preserve_hash_slashes_inside_string_and_ignore_real_comment_changes(sample):
@@ -42,11 +49,11 @@ def test_tokens_preserve_hash_slashes_inside_string_and_ignore_real_comment_chan
     old = b'password = "https://host/#fragment" # first private comment\n'
     changed_comment = b'password = "https://host/#fragment" # changed private comment\n'
     changed_literal = b'password = "https://host/#different" # first private comment\n'
-    first = store.semantic_proof(FIRST, 'a.py', old)
+    first = legacy_semantic_proof(store, FIRST, 'a.py', old)
     assert first['complete'] and set(first['semantic_lines']) == {1}
-    assert first == store.semantic_proof(FIRST, 'a.py', changed_comment)
-    assert first['semantic_lines'] != store.semantic_proof(FIRST, 'a.py', changed_literal)['semantic_lines']
-    comment_only = store.semantic_proof(FIRST, 'a.py', b'# no semantic source\nallowed = guard.check(user)\n')
+    assert first == legacy_semantic_proof(store, FIRST, 'a.py', changed_comment)
+    assert first['semantic_lines'] != legacy_semantic_proof(store, FIRST, 'a.py', changed_literal)['semantic_lines']
+    comment_only = legacy_semantic_proof(store, FIRST, 'a.py', b'# no semantic source\nallowed = guard.check(user)\n')
     assert comment_only['complete'] and comment_only['semantic_lines'] == {}
 
 
@@ -54,8 +61,8 @@ def test_private_key_ownership_precedes_comment_tokenizer(sample):
     store, _ = sample
     first = b'-----BEGIN PRIVATE KEY-----\nAAAA//first-hidden-part\n-----END PRIVATE KEY-----\n'
     second = first.replace(b'first-hidden-part', b'other-hidden-part')
-    old = store.semantic_proof(FIRST, 'key.py', first)
-    new = store.semantic_proof(FIRST, 'key.py', second)
+    old = legacy_semantic_proof(store, FIRST, 'key.py', first)
+    new = legacy_semantic_proof(store, FIRST, 'key.py', second)
     assert old['complete'] and new['complete']
     assert old['semantic_lines'][2] != new['semantic_lines'][2]
 
@@ -63,19 +70,19 @@ def test_private_key_ownership_precedes_comment_tokenizer(sample):
 def test_fingerprints_align_after_insertion_but_are_task_and_path_bound(sample):
     store, _ = sample
     raw = b'password = "private-literal"\n'
-    first = store.semantic_proof(FIRST, 'a.py', raw)['semantic_lines'][1]
-    shifted = store.semantic_proof(FIRST, 'a.py', b'allowed = guard.check(user)\n' + raw)
+    first = legacy_semantic_proof(store, FIRST, 'a.py', raw)['semantic_lines'][1]
+    shifted = legacy_semantic_proof(store, FIRST, 'a.py', b'allowed = guard.check(user)\n' + raw)
     assert shifted['semantic_lines'][2] == first
-    assert store.semantic_proof(SECOND, 'a.py', raw)['semantic_lines'][1] != first
-    assert store.semantic_proof(FIRST, 'b.py', raw)['semantic_lines'][1] != first
+    assert legacy_semantic_proof(store, SECOND, 'a.py', raw)['semantic_lines'][1] != first
+    assert legacy_semantic_proof(store, FIRST, 'b.py', raw)['semantic_lines'][1] != first
 
 
 def test_long_public_suffix_is_visible_without_private_comparison(sample):
     store, _ = sample
     raw = ('result = ' + 'value + ' * 120 + 'first\n').encode()
     changed = raw.replace(b'first\n', b'other\n')
-    old = store.semantic_proof(FIRST, 'a.py', raw)
-    new = store.semantic_proof(FIRST, 'a.py', changed)
+    old = legacy_semantic_proof(store, FIRST, 'a.py', raw)
+    new = legacy_semantic_proof(store, FIRST, 'a.py', changed)
     assert old['complete'] and new['complete']
     assert old['semantic_lines'] == new['semantic_lines'] == {}
     with store.writer(FIRST) as writer:
@@ -179,9 +186,9 @@ def test_visible_directive_change_requires_reads_and_can_be_fully_reviewed(sampl
     store, _ = sample
     old, new = (first + '\nallowed = guard.check(user)\n').encode(), (second + '\nallowed = guard.check(user)\n').encode()
     before = dict(hashes={path: hashlib.sha256(old).hexdigest()}, texts={path: safe_source(old.decode(), source_path=path)},
-        semantic_proofs={path: store.semantic_proof(FIRST, path, old)})
+        semantic_proofs={path: legacy_semantic_proof(store, FIRST, path, old)})
     after = dict(hashes={path: hashlib.sha256(new).hexdigest()}, texts={path: safe_source(new.decode(), source_path=path)},
-        semantic_proofs={path: store.semantic_proof(FIRST, path, new)})
+        semantic_proofs={path: legacy_semantic_proof(store, FIRST, path, new)})
     assert before['texts'] != after['texts']
     assert before['semantic_proofs'][path]['semantic_lines'] == {}
     assert after['semantic_proofs'][path]['semantic_lines'] == {}
@@ -201,9 +208,9 @@ def test_visible_comment_edit_requires_review_even_without_private_proof(sample)
     old, new = b'# first ordinary explanation\nallowed = guard.check(user)\n', b'# another ordinary explanation\nallowed = guard.check(user)\n'
     record = dict(task_ref=FIRST,
         baseline=dict(hashes={path: hashlib.sha256(old).hexdigest()}, texts={path: safe_source(old.decode(), source_path=path)},
-                      semantic_proofs={path: store.semantic_proof(FIRST, path, old)}),
+                      semantic_proofs={path: legacy_semantic_proof(store, FIRST, path, old)}),
         end=dict(hashes={path: hashlib.sha256(new).hexdigest()}, texts={path: safe_source(new.decode(), source_path=path)},
-                 semantic_proofs={path: store.semantic_proof(FIRST, path, new)}))
+                 semantic_proofs={path: legacy_semantic_proof(store, FIRST, path, new)}))
     windows, gaps = adaptive_windows(record, dict(path=path, change='MODIFIED'))
     assert windows and not gaps
     record['baseline'].pop('semantic_proofs')
@@ -217,10 +224,10 @@ def test_javascript_regex_remains_visible_instead_of_opaque_semantics(sample, pa
     old = b'const pattern = /[//]first/;\n'
     new = b'const pattern = /[//]other/;\n'
     assert safe_source(old.decode(), source_path=path) != safe_source(new.decode(), source_path=path)
-    before, after = store.semantic_proof(FIRST, path, old), store.semantic_proof(FIRST, path, new)
+    before, after = legacy_semantic_proof(store, FIRST, path, old), legacy_semantic_proof(store, FIRST, path, new)
     assert before['complete'] and after['complete']
     assert before['semantic_lines'] == after['semantic_lines'] == {}
-    assert store.semantic_proof(FIRST, path, b'const checked = guard.check(user); // ordinary explanation\n')['semantic_lines'] == {}
+    assert legacy_semantic_proof(store, FIRST, path, b'const checked = guard.check(user); // ordinary explanation\n')['semantic_lines'] == {}
 
 
 @pytest.mark.parametrize('limit', ['MAX_FILE_PROOF_BYTES', 'MAX_TASK_PROOF_BYTES', 'MAX_WORKSPACE_PROOF_BYTES'])
@@ -228,7 +235,7 @@ def test_small_proof_long_metadata_is_counted_against_optional_budget(sample, mo
     store, _ = sample
     path = ('private_scope_segment/' * 15) + 'routes.py'
     raw = b'checked = guard.check(user)\n'
-    assert len(fingerprints.encode_proof(store.semantic_proof(FIRST, path, raw))) < 300
+    assert len(fingerprints.encode_proof(legacy_semantic_proof(store, FIRST, path, raw))) < 300
     monkeypatch.setattr(fingerprints, limit, 300)
     reference = captured(store, raw, path)
     assert store.read(FIRST, path, reference['raw_sha256'], reference)
@@ -245,7 +252,7 @@ def test_literal_marker_provenance_round_trips_in_authenticated_private_proof(sa
     assert result['version'] == 2
     assert result['literal_marker_lines'] == [1]
     assert set(result['semantic_lines']) == {2}
-    assert result == store.semantic_proof(FIRST, 'routes.py', raw)
+    assert result == legacy_semantic_proof(store, FIRST, 'routes.py', raw)
     with sqlite3.connect(store.path) as db:
         body = json.loads(db.execute('SELECT body FROM task_preimage_semantics').fetchone()[0])
         body['literal_marker_lines'] = [1, 2]
@@ -270,5 +277,5 @@ def test_invalid_literal_marker_provenance_is_rejected(markers):
 def test_literal_marker_provenance_obeys_existing_proof_budget(monkeypatch):
     monkeypatch.setattr(fingerprints, 'MAX_FILE_PROOF_BYTES', 180)
     raw = b'label = "[REDACTED_SECRET]"\n' * 20
-    result = fingerprints.make_proof(b'key', 'workspace', FIRST, 'a.py', raw)
+    result = fingerprints.make_proof(b'key', 'workspace', FIRST, 'a.py', raw, redaction_version=2)
     assert result['complete'] is False and result['semantic_lines'] == {}

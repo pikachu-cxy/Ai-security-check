@@ -242,7 +242,7 @@ def test_legacy_user_opinion_does_not_overwrite_ai_assessment(service):
     assert not state['reminder_suppressed']
 
 
-def test_known_secret_in_reason_is_not_returned_or_written(service):
+def test_known_secret_in_reason_is_preserved_without_changing_risk_or_authorization(service):
     s, root, _ = service
     secret = 'opaqueDispositionPrivacyBoundary'
     (root/'auth.py').write_text('def owns(user, order):\n    marker = '+repr(secret)+
@@ -254,8 +254,12 @@ def test_known_secret_in_reason_is_not_returned_or_written(service):
     s.store(root).save(record)
     feedback = TaskRiskFeedbackService()
     result = feedback.set_disposition(s, root, ref, finding, 'EXCLUDE', secret, user_requested=True)
-    assert secret not in json.dumps(result)
-    assert secret not in json.dumps(feedback.get(s, root, ref, finding))
+    assert result['disposition']['reason'] == secret
+    assert result['disposition']['decision']['reason'] == secret
+    assert not result['repair_authorized'] and not result['raw_findings_changed']
+    saved = TaskRiskFeedbackService().get(s, root, ref, finding)
+    assert saved['disposition']['reason'] == secret
+    assert saved['disposition_audit_events'][0]['reason'] == secret
     assert TaskRiskLedger(s.hooks, root).read()[ref+':'+finding]['status'] == 'OPEN'
 
 

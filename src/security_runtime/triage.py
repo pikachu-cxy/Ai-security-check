@@ -158,7 +158,7 @@ class TriageService:
             if value['verdict'] in {'CONFIRMED','LIKELY','FALSE_POSITIVE'} and not refs:
                 if value['verdict']!='FALSE_POSITIVE': raise ValueError('Positive validation requires evidence references')
             # The schema prevents arbitrary tool/shell/network fields. No model
-            # output is executed. Text is sanitized before SQLite or presentation.
+            # output is executed. Evidence prose is bounded without masking source values.
             def safe(item):
                 if isinstance(item,str): return builder.safe_text(item)
                 if isinstance(item,list): return [safe(i) for i in item]
