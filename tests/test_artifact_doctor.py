@@ -144,7 +144,7 @@ def test_verifier_separates_global_and_project_doctors(tmp_path, monkeypatch):
         # an editable checkout is deliberately rejected by the global DEV guard.
         entry = ("from security_runtime import global_integration as g; "
                  "from security_runtime import codex_integration as c; "
-                 "from security_runtime.host_guidance import runtime_info; "
+                 "from security_runtime.guidance.host_guidance import runtime_info; "
                  "from security_runtime.codex_integration import current_runtime; "
                  "g.installed_runtime = current_runtime; "
                  "c.probe_runtime = lambda *a: c.check_capabilities(runtime_info(), c.REQUIRED_TOOLS); "

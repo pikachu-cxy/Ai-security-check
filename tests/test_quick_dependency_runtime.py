@@ -43,7 +43,8 @@ def commit(root, *files):
 def repo(tmp_path):
     root = tmp_path / "project"
     root.mkdir()
-    git(root, "init", "-q", "-b", "main")
+    git(root, "init", "-q")
+    git(root, "symbolic-ref", "HEAD", "refs/heads/main")
     git(root, "config", "user.name", "Dependency Fixture")
     git(root, "config", "user.email", "fixture@example.invalid")
     write(root, "app.py", "value = 1\n")

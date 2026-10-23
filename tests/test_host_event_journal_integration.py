@@ -6,9 +6,9 @@ import pytest
 from security_runtime.host_event_journal import HostEventJournal, JournalError
 from security_runtime.host_event_runtime import handle_normalized_event
 from security_runtime.hook_state import identity
-from security_runtime.task_hook_activity import _record_task_hook
-from security_runtime.task_security import TaskSecurityService
-from security_runtime.task_security_state import TaskSecurityStore
+from security_runtime.tasks.hook_activity import _record_task_hook
+from security_runtime.tasks.security import TaskSecurityService
+from security_runtime.tasks.security_state import TaskSecurityStore
 from test_host_event_journal import event,owner
 from test_hook_runtime import repo,coordinator,FakeRuntime,dirty
 

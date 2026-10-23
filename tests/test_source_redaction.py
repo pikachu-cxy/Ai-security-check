@@ -8,7 +8,7 @@ import pytest
 
 from security_runtime.local_evidence import safe_source, legacy_safe_source
 from security_runtime.source_redaction import task_version
-from security_runtime.task_preimages import TaskPreimageUnavailable
+from security_runtime.tasks.preimages import TaskPreimageUnavailable
 from test_task_preimages import sample, FIRST
 from test_task_security import service
 from task_review_helpers import review_all
@@ -241,7 +241,7 @@ def test_template_expressions_and_raw_credentials_are_not_reference_exemptions(s
 def test_security_pattern_constants_are_readable_without_a_regex_exemption():
     package = Path(__file__).parents[1] / 'src' / 'security_runtime'
     for name, marker in [('local_evidence.py', '_SAFE_CREDENTIAL_PATTERN = ('),
-                         ('task_preimage_fingerprints.py', '_PRIVATE_KEY_PATTERN = ' )]:
+                         ('tasks/preimage_fingerprints.py', '_PRIVATE_KEY_PATTERN = ' )]:
         text = (package / name).read_text(encoding='utf-8')
         raw = text.splitlines()
         safe = safe_source(text, source_path=name, max_line_chars=None)

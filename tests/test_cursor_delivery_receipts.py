@@ -2,7 +2,7 @@
 import json
 
 from security_runtime.cursor_tasks import CursorTaskBridge,DELIVERY_CONTEXT_MARKER
-from security_runtime.task_delivery_receipts import TaskDeliveryReceipts
+from security_runtime.tasks.delivery_receipts import TaskDeliveryReceipts
 from test_hook_runtime import repo,FakeRuntime,coordinator
 from test_cursor_automatic import tool,ingress
 

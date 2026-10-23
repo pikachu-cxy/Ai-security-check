@@ -9,7 +9,7 @@ import sys
 import pytest
 
 from security_runtime.codex_integration import REQUIRED_TOOLS, probe_runtime
-from security_runtime.host_guidance import runtime_info
+from security_runtime.guidance.host_guidance import runtime_info
 from security_runtime.integration_lifecycle import IntegrationDiagnostic
 
 

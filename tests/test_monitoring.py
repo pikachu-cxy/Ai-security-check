@@ -317,7 +317,7 @@ subprocess.run(['git', 'init', '-q', str(project)], check=True)
 engine = SecurityRuntime(ScannerRegistry([NativeFunctionScanner()]), store=SQLiteStore(Path('scan.sqlite3')))
 result = engine.scan(project, 'quick', request=scoped_request(project, ['demo.js']))
 assert any(run.scanner == NativeFunctionScanner.scanner_id and run.status == 'SUCCESS' for run in result.scanner_runs), str(result.scanner_runs) + str(result.scanner_diagnostics)
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.security import TaskSecurityService
 from security_runtime.hook_state import HookStateStore
 tasks = TaskSecurityService(engine, HookStateStore(Path('hooks').absolute()))
 task = tasks.begin(project, 'without-monitor')

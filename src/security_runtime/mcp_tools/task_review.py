@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Literal
 from mcp.types import ToolAnnotations
-from ..task_review_protocol import PROTOCOL_VERSION
-from .. import task_review_contract as task_review_models
+from ..task_review.protocol import PROTOCOL_VERSION
+from ..task_review import contract as task_review_models
 
 
 def register(server, registry, *, application):
@@ -42,7 +42,7 @@ def register(server, registry, *, application):
     def get_task_review_plan(task_ref: str, review_session: str, cursor: int = 0, limit: int = 10,
                               workspace_path: str | None = None, session_ref: str | None = None) -> dict:
         """Page the current version-3 task's required review units. For v3 follow next_cursor across all window_fragment items, including multiple fragments of the same unit_id. Use the returned cursor and exact task/session; omitted pages remain required work. This reads the plan without rescanning, starting a new task or resetting cumulative budgets."""
-        from ..task_security import TaskContextError
+        from ..tasks.security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).review_plan(bound_path(workspace_path),
                 task_ref, review_session, cursor, limit)
@@ -53,7 +53,7 @@ def register(server, registry, *, application):
     def get_task_review_method(task_ref: str, review_session: str, workspace_path: str | None = None,
                                 session_ref: str | None = None) -> dict:
         """Get the canonical method for this exact version-3 review session when its advertised version/hash is unavailable locally. Retrieve once and reuse within the same method version; source evidence and plan coverage remain separate. No scan, task restart or repair authority."""
-        from ..task_security import TaskContextError
+        from ..tasks.security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).review_method(bound_path(workspace_path),
                 task_ref, review_session)
@@ -65,7 +65,7 @@ def register(server, registry, *, application):
                                   limitations: list[str], workspace_path: str | None = None,
                                   session_ref: str | None = None) -> dict:
         """Record reasoning completion for exact version-3 plan units after their required current/before evidence has been read. Report REVIEWED or PARTIAL with explicit limitations. Batch completion never substitutes for the final submit_task_security_review, erases other pending work, resets task budgets or grants repair authority."""
-        from ..task_security import TaskContextError
+        from ..tasks.security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).submit_batch(bound_path(workspace_path),
                 task_ref, review_session, unit_ids, coverage, limitations)
@@ -87,7 +87,7 @@ def register(server, registry, *, application):
         reconnect. Missing source and unread ranges remain gaps. No old-protocol
         reads, .env content, links, path escapes, commands or network.
         """
-        from ..task_security import TaskContextError
+        from ..tasks.security import TaskContextError
         try:
             return task_service(task_ref,session_ref,workspace_path).read(bound_path(workspace_path), task_ref, review_session, file_path, start_line, end_line, source_version)
         except TaskContextError as exc:

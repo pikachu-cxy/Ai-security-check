@@ -46,7 +46,7 @@ def delivery_manifest(info, tools, *, skill_contents=None):
             'task_session_routing', 'task_review_submission', 'repair_impact',
             'repair_impact_unknowns', 'risk_disposition') if name in features})
     from .compatibility import requirements, storage_contracts, task_review_compatibility
-    from .guidance_catalog import manifest as guidance_manifest
+    from .guidance.guidance_catalog import manifest as guidance_manifest
     from .host_lifecycle import profile_catalog
     identity['connectors'] = dict(declared=profile_catalog(), observed_host=info.get('host_connector'),
         integration_scope=info.get('integration_scope'), workspace_routing=info.get('workspace_routing'))

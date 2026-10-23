@@ -12,7 +12,7 @@ from security_runtime.integration_state import WorkspaceBinding
 from security_runtime.mcp_server import create_server
 from security_runtime.remediation import RemediationService
 from security_runtime.remediation_policy import RemediationConfig
-from security_runtime.task_fix import TaskFixService
+from security_runtime.tasks.fix import TaskFixService
 from test_codex_mcp_hook import binding as workspace_binding, claims
 from test_codex_code_mode_contract import documented_posttool_effect
 from test_quick_dependency_runtime import coordinator, repo, runtime, write

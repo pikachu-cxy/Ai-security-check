@@ -10,8 +10,8 @@ import pytest
 from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters,stdio_client
 
-from security_runtime.host_guidance import RUNTIME_WORKFLOW
-from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
+from security_runtime.guidance.host_guidance import RUNTIME_WORKFLOW
+from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
 from security_runtime.review_skill import ReviewSkillManager
 from security_runtime.mcp_views import page_bounds
 

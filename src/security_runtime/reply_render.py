@@ -1,6 +1,6 @@
 """Chinese fallback rendering of a reply plan. No domain state is modified."""
 from .reply_plan import ReplyPlan
-from .risk_decision_guidance import PRIMARY_CHOICES
+from .guidance.risk_decision_guidance import PRIMARY_CHOICES
 
 
 def _candidate(risk):

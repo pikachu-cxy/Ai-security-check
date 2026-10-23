@@ -17,7 +17,7 @@ from security_runtime.monitoring.host_reader import HostReader
 from security_runtime.monitoring.launch import find_chat_log, start_monitor
 from security_runtime.monitoring.report import report_bundle
 from security_runtime.monitoring.service import MonitorService
-from security_runtime.task_ownership import session_owner
+from security_runtime.tasks.ownership import session_owner
 
 CHAT = '12345678-1234-1234-1234-123456789abc'
 OTHER = '23456789-1234-1234-1234-123456789abc'
@@ -241,7 +241,7 @@ def test_mcp_entry_rejects_other_workspace_or_bad_ref_before_launch(source, monk
     from security_runtime.mcp_contracts import MCPRegistry
     from security_runtime.monitoring.mcp import register
     from security_runtime.hook_state import HookStateStore
-    from security_runtime.task_ownership import issue_session_ref
+    from security_runtime.tasks.ownership import issue_session_ref
     _, project, _, _ = source
     hooks = HookStateStore(project.parent/'hooks')
     token = issue_session_ref(hooks, project, 'codex', CHAT)
@@ -278,7 +278,7 @@ def test_broken_monitor_registration_cannot_prevent_core_mcp_startup(monkeypatch
 def test_missing_observer_does_not_change_verified_session_routing(source, monkeypatch):
     import builtins
     from security_runtime.hook_state import HookStateStore
-    from security_runtime.task_ownership import issue_session_ref, verify_session_ref
+    from security_runtime.tasks.ownership import issue_session_ref, verify_session_ref
     _, project, _, _ = source
     hooks = HookStateStore(project.parent / 'route-hooks')
     token = issue_session_ref(hooks, project, 'codex', CHAT)

@@ -8,7 +8,7 @@ import pytest
 from security_runtime.hook_state import HookStateStore
 from security_runtime.native_repair_intent import NativeRepairIntents
 from security_runtime.repair_impact_models import RepairImpactError
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.security import TaskSecurityService
 
 
 OWNER = dict(host='codex', session='a' * 64)
@@ -76,7 +76,7 @@ def test_waiting_blocks_both_existing_and_new_keys_before_capture(sample, monkey
     intents.request(SOURCE, ASSESSMENT)
     def no_capture(*args, **kwargs):
         raise AssertionError('A denied ordinary begin must not capture a replacement baseline')
-    monkeypatch.setattr('security_runtime.task_security.capture', no_capture)
+    monkeypatch.setattr('security_runtime.tasks.security.capture', no_capture)
     for key in ('existing-development', 'new-development'):
         result = tasks.begin(root, key)
         assert result['status'] == 'NATIVE_REPAIR_PREPARATION_REQUIRED'
@@ -118,7 +118,7 @@ def test_bound_repair_reuses_original_baseline_after_own_edits(sample, monkeypat
     (root / 'app.py').write_text('def read_document(user, document):\n    assert user in document.members\n    return document.body\n')
     def no_capture(*args, **kwargs):
         raise AssertionError('A resumed repair must retain its pre-repair bytes')
-    monkeypatch.setattr('security_runtime.task_security.capture', no_capture)
+    monkeypatch.setattr('security_runtime.tasks.security.capture', no_capture)
     assert intents.request(SOURCE, ASSESSMENT)['status'] == 'BOUND'
     second = tasks.begin(root, 'different-key', _native_preparation=preparation)
     assert second['task_ref'] == first['task_ref']

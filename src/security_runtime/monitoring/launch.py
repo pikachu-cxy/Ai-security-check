@@ -14,7 +14,7 @@ import time
 import webbrowser
 
 from ..hook_state import no_links
-from ..task_ownership import valid_owner
+from ..tasks.ownership import valid_owner
 
 MAX_ENTRIES = 20_000
 HEADER_BYTES = 65_536
@@ -190,5 +190,5 @@ def start_from_environment(project=None, *, store=None):
     session = os.getenv('CODEX_THREAD_ID')
     if not session:
         raise ValueError('MONITOR_SESSION_REQUIRED')
-    from ..task_ownership import session_owner
+    from ..tasks.ownership import session_owner
     return start_monitor(project or Path.cwd(), session_owner('codex', session), store=store)

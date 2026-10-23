@@ -451,7 +451,7 @@ class RiskDispositionStore:
         query = "workspace=? AND state='PENDING'"
         arguments = [_workspace(workspace)]
         if owner is not None:
-            from .task_ownership import valid_owner
+            from .tasks.ownership import valid_owner
             if not valid_owner(owner):
                 raise ValueError('Invalid decision recovery owner')
             query += " AND json_extract(data,'$.payload.owner.host')=? AND json_extract(data,'$.payload.owner.session')=?"

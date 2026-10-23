@@ -48,7 +48,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             closeout_engine = CloseoutService(runtime_engine(), hook_coordinator.store)
         return closeout_engine
     binding = workspace_binding or WorkspaceBinding.from_environment()
-    from .mcp_guidance import MCP_INSTRUCTIONS
+    from .guidance.mcp_guidance import MCP_INSTRUCTIONS
     server = FastMCP("AI Security Runtime", instructions=MCP_INSTRUCTIONS, log_level=mcp_log_level())
     registry = MCPRegistry(server)
     from .workspace_services import assemble_remediation, bind_impact_gate
@@ -115,7 +115,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             data.update({'continue': True, 'systemMessage': '安全检查尚未成功接入当前项目，暂时无法确认检查结果。'})
         data = {**diag, **data}
         if data.get('status')=='READY':
-            from .task_ownership import issue_session_ref,session_context
+            from .tasks.ownership import issue_session_ref, session_context
             root=Path(binding.root)
             token=issue_session_ref(hook_coordinator.store,root,'codex',session_id)
             data['task_session_ref']=token

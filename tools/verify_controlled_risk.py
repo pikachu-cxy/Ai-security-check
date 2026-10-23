@@ -14,17 +14,17 @@ import subprocess
 import zipfile
 import uuid
 import security_runtime.runtime as runtime_module
-import security_runtime.task_security as task_module
+import security_runtime.tasks.security as task_module
 from security_runtime._version import __version__
 
-from security_runtime.task_security import TaskSecurityService, digest_value
+from security_runtime.tasks.security import TaskSecurityService, digest_value
 from security_runtime.hook_state import HookStateStore
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.scanners import ScannerRegistry
 from security_runtime.storage import SQLiteStore, ReadOnlySQLiteStore
 from security_runtime.toolchain import ToolManager
 from security_runtime.security_summary import SecuritySummaryService
-from security_runtime.task_fix import TaskFixService
+from security_runtime.tasks.fix import TaskFixService
 from security_runtime.verification_policy import local_recheck
 
 RULE = 'ai-security.python.unsafe-yaml'
@@ -70,7 +70,7 @@ def main():
     registry = ScannerRegistry(tool_manager=ToolManager())
     runtime = SecurityRuntime(registry,store)
     tasks = TaskSecurityService(runtime,hooks)
-    path=root/'src/security_runtime/task_security.py'; original=path.read_bytes()
+    path=root/'src/security_runtime/tasks/security.py'; original=path.read_bytes()
     report=dict(project='pikachu-cxy/Ai-security-check',commit='755e411c4383003a5da54330890fb49c6f96c967',
         status='RUNNING',run_id=uuid.uuid4().hex,started_at_utc=datetime.now(timezone.utc).isoformat(),
         runtime_identity=dict(version=__version__,source_root=str(source_root),

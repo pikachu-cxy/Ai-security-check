@@ -11,7 +11,7 @@ from scripts import make_release_metadata
 from scripts.prepare_release_assets import PLATFORMS, prepare
 from scripts.generate_winget_manifest import generate as winget
 from scripts.update_homebrew_formula import generate as homebrew
-from scripts.validate_manager_metadata import validate
+from scripts.maintenance.validate_manager_metadata import validate
 from security_runtime._version import __version__
 
 

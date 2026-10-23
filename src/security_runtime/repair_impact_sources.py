@@ -24,7 +24,7 @@ def resolve_impact_source(source, workspace, scan_store, task_service):
     if kind == 'SCANNER_TASK_GROUP':
         if set(source) - {'kind', 'task_ref'}:
             raise ValueError('IMPACT_SOURCE_INVALID')
-        from .task_fix import TaskFixService
+        from .tasks.fix import TaskFixService
         prepared = TaskFixService(scan_store).prepare(source['task_ref'], workspace,
                                                      bound_workspace=workspace)
         members = prepared.get('affected_findings', [])

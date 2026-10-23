@@ -5,10 +5,11 @@ import json
 from pathlib import Path
 
 from .hook_state import identity
-from .task_security import TaskSecurityService, capture
-from .task_orchestration import (select_task, require_task_owner, review_protocol, task_needs_handoff,
-    task_allows_followup, followup_identity, task_delivery_facts, historical_tasks)
-from .task_review_protocol import UnsupportedTaskReviewProtocol
+from .tasks.security import TaskSecurityService, capture
+from .tasks.orchestration import (
+    select_task, require_task_owner, review_protocol, task_needs_handoff, task_allows_followup, followup_identity, task_delivery_facts, historical_tasks,
+)
+from .task_review.protocol import UnsupportedTaskReviewProtocol
 
 _CURRENT = object()
 DELIVERY_CONTEXT_MARKER = '\n交付状态元数据（非工具参数）：\n'
@@ -80,7 +81,7 @@ class CursorTaskBridge:
                 return dict(status='BASELINE_UNAVAILABLE', scanner_run=False)
             # An explicit call without session routing stays connection-scoped.
             # Never prepare a different owner and pretend MCP can adopt it.
-            from .task_ownership import verify_session_ref
+            from .tasks.ownership import verify_session_ref
             token=inputs.get('session_ref')
             if token is None:
                 return dict(status='MCP_PREPARATION_DELEGATED',scanner_run=False)
@@ -89,7 +90,7 @@ class CursorTaskBridge:
         mutating = preparing or self.may_mutate(payload)
         if not mutating:
             return dict(status='READ_ONLY_OR_UNSUPPORTED', scanner_run=False)
-        from .task_attribution import session_activity
+        from .tasks.attribution import session_activity
         session_activity(self.core.store, self.root, self.owner)
         record = None if preparing else self.current()
         if record is None and not preparing:
@@ -136,7 +137,7 @@ class CursorTaskBridge:
             return HISTORICAL_CONTEXT
         if not task_needs_handoff(record):
             return None
-        from .task_ownership import issue_session_ref
+        from .tasks.ownership import issue_session_ref
         token=issue_session_ref(self.core.store,self.root,'cursor',self.session)
         context = (
             'Cursor 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
@@ -155,7 +156,7 @@ class CursorTaskBridge:
         )
         # Rendering a response is not proof that stdout was written or that a
         # host report/person consumed it. Metadata is outside executable args.
-        from .task_delivery_receipts import TaskDeliveryReceipts, unavailable
+        from .tasks.delivery_receipts import TaskDeliveryReceipts, unavailable
         import sqlite3
         try:
             receipt = TaskDeliveryReceipts(self.core.store, self.root).prepare(

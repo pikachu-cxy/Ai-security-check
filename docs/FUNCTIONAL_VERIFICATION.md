@@ -92,7 +92,7 @@ opt-in 生成执行权限。上下文分析风险的通用验证接入和修复�
 
 ## 本地计时与验收
 
-`scripts/functional_verification_benchmark.py` 分别计时安全复查摘要生成与真实 Python 测试进程。
+`scripts/benchmarks/functional_verification_benchmark.py` 分别计时安全复查摘要生成与真实 Python 测试进程。
 该脚本保留为内部计时工具，不表示个人版会显示提示或安排检查。它使用合成项目且不运行
 安全扫描、不提交模拟执行回执。将源码目录放到 PYTHONPATH，使用已具备 pytest 的本地
 Python；`--output` 指向忽略的 artifacts 目录。

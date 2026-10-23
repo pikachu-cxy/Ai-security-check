@@ -22,7 +22,7 @@ def test_cli_json_preserves_unicode_after_pipeline_decoding(tmp_path, monkeypatc
     monkeypatch.delenv('SECURITY_RUNTIME_GLOBAL', raising=False)
     monkeypatch.setattr(cli, 'configure_logging', lambda **kwargs: None)
     if entry == 'runtime-info':
-        monkeypatch.setattr('security_runtime.host_guidance.runtime_info', lambda: payload)
+        monkeypatch.setattr('security_runtime.guidance.host_guidance.runtime_info', lambda: payload)
         args = ['runtime-info', '--json']
     elif entry == 'review-skill':
         monkeypatch.setattr('security_runtime.review_skill.ReviewSkillManager',
@@ -57,7 +57,7 @@ def test_cli_json_preserves_unicode_after_pipeline_decoding(tmp_path, monkeypatc
 def test_runtime_info_human_output_retains_readable_chinese(monkeypatch):
     monkeypatch.delenv('SECURITY_RUNTIME_GLOBAL', raising=False)
     monkeypatch.setattr(cli, 'configure_logging', lambda **kwargs: None)
-    monkeypatch.setattr('security_runtime.host_guidance.runtime_info', lambda: {
+    monkeypatch.setattr('security_runtime.guidance.host_guidance.runtime_info', lambda: {
         'version': '0.3.5', 'capability_contract': 'developer-guidance-v0.3',
         'connection_recovery': ['连接已准备好。']})
     captured = io.StringIO()

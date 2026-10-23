@@ -12,7 +12,7 @@ import pytest
 from security_runtime.closeout_state import digest
 from security_runtime.hook_state import HookStateStore, atomic_bytes
 from security_runtime.ledger_partitions import LedgerCapacity, MAX_PARTITIONS
-from security_runtime.task_risk_ledger import TaskRiskLedger
+from security_runtime.tasks.risk_ledger import TaskRiskLedger
 
 LEGACY_SOURCE_HASHES = {
     'v0.3.4':'5b6459f8b7a45c5c58c37276474a6de665e86090e254bce318a392f49c1f97ef',

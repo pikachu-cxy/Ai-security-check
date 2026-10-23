@@ -29,6 +29,6 @@ jobs:
           security-check licenses
           security-check licenses --check-distribution
       - name: Check notices against reviewed metadata
-        run: python scripts/generate_notices.py --check
+        run: python scripts/maintenance/generate_notices.py --check
       - name: Check rule-pack license and provenance
         run: python -m pytest -q tests/test_compliance.py

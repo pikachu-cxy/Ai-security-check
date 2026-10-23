@@ -4,7 +4,7 @@ import asyncio
 import pytest
 
 from security_runtime.compatibility import storage_contracts
-from security_runtime.guidance_catalog import TOPICS, get_runtime_guidance
+from security_runtime.guidance.guidance_catalog import TOPICS, get_runtime_guidance
 from security_runtime.global_mcp import create_global_server
 from security_runtime.mcp_contracts import MCPRegistry
 from security_runtime.mcp_server import create_server

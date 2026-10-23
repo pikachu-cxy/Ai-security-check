@@ -10,7 +10,7 @@ from security_runtime.codex_mcp_hook import handle_codex_hook
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
 from security_runtime.hook_timing import ExecutionTrigger, PHASES
-from security_runtime.host_guidance import HOST_INSTRUCTIONS, runtime_info
+from security_runtime.guidance.host_guidance import HOST_INSTRUCTIONS, runtime_info
 from security_runtime.functional_verification import FunctionalVerificationService
 from security_runtime.functional_verifiers import FunctionalVerifierRegistry
 from security_runtime.codex_integration import check_capabilities, REQUIRED_TOOLS

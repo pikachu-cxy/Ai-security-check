@@ -6,8 +6,8 @@ from .cursor_tasks import CursorTaskBridge
 from .host_events import EventKind
 from .host_event_runtime import handle_normalized_event
 from .recent_hooks import Observation, CURRENT
-from .task_hook_activity import _record_task_hook
-from .task_orchestration import task_allows_followup, task_delivery_facts
+from .tasks.hook_activity import _record_task_hook
+from .tasks.orchestration import task_allows_followup, task_delivery_facts
 
 
 GAP = ('本次 Cursor 自动安全任务未能建立或读取编辑前的任务记录。'
@@ -66,7 +66,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if event == 'preToolUse':
             result = bridge.before(payload)
         elif event == 'postToolUse':
-            from .task_attribution import session_activity
+            from .tasks.attribution import session_activity
             session_activity(core.store, root, bridge.owner)
             record = bridge.current()
             context = bridge.context(record)
@@ -84,7 +84,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 result['response_prepared'] = True
         elif event == 'stop':
             message = bridge.followup(payload)
-            from .task_attribution import session_activity
+            from .tasks.attribution import session_activity
             idle = (not message and payload['status'] == 'completed' and payload['loop_count'] == 0
                     and core.store.pending_activity(root, 'cursor', bridge.session) is None)
             session_activity(core.store, root, bridge.owner, idle=idle)
@@ -98,7 +98,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
             if normalized.kind == EventKind.SESSION_START:
-                from .task_ownership import issue_session_ref,session_context
+                from .tasks.ownership import issue_session_ref, session_context
                 token=issue_session_ref(core.store,root,'cursor',payload['conversation_id'])
                 output['additional_context']=session_context(token)
             if normalized.kind == EventKind.WORKSPACE_ACTIVITY:

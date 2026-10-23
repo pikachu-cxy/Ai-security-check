@@ -72,7 +72,7 @@ from security_runtime import task_fix, equivalence, verification, verification_p
 from security_runtime import hook_runtime, hook_state, hook_adapters
 for module in (hook_runtime, hook_state, hook_adapters):
     assert Path(module.__file__).resolve().is_relative_to(package)
-from security_runtime.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS, HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
+from security_runtime.guidance.host_guidance import runtime_info, REQUIRED_GUIDANCE_TOOLS, HOST_INSTRUCTIONS, RUNTIME_WORKFLOW
 from security_runtime.mcp_server import create_server
 from security_runtime.professional_guidance import get_professional_guidance
 guide = get_professional_guidance()
@@ -103,8 +103,8 @@ assert 'references/runtime-workflow.md' in skill_files()
 assert 'references/deep-audit.md' in skill_files()
 assert '沉默和计划均不授权' in skill_files()['SKILL.md'].decode('utf-8')
 from security_runtime.compatibility import requirements, storage_contracts, TASK_REVIEW_TOOLS
-from security_runtime.guidance_catalog import TOPICS, get_runtime_guidance, manifest as guidance_manifest
-from security_runtime.task_security import method
+from security_runtime.guidance.guidance_catalog import TOPICS, get_runtime_guidance, manifest as guidance_manifest
+from security_runtime.tasks.security import method
 from security_runtime.build_identity import STATE_SCHEMA
 assert STATE_SCHEMA == 'runtime-state-v1'
 assert {'task-risk-authority-v2', 'closure-authority-v2', 'persistence-effect-v1',

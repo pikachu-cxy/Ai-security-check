@@ -8,8 +8,8 @@ from security_runtime.baseline_seed import WorkspaceBaselineSeeds
 from security_runtime.bootstrap_diagnostics import BaselinePreparationError
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
-from security_runtime.task_ownership import session_owner
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.ownership import session_owner
+from security_runtime.tasks.security import TaskSecurityService
 from security_runtime.scan_attempt import ScanAttemptStore, AttemptLease, ScanAttemptLost
 from test_global_integration import complete_runtime, installed, projects
 

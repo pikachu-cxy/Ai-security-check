@@ -9,7 +9,7 @@ from security_runtime import cursor_hook
 from security_runtime.cursor_tasks import CursorTaskBridge
 from security_runtime.cursor_hook import CursorBindings
 from security_runtime.recent_hooks import RecentHookStore
-from security_runtime.task_delivery_receipts import DeliveryWriteObserver,TaskDeliveryReceipts
+from security_runtime.tasks.delivery_receipts import DeliveryWriteObserver, TaskDeliveryReceipts
 from test_cursor_automatic import tool
 from test_cursor_host_adapter import payload
 from test_hook_runtime import repo,coordinator,FakeRuntime

@@ -78,7 +78,7 @@ def test_personal_reply_facts_have_no_functional_test_or_host_execution_input():
     for model in (ReplyFacts, CheckFact, RiskFact, Notice):
         assert not {f.name for f in fields(model)} & {
             'functional_verification', 'functional_results', 'test_results', 'host_execution'}
-    from security_runtime.host_guidance import runtime_info
+    from security_runtime.guidance.host_guidance import runtime_info
     info = runtime_info()
     assert info['features']['reply_plan'].startswith('security-reply-plan-v1')
     assert 'functional_verification' not in info['features']

@@ -9,7 +9,7 @@ from security_runtime.reply_adapters import task_facts
 from security_runtime.reply_plan import plan_reply
 from security_runtime.reply_render import render_reply
 from security_runtime.risk import NO_FINDINGS_MESSAGE
-from security_runtime.task_review_results import bounded_history_result
+from security_runtime.task_review.results import bounded_history_result
 from task_review_helpers import review_all
 from test_mcp_context_cost import registered
 from test_task_review_results import record

@@ -17,7 +17,7 @@ from security_runtime import observation
 from security_runtime.context_cost_mcp import observe_response
 from security_runtime.context_cost_worker import ObservationWorker
 from security_runtime.hook_state import HookStateStore
-from security_runtime.task_ownership import issue_session_ref, session_owner, verify_session_ref
+from security_runtime.tasks.ownership import issue_session_ref, session_owner, verify_session_ref
 
 
 def request(name='get_runtime_info', **arguments):
@@ -326,7 +326,7 @@ names = {tool.name for tool in asyncio.run(server.list_tools())}
 assert {'get_runtime_info', 'scan_project', 'begin_security_task'} <= names
 assert 'start_usage_monitor' not in names
 from security_runtime.hook_state import HookStateStore
-from security_runtime.task_ownership import issue_session_ref, verify_session_ref, session_owner
+from security_runtime.tasks.ownership import issue_session_ref, verify_session_ref, session_owner
 project = Path('project').resolve()
 project.mkdir()
 hooks = HookStateStore(Path('hook-state').resolve())

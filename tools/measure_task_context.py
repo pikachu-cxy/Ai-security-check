@@ -16,7 +16,7 @@ import subprocess
 import time
 import zipfile
 
-from security_runtime import task_security as ts
+from security_runtime.tasks import security as ts
 from security_runtime.hook_state import HookStateStore
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.scanners import ScannerRegistry
@@ -112,7 +112,7 @@ def main():
                     ['git','-C',str(root),'-c','user.name=Performance measurement',
                      '-c','user.email=measurement@example.invalid','commit','-qm','fixed baseline source']):
             subprocess.run(cmd, check=True, capture_output=True)
-        target = root/'src/security_runtime/task_security.py'
+        target = root/'src/security_runtime/tasks/security.py'
         original = target.read_bytes()
         js_target = root/'src/security_runtime/assets/arithmetic_regression.mjs'
         original_js = js_target.read_bytes()
@@ -146,10 +146,10 @@ def main():
                 for low in (1,81,161):
                     with measured('context_page', stages):
                         pages.append(service.read(root, ref, packet['review_session'],
-                                     'src/security_runtime/task_security.py', low, low+79))
+                                     'src/security_runtime/tasks/security.py', low, low+79))
                 with measured('context_repeat_page', stages):
                     service.read(root, ref, packet['review_session'],
-                                 'src/security_runtime/task_security.py', 1,80)
+                                 'src/security_runtime/tasks/security.py', 1,80)
                 with measured('host_partial_submission', stages):
                     service.submit(root, ref, packet['review_session'], [], 'PARTIAL',
                         ['Performance harness only; no model or semantic review; remaining source unreviewed.'])

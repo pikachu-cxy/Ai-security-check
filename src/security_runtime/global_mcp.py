@@ -37,7 +37,7 @@ BOOTSTRAP_WAIT_SECONDS = 20
 
 
 def global_runtime_info(*, tools=None, host=None):
-    from .host_guidance import runtime_info
+    from .guidance.host_guidance import runtime_info
     info = runtime_info()
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1'}
     info['integration_scope'] = 'GLOBAL'
@@ -418,7 +418,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 or not Draft202012Validator(schemas[name]).is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
             if name == 'submit_task_security_review':
-                from .task_review_contract import task_review_input_failure
+                from .task_review.contract import task_review_input_failure
                 data = task_review_input_failure(arguments, require_workspace=True)
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
@@ -442,7 +442,7 @@ def create_global_server(*, workspaces=None, host='codex'):
             info = runtime_info_view(info, arguments.get('view', 'full'))
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_runtime_guidance':
-            from .guidance_catalog import get_runtime_guidance
+            from .guidance.guidance_catalog import get_runtime_guidance
             guide = get_runtime_guidance(arguments['topic'])
             return CallToolResult(structuredContent=guide, content=[TextContent(type='text', text=json.dumps(guide))])
         if name == 'get_professional_guidance':
@@ -513,7 +513,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 claim_diag['workspace_binding_stage'] = binding_stage
                 session_token = None
                 if normalized.kind == EventKind.SESSION_START:
-                    from .task_ownership import issue_session_ref
+                    from .tasks.ownership import issue_session_ref
                     # Claims/configuration/admission were already checked.
                     # Establish stable routing before launching a slow worker;
                     # the token attests no scanner or comparison-point result.
@@ -547,7 +547,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     # Identity routing is independent of initial scan readiness.
                     # Slow/busy scanners must not silently downgrade a native
                     # conversation into an unresumable connection-owned task.
-                    from .task_ownership import session_context
+                    from .tasks.ownership import session_context
                     data['task_session_ref']=session_token
                     output['hookSpecificOutput']={'hookEventName':'SessionStart','additionalContext':session_context(session_token)}
                     return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps({
@@ -583,7 +583,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 forwarded.pop('workspace_path', None)
             # No parsing/rebuilding references or credentials; all other values
             # are forwarded byte-for-byte as supplied to this request's root.
-            from .task_ownership import owner_scope, session_owner
+            from .tasks.ownership import owner_scope, session_owner
             if name in HOOKS:
                 owner=session_owner(active_host,arguments['session_id'])
             else:
@@ -599,7 +599,7 @@ def create_global_server(*, workspaces=None, host='codex'):
             return result
         except Exception as exc:
             if name == 'submit_task_security_review':
-                from .task_review_contract import find_task_review_input_error
+                from .task_review.contract import find_task_review_input_error
                 rejection = find_task_review_input_error(exc)
                 if rejection is not None:
                     data = rejection.response()
@@ -620,7 +620,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .mcp_contracts import unsupported_protocol_failure
-            from .task_diagnostics import capacity_failure
+            from .tasks.diagnostics import capacity_failure
             unsupported = (unsupported_protocol_failure(exc) or capacity_failure(exc)) if handler_entered else None
             if unsupported is not None:
                 return CallToolResult(isError=False, structuredContent=unsupported,
@@ -629,9 +629,9 @@ def create_global_server(*, workspaces=None, host='codex'):
                 # Ownership, expired sessions, unsupported protocol versions and
                 # malformed review requests must not masquerade as a broken
                 # workspace. Never reflect arbitrary SDK/source/path errors.
-                from .task_ownership import TaskOwnershipError
-                from .task_review_plan import ReviewPlanError
-                from .task_review_revisions import ReviewRevisionError
+                from .tasks.ownership import TaskOwnershipError
+                from .task_review.plan import ReviewPlanError
+                from .task_review.revisions import ReviewRevisionError
                 cause = exc
                 for _ in range(8):
                     if isinstance(cause, TaskOwnershipError):

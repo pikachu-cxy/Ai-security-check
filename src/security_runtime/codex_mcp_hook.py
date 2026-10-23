@@ -11,7 +11,7 @@ from .hook_runtime import HookCoordinator
 from .hook_state import no_links
 from .integration_state import WorkspaceBinding
 from .hook_timing import timings, elapsed, core_context
-from .task_orchestration import task_needs_handoff, task_delivery_facts
+from .tasks.orchestration import task_needs_handoff, task_delivery_facts
 
 
 def codex_mcp_hook_config() -> dict:
@@ -44,8 +44,9 @@ def _bash_no_scan(result, classification, reason):
     return result
 
 
-from .task_hook_activity import (MAX_TASK_HOOK_CHECKS, _bounded_task_paths,
-    _record_task_hook as _shared_record_task_hook, _deferred_task_context)
+from .tasks.hook_activity import (
+    MAX_TASK_HOOK_CHECKS, _bounded_task_paths, _record_task_hook as _shared_record_task_hook, _deferred_task_context,
+)
 
 
 def _record_task_hook(hooks, root, result, decision):
@@ -313,9 +314,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
         summary['task_delivery']['context_returned'] = bool(
             output.get('hookSpecificOutput', {}).get('additionalContext'))
         if summary['task_delivery']['context_returned']:
-            from .task_delivery_receipts import TaskDeliveryReceipts, unavailable
+            from .tasks.delivery_receipts import TaskDeliveryReceipts, unavailable
             import sqlite3
-            from .task_ownership import record_owner
+            from .tasks.ownership import record_owner
             try:
                 receipt = TaskDeliveryReceipts(active_coordinator.store, validated_root).prepare(
                     task, record_owner(task), intent='TASK_FINAL_SUMMARY', category='POST_TOOL_CONTEXT')

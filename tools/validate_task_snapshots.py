@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from security_runtime.task_security import TaskSecurityService, digest_value
+from security_runtime.tasks.security import TaskSecurityService, digest_value
 from security_runtime.hook_state import HookStateStore
 
 

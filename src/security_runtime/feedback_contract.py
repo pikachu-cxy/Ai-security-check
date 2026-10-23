@@ -65,7 +65,7 @@ def disposition_unavailable(exc):
 
 def feedback_reason(exc, name):
     """Inspect only fixed error types/text; never reflect supplied code or paths."""
-    from .task_ownership import TaskOwnershipError
+    from .tasks.ownership import TaskOwnershipError
     current = exc
     for _ in range(12):
         if isinstance(current, TaskOwnershipError):

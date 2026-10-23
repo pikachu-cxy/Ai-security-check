@@ -6,8 +6,8 @@
 
 Codex/Cursor 的聊天会话可以在 MCP 重连后继续，短命 Hook 进程也不是编辑任务的所有者。因此聊天任务、未知进程状态、缺失元数据、旧协议和正在检查或复核的任务仍保留并发归属限制。历史 Hook 任务缺少可靠会话结束信号时，不能仅凭长时间无活动自动排除。相同/不同文件上的真实并发均保持原有保守规则。
 
-回归入口：`python -m pytest tests/test_task_disconnection.py tests/test_task_ownership.py tests/test_task_attribution_presentation.py tests/test_task_review_invariants.py tests/test_task_review_v3_state.py tests/test_task_review_revisions.py tests/test_task_scan_attempt.py tests/test_task_risk_dispositions.py tests/test_task_risk_ledger_watermark.py`。
+回归入口：`python -m pytest tests/tasks/test_task_disconnection.py tests/tasks/test_task_ownership.py tests/tasks/test_task_attribution_presentation.py tests/task_review/test_task_review_invariants.py tests/task_review/test_task_review_v3_state.py tests/task_review/test_task_review_revisions.py tests/tasks/test_task_scan_attempt.py tests/tasks/test_task_risk_dispositions.py tests/tasks/test_task_risk_ledger_watermark.py`。
 
 覆盖修改前失联与任务期间失联、进程存活/未知/PID 复用、租约边界、开始捕获时竞态、后续 Hook 或任务活动、重复开始、会话隔离、真实子进程退出与 MCP 路由。相关复核与风险回归继续验证未完成范围不得标成完整核查，部分覆盖不得关闭历史风险。模拟扫描器回归与真实进程检查各自说明证据范围，不冒充双宿主人工实机验收。
 
-2026-10-20 本地验收：以上关联回归 137 项通过；额外运行 `tests/test_task_security.py tests/test_cursor_automatic.py`，82 项通过，共 219 项。实际退出子进程及真实 MCP 路由用例已执行；检查器结果与宿主提交由测试夹具模拟的部分仍按其原证据范围解释。
+2026-10-20 本地验收：以上关联回归 137 项通过；额外运行 `tests/tasks/test_task_security.py tests/test_cursor_automatic.py`，82 项通过，共 219 项。实际退出子进程及真实 MCP 路由用例已执行；检查器结果与宿主提交由测试夹具模拟的部分仍按其原证据范围解释。

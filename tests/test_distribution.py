@@ -12,13 +12,32 @@ import yaml
 
 from scripts.generate_winget_manifest import generate as generate_winget
 from scripts.update_homebrew_formula import generate as generate_homebrew
-from scripts.validate_manager_metadata import validate
+from scripts.maintenance.validate_manager_metadata import validate
+from scripts.check_wheel import check_python_modules
 from security_runtime._version import __version__
 from security_runtime.cli import main
 from security_runtime.engines import BUILTIN_ENGINES
 from security_runtime.rulepacks import FIRST_PARTY_RULE_PACK
 from security_runtime.mcp_config import resolve_runtime_command
 from security_runtime.licensing import LicenseAction, LicensePolicy, Permission, MANAGED_PYTHON_LICENSE, PYINSTALLER_BOOTLOADER_LICENSE
+
+
+@pytest.mark.parametrize('drift', ['none', 'missing', 'stale'])
+def test_wheel_module_inventory_follows_directory_moves(tmp_path, drift):
+    package = tmp_path / 'security_runtime'
+    (package / 'guidance').mkdir(parents=True)
+    (package / '__init__.py').write_text('')
+    (package / 'guidance/host_guidance.py').write_text('')
+    names = {'security_runtime/__init__.py', 'security_runtime/guidance/host_guidance.py'}
+    if drift == 'missing':
+        names.remove('security_runtime/guidance/host_guidance.py')
+    if drift == 'stale':
+        names.add('security_runtime/host_guidance.py')
+    if drift == 'none':
+        check_python_modules(names, package)
+    else:
+        with pytest.raises(ValueError, match='stale or missing Python modules'):
+            check_python_modules(names, package)
 
 
 def test_runtime_version_and_semgrep_delivery(capsys):

@@ -682,7 +682,7 @@ class HookCoordinator:
                 projection = FindingFeedbackService(runtime.store, root).hook_projection(scan.scan_id)
                 result['finding_feedback_projection'] = projection
             except (OSError, ValueError):
-                from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+                from .guidance.risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
                 result.update(handling_unavailable=True, handling_status='UNAVAILABLE', risk_choices=[],
                     handling_user_feedback=dict(version='security-user-feedback-v1', choices=[],
                         message=HANDLING_UNAVAILABLE_MESSAGE))
@@ -751,7 +751,7 @@ class HookCoordinator:
         if session_id is not None and (not isinstance(session_id,str) or len(session_id)>500):
             raise ValueError('Invalid hook session identity')
         if expected_task_ref is not _UNBOUND_TASK and expected_task_ref is not None:
-            from .task_security_state import REF
+            from .tasks.security_state import REF
             if not isinstance(expected_task_ref, str) or REF.fullmatch(expected_task_ref) is None:
                 raise ValueError('Invalid expected Hook task reference')
         root = (self.workspace_resolver(workspace) if self.workspace_resolver
@@ -866,8 +866,8 @@ class HookCoordinator:
 
     def _claim(self, result, root, host, session_id, pending, expected_task_ref=_UNBOUND_TASK):
         from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, source_binding
-        from .task_security_state import TaskSecurityStore
-        from .task_ownership import record_owner
+        from .tasks.security_state import TaskSecurityStore
+        from .tasks.ownership import record_owner
         path = self.store.path(root, host, session_id)
         previous, recovered = self.store.load(path)
         key = self.store.key(root)
@@ -958,7 +958,7 @@ class HookCoordinator:
         return None
 
     def _publish(self, result, root, host, session_id, transaction):
-        from .task_security_state import TaskSecurityStore
+        from .tasks.security_state import TaskSecurityStore
         execution, attempts, lease = (transaction[k] for k in ('execution','attempts','lease'))
         from .scan_publication import ScanPublications
         publications = ScanPublications(self.store, root)

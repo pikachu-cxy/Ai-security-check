@@ -10,7 +10,7 @@ import pytest
 from security_runtime.functional_execution import LocalSandbox, bounded_run, MAX_OUTPUT, MAX_PROCESSES, TIMEOUT
 from security_runtime.functional_verifiers import FunctionalVerifierRegistry, MavenVerifier, GradleVerifier, NodeVerifier, PythonVerifier
 from security_runtime.functional_verification import FunctionalVerificationService, snapshot, result
-from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS, runtime_info
+from security_runtime.guidance.host_guidance import REQUIRED_GUIDANCE_TOOLS, runtime_info
 from security_runtime.hook_state import HookStateStore
 
 

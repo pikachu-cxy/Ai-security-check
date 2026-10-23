@@ -1,5 +1,41 @@
 # Architecture
 
+
+## Repository layout
+
+Directory migrations group host guidance, task review and task services while retaining the
+scan, repair and persistence boundaries. CLI and MCP public entrypoints remain
+`security_runtime.cli` and `security_runtime.mcp_server`.
+
+| Location | Responsibility |
+| --- | --- |
+| `src/security_runtime/guidance/` | Fixed host instructions, versioned topic catalog and shared presentation rules |
+| `src/security_runtime/skills/` | Bundled Skill resources; lifecycle and rendering remain in `review_skill.py` |
+| `tests/guidance/` | Guidance delivery, Skill lifecycle and risk presentation regressions |
+| `src/security_runtime/task_review/` | Review protocol, contract, windows, coverage, budget, plan, revisions and result delivery |
+| `tests/task_review/` | Task review regressions and shared review helpers |
+| `src/security_runtime/tasks/` | Task lifecycle, ownership, snapshots, immutable evidence, projection, risk handling and verification |
+| `tests/tasks/` | Task service regressions and the task-fix stdio fixture |
+| `scripts/maintenance/` | Repository content synchronization and metadata checks |
+| `scripts/benchmarks/` | Reproducible architecture, context, rule and scanner measurements |
+
+Python imports use the new guidance package directly; there are no duplicate
+implementations at the old module paths. Resource lookup remains anchored to the
+Runtime package root. Test discovery remains under `tests`; pytest's configured
+Python paths preserve shared helper imports during the incremental migration.
+Task service helpers use short names under `security_runtime.tasks`, including
+`tasks.security`, `tasks.snapshot`, `tasks.preimages` and `tasks.risk_ledger`.
+Their existing classes and functions retain the same behavior; source modules,
+test monkeypatch targets, measurement tools and package checks use these paths
+directly. The immutable legacy-writer fixtures retain their original source.
+`security_runtime.task_review` retains the coordinator and its existing module
+attributes through the package entrypoint; internal helpers use short submodule
+names such as `task_review.plan` and `task_review.transport`. Task record schemas,
+protocol identifiers, quotas and MCP tool schemas do not change with this move.
+
+Further groups should follow actual dependencies, with imports, resource paths,
+CI, package manifests and callers migrated in the same batch.
+
 Risk handling separates four facts: technical assessment, the user's handling
 decision, effective reminder state and repair verification. `risk_disposition`
 owns the SQLite decision/event/assessment store, stable issue identity and
@@ -21,11 +57,11 @@ Unreadable source cannot revoke a saved choice. Unreadable decision storage is
 reported as unavailable rather than converted into zero risks or a new prompt.
 
 Task review v3 separates five responsibilities: immutable sanitized evidence
-(`task_preimages`), pure changed-range selection (`task_review_windows`), finite
-resource policy (`task_review_budget`), plan/coverage accounting
-(`task_review_plan`) and readable delivery (`task_review_transport`). The
+(`tasks.preimages`), pure changed-range selection (`task_review.windows`), finite
+resource policy (`task_review.budget`), plan/coverage accounting
+(`task_review.plan`) and readable delivery (`task_review.transport`). The
 `task_review` coordinator owns source verification, locking and persistence;
-`task_security` retains task lifecycle, scanning and risk-policy integration.
+`tasks.security` retains task lifecycle, scanning and risk-policy integration.
 Neither the planner nor the transport reads files, starts a scanner, authorizes
 repairs or treats a locator as evidence.
 

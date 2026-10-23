@@ -54,7 +54,7 @@ def test_query_does_not_scan_finish_edit_or_grant(sample):
     server = make_server(sample)
     before = snapshot(sample[0])
     scans = copy.deepcopy(sample[2].get_scan('scan-a'))
-    with patch('security_runtime.task_security.TaskSecurityService.finish', side_effect=AssertionError('no task finish')), \
+    with patch('security_runtime.tasks.security.TaskSecurityService.finish', side_effect=AssertionError('no task finish')), \
          patch.object(SecurityRuntime, 'scan', side_effect=AssertionError('no scan')):
         source, prepared = prepare(server, sample)
         assert prepared.get('assessment_ref'), prepared

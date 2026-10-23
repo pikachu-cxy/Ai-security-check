@@ -16,7 +16,7 @@
 
 本轮针对 A2 的过宽阻断增加 `repair-impact-unknowns-v1`。A2 在四个必要文件已读、仅复用既有共享权限函数时，将未提供整个仓储、外层身份和异常显示都升级为关键未知，并重复写成 UNDETERMINED。B3 已完成局部共享权限修复与原风险宿主复查，C2 已完成只读影响保存、正式 DEFER 和历史回读；这些已有场景按各自回执保留，不代替 A2 新包复验或所有通道通过。
 
-统一判据见 [repair_impact_policy.py](../../src/security_runtime/repair_impact_policy.py)，由[宿主指导](../../src/security_runtime/host_guidance.py)和[受控安装方法生成器](../../src/security_runtime/review_skill.py)复用。当前实际连接通过 `features.repair_impact_unknowns` 声明该契约后，才发送新增字段；不能用源码存在新字段推定旧连接已支持。
+统一判据见 [repair_impact_policy.py](../../src/security_runtime/repair_impact_policy.py)，由[宿主指导](../../src/security_runtime/guidance/host_guidance.py)和[受控安装方法生成器](../../src/security_runtime/review_skill.py)复用。当前实际连接通过 `features.repair_impact_unknowns` 声明该契约后，才发送新增字段；不能用源码存在新字段推定旧连接已支持。
 
 | 新增字段或分类 | 契约与决策边界 |
 | --- | --- |
@@ -41,11 +41,11 @@
 | 当前源码事实 | 本次设计调整 |
 | --- | --- |
 | [共同回复计划](../../src/security_runtime/reply_plan.py)及适配、呈现层已经存在 | 修复影响进入同一回复投影，区别于漏洞后果，不另建提示链 |
-| [扫描器任务准备](../../src/security_runtime/task_fix.py)按分组解析，无任意成员子集参数 | 绑定原响应的具体任务和当前活动成员，处置变化后重新核对范围 |
-| [同任务复核修订](../../src/security_runtime/task_review_revisions.py)保留旧版本并推进当前快照 | 原风险版本、当前分析版本及编辑版本分别绑定，不能只用 task_ref 判定同版 |
-| [自适应预算](../../src/security_runtime/task_review_budget.py)和[计划](../../src/security_runtime/task_review_plan.py)按必读义务分配资源 | 删除固定 12／24 文件、96／192 KiB 和仅一次扩展的完成边界，改为有硬上限的义务驱动计划 |
-| [任务复核准备](../../src/security_runtime/task_review.py)可能结束活动任务并触发检查 | 影响查询使用独立服务，仅复用安全读取和适配后的纯逻辑，不调用任务 prepare 充当查询准备器 |
-| [历史结果](../../src/security_runtime/task_review_results.py)与[全局路由](../../src/security_runtime/global_mcp.py)区分查询、取证及领域错误 | 历史可读不等于可续办；引用、修订、容量错误不得误报为项目接入失败 |
+| [扫描器任务准备](../../src/security_runtime/tasks/fix.py)按分组解析，无任意成员子集参数 | 绑定原响应的具体任务和当前活动成员，处置变化后重新核对范围 |
+| [同任务复核修订](../../src/security_runtime/task_review/revisions.py)保留旧版本并推进当前快照 | 原风险版本、当前分析版本及编辑版本分别绑定，不能只用 task_ref 判定同版 |
+| [自适应预算](../../src/security_runtime/task_review/budget.py)和[计划](../../src/security_runtime/task_review/plan.py)按必读义务分配资源 | 删除固定 12／24 文件、96／192 KiB 和仅一次扩展的完成边界，改为有硬上限的义务驱动计划 |
+| [任务复核准备](../../src/security_runtime/task_review/__init__.py)可能结束活动任务并触发检查 | 影响查询使用独立服务，仅复用安全读取和适配后的纯逻辑，不调用任务 prepare 充当查询准备器 |
+| [历史结果](../../src/security_runtime/task_review/results.py)与[全局路由](../../src/security_runtime/global_mcp.py)区分查询、取证及领域错误 | 历史可读不等于可续办；引用、修订、容量错误不得误报为项目接入失败 |
 | [本地证据](../../src/security_runtime/local_evidence.py)限制类型、路径、脱敏和片段大小 | 业务文档及扫描计划之外的关联文件由新适配器显式登记，脱敏后的未知不能冒充正常行为证明 |
 
 ## 目标与产品边界
@@ -113,7 +113,7 @@ flowchart TD
 | `agent_fix_ticket.py`、`fix_context.py` | 快速票据仅服务窄范围确定性编辑，已有指令限制重新分析与搜索；不能把跨模块调查插到已签发票据之后 |
 | `agent_fix_envelope.py`、`remediation_guard.py` | 精确编辑范围及保留内容保护继续有效，影响评估不能扩大 envelope |
 | `triage_evidence.py`、`local_evidence.py` | 复用安全读取、脱敏与来源校验；EvidenceBuilder 只读原扫描清单，不能直接扩大为任意关联文件 |
-| `task_review_budget.py`、`task_review_plan.py`、`task_review_revisions.py` | 借鉴或经适配提取义务计划、资源分类、同任务修订和累计消费逻辑；不直接写入或重用原复核会话 |
+| `task_review/budget.py`、`task_review/plan.py`、`task_review/revisions.py` | 借鉴或经适配提取义务计划、资源分类、同任务修订和累计消费逻辑；不直接写入或重用原复核会话 |
 | `reply_plan.py`、`reply_adapters.py`、`reply_render.py`、`risk_presentation.py` | 共用可见风险、事实、处置和允许选择；新增修复影响事实经同一链路呈现 |
 | `task_risk_ledger.py` | 保留任务代码复核风险及其原有核查归属；不能将其伪装成扫描器发现 |
 | `task_risk_fix.py`、`native_repair_intent.py`、`TaskSecurityService.begin` | 精确原生风险与当前影响核对、签名修复意图、原编辑前基线及同 owner 普通 begin 守卫；不签发通用编辑 grant，不拦截任意外部写入 |

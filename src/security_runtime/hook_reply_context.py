@@ -11,7 +11,7 @@ import copy
 import json
 import re
 
-from .risk_presentation import COMPACT_LANGUAGE_RULES, HOOK_PRESENTATION_RULES, LANGUAGE_RULES
+from .guidance.risk_presentation import COMPACT_LANGUAGE_RULES, HOOK_PRESENTATION_RULES, LANGUAGE_RULES
 
 CONTROL_DELIMITER = '\n\n内部控制（仅供工具使用，不展示给用户）\n'
 MAX_CONTEXT_CHARS = 6000

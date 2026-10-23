@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from security_runtime.task_review_results import bounded_history_result, history_freshness
+from security_runtime.task_review.results import bounded_history_result, history_freshness
 from test_task_review_results import record as history_record, assert_bounded
 from test_task_review_invariants import review_all, assert_reviewed
 from task_review_helpers import read_plan

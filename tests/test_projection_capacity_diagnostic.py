@@ -1,6 +1,6 @@
 """Actual task finish preserves its result and reports only projection capacity."""
 from security_runtime.findings import FindingNormalizer
-from security_runtime.task_risk_ledger import TaskRiskLedger
+from security_runtime.tasks.risk_ledger import TaskRiskLedger
 from test_task_security import service, begin  # noqa: F401
 
 

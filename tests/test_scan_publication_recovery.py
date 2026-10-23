@@ -10,7 +10,7 @@ from security_runtime.host_event_runtime import handle_normalized_event
 from security_runtime.host_events import OperationClass
 from security_runtime.scan_attempt import ScanAttemptStore, source_binding
 from security_runtime.scan_publication import ScanPublications
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.security import TaskSecurityService
 from test_task_security import service  # noqa: F401
 from test_hook_runtime import repo, coordinator, FakeRuntime, dirty  # noqa: F401
 from test_host_event_journal import event

@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from summary_fixtures import sample
-from security_runtime.task_triage import TaskTriageService
+from security_runtime.tasks.triage import TaskTriageService
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.triage import TriageService
 from security_runtime.triage_evidence import encoded

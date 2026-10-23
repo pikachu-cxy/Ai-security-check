@@ -14,7 +14,7 @@ pytestmark = pytest.mark.skipif(os.getenv('SECURITY_RUNTIME_PERFORMANCE_BENCHMAR
 def test_real_managed_three_edits_rebuilt_cache_and_five_target_batch(tmp_path):
     root = Path(__file__).resolve().parents[2]
     output = tmp_path/'result.json'
-    subprocess.run([sys.executable, str(root/'scripts/cache_lifetime_benchmark.py'), '--output', str(output)],
+    subprocess.run([sys.executable, str(root/'scripts/benchmarks/cache_lifetime_benchmark.py'), '--output', str(output)],
                    check=True, capture_output=True, timeout=180)
     data = json.loads(output.read_text())
     assert data['status'] == 'PASS' and data['kind'] == 'ACTUAL_MANAGED_SCANNER'

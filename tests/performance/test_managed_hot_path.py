@@ -12,7 +12,7 @@ import pytest
 def test_actual_managed_scanner_benchmark(tmp_path):
     root=Path(__file__).resolve().parents[2]
     output=tmp_path/'evidence.json'
-    proc=subprocess.run([sys.executable,str(root/'scripts/scanner_hot_path_benchmark.py'),
+    proc=subprocess.run([sys.executable,str(root/'scripts/benchmarks/scanner_hot_path_benchmark.py'),
                          '--samples','1','--output',str(output)],cwd=root,capture_output=True,
                          env=dict(os.environ,SECURITY_RUNTIME_OFFLINE='1'),timeout=180)
     assert proc.returncode==0,proc.stderr[-2000:]

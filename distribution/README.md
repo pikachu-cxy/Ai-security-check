@@ -2,7 +2,7 @@
 
 `distribution/build/security-check.spec` creates an inspectable PyInstaller one-directory Runtime. `scripts/build_standalone.py` adds notices and version metadata. Semgrep, Gitleaks, Trivy, their rule repositories, and user data are not copied into the Runtime bundle. First Semgrep preparation downloads the separate CPython distribution declared in `security_runtime/python_downloads.json`; its original license inventory remains in the managed directory. URLs and SHA256 values are pinned to the 20260211 upstream build and checked before extraction. No system Python or package environment is modified.
 
-The Homebrew Formula and WinGet manifests are generated **only after all three supported native platform archives have been built and SHA256-verified**. No placeholder URL or checksum is committed. `scripts/make_release_metadata.py` reads each archive's `.verification.json` before writing `dist/release/release-manifest.json` and `SHA256SUMS.txt`; both package-manager generators and `scripts/validate_manager_metadata.py` read that single manifest. The generated Formula belongs in `pikachu-cxy/homebrew-tap`; the WinGet YAML belongs in a later `microsoft/winget-pkgs` submission. Neither external repository is changed by this project.
+The Homebrew Formula and WinGet manifests are generated **only after all three supported native platform archives have been built and SHA256-verified**. No placeholder URL or checksum is committed. `scripts/make_release_metadata.py` reads each archive's `.verification.json` before writing `dist/release/release-manifest.json` and `SHA256SUMS.txt`; both package-manager generators and `scripts/maintenance/validate_manager_metadata.py` read that single manifest. The generated Formula belongs in `pikachu-cxy/homebrew-tap`; the WinGet YAML belongs in a later `microsoft/winget-pkgs` submission. Neither external repository is changed by this project.
 
 After these checks and copying the installation guides, `scripts/prepare_release_assets.py` stages only the three native archives, their three `.sha256` files, `SHA256SUMS.txt`, `release-manifest.json`, and one versioned `release-evidence.zip` in a fresh `dist/public-release` directory. The evidence ZIP preserves all remaining release files (including native and specialty JSON receipts and guides) plus the generated Formula and three WinGet YAML files. Original CI artifacts and `dist/release` stay intact. The public checksum list additionally covers the evidence ZIP. Release notes are generated from the same version and manifest, with direct platform download links at the top; an existing draft receives the same notes before publication. Do not reuse a stale public staging directory. The expected public asset set is defined by scripts/prepare_release_assets.py and covered by its release-asset regression tests; retired stage examples are available in Git history.
 
@@ -45,7 +45,7 @@ the offline source compliance workflow.
    scan and uninstall. Upgrade requires a second real published version. Submit
    the reviewed YAML to `microsoft/winget-pkgs` manually.
 
-`scripts/validate_manager_metadata.py` checks the vendored official WinGet JSON
+`scripts/maintenance/validate_manager_metadata.py` checks the vendored official WinGet JSON
 schemas and matches both package managers to actual archive checksums. This
 static validation does not claim a package-manager installation or upgrade.
 Until GitHub assets and external package listings exist, generated URL metadata

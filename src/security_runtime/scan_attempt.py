@@ -157,7 +157,7 @@ class ScanAttemptStore:
                 or _HEX.fullmatch(source_binding['revision']) is None):
             raise ValueError('Invalid bounded scan attempt request')
         if owner is not None:
-            from .task_ownership import valid_owner
+            from .tasks.ownership import valid_owner
             if not valid_owner(owner): raise ValueError('Invalid scan attempt owner')
         no_links(self.private_parent)
         if self.private_parent.resolve().is_relative_to(self.root):

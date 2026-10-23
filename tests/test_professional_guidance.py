@@ -9,7 +9,7 @@ import pytest
 from security_runtime.professional_guidance import get_professional_guidance, delivery_contract, MAX_BYTES
 from security_runtime.mcp_server import create_server
 from security_runtime.global_mcp import create_global_server, GlobalWorkspaces
-from security_runtime.host_guidance import runtime_info
+from security_runtime.guidance.host_guidance import runtime_info
 from test_global_integration import installed, projects
 
 

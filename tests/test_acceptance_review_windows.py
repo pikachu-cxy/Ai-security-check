@@ -1,8 +1,8 @@
 """Acceptance regressions: disjoint edits and large files use bounded v3 frames."""
 import pytest
 
-from security_runtime.task_security import TaskContextError
-from security_runtime.task_review_plan import build_plan, DEFAULT_LIMITS
+from security_runtime.tasks.security import TaskContextError
+from security_runtime.task_review.plan import build_plan, DEFAULT_LIMITS
 from test_task_review_plan import task
 from task_review_helpers import read_plan, read_window, review_all
 from test_task_review_invariants import assert_reviewed

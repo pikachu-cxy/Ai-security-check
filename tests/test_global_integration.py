@@ -17,7 +17,7 @@ from security_runtime.global_workspace import resolve_workspace, source_snapshot
 from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
-from security_runtime.host_guidance import runtime_info
+from security_runtime.guidance.host_guidance import runtime_info
 from security_runtime.integration_lifecycle import IntegrationDiagnostic
 from test_hook_runtime import FakeRuntime
 

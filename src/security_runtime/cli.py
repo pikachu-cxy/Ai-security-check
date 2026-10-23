@@ -543,7 +543,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 'AI Security Review: '+data['status'],data.get('path',''),data.get('reason','')]))
             return 2 if data['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'} else 0
         if args.command=='runtime-info':
-            from .host_guidance import runtime_info
+            from .guidance.host_guidance import runtime_info
             info=runtime_info()
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
                 from .global_mcp import global_runtime_info

@@ -7,7 +7,9 @@ from pathlib import Path
 from mcp.types import ToolAnnotations
 from ..functional_host import FunctionalExecutionReport
 from ..integration_state import DogfoodEvent
-from ..task_risk_fix import (NativeTaskReference, NativeFindingReference, NativeImpactReference, NativeReviewRevision, NativeFixIntent)
+from ..tasks.risk_fix import (
+    NativeTaskReference, NativeFindingReference, NativeImpactReference, NativeReviewRevision, NativeFixIntent,
+)
 from .. import repair_impact_models as impact_models
 
 
@@ -127,7 +129,7 @@ def register(server, registry, *, application, runtime_engine, peek_runtime,
                               origin_review_revision: NativeReviewRevision | None = None,
                               workspace_path: str | None = None, session_ref: str | None = None) -> dict:
         """After the user's explicit selected native-risk fix request, validate its exact owner/source, record the selected intent, and create or reuse its bound pre-edit repair task only after accepted impact. HOST_TASK_RISK only; never use scanner prepare_task_fix for ts1 refs. A recorded intent blocks replacement ordinary baselines while preparation remains incomplete. No edits, scan, scanner proof or independent repair consent. Use repair_task_ref to finish/review changes and bind risk_resolutions to the original task_ref/finding_id."""
-        from ..task_risk_fix import TaskRiskFixService
+        from ..tasks.risk_fix import TaskRiskFixService
         from ..repair_impact_contract import impact_failure
         try:
             native_binding_required(workspace_path, session_ref)
@@ -181,7 +183,7 @@ def register(server, registry, *, application, runtime_engine, peek_runtime,
                          security_context_ref: str | None = None, impact_ref: str | None = None,
                          session_ref: str | None = None) -> dict:
         """Prepare bounded constraints/evidence for the exact displayed task. Host edits; no scanner, model, network or writes here."""
-        from ..task_fix import TaskFixService
+        from ..tasks.fix import TaskFixService
         from ..storage import ReadOnlySQLiteStore, SQLiteStore
         if isinstance(task_ref, str) and task_ref.startswith('ts1-'):
             return dict(status='NATIVE_RISK_FIX_ROUTE_REQUIRED', ready_for_host_fix=False,
@@ -297,7 +299,7 @@ def register(server, registry, *, application, runtime_engine, peek_runtime,
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def verify_task_fix(task_ref: str, workspace_path: str | None = None, host_reported_execution: dict[str, bool] | None = None, remediation_ref: str | None = None) -> dict:
         """Locally recheck every original task member with originating scanners/equivalence, bounded and offline. Never edits/builds target; engine caches/temp files may be written. Host reports are untrusted claims."""
-        from ..task_fix import TaskFixService
+        from ..tasks.fix import TaskFixService
         from ..storage import ReadOnlySQLiteStore, SQLiteStore
         if remediation_ref is not None:
             if binding is None:

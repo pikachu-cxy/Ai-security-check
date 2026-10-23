@@ -109,7 +109,7 @@ def test_one_folded_member_does_not_hide_other_risk_in_same_group(sample, monkey
 @pytest.mark.parametrize('fold_count', [1, 2])
 def test_fix_handoff_excludes_reviewed_false_positives_but_keeps_original_reference(sample, monkeypatch, fold_count):
     from security_runtime.finding_feedback import FindingFeedbackService
-    from security_runtime.task_fix import TaskFixService
+    from security_runtime.tasks.fix import TaskFixService
     root, scan, store = sample
     original = next(task for task in SecuritySummaryService(store).get(root, scan.scan_id, details=True)['tasks']
                     if task['topic'] == 'tls')

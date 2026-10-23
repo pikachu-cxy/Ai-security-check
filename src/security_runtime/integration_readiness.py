@@ -53,7 +53,7 @@ def handle_readiness(event, workspace_path, session_id, *, binding, tools, adapt
             raise IntegrationDiagnostic('WORKSPACE_BINDING_MISMATCH')
         no_links(candidate)
         no_links(root)
-        from .host_guidance import runtime_info
+        from .guidance.host_guidance import runtime_info
         info = runtime_info()
         check_capabilities(info, tools)
         manager = adapter or CodexIntegrationAdapter()

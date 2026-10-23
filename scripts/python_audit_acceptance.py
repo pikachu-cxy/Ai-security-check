@@ -15,7 +15,7 @@ from security_runtime.toolchain import ToolManager
 from security_runtime.remediation import RemediationService
 from security_runtime.remediation_policy import RemediationConfig
 from security_runtime.security_summary import SecuritySummaryService
-from security_runtime.task_fix import TaskFixService
+from security_runtime.tasks.fix import TaskFixService
 
 
 def run():

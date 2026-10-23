@@ -11,7 +11,7 @@ from test_remediation import setup, UNSAFE, CANARY, fresh_transport_hook
 from test_codex_mcp_hook import binding as workspace_binding
 from security_runtime.codex_mcp_hook import handle_codex_hook, codex_hook_output
 from security_runtime.hook_runtime import HookCoordinator
-from security_runtime.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW, runtime_info
+from security_runtime.guidance.host_guidance import HOST_INSTRUCTIONS, RUNTIME_WORKFLOW, runtime_info
 from security_runtime.mcp_server import create_server
 from security_runtime.remediation import RemediationService
 from security_runtime.remediation_policy import RemediationConfig
@@ -92,7 +92,7 @@ def test_approved_grant_never_reasks_and_decline_never_grants(setup, approve):
 
 
 def test_host_action_authority_and_fixed_exclusive_branches():
-    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
     auto = REPAIR_IMPACT_GUIDANCE.split('When remediation.action == AUTO_FIX:')[1].split(
         'When remediation.action == CONFIRM_REQUIRED:')[0]
     confirm = REPAIR_IMPACT_GUIDANCE.split('When remediation.action == CONFIRM_REQUIRED:')[1]

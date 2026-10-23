@@ -10,6 +10,15 @@ import yaml
 from security_runtime._version import __version__
 
 
+def check_python_modules(names: set[str], source_package: Path) -> None:
+    expected = {'security_runtime/' + path.relative_to(source_package).as_posix()
+                for path in source_package.rglob('*.py')}
+    bundled = {name for name in names if name.startswith('security_runtime/') and name.endswith('.py')}
+    if bundled != expected:
+        raise ValueError('Wheel contains stale or missing Python modules: ' +
+                         ', '.join(sorted(bundled ^ expected)))
+
+
 def check(wheel: Path, project: Path) -> None:
     with zipfile.ZipFile(wheel) as package:
         names = set(package.namelist())
@@ -34,12 +43,12 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/triage_evidence.py",
             "security_runtime/triage_providers.py",
             "security_runtime/security_summary.py",
-            "security_runtime/task_triage.py",
-            "security_runtime/task_fix.py",
+            "security_runtime/tasks/triage.py",
+            "security_runtime/tasks/fix.py",
             "security_runtime/equivalence.py",
             "security_runtime/verification.py",
             "security_runtime/verification_policy.py",
-            "security_runtime/host_guidance.py",
+            "security_runtime/guidance/host_guidance.py",
             "security_runtime/hook_runtime.py",
             "security_runtime/hook_state.py",
             "security_runtime/baseline_seed.py",
@@ -55,6 +64,7 @@ def check(wheel: Path, project: Path) -> None:
             data_prefix + "SOURCE_OFFER.md",
         }
         source_package = project / "src" / "security_runtime"
+        check_python_modules(names, source_package)
         # Compare the descriptor and catalog as well as rule filenames. A stale
         # wheel must fail even if its old metadata remains internally valid.
         for relative in ('rulepacks.py', 'rules/catalog.json'):

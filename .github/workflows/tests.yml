@@ -85,19 +85,19 @@ jobs:
           python -m pytest -q
           tests/test_source_redaction.py
           tests/test_local_evidence.py
-          tests/test_task_preimages.py
-          tests/test_task_preimage_fingerprints.py
-          tests/test_task_review_closeout.py
-          tests/test_task_review_adaptive_windows.py
-          tests/test_task_review_redacted_changes.py
-          tests/test_task_review_invariants.py
+          tests/tasks/test_task_preimages.py
+          tests/tasks/test_task_preimage_fingerprints.py
+          tests/task_review/test_task_review_closeout.py
+          tests/task_review/test_task_review_adaptive_windows.py
+          tests/task_review/test_task_review_redacted_changes.py
+          tests/task_review/test_task_review_invariants.py
           tests/test_component_probe.py
           tests/test_dependency_fallback.py
           tests/test_dependency_scan_runtime.py
           tests/test_hook_reply_context.py
           tests/test_hook_user_feedback.py
           tests/test_install_readiness.py
-          tests/test_reply_experience.py
+          tests/guidance/test_reply_experience.py
           tests/test_scanner_execution_identity.py
           tests/test_tool_resolution.py
           tests/test_distribution.py

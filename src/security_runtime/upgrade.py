@@ -103,7 +103,7 @@ class InstallationUpgrade:
         return rows
 
     def diagnose(self, workspace=None, *, probe=False):
-        from .host_guidance import runtime_info
+        from .guidance.host_guidance import runtime_info
         from .global_workspace import read_bootstrap
         layers = self.layers(workspace)
         try:
@@ -189,7 +189,7 @@ class InstallationUpgrade:
         if self.manage_skill:
             steps.append({'kind': 'UPGRADE_SKILL', 'layer': str(self.skill.root), 'scope': 'USER',
                           'files': sorted(self.skill.expected)})
-        from .host_guidance import runtime_info
+        from .guidance.host_guidance import runtime_info
         value = {'contract': CONTRACT, 'issued_at': self.now() if issued_at is None else issued_at,
                  'expires_after_seconds': TTL, 'workspace': str(Path(workspace).absolute()) if workspace is not None else None,
                  'home': str(self.integration.home), 'skill_root': str(self.skill.root),

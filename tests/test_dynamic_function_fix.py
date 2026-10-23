@@ -12,7 +12,7 @@ from security_runtime.scanners import ScannerRegistry
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.storage import SQLiteStore
 from security_runtime.target import TargetDetector
-from security_runtime.task_fix import TaskFixService
+from security_runtime.tasks.fix import TaskFixService
 from security_runtime.triage_models import category
 
 

@@ -204,7 +204,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             session[1].get(item.get('finding_id'))!=item.get('context_hash') for item in results):
             raise ValueError('Triage result does not belong to this evidence handoff')
         if session[3] is not None:
-            from ..task_triage import TaskTriageService
+            from ..tasks.triage import TaskTriageService
             reference,workspace=session[3]
             resolved=TaskTriageService(runtime_engine().store).resolve(reference,workspace,
                 bound_workspace=binding.root if binding else None)
@@ -229,7 +229,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_runtime_info(view: Literal['full', 'summary'] = 'full') -> dict:
         """Read runtime capabilities. Opt into summary for discovery; full remains the default. Check required tool subset, not exact count; never scans or writes state."""
-        from ..host_guidance import runtime_info
+        from ..guidance.host_guidance import runtime_info
         from ..delivery_manifest import delivery_manifest
         from ..runtime_info_view import runtime_info_view
         info = runtime_info(remediation_config=remediation.config,
@@ -242,7 +242,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     def get_runtime_guidance(topic: Literal['core', 'runtime-workflow', 'task-review',
                                             'risk-decisions', 'repair-impact', 'deep-audit']) -> dict:
         """Read one fixed bundled method with version/hash and reuse that identity. No workspace, source, URL, network, scan, writes or repair authority. When matching local content exists, do not fetch it again."""
-        from ..guidance_catalog import get_runtime_guidance as load_guidance
+        from ..guidance.guidance_catalog import get_runtime_guidance as load_guidance
         return load_guidance(topic)
 
     registry.harden(('get_runtime_guidance',))
@@ -281,7 +281,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     def prepare_task_triage(task_ref: str, workspace_path: str | None = None, limit: int = 5, retry_failed: bool = False,
                             include_existing_reviews: bool = False) -> dict:
         """Continue the displayed task using its task_ref, never T01 or user UUIDs. Host analyzes packets then submit_triage; no model invocation here."""
-        from ..task_triage import TaskTriageService
+        from ..tasks.triage import TaskTriageService
         from ..storage import ReadOnlySQLiteStore, SQLiteStore
         from ..triage import TriageService
         path=application.scan_path_provider()

@@ -53,7 +53,7 @@ def verify_skill_payload(skill_root: Path) -> None:
 
 
 def verify_host_instructions(instructions: str | None) -> None:
-    from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
+    from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
     if instructions != MCP_INSTRUCTIONS:
         raise ValueError('Standalone host workflow instructions mismatch')
 
@@ -75,7 +75,7 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 if runtime.isError:raise ValueError('Standalone runtime capability discovery failed')
                 runtime_data=runtime.structuredContent or json.loads(runtime.content[0].text)
                 runtime_data=runtime_data.get('result',runtime_data)
-                from security_runtime.guidance_catalog import get_runtime_guidance
+                from security_runtime.guidance.guidance_catalog import get_runtime_guidance
                 for topic in ('core', 'runtime-workflow', 'repair-impact'):
                     delivered = await client.call_tool('get_runtime_guidance', {'topic': topic})
                     if delivered.isError:

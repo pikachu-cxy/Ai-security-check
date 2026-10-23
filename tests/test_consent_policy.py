@@ -8,7 +8,7 @@ from security_runtime.fast_fix import HOST_CONTRACT
 from security_runtime.fix_context import build
 
 def test_ambiguous_continuation_is_not_repair_approval():
-    from security_runtime.host_guidance import HOST_INSTRUCTIONS, REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import HOST_INSTRUCTIONS, REPAIR_IMPACT_GUIDANCE
     from security_runtime.review_skill import skill_files
     assert 'is analysis, not repair' in REPAIR_IMPACT_GUIDANCE
     assert 'approval. Clarify whether to fix before editing' in REPAIR_IMPACT_GUIDANCE

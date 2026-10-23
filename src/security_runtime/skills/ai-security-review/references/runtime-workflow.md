@@ -24,74 +24,14 @@ scan_files 和 scan_diff 每次按其范围执行，不传该参数。
 宿主模型分析、队列、用户批准和整段对话耗时只有宿主实际计时才报告；不能拿服务端总耗时冒充对话总耗时。
 宿主没有实时进度支持时，在调用前和返回后说明实际阶段，不声称已实时显示。
 
-开发任务安全核查（普通聊天不触发）：
-普通问答、只读操作、结束对话不创建或恢复检查任务，不展示空提示或通用钩子反馈。
-实际修改源代码/配置的普通开发任务，在第一次编辑前调用 begin_security_task，保留同一 task_ref。
-已选原生风险修复由 prepare_task_risk_fix 校验影响并建立基线，沿用返回的 repair_task_ref，不用普通开发入口替代。
-SessionStart 交付 session_ref 时，在 begin_security_task 传入；自动编辑前 Hook 交付原任务时，
-在 finish_security_task 传入其 session_ref。它只绑定会话，不授予修复权限，不展示给用户。
-并行会话分别开始自己的任务，不借用或结束他人的任务；不能按最近活动任务猜测归属。
-断线后沿用原 task_ref 和有效 session_ref；缺少绑定或原记录就说明缺口，不从编辑后补基线。
-任务记录和修改前源码由 Runtime 私有存储保管。不要在项目中写原始源码 Base64、完整任务记录、
-会话凭据或恢复文件来绕过重连归属检查。旧的连接范围任务不能由新聊天认领。
-历史查询保留当时的完成状态和摘要；同时查看 current_version、version_freshness 和 version_notice。
-其他文件变化而已检查/关联源码未变时，明确说原检查结果仍是历史结果、其他项目内容已变化；
-实际检查路径变化则列出路径。不能把历史 COMPLETE 说成当前整个项目已通过，也不自动补扫。
-Windows 自带终端若明确报 PowerShell 的 CET 启动错误，改用可用的 cmd.exe 或文件工具，
-不要重复调用同一故障终端，也不把终端故障解释成项目代码或安全检查失败。
-若当前连接器明确提供同步的编辑前自动任务准备，则沿用 Hook 交付的原 task_ref，不另起任务；
-没有该能力的宿主仍在首次编辑前显式开始任务。编辑后缺少基线时说明缺口，不能补建冒充编辑前状态。
-现有未提交改动属于任务开始时的基线，不能用 Git HEAD 或最后一次 Hook 代替。
-已有明确授权的漏洞修复仍按原引用和修复流程执行，不另建开发核查来覆盖授权。
-完成开发、测试后，最终回复前调用 finish_security_task。NO_CHANGES 时不扫描、
-不调用模型核查、不添加安全段落。开发任务核查只使用 v3；开始前核对 get_runtime_info 声明
-task-review-plan-v3 和 task_security_result_delivery=task-result-delivery-v1，并确认 begin/finish、prepare、method、plan、context、batch、submit、get
-九项任务工具均可用，且来自同一 Runtime 构建。缺少能力或工具时明确提示升级 Runtime 并重连，
-停止相关核查，不回退旧协议、不补建已发生修改的基线、不宣称检查通过。旧 Runtime 的指导
-不能覆盖新版 Skill 的 v3 能力门槛；核查不可用不改变用户原开发授权，如实保留无法核查的缺口。
-新任务调用 prepare_task_security_review(protocol_version=3)；省略协议也只使用 v3。
-prepare_task_security_review 会为尚未结束的 ACTIVE 任务补齐首次任务末检查；真实
-版本过期或终止的任务不自动重启。不要把漏调用首次检查解释为版本冲突后直接跳过。
-即使静态扫描零发现，也按返回的 quick_skill 版本和摘要使用正式方法；本地没有完全相同的
-方法时通过 get_task_review_method 读取一次。用 get_task_review_plan 分页列出全部必读项，
-通过 read_task_review_context 读取各项所需的修改前后证据，按实际关联读取其他源码，
-再通过 submit_task_review_batch 逐批记录完成情况。最后 submit_task_security_review 汇总；
-未请求或未完成的必读项不能算已核查。v3 根据全部必读范围分配独立的源码、导航和控制额度，
-逐行传输可读脱敏源码；source_ref 只定位同版本材料，不代表已经阅读。重复已交付范围只返回原证据
-回执；实际需要相关源码时才扩展计划。沿用同一任务、版本和累计额度，不靠分页、重连或重新
-prepare 清零预算。v3 闲置活动租约可通过原 prepare(protocol_version=3) 恢复，先校验会话归属、
-源码和检查范围，保留原任务、静态结果、已读证据和累计用量；有新读取/提交进度才续活动时间。
-旧 v1/v2 任务仅可查询历史，完成状态和原证据不改写；未完成旧任务不再支持继续。
-说明不兼容原因和覆盖缺口，不自动转成 v3、不重置额度。后续独立开发应在下一次修改前
-显式开始新任务并使用新 task_key；新基线只覆盖未来改动，不能追认旧任务已完成的修改。
-此流程属于当前开发任务，不需要用户再发“继续”，不等到 Stop 后再拉起一轮对话。
-最终保存回执不含风险正文。沿 next_action 读取 get_task_security_review，保留 completion_revision
-和原 session_ref；当前任务交付校验原会话、完成修订和当前源码，逐页保留完整格式、有效处置选项。
-仅将非空 development_summary 合并进正常开发总结；合并相同风险，默认最多三项并保留记录。
-不带 completion_revision 的历史查询不重复提问；处置读取失败显示未知，不把已暂缓或排除项重新提醒。
-有代码依据的条件性风险也须登记为 findings，不能仅放在 limitations 或后续建议。
-新增入口已有防护，但直接关联的现有服务/仓储仍缺少控制时，按 quick_skill 的
-RELATED_EXISTING 契约提交当前关联证据和 task_evidence，不宣称新增入口仍有漏洞。
-最终保留代码依据、当前防护、触发条件、未知范围和建议，并给出“修复／暂不处理”
-选项；暂不处理保留风险记录，不代表风险消除。原要求保持模块不变不取消该选项。
-
-普通开发仅在当前任务核查完整、零发现且无检查或处置缺口时静默；development_summary 为空时不自行补写
-扫描项、覆盖范围或“未发现风险”尾注。零发现不代表已有风险已修复。
-显式安全检查或安全状态/历史查询即使零发现也报告实际范围、结果与缺口；复用或历史结果说明其适用版本。
-风险、检查缺口及需报告的原问题复查不静默。普通聊天、只读操作和无改动不追加通用安全提示。
-选项本身不是授权，不虚构用户选择或修复凭据；旧“忽略”措辞仍兼容明确的暂不处理。
-普通回复不显示原始计划、内部引用或独立“钩子反馈”。改文件 Hook 的静态检查保留。
-遵守文件、上下文和尝试预算；v3 闲置先按原计划恢复，真实证据过期、版本变化、资源不足或不可用时说明具体缺口，
-锁忙可在同一原任务合理等待一次；仍不可用则结束，
-不循环补查、不断新建任务或要求用户“继续”。Runtime 不调用宿主模型。
-普通总结请求不等于取消核查；用户明确要求停止时遵从，只在可用的原 v3 任务保存中止原因，
-不新增扫描或重建任务。无法完成核查时，用 finish_security_task 的 skip_review_reason 记录实际原因并结束
-当前核查；它保留已有结果，不运行额外扫描，不把未完成包装成通过。
-未在编辑前建立基线时，不能伪造任务范围；保留任务核查未完成的限制。
-主机提交的上下文分析只是候选风险；Runtime 只校验结构和版本，不能冒充规则证明。
-任务检查不授予修复权限。保留已有用户选择，不自行修改、忽略风险或扩大授权。
-旧的明确收尾计划仍可通过原 run_closeout_check/get_closeout_status 恢复；普通 Stop
-不安排或派发收尾。检查完成、实际覆盖与风险修复分别表达，零发现不得称项目安全。
+开发任务只使用 [v3 方法](references/quick-task-review-v3.md)，topic=task-review；
+开始前读完该方法并核对能力，不在显式扫描方法中复制开发核查步骤。
+原生风险修复按 topic=repair-impact 建立 repair_task_ref，不以普通开发任务替代。
+历史查询查看 current_version、version_freshness 和 version_notice；列出变化的检查路径。
+其他文件变化而原检查/关联源码未变时，仍说明是历史结果，不称当前整个项目已通过，也不自动补扫。
+有实际保留的明确收尾计划可沿原 run_closeout_check/get_closeout_status 恢复；普通 Stop 不派发。
+Windows 终端明确报 PowerShell CET 启动错误时，使用可用的 cmd.exe 或文件工具，
+不反复调用故障终端，不把终端故障解释成项目代码或安全检查失败。
 
 Explicit security scans/audits and selected-risk analysis use this same workflow;
 ordinary development task completion uses only topic=task-review, without

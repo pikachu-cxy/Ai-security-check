@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from .repair_impact_contract import CONTRACT as IMPACT_CONTRACT, IMPACT_TOOLS
-from .task_review_contract import CONTRACT as TASK_REVIEW_CONTRACT
+from .task_review.contract import CONTRACT as TASK_REVIEW_CONTRACT
 
 
 @dataclass(frozen=True)
@@ -26,12 +26,12 @@ def _impact_input(name, arguments, require_workspace):
 
 
 def _task_review_input(name, arguments, require_workspace):
-    from .task_review_contract import task_review_input_failure
+    from .task_review.contract import task_review_input_failure
     return task_review_input_failure(arguments, require_workspace=require_workspace)
 
 
 def _task_protocol_input(name, arguments, require_workspace):
-    from .task_review_protocol import PROTOCOL_VERSION, validate_protocol, UnsupportedTaskReviewProtocol
+    from .task_review.protocol import PROTOCOL_VERSION, validate_protocol, UnsupportedTaskReviewProtocol
     if not isinstance(arguments, dict):
         return None
     try:
@@ -42,7 +42,7 @@ def _task_protocol_input(name, arguments, require_workspace):
 
 
 def unsupported_protocol_failure(exc):
-    from .task_review_protocol import UnsupportedTaskReviewProtocol
+    from .task_review.protocol import UnsupportedTaskReviewProtocol
     cause = exc
     for _ in range(8):
         if isinstance(cause, UnsupportedTaskReviewProtocol):
@@ -128,7 +128,7 @@ class MCPRegistry:
                     try:
                         return await original(name, arguments, *args, **kwargs)
                     except Exception as exc:
-                        from .task_diagnostics import capacity_failure
+                        from .tasks.diagnostics import capacity_failure
                         failure = unsupported_protocol_failure(exc) or capacity_failure(exc)
                         if failure is None:
                             raise

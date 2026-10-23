@@ -13,7 +13,7 @@ from test_codex_integration import adapter, call, config, write
 from security_runtime.codex_mcp_hook import codex_hook_output
 from security_runtime.codex_integration import REQUIRED_TOOLS, check_capabilities, product_hooks
 from security_runtime.host_continuation import HostContinuationGuard, handle_stop_event
-from security_runtime.host_guidance import runtime_info
+from security_runtime.guidance.host_guidance import runtime_info
 from security_runtime.integration_lifecycle import IntegrationDiagnostic, render_integration
 from security_runtime.remediation import RemediationService
 
@@ -247,7 +247,7 @@ def test_old_runtime_missing_stop_capability_rejected():
 
 
 def test_failed_prepare_does_not_count_as_progress(setup, monkeypatch):
-    from security_runtime.task_fix import TaskFixService
+    from security_runtime.tasks.fix import TaskFixService
     monkeypatch.setattr(TaskFixService, 'prepare', lambda *a, **k: {'status': 'INCONCLUSIVE'})
     assert prepare(setup)['status'] == 'INCONCLUSIVE'
     assert stop(setup)['decision'] == 'block' and not setup[3].prepared

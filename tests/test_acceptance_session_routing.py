@@ -9,8 +9,8 @@ from security_runtime.global_mcp import create_global_server, GLOBAL_READS, HOOK
 from security_runtime.hook_runtime import HookCoordinator
 from security_runtime.hook_state import HookStateStore
 from security_runtime.mcp_server import create_server
-from security_runtime.task_ownership import session_owner, verify_session_ref
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.ownership import session_owner, verify_session_ref
+from security_runtime.tasks.security import TaskSecurityService
 from test_global_integration import complete_runtime, installed, projects, pool_fixture
 
 

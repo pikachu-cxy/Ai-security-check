@@ -14,9 +14,9 @@ from security_runtime.storage import SQLiteStore
 from security_runtime.target import TargetDetector
 from security_runtime.verification_policy import local_recheck
 from security_runtime.security_summary import SecuritySummaryService
-from security_runtime.task_fix import TaskFixService
+from security_runtime.tasks.fix import TaskFixService
 from security_runtime.sast import SemgrepEngineProvider
-from security_runtime.mcp_guidance import MCP_INSTRUCTIONS
+from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
 if __package__:
     from .tls_impact_fixture import assess_tls_fixture
 else:
@@ -83,7 +83,7 @@ async def native_sdk_acceptance(executable):
                     return data.get('result', data)
                 info = await call('get_runtime_info', {})
                 assert info['features']['task_fix_verify'] == 'v0.1'
-                from security_runtime.guidance_catalog import get_runtime_guidance
+                from security_runtime.guidance.guidance_catalog import get_runtime_guidance
                 guidance = await call('get_runtime_guidance', {'topic': 'repair-impact'})
                 expected = get_runtime_guidance('repair-impact')
                 assert guidance['status'] == 'READY' and guidance['content'] == expected['content']

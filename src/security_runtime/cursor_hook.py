@@ -235,7 +235,7 @@ def main(*, automatic=False):
         payload = unique_json(raw)
     except (ValueError, UnicodeError, RecursionError):
         payload = None
-    from .task_delivery_receipts import DeliveryWriteObserver
+    from .tasks.delivery_receipts import DeliveryWriteObserver
     delivery = DeliveryWriteObserver()
     output, _ = handle_cursor_event(payload, project_dir=os.getenv('CURSOR_PROJECT_DIR'),
         remote=os.getenv('CURSOR_CODE_REMOTE') == 'true', automatic=automatic,

@@ -37,7 +37,10 @@ _GAPS = {
     'TASK_CHANGE_COMPARISON_UNAVAILABLE': '部分文件的修改前后内容无法完成比较。',
     'TASK_HOOK_CURRENT_SOURCE_UNAVAILABLE': '部分文件未能取得本次检查所需的当前内容。',
 }
-from .task_coverage import CAPTURE_GAP, CAPTURE_LABEL, capture_gap_note, display_limitations
+from .tasks.coverage import CAPTURE_GAP
+from .tasks.coverage import CAPTURE_LABEL
+from .tasks.coverage import capture_gap_note
+from .tasks.coverage import display_limitations
 _GAPS[CAPTURE_GAP] = CAPTURE_LABEL
 
 _ATTRIBUTION_REASON = 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'

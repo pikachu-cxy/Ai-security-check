@@ -17,7 +17,7 @@ from security_runtime.codex_integration import (CodexIntegrationAdapter, REQUIRE
     check_capabilities, current_runtime, fingerprint, product_hooks, validated_workspace)
 from security_runtime.integration_lifecycle import IntegrationDiagnostic, IntegrationManager, render_integration
 from security_runtime.integration_readiness import handle_readiness
-from security_runtime.host_guidance import runtime_info, HOST_INSTRUCTIONS
+from security_runtime.guidance.host_guidance import runtime_info, HOST_INSTRUCTIONS
 
 
 @pytest.fixture
@@ -385,7 +385,7 @@ def test_hook_closed_receipt_direct_functional_without_second_verify(setup, monk
         assert output['functional_verification']['status'] == 'NOT_AVAILABLE'
         assert not output.get('functional_ref') and not output.get('handoff')
     assert output['security_verification']['status'] == 'SCANNER_VERIFIED_RESOLVED'
-    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
     assert 'NOT_AVAILABLE without a handoff' in REPAIR_IMPACT_GUIDANCE
 
 

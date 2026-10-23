@@ -61,7 +61,7 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
     async def run():
         tools = {tool.name: tool for tool in await server.list_tools()}
         tool = tools['handle_hook_event']
-        from security_runtime.host_guidance import REQUIRED_GUIDANCE_TOOLS
+        from security_runtime.guidance.host_guidance import REQUIRED_GUIDANCE_TOOLS
         assert REQUIRED_GUIDANCE_TOOLS <= set(tools)
         assert set(tool.inputSchema['required']) == set(claims(repo))
         assert set(tool.inputSchema['properties']) == set(claims(repo)) | {'tool_input', 'permission_mode'}

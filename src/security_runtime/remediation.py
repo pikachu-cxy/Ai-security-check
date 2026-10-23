@@ -17,7 +17,7 @@ from .remediation_guard import digest, preservation_proof, source_proof
 from .remediation_policy import RemediationConfig, RemediationPolicy, RULE
 from .security_summary import SecuritySummaryService, task_reference, decode_task_reference
 from .storage import ReadOnlySQLiteStore, SQLiteStore
-from .task_fix import TaskFixService
+from .tasks.fix import TaskFixService
 from .triage_models import category as finding_category, iac_classification
 from .hook_timing import timings, elapsed, core_context
 
@@ -159,7 +159,7 @@ class RemediationService:
 
     @staticmethod
     def _handling_unavailable():
-        from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+        from .guidance.risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
         return dict(action='NONE', reason_code='HANDLING_UNAVAILABLE', handling_unavailable=True,
             feedback_required=False, user_feedback=dict(version='security-user-feedback-v1',
                 choices=[], handling_unavailable=True, message=HANDLING_UNAVAILABLE_MESSAGE))

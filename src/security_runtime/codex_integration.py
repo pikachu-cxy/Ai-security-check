@@ -23,7 +23,7 @@ from pathlib import Path, PureWindowsPath
 from ._version import __version__
 from .codex_mcp_hook import codex_mcp_hook_config
 from .hook_state import HookStateStore, atomic_bytes, identity, no_links
-from .host_guidance import REQUIRED_GUIDANCE_TOOLS
+from .guidance.host_guidance import REQUIRED_GUIDANCE_TOOLS
 from .integration_lifecycle import IntegrationDiagnostic
 from .processes import run_process
 from .storage import SQLiteStore

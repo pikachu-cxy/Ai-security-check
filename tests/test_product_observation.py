@@ -13,8 +13,8 @@ from security_runtime.integration_state import WorkspaceBinding
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.scanners import ScannerRegistry
 from security_runtime.storage import SQLiteStore
-from security_runtime.task_ownership import issue_session_ref, session_owner, verify_session_ref
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.ownership import issue_session_ref, session_owner, verify_session_ref
+from security_runtime.tasks.security import TaskSecurityService
 from test_host_event_journal import event
 from test_hook_runtime import repo
 from test_task_security import service

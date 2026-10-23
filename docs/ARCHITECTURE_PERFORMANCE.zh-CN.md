@@ -1,6 +1,6 @@
 # 架构本地性能基线
 
-日期：2026-10-18。环境：Windows、Python 3.13.9。本轮是隔离合成数据测量，不包含宿主界面、模型推理或真实双宿主耗时；未清空操作系统缓存。脚本：[architecture_benchmark.py](../scripts/architecture_benchmark.py)。原始回执：本地 artifacts/architecture-benchmark-20261018-a.json。
+日期：2026-10-18。环境：Windows、Python 3.13.9。本轮是隔离合成数据测量，不包含宿主界面、模型推理或真实双宿主耗时；未清空操作系统缓存。脚本：[architecture_benchmark.py](../scripts/benchmarks/architecture_benchmark.py)。原始回执：本地 artifacts/architecture-benchmark-20261018-a.json。
 
 ## 历史查询
 

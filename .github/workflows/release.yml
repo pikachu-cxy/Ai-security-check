@@ -67,7 +67,7 @@ jobs:
       - run: python scripts/make_release_metadata.py
       - run: python scripts/update_homebrew_formula.py --manifest dist/release/release-manifest.json
       - run: python scripts/generate_winget_manifest.py --manifest dist/release/release-manifest.json
-      - run: python scripts/validate_manager_metadata.py --manifest dist/release/release-manifest.json
+      - run: python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
       - name: Include pilot installation guide
         run: |
           cp README.zh-CN.md dist/release/INSTALL.zh-CN.md

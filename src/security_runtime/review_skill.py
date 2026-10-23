@@ -29,7 +29,7 @@ def digest(content):
 
 
 def repair_impact_reference():
-    from .host_guidance import REPAIR_IMPACT_GUIDANCE
+    from .guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
 
     original_task_ref = 'ts1-' + '0' * 32
     original_finding_id = 'tc1-' + '1' * 32
@@ -98,20 +98,34 @@ def repair_impact_reference():
 
 
 def skill_entrypoint():
-    from .host_guidance import HOST_INSTRUCTIONS
+    from .guidance.host_guidance import HOST_INSTRUCTIONS
     return ('---\nname: ai-security-review\ndescription: Check source/config development before the final summary, or use AI Security Runtime for requested audits and explicitly authorized selected-risk fixes. Ordinary chat and read-only questions do not start checks. Requires connected ai_security_runtime MCP.\n---\n\n# Security review\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')
 
 
+def generated_skill_file(name):
+    """Single renderer shared by live guidance and shipped Markdown copies."""
+    from .guidance.host_guidance import RUNTIME_WORKFLOW
+    from .guidance.host_guidance import RISK_DECISION_WORKFLOW
+    if name == 'SKILL.md':
+        return skill_entrypoint()
+    if name == 'references/runtime-workflow.md':
+        return ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8')
+    if name == 'references/risk-decisions.md':
+        return ('# 风险交互与用户处置\n\n' + RISK_DECISION_WORKFLOW).encode('utf-8')
+    if name == 'references/repair-impact.md':
+        return repair_impact_reference().encode('utf-8')
+    raise ValueError('Unsupported generated Skill file')
+
+
+GENERATED_FILES = ('SKILL.md', 'references/runtime-workflow.md',
+                   'references/risk-decisions.md', 'references/repair-impact.md')
+
+
 def skill_files():
-    from .host_guidance import RUNTIME_WORKFLOW
-    from .host_guidance import RISK_DECISION_WORKFLOW
     source = Path(__file__).parent / 'skills' / NAME
     return {name: (source / name).read_bytes() for name in (
         'agents/openai.yaml', 'references/deep-audit.md', 'references/quick-task-review-v3.md')} | {
-        'SKILL.md': skill_entrypoint(),
-        'references/runtime-workflow.md': ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8'),
-        'references/risk-decisions.md': ('# 风险交互与用户处置\n\n' + RISK_DECISION_WORKFLOW).encode('utf-8'),
-        'references/repair-impact.md': repair_impact_reference().encode('utf-8')}
+        name: generated_skill_file(name) for name in GENERATED_FILES}
 
 
 def skill_content_manifest(contents=None):

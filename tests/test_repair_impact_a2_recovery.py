@@ -16,8 +16,8 @@ from security_runtime.hook_state import HookStateStore
 from security_runtime.mcp_server import create_server
 from security_runtime.native_repair_intent import NativeRepairIntents
 from security_runtime.storage import SQLiteStore
-from security_runtime.task_ownership import issue_session_ref, session_owner
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.ownership import issue_session_ref, session_owner
+from security_runtime.tasks.security import TaskSecurityService
 from test_global_integration import structured
 from test_task_review_submission_recovery import (
     DOWNLOAD, ORIGINAL_FILES, candidate as native_candidate, complete_plan, source_hashes,
@@ -293,7 +293,7 @@ def test_public_unknown_contract_and_guidance_explain_scope_limits_without_grant
     assert 'SCOPE_LIMITATION' in json.dumps(unknown['classification'])
     instructions = server._mcp_server.instructions
     assert 'repair-impact' in instructions
-    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
     assert 'SCOPE_LIMITATION' in REPAIR_IMPACT_GUIDANCE and 'decision_basis' in REPAIR_IMPACT_GUIDANCE
     guidance = structured(asyncio.run(server.call_tool('get_runtime_guidance', {'topic':'repair-impact'})))
     assert guidance['status']=='READY'

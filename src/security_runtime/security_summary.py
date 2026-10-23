@@ -12,7 +12,7 @@ from .triage_evidence import EvidenceBuilder, encoded
 from .triage_models import category, dependency_groups
 from .workspace import WorkspaceResolver
 from .risk import NO_FINDINGS_MESSAGE, presentation_status
-from .risk_decision_guidance import handling_counts
+from .guidance.risk_decision_guidance import handling_counts
 
 TLS_RULES = {'ai-security.java.trust-all-hostname', 'ai-security.java.trust-all-certificates'}
 SEVERITIES = {'CRITICAL': 5, 'HIGH': 4, 'MEDIUM': 3, 'LOW': 2, 'UNKNOWN': 1}

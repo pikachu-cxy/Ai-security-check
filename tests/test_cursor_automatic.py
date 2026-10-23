@@ -196,7 +196,7 @@ def test_historical_cursor_task_cannot_resume_capture_or_stop_and_new_work_is_ex
 
     # An explicit, bound begin starts only subsequent work under a different key.
     (repo/'A.java').write_text('already edited under historical task')
-    from security_runtime.task_ownership import issue_session_ref
+    from security_runtime.tasks.ownership import issue_session_ref
     token = issue_session_ref(core.store, repo, 'cursor', 'private-cursor-conversation')
     refused = tool(repo, tmp_path, core, 'MCP:begin_security_task',
                    workspace_path=str(repo), task_key=bridge.key, session_ref=token)[1]
@@ -287,7 +287,7 @@ def test_mcp_begin_prepares_same_key_before_call_and_edit(repo,tmp_path,name):
     core=coordinator(tmp_path,FakeRuntime())
     bridge=CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation')
     key='host-generated-unique-key'
-    from security_runtime.task_ownership import issue_session_ref
+    from security_runtime.tasks.ownership import issue_session_ref
     token=issue_session_ref(core.store,repo,'cursor','private-cursor-conversation')
     before=tool(repo,tmp_path,core,name,workspace_path=str(repo),task_key=key,session_ref=token)[1]
     assert before['status']=='BASELINE_CAPTURED' and not core.runtime.calls
@@ -323,7 +323,7 @@ def test_mcp_preparation_never_adopts_existing_manual_or_other_server(repo,tmp_p
     bridge=CursorTaskBridge(core,repo,'private-cursor-conversation','private-generation')
     assert tool(repo,tmp_path,core,'MCP:other:begin_security_task',
         workspace_path=str(repo),task_key='key')[1]['status']=='READ_ONLY_OR_UNSUPPORTED'
-    from security_runtime.task_security import TaskSecurityService
+    from security_runtime.tasks.security import TaskSecurityService
     ref=TaskSecurityService(core.runtime,core.store).begin(str(repo),'key')['task_ref']
     result=tool(repo,tmp_path,core,'MCP:begin_security_task',workspace_path=str(repo),task_key='key')[1]
     assert result['status']=='MCP_PREPARATION_DELEGATED'

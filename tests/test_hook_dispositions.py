@@ -238,7 +238,7 @@ def test_pending_historical_fallback_retains_original_facts_after_empty_rescan(r
 def test_codex_full_coverage_retains_non_choice_handling_notice(repo, tmp_path, monkeypatch):
     from security_runtime.codex_mcp_hook import handle_codex_hook, codex_hook_output
     from security_runtime.integration_state import WorkspaceBinding
-    from security_runtime.risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+    from security_runtime.guidance.risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
     store, runtime, core, remediation = environment(repo, tmp_path)
     finding = candidate(repo)
     first = next_scan(repo, runtime, core, [finding])

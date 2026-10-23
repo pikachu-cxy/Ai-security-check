@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import re
 
-from .risk_decision_guidance import PRIMARY_CHOICES, SECONDARY_CHOICES
+from .guidance.risk_decision_guidance import PRIMARY_CHOICES, SECONDARY_CHOICES
 
 
 _TLS_HOSTNAME = (
@@ -417,7 +417,7 @@ def scan_status_feedback(result: dict) -> dict:
     from .reply_render import render_reply
     result = result if isinstance(result, dict) else {}
     if result.get('handling_unavailable'):
-        from .risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
+        from .guidance.risk_decision_guidance import HANDLING_UNAVAILABLE_MESSAGE
         scope = code_scope_notice(result)
         dependency = dependency_status_message(result)
         notices = tuple(Notice(kind, text) for kind, text in (

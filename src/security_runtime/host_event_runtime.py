@@ -10,8 +10,8 @@ from .host_event_journal import EventClaim, HostEventJournal
 
 
 def _event_task(hooks, root, context):
-    from .task_orchestration import select_task
-    from .task_security_state import TaskSecurityStore
+    from .tasks.orchestration import select_task
+    from .tasks.security_state import TaskSecurityStore
     task = select_task(TaskSecurityStore(hooks, root),
         dict(host=context.host, session=context.session_binding), hook=True)
     return task['task_ref'] if task else None
@@ -64,7 +64,7 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             EventKind.WORKSPACE_ACTIVITY:'WORKSPACE_RECONCILIATION',
             EventKind.SESSION_STOP:'SESSION_FINALIZATION'}[event.kind]
     observe('CLAIMS_VALID', **normalized)
-    from .task_attribution import session_activity
+    from .tasks.attribution import session_activity
     owner = dict(host=context.host, session=context.session_binding)
     if event.kind != EventKind.SESSION_STOP:
         session_activity(coordinator.store, context.workspace, owner)

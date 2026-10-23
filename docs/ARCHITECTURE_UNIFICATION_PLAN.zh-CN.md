@@ -45,7 +45,7 @@
 - [工作区服务工厂](../src/security_runtime/workspace_services.py)
 - [Codex 接入](../src/security_runtime/codex_integration.py)
 - [Cursor 自动接入](../src/security_runtime/cursor_automatic.py)与[任务桥接](../src/security_runtime/cursor_tasks.py)
-- [任务检查](../src/security_runtime/task_security.py)与[任务持久化](../src/security_runtime/task_security_state.py)
+- [任务检查](../src/security_runtime/tasks/security.py)与[任务持久化](../src/security_runtime/tasks/security_state.py)
 - [扫描与历史存储](../src/security_runtime/storage.py)
 - [Skill 生成](../src/security_runtime/review_skill.py)与[MCP 工具装配](../src/security_runtime/mcp_server.py)
 

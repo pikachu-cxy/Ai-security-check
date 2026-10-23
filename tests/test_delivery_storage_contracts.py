@@ -127,13 +127,13 @@ def test_replaced_history_package_and_corrupt_pointer_fail_closed(tmp_path):
 
 def test_release_floor_matches_implemented_store_contracts_and_creates_no_state(tmp_path):
     from security_runtime.hook_state import HookStateStore
-    from security_runtime.task_risk_ledger import TaskRiskLedger
+    from security_runtime.tasks.risk_ledger import TaskRiskLedger
     from security_runtime.risk_closure import RiskClosureService
     from security_runtime.private_authority import FENCE_CONTRACT
     from security_runtime.persistence_effects import CONTRACT as EFFECT
-    from security_runtime.task_verification_journal import CONTRACT as VERIFICATION
+    from security_runtime.tasks.verification_journal import CONTRACT as VERIFICATION
     from security_runtime.host_event_journal import CONTRACT as EVENT
-    from security_runtime.task_delivery_receipts import CONTRACT as DELIVERY
+    from security_runtime.tasks.delivery_receipts import CONTRACT as DELIVERY
     from security_runtime.closeout_persistence import CONTRACT as CLOSEOUT
     from security_runtime.scan_attempt import STATE_CONTRACT as ATTEMPT
     from security_runtime.scan_publication import CONTRACT as PUBLICATION

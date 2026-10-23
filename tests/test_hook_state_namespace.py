@@ -9,7 +9,7 @@ import pytest
 from security_runtime.closeout_state import digest
 from security_runtime.hook_state import atomic_bytes, hook_session_paths, identity
 from security_runtime.risk_closure import RiskClosureService
-from security_runtime.task_risk_ledger import TaskRiskLedger
+from security_runtime.tasks.risk_ledger import TaskRiskLedger
 from test_remediation import setup  # noqa: F401
 from test_hook_runtime import repo  # noqa: F401
 from test_confirmation_recovery import record, refresh, assert_no_grant

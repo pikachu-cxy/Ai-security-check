@@ -20,7 +20,7 @@ from security_runtime.runtime import SecurityRuntime
 from security_runtime.scan_attempt import ScanAttemptStore
 from security_runtime.scanners import ScannerRegistry
 from security_runtime.storage import SQLiteStore
-from security_runtime.task_security import TaskSecurityService
+from security_runtime.tasks.security import TaskSecurityService
 from test_global_integration import structured
 
 

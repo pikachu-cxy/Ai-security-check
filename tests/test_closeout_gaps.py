@@ -4,7 +4,7 @@ import json
 import pytest
 from test_task_security import service, begin, candidate, prepared
 from task_review_helpers import evidence_id,read_plan,read_window,review_all
-from security_runtime.task_risk_ledger import TaskRiskLedger
+from security_runtime.tasks.risk_ledger import TaskRiskLedger
 from security_runtime.verification import declared_dependency_proof
 from security_runtime.models import ScannerRun
 

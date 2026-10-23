@@ -289,7 +289,7 @@ def test_one_provider_proof_never_closes_another_provider(secret_engine, tmp_pat
 
 def test_manual_recheck_updates_summary_without_rewriting_scan(secret_engine, tmp_path):
     from security_runtime.security_summary import SecuritySummaryService
-    from security_runtime.task_fix import TaskFixService
+    from security_runtime.tasks.fix import TaskFixService
     service, _, _ = closeout_fixture(secret_engine, tmp_path)
     root = secret_engine[0]
     before = service.runtime.store.latest_scan(root)

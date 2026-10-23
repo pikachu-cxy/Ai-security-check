@@ -13,7 +13,7 @@ import time
 
 from .repair_impact_models import digest, encoded, path, require, source as clean_source
 from .repair_impact_store import RepairImpactStore
-from .task_ownership import record_owner, valid_owner
+from .tasks.ownership import record_owner, valid_owner
 
 
 CONTRACT = 'native-repair-intent-v1'
@@ -67,7 +67,7 @@ class NativeRepairIntents:
         """
         if not record.get('repair_task_ref'):
             return False
-        from .task_security_state import TaskSecurityStore
+        from .tasks.security_state import TaskSecurityStore
         task = TaskSecurityStore(self.hooks, self.root, now=self.now).get(record['repair_task_ref'])
         return (task is not None and record_owner(task) == self.owner
             and task.get('native_repair') == record['preparation']
@@ -136,7 +136,7 @@ class NativeRepairIntents:
             if record['status'] == 'BOUND':
                 require(record['repair_task_ref'] == task_ref, 'NATIVE_REPAIR_ALREADY_BOUND')
                 return copy.deepcopy(record)
-            from .task_security_state import TaskSecurityStore
+            from .tasks.security_state import TaskSecurityStore
             task = TaskSecurityStore(self.hooks, self.root, now=self.now).get(task_ref)
             require(task is not None and record_owner(task) == self.owner
                 and task.get('native_repair') == record['preparation'],
@@ -250,8 +250,8 @@ class NativeRepairIntents:
             if record.get('repair_task_ref'):
                 result['repair_task_ref'] = record['repair_task_ref']
             if record.get('repair_task_ref'):
-                from .task_security_state import TaskSecurityStore
-                from .task_review_protocol import is_v3_record, UnsupportedTaskReviewProtocol
+                from .tasks.security_state import TaskSecurityStore
+                from .task_review.protocol import is_v3_record, UnsupportedTaskReviewProtocol
                 task = TaskSecurityStore(self.hooks, self.root, now=self.now).get(record['repair_task_ref'])
                 if (task is not None and record_owner(task) == self.owner
                         and task.get('native_repair') == record['preparation']

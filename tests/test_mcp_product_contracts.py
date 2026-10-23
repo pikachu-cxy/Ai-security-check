@@ -7,7 +7,7 @@ import pytest
 
 from security_runtime.delivery_manifest import delivery_manifest
 from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
-from security_runtime.host_guidance import HOST_INSTRUCTIONS
+from security_runtime.guidance.host_guidance import HOST_INSTRUCTIONS
 from security_runtime.mcp_contracts import MCPRegistry
 from security_runtime.mcp_server import create_server
 from security_runtime.workspace_services import bind_impact_gate
@@ -26,7 +26,7 @@ def test_manifest_binds_actual_routed_schema_without_admitting_a_workspace(tmp_p
     state = tmp_path / 'private'
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(state))
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
-    monkeypatch.setattr('security_runtime.host_guidance.runtime_info', lambda **_: runtime_info())
+    monkeypatch.setattr('security_runtime.guidance.host_guidance.runtime_info', lambda **_: runtime_info())
     monkeypatch.setattr('security_runtime.review_skill.skill_files',
                         lambda: {'SKILL.md': b'core', 'references/quick-task-review-v3.md': b'method'})
     local = create_server(global_mode=False)
@@ -145,6 +145,6 @@ def test_impact_gate_cannot_be_omitted_by_custom_global_factory(sample, tmp_path
 
 
 def test_native_guidance_does_not_send_host_risks_to_scanner_verification():
-    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
     assert 'do not call scanner verify_task_fix for a native risk' in REPAIR_IMPACT_GUIDANCE
     assert 'Native task repairs use their bound\nrepair_task_ref for finish/review' in REPAIR_IMPACT_GUIDANCE

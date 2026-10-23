@@ -98,7 +98,7 @@ def test_completed_host_edit_requests_repair_without_rejecting_or_repeating(setu
 
 
 def test_host_guidance_limits_ambiguous_permission_to_repair_question(setup):
-    from security_runtime.host_guidance import REPAIR_IMPACT_GUIDANCE
+    from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE
     assert 'has ALREADY executed' in REPAIR_IMPACT_GUIDANCE
     assert 'Do NOT retry, re-apply, or repeat' in REPAIR_IMPACT_GUIDANCE
     assert 'An immediate 修复' in REPAIR_IMPACT_GUIDANCE

@@ -15,8 +15,8 @@ from security_runtime.mcp_server import create_server
 from security_runtime.models import ScanResult, ScannerRun, TargetProfile
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.storage import SQLiteStore
-from security_runtime.task_ownership import issue_session_ref
-from security_runtime.task_risk_feedback import TaskRiskFeedbackService
+from security_runtime.tasks.ownership import issue_session_ref
+from security_runtime.tasks.risk_feedback import TaskRiskFeedbackService
 from test_finding_feedback import setup, stable_package  # noqa: F401
 from test_finding_feedback_mcp import make_server, call as local_call
 from test_global_integration import installed, projects, pool_fixture, structured  # noqa: F401
@@ -268,7 +268,7 @@ def test_global_task_disposition_preserves_owner_diagnostics(installed, projects
 
 
 def test_task_feedback_read_reconnects_with_original_session_and_rejects_other_session(service):
-    from security_runtime.task_ownership import session_owner
+    from security_runtime.tasks.ownership import session_owner
     from test_task_risk_feedback import host_risk
     tasks, root, runtime = service
     tasks.owner = session_owner('codex', 'original-feedback-reader')

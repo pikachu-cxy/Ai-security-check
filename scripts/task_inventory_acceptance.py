@@ -34,7 +34,7 @@ async def accept(executable, engine_root, output, workspace=None):
         probe_directory = root
     else:
         root = workspace.resolve(strict=True)
-        related = 'src/security_runtime/task_security.py'
+        related = 'src/security_runtime/tasks/security.py'
         probe_directory = root / 'src/security_runtime'
         if not probe_directory.is_dir():
             raise ValueError('Expected Runtime source workspace')

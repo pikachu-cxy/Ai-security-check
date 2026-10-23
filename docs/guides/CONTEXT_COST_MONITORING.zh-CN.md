@@ -139,7 +139,7 @@ Windows/macOS 使用相同代码。早期监测定向测试在 Windows；本轮�
 ## 可重复的本地基准
 
 ```console
-python scripts/context_cost_benchmark.py --output artifacts/context-cost/optimization-report.json
+python scripts/benchmarks/context_cost_benchmark.py --output artifacts/context-cost/optimization-report.json
 ```
 
 脚本从固定旧提交读取投影实现，用同一份合成数据比较当前实现，校验覆盖状态及完整证据一致。

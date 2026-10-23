@@ -9,7 +9,7 @@ from ..hook_state import atomic_bytes, no_links
 
 
 def _path(store, owner):
-    from ..task_ownership import valid_owner
+    from ..tasks.ownership import valid_owner
     if not valid_owner(owner) or owner['host'] not in {'codex', 'cursor'}:
         raise ValueError('MONITOR_OWNER_INVALID')
     key = store._key()

@@ -12,7 +12,7 @@ def register(server, registry, *, application, runtime_engine, check_scan):
     bound_path = application.bound_path
     task_service = application.task_service
     feedback_sessions = {}
-    from ..task_risk_feedback import TaskRiskFeedbackService
+    from ..tasks.risk_feedback import TaskRiskFeedbackService
     task_risk_feedback = TaskRiskFeedbackService()
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))

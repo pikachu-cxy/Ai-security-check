@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .task_ownership import connection_owner, current_owner
+from .tasks.ownership import connection_owner, current_owner
 from .workspace import WorkspaceResolver
 
 
@@ -20,7 +20,7 @@ class WorkspaceApplication:
         self.connection_owner = connection_owner()
         self.issued_tasks = {}
         self.native_session_bindings = set()
-        from .task_source_cache import TaskSourceCache
+        from .tasks.source_cache import TaskSourceCache
         self.task_source_cache = TaskSourceCache()
 
     def bound_path(self, value: str | None) -> str | None:
@@ -35,14 +35,14 @@ class WorkspaceApplication:
         return self.binding.root
 
     def task_service(self, ref=None,session_ref=None,workspace=None):
-        from .task_security import TaskSecurityService
+        from .tasks.security import TaskSecurityService
         owner=current_owner(self.connection_owner)
         if session_ref is not None:
-            from .task_ownership import verify_session_ref
+            from .tasks.ownership import verify_session_ref
             root=TaskSecurityService(self.runtime_provider,self.hooks).root(self.bound_path(workspace))
             scoped=verify_session_ref(self.hooks,root,session_ref)
             if owner['host']!='connection' and scoped!=owner:
-                from .task_ownership import ownership_error
+                from .tasks.ownership import ownership_error
                 raise ownership_error(owner, scoped)
             owner=scoped
         prior=self.issued_tasks.get(ref)
@@ -115,7 +115,7 @@ class WorkspaceApplication:
             resolved_owner, lambda source: resolve_impact_source(source, root, scans, tasks))
 
     def impact_required(self, root, task_ref, record=None):
-        from .task_fix import TaskFixService
+        from .tasks.fix import TaskFixService
         from .storage import ReadOnlySQLiteStore, SQLiteStore
         scans = ReadOnlySQLiteStore(self.scan_path_provider())
         packet = TaskFixService(scans).prepare(task_ref, root, bound_workspace=root)
@@ -167,5 +167,5 @@ class WorkspaceApplication:
         # after a failed native repair preparation. This latch chooses no owner.
         if (root in self.native_session_bindings and session_ref is None and
                 current_owner(self.connection_owner)['host'] == 'connection'):
-            from .task_ownership import TaskOwnershipError
+            from .tasks.ownership import TaskOwnershipError
             raise TaskOwnershipError('TASK_SESSION_BINDING_REQUIRED')
