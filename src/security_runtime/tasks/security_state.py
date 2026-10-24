@@ -139,10 +139,10 @@ class TaskSecurityStore:
                 return None
             return value
 
-    def get_frozen_body_context(self, ref, *, owner):
-        """Read one authenticated small context without source-page hydration."""
-        from .frozen_body_context import (PROFILE, PROFILE_FIELD, CONTEXT_FIELD,
-            FrozenBodyContextUnavailable, readonly_database, unavailable, verify_context)
+    def _frozen_body_record(self, ref, *, owner):
+        """Read one authenticated head and its original TTL without hydration."""
+        from .frozen_body_context import (FrozenBodyContextUnavailable,
+            readonly_database, unavailable)
         from .ownership import valid_owner, record_owner
         if not isinstance(ref, str) or REF.fullmatch(ref) is None or not valid_owner(owner):
             unavailable('INVALID')
@@ -184,16 +184,7 @@ class TaskSecurityStore:
                         expired = self.expired(value)
                     if expired:
                         unavailable()
-                    if value.get(PROFILE_FIELD) != PROFILE:
-                        unavailable()
-                    packet = value.get('baseline', {}).get(CONTEXT_FIELD)
-                    if packet is None:
-                        unavailable()
-                    payload = verify_context(self.hooks, self.root, packet, task_ref=ref, owner=owner, now=self.now)
-                    pointer = value['baseline'].get('paged_entries')
-                    if not isinstance(pointer, dict) or pointer.get('source') != payload['source']:
-                        unavailable('INVALID')
-                    return json.loads(encode(packet))
+                    return value
         except FrozenBodyContextUnavailable:
             raise
         except sqlite3.Error as error:
@@ -201,6 +192,58 @@ class TaskSecurityStore:
             unavailable('BUSY' if code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} else 'STATE_UNAVAILABLE')
         except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
             unavailable('STATE_UNAVAILABLE')
+
+    def get_frozen_body_context(self, ref, *, owner):
+        """Read the original small baseline context, never all source pages."""
+        from .frozen_body_context import (PROFILE, PROFILE_FIELD, CONTEXT_FIELD,
+            unavailable, verify_context)
+        value = self._frozen_body_record(ref, owner=owner)
+        if value.get(PROFILE_FIELD) != PROFILE:
+            unavailable()
+        baseline = value.get('baseline')
+        if not isinstance(baseline, dict):
+            unavailable('STATE_UNAVAILABLE')
+        packet = baseline.get(CONTEXT_FIELD)
+        if packet is None:
+            unavailable()
+        payload = verify_context(self.hooks, self.root, packet, task_ref=ref, owner=owner, now=self.now)
+        pointer = baseline.get('paged_entries')
+        if not isinstance(pointer, dict) or pointer.get('source') != payload['source']:
+            unavailable('INVALID')
+        return json.loads(encode(packet))
+
+    def get_frozen_end_body_context(self, ref, *, owner, expected_version_ref,
+                                    expected_source=None):
+        """Read only the specified current end version; never choose latest."""
+        from .frozen_body_context import PROFILE, PROFILE_FIELD, FrozenBodyContextUnavailable
+        from .frozen_end_context import (END_CONTEXT_FIELD, unavailable as end_unavailable,
+            verify_end_context)
+        if (not isinstance(expected_version_ref, str) or REF.fullmatch(expected_version_ref) is None
+                or expected_source is not None and (not isinstance(expected_source, str)
+                    or re.fullmatch('[a-f0-9]{64}', expected_source) is None)):
+            end_unavailable('INVALID')
+        try:
+            value = self._frozen_body_record(ref, owner=owner)
+        except FrozenBodyContextUnavailable as error:
+            end_unavailable(error.reason_code[len('FROZEN_BODY_CONTEXT_'):])
+        if value.get(PROFILE_FIELD) != PROFILE:
+            end_unavailable()
+        end = value.get('end')
+        if not isinstance(end, dict) or not end.get('version_ref'):
+            end_unavailable()
+        if end['version_ref'] != expected_version_ref:
+            end_unavailable('SUPERSEDED')
+        packet = end.get(END_CONTEXT_FIELD)
+        if packet is None:
+            end_unavailable()
+        payload = verify_end_context(self.hooks, self.root, packet, task_ref=ref,
+            owner=owner, version_ref=expected_version_ref, now=self.now)
+        pointer = end.get('paged_entries')
+        if not isinstance(pointer, dict) or pointer.get('source') != payload['source']:
+            end_unavailable('INVALID')
+        if expected_source is not None and payload['source'] != expected_source:
+            end_unavailable('SOURCE_MISMATCH')
+        return json.loads(encode(packet))
 
     def for_hook(self, host, session):
         from .activity import ActivityStore
@@ -369,6 +412,8 @@ class TaskSecurityStore:
                 raise ValueError('Task changed concurrently; read current task first')
             from .frozen_body_context import validate_transition
             validate_transition(self.hooks, self.root, old, value, new=new, now=self.now)
+            from .frozen_end_context import validate_end_transition
+            validate_end_transition(self.hooks, self.root, old, value, new=new, now=self.now)
             if new:
                 rows = db.execute('SELECT data,mac FROM security_tasks LIMIT ?',
                                   (MAX_HISTORY_RECORDS+1,)).fetchall()

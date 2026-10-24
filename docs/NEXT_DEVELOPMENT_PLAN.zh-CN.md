@@ -166,6 +166,19 @@
 - 原1150文件before和原task/累计账本保留。8/8改动单元必读34帧1706行、另5帧245行调用边已实读，12个source摘要核对一致，必读未读/计划缺口均0；当前第1修订终态及完整交付已读。静态FULL零发现，整体仍因共享工作区并发归因未确认保留PARTIAL；旧L2容量不足及独立原始输入保留缺口不由本批覆盖。验收安装后立即同步GitHub，之后再进入下一批。
 - 下一批先接真实end版本定位，精确绑定原`version_ref`并覆盖前台与后台队列；旧版本丢弃后明确不可用，不能读新版本或live内容。随后继续新domain producer、保留/pins、私有proof、增量planner和证据/结果/closeout等消费者。默认`paged_review_storage=False`，不得把本内部基线接口记作L5或全计划完成。
 
+### 2026-10-24 L5真实结束版本正文位置（内部接口验收通过）
+
+- 上批已验收安装并同步GitHub提交`f6ac75dbeb9e7993b0cbb718c6cc006fcae48449`，远端树与本地验收提交`669acc8`一致（`d996106662e18a1fb3235601b6ba7e63807fc7a6`）；本地获取提交有界30秒超时，验收备份和远端提交均保留。下一阶段真实编辑前清单1154文件，hash及请求正文完整、无缺口，原task/账本保留。
+- 仅为原opt-in profile的新任务增加独立END契约；真实end writer提交封存、preview一致后，绑定父task/owner/root、原canonical source、实际`version_ref`/namespace/end正文task_ref、表示版本与原创建/到期时间。未变化end原样复用，旧版本无context不补签；baseline契约不放宽。
+- Getter要求明确`expected_version_ref`，有界只读当前版本；版本不符返回SUPERSEDED，不选最新版本替代。正文读取器只显式分派两个已知契约，先核对active typed scope/原context/每路径reference/预算，再读指定原正文，禁止live或私有proof回补。
+- 本批沿用原前台与后台队列的版本替换流程，逐项验证真实finish、队列claim、SQL/CAS失败及迟到cleanup。已用真实Events复现旧enqueue迟到finally仅看queue E2、误删task仍引用的E1正文（1项真实失败）；清理需在原workspace锁内同时核对认证task head与实际queue两条引用，不可核实时保守保留，仍受原TTL/配额约束。旧正文合法失去引用并被清理后明确不可用，不承诺历史30天可读，也不靠移除discard增加无限历史。新domain producer、完整双向pins/生命周期、私有proof、planner及默认分页路由仍为后续未完成项。
+- 已实现独立`FROZEN_END_BODY_CONTEXT_V1`、精确版本getter及两个已知契约的正文读取分派。原writer完成封存并确认preview一致后发布，原版本复用不续TTL；同version context/canonical source在原CAS内不可变。getter读时核对当前头，返回context不等于持有保留租约。正文缺失或被合法丢弃时保持原不可用原因，不读新版本、live或proof代替。
+- `discard_unreferenced`仅接受原staged/prior至多两个候选，在同workspace锁内有界认证task head与实际签名queue，任一引用即保护；前台/后台入口均接入。锁、owner、记录或认证不可靠时保守跳过。真实Event重放实际读根严格为task E1/queue E2，E1原正文保留；前台superseded仍被queue引用也保留，真实跨进程锁失败先保留、释放后确实可删除无引用版本。原QueuedInputs清理保持独立，不扩大大目录删除的持锁范围。
+- 源码新消费者18项通过、producer最终24项通过（28.50秒），后者保留真实误删失败以及两类夹具修正的旧日志，未冒称首次全过；清理修复后的既有queue/lifecycle/source恢复与投影55项通过（139.66秒）。最终独立安装包193项全部通过（224.56秒），无失败、跳过或警告，含两个新组及原baseline/队列/修订/retention回归；其中检测器是既有测试fixture，不冒称真实引擎或native宿主验收。
+- 干净wheel SHA-256 `bbc5969cf51eef4a10fd01dd3c0c202a459dfb142bb985d8a3fb7a5f47265557`；398个源码/资源文件在源码、wheel和独立非editable安装间逐字节一致，依赖及70条规则打包校验通过。已离线更新本机Codex配置，CONFIGURED/READY，build_id `fe379f4556e031ccf1a17eaf250c845527100cbfbb641441f3689346dc50e933`；真实配置新MCP核对62工具、9项必需接口及原446f worktree只读ALLOWED通过。会话绑定仍UNKNOWN、桌面当前连接重连与Hook信任未由本批证明。
+- 原1154文件before和同一任务/累计额度保留；8/8改动单元必读34帧1293行、另7帧151行调用边全部实读，13个source摘要核对一致。导航至尾、必读未读和计划缺口均0；当前第1修订终态及完整交付已读，静态FULL零发现。整体仍因共享目录改动归因未独立确认保留PARTIAL，旧L2容量不足及独立原始输入保留缺口不由本批替代。验收安装后立即同步GitHub，再保存下一批真实before。
+- 下一批真实新domain producer需先闭合捕获身份、原task头CAS和GC引用：`source_binding`现虽接收ReviewMetadataBinding，Raw绑定实际不含review revision/snapshot；不能在begin虚构这些值。旧/新域当前task slot同为parent/field/SHA，且Raw captures.task唯一，不能将测试独立store桥接直接搬成同store双写。需明确版本化捕获域/slot、认证pointer和原容量预算/旧writer隔离，保持旧契约可读，不先声明新paged head或全部L5接入；默认`paged_review_storage=False`。
+
 ### 换电脑接续时先做什么
 
 编写本计划时，分支为 `feature/runtime-mvp`，HEAD 为 `6648e31`，工作区还有大量已修改及未跟踪文件。**该旧提交不包含后续完整实现。** 用户随后授权在验收通过后，将本地最新代码、测试和开发计划一并提交并推送到同一分支；本次交付包含[原文证据改造及验收记录](design/RAW_SOURCE_EVIDENCE_V3_2026-10-23.zh-CN.md)。换电脑应获取该分支的最新提交，并核对实际文件，不能停留在旧提交或把大项目计划误认为已经实施。

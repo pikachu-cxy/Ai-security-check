@@ -733,13 +733,9 @@ class TaskSecurityService:
             return result
         finally:
             if staged_ref:
-                saved = self.store(root).get(ref)
-                if not saved or saved.get('end', {}).get('version_ref') != staged_ref:
-                    self.end_versions(root).discard(staged_ref)
-                else:
-                    superseded = record.get('end', {}).get('version_ref')
-                    if superseded and superseded != staged_ref:
-                        self.end_versions(root).discard(superseded)
+                from .end_versions import discard_unreferenced
+                discard_unreferenced(self, root, ref, staged_ref,
+                    record.get('end', {}).get('version_ref'))
 
     def _closeout_configuration(self, root, end):
         """Bind scanner configuration even when it is outside source inventory."""

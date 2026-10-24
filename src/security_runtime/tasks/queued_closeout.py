@@ -82,9 +82,10 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
             launch_worker(service.hooks, root)
         return queue.view(ref, service._owner())
     finally:
+        if staged:
+            from .end_versions import discard_unreferenced
+            discard_unreferenced(service, root, ref, staged)
         saved = queue.read(ref)
-        if staged and (not saved or saved['end'].get('version_ref') != staged):
-            service.end_versions(root).discard(staged)
         if input_ref and (not saved or saved.get('input_ref') != input_ref):
             inputs.discard(input_ref)
 

@@ -1,4 +1,4 @@
-"""Read original baseline lines from an authenticated, explicit body locator.
+"""Read original versioned lines from an authenticated, explicit body locator.
 
 The caller supplies an already verified typed source and remains responsible
 for task/session authorization. This internal adapter neither reads live files
@@ -55,8 +55,12 @@ class FrozenBodySource:
         # scope also verifies that the original typed view is still active and
         # that its source/root and private storage identities remain valid.
         scope = self.source.scope
-        payload = verify_context(self.hooks, self.root, self._packet,
-                                 task_ref=scope['task_ref'], owner=scope['owner'], now=self.now)
+        from ..tasks.frozen_end_context import END_CONTRACT, verify_end_context
+        raw_payload = self._packet.get('payload')
+        verifier = (verify_end_context if isinstance(raw_payload, dict)
+            and raw_payload.get('contract') == END_CONTRACT else verify_context)
+        payload = verifier(self.hooks, self.root, self._packet,
+                           task_ref=scope['task_ref'], owner=scope['owner'], now=self.now)
         pairs = (('task_ref', 'task_ref'), ('owner', 'owner'),
                  ('workspace', 'workspace'), ('root_identity', 'root_identity'),
                  ('field', 'field'), ('source', 'source'),
@@ -66,7 +70,8 @@ class FrozenBodySource:
             _fail('SCOPE_MISMATCH')
         # Capture identity is independent of later review revisions or raw page
         # references. Their canonical source, task and owner must still match.
-        if payload['field'] != 'baseline' or payload['preimage_namespace'] != 'closeout':
+        if (payload['field'], payload['preimage_namespace']) not in {
+                ('baseline', 'closeout'), ('end', 'end')}:
             _fail('SCOPE_MISMATCH')
         return payload
 
