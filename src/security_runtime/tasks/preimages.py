@@ -334,8 +334,24 @@ class TaskPreimageStore:
             _fail('TASK_PREIMAGE_EXPIRED')
         return metadata
 
-    def read(self, task_ref, path, expected_hash, reference):
+    @contextmanager
+    def _read_database(self, strict_readonly):
+        if strict_readonly:
+            from .frozen_body_context import FrozenBodyContextUnavailable, readonly_database
+            try:
+                maximum = MAX_FILE_BODY_BYTES + MAX_REFERENCE_BYTES + MAX_PATH_BYTES + 1024
+                with readonly_database(self.path, maximum=maximum) as db:
+                    yield db
+            except FrozenBodyContextUnavailable:
+                _fail('TASK_PREIMAGE_STORE_UNAVAILABLE')
+        else:
+            with closing(sqlite3.connect(readonly_uri(self.path), uri=True, timeout=2)) as db:
+                yield db
+
+    def read(self, task_ref, path, expected_hash, reference, *, strict_readonly=False):
         """Return authentic sanitized lines for exactly the signed before hash."""
+        if type(strict_readonly) is not bool:
+            _fail('TASK_PREIMAGE_SOURCE_REJECTED')
         task_ref, path = _task_ref(task_ref), _path(path)
         try:
             self._paths()
@@ -343,7 +359,7 @@ class TaskPreimageStore:
             metadata = self._reference(task_ref, path, expected_hash, reference, key)
             if not self.path.is_file():
                 _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
-            with closing(sqlite3.connect(readonly_uri(self.path), uri=True, timeout=2)) as db:
+            with self._read_database(strict_readonly) as db:
                 db.execute('PRAGMA query_only=ON')
                 db.execute('PRAGMA trusted_schema=OFF')
                 paged = metadata['contract'] == PAGED_CONTRACT

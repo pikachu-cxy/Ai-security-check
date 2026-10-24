@@ -139,6 +139,69 @@ class TaskSecurityStore:
                 return None
             return value
 
+    def get_frozen_body_context(self, ref, *, owner):
+        """Read one authenticated small context without source-page hydration."""
+        from .frozen_body_context import (PROFILE, PROFILE_FIELD, CONTEXT_FIELD,
+            FrozenBodyContextUnavailable, readonly_database, unavailable, verify_context)
+        from .ownership import valid_owner, record_owner
+        if not isinstance(ref, str) or REF.fullmatch(ref) is None or not valid_owner(owner):
+            unavailable('INVALID')
+        try:
+            with page_guard(self.path.parent):
+                no_links(self.path)
+                if not self.path.is_file():
+                    unavailable()
+                with readonly_database(self.path, maximum=MAX_RECORD_BYTES) as db:
+                    row = db.execute("SELECT CASE WHEN typeof(data)='text' AND "
+                        'length(CAST(data AS BLOB))<=? THEN data END, '
+                        "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END "
+                        'FROM security_tasks WHERE ref=? LIMIT 1', (MAX_RECORD_BYTES, ref)).fetchone()
+                    if row is None:
+                        unavailable()
+                    if not isinstance(row[0], str) or not isinstance(row[1], str):
+                        unavailable('STATE_UNAVAILABLE')
+                    value = self.head(row)
+                    if value is None or value['task_ref'] != ref:
+                        unavailable('STATE_UNAVAILABLE')
+                    if record_owner(value) != owner:
+                        unavailable('OWNER_MISMATCH')
+                    from .activity import ActivityStore, deferred, HARD_TTL, IDLE_TTL
+                    if deferred(value):
+                        activity = ActivityStore(self.hooks, self.root, now=self.now)
+                        activity._paths()
+                        summary = {}
+                        if activity.path.exists():
+                            with readonly_database(activity.path, maximum=160000) as activity_db:
+                                summary = activity._get(activity_db, 'task:' + ref) or {}
+                        # Keep lifecycle.expires_at's original idle/hard rule,
+                        # but do not let its legacy reader recover a journal or
+                        # create WAL sidecars during this read-only operation.
+                        last = max(value['created_at'], value.get('activity_at', 0),
+                                   summary.get('last_activity', 0))
+                        expiry = min(value['created_at'] + HARD_TTL, last + IDLE_TTL)
+                        expired = self.now() > expiry
+                    else:
+                        expired = self.expired(value)
+                    if expired:
+                        unavailable()
+                    if value.get(PROFILE_FIELD) != PROFILE:
+                        unavailable()
+                    packet = value.get('baseline', {}).get(CONTEXT_FIELD)
+                    if packet is None:
+                        unavailable()
+                    payload = verify_context(self.hooks, self.root, packet, task_ref=ref, owner=owner, now=self.now)
+                    pointer = value['baseline'].get('paged_entries')
+                    if not isinstance(pointer, dict) or pointer.get('source') != payload['source']:
+                        unavailable('INVALID')
+                    return json.loads(encode(packet))
+        except FrozenBodyContextUnavailable:
+            raise
+        except sqlite3.Error as error:
+            code = getattr(error, 'sqlite_errorcode', 0) & 255
+            unavailable('BUSY' if code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} else 'STATE_UNAVAILABLE')
+        except (OSError, ValueError, TypeError, KeyError, AttributeError, RecursionError):
+            unavailable('STATE_UNAVAILABLE')
+
     def for_hook(self, host, session):
         from .activity import ActivityStore
         from .ownership import valid_owner, record_owner
@@ -304,6 +367,8 @@ class TaskSecurityStore:
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
                 raise ValueError('Task changed concurrently; read current task first')
+            from .frozen_body_context import validate_transition
+            validate_transition(self.hooks, self.root, old, value, new=new, now=self.now)
             if new:
                 rows = db.execute('SELECT data,mac FROM security_tasks LIMIT ?',
                                   (MAX_HISTORY_RECORDS+1,)).fetchall()

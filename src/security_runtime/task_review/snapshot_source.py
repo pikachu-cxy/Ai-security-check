@@ -307,6 +307,22 @@ class TypedSnapshotSource:
         self._active()
         return json.loads(_encode(self._summary))
 
+    @property
+    def scope(self):
+        """Detached identity for internal consumers of this verified view.
+
+        This is authenticated typed metadata within the current context, not
+        native host attestation or permission to adopt another task's source.
+        """
+        self._active()
+        return json.loads(_encode(dict(task_ref=self._review_binding.task_ref,
+            owner=self._review_binding.owner, workspace=str(self.store.root),
+            root_identity=self.store.root_identity, field=self.field,
+            source=self._pointer['source'], ref=self._pointer['ref'],
+            representation_version=self._review_binding.representation_version,
+            review_revision=self._review_binding.revision,
+            snapshot_id=self._review_binding.snapshot_id)))
+
     def _read_entry(self, row):
         path, raw, mac = row
         if (not _path(path) or not isinstance(raw, bytes) or len(raw) > self.budget.entry_bytes

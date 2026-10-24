@@ -272,13 +272,16 @@ def _coverage_gaps(limitations):
 
 class TaskSecurityService:
     def __init__(self, runtime, hooks=None, *, now=time.time, owner=None,
-                 read_only_scan_store_provider=None, source_cache=None):
+                 read_only_scan_store_provider=None, source_cache=None, frozen_body_contexts=False):
+        if type(frozen_body_contexts) is not bool:
+            raise ValueError('Invalid frozen body context option')
         self.runtime = runtime
         self.hooks = hooks or HookStateStore()
         self.now = now
         self.owner = owner
         self.read_only_scan_store_provider = read_only_scan_store_provider
         self.source_cache = source_cache
+        self.frozen_body_contexts = frozen_body_contexts
 
     def _owner(self):
         from .ownership import valid_owner
@@ -479,6 +482,10 @@ class TaskSecurityService:
         original_inputs = None
         inputs = BaselineInputs(self.hooks, root, now=self.now)
         retain_inputs = check_policy == POLICY and _native_preparation is None
+        frozen_root = None
+        if self.frozen_body_contexts and batched_files and owner is not None:
+            from .frozen_body_context import root_identity
+            _, frozen_root = root_identity(root)
         with self.preimages(root, policy_record).writer(ref, paged=batched_files) as writer, (inputs.writer(ref) if retain_inputs else nullcontext(None)) as raw_sink:
             baseline = capture(root, preimage_writer=writer,
                 batched_files=batched_files,
@@ -506,6 +513,11 @@ class TaskSecurityService:
                     for name, sha in _native_preparation['source_hashes'].items()):
                 self.discard_preimages(root, ref, policy_record)
                 raise ValueError('NATIVE_REPAIR_BASELINE_MISMATCH')
+            if frozen_root is not None:
+                from .frozen_body_context import build_context, CONTEXT_FIELD
+                baseline[CONTEXT_FIELD] = build_context(self.hooks, root, baseline,
+                    writer=writer, task_ref=ref, owner=owner,
+                    expected_root_identity=frozen_root, now=self.now)
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=capture_started_at,
                 review_protocol=PROTOCOL_VERSION,
@@ -514,6 +526,9 @@ class TaskSecurityService:
                 # A short-lived command Hook is not the conversation's owner process.
                 # Its normal exit can never prove that the editing task ended.
                 writer=writer_identity() if _owner is None else None)
+            if frozen_root is not None:
+                from .frozen_body_context import PROFILE, PROFILE_FIELD
+                record[PROFILE_FIELD] = PROFILE
             if check_policy == POLICY:
                 record['check_policy'] = POLICY
                 if batched_files:
