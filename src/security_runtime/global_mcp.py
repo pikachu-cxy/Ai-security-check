@@ -773,6 +773,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                     data = rejection.response()
                     return CallToolResult(isError=True, structuredContent=data,
                         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            from .tasks.diagnostics import owned_storage_failure
+            admission = owned_storage_failure(exc)
+            if admission is not None:
+                return CallToolResult(isError=False, structuredContent=admission,
+                    content=[TextContent(type='text', text=json.dumps(admission, ensure_ascii=False))])
             from .repair_impact_contract import IMPACT_TOOLS, impact_failure
             if name in IMPACT_TOOLS:
                 data = impact_failure(exc)

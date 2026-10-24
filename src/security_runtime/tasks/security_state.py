@@ -246,6 +246,7 @@ class TaskSecurityStore:
         if (candidate.get('retained_for_projection') is not True
                 or status(candidate)['state'] not in {'APPLIED', 'SUPERSEDED'}):
             raise ValueError('Invalid retained task projection acknowledgement')
+        self.hooks.prepare_database(self.root, 'task-security.db')
         no_links(self.path)
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
             db.execute('BEGIN IMMEDIATE')
@@ -267,6 +268,9 @@ class TaskSecurityStore:
             raise _PagedReviewHead('Paged review heads require their atomic task store')
         if new:
             require_record_protocol(value)
+        # Collection itself reads strict metadata permissions. An explicit
+        # writer must admit old owned storage before entering that path.
+        self.hooks.prepare_private_writer(self.root)
         if managed(value):
             from .snapshot_gc import collect_pages
             # No lock upgrade: collection completes before shared publication.
@@ -279,11 +283,12 @@ class TaskSecurityStore:
             raise _PagedReviewHead('Paged review heads require their atomic task store')
         if new:
             require_record_protocol(value)
+        self.hooks.prepare_private_writer(self.root)
         # Object/page I/O completes before taking the task/control write lock.
         from .snapshot_pages import pack
         packed = pack(self, value)
+        self.hooks.prepare_database(self.root, 'task-security.db')
         no_links(self.path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
             db.execute('PRAGMA secure_delete=ON')
             db.execute('CREATE TABLE IF NOT EXISTS security_tasks (ref TEXT PRIMARY KEY, task_key TEXT NOT NULL, phase TEXT NOT NULL, created REAL NOT NULL, data TEXT NOT NULL, mac TEXT NOT NULL)')

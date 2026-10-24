@@ -13,6 +13,7 @@ import stat
 import threading
 from contextlib import contextmanager
 from contextlib import closing
+from contextlib import nullcontext
 from pathlib import Path
 
 from .storage import SQLiteStore
@@ -114,7 +115,9 @@ def no_links(path: Path) -> None:
 def atomic_bytes(path: Path, content: bytes) -> None:
     no_links(path)
     path = native_io_path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
+    # This helper also writes user-selected configuration/export locations.
+    # Only new parents get a private mode; existing parents are never upgraded.
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, name = tempfile.mkstemp(prefix='.hook-', dir=path.parent)
     try:
         with os.fdopen(fd, 'wb') as stream:
@@ -146,6 +149,46 @@ class HookStateStore:
         """
         return self.workspace_directory(root) / 'scan-sessions' / self.path(root, host, session_id).name
 
+    def prepare_private_writer(self, root: Path, *, wait_seconds: float = 2) -> Path:
+        """Explicit POSIX writer admission, never an implicit key/read repair."""
+        if os.name != 'nt':
+            from .owned_workspace_storage import OwnedWorkspaceStorage
+            OwnedWorkspaceStorage(self, root).admit(wait_seconds=wait_seconds)
+        return self.workspace_directory(root)
+
+    def prepare_private_namespace(self, namespace: Path, *, wait_seconds: float = 2) -> Path:
+        """Protect Hook state for a logical identity, without admitting a source."""
+        if os.name != 'nt':
+            from .owned_workspace_storage import OwnedHookNamespaceStorage
+            OwnedHookNamespaceStorage(self, namespace).admit(wait_seconds=wait_seconds)
+        return self.workspace_directory(namespace)
+
+    def prepare_database(self, root: Path, name: str) -> Path:
+        """Create only a fixed workspace database, without truncating history."""
+        if name not in {'task-security.db', 'pending-activity.db'}:
+            raise ValueError('Unsupported private workspace database')
+        directory = self.prepare_private_writer(root)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        path = directory / name
+        no_links(path)
+        if os.name == 'nt':
+            # POSIX permission migration cannot claim Windows ACL ownership.
+            # Preserve the existing native SQLite path and link gates.
+            return path
+        try:
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        except FileExistsError:
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            info, actual = os.fstat(fd), path.lstat()
+            if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+                    or info.st_uid != os.getuid() or info.st_mode & 0o077
+                    or (info.st_dev, info.st_ino) != (actual.st_dev, actual.st_ino)):
+                raise ValueError('Private workspace database cannot be verified')
+        finally:
+            os.close(fd)
+        return path
+
     def pending_activity(self, root, host, session_id, *, mark=False, completed=None):
         """Bounded reconciliation intent, not finding/proof/authorization state.
 
@@ -166,7 +209,7 @@ class HookStateStore:
                     return None
                 row = db.execute('SELECT sequence FROM pending_activity WHERE session=?', (sid,)).fetchone()
                 return row[0] if row else None
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = self.prepare_database(root, 'pending-activity.db')
         with closing(sqlite3.connect(path, timeout=1)) as db:
             with db:
                 db.execute('PRAGMA secure_delete=ON')
@@ -186,16 +229,25 @@ class HookStateStore:
 
     @contextmanager
     def lock(self, root: Path, *, wait_seconds: float = 0):
-        directory = self.workspace_directory(root)
+        deadline = time.monotonic() + wait_seconds
+        try:
+            directory = self.prepare_private_namespace(root, wait_seconds=wait_seconds)
+        except ValueError as error:
+            if os.name != 'nt':
+                from .owned_workspace_storage import OwnedWorkspaceStorageError
+                if (isinstance(error, OwnedWorkspaceStorageError)
+                        and error.reason_code == 'OWNED_WORKSPACE_STORAGE_BUSY'):
+                    yield False
+                    return
+            raise
         no_links(directory)
-        directory.mkdir(parents=True, exist_ok=True)
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         path = directory / 'workspace.lock'
         no_links(path)
         # The file is never unlinked: deleting an allegedly stale lock permits
         # two owners of different inodes. OS locks release on process death.
         fd = os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
         acquired = False
-        deadline = time.monotonic() + wait_seconds
         try:
             if os.fstat(fd).st_size == 0:
                 os.write(fd, b'0')
@@ -247,24 +299,33 @@ class HookStateStore:
             # Session routing can precede the initial scan. Publish a complete
             # key exactly once, without replacing a concurrent creator's key or
             # exposing an empty/partially-written key to another connection.
-            path.parent.mkdir(parents=True, exist_ok=True)
-            fd, name = tempfile.mkstemp(prefix='.key-', dir=path.parent)
-            temporary = Path(name)
-            try:
-                with os.fdopen(fd, 'wb') as stream:
-                    stream.write(os.urandom(32))
-                    stream.flush()
-                    os.fsync(stream.fileno())
-                try:
-                    if os.name == 'nt':
-                        # Windows rename fails when the destination exists.
-                        os.rename(temporary, path)
-                    else:
-                        os.link(temporary, path, follow_symlinks=False)
-                except FileExistsError:
-                    pass  # The fully-published winner is the only valid key.
-            finally:
-                temporary.unlink(missing_ok=True)
+            admission = nullcontext()
+            if os.name != 'nt':
+                from .owned_workspace_storage import OwnedHookNamespaceStorage
+                admission = OwnedHookNamespaceStorage(self, root).admitted()
+            with admission:
+                # Concurrent creators use the same directory admission lock.
+                # Keep it through unlink so no writer sees a transient nlink=2.
+                no_links(path)
+                if not path.exists():
+                    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    fd, name = tempfile.mkstemp(prefix='.key-', dir=path.parent)
+                    temporary = Path(name)
+                    try:
+                        with os.fdopen(fd, 'wb') as stream:
+                            stream.write(os.urandom(32))
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                        try:
+                            if os.name == 'nt':
+                                # Windows rename fails when the destination exists.
+                                os.rename(temporary, path)
+                            else:
+                                os.link(temporary, path, follow_symlinks=False)
+                        except FileExistsError:
+                            pass  # The fully-published winner is the only valid key.
+                    finally:
+                        temporary.unlink(missing_ok=True)
         key = path.read_bytes()
         if len(key) != 32:
             raise ValueError('Invalid local hook snapshot key')

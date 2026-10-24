@@ -8,6 +8,41 @@ class TaskRuntimeRestartRequired(ValueError):
         super().__init__('RUNTIME_RESTART_REQUIRED')
 
 
+def owned_storage_failure(exc):
+    """Keep typed storage admission separate from workspace/session rejection.
+
+    The caller may already have performed work before admission failed, so this
+    response deliberately makes no claim that a scanner did or did not run.
+    Never return the filesystem report, target paths or arbitrary exception text.
+    """
+    from ..owned_workspace_storage import OwnedWorkspaceStorageError
+    cause = exc
+    for _ in range(8):
+        if isinstance(cause, OwnedWorkspaceStorageError):
+            states = {'BUSY', 'RETRY', 'UPGRADE_INCOMPLETE', 'UNSAFE', 'PLATFORM_UNSUPPORTED'}
+            state = cause.report.get('state')
+            if state not in states or cause.reason_code != 'OWNED_WORKSPACE_STORAGE_' + state:
+                return None
+            busy = state in {'BUSY', 'RETRY'}
+            # A partial permission upgrade may have tightened some targets.
+            # Retry full admission on the original path; never discard frozen
+            # inputs or relax those modes to simulate rollback.
+            retryable = busy or state == 'UPGRADE_INCOMPLETE'
+            return dict(status='BUSY' if busy else 'INCONCLUSIVE',
+                reason_code=cause.reason_code, stage='PRIVATE_STORAGE_ADMISSION',
+                retryable=retryable, original_records_preserved=True,
+                retry_original_request=True, baseline_recreated=False,
+                source_modified=False, security_proof=False, repair_authorized=False,
+                message=('状态目录暂时繁忙或正在变化，请沿原任务和原参数重试，保留原记录。'
+                         if busy else
+                         '状态目录权限准入未完成，原记录和已收紧的权限保留；'
+                         '请沿原路径处理后重试，不要清空历史或重新建立旧基线。'))
+        cause = cause.__cause__ or cause.__context__
+        if cause is None:
+            break
+    return None
+
+
 def runtime_compatibility_failure(exc):
     cause = exc
     for _ in range(8):

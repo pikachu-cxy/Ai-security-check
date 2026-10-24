@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import math
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -342,6 +343,17 @@ class PagedReviewTaskStore:
         self.state = state
         self.metadata = ReviewMetadataStore(state.path, workspace_root=state.root, key=state.key(), budget=budget)
 
+    def _prepare_writer(self):
+        from ..hook_state import HookStateStore
+        from ..owned_workspace_storage import OwnedWorkspaceStorage
+        expected = HookStateStore.workspace_directory(self.state.hooks, self.state.root) / 'task-security.db'
+        if os.path.normcase(os.path.abspath(self.state.path)) != os.path.normcase(os.path.abspath(expected)):
+            fail('INVALID')
+        # Explicit new writer only. Constructor/get/metadata readers never
+        # repair modes. Unsupported ACL platforms reject this new admission
+        # without changing the old Hook/TaskSecurityStore Windows paths.
+        OwnedWorkspaceStorage(self.state.hooks, self.state.root).admit()
+
     def _head(self, db, ref, owner):
         _security_schema(db)
         try:
@@ -469,6 +481,7 @@ class PagedReviewTaskStore:
         limits = store._counts(limits)
         payload = dict(task_key=task_key, baseline=baseline, end=end, limits=limits)
         request_hash = store._request('paged-head-create', binding, request_id, payload, ZERO)
+        self._prepare_writer()
         with page_guard(self.state.path.parent, create=True), store._db(write=True, create=True) as db:
             _security_schema(db, create=True)
             row = db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (binding['task_ref'],)).fetchone()
@@ -530,6 +543,7 @@ class PagedReviewTaskStore:
         else:
             fail('INVALID')
         request_hash = store._request('paged-head-mutate', binding, request_id, dict(mutation=payload, phase=phase), charge, frozen)
+        self._prepare_writer()
         with page_guard(self.state.path.parent), store._db(write=True) as db:
             head = self._head(db, binding['task_ref'], binding['owner'])
             if (head['representation_version'] != binding['representation_version']

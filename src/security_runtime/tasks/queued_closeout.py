@@ -219,9 +219,16 @@ def execute_one(service, workspace, ref, *, worker=None):
         queue.finish(claim, outcome, 'SOURCE_CHANGED_SINCE_CLOSEOUT' if source_changed else
                      None if outcome in {'READY_FOR_REVIEW', 'NO_CHANGES'} else state)
         return True
-    except Exception:
+    except Exception as exc:
         # Fixed reason; never persist exception text containing source or secrets.
-        queue.finish(claim, 'FAILED', 'TASK_EXECUTION_UNAVAILABLE')
+        from .diagnostics import owned_storage_failure
+        admission = owned_storage_failure(exc)
+        if admission is not None and admission['retryable']:
+            # Keep the original frozen inputs and task/version binding. A
+            # permission-admission lock is not a terminal execution failure.
+            queue.finish(claim, 'RETRY_WAIT', admission['reason_code'])
+        else:
+            queue.finish(claim, 'FAILED', 'TASK_EXECUTION_UNAVAILABLE')
         return True
     finally:
         stop.set()
