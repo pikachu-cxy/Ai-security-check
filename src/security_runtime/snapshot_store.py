@@ -273,6 +273,11 @@ class SnapshotStore:
 
     get = resume
 
+    def sealed_reader(self, ref, binding):
+        """Return an opt-in bounded raw reader; legacy read semantics stay intact."""
+        from .snapshot_reader import SealedSnapshotReader
+        return SealedSnapshotReader(self, ref, binding)
+
     def append_page(self, ref, binding, entries, *, expected_cursor, cursor):
         if expected_cursor is not None:
             _text(expected_cursor)

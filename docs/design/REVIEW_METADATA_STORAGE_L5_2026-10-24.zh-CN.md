@@ -61,3 +61,16 @@
 - Windows旧Hook/Task路径保留原行为；本批新的私有权限准入不宣称已验证Windows ACL，也不据POSIX测试宣称支持。原生外用户归属测试在本机非root无法chown时明确跳过，模拟UID测试单独标记。
 
 实际验收、安装及逐批GitHub回执见近期开发计划。权限模式检查不验证数据库正文、可信宿主身份、整个文件系统ACL或强一致源快照，也不能替代后续分页计划及所有消费者接入。
+
+## 第四批：Raw来源的有界只读视图
+
+内部`SnapshotStore.sealed_reader(ref,binding)`只处理完整SEALED的原始字节仓库，不解析任务maps/list或旧正文引用。显式BEGIN固定同一只读SQLite视图；开放前逐项认证全部entry的签名、SQL索引列、连续seq、总数/总尺寸和对象存在/类型/长度。`header`保留原生产者声明，不能据此声称本次已经读过或重新验证所有正文；正文SHA只在受权path显式读取时验证。原`root_digest`是已签名header及游标锚，本批不重新构造历史append-page边界链，也不验证typed `pointer.source`的完整规范摘要。
+
+- 按`PATH_BINARY_V1`进行keyset分页，不要求原append顺序等于路径顺序。游标签名绑定原ref、binding、store/root身份、签名root_digest、总数和最后路径；翻页、重开、调整单次预算都不能换来源。单页最多256项及64KiB规范JSON（包含游标和外壳），没有整个来源只取前256项的行为。
+- 对象读取只接受本reader内已认证的path，不开放裸hash或外来entry对象。默认64KiB，单次可显式申请至8,000,000字节；超限在对象SQL读取前拒绝，不能截断当完整。本批尚未提供单个大对象的流式分块API；总来源文件数不设固定前缀。
+- SQL在返回Python之前限制元数据字段长度及类型，防止受损header/entry/索引列形成巨型Python分配。每个新reader先线性验证完整清单，其后逐页/对象读取；这保证有界内存，不是每次打开都O(1)或大项目即时可用的承诺。完整遍历与对象读取的测量分别记录，包含该次开头验证成本。
+- 新reader不创建目录、密钥、数据库、应用临时索引或恢复日志；本批只接纳rollback存储。已存在rollback journal表达暂时等待并沿原ref重试，不将多会话写入中的短暂日志当作永久不支持；WAL模式/sidecar明确不支持本批读取。数据库首次访问前设置连接的EXCLUSIVE锁模式，防止前置检查后切WAL而意外创建共享辅助文件；该连接设置遵循[SQLite WAL说明](https://www.sqlite.org/wal.html#use_of_wal_without_shared_memory)及[锁模式说明](https://www.sqlite.org/pragma.html#pragma_locking_mode)。实际并发窗口及零副作用还须以本批真实回归为准，不能仅凭文档推断已验证。
+
+本批最终安装包141项验收通过，包含显式启用的10001真实文件及完整原字节重开读回、实际GC争用和进程退出。原WAL竞态失败及子进程测试夹具错误分别保留真实失败、修正与通过记录，不能只引用最终通过而抹去版本边界。
+
+旧`page/read_content/unpack/GC`及数据库schema保留；原域不重标、历史不迁移。typed source的列表位置验证、原规范摘要、preimage/end正文存储位置、后续增量计划及MCP生产路由仍独立接入，`paged_review_storage`继续关闭。具体测试、规模、安装及同步状态以近期开发计划的真实回执为准。
