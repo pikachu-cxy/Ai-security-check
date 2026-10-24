@@ -57,25 +57,66 @@ class TaskSecurityStore:
             raise ValueError('Task key cannot be verified')
         return key
 
-    def head(self, row):
-        """Authenticate the control record without opening its source pages."""
+    def _authenticated_head(self, row):
+        """Authenticate only control bytes, including before writer admission."""
         if not row:
             return None
         raw, mac = row
-        if len(raw.encode()) > MAX_RECORD_BYTES:
+        if not isinstance(raw, str) or not isinstance(mac, str) or len(raw.encode()) > MAX_RECORD_BYTES:
             raise ValueError('Task record budget exceeded')
         value = json.loads(raw)
         if isinstance(value, dict) and value.get('contract') == REVIEW_CONTRACT:
             raise _PagedReviewHead('Paged review heads require their bounded task reader')
-        if (value.get('contract') not in {CONTRACT, GC_CONTRACT} or not REF.fullmatch(value.get('task_ref', ''))
+        if (not isinstance(value, dict) or value.get('contract') not in {CONTRACT, GC_CONTRACT}
+                or not REF.fullmatch(value.get('task_ref', ''))
                 or value.get('workspace') != str(self.root)
                 or not hmac.compare_digest(mac, digest(self.key(), value))):
             raise ValueError('Task state cannot be verified')
+        from .capture_source_profile import validate_record
+        validate_record(value)
         if value.get('contract') == GC_CONTRACT and not managed(value):
             raise ValueError('Snapshot collection contract mismatch')
+        return value
+
+    def head(self, row):
+        """Authenticate the control record without opening its source pages."""
+        value = self._authenticated_head(row)
+        if value is None:
+            return None
         if managed(value) and not guard_held(self.path.parent):
             raise ValueError('Snapshot collection guard unavailable')
         return value
+
+    def _preflight_capture_transition(self, value, *, new):
+        """Reject policy changes before chmod, collection or source-page I/O.
+
+        This control-only read needs no source guard and can inspect owned old
+        permissions before explicit writer admission. The write CAS repeats it.
+        """
+        if new:
+            return
+        ref = value.get('task_ref')
+        if not isinstance(ref, str) or REF.fullmatch(ref) is None:
+            raise ValueError('Invalid task reference')
+        no_links(self.path)
+        old = None
+        if self.path.is_file():
+            from .frozen_body_context import readonly_database
+            with readonly_database(self.path, maximum=MAX_RECORD_BYTES) as db:
+                row = db.execute("SELECT CASE WHEN typeof(data)='text' AND "
+                    'length(CAST(data AS BLOB))<=? THEN data END, '
+                    "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END "
+                    'FROM security_tasks WHERE ref=? LIMIT 1', (MAX_RECORD_BYTES, ref)).fetchone()
+                old = self._authenticated_head(row)
+        if not old or old['task_ref'] != ref:
+            raise ValueError('Task changed concurrently; read current task first')
+        from .capture_source_profile import CaptureSourceProfileError, validate_transition
+        try:
+            validate_transition(old, value, new=False)
+        except CaptureSourceProfileError:
+            if old['generation'] != value.get('generation'):
+                raise ValueError('Task changed concurrently; read current task first') from None
+            raise
 
     def retention_head(self, row):
         """Authenticate small heads for retention only; never project new data.
@@ -372,8 +413,11 @@ class TaskSecurityStore:
     def save(self, value, *, new=False, session_idle=False):
         if value.get('contract') == REVIEW_CONTRACT:
             raise _PagedReviewHead('Paged review heads require their atomic task store')
+        from .capture_source_profile import validate_record
+        validate_record(value)
         if new:
             require_record_protocol(value)
+        self._preflight_capture_transition(value, new=new)
         # Collection itself reads strict metadata permissions. An explicit
         # writer must admit old owned storage before entering that path.
         self.hooks.prepare_private_writer(self.root)
@@ -387,8 +431,11 @@ class TaskSecurityStore:
     def _save(self, value, *, new=False, session_idle=False):
         if value.get('contract') == REVIEW_CONTRACT:
             raise _PagedReviewHead('Paged review heads require their atomic task store')
+        from .capture_source_profile import validate_record, validate_transition as validate_capture_transition
+        validate_record(value)
         if new:
             require_record_protocol(value)
+        self._preflight_capture_transition(value, new=new)
         self.hooks.prepare_private_writer(self.root)
         # Object/page I/O completes before taking the task/control write lock.
         from .snapshot_pages import pack
@@ -410,6 +457,7 @@ class TaskSecurityStore:
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
                 raise ValueError('Task changed concurrently; read current task first')
+            validate_capture_transition(old, value, new=new)
             from .frozen_body_context import validate_transition
             validate_transition(self.hooks, self.root, old, value, new=new, now=self.now)
             from .frozen_end_context import validate_end_transition

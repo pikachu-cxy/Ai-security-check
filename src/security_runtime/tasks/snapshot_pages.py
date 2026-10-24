@@ -11,6 +11,7 @@ from ..closeout_state import encode
 from ..snapshot_store import SnapshotBinding, SnapshotStore, SnapshotStoreError
 from ..source_redaction import task_version
 from .ownership import record_owner
+from .capture_source_profile import POLICY as SOURCE_POLICY, validate_record
 
 
 MAPS = ('hashes', 'texts', 'text_truncations', 'preimages', 'text_unavailable', 'line_counts')
@@ -19,7 +20,8 @@ POINTER = 'paged_entries'
 GC_CONTRACT = 'task-security-paged-gc-v1'
 REVIEW_CONTRACT = 'task-security-paged-review-v1'
 GC_POLICY = 'BATCHED_FILES_GC_V1'
-POLICIES = frozenset({'BATCHED_FILES_V1', GC_POLICY})
+POLICIES = frozenset({'BATCHED_FILES_V1', GC_POLICY, SOURCE_POLICY})
+MANAGED_POLICIES = frozenset({GC_POLICY, SOURCE_POLICY})
 
 
 def batched(record):
@@ -28,7 +30,7 @@ def batched(record):
 
 def managed(record):
     return (record.get('contract') in {GC_CONTRACT, REVIEW_CONTRACT}
-            and record.get('capture_policy') == GC_POLICY)
+            and record.get('capture_policy') in MANAGED_POLICIES)
 
 
 def _store(state):
@@ -46,9 +48,10 @@ def _binding(record, field, source):
 def pack(state, record):
     if record.get('contract') == REVIEW_CONTRACT:
         raise ValueError('Paged review heads require their atomic task store')
+    validate_record(record)
     if not batched(record):
         return record
-    if record.get('capture_policy') == GC_POLICY and not managed(record):
+    if record.get('capture_policy') in MANAGED_POLICIES and not managed(record):
         raise ValueError('Snapshot collection contract mismatch')
     result = dict(record)
     store = None
@@ -99,9 +102,10 @@ def pack(state, record):
 def unpack(state, record):
     if record.get('contract') == REVIEW_CONTRACT:
         raise ValueError('Paged review heads require their bounded task reader')
+    validate_record(record)
     if not batched(record):
         return record
-    if record.get('capture_policy') == GC_POLICY and not managed(record):
+    if record.get('capture_policy') in MANAGED_POLICIES and not managed(record):
         raise ValueError('Snapshot collection contract mismatch')
     result = dict(record)
     store = None

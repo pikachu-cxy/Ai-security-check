@@ -179,6 +179,19 @@
 - 原1154文件before和同一任务/累计额度保留；8/8改动单元必读34帧1293行、另7帧151行调用边全部实读，13个source摘要核对一致。导航至尾、必读未读和计划缺口均0；当前第1修订终态及完整交付已读，静态FULL零发现。整体仍因共享目录改动归因未独立确认保留PARTIAL，旧L2容量不足及独立原始输入保留缺口不由本批替代。验收安装后立即同步GitHub，再保存下一批真实before。
 - 下一批真实新domain producer需先闭合捕获身份、原task头CAS和GC引用：`source_binding`现虽接收ReviewMetadataBinding，Raw绑定实际不含review revision/snapshot；不能在begin虚构这些值。旧/新域当前task slot同为parent/field/SHA，且Raw captures.task唯一，不能将测试独立store桥接直接搬成同store双写。需明确版本化捕获域/slot、认证pointer和原容量预算/旧writer隔离，保持旧契约可读，不先声明新paged head或全部L5接入；默认`paged_review_storage=False`。
 
+### 2026-10-24 L5捕获身份与旧写入器隔离（内部基础验收通过）
+
+- 将捕获身份与复核身份分开。新增纯 `CaptureSourceBinding(task_ref, owner, field, capture_ref, representation_version)`；baseline 的 capture_ref 是原 task，end 是实际原 version_ref，不构造占位 review revision/snapshot。新 `TASK_CAPTURE_SOURCE_V2` 使用含版本前缀、父任务、field、capture_ref 和规范摘要的独立 slot；严格 `capture_source` 描述符与旧两键 pointer 分开。同原 `snapshot-pages` 库、原逻辑 usage 和物理配额共存，不通过新库翻倍容量；旧GC/V1公式保持原样，两者原有的同slot冲突不重标为已解决。
+- 抽出共享 canonical 校验核心，新增显式 `CaptureCanonicalView`。完整原 maps/list 摘要、连续位置、逐项正文摘要和原SEALED来源均验证后才可读取；保留原私有scratch、页/字节/时间、根身份、PID和关闭边界。捕获 scope 含 capture_ref/domain，不含 review_revision/snapshot_id；没有读取到的项目覆盖和外部正文仍分别为 UNKNOWN/不可据此确认。原 `TypedSnapshotSource` 仍必须提供复核身份，其原绑定/HMAC/游标/summary/scope不变，实际旧安装与当前版本的双向游标续读已交叉核对。
+- 原 `FrozenBodySource` 显式支持该捕获view，继续核对原task/owner/root/field/source/表示版本，并要求 capture_ref 等于原正文任务引用，END再等于原 version_ref。同SHA的另一个END不能替换原正文；不延长正文期限、不增加历史pin，不从live、inline或其他版本回补。
+- 仅全新、显式 `capture_sources=True` 且 `frozen_body_contexts=True` 的owned普通TASK_CLOSEOUT任务出生为 `BATCHED_FILES_GC_SOURCE_V2`/`CAPTURE_SOURCES_V2`；仍使用原普通任务行、generation、原累计账本和原donor页域。旧key resume、PER_EDIT和native均不升级，匿名closeout继续沿原owner门禁拒绝。当前尚无真实发布器，所有任务控制位置的 `capture_source` 注入都明确拒绝；用户maps/preimages中的同名普通数据不当作契约。
+- 验收发现并修正一次实际顺序缺口：非法policy变更原先会先pack、误读另一域，再被CAS拒绝。现在save及直接_save均在权限收紧、GC、pack前有界只读认证原控制头并核对policy/profile；SQL限长、不hydrate/判TTL、不初始化guard、不新建基线，提交事务内仍复验。普通stale generation仍保留既有“收紧权限后最终CAS拒绝”语义。新/旧profile不可被补加、移除或降级；缺失与显式None分别处理。
+- 最终安装包 **283 passed，475.92秒，无跳过/失败/警告**，覆盖新身份/view/原正文、真实新任务和队列、原Typed/body/END、GC、保留/投影、原复核版本及旧权限writer。实际旧234安装的read/write/GC均拒绝新policy，同一个可回收orphan零删除，当前GC随后实际收回，避免空库存假阳性；原V1-only库旧二进制读写继续通过。另用当前安装创建同库旧任务A/新任务B，实际旧234保存A因GC检查B而保守拒绝，两库完整文件及逻辑行摘要均不变；独立V1-only对照仍保存成功。混合库旧GC及依赖它的managed writer不可继续写，不能将仅V1正向结果外推为混合库兼容。
+- 显式1001与10001元数据记录均逐项核对全部maps、两种list位置、末页和重开结果。最终安装10001样本构建1.572秒，校验/遍历/关闭262.785秒，tracemalloc峰2,586,818字节、raw库8,175,616字节；1001同口径24.062秒/2,571,456字节。测量不含fixture/reopen，且启用tracemalloc，不是实际项目捕获、完整producer或端到端耗时，也不作为L6性能完成证明。
+- 冻结400个程序/资源文件源码、wheel及安装一致，离线pip检查和70项自有规则检查通过；wheel SHA `eccbc44e4a9829eea12b4daa0ac459d708e49c2e0f69cb85278f293fb913d92e`，本机build `6158a308fd74326b1c4b0b4e8830a72a500caed0739a250204d5412aee8270ac`。已配置该安装，实际新MCP进程核对62工具及9项必需子集；446f工作树准入ALLOWED。原桌面连接重连、Hook信任及当前宿主会话身份仍未确认，不把新进程验证当当前聊天绑定成功。
+- 本批保留1157文件原before及同一task/累计账本；12单元49帧2015行，另3帧102行调用边均已实读，18个before/current摘要与原Git版本/冻结磁盘一致。切换安装配置后旧复核进程被RUNTIME_STALE拒绝，已用新构建接续原task/review及原证据，不重建基线或重发finish。12/12单元提交完成，第1修订终态及当前交付已读，必读未读/计划缺口/源码变化均0，静态FULL零发现；整体仍因共享目录改动归属未独立确认保留PARTIAL。旧L2容量不足及独立原始输入保留缺口不由本批替代。功能验收、安装核对和原任务复核后随即同步GitHub，再进入下一阶段。
+- 下一批才实现真实baseline发布：原SEALED donor有界复制、完整规范SHA核验、原父头CAS、同任务库签名owner/intent/receipt和完整GC库存；封口/发布中断沿原ref恢复，原来源缺失明确不可用。然后分别接END/queue精确版本及退休/取消回收，再继续增量planner、原证据/预算/提交/结果/生命周期。当前没有自动V2来源publisher，`paged_review_storage=False`；不把本内部基础或10001元数据夹具记作L5、L6或全计划完成。每阶段验收、安装核对后立即同步GitHub，再进入下一阶段。
+
 ### 换电脑接续时先做什么
 
 编写本计划时，分支为 `feature/runtime-mvp`，HEAD 为 `6648e31`，工作区还有大量已修改及未跟踪文件。**该旧提交不包含后续完整实现。** 用户随后授权在验收通过后，将本地最新代码、测试和开发计划一并提交并推送到同一分支；本次交付包含[原文证据改造及验收记录](design/RAW_SOURCE_EVIDENCE_V3_2026-10-23.zh-CN.md)。换电脑应获取该分支的最新提交，并核对实际文件，不能停留在旧提交或把大项目计划误认为已经实施。

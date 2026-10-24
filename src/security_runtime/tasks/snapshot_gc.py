@@ -10,6 +10,7 @@ from ..hook_state import no_links
 from ..snapshot_store import SnapshotStoreError
 from .snapshot_page_guard import page_guard
 from .snapshot_pages import GC_POLICY, POINTER, REVIEW_CONTRACT, _binding, _store
+from .capture_source_profile import POLICY as CAPTURE_SOURCE_POLICY
 
 
 def _pointers(value):
@@ -113,7 +114,8 @@ def collect_pages(state, *, prune=False, max_captures=32):
                 if row.get('state') != 'RUNNING' and row.get('expires_at', float('inf')) <= state.now():
                     continue
                 baseline_pin = row.get('baseline_pages', {})
-                if row.get('snapshot_capture_policy') == GC_POLICY and POINTER not in baseline_pin:
+                if (row.get('snapshot_capture_policy') in {GC_POLICY, CAPTURE_SOURCE_POLICY}
+                        and POINTER not in baseline_pin):
                     raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
                 surrogate = dict(task_ref=row['task_ref'], task_owner=row['owner'],
                     contract=row.get('snapshot_task_contract'),

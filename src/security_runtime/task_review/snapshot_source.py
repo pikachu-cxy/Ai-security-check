@@ -93,28 +93,16 @@ def _sqlite_failure(error):
     fail('STORAGE_UNAVAILABLE')
 
 
-class TypedSnapshotSource:
-    def __init__(self, store, pointer, *, review_binding, field, scratch_directory,
-                 budget=TypedSourceBudget()):
-        # Validation and detachment here are pure; construction never stats,
-        # opens SQLite, creates a directory, or changes permissions.
-        try:
-            if (not isinstance(store, SnapshotStore) or not isinstance(budget, TypedSourceBudget)
-                    or not isinstance(pointer, dict) or set(pointer) != {'ref', 'source'}
-                    or not isinstance(pointer['ref'], str) or re.fullmatch('ws2-[a-f0-9]{32}', pointer['ref']) is None
-                    or not isinstance(pointer['source'], str) or re.fullmatch('[a-f0-9]{64}', pointer['source']) is None
-                    or not isinstance(review_binding, ReviewMetadataBinding)):
-                fail('INVALID_ARGUMENT')
-            owner = json.loads(_encode(review_binding.owner))
-            binding = ReviewMetadataBinding(review_binding.task_ref, owner, review_binding.revision,
-                review_binding.snapshot_id, review_binding.representation_version)
-            raw_binding = source_binding(binding, field, pointer['source'])
-            directory = Path(scratch_directory)
-        except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
-            fail('INVALID_ARGUMENT')
+class _CanonicalSource:
+    """Shared validation only; each public adapter supplies its own identity."""
+
+    def _configure(self, store, pointer, *, raw_binding, field, scratch_directory,
+                   budget, contract, binding_context, source_identity):
         self.store, self.budget, self.field = store, budget, field
-        self._pointer, self._review_binding, self._raw_binding = dict(pointer), binding, raw_binding
-        self._scratch_directory = directory
+        self._pointer, self._raw_binding = dict(pointer), raw_binding
+        self._contract, self._binding_context = contract, binding_context
+        self._source_identity = source_identity
+        self._scratch_directory = scratch_directory
         self._stack, self._db, self._reader, self._scratch = None, None, None, None
         self._closed, self._verified, self._start = False, False, None
         self._pid = os.getpid()
@@ -160,9 +148,9 @@ class TypedSnapshotSource:
             self._tick()
             if header['source_bytes'] > self.budget.source_bytes:
                 fail('WAITING_SOURCE_BUDGET')
-            self._bound = dict(contract=CONTRACT, pointer=self._pointer, review_binding=asdict(self._review_binding),
+            self._bound = dict(contract=self._contract, pointer=self._pointer, **self._binding_context,
                 field=self.field, root=self.store._identity(), store=self.store._store_identity(),
-                representation_version=self._review_binding.representation_version,
+                representation_version=self._source_identity['representation_version'],
                 root_digest_anchor=header['root_digest'], entry_count=header['entry_count'], order='PATH_BINARY_V1')
             self._bound_digest = hashlib.sha256(_encode(self._bound)).hexdigest()
             self._scratch = stack.enter_context(ScratchSlot(self.store, self._scratch_directory))
@@ -229,9 +217,8 @@ class TypedSnapshotSource:
             # proof is cached across a commit, reconnect, or later context.
             self._db.execute('PRAGMA query_only=ON')
             self._summary = dict(state='VERIFIED', metadata_verified=True, source_digest_verified=True,
-                ref=self._pointer['ref'], source=self._pointer['source'], task_ref=self._review_binding.task_ref,
-                review_revision=self._review_binding.revision, snapshot_id=self._review_binding.snapshot_id,
-                representation_version=self._review_binding.representation_version, field=self.field,
+                ref=self._pointer['ref'], source=self._pointer['source'],
+                **{key: value for key, value in self._source_identity.items() if key != 'owner'}, field=self.field,
                 entry_count=count, source_bytes=source_bytes, map_counts=maps, list_counts=lists,
                 project_coverage='UNKNOWN', external_bodies_available=False, budget=asdict(self.budget))
             self._verified = True
@@ -260,7 +247,7 @@ class TypedSnapshotSource:
         return dict(path=path, maps=value['maps'], positions=value['positions'])
 
     def _mac(self, path, raw):
-        return self.store._mac([CONTRACT, self._bound_digest, path, hashlib.sha256(raw).hexdigest()])
+        return self.store._mac([self._contract, self._bound_digest, path, hashlib.sha256(raw).hexdigest()])
 
     def _source_digest(self):
         digest = hashlib.sha256()
@@ -315,13 +302,9 @@ class TypedSnapshotSource:
         native host attestation or permission to adopt another task's source.
         """
         self._active()
-        return json.loads(_encode(dict(task_ref=self._review_binding.task_ref,
-            owner=self._review_binding.owner, workspace=str(self.store.root),
+        return json.loads(_encode(dict(**self._source_identity, workspace=str(self.store.root),
             root_identity=self.store.root_identity, field=self.field,
-            source=self._pointer['source'], ref=self._pointer['ref'],
-            representation_version=self._review_binding.representation_version,
-            review_revision=self._review_binding.revision,
-            snapshot_id=self._review_binding.snapshot_id)))
+            source=self._pointer['source'], ref=self._pointer['ref'])))
 
     def _read_entry(self, row):
         path, raw, mac = row
@@ -417,3 +400,63 @@ class TypedSnapshotSource:
         if stack is not None:
             return stack.__exit__(kind, error, traceback)
         return False
+
+
+class TypedSnapshotSource(_CanonicalSource):
+    """Original V1 review adapter, with its required real review binding."""
+
+    def __init__(self, store, pointer, *, review_binding, field, scratch_directory,
+                 budget=TypedSourceBudget()):
+        # Preserve V1 validation, cursor identity and returned fields. This
+        # constructor never stats, opens SQLite, or creates private scratch.
+        try:
+            if (not isinstance(store, SnapshotStore) or not isinstance(budget, TypedSourceBudget)
+                    or not isinstance(pointer, dict) or set(pointer) != {'ref', 'source'}
+                    or not isinstance(pointer['ref'], str) or re.fullmatch('ws2-[a-f0-9]{32}', pointer['ref']) is None
+                    or not isinstance(pointer['source'], str) or re.fullmatch('[a-f0-9]{64}', pointer['source']) is None
+                    or not isinstance(review_binding, ReviewMetadataBinding)):
+                fail('INVALID_ARGUMENT')
+            owner = json.loads(_encode(review_binding.owner))
+            binding = ReviewMetadataBinding(review_binding.task_ref, owner, review_binding.revision,
+                review_binding.snapshot_id, review_binding.representation_version)
+            raw_binding = source_binding(binding, field, pointer['source'])
+            directory = Path(scratch_directory)
+        except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
+            fail('INVALID_ARGUMENT')
+        self._configure(store, pointer, raw_binding=raw_binding, field=field,
+            scratch_directory=directory, budget=budget, contract=CONTRACT,
+            binding_context=dict(review_binding=asdict(binding)),
+            source_identity=dict(task_ref=binding.task_ref, owner=owner,
+                review_revision=binding.revision, snapshot_id=binding.snapshot_id,
+                representation_version=binding.representation_version))
+
+
+class CaptureCanonicalView(_CanonicalSource):
+    """Validate a V2 capture without inventing a review revision or snapshot.
+
+    This is a private metadata consumer, not task publication, native source
+    attestation, review evidence, or a grant to adopt a historical capture.
+    """
+
+    def __init__(self, store, descriptor, *, capture_binding, scratch_directory,
+                 budget=TypedSourceBudget()):
+        from .capture_source_binding import (CaptureSourceBinding, SOURCE_RETENTION_DOMAIN,
+            binding_identity, raw_source_binding, validate_descriptor)
+        if (not isinstance(store, SnapshotStore) or not isinstance(budget, TypedSourceBudget)
+                or not isinstance(capture_binding, CaptureSourceBinding)):
+            fail('INVALID_ARGUMENT')
+        # These pure helpers detach the descriptor and compare all capture
+        # fields before either raw storage or scratch can be opened.
+        payload = validate_descriptor(capture_binding, descriptor)
+        identity = binding_identity(capture_binding)
+        raw_binding = raw_source_binding(capture_binding, payload['source'])
+        try:
+            directory = Path(scratch_directory)
+        except (ValueError, TypeError):
+            fail('INVALID_ARGUMENT')
+        self._configure(store, dict(ref=payload['ref'], source=payload['source']),
+            raw_binding=raw_binding, field=identity['field'], scratch_directory=directory,
+            budget=budget, contract='canonical-task-capture-source-v2',
+            binding_context=dict(capture_binding=identity, capture_source=payload),
+            source_identity={key: value for key, value in identity.items() if key != 'field'}
+                | dict(source_domain=SOURCE_RETENTION_DOMAIN))

@@ -272,9 +272,12 @@ def _coverage_gaps(limitations):
 
 class TaskSecurityService:
     def __init__(self, runtime, hooks=None, *, now=time.time, owner=None,
-                 read_only_scan_store_provider=None, source_cache=None, frozen_body_contexts=False):
+                 read_only_scan_store_provider=None, source_cache=None, frozen_body_contexts=False,
+                 capture_sources=False):
         if type(frozen_body_contexts) is not bool:
             raise ValueError('Invalid frozen body context option')
+        if type(capture_sources) is not bool or capture_sources and not frozen_body_contexts:
+            raise ValueError('Invalid capture source option')
         self.runtime = runtime
         self.hooks = hooks or HookStateStore()
         self.now = now
@@ -282,6 +285,7 @@ class TaskSecurityService:
         self.read_only_scan_store_provider = read_only_scan_store_provider
         self.source_cache = source_cache
         self.frozen_body_contexts = frozen_body_contexts
+        self.capture_sources = capture_sources
 
     def _owner(self):
         from .ownership import valid_owner
@@ -533,6 +537,10 @@ class TaskSecurityService:
                 record['check_policy'] = POLICY
                 if batched_files:
                     record.update(contract=GC_CONTRACT, capture_policy=GC_POLICY)
+                    if self.capture_sources and owner is not None:
+                        from .capture_source_profile import (POLICY as SOURCE_POLICY,
+                            PROFILE as SOURCE_PROFILE, PROFILE_FIELD as SOURCE_PROFILE_FIELD)
+                        record.update(capture_policy=SOURCE_POLICY, **{SOURCE_PROFILE_FIELD: SOURCE_PROFILE})
                 if retain_inputs:
                     record.update(attribution_contract=ATTRIBUTION_CONTRACT, before_scan_inputs=original_inputs)
                 if background_closeout:

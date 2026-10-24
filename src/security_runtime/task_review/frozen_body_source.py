@@ -12,7 +12,7 @@ import time
 
 from ..tasks.frozen_body_context import MAX_CONTEXT_BYTES, verify_context
 from ..tasks.preimages import MAX_FILE_BODY_BYTES, TaskPreimageStore
-from .snapshot_source import TypedSnapshotSource, _path
+from .snapshot_source import CaptureCanonicalView, TypedSnapshotSource, _path
 
 
 class FrozenBodySourceError(ValueError):
@@ -37,10 +37,10 @@ def _detach(packet):
 
 
 class FrozenBodySource:
-    """Use within the lifetime of the caller-owned TypedSnapshotSource."""
+    """Use within the lifetime of the caller-owned verified canonical view."""
 
     def __init__(self, hooks, root, context, *, typed_source, now=time.time):
-        if (not isinstance(typed_source, TypedSnapshotSource)
+        if (not isinstance(typed_source, (TypedSnapshotSource, CaptureCanonicalView))
                 or not isinstance(context, dict) or not callable(now)):
             _fail('INVALID_ARGUMENT')
         try:
@@ -73,6 +73,14 @@ class FrozenBodySource:
         if (payload['field'], payload['preimage_namespace']) not in {
                 ('baseline', 'closeout'), ('end', 'end')}:
             _fail('SCOPE_MISMATCH')
+        if isinstance(self.source, CaptureCanonicalView):
+            # A V2 capture identifies the original baseline or exact END,
+            # even when two ENDs happen to have identical canonical metadata.
+            from .capture_source_binding import SOURCE_RETENTION_DOMAIN
+            if (scope['source_domain'] != SOURCE_RETENTION_DOMAIN
+                    or scope['capture_ref'] != payload['preimage_task_ref']
+                    or payload['field'] == 'end' and scope['capture_ref'] != payload['version_ref']):
+                _fail('SCOPE_MISMATCH')
         return payload
 
     def __enter__(self):
