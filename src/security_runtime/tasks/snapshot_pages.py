@@ -17,6 +17,7 @@ MAPS = ('hashes', 'texts', 'text_truncations', 'preimages', 'text_unavailable', 
 LISTS = ('inventory', 'read_priority')
 POINTER = 'paged_entries'
 GC_CONTRACT = 'task-security-paged-gc-v1'
+REVIEW_CONTRACT = 'task-security-paged-review-v1'
 GC_POLICY = 'BATCHED_FILES_GC_V1'
 POLICIES = frozenset({'BATCHED_FILES_V1', GC_POLICY})
 
@@ -26,7 +27,8 @@ def batched(record):
 
 
 def managed(record):
-    return record.get('contract') == GC_CONTRACT and record.get('capture_policy') == GC_POLICY
+    return (record.get('contract') in {GC_CONTRACT, REVIEW_CONTRACT}
+            and record.get('capture_policy') == GC_POLICY)
 
 
 def _store(state):
@@ -42,6 +44,8 @@ def _binding(record, field, source):
 
 
 def pack(state, record):
+    if record.get('contract') == REVIEW_CONTRACT:
+        raise ValueError('Paged review heads require their atomic task store')
     if not batched(record):
         return record
     if record.get('capture_policy') == GC_POLICY and not managed(record):
@@ -93,6 +97,8 @@ def pack(state, record):
 
 
 def unpack(state, record):
+    if record.get('contract') == REVIEW_CONTRACT:
+        raise ValueError('Paged review heads require their bounded task reader')
     if not batched(record):
         return record
     if record.get('capture_policy') == GC_POLICY and not managed(record):

@@ -14,7 +14,7 @@ from ..closeout_state import digest, encode, readonly_uri
 from ..hook_state import atomic_bytes, no_links
 from ..task_review.protocol import require_record_protocol, is_v3_record
 from .snapshot_page_guard import guarded_read, page_guard, guard_held
-from .snapshot_pages import GC_CONTRACT, batched, managed
+from .snapshot_pages import GC_CONTRACT, REVIEW_CONTRACT, batched, managed
 
 CONTRACT = 'task-security-v1'
 REF = re.compile(r'ts1-[a-f0-9]{32}')
@@ -40,6 +40,10 @@ def persistent_record(value):
     return value
 
 
+class _PagedReviewHead(ValueError):
+    """Route internal retention to the new verifier, never a legacy reader."""
+
+
 class TaskSecurityStore:
     def __init__(self, hooks, root, *, now=time.time):
         self.root, self.hooks, self.now = root, hooks, now
@@ -61,6 +65,8 @@ class TaskSecurityStore:
         if len(raw.encode()) > MAX_RECORD_BYTES:
             raise ValueError('Task record budget exceeded')
         value = json.loads(raw)
+        if isinstance(value, dict) and value.get('contract') == REVIEW_CONTRACT:
+            raise _PagedReviewHead('Paged review heads require their bounded task reader')
         if (value.get('contract') not in {CONTRACT, GC_CONTRACT} or not REF.fullmatch(value.get('task_ref', ''))
                 or value.get('workspace') != str(self.root)
                 or not hmac.compare_digest(mac, digest(self.key(), value))):
@@ -70,6 +76,18 @@ class TaskSecurityStore:
         if managed(value) and not guard_held(self.path.parent):
             raise ValueError('Snapshot collection guard unavailable')
         return value
+
+    def retention_head(self, row):
+        """Authenticate small heads for retention only; never project new data.
+
+        A new contract has its own reader and atomic writer. Legacy consumers
+        must not mistake absent inline maps for an empty completed snapshot.
+        """
+        try:
+            return self.head(row)
+        except _PagedReviewHead:
+            from ..task_review.paged_task_store import verify_paged_head
+            return verify_paged_head(self, row)
 
     @guarded_read
     def decode(self, row):
@@ -147,12 +165,18 @@ class TaskSecurityStore:
         if len(archived) > MAX_RETAINED_PROJECTIONS:
             raise ValueError('Pending task projection retention capacity exceeded')
         for ref, raw, mac, created in archived:
+            if self.retention_head((raw, mac)).get('contract') == REVIEW_CONTRACT:
+                raise ValueError('Paged review heads cannot use legacy risk projections')
             value = self.decode((raw, mac))
             if created < self.now()-TTL and not status(value)['pending']:
                 db.execute('DELETE FROM retained_task_projections WHERE ref=?', (ref,))
         expired = db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?',
                              (self.now()-TTL,)).fetchall()
         for ref, raw, mac in expired:
+            if self.retention_head((raw, mac)).get('contract') == REVIEW_CONTRACT:
+                # The new coordinator/lifecycle must retire its own catalog.
+                # Until connected, do not erase sources via old TTL/projection.
+                continue
             value = self.decode((raw, mac))
             if not self.expired(value):
                 continue
@@ -239,6 +263,8 @@ class TaskSecurityStore:
             return updated
 
     def save(self, value, *, new=False, session_idle=False):
+        if value.get('contract') == REVIEW_CONTRACT:
+            raise _PagedReviewHead('Paged review heads require their atomic task store')
         if new:
             require_record_protocol(value)
         if managed(value):
@@ -249,6 +275,8 @@ class TaskSecurityStore:
             return self._save(value, new=new, session_idle=session_idle)
 
     def _save(self, value, *, new=False, session_idle=False):
+        if value.get('contract') == REVIEW_CONTRACT:
+            raise _PagedReviewHead('Paged review heads require their atomic task store')
         if new:
             require_record_protocol(value)
         # Object/page I/O completes before taking the task/control write lock.
@@ -262,6 +290,8 @@ class TaskSecurityStore:
             db.execute('BEGIN IMMEDIATE')
             self._retain_pending(db)
             for expired_ref, raw, mac in db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?', (self.now()-TTL,)).fetchall():
+                if self.retention_head((raw, mac)).get('contract') == REVIEW_CONTRACT:
+                    continue
                 expired_record = self.decode((raw, mac))
                 if self.expired(expired_record):
                     self.expire_queued_task(expired_record)
@@ -275,7 +305,7 @@ class TaskSecurityStore:
                 # Protocol classification must use authenticated records. Old
                 # history retains its bytes and its own bounded reserve; it
                 # cannot consume the unchanged v3 task allowance.
-                records = [self.decode(row) for row in rows]
+                records = [self.retention_head(row) for row in rows]
                 if (len(records) >= MAX_HISTORY_RECORDS or
                         sum(is_v3_record(item) for item in records) >= MAX_V3_RECORDS):
                     raise ValueError('Task history budget exceeded')

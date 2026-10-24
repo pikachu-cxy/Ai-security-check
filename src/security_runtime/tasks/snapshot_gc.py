@@ -9,7 +9,7 @@ import sqlite3
 from ..hook_state import no_links
 from ..snapshot_store import SnapshotStoreError
 from .snapshot_page_guard import page_guard
-from .snapshot_pages import GC_POLICY, POINTER, _binding, _store
+from .snapshot_pages import GC_POLICY, POINTER, REVIEW_CONTRACT, _binding, _store
 
 
 def _pointers(value):
@@ -31,7 +31,20 @@ def _pointers(value):
             stack.extend(current)
 
 
-def _protect(store, record, references):
+def _protect(store, record, references, *, state=None, db=None):
+    if record.get('contract') == REVIEW_CONTRACT:
+        # The visible head contains only the current pointers. Historical
+        # revisions are rooted in its authenticated, paged source catalog.
+        # Never infer that catalog from a partial compatibility projection.
+        if state is None or db is None:
+            raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
+        from ..task_review.paged_task_store import iter_source_pins
+        for pin in iter_source_pins(state, record, db=db):
+            header = store.resume(pin['ref'], pin['binding'])
+            if header['state'] != 'SEALED':
+                raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
+            references.add(pin['ref'])
+        return
     for pointer in _pointers(record):
         matched = False
         for field in ('baseline', 'end'):
@@ -74,18 +87,27 @@ def collect_pages(state, *, prune=False, max_captures=32):
         with closing(sqlite3.connect(state.path, timeout=2)) as db, db:
             db.execute('PRAGMA secure_delete=ON')
             db.execute('BEGIN IMMEDIATE')
+            # A missing new head is not a retirement grant. Its signed fence
+            # and metadata ledger must have one matching published head before
+            # this inventory can authorize any pruning or source collection.
+            from ..task_review.paged_task_store import validate_head_inventory
+            validate_head_inventory(state, db=db)
             rows = db.execute('SELECT data,mac FROM security_tasks LIMIT ?',
                               (MAX_HISTORY_RECORDS+1,)).fetchall()
             if len(rows) > MAX_HISTORY_RECORDS:
                 raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_BUDGET')
-            heads = [state.head(row) for row in rows]
+            heads = [state.retention_head(row) for row in rows]
             for record in heads:
-                _protect(store, record, references)
+                _protect(store, record, references, state=state, db=db)
             queue_refs = set()
             for row in CloseoutQueue(state.hooks, state.root, now=state.now).rows():
                 if row.get('key') == '$worker':
                     continue  # Dispatcher lease; it contains no source pointers.
                 if row.get('contract') != 'task-closeout-queue-v1':
+                    raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
+                if row.get('snapshot_task_contract') == REVIEW_CONTRACT:
+                    # This foundation has no new-head queue publication path.
+                    # A legacy queue row cannot stand in for its full catalog.
                     raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
                 # Running work remains pinned even if its initial queue TTL elapsed.
                 if row.get('state') != 'RUNNING' and row.get('expires_at', float('inf')) <= state.now():
@@ -103,12 +125,16 @@ def collect_pages(state, *, prune=False, max_captures=32):
                 state._retain_pending(db)
                 for ref, raw, mac in db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?',
                                                 (state.now()-TTL,)).fetchall():
+                    if state.retention_head((raw, mac)).get('contract') == REVIEW_CONTRACT:
+                        # Its projection/TTL integration is not enabled. Keep
+                        # the authenticated head and every original source pin.
+                        continue
                     expired_record = state.decode((raw, mac))
                     if state.expired(expired_record):
                         state.expire_queued_task(expired_record)
                         db.execute('DELETE FROM security_tasks WHERE ref=?', (ref,))
                 references = set()
                 for row in db.execute('SELECT data,mac FROM security_tasks'):
-                    _protect(store, state.head(row), references)
+                    _protect(store, state.retention_head(row), references, state=state, db=db)
             references.update(queue_refs)
         return store.collect_unreferenced(references, max_captures=max_captures)

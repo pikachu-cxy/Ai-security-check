@@ -34,6 +34,9 @@ SCHEMA = (
     'CREATE TABLE rm_pages (ref TEXT NOT NULL, page_seq INTEGER NOT NULL, first_item INTEGER NOT NULL, item_count INTEGER NOT NULL, previous_digest TEXT NOT NULL, digest TEXT NOT NULL, data BLOB NOT NULL, mac TEXT NOT NULL, PRIMARY KEY(ref,page_seq))',
     'CREATE TABLE rm_receipts (task_ref TEXT NOT NULL, request_id TEXT NOT NULL, data BLOB NOT NULL, mac TEXT NOT NULL, PRIMARY KEY(task_ref,request_id))',
 )
+FENCE_TABLE = 'rm_head_fences'
+FENCE_SCHEMA = ('CREATE TABLE rm_head_fences (task_ref TEXT PRIMARY KEY, '
+                'data BLOB NOT NULL, mac TEXT NOT NULL)')
 CATEGORIES = ('source_bytes', 'navigation_bytes', 'control_bytes', 'reads', 'total_bytes')
 ZERO = dict.fromkeys(CATEGORIES, 0)
 HEADER_BYTES = 65536
@@ -229,7 +232,8 @@ class ReviewMetadataStore:
 
     def _stats(self, db):
         counts, usage = {}, HEADER_BYTES
-        for table in TABLES[1:]:
+        tables = (*TABLES[1:], FENCE_TABLE) if self._fenced_schema(db) else TABLES[1:]
+        for table in tables:
             count, size = db.execute(f'SELECT count(*),coalesce(sum(length(data)+length(mac)),0) FROM {table}').fetchone()
             counts[table] = count
             usage += size + ROW_BYTES * count
@@ -269,7 +273,11 @@ class ReviewMetadataStore:
 
     def _schema(self, db):
         expected = dict(zip(TABLES, SCHEMA))
+        if self._fenced_schema(db):
+            expected[FENCE_TABLE] = FENCE_SCHEMA
         indexes = {f'sqlite_autoindex_{name}_1' for name in TABLES[1:]}
+        if FENCE_TABLE in expected:
+            indexes.add(f'sqlite_autoindex_{FENCE_TABLE}_1')
         seen, actual_indexes = set(), set()
         for kind, name, table, sql in db.execute('SELECT type,name,tbl_name,sql FROM sqlite_master'):
             if table not in expected:
@@ -282,8 +290,33 @@ class ReviewMetadataStore:
                 # trusted_schema does not stop a plain-SQL trigger updating a
                 # legacy task. No user trigger/index may extend this domain.
                 fail()
-        if seen != set(TABLES) or actual_indexes != indexes:
+        if seen != set(expected) or actual_indexes != indexes:
             fail()
+
+    def _fenced_schema(self, db):
+        return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (FENCE_TABLE,)).fetchone() is not None
+
+    def _enable_head_fences(self, db):
+        if not self._fenced_schema(db):
+            db.execute(FENCE_SCHEMA)
+        self._schema(db)
+
+    def _head_fence(self, db, binding):
+        if not self._fenced_schema(db):
+            return None
+        row = db.execute('SELECT task_ref,data,mac FROM rm_head_fences WHERE task_ref=?', (binding['task_ref'],)).fetchone()
+        if row is None:
+            return None
+        value = self._decode('head-fence', row[1], row[2])
+        if (row[0] != binding['task_ref'] or value.get('task_ref') != binding['task_ref']
+                or value.get('binding') != self._task_binding(binding)
+                or value.get('contract') != 'task-security-paged-review-v1'):
+            fail()
+        return value
+
+    def _standalone(self, db, binding):
+        if self._head_fence(db, binding) is not None:
+            fail('HEAD_BOUND')
 
     @contextmanager
     def _db(self, *, write=False, create=False):
@@ -330,7 +363,7 @@ class ReviewMetadataStore:
                 db.execute('PRAGMA query_only=ON')
                 db.execute('BEGIN')
             tables = {row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'rm_%'")}
-            if tables != set(TABLES):
+            if tables not in (set(TABLES), {*TABLES, FENCE_TABLE}):
                 if tables or self.marker.exists() or not create or not write:
                     fail()
                 self._initialize(db)
@@ -587,7 +620,16 @@ class ReviewMetadataStore:
         if any(ledger['spent'][k] + charge[k] > ledger['limits'][k] for k in CATEGORIES):
             fail('WAITING_CAPACITY')
 
-    def _finish(self, db, binding, ledger, value, request_id, request_hash, charge):
+    def _save_receipt(self, db, binding, request_id, request_hash, result):
+        receipt = dict(task_ref=binding['task_ref'], request_id=request_id,
+                       binding=self._task_binding(binding), request_hash=request_hash, result=result)
+        raw = encode(receipt)
+        if len(raw) > 16384:
+            fail('PAGE_BUDGET')
+        db.execute('INSERT INTO rm_receipts VALUES(?,?,?,?)',
+                   (binding['task_ref'], request_id, raw, self._mac('receipt', receipt)))
+
+    def _finish(self, db, binding, ledger, value, request_id, request_hash, charge, *, receipt=True):
         ledger = dict(ledger, generation=ledger['generation'] + 1,
                       spent={k: ledger['spent'][k] + charge[k] for k in CATEGORIES})
         if any(ledger['spent'][k] > ledger['limits'][k] for k in CATEGORIES):
@@ -597,10 +639,8 @@ class ReviewMetadataStore:
         db.execute('INSERT OR REPLACE INTO rm_ledgers VALUES(?,?,?,?)',
                    (binding['task_ref'], ledger['generation'], encode(ledger), self._mac('ledger', ledger)))
         result = self._head(value, ledger)
-        receipt = dict(task_ref=binding['task_ref'], request_id=request_id,
-                       binding=self._task_binding(binding), request_hash=request_hash, result=result)
-        db.execute('INSERT INTO rm_receipts VALUES(?,?,?,?)',
-                   (binding['task_ref'], request_id, encode(receipt), self._mac('receipt', receipt)))
+        if receipt:
+            self._save_receipt(db, binding, request_id, request_hash, result)
         return result
 
     def create(self, binding, name, *, limits, request_id, expected_generation=0):
@@ -609,6 +649,7 @@ class ReviewMetadataStore:
             fail('INVALID')
         request_hash = self._request('create', binding, request_id, dict(name=name, limits=limits), ZERO)
         with self._db(write=True, create=True) as db:
+            self._standalone(db, binding)
             # Verify task owner/representation even for a receipt replay.
             ledger = self._ledger(db, binding, optional=True)
             receipt = self._receipt(db, binding, request_id, request_hash)
@@ -631,6 +672,7 @@ class ReviewMetadataStore:
         frozen = self._freeze_items(items)
         request_hash = self._request('append', binding, request_id, dict(ref=ref), charge, frozen)
         with self._db(write=True) as db:
+            self._standalone(db, binding)
             ledger = self._ledger(db, binding)
             value = self._collection(db, ref, binding)
             receipt = self._receipt(db, binding, request_id, request_hash)
@@ -640,27 +682,7 @@ class ReviewMetadataStore:
             if value['state'] != 'STAGING':
                 fail('INVALID')
             self._validate(db, value, full=False)
-            batch, size = [], 2
-
-            def write_page():
-                page = dict(ref=ref, page_seq=value['page_count'] + 1, first_item=value['item_count'],
-                            item_count=len(batch), previous_digest=value['tail_digest'], items=batch)
-                raw = encode(page)
-                hashed = hashlib.sha256(raw).hexdigest()
-                db.execute('INSERT INTO rm_pages VALUES(?,?,?,?,?,?,?,?)',
-                    (ref, page['page_seq'], page['first_item'], len(batch), page['previous_digest'],
-                     hashed, raw, self._mac('page', page)))
-                value.update(page_count=page['page_seq'], item_count=value['item_count'] + len(batch), tail_digest=hashed)
-
-            for raw in frozen:
-                extra = len(raw) + bool(batch)
-                if batch and (len(batch) == self.budget.page_items or size + extra > self.budget.page_bytes):
-                    write_page()
-                    batch, size, extra = [], 2, len(raw)
-                # Freeze caller-owned values. At most this one page is copied.
-                batch.append(json.loads(raw))
-                size += extra
-            write_page()
+            self._append_pages(db, value, frozen)
             return self._finish(db, binding, ledger, value, request_id, request_hash, charge)
 
     def seal(self, ref, binding, *, expected_generation, expected_items, request_id, charge=None):
@@ -670,6 +692,7 @@ class ReviewMetadataStore:
             fail('INVALID')
         request_hash = self._request('seal', binding, request_id, dict(ref=ref, expected_items=expected_items), charge)
         with self._db(write=True) as db:
+            self._standalone(db, binding)
             ledger = self._ledger(db, binding)
             value = self._collection(db, ref, binding)
             receipt = self._receipt(db, binding, request_id, request_hash)
@@ -681,6 +704,29 @@ class ReviewMetadataStore:
             self._validate(db, value, full=True)
             value['state'] = 'SEALED'
             return self._finish(db, binding, ledger, value, request_id, request_hash, charge)
+
+    def _append_pages(self, db, value, frozen):
+        batch, size, ref = [], 2, value['ref']
+
+        def write_page():
+            page = dict(ref=ref, page_seq=value['page_count'] + 1, first_item=value['item_count'],
+                        item_count=len(batch), previous_digest=value['tail_digest'], items=batch)
+            raw = encode(page)
+            hashed = hashlib.sha256(raw).hexdigest()
+            db.execute('INSERT INTO rm_pages VALUES(?,?,?,?,?,?,?,?)',
+                (ref, page['page_seq'], page['first_item'], len(batch), page['previous_digest'],
+                 hashed, raw, self._mac('page', page)))
+            value.update(page_count=page['page_seq'], item_count=value['item_count'] + len(batch), tail_digest=hashed)
+
+        for raw in frozen:
+            extra = len(raw) + bool(batch)
+            if batch and (len(batch) == self.budget.page_items or size + extra > self.budget.page_bytes):
+                write_page()
+                batch, size, extra = [], 2, len(raw)
+            batch.append(json.loads(raw))
+            size += extra
+        if batch:
+            write_page()
 
 
 class _ReviewMetadataReader:
