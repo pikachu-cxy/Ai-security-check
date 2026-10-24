@@ -11,6 +11,8 @@ from summary_fixtures import sample, snapshot, SECRET  # noqa: F401
 from test_task_fix import LocalProvider
 from test_task_triage import task
 from security_runtime.scanners import ScannerRegistry
+from security_runtime.security_summary import SecuritySummaryService
+from security_runtime.finding_feedback import FindingFeedbackService
 
 
 def services(sample):
@@ -119,3 +121,52 @@ def test_missing_target_with_registered_rows_keeps_original_risk_and_no_attempt_
     assert result['risk_ledger_recording']['unverified_current'] == 1
     assert provider.calls == [] and ledger.read() == original
     assert all(row['status'] == 'OPEN' for row in ledger.read().values())
+
+
+def test_verified_repair_is_visible_in_readonly_history_and_keeps_raw_findings(sample):
+    root, hooks, provider, fixer, journal = services(sample)
+    reference = task(sample)['task_ref']
+    original = sample[2].get_scan(sample[1].scan_id)
+    checked = fixer.verify(reference, root)
+    assert checked['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    before = snapshot(root)
+    summary = SecuritySummaryService(sample[2]).get(root, sample[1].scan_id, details=True)
+    group = next(row for row in summary['tasks'] if row['task_ref'] == reference)
+    assert group['active_finding_count'] == 0
+    assert group['handling_counts']['resolved'] == 2
+    assert all(row['false_positive_review']['handling_label'] == '已修复' for row in group['members'])
+    assert all(row['task_ref'] != reference for row in summary['recommended_tasks'])
+    assert summary['risk_handling']['resolved'] == 2
+    status = FindingFeedbackService(sample[2], root).status(sample[1].scan_id, sample[1].findings[0].id)
+    assert status['verification']['current'] and '复查确认修复' in status['message']
+    assert sample[2].get_scan(sample[1].scan_id) == original
+    assert snapshot(root) == before and provider.calls == [('App.java',)]
+
+
+@pytest.mark.parametrize('change', ['source', 'config', 'missing'])
+def test_changed_verification_inputs_do_not_keep_showing_resolved(sample, change):
+    root, hooks, provider, fixer, journal = services(sample)
+    reference = task(sample)['task_ref']
+    assert fixer.verify(reference, root)['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    if change == 'source':
+        (root / 'App.java').write_text('class App { boolean changed = true; }\n')
+    elif change == 'config':
+        (root / '.semgrepignore').write_text('App.java\n')
+    else:
+        (root / 'App.java').unlink()
+    summary = SecuritySummaryService(sample[2]).get(root, sample[1].scan_id, details=True)
+    group = next(row for row in summary['tasks'] if row['task_ref'] == reference)
+    assert group['handling_counts']['resolved'] == 0
+    assert group['active_finding_count'] == 2
+
+
+def test_new_failed_recheck_supersedes_old_success_in_history(sample):
+    root, hooks, provider, fixer, journal = services(sample)
+    reference = task(sample)['task_ref']
+    assert fixer.verify(reference, root)['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
+    provider.status = 'FAILED'
+    assert fixer.verify(reference, root)['verification_status'] == 'INCONCLUSIVE'
+    data = journal.presentations(sample[1].scan_id)
+    assert all(row['verification_status'] == 'INCONCLUSIVE' for row in data.values())
+    summary = SecuritySummaryService(sample[2]).get(root, sample[1].scan_id, details=True)
+    assert summary['risk_handling']['resolved'] == 0

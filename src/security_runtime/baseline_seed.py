@@ -163,10 +163,19 @@ class WorkspaceBaselineSeeds:
         """
         if self.coordinator is None:
             return None
-        core = self.coordinator
+        return self._session_snapshot(self.coordinator, root, session_id, host)
+
+    @staticmethod
+    def _session_snapshot(core, root, session_id, host):
         if core.store.directory.absolute().is_relative_to(root):
             raise ValueError('Baseline state must be outside workspace')
-        previous, _ = core.store.load(core.store.path(root, host, session_id))
+        previous, corrupt = core.store.load(core.store.path(root, host, session_id))
+        if corrupt:
+            raise BaselinePreparationError('BASELINE_HISTORY_UNAVAILABLE')
+        if previous is not None and previous.get('schema_version') != 'hook-v1':
+            # A product observation has no scanner facts or before-edit
+            # authority. Do not return it as a seed or overwrite it on retry.
+            raise BaselinePreparationError('BASELINE_COVERAGE_INSUFFICIENT')
         if previous and (previous['workspace_id'], previous['host'], previous['session_id']) == (
                 identity(os.path.normcase(str(root))), host, identity(session_id)):
             return previous
@@ -180,7 +189,7 @@ class WorkspaceBaselineSeeds:
         if core.store.directory.absolute().is_relative_to(root):
             raise ValueError('Baseline state must be outside workspace')
         if session_id is not None:
-            previous = self.existing_session(root, session_id, host=host)
+            previous = self._session_snapshot(core, root, session_id, host)
             if previous is not None:
                 return previous
         def inventory(key):
@@ -217,7 +226,7 @@ class WorkspaceBaselineSeeds:
                 raise BaselinePreparationError('BASELINE_BUSY')
             key = core.store.key(root)
             if session_id is not None:
-                previous = self.existing_session(root, session_id, host=host)
+                previous = self._session_snapshot(core, root, session_id, host)
                 if previous is not None:
                     return previous
             pending = core.store.pending_activity(root, host, session_id)
@@ -263,7 +272,7 @@ class WorkspaceBaselineSeeds:
                 if not locked:
                     raise BaselinePreparationError('BASELINE_BUSY')
                 if session_id is not None:
-                    previous = self.existing_session(root, session_id, host=host)
+                    previous = self._session_snapshot(core, root, session_id, host)
                     if previous is not None:
                         outcome = 'STALE'
                         return previous

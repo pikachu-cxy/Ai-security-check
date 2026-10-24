@@ -270,7 +270,8 @@ class SecuritySummaryService:
                                 'false_positive_review': {key: review.get(key) for key in
                                     ('state', 'folded', 'agent_review_current', 'message',
                                      'handling_status', 'handling_label', 'handling_source',
-                                     'reminder_suppressed', 'reassessment_required', 'disposition')},
+                                     'reminder_suppressed', 'reassessment_required', 'disposition',
+                                     'verification', 'verification_read_status')},
                                 'ai_review': safe(row['triage']),
                                 'advisory': safe({key: md.get(key) for key in ('canonical_vulnerability_id', 'vulnerability_id',
                                             'aliases', 'affected_ranges', 'fixed_versions',
@@ -289,7 +290,8 @@ class SecuritySummaryService:
                                                                       'automatic_execution': False},
                           'finding_count': len(ids), 'locations': sorted(set(f"{m['file']}:{m['line']}" for m in members)),
                           'folded_finding_count': sum(feedback.get(fid, {}).get('folded', False) for fid in ids),
-                          'active_finding_count': sum(not feedback.get(fid, {}).get('folded', False) for fid in ids),
+                          'active_finding_count': sum(not feedback.get(fid, {}).get('folded', False)
+                              and feedback.get(fid, {}).get('handling_status') != 'RESOLVED' for fid in ids),
                           'handling_counts': handling_counts({fid:feedback.get(fid, {}) for fid in ids}),
                           'priority_counts': priorities, 'review_states': states,
                           'highest_severity': max((m['severity'] for m in members), key=lambda s: SEVERITIES.get(s, 0)),

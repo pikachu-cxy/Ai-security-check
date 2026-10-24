@@ -412,7 +412,18 @@ class FindingFeedbackService:
         return self._status(scan_id, scan, finding, row,
                             self.store.finding_review_history(self.workspace), include_history)
 
-    def _status(self, scan_id, scan, finding, row, records, include_history=False, source_scans=None):
+    def _verification_presentations(self, scan_id):
+        from .hook_state import HookStateStore
+        from .tasks.verification_journal import TaskVerificationJournal
+        try:
+            journal = TaskVerificationJournal(HookStateStore(self.store.path.parent / 'hooks'),
+                                              Path(self.workspace))
+            return journal.presentations(scan_id), 'AVAILABLE'
+        except (OSError, ValueError):
+            return {}, 'UNAVAILABLE'
+
+    def _status(self, scan_id, scan, finding, row, records, include_history=False, source_scans=None,
+                verifications=None):
         scope, disposition = None, None
         try:
             scope = self._scope(scan_id, finding)
@@ -547,6 +558,15 @@ class FindingFeedbackService:
         result['handling_label'] = {'DEFERRED': '已暂缓', 'EXCLUDED': '已排除', 'PENDING': '待处理'}[result['handling_status']]
         result['handling_source'] = ('USER_DECISION' if human_suppressed else 'USER_RESTORE' if restored
                                     else 'AI_REVIEW_EXCLUSION' if folded else None)
+        values, availability = (self._verification_presentations(scan_id)
+                                if verifications is None else verifications)
+        verification = values.get(finding['id'])
+        result['verification_read_status'] = availability
+        result['verification'] = verification
+        if (verification and verification['current'] and
+                verification['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'):
+            result.update(handling_status='RESOLVED', handling_label='已修复',
+                handling_source='ORIGINATING_SCANNER_RECHECK', reminder_suppressed=True)
         from .reply_adapters import handling_facts
         from .reply_plan import plan_reply
         from .reply_render import render_reply
@@ -568,8 +588,10 @@ class FindingFeedbackService:
         for record in records:
             grouped.setdefault(record['finding_id'], []).append(record)
         source_scans = {scan_id: scan}
+        verifications = self._verification_presentations(scan_id)
         return {finding['id']: self._status(scan_id, scan, finding, row,
-                                          grouped.get(row['finding_id'], []), source_scans=source_scans)
+                                          grouped.get(row['finding_id'], []), source_scans=source_scans,
+                                          verifications=verifications)
                 for finding in scan['findings'] for row in (quality_finding(finding),)}
 
     def hook_projection(self, scan_id, limit=20):

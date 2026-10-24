@@ -128,8 +128,9 @@ class MCPRegistry:
                     try:
                         return await original(name, arguments, *args, **kwargs)
                     except Exception as exc:
-                        from .tasks.diagnostics import capacity_failure
-                        failure = unsupported_protocol_failure(exc) or capacity_failure(exc)
+                        from .tasks.diagnostics import capacity_failure, runtime_compatibility_failure
+                        failure = (unsupported_protocol_failure(exc) or capacity_failure(exc)
+                                   or runtime_compatibility_failure(exc))
                         if failure is None:
                             raise
                 convert = kwargs.get('convert_result', args[1] if len(args) > 1 else False)

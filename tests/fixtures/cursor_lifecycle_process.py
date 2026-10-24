@@ -10,6 +10,7 @@ from test_cursor_host_adapter import payload
 from security_runtime.cursor_hook import CursorBindings, handle_cursor_event
 from security_runtime.hook_runtime import HookCoordinator, capture_snapshot
 from security_runtime.hook_state import HookStateStore
+from security_runtime.product_epoch_service import ProductEpochService
 from security_runtime.recent_hooks import RecentHookStore
 
 root, directory, mode = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
@@ -35,17 +36,15 @@ if mode == 'hold':
         assert sys.stdin.readline().strip() == 'release'
     raise SystemExit(0)
 
-first = True
-def capture(root, key):
-    global first
-    if mode == 'capture' and first:
-        first = False
-        print('CAPTURE_PENDING', flush=True)
-        assert sys.stdin.readline().strip() == 'release'
-    return capture_snapshot(root, key)
+class OrderedEpochService(ProductEpochService):
+    def step(self, owner):
+        if mode == 'capture':
+            print('CAPTURE_PENDING', flush=True)
+            assert sys.stdin.readline().strip() == 'release'
+        return super().step(owner)
 
 runtime = FakeRuntime()
-core = HookCoordinator(runtime, store, snapshot_capture=capture)
+core = HookCoordinator(runtime, store, product_epoch_factory=lambda hooks,root:OrderedEpochService(hooks,root))
 event = 'sessionStart' if mode in {'publish','capture'} else 'afterFileEdit'
 _, result = handle_cursor_event(payload(root, event), core=core,
     bindings=CursorBindings(directory/'bindings'), project_dir=str(root),

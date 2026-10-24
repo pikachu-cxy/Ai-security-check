@@ -13,6 +13,8 @@ import time
 from ..closeout_state import digest, encode, readonly_uri
 from ..hook_state import atomic_bytes, no_links
 from ..task_review.protocol import require_record_protocol, is_v3_record
+from .snapshot_page_guard import guarded_read, page_guard, guard_held
+from .snapshot_pages import GC_CONTRACT, batched, managed
 
 CONTRACT = 'task-security-v1'
 REF = re.compile(r'ts1-[a-f0-9]{32}')
@@ -51,23 +53,37 @@ class TaskSecurityStore:
             raise ValueError('Task key cannot be verified')
         return key
 
-    def decode(self, row):
+    def head(self, row):
+        """Authenticate the control record without opening its source pages."""
         if not row:
             return None
         raw, mac = row
         if len(raw.encode()) > MAX_RECORD_BYTES:
             raise ValueError('Task record budget exceeded')
         value = json.loads(raw)
-        if (value.get('contract') != CONTRACT or not REF.fullmatch(value.get('task_ref', ''))
+        if (value.get('contract') not in {CONTRACT, GC_CONTRACT} or not REF.fullmatch(value.get('task_ref', ''))
                 or value.get('workspace') != str(self.root)
                 or not hmac.compare_digest(mac, digest(self.key(), value))):
             raise ValueError('Task state cannot be verified')
+        if value.get('contract') == GC_CONTRACT and not managed(value):
+            raise ValueError('Snapshot collection contract mismatch')
+        if managed(value) and not guard_held(self.path.parent):
+            raise ValueError('Snapshot collection guard unavailable')
         return value
+
+    @guarded_read
+    def decode(self, row):
+        value = self.head(row)
+        if value is None:
+            return None
+        from .snapshot_pages import unpack
+        return unpack(self, value)
 
     def expired(self, record):
         from .lifecycle import expires_at
         return self.now() > expires_at(record, self.hooks, self.root, now=self.now)
 
+    @guarded_read
     def records(self, *, active=False):
         """Bounded signed inventory; never selects a newest foreign task."""
         no_links(self.path)
@@ -82,6 +98,7 @@ class TaskSecurityStore:
         records=[self.decode(row) for row in rows]
         return [v for v in records if v and not self.expired(v) and (not active or v['phase'] in ACTIVE)]
 
+    @guarded_read
     def get(self, ref=None, *, active=False, task_key=None, owner=None):
         no_links(self.path)
         if ref is not None and (not isinstance(ref, str) or not REF.fullmatch(ref)):
@@ -153,6 +170,15 @@ class TaskSecurityStore:
             for field in ('baseline', 'end'):
                 snapshot = retained.get(field)
                 if isinstance(snapshot, dict):
+                    if batched(value):
+                        from .snapshot_pages import MAPS, LISTS, POINTER
+                        # Ledger basis and original risk anchors depend on end
+                        # hashes. Retain those facts, without source references.
+                        end_hashes = snapshot.get('hashes', {}) if field == 'end' else {}
+                        for key in (*MAPS, *LISTS, POINTER):
+                            snapshot.pop(key, None)
+                        # A retained ledger is not a resumable source snapshot.
+                        snapshot.update(hashes=end_hashes, inventory=[], preimages={}, texts={})
                     for body in ('texts', 'semantic_proofs', 'text_truncations'):
                         snapshot.pop(body, None)
             retained.pop('packet', None)
@@ -163,6 +189,7 @@ class TaskSecurityStore:
             db.execute('INSERT INTO retained_task_projections VALUES(?,?,?,?)',
                        (ref, retained_raw.decode(), digest(self.key(), retained), self.now()))
 
+    @guarded_read
     def pending_projections(self, limit=8):
         """Read authenticated expired obligations without reviving tasks or evidence."""
         if type(limit) is not int or not 1 <= limit <= MAX_RETAINED_PROJECTIONS:
@@ -188,6 +215,7 @@ class TaskSecurityStore:
                 if len(selected) == limit: break
         return selected
 
+    @guarded_read
     def ack_retained_projection(self, candidate):
         """Acknowledge only the original signed obligation; no task is rewritten."""
         from .projection import status
@@ -213,6 +241,19 @@ class TaskSecurityStore:
     def save(self, value, *, new=False, session_idle=False):
         if new:
             require_record_protocol(value)
+        if managed(value):
+            from .snapshot_gc import collect_pages
+            # No lock upgrade: collection completes before shared publication.
+            collect_pages(self, prune=True)
+        with page_guard(self.path.parent, create=managed(value)):
+            return self._save(value, new=new, session_idle=session_idle)
+
+    def _save(self, value, *, new=False, session_idle=False):
+        if new:
+            require_record_protocol(value)
+        # Object/page I/O completes before taking the task/control write lock.
+        from .snapshot_pages import pack
+        packed = pack(self, value)
         no_links(self.path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(sqlite3.connect(self.path, timeout=5)) as db, db:
@@ -221,7 +262,9 @@ class TaskSecurityStore:
             db.execute('BEGIN IMMEDIATE')
             self._retain_pending(db)
             for expired_ref, raw, mac in db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?', (self.now()-TTL,)).fetchall():
-                if self.expired(self.decode((raw, mac))):
+                expired_record = self.decode((raw, mac))
+                if self.expired(expired_record):
+                    self.expire_queued_task(expired_record)
                     db.execute('DELETE FROM security_tasks WHERE ref=?', (expired_ref,))
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
@@ -252,11 +295,15 @@ class TaskSecurityStore:
                 value.pop('closed_at',None)
             else: value.setdefault('closed_at',self.now())
             value = persistent_record(value)
-            raw = encode(value)
+            stored = dict(value)
+            for field in ('baseline', 'end'):
+                if field in packed:
+                    stored[field] = packed[field]
+            raw = encode(stored)
             if len(raw) > MAX_RECORD_BYTES:
                 raise ValueError('Task record budget exceeded')
             db.execute('INSERT OR REPLACE INTO security_tasks VALUES(?,?,?,?,?,?)',
-                       (value['task_ref'], value['task_key'], value['phase'], value['created_at'], raw.decode(), digest(self.key(), value)))
+                       (value['task_ref'], value['task_key'], value['phase'], value['created_at'], raw.decode(), digest(self.key(), stored)))
         try:
             from ..product_metrics import task_record_observed
             task_record_observed(value)
@@ -267,6 +314,12 @@ class TaskSecurityStore:
             ActivityStore(self.hooks, self.root, now=self.now).touch(value['task_ref'], value['activity_at'], value['phase'])
         return value
 
+    def expire_queued_task(self, record):
+        if managed(record):
+            from .closeout_queue import CloseoutQueue
+            CloseoutQueue(self.hooks, self.root, now=self.now).expire_for_task(record)
+
+    @guarded_read
     def for_scan(self, scan_id):
         """Bounded read-only migration lookup, retaining signed legacy facts."""
         no_links(self.path)

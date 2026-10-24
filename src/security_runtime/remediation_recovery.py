@@ -108,13 +108,20 @@ def _evidence(service, record, root, key, scan_id):
              'CONFIRMATION_RECOVERY_SOURCE_CHANGED')
     # A new host session may produce current evidence for the same workspace.
     # Never move the saved repair namespace to that session or import its grant.
-    hook_paths = hook_session_paths(service.hooks.workspace_directory(root))
+    directory = service.hooks.workspace_directory(root)
+    hook_paths = {path.name: path for path in hook_session_paths(directory)}
+    for path in hook_session_paths(directory/'scan-sessions'):
+        primary = hook_paths.get(path.name)
+        state, corrupt = service.hooks.load(primary) if primary is not None else (None, False)
+        _require(not corrupt, 'CONFIRMATION_RECOVERY_HOOK_STATE_INVALID')
+        if state is None or state.get('schema_version') == 'hook-product-epoch-v1':
+            hook_paths[path.name] = path
     _require(len(hook_paths) <= 64, 'CONFIRMATION_RECOVERY_HOOK_BUDGET_EXCEEDED')
     hook_matches = []
-    for hook_path in hook_paths:
+    for hook_path in hook_paths.values():
         hook, corrupt = service.hooks.load(hook_path)
         _require(not corrupt, 'CONFIRMATION_RECOVERY_HOOK_STATE_INVALID')
-        if hook is not None and hook['last_scan_id'] == scan_id:
+        if hook is not None and hook.get('schema_version') == 'hook-v1' and hook['last_scan_id'] == scan_id:
             hook_matches.append(hook)
     _require(len(hook_matches) == 1, 'CONFIRMATION_RECOVERY_HOOK_SCAN_NOT_CURRENT')
     hook = hook_matches[0]

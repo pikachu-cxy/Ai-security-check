@@ -19,6 +19,7 @@ from ..local_evidence import EvidenceUnavailable, WorkspaceReader, _relative, sa
 from ..diagnostics import evidence_text
 from ..source_redaction import VERSION
 from .security_state import CONTRACT, TaskSecurityStore
+from .snapshot_pages import GC_CONTRACT, GC_POLICY, batched
 from ..task_review.protocol import PROTOCOL_VERSION, validate_protocol, require_record_protocol, is_v3_record
 from .snapshot import SnapshotPolicy
 from .snapshot import collect_snapshot
@@ -159,7 +160,7 @@ def _inventory(root, ignored):
 
 
 def capture(root, *, known_paths=None, priority_paths=(), include_text=True, preimage_writer=None, raw_sink=None,
-            redaction_version=VERSION):
+            redaction_version=VERSION, batched_files=False):
     """Hash the actual workspace (including pre-existing dirty/new files).
 
     Returned task evidence uses the captured source policy. An optional private
@@ -170,7 +171,7 @@ def capture(root, *, known_paths=None, priority_paths=(), include_text=True, pre
     """
     ignored = IGNORED | {v.strip() for v in os.getenv('SECURITY_RUNTIME_EXCLUDE_DIRS', '').split(',') if v.strip()}
     inventory, dirty, complete, inventory_limits = _inventory(root, ignored)
-    policy = SnapshotPolicy(max_files=MAX_FILES, max_read_bytes=MAX_READ_BYTES,
+    policy = SnapshotPolicy(max_files=None if batched_files else MAX_FILES, max_read_bytes=MAX_READ_BYTES,
         max_inline_text_bytes=MAX_PREIMAGE_BYTES, max_inventory_paths=MAX_INVENTORY_PATHS,
         max_inventory_name_bytes=MAX_INVENTORY_NAME_BYTES)
     return collect_snapshot(root, inventory=inventory, dirty=dirty,
@@ -470,13 +471,17 @@ class TaskSecurityService:
         from ..task_workspaces import admit
         isolation = admit(root, owner, task_key, workspace_setup_ref)
         policy_record = {'check_policy': check_policy}
+        batched_files = check_policy == POLICY and _native_preparation is None
+        if batched_files:
+            policy_record['capture_policy'] = GC_POLICY
         from contextlib import nullcontext
         from .baseline_inputs import BaselineInputs, CONTRACT as ATTRIBUTION_CONTRACT
         original_inputs = None
         inputs = BaselineInputs(self.hooks, root, now=self.now)
         retain_inputs = check_policy == POLICY and _native_preparation is None
-        with self.preimages(root, policy_record).writer(ref) as writer, (inputs.writer(ref) if retain_inputs else nullcontext(None)) as raw_sink:
+        with self.preimages(root, policy_record).writer(ref, paged=batched_files) as writer, (inputs.writer(ref) if retain_inputs else nullcontext(None)) as raw_sink:
             baseline = capture(root, preimage_writer=writer,
+                batched_files=batched_files,
                 raw_sink=raw_sink,
                 priority_paths=tuple(_native_preparation['source_hashes']) if _native_preparation else ())
             if raw_sink is not None:
@@ -511,6 +516,8 @@ class TaskSecurityService:
                 writer=writer_identity() if _owner is None else None)
             if check_policy == POLICY:
                 record['check_policy'] = POLICY
+                if batched_files:
+                    record.update(contract=GC_CONTRACT, capture_policy=GC_POLICY)
                 if retain_inputs:
                     record.update(attribution_contract=ATTRIBUTION_CONTRACT, before_scan_inputs=original_inputs)
                 if background_closeout:
@@ -572,7 +579,8 @@ class TaskSecurityService:
             if revision != record['finished_hook_revision']:
                 return False
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
-                          priority_paths=record['end'].get('read_priority', ()), include_text=False)
+                          priority_paths=record['end'].get('read_priority', ()), include_text=False,
+                          batched_files=batched(record))
         if current.get('read_limitations', current['limitations']) != record['end'].get(
                 'read_limitations', record['end']['limitations']):
             return False
@@ -874,7 +882,8 @@ class TaskSecurityService:
                 record.update(phase='READY', static=dict(status='NOT_EXECUTED', coverage='UNKNOWN', findings=[], reason='TASK_STATIC_ATTEMPT_BUDGET'))
                 return self._view(self.store(root).save(record))
             eligible = sorted(set(v['path'] for v in changes if not _environment(v['path'])) | hook_paths)
-            scope = eligible[:MAX_STATIC_CHANGED]
+            scope = (eligible if batched(record)
+                     else eligible[:MAX_STATIC_CHANGED])
             exclusions = [v['path'] for v in changes if _environment(v['path']) or v['path'] not in scope]
             if exclusions:
                 record['limitations'].append({'reason': 'TASK_STATIC_SCOPE_EXCLUDED', 'count': len(exclusions), 'paths': exclusions[:MAX_CHANGED]})
@@ -1240,7 +1249,8 @@ class TaskSecurityService:
                 raise ValueError('Task completion revision is unavailable or stale')
         from ..task_review.results import bounded_history_result, history_freshness, seal_history_result
         current = capture(root, known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
-                          priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False)
+                          priority_paths=(record.get('end') or {}).get('read_priority', ()), include_text=False,
+                          batched_files=batched(record))
         revision = self._hook_inputs(root, record)[0] if record.get('finished_hook_revision') else None
         freshness = history_freshness(record, current, hook_revision=revision)
         feedback, static_feedback, handling_available = {}, {}, True
@@ -1361,7 +1371,9 @@ class TaskSecurityService:
             current=(record.get('end') or {}).get('capture_stats'))
         if record.get('attribution_contract'):
             result['risk_attribution_contract'] = record['attribution_contract']
-            result['task_baseline_ready'] = True
+            result['task_baseline_ready'] = (bool(record['baseline'].get('capture_stats', {}).get('hash_complete')
+                and record['baseline'].get('capture_stats', {}).get('body_complete'))
+                if batched(record) else True)
             result['before_scan_input_status'] = (record.get('before_scan_inputs') or {}).get('status', 'UNKNOWN')
         from .lifecycle import view_fields
         result.update(view_fields(self, record))

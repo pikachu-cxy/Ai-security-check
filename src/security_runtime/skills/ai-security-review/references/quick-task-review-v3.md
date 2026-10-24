@@ -29,7 +29,9 @@ After development call finish_security_task once. NO_CHANGES needs no model
 review or security paragraph. For actual changes call prepare_task_security_review
 with protocol_version=3. Historical tasks using an older protocol retain their
 records and limitations; this workflow does not execute or convert them. It can finish a
-never-finished ACTIVE task once; it does not restart stale or terminal work. Static zero alerts still require
+never-finished ACTIVE task once. Unfinished background work with changed sources
+can recover on the same task as described below; completed or cancelled work is
+not automatically restarted. Static zero alerts still require
 the bounded review below. Keep ordinary file-edit Hooks enabled. New tasks with
 check_policy=TASK_CLOSEOUT_V1 record bounded path hints during edits; they do not
 scan or hash the workspace per edit. Tasks without that policy retain their
@@ -92,6 +94,18 @@ cancel_task_closeout preserves the baseline. Older CALLER_RETRY tasks still repe
 finish on BUSY with the same reference. Reads and Stop never enqueue new work.
 Queued scanner bytes are private and bounded to 24 hours. Changes after submission
 do not replace those bytes; outdated results cannot certify current sources.
+For source-change STALE with next_action=prepare_task_security_review, continue
+that action on the ORIGINAL task/session without asking the user to continue.
+Explicit preparation queues a new END snapshot and static check against the
+unchanged original pre-edit baseline. Follow queue progress and prepare again;
+do not poll a terminal STALE record repeatedly. The same applies to changes
+between successful scanning and unfinished host review. Prior review evidence
+and decisions become history, while task-wide consumption stays cumulative;
+read and review the new version. Read-only status/history never dispatch recovery.
+Automatic source recovery is bounded to three refreshes; persistent changes,
+cancelled/finished tasks or changed execution identity retain a concrete gap
+instead of restarting indefinitely. This is not permission to reset budgets,
+replace a baseline, reopen completed work or create a new task after editing.
 Runtime restart resumes registered requests; user-login recovery requires an
 installed dispatcher startup entry. Do not claim it is enabled from capability alone.
 

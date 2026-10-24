@@ -30,6 +30,7 @@ from ..local_evidence import safe_source
 from ..source_redaction import VERSION, SUPPORTED_VERSIONS
 
 CONTRACT = 'task-preimage-v1'
+PAGED_CONTRACT = 'task-preimage-paged-v1'
 SOURCE = 'SANITIZED_WORKSPACE_BEFORE_TASK'
 RAW_SOURCE = 'WORKSPACE_SOURCE'
 REF = re.compile(r'ts1-[a-f0-9]{32}')
@@ -203,9 +204,11 @@ class TaskPreimageStore:
             raise
 
     @contextmanager
-    def writer(self, task_ref, *, redaction_version=VERSION):
+    def writer(self, task_ref, *, redaction_version=VERSION, paged=False):
         """Atomically collect one immutable batch; never recapture a task later."""
         task_ref = _task_ref(task_ref)
+        if type(paged) is not bool:
+            _fail('TASK_PREIMAGE_REPRESENTATION_UNSUPPORTED')
         if type(redaction_version) is not int or redaction_version not in SUPPORTED_VERSIONS:
             _fail('TASK_PREIMAGE_REPRESENTATION_UNSUPPORTED')
         db = None
@@ -223,10 +226,21 @@ class TaskPreimageStore:
                 _fail('TASK_PREIMAGE_TASK_COUNT_BUDGET')
             db.execute('INSERT INTO task_preimage_batches VALUES(?,?,?)', (task_ref, created, created+self.ttl))
             writer = _PreimageWriter(self, db, key, task_ref, created, redaction_version)
+            writer.paged = paged
+            if paged:
+                db.execute('CREATE TABLE IF NOT EXISTS task_preimage_seals '
+                           '(task_ref TEXT PRIMARY KEY, sealed INTEGER NOT NULL, mac TEXT NOT NULL)')
+                db.execute('DELETE FROM task_preimage_seals WHERE task_ref NOT IN '
+                           '(SELECT task_ref FROM task_preimage_batches)')
+                db.execute('INSERT INTO task_preimage_seals VALUES(?,0,?)',
+                           (task_ref, digest(key, dict(task_ref=task_ref, sealed=0))))
             yield writer
             if writer.closed:
                 _fail('TASK_PREIMAGE_STORE_UNAVAILABLE')
             self._paths()
+            if paged:
+                db.execute('UPDATE task_preimage_seals SET sealed=1,mac=? WHERE task_ref=?',
+                           (digest(key, dict(task_ref=task_ref, sealed=1)), task_ref))
             db.commit()
         except (sqlite3.Error, OSError):
             if db is not None:
@@ -297,7 +311,7 @@ class TaskPreimageStore:
             if len(encode(reference)) > MAX_REFERENCE_BYTES:
                 _fail('TASK_PREIMAGE_REFERENCE_UNVERIFIED')
             metadata = {k: v for k, v in reference.items() if k != 'mac'}
-            valid = (metadata['contract'] == CONTRACT and metadata['workspace_id'] == self.workspace_id
+            valid = (metadata['contract'] in {CONTRACT, PAGED_CONTRACT} and metadata['workspace_id'] == self.workspace_id
                 and metadata['task_ref'] == task_ref and metadata['path'] == path
                 and metadata['raw_sha256'] == expected_hash
                 and type(metadata['redaction_version']) is int and metadata['redaction_version'] in SUPPORTED_VERSIONS
@@ -332,6 +346,17 @@ class TaskPreimageStore:
             with closing(sqlite3.connect(readonly_uri(self.path), uri=True, timeout=2)) as db:
                 db.execute('PRAGMA query_only=ON')
                 db.execute('PRAGMA trusted_schema=OFF')
+                paged = metadata['contract'] == PAGED_CONTRACT
+                seals_exist = db.execute("SELECT 1 FROM sqlite_schema WHERE name='task_preimage_seals'").fetchone()
+                if paged and not seals_exist:
+                    _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
+                if seals_exist:
+                    seal = db.execute('SELECT sealed,mac FROM task_preimage_seals WHERE task_ref=?', (task_ref,)).fetchone()
+                    if paged and seal is None:
+                        _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
+                    if seal is not None and (seal[0] != 1 or not isinstance(seal[1], str)
+                            or not hmac.compare_digest(seal[1], digest(key, dict(task_ref=task_ref, sealed=1)))):
+                        _fail('TASK_PREIMAGE_SOURCE_UNAVAILABLE')
                 if db.execute("SELECT 1 FROM sqlite_schema WHERE name='task_preimages' AND type='table'").fetchone() is None:
                     # A first capture that rolled back leaves no committed
                     # schema or source; it is not a corrupt successful capture.
@@ -455,6 +480,7 @@ class _PreimageWriter:
         self.task_ref, self.created, self.closed = task_ref, created, False
         self.redaction_version = redaction_version
         self.references = {}
+        self.paged = False
         self.task_bytes = 0
         self.workspace_bytes = db.execute('SELECT coalesce(sum(length(body)),0) FROM task_preimage_blobs').fetchone()[0]
         self.proof_bytes = 0
@@ -463,6 +489,24 @@ class _PreimageWriter:
             'SELECT coalesce(sum(length(body)+length(CAST(metadata AS BLOB))+'
             'length(CAST(path AS BLOB))+length(mac)+?),0) FROM task_preimage_semantics',
             (ROW_FRAMING_BYTES,)).fetchone()[0]
+
+    def checkpoint(self):
+        """Commit a private page; its evidence stays unreadable until final seal.
+
+        A failed/interrupted capture retains its unsealed task tombstone. It is
+        never restarted from current workspace bytes under the old task ref.
+        """
+        if self.paged and not self.closed:
+            self.store._paths()
+            self.db.commit()
+            self.db.execute('BEGIN IMMEDIATE')
+            self.workspace_bytes = self.db.execute(
+                'SELECT coalesce(sum(length(body)),0) FROM task_preimage_blobs').fetchone()[0]
+            from .preimage_fingerprints import ROW_FRAMING_BYTES
+            self.workspace_proof_bytes = self.db.execute(
+                'SELECT coalesce(sum(length(body)+length(CAST(metadata AS BLOB))+'
+                'length(CAST(path AS BLOB))+length(mac)+?),0) FROM task_preimage_semantics',
+                (ROW_FRAMING_BYTES,)).fetchone()[0]
 
     def _prepare_source(self, path, raw_bytes):
         if self.closed:
@@ -516,7 +560,7 @@ class _PreimageWriter:
             if old['raw_sha256'] != raw_hash or old['body_sha256'] != _sha(body):
                 _fail('TASK_PREIMAGE_IMMUTABLE')
             return dict(old)
-        if len(self.references) >= MAX_TASK_FILES:
+        if not self.paged and len(self.references) >= MAX_TASK_FILES:
             _fail('TASK_PREIMAGE_FILE_COUNT_BUDGET')
         if self.task_bytes+len(body) > MAX_TASK_BYTES:
             _fail('TASK_PREIMAGE_TASK_BYTE_BUDGET')
@@ -528,7 +572,7 @@ class _PreimageWriter:
         added_bytes = 0 if shared else len(body)
         if self.workspace_bytes+added_bytes > MAX_WORKSPACE_BYTES:
             _fail('TASK_PREIMAGE_WORKSPACE_BYTE_BUDGET')
-        metadata = dict(contract=CONTRACT, workspace_id=self.store.workspace_id,
+        metadata = dict(contract=PAGED_CONTRACT if self.paged else CONTRACT, workspace_id=self.store.workspace_id,
             task_ref=self.task_ref, path=path, raw_sha256=raw_hash,
             body_sha256=_sha(body), body_bytes=len(body), line_count=len(sanitized_lines),
             source=RAW_SOURCE if self.redaction_version == VERSION else SOURCE,

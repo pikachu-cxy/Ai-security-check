@@ -599,8 +599,10 @@ class ToolManager:
                     # this by the current overall preparation budget.
                     macos_semgrep = sys.platform == 'darwin' and tool_id == 'semgrep'
                     timeout = (90 if initial_install else 30) if macos_semgrep else 8
-                    proc = run_process([str(path.resolve()), "--version"], timeout=timeout, max_output=16_000,
-                                       env=environment)
+                    from .engine_environment import engine_environment
+                    with engine_environment(tool_id, environment) as probe_environment:
+                        proc = run_process([str(path.resolve()), "--version"], timeout=timeout, max_output=16_000,
+                                           env=probe_environment)
             if proc.returncode:
                 lower = proc.stderr.lower()
                 code = ('COMPONENT_PERMISSION_DENIED' if any(marker in lower for marker in

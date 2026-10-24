@@ -102,14 +102,27 @@ def test_read_only_valid_claims_skip_scanner(connected, projects):
 
 
 @pytest.mark.parametrize('tool', ['Bash', 'apply_patch'])
-def test_valid_mutation_reaches_existing_coordinator(connected, projects, tool):
-    server, _, runtimes = connected
+@pytest.mark.parametrize('comparison', ['legacy', 'product'])
+def test_valid_mutation_reaches_existing_coordinator(connected, projects, tool, comparison):
+    server, pool, runtimes = connected
     root = projects[0]
+    if comparison == 'legacy':
+        from legacy_hook_helpers import legacy_comparison
+        core = pool.children[root][1]
+        core.store.path(root, 'codex', 's').unlink()
+        legacy_comparison(core.store, root, 'codex', 's')
     args = claims(root); args.update(tool_name=tool, tool_input={'command': 'Set-Content src/A.java fixture'})
     (root/'src/A.java').write_text('class A { int n; }\n')
     out = invoke(server, args)
     assert out['host_claim_status'] == 'VALID' and out['scanner_run'], out
-    assert out['workspace_mutation_observed'] and out['changed_file_count'] == 1
+    if comparison == 'legacy':
+        assert out['workspace_mutation_observed'] and out['changed_file_count'] == 1
+    else:
+        assert out['workspace_mutation_observed'] is None and out['changed_file_count'] is None
+        assert out['comparison_kind'] == 'PRODUCT_COMPARISON'
+        assert out['comparison_representation'] == 'HASH_ONLY'
+        assert out['product_epoch_scope_unknown'] is True
+        assert out['product_epoch_comparison_reason'] == 'EVENT_SCOPE_UNKNOWN'
     assert runtimes[root].calls[-1] == ('src/A.java',)
     assert 'remediation' not in out  # advisory-only fixture; no Deep capability used
 

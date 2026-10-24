@@ -7,6 +7,7 @@
 | `guidance/` | 指导、Skill 交付与风险呈现 |
 | `task_review/` | 任务复核协议、证据窗口、预算与交付 |
 | `tasks/` | 任务归属、快照、风险和恢复 |
+| `snapshots/` | L0契约/旧限制刻画，L1页存储，1001文件任务及Hook基线，worktree窄准入与全局只读绑定诊断；不代替10万规模或真实宿主验收 |
 | `distribution/` | wheel、独立包、安装引导、平台发布和恢复 |
 | `rules/`、`rule_program/`、`triage/`、`corpus/` | 规则、评估和合成语料 |
 | `performance/`、`benchmarks/` | 性能回归与测量依据 |

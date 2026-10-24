@@ -8,6 +8,8 @@ BASELINE_REASONS = frozenset({
     'BASELINE_SOURCE_CHANGED', 'BASELINE_COVERAGE_INSUFFICIENT',
     'BASELINE_STATE_PERMISSION_DENIED', 'BASELINE_GIT_SNAPSHOT_UNAVAILABLE',
     'BASELINE_CHECK_INCONCLUSIVE', 'INITIALIZATION_INCONCLUSIVE',
+    'BASELINE_CAPACITY_WAIT', 'BASELINE_PROGRESS_WAIT',
+    'BASELINE_HISTORY_UNAVAILABLE', 'BASELINE_PLATFORM_UNSUPPORTED',
 })
 
 
@@ -22,6 +24,15 @@ def baseline_failure_reason(error):
         return error.code
     if isinstance(error, PermissionError):
         return 'BASELINE_STATE_PERMISSION_DENIED'
+    product_reason = getattr(error, 'reason_code', None)
+    if product_reason in {'PRODUCT_EPOCH_HISTORY_UNAVAILABLE', 'PRODUCT_EPOCH_WAITING_CAPACITY',
+                          'PRODUCT_EPOCH_NO_PROGRESS',
+                          'PRODUCT_EPOCH_PLATFORM_UNSUPPORTED', 'PLATFORM_UNSUPPORTED'}:
+        return {'PRODUCT_EPOCH_HISTORY_UNAVAILABLE': 'BASELINE_HISTORY_UNAVAILABLE',
+                'PRODUCT_EPOCH_WAITING_CAPACITY': 'BASELINE_CAPACITY_WAIT',
+                'PRODUCT_EPOCH_NO_PROGRESS': 'BASELINE_PROGRESS_WAIT',
+                'PRODUCT_EPOCH_PLATFORM_UNSUPPORTED': 'BASELINE_PLATFORM_UNSUPPORTED',
+                'PLATFORM_UNSUPPORTED': 'BASELINE_PLATFORM_UNSUPPORTED'}[product_reason]
     # Older snapshot helpers retain their public ValueError contract. Match
     # only complete fixed messages; arbitrary exception text is never copied.
     return {

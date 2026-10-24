@@ -117,7 +117,7 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None,
                                      protocol_version: Literal[3] = PROTOCOL_VERSION) -> dict:
-        """Prepare protocol 3 only, preserving the original pre-edit baseline, source snapshot, evidence and cumulative allowances. Older protocols are unsupported and older tasks remain read-only. Page all required fragments, read actual before/current evidence and submit batches; resume only the same owner/snapshot/ledger. No scan reset or repair authority."""
+        """Prepare protocol 3 only, preserving the original pre-edit baseline and cumulative allowances. An unfinished background closeout with changed sources queues a bounded new end snapshot on the SAME task; follow queue progress, then prepare again. Old evidence stays historical and must not approve the new version. Reads never start recovery; cancelled, completed and incompatible work is not automatically restarted. Page all required fragments, read actual before/current evidence and submit batches. No budget reset or repair authority."""
         return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref,
             protocol_version=protocol_version)
 

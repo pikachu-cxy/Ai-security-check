@@ -168,7 +168,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
             item['triage']=row['triage']
             item['false_positive_review'] = feedback.status(scan_id, finding['id'])
             review = item['false_positive_review']
-            if ((review.get('disposition') or {}).get('reassessment_required')
+            if review.get('handling_status') != 'RESOLVED' and ((review.get('disposition') or {}).get('reassessment_required')
                     or not (review.get('agent_review_current') or review.get('technical_assessment_current')
                             or review.get('technical_false_positive')) and not review.get('folded')):
                 item['review_continuation'] = {'tool': 'prepare_finding_feedback',

@@ -48,6 +48,37 @@ class CloseoutService:
     def _workspace(self, root):
         return identity(os.path.normcase(str(root)))
 
+    def _session_cache(self, root, host, session, *, kind=None):
+        """Read scanner facts without substituting a product comparison state.
+
+        Persisted jobs select their original namespace explicitly. An older
+        job without that selector stays on its historical main-session cache.
+        """
+        path = self.hooks.path(root, host, session)
+        primary, corrupt = self.hooks.load(path)
+        if corrupt:
+            raise ValueError('Closeout session cannot be verified')
+        epoch = primary is not None and primary.get('schema_version') == 'hook-product-epoch-v1'
+        if kind is None:
+            kind = ('SCAN_SESSION' if epoch or primary is None and
+                    self.hooks.scan_path(root, host, session).exists() else 'LEGACY_SESSION')
+        if kind == 'SCAN_SESSION':
+            if primary is not None and not epoch:
+                raise ValueError('Closeout scanner cache namespace changed')
+            path = self.hooks.scan_path(root, host, session)
+            state, corrupt = self.hooks.load(path)
+            if corrupt:
+                raise ValueError('Closeout scanner cache cannot be verified')
+        elif kind == 'LEGACY_SESSION':
+            state = None if epoch else primary
+        else:
+            raise ValueError('Closeout scanner cache namespace cannot be verified')
+        if state is not None and (state.get('schema_version') != 'hook-v1' or
+                (state['workspace_id'], state['host'], state['session_id']) !=
+                (self._workspace(root), host, identity(session or 'default'))):
+            raise ValueError('Closeout scanner cache binding changed')
+        return path, state, kind
+
     def _source_revisions(self, root, scope):
         from .target import DEPENDENCIES
         # Match the Core provider's dependency context without reading .env or
@@ -95,9 +126,9 @@ class CloseoutService:
                 source='MANUAL_CLOSEOUT', pending=None):
         root = self._root(workspace)
         self.hooks.key(root)  # Preparation is a write; status reads never create keys.
-        families, deferred = {}, []
+        families, deferred, cache_kind = {}, [], None
         if host and session:
-            state, _ = self.hooks.load(self.hooks.path(root, host, session))
+            _, state, cache_kind = self._session_cache(root, host, session)
             if state:
                 families, _ = self.closures.overlay(root, state['families'], state['last_result']['delta'])
                 source_scan_id = state['last_scan_id']
@@ -167,6 +198,15 @@ class CloseoutService:
         details = dict(members=members, source=source, host=host, session=session,
                        session_key=session_key, pending_sequence=pending,
                        scope_exclusions=exclusions, excluded_recheck=excluded_recheck)
+        if cache_kind is not None:
+            details['scanner_cache_kind'] = cache_kind
+        if cache_kind == 'SCAN_SESSION':
+            primary, corrupt = self.hooks.load(self.hooks.path(root, host, session))
+            if corrupt:
+                raise ValueError('Closeout comparison state cannot be verified')
+            if primary is not None:
+                from .closeout_persistence import hook_revision
+                details['product_epoch_binding'] = hook_revision(self._read_key(root), primary)
         store = self._store(root)
         previous = store.latest(self._workspace(root), session_key) if session_key else None
         if previous and previous['status'] in {'PENDING', 'RUNNING', 'NEEDS_RETRY'}:
@@ -294,10 +334,13 @@ class CloseoutService:
             closure_version = self.closures.version(root)
             from .closeout_persistence import hook_revision
             details = job['details']
-            hook_state, corrupt = (self.hooks.load(self.hooks.path(root, details['host'], details['session']))
-                if details.get('session_key') else (None, False))
-            if corrupt:
-                raise ValueError('Closeout session cannot be verified')
+            hook_state = (self._session_cache(root, details['host'], details['session'],
+                kind=details.get('scanner_cache_kind', 'LEGACY_SESSION'))[1]
+                if details.get('session_key') else None)
+            if details.get('product_epoch_binding') is not None:
+                primary, corrupt = self.hooks.load(self.hooks.path(root, details['host'], details['session']))
+                if corrupt or hook_revision(self._read_key(root), primary) != details['product_epoch_binding']:
+                    raise ValueError('Closeout product comparison binding changed')
             hook_binding = hook_revision(self._read_key(root), hook_state)
             lease = attempts.claim('CLOSEOUT', ref, source_binding(dict(revision=revision, plan=plan)))
             if lease is None:

@@ -236,7 +236,9 @@ def handling_facts(result):
     }
     message = messages.get(result['state'], messages['UNREVIEWED'])
     source = result.get('handling_source')
-    if source == 'USER_DECISION':
+    if source == 'ORIGINATING_SCANNER_RECHECK' and result.get('handling_status') == 'RESOLVED':
+        message = '原问题已由原扫描规则复查确认修复；原始告警、技术评估和复查记录保留。'
+    elif source == 'USER_DECISION':
         message = ('已暂缓此项，本次不再重复追问；技术评估和原告警仍保留。'
                    if result['handling_status'] == 'DEFERRED' else
                    '已按你的决定排除此项，不再重复提醒；技术评估和原告警仍保留，可随时恢复。')

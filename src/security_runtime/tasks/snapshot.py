@@ -34,7 +34,7 @@ MAX_LIMITATIONS = 100
 class SnapshotPolicy:
     """A caller may lower supported capacities, never bypass the private store."""
 
-    max_files: int = task_preimages.MAX_TASK_FILES
+    max_files: int | None = task_preimages.MAX_TASK_FILES
     max_read_bytes: int = MAX_READ_BYTES
     max_inline_text_bytes: int = MAX_INLINE_TEXT_BYTES
     max_inventory_paths: int = MAX_INVENTORY_PATHS
@@ -52,6 +52,8 @@ class SnapshotPolicy:
             max_inventory_depth=MAX_INVENTORY_DEPTH)
         for key, maximum in ceilings.items():
             value = getattr(self, key)
+            if key == 'max_files' and value is None:
+                continue  # New batched tasks use byte/storage admission, not a prefix.
             if type(value) is not int or not 1 <= value <= maximum:
                 raise ValueError('Invalid task snapshot capacity: '+key)
 
@@ -123,8 +125,10 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
     hashes, texts, truncations, preimages, unavailable, line_counts = {}, {}, {}, {}, {}, {}
     attempts, accepted_bytes, reserved_failed_bytes, text_bytes, private_bytes = 0, 0, 0, 0, 0
     byte_limited = False
-    scheduled = selected[:policy.max_files]
+    scheduled = selected if policy.max_files is None else selected[:policy.max_files]
     for index, name in enumerate(scheduled):
+        if index and index % 256 == 0 and callable(getattr(preimage_writer, 'checkpoint', None)):
+            preimage_writer.checkpoint()
         used_bytes = accepted_bytes+reserved_failed_bytes
         remaining = policy.max_read_bytes-used_bytes
         if remaining <= 0:
@@ -186,7 +190,7 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
             unavailable[name] = 'SNAPSHOT_INLINE_TEXT_BYTE_BUDGET'
             limit('SNAPSHOT_INLINE_TEXT_BYTE_BUDGET', path=name,
                   limit=policy.max_inline_text_bytes, used=text_bytes, required=cost)
-    if len(selected) > policy.max_files and not byte_limited:
+    if policy.max_files is not None and len(selected) > policy.max_files and not byte_limited:
         limit('SNAPSHOT_READ_FILE_BUDGET', read=True, limit=policy.max_files,
               used=attempts, pending_count=len(selected)-attempts)
 

@@ -13,6 +13,7 @@ from security_runtime.hook_state import HookStateStore
 from security_runtime.recent_hooks import RecentHookStore, safe_fields
 from test_hook_runtime import repo, coordinator, FakeRuntime, row
 from test_cursor_host_adapter import payload
+from legacy_hook_helpers import legacy_comparison
 
 
 def ingress(repo, tmp_path, core, *, event='afterFileEdit', **fields):
@@ -41,6 +42,7 @@ def test_session_snapshot_only_duplicate_retains_pre_edit(repo,tmp_path):
 def test_digest_delta_once_same_bytes_revert_and_no_cooldown_loss(repo,tmp_path,event):
     runtime=FakeRuntime(); core=coordinator(tmp_path,runtime)
     (repo/'A.java').write_bytes(b'class A { int timeout=2300; }\r\n')
+    legacy_comparison(core.store,repo,'cursor','private-cursor-conversation')
     ingress(repo,tmp_path,core,event='sessionStart')
     (repo/'A.java').write_bytes(b'class A { int timeout=2400; }\r\n')
     fields={'command':'Set-Content A.java private-command'} if event=='afterShellExecution' else {}
@@ -84,14 +86,16 @@ def test_readonly_never_enters_reconciliation_or_scanner(repo,tmp_path):
 
 def test_failed_session_capture_lazy_activity_does_not_fake_attribution(repo,tmp_path):
     runtime=FakeRuntime([row(repo)]); core=coordinator(tmp_path,runtime)
-    core.snapshot_capture=lambda *a: (_ for _ in ()).throw(ValueError('private-source-error'))
+    from security_runtime.product_epoch_service import ProductEpochService
+    service=ProductEpochService(core.store,repo)
+    service.ensure=lambda owner: (_ for _ in ()).throw(ValueError('private-source-error'))
+    core.product_epoch_factory=lambda hooks,root:service
     result=ingress(repo,tmp_path,core,event='sessionStart')
-    assert result['reason']=='BASELINE_CAPTURE_FAILED' and result['baseline_publish_status']=='FAILED'
+    assert result['reason']=='PRODUCT_EPOCH_BINDING_UNAVAILABLE' and result['baseline_publish_status']=='FAILED'
     assert result['baseline_state_after']=='MISSING' and not runtime.calls
-    assert result['scan_attempt']['publication']=='NOT_PUBLISHED'
     from security_runtime.scan_attempt import ScanAttemptStore
-    assert ScanAttemptStore(core.store,repo).read()['lane']['state']=='FAILED'
-    core.snapshot_capture=capture_snapshot
+    assert ScanAttemptStore(core.store,repo).read()['lane'] is None
+    core.product_epoch_factory=None
     (repo/'A.java').write_text('changed')
     result=ingress(repo,tmp_path,core)
     assert result['snapshot_available'] is False and result['workspace_mutation_observed'] is None
@@ -101,6 +105,7 @@ def test_failed_session_capture_lazy_activity_does_not_fake_attribution(repo,tmp
 
 def test_comparison_baseline_is_not_empty_security_proof(repo,tmp_path):
     runtime=FakeRuntime([row(repo)]); core=coordinator(tmp_path,runtime)
+    legacy_comparison(core.store,repo,'cursor','private-cursor-conversation')
     ingress(repo,tmp_path,core,event='sessionStart')
     (repo/'A.java').write_text('changed')
     result=ingress(repo,tmp_path,core)
@@ -115,6 +120,7 @@ def test_comparison_baseline_is_not_empty_security_proof(repo,tmp_path):
 def test_multifile_scope_excludes_unchanged_pre_existing_dirty_file(repo,tmp_path):
     runtime=FakeRuntime(); core=coordinator(tmp_path,runtime)
     (repo/'preexisting.java').write_text('class Preexisting {}')
+    legacy_comparison(core.store,repo,'cursor','private-cursor-conversation')
     ingress(repo,tmp_path,core,event='sessionStart')
     (repo/'A.java').write_text('class A {}')
     (repo/'B.java').write_text('class B {}')
@@ -124,6 +130,7 @@ def test_multifile_scope_excludes_unchanged_pre_existing_dirty_file(repo,tmp_pat
 
 def test_failed_scan_keeps_pending_and_previous_snapshot_for_retry(repo,tmp_path):
     runtime=FakeRuntime(status='FAILED'); core=coordinator(tmp_path,runtime)
+    legacy_comparison(core.store,repo,'cursor','private-cursor-conversation')
     ingress(repo,tmp_path,core,event='sessionStart')
     path=core.store.path(repo,'cursor','private-cursor-conversation'); before=path.read_bytes()
     (repo/'A.java').write_text('changed')
@@ -164,23 +171,29 @@ def test_independent_process_session_activity_overlap(repo,tmp_path,mode):
         assert not began['result']['scanner_run'] and not began['scopes']
         assert not changed['result']['mutation_event_dropped']
         if mode=='publish':
-            assert changed['result']['scanner_run'] and changed['scopes']==[['A.java']]
+            assert changed['result']['scanner_run'] and changed['scopes']==[['A.java']], changed
             assert not changed['result']['pending_mutation']
             assert began['result']['baseline_publish_status']=='PUBLISHED'
-            assert changed['result']['workspace_mutation_observed'] and changed['result']['changed_file_count']==1
-            assert changed['result']['activity_waited_for_baseline']
+            assert changed['result']['product_epoch_changed_path_count']==1
+            assert changed['result']['product_epoch_comparison_reason']=='OBSERVED_HASH_DELTA'
+            assert changed['result']['delta']['new']==0
         else:
-            # Capture is now outside the OS state lock. A competing mutation
-            # sees the durable lane BUSY and keeps intent instead of waiting
-            # inside a long source transaction or executing a second scan.
-            assert changed['result']['reason']=='WORKSPACE_SCAN_ATTEMPT_BUSY'
-            assert not changed['result']['scanner_run'] and not changed['scopes']
-            assert changed['result']['pending_mutation']
-            assert began['result']['reason']=='BASELINE_ATTRIBUTION_UNAVAILABLE'
-            retried=result(child(repo,tmp_path,'activity'))
-            assert retried['result']['scanner_run'] and retried['scopes']==[['A.java']]
-            assert retried['result']['workspace_mutation_observed'] is None
-            assert retried['result']['delta']['new']==0 and not retried['result']['pending_mutation']
+            # The other process can continue the same durable observation.
+            # Its accepted product hash may be observed after this edit; it
+            # never becomes an earlier task/scanner before-image.
+            if not changed['result']['scanner_run']:
+                # The first observer may hold its bounded write step. That
+                # event remains pending instead of becoming a legacy before.
+                assert changed['result']['status']=='BASELINE_PENDING' and not changed['scopes']
+                assert changed['result']['pending_mutation']
+                reconciled=result(child(repo,tmp_path,'activity'))
+            else:
+                reconciled=changed
+            assert reconciled['result']['scanner_run'] and reconciled['scopes']==[['A.java']]
+            assert reconciled['result']['product_epoch_comparison_reason']=='OBSERVED_HASH_MATCH'
+            assert reconciled['result']['delta']['new']==0 and not reconciled['result']['pending_mutation']
+            assert began['result']['baseline_publish_status'] in {'PUBLISHED','RETAINED'}
+            assert began['result']['product_epoch_ref']==changed['result']['product_epoch_ref']
         duplicate=result(child(repo,tmp_path,'activity'))
         assert duplicate['result']['status']=='NO_CHANGE' and not duplicate['scopes']
     finally:
@@ -192,6 +205,7 @@ def test_independent_process_session_activity_overlap(repo,tmp_path,mode):
 def test_lock_timeout_is_persistent_pending_then_retry_not_lost(repo,tmp_path):
     runtime=FakeRuntime(); core=coordinator(tmp_path,runtime)
     core.store.directory=tmp_path/'hooks'
+    legacy_comparison(core.store,repo,'cursor','private-cursor-conversation')
     ingress(repo,tmp_path,core,event='sessionStart')
     # Worker shares exactly the same Core state directory, different OS process.
     original=core.store.lock

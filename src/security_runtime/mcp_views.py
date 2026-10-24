@@ -27,7 +27,7 @@ def finding_summary(item):
         **({'false_positive_review': {key: item['false_positive_review'].get(key) for key in
             ('state', 'folded', 'agent_review_current', 'message', 'assessment_source',
              'handling_status', 'handling_label', 'handling_source', 'reminder_suppressed',
-             'reassessment_required', 'disposition')}}
+             'reassessment_required', 'disposition', 'verification', 'verification_read_status')}}
             if 'false_positive_review' in item else {}),
         **({'local_evidence': item['local_evidence']} if 'local_evidence' in item else {}),
         **({'review_continuation': item['review_continuation']} if 'review_continuation' in item else {})}

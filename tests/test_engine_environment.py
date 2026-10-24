@@ -15,14 +15,49 @@ from security_runtime.engine_environment import engine_environment
 from security_runtime.engine_probe import probe_semgrep
 
 
-def test_other_engines_and_non_windows_keep_their_environment(monkeypatch):
+def test_other_engines_keep_their_environment(monkeypatch):
     original = {'TEMP': 'original', 'TMPDIR': 'original-other'}
     for engine in ('gitleaks', 'trivy', 'osv-scanner'):
         with engine_environment(engine, original) as child:
             assert child == original and child is not original
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX permissions; Windows scratch has native ACL tests')
+def test_semgrep_isolates_logs_and_copies_settings_without_writing_home(tmp_path, monkeypatch):
     monkeypatch.setattr(module, 'WINDOWS', False)
-    with engine_environment('semgrep', original) as child:
-        assert child == original and child is not original
+    home = tmp_path / 'readonly-home'
+    home.mkdir()
+    settings = home / 'settings.yml'
+    original_settings = b'has_shown_metrics_notification: true\nanonymous_user_id: fixture\n'
+    settings.write_bytes(original_settings)
+    settings.chmod(0o400)
+    home.chmod(0o500)
+    original = {'SEMGREP_SETTINGS_FILE': str(settings), 'SEMGREP_LOG_FILE': str(home / 'denied.log'),
+                'SECURITY_RUNTIME_ENGINE_TEMP_ROOT': str(tmp_path), 'TMPDIR': 'unchanged'}
+    saved = dict(original)
+    try:
+        with engine_environment('semgrep', original) as child:
+            directory = Path(child['XDG_CONFIG_HOME'])
+            assert directory.stat().st_mode & 0o777 == 0o700
+            assert Path(child['SEMGREP_SETTINGS_FILE']).read_bytes() == original_settings
+            Path(child['SEMGREP_SETTINGS_FILE']).write_text('child-only: true\n')
+            Path(child['SEMGREP_LOG_FILE']).write_text('private log\n')
+            assert child['TMPDIR'] == 'unchanged'
+        assert not directory.exists()
+        assert original == saved and settings.read_bytes() == original_settings
+        assert not (home / 'denied.log').exists()
+    finally:
+        home.chmod(0o700)
+        settings.chmod(0o600)
+
+
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX scratch; Windows has a native cleanup test')
+def test_semgrep_isolation_cleans_up_after_failure(tmp_path, monkeypatch):
+    monkeypatch.setattr(module, 'WINDOWS', False)
+    with pytest.raises(RuntimeError, match='fixture'):
+        with engine_environment('semgrep', {'SECURITY_RUNTIME_ENGINE_TEMP_ROOT': str(tmp_path)}) as child:
+            directory = Path(child['XDG_CONFIG_HOME'])
+            raise RuntimeError('fixture')
+    assert not directory.exists()
 
 
 @pytest.mark.skipif(os.name != 'nt', reason='Windows native scratch contract')
@@ -82,11 +117,11 @@ def test_cleanup_rejects_replaced_directory_without_removing_either(tmp_path):
                 module.windows_private_directory(directory)
         assert directory.is_dir() and moved.is_dir()
     finally:
-        # Both are empty, test-created directories; never recurse into a root.
+        # Only remove the two exact directories created by this test.
         if directory is not None and directory.exists():
             directory.rmdir()
         if moved is not None and moved.exists():
-            moved.rmdir()
+            shutil.rmtree(moved)
 
 
 @pytest.mark.skipif(os.name != 'nt', reason='Windows native scratch contract')

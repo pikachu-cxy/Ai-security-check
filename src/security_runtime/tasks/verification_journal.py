@@ -55,6 +55,42 @@ class TaskVerificationJournal:
                     if len(selected) == limit: break
             return selected
 
+    def presentations(self, scan_id):
+        """Read saved rechecks, never replay/ACK or infer absence from a scan.
+
+        The newest attempt for each original finding wins, even if incomplete.
+        An old success cannot override a later failure or changed source/config.
+        """
+        if not self.store.path.exists():
+            return {}
+        with self.store.connect() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='task_verifications'").fetchone():
+                return {}
+            refs = db.execute('SELECT id FROM task_verifications ORDER BY rowid LIMIT ?',
+                              (MAX_RECORDS + 1,)).fetchall()
+            if len(refs) > MAX_RECORDS:
+                raise ValueError('Verification journal capacity exceeded')
+            records = [self._load(db, row[0]) for row in refs]
+        records = [row for row in records if row['scan_id'] == scan_id]
+        records.sort(key=lambda row: (row.get('input_context') or {}).get('generation', -1))
+        latest = {}
+        for row in records:
+            for member in row['results']:
+                latest[member['finding_id']] = (row, member)
+        result, freshness = {}, {}
+        for finding_id, (row, member) in latest.items():
+            context = row.get('input_context') or {}
+            hashes = row.get('input_hashes')
+            if row['event_id'] not in freshness:
+                freshness[row['event_id']] = bool(row['state'] == 'APPLIED'
+                    and context.get('applicability') == 'CURRENT' and hashes
+                    and current_hashes(self.root, hashes) == hashes
+                    and current_hashes(self.root, row['before']) == row['before'])
+            result[finding_id] = dict(event_id=row['event_id'],
+                verification_status=member['verification_status'], current=freshness[row['event_id']],
+                persistence=row['state'], source='SAVED_ORIGINATING_SCANNER_RECHECK')
+        return result
+
     def append(self, *, task_ref, scan_id, members, results, before, expected_rows,
                closure_version, activity_epoch, input_hashes=None, input_context=None):
         if not self.hooks.lock_held(self.root): raise ValueError('Verification workspace lock required')

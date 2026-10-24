@@ -252,15 +252,17 @@ def test_project_a_b_bootstrap_without_setup_and_isolated_state(installed, proje
     finally: pool.close()
 
 
-def test_initialization_not_blocking_or_fake_ready(installed, projects, tmp_path):
+def test_initialization_not_blocking_or_fake_ready(installed, projects, tmp_path, monkeypatch):
     blocker = threading.Event(); started = threading.Event()
     def factory(root, directory, binding):
         core = HookCoordinator(complete_runtime(), HookStateStore(directory / 'hooks'))
-        original = core._session_baseline
-        def handle(*a, **k):
-            started.set(); assert blocker.wait(10); return original(*a, **k)
-        core._session_baseline = handle
         return _Child(binding).server, core
+    from security_runtime.product_epoch_service import ProductEpochService
+    original = ProductEpochService.step
+    def handle(current, *args, **kwargs):
+        started.set(); assert blocker.wait(10)
+        return original(current, *args, **kwargs)
+    monkeypatch.setattr(ProductEpochService, 'step', handle)
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         assert pool.bootstrap(projects[0], 's')['status'] == 'INITIALIZING'
@@ -448,11 +450,13 @@ def test_non_edit_tool_does_not_bootstrap(installed, projects, tmp_path, tool):
     finally: pool.close()
 
 
-def test_initialization_failure_not_ready_or_proof(installed, projects, tmp_path):
+def test_initialization_failure_not_ready_or_proof(installed, projects, tmp_path, monkeypatch):
     def factory(root, directory, binding):
         core = HookCoordinator(FakeRuntime(), HookStateStore(directory / 'hooks'))
-        core._session_baseline = lambda *a, **k: (_ for _ in ()).throw(RuntimeError('private source-like error'))
         return _Child(binding).server, core
+    from security_runtime.product_epoch_service import ProductEpochService
+    monkeypatch.setattr(ProductEpochService, 'step',
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError('private source-like error')))
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         value = ready(pool, projects[0], 's')
@@ -640,8 +644,9 @@ def test_global_session_baseline_does_not_invent_preexisting_scanner_facts(insta
         assert ready(pool, root, 's')['status'] == 'READY'
         core = pool.children[root][1]
         snapshot, _ = core.store.load(core.store.path(root, 'codex', 's'))
-        assert snapshot['changed_files'] == [] and snapshot['families'] == {}
-        assert snapshot['last_result']['status'] == 'COMPARISON_BASELINE'
+        assert snapshot['schema_version'] == 'hook-product-epoch-v1'
+        assert snapshot['representation'] == 'HASH_ONLY'
+        assert not {'families', 'file_digests', 'last_result', 'changed_files'} & snapshot.keys()
         assert core.runtime.calls == []
         (root / 'src/A.java').write_text('class A { int harmless; }\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
@@ -666,7 +671,7 @@ def test_global_session_baseline_alone_cannot_prove_new_risk(installed, projects
 
 
 @pytest.mark.parametrize('cause', ['FAILED', 'PARTIAL', 'moving'])
-def test_session_comparison_independent_of_engine_but_rejects_moving_source(installed, projects, tmp_path, cause):
+def test_product_observation_is_independent_of_engine_and_records_moving_gaps(installed, projects, tmp_path, monkeypatch, cause):
     root = projects[0]
     def factory(root, directory, binding):
         runtime = complete_runtime()
@@ -679,22 +684,27 @@ def test_session_comparison_independent_of_engine_but_rejects_moving_source(inst
         runtime.scan = scan
         if cause == 'FAILED': runtime.status = 'FAILED'
         core = HookCoordinator(runtime, HookStateStore(directory / 'hooks'))
-        if cause == 'moving':
-            snapshot = core.snapshot_capture
-            def moving(*args):
-                value = snapshot(*args)
-                (root/'src/A.java').write_text('class A { int moved; }\n')
-                return value
-            core.snapshot_capture = moving
         return _Child(binding).server, core
+    if cause == 'moving':
+        from security_runtime.product_epoch_capture import StableHashReader
+        original_read = StableHashReader._read_chunk
+        def moving(reader, size):
+            raw = original_read(reader, size)
+            with (root/'src/A.java').open('ab') as output:
+                output.write(b' changed')
+            return raw
+        monkeypatch.setattr(StableHashReader, '_read_chunk', moving)
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         value = ready(pool, root, 's')
-        assert value['status'] == ('DEGRADED' if cause == 'moving' else 'READY')
+        assert value['status'] == 'READY'
+        if cause == 'moving':
+            assert value['product_epoch']['counts']['gaps'] > 0
+            assert value['product_epoch']['comparison_available'] is False
         assert value['security_proof'] is False
         core = pool.children[root][1]
         assert core.runtime.calls == []
-        assert (core.store.load(core.store.path(root, 'codex', 's'))[0] is None) == (cause == 'moving')
+        assert core.store.load(core.store.path(root, 'codex', 's'))[0]['consistency'] == 'OBSERVED_ONLY'
     finally: pool.close()
 
 

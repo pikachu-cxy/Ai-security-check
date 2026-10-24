@@ -24,6 +24,10 @@ def readiness_message(status, reason_code=None):
             'BASELINE_COVERAGE_INSUFFICIENT': '项目初始代码检查未完成，项目初始比较点未能保存。请查看检查工具的准备状态，保留已有任务记录。',
             'BASELINE_STATE_PERMISSION_DENIED': '无法读取项目文件或读写本地检查记录。请检查当前账户的访问权限，保留当前会话和已有任务记录。',
             'BASELINE_GIT_SNAPSHOT_UNAVAILABLE': '无法读取项目的版本和文件列表。请确认项目目录可访问，保留当前会话和已有任务记录。',
+            'BASELINE_CAPACITY_WAIT': '产品比较记录等待存储容量，已保存的进度保留。释放容量后沿原记录继续。',
+            'BASELINE_PROGRESS_WAIT': '产品比较记录因持续没有进展而暂停。已保存的进度保留，资源恢复后沿原记录重试。',
+            'BASELINE_HISTORY_UNAVAILABLE': '原产品比较记录无法核对，已有任务记录保留。不能用当前文件补作原记录。',
+            'BASELINE_PLATFORM_UNSUPPORTED': '当前平台尚不支持安全的产品基线读取。任务检查按自己的修改前记录说明结果。',
         }
         detail = reasons.get(reason_code, '项目初始检查准备失败，具体原因未能确定。请查看本地诊断记录，保留当前会话和已有任务记录。')
         return '自动安全检查未启动：' + detail

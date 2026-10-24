@@ -122,7 +122,15 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     delta = result['delta']
     summary = {key: result[key] for key in ('status', 'coverage', 'scan_id', 'execution',
                                            'baseline_available', 'duration_ms')}
-    for key in ('tool_classification', 'workspace_mutation_observed', 'changed_file_count',
+    for key in ('product_epoch_ref', 'product_epoch_state', 'product_epoch_policy_digest',
+                'comparison_kind', 'comparison_consistency', 'comparison_representation',
+                'task_baseline_ready', 'task_baseline_requirement',
+                'product_epoch_comparison_scope', 'product_epoch_comparison_complete',
+                'product_epoch_scope_unknown', 'product_epoch_compared_path_count',
+                'product_epoch_strict_task_preimage_eligible',
+                'product_epoch_changed_path_count', 'product_epoch_unobserved_path_count',
+                'product_epoch_unavailable_path_count', 'product_epoch_comparison_reason',
+                'tool_classification', 'workspace_mutation_observed', 'changed_file_count',
                 'scanner_trigger_reason', 'scanner_skipped_reason', 'snapshot_file_count', 'snapshot_available',
                 'snapshot_source', 'snapshot_generation', 'pre_snapshot_match', 'content_delta_detected', 'reconciliation_reason',
                 'normalized_scanner_trigger_reason', 'first_scan_attribution_attempted',

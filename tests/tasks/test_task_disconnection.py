@@ -250,6 +250,9 @@ print(json.dumps(service.begin(sys.argv[1], 'exited-process')))
     assert process.returncode == 0, process.stderr
     ref = json.loads(process.stdout)['task_ref']
     before = legacy.store(root).get(ref)
+    if before['writer']['stamp'] is None:
+        assert own.writer_gone(before['writer']) is False
+        pytest.skip('Native process birth identity is unavailable; disconnection stays unproven')
     assert own.writer_gone(before['writer'])
     core = HookCoordinator(runtime, legacy.hooks)
     server = create_server(runtime, hook_coordinator=core, global_mode=False)

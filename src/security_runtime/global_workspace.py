@@ -25,6 +25,7 @@ WORKSPACE_REJECTIONS = {
     'SESSION_CONNECTION_BUDGET_EXCEEDED', 'TOOL_USE_CLAIM_REPLAYED',
     'HOST_CLAIM_BUDGET_EXCEEDED', 'RUNTIME_MISSING',
     'WORKSPACE_DIRECTORY_REQUIRED', 'WORKSPACE_ALIAS_MISMATCH',
+    'WORKSPACE_WORKTREE_INVALID',
 }
 WORKSPACE_STAGES = {'RESOLVING_ROOT', 'VALIDATING_CONFIGURATION', 'ADMITTING_WORKSPACE',
                     'BINDING_SESSION', 'VALIDATING_INVOCATION', 'BOOTSTRAPPING',
@@ -60,7 +61,7 @@ def workspace_rejection(exc, stage):
             'BINDING_SESSION': 'WORKSPACE_SESSION_BINDING_MISSING'}.get(stage, 'WORKSPACE_TOOL_REJECTED')
 
 
-def resolve_workspace(value, *, excluded=()):
+def resolve_workspace(value, *, excluded=(), codex_homes=()):
     raw = str(value) if isinstance(value, (str, Path)) else ''
     if (not raw.strip() or len(raw) > 4096 or '${' in raw or any(ord(c) < 32 for c in raw)
         or raw.startswith(('\\\\', '//')) or not Path(raw).is_absolute()
@@ -70,9 +71,12 @@ def resolve_workspace(value, *, excluded=()):
     no_links(candidate)
     candidate = candidate.resolve(strict=True)
     no_links(candidate)
-    forbidden = [SQLiteStore.default_path().parent.absolute(), *map(lambda p: Path(p).absolute(), excluded)]
+    # Trusted configuration boundaries and the candidate must use the same
+    # filesystem identity, including configured aliases and '..' components.
+    forbidden = [SQLiteStore.default_path().parent.resolve(), *map(lambda p: Path(p).resolve(), excluded)]
     configured_home = os.getenv('SECURITY_RUNTIME_CODEX_HOME') or os.getenv('CODEX_HOME')
-    forbidden.append(Path(configured_home).absolute() if configured_home else Path.home() / '.codex')
+    homes = [(Path(configured_home) if configured_home else Path.home() / '.codex').resolve(),
+             *(Path(path).resolve() for path in codex_homes)]
     if any(candidate == p or candidate.is_relative_to(p) for p in forbidden):
         raise ValueError('RUNTIME_STATE_IS_NOT_A_WORKSPACE')
     resolver = WorkspaceResolver()
@@ -81,6 +85,18 @@ def resolve_workspace(value, *, excluded=()):
         raise ValueError('UNSAFE_WORKSPACE')
     if not candidate.is_dir():
         raise WorkspaceClaimError('WORKSPACE_DIRECTORY_REQUIRED')
+    containing_homes = [home for home in homes if candidate == home or candidate.is_relative_to(home)]
+    if containing_homes:
+        from .worktree_admission import codex_linked_worktree
+        for home in containing_homes:
+            no_links(home)
+            if not candidate.is_relative_to(home / 'worktrees') or candidate == home / 'worktrees':
+                raise ValueError('RUNTIME_STATE_IS_NOT_A_WORKSPACE')
+        root = codex_linked_worktree(candidate, max(containing_homes, key=lambda path: len(path.parts)),
+                                     protected=forbidden)
+        if any(root == p or root.is_relative_to(p) or p.is_relative_to(root) for p in forbidden):
+            raise ValueError('WORKSPACE_BOUNDARY_REJECTED')
+        return root
     try:
         root = resolver.resolve(candidate).path
     except ValueError:
@@ -102,7 +118,7 @@ def resolve_workspace(value, *, excluded=()):
     no_links(root)
     if resolver._unsafe(root):
         raise ValueError('UNSAFE_WORKSPACE')
-    if not candidate.is_relative_to(root) or any(root == p or root.is_relative_to(p) or p.is_relative_to(root) for p in forbidden):
+    if not candidate.is_relative_to(root) or any(root == p or root.is_relative_to(p) or p.is_relative_to(root) for p in [*forbidden, *homes]):
         raise ValueError('WORKSPACE_BOUNDARY_REJECTED')
     return root
 
@@ -117,9 +133,22 @@ def workspace_state(root, base=None):
 
 def source_snapshot(root, key):
     """Non-Git fallback only. No source survives this bounded snapshot call."""
-    from .hook_runtime import MAX_FILES, MAX_BYTES, CapturedSnapshot
+    from .hook_runtime import MAX_BYTES, CapturedSnapshot, snapshot_inventory_budget
+    from .hook_state import MAX_STATE_BYTES
+    from .tasks.inventory import non_git_inventory
     from .target import TargetDetector
-    profile = TargetDetector(max_files=MAX_FILES).detect(root, select_scan_targets=True)
+    detector = TargetDetector()
+    # Bound discovery by the state name-byte budget. Every directory entry
+    # consumes at least one name byte, so this entry allowance cannot become an
+    # earlier fixed file-count cutoff. Never publish a discovered prefix.
+    names, limitations = non_git_inventory(root, detector.ignored,
+        max_entries=MAX_STATE_BYTES, max_directories=detector.max_directories,
+        max_depth=detector.max_depth, max_name_bytes=MAX_STATE_BYTES)
+    if limitations:
+        raise ValueError('SNAPSHOT_INVENTORY_BUDGET_OR_BOUNDARY_EXCEEDED')
+    snapshot_inventory_budget(names, names)
+    detector.max_files = max(1, len(names))
+    profile = detector.detect(root, names, select_scan_targets=True)
     files = profile.files
     digest = hmac.new(key, b'global-non-git-snapshot-v1', hashlib.sha256)
     consumed = 0
@@ -133,7 +162,8 @@ def source_snapshot(root, key):
         consumed += size
         if size > 1_000_000 or consumed > MAX_BYTES:
             raise ValueError('SNAPSHOT_BUDGET_EXCEEDED')
-        raw = p.read_bytes()
+        with p.open('rb') as stream:
+            raw = stream.read(size + 1)
         after = p.stat()
         if (len(raw) != size or
                 (before.st_ino, before.st_size, before.st_mtime_ns) !=

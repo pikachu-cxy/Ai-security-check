@@ -138,6 +138,14 @@ class HookStateStore:
     def path(self, root: Path, host: str, session_id: str | None) -> Path:
         return self.workspace_directory(root) / (identity(host + '\0' + (session_id or 'default')) + '.json')
 
+    def scan_path(self, root: Path, host: str, session_id: str | None) -> Path:
+        """A strict scanner cache cannot replace a product observation binding.
+
+        The separate directory prevents any caller-controlled session name from
+        colliding with the main session's namespace.
+        """
+        return self.workspace_directory(root) / 'scan-sessions' / self.path(root, host, session_id).name
+
     def pending_activity(self, root, host, session_id, *, mark=False, completed=None):
         """Bounded reconciliation intent, not finding/proof/authorization state.
 
@@ -271,7 +279,11 @@ class HookStateStore:
                 return None, True
             value = json.loads(path.read_bytes())
             from .hook_runtime import validate_state
-            return validate_state(value), False
+            value = validate_state(value)
+            if value.get('schema_version') == 'hook-product-epoch-v1':
+                from .product_epoch_hooks import verify_epoch_state
+                verify_epoch_state(value, path)
+            return value, False
         except (ValueError, TypeError, KeyError, UnicodeError, RecursionError):
             # Do not copy corrupt/oversized content to logs or quarantine files.
             return None, True
@@ -279,6 +291,9 @@ class HookStateStore:
     def save(self, path: Path, value: dict) -> None:
         from .hook_runtime import validate_state
         validate_state(value)
+        if value.get('schema_version') == 'hook-product-epoch-v1':
+            from .product_epoch_hooks import verify_epoch_state
+            verify_epoch_state(value, path)
         content = json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode()
         if len(content) > MAX_STATE_BYTES:
             raise ValueError('Hook state budget exceeded')

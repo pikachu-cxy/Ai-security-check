@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from .closeout_state import digest, encode
 from .closeout_state import readonly_uri
 from .equivalence import equivalence_key
-from .hook_state import atomic_bytes, no_links
+from .hook_state import atomic_bytes, hook_session_paths, no_links
 from .secret_coverage import covers, digest as file_digest
 from .private_authority import PrivateAuthority, revision
 
@@ -76,15 +76,20 @@ class RiskClosureService:
         if authority.journal.exists(): authority._ensure()
         value = authority.read()
         for event_id, effect in list(value['outbox'].items())[:64]:
-            path = authority.directory / effect['file']
             if not __import__('re').fullmatch(r'[a-f0-9]{64}\.json', effect['file']):
                 raise ValueError('Closure cache owner cannot be verified')
+            kind = effect.get('cache_kind', 'LEGACY_SESSION')
+            if kind not in {'LEGACY_SESSION', 'SCAN_SESSION'}:
+                raise ValueError('Closure cache namespace cannot be verified')
+            path = authority.directory / effect['file'] if kind == 'LEGACY_SESSION' else (
+                authority.directory / 'scan-sessions' / effect['file'])
             state, corrupt = self.hooks.load(path)
             if corrupt: continue  # Retain the intent; do not overwrite unknown content.
             if state is not None and (state['host'], state['session_id'], state['workspace_id']) != (
                     effect['host'], effect['session_id'], effect['workspace_id']):
                 continue
-            if state is not None and revision(state) == effect['expected_version']:
+            if (state is not None and state.get('schema_version') == 'hook-v1'
+                    and revision(state) == effect['expected_version']):
                 state['families'], state['last_result']['delta'] = self.overlay(
                     root, state['families'], state['last_result']['delta'])
                 self.hooks.save(path, state)
@@ -190,13 +195,17 @@ class RiskClosureService:
                 raise ValueError('Closure proof budget exceeded')
             # Keep all original scans/baselines. Only current session facts and
             # their cached deltas are updated under the same workspace lock.
-            for path in self.hooks.workspace_directory(root).glob('*.json'):
-                if not path.is_file(): continue
+            directory = self.hooks.workspace_directory(root)
+            paths = [(path, 'LEGACY_SESSION') for path in hook_session_paths(directory)]
+            paths.extend((path, 'SCAN_SESSION') for path in hook_session_paths(directory/'scan-sessions'))
+            for path, kind in paths:
                 state, _ = self.hooks.load(path)
-                if not state:
+                if not state or state.get('schema_version') != 'hook-v1':
                     continue
                 event = dict(file=path.name, host=state['host'], session_id=state['session_id'],
                     workspace_id=state['workspace_id'], expected_version=revision(state))
+                if kind != 'LEGACY_SESSION':
+                    event['cache_kind'] = kind
                 value['outbox'][revision(event)] = event
             if len(value['outbox']) > 64: raise ValueError('Closure pending cache budget exceeded')
         receipt = dict(status='SAVED', confirmed=accepted, records_revision=revision(records))

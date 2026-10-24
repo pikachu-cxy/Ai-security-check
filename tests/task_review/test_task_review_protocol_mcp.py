@@ -197,3 +197,24 @@ def test_global_revision_errors_keep_fixed_diagnostics_without_exception_text(
         assert result['scanner_run'] is False
     finally:
         pool.close()
+
+
+def test_global_runtime_compatibility_failure_keeps_same_task_recovery(installed, projects, tmp_path, monkeypatch):
+    from security_runtime.tasks.diagnostics import TaskRuntimeRestartRequired
+    pool, ledgers = task_pool(installed, tmp_path)
+    server = create_global_server(workspaces=pool)
+
+    def reject(*args, **kwargs):
+        raise TaskRuntimeRestartRequired() from TypeError('private source must never be returned')
+
+    monkeypatch.setattr(TaskSecurityService, 'prepare', reject)
+    try:
+        result = call(server, 'prepare_task_security_review', projects[0], task_ref='ts1-'+'a'*32)
+        assert result['reason_code'] == 'RUNTIME_RESTART_REQUIRED'
+        assert result['status'] == 'INCONCLUSIVE' and result['original_task_preserved']
+        assert result['recovery']['resume_tool'] == 'prepare_task_security_review'
+        assert result['recovery']['same_task_required']
+        assert 'private source' not in json.dumps(result)
+        assert not result['scanner_run'] and not ledgers[projects[0]].calls
+    finally:
+        pool.close()

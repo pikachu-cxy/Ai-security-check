@@ -3,12 +3,14 @@ import uuid
 
 
 def capture_end(service, root, record):
+    from .snapshot_pages import batched
     from .security import capture
     from .activity import deferred
     from ..source_redaction import task_version
     version = task_version(record)
     kwargs = dict(known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                   priority_paths=record.get('end', {}).get('read_priority', ()),
+                  batched_files=batched(record),
                   redaction_version=version)
     if not deferred(record):
         return capture(root, **kwargs, include_text=False), None
@@ -21,7 +23,8 @@ def capture_end(service, root, record):
         return previous, None
     ref = 'ts1-'+uuid.uuid4().hex
     store = service.end_versions(root)
-    with store.writer(ref, redaction_version=version) as writer:
+    with store.writer(ref, redaction_version=version,
+                      paged=batched(record)) as writer:
         end = capture(root, **kwargs, preimage_writer=writer)
     if preview is not None and any(preview.get(k) != end.get(k) for k in keys):
         store.discard(ref)

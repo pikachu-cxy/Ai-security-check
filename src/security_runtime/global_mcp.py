@@ -8,7 +8,7 @@ import os
 import subprocess
 import threading
 from collections import OrderedDict
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, InvalidStateError, ThreadPoolExecutor
 from pathlib import Path
 
 from .global_workspace import (resolve_workspace, workspace_state, source_snapshot, write_bootstrap,
@@ -37,12 +37,17 @@ MAX_SESSIONS = 64
 # Leave room for admission/transport within the native 30-second startup Hook.
 # Waiting reuses the existing job; it never starts another baseline scan.
 BOOTSTRAP_WAIT_SECONDS = 20
+_PRODUCT_EPOCH_PAUSES = {'BUSY': 'BASELINE_BUSY',
+    'WAITING_CAPACITY': 'BASELINE_CAPACITY_WAIT',
+    'WAITING_PROGRESS': 'BASELINE_PROGRESS_WAIT'}
 
 
 def global_runtime_info(*, tools=None, host=None):
     from .guidance.host_guidance import runtime_info
     info = runtime_info()
-    info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1'}
+    info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1',
+                        'readonly_workspace_binding_status': 'workspace-binding-status-v1; NO_ADMISSION; HOST_ATTESTATION_UNKNOWN',
+                        'product_epoch_status': 'product-epoch-status-v1; READ_ONLY; NO_ADMISSION; HASH_ONLY; OBSERVED_ONLY'}
     info['integration_scope'] = 'GLOBAL'
     info['workspace_routing'] = 'EXPLICIT_WORKSPACE_CLAIM'
     if host is not None:
@@ -76,6 +81,8 @@ class GlobalWorkspaces:
         self.claim_guard = CodexClaimGuard()
         self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='runtime-bootstrap')
+        from .product_epoch_jobs import ProductEpochJobs
+        self.epoch_jobs = ProductEpochJobs(self.executor)
         self.lock = threading.RLock()
 
     @staticmethod
@@ -84,7 +91,7 @@ class GlobalWorkspaces:
         return workspace_mcp_server(root, directory, binding)
 
     def root(self, value):
-        return resolve_workspace(value, excluded=(self.base, self.integration.home))
+        return resolve_workspace(value, excluded=(self.base,), codex_homes=(self.integration.home,))
 
     def admit(self, root):
         with self.lock:
@@ -154,8 +161,7 @@ class GlobalWorkspaces:
                     failed.set_result(self._initialization_failure(root, session, 'DEGRADED', baseline_failure_reason(exc)))
                     self.jobs[key] = failed
                     return failed.result()
-                future = self.executor.submit(self._initialize, root, session, core)
-                self.jobs[key] = future
+                self._start_epoch_initialization(key, root, session, core)
                 return {'status': 'INITIALIZING', 'previous_status': 'NEW_WORKSPACE', 'security_proof': False}
             if not future.done():
                 return {'status': 'INITIALIZING', 'security_proof': False}
@@ -170,6 +176,72 @@ class GlobalWorkspaces:
                     return self._remember_ready(key, restored)
             return result
 
+    def retry_product_epoch(self, root, session):
+        """A new validated SessionStart may resume a paused original epoch."""
+        key = (root, hashlib.sha256(session.encode()).hexdigest())
+        with self.lock:
+            future = self.jobs.get(key)
+            if future is not None and future.done() and not future.cancelled():
+                try:
+                    result = future.result()
+                    observed = result.get('product_epoch') or {}
+                    paused = (observed.get('state') in _PRODUCT_EPOCH_PAUSES and
+                        result.get('reason_code') == _PRODUCT_EPOCH_PAUSES[observed['state']])
+                    publication = (result.get('product_epoch_retry') == 'SESSION_PUBLICATION'
+                        and result.get('reason_code') == 'BASELINE_BUSY'
+                        and observed.get('state') == 'SEALED' and observed.get('epoch_ref'))
+                    if result.get('status') != 'DEGRADED' or not (paused or publication):
+                        return
+                    # Retry is not permission to replace missing history. Read
+                    # the original root/policy/ref before discarding its result.
+                    from .product_epoch_service import ProductEpochService
+                    core = self.children[root][1]
+                    current = ProductEpochService(core.store, root).status(
+                        epoch_ref=observed.get('epoch_ref'))
+                    if (any(current.get(name) != observed.get(name) for name in
+                            ('policy_digest', 'workspace_id', 'root_identity'))
+                            or observed.get('epoch_ref') is not None and
+                            current.get('epoch_ref') != observed['epoch_ref']
+                            or publication and current.get('state') != 'SEALED'):
+                        return
+                    self.jobs.pop(key)
+                except Exception:
+                    pass
+
+    def _start_epoch_initialization(self, key, root, session, core):
+        from .tasks.ownership import session_owner
+        future = Future()
+        self.jobs[key] = future
+        try:
+            shared = self.epoch_jobs.start(root, core.store, session_owner(self.host, session))
+        except (ValueError, OSError) as exc:
+            future.set_result(self._initialization_failure(root, session, 'DEGRADED',
+                baseline_failure_reason(exc)))
+            return
+
+        def initialized(epoch):
+            if future.done():
+                return
+            try:
+                observed = epoch.result()
+                if observed['state'] != 'SEALED':
+                    reason = {**_PRODUCT_EPOCH_PAUSES,
+                              'PLATFORM_UNSUPPORTED': 'BASELINE_PLATFORM_UNSUPPORTED',
+                              'HISTORY_UNAVAILABLE': 'BASELINE_HISTORY_UNAVAILABLE'}.get(
+                                  observed['state'], 'BASELINE_COVERAGE_INSUFFICIENT')
+                    value = self._initialization_failure(root, session, 'DEGRADED',
+                        reason)
+                    value['product_epoch'] = observed
+                    future.set_result(value)
+                else:
+                    self.executor.submit(self._initialize_into, future, root, session, core)
+            except Exception as exc:
+                if not future.done():
+                    status = 'DEGRADED' if isinstance(exc, (ValueError, OSError)) else 'ERROR'
+                    future.set_result(self._initialization_failure(root, session, status,
+                        baseline_failure_reason(exc)))
+        shared.add_done_callback(initialized)
+
     def _remember_ready(self, key, result):
         future = Future()
         future.set_result(result)
@@ -178,6 +250,24 @@ class GlobalWorkspaces:
 
     def _snapshot_readiness(self, root, session, snapshot, *, reused=False, recovered_from=None,
                             target_selection=None):
+        if snapshot.get('schema_version') == 'hook-product-epoch-v1':
+            from .product_epoch_service import ProductEpochService
+            observed = ProductEpochService(self.children[root][1].store, root).status(
+                epoch_ref=snapshot['epoch_ref'])
+            if (observed.get('state') != 'SEALED'
+                    or observed.get('policy_digest') != snapshot['policy_digest']
+                    or observed.get('root_identity') != snapshot['root_identity']):
+                raise ValueError('Product comparison reference cannot be verified')
+            value = dict(status='READY', baseline_status='PRODUCT_COMPARISON',
+                baseline_reused=reused, initial_scope='PRODUCT_OBSERVED_EPOCH',
+                product_epoch=observed, scanner_run=False, project_scan_status='NOT_REQUESTED',
+                task_baseline_ready=False, task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT',
+                security_proof=False)
+            if recovered_from in BASELINE_REASONS:
+                value['recovered_from'] = recovered_from
+            write_bootstrap(root, 'READY', 'PRODUCT_COMPARISON', base=self.base, session_id=session,
+                recovered_from=value.get('recovered_from'))
+            return value
         result = snapshot['last_result']
         gaps = snapshot.get('unproven_sast_files') or []
         value = {'status': 'READY', 'baseline_status': result['status'],
@@ -202,6 +292,13 @@ class GlobalWorkspaces:
     def _restore_existing(self, root, session, core, *, recovered_from=None):
         from .baseline_seed import WorkspaceBaselineSeeds
         try:
+            snapshot, _ = core.store.load(core.store.path(root, self.host, session))
+            if snapshot is not None and snapshot.get('schema_version') == 'hook-product-epoch-v1':
+                if (snapshot.get('host') != self.host or snapshot.get('session_id') != identity(session)
+                        or snapshot.get('workspace_id') != identity(os.path.normcase(str(root)))):
+                    raise ValueError('Product session does not match')
+                return self._snapshot_readiness(root, session, snapshot, reused=True,
+                    recovered_from=recovered_from)
             snapshot = WorkspaceBaselineSeeds(integration=self.integration, coordinator=core).existing_session(
                 root, session, host=self.host)
             if snapshot is not None:
@@ -210,6 +307,18 @@ class GlobalWorkspaces:
         except (ValueError, OSError):
             pass  # Keep the original failure; no guessed baseline or raw error.
         return None
+
+    def _initialize_into(self, future, root, session, core):
+        if not future.done():
+            try:
+                result = self._initialize(root, session, core)
+            except Exception:
+                result = self._initialization_failure(root, session, 'ERROR',
+                    'INITIALIZATION_INCONCLUSIVE')
+            try:
+                future.set_result(result)
+            except InvalidStateError:
+                pass  # The session may have been cancelled during shutdown.
 
     def _initialization_failure(self, root, session, status, reason):
         value = {'status': status, 'reason_code': reason, 'security_proof': False}
@@ -232,13 +341,25 @@ class GlobalWorkspaces:
             if status == 'READY':
                 value = self._snapshot_readiness(root, session, persisted,
                     reused=result.get('baseline_publish_status') == 'RETAINED')
-                value.update(initial_scope='SESSION_COMPARISON_ONLY', scanner_run=False,
+                value.update(scanner_run=False,
                     project_scan_status='NOT_REQUESTED', task_baseline_ready=False,
                     task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT')
                 return value
-            failure = self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_COVERAGE_INSUFFICIENT')
+            reason = {'PRODUCT_EPOCH_PUBLICATION_BUSY': 'BASELINE_BUSY',
+                      'PRODUCT_EPOCH_BUSY': 'BASELINE_BUSY',
+                      'PRODUCT_EPOCH_WAITING_CAPACITY': 'BASELINE_CAPACITY_WAIT',
+                      'PRODUCT_EPOCH_PLATFORM_UNSUPPORTED': 'BASELINE_PLATFORM_UNSUPPORTED'}.get(
+                          result.get('reason'), 'BASELINE_COVERAGE_INSUFFICIENT')
+            failure = self._initialization_failure(root, session, 'DEGRADED', reason)
             failure.update(baseline_status=result['status'], baseline_coverage=result['coverage'],
                 baseline_capabilities=result['capabilities'], target_selection=result.get('target_selection'))
+            if result.get('reason') == 'PRODUCT_EPOCH_PUBLICATION_BUSY' and result.get('product_epoch_ref'):
+                from .product_epoch_service import ProductEpochService
+                observed = ProductEpochService(core.store, root).status(
+                    epoch_ref=result['product_epoch_ref'])
+                if (observed.get('state') == 'SEALED'
+                        and observed.get('policy_digest') == result.get('product_epoch_policy_digest')):
+                    failure.update(product_epoch=observed, product_epoch_retry='SESSION_PUBLICATION')
             return failure
         except ScanCancelled:
             return self._initialization_failure(root, session, 'DEGRADED', 'BASELINE_DEADLINE_EXCEEDED')
@@ -273,6 +394,11 @@ class GlobalWorkspaces:
             return readiness
 
     def close(self):
+        with self.lock:
+            for future in self.jobs.values():
+                if not future.done():
+                    future.cancel()
+        self.epoch_jobs.close()
         self.executor.shutdown(wait=True, cancel_futures=True)
 
 
@@ -366,8 +492,22 @@ def create_global_server(*, workspaces=None, host='codex'):
     from jsonschema import Draft202012Validator
     # Obtain the original registry/instructions without creating a writable DB.
     server = create_server(global_mode=False)
-    registry = MCPRegistry(server)
     pool = workspaces or GlobalWorkspaces(host=host)
+    from mcp.types import ToolAnnotations
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_workspace_binding_status(workspace_path: str, session_ref: str | None = None) -> dict:
+        """Inspect path admission and this credential's existing routing only. No bootstrap, scan, key creation or binding changes. Signed routing consistency does not verify the current host chat or execution directory."""
+        from .workspace_binding_status import inspect_binding
+        return inspect_binding(pool, workspace_path, session_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_product_epoch_status(workspace_path: str) -> dict:
+        """Read existing product comparison progress without admission, capture, key creation or task before-image claims."""
+        from .product_epoch_status import inspect_product_epoch
+        return inspect_product_epoch(pool, workspace_path)
+
+    registry = MCPRegistry(server)
     active_host = getattr(pool, 'host', host)
     server.global_workspaces = pool
     registry.add_instructions('\nGlobal host integration: workspace_path is an untrusted claim. '
@@ -443,6 +583,12 @@ def create_global_server(*, workspaces=None, host='codex'):
             info['host_connector'] = active_host
             info = runtime_info_view(info, arguments.get('view', 'full'))
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
+        if name == 'get_workspace_binding_status':
+            data = get_workspace_binding_status(**arguments)
+            return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
+        if name == 'get_product_epoch_status':
+            data = get_product_epoch_status(**arguments)
+            return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
         if name == 'get_runtime_guidance':
             from .guidance.guidance_catalog import get_runtime_guidance
             guide = get_runtime_guidance(arguments['topic'])
@@ -515,11 +661,20 @@ def create_global_server(*, workspaces=None, host='codex'):
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     observe('CLAIMS_VALID', tool_classification=classification, **normalized.diagnostics())
             lightweight = False
+            independent_task_before = False
             if name in HOOKS and normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                 from .tasks.activity import lightweight_focus
-                lightweight = bool(lightweight_focus(pool.children[root][1].store, root,
-                    dict(host=normalized.context.host, session=normalized.context.session_binding)))
-            if name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP and not lightweight:
+                owner = dict(host=normalized.context.host, session=normalized.context.session_binding)
+                hooks = pool.children[root][1].store
+                lightweight = bool(lightweight_focus(hooks, root, owner))
+                if not lightweight and not read_only_hook:
+                    from .tasks.security_state import TaskSecurityStore
+                    from .tasks.ownership import record_owner
+                    task = TaskSecurityStore(hooks, root).for_hook(owner['host'], owner['session'])
+                    independent_task_before = bool(task and task.get('phase') == 'ACTIVE'
+                        and record_owner(task) == owner)
+            if (name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP
+                    and not lightweight and not independent_task_before):
                 binding_stage = 'BOOTSTRAPPING'
                 claim_diag['workspace_binding_stage'] = binding_stage
                 session_token = None
@@ -540,6 +695,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                             snapshot_source='LAZY_BOOTSTRAP', snapshot_generation=None,
                             pre_snapshot_match=None, content_delta_detected=None,
                             reconciliation_reason='NO_TRUSTED_PRE_EDIT_SNAPSHOT')
+                if normalized.kind == EventKind.SESSION_START:
+                    pool.retry_product_epoch(root, arguments['session_id'])
                 readiness = pool.bootstrap(root, arguments['session_id'])
                 if readiness.get('reason_code') in BASELINE_REASONS:
                     claim_diag['bootstrap_reason'] = readiness['reason_code']
@@ -631,8 +788,9 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .mcp_contracts import unsupported_protocol_failure
-            from .tasks.diagnostics import capacity_failure
-            unsupported = (unsupported_protocol_failure(exc) or capacity_failure(exc)) if handler_entered else None
+            from .tasks.diagnostics import capacity_failure, runtime_compatibility_failure
+            unsupported = (unsupported_protocol_failure(exc) or capacity_failure(exc)
+                           or runtime_compatibility_failure(exc)) if handler_entered else None
             if unsupported is not None:
                 return CallToolResult(isError=False, structuredContent=unsupported,
                     content=[TextContent(type='text', text=json.dumps(unsupported, ensure_ascii=False))])

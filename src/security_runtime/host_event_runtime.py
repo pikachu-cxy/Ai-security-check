@@ -146,6 +146,10 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
         observe('RECONCILIATION_STARTED', **normalized)
     try:
         task_binding = {'expected_task_ref':claim.task_ref} if claim is not None else {}
+        from .hook_runtime import HookCoordinator
+        if isinstance(coordinator, HookCoordinator):
+            task_binding.update(candidate_paths=event.candidate_paths, scope_unknown=event.scope_unknown,
+                                event_ref=event.sequence_identity)
         result = (coordinator.handle_lifecycle(event.kind, context.workspace, context.host, context._session, **task_binding)
                   if lifecycle else coordinator.handle(mapped, context.workspace, context.host, context._session, **task_binding))
     except Exception:
@@ -161,7 +165,8 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
         result.setdefault('changed_file_count', None)
         result['normalized_scanner_trigger_reason'] = ('WORKSPACE_CONTENT_DELTA'
             if result['workspace_mutation_observed'] is True else None)
-        result['scanner_skipped_reason'] = result['status'] if not result['execution']['scanner_run'] else None
+        result['scanner_skipped_reason'] = ((result.get('scanner_skipped_reason') or result['status'])
+            if not result['execution']['scanner_run'] else None)
         if remediation is not None:
             decision = remediation.on_hook(result, context.workspace, context._session,
                 host=context.host, event_started=started, initial_scan_finished=time.perf_counter(),

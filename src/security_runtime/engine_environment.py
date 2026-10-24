@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import secrets
 import shutil
+import tempfile
 import uuid
 
 from .diagnostics import DiagnosticError, ErrorDiagnostic
@@ -92,23 +93,36 @@ def _temporary_parent(environment, workspace):
 def engine_environment(engine_id, environment, *, workspace=None):
     """Yield a fixed child environment, with one private scratch dir per scan.
 
-    Other engines/platforms retain their existing environment. The parent is
+    Other engines retain their existing environment. The parent is
     never chmod'ed, removed, or used as a workspace fallback. Cleanup addresses
     only the exact directory created here, after checking its file identity.
     """
     child = dict(environment)
-    if not WINDOWS or engine_id != 'semgrep':
+    if engine_id != 'semgrep':
         yield child
         return
     directory = None
     identity = None
     try:
         try:
-            parent = _temporary_parent(child, workspace)
+            if WINDOWS:
+                parent = _temporary_parent(child, workspace)
+            else:
+                parent = Path(child.get('SECURITY_RUNTIME_ENGINE_TEMP_ROOT') or tempfile.gettempdir())
+                if not parent.is_absolute():
+                    raise _temp_failure()
+                parent = parent.resolve(strict=True)
+                no_links(parent)
+                if not parent.is_dir() or (workspace is not None and
+                        parent.is_relative_to(Path(workspace).resolve(strict=True))):
+                    raise _temp_failure()
             for _ in range(8):
                 candidate = parent / ('r-' + secrets.token_hex(6))
                 try:
-                    windows_private_directory(candidate)
+                    if WINDOWS:
+                        windows_private_directory(candidate)
+                    else:
+                        candidate.mkdir(mode=0o700)
                 except FileExistsError:
                     continue
                 directory = candidate
@@ -122,8 +136,24 @@ def engine_environment(engine_id, environment, *, workspace=None):
             if isinstance(error, DiagnosticError):
                 raise
             raise _temp_failure() from None
-        # Python checks TMPDIR first; Win32 checks TMP before TEMP.
-        child.update(TEMP=str(directory), TMP=str(directory), TMPDIR=str(directory))
+        # Keep the user's settings readable but never let the engine rewrite
+        # them or its shared home log, including during a version-only probe.
+        from .component_health import _settings_bytes
+        try:
+            _, settings, _ = _settings_bytes(child)
+        except (OSError, ValueError):
+            raise DiagnosticError(ErrorDiagnostic('COMPONENT_SETTINGS_UNREADABLE',
+                'Semgrep settings cannot be read safely.',
+                'Check the selected settings file; no settings were replaced.')) from None
+        config = directory / '.semgrep'
+        config.mkdir(mode=0o700)
+        settings_path = config / 'settings.yml'
+        settings_path.write_bytes(settings if settings is not None else b'{}\n')
+        child.update(SEMGREP_LOG_FILE=str(config / 'semgrep.log'),
+            SEMGREP_SETTINGS_FILE=str(settings_path), XDG_CONFIG_HOME=str(directory))
+        if WINDOWS:
+            # Python checks TMPDIR first; Win32 checks TMP before TEMP.
+            child.update(TEMP=str(directory), TMP=str(directory), TMPDIR=str(directory))
         yield child
     finally:
         if directory is not None and identity is not None:

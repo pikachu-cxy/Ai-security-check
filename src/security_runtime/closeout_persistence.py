@@ -23,6 +23,10 @@ FLAGS = ('current_version', 'check_completed', 'credential_closure_complete', 'r
 def hook_revision(key, state):
     if state is None:
         return None
+    if state.get('schema_version') == 'hook-product-epoch-v1':
+        return digest(key, {name: state.get(name) for name in ('schema_version', 'workspace_id',
+            'host', 'session_id', 'root_identity', 'epoch_ref', 'policy_digest',
+            'kind', 'consistency', 'representation', 'last_processed_ref')})
     # Closure projections may change families/delta; they cannot change the
     # originating scan, source snapshot, host or session represented here.
     return digest(key, {name: state.get(name) for name in ('workspace_id', 'host',
@@ -83,6 +87,11 @@ def source_matches(store, job, effect):
 
 
 def _source_current(service, root, effect):
+    details = effect['details']
+    if details.get('product_epoch_binding') is not None:
+        state, corrupt = service.hooks.load(service.hooks.path(root, details['host'], details['session']))
+        if corrupt or hook_revision(service._read_key(root), state) != details['product_epoch_binding']:
+            return False
     return (service._source_revisions(root, effect['scope_files']) == effect['source_versions']
         and service._plan(root, effect['scope_files'], effect['details']['members'],
             effect['deferred_providers'], effect['details'].get('scope_exclusions', ()))
@@ -110,10 +119,12 @@ def _session_cleanup(service, root, effect):
     details = effect['details']
     if not details.get('session_key'):
         return
-    path = service.hooks.path(root, details['host'], details['session'])
-    state, corrupt = service.hooks.load(path)
-    if corrupt:
-        raise ValueError('Closeout session cannot be verified')
+    path, state, _ = service._session_cache(root, details['host'], details['session'],
+        kind=details.get('scanner_cache_kind', 'LEGACY_SESSION'))
+    if details.get('product_epoch_binding') is not None:
+        primary, corrupt = service.hooks.load(service.hooks.path(root, details['host'], details['session']))
+        if corrupt or hook_revision(service._read_key(root), primary) != details['product_epoch_binding']:
+            raise ValueError('Closeout product comparison binding changed')
     if state and hook_revision(service._read_key(root), state) == effect['hook_binding']:
         if state['last_result'].get('deferred_code_providers'):
             state['last_result']['deferred_code_providers'] = []

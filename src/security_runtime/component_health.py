@@ -95,18 +95,19 @@ def valid_issue(component, value):
     return value == expected
 
 
-def semgrep_settings_path():
-    explicit = os.getenv('SEMGREP_SETTINGS_FILE')
+def semgrep_settings_path(environment=None):
+    environment = os.environ if environment is None else environment
+    explicit = environment.get('SEMGREP_SETTINGS_FILE')
     if explicit:
         return Path(os.path.abspath(os.path.expanduser(explicit)))
-    home = Path(os.getenv('XDG_CONFIG_HOME', ''))
-    if not os.getenv('XDG_CONFIG_HOME') or not home.is_dir():
+    home = Path(environment.get('XDG_CONFIG_HOME', ''))
+    if not environment.get('XDG_CONFIG_HOME') or not home.is_dir():
         home = Path.home()
     return Path(os.path.abspath(home / '.semgrep' / 'settings.yml'))
 
 
-def _settings_bytes():
-    path = semgrep_settings_path()
+def _settings_bytes(environment=None):
+    path = semgrep_settings_path(environment)
     no_links(path)
     if not path.exists():
         return path, None, None

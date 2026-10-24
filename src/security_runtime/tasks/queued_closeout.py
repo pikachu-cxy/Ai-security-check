@@ -23,7 +23,7 @@ def execution_identity():
                      ('GITLEAKS_CONFIG', 'TRIVY_CONFIG', 'SECURITY_RUNTIME_OFFLINE')})
 
 
-def enqueue(service, workspace, ref, *, launch=True):
+def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
     root = service.root(workspace)
     record = service.load(root, ref)
     if not deferred(record) or record.get('native_repair'):
@@ -31,6 +31,9 @@ def enqueue(service, workspace, ref, *, launch=True):
     if record_owner(record) != service._owner():
         raise ValueError('Closeout requires the original task owner')
     queue = CloseoutQueue(service.hooks, root, now=service.now)
+    if recovery_from is not None and not getattr(queue, 'supports_source_recovery', False):
+        from .diagnostics import TaskRuntimeRestartRequired
+        raise TaskRuntimeRestartRequired()
     pending = queue.read(ref)
     if pending and pending['state'] in PENDING:
         if pending['owner'] != service._owner():
@@ -65,8 +68,14 @@ def enqueue(service, workspace, ref, *, launch=True):
             current = service.load(root, ref)
             if current['baseline'] != record['baseline']:
                 raise ValueError('Original baseline changed')
+            if recovery_from is not None and current['phase'] in {'COMPLETE', 'INCOMPLETE'}:
+                return service._view(current)
+            # Ordinary closeout retains the original call contract. A long-lived
+            # DEV process may have imported the queue before recovery was added.
+            recovery_args = {} if recovery_from is None else dict(recovery_from=recovery_from)
             row = queue.submit(current, end, configuration, input_ref,
-                               preparation_ms=round(1000*(time.perf_counter()-started)))
+                               preparation_ms=round(1000*(time.perf_counter()-started)),
+                               **recovery_args)
             service.store(root).save(current)  # Explicit closeout refreshes idle retention, never the baseline.
         if launch:
             from ..task_closeout_worker import launch_worker
@@ -78,6 +87,42 @@ def enqueue(service, workspace, ref, *, launch=True):
             service.end_versions(root).discard(staged)
         if input_ref and (not saved or saved.get('input_ref') != input_ref):
             inputs.discard(input_ref)
+
+
+def recover_source_change(service, workspace, ref):
+    """Explicit prepare may refresh an unfinished end, never a baseline or read.
+
+    The original signed queue fences identity/configuration and concurrent
+    cancellation. Existing refinish archives review evidence and retains spending.
+    Return None when ordinary preparation should continue unchanged.
+    """
+    from .closeout_queue import source_recoverable, MAX_SOURCE_RECOVERIES
+    root = service.root(workspace)
+    record = service.load(root, ref)
+    if (record.get('closeout_dispatch') != 'BACKGROUND_V1' or record.get('native_repair')
+            or record['phase'] in {'ACTIVE', 'STATIC_RUNNING', 'COMPLETE', 'INCOMPLETE'}):
+        return None
+    queue = CloseoutQueue(service.hooks, root, now=service.now)
+    row = queue.read(ref)
+    if not row or row['owner'] != service._owner():
+        return None
+    if not (source_recoverable(row) or row['state'] == 'READY_FOR_REVIEW'):
+        return None
+    if row.get('end', {}).get('version_ref') != record.get('end', {}).get('version_ref'):
+        return None
+    if execution_identity() != row['configuration']['execution']:
+        return dict(status='STALE', task_ref=ref, reason='RUNTIME_OR_CONFIGURATION_CHANGED',
+                    next_action=None, baseline_recreated=False, recovery_blocked=True,
+                    message='执行身份或配置已变化，不能自动沿用旧检查；保留原任务与基线并说明检查缺口。')
+    if not source_recoverable(row) and service._fresh(root, record):
+        return None
+    if row.get('source_recovery_count', 0) >= MAX_SOURCE_RECOVERIES:
+        result = queue.view(ref, service._owner())
+        result.update(status='STALE', next_action=None, recovery_blocked=True,
+                      reason='SOURCE_RECOVERY_LIMIT',
+                      message='源码持续变化，已达到本轮自动恢复上限；保留原基线与检查记录，报告未完成范围。')
+        return result
+    return enqueue(service, root, ref, recovery_from=row)
 
 
 def status(service, workspace, ref):
@@ -163,12 +208,16 @@ def execute_one(service, workspace, ref, *, worker=None):
         result = service._finish(root, ref, end=claim['end'], queue_guard=lambda:queue.current(claim),
                                  frozen_source=frozen, frozen_auxiliary=expected['auxiliary'])
         state = result['status']
-        if state in {'READY', 'REVIEWING', 'COMPLETE', 'NO_CHANGES'} and not service._fresh(root, candidate):
+        source_changed = ((state in {'READY', 'REVIEWING', 'COMPLETE', 'NO_CHANGES'}
+                           or state == 'STALE' and not result.get('reason'))
+                          and not service._fresh(root, candidate))
+        if source_changed:
             state = 'STALE'
         outcome = ('RETRY_WAIT' if state == 'BUSY' else 'NO_CHANGES' if state == 'NO_CHANGES'
                    else 'READY_FOR_REVIEW' if state in {'READY', 'REVIEWING', 'COMPLETE'}
                    else 'STALE' if state == 'STALE' else 'FAILED')
-        queue.finish(claim, outcome, None if outcome in {'READY_FOR_REVIEW', 'NO_CHANGES'} else state)
+        queue.finish(claim, outcome, 'SOURCE_CHANGED_SINCE_CLOSEOUT' if source_changed else
+                     None if outcome in {'READY_FOR_REVIEW', 'NO_CHANGES'} else state)
         return True
     except Exception:
         # Fixed reason; never persist exception text containing source or secrets.

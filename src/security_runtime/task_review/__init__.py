@@ -149,12 +149,18 @@ class TaskReviewCoordinator:
         initial = service.load(root, ref)
         require_record_protocol(initial)
         if initial.get('closeout_dispatch') == 'BACKGROUND_V1':
-            from ..tasks.queued_closeout import status
+            from ..tasks.queued_closeout import status, recover_source_change
             from ..tasks.closeout_queue import PENDING
             queued = status(service, root, ref)
             if queued['status'] in PENDING or initial['phase'] == 'ACTIVE':
                 if queued['status'] == 'NOT_QUEUED':
                     queued['next_action'] = 'finish_security_task'
+                return queued
+            recovery = recover_source_change(service, root, ref)
+            if recovery is not None:
+                return recovery
+            if (queued['status'] in {'STALE', 'CANCELLED', 'FAILED', 'EXPIRED'}
+                    and initial['phase'] not in {'COMPLETE', 'INCOMPLETE'}):
                 return queued
         if initial['phase'] == 'ACTIVE':
             result = service.finish(workspace, ref)
@@ -179,6 +185,10 @@ class TaskReviewCoordinator:
                 return service._view(record)
             if record['phase'] not in {'READY', 'REVIEWING'} or not service._fresh(root, record):
                 return dict(status='STALE', task_ref=ref, review_required=False,
+                            next_action=('prepare_task_security_review'
+                                if initial.get('closeout_dispatch') == 'BACKGROUND_V1'
+                                and queued['status'] == 'READY_FOR_REVIEW' else None),
+                            baseline_recreated=False,
                             message='代码或文件修改检查范围已变化；保留原记录，不能沿用旧证据。')
             if record.get('review_capacity'):
                 return self._capacity_packet(record)

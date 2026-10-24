@@ -41,7 +41,10 @@ def native_case(tmp_path):
         fix_advice='Keep owner and member reads; reject other readers.',
         evidence_locations=[dict(path='app.py', start_line=1, end_line=2,
                                  location_version='CURRENT_TASK_END')])
-    record.update(phase='COMPLETE', end=copy.deepcopy(record['baseline']), review_revision=1,
+    from security_runtime.tasks.end_versions import capture_end
+    captured_end, _ = capture_end(TaskSecurityService(runtime, hooks.store,
+        owner=record_owner(record)), root, record)
+    record.update(phase='COMPLETE', end=captured_end, review_revision=1,
         review=dict(source='HOST_TASK_REVIEW', findings=[finding], status='COMPLETE'),
         review_plan=dict(snapshot_id='acceptance-native-snapshot'))
     record = store.save(record)

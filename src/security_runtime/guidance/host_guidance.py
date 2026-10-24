@@ -554,6 +554,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
     from ..owasp_coverage import installed_inventory
     from ..professional_guidance import delivery_contract
     from .guidance_catalog import manifest as guidance_manifest
+    from ..snapshot_contract import development_capabilities
     try:
         inventory = installed_inventory(RulePackManager().resolve())
     except (ValueError, OSError):
@@ -568,6 +569,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                 'capability_is_not_execution_timing': True},
             'remediation': remediation,
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
+                         'workspace_snapshot_development': development_capabilities(),
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'selected_file_scan': 'selected-file-scan-v1; EXPLICIT_RELATIVE_FILES; NO_PROJECT_EXPANSION',
                          'project_scan_reuse': 'verified-project-scan-reuse-v1; CURRENT_IDENTITY_REVALIDATION; FORCE_RESCAN',

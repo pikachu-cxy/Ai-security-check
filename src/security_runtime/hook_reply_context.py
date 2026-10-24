@@ -39,6 +39,9 @@ CHECK_OPERATION_BOUNDARIES = (
 )
 
 SUMMARY_FIELDS = ('status', 'coverage', 'scan_id', 'scanner_run', 'last_check_status',
+                  'comparison_kind', 'comparison_consistency', 'comparison_representation',
+                  'product_epoch_strict_task_preimage_eligible',
+                  'task_baseline_ready', 'task_baseline_requirement',
                   'first_scan_attribution_status', 'reason')
 COUNT_FIELDS = ('new_families', 'persisting_families', 'resolved_families',
                 'pre_existing_risk_count', 'newly_attributed_risk_count')
@@ -70,7 +73,7 @@ def _control(summary: dict, decision: dict | None) -> dict:
     control = {}
     for field in SUMMARY_FIELDS:
         value = summary.get(field)
-        if field == 'scanner_run':
+        if field in {'scanner_run', 'task_baseline_ready', 'product_epoch_strict_task_preimage_eligible'}:
             if type(value) is bool:
                 control[field] = value
         elif field == 'scan_id':

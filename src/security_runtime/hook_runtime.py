@@ -112,8 +112,7 @@ def capture_recheck_expectation(root, captured, key, scope):
         raise ValueError('Hook input expectation unavailable')
     expected = dict(expected)
     names = sorted({safe_path(name) for name in scope} - set(expected))
-    if len(expected) + len(names) > MAX_FILES:
-        raise ValueError('Hook input expectation file count budget exceeded')
+    snapshot_inventory_budget(captured[1], [*expected, *names])
     consumed = 0
     for name in names:
         checkpoint()
@@ -152,10 +151,16 @@ def incremental_scope(previous, dirty_files, content_changed, *, checked_files=(
 
 
 def validate_state(value):
+    if isinstance(value, dict) and value.get('schema_version') == 'hook-product-epoch-v1':
+        from .product_epoch_hooks import validate_epoch_state
+        return validate_epoch_state(value)
     fields = set(HookSnapshot.__dataclass_fields__)
     if (not isinstance(value, dict) or not fields - {'file_digests', 'unproven_sast_files'} <= set(value) <= fields
             or value['schema_version'] != 'hook-v1'):
         raise ValueError('Invalid hook snapshot')
+    from .hook_state import MAX_STATE_BYTES
+    if len(json.dumps(value, ensure_ascii=True, separators=(',', ':')).encode()) > MAX_STATE_BYTES:
+        raise ValueError('Hook state budget exceeded')
     gaps = value.get('unproven_sast_files')
     if gaps is not None:
         if not isinstance(gaps, list) or len(gaps) > MAX_FILES:
@@ -171,13 +176,13 @@ def validate_state(value):
         raise ValueError('Invalid hook snapshot scope')
     if value['last_scan_id'] is not None and not re.fullmatch(r'[A-Za-z0-9-]{1,100}', value['last_scan_id']):
         raise ValueError('Invalid hook scan identity')
-    if not isinstance(value['changed_files'], list) or len(value['changed_files']) > MAX_FILES:
+    if not isinstance(value['changed_files'], list):
         raise ValueError('Hook snapshot budget exceeded')
     for name in value['changed_files']:
         safe_path(name)
     file_digests = value.get('file_digests')
     if file_digests is not None:
-        if (not isinstance(file_digests, dict) or len(file_digests) > MAX_FILES
+        if (not isinstance(file_digests, dict)
                 or not set(value['changed_files']).issubset(file_digests)):
             raise ValueError('Invalid hook file digest inventory')
         for name, digest in file_digests.items():
@@ -286,14 +291,31 @@ class CapturedSnapshot(tuple):
         return value
 
 
+def snapshot_inventory_budget(paths, inventory):
+    """Bound a complete finite identity list by bytes, never a file prefix.
+
+    This is a lower bound on the final Hook state. The full serialized state
+    must still fit its unchanged budget before publication.
+    """
+    from .hook_state import MAX_STATE_BYTES
+    consumed = 4
+    for name in paths:
+        consumed += len(json.dumps(safe_path(name), ensure_ascii=True).encode()) + 1
+        if consumed > MAX_STATE_BYTES:
+            raise ValueError('Hook snapshot identity byte budget exceeded')
+    for name in inventory:
+        # A quoted 64-character digest, colon and comma accompany every key.
+        consumed += len(json.dumps(safe_path(name), ensure_ascii=True).encode()) + 68
+        if consumed > MAX_STATE_BYTES:
+            raise ValueError('Hook snapshot identity byte budget exceeded')
+
+
 def capture_snapshot(root: Path, key: bytes):
-    detector = TargetDetector(max_files=max(1, MAX_FILES))
+    detector = TargetDetector()
     paths = set()
     for args in (('diff','--name-only','-z','--no-renames'), ('diff','--cached','--name-only','-z','--no-renames'), ('ls-files','--others','--exclude-standard','-z')):
         paths.update(safe_path(v.decode('utf-8')) for v in _git(root,*args).split(b'\0') if v)
     paths = sorted(name for name in paths if not set(PurePosixPath(name).parts) & detector.ignored)
-    if len(paths) > MAX_FILES:
-        raise ValueError('Hook snapshot file count budget exceeded')
     digest = hmac.new(key, b'hook-snapshot-v1', hashlib.sha256)
     try:
         head = _git(root,'rev-parse','--verify','HEAD')
@@ -307,11 +329,13 @@ def capture_snapshot(root: Path, key: bytes):
             index.setdefault(name.decode('utf-8'),[]).append(header)
     inventory = sorted(set(paths) | {safe_path(name) for name in index
         if not set(PurePosixPath(name).parts) & detector.ignored})
-    if len(inventory) > MAX_FILES:
-        raise ValueError('Hook comparison file budget exceeded')
+    snapshot_inventory_budget(paths, inventory)
     # Use the same extension + magic-byte policy as scans, including boundary
     # validation before exclusion. A document renamed to text becomes eligible
     # on the next capture and therefore produces a content delta.
+    # Git output has already closed this finite list under its byte budget.
+    # Per-edit scanner scope retains its independent MAX_FILES allowance.
+    detector.max_files = max(1, len(inventory))
     profile = detector.detect(root, inventory, select_scan_targets=True)
     excluded = {row['path'] for row in profile.skipped_files}
     paths = [name for name in paths if name not in excluded]
@@ -513,7 +537,8 @@ def family_delta(previous, observed, can_cover):
 
 class HookCoordinator:
     def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None,
-                 workspace_resolver=None, snapshot_capture=None, activity_wait_seconds=0):
+                 workspace_resolver=None, snapshot_capture=None, activity_wait_seconds=0,
+                 product_epoch_factory=None):
         if type(activity_wait_seconds) not in (int, float) or not 0 <= activity_wait_seconds <= 10:
             raise ValueError('Invalid activity wait budget')
         self.runtime = runtime
@@ -524,6 +549,7 @@ class HookCoordinator:
         self.workspace_resolver = workspace_resolver
         self.snapshot_capture = snapshot_capture or capture_snapshot
         self.activity_wait_seconds = activity_wait_seconds
+        self.product_epoch_factory = product_epoch_factory
         self._managed_registry = None
 
     def managed_registry(self):
@@ -729,7 +755,8 @@ class HookCoordinator:
                 observation['attribution_detector'] = None
         return observation
 
-    def handle_lifecycle(self, kind, workspace, host, session_id, *, expected_task_ref=_UNBOUND_TASK):
+    def handle_lifecycle(self, kind, workspace, host, session_id, *, expected_task_ref=_UNBOUND_TASK,
+                         candidate_paths=(), scope_unknown=True, event_ref=None):
         """Explicit snapshot/activity/finalization dispatch, sharing one Core.
 
         Existing legacy callers retain their convergence contract. The bounded
@@ -740,10 +767,12 @@ class HookCoordinator:
                  EventKind.WORKSPACE_ACTIVITY: HookEvent.FILE_CHANGED,
                  EventKind.SESSION_STOP: HookEvent.AGENT_STOP}[EventKind(kind)]
         return self.handle(event, workspace, host, session_id, _lifecycle=True,
-                           expected_task_ref=expected_task_ref)
+                           expected_task_ref=expected_task_ref, candidate_paths=candidate_paths,
+                           scope_unknown=scope_unknown, event_ref=event_ref)
 
     def handle(self, event, workspace=None, host='generic', session_id=None, *, _baseline_only=False,
-               _lifecycle=False, expected_task_ref=_UNBOUND_TASK):
+               _lifecycle=False, expected_task_ref=_UNBOUND_TASK,
+               candidate_paths=(), scope_unknown=True, event_ref=None):
         start = time.monotonic()
         event = HookEvent(event)
         if event not in {HookEvent.SESSION_START,HookEvent.FILE_CHANGED,HookEvent.AGENT_STOP} or host not in HOSTS:
@@ -763,13 +792,77 @@ class HookCoordinator:
             'coverage':'UNKNOWN','execution_state':'NOT_EXECUTED','last_check_status':'NOT_EXECUTED','capabilities':{},'scanner_runs':[],
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
+        from .product_epoch_hooks import ProductEpochHooks, SCHEMA as EPOCH_SCHEMA
+        epoch = None
+        retained_epoch = (event == HookEvent.SESSION_START and not _lifecycle and
+            (self.store.load(self.store.path(root, host, session_id))[0] or {}).get('schema_version') == EPOCH_SCHEMA)
+        if event == HookEvent.SESSION_START and (_lifecycle or retained_epoch):
+            epoch = ProductEpochHooks(self.store, root, now=self.clock, factory=self.product_epoch_factory)
+            try:
+                handled = epoch.start(result, host, session_id)
+            except (ValueError, OSError):
+                result.update(status='INCONCLUSIVE', reason='PRODUCT_EPOCH_BINDING_UNAVAILABLE',
+                    baseline_publish_status='FAILED', pending_mutation=True,
+                    next_step='The original product observation could not be verified; no baseline was replaced.')
+                handled = True
+            if handled:
+                result['duration_ms'] = round((time.monotonic()-start)*1000)
+                return result
         if not (_lifecycle and event == HookEvent.AGENT_STOP):
-            # Consume completed facts before this new event can advance the
-            # pending sequence. This never invokes a provider or moves source.
+            # Recover original completed scan facts before a new comparison
+            # cursor or pending event can advance the session's CAS token.
             recovered_publication = self.recover_publications(root, host, session_id)
             if recovered_publication is not None:
                 result['publication_recovery'] = {k:v for k,v in recovered_publication.items()
                                                   if k != 'recovered_result'}
+        if event == HookEvent.FILE_CHANGED:
+            bound, invalid = self.store.load(self.store.path(root, host, session_id))
+            if invalid:
+                self.store.pending_activity(root, host, session_id, mark=True)
+                result.update(status='INCONCLUSIVE', reason='HOOK_STATE_UNVERIFIABLE',
+                    pending_mutation=True, state_recovered=True,
+                    scanner_skipped_reason='HOOK_STATE_UNVERIFIABLE')
+                result['duration_ms'] = round((time.monotonic()-start)*1000)
+                return result
+            if bound is None:
+                # A short-lived host may exit after its first bounded step.
+                # Continue that same durable epoch, never fall back to an
+                # after-edit legacy baseline while its publication is pending.
+                epoch = epoch or ProductEpochHooks(self.store, root, now=self.clock, factory=self.product_epoch_factory)
+                observed = epoch.service.status()
+                if observed.get('epoch_ref') is not None or _lifecycle:
+                    self.store.pending_activity(root, host, session_id, mark=True)
+                    try:
+                        epoch.start(result, host, session_id)
+                    except (ValueError, OSError):
+                        result.update(status='INCONCLUSIVE', reason='PRODUCT_EPOCH_BINDING_UNAVAILABLE')
+                    bound, _ = self.store.load(self.store.path(root, host, session_id))
+                    result['event_dispatch_route'] = 'WORKSPACE_RECONCILIATION'
+                    if bound is None:
+                        result.update(pending_mutation=True, scanner_skipped_reason='PRODUCT_EPOCH_PENDING',
+                            product_epoch_comparison_complete=False, scanner_invocation_count=0,
+                            event_dispatch_route='WORKSPACE_RECONCILIATION')
+                        from .tasks.security_state import TaskSecurityStore
+                        original_task = TaskSecurityStore(self.store, root).for_hook(host, result['session_id'])
+                        if original_task is None:
+                            result['duration_ms'] = round((time.monotonic()-start)*1000)
+                            return result
+                        # A real per-edit task owns its synchronous before
+                        # image independently of product observation readiness.
+                        # Its strict scan cache must not create a main baseline.
+                        result['product_epoch_pending_task_scan'] = True
+            if bound is not None and bound.get('schema_version') == EPOCH_SCHEMA:
+                self.store.pending_activity(root, host, session_id, mark=True)
+                epoch = epoch or ProductEpochHooks(self.store, root, now=self.clock, factory=self.product_epoch_factory)
+                try:
+                    _, comparison = epoch.compare(bound, host, session_id, candidate_paths, scope_unknown,
+                        event_ref=event_ref)
+                    result.update(comparison)
+                except (ValueError, OSError):
+                    result.update(status='INCONCLUSIVE', reason='PRODUCT_EPOCH_COMPARISON_UNAVAILABLE',
+                        pending_mutation=True, scanner_skipped_reason='PRODUCT_EPOCH_COMPARISON_UNAVAILABLE')
+                    result['duration_ms'] = round((time.monotonic()-start)*1000)
+                    return result
         from .background_preparation import current_preparation, preparation_message, ACTIVE
         preparation = current_preparation()
         if preparation['status'] in ACTIVE and not preparation.get('ready'):
@@ -870,6 +963,18 @@ class HookCoordinator:
         from .tasks.ownership import record_owner
         path = self.store.path(root, host, session_id)
         previous, recovered = self.store.load(path)
+        product_epoch_state = None
+        if previous is not None and previous.get('schema_version') == 'hook-product-epoch-v1':
+            from .product_epoch_hooks import ProductEpochHooks
+            ProductEpochHooks(self.store, root, now=self.clock, factory=self.product_epoch_factory).verify(
+                previous, host, session_id)
+            product_epoch_state = previous
+            path = self.store.scan_path(root, host, session_id)
+            previous, recovered = self.store.load(path)
+        product_epoch_mode = product_epoch_state is not None or result.get('product_epoch_pending_task_scan') is True
+        if product_epoch_state is None and previous is None and product_epoch_mode:
+            path = self.store.scan_path(root, host, session_id)
+            previous, recovered = self.store.load(path)
         key = self.store.key(root)
         task = (TaskSecurityStore(self.store, root).for_hook(host, result['session_id'])
                 if result['event'] == HookEvent.FILE_CHANGED.value else None)
@@ -893,7 +998,11 @@ class HookCoordinator:
         execution = ScanAttemptExecution(attempts, lease)
         result['scan_attempt'] = lease.receipt | {'publication':'PENDING'}
         return dict(path=path, previous=previous, recovered=recovered, key=key, task=task,
-                    pending=pending, attempts=attempts, lease=lease, execution=execution, state=None)
+                    pending=pending, attempts=attempts, lease=lease, execution=execution, state=None,
+                    product_epoch_state=product_epoch_state,
+                    product_epoch_mode=product_epoch_mode,
+                    product_comparison_gap=product_epoch_mode and
+                        result.get('product_epoch_comparison_complete') is not True)
 
     def _abandon(self, result, root, transaction, outcome, *, reason=None):
         execution = transaction['execution']
@@ -924,6 +1033,9 @@ class HookCoordinator:
                 previous=transaction['previous'], state=transaction['state'],
                 pending=transaction['pending'], task_ref=task['task_ref'] if task else None,
                 input_current=transaction.get('input_current'), snapshot=source,
+                product_epoch_state=transaction.get('product_epoch_state'),
+                product_epoch_mode=transaction.get('product_epoch_mode', False),
+                product_comparison_gap=transaction.get('product_comparison_gap', False),
                 execution=transaction['execution'].receipt))
 
     def recover_publications(self, root, host, session_id):
@@ -946,11 +1058,16 @@ class HookCoordinator:
             attempts = ScanAttemptStore(self.store, root)
             execution = SimpleNamespace(receipt=payload['execution'], input_id=payload['execution'].get('input_id'))
             result = copy.deepcopy(payload['result'])
-            transaction = dict(path=self.store.path(root, host, session_id), previous=payload['previous'],
+            transaction = dict(path=(self.store.scan_path(root, host, session_id) if
+                                      (payload.get('product_epoch_mode') or payload.get('product_epoch_state'))
+                                      else self.store.path(root, host, session_id)), previous=payload['previous'],
                 key=key, task={'task_ref':payload['task_ref']} if payload['task_ref'] else None,
                 pending=payload['pending'], attempts=attempts, lease=AttemptLease(**pending['lease']),
                 execution=execution, state=payload['state'], input_current=payload['input_current'],
-                publication=pending, publication_current=fresh)
+                publication=pending, publication_current=fresh,
+                product_epoch_state=payload.get('product_epoch_state'),
+                product_epoch_mode=payload.get('product_epoch_mode', bool(payload.get('product_epoch_state'))),
+                product_comparison_gap=payload.get('product_comparison_gap', False))
             self._publish(result, root, host, session_id, transaction)
             return dict(publication=result['scan_attempt']['publication'],
                 reason=result.get('reason'), scanner_run=False, original_attempt=pending['lease']['attempt_id'],
@@ -975,10 +1092,13 @@ class HookCoordinator:
                 result['next_step'] = 'Completed facts await their original publication fence; retry restores them without another scan.'
                 return
             current, _ = self.store.load(transaction['path'])
+            epoch_state = transaction.get('product_epoch_state')
+            epoch_current = (self.store.load(self.store.path(root, host, session_id))[0] == epoch_state
+                             if transaction.get('product_epoch_mode') else True)
             lane = attempts.read()['lane']
             if (publication is not None and transaction['state'] is not None
                     and current == transaction['state'] and attempts._matches(lane, lease)
-                    and transaction.get('publication_current', True)):
+                    and transaction.get('publication_current', True) and epoch_current):
                 if lane['state'] == 'ACTIVE' and attempts.is_current(lease, execution.input_id):
                     attempts.finish(lease, input_id=execution.input_id,
                                     scan_id=result.get('scan_id'), outcome='COMPLETED')
@@ -998,6 +1118,7 @@ class HookCoordinator:
             task_ref = lambda value: value['task_ref'] if value else None
             valid = (attempts.is_current(lease, execution.input_id)
                      and transaction.get('publication_current', True)
+                     and epoch_current
                      and current == transaction['previous'] and pending == transaction['pending']
                      and task_ref(task) == task_ref(transaction['task'])
                      and self.store.key(root) == transaction['key'])
@@ -1019,6 +1140,7 @@ class HookCoordinator:
                 self.store.save(transaction['path'], transaction['state'])
             if (transaction['pending'] is not None and result['status'] in
                     {'SCANNED','NO_CHANGE','NO_CHANGES','BASELINE_ESTABLISHED'} and
+                    not transaction.get('product_comparison_gap', False) and
                     result.get('first_scan_attribution_status') != 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'):
                 result['pending_mutation'] = self.store.pending_activity(root, host, session_id,
                     completed=transaction['pending']) is not None
@@ -1080,6 +1202,13 @@ class HookCoordinator:
         if previous and any(previous[k] != result[k] for k in ('workspace_id','host','session_id')):
             previous = None
             recovered = True
+        if previous and previous.get('schema_version') == 'hook-product-epoch-v1':
+            from .product_epoch_hooks import ProductEpochHooks
+            try:
+                ProductEpochHooks(self.store, root, now=self.clock, factory=self.product_epoch_factory).verify(
+                    previous, host, session_id)
+            except (OSError, ValueError):
+                previous, recovered = None, True
         result.update(status='SESSION_FINALIZED' if previous else 'INCONCLUSIVE',
             reason='SESSION_STOP_WITHOUT_BASELINE' if previous is None else None,
             state_recovered=recovered, baseline_available=previous is not None,
@@ -1117,7 +1246,7 @@ class HookCoordinator:
         result['snapshot_file_count'] = len(files)
         seeded = False
         from .host_event_adapters import host_capabilities
-        if previous is None and host_capabilities(host).supports_setup_seed:
+        if previous is None and not transaction.get('product_epoch_mode') and host_capabilities(host).supports_setup_seed:
             from .baseline_seed import WorkspaceBaselineSeeds
             seed, diagnostic = (self.seeds or WorkspaceBaselineSeeds()).load(root)
             result['baseline_seed_status'] = diagnostic
