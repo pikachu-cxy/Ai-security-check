@@ -78,7 +78,7 @@ def register(server, registry, *, application):
             return service.skip(root, task_ref, skip_review_reason)
         service = task_service(task_ref,session_ref,workspace_path)
         root = service.root(bound_path(workspace_path))
-        if service.load(root, task_ref).get('closeout_dispatch') == 'BACKGROUND_V1':
+        if service.load_header(root, task_ref).get('closeout_dispatch') == 'BACKGROUND_V1':
             from ..tasks.queued_closeout import enqueue
             return enqueue(service, root, task_ref)
         return service.finish(root, task_ref)

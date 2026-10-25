@@ -1,5 +1,6 @@
 """Real review updates preserve source pages and the original cumulative ledger."""
 import copy
+import json
 import sqlite3
 
 import pytest
@@ -10,6 +11,7 @@ from security_runtime.tasks.review_control import ReviewControlError
 from security_runtime.tasks.security import TaskSecurityService
 from security_runtime.tasks.snapshot_pages import _store
 from test_task_security import service
+from task_review_helpers import review_all
 
 
 @pytest.fixture(autouse=True)
@@ -99,6 +101,66 @@ def test_stale_generation_and_ledger_regression_do_not_lose_original_progress(se
     with pytest.raises(ReviewControlError, match='REVIEW_CONTROL_LEDGER_REGRESSION'):
         state.save_review(regressed)
     assert images(task, root) == before
+
+
+@pytest.mark.parametrize('capture', [False, True])
+def test_final_submission_collects_once_and_acknowledges_without_rewriting_sources(service, monkeypatch, capture):
+    task, root, ref, session, engine = prepared(service, capture=capture)
+    packet = task.prepare(root, ref)
+    review_all(task, root, ref, packet)
+    before = task.load(root, ref)
+    from security_runtime.tasks import snapshot_gc
+    original = snapshot_gc.collect_pages
+    collected = []
+    def collect(*args, **kwargs):
+        collected.append(True)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(snapshot_gc, 'collect_pages', collect)
+    done = task.submit(root, ref, session, [], 'REVIEWED', [])
+    assert done['status'] == 'COMPLETE'
+    assert len(collected) == 1
+    saved = task.load(root, ref)
+    assert saved['ledger_projection']['state'] == 'APPLIED'
+    assert saved['baseline'] == before['baseline']
+    assert saved['end'] == before['end']
+    assert len(engine.calls) == 1
+    result = task.get(root, ref, completion_revision=done['next_action']['completion_revision'])
+    assert result['review_progress']['coverage'] == 'REVIEWED'
+    assert result['development_summary'] == ''
+
+
+@pytest.mark.parametrize('capture', [False, True])
+def test_final_ack_sql_failure_keeps_saved_review_and_retry_never_rescans(service, monkeypatch, capture):
+    task, root, ref, session, engine = prepared(service, capture=capture)
+    packet = task.prepare(root, ref)
+    review_all(task, root, ref, packet)
+    connect = sqlite3.connect
+    class FailAck(sqlite3.Connection):
+        def execute(self, sql, parameters=()):
+            if sql.startswith('UPDATE security_tasks SET data=') and parameters:
+                value = json.loads(parameters[0])
+                if (value.get('task_ref') == ref
+                        and value.get('ledger_projection', {}).get('state') == 'APPLIED'):
+                    # Raise a real SQL error inside the acknowledgement's
+                    # transaction without adding unsupported main-schema objects.
+                    return super().execute('UPDATE __fixture_missing_ack_table SET value=1')
+            return super().execute(sql, parameters)
+    def fail_ack_connection(*args, **kwargs):
+        return connect(*args, **dict(kwargs, factory=FailAck))
+    with monkeypatch.context() as fault:
+        fault.setattr(sqlite3, 'connect', fail_ack_connection)
+        done = task.submit(root, ref, session, [], 'REVIEWED', [])
+    assert done['status'] == 'COMPLETE' and done['risk_ledger_sync']['pending']
+    saved = task.load(root, ref)
+    assert saved['phase'] == 'COMPLETE'
+    assert saved['ledger_projection']['state'] == 'PENDING'
+    resumed = task.submit(root, ref, session, [], 'REVIEWED', [])
+    assert resumed['risk_ledger_sync']['state'] == 'APPLIED'
+    current = task.load(root, ref)
+    assert current['review'] == saved['review']
+    assert current['baseline'] == saved['baseline'] and current['end'] == saved['end']
+    assert current['review_ledger'] == saved['review_ledger']
+    assert len(engine.calls) == 1
 
 
 def test_real_sql_rollback_preserves_review_progress_and_all_raw_bytes(service):

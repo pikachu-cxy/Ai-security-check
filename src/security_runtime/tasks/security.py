@@ -351,6 +351,14 @@ class TaskSecurityService:
 
     def load(self, root, ref, *, read_only=False):
         record = self.store(root).get(ref)
+        return self._loaded(root, record, read_only=read_only)
+
+    def load_header(self, root, ref, *, read_only=False):
+        """Check routing/lifecycle only; never use this projection as source proof."""
+        record = self.store(root).get(ref, headers=True)
+        return self._loaded(root, record, read_only=read_only)
+
+    def _loaded(self, root, record, *, read_only):
         if not record:
             raise ValueError('Task is unavailable or expired; never infer a baseline after editing')
         from .ownership import record_owner, ownership_error
@@ -478,7 +486,7 @@ class TaskSecurityService:
                 focus = activity.focus(owner)
                 focus_generation = focus['generation'] if focus else 0
                 if focus is None:
-                    owned = [r for r in store.records(active=True)
+                    owned = [r for r in store.records(active=True, headers=True)
                              if record_owner(r) == owner and is_v3_record(r)]
                     if owned:
                         return dict(status='ACTIVE_TASK_EXISTS', scanner_run=False,
@@ -487,12 +495,12 @@ class TaskSecurityService:
                     if not focus or (focus['task_ref'], focus['generation']) != _switch:
                         raise ValueError('Task routing changed')
                 elif focus and focus.get('task_ref'):
-                    current = store.get(focus['task_ref'])
+                    current = store.get(focus['task_ref'], headers=True)
                     if current is None or (is_v3_record(current)
                             and current['phase'] not in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}):
                         return dict(status='ACTIVE_TASK_EXISTS', task_ref=focus['task_ref'],
                             routing_generation=focus_generation, scanner_run=False), native
-            active = store.get(active=True,owner=owner)
+            active = store.get(active=True, headers=True) if owner is None else None
             if active and owner is None:
                 # Avoid silently joining another editing task. The host may
                 # resume the exact ref, or finish it, then begin the next one.
@@ -508,7 +516,7 @@ class TaskSecurityService:
                 return response
             capture_started_at = self.now()
             from .attribution import observe_start
-            attribution_start = observe_start(self.store(root).records(active=True), capture_started_at)
+            attribution_start = observe_start(self.store(root).records(active=True, headers=True), capture_started_at)
         # Preimages use their independent bounded transaction. Capture source
         # outside the workspace lock, then recheck owner/intent/task membership.
         ref = 'ts1-'+uuid.uuid4().hex
@@ -860,7 +868,7 @@ class TaskSecurityService:
             # Conservatively retain a gap if editing intervals overlap; do not
             # infer exclusive attribution from a whole-workspace snapshot.
             from .attribution import overlapping_tasks
-            overlaps = overlapping_tasks(record, self.store(root).records(), self.now())
+            overlaps = overlapping_tasks(record, self.store(root).records(headers=True), self.now())
             # Keep historical risk membership before staging a new current view.
             from .risk_ledger import TaskRiskLedger
             if record.get('end'):
@@ -1117,14 +1125,15 @@ class TaskSecurityService:
 
     def submit(self, workspace, ref, session, findings, coverage, limitations, risk_resolutions=None, risk_attributions=None):
         root = self.root(workspace)
-        require_record_protocol(self.load(root, ref))
+        require_record_protocol(self.load_header(root, ref))
         with self.hooks.lock(root) as acquired:
             if not acquired:
                 return {'status': 'BUSY'}
-            old = self.load(root, ref)
+            old = self.load_header(root, ref)
             require_record_protocol(old)
-            from .projection import drain
-            old = drain(self, root, old)
+            from .projection import drain, status as projection_status
+            if projection_status(old)['pending']:
+                old = drain(self, root, self.load(root, ref))
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
                 return self.get(workspace, ref, completion_revision=old.get('review_revision', 1))  # no scan/model.
             record = self._session(root, ref, session)
@@ -1132,7 +1141,7 @@ class TaskSecurityService:
             # idle witness too. Never let a finish-time exemption close risks
             # after concurrent activity has resumed.
             from .attribution import overlapping_tasks
-            overlaps = overlapping_tasks(record, self.store(root).records(), self.now())
+            overlaps = overlapping_tasks(record, self.store(root).records(headers=True), self.now())
             if overlaps and record.get('changes') and not any(
                     item.get('reason') == 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
                     for item in record['limitations']):

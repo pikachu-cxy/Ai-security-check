@@ -63,6 +63,18 @@ def test_activity_is_small_deduplicated_and_task_scoped(service):
     assert service[2].calls == []
 
 
+def test_new_goal_precheck_does_not_load_active_tasks_source_pages(service, monkeypatch):
+    task = scoped(service)
+    root = service[1]
+    first = task.begin(root, 'one', check_policy=POLICY)
+    monkeypatch.setattr('security_runtime.tasks.snapshot_pages.unpack',
+                        lambda *args: pytest.fail('Goal precheck loaded task sources'))
+    blocked = task.begin(root, 'two', check_policy=POLICY)
+    assert blocked['status'] == 'ACTIVE_TASK_EXISTS'
+    assert blocked['task_ref'] == first['task_ref']
+    assert service[2].calls == []
+
+
 def test_restart_recovers_focus_without_new_baseline(service):
     a = scoped(service)
     root = service[1]

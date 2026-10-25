@@ -52,7 +52,7 @@ class WorkspaceApplication:
             read_only_scan_store_provider=lambda: ReadOnlySQLiteStore(self.scan_path_provider()),
             source_cache=self.task_source_cache)
         if ref is not None and session_ref is not None:
-            service.load(root,ref)  # Reject before changing connection routing.
+            service.load_header(root,ref)  # Reject before routing, without loading source pages.
             if len(self.issued_tasks)>=64: self.issued_tasks.pop(next(iter(self.issued_tasks)))
             self.issued_tasks[ref]=owner
         return service

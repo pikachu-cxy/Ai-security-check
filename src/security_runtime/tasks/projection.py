@@ -93,7 +93,7 @@ def drain(service, root, record):
         store = service.store(root)
         if record.get('retained_for_projection') is True:
             return store.ack_retained_projection(candidate)
-        return store.save(candidate)
+        return store.save_projection(candidate)
     except (OSError, ValueError, sqlite3.DatabaseError) as exc:
         # The source result was committed first. Preserve its pending intent,
         # rather than pretending a failed projection means no risks were found.

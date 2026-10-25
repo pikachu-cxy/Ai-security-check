@@ -186,8 +186,14 @@ class TaskSecurityStore:
         return self.now() > expires_at(record, self.hooks, self.root, now=self.now)
 
     @guarded_read
-    def records(self, *, active=False):
-        """Bounded signed inventory; never selects a newest foreign task."""
+    def records(self, *, active=False, headers=False):
+        """Authenticate task controls; source consumers use the default full read.
+
+        Header-only results contain no source coverage proof. They are suitable
+        for time-window/owner checks, never for scanning or source review.
+        """
+        if type(headers) is not bool:
+            raise ValueError('Invalid task header read option')
         no_links(self.path)
         if not self.path.is_file(): return []
         with closing(sqlite3.connect(readonly_uri(self.path),uri=True)) as db:
@@ -197,11 +203,14 @@ class TaskSecurityStore:
             predicate="WHERE phase IN ('ACTIVE','STATIC_RUNNING','READY','REVIEWING')" if active else ''
             rows=db.execute(f'SELECT data,mac FROM security_tasks {predicate} ORDER BY rowid DESC LIMIT {MAX_HISTORY_RECORDS}').fetchall()
         from .ownership import ACTIVE
-        records=[self.decode(row) for row in rows]
+        reader = self.head if headers else self.decode
+        records=[reader(row) for row in rows]
         return [v for v in records if v and not self.expired(v) and (not active or v['phase'] in ACTIVE)]
 
     @guarded_read
-    def get(self, ref=None, *, active=False, task_key=None, owner=None):
+    def get(self, ref=None, *, active=False, task_key=None, owner=None, headers=False):
+        if type(headers) is not bool:
+            raise ValueError('Invalid task header read option')
         no_links(self.path)
         if ref is not None and (not isinstance(ref, str) or not REF.fullmatch(ref)):
             raise ValueError('Invalid task reference')
@@ -209,7 +218,7 @@ class TaskSecurityStore:
             return None
         if active and ref is None:
             from .ownership import record_owner
-            values=[v for v in self.records(active=True) if is_v3_record(v)
+            values=[v for v in self.records(active=True, headers=headers) if is_v3_record(v)
                     and (owner is None or record_owner(v)==owner)]
             return values[0] if len(values)==1 else None
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
@@ -218,7 +227,7 @@ class TaskSecurityStore:
                 row = db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (ref,)).fetchone()
             else:
                 row = db.execute('SELECT data,mac FROM security_tasks WHERE task_key=? ORDER BY rowid DESC LIMIT 1', (task_key,)).fetchone()
-            value = self.decode(row)
+            value = self.head(row) if headers else self.decode(row)
             if value and self.expired(value):
                 return None
             return value
@@ -483,6 +492,10 @@ class TaskSecurityStore:
     def save_review(self, value):
         from .review_control import save
         return save(self, value)
+
+    def save_projection(self, value):
+        from .review_control import save_projection
+        return save_projection(self, value)
 
     def _save(self, value, *, new=False, session_idle=False):
         # Keep direct callers under the same source/GC fence as save(). First

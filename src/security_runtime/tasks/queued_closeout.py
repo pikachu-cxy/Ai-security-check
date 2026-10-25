@@ -152,7 +152,7 @@ def recover_source_change(service, workspace, ref, *, resume_capacity=False):
 
 def status(service, workspace, ref):
     root = service.root(workspace)
-    record = service.load(root, ref, read_only=True)
+    record = service.load_header(root, ref, read_only=True)
     queue = CloseoutQueue(service.hooks, root, now=service.now)
     result = queue.view(ref, service._owner())
     row = queue.read(ref)
