@@ -43,10 +43,16 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
             from ..task_closeout_worker import launch_worker
             launch_worker(service.hooks, root)
         return queue.view(ref, service._owner())
-    started = time.perf_counter()
-    end, staged = capture_end(service, root, record)
     from .queued_inputs import QueuedInputs
     inputs = QueuedInputs(service.hooks, root, now=service.now)
+    with inputs.writer() as raw_sink:
+        return _capture_enqueue(service, root, ref, record, queue, inputs, raw_sink,
+                                launch=launch, recovery_from=recovery_from)
+
+
+def _capture_enqueue(service, root, ref, record, queue, inputs, raw_sink, *, launch, recovery_from):
+    started = time.perf_counter()
+    end, staged = capture_end(service, root, record, raw_sink)
     input_ref = None
     try:
         configuration = dict(auxiliary=service._closeout_configuration(root, end),
@@ -58,6 +64,7 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
                 path = (root/path).resolve() if not path.is_absolute() else path.resolve()
                 if not path.is_relative_to(root):
                     raise ValueError('Queued scan requires project-local scanner configuration')
+        raw_sink.prepare(end, configuration['auxiliary'])
         engine = service.runtime() if callable(service.runtime) else service.runtime
         scan_path = getattr(getattr(engine, 'store', None), 'path', None)
         configuration['scan_store'] = str(scan_path.resolve()) if scan_path is not None else None
@@ -80,9 +87,9 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
                 if managed(current):
                     from .closeout_pages import freeze
                     end, small = freeze(service.store(root), current, end)
-                    input_ref = inputs.capture(end, configuration['auxiliary'], snapshot=small, record=current)
+                    input_ref = raw_sink.seal(end, configuration['auxiliary'], snapshot=small, record=current)
                 else:
-                    input_ref = inputs.capture(end, configuration['auxiliary'])
+                    input_ref = raw_sink.seal(end, configuration['auxiliary'])
                 row = queue.submit(current, end, configuration, input_ref,
                                    preparation_ms=round(1000*(time.perf_counter()-started)),
                                    **recovery_args)
@@ -104,7 +111,7 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
             pass  # Unknown references retain their original TTL and quota.
 
 
-def recover_source_change(service, workspace, ref, *, resume_capacity=False):
+def recover_source_change(service, workspace, ref, *, resume_capacity=False, check_ready=True):
     """Explicit prepare may refresh an unfinished end, never a baseline or read.
 
     The original signed queue fences identity/configuration and concurrent
@@ -112,8 +119,10 @@ def recover_source_change(service, workspace, ref, *, resume_capacity=False):
     Return None when ordinary preparation should continue unchanged.
     """
     from .closeout_queue import source_recoverable, MAX_SOURCE_RECOVERIES
+    if type(check_ready) is not bool:
+        raise ValueError('Invalid ready-source check option')
     root = service.root(workspace)
-    record = service.load(root, ref)
+    record = service.load(root, ref) if check_ready else service.load_header(root, ref)
     if (record.get('closeout_dispatch') != 'BACKGROUND_V1' or record.get('native_repair')
             or record['phase'] in {'ACTIVE', 'STATIC_RUNNING', 'COMPLETE'}
             or record['phase'] == 'INCOMPLETE' and not resume_capacity):
@@ -134,13 +143,16 @@ def recover_source_change(service, workspace, ref, *, resume_capacity=False):
         # Configuration/rules and the complete source must still be unchanged.
         if (resume_capacity and row['state'] == 'READY_FOR_REVIEW'
                 and dict(row['configuration']['execution'], build_id=execution['build_id']) == execution
-                and service._fresh(root, record)):
+                and service._fresh(root, record if check_ready else service.load(root, ref))):
             return None
         return dict(status='STALE', task_ref=ref, reason='RUNTIME_OR_CONFIGURATION_CHANGED',
                     next_action=None, baseline_recreated=False, recovery_blocked=True,
                     message='执行身份或配置已变化，不能自动沿用旧检查；保留原任务与基线并说明检查缺口。')
-    if not source_recoverable(row) and service._fresh(root, record):
-        return None
+    if not source_recoverable(row):
+        # Preparation will perform its mandatory current-source check under
+        # the workspace lock. Do not do the same full inventory beforehand.
+        if not check_ready or service._fresh(root, record):
+            return None
     if row.get('source_recovery_count', 0) >= MAX_SOURCE_RECOVERIES:
         result = queue.view(ref, service._owner())
         result.update(status='STALE', next_action=None, recovery_blocked=True,

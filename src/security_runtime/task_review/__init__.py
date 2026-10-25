@@ -20,6 +20,13 @@ from .protocol import PROTOCOL_VERSION, validate_protocol, require_record_protoc
 TERMINAL_RECEIPT_BYTES = 1_600
 
 
+class _ReadySourceChanged:
+    """Private continuation: recover only after releasing the workspace lock."""
+
+    def __init__(self, response, resume_capacity):
+        self.response, self.resume_capacity = response, resume_capacity
+
+
 def submission_contract():
     """Describe submitted IDs separately from source-location metadata."""
     return dict(coverage='REVIEWED or PARTIAL',
@@ -143,12 +150,21 @@ class TaskReviewCoordinator:
         return packet
 
     def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION, *, resume_capacity=False):
+        result = self._prepare(workspace, ref, protocol_version, resume_capacity=resume_capacity)
+        if isinstance(result, _ReadySourceChanged):
+            from ..tasks.queued_closeout import recover_source_change
+            recovered = recover_source_change(self.service, workspace, ref,
+                                               resume_capacity=result.resume_capacity)
+            return recovered if recovered is not None else result.response
+        return result
+
+    def _prepare(self, workspace, ref, protocol_version, *, resume_capacity):
         validate_protocol(protocol_version)
         if type(resume_capacity) is not bool:
             raise ValueError('Invalid capacity recovery option')
         service = self.service
         root = service.root(workspace)
-        initial = service.load(root, ref)
+        initial = service.load_header(root, ref)
         require_record_protocol(initial)
         if initial.get('closeout_dispatch') == 'BACKGROUND_V1':
             from ..tasks.queued_closeout import status, recover_source_change
@@ -158,10 +174,15 @@ class TaskReviewCoordinator:
                 if queued['status'] == 'NOT_QUEUED':
                     queued['next_action'] = 'finish_security_task'
                 return queued
-            capacity_retry = transport.retry_legacy_capacity(initial, include_closed=resume_capacity)
+            # Legacy diagnoses bind the full original before/end hash maps.
+            # Hydrate only this exceptional path; a small authenticated header
+            # cannot prove its snapshot identity or authorize a capacity retry.
+            capacity_source = service.load(root, ref) if initial.get('review_capacity') else initial
+            capacity_retry = transport.retry_legacy_capacity(capacity_source, include_closed=resume_capacity)
             if capacity_retry and queued['status'] in {'CANCELLED', 'FAILED', 'EXPIRED'}:
                 return queued
-            recovery = recover_source_change(service, root, ref, resume_capacity=capacity_retry)
+            recovery = recover_source_change(service, root, ref, resume_capacity=capacity_retry,
+                                             check_ready=False)
             if recovery is not None:
                 return recovery
             if (queued['status'] in {'STALE', 'CANCELLED', 'FAILED', 'EXPIRED'}
@@ -199,12 +220,15 @@ class TaskReviewCoordinator:
                 return service._view(record)
             if ((record['phase'] not in {'READY', 'REVIEWING'} and not resume_closed)
                     or not service._fresh(root, record)):
-                return dict(status='STALE', task_ref=ref, review_required=False,
+                response = dict(status='STALE', task_ref=ref, review_required=False,
                             next_action=('prepare_task_security_review'
                                 if initial.get('closeout_dispatch') == 'BACKGROUND_V1'
                                 and queued['status'] == 'READY_FOR_REVIEW' else None),
                             baseline_recreated=False,
                             message='代码或文件修改检查范围已变化；保留原记录，不能沿用旧证据。')
+                if (record['phase'] in {'READY', 'REVIEWING'} or resume_closed) and response['next_action']:
+                    return _ReadySourceChanged(response, capacity_retry)
+                return response
             if resume_closed:
                 record = copy.deepcopy(record)
                 record.setdefault('capacity_recoveries', []).append(dict(

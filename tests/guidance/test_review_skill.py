@@ -92,6 +92,23 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
     assert REPAIR_IMPACT_GUIDANCE not in workflow
 
 
+def test_closeout_scheduling_reaches_the_installed_skill_after_upgrade(tmp_path):
+    previous = manager(tmp_path)
+    entry = previous.expected['SKILL.md'].decode('utf-8')
+    previous.expected['SKILL.md'] = '\n'.join(line for line in entry.split('\n')
+        if '尽早提交后台收尾' not in line).encode('utf-8')
+    assert previous.execute('install')['status'] == 'INSTALLED'
+    before_method = (previous.root/'references/quick-task-review-v3.md').read_bytes()
+    current = manager(tmp_path)
+    assert current.status()['status'] == 'UPGRADE_AVAILABLE'
+    assert current.execute('upgrade')['status'] == 'INSTALLED'
+    installed = (current.root/'SKILL.md').read_text(encoding='utf-8')
+    for rule in ('尽早提交后台收尾', '已授权且不写项目文件', '不补建基线',
+                 '不能为填充等待增加测试或安装', '源码复核仍等待 READY_FOR_REVIEW'):
+        assert rule in installed
+    assert (current.root/'references/quick-task-review-v3.md').read_bytes() == before_method
+
+
 def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     service=manager(tmp_path)
     home=tmp_path/'home'

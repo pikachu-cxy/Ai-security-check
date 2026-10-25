@@ -1,11 +1,13 @@
 """Private bounded raw inputs retained only until queued static execution ends."""
 import hashlib
+from contextlib import contextmanager
 import os
 from pathlib import Path
 import shutil
 import stat
 import re
 import uuid
+import sqlite3
 
 from ..hook_state import no_links, native_io_path
 from ..scan_input import check_private_input_parent, _write, _read_file, _windows_private_directory
@@ -19,6 +21,22 @@ class QueuedInputs(SignedRecords):
         super().__init__(hooks, root, 'task-queued-inputs.db', **kwargs)
         from ..scan_attempt import _input_parent
         self.parent = _input_parent(hooks).parent/'q'
+
+    @contextmanager
+    def writer(self):
+        """Retain raw bytes during end capture, before the workspace lock.
+
+        Preparation binds capture receipts; publication binds its sealed
+        snapshot reference. Workers verify every private byte before scanning.
+        The existing capture API and already queued records keep their contract.
+        """
+        sink = _CaptureWriter(self)
+        try:
+            sink.start()
+            yield sink
+        finally:
+            if not sink.sealed:
+                sink.discard()
 
     def capture(self, end, auxiliary, *, snapshot=None, record=None):
         from .security import _environment
@@ -82,6 +100,9 @@ class QueuedInputs(SignedRecords):
             expected = {**end['hashes'], **row['auxiliary']}
             row = dict(row, hashes={p:sha for p,sha in expected.items()
                                    if sha is not None and not _environment(p)})
+        return self._open_tree(ref, row, row['hashes'])
+
+    def _directory(self, ref, row):
         path = self.parent/ref
         no_links(path)
         info = path.stat()
@@ -89,6 +110,10 @@ class QueuedInputs(SignedRecords):
         if not historical_identity_matches(row['directory_identity'], info,
                                            captured_at=row['created_at']):
             raise ValueError('Queued input directory replaced')
+        return path
+
+    def _open_tree(self, ref, row, hashes):
+        path = self._directory(ref, row)
         found = set()
         entries = 0
         for directory, children, files in os.walk(path, followlinks=False):
@@ -101,13 +126,13 @@ class QueuedInputs(SignedRecords):
             for name in files:
                 item = Path(directory)/name
                 relative = item.relative_to(path).as_posix()
-                if relative not in row['hashes']:
+                if relative not in hashes:
                     raise ValueError('Unexpected queued input')
                 raw = _read_file(item, 1_000_000)
-                if hashlib.sha256(raw).hexdigest() != row['hashes'][relative]:
+                if hashlib.sha256(raw).hexdigest() != hashes[relative]:
                     raise ValueError('Queued input modified')
                 found.add(relative)
-        if found != set(row['hashes']):
+        if found != set(hashes):
             raise ValueError('Queued input incomplete')
         return path
 
@@ -146,3 +171,109 @@ class QueuedInputs(SignedRecords):
             if row['expires_at'] <= self.now() or (row['state'] == 'READY'
                     and row['key'] not in active_refs and row['created_at']+300 <= self.now()):
                 self.discard(row['key'])
+
+
+class _CaptureWriter:
+    """Unpublished raw inputs use the original quota, identity and lifetime."""
+
+    def __init__(self, store):
+        self.store = store
+        self.ref = 'qi1-' + uuid.uuid4().hex
+        self.row = None
+        self.hashes, self.size = {}, 0
+        self.prepared = self.sealed = False
+        self.auxiliary = None
+
+    def start(self):
+        store = self.store
+        no_links(store.parent)
+        if store.parent.resolve().is_relative_to(store.root):
+            raise ValueError('Queued inputs require private storage outside the source workspace')
+        check_private_input_parent(store.parent)
+        store.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        target = store.parent/self.ref
+        with store.transaction() as db:
+            if sum(row['reserved_bytes'] for row in store._all(db)) + 20_000_000 > MAX_TOTAL:
+                raise ValueError('Queued input storage capacity exceeded')
+            self.row = store._put(db, self.ref, dict(state='PREPARING', hashes={},
+                created_at=store.now(), expires_at=store.now()+86400,
+                reserved_bytes=20_000_000, directory_identity=None))
+            if os.name == 'nt':
+                _windows_private_directory(target)
+            else:
+                target.mkdir(mode=0o700)
+            info = target.stat()
+            self.row = store._put(db, self.ref, dict(self.row,
+                directory_identity=[info.st_dev, info.st_ino]))
+
+    def put(self, name, raw):
+        if self.prepared or self.sealed or self.row is None:
+            raise ValueError('Queued input capture is not writable')
+        sha = hashlib.sha256(raw).hexdigest()
+        if name in self.hashes:
+            if self.hashes[name] != sha:
+                raise ValueError('Source changed during queued input capture')
+            return
+        if len(raw) > 1_000_000 or self.size+len(raw) > 20_000_000:
+            raise ValueError('Queued input size limit exceeded')
+        _write(self.store.parent/self.ref, name, raw)
+        self.hashes[name] = sha
+        self.size += len(raw)
+
+    @staticmethod
+    def expected(end, auxiliary):
+        from .security import _environment
+        return {name: sha for name, sha in {**end['hashes'], **auxiliary}.items()
+                if sha is not None and not _environment(name)}
+
+    def prepare(self, end, auxiliary):
+        if self.prepared or self.sealed:
+            raise ValueError('Queued input capture already prepared')
+        from .security import _environment
+        for name, sha in auxiliary.items():
+            if sha is None or _environment(name):
+                continue
+            if name not in self.hashes:
+                self.put(name, _read_file(self.store.root/name, 1_000_000))
+            if self.hashes[name] != sha:
+                raise ValueError('Source changed during queued input capture')
+        if self.expected(end, auxiliary) != self.hashes:
+            raise ValueError('Queued input source capture incomplete')
+        # The guarded writes already retained these exact source bytes. Check
+        # their signed reservation and directory here; the worker's mandatory
+        # open validates the complete tree and every hash before any scanner
+        # or cached scanner fact can consume it. A queued job is not a scan.
+        current = self.store.read(self.ref)
+        if current != self.row or current['expires_at'] <= self.store.now():
+            raise ValueError('Queued input preparation changed')
+        self.store._directory(self.ref, current)
+        self.auxiliary = dict(auxiliary)
+        self.prepared = True
+
+    def seal(self, end, auxiliary, *, snapshot=None, record=None):
+        if (not self.prepared or self.sealed or auxiliary != self.auxiliary
+                or self.expected(end, auxiliary) != self.hashes):
+            raise ValueError('Queued input prepared version changed')
+        binding = dict(hashes=self.hashes)
+        if snapshot is not None:
+            from .closeout_pages import scope
+            binding = dict(snapshot_scope=scope(record, snapshot), auxiliary=auxiliary)
+        with self.store.transaction() as db:
+            current = self.store._get(db, self.ref)
+            if current != self.row or current['expires_at'] <= self.store.now():
+                raise ValueError('Queued input preparation changed')
+            ready = dict(current, state='READY', reserved_bytes=self.size, **binding)
+            if snapshot is not None:
+                # Preserve compact queue storage: no full hashes alongside the
+                # authenticated snapshot reference, including the empty draft.
+                ready.pop('hashes', None)
+            self.store._put(db, self.ref, ready)
+        self.sealed = True
+        return self.ref
+
+    def discard(self):
+        if self.row is not None:
+            try:
+                self.store.discard(self.ref)
+            except (OSError, ValueError, sqlite3.DatabaseError):
+                pass  # Keep uncertain signed reservations; preserve the original error.

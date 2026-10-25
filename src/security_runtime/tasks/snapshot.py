@@ -155,10 +155,10 @@ def collect_snapshot(root, *, inventory, dirty=(), inventory_complete=True,
         hashes[name] = hashlib.sha256(raw).hexdigest()
         line_counts[name] = len(text.splitlines())
         accepted_bytes += len(raw)
+        if raw_sink is not None and not _environment(name):
+            raw_sink.put(name, raw)
         if not include_text or _environment(name):
             continue
-        if raw_sink is not None:
-            raw_sink.put(name, raw)
         if preimage_writer is not None:
             try:
                 if callable(getattr(preimage_writer, 'put_source', None)):

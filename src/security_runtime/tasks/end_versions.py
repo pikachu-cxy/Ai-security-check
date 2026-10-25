@@ -39,7 +39,7 @@ def discard_unreferenced(service, root, task_ref, *candidates):
         return
 
 
-def capture_end(service, root, record):
+def capture_end(service, root, record, raw_sink=None):
     from .snapshot_pages import batched
     from .security import capture
     from .activity import deferred
@@ -48,6 +48,7 @@ def capture_end(service, root, record):
     kwargs = dict(known_paths=record['baseline'].get('inventory', record['baseline']['hashes']),
                   priority_paths=record.get('end', {}).get('read_priority', ()),
                   batched_files=batched(record),
+                  raw_sink=raw_sink,
                   redaction_version=version)
     if not deferred(record):
         return capture(root, **kwargs, include_text=False), None
