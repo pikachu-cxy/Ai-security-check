@@ -301,12 +301,14 @@ class ProductEpochService:
         if header['file_cursor'] == header['members']:
             header.update(state='SEALED', sealed_at=self.now())
 
-    def step(self, owner):
+    def step(self, owner, *, epoch_ref=None):
         if not valid_owner(owner):
             fail('PRODUCT_EPOCH_OWNER_INVALID')
         if not platform_supported():
             return dict(self.status(), state='PLATFORM_UNSUPPORTED', reason='PRODUCT_EPOCH_PLATFORM_UNSUPPORTED')
         if not self.store.directory.exists():
+            if epoch_ref is not None:
+                fail()
             return self.ensure(owner)
         self.store.check_root()
         started = time.monotonic()
@@ -315,7 +317,7 @@ class ProductEpochService:
                 return dict(self.status(), state='BUSY')
             try:
                 with self.store.db(write=True) as (db, key):
-                    header = self.store.load(db, key, policy=self.policy_digest)
+                    header = self.store.load(db, key, ref=epoch_ref, policy=self.policy_digest)
                     if header is None:
                         fail('PRODUCT_EPOCH_NOT_STARTED')
                     if header['state'] == 'SEALED':

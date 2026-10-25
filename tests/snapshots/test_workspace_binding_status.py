@@ -18,7 +18,9 @@ def context(tmp_path, monkeypatch):
     home.mkdir()
     monkeypatch.setenv('SECURITY_RUNTIME_CODEX_HOME', str(home))
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'runtime'))
-    pool = GlobalWorkspaces(base=tmp_path/'routing', integration=SimpleNamespace(home=home))
+    pool = GlobalWorkspaces(base=tmp_path/'routing', integration=SimpleNamespace(
+        home=home, configuration_status=lambda: {'overall': 'CONFIGURED'},
+        inspect_project=lambda path: []))
     for name in ('admit', 'bootstrap'):
         monkeypatch.setattr(pool, name, lambda *a, **kw: pytest.fail('diagnostic cannot admit or bootstrap'))
     server = create_global_server(workspaces=pool)
@@ -40,6 +42,9 @@ def test_unregistered_path_and_denied_home_diagnostics_create_no_state(context):
         good = query(server, root)
         assert good['path_status'] == 'ALLOWED' and good['resolved_workspace'] == str(root)
         assert good['session_binding_status'] == 'UNKNOWN' and not good['binding_confirmed']
+        assert good['configuration_status'] == 'VALIDATED'
+        assert good['admission_status'] == 'ELIGIBLE'
+        assert not good['routing_binding_confirmed']
         bad = query(server, home)
         assert bad['path_status'] == 'REJECTED' and bad['resolved_workspace'] is None
         assert bad['reason_code'] == 'WORKSPACE_OUTSIDE_ALLOWED_ROOT'
@@ -56,6 +61,8 @@ def test_signed_routing_match_does_not_pretend_to_verify_current_chat(context):
     out = query(server, root, session_ref=token)
     assert out['session_binding_status'] == 'MATCH'
     assert out['identity_evidence'] == 'SIGNED_ROUTING_CONTEXT_ONLY'
+    assert out['routing_binding_confirmed']
+    assert out['session_context_status'] == 'VERIFIED'
     assert not out['binding_confirmed'] and not out['current_host_verified']
     assert out['execution_root_match'] is None
     assert before == {p:(p.read_bytes(), p.stat().st_mtime_ns) for p in root.parent.rglob('*') if p.is_file()}
@@ -86,3 +93,42 @@ def test_unverified_query_never_reads_existing_foreign_registration(context, tok
     result = query(server, root, session_ref=token)
     assert result['session_binding_status'] == 'UNKNOWN'
     assert result['registered_workspace'] is None and not result['binding_confirmed']
+
+
+@pytest.mark.parametrize('failure,reason', [
+    ('global', 'GLOBAL_CONFIGURATION_NOT_READY'),
+    ('project', 'LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR'),
+    ('directory', 'WORKSPACE_OUTSIDE_ALLOWED_ROOT'),
+])
+def test_preflight_reports_second_stage_rejection_before_missing_context(context, failure, reason):
+    root, _, pool, server = context
+    before = list(root.parent.rglob('*'))
+    if failure == 'global':
+        pool.integration.configuration_status = lambda: {'overall': 'DEGRADED'}
+    elif failure == 'project':
+        pool.integration.inspect_project = lambda path: [{'related': True}]
+    else:
+        def reject(path):
+            raise ValueError('RUNTIME_STATE_IS_NOT_A_WORKSPACE')
+        pool.integration.inspect_project = reject
+    out = query(server, root)
+    assert out['path_status'] == 'ALLOWED'
+    assert out['configuration_status'] == out['admission_status'] == 'REJECTED'
+    assert out['resolution_stage'] == 'VALIDATING_CONFIGURATION'
+    assert out['reason_code'] == reason
+    assert out['next_action'] == 'CHECK_INTEGRATION_CONFIGURATION'
+    assert not out['routing_binding_confirmed'] and not out['scanner_run']
+    assert not pool.sessions and not pool.children and not pool.jobs
+    assert list(root.parent.rglob('*')) == before
+
+
+def test_other_root_token_cannot_confirm_or_disclose_routing(context):
+    root, _, pool, server = context
+    other = root.parent/'other-project'
+    other.mkdir()
+    hooks = HookStateStore(workspace_state(other, pool.base)/'hooks')
+    token = issue_session_ref(hooks, other, 'codex', 'other-session')
+    pool.bind_session('other-session', other)
+    out = query(server, root, session_ref=token)
+    assert out['session_context_status'] == 'UNVERIFIED'
+    assert out['registered_workspace'] is None and not out['routing_binding_confirmed']

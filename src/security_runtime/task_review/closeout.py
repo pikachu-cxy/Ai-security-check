@@ -19,7 +19,7 @@ def retain_delivery_blocker(service, root, record, reason):
         saved = service.load(root, record['task_ref'])
         saved['review_delivery_blocker'] = record['review_delivery_blocker'] = dict(
             reason=reason, review_revision=record.get('review_revision', 1))
-        service.store(root).save(saved)
+        service.store(root).save_review(saved)
 
 
 def _delivery_blocked(record):

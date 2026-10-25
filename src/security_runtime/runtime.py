@@ -382,7 +382,13 @@ class SecurityRuntime:
                 emit('SCANNER_STARTED', scanner=scanner.name, capability=tuple(scanner.capabilities))
             try:
                 scanner_context=replace(context,rule_plan=rule_plans[scanner.name]) if scanner.name in rule_plans else context
-                found, run = scanner.scan(scanner_context, normalizer)
+                from .dynamic_function import NativeFunctionScanner
+                if (type(scanner) is NativeFunctionScanner and attempt is not None
+                        and getattr(attempt, 'artifact_cache', False) and hook_observer is None
+                        and getattr(attempt, 'allow_artifact_reuse', True)):
+                    found, run = scanner.scan(scanner_context, normalizer, partition_state=attempt.store)
+                else:
+                    found, run = scanner.scan(scanner_context, normalizer)
             except ScanCancelled:
                 raise
             except Exception as exc:
@@ -410,9 +416,17 @@ class SecurityRuntime:
             if Capability.DEPENDENCY_VULN in scanner.capabilities and run.provider_role == 'PRIMARY' and should_fallback(run):
                 fallback = next((adapter for adapter in getattr(self.registry, 'fallback_adapters', [])
                     if Capability.DEPENDENCY_VULN in adapter.capabilities and adapter.supports(profile, context)), None)
+                # A Maven 429 stops remote graph resolution. Match only locally
+                # confirmed direct POM versions against the already cached DB.
+                from .scanners import TrivyAdapter
+                if isinstance(scanner, TrivyAdapter) and run.error_code == 'MAVEN_RATE_LIMITED':
+                    from .maven_direct import MavenDirectAdapter
+                    direct = MavenDirectAdapter(scanner.tool_manager)
+                    fallback = direct if direct.supports(profile, context) else None
                 if fallback:
                     emit('FALLBACK_SELECTED', scanner=fallback.name, capability=(Capability.DEPENDENCY_VULN,),
-                        error_code=run.error_code, message='依赖检查切换至 OSV-Scanner')
+                        error_code=run.error_code, message=('Maven 429：只检查本地可确认的直接依赖，间接依赖不完整。'
+                            if fallback.name == 'trivy-maven-direct' else '依赖检查切换至 OSV-Scanner'))
                     more, fallback_runs = execute(fallback)
                     found.extend(more)
                     provider_runs.extend(fallback_runs)

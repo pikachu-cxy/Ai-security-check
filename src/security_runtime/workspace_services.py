@@ -69,4 +69,6 @@ def workspace_services(root, directory):
         seeds=NoProjectSeed(), activity_wait_seconds=10)
     from .task_closeout_worker import recover
     recover(core.store, root)
+    from .product_epoch_worker import launch
+    launch(core.store, root)
     return runtime, core, is_git

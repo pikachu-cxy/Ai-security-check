@@ -187,8 +187,11 @@ class SecuritySummaryService:
         dependency = scan.get('capability_details',{}).get('DEPENDENCY_VULN',{})
         fallback = dependency.get('provider_role') == 'FALLBACK'
         degraded = fallback and dependency.get('status') in {'EXECUTED','PARTIAL'}
+        direct_only = any(r.get('scanner') == 'trivy-maven-direct' and r.get('status') == 'SUCCESS'
+                          for r in scan.get('scanner_runs', []))
         result['dependency_health'] = {'status':'FALLBACK_SUCCEEDED_WITH_LIMITS' if degraded else dependency.get('status','NOT_EXECUTED'),
-            'message':'主依赖引擎受阻，回退引擎已提供结果；依赖图仍可能不完整，并非全部依赖扫描失败。' if degraded else
+            'message':'Maven 仓库返回 HTTP 429；仅返回本地可确定版本的 POM 直接依赖检查结果，间接依赖扫描不完整。' if direct_only else
+                '主依赖引擎受阻，回退引擎已提供结果；依赖图仍可能不完整，并非全部依赖扫描失败。' if degraded else
                       '以原扫描的依赖执行状态和图覆盖为准；扫描器成功不等于调用链已验证。',
             'complete_graph_verified':dependency.get('inventory', {}).get('complete_dependency_graph_attested') is True,
             'automatic_retry':False}

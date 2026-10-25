@@ -120,7 +120,8 @@ def _requirement(path, file_hash, version, low=1, high=None):
                 start_line=low, end_line=high)
 
 
-def build_plan(record, *, now=None, deadline=None, limits=None, protocol_version=PROTOCOL_VERSION):
+def build_plan(record, *, now=None, deadline=None, limits=None, protocol_version=PROTOCOL_VERSION,
+               storage_snapshots=None):
     """Create the sole executable plan without migrating an older task."""
     validate_protocol(protocol_version)
     require_record_protocol(record)
@@ -134,10 +135,11 @@ def build_plan(record, *, now=None, deadline=None, limits=None, protocol_version
         return plan
     if record.get('review_ledger'):
         validate_protocol(record['review_ledger'].get('protocol_version'))
-    return _build_adaptive(record, now=_now(now), deadline=deadline, limits=None)
+    return _build_adaptive(record, now=_now(now), deadline=deadline, limits=None,
+                           storage_snapshots=storage_snapshots)
 
 
-def _build_adaptive(record, *, now, deadline, limits):
+def _build_adaptive(record, *, now, deadline, limits, storage_snapshots=None):
     from . import budget as adaptive
     from .windows import adaptive_windows
     if limits is not None:
@@ -205,7 +207,10 @@ def _build_adaptive(record, *, now, deadline, limits):
             source = record[_VERSIONS[window['location_version']]]
             _source_binding(record, plan, window['path'], window['file_sha256'],
                             window['location_version'], _line_count(source, window['path']))
-    metadata_capacity = record_capacity(record)
+    # Source-window planning hydrates temporary bodies. Capacity must instead
+    # use the original verified snapshots that the coordinator will persist.
+    metadata_capacity = record_capacity(dict(record, **storage_snapshots)
+                                        if storage_snapshots is not None else record)
     plan['metadata_capacity'] = metadata_capacity
     if metadata_capacity['status'] != 'READY':
         ledger['capacity']['status'] = 'CAPACITY_REQUIRED'

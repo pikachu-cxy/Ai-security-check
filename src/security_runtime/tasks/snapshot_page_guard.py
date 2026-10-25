@@ -119,7 +119,12 @@ def page_guard(directory, *, exclusive=False, create=False, wait_seconds=2):
                 or marker_info.st_size > 512 or (os.name != 'nt' and marker_info.st_mode & 0o077)):
             raise SnapshotStoreError('SNAPSHOT_GC_GUARD_UNAVAILABLE')
         with identity.open('rb') as stream:
-            if json.loads(stream.read(513)) != expected:
+            saved = json.loads(stream.read(513))
+            from ..persisted_file_identity import historical_identity_matches
+            if (not isinstance(saved, dict) or set(saved) != set(expected)
+                    or saved.get('contract') != expected['contract']
+                    or not historical_identity_matches(
+                        [saved.get('device'), saved.get('inode')], info, anchor=marker_info)):
                 raise SnapshotStoreError('SNAPSHOT_GC_GUARD_UNAVAILABLE')
         held[marker] = dict(exclusive=exclusive, fd=fd)
         yield

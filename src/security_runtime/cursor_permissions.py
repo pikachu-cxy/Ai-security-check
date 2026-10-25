@@ -20,6 +20,7 @@ ROUTINE_TOOLS = (
     'get_task_review_plan', 'get_task_review_method', 'submit_task_review_batch',
     'read_task_review_context', 'submit_task_security_review', 'get_task_security_review',
     'get_task_risk_ledger', 'get_runtime_info', 'get_scan_preparation_status', 'get_security_summary',
+    'get_scan_status', 'get_scan_result', 'list_scan_jobs',
     'get_findings', 'prepare_finding_feedback', 'submit_finding_feedback', 'get_finding_feedback',
     'mark_finding_false_positive', 'revoke_finding_feedback', 'set_finding_disposition',
     'prepare_task_risk_feedback', 'submit_task_risk_feedback', 'get_task_risk_feedback',

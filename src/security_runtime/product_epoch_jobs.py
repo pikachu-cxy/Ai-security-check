@@ -4,6 +4,7 @@ The service owns durable progress and cross-process fencing. This scheduler
 only lends one executor turn at a time; it never authorizes task preimages.
 """
 from concurrent.futures import Future, InvalidStateError
+import sqlite3
 import threading
 
 from .product_epoch_store import ProductEpochError
@@ -45,8 +46,11 @@ def _advance(service, owner, first):
 
 
 class ProductEpochJobs:
-    def __init__(self, executor):
+    def __init__(self, executor, *, detached=False):
+        if type(detached) is not bool:
+            raise ValueError('Invalid product observation scheduler option')
         self.executor = executor
+        self.detached = detached
         self.lock = threading.RLock()
         self.jobs = {}
         self.resources = {}
@@ -92,7 +96,15 @@ class ProductEpochJobs:
                 return
             self.active[result] = self.active.get(result, 0)+1
         try:
-            status = _advance(service, owner, first)
+            if self.detached:
+                status = self._detached_turn(service, owner, first)
+                if status is None:
+                    timer = threading.Timer(1, self._poll, (service, owner, result))
+                    timer.daemon = True
+                    timer.start()
+                    return
+            else:
+                status = _advance(service, owner, first)
             if status['state'] in TERMINAL:
                 result.set_result(status)
                 return
@@ -130,6 +142,45 @@ class ProductEpochJobs:
                     self.resources.pop(result, None)
                     self.progress.pop(result, None)
                     service.close()
+
+    def _detached_turn(self, service, owner, first):
+        from .product_epoch_worker import EpochQueue, EpochWorkerUnavailable, launch
+        queue = EpochQueue(service.hooks, service.root)
+        if first:
+            status = _advance(service, owner, True)
+            if status['state'] in TERMINAL:
+                return status
+            queue.submit(service, owner, status)
+        job = queue.read('$job')
+        if job is None:
+            raise ValueError('Original product observation request unavailable')
+        current = queue.verify(service, job)
+        if current['state'] == 'SEALED':
+            return current
+        if job['state'] in {'QUEUED', 'RUNNING'}:
+            # Reclaims an expired process lease; live leases do not respawn.
+            try:
+                launch(service.hooks, service.root)
+            except EpochWorkerUnavailable:
+                return dict(current, state='BUSY', reason='PRODUCT_EPOCH_WORKER_UNAVAILABLE')
+            except sqlite3.OperationalError as error:
+                if getattr(error, 'sqlite_errorcode', None) not in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED}:
+                    raise
+                return dict(current, state='BUSY', reason='PRODUCT_EPOCH_WORKER_BUSY')
+            return None
+        return dict(current, state=job['state'], reason=job.get('reason'))
+
+    def _poll(self, service, owner, result):
+        with self.lock:
+            if self.closed or result.done():
+                return
+            try:
+                self.executor.submit(self._turn, service, owner, result)
+            except RuntimeError as error:
+                if not result.done():
+                    result.set_exception(error)
+                self.resources.pop(result, None)
+                service.close()
 
     def close(self):
         with self.lock:

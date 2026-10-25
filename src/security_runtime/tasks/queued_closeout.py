@@ -8,6 +8,7 @@ from .activity import deferred
 from .closeout_queue import CloseoutQueue, PENDING, fingerprint
 from .end_versions import capture_end
 from .ownership import record_owner
+from .baseline_identity import baseline_snapshot, baseline_fingerprint
 
 
 def execution_identity():
@@ -60,22 +61,31 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
         engine = service.runtime() if callable(service.runtime) else service.runtime
         scan_path = getattr(getattr(engine, 'store', None), 'path', None)
         configuration['scan_store'] = str(scan_path.resolve()) if scan_path is not None else None
-        input_ref = inputs.capture(end, configuration['auxiliary'])
         # Serialize submission against foreground completion/cancellation.
         with service.hooks.lock(root, wait_seconds=2) as acquired:
             if not acquired:
                 return dict(status='BUSY', task_ref=ref, scanner_run=False, reason='QUEUE_SUBMISSION_LOCK')
             current = service.load(root, ref)
-            if current['baseline'] != record['baseline']:
+            if baseline_snapshot(current) != baseline_snapshot(record):
                 raise ValueError('Original baseline changed')
             if recovery_from is not None and current['phase'] in {'COMPLETE', 'INCOMPLETE'}:
                 return service._view(current)
             # Ordinary closeout retains the original call contract. A long-lived
             # DEV process may have imported the queue before recovery was added.
             recovery_args = {} if recovery_from is None else dict(recovery_from=recovery_from)
-            row = queue.submit(current, end, configuration, input_ref,
-                               preparation_ms=round(1000*(time.perf_counter()-started)),
-                               **recovery_args)
+            from .snapshot_page_guard import page_guard
+            from .snapshot_pages import managed
+            # Keep unpublished pages fenced until their queue reference commits.
+            with page_guard(service.store(root).path.parent, create=managed(current)):
+                if managed(current):
+                    from .closeout_pages import freeze
+                    end, small = freeze(service.store(root), current, end)
+                    input_ref = inputs.capture(end, configuration['auxiliary'], snapshot=small, record=current)
+                else:
+                    input_ref = inputs.capture(end, configuration['auxiliary'])
+                row = queue.submit(current, end, configuration, input_ref,
+                                   preparation_ms=round(1000*(time.perf_counter()-started)),
+                                   **recovery_args)
             service.store(root).save(current)  # Explicit closeout refreshes idle retention, never the baseline.
         if launch:
             from ..task_closeout_worker import launch_worker
@@ -85,12 +95,16 @@ def enqueue(service, workspace, ref, *, launch=True, recovery_from=None):
         if staged:
             from .end_versions import discard_unreferenced
             discard_unreferenced(service, root, ref, staged)
-        saved = queue.read(ref)
-        if input_ref and (not saved or saved.get('input_ref') != input_ref):
-            inputs.discard(input_ref)
+        # Cleanup must never replace the original failure with a second error.
+        try:
+            saved = queue.read(ref)
+            if input_ref and (not saved or saved.get('input_ref') != input_ref):
+                inputs.discard(input_ref)
+        except Exception:
+            pass  # Unknown references retain their original TTL and quota.
 
 
-def recover_source_change(service, workspace, ref):
+def recover_source_change(service, workspace, ref, *, resume_capacity=False):
     """Explicit prepare may refresh an unfinished end, never a baseline or read.
 
     The original signed queue fences identity/configuration and concurrent
@@ -101,7 +115,8 @@ def recover_source_change(service, workspace, ref):
     root = service.root(workspace)
     record = service.load(root, ref)
     if (record.get('closeout_dispatch') != 'BACKGROUND_V1' or record.get('native_repair')
-            or record['phase'] in {'ACTIVE', 'STATIC_RUNNING', 'COMPLETE', 'INCOMPLETE'}):
+            or record['phase'] in {'ACTIVE', 'STATIC_RUNNING', 'COMPLETE'}
+            or record['phase'] == 'INCOMPLETE' and not resume_capacity):
         return None
     queue = CloseoutQueue(service.hooks, root, now=service.now)
     row = queue.read(ref)
@@ -111,7 +126,16 @@ def recover_source_change(service, workspace, ref):
         return None
     if row.get('end', {}).get('version_ref') != record.get('end', {}).get('version_ref'):
         return None
-    if execution_identity() != row['configuration']['execution']:
+    execution = execution_identity()
+    if execution != row['configuration']['execution']:
+        # Explicit preparation of an old pre-delivery capacity diagnosis may
+        # continue reviewing the SAVED scan facts after a Runtime update. This
+        # never changes the scan's recorded build or executes/reuses a new scan.
+        # Configuration/rules and the complete source must still be unchanged.
+        if (resume_capacity and row['state'] == 'READY_FOR_REVIEW'
+                and dict(row['configuration']['execution'], build_id=execution['build_id']) == execution
+                and service._fresh(root, record)):
+            return None
         return dict(status='STALE', task_ref=ref, reason='RUNTIME_OR_CONFIGURATION_CHANGED',
                     next_action=None, baseline_recreated=False, recovery_blocked=True,
                     message='执行身份或配置已变化，不能自动沿用旧检查；保留原任务与基线并说明检查缺口。')
@@ -182,11 +206,14 @@ def execute_one(service, workspace, ref, *, worker=None):
     thread.start()
     try:
         record = service.load(root, ref)
-        if record_owner(record) != claim['owner'] or fingerprint(record['baseline']) != claim['baseline_digest']:
+        if record_owner(record) != claim['owner'] or baseline_fingerprint(record) != claim['baseline_digest']:
             raise ValueError('Original task identity changed')
         if record['phase'] == 'INCOMPLETE':
             queue.finish(claim, 'CANCELLED', 'TASK_ALREADY_CLOSED')
             return True
+        from .closeout_pages import restore
+        # The queue stays compact. Only the worker's compatibility view expands.
+        claim = dict(claim, end=restore(service.store(root), record, claim['end']))
         lane = ScanAttemptStore(service.hooks, root, now=service.now).read()['lane']
         if lane and lane['state'] == 'ACTIVE' and lane['expires_at'] > service.now():
             queue.finish(claim, 'RETRY_WAIT', 'SCAN_RESOURCE_BUSY')
@@ -224,7 +251,12 @@ def execute_one(service, workspace, ref, *, worker=None):
         # Fixed reason; never persist exception text containing source or secrets.
         from .diagnostics import owned_storage_failure
         admission = owned_storage_failure(exc)
-        if admission is not None and admission['retryable']:
+        from .durable import operation_failure
+        operation = operation_failure(exc)
+        if operation is not None:
+            queue.finish(claim, 'RETRY_WAIT' if operation['status'] in {'BUSY', 'CAPACITY_REQUIRED'}
+                         else 'FAILED', operation['reason_code'])
+        elif admission is not None and admission['retryable']:
             # Keep the original frozen inputs and task/version binding. A
             # permission-admission lock is not a terminal execution failure.
             queue.finish(claim, 'RETRY_WAIT', admission['reason_code'])

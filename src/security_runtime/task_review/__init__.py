@@ -83,7 +83,7 @@ class TaskReviewCoordinator:
                 'The signed review record cannot safely grow; existing delivered evidence is retained',
                 recoverable=False, guidance='Keep this task and its existing evidence; save an honest partial result without resetting its ledger.',
                 details={key: capacity[key] for key in ('required_record_bytes', 'maximum_record_bytes')})
-        record.update(self.service.store(root).save(record))
+        record.update(self.service.store(root).save_review(record))
         return packet
 
     def _method(self, protocol_version=PROTOCOL_VERSION):
@@ -142,8 +142,10 @@ class TaskReviewCoordinator:
             record['completion_delivery']['response_bytes_bound'] = 'PENDING_OR_APPLIED_UPPER_BOUND'
         return packet
 
-    def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION):
+    def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION, *, resume_capacity=False):
         validate_protocol(protocol_version)
+        if type(resume_capacity) is not bool:
+            raise ValueError('Invalid capacity recovery option')
         service = self.service
         root = service.root(workspace)
         initial = service.load(root, ref)
@@ -156,7 +158,10 @@ class TaskReviewCoordinator:
                 if queued['status'] == 'NOT_QUEUED':
                     queued['next_action'] = 'finish_security_task'
                 return queued
-            recovery = recover_source_change(service, root, ref)
+            capacity_retry = transport.retry_legacy_capacity(initial, include_closed=resume_capacity)
+            if capacity_retry and queued['status'] in {'CANCELLED', 'FAILED', 'EXPIRED'}:
+                return queued
+            recovery = recover_source_change(service, root, ref, resume_capacity=capacity_retry)
             if recovery is not None:
                 return recovery
             if (queued['status'] in {'STALE', 'CANCELLED', 'FAILED', 'EXPIRED'}
@@ -171,6 +176,13 @@ class TaskReviewCoordinator:
                 return dict(status='BUSY', task_ref=ref, scanner_run=False)
             record = service.load(root, ref)
             require_record_protocol(record)
+            if (initial.get('closeout_dispatch') == 'BACKGROUND_V1'
+                    and transport.retry_legacy_capacity(record, include_closed=resume_capacity)):
+                # Cancellation can race the pre-lock queue observation. Check
+                # it again under the same workspace lock used by cancellation.
+                queued = status(service, root, ref)
+                if queued['status'] not in {'READY_FOR_REVIEW', 'INCOMPLETE'}:
+                    return queued
             if record['phase']=='STATIC_RUNNING':
                 from ..scan_attempt import ScanAttemptStore
                 attempts=ScanAttemptStore(service.hooks,root,now=service.now)
@@ -181,22 +193,40 @@ class TaskReviewCoordinator:
                         and all(lane.get(key)==receipt.get(key) for key in
                             ('attempt_id','generation','cancel_generation'))):
                     return dict(status='BUSY',task_ref=ref,scanner_run=False)
-            if record['phase'] in {'NO_CHANGES', 'INCOMPLETE', 'COMPLETE'}:
+            resume_closed = (resume_capacity and record['phase'] == 'INCOMPLETE'
+                             and transport.retry_legacy_capacity(record, include_closed=True))
+            if record['phase'] in {'NO_CHANGES', 'INCOMPLETE', 'COMPLETE'} and not resume_closed:
                 return service._view(record)
-            if record['phase'] not in {'READY', 'REVIEWING'} or not service._fresh(root, record):
+            if ((record['phase'] not in {'READY', 'REVIEWING'} and not resume_closed)
+                    or not service._fresh(root, record)):
                 return dict(status='STALE', task_ref=ref, review_required=False,
                             next_action=('prepare_task_security_review'
                                 if initial.get('closeout_dispatch') == 'BACKGROUND_V1'
                                 and queued['status'] == 'READY_FOR_REVIEW' else None),
                             baseline_recreated=False,
                             message='代码或文件修改检查范围已变化；保留原记录，不能沿用旧证据。')
+            if resume_closed:
+                record = copy.deepcopy(record)
+                record.setdefault('capacity_recoveries', []).append(dict(
+                    reason='LEGACY_PAGED_RECORD_MISCOUNT', previous_phase='INCOMPLETE',
+                    previous_skip_reason=record.pop('skip_reason', None), resumed_at=service.now(),
+                    previous_closed_at=record.pop('closed_at', None),
+                    snapshot_id=record['review_capacity']['snapshot_id']))
+                record['phase'] = 'READY'
+            retry_capacity = False
             if record.get('review_capacity'):
-                return self._capacity_packet(record)
+                retry_capacity = transport.retry_legacy_capacity(record)
+                if not retry_capacity:
+                    return self._capacity_packet(record)
+                # Local candidate only: CAS-save the replacement plan together
+                # with removing the obsolete diagnosis, or retain the old row.
+                record = copy.deepcopy(record)
+                record.pop('review_capacity')
             if record.get('review_plan'):
                 if service.now() > record['review_deadline']:
                     plans.renew_activity(record, now=service.now(), resume=True)
             elif (record.get('review_deadline', float('inf')) < service.now()
-                    and not record.get('pending_review_revision')):
+                    and not record.get('pending_review_revision') and not retry_capacity):
                 return dict(status='EXPIRED', task_ref=ref, review_required=False)
             # A refinish archives the old plan. Its signed pending revision is
             # validated by revision_ledger below, which renews only the idle
@@ -236,7 +266,8 @@ class TaskReviewCoordinator:
                             if limitation not in record['limitations']:
                                 record['limitations'].append(limitation)
                 deadline = record.get('review_deadline', service.now()+900)
-                plans.build_plan(hydrated, now=service.now(), protocol_version=PROTOCOL_VERSION)
+                plans.build_plan(hydrated, now=service.now(), protocol_version=PROTOCOL_VERSION,
+                                 storage_snapshots={key: record[key] for key in ('baseline', 'end')})
                 deadline = hydrated['review_plan']['deadline']
                 record['review_plan'] = hydrated['review_plan']
                 record['review_ledger'] = hydrated['review_ledger']
@@ -252,7 +283,7 @@ class TaskReviewCoordinator:
                         plan_id=record['review_plan']['plan_id'], snapshot_id=record['review_plan']['snapshot_id'],
                         unit_count=len(record['review_plan']['units']), reviewed_unit_count=0,
                         source_delivery_started=False,
-                        **{key: capacity[key] for key in ('required_record_bytes', 'maximum_record_bytes')})
+                        **{key: capacity[key] for key in ('required_record_bytes', 'maximum_record_bytes', 'capacity_basis')})
                     # Keep the complete original change inventory and source
                     # references. Do not publish a plan/ledger that storage
                     # cannot hold, or silently omit its trailing units.
@@ -529,7 +560,7 @@ class TaskReviewCoordinator:
             if exc.reason_code in DELIVERY_BLOCKERS:
                 refused['review_delivery_blocker'] = dict(reason=exc.reason_code,
                     review_revision=record.get('review_revision', 1))
-            service.store(root).save(refused)
+            service.store(root).save_review(refused)
             raise TaskContextError(exc.reason_code, str(exc), recoverable=False,
                 guidance='Keep this task, source bindings and delivered evidence; correct the named capacity or range limitation without resetting its ledger.') from None
         except TaskContextError as exc:
@@ -539,5 +570,5 @@ class TaskReviewCoordinator:
             if exc.reason_code in DELIVERY_BLOCKERS:
                 refused['review_delivery_blocker'] = dict(reason=exc.reason_code,
                     review_revision=record.get('review_revision', 1))
-            service.store(root).save(refused)
+            service.store(root).save_review(refused)
             raise

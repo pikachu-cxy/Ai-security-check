@@ -9,7 +9,7 @@ from ..hook_state import no_links
 CONTRACT = 'runtime-guidance-v1'
 MAX_BYTES = 256_000
 TOPICS = ('core', 'runtime-workflow', 'task-review', 'risk-decisions', 'repair-impact', 'deep-audit')
-_VERSIONS = dict(zip(TOPICS, ('runtime-guidance-core-v1', 'runtime-workflow-v2', 'quick-task-review-v3',
+_VERSIONS = dict(zip(TOPICS, ('runtime-guidance-core-v1', 'runtime-workflow-v3', 'quick-task-review-v3',
                             'risk-decisions-v2', 'repair-impact-v1', '1.0.0')))
 _REFERENCES = dict(zip(TOPICS, ('SKILL.md', 'references/runtime-workflow.md',
     'references/quick-task-review-v3.md', 'references/risk-decisions.md',

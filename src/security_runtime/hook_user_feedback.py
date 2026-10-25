@@ -356,6 +356,12 @@ def dependency_status_message(result: dict) -> str:
         errors.add(reason)
     start = ('依赖检查只完成部分范围，尚未确认完整依赖范围。' if state == 'PARTIAL' else
              '依赖检查没有完成，暂时无法确认依赖是否安全。')
+    direct_runs = [r for r in runs if isinstance(r, dict) and r.get('scanner') == 'trivy-maven-direct']
+    if direct_runs:
+        start += ('Maven 仓库返回 HTTP 429，已停止远程解析间接依赖；'
+                  '当前仅返回能够本地确定版本的 POM 直接依赖结果，间接依赖扫描不完整。'
+                  if any(r.get('status') == 'SUCCESS' for r in direct_runs) else
+                  'Maven 仓库返回 HTTP 429，已停止远程解析；直接依赖降级检查也未完成，间接依赖未完整检查。')
     inventories = result.get('dependency_inventory', [])
     inventories = inventories if isinstance(inventories, list) else []
     missing, observed = set(), set()

@@ -82,7 +82,9 @@ class GlobalWorkspaces:
         self.jobs = {}
         self.executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='runtime-bootstrap')
         from .product_epoch_jobs import ProductEpochJobs
-        self.epoch_jobs = ProductEpochJobs(self.executor)
+        # Custom embeddings own their execution strategy; the installed product
+        # continues observation independently of its short-lived MCP process.
+        self.epoch_jobs = ProductEpochJobs(self.executor, detached=child_factory is None)
         self.lock = threading.RLock()
 
     @staticmethod
@@ -497,7 +499,7 @@ def create_global_server(*, workspaces=None, host='codex'):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_workspace_binding_status(workspace_path: str, session_ref: str | None = None) -> dict:
-        """Inspect path admission and this credential's existing routing only. No bootstrap, scan, key creation or binding changes. Signed routing consistency does not verify the current host chat or execution directory."""
+        """Read path and configuration eligibility, then this credential's existing routing. No admission, bootstrap, scan, key creation or binding changes. routing_binding_confirmed only proves signed routing consistency; binding_confirmed/current_host_verified remain false without host attestation."""
         from .workspace_binding_status import inspect_binding
         return inspect_binding(pool, workspace_path, session_ref)
 
@@ -774,6 +776,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                     return CallToolResult(isError=True, structuredContent=data,
                         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             from .tasks.diagnostics import owned_storage_failure
+            from .tasks.durable import operation_failure
+            operation = operation_failure(exc)
+            if operation is not None:
+                return CallToolResult(isError=False, structuredContent=operation,
+                    content=[TextContent(type='text', text=json.dumps(operation, ensure_ascii=False))])
             admission = owned_storage_failure(exc)
             if admission is not None:
                 return CallToolResult(isError=False, structuredContent=admission,

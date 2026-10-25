@@ -1,4 +1,4 @@
-"""Birth-only opt-in and actual old-install fences, without a V2 publisher."""
+"""Birth-only opt-in, baseline publication and actual old-install fences."""
 import copy
 import hashlib
 import json
@@ -84,7 +84,9 @@ def test_fresh_owned_closeout_gets_immutable_birth_fence_and_original_donor_doma
     assert record["capture_policy"] == POLICY and record[PROFILE_FIELD] == PROFILE
     assert batched(record) and managed(record)
     assert "review_plan" not in record and "review_revision" not in record
-    assert DESCRIPTOR_FIELD not in record and DESCRIPTOR_FIELD not in record["baseline"]
+    assert DESCRIPTOR_FIELD not in record
+    assert record["baseline"][DESCRIPTOR_FIELD]["contract"] == "task-capture-source-v2"
+    assert sample.service.baseline_publication_status(sample.root, sample.ref)["state"] == "PUBLISHED"
     pointer = record["baseline"][POINTER]
     binding = _binding(record, "baseline", pointer["source"])
     assert binding.retention_domain == "TASK_PAGES_GC_V1"

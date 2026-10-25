@@ -17,7 +17,9 @@ import tempfile
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
+from functools import cached_property
 from pathlib import Path
+from types import MappingProxyType
 
 from .hook_state import native_io_path, no_links
 from .progress import checkpoint
@@ -321,6 +323,18 @@ class CapturedScanInput:
     def _require_active(self):
         if not self._lifetime.active:
             raise ScanInputError('SCAN_INPUT_CLOSED')
+
+    @cached_property
+    def source_entries(self):
+        return MappingProxyType({entry.path: entry for entry in self.manifest if entry.role in {'TARGET', 'CONTEXT'}})
+
+    def assert_content(self, name, raw):
+        """Verify bytes actually parsed by a provider, including negative files."""
+        self._require_active()
+        entry = self.source_entries.get(name)
+        if (entry is None or not isinstance(raw, bytes) or len(raw) != entry.size
+                or not hmac.compare_digest(_digest(self._key, raw), entry.content_id)):
+            raise ScanInputError('SCAN_INPUT_VIEW_CHANGED')
 
     def assert_intact(self):
         """Detect changed view bytes; same-user plugins are not a sandbox."""

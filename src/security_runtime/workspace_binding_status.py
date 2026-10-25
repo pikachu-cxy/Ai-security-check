@@ -37,8 +37,11 @@ def _routing_owner(pool, root, token):
 
 def inspect_binding(pool, workspace_path, session_ref=None):
     result = dict(contract='workspace-binding-status-v1', path_status='UNKNOWN',
+        configuration_status='NOT_CHECKED', admission_status='UNKNOWN',
         resolution_stage='RESOLVING_ROOT', reason_code=None, resolved_workspace=None,
         session_binding_status='UNKNOWN', registered_workspace=None,
+        session_context_status='MISSING', routing_binding_confirmed=False,
+        next_action='CHECK_WORKSPACE_PATH',
         identity_evidence='UNAVAILABLE', current_host_verified=False,
         execution_root_match=None, binding_confirmed=False, task_target_match=None,
         baseline_status='NOT_QUERIED', scan_status='NOT_QUERIED',
@@ -47,9 +50,22 @@ def inspect_binding(pool, workspace_path, session_ref=None):
     try:
         root = pool.root(workspace_path)
     except (ValueError, OSError, RuntimeError) as exc:
-        result.update(path_status='REJECTED', reason_code=workspace_rejection(exc, 'RESOLVING_ROOT'))
+        result.update(path_status='REJECTED', admission_status='REJECTED',
+                      reason_code=workspace_rejection(exc, 'RESOLVING_ROOT'))
         return result
-    result.update(path_status='ALLOWED', resolved_workspace=str(root), resolution_stage='BINDING_SESSION')
+    result.update(path_status='ALLOWED', resolved_workspace=str(root),
+                  resolution_stage='VALIDATING_CONFIGURATION')
+    # Use the same read-only preflight as real admission. A valid filesystem
+    # root alone must not conceal a rejected global/project configuration.
+    try:
+        pool.validate_layers(workspace_path)
+    except (ValueError, OSError, RuntimeError) as exc:
+        result.update(configuration_status='REJECTED', admission_status='REJECTED',
+                      reason_code=workspace_rejection(exc, 'VALIDATING_CONFIGURATION'),
+                      next_action='CHECK_INTEGRATION_CONFIGURATION')
+        return result
+    result.update(configuration_status='VALIDATED', admission_status='ELIGIBLE',
+                  resolution_stage='BINDING_SESSION', next_action='WAIT_FOR_HOST_SESSION_START')
     if session_ref is None:
         result['reason_code'] = 'SESSION_CONTEXT_REQUIRED'
         return result
@@ -57,18 +73,22 @@ def inspect_binding(pool, workspace_path, session_ref=None):
         owner = _routing_owner(pool, root, session_ref)
     except (ValueError, OSError, TypeError, KeyError, UnicodeError):
         result['reason_code'] = 'SESSION_CONTEXT_UNVERIFIED'
+        result['session_context_status'] = 'UNVERIFIED'
         return result
     # A signed token authorizes observing this owner's existing routing record.
     # It does not attest which chat is issuing this request or its current cwd.
     with pool.lock:
         bound = pool.sessions.get(owner['session'])
     result['identity_evidence'] = 'SIGNED_ROUTING_CONTEXT_ONLY'
+    result['session_context_status'] = 'VERIFIED'
     if bound is None:
         result['reason_code'] = 'SESSION_BINDING_NOT_OBSERVED'
     elif Path(bound) != root:
         # Do not disclose a different root through a credential bound to this one.
         result.update(session_binding_status='MISMATCH', reason_code='SESSION_WORKSPACE_MISMATCH')
+        result['next_action'] = 'CHECK_SESSION_WORKSPACE'
     else:
         result.update(session_binding_status='MATCH', registered_workspace=str(root),
-                      reason_code='CURRENT_HOST_ATTESTATION_UNAVAILABLE')
+                      reason_code='CURRENT_HOST_ATTESTATION_UNAVAILABLE',
+                      routing_binding_confirmed=True, next_action='COMPARE_HOST_WORKSPACE')
     return result

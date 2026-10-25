@@ -64,6 +64,9 @@ def _error(suffix):
 
 
 def _original(sample, end):
+    if 'preimages' not in end and 'paged_entries' in end:
+        from security_runtime.tasks.closeout_pages import restore
+        end = restore(sample.state, sample.service.load(sample.root, sample.ref), end)
     reference = end["preimages"]["module_0000.py"]
     return sample.service.end_versions(sample.root).read(end["version_ref"], "module_0000.py",
         end["hashes"]["module_0000.py"], reference, strict_readonly=True)
@@ -329,7 +332,13 @@ def test_queue_carries_original_end_context_but_pending_is_not_current_task(tmp_
     assert execute_one(s.service, s.root, s.ref)
     assert queue.read(s.ref)["state"] == "READY_FOR_REVIEW"
     assert seen == [end[END_CONTEXT_FIELD]] and _get(s, end) == end[END_CONTEXT_FIELD]
-    assert _original(s, end) == ["queued_end = 1"]
+    from security_runtime.tasks.closeout_pages import restore
+    from security_runtime.tasks.closeout_index import CONTENT_SOURCE
+    assert "preimages" not in end
+    assert end[CONTENT_SOURCE] == end[END_CONTEXT_FIELD]["payload"]["source"]
+    assert _get(s, end, expected_source=end[CONTENT_SOURCE]) == end[END_CONTEXT_FIELD]
+    fixed = restore(s.state, s.service.load(s.root, s.ref), end)
+    assert _original(s, fixed) == ["queued_end = 1"]
     _preserved(s)
 
 

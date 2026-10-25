@@ -365,11 +365,11 @@ class CodexIntegrationAdapter:
         env = {'SECURITY_RUNTIME_WORKSPACE': str(root), 'SECURITY_RUNTIME_INTEGRATION': 'codex',
                'SECURITY_RUNTIME_STATE_DIR': str(directory)}
         server = {'command': runtime['command'], 'args': [*runtime['prefix'], 'mcp'], 'cwd': str(root),
-                  'enabled': True, 'required': True, 'startup_timeout_sec': 60, 'tool_timeout_sec': 120, 'env': env}
+                  'enabled': True, 'required': True, 'startup_timeout_sec': 60, 'tool_timeout_sec': 600, 'env': env}
         q = lambda s: json.dumps(s, ensure_ascii=True)
         lines = [BEGIN.rstrip('\n'), f'[mcp_servers.{SERVER}]', 'command = ' + q(server['command']),
                  'args = ' + q(server['args']), 'cwd = ' + q(server['cwd']), 'enabled = true', 'required = true',
-                 'startup_timeout_sec = 60', 'tool_timeout_sec = 120', f'[mcp_servers.{SERVER}.env]']
+                 'startup_timeout_sec = 60', 'tool_timeout_sec = 600', f'[mcp_servers.{SERVER}.env]']
         lines.extend(k + ' = ' + q(v) for k, v in env.items())
         block = ('\n'.join(lines) + '\n' + END).encode()
         hooks = product_hooks()
@@ -453,6 +453,12 @@ class CodexIntegrationAdapter:
         from .hook_adapters import CodexHookAdapter
         expected = CodexHookAdapter().config(root)
         marker = '\n# AI Security Runtime: .codex/hooks.json\n/.codex/hooks.json\n# End AI Security Runtime: .codex/hooks.json\n'
+        git_marker = root / '.git'
+        no_links(git_marker)
+        # A linked worktree's .git is a pointer file. It has no local legacy
+        # marker; do not walk through that file or adopt the origin's marker.
+        if not git_marker.is_dir():
+            return {}
         exclude = root / '.git/info/exclude'
         no_links(exclude)
         # Linked worktrees have no directory .git; do not guess their provenance.

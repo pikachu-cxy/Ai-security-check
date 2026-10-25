@@ -98,15 +98,41 @@ class SnapshotStore:
             _fail('SNAPSHOT_PRIVATE_DIRECTORY_REQUIRED')
         info = self.root.stat()
         self.root_identity = [info.st_dev, info.st_ino]
+        self._physical_root_identity = list(self.root_identity)
         self.key, self.quota, self.database_quota = key, max_storage_bytes, max_database_bytes
         self.batch_budget = batch_budget or CaptureBatchBudget()
         if not isinstance(self.batch_budget, CaptureBatchBudget):
             _fail('SNAPSHOT_CAPACITY_INVALID')
         self.path, self.marker = self.directory/'snapshots.db', self.directory/'store.identity'
         self.storage_identity = None
+        self._physical_storage_identity = None
+        self._identity_checked, self._resolving_identity = False, False
         if self.directory.exists():
             info = self.directory.stat()
             self.storage_identity = [info.st_dev, info.st_ino]
+            self._physical_storage_identity = list(self.storage_identity)
+    def _ensure_identity(self):
+        if self._identity_checked or self._resolving_identity:
+            return
+        if self.path.exists() and self.marker.exists():
+            if self.storage_identity is None:
+                info = self.directory.stat()
+                self.storage_identity = [info.st_dev, info.st_ino]
+                self._physical_storage_identity = list(self.storage_identity)
+            self._paths()
+            with self.marker.open('rb') as stream:
+                identity = stream.read(65)
+            if not hmac.compare_digest(identity, self._mac(self._store_identity()).encode()):
+                from .persisted_file_identity import preboot_anchor
+                if not preboot_anchor(self.marker.stat()):
+                    _fail('SNAPSHOT_KEY_OR_WORKSPACE_MISMATCH')
+                self._resolving_identity = True
+                try:
+                    with self._strict_database(_resolve_identity=True):
+                        pass
+                finally:
+                    self._resolving_identity = False
+        self._identity_checked = True
 
     def _mac(self, value):
         return hmac.new(self.key, _encode(value), hashlib.sha256).hexdigest()
@@ -118,6 +144,7 @@ class SnapshotStore:
         return dict(self._identity(), directory=str(self.directory), storage_identity=self.storage_identity)
 
     def _binding(self, binding):
+        self._ensure_identity()
         if not isinstance(binding, SnapshotBinding):
             _fail('SNAPSHOT_BINDING_INVALID')
         value = dict(self._identity(), task_ref=binding.task_ref, owner=dict(binding.owner),
@@ -130,7 +157,7 @@ class SnapshotStore:
 
     def _paths(self):
         no_links(self.root)
-        if [self.root.stat().st_dev, self.root.stat().st_ino] != self.root_identity:
+        if [self.root.stat().st_dev, self.root.stat().st_ino] != self._physical_root_identity:
             _fail('SNAPSHOT_ROOT_REPLACED')
         for path in (self.directory, self.path, self.marker,
                      *(Path(str(self.path)+suffix) for suffix in ('-journal', '-wal', '-shm'))):
@@ -141,13 +168,14 @@ class SnapshotStore:
                     stat.S_ISREG(info.st_mode) and info.st_nlink == 1)
                 if not valid or (os.name != 'nt' and info.st_mode & 0o077):
                     _fail('SNAPSHOT_PRIVATE_STORAGE_UNAVAILABLE')
-                if path == self.directory and self.storage_identity is not None and [info.st_dev, info.st_ino] != self.storage_identity:
+                if path == self.directory and self._physical_storage_identity is not None and [info.st_dev, info.st_ino] != self._physical_storage_identity:
                     _fail('SNAPSHOT_PRIVATE_STORAGE_UNAVAILABLE')
                 if path == self.path and info.st_size > self.database_quota:
                     _fail('SNAPSHOT_WAITING_CAPACITY')
 
     @contextmanager
     def _db(self, *, write=False, initialize=False):
+        self._ensure_identity()
         self._paths()
         exists = self.path.exists()
         if exists != self.marker.exists() or (not exists and not initialize):
@@ -162,6 +190,7 @@ class SnapshotStore:
                 self.directory.mkdir(mode=0o700, exist_ok=True)
             info = self.directory.stat()
             self.storage_identity = [info.st_dev, info.st_ino]
+            self._physical_storage_identity = list(self.storage_identity)
             self._paths()
             fd = os.open(native_io_path(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
             os.close(fd)
@@ -169,6 +198,7 @@ class SnapshotStore:
             if self.storage_identity is None:
                 info = self.directory.stat()
                 self.storage_identity = [info.st_dev, info.st_ino]
+                self._physical_storage_identity = list(self.storage_identity)
             with self.marker.open('rb') as stream:
                 identity = stream.read(65)
             if not hmac.compare_digest(identity, self._mac(self._store_identity()).encode()):
@@ -243,8 +273,10 @@ class SnapshotStore:
             (header['ref'], header['binding']['task_ref'], raw, self._mac(header)))
 
     def _usage(self, db):
-        row = db.execute('SELECT bytes,mac FROM usage WHERE id=1').fetchone()
-        if not row or type(row[0]) is not int or row[0] < 0 or not hmac.compare_digest(row[1], self._mac(dict(used=row[0]))):
+        row = db.execute("SELECT CASE WHEN typeof(bytes)='integer' THEN bytes END,"
+            "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END FROM usage WHERE id=1").fetchone()
+        if (not row or type(row[0]) is not int or row[0] < 0 or not isinstance(row[1], str)
+                or not hmac.compare_digest(row[1], self._mac(dict(used=row[0])))):
             _fail('SNAPSHOT_RECORD_INVALID')
         return row[0]
 
@@ -277,6 +309,222 @@ class SnapshotStore:
         """Return an opt-in bounded raw reader; legacy read semantics stay intact."""
         from .snapshot_reader import SealedSnapshotReader
         return SealedSnapshotReader(self, ref, binding)
+
+    @contextmanager
+    def _strict_database(self, *, _resolve_identity=False):
+        """A header/page read view; no initialization or journal recovery."""
+        from .snapshot_reader import SealedSnapshotReader, SQL_LENGTH, _sql_error
+        reader, opened = SealedSnapshotReader(self, None, None), False
+        try:
+            if not _resolve_identity:
+                self._ensure_identity()
+            self._paths()
+            if not self.path.exists() or not self.marker.exists():
+                _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
+            reader._sidecars()
+            marker = reader._pin(self.marker)
+            marker_bytes = os.read(marker, 65)
+            if not _resolve_identity and not hmac.compare_digest(marker_bytes, self._mac(self._store_identity()).encode()):
+                _fail('SNAPSHOT_KEY_OR_WORKSPACE_MISMATCH')
+            database = reader._pin(self.path)
+            prefix = os.read(database, 100)
+            if len(prefix) != 100 or prefix[:16] != b'SQLite format 3\0':
+                _fail('SNAPSHOT_RECORD_INVALID')
+            if prefix[18:20] == b'\x02\x02':
+                _fail('SNAPSHOT_READER_UNSUPPORTED_JOURNAL')
+            if prefix[18:20] != b'\x01\x01':
+                _fail('SNAPSHOT_RECORD_INVALID')
+            reader._sidecars()
+            reader._db = sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True, timeout=2)
+            reader._db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, SQL_LENGTH)
+            if reader._db.execute('PRAGMA locking_mode=EXCLUSIVE').fetchone() != ('exclusive',):
+                _fail('SNAPSHOT_STORAGE_UNAVAILABLE')
+            reader._db.execute('PRAGMA trusted_schema=OFF')
+            reader._db.execute('PRAGMA query_only=ON')
+            reader._db.execute('PRAGMA cache_size=-1024')
+            reader._db.execute('BEGIN')
+            reader._schema()
+            reader._sidecars()
+            reader._stable()
+            if _resolve_identity:
+                from .snapshot_identity import resolve
+                resolve(self, reader, marker_bytes)
+            opened = True
+            yield reader
+            reader._stable()
+        except sqlite3.Error as error:
+            if not opened:
+                reader._diagnose_open_journal()
+            _sql_error(error)
+        except SnapshotStoreError:
+            raise
+        except (OSError, ValueError, TypeError, KeyError, RecursionError):
+            _fail('SNAPSHOT_RECORD_INVALID')
+        finally:
+            reader.close()
+
+    def _strict_header_row(self, ref, task, raw, mac, binding=None):
+        from .snapshot_reader import _count, _hex
+        header = self._decode(raw, mac)
+        try:
+            stored = header.get('binding')
+            if not isinstance(stored, dict):
+                raise ValueError()
+            actual = self._binding(SnapshotBinding(task_ref=stored['task_ref'], owner=stored['owner'],
+                source_ref=stored['source_ref'], representation_version=stored['representation_version'],
+                kind=stored['kind'], consistency=SourceConsistency(stored['consistency']),
+                captured_before_edit=stored['captured_before_edit'], retention_domain=stored.get('retention_domain')))
+            fields = {'ref', 'binding', 'state', 'cursor', 'entry_count', 'source_bytes', 'gap_count',
+                      'last_page', 'expected_files', 'inventory_complete', 'root_digest'}
+            state = header.get('state')
+            fields |= {'coverage_complete'} if state == 'SEALED' else set()
+            fields |= {'required_storage_bytes'} if state == 'WAITING_CAPACITY' else set()
+            if (not isinstance(ref, str) or re.fullmatch(r'ws2-[a-f0-9]{32}', ref) is None
+                    or header.get('ref') != ref or task != stored['task_ref'] or stored != actual
+                    or set(header) != fields or state not in {'CAPTURING', 'WAITING_CAPACITY', 'SEALED'}
+                    or not all(_count(header.get(key)) for key in ('entry_count', 'source_bytes', 'gap_count'))
+                    or not _hex(header.get('root_digest'))):
+                raise ValueError()
+            if binding is not None and actual != self._binding(binding):
+                _fail('SNAPSHOT_BINDING_MISMATCH')
+            if header['entry_count'] == 0:
+                if header['cursor'] is not None or header['last_page'] is not None:
+                    raise ValueError()
+            else:
+                last = header['last_page']
+                if (not isinstance(header['cursor'], str) or not header['cursor']
+                        or len(header['cursor'].encode()) > 4096 or not isinstance(last, dict)
+                        or set(last) != {'previous', 'cursor', 'digest'} or last['cursor'] != header['cursor']
+                        or not _hex(last['digest']) or last['previous'] is not None and
+                        (not isinstance(last['previous'], str) or not last['previous'] or len(last['previous'].encode()) > 4096)):
+                    raise ValueError()
+            if state == 'SEALED':
+                coverage = SnapshotCompleteness(header['entry_count'], header['expected_files'],
+                    header['inventory_complete'], header['entry_count'], header['entry_count'],
+                    header['entry_count'], header['gap_count'])
+                if type(header['coverage_complete']) is not bool or header['coverage_complete'] != coverage.complete:
+                    raise ValueError()
+            elif (header['expected_files'] is not None or header['inventory_complete'] is not False
+                    or header['gap_count'] != 0):
+                raise ValueError()
+            if state == 'WAITING_CAPACITY' and (not _count(header['required_storage_bytes'])
+                                               or header['required_storage_bytes'] == 0):
+                raise ValueError()
+            return header
+        except SnapshotStoreError:
+            raise
+        except (ValueError, TypeError, KeyError, OverflowError, RecursionError):
+            _fail('SNAPSHOT_RECORD_INVALID')
+
+    def _strict_load_header(self, reader, ref, binding):
+        if not isinstance(ref, str) or re.fullmatch(r'ws2-[a-f0-9]{32}', ref) is None:
+            _fail('SNAPSHOT_REFERENCE_INVALID')
+        self._binding(binding)
+        row = reader._db.execute("SELECT CASE WHEN typeof(ref)='text' AND length(ref)<=36 THEN ref END,"
+            "CASE WHEN typeof(task)='text' AND length(CAST(task AS BLOB))<=4096 THEN task END,"
+            "CASE WHEN typeof(data)='blob' AND length(data)<=65536 THEN data END,"
+            "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END FROM captures WHERE ref=?", (ref,)).fetchone()
+        if row is None:
+            _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
+        return self._strict_header_row(*row, binding=binding)
+
+    def strict_header(self, ref, binding):
+        """Authenticate one bounded header, including unfinished prefixes.
+
+        This does not validate the entry inventory or any object content.
+        """
+        if not isinstance(ref, str) or re.fullmatch(r'ws2-[a-f0-9]{32}', ref) is None:
+            _fail('SNAPSHOT_REFERENCE_INVALID')
+        self._binding(binding)
+        with self._strict_database() as reader:
+            return json.loads(_encode(self._strict_load_header(reader, ref, binding)))
+
+    def has_retention_domain(self, domain):
+        """Find an authenticated domain witness, without certifying bodies.
+
+        Every bounded header is authenticated even after a match. False only
+        means this scan found no such header; it is not a complete-store proof.
+        """
+        try:
+            valid = (isinstance(domain, str) and bool(domain) and len(domain.encode()) <= 128
+                     and not any(ord(char) < 32 for char in domain))
+        except UnicodeEncodeError:
+            valid = False
+        if not valid:
+            _fail('SNAPSHOT_PAGE_REQUEST_INVALID')
+        limit = self.database_quota // 65536 + 1
+        found = False
+        with self._strict_database() as reader:
+            rows = reader._db.execute("SELECT CASE WHEN typeof(ref)='text' AND length(ref)<=36 THEN ref END,"
+                "CASE WHEN typeof(task)='text' AND length(CAST(task AS BLOB))<=4096 THEN task END,"
+                "CASE WHEN typeof(data)='blob' AND length(data)<=65536 THEN data END,"
+                "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END "
+                'FROM captures ORDER BY rowid LIMIT ?', (limit + 1,))
+            for count, row in enumerate(rows, 1):
+                if count > limit:
+                    _fail('SNAPSHOT_REFERENCE_INVENTORY_BUDGET')
+                header = self._strict_header_row(*row)
+                found = found or header['binding'].get('retention_domain') == domain
+        return found
+
+    def strict_copy_page(self, ref, binding, *, after_seq=0, limit_files=256,
+                         limit_bytes=8_000_000, expected_header=None):
+        """Read one verified append-compatible page and close its read view.
+
+        The caller fences collection and keeps its own signed copy checkpoint.
+        Reaching the declared tail is not whole-inventory/canonical validation.
+        """
+        from .snapshot_reader import _ROW, _count, _hex
+        if (type(after_seq) is not int or after_seq < 0 or type(limit_files) is not int
+                or not 1 <= limit_files <= min(256, self.batch_budget.files)
+                or type(limit_bytes) is not int or not 1 <= limit_bytes <= min(8_000_000, self.batch_budget.bytes)):
+            _fail('SNAPSHOT_PAGE_REQUEST_INVALID')
+        if expected_header is not None and (not isinstance(expected_header, dict)
+                or set(expected_header) != {'root_digest', 'entry_count', 'source_bytes'}
+                or not _hex(expected_header['root_digest'])
+                or not _count(expected_header['entry_count']) or not _count(expected_header['source_bytes'])):
+            _fail('SNAPSHOT_PAGE_REQUEST_INVALID')
+        if not isinstance(ref, str) or re.fullmatch(r'ws2-[a-f0-9]{32}', ref) is None:
+            _fail('SNAPSHOT_REFERENCE_INVALID')
+        self._binding(binding)
+        with self._strict_database() as reader:
+            header = self._strict_load_header(reader, ref, binding)
+            if header['state'] != 'SEALED':
+                _fail('SNAPSHOT_NOT_SEALED')
+            if header['coverage_complete'] is not True:
+                _fail('SNAPSHOT_COVERAGE_INCOMPLETE')
+            if expected_header is not None and any(header[key] != value for key, value in expected_header.items()):
+                _fail('SNAPSHOT_COPY_SOURCE_MISMATCH')
+            if after_seq > header['entry_count']:
+                _fail('SNAPSHOT_PAGE_REQUEST_INVALID')
+            reader.ref, reader.binding, reader._header = ref, binding, header
+            clause, args = ('', (ref, limit_files + 1)) if after_seq == 0 else (
+                ' AND seq>?', (ref, after_seq, limit_files + 1))
+            rows = reader._db.execute(f'SELECT {_ROW} FROM entries WHERE ref=?{clause} ORDER BY seq LIMIT ?', args)
+            result, cost, next_seq = [], 0, after_seq
+            row = rows.fetchone()
+            while row is not None:
+                entry = reader._entry(row)
+                if entry['seq'] != next_seq + 1 or entry['seq'] > header['entry_count']:
+                    _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
+                if len(result) == limit_files:
+                    break
+                payload = {key: value for key, value in entry.items() if key not in {'ref', 'seq'}}
+                added = entry['size'] + len(_encode(payload))
+                if cost + added > limit_bytes:
+                    if not result:
+                        _fail('SNAPSHOT_PAGE_BYTE_BUDGET')
+                    break
+                raw = reader.read_content(entry['path'], max_bytes=max(1, limit_bytes - cost))
+                result.append(dict(entry, content=raw))
+                cost += added
+                next_seq += 1
+                row = rows.fetchone()
+            if row is None and next_seq != header['entry_count']:
+                _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
+            return dict(header=json.loads(_encode(header)), entries=result, next_seq=next_seq,
+                at_end=next_seq == header['entry_count'], payload_bytes=cost,
+                inventory_verified=False, source_digest_verified=False)
 
     def append_page(self, ref, binding, entries, *, expected_cursor, cursor):
         if expected_cursor is not None:
@@ -434,8 +682,23 @@ class SnapshotStore:
             self._save(db, header)
             return header
 
+    @contextmanager
+    def _validation_database(self):
+        with self._strict_database() as reader:
+            # Main is mode=ro. Only disk-backed TEMP indices are writable.
+            reader._db.execute('PRAGMA query_only=OFF')
+            yield reader._db
+
+    def validate_contents(self):
+        """Validate all raw content without initialization or main mutations.
+
+        Uses bounded disk TEMP indices just like collection. Unsealed prefixes
+        are valid history; neither this read nor its result seals/publishes them.
+        """
+        return self.collect_unreferenced((), _verify_only=True)
+
     def collect_unreferenced(self, protected_refs, *, retention_domain=TASK_PAGES_GC_DOMAIN,
-                             max_captures=32):
+                             max_captures=32, _verify_only=False):
         """Collect only opted-in sealed captures under the caller's OS fence.
 
         The caller must keep pack-through-task-publication and readers fenced
@@ -467,10 +730,11 @@ class SnapshotStore:
 
         self._paths()
         if not self.path.exists() and not self.marker.exists():
-            if protected:
+            if protected or _verify_only:
                 _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
             return outcome(0, 0)
-        with self._db(write=True) as db:
+        context = self._validation_database() if _verify_only else self._db(write=True)
+        with context as db:
             db.execute('PRAGMA secure_delete=ON')
             # TEMP_STORE=3 ignores a FILE request. Fail closed rather than
             # silently rebuilding the full inventory in process memory.
@@ -492,12 +756,14 @@ class SnapshotStore:
             db.execute('CREATE TEMP TABLE gc_delete_objects (hash TEXT PRIMARY KEY) WITHOUT ROWID')
             db.execute('CREATE TEMP TABLE gc_paths (ref TEXT, path TEXT, PRIMARY KEY(ref,path)) WITHOUT ROWID')
             before = self._usage(db)
-            header_count, eligible_count, selected = 0, 0, []
+            header_count, eligible_count, selected, all_entries = 0, 0, [], 0
             missing_protected = set(protected)
-            rows = db.execute('SELECT ref,task,CASE WHEN length(data)<=65536 THEN data END,'
-                              'CASE WHEN length(mac)=64 THEN mac END FROM captures ORDER BY rowid')
+            rows = db.execute("SELECT CASE WHEN typeof(ref)='text' AND length(ref)<=36 THEN ref END,"
+                "CASE WHEN typeof(task)='text' AND length(CAST(task AS BLOB))<=4096 THEN task END,"
+                "CASE WHEN typeof(data)='blob' AND length(data)<=65536 THEN data END,"
+                "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END FROM captures ORDER BY rowid")
             for ref, task, data, mac in rows:
-                header = self._decode(data, mac)
+                header = self._strict_header_row(ref, task, data, mac) if _verify_only else self._decode(data, mac)
                 binding = header.get('binding')
                 try:
                     if not isinstance(binding, dict):
@@ -548,8 +814,11 @@ class SnapshotStore:
                         _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
                     db.execute('UPDATE temp.gc_captures SET seen=1 WHERE ref=?', (current_ref,))
 
-            rows = db.execute('SELECT ref,seq,path,CASE WHEN length(data)<=65536 THEN data END,'
-                              'CASE WHEN length(mac)=64 THEN mac END FROM entries ORDER BY ref,seq')
+            rows = db.execute("SELECT CASE WHEN typeof(ref)='text' AND length(ref)<=36 THEN ref END,"
+                "CASE WHEN typeof(seq)='integer' THEN seq END,"
+                "CASE WHEN typeof(path)='text' AND length(CAST(path AS BLOB))<=4096 THEN path END,"
+                "CASE WHEN typeof(data)='blob' AND length(data)<=65536 THEN data END,"
+                "CASE WHEN typeof(mac)='text' AND length(mac)=64 THEN mac END FROM entries ORDER BY ref,seq")
             for ref, seq, path, data, mac in rows:
                 if state is None or ref != current_ref:
                     finish_capture()
@@ -584,6 +853,7 @@ class SnapshotStore:
                 if updated.rowcount != 1:
                     _fail('SNAPSHOT_CONTENT_UNAVAILABLE')
                 seen += 1
+                all_entries += 1
                 seen_bytes += entry['size']
                 original = {key: value for key, value in entry.items() if key not in {'ref', 'seq'}}
                 cost = len(_encode(original)) + len(path.encode()) + 160
@@ -596,7 +866,8 @@ class SnapshotStore:
                 _fail('SNAPSHOT_HISTORY_UNAVAILABLE')
 
             object_bytes, deleted_object_bytes = 0, 0
-            objects = db.execute('SELECT rowid,hash,length(body),typeof(body) FROM objects')
+            objects = db.execute("SELECT rowid,CASE WHEN typeof(hash)='text' AND length(hash)=64 THEN hash END,"
+                                 'length(body),typeof(body) FROM objects')
             while batch := objects.fetchmany(256):
                 # CPython retains Blob weakrefs until its connection closes.
                 # Bound their lifetime as well as each 64 KiB read. The outer
@@ -626,6 +897,10 @@ class SnapshotStore:
                 _fail('SNAPSHOT_CONTENT_UNAVAILABLE')
             if before != 65536*header_count + entry_bytes + object_bytes:
                 _fail('SNAPSHOT_USAGE_MISMATCH')
+
+            if _verify_only:
+                return dict(validated=True, captures=header_count, entries=all_entries,
+                            logical_bytes=before, mutated=False, physical_compaction_performed=False)
 
             for ref in selected:
                 db.execute('DELETE FROM entries WHERE ref=?', (ref,))

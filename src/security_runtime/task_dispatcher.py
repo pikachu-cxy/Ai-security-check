@@ -57,10 +57,15 @@ def recover_registered():
             inputs = QueuedInputs(hooks, root)
             active = {r.get('input_ref') for r in rows if r.get('state') in PENDING}
             inputs.collect(active)
+            from .product_epoch_worker import EpochQueue, launch
+            epoch_pending = EpochQueue(hooks, root).pending()
+            if epoch_pending:
+                launch(hooks, root)
+                restored += 1
             if any(r.get('state') in PENDING for r in rows):
                 recover(hooks, root)
                 restored += 1
-            elif row['registered_at']+86400 < store_now():
+            elif not epoch_pending and row['registered_at']+86400 < store_now():
                 store = index()
                 with store.transaction() as db:
                     current = store._get(db, row['key'])

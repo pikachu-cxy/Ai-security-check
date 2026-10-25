@@ -7,8 +7,12 @@ from ..closeout_state import encode
 from .durable import SignedRecords
 from .ownership import record_owner, valid_owner
 from .snapshot_page_guard import guarded_queue_publication
+from .baseline_identity import baseline_fingerprint
+from .snapshot_pages import POINTER
 
-CONTRACT = 'task-closeout-queue-v1'
+LEGACY_CONTRACT = 'task-closeout-queue-v1'
+CONTRACT = 'task-closeout-queue-v2'
+CONTRACTS = {LEGACY_CONTRACT, CONTRACT}
 PENDING = frozenset({'QUEUED', 'RUNNING', 'RETRY_WAIT'})
 TERMINAL = frozenset({'READY_FOR_REVIEW', 'NO_CHANGES', 'STALE', 'CANCELLED', 'FAILED', 'EXPIRED'})
 MAX_SOURCE_RECOVERIES = 3
@@ -30,6 +34,21 @@ class CloseoutQueue(SignedRecords):
     def __init__(self, hooks, root, **kwargs):
         super().__init__(hooks, root, 'task-closeout-queue.db', **kwargs)
 
+    def _decode(self, row):
+        value = super()._decode(row)
+        if value is not None and value.get('key') != '$worker':
+            from .durable import TaskOperationError
+            if value.get('contract') not in CONTRACTS:
+                raise TaskOperationError('TASK_CLOSEOUT_FORMAT_UNSUPPORTED')
+            if value.get('changes_ref') is not None:
+                if not isinstance(value.get('end'), dict):
+                    raise TaskOperationError('TASK_CLOSEOUT_SNAPSHOT_UNAVAILABLE')
+                expected = dict(snapshot=value['end'].get('paged_entries'),
+                                projection='closeout-change-pages-v1')
+                if value['changes_ref'] != expected:
+                    raise TaskOperationError('TASK_CLOSEOUT_SNAPSHOT_UNAVAILABLE')
+        return value
+
     @guarded_queue_publication
     def submit(self, record, end, configuration, input_ref=None, preparation_ms=0,
                recovery_from=None):
@@ -40,7 +59,7 @@ class CloseoutQueue(SignedRecords):
         page_pins = {}
         if managed(record):
             from .security_state import TaskSecurityStore
-            from .snapshot_pages import _store, POINTER
+            from .snapshot_pages import _store, pack
             from .snapshot_gc import _protect
             baseline_pointer = record.get('baseline', {}).get(POINTER)
             if not isinstance(baseline_pointer, dict):
@@ -54,11 +73,20 @@ class CloseoutQueue(SignedRecords):
                 raise ValueError('Original baseline changed')
             # The caller may have loaded this head before acquiring the guard.
             # Reject a collected/stale reference before publishing a queue pin.
-            _protect(_store(state), dict(record, end=end), set())
+            compact_current = pack(state, current)
+            _protect(_store(state), compact_current, set())
             # A running queue outlives its task TTL until explicitly ended.
             page_pins['baseline_pages'] = {POINTER: baseline_pointer}
         revision = fingerprint(dict(hashes=end['hashes'], inventory=end.get('inventory'),
             limitations=end.get('limitations'), configuration=configuration))
+        stored_end = end
+        original_end_pointer = end.get('paged_entries')
+        if managed(record):
+            from .closeout_pages import freeze
+            _, stored_end = freeze(state, current, end)
+            _protect(_store(state), dict(compact_current, end=stored_end,
+                source_end_pages=({'paged_entries': original_end_pointer}
+                                  if original_end_pointer else {})), set())
         with self.transaction() as db:
             old = self._get(db, record['task_ref'])
             if (old and old['state'] == 'EXPIRED'
@@ -81,7 +109,11 @@ class CloseoutQueue(SignedRecords):
                 snapshot_capture_policy=record.get('capture_policy'),
                 snapshot_task_contract=record.get('contract'),
                 **page_pins,
-                baseline_digest=fingerprint(record['baseline']), end=end,
+                baseline_digest=baseline_fingerprint(record), end=stored_end,
+                source_end_pages=({'paged_entries': original_end_pointer}
+                                  if original_end_pointer else {}),
+                changes_ref=(dict(snapshot=stored_end[POINTER], projection='closeout-change-pages-v1')
+                             if POINTER in stored_end else None),
                 input_ref=input_ref,
                 configuration=configuration, revision=revision, generation=generation,
                 state='QUEUED', created_at=self.now(), expires_at=self.now()+86400,
@@ -90,6 +122,18 @@ class CloseoutQueue(SignedRecords):
                 preparation_ms=preparation_ms, scan_started_at=None, finished_at=None,
                 next_attempt_at=self.now(), attempts=0, lease_owner=None, lease_until=0,
                 reason=None))
+
+    def change_page(self, ref, owner, *, cursor=0, limit=256):
+        row = self.read(ref)
+        if not row or row['owner'] != owner or not row.get('changes_ref'):
+            raise ValueError('Original queued change list unavailable')
+        from .security_state import TaskSecurityStore
+        from .closeout_pages import changes_page
+        state = TaskSecurityStore(self.hooks, self.root, now=self.now)
+        record = state.get(ref)
+        if record is None or record_owner(record) != owner:
+            raise ValueError('Original task unavailable')
+        return changes_page(state, record, row['end'], after_seq=cursor, limit=limit)
 
     def claim(self, ref, worker, *, seconds=120):
         with self.transaction() as db:
@@ -171,7 +215,12 @@ class CloseoutQueue(SignedRecords):
     def view(self, ref, owner):
         row = self.read(ref)
         if not row:
-            return dict(status='NOT_QUEUED', task_ref=ref)
+            result = dict(status='NOT_QUEUED', task_ref=ref)
+            if self.path.exists() and self.path.stat().st_size == 0:
+                result.update(reason='QUEUE_STORAGE_UNINITIALIZED', retryable=True,
+                    baseline_recreated=False,
+                    message='收尾队列尚未初始化；可沿原任务重试提交，原基线保持不变。')
+            return result
         if row['owner'] != owner:
             raise ValueError('Closeout owner mismatch')
         recoverable = source_recoverable(row)

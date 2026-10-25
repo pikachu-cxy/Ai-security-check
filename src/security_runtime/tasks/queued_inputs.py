@@ -20,7 +20,7 @@ class QueuedInputs(SignedRecords):
         from ..scan_attempt import _input_parent
         self.parent = _input_parent(hooks).parent/'q'
 
-    def capture(self, end, auxiliary):
+    def capture(self, end, auxiliary, *, snapshot=None, record=None):
         from .security import _environment
         no_links(self.parent)
         if self.parent.resolve().is_relative_to(self.root):
@@ -36,7 +36,11 @@ class QueuedInputs(SignedRecords):
             # Reserve a complete bounded task before writing any raw bytes.
             if sum(r['reserved_bytes'] for r in rows)+20_000_000 > MAX_TOTAL:
                 raise ValueError('Queued input storage capacity exceeded')
-            row = self._put(db, ref, dict(state='PREPARING', hashes=expected,
+            binding = dict(hashes=expected)
+            if snapshot is not None:
+                from .closeout_pages import scope
+                binding = dict(snapshot_scope=scope(record, snapshot), auxiliary=auxiliary)
+            row = self._put(db, ref, dict(state='PREPARING', **binding,
                 created_at=self.now(), expires_at=self.now()+86400,
                 reserved_bytes=20_000_000, directory_identity=None))
             if os.name == 'nt':
@@ -68,10 +72,22 @@ class QueuedInputs(SignedRecords):
         if (not row or row['state'] != 'READY' or row['expires_at'] <= self.now()
                 or re.fullmatch(r'qi1-[a-f0-9]{32}', ref) is None):
             raise ValueError('Queued input unavailable')
+        if 'snapshot_scope' in row:
+            from .closeout_pages import restore
+            from .security_state import TaskSecurityStore
+            from .security import _environment
+            scope = row['snapshot_scope']
+            state = TaskSecurityStore(self.hooks, self.root, now=self.now)
+            end = restore(state, scope, scope['end'])
+            expected = {**end['hashes'], **row['auxiliary']}
+            row = dict(row, hashes={p:sha for p,sha in expected.items()
+                                   if sha is not None and not _environment(p)})
         path = self.parent/ref
         no_links(path)
         info = path.stat()
-        if [info.st_dev, info.st_ino] != row['directory_identity']:
+        from ..persisted_file_identity import historical_identity_matches
+        if not historical_identity_matches(row['directory_identity'], info,
+                                           captured_at=row['created_at']):
             raise ValueError('Queued input directory replaced')
         found = set()
         entries = 0
@@ -107,7 +123,9 @@ class QueuedInputs(SignedRecords):
             no_links(path)
             if path.exists():
                 info = path.stat()
-                if [info.st_dev, info.st_ino] != row['directory_identity']:
+                from ..persisted_file_identity import historical_identity_matches
+                if not historical_identity_matches(row['directory_identity'], info,
+                                                   captured_at=row['created_at']):
                     raise ValueError('Queued input directory replaced')
                 count = 0
                 for directory, children, files in os.walk(path, followlinks=False):

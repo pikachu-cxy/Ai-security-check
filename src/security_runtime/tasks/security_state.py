@@ -12,6 +12,7 @@ import time
 
 from ..closeout_state import digest, encode, readonly_uri
 from ..hook_state import atomic_bytes, no_links
+from ..snapshot_store import SnapshotStoreError
 from ..task_review.protocol import require_record_protocol, is_v3_record
 from .snapshot_page_guard import guarded_read, page_guard, guard_held
 from .snapshot_pages import GC_CONTRACT, REVIEW_CONTRACT, batched, managed
@@ -32,6 +33,8 @@ MAX_HOOK_FAILURE_MARKERS = 32
 
 def persistent_record(value):
     """Keep one authoritative v3 ledger; do not mutate caller or legacy bytes."""
+    from .closeout_index import compact
+    value = compact(value)
     plan = value.get('review_plan')
     if (is_v3_record(value) and isinstance(plan, dict)
             and plan.get('contract') == 'task-review-plan-v3'
@@ -40,13 +43,22 @@ def persistent_record(value):
     return value
 
 
+def stored_record_projection(value):
+    """Pure capacity view of the encoding used by the authenticated writer."""
+    from .snapshot_pages import control_projection
+    return control_projection(persistent_record(value))
+
+
 class _PagedReviewHead(ValueError):
     """Route internal retention to the new verifier, never a legacy reader."""
 
 
 class TaskSecurityStore:
-    def __init__(self, hooks, root, *, now=time.time):
+    def __init__(self, hooks, root, *, now=time.time, birth_publication=False):
+        if type(birth_publication) is not bool:
+            raise ValueError('Invalid baseline publication option')
         self.root, self.hooks, self.now = root, hooks, now
+        self.birth_publication = birth_publication
         self.path = hooks.workspace_directory(root) / 'task-security.db'
 
     def key(self):
@@ -94,6 +106,8 @@ class TaskSecurityStore:
         permissions before explicit writer admission. The write CAS repeats it.
         """
         if new:
+            from .capture_publication_store import validate_transition
+            validate_transition(None, value, new=True)
             return
         ref = value.get('task_ref')
         if not isinstance(ref, str) or REF.fullmatch(ref) is None:
@@ -117,6 +131,35 @@ class TaskSecurityStore:
             if old['generation'] != value.get('generation'):
                 raise ValueError('Task changed concurrently; read current task first') from None
             raise
+        from .capture_publication_store import validate_transition as validate_publication
+        validate_publication(old, value, new=False)
+
+    def _prepare_publication_birth(self, value, *, new):
+        from .capture_source_profile import POLICY
+        if (new and self.birth_publication and value.get('capture_policy') == POLICY
+                and not guard_held(self.path.parent)):
+            # Allocation has its own durable marker and SQL transaction. It
+            # must finish before the task transaction or shared source guard.
+            self.hooks.prepare_database(self.root, 'task-security.db')
+            from .capture_publication_store import prepare_storage
+            prepare_storage(self)
+
+    def _validate_publication_retention(self, db):
+        from .capture_publication_store import validate_inventory, iter_source_pins
+        inventory = validate_inventory(self, db=db)
+        if not inventory['allocated']:
+            return
+        from .snapshot_pages import _store
+        store = _store(self)
+        pins = list(iter_source_pins(self, db=db))
+        if pins or store.path.exists():
+            store.validate_contents()
+        for pin in pins:
+            header = store.strict_header(pin['ref'], pin['binding'])
+            if (header['state'] not in pin['expected_states']
+                    or any(header.get(key) != value for key, value in pin.get('expected_header', {}).items())):
+                from ..snapshot_store import SnapshotStoreError
+                raise SnapshotStoreError('SNAPSHOT_REFERENCE_INVENTORY_INVALID')
 
     def retention_head(self, row):
         """Authenticate small heads for retention only; never project new data.
@@ -228,6 +271,8 @@ class TaskSecurityStore:
                     return value
         except FrozenBodyContextUnavailable:
             raise
+        except SnapshotStoreError as error:
+            unavailable('BUSY' if error.reason_code == 'SNAPSHOT_PAGE_STORE_BUSY' else 'STATE_UNAVAILABLE')
         except sqlite3.Error as error:
             code = getattr(error, 'sqlite_errorcode', 0) & 255
             unavailable('BUSY' if code in {sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED} else 'STATE_UNAVAILABLE')
@@ -280,7 +325,11 @@ class TaskSecurityStore:
         payload = verify_end_context(self.hooks, self.root, packet, task_ref=ref,
             owner=owner, version_ref=expected_version_ref, now=self.now)
         pointer = end.get('paged_entries')
-        if not isinstance(pointer, dict) or pointer.get('source') != payload['source']:
+        from .closeout_index import indexed, CONTENT_SOURCE
+        if not isinstance(pointer, dict):
+            end_unavailable('INVALID')
+        source = end.get(CONTENT_SOURCE) if indexed(end) else pointer.get('source')
+        if source != payload['source']:
             end_unavailable('INVALID')
         if expected_source is not None and payload['source'] != expected_source:
             end_unavailable('SOURCE_MISMATCH')
@@ -338,9 +387,11 @@ class TaskSecurityStore:
             if db.execute('SELECT count(*) FROM retained_task_projections').fetchone()[0] >= MAX_RETAINED_PROJECTIONS:
                 raise ValueError('Pending task projection retention capacity exceeded')
             retained = copy.deepcopy(value)
+            retained.pop('capture_publication', None)
             for field in ('baseline', 'end'):
                 snapshot = retained.get(field)
                 if isinstance(snapshot, dict):
+                    snapshot.pop('capture_source', None)
                     if batched(value):
                         from .snapshot_pages import MAPS, LISTS, POINTER
                         # Ledger basis and original risk anchors depend on end
@@ -421,6 +472,7 @@ class TaskSecurityStore:
         # Collection itself reads strict metadata permissions. An explicit
         # writer must admit old owned storage before entering that path.
         self.hooks.prepare_private_writer(self.root)
+        self._prepare_publication_birth(value, new=new)
         if managed(value):
             from .snapshot_gc import collect_pages
             # No lock upgrade: collection completes before shared publication.
@@ -428,7 +480,20 @@ class TaskSecurityStore:
         with page_guard(self.path.parent, create=managed(value)):
             return self._save(value, new=new, session_idle=session_idle)
 
+    def save_review(self, value):
+        from .review_control import save
+        return save(self, value)
+
     def _save(self, value, *, new=False, session_idle=False):
+        # Keep direct callers under the same source/GC fence as save(). First
+        # allocation must precede a shared fence, including on this path.
+        self._preflight_capture_transition(value, new=new)
+        self.hooks.prepare_private_writer(self.root)
+        self._prepare_publication_birth(value, new=new)
+        with page_guard(self.path.parent, create=managed(value)):
+            return self._save_impl(value, new=new, session_idle=session_idle)
+
+    def _save_impl(self, value, *, new=False, session_idle=False):
         if value.get('contract') == REVIEW_CONTRACT:
             raise _PagedReviewHead('Paged review heads require their atomic task store')
         from .capture_source_profile import validate_record, validate_transition as validate_capture_transition
@@ -437,6 +502,7 @@ class TaskSecurityStore:
             require_record_protocol(value)
         self._preflight_capture_transition(value, new=new)
         self.hooks.prepare_private_writer(self.root)
+        self._prepare_publication_birth(value, new=new)
         # Object/page I/O completes before taking the task/control write lock.
         from .snapshot_pages import pack
         packed = pack(self, value)
@@ -446,6 +512,7 @@ class TaskSecurityStore:
             db.execute('PRAGMA secure_delete=ON')
             db.execute('CREATE TABLE IF NOT EXISTS security_tasks (ref TEXT PRIMARY KEY, task_key TEXT NOT NULL, phase TEXT NOT NULL, created REAL NOT NULL, data TEXT NOT NULL, mac TEXT NOT NULL)')
             db.execute('BEGIN IMMEDIATE')
+            self._validate_publication_retention(db)
             self._retain_pending(db)
             for expired_ref, raw, mac in db.execute('SELECT ref,data,mac FROM security_tasks WHERE created<?', (self.now()-TTL,)).fetchall():
                 if self.retention_head((raw, mac)).get('contract') == REVIEW_CONTRACT:
@@ -453,11 +520,15 @@ class TaskSecurityStore:
                 expired_record = self.decode((raw, mac))
                 if self.expired(expired_record):
                     self.expire_queued_task(expired_record)
+                    from .capture_publication_store import retire_for_task
+                    retire_for_task(self, expired_record, db=db)
                     db.execute('DELETE FROM security_tasks WHERE ref=?', (expired_ref,))
             old = self.decode(db.execute('SELECT data,mac FROM security_tasks WHERE ref=?', (value['task_ref'],)).fetchone())
             if (new and old) or (not new and (not old or old['generation'] != value['generation'])):
                 raise ValueError('Task changed concurrently; read current task first')
             validate_capture_transition(old, value, new=new)
+            from .capture_publication_store import validate_transition as validate_publication
+            validate_publication(old, value, new=new)
             from .frozen_body_context import validate_transition
             validate_transition(self.hooks, self.root, old, value, new=new, now=self.now)
             from .frozen_end_context import validate_end_transition
@@ -492,6 +563,11 @@ class TaskSecurityStore:
             for field in ('baseline', 'end'):
                 if field in packed:
                     stored[field] = packed[field]
+            if new and self.birth_publication:
+                from .capture_source_profile import POLICY
+                if value.get('capture_policy') == POLICY:
+                    from .capture_publication_store import birth_in_transaction
+                    stored, value = birth_in_transaction(self, db, stored, value)
             raw = encode(stored)
             if len(raw) > MAX_RECORD_BYTES:
                 raise ValueError('Task record budget exceeded')

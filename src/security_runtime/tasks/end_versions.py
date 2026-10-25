@@ -4,7 +4,7 @@ import uuid
 
 def discard_unreferenced(service, root, task_ref, *candidates):
     """Best-effort cleanup; task and queue references win over late callers."""
-    from .closeout_queue import CloseoutQueue, CONTRACT, PENDING, TERMINAL
+    from .closeout_queue import CloseoutQueue, CONTRACTS, PENDING, TERMINAL
     from .frozen_end_context import _ref
     from .ownership import valid_owner
     try:
@@ -24,7 +24,7 @@ def discard_unreferenced(service, root, task_ref, *candidates):
                     return
                 protected.add(current['version_ref'])
             if queued is not None:
-                if (queued.get('contract') != CONTRACT or queued.get('task_ref') != task_ref
+                if (queued.get('contract') not in CONTRACTS or queued.get('task_ref') != task_ref
                         or queued.get('owner') != owner or queued.get('state') not in PENDING | TERMINAL
                         or not isinstance(queued.get('end'), dict)
                         or not _ref(queued['end'].get('version_ref'))):

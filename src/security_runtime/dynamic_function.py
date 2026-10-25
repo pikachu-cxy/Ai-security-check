@@ -363,7 +363,13 @@ class NativeFunctionScanner:
     def normalize(self, raw, normalizer):
         raise ValueError('Native Function provider only accepts freshly read local files')
 
-    def scan(self, context: ScanContext, normalizer: FindingNormalizer):
+    def scan(self, context: ScanContext, normalizer: FindingNormalizer, *, partition_state=None):
+        if type(self) is not NativeFunctionScanner:
+            return self._scan_page(context, normalizer)
+        from .native_file_partitions import scan
+        return scan(self, context, normalizer, state=partition_state)
+
+    def _scan_page(self, context: ScanContext, normalizer: FindingNormalizer):
         started = time.monotonic()
         try:
             plan = context.rule_plan if isinstance(context.rule_plan, NativeFunctionRulePlan) else self.plan_rules(None, context)
@@ -393,6 +399,8 @@ class NativeFunctionScanner:
                 if index >= MAX_FILES:
                     raise LexicalLimit('FILE_BUDGET_EXCEEDED')
                 raw, text = reader.read(name)
+                if context.input_view is not None:
+                    context.input_view.assert_content(name, raw)
                 total_bytes += len(raw)
                 if total_bytes > MAX_TOTAL_BYTES:
                     raise LexicalLimit('TOTAL_BYTE_BUDGET_EXCEEDED')

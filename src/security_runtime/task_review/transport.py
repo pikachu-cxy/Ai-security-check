@@ -11,6 +11,9 @@ import json
 from .coverage import complete_spans
 
 
+CAPACITY_BASIS = 'PERSISTED_CONTROL_V1'
+
+
 def packet_bytes(packet):
     return len(json.dumps(packet, ensure_ascii=False).encode('utf-8'))
 
@@ -18,10 +21,25 @@ def packet_bytes(packet):
 def record_capacity(record):
     """Check the storage encoding, reserving room for signed-store counters."""
     from ..closeout_state import encode
-    from ..tasks.security_state import MAX_RECORD_BYTES, persistent_record
-    required = len(encode(persistent_record(record))) + 4_096
+    from ..tasks.security_state import MAX_RECORD_BYTES, stored_record_projection
+    required = len(encode(stored_record_projection(record))) + 4_096
     return dict(required_record_bytes=required, maximum_record_bytes=MAX_RECORD_BYTES,
-                fits=required <= MAX_RECORD_BYTES)
+                fits=required <= MAX_RECORD_BYTES, capacity_basis=CAPACITY_BASIS)
+
+
+def retry_legacy_capacity(record, *, include_closed=False):
+    """Only retry a pre-plan legacy byte diagnosis, never reset delivered work."""
+    from .plan import _snapshot
+    capacity = record.get('review_capacity') or {}
+    return (record.get('phase') in ({'READY', 'INCOMPLETE'} if include_closed else {'READY'})
+            and capacity.get('reason_code') == 'TASK_REVIEW_RECORD_CAPACITY'
+            and 'capacity_basis' not in capacity
+            and capacity.get('source_delivery_started') is False
+            and capacity.get('reviewed_unit_count') == 0
+            and capacity.get('snapshot_id') == _snapshot(record)
+            and not any(record.get(key) for key in
+                        ('review_plan', 'review_session', 'evidence', 'review_completion', 'review'))
+            and (not record.get('review_ledger') or bool(record.get('pending_review_revision'))))
 
 
 def delivered_ranges(record, path, file_sha256, location_version, low, high):

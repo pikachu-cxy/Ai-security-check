@@ -1,4 +1,4 @@
-"""Birth-only capture-source fencing; no source publisher is enabled here.
+"""Birth-only capture-source fencing with an explicit publication marker.
 
 The new policy makes older task readers reject these fresh opt-in records.
 Original donor pages retain their existing GC domain and all task accounting.
@@ -31,7 +31,8 @@ def _no_descriptors(record):
             raise CaptureSourceProfileError()
         if not isinstance(value, dict):
             continue
-        if DESCRIPTOR_FIELD in value:
+        if (DESCRIPTOR_FIELD in value
+                and not (value is record.get('baseline') and 'capture_publication' in record)):
             raise CaptureSourceProfileError('PUBLISHER_UNAVAILABLE')
         pending.extend(value[name] for name in _SINGLES if isinstance(value.get(name), dict))
         for name in _HISTORIES:
@@ -47,6 +48,8 @@ def validate_record(record):
     _no_descriptors(record)
     present = PROFILE_FIELD in record
     if not present and record.get('capture_policy') != POLICY:
+        if 'capture_publication' in record:
+            raise CaptureSourceProfileError()
         return
     from .activity import POLICY as CLOSEOUT_POLICY
     from .frozen_body_context import (CONTRACT as BODY_CONTRACT, PROFILE as BODY_PROFILE,
@@ -67,6 +70,34 @@ def validate_record(record):
             or payload.get('field') != 'baseline' or payload.get('preimage_namespace') != 'closeout'
             or payload.get('representation_version') != baseline.get('redaction_version')):
         raise CaptureSourceProfileError()
+    marker = record.get('capture_publication')
+    if 'capture_publication' in record:
+        import re
+        if (not isinstance(marker, dict) or set(marker) != {'payload', 'mac'}
+                or not isinstance(marker.get('mac'), str)
+                or re.fullmatch('[a-f0-9]{64}', marker['mac']) is None
+                or not isinstance(marker.get('payload'), dict)):
+            raise CaptureSourceProfileError()
+        identity = marker['payload']
+        if (set(identity) != {'contract', 'task_ref', 'request_id', 'identity_digest'}
+                or identity.get('contract') != 'task-baseline-capture-publication-v1'
+                or identity.get('task_ref') != record.get('task_ref')
+                or not isinstance(identity.get('request_id'), str)
+                or re.fullmatch('cp1-[a-f0-9]{64}', identity['request_id']) is None
+                or not isinstance(identity.get('identity_digest'), str)
+                or re.fullmatch('[a-f0-9]{64}', identity['identity_digest']) is None):
+            raise CaptureSourceProfileError()
+    if DESCRIPTOR_FIELD in baseline:
+        from ..task_review.capture_source_binding import (CaptureSourceBinding,
+            CaptureSourceBindingError, validate_descriptor)
+        try:
+            scope = CaptureSourceBinding(record['task_ref'], record_owner(record), 'baseline',
+                record['task_ref'], baseline['redaction_version'])
+            descriptor = validate_descriptor(scope, {DESCRIPTOR_FIELD: baseline[DESCRIPTOR_FIELD]})
+            if descriptor['source'] != baseline.get('paged_entries', {}).get('source'):
+                raise CaptureSourceProfileError()
+        except (CaptureSourceBindingError, ValueError, TypeError, KeyError, AttributeError):
+            raise CaptureSourceProfileError() from None
 
 
 def validate_transition(old, record, *, new):

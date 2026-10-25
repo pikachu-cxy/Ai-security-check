@@ -31,8 +31,8 @@ def protocol_routes(monkeypatch):
         return row
 
     monkeypatch.setattr(TaskSecurityService, 'prepare',
-        lambda self, root, ref, protocol_version=3: checked(self, root, ref, 'prepare',
-            protocol_version=protocol_version))
+        lambda self, root, ref, protocol_version=3, resume_capacity=False: checked(self, root, ref, 'prepare',
+            protocol_version=protocol_version, resume_capacity=resume_capacity))
     monkeypatch.setattr(TaskSecurityService, 'review_plan',
         lambda self, root, ref, session, cursor=0, limit=10: checked(self, root, ref, 'plan',
             review_session=session, cursor=cursor, limit=limit), raising=False)
@@ -53,6 +53,8 @@ def test_local_review_protocol_defaults_to_v3_and_forwards_v3_arguments(service,
     base = dict(workspace_path=str(root), task_ref=ref)
     assert local_call(server, 'prepare_task_security_review', **base)['protocol_version'] == 3
     assert local_call(server, 'prepare_task_security_review', **base, protocol_version=3)['protocol_version'] == 3
+    assert local_call(server, 'prepare_task_security_review', **base)['resume_capacity'] is False
+    assert local_call(server, 'prepare_task_security_review', **base, resume_capacity=True)['resume_capacity'] is True
     session = dict(base, review_session='tr1-protocol-test')
     plan = local_call(server, 'get_task_review_plan', **session)
     assert (plan['cursor'], plan['limit']) == (0, 10)
@@ -62,7 +64,7 @@ def test_local_review_protocol_defaults_to_v3_and_forwards_v3_arguments(service,
     batch = local_call(server, 'submit_task_review_batch', **session, unit_ids=['unit-a', 'unit-b'],
         coverage='PARTIAL', limitations=['Caller context remains unread'])
     assert batch['unit_ids'] == ['unit-a', 'unit-b'] and batch['coverage'] == 'PARTIAL'
-    assert len(protocol_routes) == 6 and not runtime.calls
+    assert len(protocol_routes) == 8 and not runtime.calls
 
 
 @pytest.mark.parametrize('protocol', [1, 2, None, True, '3', 3.0])

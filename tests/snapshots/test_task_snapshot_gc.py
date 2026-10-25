@@ -198,7 +198,8 @@ def test_queue_pins_old_end_until_expiry_or_running_work_finishes(sample, runnin
     with queue.transaction() as db:
         row = queue._get(db, original['task_ref'])
         queue._put(db, row['key'], dict(row, state='EXPIRED', expires_at=clock[0]-1))
-    assert collect_pages(state)['collected_captures'] == 1
+    # v2 also owns an indexed end projection, separate from the original end.
+    assert collect_pages(state)['collected_captures'] == 2
 
 
 def test_task_retention_expires_running_queue_before_pruning_and_reclaims_on_next_pass(sample):
@@ -229,7 +230,7 @@ def test_task_retention_expires_running_queue_before_pruning_and_reclaims_on_nex
 
     # This pass conservatively retains its already-inventoried running pin.
     # The next pass observes the explicit terminal state and releases it.
-    assert collect_pages(state, prune=True)['collected_captures'] == 2
+    assert collect_pages(state, prune=True)['collected_captures'] == 3
     assert page_state(state)['captures'] == []
 
 
@@ -266,8 +267,8 @@ def test_save_prune_expires_pending_queue_before_releasing_original_task(sample,
     assert expired['generation'] == pending['generation'] + 1
     assert expired['lease_owner'] is None and expired['lease_until'] == 0
     assert expired['finished_at'] == clock[0]
-    assert len(page_state(state)['captures']) == 3  # Two original managed pages plus the later legacy page.
-    assert collect_pages(state)['collected_captures'] == 2
+    assert len(page_state(state)['captures']) == 4  # Originals, indexed end, and later legacy page.
+    assert collect_pages(state)['collected_captures'] == 3
     assert state.get(later['task_ref'])['baseline']['hashes'] == later['baseline']['hashes']
 
 

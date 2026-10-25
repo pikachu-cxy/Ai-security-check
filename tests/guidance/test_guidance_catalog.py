@@ -90,7 +90,7 @@ def test_scan_workflow_loads_only_the_needed_topics_and_preserves_full_repair_me
     workflow = guidance_catalog.get_runtime_guidance('runtime-workflow')
     risk = guidance_catalog.get_runtime_guidance('risk-decisions')['content']
     repair = guidance_catalog.get_runtime_guidance('repair-impact')['content']
-    assert workflow['version'] == 'runtime-workflow-v2'
+    assert workflow['version'] == 'runtime-workflow-v3'
     assert RISK_DECISION_GUIDANCE not in workflow['content']
     assert RISK_DECISION_WORKFLOW not in workflow['content']
     assert REPAIR_IMPACT_GUIDANCE not in workflow['content']

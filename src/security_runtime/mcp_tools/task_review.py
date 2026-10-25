@@ -116,10 +116,11 @@ def register(server, registry, *, application):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_task_security_review(task_ref: str, workspace_path: str | None = None, session_ref: str | None = None,
-                                     protocol_version: Literal[3] = PROTOCOL_VERSION) -> dict:
-        """Prepare protocol 3 only, preserving the original pre-edit baseline and cumulative allowances. An unfinished background closeout with changed sources queues a bounded new end snapshot on the SAME task; follow queue progress, then prepare again. Old evidence stays historical and must not approve the new version. Reads never start recovery; cancelled, completed and incompatible work is not automatically restarted. Page all required fragments, read actual before/current evidence and submit batches. No budget reset or repair authority."""
+                                     protocol_version: Literal[3] = PROTOCOL_VERSION,
+                                     resume_capacity: bool = False) -> dict:
+        """Prepare protocol 3 only, preserving the original pre-edit baseline and cumulative allowances. An unfinished background closeout with changed sources queues a bounded new end snapshot on the SAME task; follow queue progress, then prepare again. Old evidence stays historical and must not approve the new version. Reads never start recovery; cancelled, completed and incompatible work is not automatically restarted. resume_capacity=true explicitly retries only an original INCOMPLETE legacy paged-record byte diagnosis before any plan/evidence delivery, after owner and unchanged-source checks; it retains the closure reason and does not restart scans or reconstruct a baseline. Use only when the user authorizes resuming that capacity-blocked task. Page all required fragments, read actual before/current evidence and submit batches. No budget reset or repair authority."""
         return task_service(task_ref,session_ref,workspace_path).prepare(bound_path(workspace_path), task_ref,
-            protocol_version=protocol_version)
+            protocol_version=protocol_version, resume_capacity=resume_capacity)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def get_task_review_plan(task_ref: str, review_session: str, cursor: int = 0, limit: int = 10,

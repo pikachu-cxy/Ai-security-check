@@ -6,6 +6,7 @@ Old records without BATCHED_FILES_V1 are byte-for-byte on their existing path.
 """
 import hashlib
 import json
+import re
 
 from ..closeout_state import encode
 from ..snapshot_store import SnapshotBinding, SnapshotStore, SnapshotStoreError
@@ -45,6 +46,50 @@ def _binding(record, field, source):
         retention_domain='TASK_PAGES_GC_V1' if managed(record) else None)
 
 
+def snapshot_fields(snapshot):
+    from .closeout_index import indexed, MAPS as CHANGE_MAPS
+    return (*MAPS, *CHANGE_MAPS) if indexed(snapshot) else MAPS
+
+
+def snapshot_head(snapshot, pointer):
+    """The exact control encoding shared by page writers and capacity checks."""
+    fields = (*snapshot_fields(snapshot), *LISTS, POINTER)
+    return dict({key: value for key, value in snapshot.items() if key not in fields},
+                **{POINTER: pointer})
+
+
+def control_projection(record):
+    """Project already loaded, fixed pages without allocating or writing pages.
+
+    Loading/writing still authenticates the page reference and owner. Here a
+    digest check prevents an altered hydrated map from being silently omitted.
+    Unpaged snapshots keep their full inline cost, including legacy records.
+    """
+    validate_record(record)
+    if not batched(record):
+        return record
+    result = dict(record)
+    for field in ('baseline', 'end'):
+        snapshot = record.get(field)
+        if not isinstance(snapshot, dict) or POINTER not in snapshot:
+            continue
+        pointer = snapshot[POINTER]
+        if (not isinstance(pointer, dict) or set(pointer) != {'ref', 'source'}
+                or not isinstance(pointer['ref'], str)
+                or re.fullmatch(r'ws2-[a-f0-9]{32}', pointer['ref']) is None
+                or not isinstance(pointer['source'], str)
+                or re.fullmatch(r'[a-f0-9]{64}', pointer['source']) is None):
+            raise ValueError('Invalid snapshot page reference')
+        fields = snapshot_fields(snapshot)
+        if any(name in snapshot for name in (*fields, *LISTS)):
+            body = dict(maps={key: snapshot.get(key, {}) for key in fields},
+                        lists={key: snapshot.get(key, []) for key in LISTS})
+            if hashlib.sha256(encode(body)).hexdigest() != pointer['source']:
+                raise ValueError('Snapshot maps differ from fixed page reference')
+        result[field] = snapshot_head(snapshot, pointer)
+    return result
+
+
 def pack(state, record):
     if record.get('contract') == REVIEW_CONTRACT:
         raise ValueError('Paged review heads require their atomic task store')
@@ -53,13 +98,15 @@ def pack(state, record):
         return record
     if record.get('capture_policy') in MANAGED_POLICIES and not managed(record):
         raise ValueError('Snapshot collection contract mismatch')
-    result = dict(record)
+    from .closeout_index import compact
+    result = dict(compact(record))
     store = None
     for field in ('baseline', 'end'):
         snapshot = record.get(field)
         if not isinstance(snapshot, dict):
             continue
-        maps = {key:snapshot.get(key, {}) for key in MAPS}
+        map_fields = snapshot_fields(snapshot)
+        maps = {key:snapshot.get(key, {}) for key in map_fields}
         lists = {key:snapshot.get(key, []) for key in LISTS}
         body = dict(maps=maps, lists=lists)
         source = hashlib.sha256(encode(body)).hexdigest()
@@ -94,8 +141,7 @@ def pack(state, record):
                         cursor, page = next_cursor, []
                 header = store.seal(header['ref'], binding, expected_files=len(names), inventory_complete=True)
             pointer = dict(ref=header['ref'], source=source)
-        result[field] = {key:value for key,value in snapshot.items() if key not in (*MAPS, *LISTS, POINTER)}
-        result[field][POINTER] = pointer
+        result[field] = snapshot_head(snapshot, pointer)
     return result
 
 
@@ -119,7 +165,7 @@ def unpack(state, record):
         header = store.resume(pointer['ref'], binding)
         if header['state'] != 'SEALED':
             raise ValueError('Original snapshot pages are unavailable')
-        maps, positions = {key:{} for key in MAPS}, {key:[] for key in LISTS}
+        maps, positions = {key:{} for key in snapshot_fields(snapshot)}, {key:[] for key in LISTS}
         seq = 0
         while True:
             page = store.page(pointer['ref'], binding, after_seq=seq, include_content=True)
@@ -145,4 +191,7 @@ def unpack(state, record):
         if hashlib.sha256(encode(dict(maps=maps, lists=lists))).hexdigest() != pointer['source']:
             raise ValueError('Original snapshot pages changed')
         result[field] = dict(snapshot, **maps, **lists)
+    from .closeout_index import indexed, project
+    if indexed(result.get('end') or {}):
+        result['changes'], result['unverified_paths'] = project(result['end'])
     return result

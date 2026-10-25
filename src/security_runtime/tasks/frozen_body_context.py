@@ -177,11 +177,15 @@ def verify_context(hooks, root, packet, *, task_ref=None, owner=None, now=time.t
                 or value['expires_at'] <= value['created_at']):
             unavailable('INVALID')
         canonical, identity = root_identity(root)
-        if value['workspace'] != str(canonical) or value['root_identity'] != identity:
+        if value['workspace'] != str(canonical):
             unavailable('ROOT_MISMATCH')
         expected = hmac.new(_key(hooks, canonical), _encode(value), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(mac, expected):
             unavailable('INVALID')
+        from ..persisted_file_identity import historical_identity_matches
+        if not historical_identity_matches(value['root_identity'], canonical.stat(),
+                                           captured_at=value['created_at']):
+            unavailable('ROOT_MISMATCH')
         if task_ref is not None and value['task_ref'] != task_ref:
             unavailable('TASK_MISMATCH')
         if owner is not None and (not valid_owner(owner) or value['owner'] != owner):

@@ -301,7 +301,7 @@ class TaskSecurityService:
         return WorkspaceResolver().resolve(workspace, allow_non_git_explicit=True).path
 
     def store(self, root):
-        return TaskSecurityStore(self.hooks, root, now=self.now)
+        return TaskSecurityStore(self.hooks, root, now=self.now, birth_publication=self.capture_sources)
 
     def preimages(self, root, record=None):
         from .preimages import TaskPreimageStore
@@ -369,6 +369,43 @@ class TaskSecurityService:
 
     def begin(self, workspace, task_key, *, _owner=None, _native_preparation=None,
               check_policy='PER_EDIT_V1', _switch=None, background_closeout=False, workspace_setup_ref=None):
+        from .activity import POLICY
+        # Capture a callable owner once, without changing the original meaning
+        # of _owner (connector provenance and writer identity).
+        owner = self._owner() if _owner is None else _owner
+        response = self._begin(workspace, task_key, _owner=_owner,
+            _native_preparation=_native_preparation, check_policy=check_policy, _switch=_switch,
+            background_closeout=background_closeout, workspace_setup_ref=workspace_setup_ref,
+            _resolved_owner=owner)
+        if (self.capture_sources and owner is not None and _native_preparation is None
+                and check_policy == POLICY and response.get('task_ref')):
+            from .baseline_publication import advance
+            from .capture_publication_store import CapturePublicationError
+            from ..snapshot_store import SnapshotStoreError
+            from ..task_review.typed_source_scratch import TypedSnapshotSourceError
+            from .frozen_body_context import FrozenBodyContextUnavailable
+            try:
+                publication = advance(self.store(self.root(workspace)), response['task_ref'], owner=owner)
+            except (CapturePublicationError, SnapshotStoreError, TypedSnapshotSourceError,
+                    FrozenBodyContextUnavailable) as error:
+                # The original task is already committed. Return its real ref
+                # and the component failure, rather than hiding that task.
+                publication = dict(task_ref=response['task_ref'], state='INCOMPLETE',
+                                   reason_code=error.reason_code)
+            response = dict(response, capture_publication=publication)
+        return response
+
+    def baseline_publication_status(self, workspace, task_ref):
+        from .baseline_publication import status
+        return status(self.store(self.root(workspace)), task_ref, owner=self._owner())
+
+    def advance_baseline_publication(self, workspace, task_ref):
+        from .baseline_publication import advance
+        return advance(self.store(self.root(workspace)), task_ref, owner=self._owner())
+
+    def _begin(self, workspace, task_key, *, _owner=None, _native_preparation=None,
+               check_policy='PER_EDIT_V1', _switch=None, background_closeout=False,
+               workspace_setup_ref=None, _resolved_owner=None):
         from .activity import ActivityStore, POLICY, LEGACY
         from .lifecycle import register
         if check_policy not in {POLICY, LEGACY}:
@@ -376,7 +413,7 @@ class TaskSecurityService:
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 200:
             raise ValueError('Use a short unique task key, not a prompt or source')
         from .ownership import valid_owner, record_owner, writer_identity
-        owner=self._owner() if _owner is None else _owner
+        owner=_resolved_owner
         if owner is not None and not valid_owner(owner):
             raise ValueError('Invalid connector owner')
         root = self.root(workspace)
@@ -799,7 +836,8 @@ class TaskSecurityService:
             record = self.load(root, ref)
             from .projection import drain
             record = drain(self, root, record)
-            if record['baseline'] != original['baseline']:
+            from .baseline_identity import baseline_snapshot
+            if baseline_snapshot(record) != baseline_snapshot(original):
                 raise ValueError('Original task baseline changed; never replace or infer it')
             lane = attempts.read()['lane']
             if (record['phase'] == 'STATIC_RUNNING' and lane and lane['state'] == 'ACTIVE'
@@ -1031,10 +1069,11 @@ class TaskSecurityService:
                     attempts.finish(lease, input_id=execution.input_id, outcome='FAILED')
             raise
 
-    def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION):
+    def prepare(self, workspace, ref, protocol_version=PROTOCOL_VERSION, *, resume_capacity=False):
         validate_protocol(protocol_version)
         from ..task_review import TaskReviewCoordinator
-        return TaskReviewCoordinator(self).prepare(workspace, ref, protocol_version=protocol_version)
+        return TaskReviewCoordinator(self).prepare(workspace, ref, protocol_version=protocol_version,
+                                                  resume_capacity=resume_capacity)
 
     def _session(self, root, ref, session, *, full_fresh=True):
         record = self.load(root, ref)
@@ -1062,7 +1101,7 @@ class TaskSecurityService:
         gaps = record.setdefault('context_gaps', [])
         if gap not in gaps and len(gaps) < record['review_ledger']['limits']['reads']:
             gaps.append(gap)
-        self.store(root).save(record)
+        self.store(root).save_review(record)
 
     def review_plan(self, workspace, ref, session, cursor=0, limit=10):
         from ..task_review import TaskReviewCoordinator

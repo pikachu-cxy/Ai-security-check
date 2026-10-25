@@ -262,6 +262,15 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     task_worker.add_argument('--workspace', required=True)
     task_worker.add_argument('--hooks', required=True)
     task_worker.add_argument('--ticket', required=True)
+    scan_worker = sub.add_parser('scan-job-worker', help=argparse.SUPPRESS)
+    scan_worker.add_argument('--workspace', required=True)
+    scan_worker.add_argument('--hooks', required=True)
+    scan_worker.add_argument('--job-ref', required=True)
+    scan_worker.add_argument('--ticket', required=True)
+    epoch_worker = sub.add_parser('product-epoch-worker', help=argparse.SUPPRESS)
+    epoch_worker.add_argument('--workspace', required=True)
+    epoch_worker.add_argument('--hooks', required=True)
+    epoch_worker.add_argument('--ticket', required=True)
     dispatcher = sub.add_parser('task-closeout-dispatcher', help=argparse.SUPPRESS)
     dispatcher.add_argument('--once', action='store_true')
     startup = sub.add_parser('task-dispatcher-startup', help='Manage automatic recovery at user login')
@@ -373,6 +382,12 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             return run_worker(args.job, args.ticket)
         if args.command == 'task-closeout-worker':
             from .task_closeout_worker import run_worker
+            return run_worker(args.workspace, args.hooks, args.ticket)
+        if args.command == 'scan-job-worker':
+            from .scan_jobs import run_worker
+            return run_worker(args.workspace, args.hooks, args.job_ref, args.ticket)
+        if args.command == 'product-epoch-worker':
+            from .product_epoch_worker import run_worker
             return run_worker(args.workspace, args.hooks, args.ticket)
         if args.command == 'task-closeout-dispatcher':
             from .task_dispatcher import run

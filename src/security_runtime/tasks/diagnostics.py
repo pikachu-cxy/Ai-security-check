@@ -64,6 +64,17 @@ def capacity_failure(exc):
     from ..snapshot_store import SnapshotStoreError
     cause = exc
     for _ in range(8):
+        if isinstance(cause, SnapshotStoreError) and cause.reason_code in {
+                'SNAPSHOT_PAGE_STORE_BUSY', 'SNAPSHOT_STORAGE_BUSY',
+                'SNAPSHOT_GC_GUARD_UNAVAILABLE', 'SNAPSHOT_GC_LOCK_UPGRADE_REJECTED',
+                'SNAPSHOT_KEY_OR_WORKSPACE_MISMATCH', 'SNAPSHOT_ROOT_REPLACED'}:
+            busy = cause.reason_code in {'SNAPSHOT_PAGE_STORE_BUSY', 'SNAPSHOT_STORAGE_BUSY'}
+            return dict(status='BUSY' if busy else 'INCONCLUSIVE', reason_code=cause.reason_code,
+                stage='TASK_SNAPSHOT_STORAGE', retryable=busy,
+                source_modified=False, security_proof=False, repair_authorized=False,
+                prior_committed_evidence_preserved=True, baseline_recreated=False,
+                message=('快照存储暂时繁忙，请沿原任务重试，保留原基线。' if busy else
+                         '快照存储身份无法核对，原记录已保留。请保留目录和原任务进行诊断，不要删除身份标记或重新建立旧基线。'))
         if isinstance(cause, SnapshotStoreError) and cause.reason_code == 'SNAPSHOT_WAITING_CAPACITY':
             return dict(status='INCONCLUSIVE', reason_code=cause.reason_code,
                 source_modified=False, security_proof=False, repair_authorized=False,

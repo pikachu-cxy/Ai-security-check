@@ -35,7 +35,8 @@ def _inventory_summary(value):
     result = _fields(value, ('package_occurrences', 'unique_packages',
         'confirmed_package_occurrences', 'confirmed_manifests', 'planned_manifests',
         'complete_dependency_graph_attested', 'vulnerability_db_freshness',
-        'inventory_truncated', 'native_duration_ms'))
+        'inventory_truncated', 'native_duration_ms', 'direct_dependencies_only',
+        'transitive_scan_complete', 'degradation_reason', 'unresolved_direct_dependencies', 'resolution_gap_count', 'scanner_confirmed_packages', 'unconfirmed_package_count'))
     for name in ('unconfirmed_manifests', 'per_manifest', 'package_coordinates', 'python_declarations'):
         if isinstance(value.get(name), (dict, list, tuple)):
             result[name + '_count'] = len(value[name])

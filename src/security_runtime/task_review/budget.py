@@ -245,13 +245,18 @@ def renew(ledger, *, now, resume=False):
 def record_capacity(record):
     """Preflight signed metadata plus finite evidence growth, never source."""
     from ..closeout_state import encode
-    from ..tasks.security_state import MAX_RECORD_BYTES, persistent_record
-    value = dict(record)
+    from ..tasks.security_state import MAX_RECORD_BYTES, stored_record_projection
+    # Paged snapshots must be the original verified maps, not temporary
+    # planning bodies. Legacy unpaged planning keeps its existing body policy.
+    value = stored_record_projection(record)
+    value = dict(value)
     for name in ('baseline', 'end'):
-        if isinstance(record.get(name), dict):
-            value[name] = dict(record[name], texts={})
+        if isinstance(value.get(name), dict):
+            value[name] = dict(value[name])
+            if 'paged_entries' not in value[name]:
+                value[name]['texts'] = {}
             value[name].pop('semantic_proofs', None)
-    current = len(encode(persistent_record(value)))+512
+    current = len(encode(value))+512
     ledger = record.get('review_ledger', {})
     frames = min(ledger.get('limits', {}).get('reads', 0),
                  ledger.get('basis', {}).get('source_frames', 0)*2)

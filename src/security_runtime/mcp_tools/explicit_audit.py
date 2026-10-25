@@ -31,6 +31,38 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         data['triage_session_expires_in_seconds']=900
         return data
 
+    def scan_jobs(workspace):
+        from ..scan_jobs import ScanJobs
+        from ..workspace import WorkspaceResolver
+        root = WorkspaceResolver().resolve(bound_path(workspace),
+            allow_non_git_explicit=True, allow_non_git_source=True).path
+        return ScanJobs(application.hooks, root, scan_path=application.scan_path_provider())
+
+    @server.tool()
+    def start_scan(request_key: str, workspace_path: str | None = None,
+                   mode: Literal['project', 'files', 'quick', 'feature'] = 'project',
+                   files: list[str] | None = None, force_rescan: bool = False) -> dict:
+        """Start a durable asynchronous scan and return immediately. Reuse the SAME request_key after any timeout/disconnect; never create another key to poll. project means whole project; files requires explicit paths; quick/feature mean Git changes. No code edits. The detached worker continues after client disconnect. Use get_scan_status/get_scan_result, or list_scan_jobs if the reference was lost. Existing scan_project/scan_files/scan_diff are synchronous compatibility entry points."""
+        return scan_jobs(workspace_path).submit(request_key, mode=mode,
+            files=files, force_rescan=force_rescan)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_scan_status(job_ref: str, workspace_path: str | None = None) -> dict:
+        """Read saved job progress. Never starts/retries a scan. References remain workspace-bound across MCP connections. Expired workers are INTERRUPTED, not automatically restarted."""
+        return scan_jobs(workspace_path).status(job_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_scan_result(job_ref: str, workspace_path: str | None = None, summary: bool = True) -> dict:
+        """Retrieve the exact saved scan result after reconnect; no scan, freshness revalidation or repair grant. Pending jobs return progress. Use get_findings for bounded finding details."""
+        return scan_jobs(workspace_path).result(job_ref, summary=summary)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def list_scan_jobs(workspace_path: str | None = None, limit: int = 20) -> dict:
+        """Find saved job references for this workspace after a lost response. Read-only; never launch or resume execution."""
+        return scan_jobs(workspace_path).listing(limit)
+
+    registry.harden(('start_scan', 'get_scan_status', 'get_scan_result', 'list_scan_jobs'))
+
     @server.tool()
     async def scan_diff(workspace_path: str | None = None, mode: str = "quick", path: str | None = None, summary: bool = True) -> dict:
         """Scan changed files in a local Git repository. workspace_path is the project directory; path is its legacy directory alias, not a file/glob/scan target. Prefer workspace_path and omit path. For explicitly selected files use scan_files."""

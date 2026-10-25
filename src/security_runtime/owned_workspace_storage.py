@@ -69,6 +69,8 @@ def _close(fd, owner_pid):
 
 DATABASES = ('task-security.db', 'pending-activity.db')
 FILES = ('snapshot.key', 'task-security.db.review-metadata.identity', 'workspace.lock',
+         'task-security.db.capture-publication.identity',
+         'task-security.db.capture-publication.identity.next',
          'snapshot-pages.gc.lock', 'snapshot-pages.gc.identity',
          *(name + suffix for name in DATABASES for suffix in ('', '-journal', '-wal', '-shm')))
 

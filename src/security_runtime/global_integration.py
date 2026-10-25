@@ -172,11 +172,11 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                'SECURITY_RUNTIME_STATE_DIR': str(directory)}
         server = {'command': runtime['command'], 'args': [*runtime['prefix'], 'mcp'],
                   'enabled': True, 'required': True, 'startup_timeout_sec': 60,
-                  'tool_timeout_sec': 120, 'env': env}
+                  'tool_timeout_sec': 600, 'env': env}
         q = lambda s: json.dumps(s, ensure_ascii=True)
         lines = [f'[mcp_servers.{SERVER}]', 'command = ' + q(server['command']),
                  'args = ' + q(server['args']), 'enabled = true', 'required = true',
-                 'startup_timeout_sec = 60', 'tool_timeout_sec = 120', f'[mcp_servers.{SERVER}.env]']
+                 'startup_timeout_sec = 60', 'tool_timeout_sec = 600', f'[mcp_servers.{SERVER}.env]']
         lines.extend(k + ' = ' + q(v) for k, v in env.items())
         block = ('\n'.join(lines) + '\n').encode()
         hooks = product_hooks()
@@ -243,7 +243,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
 
     def project_layers(self, candidate):
         from .global_workspace import resolve_workspace
-        root = resolve_workspace(candidate, excluded=(self.home, self.store.directory))
+        root = resolve_workspace(candidate, excluded=(self.store.directory,),
+                                 codex_homes=(self.home,))
         cwd = Path(candidate).absolute().resolve()
         return [root, *reversed([p for p in (cwd, *cwd.parents) if p != root and p.is_relative_to(root)])]
 
@@ -308,7 +309,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
         if workspace is not None:
             from .global_workspace import read_bootstrap
             from .global_workspace import resolve_workspace
-            root = resolve_workspace(workspace, excluded=(self.home, self.store.directory))
+            root = resolve_workspace(workspace, excluded=(self.store.directory,),
+                                     codex_homes=(self.home,))
             result['workspace_readiness'] = read_bootstrap(root)
             if any(r['related'] for r in rows) and action not in {'setup', 'repair'}:
                 result['diagnostics'] = [*result.get('diagnostics', []), 'LEGACY_PROJECT_CONFIGURATION_PRESENT']

@@ -54,7 +54,7 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
     # These operations start scans, plan/authorize repairs, or recheck repairs.
     explicit = {
         'prepare_task_workspace',
-        'scan_project', 'scan_diff', 'scan_files', 'prepare_closeout_check', 'run_closeout_check',
+        'start_scan', 'scan_project', 'scan_diff', 'scan_files', 'prepare_closeout_check', 'run_closeout_check',
         'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
         'confirm_remediation', 'refresh_remediation_confirmation',
         'generate_fix', 'verify', 'verify_task_fix',
@@ -70,7 +70,8 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
     assert set(MCPRegistry(local).names()) == routine | explicit | host_events | optional_execution
     # Global inventory discovery must not admit or initialize any workspace.
     routed = create_global_server(host='cursor', workspaces=object())
-    assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit
+    global_reads = {'get_workspace_binding_status', 'get_product_epoch_status'}
+    assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit | global_reads
 
 
 @pytest.mark.parametrize('workflow', [

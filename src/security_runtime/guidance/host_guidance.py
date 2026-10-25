@@ -364,7 +364,10 @@ INLINE_PREPARED、AUTO_FIX、CONFIRM_REQUIRED、原生风险和取消意图分�
 
 显式检查优先使用 summary=true 的单次扫描入口并消费其返回摘要；没有必要先读摘要再立即重扫。
 单文件或明确选择的文件使用 scan_files，files 传用户指定的工作区相对文件，workspace_path 保持项目根目录；不能静默扩大成整项目扫描。
-整个项目使用 scan_project，只检查改动使用 scan_diff。整项目重新扫描/强制重扫在 scan_project 传 force_rescan=true；
+
+异步显式扫描（explicit-scan-job-v1）优先入口：当工具提供 start_scan 时，使用 start_scan(request_key=<本次请求稳定标识>, mode=project|files|quick|feature, workspace_path=...)。同一次请求断线或超时后必须沿用原 request_key，不能新建请求或改换范围；force_rescan 也不绕过同键去重。返回 job_ref 后只调用 get_scan_status，再以 get_scan_result 读取原扫描结果；引用丢失时用 list_scan_jobs 找回。查询和结果读取不启动、重试或重新验证扫描。独立工作进程继续运行不依赖客户端；进程崩溃显示 INTERRUPTED，不自动重扫。扫描版本在工作进程开始时捕获，历史结果不证明最新源码安全。旧 scan_project/scan_files/scan_diff 保留为同步兼容接口，新显式检查优先异步入口。
+
+同步兼容接口中，整个项目使用 scan_project，只检查改动使用 scan_diff。整项目重新扫描/强制重扫在 scan_project 传 force_rescan=true；
 scan_files 和 scan_diff 每次按其范围执行，不传该参数。
 普通重复检查可让 Runtime 核对原范围和完整证明后复用，不能仅凭旧摘要、时间很近或宿主自行比较版本就跳过扫描。
 复用时明确说明复用了何时的结果和实际覆盖；未能验证就按原授权范围扫描，不复用过期 AI 结论或恢复修复授权。
@@ -577,6 +580,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'fixed_scan_artifacts': 'fixed-scan-artifact-v1; EXACT_ROOT_INPUT_PROVIDER_AND_MODE; COVERAGE_GAPS_PRESERVED; NO_REVIEW_OR_AUTHORITY_REUSE',
                          'task_risk_reporting': 'task-risk-report-v1; EXISTING_INTRODUCED_EXPANDED_UNKNOWN; STABLE_REPORT_ID; AUTOMATIC_HOST_FINAL_ACK_UNSUPPORTED',
                          'scan_progress': 'MCP_PROGRESS_TOKEN_OPTIONAL; SHARED_RUNTIME_PHASES',
+                         'explicit_scan_jobs': 'explicit-scan-job-v1; DETACHED_WORKER; IDEMPOTENT_REQUEST_KEY; READ_ONLY_PROGRESS_AND_RESULT; NO_AUTOMATIC_RESCAN',
                          'scan_timing': 'mcp-scan-timing-v1; HOST_TIME_UNKNOWN; HISTORICAL_TIME_SEPARATE',
                          'security_review_skill': 'v1',
                          'runtime_guidance': 'runtime-guidance-v1; FIXED_TOPICS; VERSION_SHA256_REUSE; NO_RUNTIME_AUTHORITY',
