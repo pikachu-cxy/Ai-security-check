@@ -8,21 +8,28 @@ from __future__ import annotations
 from .reply_plan import CheckFact, Notice, RepairImpactFact, ReplyFacts, RiskFact
 
 
-def finding_fact(finding, *, source='SCANNER', feedback=None, choice_required=True):
+def finding_fact(finding, *, source='SCANNER', feedback=None, choice_required=True, workspace=None):
     feedback = feedback or {}
     context = source == 'HOST_REVIEW'
     title = finding.get('plain_title') or finding.get('title') or '待核查的安全问题'
+    assessment = (feedback.get('agent_review') or {} if feedback.get('agent_review_current') is True
+                  and feedback.get('technical_assessment_current') is True else {})
+    function = finding.get('function_name') or finding.get('function')
     return RiskFact(identifier=finding.get('id', ''), title=title,
         file=finding.get('file_path'), line=finding.get('line_start'), problem=title,
         impact=finding.get('impact', '实际影响尚未确认。'),
         recommendation=finding.get('fix_advice', '先核查代码依据和处理范围。'),
-        unknowns=tuple(finding.get('unknowns') or ()) if context else (),
+        unknowns=tuple(dict.fromkeys([*(finding.get('unknowns') or ()),
+                                     *(assessment.get('unknowns') or ())])),
         preconditions=tuple(finding.get('preconditions') or ()),
         protections=tuple(finding.get('current_protections', finding.get('counterevidence')) or ()),
         counterevidence=tuple(finding.get('counterevidence') or ()),
         evidence=tuple(f"{v['path']}:{v['start_line']}-{v['end_line']}"
                        for v in finding.get('evidence_locations', [])),
         source=source, severity=finding.get('severity', 'UNKNOWN'),
+        line_end=finding.get('line_end'),
+        function=function if isinstance(function, str) and function.strip() else None,
+        workspace=workspace,
         related=finding.get('risk_scope') == 'RELATED_EXISTING',
         deleted=finding.get('location_version') == 'BEFORE_DELETION',
         suppressed=bool(feedback.get('reminder_suppressed', feedback.get('folded', False))),
@@ -129,6 +136,16 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
     complete = (static.get('status') in {'SUCCESS', 'COMPLETED'}
                 and static.get('coverage') in {'FULL', 'SCOPED'})
     details, attribution_notes = _attribution_details(record, limitations, complete)
+    if raw and phase == 'COMPLETE' and not details:
+        completion = record.get('review_completion') or {}
+        source_complete = (completion.get('status') == 'COMPLETE'
+            and completion.get('coverage') == 'REVIEWED'
+            and type(completion.get('unit_count')) is int and completion['unit_count'] > 0
+            and completion.get('reviewed_unit_count') == completion['unit_count']
+            and not completion.get('gaps') and not record.get('context_gaps')
+            and not record.get('unverified_paths'))
+        details = (('static_check', 'COMPLETED' if complete else 'INCOMPLETE'),
+                   ('source_review', 'COMPLETED' if source_complete else 'INCOMPLETE'))
     if phase == 'COMPLETE' and (not complete or review.get('coverage') != 'REVIEWED'
                                or limitations or review.get('limitations')):
         state = 'PARTIAL'
@@ -146,11 +163,11 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
                           if not (isinstance(note, str) and note in attribution_notes))
         for note in gap_notes(display_limitations(record, check_gaps)):
             notices.append(Notice('CHECK_GAP', note))
-        if details:
+        if attribution_notes:
             notices.append(Notice('ATTRIBUTION',
                 '同一工作区存在任务时间窗重叠，无法独立确认本次改动的归属。'))
-            if dict(details)['source_review'] != 'COMPLETED':
-                notices.append(Notice('CHECK_GAP', '必读代码复核尚未完成或缺少完成记录。'))
+        if details and dict(details)['source_review'] != 'COMPLETED':
+            notices.append(Notice('CHECK_GAP', '必读代码复核尚未完成或缺少完成记录。'))
         if phase == 'INCOMPLETE':
             notices.append(Notice('CHECK_GAP', record.get('skip_reason') or '代码复核尚未完成，已有检查记录保留。'))
         if not complete and record.get('hook_final_recheck_files'):
@@ -164,9 +181,9 @@ def task_facts(record, host_feedback=None, static_feedback=None, *, handling_ava
         notices.append(Notice('CHECK_GAP', '全部必读范围需要的资源超过当前可承载容量，代码复核尚未开始；已有记录保留，未省略文件。'))
     risks = ()
     if phase in {'COMPLETE', 'INCOMPLETE'}:
-        risks = tuple(finding_fact(f, feedback=(static_feedback or {}).get(f['id']))
+        risks = tuple(finding_fact(f, feedback=(static_feedback or {}).get(f['id']), workspace=record.get('workspace'))
                       for f in static.get('findings', []))
-        risks += tuple(finding_fact(f, source='HOST_REVIEW', feedback=(host_feedback or {}).get(f['id']))
+        risks += tuple(finding_fact(f, source='HOST_REVIEW', feedback=(host_feedback or {}).get(f['id']), workspace=record.get('workspace'))
                        for f in review.get('findings', []))
     if phase == 'NO_CHANGES' and limitations:
         notices.extend(Notice('CHECK_GAP', note) for note in gap_notes(limitations))
@@ -189,6 +206,7 @@ def history_facts(record, selected, *, current=True, feedback=None,
     risks = tuple(finding_fact(item['detail'],
         source='HOST_REVIEW' if item['source'] == 'HOST_TASK_REVIEW' else 'SCANNER',
         feedback=(item['detail'].get('feedback') or {}),
+        workspace=record.get('workspace'),
         choice_required=delivery and (item['source'] == 'HOST_TASK_REVIEW'
                                      or bool((record.get('static') or {}).get('scan_id'))))
         for item in selected if item.get('details_complete') and not item['detail'].get('prior_report'))
@@ -205,6 +223,8 @@ def issue_facts(feedback, *, notes=(), authorized=False, investigate_first=False
     location = feedback['location']
     risk = RiskFact(feedback.get('finding_id', ''), feedback['title'], location['file'],
         location['line'], feedback['problem'], feedback['impact'], feedback['recommendation'],
+        severity=feedback.get('severity', 'UNKNOWN'), line_end=location.get('line_end'),
+        function=location.get('function'),
         notes=tuple(notes), original=original, authorized=authorized,
         investigate_first=investigate_first)
     return ReplyFacts('ISSUE', risks=(risk,))

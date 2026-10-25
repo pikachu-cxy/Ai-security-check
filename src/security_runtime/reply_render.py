@@ -1,6 +1,8 @@
 """Chinese fallback rendering of a reply plan. No domain state is modified."""
 from .reply_plan import ReplyPlan
 from .guidance.risk_decision_guidance import PRIMARY_CHOICES
+from pathlib import PurePath, PureWindowsPath
+from urllib.parse import quote
 
 
 def _candidate(risk):
@@ -17,29 +19,63 @@ def choice_prompt(total, *, issue=False, investigate_first=False):
     return question+'\n\n暂不处理仅表示本次不修复，风险记录保留，本次不再追问。选择前不会修改代码。'
 
 
+def _risk_location(risk):
+    if not isinstance(risk.file, str) or not risk.file:
+        return '位置尚未确认'
+    valid_line = type(risk.line) is int and risk.line > 0
+    label = str(risk.file)
+    if valid_line:
+        label += ':' + str(risk.line)
+        if type(risk.line_end) is int and risk.line_end > risk.line:
+            label += '–' + str(risk.line_end)
+    label = label.replace('\\', '\\\\').replace('[', '\\[').replace(']', '\\]').replace('\n', ' ')
+    path = PureWindowsPath(risk.file) if PureWindowsPath(risk.file).is_absolute() else PurePath(risk.file)
+    if not path.is_absolute() and risk.workspace:
+        path = PurePath(risk.workspace) / path
+    if path.is_absolute():
+        target = quote(path.as_posix(), safe='/:') + (':'+str(risk.line) if valid_line else '')
+        location = f'[{label}](<{target}>)' if any(c.isspace() for c in str(path)) else f'[{label}]({target})'
+    else:
+        location = '`' + label.replace('`', '\\`') + '`'
+    if isinstance(risk.function, str) and risk.function:
+        location += ' · ' + risk.function
+    return location
+
+
+def _risk_severity(risk):
+    labels = {'CRITICAL': '严重', 'HIGH': '高', 'MEDIUM': '中', 'LOW': '低', 'INFO': '信息'}
+    if risk.severity_source == 'UNKNOWN':
+        return '严重级别：未评级'
+    source = '代码复核评级' if risk.severity_source == 'HOST_REVIEW' else '规则评级'
+    return source+'：'+labels[risk.severity]+'（不代表实际可利用性已证明）'
+
+
 def risk_details(risk, *, issue=False, number=None):
     parts = [f'**{number}. {risk.title}**'] if number is not None else []
+    parts.append(_risk_severity(risk))
     if issue:
-        where = (f'`{risk.file}` 第 {risk.line} 行' if risk.file and risk.line else
-                 f'`{risk.file}`' if risk.file else '当前改动的代码')
+        where = _risk_location(risk)
         parts.append(('原问题位置' if risk.original else '位置')+'：'+where)
     else:
         source = '上下文核查线索' if risk.source == 'HOST_REVIEW' else '静态检查提示'
-        where = f'{risk.file}:{risk.line}' if risk.file and risk.line else risk.file or '当前改动的代码'
-        parts.append(f'📍 `{where}` · {source}')
+        parts.append(f'📍 {_risk_location(risk)} · {source}')
     if _candidate(risk) and not risk.original:
         parts.append('这是一项待核实的检查提示，尚未确认实际影响。')
     if risk.deleted:
         parts.append('位置对应删除前的代码。')
-    parts.extend(['**问题**\n'+risk.problem, '**可能影响**\n'+risk.impact])
+    parts.append('**问题**\n'+risk.problem)
     if risk.source == 'HOST_REVIEW':
         parts.append('风险范围：'+('关联代码中的现有条件性风险，不等于新增入口仍有漏洞。'
                                    if risk.related else '本次改动相关路径。'))
-        if risk.evidence:
-            parts.append('代码依据：'+' → '.join(risk.evidence))
-        parts.append('触发条件：'+('；'.join(risk.preconditions) or '实际可达性未确认'))
+    if risk.evidence:
+        parts.append('代码依据：'+' → '.join(risk.evidence))
+    if risk.protections or risk.source == 'HOST_REVIEW':
         parts.append('当前防护：'+('；'.join(risk.protections) or '未观察到相关防护；不代表不存在'))
+    if risk.counterevidence or risk.source == 'HOST_REVIEW':
         parts.append('反证：'+('；'.join(risk.counterevidence) or '未观察到足以排除风险的反证'))
+    parts.append('**可能影响**\n'+risk.impact)
+    if risk.preconditions or risk.source == 'HOST_REVIEW':
+        parts.append('触发条件：'+('；'.join(risk.preconditions) or '实际可达性未确认'))
     parts.append('**建议修复**\n'+risk.recommendation)
     parts.append('**尚未确认**\n'+('；'.join(risk.unknowns) or '该风险的实际触发条件尚未确认。'))
     parts.extend(risk.notes)
@@ -129,10 +165,11 @@ def render_reply(plan: ReplyPlan, *, include_risks=True):
     parts = []
     risks = plan.risks if include_risks else ()
     total = plan.total_risk_count if include_risks else 0
-    if total:
+    if total and risks:
         if plan.intent == 'ISSUE':
             prefix = '安全检查提示（待核实）：' if _candidate(risks[0]) else '发现安全风险：'
-            parts.append((risks[0].title+'。') if risks[0].original else prefix+risks[0].title+'。')
+            title = risks[0].title if risks[0].original else prefix+risks[0].title
+            parts.append(f'**{title}（{total} 项）**')
         else:
             related = sum(r.related for r in risks)
             candidates = sum(_candidate(r) for r in risks)

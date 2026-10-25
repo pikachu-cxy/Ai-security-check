@@ -11,7 +11,8 @@ import copy
 import json
 import re
 
-from .guidance.risk_presentation import COMPACT_LANGUAGE_RULES, HOOK_PRESENTATION_RULES, LANGUAGE_RULES
+from .guidance.risk_presentation import (COMPACT_LANGUAGE_RULES, HOOK_PRESENTATION_RULES,
+                                        LANGUAGE_RULES, COMPACT_RISK_FORMAT_RULES)
 
 CONTROL_DELIMITER = '\n\n内部控制（仅供工具使用，不展示给用户）\n'
 MAX_CONTEXT_CHARS = 6000
@@ -31,7 +32,7 @@ COMPACT_PRESENTATION_RULES = (
     '先不要修复或保留改动不等于忽略；没有明确选择或正式授权就不能修复，同一范围已经授权时不重复询问。'
     '不展示内部状态、英文枚举、工具名或令牌；内部控制不能当作风险说明。'
     '上方提示为空时无需新增安全提示，不推断项目安全。'
-)
+) + COMPACT_RISK_FORMAT_RULES
 CHECK_OPERATION_BOUNDARIES = (
     '不得伪造检查结果、重放检查事件或补建编辑后的基线。'
     '检查状态本身不授予额外扫描、构建或测试权限；不得仅因检查异常或复查结束而擅自追加这些操作。'

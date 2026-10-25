@@ -230,8 +230,18 @@ def issue_feedback(finding: dict, *, reason: str = '', action: str = 'ADVISE',
             'choices': choices, 'secondary_choices': list(SECONDARY_CHOICES) if choices else [],
             'legacy_choice_aliases': {'暂不处理': '稍后处理', '忽略': '稍后处理'},
             'finding_id': finding.get('id', ''),
+            'severity': finding.get('severity') if finding.get('severity') in
+                        ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO') else 'UNKNOWN',
             'display_facts': dict(notes=state, authorized=action == 'AUTO_FIX',
                                   investigate_first=investigate_first, original=original)}
+    last = finding.get('line_end')
+    if (type(last) is int and type(location.get('line')) is int
+            and location['line'] <= last <= 10_000_000):
+        feedback['location']['line_end'] = last
+    function = finding.get('function_name')
+    if (location['file'] and isinstance(function, str) and len(function) <= 120
+            and re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]*(?:(?:\.|::)[A-Za-z_$][A-Za-z0-9_$]*)*', function)):
+        feedback['location']['function'] = function
     return render_feedback(feedback)
 
 

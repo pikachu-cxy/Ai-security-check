@@ -285,7 +285,7 @@ RISK_DECISION_WORKFLOW = RISK_DECISION_GUIDANCE + "\n" + RISK_PRESENTATION_RULES
 已排除、已暂缓的项目不重复展示或索取选择；处置状态不可读取时说明读取缺口，不能回退旧提示重问。
 对仍需提醒的项目，必须完整保留其中的
 位置、具体问题、条件性影响、修复建议、未确认事项，以及等待用户选择时的
-“修复／稍后处理”含义。按用户语言自然改写，可合并相关事实、调整段落或文件链接，不得只摘取风险标题、统计数量，
+“修复／稍后处理”含义。按用户语言在固定标签内自然改写，可合并同段事实并调整文件链接，不能跨越四段标签合并，不得只摘取风险标题、统计数量，
 不得用内部状态摘要替代这些内容，也不得省略选择。没有“用户提示”或非空风险
 内容时不添加通用检查消息；任务核查内容合并到开发总结，不单独刷回复。
 internal_control 仅供内部流程使用。普通用户回复和进度说明不得展示内部
@@ -318,8 +318,11 @@ Preserve every supplied location/problem/conditional impact/recommendation,
 unknown and pending 修复／稍后处理 choice; translate all headings, explanations and
 choices into the user's current language or explicit language preference. The
 Chinese fallback is source material, not a required response language. Runtime
-does not infer conversation language. Formatting and file links may be adapted,
-but do not summarize away any of those facts or replace them with diagnostics.
+does not infer conversation language. Formatting and file links may be adapted within
+the fixed risk sections, but never merge or omit their labels, severity and its source,
+exact risk location, or the recorded check-completion facts. No current remindable risk
+means no risk template and no change to normal successful development replies.
+Do not summarize away any of those facts or replace them with diagnostics.
 Describe the affected file/line or dependency
 version owner, the specific unsafe behavior, its conditional impact, the concrete
 safe change and the originating-scanner recheck. Preserve unknown conditions;

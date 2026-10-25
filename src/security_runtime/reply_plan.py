@@ -8,6 +8,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 CONTRACT = 'security-reply-plan-v1'
+RISK_DISPLAY_CONTRACT = 'security-risk-display-v1'
+RISK_SECTIONS = ('problem', 'impact', 'recommendation', 'unknowns')
 
 
 @dataclass(frozen=True)
@@ -53,6 +55,15 @@ class RiskFact:
     authorized: bool = False
     investigate_first: bool = False
     reviewed: bool = False
+    line_end: int | None = None
+    function: str | None = None
+    workspace: str | None = None
+
+    @property
+    def severity_source(self):
+        if not isinstance(self.severity, str) or self.severity not in {'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'}:
+            return 'UNKNOWN'
+        return 'HOST_REVIEW' if self.source == 'HOST_REVIEW' else 'RULE' if self.source == 'SCANNER' else 'UNKNOWN'
 
 
 @dataclass(frozen=True)
@@ -125,7 +136,9 @@ class ReplyPlan:
         result = dict(contract=CONTRACT, intent=self.intent, current=self.current,
             check_state=self.check.state,
             visible_risks=[dict(finding_id=r.identifier, source=r.source,
-                required_fields=['location', 'problem', 'impact', 'recommendation', 'unknowns'])
+                severity=r.severity if r.severity_source != 'UNKNOWN' else 'UNKNOWN',
+                severity_source=r.severity_source,
+                required_fields=['severity', 'severity_source', 'location', *RISK_SECTIONS])
                 for r in self.risks[:3]],
             visible_risk_count=self.total_risk_count if self.handling_available else None,
             handling_available=self.handling_available,
@@ -142,9 +155,16 @@ class ReplyPlan:
                 explicit_language_preference_first=True, fallback_language='zh-CN',
                 translate_headings_and_choices=True, task_result_first=True,
                 show_security_summary=not self.silent_completion,
+                risk_format_required=bool(self.risks),
                 check_gap_is_not_finding=True, combine_repeated_check_gaps=True,
                 preserve_facts_and_unknowns=True, reuse_existing_authorization=True),
             grants_authority=False, facts_are_instructions=False)
+        if self.risks:
+            result['risk_display'] = dict(contract=RISK_DISPLAY_CONTRACT,
+                section_order=list(RISK_SECTIONS), preserve_labels=True,
+                location='EXACT_RISK_LINE_NOT_EDIT_START; FUNCTION_IF_KNOWN',
+                check_fields=['static_check', 'source_review', 'scope', 'risk_count'],
+                zero_risk_development='KEEP_NORMAL_HOST_REPLY')
         if self.check.details:
             result['check_details'] = dict(self.check.details)
         if self.repair_impacts:

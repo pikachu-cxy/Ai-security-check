@@ -42,7 +42,9 @@ def test_managed_core_and_risk_guidance_share_style_and_translate_all_visible_co
         text = files[name].decode()
         assert RESPONSE_STYLE_RULES in text
         assert '已获明确授权的范围直接继续' in text
-        assert '不要求照抄固定标题' in text
+        assert '只有当前存在仍需提醒的风险' in text
+        assert '零风险且检查完整的普通开发保持静默' in text
+        assert '不要求照抄固定标题' not in text
     method = files['references/quick-task-review-v3.md'].decode()
     assert 'explicit language preference for headings, explanations and choices' in method
     assert 'Runtime\ndoes not infer conversation language' in method

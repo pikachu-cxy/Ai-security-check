@@ -108,7 +108,7 @@ def test_unsafe_location_is_not_reflected(filename):
     finding = tls_finding(); finding['file_path'] = filename
     output = issue_feedback(finding)
     assert output['location'] == {'file': None, 'line': None}
-    assert '位置：当前改动的代码' in output['message']
+    assert '位置：位置尚未确认' in output['message']
     assert filename not in output['message']
 
 
@@ -191,7 +191,7 @@ def test_original_record_with_failed_recheck_does_not_claim_current_risk_present
                             verification_status='INCONCLUSIVE', evidence_scope='ORIGINAL_FINDING')
     assert output['title'].startswith('待复查的原安全问题')
     message = output['message']
-    for text in ('原问题位置：`HookTlsProbe20261011.java` 第 9 行', '原问题记录',
+    for text in ('原问题位置：`HookTlsProbe20261011.java:9`', '原问题记录',
                  '当前代码是否仍存在该问题，需重新确认', '若问题仍存在',
                  '重新检查未能确认结果', '尚未确认修复成功', '不代表风险已消除',
                  '已停止重复自动修复尝试', '先核查再处理'):

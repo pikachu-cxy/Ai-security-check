@@ -338,9 +338,14 @@ language or explicit language preference for headings, explanations and choices;
 Chinese templates are fallback facts, not a required response language. Runtime
 does not infer conversation language. Lead with the requested task's result, then
 explain the issue, its effect and the next step in concise natural paragraphs.
-Include actual file:line/function where known; preserve the problem, conditional
-impact, advice and unknowns without requiring four fixed headings. State actual
-scope once after risk details. A check gap is not a vulnerability finding or an
+Only current remindable risks use the fixed risk format. Include the saved severity
+and rating source (or ungraded), the exact risk file:line/range and known function;
+do not substitute an import line or the start of an edited block. Preserve four
+separate bold labels in order: problem, possible impact, recommended fix, unknowns,
+translated into the user's language. Never merge the four sections into one paragraph.
+State actual static-check and required-source-review completion and scope once
+after risk details. Complete zero-risk ordinary development keeps the normal host
+reply unchanged, with no security summary or risk template. A check gap is not a vulnerability finding or an
 edit failure. Ask once to select a specific risk and choose repair or defer, in
 the user's language, only when repair approval is still needed.
 Deferral retains the risk and is not resolution; legacy 忽略 remains compatible.
