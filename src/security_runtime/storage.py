@@ -169,7 +169,8 @@ class ReadOnlySQLiteStore:
         if not self.path.is_file():
             return []
         try:
-            with closing(sqlite3.connect(self.path.resolve().as_uri() + '?mode=ro', uri=True)) as db:
+            from .closeout_state import readonly_uri
+            with closing(sqlite3.connect(readonly_uri(self.path), uri=True)) as db:
                 db.execute('PRAGMA query_only=ON')
                 if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
                     return []

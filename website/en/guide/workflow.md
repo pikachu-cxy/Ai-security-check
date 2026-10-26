@@ -16,6 +16,12 @@ Open the source and Git repository root rather than an outer extraction folder. 
 
 `NEEDS_SCAN` means no project scan has been recorded. `READY` describes available components. Neither state is a passing project check.
 
+Current development builds use **AI development task auditing**. Startup and new chats validate connection, configuration, workspace binding, and signed routing without creating product comparison baseline A or inventorying/scanning project sources. A is explicitly not required. Scanner and vulnerability-data readiness are reported independently; a connected session does not claim that they are ready.
+
+Capture B before the task's first edit and seal C at closeout. Audit the entire actual B-to-C workspace difference and necessary related code, configuration, and dependency effects. Include manual edits, other editors' changes, untracked files, deletions, and both paths of a rename. Scanning and source review bind the same C. Worktrees and independent copies keep separate versions and results. Unknown authorship or overlapping task windows alone do not downgrade new audits; permissions, signatures, cancellation, publication checks, and real evidence gaps still apply.
+
+A completed Hook only means its handler returned. Recorded edit activity may await closeout without running a scanner. Missing B, unavailable original source, failed scans, and version mismatches remain explicit gaps. Historical results and old unknown log states are never upgraded or reconstructed automatically.
+
 ## Develop and review the change
 
 ```text

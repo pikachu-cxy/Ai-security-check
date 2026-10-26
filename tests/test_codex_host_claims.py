@@ -52,6 +52,13 @@ def connected(installed, projects, tmp_path):
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         ready(pool, projects[0], 's')
+        # Explicit B before test edits; SessionStart itself never captures it.
+        from security_runtime.tasks.activity import POLICY
+        from security_runtime.tasks.ownership import session_owner
+        from security_runtime.tasks.security import TaskSecurityService
+        core = pool.children[projects[0]][1]
+        TaskSecurityService(runtimes[projects[0]], core.store, owner=session_owner('codex', 's')).begin(
+            projects[0], 'fixture-development-task', check_policy=POLICY)
         yield create_global_server(workspaces=pool), pool, runtimes
     finally:
         pool.close()
@@ -102,28 +109,22 @@ def test_read_only_valid_claims_skip_scanner(connected, projects):
 
 
 @pytest.mark.parametrize('tool', ['Bash', 'apply_patch'])
-@pytest.mark.parametrize('comparison', ['legacy', 'product'])
+@pytest.mark.parametrize('comparison', ['legacy', 'absent'])
 def test_valid_mutation_reaches_existing_coordinator(connected, projects, tool, comparison):
     server, pool, runtimes = connected
     root = projects[0]
     if comparison == 'legacy':
         from legacy_hook_helpers import legacy_comparison
         core = pool.children[root][1]
-        core.store.path(root, 'codex', 's').unlink()
+        core.store.path(root, 'codex', 's').unlink(missing_ok=True)
         legacy_comparison(core.store, root, 'codex', 's')
     args = claims(root); args.update(tool_name=tool, tool_input={'command': 'Set-Content src/A.java fixture'})
     (root/'src/A.java').write_text('class A { int n; }\n')
     out = invoke(server, args)
-    assert out['host_claim_status'] == 'VALID' and out['scanner_run'], out
-    if comparison == 'legacy':
-        assert out['workspace_mutation_observed'] and out['changed_file_count'] == 1
-    else:
-        assert out['workspace_mutation_observed'] is None and out['changed_file_count'] is None
-        assert out['comparison_kind'] == 'PRODUCT_COMPARISON'
-        assert out['comparison_representation'] == 'HASH_ONLY'
-        assert out['product_epoch_scope_unknown'] is True
-        assert out['product_epoch_comparison_reason'] == 'EVENT_SCOPE_UNKNOWN'
-    assert runtimes[root].calls[-1] == ('src/A.java',)
+    assert out['host_claim_status'] == 'VALID' and not out['scanner_run'], out
+    assert out['status'] == 'RECORDED_PENDING' and out['task_activity_recorded']
+    assert out['workspace_mutation_observed'] is None and out['changed_file_count'] is None
+    assert runtimes[root].calls == []
     assert 'remediation' not in out  # advisory-only fixture; no Deep capability used
 
 
@@ -170,7 +171,7 @@ def test_sessionstart_stop_have_their_own_schemas(connected, projects):
     server, _, _ = connected
     args = dict(event='SessionStart', workspace_path=str(projects[0]), session_id='s', permission_mode='default')
     start = structured(asyncio.run(server.call_tool('handle_readiness_event', args)))
-    assert start['status'] == 'READY' and start['host_claim_status'] == 'VALID'
+    assert start['status'] == 'CONNECTED' and start['host_claim_status'] == 'VALID'
     stop = structured(asyncio.run(server.call_tool('handle_stop_event', {
         **args, 'event': 'Stop', 'turn_id': 'turn-1', 'stop_hook_active': False})))
     assert stop['status'] == 'ALLOW_STOP' and stop['host_claim_status'] == 'VALID'

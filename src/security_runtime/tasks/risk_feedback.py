@@ -101,7 +101,7 @@ def project_disposition(hooks, root, row, technical_feedback, *, now=None, inclu
     restored = kind == 'RESTORE'
     suppressed = manual or (bool(technical_feedback.get('folded')) and not restored)
     resolution_proof = row.get('proof_hashes') or {}
-    resolved = (row['status'] in {'CODE_REVIEWED_RESOLVED', 'VERIFIED_FIXED', 'FIXED', 'RESOLVED'}
+    resolved = (row['status'] in {'SCANNER_VERIFIED_RESOLVED', 'CODE_REVIEWED_RESOLVED', 'VERIFIED_FIXED', 'FIXED', 'RESOLVED'}
                 and bool(resolution_proof) and all(resolution_proof.values())
                 and current_hashes(root, resolution_proof) == resolution_proof)
     handling = ('RESOLVED' if resolved else 'EXCLUDED' if manual and kind == 'EXCLUDE'

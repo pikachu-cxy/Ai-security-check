@@ -7,7 +7,7 @@ from contextlib import closing
 import hashlib
 import sqlite3
 
-from ..closeout_state import digest, encode
+from ..closeout_state import database_uri, digest, encode
 from ..hook_state import no_links
 from ..task_review.protocol import require_record_protocol
 from .activity import ActivityStore, deferred
@@ -105,7 +105,7 @@ def _save(state, value, *, projection):
     with page_guard(state.path.parent):
         if not guard_held(state.path.parent):
             raise ReviewControlError('HISTORY_UNAVAILABLE')
-        with closing(sqlite3.connect(state.path.as_uri() + '?mode=rw', uri=True, timeout=2)) as db, db:
+        with closing(sqlite3.connect(database_uri(state.path, mode='rw'), uri=True, timeout=2)) as db, db:
             db.execute('PRAGMA trusted_schema=OFF')
             db.execute('PRAGMA secure_delete=ON')
             db.execute('BEGIN IMMEDIATE')

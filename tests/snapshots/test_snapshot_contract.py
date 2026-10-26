@@ -107,11 +107,11 @@ def test_capability_discovery_separates_implemented_adapters_from_host_guarantee
     assert result['product_comparison_consistency'] == 'OBSERVED_ONLY'
     for key in ('resumable_capture',
                 'semantic_scan_partitioning', 'paged_review_storage',
-                'trusted_current_session_identity', 'reliable_invocation_start_binding',
-                'execution_root_attestation',
                 'cross_root_host_handshake', 'native_frozen_source',
                 'host_write_barrier', 'os_write_sandbox', 'security_proof'):
         assert result[key] is False
+    assert not {'trusted_current_session_identity', 'reliable_invocation_start_binding',
+                'execution_root_attestation'} & result.keys()
     result['paged_capture'] = False
     assert development_capabilities()['paged_capture']
 

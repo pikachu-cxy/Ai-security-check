@@ -66,9 +66,7 @@ def workspace_services(root, directory):
     core = HookCoordinator(hook_runtime, HookStateStore(directory / 'hooks'),
         workspace_resolver=resolve_workspace,
         snapshot_capture=None if is_git else source_snapshot,
-        seeds=NoProjectSeed(), activity_wait_seconds=10)
+        seeds=NoProjectSeed(), activity_wait_seconds=10, task_audit_mode=True)
     from .task_closeout_worker import recover
     recover(core.store, root)
-    from .product_epoch_worker import launch
-    launch(core.store, root)
     return runtime, core, is_git

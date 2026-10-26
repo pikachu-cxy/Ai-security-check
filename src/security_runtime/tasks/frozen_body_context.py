@@ -68,7 +68,8 @@ def _key(hooks, root):
             unavailable('STATE_UNAVAILABLE')
         path = hooks.workspace_directory(root) / 'snapshot.key'
         no_links(path)
-        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
+        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_BINARY', 0)
+                     | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
         try:
             info, actual = os.fstat(fd), path.lstat()
             if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size != 32
@@ -96,7 +97,8 @@ def readonly_database(path, *, maximum=65536):
             no_links(sidecar)
             if sidecar.exists():
                 unavailable('BUSY')
-        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
+        fd = os.open(path, os.O_RDONLY | getattr(os, 'O_BINARY', 0)
+                     | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0))
         info, actual = os.fstat(fd), path.lstat()
         if (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
                 or (info.st_dev, info.st_ino) != (actual.st_dev, actual.st_ino)):

@@ -60,8 +60,9 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     from .recent_hooks import observe
     normalized = event.diagnostics()
     if lifecycle:
-        normalized['event_dispatch_route'] = {EventKind.SESSION_START:'SESSION_BASELINE',
-            EventKind.WORKSPACE_ACTIVITY:'WORKSPACE_RECONCILIATION',
+        audit = getattr(coordinator, 'task_audit_mode', False)
+        normalized['event_dispatch_route'] = {EventKind.SESSION_START:'SESSION_CONNECTION' if audit else 'SESSION_BASELINE',
+            EventKind.WORKSPACE_ACTIVITY:'TASK_ACTIVITY' if audit else 'WORKSPACE_RECONCILIATION',
             EventKind.SESSION_STOP:'SESSION_FINALIZATION'}[event.kind]
     observe('CLAIMS_VALID', **normalized)
     from .tasks.attribution import session_activity
@@ -74,7 +75,7 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             recorded = record_event(event, coordinator.store)
             if recorded is not None:
                 return recorded, None
-    if event.kind != EventKind.SESSION_STOP:
+    if event.kind != EventKind.SESSION_STOP and not getattr(coordinator, 'task_audit_mode', False):
         session_activity(coordinator.store, context.workspace, owner)
     if event.kind == EventKind.SESSION_STOP and continuation is not None:
         result = continuation.handle(context.workspace, context._session,
@@ -167,7 +168,7 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             if result['workspace_mutation_observed'] is True else None)
         result['scanner_skipped_reason'] = ((result.get('scanner_skipped_reason') or result['status'])
             if not result['execution']['scanner_run'] else None)
-        if remediation is not None:
+        if remediation is not None and not getattr(coordinator, 'task_audit_mode', False):
             decision = remediation.on_hook(result, context.workspace, context._session,
                 host=context.host, event_started=started, initial_scan_finished=time.perf_counter(),
                 workspace_context=context)

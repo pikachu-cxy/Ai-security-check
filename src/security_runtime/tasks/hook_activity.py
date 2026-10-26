@@ -45,7 +45,7 @@ def _record_task_hook(hooks, root, result, decision, *, expected_task_ref=None, 
         # The separate small ledger is already durable; no full task rewrite.
         from .security_state import TaskSecurityStore
         ref = result.get('security_task_ref')
-        return (TaskSecurityStore(hooks, root).get(ref) if ref else None), 'ACTIVITY_RECORDED'
+        return (TaskSecurityStore(hooks, root).get(ref, headers=True) if ref else None), 'ACTIVITY_RECORDED'
     from .security_state import TaskSecurityStore
     from .orchestration import select_task, TaskSelectionError
     from ..host_event_journal import HostEventJournal, EVENT_REF

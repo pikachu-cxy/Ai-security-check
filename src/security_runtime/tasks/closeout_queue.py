@@ -174,15 +174,19 @@ class CloseoutQueue(SignedRecords):
             self._put(db, row['task_ref'], dict(row, scan_started_at=row.get('scan_started_at') or self.now()))
             return True
 
-    def finish(self, claim, state, reason=None):
+    def finish(self, claim, state, reason=None, *, diagnostic=None):
         if state not in TERMINAL | {'RETRY_WAIT'}:
             raise ValueError('Invalid queue transition')
+        details = {}
+        if diagnostic is not None:
+            from .execution_diagnostics import validate
+            details['last_failure_diagnostic'] = validate(diagnostic)
         with self.transaction() as db:
             row = self._get(db, claim['task_ref'])
             if not self.matches(row, claim) or row['lease_until'] <= self.now():
                 return False
             delay = min(30, 2**min(row['attempts'], 5)) + random.uniform(0, 0.5)
-            self._put(db, row['task_ref'], dict(row, state=state, reason=reason,
+            self._put(db, row['task_ref'], dict(row, state=state, reason=reason, **details,
                 finished_at=self.now() if state in TERMINAL else None,
                 lease_owner=None, lease_until=0, next_attempt_at=self.now()+delay))
             return True
@@ -241,6 +245,11 @@ class CloseoutQueue(SignedRecords):
         if recoverable or recovery_count:
             result.update(source_recovery_count=recovery_count,
                           source_recovery_limit=MAX_SOURCE_RECOVERIES)
+        if row['state'] in {'FAILED', 'RETRY_WAIT'}:
+            from .execution_diagnostics import validate
+            diagnostic = row.get('last_failure_diagnostic')
+            result.update(execution_diagnostic=validate(diagnostic) if diagnostic else None,
+                          diagnostic_status='RECORDED' if diagnostic else 'NOT_RECORDED')
         if recoverable:
             result.update(recovery_required=True, recovery_blocked=recovery_limited,
                 message=('源码持续变化，已达到本轮自动恢复上限；保留原基线与检查记录，报告未完成范围。'

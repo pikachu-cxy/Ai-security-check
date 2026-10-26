@@ -248,6 +248,7 @@ def _base(record, freshness=None, feedback=None, static_feedback=None, *, handli
     changes = record.get('changes') or []
     static_findings, host_findings = static.get('findings') or [], review.get('findings') or []
     result = dict(status=record['phase'], task_ref=record['task_ref'],
+        audit_scope_contract=record.get('audit_scope_contract', 'LEGACY_RECORDED_SCOPE'),
         protocol_version=(record.get('review_protocol') if type(record.get('review_protocol')) is int else None),
         history_read_only=True, scanner_run=False,
         repair_authorized=False,

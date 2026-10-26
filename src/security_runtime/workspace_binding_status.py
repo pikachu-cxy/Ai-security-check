@@ -42,10 +42,9 @@ def inspect_binding(pool, workspace_path, session_ref=None):
         session_binding_status='UNKNOWN', registered_workspace=None,
         session_context_status='MISSING', routing_binding_confirmed=False,
         next_action='CHECK_WORKSPACE_PATH',
-        identity_evidence='UNAVAILABLE', current_host_verified=False,
-        execution_root_match=None, binding_confirmed=False, task_target_match=None,
+        identity_evidence='UNAVAILABLE',
         baseline_status='NOT_QUERIED', scan_status='NOT_QUERIED',
-        binding_generation=None, verified_at=time.time(), scanner_run=False,
+        verified_at=time.time(), scanner_run=False,
         state_modified=False, source_modified=False, security_proof=False)
     try:
         root = pool.root(workspace_path)
@@ -76,10 +75,9 @@ def inspect_binding(pool, workspace_path, session_ref=None):
         result['session_context_status'] = 'UNVERIFIED'
         return result
     # A signed token authorizes observing this owner's existing routing record.
-    # It does not attest which chat is issuing this request or its current cwd.
     with pool.lock:
         bound = pool.sessions.get(owner['session'])
-    result['identity_evidence'] = 'SIGNED_ROUTING_CONTEXT_ONLY'
+    result['identity_evidence'] = 'SIGNED_ROUTING_CONTEXT'
     result['session_context_status'] = 'VERIFIED'
     if bound is None:
         result['reason_code'] = 'SESSION_BINDING_NOT_OBSERVED'
@@ -89,6 +87,5 @@ def inspect_binding(pool, workspace_path, session_ref=None):
         result['next_action'] = 'CHECK_SESSION_WORKSPACE'
     else:
         result.update(session_binding_status='MATCH', registered_workspace=str(root),
-                      reason_code='CURRENT_HOST_ATTESTATION_UNAVAILABLE',
-                      routing_binding_confirmed=True, next_action='COMPARE_HOST_WORKSPACE')
+                      routing_binding_confirmed=True, next_action=None)
     return result

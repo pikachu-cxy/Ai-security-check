@@ -64,7 +64,7 @@ def test_rejected_claims_before_child_admission_remain_queryable(connected, proj
     assert len(runtimes[projects[0]].calls) == before
 
 
-def test_real_reconciliation_and_scanner_boundaries_observed(connected, projects):
+def test_real_task_activity_is_recorded_and_scan_deferred_to_closeout(connected, projects):
     server, _, _ = connected
     root = projects[0]
     (root/'src/A.java').write_text('class A { int changed; }\n')
@@ -72,10 +72,12 @@ def test_real_reconciliation_and_scanner_boundaries_observed(connected, projects
     args.update(tool_name='apply_patch', tool_input={'command': 'synthetic patch'})
     out = invoke(server, args)
     row = recent(root)[0]
-    assert out['scanner_run'] and row['scanner_run']
-    assert row['workspace_mutation_observed'] is True and row['changed_file_count'] > 0
-    assert 'SCANNER_TRIGGERED' in stages(row) and row['last_stage'] == 'SCANNER_COMPLETED'
-    assert row['scanner_trigger_reason'] == 'POST_TOOL_USE_MUTATION'
+    assert not out['scanner_run'] and row['scanner_run'] is False
+    assert out['task_activity_recorded'] and row['task_activity_recorded']
+    assert row['handler_status'] == 'RECORDED_PENDING'
+    assert row['handler_reason'] == 'TASK_CLOSEOUT_PENDING'
+    assert row['scanner_skipped_reason'] == 'DEFERRED_TO_TASK_CLOSEOUT'
+    assert 'SCANNER_TRIGGERED' not in stages(row)
 
 
 def test_same_snapshot_no_mutation_is_distinct_from_readonly(connected, projects):
@@ -84,11 +86,13 @@ def test_same_snapshot_no_mutation_is_distinct_from_readonly(connected, projects
     out = invoke(server, args)
     row = recent(projects[0])[0]
     assert not out['scanner_run'] and row['scanner_run'] is False
-    assert row['workspace_mutation_observed'] is False
-    assert row['last_stage'] == 'MUTATION_NOT_OBSERVED'
+    assert row['workspace_mutation_observed'] is None
+    assert row['task_activity_recorded']
+    assert row['handler_status'] == 'RECORDED_PENDING'
+    assert row['last_stage'] == 'HANDLER_COMPLETED'
 
 
-def test_suppressed_handler_exception_still_has_entry_and_error(connected, projects, monkeypatch):
+def test_deferred_task_activity_does_not_enter_legacy_core_handler(connected, projects, monkeypatch):
     server, pool, _ = connected
     def failure(*args, **kwargs):
         raise RuntimeError('private-exception-source-token')
@@ -96,9 +100,9 @@ def test_suppressed_handler_exception_still_has_entry_and_error(connected, proje
     args = claims(projects[0]); args.update(tool_name='apply_patch')
     out = invoke(server, args)
     row = recent(projects[0])[0]
-    assert stages(row)[0] == 'HOOK_RECEIVED' and row['last_stage'] == 'HANDLER_ERROR'
-    assert row['handler_reason'] == 'HOOK_CHECK_INCONCLUSIVE'
-    assert out['reason'] == 'HOOK_CHECK_INCONCLUSIVE'
+    assert stages(row)[0] == 'HOOK_RECEIVED' and row['last_stage'] == 'HANDLER_COMPLETED'
+    assert row['handler_reason'] == 'TASK_CLOSEOUT_PENDING'
+    assert out['reason'] == 'TASK_CLOSEOUT_PENDING'
     assert 'private-exception' not in json.dumps(row)
 
 
@@ -178,7 +182,8 @@ def test_storage_failure_is_advisory_and_does_not_bypass_claims_or_core(connecte
     assert invoke(connected[0], args)['host_claim_status'] == 'INVALID'
     (projects[0]/'src/A.java').write_text('class A { int changed; }\n')
     args = claims(projects[0], 'mutation-with-storage-error'); args['tool_name'] = 'apply_patch'
-    assert invoke(connected[0], args)['scanner_run']
+    pending = invoke(connected[0], args)
+    assert not pending['scanner_run'] and pending['task_activity_recorded']
 
 
 @pytest.mark.parametrize('kind', [RuntimeError, ValueError])
@@ -202,13 +207,13 @@ def test_rejected_subdirectory_claim_is_queryable_from_canonical_workspace(conne
     assert recent(projects[0])[0]['last_stage'] == 'CLAIMS_REJECTED'
 
 
-def test_initializing_early_return_keeps_actual_classification(connected, projects, monkeypatch):
+def test_unused_A_initialization_does_not_block_task_activity_classification(connected, projects, monkeypatch):
     server, pool, _ = connected
     monkeypatch.setattr(pool, 'bootstrap', lambda *args: {'status':'INITIALIZING', 'security_proof':False})
     args = claims(projects[0]); args['tool_input'] = {'command':'Set-Content src/A.java fixture'}
     out = invoke(server, args)
     row = recent(projects[0])[0]
-    assert out['reason_code'] == 'WORKSPACE_INITIALIZING' and not out['scanner_run']
+    assert out['reason'] == 'TASK_CLOSEOUT_PENDING' and not out['scanner_run']
     assert row['host_claim_status'] == 'VALID' and row['tool_classification'] == 'POSSIBLE_WORKSPACE_MUTATION'
     assert row['workspace_mutation_observed'] is None and row['scanner_run'] is False
     assert 'SCANNER_TRIGGERED' not in stages(row)
@@ -277,7 +282,7 @@ def test_observer_exception_never_repeats_or_blocks_original_handler(projects, m
     assert out['recent_hook_diagnostic_status'] == 'WRITE_UNAVAILABLE'
 
 
-def test_scanner_exception_does_not_claim_completion_or_hide_observed_invocation(connected, projects, monkeypatch):
+def test_edit_activity_does_not_invoke_scanner_or_claim_audit_completion(connected, projects, monkeypatch):
     from security_runtime.verification_policy import scanner_process_observed
     server, pool, _ = connected
     core = pool.children[projects[0]][1]
@@ -289,9 +294,10 @@ def test_scanner_exception_does_not_claim_completion_or_hide_observed_invocation
     args = claims(projects[0]); args['tool_name'] = 'apply_patch'
     out = invoke(server, args)
     row = recent(projects[0])[0]
-    assert out['reason'] == 'HOOK_CHECK_INCONCLUSIVE'  # security protocol unchanged
-    assert 'SCANNER_TRIGGERED' in stages(row) and 'SCANNER_COMPLETED' not in stages(row)
-    assert row['scanner_run'] is True and row['last_stage'] == 'HANDLER_ERROR'
+    assert out['reason'] == 'TASK_CLOSEOUT_PENDING'
+    assert 'SCANNER_TRIGGERED' not in stages(row) and 'SCANNER_COMPLETED' not in stages(row)
+    assert row['scanner_run'] is False and row['last_stage'] == 'HANDLER_COMPLETED'
+    assert row['task_activity_recorded'] and row['task_audit_complete'] is False
 
 
 def test_database_corrupt_values_are_not_echoed(connected, projects, capsys):

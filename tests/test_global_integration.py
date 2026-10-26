@@ -61,7 +61,7 @@ def test_fresh_global_install_no_project_writes(installed, projects):
     result = installed.execute('setup', projects[0])
     assert result['scope'] == 'GLOBAL' and result['ownership'] == GLOBAL
     assert result['overall'] == 'CONFIGURED'
-    assert result['baseline']['status'] == 'DEFERRED_TO_SESSION_START'
+    assert result['baseline']['status'] == 'NOT_REQUIRED'
     assert not any((root / '.codex').exists() for root in projects)
     server = tomllib.loads((installed.home / 'config.toml').read_text())['mcp_servers']['ai_security_runtime']
     assert 'cwd' not in server
@@ -233,7 +233,9 @@ def pool_fixture(installed, tmp_path, factory=None):
 
 
 def ready(pool, root, session):
-    pool.bootstrap(root, session)
+    observed = pool.bootstrap(root, session)
+    if observed['status'] != 'INITIALIZING':
+        return observed
     key = (root, pool.bind_session(session, root))
     pool.jobs[key].result(timeout=20)
     return pool.bootstrap(root, session)
@@ -243,8 +245,8 @@ def test_project_a_b_bootstrap_without_setup_and_isolated_state(installed, proje
     pool = pool_fixture(installed, tmp_path)
     try:
         for root, session in zip(projects, ('s-a', 's-b')):
-            assert ready(pool, root, session)['status'] == 'READY'
-            assert read_bootstrap(root, base=pool.base)['status'] == 'READY'
+            assert ready(pool, root, session)['status'] == 'CONNECTED'
+            assert not (workspace_state(root, pool.base)/'bootstrap.json').exists()
             assert not (root / '.codex').exists()
         assert workspace_state(projects[0], pool.base) != workspace_state(projects[1], pool.base)
         assert pool.children[projects[0]][1].store.key(projects[0]) != pool.children[projects[1]][1].store.key(projects[1])
@@ -265,13 +267,13 @@ def test_initialization_not_blocking_or_fake_ready(installed, projects, tmp_path
     monkeypatch.setattr(ProductEpochService, 'step', handle)
     pool = pool_fixture(installed, tmp_path, factory)
     try:
-        assert pool.bootstrap(projects[0], 's')['status'] == 'INITIALIZING'
-        assert started.wait(10)
+        assert pool.bootstrap(projects[0], 's')['status'] == 'CONNECTED'
+        assert not started.is_set()
         server = create_global_server(workspaces=pool)
-        result = asyncio.run(server.call_tool('handle_hook_event', {'event': 'PostToolUse', 'workspace_path': str(projects[0]), 'session_id': 's', 'tool_name': 'apply_patch', 'turn_id': 't', 'tool_use_id': 'call'}))
-        assert result.structuredContent['reason_code'] == 'WORKSPACE_INITIALIZING'
-        assert result.structuredContent['scanner_run'] is False
-        assert read_bootstrap(projects[0], base=pool.base)['security_proof'] is False
+        result = asyncio.run(server.call_tool('get_security_summary', {'workspace_path': str(projects[0])}))
+        assert structured(result)['workspace'] == str(projects[0])
+        assert not pool.jobs
+        assert not (workspace_state(projects[0], pool.base)/'bootstrap.json').exists()
     finally: blocker.set(); pool.close()
 
 
@@ -338,12 +340,12 @@ def test_stale_tampered_bootstrap_not_ready(installed, projects, tmp_path):
 
 def test_restart_rebuilds_live_context_and_initializes_new_session(installed, projects, tmp_path):
     pool = pool_fixture(installed, tmp_path)
-    assert ready(pool, projects[0], 'first')['status'] == 'READY'
+    assert ready(pool, projects[0], 'first')['status'] == 'CONNECTED'
     key = pool.children[projects[0]][1].store.key(projects[0]); pool.close()
     restarted = pool_fixture(installed, tmp_path)
     try:
         assert not restarted.jobs and not restarted.sessions
-        assert ready(restarted, projects[0], 'second')['status'] == 'READY'
+        assert ready(restarted, projects[0], 'second')['status'] == 'CONNECTED'
         assert restarted.children[projects[0]][1].store.key(projects[0]) == key
     finally: restarted.close()
 
@@ -450,7 +452,7 @@ def test_non_edit_tool_does_not_bootstrap(installed, projects, tmp_path, tool):
     finally: pool.close()
 
 
-def test_initialization_failure_not_ready_or_proof(installed, projects, tmp_path, monkeypatch):
+def test_unused_product_A_failure_does_not_block_connection_or_claim_proof(installed, projects, tmp_path, monkeypatch):
     def factory(root, directory, binding):
         core = HookCoordinator(FakeRuntime(), HookStateStore(directory / 'hooks'))
         return _Child(binding).server, core
@@ -460,8 +462,9 @@ def test_initialization_failure_not_ready_or_proof(installed, projects, tmp_path
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         value = ready(pool, projects[0], 's')
-        assert value['status'] == 'ERROR' and value['security_proof'] is False
-        assert read_bootstrap(projects[0], base=pool.base)['status'] == 'ERROR'
+        assert value['status'] == 'CONNECTED' and value['security_proof'] is False
+        assert value['startup_comparison_baseline']['status'] == 'NOT_REQUIRED'
+        assert not pool.jobs
         assert 'private' not in json.dumps(value)
     finally: pool.close()
 
@@ -494,7 +497,7 @@ def test_encountered_legacy_project_is_degraded_until_explicit_repair(installed,
         with pytest.raises(ValueError, match='LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR'): pool.admit(projects[0])
         assert (projects[0] / '.codex/hooks.json').is_file()
         installed.execute('repair', projects[0])
-        assert ready(pool, projects[0], 's')['status'] == 'READY'
+        assert ready(pool, projects[0], 's')['status'] == 'CONNECTED'
     finally: pool.close()
 
 
@@ -641,17 +644,15 @@ def test_global_session_baseline_does_not_invent_preexisting_scanner_facts(insta
         return _Child(binding).server, HookCoordinator(runtime, HookStateStore(directory / 'hooks'), cooldown_ms=0)
     pool = pool_fixture(installed, tmp_path, factory)
     try:
-        assert ready(pool, root, 's')['status'] == 'READY'
+        assert ready(pool, root, 's')['status'] == 'CONNECTED'
         core = pool.children[root][1]
         snapshot, _ = core.store.load(core.store.path(root, 'codex', 's'))
-        assert snapshot['schema_version'] == 'hook-product-epoch-v1'
-        assert snapshot['representation'] == 'HASH_ONLY'
-        assert not {'families', 'file_digests', 'last_result', 'changed_files'} & snapshot.keys()
+        assert snapshot is None
         assert core.runtime.calls == []
         (root / 'src/A.java').write_text('class A { int harmless; }\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
         assert result['delta']['new'] == 0
-        assert result['first_scan_attribution_status'] == 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
+        assert result['reason'] == 'TASK_BASELINE_REQUIRED'
     finally: pool.close()
 
 
@@ -660,13 +661,13 @@ def test_global_session_baseline_alone_cannot_prove_new_risk(installed, projects
     pool = pool_fixture(installed, tmp_path)
     try:
         root = projects[0]
-        assert ready(pool, root, 's')['status'] == 'READY'
+        assert ready(pool, root, 's')['status'] == 'CONNECTED'
         core = pool.children[root][1]; core.cooldown_ms = 0
         core.runtime.findings = [row(root, file='src/A.java')]
         (root / 'src/A.java').write_text('changed\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
         assert result['delta']['new'] == 0
-        assert result['first_scan_attribution_status'] == 'FIRST_SCAN_ATTRIBUTION_INCONCLUSIVE'
+        assert result['reason'] == 'TASK_BASELINE_REQUIRED'
     finally: pool.close()
 
 
@@ -697,14 +698,12 @@ def test_product_observation_is_independent_of_engine_and_records_moving_gaps(in
     pool = pool_fixture(installed, tmp_path, factory)
     try:
         value = ready(pool, root, 's')
-        assert value['status'] == 'READY'
-        if cause == 'moving':
-            assert value['product_epoch']['counts']['gaps'] > 0
-            assert value['product_epoch']['comparison_available'] is False
+        assert value['status'] == 'CONNECTED'
+        assert value['startup_comparison_baseline']['status'] == 'NOT_REQUIRED'
         assert value['security_proof'] is False
         core = pool.children[root][1]
         assert core.runtime.calls == []
-        assert core.store.load(core.store.path(root, 'codex', 's'))[0]['consistency'] == 'OBSERVED_ONLY'
+        assert core.store.load(core.store.path(root, 'codex', 's'))[0] is None
     finally: pool.close()
 
 

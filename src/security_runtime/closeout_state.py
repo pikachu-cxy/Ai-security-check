@@ -11,7 +11,7 @@ import sqlite3
 import time
 import uuid
 
-from .hook_state import no_links
+from .hook_state import native_io_path, no_links
 
 CONTRACT = 'closeout-state-v1'
 MAX_RECORDS = 512
@@ -27,14 +27,22 @@ def digest(key, value):
     return hmac.new(key, encode(value), hashlib.sha256).hexdigest()
 
 
-def readonly_uri(path):
+def database_uri(path, *, mode):
+    if mode not in {'ro', 'rw'}:
+        raise ValueError('SQLite URI requires an existing-file mode')
     # Keep Windows extended paths for long state directories, but encode them
     # as a URI path, never a URI authority. SQLite decodes native backslashes.
     from urllib.parse import quote
-    value = str(path.resolve())
+    value = str(native_io_path(path.resolve()))
     if value.startswith('\\\\?\\'):
-        return 'file:' + quote(value, safe=':/') + '?mode=ro'
-    return Path(value).as_uri() + '?mode=ro'
+        uri = 'file:' + quote(value, safe=':/')
+    else:
+        uri = Path(value).as_uri()
+    return uri + '?mode=' + mode
+
+
+def readonly_uri(path):
+    return database_uri(path, mode='ro')
 
 
 class CloseoutStateStore:

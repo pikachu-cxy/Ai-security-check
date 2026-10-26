@@ -95,7 +95,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
             observe('CLAIMS_VALID', tool_classification=classification, **(claim_diag or {}))
             try:
                 from .host_event_runtime import handle_normalized_event
-                active_coordinator = coordinator or HookCoordinator()
+                active_coordinator = coordinator or HookCoordinator(task_audit_mode=True)
                 from .host_event_journal import HostEventJournal
                 if classification != 'READ_ONLY' and not HostEventJournal.applicable(normalized):
                     active_coordinator.store.pending_activity(validated_root, 'codex', session_id, mark=True)
@@ -137,7 +137,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 'pre_edit_targeted_scan_run', 'pre_edit_targeted_scan_count', 'first_scan_attribution_status',
                 'pre_existing_risk_count', 'newly_attributed_risk_count', 'attribution_scanner_equivalent',
                 'first_scan_attribution_reason', 'first_scan_attribution_ms',
-                'security_task_ref', 'task_edit_check_policy'):
+                'security_task_ref', 'task_edit_check_policy', 'task_activity_recorded', 'task_audit_complete'):
         if key in result:
             summary[key] = result[key]
     if 'event_processing' in result:
@@ -163,7 +163,6 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     measured.update(result.get('timing_ms', {}))
     if decision is not None:
         measured.update({k: v for k, v in decision.get('timing_ms', {}).items() if v is not None})
-    measured['hook_total'] = elapsed(started)
     summary.update(timing_ms=measured, execution_context=core_context())
     from .scanner_cache import lifetime
     summary.update(lifetime())
@@ -174,7 +173,6 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 'remediation_cycle_boundary', 'remediation_cycle_detail_ms',
                 'remediation_cycle_breakdown_measurement'):
         summary[key] = decision.get(key) if decision else None
-    summary['duration_ms'] = round(measured['hook_total'])
     if 'scanner_diagnostics' in result:
         summary['scanner_diagnostics'] = result['scanner_diagnostics']
     for key in ('current_dependency_finding_ids', 'dependency_user_feedback', 'capabilities', 'dependency_check_reason', 'target_selection', 'unattributed_code_risk_count',
@@ -188,6 +186,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     for key in ('baseline_source', 'baseline_seed_status'):
         if key in result:
             summary[key] = result[key]
+    feedback_started = time.perf_counter()
+    task_recording_ms = 0.0
     output = CodexHookAdapter().output({'hook_event_name': 'PostToolUse'}, result)
     if decision is None and result['execution']['scanner_run'] is True and result.get('dependency_user_feedback'):
         # Non-Git workspaces use the advisory-only Hook. Actual dependency
@@ -272,7 +272,10 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     repair_flow = bool(decision and (decision.get('action') == 'AUTO_FIX' or
         decision.get('episode_id') and decision.get('verification') and decision.get('attempt_count', 0) > 0))
     if validated_root is not None and active_coordinator is not None:
+        recording_started = time.perf_counter()
         task, recording = _record_task_hook(active_coordinator.store, validated_root, result, decision)
+        task_recording_ms = elapsed(recording_started)
+        measured['task_recording'] = task_recording_ms
         if 'event_processing' in result:
             summary['event_processing'] = {key: result['event_processing'][key] for key in
                 ('contract', 'event_ref', 'state', 'exact_call_deduplication', 'task_ref', 'task_linkage')
@@ -335,6 +338,10 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 context_returned=True, delivery_receipt=receipt)
             if summary.get('feedback_delivery') == 'TASK_FINAL_SUMMARY' and not authorized:
                 output['hookSpecificOutput']['additionalContext'] = _deferred_task_context(summary)
+    measured['feedback_processing'] = round(max(0.0, elapsed(feedback_started) - task_recording_ms), 3)
+    measured['hook_total'] = elapsed(started)
+    summary['duration_ms'] = round(measured['hook_total'])
+    summary['timing_boundary'] = 'HANDLER_RETURN_READY; SERIALIZATION_AND_HOST_TIME_EXCLUDED'
     return {**summary, **output}
 
 

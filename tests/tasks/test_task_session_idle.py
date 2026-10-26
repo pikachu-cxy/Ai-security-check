@@ -34,8 +34,8 @@ def test_explicit_stop_before_baseline_excludes_idle_task_without_closing_it(tim
     assert 'review' not in idle and 'closed_at' not in idle
     clock[0] += 1
     fresh = new.begin(root, 'new')['task_ref']
-    assert ref in new.load(root, fresh)['attribution_start']['idle_sessions']
-    finish_review(new, root, fresh, expected=False)
+    assert 'attribution_start' not in new.load(root, fresh)
+    finish_review(new, root, fresh)
     assert tasks.load(root, ref) == idle
     with pytest.raises(ValueError, match='another session'):
         new.finish(root, ref)
@@ -54,7 +54,7 @@ def test_reconnect_or_activity_after_baseline_invalidates_idle_witness(timeline,
         assert tasks.begin(root, 'host-task')['task_ref'] == ref
     else:
         session_activity(tasks.hooks, root, owner, idle=resume == 'stop-again', now=lambda: clock[0])
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_stop_first_observed_after_new_task_start_cannot_erase_overlap(timeline):
@@ -63,7 +63,7 @@ def test_stop_first_observed_after_new_task_start_cannot_erase_overlap(timeline)
     fresh = new.begin(root, 'new')['task_ref']
     clock[0] += 1
     session_activity(tasks.hooks, root, owner, idle=True, now=lambda: clock[0])
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_resume_during_baseline_capture_invalidates_idle_witness(timeline, monkeypatch):
@@ -79,7 +79,7 @@ def test_resume_during_baseline_capture_invalidates_idle_witness(timeline, monke
     with monkeypatch.context() as patch:
         patch.setattr(task_security, 'capture', resumed)
         fresh = new.begin(root, 'new')['task_ref']
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_resume_during_review_is_rechecked_at_final_submission(timeline):
@@ -96,8 +96,8 @@ def test_resume_during_review_is_rechecked_at_final_submission(timeline):
     session_activity(tasks.hooks, root, owner, now=lambda: clock[0])
     assert new.submit(root, fresh, packet['review_session'], [], 'REVIEWED', [])['result_saved']
     result = new.get(root, fresh)
-    assert result['host_review']['coverage'] == 'PARTIAL'
-    assert any(item['reason'] == REASON for item in new.load(root, fresh)['limitations'])
+    assert result['host_review']['coverage'] == 'REVIEWED'
+    assert not any(item['reason'] == REASON for item in new.load(root, fresh)['limitations'])
 
 
 @pytest.mark.parametrize('field,value', [('contract', 'unknown'), ('observed_at', float('nan')),

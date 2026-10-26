@@ -119,7 +119,8 @@ def test_private_copy_corruption_is_rejected_before_scanner_execution(service, m
 
 def test_edit_after_capture_does_not_replace_frozen_scanner_bytes(service, monkeypatch):
     task, root, ref = setup(service)
-    (root/'routes.py').write_text('version = 1\n')
+    original = b'version = 1\r\n'
+    (root/'routes.py').write_bytes(original)
     prepare = _CaptureWriter.prepare
 
     def later_edit(sink, *args):
@@ -130,7 +131,7 @@ def test_edit_after_capture_does_not_replace_frozen_scanner_bytes(service, monke
     enqueue(task, root, ref, launch=False)
     row = CloseoutQueue(task.hooks, root).read(ref)
     frozen = QueuedInputs(task.hooks, root).open(row['input_ref'])
-    assert (frozen/'routes.py').read_bytes() == b'version = 1\n'
+    assert (frozen/'routes.py').read_bytes() == original
     assert execute_one(task, root, ref)
     assert CloseoutQueue(task.hooks, root).read(ref)['state'] == 'STALE'
     assert task.end_lines(root, task.load(root, ref), 'routes.py') == ['version = 1']

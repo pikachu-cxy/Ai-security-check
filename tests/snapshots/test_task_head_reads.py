@@ -32,6 +32,34 @@ def test_headers_keep_control_and_default_reads_keep_complete_sources(sample, mo
     assert state.records(headers=True) == [head]
 
 
+def test_pending_hook_ack_keeps_authenticated_head_without_source_reads(sample, monkeypatch):
+    from security_runtime.tasks.hook_activity import _record_task_hook
+    root, hooks, clock, _, state, _ = sample
+    clock[0] = time.time()
+    full = saved(sample)
+    before = state.path.read_bytes()
+    monkeypatch.setattr('security_runtime.tasks.snapshot_pages.unpack',
+                        lambda *args: pytest.fail('Edit acknowledgement loaded source pages'))
+    head, recording = _record_task_hook(hooks, root,
+        dict(status='RECORDED_PENDING', security_task_ref=full['task_ref']), None)
+    assert recording == 'ACTIVITY_RECORDED'
+    assert head['baseline'][POINTER] == full['baseline'][POINTER]
+    assert head['task_owner'] == full['task_owner']
+    assert 'hashes' not in head['baseline']
+    assert state.path.read_bytes() == before
+
+
+def test_pending_hook_ack_rejects_tampered_control_without_loading_sources(sample):
+    from security_runtime.tasks.hook_activity import _record_task_hook
+    root, hooks, _, _, state, _ = sample
+    full = saved(sample)
+    with sqlite3.connect(state.path) as db:
+        db.execute("UPDATE security_tasks SET data=replace(data, 'ACTIVE', 'COMPLETE')")
+    with pytest.raises(ValueError, match='cannot be verified'):
+        _record_task_hook(hooks, root,
+            dict(status='RECORDED_PENDING', security_task_ref=full['task_ref']), None)
+
+
 def test_header_reads_reject_modified_signed_control(sample):
     state = sample[4]
     full = saved(sample)

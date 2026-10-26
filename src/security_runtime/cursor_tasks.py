@@ -131,14 +131,11 @@ class CursorTaskBridge:
                 return dict(status='BASELINE_UNAVAILABLE', scanner_run=False)
             record = self.tasks.load(self.root, view['task_ref'])
         review_protocol(record)
-        # SessionStart is fire-and-forget. This synchronous pre-tool snapshot
-        # establishes Core comparison bytes before the first supported mutation.
-        from .host_events import EventKind
-        result = self.core.handle_lifecycle(EventKind.SESSION_START, self.root,
-                                           'cursor', payload['conversation_id'])
+        # The task's original B is authoritative; never create a second product
+        # comparison point here or recapture B after the first mutation.
         return dict(status='BASELINE_PARTIAL' if record['baseline']['limitations'] else 'BASELINE_CAPTURED',
                     task_ref=record['task_ref'], scanner_run=False,
-                    baseline_available=result.get('baseline_available'))
+                    baseline_available=True)
 
     def context(self, record=_CURRENT, *, category='POST_TOOL_CONTEXT'):
         self.last_delivery = None

@@ -17,6 +17,7 @@ from types import MappingProxyType
 import uuid
 
 from .hook_state import no_links, native_io_path
+from .closeout_state import database_uri, readonly_uri
 from .local_evidence import _relative
 from .snapshot_contract import (BaselineKind, CaptureBatchBudget,
                                 SnapshotCompleteness, SourceConsistency, CONTRACT)
@@ -205,7 +206,7 @@ class SnapshotStore:
                 _fail('SNAPSHOT_KEY_OR_WORKSPACE_MISMATCH')
         db = None
         try:
-            uri = self.path.as_uri() + ('?mode=rw' if write else '?mode=ro')
+            uri = database_uri(self.path, mode='rw' if write else 'ro')
             db = sqlite3.connect(uri, uri=True, timeout=2)
             db.execute('PRAGMA trusted_schema=OFF')
             if write:
@@ -335,7 +336,7 @@ class SnapshotStore:
             if prefix[18:20] != b'\x01\x01':
                 _fail('SNAPSHOT_RECORD_INVALID')
             reader._sidecars()
-            reader._db = sqlite3.connect(self.path.as_uri() + '?mode=ro', uri=True, timeout=2)
+            reader._db = sqlite3.connect(readonly_uri(self.path), uri=True, timeout=2)
             reader._db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, SQL_LENGTH)
             if reader._db.execute('PRAGMA locking_mode=EXCLUSIVE').fetchone() != ('exclusive',):
                 _fail('SNAPSHOT_STORAGE_UNAVAILABLE')

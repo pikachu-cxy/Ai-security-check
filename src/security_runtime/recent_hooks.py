@@ -15,6 +15,7 @@ from pathlib import Path
 from .codex_host_claims import EVENTS, schema_diagnostics
 from .hook_state import no_links
 from .storage import ReadOnlySQLiteStore, SQLiteStore
+from .hook_observation_contract import ACTIVITY_STATUSES, ACTIVITY_REASONS
 
 RETENTION = 32
 TOTAL_RETENTION = 1024
@@ -38,6 +39,7 @@ STATUS |= {'SESSION_FINALIZED'}
 STATUS |= {'BASELINE_CAPTURED', 'BASELINE_PARTIAL', 'BASELINE_UNAVAILABLE',
            'READ_ONLY_OR_UNSUPPORTED', 'DELIVERED', 'NOT_APPLICABLE', 'FOLLOWUP'}
 STATUS |= {'CLOSEOUT_PENDING', 'CLOSEOUT_REQUIRED', 'ALLOW_STOP_PENDING'}
+STATUS |= {'CONNECTED'} | ACTIVITY_STATUSES
 REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQUIRED',
            'WORKSPACE_OR_REFERENCE_REJECTED', 'WORKSPACE_CLAIM_REQUIRED',
            'GLOBAL_CONFIGURATION_NOT_READY', 'LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR',
@@ -49,6 +51,7 @@ REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQ
            'DEBOUNCED', 'BUSY', 'HANDLER_EXCEPTION', 'STRUCTURED_RESULT_UNAVAILABLE', 'OTHER',
             'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE'}
 REASONS |= {'READ_ONLY_ACTIVITY', 'WORKSPACE_CONTENT_DELTA'}
+REASONS |= ACTIVITY_REASONS | {'TASK_BASELINE_REQUIRED', 'TASK_BASELINE_UNAVAILABLE'}
 REASONS |= {'CURSOR_REMOTE_NOT_SUPPORTED'}
 REASONS |= {'CURSOR_AUTOMATIC_TASK_UNAVAILABLE'}
 REASONS |= {'SESSION_STOP_WITHOUT_BASELINE', 'SESSION_BASELINE_ONLY', 'SESSION_FINALIZATION_ONLY',
@@ -67,6 +70,7 @@ BOOL_FIELDS = {'workspace_claim_match', 'session_claim_match', 'turn_claim_prese
                'generation_id_shape_valid', 'file_path_containment', 'file_path_absolute',
                'cursor_project_dir_valid', 'workspace_root_relative'}
 BOOL_FIELDS |= {'cursor_task_begin_tool'}
+BOOL_FIELDS |= {'task_activity_recorded', 'task_audit_complete'}
 BOOL_FIELDS |= {'activity_waited_for_baseline', 'mutation_event_dropped', 'pending_mutation'}
 BOOL_FIELDS |= {'first_scan_attribution_attempted', 'pre_edit_targeted_scan_run', 'attribution_scanner_equivalent'}
 BOOL_FIELDS |= {'agent_continuation_available'}
@@ -148,7 +152,8 @@ def safe_fields(values):
                          ('tool_use_id_state', {'NOT_APPLICABLE', 'MISSING', 'NULL', 'EMPTY', 'VALID', 'INVALID'}),
                          ('workspace_roots_validation_reason', {'MISSING', 'INVALID_TYPE', 'EMPTY_ROOTS', 'EMPTY_HOST_LIST', 'MULTI_ROOT_UNSUPPORTED', 'INVALID_ROOT', 'VALID'}),
                          ('snapshot_source', {'NONE', 'SESSION_BASELINE', 'SESSION_PROCESSED', 'SETUP_SEED', 'LAZY_BOOTSTRAP'}),
-                         ('event_dispatch_route', {'SESSION_BASELINE', 'WORKSPACE_RECONCILIATION', 'SESSION_FINALIZATION'}),
+            ('event_dispatch_route', {'SESSION_BASELINE', 'WORKSPACE_RECONCILIATION', 'SESSION_FINALIZATION',
+                                      'SESSION_CONNECTION', 'TASK_ACTIVITY'}),
                          ('baseline_state_before', {'AVAILABLE', 'MISSING', 'INVALID'}),
                          ('baseline_state_after', {'AVAILABLE', 'MISSING', 'INVALID'}),
                          ('baseline_publish_status', {'NOT_ATTEMPTED', 'PUBLISHED', 'RETAINED', 'FAILED', 'REJECTED_ACTIVITY_ORDER'}),
@@ -213,14 +218,52 @@ def safe_fields(values):
 class RecentHookStore:
     def __init__(self, path=None):
         # Caller-controlled Hook arguments never select this location.
-        self.path = Path(path) if path is not None else SQLiteStore.default_path().parent/'hook-diagnostics.db'
+        from .hook_diagnostic_recovery import DiagnosticHistory
+        self.history = DiagnosticHistory(Path(path) if path is not None else SQLiteStore.default_path().parent/'hook-diagnostics.db')
+
+    @property
+    def path(self):
+        return self.history.path()
+
+    @staticmethod
+    def _initialize(path):
+        no_links(path)
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+        except FileExistsError:
+            pass
+        else:
+            os.close(fd)
+        with closing(sqlite3.connect(path, timeout=.05)) as db, db:
+            db.execute('CREATE TABLE IF NOT EXISTS recent_hook_diagnostics '
+                       '(sequence INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE, workspace TEXT, data TEXT)')
+            db.execute('CREATE INDEX IF NOT EXISTS recent_hook_workspace ON recent_hook_diagnostics(workspace, sequence)')
+
+    def repair(self):
+        with self.history.writer():
+            return self.history.repair_locked(self._initialize)
 
     def write(self, record, *, create=False):
-        no_links(self.path)
+        from .hook_diagnostic_recovery import corrupt_error
+        with self.history.writer():
+            try:
+                return self._write(self.path, record, create=create)
+            except sqlite3.DatabaseError as error:
+                if not corrupt_error(error):
+                    raise
+                repaired = self.history.repair_locked(self._initialize)
+                if repaired['status'] != 'RECOVERED':
+                    raise
+                # Only this actual in-flight observation is written in the new
+                # diagnostic generation; no Hook or scanner event is replayed.
+                return self._write(self.path, record, create=True)
+
+    def _write(self, path, record, *, create):
+        no_links(path)
         if create:
-            self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-            no_links(self.path)
-        with closing(sqlite3.connect(self.path, timeout=.05)) as db:
+            path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+            no_links(path)
+        with closing(sqlite3.connect(path, timeout=.05)) as db:
             with db:
                 db.execute('PRAGMA secure_delete=ON')
                 if create:
@@ -250,9 +293,10 @@ class RecentHookStore:
             raise ValueError('Recent limit must be between 1 and 32')
         if root is None and not unbound:
             raise ValueError('A diagnostic workspace is required')
-        no_links(self.path)
+        path = self.path
+        no_links(path)
         key = UNBOUND if unbound else workspace_hash(root)
-        rows = ReadOnlySQLiteStore(self.path)._rows('recent_hook_diagnostics',
+        rows = ReadOnlySQLiteStore(path)._rows('recent_hook_diagnostics',
             'SELECT data FROM recent_hook_diagnostics WHERE workspace=? ORDER BY sequence DESC LIMIT ?', (key, limit))
         records = []
         for row in rows:
@@ -284,7 +328,9 @@ class RecentHookStore:
             records.append(record)
         return dict(status='OBSERVED' if records else 'NO_RECORDS', records=records, retention=RETENTION,
                     total_retention=TOTAL_RETENTION, diagnostic_only=True, security_proof=False,
+                    completion_semantics='HOOK_HANDLER_RETURNED_ONLY',
                     scope='UNBOUND' if unbound else 'WORKSPACE', workspace_hash=None if unbound else key,
+                    history_recovery=self.history.facts(),
                     note='Absence is not proof of non-delivery: check state namespace, retention and diagnostic write availability.')
 
 

@@ -161,8 +161,6 @@ def development_capabilities():
         snapshot_page_gc_scope='NEW_GC_CONTRACT_SEALED_CAPTURES_ONLY',
         task_page_write_contract='task-security-paged-gc-v1',
         legacy_page_gc='RETAIN_UNCHANGED',
-        trusted_current_session_identity=False, reliable_invocation_start_binding=False,
-        execution_root_attestation=False,
         cross_root_host_handshake=False, native_frozen_source=False,
         host_write_barrier=False, os_write_sandbox=False,
         existing_task_protocol='task-review-plan-v3', legacy_tasks='READ_WITH_ORIGINAL_CONTRACT',

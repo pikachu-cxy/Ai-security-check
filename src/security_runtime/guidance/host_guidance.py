@@ -493,6 +493,9 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 ## 入口与指导身份
 
 普通聊天、只读和普通 Stop 不开始、恢复或派发检查，不追加通用安全提示。
+默认按工作区任务开始 B → 结束 C 的完整实际净变化审计，不要求识别修改者；其他编辑器、手工改动和未跟踪文件也纳入范围。
+产品启动只校验连接、配置、绑定和签名会话路由，不要求产品比较基线 A，不因此盘点或扫描项目；组件和漏洞数据状态独立如实说明。
+首次编辑前的 B、封存 C、同版本扫描与源码复核、owner 权限及真实检查缺口保持原门槛。任务时间窗重叠不能单独降低新审计覆盖。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
 先核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；按版本、sha256 复用已读完整方法，
 不重复加载已读的同版本主题，缺失才取 get_runtime_guidance(topic)。构建或摘要变化时重新核对。
@@ -576,11 +579,14 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                 'capability_is_not_execution_timing': True},
             'remediation': remediation,
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
+                         'operating_mode': 'AI_DEVELOPMENT_TASK_AUDIT',
+                         'task_audit_scope': 'workspace-task-diff-v1; ENTIRE_B_TO_C_DIFF; AUTHOR_INDEPENDENT; SAME_C_SCAN_AND_REVIEW',
+                         'startup_comparison_baseline': 'NOT_REQUIRED; NO_STARTUP_INVENTORY_OR_SCAN; HISTORICAL_READ_ONLY',
                          'workspace_snapshot_development': development_capabilities(),
                          'local_evidence': 'v0.2', 'bounded_finding_views': 'v0.1',
                          'selected_file_scan': 'selected-file-scan-v1; EXPLICIT_RELATIVE_FILES; NO_PROJECT_EXPANSION',
                          'project_scan_reuse': 'verified-project-scan-reuse-v1; CURRENT_IDENTITY_REVALIDATION; FORCE_RESCAN',
-                         'unified_scan_lifecycle': 'task-risk-attribution-v1; SESSION_COMPARISON_ONLY; PROJECT_SCAN_ON_REQUEST; PRE_EDIT_INPUTS; CLOSEOUT_AND_HOST_REVIEW',
+                         'unified_scan_lifecycle': 'task-risk-attribution-v1; TASK_B_TO_C; PROJECT_SCAN_ON_REQUEST; PRE_EDIT_INPUTS; CLOSEOUT_AND_HOST_REVIEW',
                          'fixed_scan_artifacts': 'fixed-scan-artifact-v1; EXACT_ROOT_INPUT_PROVIDER_AND_MODE; COVERAGE_GAPS_PRESERVED; NO_REVIEW_OR_AUTHORITY_REUSE',
                          'task_risk_reporting': 'task-risk-report-v1; EXISTING_INTRODUCED_EXPANDED_UNKNOWN; STABLE_REPORT_ID; AUTOMATIC_HOST_FINAL_ACK_UNSUPPORTED',
                          'scan_progress': 'MCP_PROGRESS_TOKEN_OPTIONAL; SHARED_RUNTIME_PHASES',

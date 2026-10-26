@@ -126,6 +126,7 @@ def coordinator(root, *, automatic=False):
     runtime = SecurityRuntime(ScannerRegistry([SemgrepAdapter(manager), GitleaksAdapter(manager)],
         tool_manager=manager, fallback_adapters=[]), SQLiteStore(directory / 'scans.db'))
     return HookCoordinator(runtime, HookStateStore(directory / 'hooks'),
+        task_audit_mode=True,
         workspace_resolver=resolve_workspace,
         snapshot_capture=None if WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git else source_snapshot)
 

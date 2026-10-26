@@ -57,6 +57,49 @@ def ledger(sample):
     return TaskSecurityStore(sample[4].store, sample[0]).get(sample[-1])
 
 
+def test_hook_timing_includes_task_ack_feedback_and_delivery_receipt(development, monkeypatch):
+    from types import SimpleNamespace
+    import security_runtime.codex_mcp_hook as module
+    import security_runtime.hook_reply_context as context_module
+    from security_runtime.tasks.delivery_receipts import TaskDeliveryReceipts
+    clock = [100.0]
+    original_record = module._record_task_hook
+    original_output = module.CodexHookAdapter.output
+    original_render = context_module.render_hook_context
+    original_receipt = TaskDeliveryReceipts.prepare
+
+    def record(*args, **kwargs):
+        clock[0] += .250
+        return original_record(*args, **kwargs)
+
+    def output(*args, **kwargs):
+        clock[0] += .125
+        return original_output(*args, **kwargs)
+
+    def render(*args, **kwargs):
+        clock[0] += .075
+        return original_render(*args, **kwargs)
+
+    def receipt(*args, **kwargs):
+        clock[0] += .400
+        return original_receipt(*args, **kwargs)
+
+    monkeypatch.setattr(module, 'time', SimpleNamespace(perf_counter=lambda: clock[0]))
+    monkeypatch.setattr(module, 'elapsed', lambda start: round(1000 * (clock[0] - start), 3))
+    monkeypatch.setattr(module, '_record_task_hook', record)
+    monkeypatch.setattr(module.CodexHookAdapter, 'output', output)
+    monkeypatch.setattr(context_module, 'render_hook_context', render)
+    monkeypatch.setattr(TaskDeliveryReceipts, 'prepare', receipt)
+    result = introduce_risk(development)
+    assert result['timing_ms']['task_recording'] == 250
+    assert result['timing_ms']['feedback_processing'] == 600
+    assert result['timing_ms']['hook_total'] == 850
+    assert result['duration_ms'] == 850
+    assert result['task_delivery']['context_returned']
+    assert result['task_delivery']['delivery_receipt']['recording'] == 'RECORDED'
+    assert result['timing_boundary'] == 'HANDLER_RETURN_READY; SERIALIZATION_AND_HOST_TIME_EXCLUDED'
+
+
 def test_risky_edit_runs_and_persists_without_prompting_or_granting_repair(development):
     root, runtime, _, service, core, _, _, ref = development
     result = introduce_risk(development)

@@ -216,6 +216,7 @@ def execute_one(service, workspace, ref, *, worker=None):
 
     thread = threading.Thread(target=heartbeat, daemon=True)
     thread.start()
+    stage = 'LOAD_TASK'
     try:
         record = service.load(root, ref)
         if record_owner(record) != claim['owner'] or baseline_fingerprint(record) != claim['baseline_digest']:
@@ -224,12 +225,15 @@ def execute_one(service, workspace, ref, *, worker=None):
             queue.finish(claim, 'CANCELLED', 'TASK_ALREADY_CLOSED')
             return True
         from .closeout_pages import restore
+        stage = 'RESTORE_END'
         # The queue stays compact. Only the worker's compatibility view expands.
         claim = dict(claim, end=restore(service.store(root), record, claim['end']))
+        stage = 'CHECK_SCAN_LANE'
         lane = ScanAttemptStore(service.hooks, root, now=service.now).read()['lane']
         if lane and lane['state'] == 'ACTIVE' and lane['expires_at'] > service.now():
             queue.finish(claim, 'RETRY_WAIT', 'SCAN_RESOURCE_BUSY')
             return True
+        stage = 'CHECK_EXECUTION_IDENTITY'
         expected = claim['configuration']
         if execution_identity() != expected['execution']:
             queue.finish(claim, 'STALE', 'RUNTIME_OR_CONFIGURATION_CHANGED')
@@ -238,16 +242,20 @@ def execute_one(service, workspace, ref, *, worker=None):
                          finished_hook_revision=expected['hook_revision'])
         from .queued_inputs import QueuedInputs
         inputs = QueuedInputs(service.hooks, root, now=service.now)
+        stage = 'OPEN_FROZEN_INPUTS'
         frozen = inputs.open(claim['input_ref']) if claim.get('input_ref') else None
         # Legacy queue records without pinned bytes cannot prove old sources.
         if frozen is None and not service._fresh(root, candidate):
             queue.finish(claim, 'STALE', 'SOURCE_CHANGED_SINCE_CLOSEOUT')
             return True
+        stage = 'MARK_SCAN_STARTED'
         if not queue.started(claim):
             return True
+        stage = 'TASK_CLOSEOUT'
         result = service._finish(root, ref, end=claim['end'], queue_guard=lambda:queue.current(claim),
                                  frozen_source=frozen, frozen_auxiliary=expected['auxiliary'])
         state = result['status']
+        stage = 'VALIDATE_CURRENT_SOURCE'
         source_changed = ((state in {'READY', 'REVIEWING', 'COMPLETE', 'NO_CHANGES'}
                            or state == 'STALE' and not result.get('reason'))
                           and not service._fresh(root, candidate))
@@ -256,6 +264,7 @@ def execute_one(service, workspace, ref, *, worker=None):
         outcome = ('RETRY_WAIT' if state == 'BUSY' else 'NO_CHANGES' if state == 'NO_CHANGES'
                    else 'READY_FOR_REVIEW' if state in {'READY', 'REVIEWING', 'COMPLETE'}
                    else 'STALE' if state == 'STALE' else 'FAILED')
+        stage = 'PUBLISH_QUEUE_RESULT'
         queue.finish(claim, outcome, 'SOURCE_CHANGED_SINCE_CLOSEOUT' if source_changed else
                      None if outcome in {'READY_FOR_REVIEW', 'NO_CHANGES'} else state)
         return True
@@ -265,15 +274,17 @@ def execute_one(service, workspace, ref, *, worker=None):
         admission = owned_storage_failure(exc)
         from .durable import operation_failure
         operation = operation_failure(exc)
+        from .execution_diagnostics import failure_diagnostic
+        diagnostic = failure_diagnostic(exc, stage)
         if operation is not None:
             queue.finish(claim, 'RETRY_WAIT' if operation['status'] in {'BUSY', 'CAPACITY_REQUIRED'}
-                         else 'FAILED', operation['reason_code'])
+                         else 'FAILED', operation['reason_code'], diagnostic=diagnostic)
         elif admission is not None and admission['retryable']:
             # Keep the original frozen inputs and task/version binding. A
             # permission-admission lock is not a terminal execution failure.
-            queue.finish(claim, 'RETRY_WAIT', admission['reason_code'])
+            queue.finish(claim, 'RETRY_WAIT', admission['reason_code'], diagnostic=diagnostic)
         else:
-            queue.finish(claim, 'FAILED', 'TASK_EXECUTION_UNAVAILABLE')
+            queue.finish(claim, 'FAILED', 'TASK_EXECUTION_UNAVAILABLE', diagnostic=diagnostic)
         return True
     finally:
         stop.set()

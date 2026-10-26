@@ -341,6 +341,7 @@ def test_persisted_wal_header_is_explicitly_unsupported_and_zero_write(sample):
 def test_wal_switch_between_preflight_and_native_connect_creates_no_reader_sidecars(sample, monkeypatch):
     """The test writer changes the DB; compare only after that real commit."""
     import security_runtime.snapshot_reader as reader_module
+    from security_runtime.closeout_state import readonly_uri
 
     ref, _ = seal(sample.store, sample.binding)
     native_connect = sqlite3.connect
@@ -365,7 +366,7 @@ def test_wal_switch_between_preflight_and_native_connect_creates_no_reader_sidec
                 reader_sidecars.extend(sidecars())
 
     def switched_connect(database, *args, **kwargs):
-        if not checkpoints and str(database) == sample.store.path.as_uri() + "?mode=ro":
+        if not checkpoints and str(database) == readonly_uri(sample.store.path):
             # Preflight saw rollback mode. A real separate writer switches
             # journal mode immediately before the reader's native connect.
             with closing(native_connect(sample.store.path)) as writer, writer:

@@ -323,7 +323,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     license_parser = sub.add_parser("licenses")
     license_parser.add_argument("--check-distribution", action="store_true")
     hooks_parser = sub.add_parser("hooks", help="Manage AI host lifecycle Hooks and diagnostics")
-    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc", "recent"])
+    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc", "recent", "repair-diagnostics"])
     hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"],
         metavar="{codex,cursor,kiro,workbuddy,codebuddy,qoder}")
     hooks_parser.add_argument("--path")
@@ -513,6 +513,19 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 data = manager.apply(json.loads(args.plan.read_bytes()), approve_user_managed=args.approve_user_managed)
             print(json.dumps(data, ensure_ascii=True) if args.json else json.dumps(data, ensure_ascii=False, indent=2))
             return 0 if not data.get('blocked') else 2
+        if args.command == 'hooks' and args.action == 'repair-diagnostics':
+            if args.hook is not None or args.path is not None or args.unbound:
+                raise ValueError('Diagnostic repair uses the fixed user diagnostic store')
+            from .recent_hooks import RecentHookStore
+            try:
+                result = RecentHookStore().repair()
+            except (OSError, ValueError, __import__('sqlite3').DatabaseError):
+                result = dict(status='UNAVAILABLE', reason_code='HOOK_DIAGNOSTIC_RECOVERY_UNAVAILABLE',
+                              diagnostic_only=True, security_proof=False)
+                print(json.dumps(result, ensure_ascii=True) if args.json else 'Hook diagnostic recovery unavailable; original history retained.')
+                return 2
+            print(json.dumps(result, ensure_ascii=True) if args.json else json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
         if args.command == 'hooks' and args.action == 'recent':
             from .recent_hooks import RecentHookStore
             from .global_workspace import resolve_workspace
@@ -549,7 +562,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                     if args.stdin:
                         raise ValueError('Use host-event for lifecycle payloads')
                     event = args.event.upper().replace('-','_')
-                    output = HookCoordinator().handle(event,args.path,args.host,args.session_id)
+                    output = HookCoordinator(task_audit_mode=True).handle(event,args.path,args.host,args.session_id)
                 print(json.dumps(output,ensure_ascii=True) if args.json or args.event=='host-event' else
                       f"{output['status']} · coverage {output['coverage']} · new families {output['delta']['new']} · added occurrences {output['delta']['additional_occurrences']}\n{output['next_step']}")
                 return 0  # Findings and scanner limitations are advisory.

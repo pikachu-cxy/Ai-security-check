@@ -45,7 +45,7 @@ def test_three_worktrees_pass_config_gate_and_have_independent_session_routes(in
             assert out['session_binding_status'] == 'MATCH'
             assert out['registered_workspace'] == str(root)
             assert out['routing_binding_confirmed']
-            assert not out['binding_confirmed'] and not out['current_host_verified']
+            assert out['reason_code'] is None and out['next_action'] is None
             # Global installation status must use the same narrow worktree policy.
             assert installed.execute('doctor', root)['overall'] == 'CONFIGURED'
         assert len(set(tokens)) == 3

@@ -218,9 +218,10 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                             if owned else 'NOT_INSTALLED'},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
                 'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
-                'readiness': {'status': 'WORKSPACE_BOOTSTRAP_DEFERRED',
+                'readiness': {'status': 'AWAITING_SESSION_CONNECTION',
                               'hook_status': self._hook_status('SessionStart', configs[1][2], desired[4], manifest)},
-                'baseline': {'status': 'DEFERRED_TO_SESSION_START'},
+                'baseline': {'status': 'NOT_REQUIRED', 'required': False,
+                             'message': '当前任务审计模式不要求产品启动比较基线。'},
                 'hook_definition_hash': fingerprint(product_hooks()),
                 'hook_trust': 'HOST_MANAGED_UNKNOWN', 'live_connection': 'UNKNOWN',
                 'cold_start_host_trial': 'PENDING_ACTUAL_DESKTOP',
@@ -298,7 +299,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                     self.legacy_adapter.remove(row['layer'])
             result['migration'] = {'status': 'MIGRATED' if any(r['ownership'] == LEGACY for r in rows) else 'NONE',
                                    'removed_layers': sum(r['ownership'] == LEGACY for r in rows)}
-            result['baseline'] = {'status': 'DEFERRED_TO_SESSION_START'}
+            result['baseline'] = {'status': 'NOT_REQUIRED', 'required': False,
+                                  'message': '当前任务审计模式不要求产品启动比较基线。'}
         elif action == 'uninstall':
             result = self._mutate(self.home, 'remove')
             result.update(scope='GLOBAL', ownership=GLOBAL)

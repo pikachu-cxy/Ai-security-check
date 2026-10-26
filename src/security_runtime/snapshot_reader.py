@@ -17,6 +17,7 @@ import sqlite3
 import stat
 
 from .snapshot_store import SnapshotStoreError, _encode, _gc_canonical_path
+from .closeout_state import readonly_uri
 
 
 MAX_RECORD_BYTES = 65536
@@ -84,7 +85,7 @@ class SealedSnapshotReader:
         self._closed = False
 
     def _pin(self, path):
-        flags = os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
+        flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0) | getattr(os, 'O_NONBLOCK', 0)
         fd = os.open(path, flags)
         try:
             info, actual = os.fstat(fd), path.lstat()
@@ -158,7 +159,7 @@ class SealedSnapshotReader:
             if raw[18:20] != b'\x01\x01':
                 _fail('SNAPSHOT_RECORD_INVALID')
             self._sidecars()
-            self._db = sqlite3.connect(self.store.path.as_uri() + '?mode=ro', uri=True, timeout=2)
+            self._db = sqlite3.connect(readonly_uri(self.store.path), uri=True, timeout=2)
             self._db.setlimit(sqlite3.SQLITE_LIMIT_LENGTH, SQL_LENGTH)
             # Configure this before any schema/database access. A concurrent
             # WAL mode switch must not make a read-only connection create a

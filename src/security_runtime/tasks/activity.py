@@ -134,14 +134,14 @@ class ActivityStore:
         return self.read('task:'+ref) or dict(seq=0, paths=[], scope_unknown=False,
                                              events=[], last_activity=0)
 
-    def record(self, owner, *, event_id=None, paths=(), scope_unknown=True):
+    def record(self, owner, *, event_id=None, paths=(), scope_unknown=True, allow_legacy=False):
         from ..local_evidence import _relative
         key = self.owner_key(owner)
         with self.transaction() as db:
             focus = self._get(db, key)
             if not focus:
                 raise ValueError('Task routing unavailable')
-            if focus.get('policy') != POLICY:
+            if focus.get('policy') not in ({POLICY, LEGACY} if allow_legacy else {POLICY}):
                 return None  # Switched to a legacy/native repair route meanwhile.
             ref = focus.get('task_ref')
             # A replay keeps its original route even after an explicit switch.
@@ -222,10 +222,11 @@ def record_event(event, hooks):
     if row is None:
         return None
     from ..host_event_runtime import inconclusive
-    result = inconclusive('TASK_CLOSEOUT_PENDING')
-    result.update(status='RECORDED_PENDING', security_task_ref=row['task_ref'],
+    from ..hook_observation_contract import TASK_CLOSEOUT_PENDING, deferred_activity_facts
+    result = inconclusive(TASK_CLOSEOUT_PENDING)
+    result.update(deferred_activity_facts(), security_task_ref=row['task_ref'],
         task_edit_check_policy=POLICY, activity_seq=row['seq'],
         workspace_mutation_observed=None, changed_file_count=None,
-        scanner_skipped_reason='DEFERRED_TO_TASK_CLOSEOUT', duration_ms=0,
+        duration_ms=0,
         next_step='Continue development; finish the original task before the development summary.')
     return {**result, **event.diagnostics()}

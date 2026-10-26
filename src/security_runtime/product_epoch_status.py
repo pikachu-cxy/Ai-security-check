@@ -4,11 +4,13 @@ from .hook_state import HookStateStore
 
 
 def inspect_product_epoch(pool, workspace_path):
+    from .task_audit_mode import MODE, startup_baseline
     result = dict(contract='product-epoch-status-v1', path_status='UNKNOWN',
         reason_code=None, resolved_workspace=None, epoch_status=None,
         scanner_run=False, state_modified=False, source_modified=False,
-        security_proof=False, current_host_verified=False,
-        strict_task_preimage_eligible=False)
+        security_proof=False,
+        strict_task_preimage_eligible=False, operating_mode=MODE,
+        startup_comparison_baseline=startup_baseline())
     try:
         root = pool.root(workspace_path)
     except (ValueError, OSError, RuntimeError) as exc:

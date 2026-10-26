@@ -95,22 +95,22 @@ def test_dead_historical_writer_stays_read_only_without_blocking_new_v3_key(serv
     assert a.load(root,fresh['task_ref'])['review_protocol']==3
 
 
-def test_overlapping_checkout_never_reports_a_full_review(service):
+def test_overlapping_checkout_keeps_full_B_to_C_review_and_owner_isolation(service):
     from task_review_helpers import review_all
     _,root,_=service;a,b=scoped(service,'a'),scoped(service,'b')
     ar=a.begin(root,'a')['task_ref'];br=b.begin(root,'b')['task_ref']
     (root/'routes.py').write_text('def route(): return 1\n')
     result=a.finish(root,ar)
-    assert any(v['reason']=='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE' for v in result['limitations'])
+    assert not any(v['reason']=='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE' for v in result['limitations'])
     packet=a.prepare(root,ar,protocol_version=3)
     review_all(a,root,ar,packet)
     submitted=a.submit(root,ar,packet['review_session'],[],'REVIEWED',[])
     assert submitted['result_saved'] and not submitted['scanner_run']
     result=a.get(root,ar)
-    assert result['host_review']['coverage']=='PARTIAL'
-    assert result['reply_plan']['check_state']=='PARTIAL'
-    assert '静态检查和必读代码复核均已完成' in result['development_summary']
-    assert '**改动归属待确认**' in result['development_summary']
+    assert result['host_review']['coverage']=='REVIEWED'
+    assert result['reply_plan']['check_state']=='COMPLETE'
+    assert '未完成' not in result['development_summary']
+    assert '**改动归属待确认**' not in result['development_summary']
     assert b.load(root,br)['phase']=='ACTIVE'
 
 

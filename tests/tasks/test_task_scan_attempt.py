@@ -199,8 +199,8 @@ def test_another_task_closed_during_unlocked_baseline_capture_keeps_attribution_
         release.set()
         service.finish(root,second)
         saved=service.load(root,second)
-    assert any(row['reason']=='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE' and row['count']==1
-               for row in saved['limitations'])
+    assert not any(row['reason']=='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
+                   for row in saved['limitations'])
 
 
 @pytest.mark.parametrize('changed_path',['code.ts','.semgrepignore','package.json'])

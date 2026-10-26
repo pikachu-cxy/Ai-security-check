@@ -46,7 +46,7 @@ def global_runtime_info(*, tools=None, host=None):
     from .guidance.host_guidance import runtime_info
     info = runtime_info()
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1',
-                        'readonly_workspace_binding_status': 'workspace-binding-status-v1; NO_ADMISSION; HOST_ATTESTATION_UNKNOWN',
+                        'readonly_workspace_binding_status': 'workspace-binding-status-v1; NO_ADMISSION; ROUTING_DIAGNOSTICS',
                         'product_epoch_status': 'product-epoch-status-v1; READ_ONLY; NO_ADMISSION; HASH_ONLY; OBSERVED_ONLY'}
     info['integration_scope'] = 'GLOBAL'
     info['workspace_routing'] = 'EXPLICIT_WORKSPACE_CLAIM'
@@ -59,10 +59,14 @@ def global_runtime_info(*, tools=None, host=None):
 
 
 class GlobalWorkspaces:
-    def __init__(self, *, base=None, integration=None, child_factory=None, host='codex'):
+    def __init__(self, *, base=None, integration=None, child_factory=None, host='codex',
+                 task_audit_mode=True):
+        if type(task_audit_mode) is not bool:
+            raise ValueError('Invalid task audit mode')
         from .host_connectors import connector
         self.connector = connector(host)
         self.host = host
+        self.task_audit_mode = task_audit_mode
         from .storage import SQLiteStore
         self.base = Path(base or SQLiteStore.default_path().parent / ('cursor-workspaces' if host == 'cursor' else 'global-workspaces')).absolute()
         no_links(self.base)
@@ -116,6 +120,7 @@ class GlobalWorkspaces:
             binding = WorkspaceBinding(identity(os.path.normcase(str(root)))[:24], str(root),
                                        str(root) if workspace.is_git else '', self.host, 'PROJECT', '')
             self.children[root] = self.child_factory(root, directory, binding)
+            self.children[root][1].task_audit_mode = self.task_audit_mode
             return self.children[root]
 
     def validate_layers(self, cwd):
@@ -150,6 +155,10 @@ class GlobalWorkspaces:
     def bootstrap(self, root, session):
         key = (root, self.bind_session(session, root))
         _, core = self.admit(root)
+        if self.task_audit_mode:
+            from .task_audit_mode import connection_readiness
+            return dict(connection_readiness(), configuration_status='VALIDATED',
+                        session_binding_status='MATCH', readiness_status='CONNECTION_OBSERVED')
         with self.lock:
             future = self.jobs.get(key)
             if future is None:
@@ -499,7 +508,7 @@ def create_global_server(*, workspaces=None, host='codex'):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_workspace_binding_status(workspace_path: str, session_ref: str | None = None) -> dict:
-        """Read path and configuration eligibility, then this credential's existing routing. No admission, bootstrap, scan, key creation or binding changes. routing_binding_confirmed only proves signed routing consistency; binding_confirmed/current_host_verified remain false without host attestation."""
+        """Read path and configuration eligibility, then this credential's existing routing. No admission, bootstrap, scan, key creation or binding changes. A routing match completes this diagnostic without further host checks."""
         from .workspace_binding_status import inspect_binding
         return inspect_binding(pool, workspace_path, session_ref)
 
@@ -662,9 +671,22 @@ def create_global_server(*, workspaces=None, host='codex'):
                                   and normalized.operation == OperationClass.READ_ONLY)
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     observe('CLAIMS_VALID', tool_classification=classification, **normalized.diagnostics())
+            if (name in HOOKS and normalized.kind == EventKind.SESSION_START
+                    and pool.task_audit_mode):
+                from .tasks.ownership import issue_session_ref, session_context
+                readiness = pool.bootstrap(root, arguments['session_id'])
+                token = issue_session_ref(pool.children[root][1].store, root,
+                                          active_host, arguments['session_id'])
+                data = dict(readiness, **claim_diag, task_session_ref=token)
+                output = {'continue': True, 'systemMessage': readiness['message'],
+                    'hookSpecificOutput': {'hookEventName': 'SessionStart',
+                                           'additionalContext': readiness['message'] + '\n' + session_context(token)}}
+                return CallToolResult(structuredContent=data, content=[TextContent(
+                    type='text', text=json.dumps(output, ensure_ascii=False))])
             lightweight = False
             independent_task_before = False
-            if name in HOOKS and normalized.kind == EventKind.WORKSPACE_ACTIVITY:
+            if (not pool.task_audit_mode and name in HOOKS
+                    and normalized.kind == EventKind.WORKSPACE_ACTIVITY):
                 from .tasks.activity import lightweight_focus
                 owner = dict(host=normalized.context.host, session=normalized.context.session_binding)
                 hooks = pool.children[root][1].store
@@ -676,7 +698,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     independent_task_before = bool(task and task.get('phase') == 'ACTIVE'
                         and record_owner(task) == owner)
             if (name in HOOKS and not read_only_hook and normalized.kind != EventKind.SESSION_STOP
-                    and not lightweight and not independent_task_before):
+                    and not pool.task_audit_mode and not lightweight and not independent_task_before):
                 binding_stage = 'BOOTSTRAPPING'
                 claim_diag['workspace_binding_stage'] = binding_stage
                 session_token = None
@@ -896,7 +918,7 @@ def create_global_server(*, workspaces=None, host='codex'):
             # systemMessage alone can be invisible to the agent, hiding a real
             # missed check behind a successful file edit. Keep gaps explicit;
             # this presentation never grants repair or manual-scan authority.
-            if ((name == 'handle_readiness_event' and data.get('status') != 'READY') or
+            if ((name == 'handle_readiness_event' and data.get('status') not in {'READY', 'CONNECTED'}) or
                     (data.get('status') in {'INCONCLUSIVE', 'BUSY', 'FAILED', 'PARTIAL'}
                      and data.get('scanner_run') is False
                      and (not data.get('user_feedback') or data.get('feedback_kind') == 'CHECK_GAP'))):

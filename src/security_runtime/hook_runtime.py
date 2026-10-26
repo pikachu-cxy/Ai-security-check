@@ -538,7 +538,9 @@ def family_delta(previous, observed, can_cover):
 class HookCoordinator:
     def __init__(self, runtime=None, store=None, *, cooldown_ms=1000, clock=time.time, seeds=None,
                  workspace_resolver=None, snapshot_capture=None, activity_wait_seconds=0,
-                 product_epoch_factory=None):
+                 product_epoch_factory=None, task_audit_mode=False):
+        if type(task_audit_mode) is not bool:
+            raise ValueError('Invalid task audit mode')
         if type(activity_wait_seconds) not in (int, float) or not 0 <= activity_wait_seconds <= 10:
             raise ValueError('Invalid activity wait budget')
         self.runtime = runtime
@@ -550,6 +552,7 @@ class HookCoordinator:
         self.snapshot_capture = snapshot_capture or capture_snapshot
         self.activity_wait_seconds = activity_wait_seconds
         self.product_epoch_factory = product_epoch_factory
+        self.task_audit_mode = task_audit_mode
         self._managed_registry = None
 
     def managed_registry(self):
@@ -792,6 +795,21 @@ class HookCoordinator:
             'coverage':'UNKNOWN','execution_state':'NOT_EXECUTED','last_check_status':'NOT_EXECUTED','capabilities':{},'scanner_runs':[],
             'execution':{'scanner_run':False,'ai_called':False,'network_required':False,'source_modified':False,'target_build':False},
             'baseline_available':False,'state_recovered':False,'next_step':'Retry on the next event or agent stop.'}
+        if self.task_audit_mode:
+            from .task_audit_mode import connection_readiness, task_activity
+            if event == HookEvent.SESSION_START:
+                result.update(connection_readiness(), event_dispatch_route='SESSION_CONNECTION',
+                              baseline_publish_status='NOT_REQUIRED')
+            elif event == HookEvent.FILE_CHANGED:
+                result.update(task_activity(self.store, root, host, session_id,
+                    paths=candidate_paths, scope_unknown=scope_unknown, event_id=event_ref),
+                    event_dispatch_route='TASK_ACTIVITY')
+            else:
+                result.update(status='SESSION_FINALIZED', coverage='NOT_APPLICABLE',
+                              scanner_skipped_reason='SESSION_FINALIZATION_ONLY',
+                              event_dispatch_route='SESSION_FINALIZATION')
+            result['duration_ms'] = round((time.monotonic()-start)*1000)
+            return result
         from .product_epoch_hooks import ProductEpochHooks, SCHEMA as EPOCH_SCHEMA
         epoch = None
         retained_epoch = (event == HookEvent.SESSION_START and not _lifecycle and

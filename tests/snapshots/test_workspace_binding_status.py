@@ -41,7 +41,7 @@ def test_unregistered_path_and_denied_home_diagnostics_create_no_state(context):
     for _ in range(2):
         good = query(server, root)
         assert good['path_status'] == 'ALLOWED' and good['resolved_workspace'] == str(root)
-        assert good['session_binding_status'] == 'UNKNOWN' and not good['binding_confirmed']
+        assert good['session_binding_status'] == 'UNKNOWN'
         assert good['configuration_status'] == 'VALIDATED'
         assert good['admission_status'] == 'ELIGIBLE'
         assert not good['routing_binding_confirmed']
@@ -52,7 +52,7 @@ def test_unregistered_path_and_denied_home_diagnostics_create_no_state(context):
     assert not pool.sessions and not pool.children and not pool.jobs
 
 
-def test_signed_routing_match_does_not_pretend_to_verify_current_chat(context):
+def test_signed_routing_match_completes_without_extra_host_checks(context):
     root, _, pool, server = context
     hooks = HookStateStore(workspace_state(root, pool.base)/'hooks')
     token = issue_session_ref(hooks, root, 'codex', 'session-a')
@@ -60,11 +60,12 @@ def test_signed_routing_match_does_not_pretend_to_verify_current_chat(context):
     before = {p:(p.read_bytes(), p.stat().st_mtime_ns) for p in root.parent.rglob('*') if p.is_file()}
     out = query(server, root, session_ref=token)
     assert out['session_binding_status'] == 'MATCH'
-    assert out['identity_evidence'] == 'SIGNED_ROUTING_CONTEXT_ONLY'
+    assert out['identity_evidence'] == 'SIGNED_ROUTING_CONTEXT'
     assert out['routing_binding_confirmed']
     assert out['session_context_status'] == 'VERIFIED'
-    assert not out['binding_confirmed'] and not out['current_host_verified']
-    assert out['execution_root_match'] is None
+    assert out['reason_code'] is None and out['next_action'] is None
+    assert not {'current_host_verified', 'execution_root_match', 'binding_confirmed',
+                'task_target_match', 'binding_generation'} & out.keys()
     assert before == {p:(p.read_bytes(), p.stat().st_mtime_ns) for p in root.parent.rglob('*') if p.is_file()}
 
 
@@ -92,7 +93,7 @@ def test_unverified_query_never_reads_existing_foreign_registration(context, tok
     pool.sessions = UnreadableSessions({'foreign-session': root.parent/'private-project'})
     result = query(server, root, session_ref=token)
     assert result['session_binding_status'] == 'UNKNOWN'
-    assert result['registered_workspace'] is None and not result['binding_confirmed']
+    assert result['registered_workspace'] is None and not result['routing_binding_confirmed']
 
 
 @pytest.mark.parametrize('failure,reason', [

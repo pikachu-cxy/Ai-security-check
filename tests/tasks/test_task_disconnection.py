@@ -36,15 +36,15 @@ def expire(timeline):
     return ref
 
 
-def finish_review(tasks, root, ref, *, expected):
+def finish_review(tasks, root, ref):
     (root/'routes.py').write_text('def route(): return 1\n')
     result = tasks.finish(root, ref)
-    assert any(item['reason'] == REASON for item in result['limitations']) == expected
+    assert not any(item['reason'] == REASON for item in result['limitations'])
     packet = tasks.prepare(root, ref, protocol_version=3)
     review_all(tasks, root, ref, packet)
     assert tasks.submit(root, ref, packet['review_session'], [], 'REVIEWED', [])['result_saved']
     result = tasks.get(root, ref)
-    assert result['host_review']['coverage'] == ('PARTIAL' if expected else 'REVIEWED')
+    assert result['host_review']['coverage'] == 'REVIEWED'
     return result
 
 
@@ -55,8 +55,8 @@ def test_disconnected_before_baseline_is_excluded_without_touching_original(time
     state[0] = observed
     before = copy.deepcopy(old.load(root, ref))
     fresh = new.begin(root, 'new')['task_ref']
-    assert ref in new.load(root, fresh)['attribution_start']['disconnected']
-    finish_review(new, root, fresh, expected=False)
+    assert 'attribution_start' not in new.load(root, fresh)
+    finish_review(new, root, fresh)
     assert old.load(root, ref) == before
     assert old.load(root, ref)['phase'] == 'ACTIVE' and len(runtime.calls) == 1
     with pytest.raises(ValueError, match='another session'):
@@ -64,13 +64,13 @@ def test_disconnected_before_baseline_is_excluded_without_touching_original(time
 
 
 @pytest.mark.parametrize('observed', [None, 'writer-start'])
-def test_expired_but_live_or_unknown_writer_still_blocks_attribution(timeline, observed):
+def test_expired_but_live_or_unknown_writer_does_not_limit_diff_audit(timeline, observed):
     _, new, root, _, _, state = timeline
     expire(timeline)
     state[0] = observed
     fresh = new.begin(root, 'new')['task_ref']
-    assert not new.load(root, fresh)['attribution_start']['disconnected']
-    finish_review(new, root, fresh, expected=True)
+    assert 'attribution_start' not in new.load(root, fresh)
+    finish_review(new, root, fresh)
 
 
 @pytest.mark.parametrize('host', ['codex', 'cursor', None])
@@ -83,7 +83,7 @@ def test_host_session_or_unowned_task_is_not_retired_by_mcp_exit(timeline, host)
     state[0] = False
     original = host_tasks.load(root, ref)
     fresh = new.begin(root, 'new')['task_ref']
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
     assert host_tasks.load(root, ref) == original
 
 
@@ -114,7 +114,7 @@ def test_recently_dead_writer_is_not_disconnected_until_its_lease_expires(timeli
     clock[0] += own.LEASE_SECONDS - 1
     fresh = new.begin(root, 'new')['task_ref']
     clock[0] += 2
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_death_first_seen_at_finish_cannot_erase_real_overlap(timeline):
@@ -124,11 +124,11 @@ def test_death_first_seen_at_finish_cannot_erase_real_overlap(timeline):
     (root/'service.py').write_text('overlapping_edit = True\n')
     clock[0] += own.LEASE_SECONDS + 1
     state[0] = False
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 @pytest.mark.parametrize('mode', ['save', 'hook', 'new-task', 'missing-witness', 'wrong-boundary'])
-def test_activity_or_missing_start_witness_preserves_gap(timeline, mode):
+def test_activity_or_missing_author_witness_does_not_create_audit_gap(timeline, mode):
     from security_runtime.tasks.hook_activity import _record_task_hook
     old, new, root, _, clock, _ = timeline
     ref = expire(timeline)
@@ -147,11 +147,11 @@ def test_activity_or_missing_start_witness_preserves_gap(timeline, mode):
     else:
         record = new.load(root, fresh)
         if mode == 'missing-witness':
-            record.pop('attribution_start')
+            record.pop('attribution_start', None)
         else:
-            record['attribution_start']['observed_at'] += 1
+            record['attribution_start'] = dict(contract='task-attribution-start-v1', observed_at=record['created_at']+1)
         new.store(root).save(record)
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_change_during_baseline_capture_invalidates_witness(timeline, monkeypatch):
@@ -166,7 +166,7 @@ def test_change_during_baseline_capture_invalidates_witness(timeline, monkeypatc
     with monkeypatch.context() as patch:
         patch.setattr(task_security, 'capture', race)
         fresh = new.begin(root, 'new')['task_ref']
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 def test_retry_keeps_original_witness_and_cannot_recapture_after_death(timeline):
@@ -178,7 +178,7 @@ def test_retry_keeps_original_witness_and_cannot_recapture_after_death(timeline)
     state[0] = False
     assert new.begin(root, 'new')['task_ref'] == fresh
     assert new.load(root, fresh) == baseline
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 @pytest.mark.parametrize('closed_at,expected', [(999.0, False), (1000.0, False), (1000.1, True)])
@@ -197,12 +197,12 @@ def test_malformed_optional_witness_keeps_original_overlap(start):
 
 
 @pytest.mark.parametrize('path', ['routes.py', 'service.py'])
-def test_live_parallel_edits_on_same_or_different_file_remain_partial(timeline, path):
+def test_live_parallel_edits_on_same_or_different_file_are_in_complete_diff(timeline, path):
     old, new, root, _, _, _ = timeline
     old.begin(root, 'live')
     fresh = new.begin(root, 'new')['task_ref']
     (root/path).write_text('other_task_edit = True\n')
-    finish_review(new, root, fresh, expected=True)
+    finish_review(new, root, fresh)
 
 
 @pytest.mark.parametrize('live', [False, True])
@@ -213,7 +213,7 @@ def test_actual_review_coverage_still_controls_original_risk_closure(timeline, m
     if live:
         state[0] = 'writer-start'
     fresh = new.begin(root, 'new')['task_ref']
-    result = finish_review(new, root, fresh, expected=live)
+    result = finish_review(new, root, fresh)
     record = new.load(root, fresh)
     refs = [key for key, value in record['evidence'].items()
             if value['path'] == 'routes.py' and value['location_version'] == 'CURRENT_TASK_END']
@@ -224,7 +224,7 @@ def test_actual_review_coverage_still_controls_original_risk_closure(timeline, m
         evidence_refs=refs[:1], outcome='CODE_REVIEWED_RESOLVED',
         rationale='Current issued source contains the selected change.',
         tests='Synthetic regression of the existing coverage gate.')], result['host_review']['coverage'])
-    assert updates['original:risk']['status'] == ('INCONCLUSIVE' if live else 'CODE_REVIEWED_RESOLVED')
+    assert updates['original:risk']['status'] == 'CODE_REVIEWED_RESOLVED'
     assert not updates['original:risk']['production_safety_verified']
 
 

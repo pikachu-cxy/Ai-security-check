@@ -14,6 +14,8 @@ from .integration_lifecycle import IntegrationDiagnostic
 
 def readiness_message(status, reason_code=None):
     """Fixed user copy; lifecycle metadata never becomes a security verdict."""
+    if status == 'CONNECTED':
+        return 'AI 开发任务审计已连接；当前任务审计模式不要求产品启动比较基线。组件与漏洞数据就绪状态独立核验。'
     if status in {'DEGRADED', 'ERROR'}:
         reasons = {
             'BASELINE_BUSY': '项目初始检查暂时被其他检查占用。保留当前会话和已有任务记录，等待资源释放后继续同一个任务；无需新建聊天。',
@@ -93,11 +95,13 @@ def handle_readiness(event, workspace_path, session_id, *, binding, tools, adapt
                 if len(content) > 4096:
                     raise IntegrationDiagnostic('READINESS_BUDGET_EXCEEDED')
                 atomic_bytes(path, content)
-            result.update(status='READY', readiness='READINESS_OBSERVED', runtime_version=__version__, capability_contract=CONTRACT)
+            from .task_audit_mode import connection_readiness
+            result.update(connection_readiness(), readiness='READINESS_OBSERVED',
+                          runtime_version=__version__, capability_contract=CONTRACT)
     except IntegrationDiagnostic as exc:
         result['diagnostic'] = exc.code
     except (ValueError, OSError, TypeError, KeyError, UnicodeError):
         result['diagnostic'] = 'READINESS_INCONCLUSIVE'
-    message = readiness_message(result['status'])
+    message = result.get('message') or readiness_message(result['status'])
     result.update(systemMessage=message, hookSpecificOutput={'hookEventName': 'SessionStart', 'additionalContext': message})
     return result

@@ -515,8 +515,6 @@ class TaskSecurityService:
             if response is not None:
                 return response
             capture_started_at = self.now()
-            from .attribution import observe_start
-            attribution_start = observe_start(self.store(root).records(active=True, headers=True), capture_started_at)
         # Preimages use their independent bounded transaction. Capture source
         # outside the workspace lock, then recheck owner/intent/task membership.
         ref = 'ts1-'+uuid.uuid4().hex
@@ -570,7 +568,7 @@ class TaskSecurityService:
             record = dict(contract=CONTRACT, task_ref=ref, task_key=self.key(task_key,owner),
                 workspace=str(root), generation=0, phase='ACTIVE', created_at=capture_started_at,
                 review_protocol=PROTOCOL_VERSION,
-                attribution_start=attribution_start,
+                audit_scope_contract='workspace-task-diff-v1',
                 baseline=baseline, static_attempts=0, limitations=[], source='TASK_BASELINE_BEFORE_EDIT',
                 # A short-lived command Hook is not the conversation's owner process.
                 # Its normal exit can never prove that the editing task ended.
@@ -864,11 +862,8 @@ class TaskSecurityService:
                     activity.complete_queue(ref, revision)
                 return self._view(record)
             changes, unknown = task_changes(frozen_source or root, record['baseline'], end)
-            # Independent tasks may share a checkout, never each other's verdict.
-            # Conservatively retain a gap if editing intervals overlap; do not
-            # infer exclusive attribution from a whole-workspace snapshot.
-            from .attribution import overlapping_tasks
-            overlaps = overlapping_tasks(record, self.store(root).records(headers=True), self.now())
+            # The original workspace B-to-C difference is the scope regardless
+            # of authors. Owner checks still protect access and publication.
             # Keep historical risk membership before staging a new current view.
             from .risk_ledger import TaskRiskLedger
             if record.get('end'):
@@ -888,9 +883,8 @@ class TaskSecurityService:
             if closeout:
                 record.update(end_auxiliary_hashes=auxiliary_hashes, closeout_revision=revision,
                     reconciled_through_seq=activity.summary(ref)['seq'])
-            if changes and overlaps:
-                record['limitations'].append({'reason':'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE',
-                    'count':len(overlaps)})
+            from .audit_scope import apply as apply_audit_scope
+            apply_audit_scope(record)
             # Hook checks may have found a pre-existing risk outside the final
             # net diff, or left an edited/reverted file pending. Re-evaluate
             # those CURRENT sources; historical alerts are never replayed as
@@ -1031,8 +1025,10 @@ class TaskSecurityService:
                             finding['risk_attribution'] = comparison['findings'][finding['id']]
                 except ScanCancelled:
                     raise
-                except Exception:
-                    record['static'] = dict(status='FAILED', coverage='UNKNOWN', scope_files=scope, findings=[], reason='TASK_STATIC_CHECK_FAILED')
+                except Exception as error:
+                    from .execution_diagnostics import failure_diagnostic
+                    record['static'] = dict(status='FAILED', coverage='UNKNOWN', scope_files=scope, findings=[],
+                        reason='TASK_STATIC_CHECK_FAILED', failure_diagnostic=failure_diagnostic(error, 'STATIC_SCAN'))
             else:
                 record['static'] = dict(status='NOT_EXECUTED', coverage='UNKNOWN', scope_files=[], findings=[], reason='NO_ELIGIBLE_STATIC_FILES')
             record['static']['duration_ms'] = round((time.perf_counter()-started)*1000)
@@ -1137,16 +1133,8 @@ class TaskSecurityService:
             if old['phase'] == 'COMPLETE' and old.get('review_session') == session:
                 return self.get(workspace, ref, completion_revision=old.get('review_revision', 1))  # no scan/model.
             record = self._session(root, ref, session)
-            # A session resuming during source review invalidates the original
-            # idle witness too. Never let a finish-time exemption close risks
-            # after concurrent activity has resumed.
-            from .attribution import overlapping_tasks
-            overlaps = overlapping_tasks(record, self.store(root).records(headers=True), self.now())
-            if overlaps and record.get('changes') and not any(
-                    item.get('reason') == 'CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE'
-                    for item in record['limitations']):
-                record['limitations'].append(dict(reason='CONCURRENT_TASK_ATTRIBUTION_UNAVAILABLE',
-                                                  count=len(overlaps)))
+            from .audit_scope import apply as apply_audit_scope
+            apply_audit_scope(record)
             from ..task_review.contract import validate_task_review_body, evidence_error, TaskReviewInputError
             body = validate_task_review_body(findings, coverage, limitations)
             findings, coverage, limitations = body['findings'], body['coverage'], body['limitations']
@@ -1424,6 +1412,7 @@ class TaskSecurityService:
         if phase in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'} and self.source_cache is not None:
             self.source_cache.discard_task(record['workspace'], record['task_ref'])
         result = dict(status=phase, task_ref=record['task_ref'], scanner_run=False,
+            audit_scope_contract=record.get('audit_scope_contract', 'LEGACY_RECORDED_SCOPE'),
             task_scope=('HOST_SESSION' if (record.get('task_owner') or {}).get('host') in {'cursor','codex'} else
                         'MCP_CONNECTION' if record.get('task_owner') else 'LEGACY_UNOWNED'),
             review_protocol=record.get('review_protocol'),
@@ -1508,6 +1497,9 @@ class TaskSecurityService:
         if record.get('static'):
             static = record['static']
             result['static'] = {key: static[key] for key in ('scan_id','status','coverage','scope_files','actual_files','duration_ms','reason','capability_results') if key in static}
+            if static.get('failure_diagnostic'):
+                from .execution_diagnostics import validate
+                result['static']['failure_diagnostic'] = validate(static['failure_diagnostic'])
             result['static'].update(finding_count=len(static['findings']), findings=[finding_view(f) for f in static['findings'][:20]],
                 has_more=len(static['findings'])>20,
                 scanner_runs=[{k: r[k] for k in ('scanner','version','status','duration_ms','error_code','coverage_contract') if k in r}

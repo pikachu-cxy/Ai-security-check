@@ -19,7 +19,10 @@ from .mcp_tools.presentation import _agent_finding, _agent_result
 
 def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory=None,
                   hook_coordinator=None, workspace_binding=None, global_mode=None,
-                  hook_advisory_only=False, include_functional_verification=False):
+                  hook_advisory_only=False, include_functional_verification=False,
+                  task_audit_mode=True):
+    if type(task_audit_mode) is not bool:
+        raise ValueError('Invalid task audit mode')
     if global_mode is True or (global_mode is None and os.getenv('SECURITY_RUNTIME_GLOBAL') == '1'):
         from .global_mcp import create_global_server
         return create_global_server(host=os.getenv('SECURITY_RUNTIME_HOST', 'codex'))
@@ -54,6 +57,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     from .workspace_services import assemble_remediation, bind_impact_gate
     from .hook_runtime import HookCoordinator
     hook_coordinator = hook_coordinator or HookCoordinator(runtime)
+    hook_coordinator.task_audit_mode = task_audit_mode
     # Trusted embedding only, never environment/MCP claims. Default Codex has
     # no atomic edit bridge and cannot opt into Fast Fix through tool arguments.
     remediation = assemble_remediation(runtime, hook_coordinator, factory=remediation_factory)
@@ -114,7 +118,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         if rejected:
             data.update({'continue': True, 'systemMessage': '安全检查尚未成功接入当前项目，暂时无法确认检查结果。'})
         data = {**diag, **data}
-        if data.get('status')=='READY':
+        if data.get('status') in {'READY', 'CONNECTED'}:
             from .tasks.ownership import issue_session_ref, session_context
             root=Path(binding.root)
             token=issue_session_ref(hook_coordinator.store,root,'codex',session_id)
