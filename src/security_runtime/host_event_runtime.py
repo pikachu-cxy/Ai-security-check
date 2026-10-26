@@ -59,14 +59,32 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
         pass  # Only copy facts after the existing context validation.
     from .recent_hooks import observe
     normalized = event.diagnostics()
+    audit = getattr(coordinator, 'task_audit_mode', False)
     if lifecycle:
-        audit = getattr(coordinator, 'task_audit_mode', False)
         normalized['event_dispatch_route'] = {EventKind.SESSION_START:'SESSION_CONNECTION' if audit else 'SESSION_BASELINE',
-            EventKind.WORKSPACE_ACTIVITY:'TASK_ACTIVITY' if audit else 'WORKSPACE_RECONCILIATION',
+            EventKind.WORKSPACE_ACTIVITY:'OBSERVED_EDIT_ACTIVITY' if audit else 'WORKSPACE_RECONCILIATION',
             EventKind.SESSION_STOP:'SESSION_FINALIZATION'}[event.kind]
     observe('CLAIMS_VALID', **normalized)
-    from .tasks.attribution import session_activity
     owner = dict(host=context.host, session=context.session_binding)
+    if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation == OperationClass.READ_ONLY:
+        result = inconclusive('READ_ONLY_ACTIVITY')
+        result.update(status='NOT_SCANNED', coverage='NOT_APPLICABLE', scanner_run=False,
+            workspace_mutation_observed=False, changed_file_count=0,
+            scanner_trigger_reason=None, scanner_skipped_reason='READ_ONLY_ACTIVITY')
+        if lifecycle:
+            result.update(scanner_invocation_count=0, mutation_event_dropped=False)
+        observe('READ_ONLY_SKIPPED', scanner_run=False, **normalized)
+        return {**result, **normalized}, None
+    if event.kind == EventKind.WORKSPACE_ACTIVITY and audit:
+        # The default path must not enumerate historical tasks, claim a full
+        # workspace reconciliation, capture source, or run a scanner in Hook.
+        from .task_audit_mode import task_activity
+        result = task_activity(coordinator.store, context.workspace, context.host, context._session,
+            paths=event.candidate_paths, scope_unknown=event.scope_unknown,
+            event_id=context.invocation_binding or event.sequence_identity,
+            scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
+        return {**result, **normalized}, None
+    from .tasks.attribution import session_activity
     if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation != OperationClass.READ_ONLY:
         from .tasks.activity import lightweight_focus, record_event
         if lightweight_focus(coordinator.store, context.workspace, owner):
@@ -80,19 +98,10 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     if event.kind == EventKind.SESSION_STOP and continuation is not None:
         result = continuation.handle(context.workspace, context._session,
                                      event.stop_guard_active, host=context.host)
-        if result.get('status') == 'ALLOW_STOP' and result.get('decision') != 'block':
+        if not audit and result.get('status') == 'ALLOW_STOP' and result.get('decision') != 'block':
             idle = (not event.stop_guard_active and coordinator.store.pending_activity(
                 context.workspace, context.host, context._session) is None)
             session_activity(coordinator.store, context.workspace, owner, idle=idle)
-        return {**result, **normalized}, None
-    if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation == OperationClass.READ_ONLY:
-        result = inconclusive('READ_ONLY_ACTIVITY')
-        result.update(status='NOT_SCANNED', coverage='NOT_APPLICABLE', scanner_run=False,
-            workspace_mutation_observed=False, changed_file_count=0,
-            scanner_trigger_reason=None, scanner_skipped_reason='READ_ONLY_ACTIVITY')
-        if lifecycle:
-            result.update(scanner_invocation_count=0, mutation_event_dropped=False)
-        observe('READ_ONLY_SKIPPED', scanner_run=False, **normalized)
         return {**result, **normalized}, None
     journal, claim = None, None
     recovered_publication = None
@@ -189,7 +198,7 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
     elif event.kind == EventKind.WORKSPACE_ACTIVITY:
         result['event_processing'] = EventClaim(None, 'CONTENT_RECONCILIATION_ONLY').facts()
     result.update(normalized)
-    if event.kind == EventKind.SESSION_STOP and result.get('status') in {
+    if not audit and event.kind == EventKind.SESSION_STOP and result.get('status') in {
             'SESSION_FINALIZED', 'REUSED_LAST_RESULT', 'NO_CHANGE'}:
         idle = (not event.stop_guard_active and coordinator.store.pending_activity(
             context.workspace, context.host, context._session) is None)

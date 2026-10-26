@@ -66,9 +66,25 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if event == 'preToolUse':
             result = bridge.before(payload)
         elif event == 'postToolUse':
-            from .tasks.attribution import session_activity
-            session_activity(core.store, root, bridge.owner)
-            record = bridge.current()
+            if not may_mutate and getattr(core, 'task_audit_mode', False):
+                result = dict(status='NOT_APPLICABLE', scanner_run=False,
+                              scanner_skipped_reason='READ_ONLY_ACTIVITY')
+                result.update(diag, automatic_connector=True)
+                return output, result
+            if getattr(core, 'task_audit_mode', False):
+                from .codex_event_adapter import edit_path_hints
+                from .task_audit_mode import task_activity
+                paths, unknown = edit_path_hints(payload.get('tool_name'), payload.get('tool_input'), root)
+                result = task_activity(core.store, root, 'cursor', bridge.session, paths=paths,
+                    scope_unknown=unknown, event_id=payload.get('tool_use_id'),
+                    scan_path=getattr(getattr(core.runtime, 'store', None), 'path', None))
+                if not result.get('security_task_ref'):
+                    result.update(diag, automatic_connector=True)
+                    return output, result
+            else:
+                from .tasks.attribution import session_activity
+                session_activity(core.store, root, bridge.owner)
+            record = bridge.current(headers=True)
             context = bridge.context(record)
             if context:
                 output['additional_context'] = context
@@ -87,7 +103,8 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             from .tasks.attribution import session_activity
             idle = (not message and payload['status'] == 'completed' and payload['loop_count'] == 0
                     and core.store.pending_activity(root, 'cursor', bridge.session) is None)
-            session_activity(core.store, root, bridge.owner, idle=idle)
+            if not getattr(core, 'task_audit_mode', False):
+                session_activity(core.store, root, bridge.owner, idle=idle)
             if message:
                 output['followup_message'] = message
             result = dict(status='FOLLOWUP' if message else 'NOT_APPLICABLE', scanner_run=False)
@@ -99,10 +116,12 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
             if normalized.kind == EventKind.SESSION_START:
                 from .tasks.ownership import issue_session_ref, session_context
-                token=issue_session_ref(core.store,root,'cursor',payload['conversation_id'])
-                output['additional_context']=session_context(token)
-            if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
-                record = bridge.current()
+                session_ref=issue_session_ref(core.store,root,'cursor',payload['conversation_id'])
+                output['additional_context']=session_context(session_ref)
+            if (normalized.kind == EventKind.WORKSPACE_ACTIVITY
+                    and not result.get('development_check_ref')
+                    and normalized.operation.value != 'READ_ONLY'):
+                record = bridge.current(headers=True)
                 if task_allows_followup(record):
                     task, recording = _record_task_hook(core.store, root, result, None,
                                                      expected_task_ref=record['task_ref'])

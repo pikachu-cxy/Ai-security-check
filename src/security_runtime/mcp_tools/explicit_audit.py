@@ -274,7 +274,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return runtime_info_view(info, view)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def get_runtime_guidance(topic: Literal['core', 'runtime-workflow', 'task-review',
+    def get_runtime_guidance(topic: Literal['core', 'runtime-workflow', 'task-review', 'development-check',
                                             'risk-decisions', 'repair-impact', 'deep-audit']) -> dict:
         """Read one fixed bundled method with version/hash and reuse that identity. No workspace, source, URL, network, scan, writes or repair authority. When matching local content exists, do not fetch it again."""
         from ..guidance.guidance_catalog import get_runtime_guidance as load_guidance

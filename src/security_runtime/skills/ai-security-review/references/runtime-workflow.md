@@ -7,7 +7,7 @@
 只有请求影响分析或明确修复时才读取 topic=repair-impact（references/repair-impact.md）；完整的批准、
 INLINE_PREPARED、AUTO_FIX、CONFIRM_REQUIRED、原生风险和取消意图分支已移至该方法，进入对应分支前必读。
 扫描、分析、进度报告、指导读取都不授予漏洞编辑权限。多个风险未选定时不把“修复”扩成全部修复；
-已明确批准的同一方案沿原有效授权继续，不重复确认。普通开发仍仅按 topic=task-review 的原 v3 方法执行。
+已明确批准的同一方案沿原有效授权继续，不重复确认。普通开发按 topic=development-check 的轻量编辑检查方法执行。
 
 显式检查优先使用 summary=true 的单次扫描入口并消费其返回摘要；没有必要先读摘要再立即重扫。
 单文件或明确选择的文件使用 scan_files，files 传用户指定的工作区相对文件，workspace_path 保持项目根目录；不能静默扩大成整项目扫描。
@@ -27,8 +27,9 @@ scan_files 和 scan_diff 每次按其范围执行，不传该参数。
 宿主模型分析、队列、用户批准和整段对话耗时只有宿主实际计时才报告；不能拿服务端总耗时冒充对话总耗时。
 宿主没有实时进度支持时，在调用前和返回后说明实际阶段，不声称已实时显示。
 
-开发任务只使用 [v3 方法](references/quick-task-review-v3.md)，topic=task-review；
-开始前读完该方法并核对能力，不在显式扫描方法中复制开发核查步骤。
+普通开发使用 [轻量编辑检查](references/development-check.md)，topic=development-check，无全项目基线。
+显式完整差异审计或已有严格任务使用 [v3 方法](references/quick-task-review-v3.md)，topic=task-review；
+开始前读完对应方法并核对能力，不在显式扫描方法中复制开发核查步骤。
 原生风险修复按 topic=repair-impact 建立 repair_task_ref，不以普通开发任务替代。
 历史查询查看 current_version、version_freshness 和 version_notice；列出变化的检查路径。
 其他文件变化而原检查/关联源码未变时，仍说明是历史结果，不称当前整个项目已通过，也不自动补扫。
@@ -37,7 +38,7 @@ Windows 终端明确报 PowerShell CET 启动错误时，使用可用的 cmd.exe
 不反复调用故障终端，不把终端故障解释成项目代码或安全检查失败。
 
 Explicit security scans/audits and selected-risk analysis use this same workflow;
-ordinary development task completion uses only topic=task-review, without
+ordinary development task completion uses only topic=development-check, without
 adding a project scan/triage workflow. Hook availability is not required for explicit MCP review. Verify runtime info once per connection/build; use a scan response summary directly when available. Whole-project requests use scan_project (release mode); selected files use scan_files; changes-only requests use scan_diff. Explicit whole-project rescan uses scan_project(force_rescan=true) and always runs a new authorized scan. Otherwise only Runtime's scan_project revalidation may reuse a whole-project scan: source inventory/revision, rules/build,
 capabilities and completed scanner proof must match and execution.result_reused=true must be returned. Read-only summary does not revalidate proof; do not require its full_project_reusable flag before using the scan entry point. Quick/Hook FULL is selected-file
 coverage, not a whole-project audit. Unknown/stale summary freshness goes through Runtime's verified reuse-or-scan path;
@@ -84,8 +85,9 @@ Users express ordinary intent, such as 检查这个项目 or 继续第一项/处
 Do not ask users for Finding UUIDs, tool names, technical prompts, or copy/paste
 between tools. Codex setup owns startup/readiness; never ask users for a manual
 get_runtime_info warm-up or security prompt before the first ordinary edit.
-The agent still verifies v3, actual build identity and the required tool subset
-before starting task review or the first edit; reuse valid facts from the same connection.
+The agent verifies the selected workflow, actual build identity and its required tool subset;
+ordinary development uses observed-edit checks, while existing strict tasks retain v3.
+Reuse valid facts from the same connection.
 For diagnostics, check get_runtime_info and required tool capabilities by subset,
 not exact tool count. Missing tools can mean a stale MCP connection; follow its
 connection recovery guidance. Do not blindly reinstall an editable environment.

@@ -55,6 +55,7 @@ def test_generator_rejects_other_hosts_or_install_path(argv, capsys):
 def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', str(repo))
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'state'))
+    monkeypatch.setattr('security_runtime.development_check_worker.launch_worker', lambda *a, **k: None)
     runtime = FakeRuntime()
     dirty(repo)
     server = create_server(runtime)
@@ -71,11 +72,12 @@ def test_mcp_registration_schema_and_output(repo, tmp_path, monkeypatch):
         assert not tool.annotations.readOnlyHint and not tool.annotations.openWorldHint
         response = await server.call_tool('handle_hook_event', claims(repo))
         data = response.structuredContent
-        assert data['scanner_run'] and data['status'] == 'BASELINE_ESTABLISHED'
-        assert data['new_families'] == 0 and len(runtime.calls) == 1
+        assert not data['scanner_run'] and data['status'] == 'DIRTY'
+        assert data['scope']['scope_unknown'] and not data['baseline_created']
+        assert data['new_families'] == 0 and not runtime.calls
         output = json.loads(response.content[0].text)
         assert output == codex_hook_output(data)
-        assert output == {}  # benign baseline check has no chat feedback
+        assert output == {}  # bounded edit recording has no chat feedback
         assert data['duration_ms'] >= 0  # complete diagnostics stay structured
     asyncio.run(run())
 
@@ -228,7 +230,7 @@ def test_sdk_rejects_missing_wrong_type_or_extra_input_without_echo(arguments, m
     asyncio.run(run())
 
 
-def test_real_stdio_mcp_transport_redacted_and_no_change(repo, tmp_path):
+def test_real_stdio_mcp_transport_redacted_and_read_only(repo, tmp_path):
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
     secret = 'syntheticSecretNeverInHookTransport123'
@@ -244,10 +246,11 @@ def test_real_stdio_mcp_transport_redacted_and_no_change(repo, tmp_path):
                 async with ClientSession(read, write) as client:
                     await asyncio.wait_for(client.initialize(), 20)
                     assert 'handle_hook_event' in {t.name for t in (await client.list_tools()).tools}
-                    first = await client.call_tool('handle_hook_event', claims(repo))
-                    assert not first.isError and first.structuredContent['status'] == 'BASELINE_ESTABLISHED'
-                    repeat = await client.call_tool('handle_hook_event', claims(repo))
-                    assert not repeat.isError and repeat.structuredContent['reused']
+                    read = dict(tool_name='Bash', tool_input={'command': 'git status'})
+                    first = await client.call_tool('handle_hook_event', claims(repo) | read)
+                    assert not first.isError and first.structuredContent['status'] == 'NOT_SCANNED'
+                    repeat = await client.call_tool('handle_hook_event', claims(repo) | read)
+                    assert not repeat.isError and repeat.structuredContent['status'] == 'NOT_SCANNED'
                     assert not repeat.structuredContent['scanner_run']
                     bad = await client.call_tool('handle_hook_event', claims(repo) | dict(tool_response=secret))
                     assert bad.isError

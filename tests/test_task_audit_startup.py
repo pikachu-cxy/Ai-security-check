@@ -23,6 +23,7 @@ def audit_pool(installed, tmp_path, monkeypatch):
     monkeypatch.setattr('security_runtime.product_epoch_capture.platform_supported', lambda: False)
     monkeypatch.setattr('security_runtime.hook_runtime.capture_snapshot', forbidden)
     monkeypatch.setattr('security_runtime.tasks.security.capture', forbidden)
+    monkeypatch.setattr('security_runtime.development_check_worker.launch_worker', lambda *a, **k: None)
     engines = {}
     def factory(root, directory, binding):
         engine = complete_runtime()
@@ -44,7 +45,7 @@ def start(server, root, session='demo'):
     data = structured(response)
     if data.get('status') == 'CONNECTED':
         payload = json.loads(response.content[0].text)
-        assert '当前任务审计模式不要求' in payload['hookSpecificOutput']['additionalContext']
+        assert '不建立全项目基线' in payload['hookSpecificOutput']['additionalContext']
         assert '检查未完成' not in payload['hookSpecificOutput']['additionalContext']
     return data
 
@@ -84,14 +85,18 @@ def test_readonly_and_no_task_stop_do_not_create_baselines_or_scan(audit_pool, p
     assert not core.store.path(root, 'codex', 'demo').exists()
 
 
-def test_edit_without_original_B_reports_gap_and_does_not_backfill(audit_pool, projects):
+def test_edit_without_baseline_records_observed_scope_without_backfill(audit_pool, projects):
     pool, server, _ = audit_pool
     root = projects[0]
     start(server, root)
     data = structured(asyncio.run(server.call_tool('handle_hook_event', dict(
         event='PostToolUse', workspace_path=str(root), session_id='demo', turn_id='turn',
-        tool_use_id='edit', tool_name='apply_patch', tool_input={'file_path':'src/A.java'}))))
-    assert data['status'] == 'INCONCLUSIVE' and data['reason'] == 'TASK_BASELINE_REQUIRED'
+        tool_use_id='edit', tool_name='apply_patch',
+        tool_input='*** Begin Patch\n*** Update File: src/A.java\n@@\n-old\n+new\n*** End Patch'))))
+    assert data['status'] == 'DIRTY'
+    assert data['development_check_ref'].startswith('dc1-')
+    assert data['scope']['paths'] == ['src/A.java']
+    assert not data['baseline_created'] and not data['scope']['full_project']
     assert not data['scanner_run']
     core = pool.children[root][1]
     assert not (core.store.workspace_directory(root)/'task-security.db').exists()

@@ -19,6 +19,7 @@ class WorkspaceApplication:
         self.scan_path_provider = scan_path_provider
         self.connection_owner = connection_owner()
         self.issued_tasks = {}
+        self.issued_development_checks = {}
         self.native_session_bindings = set()
         from .tasks.source_cache import TaskSourceCache
         self.task_source_cache = TaskSourceCache()
@@ -56,6 +57,23 @@ class WorkspaceApplication:
             if len(self.issued_tasks)>=64: self.issued_tasks.pop(next(iter(self.issued_tasks)))
             self.issued_tasks[ref]=owner
         return service
+
+    def development_service(self, ref=None, session_ref=None, workspace=None):
+        """Reuse session verification without entering strict snapshot storage."""
+        from .development_check import DevelopmentCheckService
+        self.native_binding_required(workspace, session_ref)
+        owner = self.task_service(session_ref=session_ref, workspace=workspace)._owner()
+        prior = self.issued_development_checks.get(ref)
+        if prior and session_ref is None and (owner['host'] == 'connection' or prior == self.connection_owner):
+            owner = prior
+        return DevelopmentCheckService(self.runtime_provider, self.hooks, owner=owner,
+                                       scan_path_provider=self.scan_path_provider)
+
+    def remember_development_check(self, result, owner):
+        if result.get('check_ref'):
+            if len(self.issued_development_checks) >= 64:
+                self.issued_development_checks.pop(next(iter(self.issued_development_checks)))
+            self.issued_development_checks[result['check_ref']] = owner
 
     def scan(self, workspace=None, mode='quick', *, staged=False, rules_path=None, progress=None):
         from .explicit_scan import run_explicit_scan

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from .codex_host_claims import diagnostics, schema_diagnostics
 from .hook_state import identity, no_links
@@ -20,6 +20,66 @@ def classify_bash_command(tool_input) -> str:
         return 'UNKNOWN'
     from .shell_classification import classify_command
     return classify_command(command)
+
+
+def edit_path_hints(tool, inputs, root, *, cwd=None):
+    """Extract bounded path hints without reading files or trusting edit success.
+
+    A failed tool can still provide a hint. Unknown or truncated scope remains
+    explicit, and patch bodies never enter the activity ledger.
+    """
+    values = []
+    unknown = False
+    directory = Path(cwd) if cwd is not None else root
+    if not directory.is_absolute() or not directory.is_relative_to(root):
+        return (), True
+    if tool == 'apply_patch':
+        patch = (inputs if isinstance(inputs, str) else
+                 inputs.get('patch', inputs.get('input')) if isinstance(inputs, dict) else None)
+        if isinstance(patch, str):
+            if len(patch) > 262144 or len(patch.encode('utf-8', errors='replace')) > 262144:
+                return (), True
+            lines = patch.splitlines()
+            unknown = not (lines and lines[0] == '*** Begin Patch' and lines[-1] == '*** End Patch')
+            for line in lines:
+                for prefix in ('*** Add File: ', '*** Update File: ', '*** Delete File: ', '*** Move to: '):
+                    if line.startswith(prefix):
+                        values.append(line[len(prefix):])
+                        break
+        elif isinstance(inputs, dict):
+            # Older hosts expose only the target path; it is still a hint.
+            values.append(inputs.get('file_path') or inputs.get('path'))
+    elif tool in {'Edit', 'Write', 'Delete'} and isinstance(inputs, dict):
+        values.append(inputs.get('file_path') or inputs.get('path'))
+    selected, size = [], 0
+    for value in values:
+        if (not isinstance(value, str) or not value or len(value) > 4096
+                or any(ord(c) < 32 or 0xD800 <= ord(c) <= 0xDFFF for c in value)
+                or value.startswith(('\\\\', '//'))):
+            unknown = True
+            continue
+        path = Path(value)
+        if '..' in path.parts or '..' in PureWindowsPath(value).parts:
+            unknown = True
+            continue
+        try:
+            relative = (path if path.is_absolute() else directory / value.replace('\\', '/')).relative_to(root).as_posix()
+        except ValueError:
+            unknown = True
+            continue
+        if (not relative or relative == '.' or ':' in relative or relative.startswith('/')
+                or PureWindowsPath(relative).drive):
+            unknown = True
+            continue
+        if relative in selected:
+            continue
+        cost = len(relative.encode('utf-8'))
+        if len(selected) >= 1000 or size + cost > 64000:
+            unknown = True
+            break
+        selected.append(relative)
+        size += cost
+    return tuple(selected), unknown or not bool(selected)
 
 
 class CodexEventAdapter:
@@ -73,18 +133,11 @@ class CodexEventAdapter:
                           identity(turn) if turn else None)
             except Exception:
                 pass  # Optional attribution never changes validated Hook behavior.
-        candidates = ()
-        inputs = arguments.get('tool_input')
-        if expected == 'PostToolUse' and isinstance(inputs, dict):
-            value = inputs.get('file_path') or inputs.get('path')
-            if isinstance(value, str):
-                path = Path(value)
-                try:
-                    candidates = ((path.relative_to(root).as_posix() if path.is_absolute() else value),)
-                except ValueError:
-                    pass
+        candidates, unknown = (edit_path_hints(arguments.get('tool_name'), arguments.get('tool_input'), root,
+                                              cwd=arguments.get('workspace_path'))
+                               if expected == 'PostToolUse' else ((), True))
         return NormalizedHostEvent(self.events[expected], context, operation,
-            candidate_paths=candidates, scope_unknown=not bool(candidates),
+            candidate_paths=candidates, scope_unknown=unknown,
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
             stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
 

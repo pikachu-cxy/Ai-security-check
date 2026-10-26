@@ -1,10 +1,10 @@
-"""Task B-to-C audits; startup observations never claim a product baseline."""
+"""Default observed-edit checks; strict task audits remain an explicit workflow."""
 from datetime import datetime
 import time
 
-MODE = 'AI_DEVELOPMENT_TASK_AUDIT'
-CONTRACT = 'workspace-task-diff-v1'
-BASELINE_MESSAGE = '当前任务审计模式不要求产品启动比较基线。'
+MODE = 'AI_DEVELOPMENT_EDIT_CHECK'
+CONTRACT = 'observed-development-check-v1'
+BASELINE_MESSAGE = '默认开发检查不建立全项目基线。'
 
 
 def startup_baseline():
@@ -55,7 +55,7 @@ def saved_scan_preparation():
 
 
 def startup_message(preparation):
-    message = 'AI 开发任务审计已连接。' + BASELINE_MESSAGE + '每个任务首次编辑前建立修改前记录，结束后检查实际差异。'
+    message = 'AI 编辑安全检查已连接。' + BASELINE_MESSAGE + '编辑事件仅记录涉及路径，开发收尾时后台合并检查，总结前读取当前任务结果。'
     if preparation['status'] == 'KNOWN_GAPS':
         message += '已保存的扫描组件或漏洞数据状态存在准备缺口；这些问题仍须独立处理。'
         if (preparation.get('vulnerability_data') or {}).get('freshness') == 'STALE':
@@ -69,12 +69,13 @@ def connection_readiness():
     return dict(status='CONNECTED', operating_mode=MODE, audit_scope_contract=CONTRACT,
         startup_comparison_baseline=startup_baseline(), scan_preparation=preparation,
         message=startup_message(preparation), project_scan_status='NOT_REQUESTED',
-        task_baseline_ready=False, task_baseline_requirement='SYNCHRONOUS_BEFORE_FIRST_EDIT',
+        task_baseline_ready=False, task_baseline_requirement='NOT_REQUIRED',
         scanner_run=False, source_modified=False, security_proof=False)
 
 
-def task_activity(hooks, root, host, session, *, paths=(), scope_unknown=True, event_id=None):
-    """Append to an original owner-bound task; never create B after a mutation."""
+def task_activity(hooks, root, host, session, *, paths=(), scope_unknown=True, event_id=None,
+                  scan_path=None):
+    """Record observed edits; preserve an explicitly opened strict task's scope."""
     from .host_event_runtime import inconclusive
     from .tasks.activity import ActivityStore, POLICY, LEGACY
     from .tasks.ownership import record_owner, session_owner
@@ -83,14 +84,32 @@ def task_activity(hooks, root, host, session, *, paths=(), scope_unknown=True, e
     owner = session_owner(host, session)
     activity = ActivityStore(hooks, root)
     focus = activity.focus(owner)
-    if not focus or not focus.get('task_ref'):
-        return inconclusive('TASK_BASELINE_REQUIRED')
-    record = TaskSecurityStore(hooks, root).get(focus['task_ref'], headers=True)
+    record = (TaskSecurityStore(hooks, root).get(focus['task_ref'], headers=True)
+              if focus and focus.get('task_ref') else None)
+    if focus and focus.get('task_ref') and (not record or record_owner(record) != owner):
+        return inconclusive('TASK_BASELINE_UNAVAILABLE')
+    if not focus or record and record['phase'] in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}:
+        from .development_check import record_hook
+        check = record_hook(hooks, root, owner, paths, scope_unknown=scope_unknown,
+                            event_id=event_id, scan_path=scan_path)
+        if not check.get('check_ref'):
+            result = inconclusive(check.get('reason_code') or check.get('status') or 'EDIT_RECORD_UNAVAILABLE')
+            result.update(check)
+            return result
+        result = inconclusive('OBSERVED_EDITS_RECORDED')
+        # Saved scan execution belongs to the background result. The Hook only
+        # records metadata, even when a previous result already exists.
+        hook_execution = result['execution']
+        result.update(check, execution=hook_execution, coverage='UNKNOWN', baseline_available=False,
+            development_check_ref=check['check_ref'], task_baseline_requirement='NOT_REQUIRED',
+            workspace_mutation_observed=None, changed_file_count=None,
+            next_step='Finish this observed-file check after development, then read its result before the summary.')
+        return result
+    if focus and not focus.get('task_ref'):
+        return inconclusive('TASK_SUSPENDED')
     if not record or record_owner(record) != owner:
         return inconclusive('TASK_BASELINE_UNAVAILABLE')
     require_record_protocol(record)
-    if record['phase'] in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}:
-        return inconclusive('TASK_BASELINE_REQUIRED')
     if focus.get('policy') not in {POLICY, LEGACY}:
         return inconclusive('TASK_BASELINE_UNAVAILABLE')
     row = activity.record(owner, event_id=event_id, paths=paths,

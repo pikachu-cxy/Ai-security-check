@@ -45,7 +45,10 @@ def diagnostics(arguments, event):
     if event == 'Stop' and 'stop_hook_active' not in missing and type(args['stop_hook_active']) is not bool:
         invalid.append('stop_hook_active')
     if 'tool_input' in args and args['tool_input'] is not None and not isinstance(args['tool_input'], dict):
-        invalid.append('tool_input')
+        patch = args['tool_input']
+        if (args.get('tool_name') != 'apply_patch' or not isinstance(patch, str)
+                or len(patch) > 262144 or len(patch.encode('utf-8', errors='replace')) > 262144):
+            invalid.append('tool_input')
     return dict(host_claim_status='INVALID' if missing or invalid else 'VALID',
                 missing_claims=missing, invalid_claims=invalid, event_schema='codex-' + event + '-v1',
                 workspace_claim_match=None, session_claim_match=None,

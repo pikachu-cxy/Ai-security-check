@@ -20,7 +20,7 @@ def test_core_is_short_but_keeps_non_optional_safety_boundaries_and_intent_routi
     for required in ('普通聊天、只读和普通 Stop', '不开始、恢复或派发检查', '必读方法，并非可跳过',
         'task-review-plan-v3', '真实 build_identity', '九项必需工具子集', '不回退旧协议',
         '第一次编辑前 begin_security_task', '不以 Git HEAD', '不按最近任务猜测',
-        '旧 v1/v2/缺协议任务仅供历史查询', '不追认旧改动', '即使静态零发现',
+        '旧 v1/v2/缺协议任务仅供历史查询', '不追认旧改动', 'observed-development-check-v1',
         '未读、脱敏或缺失语义如实保留', '证据与累计额度', 'prepared 不等于发送',
         '不证明代码推理', '任务风险只能沿原风险', '准备受阻不能用普通 begin_security_task 绕过',
         '只有 ready_for_host_fix=true 才编辑', '已有授权不重复确认', '处置不可读说明缺口',
@@ -114,7 +114,40 @@ def test_full_methods_distinguish_saved_choice_from_released_workflow():
     assert '不重复索取同一选择、不取消后建意图' in content
     assert 'DEFER／EXCLUDE 保存成功会自动解除同一修复意图' not in content
     assert 'never ask users for a manual' in RUNTIME_WORKFLOW
-    assert 'The agent still verifies v3, actual build identity' in RUNTIME_WORKFLOW
+    assert 'The agent verifies the selected workflow, actual build identity' in RUNTIME_WORKFLOW
+    assert 'existing strict tasks retain v3' in RUNTIME_WORKFLOW
+
+
+def test_default_development_is_observed_scope_without_project_baseline():
+    from security_runtime.compatibility import DEVELOPMENT_CHECK_TOOLS, tool_requirements
+    from security_runtime.tasks.ownership import session_context
+
+    method = guidance_catalog.get_runtime_guidance('development-check')
+    assert method['version'] == 'development-check-v1'
+    assert method['local_reference'] == 'references/development-check.md'
+    for content in (HOST_INSTRUCTIONS, method['content']):
+        for name in DEVELOPMENT_CHECK_TOOLS:
+            assert name in content
+        assert '不建立全项目' in content
+        assert 'scope_unknown' in method['content']
+    assert '不强制读取所有文件的全部改前/改后窗口' in method['content']
+    assert '不扫描、不唤醒后台进程' in method['content']
+    assert '不自动扫描下一版' in method['content']
+    assert 'host_review_completed=false' in method['content']
+    assert '不能断言问题由本次 AI 编辑新增' in method['content']
+    assert '旧任务不迁移为轻量记录，不重建基线' in method['content']
+    for name in DEVELOPMENT_CHECK_TOOLS:
+        assert tool_requirements(name)['workflow'] == 'DEVELOPMENT_CHECK'
+    routing = session_context('synthetic-token')
+    assert 'begin_development_check' in routing
+    assert '首次编辑前 begin_security_task' not in routing
+    assert '已有严格审计或原生修复沿原 task_ref' in routing
+    info = runtime_info()
+    assert info['features']['operating_mode'] == 'AI_DEVELOPMENT_EDIT_CHECK'
+    assert 'NO_PROJECT_BASELINE' in info['features']['development_check']
+    assert 'HOOK_RECORD_ONLY' in info['features']['development_check']
+    assert 'BACKGROUND_ON_FINISH' in info['features']['development_check']
+    assert 'DEFAULT_V3' not in info['features']['task_security_review_protocol']
 
 
 @pytest.mark.parametrize('topic',['../private-source','https://private.invalid/secret',None,{},'task-review-v2','CORE'])

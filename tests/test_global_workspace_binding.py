@@ -211,28 +211,33 @@ def test_sessionstart_uses_same_binding(connected,projects):
     assert out['host_claim_status']=='VALID' and out['workspace_claim_match'] and out['session_claim_match']
 
 
-def test_lazy_posttooluse_after_explicit_dev_enrollment(dev_enrollment,projects,tmp_path):
+def test_lazy_posttooluse_after_explicit_dev_enrollment_only_records_edits(dev_enrollment,projects,tmp_path):
     runtimes={}
     def factory(root,directory,binding):
         runtime=complete_runtime(); runtimes[root]=runtime
         core=coordinator(directory,runtime,cooldown_ms=0)
         return create_server(runtime,hook_coordinator=core,workspace_binding=binding,
                              global_mode=False,hook_advisory_only=True),core
-    pool=GlobalWorkspaces(base=tmp_path/'state/lazy-dev',integration=dev_enrollment,child_factory=factory)
+    pool=GlobalWorkspaces(base=tmp_path/'state/lazy-dev',integration=dev_enrollment,
+                         child_factory=factory)
     server=create_global_server(workspaces=pool)
     root=projects[0]
     try:
         assert not pool.sessions and not pool.children and not pool.jobs
-        args=claims(root); args.update(tool_name='apply_patch',workspace_path=str(root/'src'))
+        args=claims(root); args.update(tool_name='apply_patch',workspace_path=str(root/'src'),
+                                      tool_input={'file_path':'A.java'})
         first=invoke(server,args)
         assert first['host_claim_status']=='VALID' and first['workspace_claim_match']
-        assert first['session_binding_present'] and pool.jobs
-        for future in tuple(pool.jobs.values()): future.result(timeout=20)
+        assert first['session_binding_present'] and not pool.jobs
+        assert first['status'] == 'DIRTY' and not first['scanner_run']
+        assert first['scope']['paths'] == ['src/A.java']
         (root/'src/A.java').write_text('class A { int changed; }\n')
         args.update(tool_use_id='lazy-second')
         out=invoke(server,args)
-        assert out['scanner_run'] and out['workspace_mutation_observed']
-        assert runtimes[root].calls[-1]==('src/A.java',)
+        assert not out['scanner_run'] and out['workspace_mutation_observed'] is None
+        assert out['development_check_ref'] == first['development_check_ref']
+        assert out['dirty_seq'] == first['dirty_seq'] + 1
+        assert runtimes[root].calls == [] and not pool.jobs
         assert out['workspace_rejection_reason'] is None
     finally:
         pool.close()

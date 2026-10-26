@@ -20,6 +20,7 @@ from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
 from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, baseline_failure_reason
 from .mcp_contracts import MCPRegistry, raw_input_failure
+from .mcp_tools.development_check import TOOLS as DEVELOPMENT_CHECK_TOOLS
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
 GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
@@ -40,6 +41,16 @@ BOOTSTRAP_WAIT_SECONDS = 20
 _PRODUCT_EPOCH_PAUSES = {'BUSY': 'BASELINE_BUSY',
     'WAITING_CAPACITY': 'BASELINE_CAPACITY_WAIT',
     'WAITING_PROGRESS': 'BASELINE_PROGRESS_WAIT'}
+
+
+def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
+    from mcp.types import CallToolResult, TextContent
+    data = dict(contract='observed-development-check-v1', status='INCONCLUSIVE',
+        reason_code=reason, scanner_run=False, source_modified=False,
+        security_proof=False, repair_authorized=False,
+        message='轻量检查请求未被接受。请保留原检查引用与会话归属，不扩大检查范围。')
+    return CallToolResult(isError=True, structuredContent=data,
+        content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
 
 def global_runtime_info(*, tools=None, host=None):
@@ -585,6 +596,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                 data = feedback_failure('FEEDBACK_INPUT_INVALID')
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
+            if name in DEVELOPMENT_CHECK_TOOLS:
+                return _development_request_rejected('DEVELOPMENT_CHECK_REQUEST_INVALID')
             if name in TASK_REVIEW_TOOLS:
                 return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
@@ -770,7 +783,9 @@ def create_global_server(*, workspaces=None, host='codex'):
             child_registry = MCPRegistry(child)
             child_tool = child_registry.tool(name)
             if 'workspace_path' in child_tool.parameters['properties']:
-                forwarded['workspace_path'] = str(root)
+                # Hook file hints are relative to the validated invocation cwd.
+                # Keep that cwd while routing through its already admitted root.
+                forwarded['workspace_path'] = str(candidate if name in HOOKS else root)
             else:
                 forwarded.pop('workspace_path', None)
             # No parsing/rebuilding references or credentials; all other values
@@ -828,6 +843,16 @@ def create_global_server(*, workspaces=None, host='codex'):
             if unsupported is not None:
                 return CallToolResult(isError=False, structuredContent=unsupported,
                     content=[TextContent(type='text', text=json.dumps(unsupported, ensure_ascii=False))])
+            if handler_entered and name in DEVELOPMENT_CHECK_TOOLS:
+                from .tasks.ownership import TaskOwnershipError
+                cause = exc
+                for _ in range(8):
+                    if isinstance(cause, TaskOwnershipError):
+                        return _development_request_rejected(cause.reason_code)
+                    cause = cause.__cause__ or cause.__context__
+                    if cause is None:
+                        break
+                return _development_request_rejected()
             if handler_entered and name in TASK_REVIEW_TOOLS:
                 # Ownership, expired sessions, unsupported protocol versions and
                 # malformed review requests must not masquerade as a broken

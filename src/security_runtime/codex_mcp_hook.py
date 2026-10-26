@@ -97,7 +97,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 from .host_event_runtime import handle_normalized_event
                 active_coordinator = coordinator or HookCoordinator(task_audit_mode=True)
                 from .host_event_journal import HostEventJournal
-                if classification != 'READ_ONLY' and not HostEventJournal.applicable(normalized):
+                if (classification != 'READ_ONLY' and not active_coordinator.task_audit_mode
+                        and not HostEventJournal.applicable(normalized)):
                     active_coordinator.store.pending_activity(validated_root, 'codex', session_id, mark=True)
                     from .closeout_state import CloseoutStateStore
                     from .hook_state import identity
@@ -137,7 +138,9 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 'pre_edit_targeted_scan_run', 'pre_edit_targeted_scan_count', 'first_scan_attribution_status',
                 'pre_existing_risk_count', 'newly_attributed_risk_count', 'attribution_scanner_equivalent',
                 'first_scan_attribution_reason', 'first_scan_attribution_ms',
-                'security_task_ref', 'task_edit_check_policy', 'task_activity_recorded', 'task_audit_complete'):
+                'security_task_ref', 'task_edit_check_policy', 'task_activity_recorded', 'task_audit_complete',
+                'development_check_ref', 'contract', 'dirty_seq', 'scanned_seq', 'scope',
+                'baseline_created', 'host_review_completed'):
         if key in result:
             summary[key] = result[key]
     if 'event_processing' in result:
@@ -152,7 +155,8 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                    removed_occurrences=delta['removed_occurrences'],
                    reused=result['status'] in {'NO_CHANGE', 'REUSED_LAST_RESULT'},
                      debounced=result['status'] == 'DEBOUNCED')
-    summary['check_source'] = 'SYNCHRONOUS_HOOK_CHECK'
+    summary['check_source'] = ('OBSERVED_EDIT_RECORD' if result.get('development_check_ref')
+                               else 'SYNCHRONOUS_HOOK_CHECK')
     if normalized is not None:
         summary.update(normalized.diagnostics())
     if claim_diag is not None:
@@ -271,7 +275,10 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     # handoff. Task-level deferral neither changes nor broadens that authority.
     repair_flow = bool(decision and (decision.get('action') == 'AUTO_FIX' or
         decision.get('episode_id') and decision.get('verification') and decision.get('attempt_count', 0) > 0))
-    if validated_root is not None and active_coordinator is not None:
+    if (validated_root is not None and active_coordinator is not None
+            and result.get('tool_classification') != 'READ_ONLY'
+            and not result.get('development_check_ref')
+            and (not active_coordinator.task_audit_mode or result.get('security_task_ref') or repair_flow)):
         recording_started = time.perf_counter()
         task, recording = _record_task_hook(active_coordinator.store, validated_root, result, decision)
         task_recording_ms = elapsed(recording_started)

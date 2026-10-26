@@ -54,9 +54,9 @@ def unsupported_protocol_failure(exc):
 
 
 def _guidance_input(name, arguments, require_workspace):
-    topics = {'core', 'runtime-workflow', 'task-review', 'risk-decisions', 'repair-impact', 'deep-audit'}
+    from .guidance.guidance_catalog import TOPICS
     if (not isinstance(arguments, dict) or set(arguments) != {'topic'}
-            or not isinstance(arguments['topic'], str) or arguments['topic'] not in topics):
+            or not isinstance(arguments['topic'], str) or arguments['topic'] not in TOPICS):
         return dict(status='GUIDANCE_REQUEST_REJECTED', reason_code='GUIDANCE_INPUT_INVALID',
             message='请选择一个已声明的本地方法主题；此入口不接受项目、源码或网址。',
             scanner_run=False, source_modified=False, repair_authorized=False)

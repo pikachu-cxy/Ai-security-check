@@ -87,7 +87,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str,
-                          turn_id: str, tool_use_id: str, tool_input: dict | None = None,
+                          turn_id: str, tool_use_id: str, tool_input: dict | str | None = None,
                           permission_mode: str | None = None) -> dict:
         """Codex MCP Hook POC: PostToolUse edits only. Untrusted metadata claims, no source/tool response/transcript. Requires SECURITY_RUNTIME_WORKSPACE binding; delegates bounded offline checks to HookCoordinator, never calls a model or edits/builds target."""
         from .codex_mcp_hook import codex_hook_output, handle_codex_hook
@@ -216,10 +216,11 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         except Exception as exc:
             logger.warning("dogfood_event_failed reason=%s", type(exc).__name__)
 
-    from .mcp_tools import task_review, risk_disposition, explicit_audit, repair
+    from .mcp_tools import task_review, risk_disposition, explicit_audit, repair, development_check
     from .workspace_services import bind_impact_gate
     bind_impact_gate(remediation, application.impact_check)
     task_review.register(server, registry, application=application)
+    development_check.register(server, registry, application=application)
     repair.register(server, registry, application=application, runtime_engine=runtime_engine,
         peek_runtime=lambda: engine, hook_coordinator=hook_coordinator, remediation=remediation,
         functional=functional, deep_requests=deep_requests,
@@ -265,7 +266,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     from .recent_hooks import install_project_observer
     install_project_observer(server, binding)
     registry.observe_context_cost(workspace=binding.root if binding is not None else None)
-    if binding is not None:
+    if binding is not None and not task_audit_mode:
         from .task_closeout_worker import recover
         recover(hook_coordinator.store, Path(binding.root))
     return server

@@ -31,16 +31,20 @@ class CursorTaskBridge:
         self.last_delivery = None
         self.last_protocol_rejection = None
 
-    def current(self):
+    def current(self, *, headers=False):
         store = self.tasks.store(self.root)
         from .tasks.activity import ActivityStore
         focus = ActivityStore(self.core.store, self.root).focus(self.owner)
         if focus:
-            record = store.get(focus['task_ref']) if focus.get('task_ref') else None
+            record = store.get(focus['task_ref'], headers=headers) if focus.get('task_ref') else None
             if (record and record['phase'] in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}
                     and record['task_key'] != self.tasks.key(self.key, self.owner)):
                 return None  # A later generation may start genuinely new work.
             return record
+        if getattr(self.core, 'task_audit_mode', False):
+            # No legacy task lookup on ordinary lightweight development. Old
+            # tasks can be resumed only through their explicit signed focus.
+            return None
         return select_task(store, self.owner, task_key=self.tasks.key(self.key, self.owner),
                            include_historical=True)
 
@@ -78,6 +82,9 @@ class CursorTaskBridge:
         preparing = self.is_begin_tool(name)
         from .tasks.activity import ActivityStore, deferred
         focus = ActivityStore(self.core.store, self.root).focus(self.owner)
+        if not preparing and getattr(self.core, 'task_audit_mode', False) and not focus:
+            return dict(status='EDIT_OBSERVATION_READY' if self.may_mutate(payload) else
+                        'READ_ONLY_OR_UNSUPPORTED', scanner_run=False, baseline_created=False)
         if not preparing and focus and focus.get('task_ref') is None:
             return dict(status='TASK_SUSPENDED', scanner_run=False,
                         routing_generation=focus['generation'])
@@ -104,8 +111,11 @@ class CursorTaskBridge:
         if not mutating:
             return dict(status='READ_ONLY_OR_UNSUPPORTED', scanner_run=False)
         from .tasks.attribution import session_activity
-        session_activity(self.core.store, self.root, self.owner)
-        record = None if preparing else self.current()
+        if not getattr(self.core, 'task_audit_mode', False):
+            session_activity(self.core.store, self.root, self.owner)
+        record = None if preparing else self.current(headers=True)
+        if record is None and not preparing and getattr(self.core, 'task_audit_mode', False):
+            return dict(status='EDIT_OBSERVATION_READY', scanner_run=False, baseline_created=False)
         if record is None and not preparing:
             historical = self._historical_rejection()
             if historical is not None:
@@ -185,6 +195,10 @@ class CursorTaskBridge:
     def followup(self, payload):
         self.last_delivery = None
         self.last_protocol_rejection = None
+        if getattr(self.core, 'task_audit_mode', False):
+            # Closing an ordinary chat neither starts a check nor captures the
+            # workspace. Explicit strict tasks retain their MCP closeout path.
+            return None
         if payload['status'] != 'completed' or payload['loop_count'] != 0:
             return None
         # Claim, freshness capture and dedup save share the workspace lock.

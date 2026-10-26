@@ -75,17 +75,20 @@ def test_resolved_feedback_preserves_security_receipt_without_cancelling_builds(
 
 
 @pytest.mark.parametrize('entry', ['handle_hook_event', 'handle_readiness_event'])
-def test_global_gap_keeps_task_permissions_without_rescan_or_fabricated_baseline(
+def test_legacy_global_gap_keeps_task_permissions_without_rescan_or_fabricated_baseline(
         installed, projects, tmp_path, monkeypatch, entry):
     root = projects[0]
     pool = pool_fixture(installed, tmp_path)
+    pool.task_audit_mode = False  # Only explicit legacy comparison mode creates this baseline.
     captures = []
 
     def busy(*args, **kwargs):
         captures.append(True)
         raise BaselinePreparationError('BASELINE_BUSY')
 
-    monkeypatch.setattr(WorkspaceBaselineSeeds, 'capture_session', busy)
+    # Inject the failure at today's comparison-worker entry, independent of
+    # whether the test platform supports its full-source capture provider.
+    monkeypatch.setattr(pool.epoch_jobs, 'start', busy)
     try:
         assert ready(pool, root, 's')['status'] == 'DEGRADED'
         core = pool.children[root][1]

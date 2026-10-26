@@ -802,8 +802,9 @@ class HookCoordinator:
                               baseline_publish_status='NOT_REQUIRED')
             elif event == HookEvent.FILE_CHANGED:
                 result.update(task_activity(self.store, root, host, session_id,
-                    paths=candidate_paths, scope_unknown=scope_unknown, event_id=event_ref),
-                    event_dispatch_route='TASK_ACTIVITY')
+                    paths=candidate_paths, scope_unknown=scope_unknown, event_id=event_ref,
+                    scan_path=getattr(getattr(self.runtime, 'store', None), 'path', None)),
+                    event_dispatch_route='OBSERVED_EDIT_ACTIVITY')
             else:
                 result.update(status='SESSION_FINALIZED', coverage='NOT_APPLICABLE',
                               scanner_skipped_reason='SESSION_FINALIZATION_ONLY',

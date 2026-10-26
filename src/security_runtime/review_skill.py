@@ -114,11 +114,15 @@ def generated_skill_file(name):
         return ('# 风险交互与用户处置\n\n' + RISK_DECISION_WORKFLOW).encode('utf-8')
     if name == 'references/repair-impact.md':
         return repair_impact_reference().encode('utf-8')
+    if name == 'references/development-check.md':
+        from .guidance.development_check_guidance import DEVELOPMENT_CHECK_GUIDANCE
+        return (DEVELOPMENT_CHECK_GUIDANCE + '\n').encode('utf-8')
     raise ValueError('Unsupported generated Skill file')
 
 
 GENERATED_FILES = ('SKILL.md', 'references/runtime-workflow.md',
-                   'references/risk-decisions.md', 'references/repair-impact.md')
+                   'references/risk-decisions.md', 'references/repair-impact.md',
+                   'references/development-check.md')
 
 
 def skill_files():

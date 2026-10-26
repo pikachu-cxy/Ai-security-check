@@ -262,6 +262,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     task_worker.add_argument('--workspace', required=True)
     task_worker.add_argument('--hooks', required=True)
     task_worker.add_argument('--ticket', required=True)
+    development_worker = sub.add_parser('development-check-worker', help=argparse.SUPPRESS)
+    development_worker.add_argument('--workspace', required=True)
+    development_worker.add_argument('--hooks', required=True)
+    development_worker.add_argument('--ticket', required=True)
     scan_worker = sub.add_parser('scan-job-worker', help=argparse.SUPPRESS)
     scan_worker.add_argument('--workspace', required=True)
     scan_worker.add_argument('--hooks', required=True)
@@ -382,6 +386,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             return run_worker(args.job, args.ticket)
         if args.command == 'task-closeout-worker':
             from .task_closeout_worker import run_worker
+            return run_worker(args.workspace, args.hooks, args.ticket)
+        if args.command == 'development-check-worker':
+            from .development_check_worker import run_worker
             return run_worker(args.workspace, args.hooks, args.ticket)
         if args.command == 'scan-job-worker':
             from .scan_jobs import run_worker

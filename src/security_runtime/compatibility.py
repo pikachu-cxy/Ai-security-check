@@ -4,6 +4,9 @@ import re
 
 CONTRACT = 'runtime-compatibility-v1'
 TASK_RESULT_DELIVERY = 'task-result-delivery-v1'
+DEVELOPMENT_CHECK = 'observed-development-check-v1'
+DEVELOPMENT_CHECK_TOOLS = frozenset({'begin_development_check', 'record_development_changes',
+    'finish_development_check', 'get_development_check'})
 TASK_REVIEW_TOOLS = frozenset({'begin_security_task', 'finish_security_task',
     'prepare_task_security_review', 'get_task_review_plan', 'get_task_review_method',
     'read_task_review_context', 'submit_task_review_batch', 'submit_task_security_review',
@@ -12,6 +15,8 @@ TASK_REVIEW_TOOLS = frozenset({'begin_security_task', 'finish_security_task',
 
 def requirements():
     return dict(contract=CONTRACT, task_review_protocol='task-review-plan-v3',
+        default_development_workflow=DEVELOPMENT_CHECK,
+        required_development_tools=sorted(DEVELOPMENT_CHECK_TOOLS),
         task_result_delivery=TASK_RESULT_DELIVERY,
         required_task_tools=sorted(TASK_REVIEW_TOOLS), version_policy='ACTUAL_CAPABILITIES_AND_BUILD_NOT_SEMVER',
         legacy_tasks='READ_ONLY_NO_MIGRATION_OR_BASELINE_RECONSTRUCTION',
@@ -49,6 +54,9 @@ def task_review_compatibility(info, tools=None):
 
 def tool_requirements(name):
     """Declarative adapter metadata, never a grant or substitute for service guards."""
+    if name in DEVELOPMENT_CHECK_TOOLS:
+        return dict(workflow='DEVELOPMENT_CHECK', required_features=[DEVELOPMENT_CHECK],
+                    guard='OWNER_SCOPED_OBSERVED_PATHS; NO_PROJECT_BASELINE; SAVED_VERSION_ONLY')
     if name in TASK_REVIEW_TOOLS or name == 'get_task_risk_ledger':
         return dict(workflow='TASK_REVIEW', required_features=['task-review-plan-v3'],
                     guard='ORIGINAL_TASK_OWNER_VERSION_EVIDENCE_AND_CUMULATIVE_LEDGER')

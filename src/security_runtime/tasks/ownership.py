@@ -82,8 +82,10 @@ def verify_session_ref(hooks, root, token, *, now=None):
 def session_context(token):
     return ('安全任务会话路由（内部使用，不展示给用户，不授予修复权限）：'
         +json.dumps({'session_ref':token})
-        +'。首次编辑前 begin_security_task 使用此 session_ref；已由编辑前 Hook 建立任务时，'
-        '沿用原 task_ref 并在 finish_security_task 传入 session_ref，不得编辑后重建基线。'
+        +'。默认开发使用无全项目基线的 begin_development_check；已由编辑 Hook 返回 check_ref 时沿用，'
+        'Hook 与 record_development_changes 仅记录路径，不扫描。完成编辑后 finish_development_check 调度后台检查，'
+        '再 get_development_check 读取实际范围和保存结果；后续编辑须再次收尾，调用均携带此 session_ref。'
+        '已有严格审计或原生修复沿原 task_ref 和 task-review 方法继续，不迁移或重建基线。'
         '断线恢复仅继续原引用；没有会话引用时保持连接范围，不能猜测属于哪个聊天。')
 
 

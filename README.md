@@ -6,7 +6,7 @@ Security checks, contextual review, and traceable fix verification for AI coding
 
 AI Security Runtime checks the changes made during a development task, combines scanner results with your host agent's review of relevant code, and explains concrete risks, existing safeguards, and unknowns. You choose whether to fix, defer, or exclude a finding. The agent makes authorized changes; the Runtime retains the original finding and verification evidence.
 
-Current development source uses **AI development task auditing**. Startup validates configuration, connection, workspace binding, and signed session routing without inventorying or scanning the project or requiring a product comparison baseline. Capture B before the first task edit, seal C at closeout, and audit the entire actual B-to-C workspace difference plus necessary context, including manual edits and untracked files. Author identity and overlapping task windows do not determine audit completeness. Worktrees retain independent versions and results. Scanner and vulnerability-data readiness remain separate; missing evidence, execution failures, and version changes remain real limitations. Published packages follow their actual build identity.
+Current development source defaults to **lightweight AI edit checks**. Hooks only record observed file paths; they do not start scanners. Finishing the coding task schedules one combined background check, then the host agent reviews findings and security-relevant changes. No whole-project baseline or workspace snapshot is created for ordinary development. Scanner inputs remain fixed for the selected files, and results retain their actual version and coverage gaps. Later edits remain pending until the next explicit finish. Unknown edit scope never silently expands to a project scan. Explicit full-difference audits, existing strict tasks, and native finding repairs keep their original contracts. Published packages follow their actual build identity; see the [development design](docs/LIGHTWEIGHT_DEVELOPMENT_CHECK.zh-CN.md).
 
 **Current source: 0.3.9 / Official release.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
@@ -25,8 +25,8 @@ The documentation site uses VitePress and GitHub Pages. Its source is in `websit
 
 ## What it does
 
-1. **Capture the real workspace before editing.** Existing uncommitted changes remain part of the task's starting state; no Git commit is required first.
-2. **Check the actual changes.** Review added, modified, and deleted files with the context needed to assess safeguards and trigger conditions.
+1. **Record observed edits.** Track the files involved in AI coding without first inventorying the project or requiring a Git commit.
+2. **Check at task completion.** Combine recorded edits into one bounded background scan, then review findings and relevant safeguards. Unobserved changes remain a coverage limitation.
 3. **Explain the evidence.** Keep file locations, potential impact, existing protections, and unverified assumptions visible.
 4. **Let the user decide.** A request for impact analysis remains read-only. Fixing a selected issue requires authorization; deferral and exclusion retain their own records.
 5. **Verify the original finding.** A new task with zero findings, ordinary passing tests, or an exclusion does not prove an earlier issue was fixed.

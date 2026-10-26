@@ -67,6 +67,4 @@ def workspace_services(root, directory):
         workspace_resolver=resolve_workspace,
         snapshot_capture=None if is_git else source_snapshot,
         seeds=NoProjectSeed(), activity_wait_seconds=10, task_audit_mode=True)
-    from .task_closeout_worker import recover
-    recover(core.store, root)
     return runtime, core, is_git
