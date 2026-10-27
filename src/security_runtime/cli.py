@@ -86,893 +86,4 @@ def doctor(path: Path | None = None, *, json_output: bool = False, verbose: bool
                         for item in scanners if any(adapter.name == item["name"] for adapter in supporting))
             report["capabilities"][label] = "READY" if ready else "MISSING"
         report["status"] = "ready" if all(value == "READY" for value in report["capabilities"].values()) else "limited"
-        report["message"] = "Local prerequisites checked. READY does not guarantee a project scan succeeds; remote repositories may fail."
-        if not workspace.is_git:
-            report["message"] += " Source directory supports release scans; quick/feature/staged require Git."
-        code = 0
-    except (WorkspaceError, ValueError, OSError) as exc:
-        report["message"] = str(exc)
-        code = 2
-    if json_output:
-        print(json.dumps(report, ensure_ascii=True))
-        return code
-    print("AI Security Runtime")
-    if report["workspace"]:
-        workspace_info = report["workspace"]
-        print(f"\nWorkspace\n{workspace_info['path']}")
-        print("Workspace: READY")
-        print("Git: " + ("READY" if workspace_info["git"] else "MISSING"))
-        print("Languages: " + (", ".join(workspace_info["languages"]) or "Unknown"))
-        print(f"Profile: {report['profile']}")
-        if report.get("profile_warning"):
-            print("Warning: " + report["profile_warning"])
-        print("\nSecurity capabilities")
-        for label, state in report["capabilities"].items():
-            print(f"{label:<22} {state}")
-        print("\nIntegrations")
-        for name, state in report["integrations"].items():
-            print(f"{name.title():<14} {state['status']}")
-            if verbose:
-                for key, value in state["details"].items():
-                    print(f"  {key}: {value or '-'}")
-        if verbose:
-            print(f"\nRuntime\nGit: {'READY' if report['runtime']['git_available'] else 'MISSING'}")
-            for item in report["runtime"]["scanners"]:
-                descriptor = BUILTIN_ENGINES.get(item["engine"])
-                print(f"\n{item['name'].title()}\nStatus: {item['status']}\nVersion: {item['version'] or (descriptor.version if descriptor else '')}")
-                print(f"Source: {item['source'] or 'NONE'}\nPath: {item['path'] or '-'}")
-                if item["engine"] == "trivy":
-                    print(f"Database: {report['database']}")
-                    for name, state in report["trivy_data"].items():
-                        print(f"{name}: {state}")
-                    if report["database"] == ToolStatus.READY:
-                        metadata = manager.trivy_cache_dir() / "db" / "metadata.json"
-                        try:
-                            updated = json.loads(metadata.read_text(encoding="utf-8")).get("UpdatedAt", "")
-                        except (OSError, ValueError):
-                            updated = ""
-                        print(f"Updated: {updated or '-'}")
-                if not item["available"]:
-                    print(f"Install: {item['install']}")
-    if verbose:
-        for item in report.get("optional_providers", []):
-            print(f"\n{item['name']}: ON_DEMAND / FALLBACK; engine: {item['engine_status']}")
-    print("\n" + report["message"])
-    return code
-
-
-def render(result, *, verbose=False) -> str:
-    from .human import render_scan
-    return render_scan(result, verbose=verbose)
-
-
-def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
-    # Windows redirected streams may otherwise use cp1252/cp936. MCP JSON and
-    # CLI status symbols are UTF-8 on every delivery format.
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(prog="security-check")
-    parser.add_argument("--version", action="version", version=f"AI Security Runtime {__version__}")
-    sub = parser.add_subparsers(dest="command", required=True)
-    # Optional observer: removing it must not remove any product commands.
-    try:
-        from .context_cost_cli import register as register_context_usage
-        register_context_usage(sub)
-    except Exception:
-        pass
-    info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
-    info_parser.add_argument('--json',action='store_true')
-    skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
-    skill_parser.add_argument('action',choices=['install','status','upgrade','repair','remove'])
-    skill_parser.add_argument('--skills-dir',type=Path,help='Explicit user Skill directory, for isolated profiles')
-    skill_parser.add_argument('--json',action='store_true')
-    upgrade_parser = sub.add_parser('upgrade', help='Read-only diagnosis/plan, explicit bounded apply and CAS recovery')
-    upgrade_parser.add_argument('action', choices=['diagnose', 'plan', 'apply', 'recover'])
-    upgrade_parser.add_argument('--path', type=Path)
-    upgrade_parser.add_argument('--skills-dir', type=Path)
-    upgrade_parser.add_argument('--plan', type=Path)
-    upgrade_parser.add_argument('--output', type=Path)
-    upgrade_parser.add_argument('--approve-user-managed', action='store_true')
-    upgrade_parser.add_argument('--dev', action='store_true')
-    upgrade_parser.add_argument('--probe', action='store_true', help='Probe only the current product launcher, not unknown config commands')
-    upgrade_parser.add_argument('--json', action='store_true')
-    trial_parser = sub.add_parser('trial', help='Create/status/run an explicit isolated local trial profile')
-    trial_parser.add_argument('action', choices=['create', 'status', 'run'])
-    trial_parser.add_argument('--root', required=True, type=Path)
-    trial_parser.add_argument('--executable', type=Path)
-    trial_parser.add_argument('--json', action='store_true')
-    delivery_parser = sub.add_parser('delivery', help='Activate/status/rollback a verified frozen package behind a stable launcher')
-    delivery_parser.add_argument('action', choices=['activate', 'status', 'rollback', 'cleanup', 'make-update'])
-    delivery_parser.add_argument('--root', type=Path)
-    delivery_parser.add_argument('--bundle', type=Path)
-    delivery_parser.add_argument('--base', type=Path)
-    delivery_parser.add_argument('--output', type=Path)
-    delivery_parser.add_argument('--json', action='store_true')
-    remediation_parser = sub.add_parser('remediation', help='User-level consent/reporting preferences; fixes require explicit approval')
-    remediation_parser.add_argument('action', choices=['status', 'configure'])
-    remediation_parser.add_argument('--mode', choices=['smart_auto', 'ask_before_fix', 'report_only'],
-                                    help='smart_auto is a legacy alias for ask_before_fix; no mode grants unconfirmed edits')
-    summary_parser=sub.add_parser('summary',help='Read developer tasks for this workspace; never scans or invokes AI')
-    summary_parser.add_argument('--path')
-    summary_parser.add_argument('--scan')
-    summary_parser.add_argument('--details',action='store_true',help='Show every task, identity and accepted AI review')
-    summary_parser.add_argument('--json',action='store_true')
-    ai_parser=sub.add_parser('ai',help='Configure user BYOK; AI is disabled during scan')
-    ai_sub=ai_parser.add_subparsers(dest='ai_action',required=True)
-    ai_config=ai_sub.add_parser('configure')
-    ai_config.add_argument('--provider',choices=['openai-compatible'],default='openai-compatible')
-    ai_config.add_argument('--base-url',required=True)
-    ai_config.add_argument('--model',required=True)
-    ai_config.add_argument('--api-key-env',default='SECURITY_RUNTIME_AI_KEY')
-    triage_parser=sub.add_parser('triage',help='Validate stored candidates; keeps raw findings')
-    triage_select=triage_parser.add_mutually_exclusive_group(required=True)
-    triage_select.add_argument('--latest',action='store_true')
-    triage_select.add_argument('--scan')
-    triage_parser.add_argument('--path')
-    triage_parser.add_argument('--provider',choices=['configured'])
-    triage_parser.add_argument('--allow-external-code-context',action='store_true',help='Authorize bounded original code context, including embedded credentials, to configured external LLM')
-    triage_parser.add_argument('--category',choices=['code','secret','dependency'],action='append')
-    triage_parser.add_argument('--severity',choices=['CRITICAL','HIGH','MEDIUM','LOW','UNKNOWN'],action='append')
-    triage_parser.add_argument('--limit',type=int,default=20)
-    triage_parser.add_argument('--json',action='store_true')
-    triage_parser.add_argument('--raw',action='store_true')
-    triage_parser.add_argument('--prepare',action='store_true',help='Export agent-native evidence and schema as JSON')
-    triage_parser.add_argument('--no-progress',action='store_true')
-    doctor_parser = sub.add_parser("doctor", help="Check Runtime and project readiness")
-    doctor_parser.add_argument("--path")
-    doctor_parser.add_argument("--json", action="store_true")
-    doctor_parser.add_argument("--verbose", action="store_true")
-    doctor_parser.add_argument('--global', dest='global_scope', action='store_true', help='Check global Codex integration, including when --path is supplied')
-    doctor_parser.add_argument('--project', action='store_true', help='Use the legacy scanner/project doctor')
-    scan_parser = sub.add_parser("scan", help="Scan code changes or the project")
-    scan_parser.add_argument("--path")
-    scan_parser.add_argument("--mode", choices=["quick", "feature", "release"], default="quick")
-    scan_parser.add_argument("--json", action="store_true")
-    scan_parser.add_argument("--no-progress", action="store_true", help="ä¸æ˜¾ç¤ºè¿›åº¦ï¼Œä»è¾“å‡ºæ­£å¼ç»“æœå’Œé”™è¯¯")
-    scan_parser.add_argument("--verbose", action="store_true", help="æ˜¾ç¤ºæœ¬æ¬¡ä¸é€‚ç”¨çš„æ£€æŸ¥")
-    scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
-    scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
-    scan_parser.add_argument('--gate', choices=['strict', 'report'], help='Git gate: 0 allowed, 1 policy blocked, 2 incomplete (strict)')
-    mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
-    mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
-    config_parser = mcp_sub.add_parser("config")
-    config_parser.add_argument("--path")
-    config_format = config_parser.add_mutually_exclusive_group()
-    config_format.add_argument("--json", action="store_true")
-    config_format.add_argument("--toml", action="store_true")
-    config_parser.add_argument("--copy", action="store_true")
-    config_parser.add_argument("--help-client", action="store_true")
-    install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
-    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
-    install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
-    install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
-    install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
-    install_parser.add_argument('--path', help='Optional project conflict check; never a project installation')
-    install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
-    install_parser.add_argument('--offline', action='store_true', help='Verify existing components and data without downloading')
-    install_parser.add_argument('--json', action='store_true')
-    background_parser = sub.add_parser('preparation', help='View automatic background preparation or retry it without reinstalling')
-    background_parser.add_argument('action', choices=['status', 'watch', 'retry'], default='status', nargs='?')
-    background_parser.add_argument('--json', action='store_true')
-    worker_parser = sub.add_parser('preparation-worker', help=argparse.SUPPRESS)
-    worker_parser.add_argument('--job', required=True)
-    worker_parser.add_argument('--ticket', required=True)
-    task_worker = sub.add_parser('task-closeout-worker', help=argparse.SUPPRESS)
-    task_worker.add_argument('--workspace', required=True)
-    task_worker.add_argument('--hooks', required=True)
-    task_worker.add_argument('--ticket', required=True)
-    development_worker = sub.add_parser('development-check-worker', help=argparse.SUPPRESS)
-    development_worker.add_argument('--workspace', required=True)
-    development_worker.add_argument('--hooks', required=True)
-    development_worker.add_argument('--ticket', required=True)
-    scan_worker = sub.add_parser('scan-job-worker', help=argparse.SUPPRESS)
-    scan_worker.add_argument('--workspace', required=True)
-    scan_worker.add_argument('--hooks', required=True)
-    scan_worker.add_argument('--job-ref', required=True)
-    scan_worker.add_argument('--ticket', required=True)
-    epoch_worker = sub.add_parser('product-epoch-worker', help=argparse.SUPPRESS)
-    epoch_worker.add_argument('--workspace', required=True)
-    epoch_worker.add_argument('--hooks', required=True)
-    epoch_worker.add_argument('--ticket', required=True)
-    dispatcher = sub.add_parser('task-closeout-dispatcher', help=argparse.SUPPRESS)
-    dispatcher.add_argument('--once', action='store_true')
-    startup = sub.add_parser('task-dispatcher-startup', help='Manage automatic recovery at user login')
-    startup.add_argument('action', choices=['status', 'install', 'remove'], default='status', nargs='?')
-    for preparation_command in ('prepare-scanners', 'prepare-installation'):
-        preparation_parser = sub.add_parser(preparation_command,
-            help='Prepare scanners and public vulnerability data independently of installation' if preparation_command == 'prepare-scanners' else argparse.SUPPRESS)
-        preparation_parser.add_argument('--json', action='store_true')
-        preparation_parser.add_argument('--offline', action='store_true')
-        preparation_parser.add_argument('--status', action='store_true', help='Read-only check of existing tools and data; no downloads')
-        preparation_parser.add_argument('--timeout', type=int, default=300, help='Initial wait in seconds; observed transfer progress may extend it (1-1800)')
-        preparation_parser.add_argument('--max-wait', type=int, default=1800, help='Absolute shared preparation ceiling in seconds; at least --timeout (1-1800)')
-        preparation_parser.add_argument('--fixed-timeout', action='store_true', help='Keep --timeout as a fixed deadline without automatic continuation')
-        preparation_parser.add_argument('--retries', type=int, choices=(0, 1), default=0, help='Explicit extra download attempts; all attempts share the budget')
-        preparation_parser.add_argument('--idle-timeout', type=int, default=30, help='Stop database download after this many seconds without byte progress (1-300)')
-    setup_parser = sub.add_parser("setup", help="Configure Codex globally and install its companion Skill together")
-    setup_parser.add_argument("integration", nargs="?", choices=["codex", "cursor", "workbuddy"])
-    setup_parser.add_argument("--path")
-    setup_parser.add_argument('--json', action='store_true')
-    setup_parser.add_argument("--verbose", action="store_true")
-    setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default Codex setup is global, including --path; project scope is explicit legacy/development opt-in')
-    setup_parser.add_argument('--dev', action='store_true', help='Explicitly acknowledge a DEV launcher; does not install source paths')
-    cursor_hook_parser = sub.add_parser('cursor-hook', help=argparse.SUPPRESS)
-    cursor_hook_parser.add_argument('--automatic', action='store_true', help=argparse.SUPPRESS)
-    for action in ('status', 'repair', 'uninstall'):
-        global_parser = sub.add_parser(action, help='Manage the owned user-level Codex installation')
-        global_parser.add_argument('--path', help='Inspect or migrate this workspace only')
-        global_parser.add_argument('--json', action='store_true')
-        global_parser.add_argument('--dev', action='store_true')
-        if action == 'repair':
-            global_parser.add_argument('--approve-user-managed', action='store_true',
-                help='Explicitly approve backup/removal of the diagnosed same-name MCP subtree; never approve unknown Hooks or invalid ownership')
-    lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
-    lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
-    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor'])
-    lifecycle_parser.add_argument('--scope', choices=['global', 'project'], default='project')
-    lifecycle_parser.add_argument('--path')
-    lifecycle_parser.add_argument('--json', action='store_true')
-    integrations_parser = sub.add_parser("integrations", help="Inspect AI coding integrations")
-    integrations_parser.add_argument("--path")
-    integrations_parser.add_argument("--verbose", action="store_true")
-    integrations_sub = integrations_parser.add_subparsers(dest="integrations_action")
-    repair_parser = integrations_sub.add_parser("repair")
-    repair_parser.add_argument("--path")
-    remove_parser = integrations_sub.add_parser("remove")
-    remove_parser.add_argument("integration", choices=["cursor", "workbuddy"])
-    remove_parser.add_argument("--path")
-    stats_parser = sub.add_parser("stats")
-    stats_parser.add_argument("--days", type=int, default=7)
-    license_parser = sub.add_parser("licenses")
-    license_parser.add_argument("--check-distribution", action="store_true")
-    hooks_parser = sub.add_parser("hooks", help="Manage AI host lifecycle Hooks and diagnostics")
-    hooks_parser.add_argument("action", choices=["install", "status", "repair", "remove", "generate-mcp-poc", "recent", "repair-diagnostics"])
-    hooks_parser.add_argument("hook", nargs="?", choices=["pre-commit", "codex", "cursor", "kiro", "workbuddy", "codebuddy", "qoder"],
-        metavar="{codex,cursor,kiro,workbuddy,codebuddy,qoder}")
-    hooks_parser.add_argument("--path")
-    hooks_parser.add_argument("--json", action="store_true")
-    hooks_parser.add_argument('--gate', choices=['strict', 'report'], default='strict')
-    hooks_parser.add_argument("--limit", type=int, default=16, help="Recent diagnostics count (1â€“32)")
-    hooks_parser.add_argument("--unbound", action="store_true", help="Explicitly query unattributed Hook diagnostics")
-    hook_parser = sub.add_parser('hook', help='Advisory local lifecycle quick check')
-    hook_parser.add_argument('event', choices=['session-start','file-changed','agent-stop','host-event'])
-    hook_parser.add_argument('--path')
-    hook_parser.add_argument('--host', choices=['codex','cursor','kiro','workbuddy','codebuddy','qoder','generic'], default='generic')
-    hook_parser.add_argument('--session-id')
-    hook_parser.add_argument('--json',action='store_true')
-    hook_parser.add_argument('--stdin',action='store_true')
-    hook_parser.add_argument('--adapter-id',choices=['ai-security-runtime-hook-v1'],help=argparse.SUPPRESS)
-    tools_parser = sub.add_parser("tools", help="Manage security engines")
-    tools_sub = tools_parser.add_subparsers(dest="tools_action", required=True)
-    tool_status_parser = tools_sub.add_parser("status")
-    tool_status_parser.add_argument('--json', action='store_true')
-    repair_component_parser = tools_sub.add_parser('repair', help='Back up and rebuild confirmed corrupt Semgrep settings; no download or scan')
-    repair_component_parser.add_argument('tool', choices=['semgrep'])
-    repair_component_parser.add_argument('--json', action='store_true')
-    install_parser = tools_sub.add_parser("install")
-    install_parser.add_argument("tool", nargs="?", choices=tuple(VERSIONS))
-    install_parser.add_argument("--all", action="store_true")
-    install_parser.add_argument('--reinstall', action='store_true', help='Explicitly replace one broken managed/system component; never repair user settings by downloading')
-    trial_arguments = []
-    parsed_argv = list(sys.argv[1:] if argv is None else argv)
-    if parsed_argv[:1] == ['trial'] and '--' in parsed_argv:
-        split = parsed_argv.index('--')
-        trial_arguments = parsed_argv[split + 1:]
-        parsed_argv = parsed_argv[:split]
-    args = parser.parse_args(parsed_argv)
-    if args.command == 'cursor-hook':
-        from .cursor_hook import main as cursor_hook_main
-        return cursor_hook_main(automatic=args.automatic)
-    if ((args.command == 'setup' and args.integration == 'cursor' and args.scope == 'global')
-            or (args.command == 'integration' and args.integration == 'cursor' and args.scope == 'global')):
-        from .cursor_connector import CursorConnectorInstallation, setup_personal_cursor, cursor_reason
-        try:
-            integration = CursorConnectorInstallation(allow_dev=getattr(args, 'dev', False))
-            data = (setup_personal_cursor(integration, args.path) if args.command == 'setup'
-                    else integration.execute(args.action, args.path))
-        except (ValueError, OSError, KeyError, TypeError) as exc:
-            data = dict(integration='cursor', scope='GLOBAL', overall='BROKEN',
-                        diagnostics=[cursor_reason(exc)])
-        print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / Cursor\n'+data['overall'])
-        return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
-    try:
-        configure_logging(mcp=args.command == "mcp")
-        if args.command == 'context-usage':
-            from .context_cost_cli import execute as execute_context_usage
-            return execute_context_usage(args)
-        if args.command == 'preparation-worker':
-            from .background_preparation import run_worker
-            return run_worker(args.job, args.ticket)
-        if args.command == 'task-closeout-worker':
-            from .task_closeout_worker import run_worker
-            return run_worker(args.workspace, args.hooks, args.ticket)
-        if args.command == 'development-check-worker':
-            from .development_check_worker import run_worker
-            return run_worker(args.workspace, args.hooks, args.ticket)
-        if args.command == 'scan-job-worker':
-            from .scan_jobs import run_worker
-            return run_worker(args.workspace, args.hooks, args.job_ref, args.ticket)
-        if args.command == 'product-epoch-worker':
-            from .product_epoch_worker import run_worker
-            return run_worker(args.workspace, args.hooks, args.ticket)
-        if args.command == 'task-closeout-dispatcher':
-            from .task_dispatcher import run
-            return run(once=args.once)
-        if args.command == 'task-dispatcher-startup':
-            from .task_dispatcher import autostart
-            print(json.dumps(autostart(args.action)))
-            return 0
-        if args.command == 'preparation':
-            from .background_preparation import read_preparation_status, start_background_preparation, watch_preparation, preparation_message
-            data = (start_background_preparation() if args.action == 'retry' else
-                    watch_preparation() if args.action == 'watch' else read_preparation_status())
-            print(json.dumps(data, ensure_ascii=True) if args.json else preparation_message(data))
-            return 0 if data.get('ready') or data['status'] in {'QUEUED', 'PREPARING', 'RESUMING'} else 2
-        if args.command in {'prepare-installation', 'prepare-scanners'}:
-            from .install_readiness import prepare_installation_readiness
-            from .install_progress import child_preparation_progress, InstallationProgress
-            if not 1 <= args.timeout <= args.max_wait <= 1800 or not 1 <= args.idle_timeout <= 300:
-                parser.error('Preparation timeout and max wait must be 1-1800, max wait at least timeout, and idle timeout 1-300 seconds')
-            offline = args.offline or args.status or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1'
-            adaptive = args.command == 'prepare-scanners' and not args.fixed_timeout and not offline
-            kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout,
-                adaptive=adaptive, max_wait_seconds=args.max_wait if adaptive else args.timeout)
-            if args.status:
-                # A read-only query must not say it is downloading/updating.
-                data = prepare_installation_readiness(**kwargs)
-            elif os.getenv('SECURITY_RUNTIME_INSTALL_PROGRESS') == '1':
-                data = prepare_installation_readiness(progress=child_preparation_progress, **kwargs)
-            else:
-                with InstallationProgress(preparation=True, adaptive=adaptive,
-                        initial_seconds=args.timeout, max_wait_seconds=args.max_wait if adaptive else args.timeout) as progress:
-                    data = prepare_installation_readiness(progress=progress, **kwargs)
-                    progress.finish(data['ready'])
-            if args.command == 'prepare-installation' and isinstance(data.get('preparation'), dict):
-                # Old installed parents require the exact legacy receipt fields.
-                # Public prepare-scanners retains the richer source trail.
-                base = {'budget_seconds', 'elapsed_ms', 'max_attempts', 'attempts', 'error_code', 'source'}
-                data['preparation'] = {key: value for key, value in data['preparation'].items() if key in base}
-            if args.command == 'prepare-installation':
-                # Preserve the legacy private child receipt for old installers.
-                for component in data['tools'].values():
-                    component.pop('diagnostic', None)
-                data['failures'] = [dict(stage=item['stage'], component=item['component'],
-                    exception_type=item.get('exception_type', 'OtherException')) for item in data['failures']]
-            else:
-                from .component_health import component_feedback
-                health = component_feedback(data['tools'])
-                # Keep the receipt shape stable for scripts. One-time notices
-                # use stderr, while JSON contains current diagnostic state.
-                if health['notify']:
-                    print(health['message'], file=sys.stderr)
-            print(json.dumps(data, ensure_ascii=True) if args.json else data['message'])
-            return 0 if data['ready'] else 2
-        if args.command == 'install':
-            from .install_progress import InstallationProgress
-            with installation_progress or InstallationProgress() as progress:
-                from .personal_install import install_personal_codex
-                from .integration_lifecycle import IntegrationDiagnostic
-                try:
-                    host_kwargs = {'_host': 'cursor'} if args.integration == 'cursor' else {}
-                    data = install_personal_codex(bundle=args.bundle, root=args.root,
-                        workspace=str(Path(args.path).absolute()) if args.path else None,
-                        allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
-                except (ValueError, OSError, TypeError, RecursionError) as exc:
-                    code = exc.code if isinstance(exc, IntegrationDiagnostic) else 'INSTALL_PATH_OR_STATE_INVALID'
-                    data = {'integration':args.integration, 'scope':'GLOBAL', 'overall':'BROKEN', 'diagnostics':[code],
-                        'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
-                            'local_files_ready':False, 'scan_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
-                            'message':'å®‰è£…æœªå®Œæˆã€‚è¯·æ£€æŸ¥è¯Šæ–­ä¸­çš„åŒ…ã€å®‰è£…ç›®å½•æˆ–ç°æœ‰é…ç½®é—®é¢˜ï¼›æœªæˆæƒè¦†ç›–ç”¨æˆ·å†…å®¹ï¼Œä¹Ÿä¸èƒ½è§†ä¸ºå¯æ‰«æã€‚'}}
-                ready = data['installation'].get('local_files_ready') is True
-                progress.finish(ready, scan_ready=data['installation'].get('scan_ready') is True)
-            print(json.dumps(data, ensure_ascii=True) if args.json else data['installation']['message'])
-            return 0 if ready else 2
-        if args.command == 'delivery':
-            if args.action == 'make-update':
-                from .delta_delivery import make_update
-                if args.base is None or args.bundle is None or args.output is None:
-                    raise ValueError('DELTA_BASE_BUNDLE_OUTPUT_REQUIRED')
-                print(json.dumps(make_update(args.base, args.bundle, args.output), ensure_ascii=True))
-                return 0
-            from .delivery import StableDelivery
-            if args.root is None:
-                raise ValueError('DELIVERY_ROOT_REQUIRED')
-            delivery = StableDelivery(args.root)
-            if args.action == 'activate':
-                if args.bundle is None:
-                    raise ValueError('DELIVERY_BUNDLE_REQUIRED')
-                data = delivery.activate(args.bundle)
-            else:
-                data = delivery.rollback() if args.action == 'rollback' else delivery.cleanup() if args.action == 'cleanup' else delivery.status()
-            print(json.dumps(data, ensure_ascii=True))
-            return 0
-        if args.command == 'trial':
-            from .trial import TrialProfile
-            trial = TrialProfile(args.root)
-            if args.action == 'run':
-                return trial.run(trial_arguments, executable=args.executable)
-            print(json.dumps(trial.create() if args.action == 'create' else trial.status(), ensure_ascii=True))
-            return 0
-        if args.command == 'upgrade':
-            from .upgrade import InstallationUpgrade
-            from .global_integration import GlobalCodexIntegration
-            from .review_skill import ReviewSkillManager
-            from .hook_state import atomic_bytes, no_links
-            manager = InstallationUpgrade(GlobalCodexIntegration(allow_dev=args.dev), ReviewSkillManager(args.skills_dir))
-            if args.action == 'diagnose':
-                data = manager.diagnose(args.path, probe=args.probe)
-            elif args.action == 'plan':
-                data = manager.plan(args.path)
-                if args.output:
-                    no_links(args.output)
-                    if args.output.exists():
-                        raise ValueError('UPGRADE_PLAN_OUTPUT_EXISTS')
-                    atomic_bytes(args.output, json.dumps(data, ensure_ascii=True).encode())
-            elif args.action == 'recover':
-                data = manager.recover()
-            else:
-                if args.plan is None:
-                    raise ValueError('UPGRADE_PLAN_REQUIRED')
-                no_links(args.plan)
-                if args.plan.stat().st_size > 1_000_000:
-                    raise ValueError('UPGRADE_PLAN_INVALID')
-                data = manager.apply(json.loads(args.plan.read_bytes()), approve_user_managed=args.approve_user_managed)
-            print(json.dumps(data, ensure_ascii=True) if args.json else json.dumps(data, ensure_ascii=False, indent=2))
-            return 0 if not data.get('blocked') else 2
-        if args.command == 'hooks' and args.action == 'repair-diagnostics':
-            if args.hook is not None or args.path is not None or args.unbound:
-                raise ValueError('Diagnostic repair uses the fixed user diagnostic store')
-            from .recent_hooks import RecentHookStore
-            try:
-                result = RecentHookStore().repair()
-            except (OSError, ValueError, __import__('sqlite3').DatabaseError):
-                result = dict(status='UNAVAILABLE', reason_code='HOOK_DIAGNOSTIC_RECOVERY_UNAVAILABLE',
-                              diagnostic_only=True, security_proof=False)
-                print(json.dumps(result, ensure_ascii=True) if args.json else 'Hook diagnostic recovery unavailable; original history retained.')
-                return 2
-            print(json.dumps(result, ensure_ascii=True) if args.json else json.dumps(result, ensure_ascii=False, indent=2))
-            return 0
-        if args.command == 'hooks' and args.action == 'recent':
-            from .recent_hooks import RecentHookStore
-            from .global_workspace import resolve_workspace
-            try:
-                if args.hook is not None or (args.unbound and args.path is not None):
-                    raise ValueError('Invalid recent diagnostic scope')
-                root = None if args.unbound else resolve_workspace(str(Path(args.path or Path.cwd()).absolute()))
-                result = RecentHookStore().recent(root, limit=args.limit, unbound=args.unbound)
-            except Exception:
-                result = dict(status='UNAVAILABLE', reason_code='RECENT_HOOK_DIAGNOSTIC_UNAVAILABLE',
-                              records=[], diagnostic_only=True, security_proof=False)
-                print(json.dumps(result, ensure_ascii=True) if args.json else 'Recent Hook diagnostics unavailable; no state changed.')
-                return 2
-            if args.json:
-                print(json.dumps(result, ensure_ascii=True))
-            else:
-                print('Recent Hook diagnostics: ' + result['status'] + ' (diagnostic only)')
-                for row in result['records']:
-                    print(f"{row['timestamp']} {row['event']} {row['last_stage']} claims={row.get('host_claim_status')} scanner={row.get('scanner_run')} id={row['diagnostic_id']}")
-                print(result['note'])
-            return 0
-        if args.command == 'hook':
-            try:
-                from .hook_runtime import HookCoordinator
-                if args.event == 'host-event':
-                    if not args.stdin:
-                        raise ValueError('Host event requires JSON stdin')
-                    from .hook_adapters import run_host_event
-                    data = sys.stdin.buffer.read(100_001)
-                    if len(data)>100_000:
-                        raise ValueError('Host payload budget exceeded')
-                    output = run_host_event(json.loads(data),args.path,args.host)
-                else:
-                    if args.stdin:
-                        raise ValueError('Use host-event for lifecycle payloads')
-                    event = args.event.upper().replace('-','_')
-                    output = HookCoordinator(task_audit_mode=True).handle(event,args.path,args.host,args.session_id)
-                print(json.dumps(output,ensure_ascii=True) if args.json or args.event=='host-event' else
-                      f"{output['status']} Â· coverage {output['coverage']} Â· new families {output['delta']['new']} Â· added occurrences {output['delta']['additional_occurrences']}\n{output['next_step']}")
-                return 0  # Findings and scanner limitations are advisory.
-            except Exception:
-                # Do not echo untrusted stdin, paths or exception source text.
-                print(json.dumps({'status':'FAILED','error_code':'HOOK_RUNTIME_FAILED','systemMessage':'æœ¬æ¬¡å®‰å…¨æ£€æŸ¥æœªå®Œæˆï¼Œæš‚æ—¶æ— æ³•ç¡®è®¤æ”¹åŠ¨æ˜¯å¦å®‰å…¨ã€‚å»ºè®®æ£€æŸ¥å·¥å…·çŠ¶æ€åé‡æ–°æ£€æŸ¥ã€‚'}))
-                return 2
-        if args.command == 'remediation':
-            from .remediation_policy import RemediationConfig
-            config = RemediationConfig()
-            if args.action == 'configure':
-                if args.mode is None:
-                    raise ValueError('configure requires --mode')
-                config.write(args.mode)
-            elif args.mode is not None:
-                raise ValueError('status does not accept --mode')
-            print(json.dumps({'remediation': {'mode': config.read(), 'user_consent_required': True,
-                'automatic_fix_without_user_consent': False}, 'max_auto_fix_attempts': 2}))
-            return 0
-        if args.command=='review-skill':
-            from .review_skill import ReviewSkillManager
-            data=ReviewSkillManager(args.skills_dir).execute(args.action)
-            print(json.dumps(data,ensure_ascii=True) if args.json else '\n'.join([
-                'AI Security Review: '+data['status'],data.get('path',''),data.get('reason','')]))
-            return 2 if data['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'} else 0
-        if args.command=='runtime-info':
-            from .guidance.host_guidance import runtime_info
-            info=runtime_info()
-            if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
-                from .global_mcp import global_runtime_info
-                info = global_runtime_info()
-            # Native stdout is UTF-8, but Windows PowerShell 5.1 can decode a
-            # pipeline using its legacy console code page. ASCII escapes keep
-            # JSON parseable and preserve Unicode values under either decoder.
-            print(json.dumps(info,ensure_ascii=True) if args.json else '\n'.join([
-                'AI Security Runtime '+info['version'], 'Capabilities: '+info['capability_contract'],
-                *info['connection_recovery']]))
-            return 0
-        if args.command=='summary':
-            from .security_summary import SecuritySummaryService
-            from .human import render_security_summary
-            bound=os.getenv('SECURITY_RUNTIME_WORKSPACE')
-            root=args.path or bound
-            if root is None:
-                root=WorkspaceResolver().resolve(allow_non_git_source=True).path
-            result=SecuritySummaryService().get(root,args.scan,details=args.details,bound_workspace=bound)
-            print(json.dumps(result,ensure_ascii=True) if args.json else render_security_summary(result))
-            return 0
-        if args.command=='ai':
-            from .triage_providers import AIConfig
-            AIConfig(args.base_url,args.model,args.api_key_env,args.provider).save()
-            print('BYOK é…ç½®å·²ä¿å­˜ï¼Œä»…ä¿å­˜ API key ç¯å¢ƒå˜é‡åã€‚AI é»˜è®¤å…³é—­ã€‚')
-            print('å°†å‘å¤–éƒ¨ LLM Provider å‘é€é™å®šèŒƒå›´çš„åŸæ–‡ä»£ç ä¸Šä¸‹æ–‡ï¼ˆåŒ…æ‹¬å…¶ä¸­çš„å‡­æ®ï¼‰ï¼Œç”¨äºå®‰å…¨ Finding éªŒè¯ã€‚')
-            print('ä½¿ç”¨ triage --provider configured --allow-external-code-context æ˜¾å¼æˆæƒã€‚')
-            return 0
-        if args.command=='triage':
-            from .triage import TriageService
-            from .triage_providers import AIConfig,OpenAICompatibleProvider
-            from .storage import SQLiteStore
-            from .human import render_triage
-            store=SQLiteStore();service=TriageService(store)
-            scan=store.latest_scan(args.path) if args.latest else store.get_scan(args.scan)
-            if scan is None: raise ValueError('No stored scan found')
-            if args.path and Path(scan['target_profile']['path']).resolve()!=Path(args.path).resolve():
-                raise ValueError('Scan does not belong to this workspace')
-            selection=dict(categories=args.category,severities=args.severity,limit=args.limit)
-            if args.raw:
-                if args.provider or args.prepare: raise ValueError('--raw cannot invoke or prepare AI')
-                print(json.dumps(scan['findings'],ensure_ascii=True,indent=2))
-                return 0
-            if args.provider:
-                if args.prepare: raise ValueError('Choose BYOK or agent-native prepare')
-                if not args.allow_external_code_context:
-                    raise ValueError('å°†å‘å¤–éƒ¨ LLM Provider å‘é€é™å®šèŒƒå›´çš„åŸæ–‡ä»£ç ä¸Šä¸‹æ–‡ï¼ˆåŒ…æ‹¬å…¶ä¸­çš„å‡­æ®ï¼‰ã€‚å¿…é¡»æ˜¾å¼æä¾› --allow-external-code-context')
-                provider=OpenAICompatibleProvider(AIConfig.load(),allow_external_code_context=True)
-                if args.no_progress: output=service.run(scan['scan_id'],provider,**selection)
-                else:
-                    from .cli_progress import CLIProgressRenderer
-                    with CLIProgressRenderer() as reporter: output=service.run(scan['scan_id'],provider,progress=reporter,**selection)
-                print(json.dumps(output,ensure_ascii=True) if args.json else render_triage(output['view']))
-                return 2 if output['failures'] or output['evidence_errors'] else 0
-            if args.prepare:
-                print(json.dumps(service.prepare(scan['scan_id'],**selection),ensure_ascii=True))
-            else:
-                view=service.view(scan['scan_id'])
-                print(json.dumps(view,ensure_ascii=True) if args.json else render_triage(view))
-            return 0
-        if args.command == "doctor" and (args.project or (args.path is not None and not args.global_scope)):
-            return doctor(Path(args.path) if args.path is not None else None, json_output=args.json, verbose=args.verbose)
-        if args.command == "scan":
-            registry = ScannerRegistry()
-            # Adapters prepare their engines only after Runtime scope/planning.
-            from .cli_progress import CLIProgressRenderer
-            from .explicit_scan import run_explicit_scan
-            runtime = SecurityRuntime(registry=registry)
-            if args.no_progress:
-                result = run_explicit_scan(runtime, args.path, mode=args.mode, staged=args.staged, rules_path=args.rules)
-            else:
-                with CLIProgressRenderer() as reporter:
-                    result = run_explicit_scan(runtime, args.path, mode=args.mode, staged=args.staged, rules_path=args.rules, progress=reporter)
-            try:
-                IntegrationStateStore().event(DogfoodEvent("cli", result.target_profile.path, args.mode,
-                    result.duration_ms, len(result.findings), result.coverage))
-            except OSError:
-                pass
-            print(json.dumps(result.to_dict(), ensure_ascii=True) if args.json else render(result, verbose=args.verbose))
-            if args.gate:
-                from .hooks import gate_exit
-                code = gate_exit(result, args.gate)
-                if result.status not in {'COMPLETED', 'NO_CHANGES'}:
-                    print('Git gate: scan incomplete; ' + ('commit blocked (strict).' if code else 'commit allowed without a completed security verdict (report).'), file=sys.stderr)
-                return code
-            return 0 if result.release_status != "BLOCKED" else 1
-        if args.command == "tools":
-            manager = ToolManager()
-            if args.tools_action == 'repair':
-                from .component_health import repair_semgrep_settings
-                data = repair_semgrep_settings(manager=manager)
-                print(json.dumps(data, ensure_ascii=True) if args.json else data['message'] +
-                    ('\nå¤‡ä»½ï¼š' + data['backup_path'] if data.get('backup_path') else ''))
-                return 0 if data['status'] in {'REPAIRED', 'NOT_APPLICABLE'} else 2
-            if args.tools_action == "status":
-                from .component_health import component_feedback
-                from .install_readiness import _component, CORE_TOOLS
-                statuses = manager.statuses()
-                tools = {name: _component(result, manager.versions[name], name)
-                    for name, result in statuses.items() if name in CORE_TOOLS}
-                health = component_feedback(tools, root=manager.root)
-                if args.json:
-                    print(json.dumps(dict(tools=tools, component_health=health,
-                        vulnerability_data=manager.trivy_data_statuses()), ensure_ascii=True))
-                    return 0
-                for tool_id, resolved in statuses.items():
-                    if tool_id in ON_DEMAND_ENGINES:
-                        print(f"{tool_id.title():<12} ON_DEMAND / FALLBACK ({resolved.status}) {resolved.path}")
-                    else:
-                        print(f"{tool_id.title():<12} {resolved.status} {resolved.path}")
-                    issue = tools.get(tool_id, {}).get('diagnostic')
-                    if issue:
-                        print(issue['message'] + issue['remediation'])
-                        if issue['repair_command']:
-                            print('ä¿®å¤å‘½ä»¤ï¼š' + ' '.join(issue['repair_command']))
-                for name, state in manager.trivy_data_statuses().items():
-                    print(f"Trivy {name}: {state}")
-                if health['notify']:
-                    print(health['message'])
-                return 0
-            if not args.all and args.tool is None:
-                parser.error("tools install requires a tool name or --all")
-            if args.reinstall and args.all:
-                parser.error('tools install --reinstall requires one explicitly selected component')
-            names = tuple(name for name in VERSIONS if name not in ON_DEMAND_ENGINES) if args.all else (args.tool,)
-            successful = True
-            for tool_id in names:
-                print(f"Preparing {tool_id}...", file=sys.stderr)
-                resolved = manager.ensure(tool_id, **({'reinstall': True} if args.reinstall else {}))
-                print(f"{tool_id.title():<12} {resolved.status} {resolved.path} {resolved.detail}")
-                if resolved.diagnostic:
-                    print(format_diagnostic(resolved.diagnostic, retry=f"security-check tools install {tool_id}"))
-                successful &= resolved.status == ToolStatus.READY
-            if "trivy" in names and manager.resolve("trivy").status == ToolStatus.READY:
-                database = manager.prepare_trivy_database(manager.resolve("trivy").path)
-                print(f"Trivy DB     {database}")
-                if manager.data_diagnostics.get("vulnerability_db"):
-                    print(format_diagnostic(manager.data_diagnostics["vulnerability_db"], retry="security-check tools install trivy"))
-                successful &= database == ToolStatus.READY
-            return 0 if successful else 2
-        if args.command == "licenses":
-            notice_roots = (Path(__file__).resolve().parent, Path(__file__).resolve().parents[2],
-                            Path(sys.prefix) / "share" / "ai-security-runtime")
-            def distributed_file(name: str) -> bool:
-                return any((directory / name).is_file() for directory in notice_roots)
-            print(f"{'Engine':<12} {'License':<18} Distribution")
-            failed = False
-            for descriptor in BUILTIN_ENGINES.values():
-                metadata = descriptor.license_metadata
-                status = LicensePolicy.distribution_status(metadata)
-                print(f"{descriptor.display_name:<12} {metadata.license_spdx:<18} {status}")
-                if args.check_distribution:
-                    # This wheel carries our code and first-party rules. A
-                    # runtime dependency or a later managed download is not
-                    # an engine binary bundled inside the Runtime wheel.
-                    delivery_actions = {"RUNTIME_DEPENDENCY": LicenseAction.USE,
-                                        "MANAGED_PYTHON_PACKAGE": LicenseAction.AUTO_DOWNLOAD,
-                                        "PINNED_RELEASE": LicenseAction.AUTO_DOWNLOAD}
-                    action = delivery_actions.get(descriptor.install_strategy)
-                    if action is None or LicensePolicy.permission(metadata, action) == Permission.NO:
-                        failed = True
-                    license_file = Path(__file__).parent / "licenses" / descriptor.engine_id / "LICENSE"
-                    if not license_file.is_file():
-                        failed = True
-                    if metadata.notice_required and not (license_file.parent / "NOTICE").is_file():
-                        failed = True
-                    if metadata.source_offer_required and not distributed_file("SOURCE_OFFER.md"):
-                        failed = True
-            if args.check_distribution:
-                from .rulepacks import RulePackManager, can_bundle_rule_pack
-                if not all(can_bundle_rule_pack(pack.descriptor) for pack in RulePackManager().discover()):
-                    failed = True
-                if not distributed_file("THIRD_PARTY_NOTICES.md"):
-                    failed = True
-            return 2 if failed else 0
-        if args.command == "mcp" and args.mcp_action == "config":
-            workspace = WorkspaceResolver().resolve(args.path).path
-            payload = toml_config(workspace) if args.toml else json_config(workspace)
-            if args.copy and copy_to_clipboard(payload):
-                print("Configuration copied to clipboard.")
-                return 0
-            if args.copy:
-                print("Clipboard unavailable. Configuration printed below.\n")
-            if args.toml or args.json or args.copy:
-                print(payload)
-            else:
-                runtime = resolve_runtime_command()
-                print("AI Security Runtime MCP\n")
-                print(f"Name: ai-security-runtime\nTransport: stdio\nCommand: {runtime.command}\nArguments: {' '.join(runtime.args)}\nWorkspace: {workspace}")
-                print("Environment: SECURITY_RUNTIME_WORKSPACE=" + str(workspace))
-                print("\nFor any MCP-compatible coding tool:\n1. Open MCP settings\n2. Add local stdio server\n3. Use the command and arguments above")
-            return 0
-        global_action = (args.command in {'status', 'repair', 'uninstall'}
-            or (args.command == 'integration' and args.integration == 'codex' and args.scope == 'global')
-            or (args.command == 'setup' and args.integration in {None, 'codex'}
-                and args.scope != 'project')
-            or (args.command == 'doctor' and not args.project and (args.path is None or args.global_scope)))
-        if global_action:
-            from contextlib import nullcontext
-            from .install_progress import InstallationProgress
-            action = ('uninstall' if args.action == 'remove' else args.action) if args.command == 'integration' else args.command
-            reporter = (installation_progress or InstallationProgress()) if action == 'setup' else nullcontext(None)
-            with reporter as progress:
-                from .global_integration import GlobalCodexIntegration, render_global
-                from .global_workspace import resolve_workspace
-                from .integration_lifecycle import IntegrationDiagnostic
-                from .integration_recovery import configuration_recovery, repair_connection
-                adapter = None
-                workspace = None
-                try:
-                    if progress is not None:
-                        progress('PREPARE')
-                    adapter = GlobalCodexIntegration(allow_dev=getattr(args, 'dev', False))
-                    # Local CLI paths may be relative; MCP workspace claims remain strict.
-                    workspace = str(Path(args.path).absolute()) if args.path is not None else None
-                    if workspace is None:
-                        try:
-                            resolve_workspace(str(Path.cwd()))
-                            workspace = str(Path.cwd())
-                        except (ValueError, OSError):
-                            workspace = None
-                    if action == 'repair':
-                        data = repair_connection(adapter, workspace,
-                            approve_user_managed=getattr(args, 'approve_user_managed', False))
-                    elif action == 'setup':
-                        from .personal_install import setup_personal_codex
-                        data = setup_personal_codex(adapter, workspace, progress=progress)
-                    else:
-                        data = adapter.execute(action, workspace)
-                    if data['overall'] == 'DEGRADED':
-                        data['configuration_recovery'] = configuration_recovery(adapter, workspace,
-                            reason=next(iter(data.get('diagnostics', [])), None))
-                except (IntegrationDiagnostic, ValueError, OSError, TypeError, RecursionError):
-                    # Do not echo arbitrary claims or malformed config contents.
-                    exc = sys.exc_info()[1]
-                    reason = exc.code if isinstance(exc, IntegrationDiagnostic) else 'GLOBAL_STATE_ACCESS_FAILED' if isinstance(exc, OSError) else 'GLOBAL_CONFIGURATION_REJECTED'
-                    data = {'integration': 'codex', 'scope': 'GLOBAL', 'overall': 'BROKEN',
-                            'ownership': 'UNKNOWN', 'diagnostics': [reason]}
-                    try:
-                        if adapter is not None:
-                            data['configuration_recovery'] = configuration_recovery(adapter, workspace, reason=reason)
-                    except (ValueError, OSError, TypeError, RecursionError):
-                        pass  # Never reflect an invalid workspace/configuration claim.
-                if progress is not None:
-                    progress.finish(data.get('installation', {}).get('local_files_ready') is True)
-            print(json.dumps(data, ensure_ascii=True) if args.json else render_global(data))
-            return 2 if data['overall'] in {'BROKEN', 'DEGRADED'} else 0
-        if args.command == 'integration' or (args.command == 'setup' and args.integration == 'codex'):
-            from .integration_lifecycle import IntegrationManager, render_integration
-            data = IntegrationManager().execute('setup' if args.command == 'setup' else args.action,
-                                                args.integration, args.path)
-            print(json.dumps(data, ensure_ascii=True) if args.json else render_integration(data))
-            return 2 if data['overall'] == 'BROKEN' else 0
-        if args.command == "setup":
-            workspace = WorkspaceResolver().resolve(args.path).path
-            registry = IntegrationRegistry()
-            adapters = [registry.get(args.integration)] if args.integration else [adapter for adapter in registry.native() if adapter.detect()]
-            print(f"AI Security Runtime\n\nWorkspace\nâœ“ {workspace}\n\nDetected AI coding tools")
-            if not adapters:
-                print("No supported native client detected. Use security-check mcp config for another tool.")
-                return 0
-            for adapter in adapters:
-                print(f"âœ“ {adapter.display_name}" if adapter.detect() else f"â—‹ {adapter.display_name} not detected")
-            for adapter in adapters:
-                print(f"\nConnecting {adapter.display_name}...")
-                try:
-                    state = adapter.install(workspace)
-                except ValueError as exc:
-                    print(f"{adapter.display_name} configuration could not be updated.\n{exc}\nRun: security-check setup {adapter.integration_id} --verbose")
-                    return 2
-                print(f"âœ“ {adapter.display_name} configuration written")
-                print(f"Config path: {state.details['config_path']}")
-                print("âœ“ Runtime MCP self-test passed")
-                print(f"â—‹ {adapter.display_name} client connection not confirmed yet")
-                if state.status == IntegrationStatusCode.NEEDS_RESTART:
-                    print(f"Restart {adapter.display_name} to load the project connection.")
-                if args.verbose:
-                    for key, value in state.details.items():
-                        print(f"  {key}: {value or '-'}")
-            print("\nCode stays local.")
-            return 0
-        if args.command == "integrations":
-            workspace = WorkspaceResolver().resolve(args.path).path
-            registry = IntegrationRegistry()
-            if args.integrations_action == "repair":
-                for adapter in registry.native():
-                    state = adapter.repair(workspace)
-                    print(f"{adapter.display_name:<12} {state.status}")
-                return 0
-            if args.integrations_action == "remove":
-                adapter = registry.get(args.integration)
-                state = adapter.uninstall(workspace)
-                print(f"{adapter.display_name} project connection removed. {state.status}")
-                return 0
-            print("AI Security Runtime\n\nAI Coding integrations")
-            for adapter in registry.native():
-                state = adapter.status(workspace)
-                print(f"{adapter.display_name:<12} {state.status}")
-                for key in ("config_path", "configuration_status", "runtime_self_test", "last_client_invocation"):
-                    print(f"  {key}: {state.details.get(key) or '-'}")
-                if args.verbose:
-                    for key, value in state.details.items():
-                        if key in {"config_path", "configuration_status", "runtime_self_test", "last_client_invocation"}:
-                            continue
-                        print(f"  {key}: {value or '-'}")
-            print("\nOther tools\nGeneric MCP  AVAILABLE\nCLI          AVAILABLE")
-            return 0
-        if args.command == "stats":
-            if args.days < 1 or args.days > 365:
-                raise ValueError("--days must be between 1 and 365")
-            stats = IntegrationStateStore().stats(args.days)
-            print(f"Last {stats['days']} days\n")
-            print(f"Scans               {stats['scans']}\nIssues found        {stats['issues_found']}\nIssues resolved     {stats['issues_resolved']}\nAverage scan time   {stats['average_scan_ms']} ms")
-            print("\nIntegrations")
-            for name, count in sorted(stats["integrations"].items()):
-                print(f"{name:<18} {count}")
-            return 0
-        if args.command == "mcp":
-            from .mcp_server import serve
-            serve()
-            return 0
-        if args.command == "hooks":
-            if args.action == 'generate-mcp-poc':
-                if args.hook != 'codex' or args.path is not None:
-                    raise ValueError('MCP POC generation supports codex only, without --path; prints JSON without installing')
-                from .codex_mcp_hook import codex_mcp_hook_config
-                print(json.dumps(codex_mcp_hook_config(), ensure_ascii=True, indent=2))
-                return 0
-            if args.hook == 'pre-commit':
-                from .hooks import GitHookManager
-                value = GitHookManager(Path(args.path) if args.path is not None else Path.cwd()).execute(args.action, args.gate)
-                print(json.dumps(value, ensure_ascii=True))
-                return 0
-            from .hook_adapters import HookIntegrationRegistry
-            registry = HookIntegrationRegistry()
-            if args.action != 'status' and args.hook is None:
-                raise ValueError('Select a hook host')
-            result = registry.manage(args.action,args.hook,args.path) if args.hook else registry.status(args.path)
-            print(json.dumps(result,ensure_ascii=True) if args.json else json.dumps(result,ensure_ascii=False,indent=2))
-            return 0
-    except ExplicitScanBusy as exc:
-        if getattr(args, 'json', False):
-            print(json.dumps(exc.to_dict(), ensure_ascii=True))
-        else:
-            print(f"security-check: SCAN_ATTEMPT_BUSY: {exc}", file=sys.stderr)
-        return 2
-    except ScanCancelled:
-        if getattr(args, 'json', False):
-            print(json.dumps(cancelled_scan(), ensure_ascii=True))
-        else:
-            print(cancelled_scan()['message'], file=sys.stderr, flush=True)
-        return 130
-    except KeyboardInterrupt:
-        message = 'æ‰«æèƒ½åŠ›å‡†å¤‡å·²å–æ¶ˆï¼Œæœªç¡®è®¤å°±ç»ªã€‚' if args.command in {'prepare-installation', 'prepare-scanners'} else 'å®‰è£…å·²å–æ¶ˆï¼Œæœªç¡®è®¤å®Œæˆã€‚' if args.command in {'install', 'setup'} else 'æ“ä½œå·²å–æ¶ˆã€‚'
-        print(message, file=sys.stderr, flush=True)
-        return 130
-    except DiscoveryLimitError as exc:
-        if getattr(args, 'json', False):
-            print(json.dumps(exc.to_dict(), ensure_ascii=True))
-        else:
-            print(f"security-check: {exc.code}: {sanitize(str(exc))}", file=sys.stderr)
-        return 2
-    except WorkspaceError as exc:
-        hint = args.command
-        if args.command == "setup" and args.integration:
-            hint += " " + args.integration
-        elif args.command == "mcp":
-            hint += " config"
-        message = str(exc).replace("security-check doctor --path <project>", f"security-check {hint} --path <project>")
-        print(f"security-check: {message}", file=sys.stderr)
-        return 2
-    except (GitError, ValueError, OSError, ImportError) as exc:
-        print(f"security-check: {sanitize(str(exc))}", file=sys.stderr)
-        return 2
-    return 2
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+        report["message"] = "Local prerequisites checked. READY does not guarantee a project scan succeeds;-ú÷n­¢G§²ÚîÆ­yÒÓ¾ò3’â7šb¿–£¦†çn»–ş¯Ÿ¾òoš^ƒšÎW†»–ºk¢2–nÓ–"g’şwVgòë–>+–g–º3–B;–Â÷š^§š>C’ê“–B;–>ÃšRÛ–Âû¾ò3’â;–ŞËš:#šv’âS’â7–g¦†çn»šZ’îÛj¦ª3¢¾–>+îOšzsšVÓB¦7–>ƒ¾òo’â7¢÷’âë–†¯–¶'–ú–Š{–*ƒšÖ/¢¾Wš"[–º'¢+šÊ‡šr'.³®/–Ş—’ös’âS–º{¦fšR¿š2‰½Õ¹‘•µ±½Í•½ÕĞµİ…¥ĞµØÄƒš^Û¾ò3–>¿R£šRÛ–Âûš:—–>jšr'V3¶'–únÓš:—¢¾ï–>[–:îOšzs¾òo¢Úš^ÛšÊÿ–:–òWR£š~—¢¾‹¾ò3’â7¦7–>GšRÛ–Âû+šRÛ–Âû–B;îŸî·ò[¢úG’öÿîOšzs’şwš2–úšš~—¾ò3–g–º3–7šÊÿ–:¢ºÃ–öWšRÛ–Âû¾ò3’â7¢«–*£š&¯š>?’â/’â&#+–ºÿ’âï–"šzC–>G:Ã–J3–º'–£nã–Ïò[¢úG¾ò3–’7R£šr'šV#’â+’â/šZ¾ò3’â7–òë–"Û¢¾ï–>[–£¦£šRç–&4¿šRç–B;ª_–>¾òoîOšzs’â7¢÷–K––ºÿ’âï–ŞË¢¾ïš"[–£¦†çn»–º'–£+îŸî·–:R’ş»–’7š"[’â—š‚ó’îï–*‡š&7’öÿR Ñ…Í¬µÉ•Ù¥•ÜµÁ±…¸µØÏÑ…Í¬µÉ•ÍÕ±Ğµ‘•±¥Ù•ÉäµØÄƒ–J3’æw¦†ç–ş¦r–Ş—–ß–¶C¦n+’â—š‚ó’îï–*‡²³’âš²‡ò[¢úG–&4‰•¥¹}Í•ÕÉ¥Ñå}Ñ…Í¯¾ò3–º3š"C–B8™¥¹¥Í¡}Í•ÕÉ¥Ñå}Ñ…Í¬ƒ–J0ÁÉ•Á…É•}Ñ…Í­}Í•ÕÉ¥Ñå}É•Ù¥•Ü¡ÁÉ½Ñ½½±}Ù•ÉÍ¥½¸ôÌ§¾òl+’şwVg–:|Ñ…Í­}É•›šêC‚&#šr³¢¾š6»’â;Ò¿¢º‡¦Šw–ê›¾ò3–ş¦rª_–>š>C’ê“–J3’ê“’îc¦^£šo’â7–>c¾ò3’â7¢†—–îë–~ëêÿ’â7–n{¦š^Ÿ–6?¢º»+’â7’î”¥Ğ!ƒ’îšnÿr–º{–~ëêÿ¾òoš^œØÄ½ØÈ¿òë–6?¢º»’îï–*‡’î’úo–:–>Ëš~—¢¾‹¾ò3’â7¢ş÷¢º“š^ŸšRç–*£š"[¢şï’âë¢öï¦?îOšzs+’â7š*+šêC‚–º3šVÓ’îï–*‡¢ºÃ–öWš"[–·š6»–g–—¦†çn»’ös’âëš‹–’7šZ’îÛšr«¢¾ï¢ÇšV?š"[òë–’Ç¢¾·’æ'–š–º{’şwVg(+šêC‚š&¯š>?–f£¢úO–ëš¢‡–z/–g¦'’â;š2–¾ó–všb¿šVÃš6»¾ò3’â7šb¿š&Ÿ¢†3š2’î“š&¯š>?–f£¢¾šb;š"[’ş»–’7š:#šv	IÕ¹Ñ¥µ”ƒ’â7¢ÂR£–ºÿ’âïš¢‡–z/¾ò3îOšzš‚‡¦ª3’â7¢¾šb;’î‚š:£B+’î–r£R£š"ß¢¾ßšÆ¢2–nÓ–š&¯š>?¾ò3’şwVg–:¦'–ºk–¾ç¢Æ‡’â;îOšz–2[–òWR£¾ò3’â7’î;šZšr³š‹–’7–òWR£š"[¦7š:K¦^»¦Šcš6‹–¾ç¢Æ‡+’ş»–’7¦†ïR£š"ß–¾ç–ß’öO¦^»¦Šc–J3šr'¦fCšZçš†#šb;†»š:#šv¾òo–ò–>D¿š&¯š>?¢¾ßšÆ’â—¦7–ê›š¢‡–z/–"“šZ·šÊ'¦îc–J3¢º‡–"K–v’â7š:#šv+ŠsîŸî·²³’â¦†ä¿–’B¢şg’â«¦^»¦ŠcŠw–>«¢†£’ë–"šzC¾òo–’k’â«šr«¦'–ºk¦^»¦Šc–#†»–ºk–¾ç¢Æ‡¾ò3’â7š&§š"CšVÓî–ŞËšr'š:#šv’â7¦7–’7†»¢º“¾ò3šb;†»šr³¢ö»’â7ò[¢úGš^Û¦×’î;+’îï–*‡¦;¦f§–>«¢÷šÊÿ–:¦;¦f§–J0É•Á…¥É}Ñ…Í­}É•˜ƒ–’B¾òo–Â÷š^§fï¢ºÃ–:’ş»–’7š?–nû¾ò3–>«šr$É•…‘å}™½É}¡½ÍÑ}™¥àõÑÉÕ”ƒš&7ò[¢úG+––’–>_¦bï’â7¢÷R£šf»¦h‰•¥¹}Í•ÕÉ¥Ñå}Ñ…Í¬ƒîW¢ş¾òošb;†»šjòO–"gnÓš:—’şw–¶`K¾ò3’â7–#–"o–îë–öÇ–N4¿’ş»–’7’îï–*‡+–:¦^»¦ŠcR£–:¢–"gš"[¦;¦f§¢Ò›šr³¦C¦†ç–’7š~—¾ò3¦nÛ–F+¢¶›š"[šZÃ’îï–*‡’â7–Ï¦^·š^Ÿ¦;¦f§¾òo–>[šÚ#’ş»–’7š?–nû’â7¶'’ê;¦;¦f§šjòOš"[–Ï¦^·+’â7¢«–*£–Š{–*ƒ–º'¢šz–îëöGîsš:‹šÖ/–£¦†çn»–º‡¢º‡–*¢÷¦ª3¢¾š"[–>G–â¾òoR£š"ßšb;†»¢ššÆš"[–öO–&7–ò–>G’îï–*‡–2–B¯jšÖ/¢¾Wšz–îë’â;¦ª3šRÛŸ–âãš&Ÿ¢†3¾ò3šš~—–ò–âãšr³¢ê¯’â7šZÃ–Š{¢şg’êošv¦fC((ŒŒƒîOšzs’â;R£š"ß–Ï–ºh(+š2'–¾ç–êSšZçšÎW¢¾ï–>[–º{¦f¢2–nÓ–J3’şw–¶cîOšzs–æÛ–B#–—š¶–âãšïîO¾òmÁÉ•Á…É•ƒ’â7¶'’ê;–>G¦¾ò3–>G¦’â7¶'’ê;R£š"ß¦b¢¾ï¾ò3–:–>È=5A1Qƒ’â7¢¾šb;–öO–&7–º'–£+–#šr'V3–’7š‚ã–æÛš‚ã–¾ç–öO–&7–’ö»¾ò3–º3šVÓ–F#:ÃR£š"ßš>C’ëš"XÕÍ•É}™••‘‰…¬¹µ•ÍÍ…—¾ò3’şwVg’ö7ö»¦^»¦Šcšv‡’îÛšŸ–öÇ–N7–îë¢º»šr«~—–ŞËšr'¦bËš*“–J3–>7¢¾+šf»¦k–ò–>G’î–r£–öO–&7’îï–*‡š‚ãš~—–º3šVÓ¦nÛ–>G:Ã’âSš^ƒšš~—š"[–’ö»òë–>š^Û¦vg¦îc¾ò3’â7¢ş÷–*ƒš&¯š>?¦†ç¢šn[¢2–nÓš"[Šsšr«–>G:Ã¦;¦f§Šw–ÂûšÎ£+šbû–ò?–º'–£šš~—š"[–º'–£*Ûš¿–:–>Ëš~—¢¾‹–6Ï’öÿ¦nÛ–>G:Ã’æš*—–F+¢2–nÓîOšzs’â;òë–>¾òo¦;¦f§šš~—òë–>–>+¦rš*—–F+j–:¦^»¦Šc–’7š~—’â7¦vg¦îc+–ŞËš:K¦f¿šjòO’â7¦7–’7š>C¦K¾òo–’ö»’â7–>¿¢¾ï¢¾Óšb;òë–>¾ò3’â7–n{¦š^Ÿš>C’ë–>«–¾ç’î7¦r–Ï–ºkj–ß’öO¦;¦f§¦^»’âš²‡Šs’ş»–’7¾ò?¢7–B;–’BŠw+š*šr¿–"“šZ·R£š"ß–Ï–ºkš>C¦K–J3’ş»–’7¢¾šb;–"–"¯’şw–¶c¾òo’â7’ò«¦ƒR£š"ß¦'š.§¾ò3’şw–¶cš"C–*š&7–ÃÃ–ŞË¢ºÃ’ö?¾ò3’êë–Ş—š:K¦f“’â7¶'’ê;–ŞË’ş»–’7+šš~—šr«–º3š"Cš^Û¢¾Óšb;–º{¦f¦bÛšº×¢2–nÓ’â;–ŞË~—–:–nƒ¾ò3’â72sšÖ/šò?šÒ{¢ş{š:—šV¦jsš"[ò[¢úG–’Ç¢Ò—–¦£–òWR£–·š6»–Ş—–ß–B7’â;šzk’âû’â7R£’ê;šf»¦k–>7¦š#(œœœ€¬€q¹q¸œ€¬IMA=9M}MQe1}IU1L(()‘•˜ÉÕ¹Ñ¥µ•}¥¹™¼ ¨°É•µ•‘¥…Ñ¥½¹}½¹™¥œõ9½¹”°¥¹±Õ‘•}™Õ¹Ñ¥½¹…±}Ù•É¥™¥…Ñ¥½¸õ…±Í”¤è(€€€™É½´€¸¹É•µ•‘¥…Ñ¥½¹}Á½±¥ä¥µÁ½ÉĞI•µ•‘¥…Ñ¥½¹½¹™¥œ(€€€™É½´€¸¹¡½½­}Ñ¥µ¥¹œ¥µÁ½ÉĞá•ÕÑ¥½¹QÉ¥•È(€€€½¹™¥œ€ôÉ•µ•‘¥…Ñ¥½¹}½¹™¥œ¥˜É•µ•‘¥…Ñ¥½¹}½¹™¥œ¥Ì¹½Ğ9½¹”•±Í”I•µ•‘¥…Ñ¥½¹½¹™¥œ ¤(€€€ÑÉäè(€€€€€€€É•µ•‘¥…Ñ¥½¸€ôìµ½‘”œè½¹™¥œ¹É•… ¤°€½¹™¥ÕÉ…Ñ¥½¹}ÍÑ…ÑÕÌœè€Y1%œ°(€€€€€€€€€€€€€€€€€€€€€€€…ÕÑ½µ…Ñ¥}™¥á}İ¥Ñ¡½ÕÑ}ÕÍ•É}½¹Í•¹Ğœé…±Í”°€ÕÍ•É}½¹Í•¹Ñ}É•ÅÕ¥É•œéQÉÕ•ô(€€€•á•ÁĞ€¡=MÉÉ½È°Y…±Õ•ÉÉ½È°U¹¥½‘•ÉÉ½È¤è(€€€€€€€€ŒM…µ”½¹™¥ÕÉ…Ñ¥½¸É•…‘•È…ÌÁ½±¥ä‘•¥Í¥½¹Ìì¹•Ù•È‘¥Í±½Í”Á…Ñ °(€€€€€€€€Œµ…±™½Éµ•½¹Ñ•¹ÑÌ½È•á•ÁÑ¥½¸Ñ•áĞ°¹½È¥µÁ±ä…ÕÑ½µ…Ñ¥½¸¥Ì•¹…‰±•¸(€€€€€€€É•µ•‘¥…Ñ¥½¸€ôìµ½‘”œè€U9-9=]8œ°€½¹™¥ÕÉ…Ñ¥½¹}ÍÑ…ÑÕÌœè€%9Y1%ô(€€€™É½é•¸€ô‰½½°¡•Ñ…ÑÑÈ¡ÍåÌ°€™É½é•¸œ°…±Í”¤¤(€€€™É½´€¸¹‰Õ¥±‘}¥‘•¹Ñ¥Ñä¥µÁ½ÉĞ‰Õ¥±‘}¥‘•¹Ñ¥Ñä(€€€™É½´€¸¹ÉÕ±•Á…­Ì¥µÁ½ÉĞIÕ±•A…­5…¹…•È(€€€™É½´€¸¹½İ…ÍÁ}½Ù•É…”¥µÁ½ÉĞ¥¹ÍÑ…±±•‘}¥¹Ù•¹Ñ½Éä(€€€™É½´€¸¹ÁÉ½™•ÍÍ¥½¹…±}Õ¥‘…¹”¥µÁ½ÉĞ‘•±¥Ù•Éå}½¹ÑÉ…Ğ(€€€™É½´€¹Õ¥‘…¹•}…Ñ…±½œ¥µÁ½ÉĞµ…¹¥™•ÍĞ…ÌÕ¥‘…¹•}µ…¹¥™•ÍĞ(€€€™É½´€¸¹Í¹…ÁÍ¡½Ñ}½¹ÑÉ…Ğ¥µÁ½ÉĞ‘•Ù•±½Áµ•¹Ñ}…Á…‰¥±¥Ñ¥•Ì(€€€ÑÉäè(€€€€€€€¥¹Ù•¹Ñ½Éä€ô¥¹ÍÑ…±±•‘}¥¹Ù•¹Ñ½Éä¡IÕ±•A…­5…¹…•È ¤¹É•Í½±Ù” ¤¤(€€€•á•ÁĞ€¡Y…±Õ•ÉÉ½È°=MÉÉ½È¤è(€€€€€€€¥¹Ù•¹Ñ½Éä€ôìÍÑ…ÑÕÌœèU9Y%1	1œ°€•á•ÕÑ¥½¹}ÁÉ½½˜œé…±Í•ô(€€€¥¹™¼€ôìÙ•ÉÍ¥½¸œè}}Ù•ÉÍ¥½¹}|°€…Á…‰¥±¥Ñå}½¹ÑÉ…Ğœè€‘•Ù•±½Á•ÈµÕ¥‘…¹”µØÀ¸Ìœ°(€€€€€€€€€€€€‰Õ¥±‘}¥‘•¹Ñ¥Ñäœè‰Õ¥±‘}¥‘•¹Ñ¥Ñä ¤°(€€€€€€€€€€€€ÉÕ±•}¥¹Ù•¹Ñ½Éäœé¥¹Ù•¹Ñ½Éä°(€€€€€€€€€€€€ÁÉ½™•ÍÍ¥½¹…±}Õ¥‘…¹”œé‘•±¥Ù•Éå}½¹ÑÉ…Ğ ¤°(€€€€€€€€€€€€Õ¥‘…¹•}…Ñ…±½œœéÕ¥‘…¹•}µ…¹¥™•ÍĞ ¤°(€€€€€€€€€€€€•á•ÕÑ¥½¹}Ñ¥µ¥¹œœèìÍÕÁÁ½ÉÑ•‘}ÑÉ¥•ÉÌœèmĞ¹Ù…±Õ”™½ÈĞ¥¸á•ÕÑ¥½¹QÉ¥•Ét°(€€€€€€€€€€€€€€€€‘•™…Õ±Ñ}¡½½­}ÁÉ½™¥±”œè€=Iœ°€‘••Á}Ù•É¥™¥…Ñ¥½¹}‘•™…Õ±Ñ}¡½½¬œè…±Í”°(€€€€€€€€€€€€€€€€…Á…‰¥±¥Ñå}¥Í}¹½Ñ}•á•ÕÑ¥½¹}Ñ¥µ¥¹œœèQÉÕ•ô°(€€€€€€€€€€€€É•µ•‘¥…Ñ¥½¸œèÉ•µ•‘¥…Ñ¥½¸°(€€€€€€€€€€€€™•…ÑÕÉ•Ìœèì‘•Ù•±½Á•É}ÍÕµµ…Éäœè€ØÀ¸Äœ°€Ñ…Í­}ÑÉ¥…”œè€ØÀ¸Äœ°(€€€€€€€€€€€€€€€€€€€€€€€€€½Á•É…Ñ¥¹}µ½‘”œè€%}Y1=A59Q}%Q}!,œ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}¡•¬œè€½‰Í•ÉÙ•µ‘•Ù•±½Áµ•¹Ğµ¡•¬µØÄìU1Pì9=}AI=)Q}	M1%9ì!==-}I=I}=91dì	-I=U9}=9}%9%M ì=	MIY}AQ!LìI}=91e}MY}IMU1QLì!=MQ}91eM%Lœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}™¥±•}İ…Ñ œè€‘•Ù•±½Áµ•¹Ğµ™¥±”µİ…Ñ µØÄì]Q!%1M|Å|Í|Àì9Q%Y}AI}Q==1}I%MQIQ%=8ìQM-}Q%5}]%9=\ì11}]I%QIM}%9}]%9=\ì]=I-QI}M=AìAQ!M}=91dìI%9}=9}%9%M ì1=MQ}]%9=]}@ì9=}%Q}%9Y9Q=Idœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}¡•­}İ…¥Ğœè€‰½Õ¹‘•µ±½Í•½ÕĞµİ…¥ĞµØÄì=AQ%=91}%9%M!}]%Q}M=9M|Á|ÈÔìU1Q}%MAQ!}=91dìMe9}]%Q}MY}MQQìMQ=A}=9}9]}%QLì9=}I%MAQ ì!=MQ}91eM%M}IEU%Iœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}¡•­}Í¡•‘Õ±•Èœè€‘•Ù•±½Áµ•¹Ğµ‰…­É½Õ¹µÍ¡•‘Õ±•ÈµØÄìMU	5%QQ}=91dìUI	1}	=U9}IQI%Lì1%Y}MUAIY%M=Hì5%QQ}EUU}I=YIdì9=}I}=I}%Q}QI%Hœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}¡•­}‘•±¥Ù•Éäœè€‘•Ù•±½Áµ•¹ĞµÉ•ÍÕ±Ğµ‘•±¥Ù•ÉäµØÄì=5A1Q}9}]%Q}Q==1LìAI=UQ}]%Q}	UPìYIM%=9}A9%9}=UQ	=`ì=]9I}M=A}A%9ì	=U9}MQ=A}=9Q%9UQ%=8ìI=99Q}=9QaPìQIUMQ}!=MQ}-}=91dìUMI}=9MU5AQ%=9}U9-9=]8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€‘•Ù•±½Áµ•¹Ñ}É¥Í­Ìœè€‘•Ù•±½Áµ•¹ĞµÉ¥Í­ÌµØÄìM!I}%9%9}M!5ìaA1%%Q}M5}%MMU}1%9,ìY%9}	-}!=MQ}%M%=8ìUI	1}=I%%91}I%M-}IA%Hì9=}M99I}AI==}I=5}!=MPœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}…Õ‘¥Ñ}Í½Á”œè€İ½É­ÍÁ…”µÑ…Í¬µ‘¥™˜µØÄìaA1%%Q}MQI%Q}=I}a%MQ%9}QM-Lì9Q%I}	}Q=}}%ìUQ!=I}%9A99PìM5}}M9}9}IY%\œ°(€€€€€€€€€€€€€€€€€€€€€€€€€ÍÑ…ÉÑÕÁ}½µÁ…É¥Í½¹}‰…Í•±¥¹”œè€9=Q}IEU%Iì9=}MQIQUA}%9Y9Q=Ie}=I}M8ì!%MQ=I%1}I}=91dœ°(€€€€€€€€€€€€€€€€€€€€€€€€€İ½É­ÍÁ…•}Í¹…ÁÍ¡½Ñ}‘•Ù•±½Áµ•¹Ğœè‘•Ù•±½Áµ•¹Ñ}…Á…‰¥±¥Ñ¥•Ì ¤°(€€€€€€€€€€€€€€€€€€€€€€€€€±½…±}•Ù¥‘•¹”œè€ØÀ¸Èœ°€‰½Õ¹‘•‘}™¥¹‘¥¹}Ù¥•İÌœè€ØÀ¸Äœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Í•±•Ñ•‘}™¥±•}Í…¸œè€Í•±•Ñ•µ™¥±”µÍ…¸µØÄìaA1%%Q}I1Q%Y}%1Lì9=}AI=)Q}aA9M%=8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€ÁÉ½©•Ñ}Í…¹}É•ÕÍ”œè€Ù•É¥™¥•µÁÉ½©•ĞµÍ…¸µÉ•ÕÍ”µØÄìUII9Q}%9Q%Qe}IY1%Q%=8ì=I}IM8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Õ¹¥™¥•‘}Í…¹}±¥™•å±”œè€½‰Í•ÉÙ•µ‘•Ù•±½Áµ•¹Ğµ¡•¬µØÄìU1Q}=	MIY}%QLìAI=)Q}M9}=9}IEUMPìMQI%Q}QM-M}IQ%9}QM-}	}Q=}œ°(€€€€€€€€€€€€€€€€€€€€€€€€€™¥á•‘}Í…¹}…ÉÑ¥™…ÑÌœè€™¥á•µÍ…¸µ…ÉÑ¥™…ĞµØÄìaQ}I==Q}%9AUQ}AI=Y%I}9}5=ì=YI}AM}AIMIYì9=}IY%]}=I}UQ!=I%Qe}IUMœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}É¥Í­}É•Á½ÉÑ¥¹œœè€Ñ…Í¬µÉ¥Í¬µÉ•Á½ÉĞµØÄìa%MQ%9}%9QI=U}aA9}U9-9=]8ìMQ	1}IA=IQ}%ìUQ=5Q%}!=MQ}%91}-}U9MUAA=IQœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Í…¹}ÁÉ½É•ÍÌœè€5A}AI=IMM}Q=-9}=AQ%=90ìM!I}IU9Q%5}A!MLœ°(€€€€€€€€€€€€€€€€€€€€€€€€€•áÁ±¥¥Ñ}Í…¹}©½‰Ìœè€•áÁ±¥¥ĞµÍ…¸µ©½ˆµØÄìQ!}]=I-Hì%5A=Q9Q}IEUMQ}-dìI}=91e}AI=IMM}9}IMU1Pì9=}UQ=5Q%}IM8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Í…¹}Ñ¥µ¥¹œœè€µÀµÍ…¸µÑ¥µ¥¹œµØÄì!=MQ}Q%5}U9-9=]8ì!%MQ=I%1}Q%5}MAIQœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Í•ÕÉ¥Ñå}É•Ù¥•İ}Í­¥±°œè€ØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€ÉÕ¹Ñ¥µ•}Õ¥‘…¹”œè€ÉÕ¹Ñ¥µ”µÕ¥‘…¹”µØÄì%a}Q=A%LìYIM%=9}M!ÈÔÙ}IUMì9=}IU9Q%5}UQ!=I%Qdœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€‘•±¥Ù•Éå}µ…¹¥™•ÍĞœè€ÉÕ¹Ñ¥µ”µ‘•±¥Ù•Éäµµ…¹¥™•ÍĞµØÄìI}=91e}%9Q%Qdì9=Q}aUQ%=9}AI==œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}Í•ÕÉ¥Ñå}É•Ù¥•Üœè€Ñ…Í¬µÍ•ÕÉ¥ÑäµØÄìAI}%Q}	M1%9}MQQ%}9}	=U9}!=MQ}IY%\œ°(€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}É•Ù¥•İ}ÍÕ‰µ¥ÍÍ¥½¸œè€Ñ…Í¬µÉ•Ù¥•ÜµÍÕ‰µ¥ÍÍ¥½¸µØÄìQeA}%MMU}Y%9}%LìM}%1}II=ILìM5}Q%Y}IY%]}IQIdœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}Í•ÕÉ¥Ñå}É•Ù¥•İ}ÁÉ½Ñ½½°œè€Ñ…Í¬µÉ•Ù¥•ÜµÁ±…¸µØÌìaA1%%Q}MQI%Q}=I}a%MQ%9}QM-Lì=91e}XÌìAQ%Y}I9}	UQLìI	1}M=UI}U@ìIMU5	1}Q%Y%Qe}1Mì1e}!%MQ=Ie}I}=91dì9=}AI=Q==1}5%IQ%=8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}Í•ÕÉ¥Ñå}É•ÍÕ±Ñ}‘•±¥Ù•Éäœè€Ñ…Í¬µÉ•ÍÕ±Ğµ‘•±¥Ù•ÉäµØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}¡•­}Á½±¥äœè€=	MIY}%QM}U1PìQM-}1=M=UQ}XÅ}=I}MQI%Q}QM-Lìa%MQ%9}QM-}A=1%e}AIMIYœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}™½ÕÍ}Íİ¥Ñ œè€Íİ¥Ñ¡}Í•ÕÉ¥Ñå}Ñ…Í¬ì=]9I}M=A}Lœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}Í•ÍÍ¥½¹}É½ÕÑ¥¹œœè€ØÄìM%9}!==-}MMM%=9}Iì=]9I}]=I-MA}	=U9}M!=IQ}!91ì1e}I}=5AQ%	1ì%9A99Q}QM-Lì=99Q%=9}11	,ì9=}1QMQ}QM-}=AQ%=8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}É¥Í­}±•‘•Èœè€Ñ…Í¬µÉ¥Í¬µ±•‘•ÈµØÄìAI}=I%%91}%9%9}YIM%=9}	=U9œ°(€€€€€€€€€€€€€€€€€€€€€€€€€™¥¹‘¥¹}™••‘‰…¬œè€™¥¹‘¥¹œµ™••‘‰…¬µØÈìQeA}Y%9}ILìUMI}9}!=MQ}MAIQìIY=	1ìI]}%9%9M}AIMIYœ°(€€€€€€€€€€€€€€€€€€€€€€€€€É¥Í­}‘¥ÍÁ½Í¥Ñ¥½¸œè€É¥Í¬µ‘¥ÍÁ½Í¥Ñ¥½¸µØÄìUMI}%91}!91%9ìa1U}I}IMQ=Iì9=}IA%I}UQ!=I%Qdœ°(€€€€€€€€€€€€€€€€€€€€€€€€€É¥Í­}‘•¥Í¥½¹}İ½É­™±½Üœè€É¥Í¬µ‘•¥Í¥½¹ÌµØÈì!=MQ}MMMMM}%IMPìUMI}%Lì5QI%1}!9}IMMMM59Pœ°(€€€€€€€€€€€€€€€€€€€€€€€€€É•Á±å}Á±…¸œè€Í•ÕÉ¥ÑäµÉ•Á±äµÁ±…¸µØÄìAUI}%MA1dìQM}9}Q%=9M}MAIQì9=}U9Q%=91}QMQ}%9AUPœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€É•Á…¥É}¥µÁ…Ğœè€É•Á…¥Èµ¥µÁ…ĞµØÄì	=U9}MQQ%}91eM%Lì9=}IA%I}UQ!=I%Qdì=I%%91}I%M-}YIM%=9}	=U9œ°(€€€€€€€€€€€€€€€€€€€€€€€€€€É•Á…¥É}¥µÁ…Ñ}Õ¹­¹½İ¹ÌœèU9-9=]9}1MM%%Q%=9}=9QIP°(€€€€€€€€€€€€€€€€€€€€€€€€€ÅÕ¥•Ñ}ÍÑ½Àœè€ØÄì9=}M9}9=}%MAQ!}9=}!Q}5MMœ°(€€€€€€€€€€€€€€€€€€€€€€€€€ÁÉ½™•ÍÍ¥½¹…±}…Õ‘¥Ñ}İ½É­™±½Üœè€ØÄì!=MQ}MQQ%}IM=9%9}=91dœ°(€€€€€€€€€€€€€€€€€€€€€€€€€ÁÉ½™•ÍÍ¥½¹…±}Õ¥‘…¹”œè€ÁÉ½™•ÍÍ¥½¹…°µÕ¥‘…¹”µØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Á•ÉÍ½¹…±}¥¹ÍÑ…±±…Ñ¥½¸œè€Á•ÉÍ½¹…°µ¥¹ÍÑ…±°µØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‰…­É½Õ¹‘}Í…¹}ÁÉ•Á…É…Ñ¥½¸œè€‰…­É½Õ¹µÁÉ•Á…É…Ñ¥½¸µØÄìY%1	1}1=1}!-M}9}MY}1=M=UQ}5@œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}‰…­É½Õ¹‘}±½Í•½ÕĞœè€Ñ…Í¬µ±½Í•½ÕĞµÅÕ•Õ”µØÄìQ!}]=I-HìUI	1}IQIdì=I%%91}	M1%9ì9Q}IY%]}IEU%IìIU9Q%5}IMQIQ}I=YIdœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}İ½É­ÍÁ…•}¥Í½±…Ñ¥½¸œè€Ñ…Í¬µİ½É­ÍÁ…”µ¥Í½±…Ñ¥½¸µØÄì]=I-QI}=I}=Adì%IQe}MìaA1%%Q}QIQ}Q%YQ%=8ì!=MQ}M]%Q!}9}]I%Q}M9	=a}U9MUAA=IQœ°(€€€€€€€€€€€€€€€€€€€€€€€€€½¹™¥ÕÉ…Ñ¥½¹}É•½Ù•Éäœè€ØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}™¥á}Ù•É¥™äœè€ØÀ¸Äœ°€™¥¹‘¥¹}•ÅÕ¥Ù…±•¹”œè€•ÄµØÄœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Í•É•Ñ}ÉÕ±•}™¥±•}É•¡•¬œè€¥Ñ±•…­ÌµÉÕ±”µ™¥±”µØÄìU1Q}=9%}	=U9}M=Aœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Ñ…Í­}±½Í•½ÕĞœè€±½Í•½ÕĞµÍÑ…Ñ”µØÄì9IQ%=9}1M}YIM%=9}	=U9œ°(€€€€€€€€€€€€€€€€€€€€€€€€€Á•ÉÍ¥ÍÑ•¹Ñ}É•‘•¹Ñ¥…±}±½ÍÕÉ”œè€AI}=I%%91}QQ=I}IU1}%1}YIM%=8œ°(€€€€€€€€€€€€€€€€€€€€€€€€€€‘å¹…µ¥}™Õ¹Ñ¥½¹}¡•¬œè€¹…Ñ¥Ù”µ©Ìµ™Õ¹Ñ¥½¸µØÄì9=9%1}e95%}=}=91dœ°(€€€€€€€€€€€€€€€€€€€€€€€€€‰½Õ¹‘•‘}‘…Ñ…™±½Üœè€ØÄ¸ÔìIY1%Q}AI=MM}55=Ie}!ìIQ%9}	Q!}IYIM}A99%LìQUI}M=Q}	UQ|ÍM}I1M|ÌÁLì)Yá}AeQ!=9}1=1}MPìME1}9})Y}AeQ!=9}I=MM}%1}AQ!}9}AeQ!=9}%=}=M}MQI5LìQUI}I1Mì9=Q}]!=1}AI=I4œ°(€€€€€€€€€€€€€€€€€€€€€€€€€…ÕÑ½µ…Ñ¥}Á…Ñ¡}İ½É­™±½Üœè€9=Q}%5A159Qœ°€Ñ…É•Ñ}‰Õ¥±œè€9=Q}%5A159Qœ°(€€€€€€€€€€€€€€€€€€€€€€€€€Íµ…ÉÑ}…ÕÑ½}É•µ•‘¥…Ñ¥½¸œè€ØÀ¸Äœ°€½¹™¥Éµ…Ñ¥½¹}¡…¹‘½™˜œè€ØÀ¸Äœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€½‘•á}¥¹Ñ•É…Ñ¥½¸œè€ØÀ¸Èœ°€½±‘}ÍÑ…ÉÑ}É•…‘¥¹•ÍÌœè€ØÀ¸Ìœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€€…ÕÑ½}É•µ•‘¥…Ñ¥½¹}½¹Ñ¥¹Õ…Ñ¥½¹}Õ…Éœè€ØÀ¸Äœ°(€€€€€€€€€€€€€€€€€€€€€€€€€€ÉÕ¹Ñ¥µ•}Í½ÕÉ•}•‘¥Ñ¥¹œœè€9=Q}%5A159Qô°(€€€€€€€€€€€€…•¹Ñ}™¥á}Ñ¥­•ĞœèìÙ•ÉÍ¥½¸œè€…•¹Ğµ™¥àµÑ¥­•ĞµØÄœ°(€€€€€€€€€€€€€€€€…Ñ¥Ù…Ñ¥½¸œè€=99Q}5A}!==,ìQIUMQ}5	%9}=AQ}%8œ°(€€€€€€€€€€€€€€€€ÉÕ±”œè€…¤µÍ•ÕÉ¥Ñä¹©…Ù„¹ÑÉÕÍĞµ…±°µ¡½ÍÑ¹…µ”œ°(€€€€€€€€€€€€€€€€µ½‘”œè€U9=9%I5}UQ=}%a}%M	1œ°(€€€€€€€€€€€€€€€€…ÕÑ¡½É¥Ñäœè€=99Q%=9}1=1}AIAIQ%=8ìA=MQ}%Q}I1}M99I}IEU%Iœ°(€€€€€€€€€€€€€€€€¡½ÍÑ}…Ñ½µ¥}•‘¥Ğœè…±Í”°€‘•Í­Ñ½Á}¡…¹‘½™™}Ù¥Í¥‰¥±¥Ñäœè€9=Q}=	MIY}	e}IU9Q%5ô°(€€€€€€€€€€€€É•ÅÕ¥É•‘}Õ¥‘…¹•}Ñ½½±ÌœèÍ½ÉÑ•¡IEU%I}U%9}Q==1L¤°(€€€€€€€€€€€€½ÁÑ¥½¹…±}Õ¥‘…¹•}Ñ½½±Ìœèmt°(€€€€€€€€€€€€Ñ½½±}¡•¬œè€IEU%I}MU	MQ}9=Q}aQ}=U9Pœ°(€€€€€€€€€€€€ÉÕ¹Ñ¥µ•}•á•ÕÑ…‰±”œèÍåÌ¹•á•ÕÑ…‰±”°(€€€€€€€€€€€€Í…µ•}•¹Ù¥É½¹µ•¹Ñ}¡•¬œèì•á•ÕÑ…‰±”œèÍåÌ¹•á•ÕÑ…‰±”°(€€€€€€€€€€€€€€€€…ÉÕµ•¹ÑÌœè€¡mt¥˜™É½é•¸•±Í”lœµ´œ°€Í•ÕÉ¥Ñå}ÉÕ¹Ñ¥µ”¹±¤t¤€¬lÉÕ¹Ñ¥µ”µ¥¹™¼œ°€œ´µ©Í½¸uô°(€€€€€€€€€€€€½¹¹•Ñ¥½¹}É•½Ù•Éäœèl(€€€€€€€€€€€€€€€€Ÿ–ºÿ’âï–#–¾çœÉ•ÅÕ¥É•‘}Õ¥‘…¹•}Ñ½½±Ìƒšš~—š&¦r¢÷–*o¾ò3–¢ºã¦Šw–’[–Ş—–ß¾òoR£š"ßš^ƒ¦r’ê¢–Ş—–ß–B7œ°(€€€€€€€€€€€€€€€€Ÿ¢.—¢÷–*oòë–’Ç¾ò3R£¦7ö»’â·–B3’â •á•ÕÑ…‰±”½•¹Ù¥É½¹µ•¹ĞƒjÉÕ¹Ñ¥µ”µ¥¹™¼€´µ©Í½¸ƒš‚ã–¾ç¾òo’â7¢šnËn»¦7¢•‘¥Ñ…‰±—œ°(€€€€€€€€€€€€€€€€Ÿ¢.—¢¾—:¿–Š–ŞËšr'¢÷–*o’ö–ºÿ’âïšÊ‡šr'¾ò3šZ·–ò–æÛ¦7šZÃ¢ş{š:”…¥}Í•ÕÉ¥Ñå}ÉÕ¹Ñ¥µ”5C¾ò3–"ßšZÃ–Ş—–ß–"_¢†£¾òo–ş¢šš^ÛšZÃ–îë–ºÿ’âï¢+–’§œ°(€€€€€€€€€€€€€€€€Ÿ¦7šZÃ–"w–/–2[–B;–7šš~—¢÷–*o–æÛ–>[–ú_šZÀÍÕµµ…Éç¾òoš^Ÿ’ê“š:”Í•ÍÍ¥½¸ƒ’â7¢Ş£¢ş{š:—–’7R£¾ò3’â‹–’Çj’îï–*‡¦'š.§¦r–"ßšZÃ¦7šZÃ¦'š.§œ°(€€€€€€€€€€€€€€€€Ÿ¢.—–B3’â:¿–Š’æòë¢÷–*o¾ò3šnÓšZÃ¦7ö»š2–BGjIÕ¹Ñ¥µ”ƒ–º'¢¿–:R–2–B;¦7¢ş{¾òm¥Ğƒš>C’ê“–æÛ’â7¢«–*£šnÓšZÃš&šr'–ŞË–º'¢–2t°(€€€€€€€€€€€€•á•ÕÑ¥½¸œèìÍ…¸œè…±Í”°€µ½‘•°œè…±Í”°€Á…Ñ œè…±Í”°€Ñ…É•Ñ}‰Õ¥±œè…±Í”°(€€€€€€€€€€€€€€€€€€€€€€€€€€Ñ•ÍÑÍ}½É}Í…¹¹•É}É•¡•¬œè…±Í•ô°€…ÕÑ½µ…Ñ¥}•á•ÕÑ¥½¸œè…±Í•ô(€€€¥˜¥¹±Õ‘•}™Õ¹Ñ¥½¹…±}Ù•É¥™¥…Ñ¥½¸è(€€€€€€€¥¹™½l™•…ÑÕÉ•Ìt¹ÕÁ‘…Ñ”¡™Õ¹Ñ¥½¹…±}Ù•É¥™¥…Ñ¥½¸ôØÀ¸Äœ°™Õ¹Ñ¥½¹…±}¡½ÍÑ}•á•ÕÑ¥½¸ôØÀ¸Äœ°(€€€€€€€€€€€…É¥Ñ¡µ•Ñ¥}¡½ÍÑ}É•É•ÍÍ¥½¸ô…É¥Ñ¡µ•Ñ¥ŒµÉ•É•ÍÍ¥½¸µØÄì=AQ%=91}=9%I5}=9QIPœ¤(€€€€€€€¥¹™½l½ÁÑ¥½¹…±}Õ¥‘…¹•}Ñ½½±Ìt€ôlÁÉ•Á…É•}™Õ¹Ñ¥½¹…±}Ù•É¥™¥…Ñ¥½¸œ°€ÉÕ¹}™Õ¹Ñ¥½¹…±}Ù•É¥™¥…Ñ¥½¸t(€€€É•ÑÕÉ¸¥¹™¼

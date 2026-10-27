@@ -1,5 +1,9 @@
 # Understand and handle findings
 
+## Local risk statistics
+
+With a Runtime build that supports this feature, ask **“Open risk statistics”** in chat to view locally retained project risk records. The dashboard is read-only: it does not scan, change dispositions, or start usage monitoring. Historical candidates may be duplicated or lack a current disposition, and records do not establish the state of current source code. The page reports incomplete reads. Check the actual published build for availability.
+
 ## Read the evidence
 
 A useful finding identifies the location, concrete problem, trigger conditions, potential impact, existing safeguards, proposed fix, and remaining unknowns. A severity label does not replace this evidence.

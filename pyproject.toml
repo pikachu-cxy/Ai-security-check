@@ -32,7 +32,7 @@ where = ["src"]
 version = {attr = "security_runtime._version.__version__"}
 
 [tool.setuptools.package-data]
-security_runtime = ["python_downloads.json", "opengrep_rules.json", "assets/*.mjs", "rules/LICENSE", "rules/README.md", "rules/**/*.yml", "rules/**/*.yaml", "licenses/*/LICENSE", "licenses/*/NOTICE", "skills/*/SKILL.md", "skills/*/agents/openai.yaml", "skills/*/references/*.md"]
+security_runtime = ["python_downloads.json", "opengrep_rules.json", "assets/*.mjs", "assets/*.html", "rules/LICENSE", "rules/README.md", "rules/**/*.yml", "rules/**/*.yaml", "licenses/*/LICENSE", "licenses/*/NOTICE", "skills/*/SKILL.md", "skills/*/agents/openai.yaml", "skills/*/references/*.md"]
 
 [tool.setuptools.data-files]
 "share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]

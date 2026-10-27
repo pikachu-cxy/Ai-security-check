@@ -10,6 +10,8 @@ Current development source defaults to **lightweight AI edit checks**. Hooks onl
 
 **Current source: 0.3.9 / Official release.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
+The current development source supports asking **“Open risk statistics”** to view locally retained project risks. The dashboard is read-only; it does not start scans or change dispositions. Historical records may contain duplicates or lack a current disposition. Availability in published packages depends on their actual build.
+
 ## Documentation
 
 [English documentation](https://pikachu-cxy.github.io/Ai-security-check/en/) · [中文文档](https://pikachu-cxy.github.io/Ai-security-check/)
