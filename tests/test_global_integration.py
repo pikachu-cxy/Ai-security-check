@@ -652,7 +652,12 @@ def test_global_session_baseline_does_not_invent_preexisting_scanner_facts(insta
         (root / 'src/A.java').write_text('class A { int harmless; }\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
         assert result['delta']['new'] == 0
-        assert result['reason'] == 'TASK_BASELINE_REQUIRED'
+        assert result['reason'] == 'OBSERVED_EDITS_RECORDED'
+        assert result['development_check_ref'].startswith('dc1-')
+        assert result['scope']['scope_unknown'] and not result['scope']['full_project']
+        assert not result['baseline_created'] and not result['scanner_run']
+        assert core.runtime.calls == []
+        assert not (core.store.workspace_directory(root) / 'task-security.db').exists()
     finally: pool.close()
 
 
@@ -667,7 +672,12 @@ def test_global_session_baseline_alone_cannot_prove_new_risk(installed, projects
         (root / 'src/A.java').write_text('changed\n')
         result = core.handle('FILE_CHANGED', root, 'codex', 's')
         assert result['delta']['new'] == 0
-        assert result['reason'] == 'TASK_BASELINE_REQUIRED'
+        assert result['reason'] == 'OBSERVED_EDITS_RECORDED'
+        assert result['development_check_ref'].startswith('dc1-')
+        assert result['scope']['scope_unknown'] and not result['scope']['full_project']
+        assert not result['baseline_created'] and not result['scanner_run']
+        assert core.runtime.calls == []
+        assert not (core.store.workspace_directory(root) / 'task-security.db').exists()
     finally: pool.close()
 
 

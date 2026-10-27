@@ -1,5 +1,7 @@
 """Lightweight observed-edit checks; strict task audits remain a separate API."""
 from mcp.types import ToolAnnotations
+from pydantic import Field
+from typing import Annotated
 
 
 TOOLS = frozenset({'begin_development_check', 'record_development_changes',
@@ -26,11 +28,15 @@ def register(server, registry, *, application):
                               scope_unknown=scope_unknown, event_id=event_id)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def finish_development_check(check_ref: str, workspace_path: str | None = None,
-                                 session_ref: str | None = None) -> dict:
-        """Close an AI coding task's observed-edit batch and schedule remaining scoped work. No baseline or workspace traversal. Read saved progress/results with get_development_check; this does not certify host review or authorize fixes."""
+    async def finish_development_check(check_ref: str, workspace_path: str | None = None,
+                                       session_ref: str | None = None,
+                                       wait_seconds: Annotated[int, Field(ge=0, le=25)] = 0) -> dict:
+        """Close the observed-edit batch and schedule scoped background work once. Default wait_seconds=0 dispatches immediately. Opt into 1-25 seconds of asynchronous waiting to receive the normal saved result directly, without client polling code. Waiting only reads the original check/owner/version; new edits, terminal state or the time budget stop it. If still pending, continue get_development_check on the same ref, never refinish to wait. No baseline, scope expansion, host review certification or repair authority."""
+        from ..development_check import MAX_FINISH_WAIT_SECONDS
+        if type(wait_seconds) is not int or not 0 <= wait_seconds <= MAX_FINISH_WAIT_SECONDS:
+            raise ValueError('DEVELOPMENT_WAIT_INVALID')
         service = application.development_service(check_ref, session_ref, workspace_path)
-        return service.finish(application.bound_path(workspace_path), check_ref)
+        return await service.finish_and_wait(application.bound_path(workspace_path), check_ref, wait_seconds)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_development_check(check_ref: str, workspace_path: str | None = None,

@@ -5,6 +5,7 @@ to the scanner's existing immutable input lifetime, never to this journal.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import os
@@ -24,6 +25,7 @@ MAX_PATHS = 1000
 MAX_PATH_BYTES = 64_000
 MAX_EVENTS = 256
 RETENTION_SECONDS = 7 * 86400
+MAX_FINISH_WAIT_SECONDS = 25
 TERMINAL = frozenset({'RESULTS_READY', 'PARTIAL', 'NO_OBSERVED_CHANGES', 'FAILED'})
 
 
@@ -192,10 +194,11 @@ def projection(store, row):
 
 class DevelopmentCheckService:
     def __init__(self, runtime_provider, hooks, *, owner, scan_path_provider=None,
-                 launcher=None, now=time.time):
+                 launcher=None, now=time.time, monotonic=time.monotonic, wait_sleep=asyncio.sleep):
         owner_key(owner)
         self.runtime_provider, self.hooks, self.owner = runtime_provider, hooks, dict(owner)
         self.scan_path_provider, self.launcher, self.now = scan_path_provider, launcher, now
+        self.monotonic, self.wait_sleep = monotonic, wait_sleep
 
     def store(self, root):
         return DevelopmentCheckStore(self.hooks, root, now=self.now)
@@ -273,6 +276,42 @@ class DevelopmentCheckService:
         if state in {'QUEUED', 'RUNNING'}:
             self._wake(store)
         return projection(store, store.load(check_ref, self.owner))
+
+    async def finish_and_wait(self, root, check_ref, wait_seconds=0):
+        """Dispatch once; optionally await only saved state without holding a lock."""
+        if type(wait_seconds) is not int or not 0 <= wait_seconds <= MAX_FINISH_WAIT_SECONDS:
+            raise ValueError('DEVELOPMENT_WAIT_INVALID')
+        submitted = self.finish(root, check_ref)
+        if wait_seconds == 0:
+            return submitted
+        started = self.monotonic()
+        deadline = started + wait_seconds
+        expected_seq = submitted['dirty_seq']
+        store = self.store(root)
+        polls = 0
+        while True:
+            # load revalidates the original owner and workspace identity. Do
+            # not repeatedly deserialize an older static scan while waiting.
+            row = store.load(check_ref, self.owner)
+            polls += 1
+            state = projection(store, row)
+            if row['dirty_seq'] != expected_seq or state['status'] not in {'QUEUED', 'RUNNING'}:
+                break
+            remaining = deadline - self.monotonic()
+            if remaining <= 0:
+                break
+            await self.wait_sleep(min(state['poll_after_seconds'] or 2, remaining))
+        # Reuse the normal read boundary and its full scope, gaps, version and
+        # finding access, including any edit racing with the last observation.
+        result = self.get(root, check_ref)
+        reason = ('VERSION_CHANGED' if result['dirty_seq'] != expected_seq else
+                  'TIME_BUDGET_EXHAUSTED' if result['status'] in {'QUEUED', 'RUNNING'} else
+                  'STATE_AVAILABLE')
+        result['closeout_wait'] = dict(contract='bounded-closeout-wait-v1',
+            requested_seconds=wait_seconds, elapsed_ms=round((self.monotonic()-started)*1000, 3),
+            polls=polls, requested_dirty_seq=expected_seq, stopped_reason=reason,
+            scanner_dispatched_by_wait=False, host_review_completed=False)
+        return result
 
     def get(self, root, check_ref):
         store = self.store(root)

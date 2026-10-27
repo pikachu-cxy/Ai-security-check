@@ -1,0 +1,672 @@
+{
+  "contract": "native-desktop-paired-timing-v1",
+  "date": "2026-10-27",
+  "model": "gpt-6.1-sol",
+  "thinking": "medium",
+  "runtime_build": "a1b59683baa71308c0da83472f394e879c1f4e17dfb4761578ef5f4f9e92f8bb",
+  "source_commit_during_measurement": "6aea7de18127078e9cf151a8df758e9bc1864131",
+  "fixture_js_files_per_group": 6000,
+  "initial_app_sha256": "4f6dbdeebf63eebe8180d0434bff8b9e2ee36960a19e5ad160c13c09f9bfc0ef",
+  "ordering": "ODD_PAIR_STANDARD_THEN_WAIT; EVEN_PAIR_WAIT_THEN_STANDARD; NO_PARALLEL_SAMPLE_TURNS",
+  "scope": "ONE_NATIVE_APP_JS_COMMENT_TOGGLE_PER_TURN; REAL_LOCAL_SCANNERS; NO_SYNTHETIC_HOOKS; NO_INTERNAL_TIMING_STORAGE",
+  "cache_condition": "OS_AND_MODEL_CACHES_NOT_RESET; BOTH_APP_A_B_INPUTS_PREWARMED",
+  "excluded": {
+    "standard": {
+      "preflight_ms": 145949,
+      "fixture_prepare_ms": 99291,
+      "prep_state": "PARTIAL_3_3_UNKNOWN_SCOPE_NO_SCAN",
+      "warmups_ms": [
+        66167,
+        70236
+      ],
+      "final_warmup": "NEW_EMPTY_0_0_TO_RESULTS_READY_1_1_ONE_FILE_ZERO_FINDINGS_NO_GAPS"
+    },
+    "bounded_wait": {
+      "preflight_ms": 132591,
+      "fixture_prepare_ms": 114365,
+      "prep_state": "PARTIAL_5_5_UNKNOWN_SCOPE_NO_SCAN; FIRST_BEGIN_REJECTED_RETAINED",
+      "warmups_ms": [
+        52935,
+        81784
+      ],
+      "first_warmup": "ADOPTED_PREPARATION_RECORD_PARTIAL_7_7_UNKNOWN_SCOPE; RETAINED",
+      "final_warmup": "NEW_EMPTY_0_0_TO_RESULTS_READY_1_1_ONE_FILE_ZERO_FINDINGS_NO_GAPS"
+    }
+  },
+  "p95": null,
+  "pure_scanner_time_ms": null,
+  "model_analysis_ms": null,
+  "hook_time_ms": null,
+  "limitations": [
+    "TWO_SEPARATE_FRESH_CHATS_NOT_IDENTICAL_TOKEN_CONTEXTS",
+    "PREPARATION_TOOL_COUNTS_DIFFER",
+    "WITHIN_EACH_CHAT_HISTORY_GROWS",
+    "SERVICE_LATENCY_AND_CACHE_VARIANCE_NOT_ELIMINATED",
+    "PRODUCT_TOOL_DURATION_IN_WAIT_GROUP_INCLUDES_WAITING_NOT_JUST_ACTIVE_RUNTIME_WORK"
+  ],
+  "platform": "Darwin",
+  "samples": [
+    {
+      "pair": 1,
+      "mode": "standard",
+      "order_in_pair": 1,
+      "duration_ms": 50449,
+      "status": "completed",
+      "product_tool_ms": 1924,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 730
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 704,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 490
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 1,
+      "mode": "bounded_wait",
+      "order_in_pair": 2,
+      "duration_ms": 45319,
+      "status": "completed",
+      "product_tool_ms": 11415,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 524
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10891,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 2,
+      "mode": "bounded_wait",
+      "order_in_pair": 1,
+      "duration_ms": 47713,
+      "status": "completed",
+      "product_tool_ms": 13016,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 466
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 12550,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 2,
+      "mode": "standard",
+      "order_in_pair": 2,
+      "duration_ms": 44980,
+      "status": "completed",
+      "product_tool_ms": 1955,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 885
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 582,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 488
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 3,
+      "mode": "standard",
+      "order_in_pair": 1,
+      "duration_ms": 51117,
+      "status": "completed",
+      "product_tool_ms": 1414,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 472
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 468,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 474
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 3,
+      "mode": "bounded_wait",
+      "order_in_pair": 2,
+      "duration_ms": 51402,
+      "status": "completed",
+      "product_tool_ms": 11074,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 489
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10585,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 4,
+      "mode": "bounded_wait",
+      "order_in_pair": 1,
+      "duration_ms": 53209,
+      "status": "completed",
+      "product_tool_ms": 11116,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 468
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10648,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 4,
+      "mode": "standard",
+      "order_in_pair": 2,
+      "duration_ms": 50140,
+      "status": "completed",
+      "product_tool_ms": 1579,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 474
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 577,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 528
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 5,
+      "mode": "standard",
+      "order_in_pair": 1,
+      "duration_ms": 54225,
+      "status": "completed",
+      "product_tool_ms": 1577,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 528
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 492,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 557
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 5,
+      "mode": "bounded_wait",
+      "order_in_pair": 2,
+      "duration_ms": 54119,
+      "status": "completed",
+      "product_tool_ms": 11077,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 520
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10557,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 6,
+      "mode": "bounded_wait",
+      "order_in_pair": 1,
+      "duration_ms": 42613,
+      "status": "completed",
+      "product_tool_ms": 11048,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 501
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10547,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 6,
+      "mode": "standard",
+      "order_in_pair": 2,
+      "duration_ms": 45779,
+      "status": "completed",
+      "product_tool_ms": 1536,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 557
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 494,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 485
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 7,
+      "mode": "standard",
+      "order_in_pair": 1,
+      "duration_ms": 55255,
+      "status": "completed",
+      "product_tool_ms": 1659,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 509
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 651,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 499
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 7,
+      "mode": "bounded_wait",
+      "order_in_pair": 2,
+      "duration_ms": 40845,
+      "status": "completed",
+      "product_tool_ms": 11059,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 488
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10571,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 8,
+      "mode": "bounded_wait",
+      "order_in_pair": 1,
+      "duration_ms": 41454,
+      "status": "completed",
+      "product_tool_ms": 11091,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 492
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10599,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 8,
+      "mode": "standard",
+      "order_in_pair": 2,
+      "duration_ms": 48749,
+      "status": "completed",
+      "product_tool_ms": 1497,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 483
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 532,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 482
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 9,
+      "mode": "standard",
+      "order_in_pair": 1,
+      "duration_ms": 50607,
+      "status": "completed",
+      "product_tool_ms": 1613,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 616
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 492,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 505
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 9,
+      "mode": "bounded_wait",
+      "order_in_pair": 2,
+      "duration_ms": 41552,
+      "status": "completed",
+      "product_tool_ms": 11547,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 767
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10780,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 10,
+      "mode": "bounded_wait",
+      "order_in_pair": 1,
+      "duration_ms": 42403,
+      "status": "completed",
+      "product_tool_ms": 11044,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 496
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 10548,
+          "wait_seconds": 25
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 0,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    },
+    {
+      "pair": 10,
+      "mode": "standard",
+      "order_in_pair": 2,
+      "duration_ms": 44838,
+      "status": "completed",
+      "product_tool_ms": 1717,
+      "product_tools": [
+        {
+          "name": "begin_development_check",
+          "status": "completed",
+          "duration_ms": 514
+        },
+        {
+          "name": "finish_development_check",
+          "status": "completed",
+          "duration_ms": 729,
+          "wait_seconds": 0
+        },
+        {
+          "name": "get_development_check",
+          "status": "completed",
+          "duration_ms": 474
+        }
+      ],
+      "finish_calls": 1,
+      "get_calls": 1,
+      "manual_record_calls": 0,
+      "file_change_count": 1,
+      "only_expected_file_changed": true,
+      "final_text": "已完成"
+    }
+  ],
+  "groups": {
+    "standard": {
+      "n": 10,
+      "median_ms": 50294.5,
+      "min_ms": 44838,
+      "max_ms": 55255,
+      "mean_ms": 49613.9,
+      "product_tool_median_ms": 1596.0,
+      "finish_calls": 10,
+      "get_calls": 10
+    },
+    "bounded_wait": {
+      "n": 10,
+      "median_ms": 43966.0,
+      "min_ms": 40845,
+      "max_ms": 54119,
+      "mean_ms": 46062.9,
+      "product_tool_median_ms": 11084.0,
+      "finish_calls": 10,
+      "get_calls": 0
+    }
+  },
+  "observed_median_difference_ms": 6328.5,
+  "observed_median_reduction_percent": 12.582886796767042,
+  "validation": "BOTH_OWNERS_READ_BACK_ALL_20_ORIGINAL_RECORDS; RESULTS_READY; DIRTY_SCANNED_1_1; ONLY_SRC_APP_JS; ONE_ACTUAL_FILE; ZERO_FINDINGS; NO_GAPS; INITIAL_METADATA_EMPTY",
+  "excluded_post_sample_audit_ms": {
+    "standard": 28087,
+    "bounded_wait": 25796
+  },
+  "test_chats_archived": true,
+  "interpretation": "OBSERVED_FIXED_TASK_SAMPLE_ONLY; NOT_A_UNIVERSAL_SPEEDUP_OR_PURE_MODEL_SCANNER_COST",
+  "work_state": "TEST_FLOW_COMPLETE; GITHUB_SYNC_AUTHORIZED; NO_FURTHER_OPTIMIZATION_THIS_SESSION"
+}

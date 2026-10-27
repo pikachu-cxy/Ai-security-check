@@ -14,4 +14,8 @@
 
 `python scripts/maintenance/check_repository_layout.py` 只读检查脚本及其嵌入式 Python 的 Runtime 模块引用、CI 文件入口、源码清单和维护导航的本地链接。它不执行脚本、不扫描项目、不安装组件，也不发布资产。构建与发布脚本保持单份实现；不要在旧位置新增转发副本。
 
+`python scripts/lightweight_development_acceptance.py --output /path/to/report.json` 在独立临时目录创建约 6000 文件的测试项目和隔离 Codex 配置，通过真实 MCP 与本机已有扫描器验证轻量收尾链路。覆盖连续 100 次编辑合并一次扫描、多文件补丁、删除/重命名、追加编辑、未知 Shell 范围及样例风险；不下载组件、不修改用户配置、不执行样例源码。失败保留私有测试目录，成功自动清理。报告中的工具往返耗时不代表真实桌面对话耗时，也不是产品开/关对照。
+
+追加 `--wait-seconds 25` 验证 `bounded-closeout-wait-v1`：原收尾请求在预算内直接返回保存结果，未完成时只沿原引用查询，不重复收尾。报告保留每次等待回执及是否无需额外读取；默认 `0` 仍验证原后台投递方式。该参数不扩大文件范围，等待耗时也不等于纯扫描或模型耗时。
+
 归组后的测试见[测试导航](../tests/README.md)，后续工作见[近期计划](../docs/NEXT_DEVELOPMENT_PLAN.zh-CN.md)。发布脚本可能写入远程资产，目录导航不表示授权执行发布。

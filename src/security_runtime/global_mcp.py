@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 import threading
+import time
 from collections import OrderedDict
 from concurrent.futures import Future, InvalidStateError, ThreadPoolExecutor
 from pathlib import Path
@@ -92,6 +93,7 @@ class GlobalWorkspaces:
         self.child_factory = child_factory or self._child
         self.children = {}
         self.sessions = {}
+        self.session_context_emitted_at = {}
         from .codex_host_claims import CodexClaimGuard
         self.claim_guard = CodexClaimGuard()
         self.jobs = {}
@@ -694,6 +696,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                 output = {'continue': True, 'systemMessage': readiness['message'],
                     'hookSpecificOutput': {'hookEventName': 'SessionStart',
                                            'additionalContext': readiness['message'] + '\n' + session_context(token)}}
+                with pool.lock:
+                    pool.session_context_emitted_at[(arguments['session_id'], root)] = time.time()
                 return CallToolResult(structuredContent=data, content=[TextContent(
                     type='text', text=json.dumps(output, ensure_ascii=False))])
             lightweight = False
@@ -803,6 +807,28 @@ def create_global_server(*, workspaces=None, host='codex'):
                 # Child rejection wins; never overwrite a rejected claim status.
                 claim_diag['workspace_binding_stage'] = 'COMPLETE'
                 result.structuredContent = {**claim_diag, **result.structuredContent}
+                if (name == 'handle_hook_event' and pool.task_audit_mode
+                        and active_host == 'codex'
+                        and result.structuredContent.get('development_check_ref')):
+                    # A chat can become a valid project after SessionStart was
+                    # rejected. Recover only this validated event's owner and
+                    # exact observed-edit reference, never the latest session.
+                    from .tasks.ownership import issue_session_ref, session_context, SESSION_TTL
+                    key = (arguments['session_id'], root)
+                    with pool.lock:
+                        emitted = pool.session_context_emitted_at.get(key)
+                        if emitted is None or time.time() - emitted >= SESSION_TTL / 2:
+                            token = issue_session_ref(pool.children[root][1].store, root,
+                                                      active_host, arguments['session_id'])
+                            ref = result.structuredContent['development_check_ref']
+                            output = json.loads(result.content[0].text)
+                            output['hookSpecificOutput'] = dict(hookEventName='PostToolUse',
+                                additionalContext=session_context(token) + '\n'
+                                + '当前编辑事件的已观测路径记录在轻量检查 ' + ref
+                                + '；不证明写入成功或完整范围。沿此引用收尾并读取结果，不新建替代记录。')
+                            result.structuredContent['task_session_ref'] = token
+                            result.content = [TextContent(type='text', text=json.dumps(output, ensure_ascii=False))]
+                            pool.session_context_emitted_at[key] = time.time()
             return result
         except Exception as exc:
             if name == 'submit_task_security_review':

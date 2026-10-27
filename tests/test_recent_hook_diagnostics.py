@@ -31,6 +31,13 @@ def recent(root):
     return RecentHookStore().recent(root)['records']
 
 
+def test_observed_edit_status_stays_specific_without_recording_routing_secrets():
+    from security_runtime.recent_hooks import safe_fields
+    result = safe_fields(dict(handler_status='DIRTY', handler_reason='OBSERVED_EDITS_RECORDED',
+        task_session_ref='private-routing-value', development_check_ref='private-check-value'))
+    assert result == dict(handler_status='DIRTY', handler_reason='OBSERVED_EDITS_RECORDED')
+
+
 def test_valid_readonly_claims_persist_one_global_not_child_record(connected, projects):
     server, _, runtimes = connected
     root = projects[0]

@@ -9,4 +9,5 @@ ACTIVITY_REASONS = frozenset({TASK_CLOSEOUT_PENDING, DEFERRED_TO_TASK_CLOSEOUT})
 def deferred_activity_facts():
     return dict(status=RECORDED_PENDING, reason=TASK_CLOSEOUT_PENDING,
         scanner_skipped_reason=DEFERRED_TO_TASK_CLOSEOUT,
-        task_activity_recorded=True, task_audit_complete=False)
+        task_activity_recorded=True, task_audit_complete=False,
+        workspace_mutation_observed=None, changed_file_count=None)

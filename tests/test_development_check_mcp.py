@@ -1,5 +1,6 @@
 """Default development transport stays scoped and never enters strict audit capture."""
 import asyncio
+import inspect
 
 import pytest
 
@@ -42,7 +43,8 @@ def development_server(projects, tmp_path, monkeypatch):
 
 
 def call(server, name, **arguments):
-    return server._tool_manager.get_tool(name).fn(**arguments)
+    result = server._tool_manager.get_tool(name).fn(**arguments)
+    return asyncio.run(result) if inspect.isawaitable(result) else result
 
 
 def test_begin_record_close_and_read_never_capture_workspace(development_server):
@@ -95,6 +97,54 @@ def test_mcp_schema_rejects_extra_authority_and_boolean_coercion(development_ser
     assert 'begin_security_task' in registry.names()  # Historical strict audits remain supported.
 
 
+@pytest.mark.parametrize('value', [-1, 26, True, 0.5, '2', None])
+def test_wait_schema_rejects_invalid_budget_before_finishing(development_server, value):
+    server, root, _, launches = development_server
+    registry = MCPRegistry(server)
+    first = call(server, 'begin_development_check', workspace_path=str(root), task_key='wait-validation')
+    with pytest.raises(Exception):
+        asyncio.run(registry.dispatch('finish_development_check', dict(
+            workspace_path=str(root), check_ref=first['check_ref'], wait_seconds=value)))
+    current = call(server, 'get_development_check', workspace_path=str(root), check_ref=first['check_ref'])
+    assert not current['finish_requested'] and not launches
+
+
+def test_wait_mcp_dispatch_yields_to_another_read(development_server, monkeypatch):
+    from security_runtime import development_check
+    server, root, _, launches = development_server
+    registry = MCPRegistry(server)
+    first = call(server, 'begin_development_check', workspace_path=str(root), task_key='parallel-read')
+    call(server, 'record_development_changes', workspace_path=str(root),
+         check_ref=first['check_ref'], paths=['src/A.java'])
+    original_factory = development_check.DevelopmentCheckService
+
+    async def run():
+        entered, blocked = asyncio.Event(), asyncio.Event()
+
+        async def pause(seconds):
+            entered.set()
+            await blocked.wait()
+
+        def factory(*args, **kwargs):
+            service = original_factory(*args, **kwargs)
+            service.wait_sleep = pause
+            return service
+
+        monkeypatch.setattr(development_check, 'DevelopmentCheckService', factory)
+        pending = asyncio.create_task(registry.dispatch('finish_development_check', dict(
+            workspace_path=str(root), check_ref=first['check_ref'], wait_seconds=25)))
+        await asyncio.wait_for(entered.wait(), timeout=5)
+        result = await asyncio.wait_for(registry.dispatch('get_development_check', dict(
+            workspace_path=str(root), check_ref=first['check_ref'])), timeout=5)
+        assert result['status'] == 'QUEUED' and result['finish_requested']
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(run())
+    assert len(launches) == 1
+
+
 def test_global_router_requires_workspace_and_keeps_session_scope(installed, projects, tmp_path, monkeypatch):
     from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
 
@@ -136,5 +186,16 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
         current = routed('get_development_check', workspace_path=root,
                          session_ref=tokens[0], check_ref=check['check_ref'])
         assert current['check_ref'] == check['check_ref']
+        schema = next(tool.inputSchema for tool in asyncio.run(server.list_tools())
+                      if tool.name == 'finish_development_check')
+        assert schema['properties']['wait_seconds']['minimum'] == 0
+        assert schema['properties']['wait_seconds']['maximum'] == 25
+        rejected = routed('finish_development_check', workspace_path=root,
+                          session_ref=tokens[1], check_ref=check['check_ref'], wait_seconds=25)
+        assert rejected['reason_code'] == 'TASK_SESSION_SCOPE_MISMATCH'
+        empty = routed('finish_development_check', workspace_path=root,
+                       session_ref=tokens[0], check_ref=check['check_ref'], wait_seconds=25)
+        assert empty['status'] == 'NO_OBSERVED_CHANGES' and empty['dirty_seq'] == 0
+        assert empty['closeout_wait']['requested_seconds'] == 25 and not empty['scanner_run']
     finally:
         pool.close()

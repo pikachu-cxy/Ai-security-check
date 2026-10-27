@@ -24,7 +24,8 @@ PATCH = '''*** Begin Patch
 *** End Patch'''
 
 
-@pytest.mark.parametrize('inputs', [PATCH, {'patch': PATCH}, {'input': PATCH}])
+@pytest.mark.parametrize('inputs', [PATCH, {'patch': PATCH}, {'input': PATCH},
+                                  {'command': PATCH}, {'patch': None, 'command': PATCH}])
 def test_patch_add_edit_delete_rename_hints_never_retain_source(repo, inputs):
     paths, unknown = edit_path_hints('apply_patch', inputs, repo)
     assert paths == ('src/new.py', 'src/old.py', 'src/renamed.py', 'src/gone.py')
@@ -97,7 +98,8 @@ def test_default_stop_keeps_explicit_repair_continuation(repo, tmp_path, monkeyp
     assert result['decision'] == 'block' and len(calls) == 1
 
 
-def test_default_edit_records_only_hint_metadata_and_keeps_hook_quiet(repo, tmp_path, monkeypatch):
+@pytest.mark.parametrize('inputs', [PATCH, {'command': PATCH}])
+def test_default_edit_records_only_hint_metadata_and_keeps_hook_quiet(repo, tmp_path, monkeypatch, inputs):
     no_old_task_reads(monkeypatch)
     calls = []
     def record(hooks, root, owner, paths=(), **kwargs):
@@ -110,7 +112,7 @@ def test_default_edit_records_only_hint_metadata_and_keeps_hook_quiet(repo, tmp_
     monkeypatch.setattr('security_runtime.development_check.record_hook', record)
     core = coordinator(tmp_path, FakeRuntime(), task_audit_mode=True)
     binding = WorkspaceBinding('fixture', str(repo), str(repo), 'codex', 'PROJECT', '')
-    result = handle_codex_hook('PostToolUse', str(repo), 's', 'apply_patch', PATCH,
+    result = handle_codex_hook('PostToolUse', str(repo), 's', 'apply_patch', inputs,
                               binding=binding, coordinator=core)
     assert result['status'] == 'DIRTY' and result['development_check_ref'].startswith('dc1-')
     assert result['scope']['paths'] == ['src/new.py', 'src/old.py', 'src/renamed.py', 'src/gone.py']

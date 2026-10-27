@@ -151,3 +151,69 @@ def test_startup_does_not_read_or_rewrite_an_existing_unavailable_A(audit_pool, 
     result = start(server, root)
     assert result['status'] == 'CONNECTED'
     assert legacy.read_bytes() == raw
+
+
+def edit_without_start(server, root, session, invocation):
+    return asyncio.run(server.call_tool('handle_hook_event', dict(
+        event='PostToolUse', workspace_path=str(root), session_id=session,
+        turn_id='fixture-turn', tool_use_id=invocation, tool_name='apply_patch',
+        tool_input={'command':'*** Begin Patch\n*** Update File: src/A.java\n@@\n-old\n+new\n*** End Patch'})))
+
+
+def test_first_native_edit_recovers_its_own_routing_without_startup(audit_pool, projects):
+    pool, server, _ = audit_pool
+    root = projects[0]
+    response = edit_without_start(server, root, 'late-start', 'first-edit')
+    result = structured(response)
+    assert result['status'] == 'DIRTY' and result['scope']['paths'] == ['src/A.java']
+    token = result['task_session_ref']
+    hooks = pool.children[root][1].store
+    assert verify_session_ref(hooks, root, token) == session_owner('codex', 'late-start')
+    output = json.loads(response.content[0].text)
+    assert output['hookSpecificOutput']['hookEventName'] == 'PostToolUse'
+    assert token in output['hookSpecificOutput']['additionalContext']
+    assert result['development_check_ref'] in output['hookSpecificOutput']['additionalContext']
+    adopted = structured(asyncio.run(server.call_tool('begin_development_check', dict(
+        workspace_path=str(root), session_ref=token, task_key='adopt-native-edit'))))
+    assert adopted['check_ref'] == result['development_check_ref']
+    assert adopted['dirty_seq'] == 1 and not adopted['baseline_created']
+    second = edit_without_start(server, root, 'late-start', 'second-edit')
+    assert 'task_session_ref' not in structured(second)
+    assert json.loads(second.content[0].text) == {}
+    assert not (hooks.workspace_directory(root)/'task-security.db').exists()
+
+
+def test_valid_startup_keeps_edit_routing_context_quiet(audit_pool, projects):
+    _, server, _ = audit_pool
+    root = projects[0]
+    start(server, root, 'started')
+    response = edit_without_start(server, root, 'started', 'edit-after-start')
+    assert structured(response)['status'] == 'DIRTY'
+    assert 'task_session_ref' not in structured(response)
+    assert json.loads(response.content[0].text) == {}
+
+
+def test_recovered_edit_token_cannot_adopt_another_sessions_record(audit_pool, projects):
+    _, server, _ = audit_pool
+    root = projects[0]
+    first = structured(edit_without_start(server, root, 'first-owner', 'first-owner-edit'))
+    second = structured(edit_without_start(server, root, 'second-owner', 'second-owner-edit'))
+    rejected = structured(asyncio.run(server.call_tool('get_development_check', dict(
+        workspace_path=str(root), session_ref=second['task_session_ref'],
+        check_ref=first['development_check_ref']))))
+    assert rejected['reason_code'] == 'TASK_SESSION_SCOPE_MISMATCH'
+
+
+def test_readonly_without_startup_does_not_emit_edit_routing(audit_pool, projects):
+    pool, server, _ = audit_pool
+    root = projects[0]
+    response = asyncio.run(server.call_tool('handle_hook_event', dict(
+        event='PostToolUse', workspace_path=str(root), session_id='readonly-only',
+        turn_id='readonly-turn', tool_use_id='readonly-call', tool_name='Bash',
+        tool_input={'command':'git status --short'})))
+    assert not structured(response)['scanner_run']
+    assert 'task_session_ref' not in structured(response)
+    assert json.loads(response.content[0].text) == {}
+    assert not pool.session_context_emitted_at
+    hooks = pool.children[root][1].store
+    assert not (hooks.workspace_directory(root)/'development-checks.db').exists()

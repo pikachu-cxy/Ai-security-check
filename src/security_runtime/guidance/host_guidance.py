@@ -528,6 +528,7 @@ get_development_check 只读保存结果。已有本会话 Hook 的 check_ref �
 保留原 check_ref、有效 session_ref、owner、范围与序号，不按最近任务猜测或跨会话认领。
 已观测文件的固定扫描输入用于保证结果一致，不是全项目快照；无法确定范围则保留缺口。
 写完后尽早提交后台收尾，与已授权且不写项目文件的验证及结果整理重叠；不能为填充等待增加测试或安装。
+没有独立工作且实际支持 bounded-closeout-wait-v1 时，可用收尾接口的有界等待直接读取原结果；超时沿原引用查询，不重发收尾。
 收尾后继续编辑使结果保持待检查，写完再沿原记录收尾，不自动扫描下一版。
 宿主分析发现和安全相关编辑，复用有效上下文，不强制读取全部改前/改后窗口；结果不能冒充宿主已读或全项目安全。
 继续原生修复或严格任务才使用 task-review-plan-v3、task-result-delivery-v1 和九项必需工具子集。
@@ -591,6 +592,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
                          'operating_mode': 'AI_DEVELOPMENT_EDIT_CHECK',
                          'development_check': 'observed-development-check-v1; DEFAULT; NO_PROJECT_BASELINE; HOOK_RECORD_ONLY; BACKGROUND_ON_FINISH; OBSERVED_PATHS; READ_ONLY_SAVED_RESULTS; HOST_ANALYSIS',
+                         'development_check_wait': 'bounded-closeout-wait-v1; OPTIONAL_FINISH_WAIT_SECONDS_0_25; DEFAULT_DISPATCH_ONLY; ASYNC_WAIT_SAVED_STATE; STOP_ON_NEW_EDITS; NO_REDISPATCH; HOST_ANALYSIS_REQUIRED',
                          'task_audit_scope': 'workspace-task-diff-v1; EXPLICIT_STRICT_OR_EXISTING_TASKS; ENTIRE_B_TO_C_DIFF; AUTHOR_INDEPENDENT; SAME_C_SCAN_AND_REVIEW',
                          'startup_comparison_baseline': 'NOT_REQUIRED; NO_STARTUP_INVENTORY_OR_SCAN; HISTORICAL_READ_ONLY',
                          'workspace_snapshot_development': development_capabilities(),

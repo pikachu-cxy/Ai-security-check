@@ -34,8 +34,11 @@ def edit_path_hints(tool, inputs, root, *, cwd=None):
     if not directory.is_absolute() or not directory.is_relative_to(root):
         return (), True
     if tool == 'apply_patch':
-        patch = (inputs if isinstance(inputs, str) else
-                 inputs.get('patch', inputs.get('input')) if isinstance(inputs, dict) else None)
+        patch = inputs if isinstance(inputs, str) else None
+        if isinstance(inputs, dict):
+            # Native Codex Hooks use command; retain older patch/input wrappers.
+            patch = next((inputs[name] for name in ('patch', 'input', 'command')
+                          if isinstance(inputs.get(name), str)), None)
         if isinstance(patch, str):
             if len(patch) > 262144 or len(patch.encode('utf-8', errors='replace')) > 262144:
                 return (), True
