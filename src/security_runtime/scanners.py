@@ -238,7 +238,8 @@ class BaseScanner:
                     verified = execution_identity == after_identity
                     run.scanner_diagnostics['execution_binding'] = dict(execution_identity,
                         contract='scanner-execution-binding-v1', verified=verified,
-                        data_status='UNVERIFIABLE' if execution_identity['data_required'] and execution_identity['data'] is None else 'VERIFIED')
+                        data_status=('DISABLED' if execution_identity.get('data_policy') == 'DISABLED'
+                            else 'UNVERIFIABLE' if execution_identity['data_required'] and execution_identity['data'] is None else 'VERIFIED'))
                     if not verified:
                         run.status, run.coverage_contract = RunStatus.FAILED, 'NONE'
                         run.error_code = 'SCAN_EXECUTION_IDENTITY_CHANGED'
@@ -293,11 +294,13 @@ class BaseScanner:
 
     def _input_execution_identity(self, binary, context, environment):
         tool = self.engine_id or self.scanner_id
+        from .scanner_identity import database_content_fingerprint_disabled
+        data_disabled = database_content_fingerprint_disabled(tool, kind=getattr(self, 'checks', None))
         identity_reader = getattr(self.tool_manager, 'execution_identity', None)
         actual = identity_reader(tool, Path(binary), environment=environment) if callable(identity_reader) else None
         actual = actual if (isinstance(actual, str) and len(actual) == 64
             and all(char in '0123456789abcdef' for char in actual)) else None
-        data_required = tool in {'trivy', 'osv-scanner'} or Capability.DEPENDENCY_VULN in self.capabilities
+        data_required = not data_disabled and (tool in {'trivy', 'osv-scanner'} or Capability.DEPENDENCY_VULN in self.capabilities)
         data = None
         data_reader = getattr(self.tool_manager, 'execution_data_identity', None)
         if data_required and callable(data_reader):
@@ -308,7 +311,10 @@ class BaseScanner:
             data = data_reader(tool, kind=getattr(self, 'checks', None), ecosystems=ecosystems)
             data = data if (isinstance(data, str) and len(data) == 64
                 and all(char in '0123456789abcdef' for char in data)) else None
-        return dict(tool=actual, data=data, data_required=data_required)
+        result = dict(tool=actual, data=data, data_required=data_required)
+        if data_disabled:
+            result['data_policy'] = 'DISABLED'
+        return result
 
     def _prepare(self, binary: str) -> ToolStatus:
         return ToolStatus.READY

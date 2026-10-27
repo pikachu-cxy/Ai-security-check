@@ -5,6 +5,11 @@ reach filesystem reconciliation instead of claiming the command was read-only.
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
+import re
+import shlex
+
 
 READ_ONLY = 'READ_ONLY'
 UNKNOWN = 'UNKNOWN'
@@ -20,6 +25,69 @@ _WRITE_COMMANDS = {
     'rm', 'del', 'erase', 'remove-item', 'mv', 'move', 'move-item',
     'rename', 'rename-item', 'copy', 'cp', 'copy-item', 'new-item', 'mkdir',
 }
+
+
+def _trusted_powershell(value):
+    """Only unwrap the owned native shell, never an arbitrary lookalike EXE."""
+    if os.name != 'nt':
+        return False
+    try:
+        from .hook_state import no_links
+        candidate = Path(value)
+        if not candidate.is_absolute():
+            return False
+        no_links(candidate)
+        resolved = candidate.resolve(strict=True)
+        bundled = (Path.home()/'.cache/codex-runtimes/codex-primary-runtime'
+                   /'dependencies/native/powershell/pwsh.exe')
+        system = (Path(os.environ.get('SystemRoot', r'C:\Windows'))
+                  /'System32/WindowsPowerShell/v1.0/powershell.exe')
+        return any(resolved == allowed.resolve() for allowed in (bundled, system))
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
+def _unwrap_powershell(command):
+    try:
+        words = shlex.split(command, posix=True)
+    except ValueError:
+        return command
+    if not words or not _trusted_powershell(words[0]):
+        return command
+    options = words[1:]
+    while options and options[0].casefold() in {'-noprofile', '-noninteractive', '-nologo'}:
+        options = options[1:]
+    if len(options) != 2 or options[0].casefold() != '-command':
+        return command
+    return options[1]
+
+
+def _readonly_powershell_fragments(command):
+    # Recognize only local numeric bookkeeping and an identity pipeline. Do
+    # not treat general PowerShell script blocks or assignments as read-only.
+    quoted, quote = set(), None
+    for index, char in enumerate(command):
+        if quote is not None:
+            quoted.add(index)
+            if char == quote:
+                quote = None
+        elif char in '\'"':
+            quote = char
+            quoted.add(index)
+    patterns = (
+        (re.compile(r'(^|[;\r\n])([ \t]*)\$[A-Za-z_]\w*[ \t]*=[ \t]*[+-]?\d+(?:\.\d+)?(?=[ \t]*(?:[;\r\n]|$))'),
+         lambda match: match[1]+match[2]+'Get-Location'),
+        (re.compile(r'(?<=\|)[ \t]*ForEach-Object[ \t]+\{[ \t]*\$_[ \t]*\}(?=[ \t]*(?:[;|\r\n]|$))', re.I),
+         lambda match: ' Select-Object'),
+    )
+    replacements = []
+    for pattern, replacement in patterns:
+        for match in pattern.finditer(command):
+            if not any(index in quoted for index in range(match.start(), match.end())):
+                replacements.append((match.start(), match.end(), replacement(match)))
+    for start, end, replacement in sorted(replacements, reverse=True):
+        command = command[:start]+replacement+command[end:]
+    return command
 
 
 def _commands(command):
@@ -98,6 +166,11 @@ def _git_readonly(args):
     if not args:
         return False
     subcommand, args = args[0], args[1:]
+    if subcommand == 'rev-parse':
+        flags = {'--show-toplevel', '--git-dir', '--git-common-dir', '--is-inside-work-tree',
+                 '--is-bare-repository', '--show-prefix', '--verify', '--quiet', '-q',
+                 '--path-format=absolute', '--path-format=relative'}
+        return bool(args) and all(arg in flags or arg == 'HEAD' for arg in args)
     if subcommand == 'branch':
         flags = {'--list', '--show-current', '--all', '-a', '--remotes', '-r',
                  '--verbose', '-v', '-vv'}
@@ -114,6 +187,7 @@ def _git_readonly(args):
 
 
 def classify_command(command):
+    command = _readonly_powershell_fragments(_unwrap_powershell(command))
     commands, reason = _commands(command)
     if reason is not None:
         return reason

@@ -22,6 +22,8 @@ MAX_WORKERS = 2
 DEBOUNCE_SECONDS = 0.35
 MAX_DEBOUNCE_SECONDS = 2
 MAX_WORKER_SECONDS = 120
+MAX_SCAN_ATTEMPTS = 3
+MAX_BUSY_ATTEMPTS = 120
 
 
 def _capacity(hooks):
@@ -117,7 +119,9 @@ def launch_worker(hooks, root):
         argv.insert(1, '-I')
     argv += ['development-check-worker']
     argv += ['--workspace', str(queue.root), '--hooks', str(Path(hooks.directory).absolute()), '--ticket', ticket]
-    options = ({'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS}
+    # DETACHED_PROCESS cancels CREATE_NO_WINDOW on Windows. The venv launcher
+    # can then create a console for its child interpreter despite DEVNULL.
+    options = ({'creationflags': subprocess.CREATE_NO_WINDOW}
                if os.name == 'nt' else {'start_new_session': True})
     try:
         subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -270,6 +274,10 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                             queue._put(db, '$worker', dict(worker, lease_until=0))
                     return 0
                 row = pending[0]
+                retry_seq = row.get('retry_seq', row.get('attempted_seq', 0))
+                if retry_seq == row['dirty_seq'] and row.get('next_attempt_at', 0) > queue.now():
+                    stop.wait(min(1, row['next_attempt_at']-queue.now(), max(0, deadline-time.monotonic())))
+                    continue
                 start = debounce_started.setdefault(row['check_ref'], time.monotonic())
                 quiet = queue.now()-row['last_event_at'] >= debounce_seconds
                 if not row['finish_requested'] and not quiet and time.monotonic()-start < MAX_DEBOUNCE_SECONDS:
@@ -281,38 +289,79 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                         continue
                     if row['root_identity'] != root_identity(queue.root):
                         raise ValueError('DEVELOPMENT_WORKSPACE_REPLACED')
+                    if row.get('retry_seq', row.get('attempted_seq', 0)) != row['dirty_seq']:
+                        # Older resident MCP processes do not clear the new
+                        # fields on append. Bind quotas in the worker as well.
+                        row = dict(row, attempt_count=0, busy_attempts=0, next_attempt_at=0)
+                    if row.get('attempt_count', 0) >= MAX_SCAN_ATTEMPTS:
+                        from .development_delivery import publish
+                        failed = queue._put(db, row['check_ref'], dict(row, state='FAILED',
+                            failed_seq=row['dirty_seq'], reason_code='DEVELOPMENT_RETRIES_EXHAUSTED'))
+                        publish(queue, db, dict(failed, scanned_seq=row['dirty_seq'], scan_id=None, result=None))
+                        continue
                     row = queue._put(db, row['check_ref'], dict(row, state='RUNNING',
-                        attempted_seq=row['dirty_seq'], worker_ticket=ticket, reason_code=None))
+                        attempted_seq=row['dirty_seq'], attempt_count=row.get('attempt_count', 0)+1,
+                        retry_seq=row['dirty_seq'], failed_seq=None, worker_ticket=ticket, reason_code=None))
                 if not row['observed_paths']:
                     with queue.transaction() as db:
                         current = queue._get(db, row['check_ref'])
                         state = ('QUEUED' if current['finish_requested'] else 'DIRTY') if current['dirty_seq'] > row['dirty_seq'] else 'PARTIAL'
                         queue._put(db, row['check_ref'], dict(current, state=state,
                             scanned_seq=row['dirty_seq'], reason_code='DEVELOPMENT_SCOPE_UNKNOWN'))
+                        from .development_delivery import publish
+                        publish(queue, db, dict(row, state='PARTIAL', scanned_seq=row['dirty_seq'],
+                            scan_id=None, result=None, reason_code='DEVELOPMENT_SCOPE_UNKNOWN'))
                     continue
                 try:
                     result = _scan(queue, row, ticket, runtime_factory)
                 except Exception:
                     with queue.transaction() as db:
                         current = queue._get(db, row['check_ref'])
-                        state = ('QUEUED' if current['finish_requested'] else 'DIRTY') if current['dirty_seq'] > row['dirty_seq'] else 'FAILED'
-                        queue._put(db, row['check_ref'], dict(current, state=state,
-                            reason_code='DEVELOPMENT_SCAN_FAILED', updated_at=queue.now()))
+                        newer = current['dirty_seq'] > row['dirty_seq']
+                        state = (('QUEUED' if current['finish_requested'] else 'DIRTY') if newer else
+                                 'QUEUED' if row['attempt_count'] < MAX_SCAN_ATTEMPTS else 'FAILED')
+                        failed = queue._put(db, row['check_ref'], dict(current, state=state,
+                            failed_seq=row['dirty_seq'] if state == 'FAILED' else None,
+                            next_attempt_at=current.get('next_attempt_at', 0) if newer else
+                                queue.now()+min(2**row['attempt_count'], 8),
+                            reason_code=current.get('reason_code') if newer else 'DEVELOPMENT_SCAN_FAILED',
+                            updated_at=queue.now()))
+                        if state == 'FAILED':
+                            from .development_delivery import publish
+                            publish(queue, db, dict(failed, scanned_seq=row['dirty_seq'], scan_id=None, result=None))
                     continue
                 with queue.transaction() as db:
                     current = queue._get(db, row['check_ref'])
                     if not _valid_worker(queue, ticket):
                         return 2
                     if result is None:
-                        queue._put(db, row['check_ref'], dict(current,
-                            state='QUEUED' if current['finish_requested'] else 'DIRTY',
+                        if current['dirty_seq'] != row['dirty_seq']:
+                            # The busy attempt belongs to an older generation.
+                            # Never charge its retry quota to a new edit batch.
+                            queue._put(db, row['check_ref'], dict(current,
+                                state='QUEUED' if current['finish_requested'] else 'DIRTY'))
+                            continue
+                        count = row.get('busy_attempts', 0) + 1
+                        busy_state = ('DIRTY' if not current['finish_requested'] else
+                                      'FAILED' if count >= MAX_BUSY_ATTEMPTS else 'QUEUED')
+                        busy = queue._put(db, row['check_ref'], dict(current,
+                            state=busy_state, busy_attempts=count,
+                            failed_seq=row['dirty_seq'] if busy_state == 'FAILED' else None,
+                            attempt_count=max(0, row['attempt_count']-1),
+                            next_attempt_at=queue.now()+min(0.25*count, 2),
                             reason_code='WORKSPACE_SCAN_BUSY', updated_at=queue.now()))
+                        if busy_state == 'FAILED':
+                            from .development_delivery import publish
+                            publish(queue, db, dict(busy, scanned_seq=row['dirty_seq'], scan_id=None, result=None))
                     else:
                         state = (('QUEUED' if current['finish_requested'] else 'DIRTY') if current['dirty_seq'] > row['dirty_seq'] else
                             'PARTIAL' if current['scope_unknown'] or result['gaps'] else 'RESULTS_READY')
                         queue._put(db, row['check_ref'], dict(current, state=state,
                             scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result,
                             reason_code=None, updated_at=queue.now()))
+                        from .development_delivery import publish
+                        publish(queue, db, dict(row, state='PARTIAL' if row['scope_unknown'] or result['gaps'] else 'RESULTS_READY',
+                            scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result, reason_code=None))
                 if result is None:
                     time.sleep(min(0.25, max(0, deadline-time.monotonic())))
                 else:

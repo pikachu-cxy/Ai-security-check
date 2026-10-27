@@ -58,7 +58,7 @@ class ScanArtifacts(SignedRecords):
             if run.status != 'SUCCESS' or run.scanner.startswith('native-'):
                 continue
             proof = result.scan_context.get('execution_bindings', {}).get(run.scanner, {})
-            if proof.get('verified') is not True or proof.get('data_status') != 'VERIFIED':
+            if proof.get('verified') is not True or proof.get('data_status') not in {'VERIFIED', 'DISABLED'}:
                 return
         hashes = None
         if view is not None:

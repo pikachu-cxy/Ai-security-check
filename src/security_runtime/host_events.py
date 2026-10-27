@@ -19,6 +19,7 @@ CLOCK_SCOPE = uuid.uuid4().hex
 
 class EventKind(StrEnum):
     SESSION_START = 'SESSION_START'
+    BEFORE_MUTATION = 'BEFORE_MUTATION'
     WORKSPACE_ACTIVITY = 'WORKSPACE_ACTIVITY'
     SESSION_STOP = 'SESSION_STOP'
 
@@ -98,7 +99,7 @@ class NormalizedHostEvent:
                 raise ValueError('Missing normalized stop guard state')
         elif self.stop_guard_active is not None:
             raise ValueError('Unexpected stop guard state')
-        if self.kind != EventKind.WORKSPACE_ACTIVITY and self.operation != OperationClass.UNKNOWN:
+        if self.kind not in {EventKind.WORKSPACE_ACTIVITY, EventKind.BEFORE_MUTATION} and self.operation != OperationClass.UNKNOWN:
             raise ValueError('Unexpected lifecycle operation')
 
     def diagnostics(self):

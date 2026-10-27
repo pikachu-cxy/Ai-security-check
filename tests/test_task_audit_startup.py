@@ -15,6 +15,7 @@ from test_global_integration import installed, projects, complete_runtime, struc
 
 @pytest.fixture
 def audit_pool(installed, tmp_path, monkeypatch):
+    monkeypatch.setattr('security_runtime.development_scheduler.supervise', lambda *a: None)
     installed.execute('setup')
     def forbidden(*args, **kwargs):
         pytest.fail('Startup must not create A, capture B, or inventory/scan project sources')
@@ -204,7 +205,7 @@ def test_recovered_edit_token_cannot_adopt_another_sessions_record(audit_pool, p
     assert rejected['reason_code'] == 'TASK_SESSION_SCOPE_MISMATCH'
 
 
-def test_readonly_without_startup_does_not_emit_edit_routing(audit_pool, projects):
+def test_readonly_without_startup_recovers_only_routing_without_creating_a_check(audit_pool, projects):
     pool, server, _ = audit_pool
     root = projects[0]
     response = asyncio.run(server.call_tool('handle_hook_event', dict(
@@ -212,8 +213,39 @@ def test_readonly_without_startup_does_not_emit_edit_routing(audit_pool, project
         turn_id='readonly-turn', tool_use_id='readonly-call', tool_name='Bash',
         tool_input={'command':'git status --short'})))
     assert not structured(response)['scanner_run']
-    assert 'task_session_ref' not in structured(response)
-    assert json.loads(response.content[0].text) == {}
-    assert not pool.session_context_emitted_at
+    token = structured(response)['task_session_ref']
+    assert token.startswith('sh1-') and len(token) == 36
     hooks = pool.children[root][1].store
+    assert verify_session_ref(hooks, root, token) == session_owner('codex', 'readonly-only')
+    assert 'development_check_ref' not in structured(response)
+    output = json.loads(response.content[0].text)
+    assert token in output['hookSpecificOutput']['additionalContext']
     assert not (hooks.workspace_directory(root)/'development-checks.db').exists()
+    again = asyncio.run(server.call_tool('handle_hook_event', dict(
+        event='PostToolUse', workspace_path=str(root), session_id='readonly-only',
+        turn_id='readonly-turn', tool_use_id='readonly-again', tool_name='Bash',
+        tool_input={'command':'git status --short'})))
+    assert 'task_session_ref' not in structured(again)
+    assert json.loads(again.content[0].text) == {}
+
+
+def test_short_native_handle_resumes_exact_check_created_with_legacy_reference(audit_pool, projects):
+    from security_runtime.tasks.ownership import issue_session_ref
+    pool, server, _ = audit_pool
+    root = projects[0]
+    short = start(server, root, 'same-owner')['task_session_ref']
+    hooks = pool.children[root][1].store
+    legacy = issue_session_ref(hooks, root, 'codex', 'same-owner')
+    from security_runtime.storage import SQLiteStore
+    pool.children[root][1].runtime.store = SQLiteStore(hooks.directory.parent/'scans.db')
+    begun = structured(asyncio.run(server.call_tool('begin_development_check', dict(
+        workspace_path=str(root), session_ref=legacy, task_key='preserve-original'))))
+    assert 'check_ref' in begun, begun
+    ref = begun['check_ref']
+    resumed = structured(asyncio.run(server.call_tool('get_development_check', dict(
+        workspace_path=str(root), session_ref=short, check_ref=ref))))
+    assert resumed['check_ref'] == ref and resumed['dirty_seq'] == begun['dirty_seq'] == 0
+    assert not resumed['baseline_created'] and not resumed['scanner_run']
+    from security_runtime.development_check import DevelopmentCheckStore
+    records = DevelopmentCheckStore(hooks, root).rows()
+    assert len([row for row in records if row.get('kind') == 'check']) == 1

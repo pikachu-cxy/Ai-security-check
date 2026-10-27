@@ -26,7 +26,18 @@ MAX_PATH_BYTES = 64_000
 MAX_EVENTS = 256
 RETENTION_SECONDS = 7 * 86400
 MAX_FINISH_WAIT_SECONDS = 25
+MAX_PRODUCT_WAIT_SECONDS = 120
 TERMINAL = frozenset({'RESULTS_READY', 'PARTIAL', 'NO_OBSERVED_CHANGES', 'FAILED'})
+
+
+def product_wait_seconds():
+    try:
+        seconds = int(os.environ.get('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '20'))
+    except ValueError:
+        raise ValueError('DEVELOPMENT_WAIT_CONFIGURATION_INVALID') from None
+    if not 0 <= seconds <= MAX_PRODUCT_WAIT_SECONDS:
+        raise ValueError('DEVELOPMENT_WAIT_CONFIGURATION_INVALID')
+    return seconds
 
 
 def workspace_root(value):
@@ -111,11 +122,15 @@ class DevelopmentCheckStore(SignedRecords):
         """Retire old inactive metadata only; persisted scan/risk records remain."""
         rows = self._all(db)
         focused = {r['check_ref'] for r in rows if r.get('kind') == 'focus'}
+        undelivered = {r['check_ref'] for r in rows if r.get('kind') == 'delivery'
+                       and not r.get('host_report_submitted')}
         removed = {r['check_ref'] for r in rows if r.get('kind') == 'check'
             and r['state'] in TERMINAL and r['finish_requested']
-            and r['check_ref'] not in focused and r['updated_at'] < self.now()-RETENTION_SECONDS}
+            and r['check_ref'] not in focused | undelivered
+            and r['updated_at'] < self.now()-RETENTION_SECONDS}
         for row in rows:
-            if row['key'] in removed or row.get('kind') == 'alias' and row['check_ref'] in removed:
+            if (row['key'] in removed or row.get('kind') in {'alias', 'delivery', 'continuation'}
+                    and row['check_ref'] in removed):
                 db.execute('DELETE FROM records WHERE key=?', (row['key'],))
             elif row.get('kind') == 'replay':
                 events = [event for event in row['events'] if event['check_ref'] not in removed]
@@ -135,7 +150,9 @@ class DevelopmentCheckStore(SignedRecords):
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
             dirty_seq=row['dirty_seq']+1, updated_at=self.now(), last_event_at=self.now(),
             events=([*row['events'], event_id][-MAX_EVENTS:] if event_id else row['events']),
-            state='DIRTY', reason_code=None, finish_requested=False)
+            state='DIRTY', reason_code=None, finish_requested=False,
+            attempt_count=0, busy_attempts=0, next_attempt_at=0, failed_seq=None,
+            launch_failures=0, launch_retry_at=0)
         return self._put(db, row['check_ref'], row), True
 
 
@@ -173,12 +190,20 @@ def projection(store, row):
     if row['dirty_seq'] > row['scanned_seq']:
         gaps.append('OBSERVED_EDITS_PENDING')
     gaps.extend(result.get('gaps', []))
+    gaps.extend(row.get('file_watch_gaps', []))
+    watch = row.get('file_watch') or {}
+    if watch.get('status') == 'ACTIVE' and watch.get('lease_until', 0) <= store.now():
+        gaps.append('FILE_WATCH_INTERRUPTED')
+        watch = dict(watch, status='INTERRUPTED')
     return dict(contract=CONTRACT, check_ref=row['check_ref'], status=state,
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
-            scope_unknown=row['scope_unknown'], full_project=False, expanded_to_project=False),
+            scope_unknown=bool(row['scope_unknown'] or 'FILE_WATCH_INTERRUPTED' in gaps),
+            full_project=False, expanded_to_project=False),
         gaps=list(dict.fromkeys(gaps)), reason_code=reason,
+        file_watch={name: watch[name] for name in ('contract', 'status', 'scope', 'attribution',
+            'started_at', 'ended_at', 'lease_until') if name in watch},
         finish_requested=row['finish_requested'], scanner_run=False,
         baseline_created=False, source_modified=False, repair_authorized=False,
         host_review_completed=False, security_proof=False,
@@ -221,6 +246,12 @@ class DevelopmentCheckService:
                 for row in store._all(db):
                     if row.get('kind') == 'check' and row['state'] == 'QUEUED':
                         store._put(db, row['check_ref'], dict(row, reason_code='DEVELOPMENT_WORKER_START_FAILED'))
+        finally:
+            # Custom launchers belong to tests/trusted embeddings. The normal
+            # product owns recovery independently of tool wait cancellation.
+            if self.launcher is None:
+                from .development_scheduler import supervise
+                supervise(self.hooks, store.root)
 
     def begin(self, root, task_key):
         if not isinstance(task_key, str) or not 1 <= len(task_key) <= 128 or any(ord(c) < 32 for c in task_key):
@@ -231,6 +262,7 @@ class DevelopmentCheckService:
             return blocked
         ref = 'dc1-' + hashlib.sha256((owner_key(self.owner)+'\0'+task_key).encode()).hexdigest()[:32]
         self.hooks.key(store.root)
+        previous = store.read('focus:'+owner_key(self.owner))
         with store.transaction() as db:
             store.prune(db)
             alias = store._get(db, 'alias:'+ref)
@@ -248,6 +280,9 @@ class DevelopmentCheckService:
             if row['owner'] != self.owner or row['root_identity'] != root_identity(store.root):
                 raise ValueError('DEVELOPMENT_CHECK_UNAVAILABLE')
             store._put(db, 'focus:'+owner_key(self.owner), dict(kind='focus', owner=self.owner, check_ref=row['check_ref']))
+        if previous and previous['check_ref'] != row['check_ref']:
+            from .development_file_watch import stop_window
+            stop_window(store, previous['check_ref'], self.owner)
         return projection(store, row)
 
     def record(self, root, check_ref, paths, *, scope_unknown=False, event_id=None):
@@ -263,6 +298,8 @@ class DevelopmentCheckService:
     def finish(self, root, check_ref):
         store = self.store(root)
         store.load(check_ref, self.owner)
+        from .development_file_watch import stop_window
+        stop_window(store, check_ref, self.owner)
         with store.transaction() as db:
             row = store._get(db, check_ref)
             state = row['state']
@@ -270,7 +307,8 @@ class DevelopmentCheckService:
             running = worker and worker.get('lease_until', 0) > self.now()
             if row['dirty_seq'] == 0:
                 state = 'NO_OBSERVED_CHANGES'
-            elif row['dirty_seq'] > row['scanned_seq'] and (state != 'RUNNING' or not running):
+            elif (row['dirty_seq'] > row['scanned_seq'] and
+                    row.get('failed_seq') != row['dirty_seq'] and (state != 'RUNNING' or not running)):
                 state = 'QUEUED'
             row = store._put(db, check_ref, dict(row, finish_requested=True, state=state, updated_at=self.now()))
         if state in {'QUEUED', 'RUNNING'}:
@@ -284,6 +322,20 @@ class DevelopmentCheckService:
         submitted = self.finish(root, check_ref)
         if wait_seconds == 0:
             return submitted
+        return await self.wait_saved(root, check_ref, wait_seconds, submitted=submitted)
+
+    async def complete(self, root, check_ref):
+        """One submit; the product selects the communication budget."""
+        budget = product_wait_seconds()  # Reject bad configuration before dispatch.
+        return await self.wait_saved(root, check_ref, budget, submitted=self.finish(root, check_ref))
+
+    async def wait_saved(self, root, check_ref, wait_seconds=None, *, submitted=None):
+        """Read-only continuation. Never finish, rescan, or wake a worker."""
+        if wait_seconds is None:
+            wait_seconds = product_wait_seconds()
+        if type(wait_seconds) is not int or not 0 <= wait_seconds <= MAX_PRODUCT_WAIT_SECONDS:
+            raise ValueError('DEVELOPMENT_WAIT_INVALID')
+        submitted = submitted or projection(self.store(root), self.store(root).load(check_ref, self.owner))
         started = self.monotonic()
         deadline = started + wait_seconds
         expected_seq = submitted['dirty_seq']
@@ -313,6 +365,35 @@ class DevelopmentCheckService:
             scanner_dispatched_by_wait=False, host_review_completed=False)
         return result
 
+    def deliveries(self, root, *, offset=0, limit=20):
+        from .development_delivery import pending, facts
+        if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= 50:
+            raise ValueError('DEVELOPMENT_DELIVERY_PAGE_INVALID')
+        rows = pending(self.store(root), self.owner)
+        return dict(contract='development-result-delivery-v1', results=[facts(r, summary=True) for r in rows[offset:offset+limit]],
+                    total=len(rows), next_offset=offset+limit if offset+limit < len(rows) else None,
+                    user_consumption='UNKNOWN', automatic_host_ack=False)
+
+    def saved_result(self, root, check_ref, scanned_seq):
+        from .development_delivery import key, facts
+        store = self.store(root)
+        store.load(check_ref, self.owner)
+        row = store.read(key(check_ref, scanned_seq))
+        if row is None or row['owner'] != self.owner or row['root_identity'] != root_identity(store.root):
+            raise ValueError('DEVELOPMENT_RESULT_UNAVAILABLE')
+        result = dict(delivery=facts(row), result=row['result'], reason_code=row['reason_code'])
+        if row['scan_id']:
+            from .storage import ReadOnlySQLiteStore
+            from .mcp_tools.presentation import _agent_result
+            no_links(Path(row['scan_path']))
+            scan = ReadOnlySQLiteStore(Path(row['scan_path'])).get_scan(row['scan_id'])
+            if scan is None or Path(scan['target_profile']['path']).resolve() != store.root:
+                raise ValueError('DEVELOPMENT_RESULT_UNAVAILABLE')
+            result['static_result'] = _agent_result(scan, summary=True)
+            if 'findings_access' in result['static_result']:
+                result['static_result']['findings_access']['arguments']['workspace_path'] = str(store.root)
+        return result
+
     def get(self, root, check_ref):
         store = self.store(root)
         row = store.load(check_ref, self.owner)
@@ -333,7 +414,7 @@ class DevelopmentCheckService:
 
 
 def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=None,
-                scan_path=None, launcher=None):
+                scan_path=None, launcher=None, prepare_only=False, watch_eligible=False):
     """Record a validated host mutation; never read project source in a hook."""
     owner_key(owner)
     names, invalid = clean_paths(paths, tolerant=True)
@@ -345,6 +426,11 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
         return blocked
     hooks.key(store.root)
     key = 'focus:'+owner_key(owner)
+    focused = store.read(key)
+    covered = False
+    if watch_eligible and focused:
+        from .development_file_watch import active
+        covered = active(store, focused['check_ref'], owner)
     with store.transaction() as db:
         digest = None
         replay_key = 'replay:'+owner_key(owner)
@@ -368,7 +454,14 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
             ref = 'dc1-'+uuid.uuid4().hex
             row = dict(store.fresh(ref, owner, service.scan_path()), automatic=True)
             store._put(db, key, dict(kind='focus', owner=dict(owner), check_ref=ref))
-        row, changed = store.append(db, row, names, bool(scope_unknown or invalid), event_id)
+        if prepare_only:
+            store._put(db, row['check_ref'], row)
+        elif covered and focused['check_ref'] == row['check_ref'] and not names and not invalid:
+            # The live task window records actual notifications. A shell whose
+            # syntax is unknown need not invent an edit or a new unknown scope.
+            pass
+        else:
+            row, changed = store.append(db, row, names, bool(scope_unknown or invalid), event_id)
         if digest is not None:
             store._put(db, replay_key, dict(kind='replay', events=[*replay['events'],
                 dict(id=digest, check_ref=row['check_ref'])][-MAX_EVENTS:]))

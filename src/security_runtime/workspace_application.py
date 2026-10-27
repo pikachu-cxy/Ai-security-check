@@ -20,6 +20,7 @@ class WorkspaceApplication:
         self.connection_owner = connection_owner()
         self.issued_tasks = {}
         self.issued_development_checks = {}
+        self.development_result_offers = set()
         self.native_session_bindings = set()
         from .tasks.source_cache import TaskSourceCache
         self.task_source_cache = TaskSourceCache()

@@ -31,4 +31,5 @@ Other Python dependency license terms are distributed with their respective inst
 | packaging | 26.3 | packaging contributors | Apache-2.0 OR BSD-2-Clause | https://packaging.pypa.io | Python dependency declaration parsing; original license texts included in standalone inventory |
 | javalang | 0.13.0 | Copyright (c) 2013 Christopher Thunes | MIT | https://github.com/c2nes/javalang | Java 8 parser; original LICENSE retained |
 | six | 1.17.0 | Copyright (c) 2010-2024 Benjamin Peterson | MIT | https://github.com/benjaminp/six | Parser dependency; original LICENSE retained |
+| watchfiles | 1.3.0 | Samuel Colvin and watchfiles contributors | MIT | https://github.com/samuelcolvin/watchfiles | Task-window file notifications; upstream wheel license inventory retained |
 | Managed CPython | 3.12.12 / 20260211 | Python Software Foundation and distribution contributors | Python-2.0 and included component licenses | https://github.com/astral-sh/python-build-standalone | Separate checksum-pinned download on first Semgrep preparation; preserve upstream license inventory; not bundled |

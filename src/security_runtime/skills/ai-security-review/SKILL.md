@@ -35,8 +35,11 @@ AI Security Runtime 核心指导
 ## 不可省略的边界
 
 普通开发使用 observed-development-check-v1：begin_development_check 仅记元数据；
-record_development_changes 仅补录明确编辑路径，finish_development_check 才请求后台合并检查，
+record_development_changes 仅补录明确编辑路径，收尾入口请求后台合并检查，
 get_development_check 只读保存结果。已有本会话 Hook 的 check_ref 则沿用，不建立修改前基线。
+具备 development_check_delivery 能力时优先 complete_development_check，由产品选择等待预算；
+超时沿 wait_development_check 原引用续等，待交付分页和历史版本读取按 development-check 方法。
+旧 Runtime 保留 finish_development_check，不猜测新参数或能力。读取不等于用户已看到。
 核对同一构建的四项轻量工具，不以版本号或工具总数替代能力；不可用不自动退回全项目审计。
 保留原 check_ref、有效 session_ref、owner、范围与序号，不按最近任务猜测或跨会话认领。
 已观测文件的固定扫描输入用于保证结果一致，不是全项目快照；无法确定范围则保留缺口。

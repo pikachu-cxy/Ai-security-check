@@ -1,0 +1,181 @@
+{
+  "contract": "watchfiles-windows-native-acceptance-v1",
+  "date": "2026-10-27",
+  "timezone": "Asia/Shanghai",
+  "build_id": "cf43b15b62513f7c8e2e18b382eb4897d8267c6854040946da0f42670216d57a",
+  "requested_model": "gpt-6.1-terra",
+  "requested_reasoning": "medium",
+  "actual_model_identity": "NOT_RETURNED_BY_THREAD_RETRIEVAL",
+  "tracked_files_per_worktree": 6023,
+  "evidence": [
+    "Original native chat command/file-change records and final replies",
+    "Read-only original scan records for each exact workspace"
+  ],
+  "cases": [
+    {
+      "group": "code-A-r01",
+      "edit_method": "NATIVE_PATCH",
+      "expected_paths": 11,
+      "reported_observed_paths": 11,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 2,
+      "reported_scanned_seq": 2,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 1,
+      "saved_scan_duration_ms": 19578,
+      "app_successful_turn_duration_ms": 135710,
+      "recognition": "STATIC_JS_CODE_INJECTION",
+      "additional_selection_context": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "functional_acceptance": "PASS"
+    },
+    {
+      "group": "code-B-r01",
+      "edit_method": "SHELL_PYTHON_CHILD",
+      "expected_paths": 11,
+      "reported_observed_paths": 11,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 1,
+      "reported_scanned_seq": 1,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 1,
+      "saved_scan_duration_ms": 19016,
+      "app_successful_turn_duration_ms": 129863,
+      "recognition": "STATIC_JS_CODE_INJECTION",
+      "additional_selection_context": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "functional_acceptance": "PASS"
+    },
+    {
+      "group": "dependency-A-r01",
+      "edit_method": "NATIVE_PATCH",
+      "expected_paths": 13,
+      "reported_observed_paths": 13,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 2,
+      "reported_scanned_seq": 2,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 5,
+      "saved_scan_duration_ms": 20531,
+      "app_successful_turn_duration_ms": 134899,
+      "recognition": "TRIVY_LODASH_VERSION_MATCHES",
+      "additional_selection_context": [],
+      "functional_acceptance": "PASS"
+    },
+    {
+      "group": "dependency-B-r01",
+      "edit_method": "SHELL_PYTHON_CHILD",
+      "expected_paths": 13,
+      "reported_observed_paths": 13,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 1,
+      "reported_scanned_seq": 1,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 5,
+      "saved_scan_duration_ms": 24532,
+      "app_successful_turn_duration_ms": 105037,
+      "recognition": "TRIVY_LODASH_VERSION_MATCHES",
+      "additional_selection_context": [],
+      "functional_acceptance": "PASS"
+    },
+    {
+      "group": "business-A-r01",
+      "edit_method": "NATIVE_PATCH",
+      "expected_paths": 14,
+      "reported_observed_paths": 14,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 2,
+      "reported_scanned_seq": 2,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 0,
+      "saved_scan_duration_ms": 24546,
+      "app_successful_turn_duration_ms": 130465,
+      "recognition": "HOST_REVIEW_CROSS_TENANT_READ",
+      "additional_selection_context": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "functional_acceptance": "PASS"
+    },
+    {
+      "group": "business-B-r01",
+      "edit_method": "SHELL_PYTHON_CHILD",
+      "expected_paths": 14,
+      "reported_observed_paths": 14,
+      "missing_paths": 0,
+      "extra_observed_paths": 0,
+      "reported_watch_status": "STOPPED",
+      "reported_watch_gaps": false,
+      "reported_dirty_seq": 1,
+      "reported_scanned_seq": 1,
+      "closeout_submissions": 1,
+      "manual_path_supplement_calls": 0,
+      "stored_static_finding_count": 0,
+      "saved_scan_duration_ms": 20078,
+      "app_successful_turn_duration_ms": 97836,
+      "recognition": "HOST_REVIEW_CROSS_TENANT_READ",
+      "additional_selection_context": [
+        "package.json",
+        "package-lock.json"
+      ],
+      "functional_acceptance": "PASS"
+    }
+  ],
+  "readonly": {
+    "group": "dependency-A-r01",
+    "reported_new_watchers": 0,
+    "reported_new_checks": 0,
+    "reported_scans": 0,
+    "app_recorded_commands": [
+      "rg --files -g README* -g readme*",
+      "Get-Content README.md -Raw"
+    ],
+    "app_recorded_mcp_calls": 0,
+    "app_recorded_file_changes": 0
+  },
+  "dependency_cves": [
+    "CVE-2021-23337",
+    "CVE-2026-4800",
+    "CVE-2020-28500",
+    "CVE-2025-13465",
+    "CVE-2026-2950"
+  ],
+  "database_content_fingerprint": "DISABLED_AS_REQUESTED; NOT_AN_ACCEPTANCE_FAILURE",
+  "limitations": [
+    "Dependency results remain partial: incomplete resolved/transitive inventory and missing optional OSV npm data.",
+    "Business recognition is host code review; static zero findings are not a complete business-security proof.",
+    "Code/business selection includes two manifest context inputs; observed/source scope remains 11/14 files.",
+    "One successful round per case; concurrent workspaces, different histories and no matched before/after baseline prevent a speedup conclusion.",
+    "App turn duration includes preparation and model work; scanner duration is a separate measure.",
+    "Earlier model-capacity failure before code-B editing: 108393 ms; preserved separately, excluded from successful-turn timing.",
+    "Original r01/r02 records and intentional vulnerable fixtures retained.",
+    "No claim of per-writer process attribution, complete project coverage or completed macOS/Linux acceptance."
+  ],
+  "windows_feature_acceptance": "PASS",
+  "macos_acceptance": "PENDING",
+  "linux_acceptance": "NOT_RUN"
+}

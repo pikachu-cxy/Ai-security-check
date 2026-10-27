@@ -61,3 +61,23 @@ def test_shared_engine_install_is_serialized(tmp_path):
     with patch.object(manager,'_ensure',side_effect=transaction),ThreadPoolExecutor(max_workers=2) as pool:
         list(pool.map(manager.ensure,['trivy','trivy']))
     assert maximum==1
+
+
+def test_vulnerability_database_content_fingerprinting_is_off(tmp_path, monkeypatch):
+    manager = ToolManager(root=tmp_path/'managed')
+    def unexpected(*_args, **_kwargs):
+        raise AssertionError('vulnerability database bytes must not be fingerprinted')
+    monkeypatch.setattr('security_runtime.scanner_identity.content_identity', unexpected)
+    assert manager.execution_data_identity('trivy', kind='vuln') is None
+    assert manager.execution_data_identity('osv-scanner', ecosystems={'npm'}) is None
+
+
+def test_misconfiguration_policy_bundle_content_binding_is_unchanged(tmp_path):
+    manager = ToolManager(root=tmp_path/'managed')
+    bundle = manager.trivy_cache_dir()/'checks'/'policy.rego'
+    bundle.parent.mkdir(parents=True)
+    bundle.write_text('first policy')
+    first = manager.execution_data_identity('trivy', kind='misconfig')
+    bundle.write_text('second policy')
+    second = manager.execution_data_identity('trivy', kind='misconfig')
+    assert first and second and first != second

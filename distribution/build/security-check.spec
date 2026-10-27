@@ -15,7 +15,8 @@ datas += [(str(root / name), "security_runtime") for name in ("LICENSE", "EULA.m
 datas += copy_metadata("ai-security-runtime")
 datas += copy_metadata("javalang") + copy_metadata("six")
 datas += copy_metadata("packaging")
-hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server"]
+datas += copy_metadata("watchfiles")
+hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server", "watchfiles._rust_notify"]
 
 a = Analysis(
     [str(root / "distribution" / "build" / "entry.py")],

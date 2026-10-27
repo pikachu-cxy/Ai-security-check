@@ -234,7 +234,7 @@ def test_actual_tool_content_change_cannot_prove_a_clean_execution(project):
     assert result.status == 'PARTIAL'
 
 
-def test_actual_database_change_invalidates_execution_identity(project):
+def test_database_content_fingerprint_is_disabled_during_execution(project, monkeypatch):
     root, store = project
     (root / 'requirements.txt').write_bytes(b'fixture==1\n')
 
@@ -242,26 +242,33 @@ def test_actual_database_change_invalidates_execution_identity(project):
         (manager.trivy_cache_dir() / 'db' / 'trivy.db').write_bytes(b'new database')
 
     runtime, _, _, manager = tool_fixture(root, store, engine='trivy', dependency=True, callback=change)
+    monkeypatch.setattr(manager, 'execution_data_identity', lambda *_a, **_k:
+        pytest.fail('vulnerability database content must not be fingerprinted'))
     db = manager.trivy_cache_dir() / 'db'
     db.mkdir(parents=True)
     (db / 'trivy.db').write_bytes(b'old database')
     (db / 'metadata.json').write_bytes(b'{}')
     result = runtime.scan(root, 'release')
-    assert result.scanner_runs[0].error_code == 'SCAN_EXECUTION_IDENTITY_CHANGED'
-    assert result.scan_context['execution_bindings']['trivy']['verified'] is False
-    assert result.scanner_runs[0].coverage_contract == 'NONE'
+    run = result.scanner_runs[0]
+    assert run.status == 'SUCCESS' and not run.error_code
+    binding = result.scan_context['execution_bindings']['trivy']
+    assert binding['verified'] is True and binding['data_status'] == 'DISABLED'
+    assert binding['data'] is None and binding['data_required'] is False
+    assert not any('DATA_IDENTITY_UNVERIFIABLE' in note for note in run.coverage_notes)
 
 
-def test_online_data_without_fixed_database_identity_remains_partial(project, monkeypatch):
+def test_osv_database_fingerprint_disabled_does_not_create_a_coverage_gap(project, monkeypatch):
     root, store = project
     monkeypatch.delenv('SECURITY_RUNTIME_OFFLINE', raising=False)
     (root / 'requirements.txt').write_bytes(b'fixture==1\n')
-    runtime, _, _, _ = tool_fixture(root, store, engine='osv-scanner', dependency=True)
+    runtime, _, _, manager = tool_fixture(root, store, engine='osv-scanner', dependency=True)
+    monkeypatch.setattr(manager, 'execution_data_identity', lambda *_a, **_k:
+        pytest.fail('vulnerability database content must not be fingerprinted'))
     result = runtime.scan(root, 'release')
     run = result.scanner_runs[0]
-    assert run.status == 'SUCCESS' and run.coverage_contract == 'PARTIAL'
-    assert run.scanner_diagnostics['execution_binding']['data_status'] == 'UNVERIFIABLE'
-    assert result.capability_results[Capability.DEPENDENCY_VULN] == 'PARTIAL'
+    assert run.status == 'SUCCESS' and run.coverage_contract == 'FULL'
+    assert run.scanner_diagnostics['execution_binding']['data_status'] == 'DISABLED'
+    assert result.capability_results[Capability.DEPENDENCY_VULN] == 'EXECUTED'
 
 
 def test_unbound_external_scanner_configuration_never_reads_live(project, monkeypatch):

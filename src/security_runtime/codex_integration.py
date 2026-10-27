@@ -36,7 +36,7 @@ BEGIN = '\n# BEGIN AI Security Runtime managed Codex v0.2\n'
 END = '# END AI Security Runtime managed Codex v0.2\n'
 MAX_CONFIG = 262_144
 MAX_METADATA = 16_384
-REQUIRED_TOOLS = REQUIRED_GUIDANCE_TOOLS | {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event',
+REQUIRED_TOOLS = REQUIRED_GUIDANCE_TOOLS | {'handle_before_hook_event', 'handle_hook_event', 'handle_readiness_event', 'handle_stop_event',
     'confirm_remediation'}
 
 
@@ -182,6 +182,11 @@ def product_hooks() -> dict:
     # User-visible labels are part of the owned definition fingerprint. Upgrades
     # retain prior signed records and require the Host's normal trust review.
     result = codex_mcp_hook_config()
+    before = copy.deepcopy(result['hooks']['PostToolUse'])
+    before[0]['hooks'][0]['tool'] = 'handle_before_hook_event'
+    before[0]['hooks'][0]['statusMessage'] = '记录开发期间的文件变更'
+    before[0]['hooks'][0]['timeout'] = 30
+    result['hooks']['PreToolUse'] = before
     result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = '检查本次改动的安全风险'
     result['hooks']['SessionStart'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_readiness_event',
@@ -440,7 +445,7 @@ class CodexIntegrationAdapter:
 
     @staticmethod
     def _related(event, group):
-        return any((h.get('server') == SERVER and h.get('tool') in {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'})
+        return any((h.get('server') == SERVER and h.get('tool') in {'handle_before_hook_event', 'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'})
                    or (h.get('type') == 'command' and ('security-check' in str(h.get('command', ''))
                        or h.get('statusMessage') == 'AI Security Runtime [hook-v1]')) for h in group['hooks'])
 
@@ -547,6 +552,7 @@ class CodexIntegrationAdapter:
         return {'integration': 'codex', 'workspace_hash': identity(os.path.normcase(str(root))),
                 'installation': 'NOT_INSTALLED' if absent else 'CONFIGURED', 'runtime': {**capability, 'kind': runtime['kind']},
                 'mode': capability['mode'], 'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED'},
+                'pre_tool_hook': {'status': self._hook_status('PreToolUse', configs[1][2], desired[4], manifest)},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
                 'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
                 'readiness': readiness, 'legacy_hook': {'status': 'LEGACY_HOOK_PRESENT' if legacy else ('POTENTIAL_DUPLICATE_HOOK' if 'POTENTIAL_DUPLICATE_HOOK' in diagnostics else 'NONE')},

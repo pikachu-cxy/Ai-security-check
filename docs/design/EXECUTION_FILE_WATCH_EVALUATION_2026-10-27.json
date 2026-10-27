@@ -1,0 +1,37 @@
+{
+  "kind": "ISOLATED_WINDOWS_DIRECTORY_WATCH_PROBE",
+  "date": "2026-10-27",
+  "production_hooks_changed": false,
+  "production_runtime_changed": false,
+  "actual_host_pretooluse_tested": false,
+  "actual_git_worktrees_tested": false,
+  "existing_filler_files": 6000,
+  "registration_ms": 6.908,
+  "expected_paths_observed": true,
+  "missing_paths": [],
+  "workspace_A_paths": [
+    "atomic.py",
+    "atomic.tmp",
+    "child_generated.py",
+    "delete_me.py",
+    "external_concurrent.py",
+    "morning_rewritten.py",
+    "nested\\new.py",
+    "rename_new.py"
+  ],
+  "workspace_B_paths": ["other.py"],
+  "root_isolation_pass": true,
+  "untouched_morning_file_excluded": true,
+  "previously_dirty_file_rewrite_observed": true,
+  "concurrent_external_write_also_observed": true,
+  "read_only_notifications": 0,
+  "watcher_errors": [],
+  "notification_properties": ["Root", "Kind", "Name", "OldName"],
+  "notification_has_writer_pid": false,
+  "attribution_to_ai_proven": false,
+  "earlier_attempts": [
+    "Initial Start-Process writer verification failed.",
+    "Sandbox retry captured WinError 5 on synthetic rename; production paths were not used."
+  ],
+  "remark": "One local probe; neither production Hook integration nor a full-chat performance benchmark."
+}

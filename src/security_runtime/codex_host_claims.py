@@ -10,7 +10,7 @@ import os
 import threading
 
 EVENTS = {'handle_readiness_event': 'SessionStart', 'handle_hook_event': 'PostToolUse',
-          'handle_stop_event': 'Stop'}
+          'handle_stop_event': 'Stop', 'handle_before_hook_event': 'PreToolUse'}
 LIMITS = dict(event=32, workspace_path=4096, session_id=500, turn_id=500,
               tool_use_id=500, tool_name=64)
 PERMISSIONS = {'default', 'acceptEdits', 'plan', 'dontAsk', 'bypassPermissions'}
@@ -20,7 +20,7 @@ def diagnostics(arguments, event):
     """Return fixed field names and booleans, never rejected values or keys."""
     args = arguments if isinstance(arguments, dict) else {}
     required = ['event', 'workspace_path', 'session_id']
-    if event == 'PostToolUse':
+    if event in {'PreToolUse', 'PostToolUse'}:
         required += ['turn_id', 'tool_use_id', 'tool_name']
     if event == 'Stop':
         required += ['stop_hook_active']
@@ -35,7 +35,7 @@ def diagnostics(arguments, event):
             invalid.append(key)
     if args.get('event') != event and 'event' not in missing + invalid:
         invalid.append('event')
-    if event == 'PostToolUse' and (not isinstance(args.get('tool_name'), str)
+    if event in {'PreToolUse', 'PostToolUse'} and (not isinstance(args.get('tool_name'), str)
                                  or args['tool_name'] not in {'Bash', 'apply_patch', 'Edit', 'Write'}):
         if 'tool_name' not in missing + invalid:
             invalid.append('tool_name')
@@ -105,23 +105,26 @@ class CodexClaimGuard:
                 diag.update(host_claim_status='REJECTED', session_claim_match=False)
                 return 'SESSION_WORKSPACE_MISMATCH'
             diag['session_claim_match'] = True
-            if args['event'] == 'PostToolUse':
+            if args['event'] in {'PreToolUse', 'PostToolUse'}:
                 invocation = self._hash(args['tool_use_id'])
+                binding = (workspace, session, self._hash(args['turn_id']), self._hash(args['tool_name']))
+                seen = ()
                 if invocation in self.invocations:
                     prior = self.invocations[invocation]
-                    diag['host_claim_status'] = 'REJECTED'
-                    diag['invalid_claims'] = ['tool_use_id']
-                    diag['workspace_claim_match'] = prior[0] == workspace
-                    diag['session_claim_match'] = prior[1] == session
-                    return 'TOOL_USE_CLAIM_REPLAYED'
-                if len(self.invocations) >= self.limit:
+                    seen = prior[4]
+                    if prior[:4] != binding or args['event'] in seen or args['event'] == 'PreToolUse':
+                        diag['host_claim_status'] = 'REJECTED'
+                        diag['invalid_claims'] = ['tool_use_id']
+                        diag['workspace_claim_match'] = prior[0] == workspace
+                        diag['session_claim_match'] = prior[1] == session
+                        return 'TOOL_USE_CLAIM_REPLAYED'
+                elif len(self.invocations) >= self.limit:
                     diag['host_claim_status'] = 'REJECTED'
                     return 'HOST_CLAIM_BUDGET_EXCEEDED'
             if session not in self.sessions and len(self.sessions) >= 64:
                 diag['host_claim_status'] = 'REJECTED'
                 return 'SESSION_CONNECTION_BUDGET_EXCEEDED'
             self.sessions[session] = workspace
-            if args['event'] == 'PostToolUse':
-                self.invocations[invocation] = (workspace, session, self._hash(args['turn_id']),
-                                                self._hash(args['tool_name']))
+            if args['event'] in {'PreToolUse', 'PostToolUse'}:
+                self.invocations[invocation] = (*binding, tuple(sorted({*seen, args['event']})))
         return None

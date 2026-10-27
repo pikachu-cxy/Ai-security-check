@@ -158,7 +158,7 @@ def test_scoped_and_partial_results_never_receive_proof(reusable):
     assert partial.status == 'PARTIAL' and 'result_reuse' not in partial.scanner_diagnostics
 
 
-def test_database_content_or_expiry_invalidates_reuse(reusable, tmp_path, monkeypatch):
+def test_database_fingerprint_disabled_preserves_reuse_and_expiry_check(reusable, tmp_path, monkeypatch):
     runtime, root, *_ = reusable
     (root / 'package-lock.json').write_text('{"lockfileVersion":3,"packages":{}}')
     manager = ToolManager(tmp_path / 'dependency-tool')
@@ -169,6 +169,8 @@ def test_database_content_or_expiry_invalidates_reuse(reusable, tmp_path, monkey
     monkeypatch.setattr(manager, 'ensure', lambda name, **_kwargs: resolved(manager, name, binary))
     monkeypatch.setattr(adapter, '_prepare', lambda *_args: ToolStatus.READY)
     monkeypatch.setattr(adapter, '_scan', lambda *_args: [])
+    monkeypatch.setattr(manager, 'execution_data_identity', lambda *_a, **_k:
+        pytest.fail('vulnerability database content must not be fingerprinted'))
     db = manager.trivy_cache_dir() / 'db'
     db.mkdir(parents=True)
     data = db / 'trivy.db'
@@ -185,10 +187,19 @@ def test_database_content_or_expiry_invalidates_reuse(reusable, tmp_path, monkey
     assert result.status == 'COMPLETED' and result.scanner_diagnostics.get('result_reuse')
     assert try_reuse(runtime, root).reused
     data.write_bytes(b'new database, metadata unchanged')
-    assert try_reuse(runtime, root).reason_code == 'BUILD_RULES_ENGINE_OR_CONFIGURATION_CHANGED'
+    assert try_reuse(runtime, root).reused
     data.write_bytes(b'original data')
     monkeypatch.setattr(manager, 'now', lambda: now + timedelta(hours=2))
     assert try_reuse(runtime, root).reason_code == 'PROVIDER_DATABASE_NOT_FRESH'
+    # The fixed-input artifact cache must also keep its existing hit path.
+    from security_runtime.explicit_scan import run_explicit_scan
+    monkeypatch.setattr(manager, 'now', lambda: now)
+    executions = []
+    monkeypatch.setattr(adapter, '_scan', lambda *_args: executions.append('scan') or [])
+    run_explicit_scan(runtime, root, mode='release')
+    cached = run_explicit_scan(runtime, root, mode='release')
+    assert executions == ['scan']
+    assert cached.scanner_diagnostics['result_reuse']['reused'] is True
 
 
 def test_unselected_default_providers_do_not_disable_valid_reuse(reusable):
@@ -294,9 +305,9 @@ def test_identity_capture_shares_only_duplicate_reads_in_one_operation(tmp_path,
     adapters = [TrivyAdapter(manager), TrivyAdapter(manager), TrivyMisconfigAdapter(manager)]
     registry = ScannerRegistry(adapters, fallback_adapters=[])
     first = capture_reuse_identity(registry, root, files=['data.txt'], selected=adapters)
-    assert calls == {'resolve': 1, 'engine': 1, 'data': ['vuln', 'misconfig']}
+    assert calls == {'resolve': 1, 'engine': 1, 'data': ['misconfig']}
     second = capture_reuse_identity(registry, root, files=['data.txt'], selected=adapters)
-    assert calls == {'resolve': 2, 'engine': 2, 'data': ['vuln', 'misconfig'] * 2}
+    assert calls == {'resolve': 2, 'engine': 2, 'data': ['misconfig'] * 2}
     assert first == second
     before = binary.stat()
     binary.write_bytes(b'changed fixture engine content')

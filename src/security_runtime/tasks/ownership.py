@@ -40,8 +40,12 @@ def ownership_error(recorded, requested):
     return TaskOwnershipError(reason)
 
 
-def issue_session_ref(hooks, root, host, session, *, now=None):
+def issue_session_ref(hooks, root, host, session, *, now=None, compact=False):
     """Routing integrity for validated Hook claims, not native host attestation."""
+    if compact:
+        from .session_handles import issue_session_handle
+        return issue_session_handle(hooks, root, host, session,
+                                    now=time.time if now is None else lambda: now)
     owner=session_owner(host,session)
     if host not in {'codex','cursor'} or not valid_owner(owner): raise ValueError('Invalid task session')
     issued=time.time() if now is None else now
@@ -55,6 +59,15 @@ def verify_session_ref(hooks, root, token, *, now=None):
     """Verify without creating a key or changing task state on rejected input."""
     from ..hook_state import no_links
     try:
+        if isinstance(token, str) and token.startswith('sh1-'):
+            from .session_handles import verify_session_handle
+            owner = verify_session_handle(hooks, root, token, now=now)
+            try:
+                from ..observation import bind_chat
+                bind_chat(owner)
+            except Exception:
+                pass
+            return owner
         if not isinstance(token,str) or len(token)>1024 or not token.startswith('so1-'): raise ValueError()
         body,signature=token[4:].split('.')
         path=hooks.workspace_directory(root)/'snapshot.key'

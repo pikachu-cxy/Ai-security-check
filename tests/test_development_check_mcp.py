@@ -17,6 +17,7 @@ from test_global_integration import installed, projects, structured  # noqa: F40
 
 @pytest.fixture
 def development_server(projects, tmp_path, monkeypatch):
+    monkeypatch.setattr('security_runtime.development_scheduler.supervise', lambda *a: None)
     from security_runtime.development_check import DevelopmentCheckService
     root = projects[0]
     hooks = HookStateStore(tmp_path/'hooks')

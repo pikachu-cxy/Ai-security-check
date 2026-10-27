@@ -522,23 +522,12 @@ class ToolManager:
             return None
 
     def execution_data_identity(self, tool_id: str, *, kind=None, ecosystems=()) -> str | None:
-        from .scanner_identity import content_identity
+        from .scanner_identity import content_identity, database_content_fingerprint_disabled
+        if database_content_fingerprint_disabled(tool_id, kind=kind):
+            return None
         if tool_id == 'trivy':
             root = self.trivy_cache_dir()
-            if kind != 'misconfig' and (not (root / 'db' / 'trivy.db').is_file()
-                    or not (root / 'db' / 'metadata.json').is_file()):
-                return None
-            names = ('checks',) if kind == 'misconfig' else ('db', 'java-db', 'checks')
-            return content_identity((name, root / name) for name in names)
-        if tool_id == 'osv-scanner':
-            from .verification_policy import offline_scanning
-            if not offline_scanning():
-                # Online responses have no locally fixed database identity.
-                return None
-            root = self.root / 'data' / 'osv' / 'osv-scalibr'
-            if not ecosystems or any(not (root / name / 'all.zip').is_file() for name in ecosystems):
-                return None
-            return content_identity((name, root / name / 'all.zip') for name in sorted(set(ecosystems)))
+            return content_identity((('checks', root / 'checks'),))
         return None
 
     def _version(self, tool_id: str, path: Path) -> str:

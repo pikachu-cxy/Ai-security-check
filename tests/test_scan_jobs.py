@@ -66,6 +66,24 @@ def test_return_immediately_and_reconnect_without_rescan(jobs):
     assert execute(other, first['job_ref']) == 2
 
 
+def test_scan_worker_launch_does_not_override_hidden_console(jobs, monkeypatch):
+    calls = []
+    monkeypatch.setattr('security_runtime.scan_jobs.subprocess.Popen',
+        lambda *args, **options: calls.append((args, options)))
+    first = jobs.submit('hidden-worker-001')
+    again = jobs.submit('hidden-worker-001')
+    assert first['job_ref'] == again['job_ref'] and len(calls) == 1
+    arguments, options = calls[0]
+    assert 'scan-job-worker' in arguments[0]
+    assert options['stdin'] == options['stdout'] == options['stderr'] == subprocess.DEVNULL
+    assert options['close_fds']
+    if os.name == 'nt':
+        assert options['creationflags'] & subprocess.CREATE_NO_WINDOW
+        assert not options['creationflags'] & (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_CONSOLE)
+    else:
+        assert options['start_new_session']
+
+
 def test_parallel_retries_launch_once_and_alias_survives_completion(jobs):
     calls = []
     def launch(queue, row):

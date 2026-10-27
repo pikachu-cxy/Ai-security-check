@@ -82,7 +82,8 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
         result = task_activity(coordinator.store, context.workspace, context.host, context._session,
             paths=event.candidate_paths, scope_unknown=event.scope_unknown,
             event_id=context.invocation_binding or event.sequence_identity,
-            scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
+            scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None),
+            watch_eligible=event.operation in {OperationClass.UNKNOWN, OperationClass.POSSIBLE_WORKSPACE_MUTATION})
         return {**result, **normalized}, None
     from .tasks.attribution import session_activity
     if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation != OperationClass.READ_ONLY:

@@ -79,6 +79,43 @@ def test_invalid_credential_neither_discloses_nor_changes_routing(context):
     assert pool.sessions == before and not pool.children
 
 
+def test_corrupted_signature_is_not_diagnosed_as_missing_startup(context):
+    root, _, pool, server = context
+    hooks = HookStateStore(workspace_state(root, pool.base)/'hooks')
+    token = issue_session_ref(hooks, root, 'codex', 'existing-chat')
+    pool.bind_session('existing-chat', root)
+    changed = token[:-1] + ('0' if token[-1] != '0' else '1')
+    before = {p:(p.read_bytes(), p.stat().st_mtime_ns) for p in root.parent.rglob('*') if p.is_file()}
+    out = query(server, root, session_ref=changed)
+    assert out['reason_code'] == 'SESSION_CONTEXT_UNVERIFIED'
+    assert out['session_context_failure'] == 'SIGNATURE_MISMATCH'
+    assert out['next_action'] == 'USE_UNCHANGED_HOST_SESSION_CONTEXT'
+    assert not out['routing_binding_confirmed'] and out['registered_workspace'] is None
+    assert changed not in str(out) and token not in str(out)
+    # Correct retry uses the exact original reference, without a restart, new
+    # key, new owner or admission; the original routing is still intact.
+    retried = query(server, root, session_ref=token)
+    assert retried['session_binding_status'] == 'MATCH'
+    assert before == {p:(p.read_bytes(), p.stat().st_mtime_ns) for p in root.parent.rglob('*') if p.is_file()}
+
+
+def test_expired_context_and_missing_state_have_distinct_readonly_diagnostics(context):
+    import time
+    from security_runtime.tasks.ownership import SESSION_TTL
+    root, _, pool, server = context
+    hooks = HookStateStore(workspace_state(root, pool.base)/'hooks')
+    expired = issue_session_ref(hooks, root, 'codex', 'expired-chat', now=time.time()-SESSION_TTL-1)
+    out = query(server, root, session_ref=expired)
+    assert out['session_context_failure'] == 'EXPIRED'
+    assert out['next_action'] == 'WAIT_FOR_HOST_SESSION_CONTEXT_REFRESH'
+    keypath = hooks.workspace_directory(root)/'snapshot.key'
+    keypath.unlink()
+    out = query(server, root, session_ref=expired)
+    assert out['session_context_failure'] == 'KEY_UNAVAILABLE'
+    assert out['next_action'] == 'CHECK_SESSION_STATE_ACCESS'
+    assert not keypath.exists() and not pool.sessions and not pool.children
+
+
 @pytest.mark.parametrize('token', [None, 'so1-invalid.invalid'])
 def test_unverified_query_never_reads_existing_foreign_registration(context, token):
     root, _, pool, server = context

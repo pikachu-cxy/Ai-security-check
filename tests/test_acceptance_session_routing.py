@@ -31,7 +31,15 @@ def startup(server, root, session='acceptance-chat'):
 def test_every_valid_start_delivers_owner_without_claiming_scan_ready(
         installed, projects, tmp_path, status):
     pool = pool_fixture(installed, tmp_path)
-    pool._initialize = lambda *args: dict(status=status, security_proof=False)
+    # This regression exercises the retained strict startup/bootstrap mode;
+    # the lightweight default deliberately reports CONNECTED without scans.
+    pool.task_audit_mode = False
+    from concurrent.futures import Future
+    def initialize(key, root, session, core):
+        future = Future()
+        future.set_result(dict(status=status, security_proof=False))
+        pool.jobs[key] = future
+    pool._start_epoch_initialization = initialize
     server = create_global_server(workspaces=pool)
     try:
         response = startup(server, projects[0])

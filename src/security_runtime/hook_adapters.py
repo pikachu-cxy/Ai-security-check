@@ -54,6 +54,12 @@ class CodexHookAdapter:
             raise ValueError('Unsupported Codex hook event')
         if event == HookEvent.FILE_CHANGED and payload.get('tool_name') not in {'Bash','apply_patch','Edit','Write'}:
             raise ValueError('Unsupported Codex edit event')
+        session = self.validate_context(payload, workspace)
+        return event,session
+
+    @staticmethod
+    def validate_context(payload, workspace):
+        """Shared cwd/session validation, including connected PreToolUse."""
         cwd = payload.get('cwd')
         if not isinstance(cwd,str) or WorkspaceResolver().resolve(
                 cwd, allow_non_git_explicit=True, allow_non_git_source=True).path != workspace:
@@ -63,7 +69,7 @@ class CodexHookAdapter:
             raise ValueError('Invalid host session identity')
         # Ignore transcript_path, tool_input/response, model and assistant text.
         # None is source data for commands, metadata state or model prompts.
-        return event,session
+        return session
 
     def config(self,workspace):
         handler = {'type':'command','command':command(workspace,self.host,'host-event'),

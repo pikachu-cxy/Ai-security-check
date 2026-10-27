@@ -11,8 +11,10 @@ MCP_INSTRUCTIONS = '''AI Security Runtime：本机安全检查与有界复核。
 保留开发授权和原记录，不降级协议或猜测方法；详细诊断可取 view="full"。
 
 默认 observed-development-check-v1：begin_development_check 仅建元数据，无全项目基线；
-Hook 或 record_development_changes 仅记录路径、不唤醒扫描；finish_development_check 才合并后台检查，
+Hook 或 record_development_changes 仅记录路径、不唤醒扫描；收尾入口才合并后台检查，
 get_development_check 只读保存结果。保留 check_ref、session_ref、owner、范围和序号，不猜归属。
+声明 development_check_delivery 时优先 complete_development_check，一次提交、产品预算等待；
+超时用 wait_development_check 原引用续等，读取不确认展示。旧 Runtime 沿 finish_development_check。
 宿主分析发现与安全相关编辑；未知范围不扩大为全项目，保存结果不证明最新全项目安全。
 严格或已有任务保留 task-review-plan-v3、task-result-delivery-v1 和原九项工具；
 沿原 task_ref、版本、证据与累计额度继续，不在编辑后补建基线，不用轻量结果替代严格审计。

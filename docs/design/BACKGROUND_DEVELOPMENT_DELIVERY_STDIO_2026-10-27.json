@@ -1,0 +1,24 @@
+{
+  "contract": "development-delivery-stdio-acceptance-v1",
+  "passed": true,
+  "build_id": "02fe5738889d1dbf22a0c6433aa01df9160cb037eaceae387be253b8b1f181b8",
+  "initial_wait_timed_out": true,
+  "wait_calls": 12,
+  "scans": 1,
+  "observed_files": 1,
+  "cases": [
+    "single_submission",
+    "scoped_real_scan",
+    "saved_risk_result",
+    "no_rescan_on_wait",
+    "pending_not_auto_acked",
+    "new_process_original_version",
+    "reconnect_context",
+    "other_owner_hidden"
+  ],
+  "limitations": [
+    "Synthetic events; not native desktop or AI report delivery.",
+    "No model, fixture execution or downloads; no full-chat speed claim."
+  ],
+  "temporary_cleanup": "PENDING_WINDOWS_RETIREMENT"
+}

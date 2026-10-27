@@ -82,7 +82,9 @@ def test_agent_hook_findings_exit_zero_and_human_json(repo,tmp_path,monkeypatch,
     import security_runtime.hook_runtime as module
     from test_hook_runtime import row
     dirty(repo);c=coordinator(tmp_path,FakeRuntime([row(repo)]))
-    monkeypatch.setattr(module,'HookCoordinator',lambda:c)
+    # Exercise the legacy advisory formatter with its explicit legacy core;
+    # the CLI now passes task_audit_mode to the constructor.
+    monkeypatch.setattr(module,'HookCoordinator',lambda **_kwargs:c)
     assert main(['hook','file-changed','--path',str(repo),'--host','codex','--json'])==0
     output=json.loads(capsys.readouterr().out)
     assert output['policy']=='ADVISORY' and output['status']=='BASELINE_ESTABLISHED'

@@ -14,6 +14,11 @@ MAX_BYTES = 2_000_000_000
 MAX_FILE_BYTES = 1_500_000_000
 
 
+def database_content_fingerprint_disabled(tool, *, kind=None):
+    """Vulnerability DB content hashing is disabled; policy bundles still bind."""
+    return tool == 'osv-scanner' or tool == 'trivy' and kind != 'misconfig'
+
+
 def _inventory(roots):
     entries = []
     visited = 0

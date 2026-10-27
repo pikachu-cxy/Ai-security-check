@@ -54,3 +54,48 @@ def test_known_write_shapes_keep_mutation_hint(command):
 @pytest.mark.parametrize('value', [None, {}, {'cmd': ''}, {'command': 7}, {'cmd': 'x' * 12001}])
 def test_invalid_inputs_remain_unknown(value):
     assert classify_bash_command(value) == 'UNKNOWN'
+
+
+@pytest.mark.parametrize('command', [
+    'Get-Location; git rev-parse --show-toplevel; git branch --show-current; git status --short',
+    'git rev-parse HEAD',
+    'git rev-parse --path-format=absolute --git-common-dir',
+    '$i=0; Get-Content billing/routes.py,billing/service.py | ForEach-Object { $_ }; rg -n "tenant_id|load_invoice" billing',
+    'Get-Content a.py | ForEach-Object { $_ } | Select-Object -First 10',
+])
+def test_native_acceptance_readback_does_not_create_a_new_edit(command):
+    assert classify_bash_command({'command': command}) == 'READ_ONLY'
+
+
+@pytest.mark.parametrize('script', [
+    'git diff --stat; git diff -- package.json package-lock.json src/adapters/render.js',
+    '$i=0; Get-Content billing/routes.py | ForEach-Object { $_ }',
+])
+def test_verified_native_powershell_wrapper_preserves_readonly_classification(monkeypatch, script):
+    import shlex
+    monkeypatch.setattr('security_runtime.shell_classification._trusted_powershell', lambda path: True)
+    command = '"C:/native/powershell/pwsh.exe" -NoProfile -Command ' + shlex.quote(script)
+    assert classify_bash_command({'command': command}) == 'READ_ONLY'
+
+
+@pytest.mark.parametrize('command', [
+    '$env:PATH=0; Get-Content a.py',
+    '$i=$(Set-Content x y); Get-Content a.py',
+    'Get-Content a.py | ForEach-Object { $_; Set-Content x y }',
+    'Get-Content a.py | ForEach-Object { & $_ }',
+    'git rev-parse --git-dir; Copy-Item a b',
+    'git rev-parse --git-path hooks; sh generator',
+    '"C:/untrusted/pwsh.exe" -Command "git status"',
+])
+def test_readback_exceptions_do_not_hide_real_or_unknown_writes(command):
+    assert classify_bash_command({'command': command}) != 'READ_ONLY'
+
+
+@pytest.mark.parametrize('suffix', [
+    "-EncodedCommand Z2l0IHN0YXR1cw==", "-File script.ps1", "-Command 'git status'; Set-Content x y",
+    "-Command 'git status' -Command 'Set-Content x y'",
+    "-Command 'git status; Set-Content x y'",
+])
+def test_wrapper_must_not_ignore_extra_commands(monkeypatch, suffix):
+    monkeypatch.setattr('security_runtime.shell_classification._trusted_powershell', lambda path: True)
+    assert classify_bash_command({'command': '"C:/native/powershell/pwsh.exe" '+suffix}) != 'READ_ONLY'

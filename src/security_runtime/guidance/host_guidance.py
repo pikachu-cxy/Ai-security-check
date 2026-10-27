@@ -522,8 +522,11 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 ## 不可省略的边界
 
 普通开发使用 observed-development-check-v1：begin_development_check 仅记元数据；
-record_development_changes 仅补录明确编辑路径，finish_development_check 才请求后台合并检查，
+record_development_changes 仅补录明确编辑路径，收尾入口请求后台合并检查，
 get_development_check 只读保存结果。已有本会话 Hook 的 check_ref 则沿用，不建立修改前基线。
+具备 development_check_delivery 能力时优先 complete_development_check，由产品选择等待预算；
+超时沿 wait_development_check 原引用续等，待交付分页和历史版本读取按 development-check 方法。
+旧 Runtime 保留 finish_development_check，不猜测新参数或能力。读取不等于用户已看到。
 核对同一构建的四项轻量工具，不以版本号或工具总数替代能力；不可用不自动退回全项目审计。
 保留原 check_ref、有效 session_ref、owner、范围与序号，不按最近任务猜测或跨会话认领。
 已观测文件的固定扫描输入用于保证结果一致，不是全项目快照；无法确定范围则保留缺口。
@@ -592,7 +595,10 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
             'features': {'developer_summary': 'v0.1', 'task_triage': 'v0.1',
                          'operating_mode': 'AI_DEVELOPMENT_EDIT_CHECK',
                          'development_check': 'observed-development-check-v1; DEFAULT; NO_PROJECT_BASELINE; HOOK_RECORD_ONLY; BACKGROUND_ON_FINISH; OBSERVED_PATHS; READ_ONLY_SAVED_RESULTS; HOST_ANALYSIS',
+                         'development_file_watch': 'development-file-watch-v1; WATCHFILES_1_3_0; NATIVE_PRE_TOOL_REGISTRATION; TASK_TIME_WINDOW; ALL_WRITERS_IN_WINDOW; WORKTREE_SCOPED; PATHS_ONLY; DRAIN_ON_FINISH; LOST_WINDOW_GAP; NO_GIT_INVENTORY',
                          'development_check_wait': 'bounded-closeout-wait-v1; OPTIONAL_FINISH_WAIT_SECONDS_0_25; DEFAULT_DISPATCH_ONLY; ASYNC_WAIT_SAVED_STATE; STOP_ON_NEW_EDITS; NO_REDISPATCH; HOST_ANALYSIS_REQUIRED',
+                         'development_check_scheduler': 'development-background-scheduler-v1; SUBMITTED_ONLY; DURABLE_BOUNDED_RETRIES; LIVE_SUPERVISOR; ADMITTED_QUEUE_RECOVERY; NO_READ_OR_EDIT_TRIGGER',
+                         'development_check_delivery': 'development-result-delivery-v1; COMPLETE_AND_WAIT_TOOLS; PRODUCT_WAIT_BUDGET; VERSIONED_PENDING_OUTBOX; OWNER_SCOPED_PAGING; BOUNDED_STOP_CONTINUATION; RECONNECT_CONTEXT; TRUSTED_HOST_ACK_ONLY; USER_CONSUMPTION_UNKNOWN',
                          'task_audit_scope': 'workspace-task-diff-v1; EXPLICIT_STRICT_OR_EXISTING_TASKS; ENTIRE_B_TO_C_DIFF; AUTHOR_INDEPENDENT; SAME_C_SCAN_AND_REVIEW',
                          'startup_comparison_baseline': 'NOT_REQUIRED; NO_STARTUP_INVENTORY_OR_SCAN; HISTORICAL_READ_ONLY',
                          'workspace_snapshot_development': development_capabilities(),
@@ -614,7 +620,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                            'task_security_result_delivery': 'task-result-delivery-v1',
                            'task_check_policy': 'OBSERVED_EDITS_DEFAULT; TASK_CLOSEOUT_V1_FOR_STRICT_TASKS; EXISTING_TASK_POLICY_PRESERVED',
                            'task_focus_switch': 'switch_security_task; OWNER_SCOPED_CAS',
-                         'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
+                          'task_session_routing': 'v1; SIGNED_HOOK_SESSION_REF; OWNER_WORKSPACE_BOUND_SHORT_HANDLE; LEGACY_REF_COMPATIBLE; INDEPENDENT_TASKS; CONNECTION_FALLBACK; NO_LATEST_TASK_ADOPTION',
                          'task_risk_ledger': 'task-risk-ledger-v1; PER_ORIGINAL_FINDING_VERSION_BOUND',
                          'finding_feedback': 'finding-feedback-v2; TYPED_EVIDENCE_REFS; USER_AND_HOST_SEPARATE; REVOCABLE; RAW_FINDINGS_PRESERVED',
                          'risk_disposition': 'risk-disposition-v1; USER_FINAL_HANDLING; EXCLUDE_DEFER_RESTORE; NO_REPAIR_AUTHORITY',

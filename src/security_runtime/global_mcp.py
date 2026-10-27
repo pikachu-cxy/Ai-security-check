@@ -23,7 +23,7 @@ from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, b
 from .mcp_contracts import MCPRegistry, raw_input_failure
 from .mcp_tools.development_check import TOOLS as DEVELOPMENT_CHECK_TOOLS
 
-HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event'}
+HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event', 'handle_before_hook_event'}
 GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
                 'get_task_isolation_capabilities'}
 TASK_REVIEW_TOOLS = {'begin_security_task', 'switch_security_task', 'finish_security_task', 'prepare_task_security_review',
@@ -424,6 +424,10 @@ class GlobalWorkspaces:
                     future.cancel()
         self.epoch_jobs.close()
         self.executor.shutdown(wait=True, cancel_futures=True)
+        from .development_check import DevelopmentCheckStore
+        from .development_file_watch import close_store
+        for root, (_, core) in list(self.children.items()):
+            close_store(DevelopmentCheckStore(core.store, root))
 
 
 class _NoProjectSeed:
@@ -682,6 +686,16 @@ def create_global_server(*, workspaces=None, host='codex'):
                 normalized = host_adapter.normalize(arguments, root, binding_diagnostics=claim_diag)
                 claim_diag.update(normalized.diagnostics())
                 classification = host_adapter.legacy_classification(normalized)
+                if name == 'handle_before_hook_event':
+                    from .codex_mcp_hook import before_normalized_event
+                    observed = await asyncio.to_thread(before_normalized_event, normalized, pool.children[root][1])
+                    data = {**claim_diag, **observed}
+                    output = {'continue': True}
+                    if data.get('file_watch', {}).get('status') != 'ACTIVE' and data.get('check_ref'):
+                        output['hookSpecificOutput'] = dict(hookEventName='PreToolUse',
+                            additionalContext='文件变更监听未能完整启动，保留原检查并在收尾说明实际范围缺口。')
+                    return CallToolResult(structuredContent=data, content=[TextContent(
+                        type='text', text=json.dumps(output, ensure_ascii=False))])
                 read_only_hook = (normalized.kind == EventKind.WORKSPACE_ACTIVITY
                                   and normalized.operation == OperationClass.READ_ONLY)
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
@@ -691,11 +705,20 @@ def create_global_server(*, workspaces=None, host='codex'):
                 from .tasks.ownership import issue_session_ref, session_context
                 readiness = pool.bootstrap(root, arguments['session_id'])
                 token = issue_session_ref(pool.children[root][1].store, root,
-                                          active_host, arguments['session_id'])
+                                          active_host, arguments['session_id'], compact=True)
                 data = dict(readiness, **claim_diag, task_session_ref=token)
                 output = {'continue': True, 'systemMessage': readiness['message'],
                     'hookSpecificOutput': {'hookEventName': 'SessionStart',
                                            'additionalContext': readiness['message'] + '\n' + session_context(token)}}
+                from .development_continuation import context as delivery_context
+                from .tasks.ownership import session_owner
+                try:
+                    note = delivery_context(pool.children[root][1].store, root,
+                                            session_owner(active_host, arguments['session_id']))
+                except (OSError, ValueError):
+                    note = ''
+                if note:
+                    output['hookSpecificOutput']['additionalContext'] += '\n' + note
                 with pool.lock:
                     pool.session_context_emitted_at[(arguments['session_id'], root)] = time.time()
                 return CallToolResult(structuredContent=data, content=[TextContent(
@@ -725,7 +748,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     # Establish stable routing before launching a slow worker;
                     # the token attests no scanner or comparison-point result.
                     session_token = issue_session_ref(pool.children[root][1].store,
-                        root, active_host, arguments['session_id'])
+                        root, active_host, arguments['session_id'], compact=True)
                 pre_snapshot_missing = False
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     core = pool.children[root][1]
@@ -809,7 +832,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 result.structuredContent = {**claim_diag, **result.structuredContent}
                 if (name == 'handle_hook_event' and pool.task_audit_mode
                         and active_host == 'codex'
-                        and result.structuredContent.get('development_check_ref')):
+                        and (read_only_hook or result.structuredContent.get('development_check_ref'))):
                     # A chat can become a valid project after SessionStart was
                     # rejected. Recover only this validated event's owner and
                     # exact observed-edit reference, never the latest session.
@@ -819,13 +842,13 @@ def create_global_server(*, workspaces=None, host='codex'):
                         emitted = pool.session_context_emitted_at.get(key)
                         if emitted is None or time.time() - emitted >= SESSION_TTL / 2:
                             token = issue_session_ref(pool.children[root][1].store, root,
-                                                      active_host, arguments['session_id'])
-                            ref = result.structuredContent['development_check_ref']
+                                                      active_host, arguments['session_id'], compact=True)
+                            ref = result.structuredContent.get('development_check_ref')
                             output = json.loads(result.content[0].text)
+                            extra = ('\n当前编辑事件的已观测路径记录在轻量检查 ' + ref
+                                + '；不证明写入成功或完整范围。沿此引用收尾并读取结果，不新建替代记录。') if ref else ''
                             output['hookSpecificOutput'] = dict(hookEventName='PostToolUse',
-                                additionalContext=session_context(token) + '\n'
-                                + '当前编辑事件的已观测路径记录在轻量检查 ' + ref
-                                + '；不证明写入成功或完整范围。沿此引用收尾并读取结果，不新建替代记录。')
+                                additionalContext=session_context(token) + extra)
                             result.structuredContent['task_session_ref'] = token
                             result.content = [TextContent(type='text', text=json.dumps(output, ensure_ascii=False))]
                             pool.session_context_emitted_at[key] = time.time()

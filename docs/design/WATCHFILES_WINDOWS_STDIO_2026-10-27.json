@@ -1,0 +1,19 @@
+{
+  "contract": "watchfiles-stdio-acceptance-v1",
+  "status": "PASSED",
+  "build_id": "cf43b15b62513f7c8e2e18b382eb4897d8267c6854040946da0f42670216d57a",
+  "observed_paths": [
+    "src/one.py",
+    "src/two.py"
+  ],
+  "unobserved_historical_excluded": true,
+  "scope_unknown": false,
+  "final_seq": 1,
+  "saved_seq": 1,
+  "scan_status": "COMPLETED",
+  "scan_coverage": "FULL",
+  "gaps": [],
+  "native_desktop_hook_verified": false,
+  "boundary": "REAL_STDIO_AND_SCOPED_SCAN; SYNTHETIC_HOST_CLAIMS; BENIGN_FILES; NO_MODEL_OR_CHAT_SPEED_CLAIM",
+  "temporary_cleanup": "COMPLETE"
+}

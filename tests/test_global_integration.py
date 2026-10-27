@@ -91,10 +91,10 @@ def test_global_idempotence_and_user_preservation(installed, projects):
     assert installed.execute('uninstall')['operation'] == 'ALREADY_REMOVED'
 
 
-def test_known_project_migrates_all_three_hooks(installed, projects):
+def test_known_project_migrates_all_owned_hooks(installed, projects):
     root = projects[0]
     installed.legacy_adapter.setup(root)
-    assert len(json.loads((root / '.codex/hooks.json').read_bytes())['hooks']) == 3
+    assert set(json.loads((root / '.codex/hooks.json').read_bytes())['hooks']) == set(product_hooks()['hooks'])
     result = installed.execute('setup', root)
     assert result['migration'] == {'status': 'MIGRATED', 'removed_layers': 1}
     assert 'ai_security_runtime' not in tomllib.loads((root / '.codex/config.toml').read_text()).get('mcp_servers', {})

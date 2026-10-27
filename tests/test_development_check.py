@@ -241,6 +241,7 @@ def test_worker_launch_is_hidden_bounded_and_recovers_dead_running(check, monkey
     assert kwargs['stdin'] == subprocess.DEVNULL and kwargs['stdout'] == subprocess.DEVNULL
     if os.name == 'nt':
         assert kwargs['creationflags'] & subprocess.CREATE_NO_WINDOW
+        assert not kwargs['creationflags'] & (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_CONSOLE)
     else:
         assert kwargs['start_new_session']
     queue = service.store(root)
@@ -253,7 +254,42 @@ def test_worker_launch_is_hidden_bounded_and_recovers_dead_running(check, monkey
     assert queue.load(ref)['state'] == 'QUEUED'
 
 
-def test_worker_failure_keeps_pending_scope_and_can_retry_explicitly(check, monkeypatch):
+def test_readback_after_finish_keeps_requested_version_but_unknown_write_invalidates(check, monkeypatch):
+    from security_runtime.codex_event_adapter import CodexEventAdapter
+    from security_runtime.host_event_runtime import handle_normalized_event
+    from security_runtime.hook_runtime import HookCoordinator
+    from security_runtime.tasks.ownership import session_owner
+    root, original, runtime, state = check
+    session = 'readback-closeout'
+    service = DevelopmentCheckService(runtime, original.hooks, owner=session_owner('codex', session),
+        scan_path_provider=original.scan_path_provider, launcher=lambda *args:None)
+    core = HookCoordinator(runtime, original.hooks, task_audit_mode=True)
+    ref = service.begin(root, 'original-reference')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    service.finish(root, ref)
+    before = service.store(root).load(ref)
+    for index, command in enumerate([
+        'git diff --stat; git diff -- app.ts',
+        '$i=0; Get-Content app.ts | ForEach-Object { $_ }; rg -n "run" app.ts',
+    ]):
+        event = CodexEventAdapter().normalize(dict(event='PostToolUse', workspace_path=str(root),
+            session_id=session, tool_name='Bash', tool_input={'command':command},
+            tool_use_id=f'read-{index}'), root, legacy=True)
+        result, _ = handle_normalized_event(event, coordinator=core)
+        assert result['scanner_skipped_reason'] == 'READ_ONLY_ACTIVITY'
+    after = service.store(root).load(ref)
+    assert after['dirty_seq'] == before['dirty_seq'] == 1
+    assert after['finish_requested'] and after['state'] == 'QUEUED' and state['calls'] == 0
+    event = CodexEventAdapter().normalize(dict(event='PostToolUse', workspace_path=str(root),
+        session_id=session, tool_name='Bash', tool_input={'command':'python opaque_edit.py'},
+        tool_use_id='unknown-write'), root, legacy=True)
+    handle_normalized_event(event, coordinator=core)
+    final = service.store(root).load(ref)
+    assert final['dirty_seq'] == 2 and final['state'] == 'DIRTY' and not final['finish_requested']
+    assert final['scope_unknown'] and state['calls'] == 0
+
+
+def test_worker_failure_keeps_scope_and_cannot_reset_durable_retry_budget(check, monkeypatch):
     root, service, runtime, state = check
     ref = service.begin(root, 'provider-fails')['check_ref']
     service.record(root, ref, ['app.ts'])
@@ -265,7 +301,15 @@ def test_worker_failure_keeps_pending_scope_and_can_retry_explicitly(check, monk
     assert result['status'] == 'FAILED' and result['scanned_seq'] == 0
     assert 'PRIVATE_SECRET' not in json.dumps(result)
     assert service.finish(root, ref)['dirty_seq'] == 1
+    assert service.store(root).load(ref)['state'] == 'FAILED'
+    assert service.store(root).load(ref)['attempt_count'] == 3
+    assert service.deliveries(root)['total'] == 1
+    service.record(root, ref, ['app.ts'], event_id='actual-new-version')
+    service.finish(root, ref)
+    # This fixture's launcher is inert; an expired previous lease is correctly
+    # projected as INTERRUPTED until a real worker starts. The request is queued.
     assert service.store(root).load(ref)['state'] == 'QUEUED'
+    assert service.store(root).load(ref)['attempt_count'] == 0
 
 
 def test_old_finished_nonfocus_metadata_retired_without_deleting_scans(check):

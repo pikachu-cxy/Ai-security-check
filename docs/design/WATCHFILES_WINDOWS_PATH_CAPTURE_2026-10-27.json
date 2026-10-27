@@ -1,0 +1,52 @@
+{
+  "contract": "watchfiles-path-capture-experiment-v1",
+  "platform": "Windows",
+  "python": "3.12.10",
+  "watchfiles": "1.3.0",
+  "tracked_files_per_worktree": 6000,
+  "real_git_worktrees": true,
+  "native_desktop_hook_verified": false,
+  "scanner_run": false,
+  "timing_scope": "PATH_REGISTRATION_AND_CAPTURE_ONLY; NO_SCAN_SPEEDUP_CLAIM",
+  "results": [
+    {
+      "worktree": "A",
+      "registration_ms": 69.361,
+      "child_write_ms": 135.251,
+      "drain_and_submit_ms": 104.633,
+      "observed_paths": [
+        "generated-A/child.py",
+        "packages/p00/file0000.py",
+        "packages/p00/file0002.py",
+        "packages/p00/file0003.py",
+        "packages/p00/file0004.py",
+        "renamed-A.py",
+        "swap.tmp"
+      ],
+      "untouched_dirty_excluded": true,
+      "worktree_isolated": true,
+      "scan_during_edit": false,
+      "submit_count": 1
+    },
+    {
+      "worktree": "B",
+      "registration_ms": 37.421,
+      "child_write_ms": 182.742,
+      "drain_and_submit_ms": 89.91,
+      "observed_paths": [
+        "generated-B/child.py",
+        "packages/p00/file0000.py",
+        "packages/p00/file0002.py",
+        "packages/p00/file0003.py",
+        "packages/p00/file0004.py",
+        "renamed-B.py",
+        "swap.tmp"
+      ],
+      "untouched_dirty_excluded": true,
+      "worktree_isolated": true,
+      "scan_during_edit": false,
+      "submit_count": 1
+    }
+  ],
+  "status": "PASSED"
+}

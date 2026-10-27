@@ -96,20 +96,22 @@ def test_status_readonly_missing_configured_observed_stale(adapter, repo):
     assert call(adapter, repo, 'status')['overall'] == 'NOT_INSTALLED'
     assert not adapter.store.directory.exists()
     assert call(adapter, repo)['overall'] == 'CONFIGURED'
-    assert observe(adapter, repo)['status'] == 'READY'
+    assert observe(adapter, repo)['status'] == 'CONNECTED'
     output = call(adapter, repo, 'status')
     assert output['overall'] == 'READY' and output['live_connection'] == 'UNKNOWN'
     assert output['cold_start_host_trial'] == 'PENDING_ACTUAL_DESKTOP'
     raw = json.dumps(output)
     assert str(repo) not in raw and str(adapter.store.directory) not in raw
     observed = observe(adapter, repo)
-    assert observed['systemMessage'] == '安全检查工具已连接，项目检查已就绪。'
+    assert observed['systemMessage'] == observed['message']
+    assert observed['startup_comparison_baseline']['required'] is False
+    assert observed['scan_preparation']['verified_now'] is False
     assert '通过安全检查' not in observed['systemMessage']
-    assert observed['status'] == 'READY' and observed['readiness'] == 'READINESS_OBSERVED'
+    assert observed['status'] == 'CONNECTED' and observed['readiness'] == 'READINESS_OBSERVED'
     assert observed['execution'] == {'scan': False, 'scanner_run': False, 'model': False,
                                      'source_modified': False, 'target_build': False,
                                      'network': False, 'remediation': False}
-    assert 'security_proof' not in observed and 'scan_id' not in observed
+    assert observed['security_proof'] is False and 'scan_id' not in observed
     adapter.now = lambda: time.time() + 901
     assert call(adapter, repo, 'status')['readiness']['status'] == 'READINESS_STALE'
 
@@ -120,13 +122,13 @@ def test_readiness_bounded_idempotent_no_source_scan_build_model(adapter, repo, 
     monkeypatch.setattr(HookCoordinator, 'handle', lambda *a: pytest.fail('readiness invoked scanner'))
     before = (repo / 'A.java').read_bytes()
     result = observe(adapter, repo, 'session-with-secret-canary')
-    assert result['status'] == 'READY' and not any(result['execution'].values())
+    assert result['status'] == 'CONNECTED' and not any(result['execution'].values())
     path = adapter._state_path(repo, 'readiness.json')
     raw = path.read_bytes(); modified = path.stat().st_mtime_ns
     assert len(raw) < 4096 and b'session-with-secret-canary' not in raw
     assert str(repo).encode() not in raw and b'safe' not in raw
     assert (repo / 'A.java').read_bytes() == before
-    assert observe(adapter, repo, 'session-with-secret-canary')['status'] == 'READY'
+    assert observe(adapter, repo, 'session-with-secret-canary')['status'] == 'CONNECTED'
     assert (raw, modified) == (path.read_bytes(), path.stat().st_mtime_ns)
     assert not (Path(os.environ['SECURITY_RUNTIME_STATE_DIR']) / 'scans.db').exists()
 
@@ -136,7 +138,7 @@ def test_bad_readiness_cannot_claim_ready_and_new_bound_event_recovers(adapter, 
     call(adapter, repo)
     path = adapter._state_path(repo, 'readiness.json'); path.write_bytes(bad)
     assert call(adapter, repo, 'status')['readiness']['status'] == 'READINESS_STALE'
-    assert observe(adapter, repo)['status'] == 'READY'
+    assert observe(adapter, repo)['status'] == 'CONNECTED'
     assert len(path.read_bytes()) <= 4096
     assert call(adapter, repo, 'status')['overall'] == 'READY'
 

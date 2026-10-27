@@ -147,12 +147,16 @@ def capture_reuse_identity(registry, root, *, files, context_files=(), selected=
                     if tool == 'osv-scanner' or checks != 'misconfig' and manager.database_freshness()['status'] != 'FRESH':
                         raise _ProofUnavailable('PROVIDER_DATABASE_NOT_FRESH')
                     ecosystems = set(profile.ecosystems)
-                    data_key = (engine_key, checks, tuple(sorted(ecosystems)))
-                    if data_key not in data:
-                        data[data_key] = manager.execution_data_identity(tool, kind=checks, ecosystems=ecosystems)
-                    value['data'] = data[data_key]
-                    if not value['data']:
-                        raise _ProofUnavailable('PROVIDER_DATA_IDENTITY_UNVERIFIABLE')
+                    from .scanner_identity import database_content_fingerprint_disabled
+                    if database_content_fingerprint_disabled(tool, kind=checks):
+                        value['data_policy'] = 'DISABLED'
+                    else:
+                        data_key = (engine_key, checks, tuple(sorted(ecosystems)))
+                        if data_key not in data:
+                            data[data_key] = manager.execution_data_identity(tool, kind=checks, ecosystems=ecosystems)
+                        value['data'] = data[data_key]
+                        if not value['data']:
+                            raise _ProofUnavailable('PROVIDER_DATA_IDENTITY_UNVERIFIABLE')
             providers.append(value)
     return {'workspace': os.path.normcase(str(root)), 'build': build,
             'source_presentation': 'RAW_V3',
@@ -188,7 +192,7 @@ def _complete_scan(scan):
             continue
         binding = context.get('execution_bindings', {}).get(run.get('scanner'), {})
         if (binding.get('contract') != 'scanner-execution-binding-v1' or binding.get('verified') is not True
-                or binding.get('data_status') != 'VERIFIED' or not binding.get('tool')):
+                or binding.get('data_status') not in {'VERIFIED', 'DISABLED'} or not binding.get('tool')):
             raise _ProofUnavailable('PROVIDER_EXECUTION_PROOF_UNVERIFIABLE')
 
 

@@ -90,7 +90,7 @@ class CodexEventAdapter:
     profile = connector_profile('codex')
     capabilities = profile.capabilities
     from .codex_host_claims import EVENTS as mcp_events
-    events = {'SessionStart': EventKind.SESSION_START,
+    events = {'SessionStart': EventKind.SESSION_START, 'PreToolUse': EventKind.BEFORE_MUTATION,
               'PostToolUse': EventKind.WORKSPACE_ACTIVITY, 'Stop': EventKind.SESSION_STOP}
 
     def validate_claims(self, arguments, expected, schema=None):
@@ -117,7 +117,7 @@ class CodexEventAdapter:
         if not legacy and self.validate_claims(arguments, expected)['host_claim_status'] != 'VALID':
             raise ValueError('Invalid Codex claims')
         operation = OperationClass.UNKNOWN
-        if expected == 'PostToolUse':
+        if expected in {'PreToolUse', 'PostToolUse'}:
             tool = arguments.get('tool_name')
             if tool not in {'Bash', 'apply_patch', 'Edit', 'Write'}:
                 raise ValueError('Unsupported Codex activity')
@@ -138,7 +138,7 @@ class CodexEventAdapter:
                 pass  # Optional attribution never changes validated Hook behavior.
         candidates, unknown = (edit_path_hints(arguments.get('tool_name'), arguments.get('tool_input'), root,
                                               cwd=arguments.get('workspace_path'))
-                               if expected == 'PostToolUse' else ((), True))
+                               if expected in {'PreToolUse', 'PostToolUse'} else ((), True))
         return NormalizedHostEvent(self.events[expected], context, operation,
             candidate_paths=candidates, scope_unknown=unknown,
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
@@ -162,8 +162,12 @@ class CodexEventAdapter:
                 raise ValueError('Host cwd outside bound workspace')
             no_links(candidate)
             from .hook_adapters import CodexHookAdapter
-            CodexHookAdapter().translate(dict(hook_event_name=arguments['event'], cwd=workspace,
-                session_id=arguments['session_id'], tool_name=arguments.get('tool_name')), root)
+            payload = dict(hook_event_name=arguments['event'], cwd=workspace,
+                session_id=arguments['session_id'], tool_name=arguments.get('tool_name'))
+            if arguments['event'] == 'PreToolUse':
+                CodexHookAdapter.validate_context(payload, root)
+            else:
+                CodexHookAdapter().translate(payload, root)
             reason = self.accept_invocation(arguments, root, diag, guard) if guard is not None else None
             if reason:
                 return None, diag, reason

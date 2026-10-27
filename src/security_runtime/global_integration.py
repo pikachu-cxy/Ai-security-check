@@ -194,7 +194,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
             diagnostics.append('POTENTIAL_DUPLICATE_MCP')
         for hooks in (configs[1][2]['hooks'], self._inline_hooks(configs[0][2])):
             if any(h.get('type') == 'mcp_tool' and h.get('server') != SERVER
-                   and h.get('tool') in {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
+                   and h.get('tool') in {'handle_before_hook_event', 'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
                    for groups in hooks.values() for group in groups for h in group['hooks']):
                 diagnostics.append('POTENTIAL_DUPLICATE_HOOK')
         return diagnostics, owned, legacy
@@ -216,6 +216,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                 'mcp': {'status': 'CONFIGURED' if owned else 'MCP_NOT_CONFIGURED',
                         'ownership_state': ('OWNED_BUT_STALE' if 'RUNTIME_STALE' in diagnostics else 'OWNED_AND_CURRENT')
                             if owned else 'NOT_INSTALLED'},
+                'pre_tool_hook': {'status': self._hook_status('PreToolUse', configs[1][2], desired[4], manifest)},
                 'post_tool_hook': {'status': self._hook_status('PostToolUse', configs[1][2], desired[4], manifest)},
                 'stop_hook': {'status': self._hook_status('Stop', configs[1][2], desired[4], manifest)},
                 'readiness': {'status': 'AWAITING_SESSION_CONNECTION',
@@ -261,7 +262,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
             if runtime_aliases(document) - {SERVER}:
                 raise IntegrationDiagnostic('POTENTIAL_DUPLICATE_MCP')
             if any(h.get('type') == 'mcp_tool' and h.get('server') != SERVER
-                   and h.get('tool') in {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
+                   and h.get('tool') in {'handle_before_hook_event', 'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
                    for source in (hooks['hooks'], adapter._inline_hooks(document))
                    for groups in source.values() for group in groups for h in group['hooks']):
                 raise IntegrationDiagnostic('POTENTIAL_DUPLICATE_HOOK')

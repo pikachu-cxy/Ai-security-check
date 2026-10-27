@@ -74,7 +74,7 @@ def connection_readiness():
 
 
 def task_activity(hooks, root, host, session, *, paths=(), scope_unknown=True, event_id=None,
-                  scan_path=None):
+                  scan_path=None, watch_eligible=False):
     """Record observed edits; preserve an explicitly opened strict task's scope."""
     from .host_event_runtime import inconclusive
     from .tasks.activity import ActivityStore, POLICY, LEGACY
@@ -91,7 +91,7 @@ def task_activity(hooks, root, host, session, *, paths=(), scope_unknown=True, e
     if not focus or record and record['phase'] in {'COMPLETE', 'NO_CHANGES', 'INCOMPLETE'}:
         from .development_check import record_hook
         check = record_hook(hooks, root, owner, paths, scope_unknown=scope_unknown,
-                            event_id=event_id, scan_path=scan_path)
+                            event_id=event_id, scan_path=scan_path, watch_eligible=watch_eligible)
         if not check.get('check_ref'):
             result = inconclusive(check.get('reason_code') or check.get('status') or 'EDIT_RECORD_UNAVAILABLE')
             result.update(check)

@@ -31,6 +31,28 @@ def codex_mcp_hook_config() -> dict:
     }]}}
 
 
+def before_normalized_event(event, coordinator):
+    """Only validated native metadata reaches task-window registration."""
+    from .host_events import EventKind, OperationClass
+    if event.kind != EventKind.BEFORE_MUTATION:
+        raise ValueError('Native pre-tool event required')
+    if event.operation == OperationClass.READ_ONLY:
+        return dict(status='NOT_STARTED', scanner_run=False, source_modified=False,
+                    baseline_created=False, reason_code='READ_ONLY_ACTIVITY')
+    from .development_check import record_hook, DevelopmentCheckStore, projection
+    from .development_file_watch import start_window
+    context = event.context
+    owner = dict(host=context.host, session=context.session_binding)
+    result = record_hook(coordinator.store, context.workspace, owner,
+        scope_unknown=False, prepare_only=True,
+        scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
+    if result.get('check_ref'):
+        store = DevelopmentCheckStore(coordinator.store, context.workspace)
+        start_window(store, result['check_ref'], owner)
+        result = projection(store, store.load(result['check_ref'], owner))
+    return result
+
+
 # Public compatibility aliases; raw parsing now lives in the Codex adapter.
 from .host_event_runtime import inconclusive as _inconclusive
 from .codex_event_adapter import classify_bash_command, CodexEventAdapter

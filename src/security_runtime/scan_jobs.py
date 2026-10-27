@@ -176,7 +176,9 @@ def launch(queue, row):
     argv = runtime_command()+['scan-job-worker', '--workspace', str(queue.root),
         '--hooks', str(Path(queue.hooks.directory).absolute()),
         '--job-ref', row['job_ref'], '--ticket', row['ticket']]
-    flags = ({'creationflags': subprocess.CREATE_NO_WINDOW | subprocess.DETACHED_PROCESS}
+    # Do not combine DETACHED_PROCESS: it makes CREATE_NO_WINDOW ineffective,
+    # allowing a venv child interpreter to create a visible console.
+    flags = ({'creationflags': subprocess.CREATE_NO_WINDOW}
              if os.name == 'nt' else {'start_new_session': True})
     subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL, close_fds=True, cwd=str(queue.path.parent), **flags)
