@@ -1,4 +1,4 @@
-这是 AI Security Runtime 0.3.9 的独立 Mac 安装方式试用，使用专属 Python 环境和标准 Python 包。不会替换历史完整安装包。
+这是 AI Security Runtime 0.3.10 的独立 Mac 安装方式试用，使用专属 Python 环境和标准 Python 包。不会替换历史完整安装包。
 
 从[文档站 Mac 试用页](https://pikachu-cxy.github.io/Ai-security-check/downloads.html)选择 Cursor 或 Codex 的一条安装命令。无需预装 Python、Git 或 Homebrew。首次安装需要联网，检查组件在后台准备。
 
@@ -10,4 +10,4 @@
 
 本次发行同步一键聊天消耗监控和 token / 耗时报告导出、完整脱敏长行证据交付。监控可选且不阻断核心功能，不能可靠拆分的活动 token 仍保持未知。
 
-本次自动安装交付为 macos-trial-v0.3.9.3，包含 0.3.9 正式版的系统 Semgrep 兼容修正：在线准备时，无法核验的自动发现组件不再阻止创建独立受管环境；不改动系统已有安装，不绕过执行身份、离线或显式路径约束。
+本次自动安装交付为 macos-trial-v0.3.10，对应 Runtime 0.3.10。两个架构分别验收；安装会使用专用环境，实际桌面兼容性仍需独立验证。

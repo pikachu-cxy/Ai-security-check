@@ -79,7 +79,7 @@ jobs:
       - name: Publish a separate immutable trial release
         env:
           GH_TOKEN: ${{ github.token }}
-          TRIAL_TAG: macos-trial-v0.3.9.3
+          TRIAL_TAG: macos-trial-v0.3.10
         run: |
           if gh release view "$TRIAL_TAG" --json isDraft > release-state.json 2>/dev/null; then
             python -c 'import json; assert json.load(open("release-state.json"))["isDraft"], "Trial already published; use a new trial tag instead of replacing it"'
@@ -91,7 +91,7 @@ jobs:
           fi
           if ! gh release view "$TRIAL_TAG" >/dev/null 2>&1; then
             gh release create "$TRIAL_TAG" --verify-tag --draft --prerelease \
-              --title "macOS 独立环境安装试用 · 0.3.9.3" --notes-file distribution/macos/RELEASE_NOTES.md
+              --title "macOS 独立环境安装试用 · 0.3.10" --notes-file distribution/macos/RELEASE_NOTES.md
           fi
           gh release upload "$TRIAL_TAG" dist/macos-trial/* --clobber
           gh release edit "$TRIAL_TAG" --draft=false --prerelease --latest=false

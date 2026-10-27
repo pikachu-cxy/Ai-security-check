@@ -21,7 +21,7 @@ import unicodedata
 import uuid
 import venv
 
-RELEASE_TAG = "macos-trial-v0.3.9.3"
+RELEASE_TAG = "macos-trial-v0.3.10"
 SCHEMA = "macos-trial-payload-v1"
 HEX = re.compile(r"[a-f0-9]{64}")
 MAX_BYTES = 1024 * 1024 * 1024
@@ -142,7 +142,7 @@ def safe_extract(archive, destination, expected_sha):
 def verify_payload(payload, platform):
     manifest = read_json(payload / "manifest.json")
     if (manifest.get("schema") != SCHEMA or manifest.get("release_tag") != RELEASE_TAG
-            or manifest.get("platform") != platform or manifest.get("version") != "0.3.9"
+            or manifest.get("platform") != platform or manifest.get("version") != "0.3.10"
             or not HEX.fullmatch(str(manifest.get("build_id", "")))
             or not re.fullmatch(r"[a-f0-9]{40}", str(manifest.get("source_commit", "")))):
         raise InstallError("安装包版本、平台或构建身份不匹配。")

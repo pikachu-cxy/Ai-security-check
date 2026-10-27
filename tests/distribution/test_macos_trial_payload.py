@@ -13,7 +13,7 @@ payload = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(payload)
 
 
-def wheel(root, name="ai_security_runtime", version="0.3.9"):
+def wheel(root, name="ai_security_runtime", version="0.3.10"):
     path = root / f"{name}-{version}-py3-none-any.whl"
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(f"{name}-{version}.dist-info/METADATA",
@@ -40,7 +40,7 @@ def test_offline_payload_locks_every_wheel_and_hashes_contents(tmp_path):
         assert manifest["platform"] == "macos-arm64"
         for path, digest in manifest["files"].items():
             assert payload.hashlib.sha256(archive.extractfile(path).read()).hexdigest() == digest
-        assert f"ai-security-runtime==0.3.9 --hash=sha256:{payload.sha256(product)}" in requirements
+        assert f"ai-security-runtime==0.3.10 --hash=sha256:{payload.sha256(product)}" in requirements
         assert f"example-dependency==1.2.3 --hash=sha256:{payload.sha256(dependency)}" in requirements
     assert output.with_name(output.name + ".sha256").read_text().startswith(payload.sha256(output))
     with pytest.raises(ValueError, match="overwrite"):
@@ -54,6 +54,6 @@ def test_duplicate_or_missing_product_is_rejected(tmp_path):
     with pytest.raises(ValueError, match="managed release"):
         payload.package_payload(tmp_path, installer, tmp_path / "out", "macos-x64")
     wheel(tmp_path)
-    wheel(tmp_path, version="0.3.10")
+    wheel(tmp_path, version="0.3.11")
     with pytest.raises(ValueError, match="Duplicate"):
         payload.package_payload(tmp_path, installer, tmp_path / "out", "macos-x64")
