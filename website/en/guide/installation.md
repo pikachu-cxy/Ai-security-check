@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.9 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.9.3**. This page covers status queries, component preparation, upgrades, and removal.
+For the **0.3.9 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.10**. This page covers status queries, component preparation, upgrades, and removal.
 
 ## Select the correct executable {#runtime-path}
 

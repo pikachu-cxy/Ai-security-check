@@ -1,6 +1,6 @@
 # 安装参数、准备与升级
 
-本页适用于 **0.3.9 正式版**，Mac 自动安装对应独立发行 **macos-trial-v0.3.9.3**。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
+本页适用于 **0.3.9 正式版**，Mac 自动安装对应独立发行 **macos-trial-v0.3.10**。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
 
 ## 先选择正确的程序路径 {#runtime-path}
 

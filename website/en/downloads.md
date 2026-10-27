@@ -29,7 +29,7 @@ Compare the hashes, extract the complete archive, and retain the entire `securit
 
 For Codex or Cursor, use the command on your [editor's setup page](./guide/quickstart.md#choose-editor). The installer detects Apple Silicon or Intel and prepares dedicated Python automatically. No preinstalled Python, Git, or Homebrew is required for installation.
 
-The managed installer uses the separate [macos-trial-v0.3.9.3 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.9.3), with Runtime version 0.3.9. Keep its installation directory and verify its own build identity rather than comparing it to a native bundle's build ID.
+The managed installer uses the separate [macos-trial-v0.3.10 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.10), with Runtime version 0.3.10. Keep its installation directory and verify its own build identity rather than comparing it to a native bundle's build ID.
 
 ## Manual macOS bundles {#macos-packages}
 

@@ -73,7 +73,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
 ```
 
-[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) before running it. This managed installation uses the separate `macos-trial-v0.3.9.3` release, detects your architecture, and prepares a dedicated Python environment. It does not require preinstalled Python, Git, or Homebrew. Keep `~/.local/share/AI-Security-Runtime-macos-trial`; an existing connection for the selected editor may be updated.
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) before running it. This managed installation uses the separate `macos-trial-v0.3.10` release, detects your architecture, and prepares a dedicated Python environment. It does not require preinstalled Python, Git, or Homebrew. Keep `~/.local/share/AI-Security-Runtime-macos-trial`; an existing connection for the selected editor may be updated.
 
 Apple Developer ID signing, notarization, and real desktop compatibility are separate validation items. If macOS blocks pasting or launching, read the [troubleshooting guide](website/en/reference/faq.md#macos-paste) and retain the exact message.
 
