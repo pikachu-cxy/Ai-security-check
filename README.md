@@ -95,16 +95,9 @@ See the [changelog](website/en/reference/changelog.md) and [release workflow](ht
 
 ## Coverage and data handling
 
-The 0.3.9 release bundles `ai-security-core 1.3.2`, with **56 distinct code rules, 48 default-on**:
+Current source uses **OpenGrep 1.32.0** with **opengrep-rules**, pinned to commit `f1d2b562b414783763fd02a6ed2736eaed622efa`. The bundled directory contains 1,934 upstream YAML files and 2,007 rules. Execution selects applicable local rules; custom rule directories remain supported. The previous first-party YAML pack is no longer bundled. Historical Semgrep results remain readable.
 
-| Language / files | Default-on / installed | Scope |
-| --- | --- | --- |
-| Java `.java` | 26 / 34 | Selected JDK, Spring, MyBatis, JPA / Hibernate, and Apache API patterns; applicable MyBatis XML is included |
-| Python `.py` | 16 / 16 | Selected standard-library, Flask, Django, Requests / HTTPX, PyYAML, PyJWT, and lxml patterns |
-| JavaScript `.js` / `.jsx` and TypeScript `.ts` / `.tsx` | 6 shared / 6 | Selected Express / Node.js SQL, command, SSRF, path, and file-I/O flows; shared rules count once |
-| Vue `.vue`, Go, PHP, C / C++, C#, Ruby, Rust, and others | No corresponding bundled SAST rules | Host AI review does not establish scanner coverage |
-
-Eight Java experimental rules are default-off. Rule counts do not establish complete language, framework, OWASP, or production-accuracy coverage. Gitleaks secret checks apply to included text files independently of these code rules. Dependency inputs currently cover Python, npm/Yarn/pnpm, Maven/Gradle, and Go manifests or lockfiles; recognition does not prove a complete dependency graph. Composer, Cargo, Bundler, and .NET manifests are not in the product's current dependency-input list.
+Rules include multiple languages and frameworks; inventory counts do not prove complete coverage or detection accuracy. Actual executed rules, scanned paths and parser errors determine each result. Gitleaks checks secrets and Trivy checks supported dependency inputs independently.
 
 See the [language and detection matrix](website/en/reference/support.md#languages) and [current source evidence (Chinese)](docs/PRODUCT_COVERAGE.zh-CN.md). Engines, data, actual file scope, and contextual review determine each result; no findings is not proof of security.
 
@@ -138,7 +131,7 @@ Node.js is a documentation-development dependency, not a bundled Runtime require
 
 ## Licensing and support
 
-AI Security Runtime uses a **closed-core, open-ecosystem** licensing model. The Runtime Core is proprietary. Explicitly marked components, the public scanner/plugin extension contract, and the `ai-security-core` community rule pack are Apache-2.0 licensed. Third-party engines and dependencies retain their own licenses. A public repository does not make the entire Runtime open source.
+AI Security Runtime uses a **closed-core, open-ecosystem** licensing model. The Runtime Core is proprietary. Explicitly marked components, the public scanner/plugin extension contract, are Apache-2.0 licensed. The bundled upstream rules retain LGPL-2.1 and Commons Clause terms. Third-party engines and dependencies retain their own licenses. A public repository does not make the entire Runtime open source.
 
 Read [LICENSE](LICENSE), [licensing](LICENSING.md), [EULA](EULA.md), [third-party notices](THIRD_PARTY_NOTICES.md), and [source offer](SOURCE_OFFER.md) for the applicable terms.
 

@@ -187,7 +187,7 @@ def product_hooks() -> dict:
     before[0]['hooks'][0]['statusMessage'] = '记录开发期间的文件变更'
     before[0]['hooks'][0]['timeout'] = 30
     result['hooks']['PreToolUse'] = before
-    result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = '检查本次改动的安全风险'
+    result['hooks']['PostToolUse'][0]['hooks'][0]['statusMessage'] = '记录本次修改的文件'
     result['hooks']['SessionStart'] = [{'hooks': [{
         'type': 'mcp_tool', 'server': SERVER, 'tool': 'handle_readiness_event',
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}', 'session_id': '${session_id}',

@@ -46,8 +46,9 @@ only failed revalidation requires a new scan within the user's request. Continui
 do not rescan or reorder on every message. Summary itself never auto-scans.
 Quick dependency checks run only for changed manifest/lockfile inputs, including
 deletions, using existing local engines and data. Source-only edits do not prove
-dependencies were checked. Missing/stale dependency data and incomplete graphs
-must stay unavailable/partial; do not install/build target dependencies to fill
+dependencies were checked. Missing/stale dependency data and actual scanner failures
+must be reported; offline mode or disabled database fingerprints alone are not failures.
+Treat adjacent package.json and package-lock.json as one npm unit. Do not install/build target dependencies to fill
 that gap. Setup baselines establish code/secret comparison proof only.
 If this product is missing/conflicted, report no execution and its diagnostic
 next step; do not silently substitute another product or edit Host configuration.

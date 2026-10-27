@@ -59,7 +59,7 @@ def test_stop_continues_original_work_then_result_offer_stops_loop_without_fake_
     assert pending['total'] == 1 and not pending['automatic_host_ack']
 
 
-def test_global_reconnect_delivers_only_original_owner_context(audit_pool, projects):
+def test_global_reconnect_does_not_inject_pending_check_context(audit_pool, projects):
     from test_task_audit_startup import start
     pool, server, _ = audit_pool
     root = projects[0]
@@ -73,7 +73,7 @@ def test_global_reconnect_delivers_only_original_owner_context(audit_pool, proje
     service.finish(root, ref)
     original = asyncio.run(server.call_tool('handle_readiness_event', dict(
         event='SessionStart', workspace_path=str(root), session_id='original')))
-    assert ref in json.loads(original.content[0].text)['hookSpecificOutput']['additionalContext']
+    assert ref not in original.content[0].text
     other = asyncio.run(server.call_tool('handle_readiness_event', dict(
         event='SessionStart', workspace_path=str(root), session_id='other')))
     assert ref not in other.content[0].text

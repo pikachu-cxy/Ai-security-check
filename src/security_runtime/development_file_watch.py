@@ -76,6 +76,9 @@ class _Window:
                 continue
             try:
                 name = path.relative_to(self.store.root).as_posix()
+                from .development_scope import excluded_artifact
+                if excluded_artifact(name):
+                    continue
                 if any(os.path.normcase(p) in self.ignored for p in Path(name).parts):
                     continue
                 if path.is_relative_to(self.private):

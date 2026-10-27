@@ -107,15 +107,20 @@ def can_prepare_managed_semgrep(result: ResolvedTool | None) -> bool:
 
 
 def _manifest(tool: str, version: str, platform_name: str, arch: str, asset: str, digest: str, homepage: str, license_name: str) -> ToolManifest:
-    owner = {"gitleaks": "gitleaks/gitleaks", "trivy": "aquasecurity/trivy", "osv-scanner": "google/osv-scanner"}[tool]
+    owner = {"opengrep": "opengrep/opengrep", "gitleaks": "gitleaks/gitleaks", "trivy": "aquasecurity/trivy", "osv-scanner": "google/osv-scanner"}[tool]
     return ToolManifest(tool, tool.title(), version, platform_name, arch,
                         f"https://github.com/{owner}/releases/download/v{version}/{asset}", digest,
-                        "binary" if tool == "osv-scanner" else "zip" if asset.endswith(".zip") else "tar.gz",
+                        "binary" if tool in {"osv-scanner", "opengrep"} else "zip" if asset.endswith(".zip") else "tar.gz",
                         tool + (".exe" if platform_name == "windows" else ""), homepage, license_name,
                         BUILTIN_ENGINES[tool].license_metadata)
 
 
 _ASSETS = {
+    ("opengrep", "windows", "x64"): ("opengrep_windows_x86.exe", "ae7152809ec71340213e8f4de3701c83edbdb33f4ac05eca2987b96ec6826a5e"),
+    ("opengrep", "linux", "x64"): ("opengrep_manylinux_x86", "7360d60174880bd9214f2dfbe439b7bce82b7a3d44cfe945ba833c85cc8bda75"),
+    ("opengrep", "linux", "arm64"): ("opengrep_manylinux_aarch64", "dc6229319c0d68948733053786a5614873947e5ec1d4669cc0e94ae9038cb99d"),
+    ("opengrep", "macos", "x64"): ("opengrep_osx_x86", "7dfb68184b7da2895a56e86bc88192fe2b9414993026f5100bacccb4764d19f4"),
+    ("opengrep", "macos", "arm64"): ("opengrep_osx_arm64", "e161746226bccef5b85c57611946fa21dc3b00a2dc2591343d6160af99397e2f"),
     ("osv-scanner", "windows", "x64"): ("osv-scanner_windows_amd64.exe", "e0ed7644118b717b028c249ee9d3515024e55e8510747ca08906eb96765354d6"),
     ("osv-scanner", "linux", "x64"): ("osv-scanner_linux_amd64", "ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108"),
     ("osv-scanner", "macos", "x64"): ("osv-scanner_darwin_amd64", "60c5296637e977b28eeda5c7f13573e447659a632922737f94d11fa7e30ad6ca"),

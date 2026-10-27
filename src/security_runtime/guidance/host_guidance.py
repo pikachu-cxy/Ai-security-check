@@ -24,6 +24,10 @@ REQUIRED_GUIDANCE_TOOLS = {'get_runtime_info', 'get_security_summary', 'prepare_
 
 REPAIR_IMPACT_GUIDANCE = '''
 修复影响分析（repair-impact-v1）：
+轻量开发若已声明 development-risks-v1，先按 development-check 的统一风险分支保存 AI/扫描器发现，
+使用 prepare_development_risk_fix 和 submit_development_risk_resolution 处理原风险；不能因静态零发现拒绝修复。
+该分支同样要求具体用户授权、影响分析、当前证据及原问题复查，AI 结论不冒充扫描器证明。
+以下 task_ref/assessment_ref 门槛适用于原扫描器任务组和严格任务，不能将轻量 check_ref 填入这些字段。
 漏洞后果与拟修复方案对正常业务的影响分别保存并经同一 reply_plan 呈现，不另建提示链。
 先生成具体建议再分析；generate_fix 只生成建议，不要求先取得影响 READY，也不授予编辑权限。
 用户对选定问题明确回复修复后，保留原响应的任务／风险引用和编号映射，不按新摘要排序换对象。
@@ -301,7 +305,10 @@ action、reason_code、verification 枚举、授权标识、引用、扫描器�
 按证据说明，不能把未确认说成安全。以上规则不改变任何 Runtime 授权门禁。
 依赖检查失败时，直接说明“依赖检查未完成”、已知原因和未检查的范围。
 依赖复查按当前数据新鲜度和返回的验证范围说明：指定清单版本的指定漏洞可以
-复查消除，完整依赖图、实际安装和完整性仍未知。不得沿用首次扫描的过期提示。
+复查消除。直接说明扫描结果、具体问题和下一步，不默认附加完整依赖图、实际安装或完整性免责声明。
+同目录 package.json 与 package-lock.json 按一个 npm 依赖单元判断；Trivy 正常完成时，
+不得仅因离线模式、清单没有独立包列表或数据库指纹关闭而称为“部分完成”。OSV 自动备用扫描已关闭。
+仅说明实际影响本次检查的失败或遗漏，不得沿用首次扫描的过期提示。
 修复后通过 get_task_risk_ledger 核对原任务全部风险的逐项状态。上下文修复通过
 submit_task_security_review 的 risk_resolutions 绑定原风险和新的实际代码证据；
 这是宿主代码复核，不是规则证明或修复授权。新任务零发现不能代替原风险逐项关闭。
@@ -404,8 +411,9 @@ only failed revalidation requires a new scan within the user's request. Continui
 do not rescan or reorder on every message. Summary itself never auto-scans.
 Quick dependency checks run only for changed manifest/lockfile inputs, including
 deletions, using existing local engines and data. Source-only edits do not prove
-dependencies were checked. Missing/stale dependency data and incomplete graphs
-must stay unavailable/partial; do not install/build target dependencies to fill
+dependencies were checked. Missing/stale dependency data and actual scanner failures
+must be reported; offline mode or disabled database fingerprints alone are not failures.
+Treat adjacent package.json and package-lock.json as one npm unit. Do not install/build target dependencies to fill
 that gap. Setup baselines establish code/secret comparison proof only.
 If this product is missing/conflicted, report no execution and its diagnostic
 next step; do not silently substitute another product or edit Host configuration.
@@ -518,6 +526,8 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 | 明确深度审计或攻击链分析 | [深度审计](references/deep-audit.md)，topic=deep-audit；先读扫描工作流 |
 
 只加载当前分支；风险或修复意图出现时再读相应方法。扫描范围、复用、分页、修复分支及字段示例由各方法维护。
+声明 development-risks-v1 时，轻量发现先按 development-check 保存统一风险再提示修复；
+AI 独立发现也可修复，关联扫描器发现后采用有证据的 AI 复核判断，保留原始命中。
 
 ## 不可省略的边界
 
@@ -599,6 +609,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'development_check_wait': 'bounded-closeout-wait-v1; OPTIONAL_FINISH_WAIT_SECONDS_0_25; DEFAULT_DISPATCH_ONLY; ASYNC_WAIT_SAVED_STATE; STOP_ON_NEW_EDITS; NO_REDISPATCH; HOST_ANALYSIS_REQUIRED',
                          'development_check_scheduler': 'development-background-scheduler-v1; SUBMITTED_ONLY; DURABLE_BOUNDED_RETRIES; LIVE_SUPERVISOR; ADMITTED_QUEUE_RECOVERY; NO_READ_OR_EDIT_TRIGGER',
                          'development_check_delivery': 'development-result-delivery-v1; COMPLETE_AND_WAIT_TOOLS; PRODUCT_WAIT_BUDGET; VERSIONED_PENDING_OUTBOX; OWNER_SCOPED_PAGING; BOUNDED_STOP_CONTINUATION; RECONNECT_CONTEXT; TRUSTED_HOST_ACK_ONLY; USER_CONSUMPTION_UNKNOWN',
+                         'development_risks': 'development-risks-v1; SHARED_FINDING_SCHEMA; EXPLICIT_SAME_ISSUE_LINK; EVIDENCE_BACKED_HOST_DECISION; DURABLE_ORIGINAL_RISK_REPAIR; NO_SCANNER_PROOF_FROM_HOST',
                          'task_audit_scope': 'workspace-task-diff-v1; EXPLICIT_STRICT_OR_EXISTING_TASKS; ENTIRE_B_TO_C_DIFF; AUTHOR_INDEPENDENT; SAME_C_SCAN_AND_REVIEW',
                          'startup_comparison_baseline': 'NOT_REQUIRED; NO_STARTUP_INVENTORY_OR_SCAN; HISTORICAL_READ_ONLY',
                          'workspace_snapshot_development': development_capabilities(),

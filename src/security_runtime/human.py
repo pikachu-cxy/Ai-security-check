@@ -134,7 +134,7 @@ def render_scan(result, *, verbose=False):
         if affected:
             lines += [f'{run.scanner} 未完成，因此：', *['- ' + label for label in affected]]
         if run.error_code and not preparation_note:
-            retry = f'security-check tools install {run.scanner}' if run.status == 'UNAVAILABLE' and run.scanner in {'semgrep', 'gitleaks', 'trivy'} else f'security-check scan --mode {result.mode}'
+            retry = f'security-check tools install {run.scanner}' if run.status == 'UNAVAILABLE' and run.scanner in {'opengrep', 'semgrep', 'gitleaks', 'trivy'} else f'security-check scan --mode {result.mode}'
             lines.append(diagnostic_zh(asdict(run), retry=retry))
     return '\n'.join(lines)
 

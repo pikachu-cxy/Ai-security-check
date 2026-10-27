@@ -231,15 +231,15 @@ def sample_scan_diagnostics(payload):
     }
 
 
-def verify_first_party_sample(payload):
-    if not any('command-injection' in str((item.get('technical_details') or {}).get('rule_id', ''))
+def verify_upstream_sample(payload):
+    if not any('opengrep' in item.get('scanner_sources', [])
                for item in payload.get('findings', [])):
-        raise ValueError('First-party scanner finding missing: ' + json.dumps(sample_scan_diagnostics(payload)))
+        raise ValueError('OpenGrep scanner finding missing: ' + json.dumps(sample_scan_diagnostics(payload)))
 
 
 def verify_sample_scan(payload, *, dependency=False):
     """Engine execution and declared inventory are separate from graph completeness."""
-    expected = {'semgrep': 'SUCCESS', 'gitleaks': 'SUCCESS',
+    expected = {'opengrep': 'SUCCESS', 'gitleaks': 'SUCCESS',
                 'trivy-vuln': 'SUCCESS' if dependency else 'NOT_APPLICABLE',
                 'trivy-misconfig': 'NOT_APPLICABLE'}
     runs = {item['scanner']: item for item in payload['scanner_runs']}
@@ -462,20 +462,20 @@ def main() -> None:
         global_ownership = verify_global_ownership(executable, root, env)
         run([str(executable), "licenses", "--check-distribution"], cwd=root, env=env)
         if args.full:
-            for tool in ("semgrep", "gitleaks", "trivy"):
+            for tool in ("opengrep", "gitleaks", "trivy"):
                 print(f"Preparing managed {tool}", flush=True)
                 run([str(executable), "tools", "install", tool], cwd=project, env=env, timeout=1200)
-                parent = data / ("engines" if tool == "semgrep" else "tools") / tool
+                parent = data / "tools" / tool
                 if not list(parent.glob("*/metadata.json")):
                     raise ValueError(f"{tool} was not installed as a managed engine")
-            reuse_paths = [path for parent in (data / "python", data / "engines" / "semgrep")
+            reuse_paths = [path for parent in (data / "tools" / "opengrep",)
                            for path in parent.rglob("*") if path.name in {"metadata.json", "install.json"}]
             before_reuse = {path: (path.read_bytes(), path.stat().st_mtime_ns) for path in reuse_paths}
-            run([str(executable), "tools", "install", "semgrep"], cwd=project,
+            run([str(executable), "tools", "install", "opengrep"], cwd=project,
                 env=dict(env, SECURITY_RUNTIME_OFFLINE="1"), timeout=60)
             if not before_reuse or any((path.read_bytes(), path.stat().st_mtime_ns) != saved
                                        for path, saved in before_reuse.items()):
-                raise ValueError("Standalone second Semgrep preparation did not reuse managed installation")
+                raise ValueError("Standalone second OpenGrep preparation did not reuse managed installation")
             (project / "app.py").write_text("import os\nos.system(input())\n", encoding="utf-8")
             result = subprocess.run([str(executable), "scan", "--mode", "quick", "--path", str(project), "--json"],
                                     cwd=project, env=env, capture_output=True, text=True, encoding="utf-8", timeout=1200)
@@ -484,7 +484,7 @@ def main() -> None:
             payload = json.loads(result.stdout)
             args.archive.with_name(args.archive.name + '.quick-scan.diagnostics.json').write_text(
                 json.dumps(sample_scan_diagnostics(payload), indent=2) + '\n', encoding='utf-8')
-            verify_first_party_sample(payload)
+            verify_upstream_sample(payload)
             verify_sample_scan(payload)
             # Dependency manifests are a distinct release check, not a source-only QUICK.
             (project / "requirements.txt").write_text("requests==2.31.0\n", encoding="utf-8")
@@ -557,7 +557,7 @@ def main() -> None:
         record['codex_integration_offline_synthetic'] = args.codex_integration
         record['doctor_contract'] = doctors
         record['global_semantic_ownership'] = global_ownership
-        record['managed_semgrep_reuse'] = args.full
+        record['managed_opengrep_reuse'] = args.full
         record['large_binary_document_exclusion'] = True
         record['oversized_source_typed_failure'] = True
         record['scan_coverage'] = {'quick': payload['coverage'], 'release': release_payload['coverage']} if args.full else {}

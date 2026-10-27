@@ -12,6 +12,9 @@ HANDLING_UNAVAILABLE_MESSAGE = ('风险处置记录暂时无法读取，原告�
 
 RISK_DECISION_GUIDANCE = '''风险交互与用户处置（risk-decisions-v2）：
 产品承担调查工作，用户决定是否处理。技术评估、用户处置、提醒状态和修复证明分别保存。
+轻量开发已声明 development-risks-v1 时，按 development-check 的统一风险分支操作：
+先提交有证据的 AI 判断并保存风险，关联同一扫描器发现后只展示一项；技术判断以 AI 复核为准，
+原始命中保留。用统一风险接口处理修复和暂缓，不再为该问题另走下面的旧扫描器/严格任务反馈分支。
 普通开发检查或授权扫描中，先由当前宿主 Agent 在原范围与预算内读取代码、防护和反证并复核，
 再给出建议；Runtime 不自调模型，不凭原始规则命中认定真实漏洞。用户明确只要原始扫描或只记录意见时遵从。
 扫描器候选通过 prepare_finding_feedback/submit_finding_feedback 完成有证据的复核；

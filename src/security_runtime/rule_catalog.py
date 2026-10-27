@@ -8,6 +8,14 @@ import re
 LANGUAGES = {'python', 'java', 'javascript', 'typescript', 'go', 'php', 'generic'}
 EXTENSIONS = {'python': {'.py'}, 'java': {'.java'}, 'javascript': {'.js', '.jsx'},
               'typescript': {'.ts', '.tsx'}, 'vue': {'.vue'}, 'go': {'.go'}, 'php': {'.php'}}
+EXTENSIONS.update({'apex': {'.cls', '.trigger'}, 'bash': {'.sh', '.bash'}, 'c': {'.c', '.h'},
+    'cpp': {'.cpp', '.cc', '.cxx', '.hpp'}, 'clojure': {'.clj', '.cljs', '.cljc'},
+    'csharp': {'.cs'}, 'dart': {'.dart'}, 'dockerfile': {'.dockerfile'}, 'elixir': {'.ex', '.exs'},
+    'hcl': {'.tf', '.hcl'}, 'html': {'.html', '.htm'}, 'json': {'.json'}, 'kotlin': {'.kt', '.kts'},
+    'lua': {'.lua'}, 'ocaml': {'.ml', '.mli'}, 'ruby': {'.rb'}, 'rust': {'.rs'}, 'scala': {'.scala'},
+    'solidity': {'.sol'}, 'swift': {'.swift'}, 'yaml': {'.yml', '.yaml'}, 'generic': {'*'}, 'regex': {'*'}})
+LANGUAGE_ALIASES = {'C#':'csharp', 'js':'javascript', 'ts':'typescript', 'kt':'kotlin', 'sh':'bash', 'terraform':'hcl'}
+LANGUAGES = set(EXTENSIONS) | set(LANGUAGE_ALIASES)
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,10 @@ def supports_language(record, language):
 
 
 def supports_file(record, name):
+    if '*' in record.target_extensions:
+        return True
+    if 'dockerfile' in record.engine_languages and Path(name).name.lower() == 'dockerfile':
+        return True
     extension = Path(name).suffix.lower()
     if extension == '.vue':
         return supports_language(record, 'vue') and bool(set(record.target_extensions) & {'.js', '.jsx', '.ts', '.tsx'})
@@ -96,12 +108,23 @@ def load_catalog(path, descriptor, definitions, *, first_party=True):
     if not first_party:
         records=[]
         for rule,relative in definitions.values():
-            md=rule.get('metadata',{})
-            for language in rule['languages']:
-                records.append(RuleRecord(rule['id'],language,(language,),md.get('category','code'),
-                    tuple(md.get('cwe',())),rule['severity'],md.get('confidence','MEDIUM'),'EXPERIMENTAL',
-                    md.get('framework',''),descriptor.rule_pack_id,descriptor.version,(),{},rule.get('mode','search'),relative,
-                    tuple(EXTENSIONS.get(language,{'.xml'}))))
+            md=rule.get('metadata') or {}
+            languages=tuple(dict.fromkeys(LANGUAGE_ALIASES.get(l,l) for l in rule['languages']))
+            cwes=md.get('cwe', [])
+            if isinstance(cwes,str): cwes=[cwes]
+            cwes=tuple(match.group() for text in cwes if (match:=re.search(r'CWE-\d+', str(text))))
+            category=next((name for cwe,name in (('CWE-89','sql-injection'),('CWE-78','command-injection'),
+                ('CWE-79','xss'),('CWE-22','path-traversal'),('CWE-918','ssrf'),('CWE-502','unsafe-deserialization'))
+                if cwe in cwes), md.get('category','code'))
+            references=md.get('references', [])
+            if isinstance(references,str): references=[references]
+            original_id=(rule['id'].removeprefix(str(Path(relative).with_suffix('')).replace('\\','.').replace('/','.')+'.')
+                         if descriptor.bundled else rule['id'])
+            records.append(RuleRecord(rule['id'],languages[0],languages,category,cwes,rule['severity'],
+                md.get('confidence','MEDIUM'),'UPSTREAM' if descriptor.bundled else 'USER_PROVIDED',
+                str(md.get('framework','')),descriptor.rule_pack_id,descriptor.version,tuple(references),
+                dict(origin=descriptor.provenance.origin, original_rule_id=original_id, source_path=relative),
+                rule.get('mode','search'),relative,tuple(sorted(set().union(*(EXTENSIONS[l] for l in languages))))))
         return tuple(records)
     file=path/'catalog.json'
     if not file.is_file() or file.is_symlink() or file.stat().st_size>1_000_000:

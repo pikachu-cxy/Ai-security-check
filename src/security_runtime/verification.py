@@ -156,19 +156,19 @@ class VerificationService:
                 continue
             # Only built-in local providers are allowed by default. Trusted
             # extensions must explicitly attest offline, exact-file semantics.
-            from .scanners import SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter
+            from .scanners import SemgrepAdapter, OpenGrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter
             from .osv import OSVDependencyAdapter
-            if type(adapter) not in {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter} and not (
+            if type(adapter) not in {OpenGrepAdapter, SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter} and not (
                     getattr(adapter, 'verification_offline', False) is True and
                     getattr(adapter, 'verification_scope_complete', False) is True):
                 complete = False
                 provider_failure = True
                 reasons.append('PROVIDER_LOCAL_SCOPE_NOT_ATTESTED')
                 continue
-            if isinstance(adapter, SemgrepAdapter):
-                from .sast import SemgrepEngineProvider
+            if isinstance(adapter, (SemgrepAdapter, OpenGrepAdapter)):
+                from .sast import SemgrepEngineProvider, OpenGrepEngineProvider
                 provider = adapter.engine_provider
-                if type(provider) is not SemgrepEngineProvider and not (
+                if type(provider) not in {SemgrepEngineProvider, OpenGrepEngineProvider} and not (
                         getattr(provider, 'verification_offline', False) is True and
                         getattr(provider, 'verification_scope_complete', False) is True):
                     complete = False
@@ -189,7 +189,7 @@ class VerificationService:
                             plan = adapter.plan_rules(profile, context)
                             # Preserve the full catalog/checksum identity and
                             # require the original rule in confirmed engine proof.
-                            if type(adapter) is SemgrepAdapter:
+                            if type(adapter) in {SemgrepAdapter, OpenGrepAdapter}:
                                 program = getattr(plan.pack, 'program', None)
                                 wanted = {rid for original in rules[(name,path)] for rid in
                                     (program.family_rules(original) if program else (original,))}
@@ -218,7 +218,7 @@ class VerificationService:
             result['runtime_observed_execution']['scanner_recheck_attempted'] = True
             if run.status in {RunStatus.SUCCESS, RunStatus.FAILED, RunStatus.TIMEOUT}:
                 result['runtime_observed_execution']['scanner_recheck'] |= process_observed or type(adapter) not in {
-                    SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter}
+                    OpenGrepAdapter, SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter}
             result['scanner_runs'].append({'scanner': name, 'status': run.status, 'version': run.version,
                 'duration_ms': run.duration_ms, 'error_code': run.error_code, 'coverage_contract': run.coverage_contract,
                 'provider': run.provider or getattr(adapter, 'engine_id', '') or adapter.scanner_id,
@@ -252,7 +252,7 @@ class VerificationService:
                                   reason='ORIGINAL_OR_EQUIVALENT_FINDING_OBSERVED')
                     result['current_evidence'].append(evidence(current))
             covered = run.status == RunStatus.SUCCESS and run.coverage_contract == 'FULL' and (process_observed or
-                type(adapter) not in {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter})
+                type(adapter) not in {OpenGrepAdapter, SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter, OSVDependencyAdapter})
             if type(adapter) is TrivyAdapter and row.get('category') == 'dependency':
                 result['current_dependency_state'] = dict(
                     database_freshness=run.dependency_inventory.get('vulnerability_db_freshness', 'UNKNOWN'),

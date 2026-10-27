@@ -43,16 +43,16 @@ def test_stale_or_modified_rule_payload_cannot_pass_wheel_gate(wheel, changed):
     import json
     _, payload = wheel
     if changed.startswith('catalog'):
-        name = 'security_runtime/rules/catalog.json'
+        name = 'security_runtime/opengrep_rules.json'
         catalog = json.loads(payload[name])
         if changed == 'catalog-version':
-            catalog['version'] = '0.0.0'
+            catalog['commit'] = '0.0.0'
         else:
-            catalog['rules'].pop()
+            catalog['sha256'].pop(next(iter(catalog['sha256'])))
         payload[name] = json.dumps(catalog).encode()
     else:
         name = ('security_runtime/rulepacks.py' if changed == 'descriptor'
-                else 'security_runtime/rules/core/python.yml')
+                else 'security_runtime/' + next((ROOT/'src/security_runtime/rules').rglob('*.yaml')).relative_to(ROOT/'src/security_runtime').as_posix())
         payload[name] += b'\n# stale build content\n'
     with pytest.raises(ValueError, match='differs from source'):
         check_wheel(wheel)

@@ -560,13 +560,12 @@ class HookCoordinator:
         if self.runtime is not None and getattr(self.runtime, 'registry', None) is not None:
             return self.runtime.registry
         if self._managed_registry is None:
-            from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+            from .scanners import ScannerRegistry, OpenGrepAdapter, GitleaksAdapter, TrivyAdapter
             from .dynamic_function import NativeFunctionScanner
-            from .osv import OSVDependencyAdapter
             from .toolchain import ToolManager
             manager = ToolManager()
-            self._managed_registry = ScannerRegistry([SemgrepAdapter(manager),NativeFunctionScanner(),GitleaksAdapter(manager),TrivyAdapter(manager)],
-                tool_manager=manager,fallback_adapters=[OSVDependencyAdapter(manager)])
+            self._managed_registry = ScannerRegistry([OpenGrepAdapter(manager),NativeFunctionScanner(),GitleaksAdapter(manager),TrivyAdapter(manager)],
+                tool_manager=manager,fallback_adapters=[])
         return self._managed_registry
 
     def _scan_scope(self, result, root, scope, *, baseline=False, attribution_candidate=False,

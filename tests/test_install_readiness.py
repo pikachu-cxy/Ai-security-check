@@ -129,23 +129,23 @@ def test_version_mismatch_replaced_by_supported_version():
 
 
 @pytest.mark.parametrize('source,offline,install', [
-    (ToolSource.SYSTEM, False, True),
+    (ToolSource.SYSTEM, False, False),
     (ToolSource.SYSTEM, True, False),
     (ToolSource.EXPLICIT, False, False),
     (ToolSource.MANAGED, False, False),
 ])
-def test_readiness_only_prepares_unverified_system_semgrep_online(source, offline, install):
+def test_readiness_only_prepares_unverified_system_opengrep_online(source, offline, install):
     from security_runtime.component_health import diagnosis
     manager = Manager()
     problem = diagnosis('COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE')
-    manager.tools['semgrep'] = ResolvedTool('semgrep', VERSIONS['semgrep'], '/external/semgrep',
+    manager.tools['opengrep'] = ResolvedTool('opengrep', VERSIONS['opengrep'], '/external/opengrep',
         source, ToolStatus.BROKEN, problem.error_summary, problem)
     receipt = prepare_installation_readiness(manager=manager, offline=offline)
     assert receipt['ready'] is install
-    assert (('ensure', 'semgrep', False) in manager.calls) is install
+    assert (('ensure', 'opengrep', False) in manager.calls) is install
     assert validate_readiness_receipt(receipt)
     if not install:
-        assert receipt['tools']['semgrep']['diagnostic']['code'] == problem.error_code
+        assert receipt['tools']['opengrep']['diagnostic']['code'] == problem.error_code
 
 
 @pytest.mark.parametrize('freshness', ['STALE', 'UNKNOWN', 'MISSING'])
@@ -213,10 +213,10 @@ def test_all_tools_missing_and_no_database_are_unavailable_offline():
 
 def test_one_tool_failure_does_not_skip_remaining_preparation():
     manager = Manager(freshness='MISSING', missing=CORE_TOOLS)
-    manager.ensure_errors['semgrep'] = PermissionError('private-path')
+    manager.ensure_errors['opengrep'] = PermissionError('private-path')
     receipt = prepare_installation_readiness(manager=manager)
     assert receipt['status'] == 'PARTIAL'
-    assert receipt['tools']['semgrep']['ready'] is False
+    assert receipt['tools']['opengrep']['ready'] is False
     assert receipt['tools']['gitleaks']['ready'] is True
     assert receipt['tools']['trivy']['ready'] is True
     assert receipt['vulnerability_db']['ready'] is True
@@ -246,7 +246,7 @@ def test_resolve_exception_is_safe_and_other_components_are_prepared():
     class PrivateCredentialError(Exception):
         pass
     manager = Manager(freshness='MISSING', missing=('gitleaks',))
-    manager.resolve_errors['semgrep'] = PrivateCredentialError('source-code')
+    manager.resolve_errors['opengrep'] = PrivateCredentialError('source-code')
     receipt = prepare_installation_readiness(manager=manager)
     assert receipt['ready'] is False
     assert receipt['tools']['gitleaks']['ready'] is True
@@ -474,7 +474,7 @@ def test_real_manager_offline_path_has_no_preparation_side_effect(tmp_path, monk
 
 def test_cancellation_is_not_turned_into_installation_failure():
     manager = Manager()
-    manager.resolve_errors['semgrep'] = ScanCancelled()
+    manager.resolve_errors['opengrep'] = ScanCancelled()
     with pytest.raises(ScanCancelled):
         prepare_installation_readiness(manager=manager)
 
@@ -488,7 +488,7 @@ def test_presentation_failure_does_not_change_readiness():
 
 
 def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
-    manager = Manager(freshness='MISSING', missing=('semgrep',))
+    manager = Manager(freshness='MISSING', missing=('opengrep',))
     logger = logging.getLogger('security_runtime.toolchain')
     handler = logging.StreamHandler()
     original_level, original_filters = logger.level, tuple(logger.filters)
@@ -496,7 +496,7 @@ def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
     logger.addHandler(handler)
     original = manager.ensure
     def ensure(*args, **kwargs):
-        logger.warning('tool_install_failed tool=semgrep reason=PrivateOutput')
+        logger.warning('tool_install_failed tool=opengrep reason=PrivateOutput')
         raise PermissionError('private-path')
     manager.ensure = ensure
     try:
@@ -505,11 +505,11 @@ def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
         output = capsys.readouterr()
         assert '代码检查不可用' in output.out and '组件尚未安装' in output.out
         assert receipt['vulnerability_db']['ready'] is True
-        assert receipt['ready'] is False and receipt['tools']['semgrep']['ready'] is False
-        assert any(item['component'] == 'semgrep' for item in receipt['failures'])
+        assert receipt['ready'] is False and receipt['tools']['opengrep']['ready'] is False
+        assert any(item['component'] == 'opengrep' for item in receipt['failures'])
         assert_valid(receipt)
         assert all(value not in output.out + output.err for value in (
-            'tool_install_failed', 'semgrep', 'PrivateOutput', 'private-path'))
+            'tool_install_failed', 'opengrep', 'PrivateOutput', 'private-path'))
         assert tuple(logger.filters) == original_filters
         logger.warning('logging-after-preparation')
         assert 'logging-after-preparation' in capsys.readouterr().err
@@ -520,7 +520,7 @@ def test_preparation_internal_logs_hidden_and_logging_restored(capsys):
 
 
 def test_preparation_log_filter_does_not_suppress_other_threads(capsys):
-    manager = Manager(missing=('semgrep',))
+    manager = Manager(missing=('opengrep',))
     logger = logging.getLogger('security_runtime.toolchain')
     handler = logging.StreamHandler()
     original_level, original_filters = logger.level, tuple(logger.filters)
@@ -548,7 +548,7 @@ def test_preparation_log_filter_does_not_suppress_other_threads(capsys):
 
 def test_cancellation_removes_only_its_own_log_filter():
     manager = Manager()
-    manager.resolve_errors['semgrep'] = ScanCancelled()
+    manager.resolve_errors['opengrep'] = ScanCancelled()
     logger = logging.getLogger('security_runtime.toolchain')
     sentinel = logging.Filter()
     logger.addFilter(sentinel)

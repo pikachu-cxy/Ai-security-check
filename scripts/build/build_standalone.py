@@ -111,7 +111,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
         "state_schema": STATE_SCHEMA, "capability_contract": "developer-guidance-v0.3",
         "storage_contracts": storage_contracts(),
         "launcher_contract": CONTRACT, "files": files,
-        "managed_engines": ["semgrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}
+        "managed_engines": ["opengrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}
     if links:
         metadata.update(links=links, bundle_link_contract='internal-relative-v1')
     metadata['build_id'] = hashlib.sha256(encode(metadata)).hexdigest()

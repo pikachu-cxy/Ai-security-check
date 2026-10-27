@@ -894,9 +894,10 @@ def create_global_server(*, workspaces=None, host='codex'):
                     content=[TextContent(type='text', text=json.dumps(unsupported, ensure_ascii=False))])
             if handler_entered and name in DEVELOPMENT_CHECK_TOOLS:
                 from .tasks.ownership import TaskOwnershipError
+                from .development_risks import DevelopmentRiskError
                 cause = exc
                 for _ in range(8):
-                    if isinstance(cause, TaskOwnershipError):
+                    if isinstance(cause, (TaskOwnershipError, DevelopmentRiskError)):
                         return _development_request_rejected(cause.reason_code)
                     cause = cause.__cause__ or cause.__context__
                     if cause is None:

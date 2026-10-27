@@ -1,4 +1,4 @@
-"""Fail closed when the wheel omits licensed runtime or first-party rule data."""
+"""Fail closed when the wheel omits licensed runtime or upstream rule data."""
 from __future__ import annotations
 
 import sys
@@ -35,7 +35,7 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/rule_coverage.py",
             "security_runtime/rule_program.py",
             "security_runtime/rule_ground_truth.py",
-            "security_runtime/rules/capabilities.json",
+            "security_runtime/opengrep_rules.json",
             "security_runtime/osv.py",
             "security_runtime/dependency_fallback.py",
             "security_runtime/triage.py",
@@ -53,7 +53,7 @@ def check(wheel: Path, project: Path) -> None:
             "security_runtime/hook_state.py",
             "security_runtime/baseline_seed.py",
             "security_runtime/hook_adapters.py",
-            "security_runtime/rules/catalog.json",
+            "security_runtime/rules/README.md",
             "security_runtime/python_downloads.json",
             "security_runtime/rules/LICENSE",
             data_prefix + "LICENSE",
@@ -67,16 +67,16 @@ def check(wheel: Path, project: Path) -> None:
         check_python_modules(names, source_package)
         # Compare the descriptor and catalog as well as rule filenames. A stale
         # wheel must fail even if its old metadata remains internally valid.
-        for relative in ('rulepacks.py', 'rules/catalog.json'):
+        for relative in ('rulepacks.py', 'opengrep_rules.json', 'rules/LICENSE', 'rules/README.md'):
             name = 'security_runtime/' + relative
             if name in names and package.read(name) != (source_package / relative).read_bytes():
                 raise ValueError(f'Wheel rule metadata differs from source: {relative}')
-        for engine in ("gitleaks", "trivy", "semgrep", "osv-scanner"):
+        for engine in ("gitleaks", "trivy", "opengrep", "semgrep", "osv-scanner"):
             for name in ("LICENSE", "NOTICE"):
                 required.add(f"security_runtime/licenses/{engine}/{name}")
         rule_files = sorted((source_package / "rules").rglob("*.yml")) + sorted((source_package / "rules").rglob("*.yaml"))
         if not rule_files:
-            raise ValueError("No first-party rules found in source")
+            raise ValueError("No upstream rules found in source")
         for file in rule_files:
             relative = file.relative_to(source_package).as_posix()
             required.add("security_runtime/" + relative)
@@ -87,21 +87,6 @@ def check(wheel: Path, project: Path) -> None:
             payload = yaml.safe_load(package.read("security_runtime/" + relative))
             if not isinstance(payload, dict) or not isinstance(payload.get("rules"), list) or not payload["rules"]:
                 raise ValueError(f"Invalid bundled rule file: {relative}")
-            for rule in payload["rules"]:
-                metadata = rule.get("metadata", {})
-                provenance = metadata.get("provenance", {})
-                if (not str(rule.get("id", "")).startswith("ai-security.")
-                        or metadata.get("publisher") != "AI Security Runtime"
-                        or metadata.get("license") != "Apache-2.0"
-                        or metadata.get("rule_pack") != "ai-security-core"
-                        or not metadata.get("rule_version")
-                        or not metadata.get("references")
-                        or provenance.get("origin") != "FIRST_PARTY"
-                        or not provenance.get("author")
-                        or not provenance.get("created_at")
-                        or provenance.get("license") != "Apache-2.0"
-                        or not provenance.get("references")):
-                    raise ValueError(f"Rule metadata incomplete: {rule.get('id', relative)}")
         bundled_rules = {name for name in names if name.startswith("security_runtime/rules/")
                          and name.endswith((".yml", ".yaml"))}
         expected_rules = {"security_runtime/" + file.relative_to(source_package).as_posix()
@@ -122,7 +107,7 @@ def check(wheel: Path, project: Path) -> None:
         if missing:
             raise ValueError("Wheel missing required files: " + ", ".join(missing))
         if any(name.startswith("semgrep/") or "semgrep-rules" in name.lower()
-               or name.endswith(("gitleaks.exe", "trivy.exe", "osv-scanner.exe")) for name in names):
+               or name.endswith(("opengrep.exe", "gitleaks.exe", "trivy.exe", "osv-scanner.exe")) for name in names):
             raise ValueError("Runtime wheel unexpectedly bundles a third-party engine")
         metadata = [name for name in names if name.endswith(".dist-info/METADATA")]
         if len(metadata) != 1:
@@ -130,7 +115,7 @@ def check(wheel: Path, project: Path) -> None:
         requirements = Parser().parsestr(package.read(metadata[0]).decode("utf-8")).get_all("Requires-Dist", [])
         if any(item.lower().startswith("semgrep") and "extra ==" not in item for item in requirements):
             raise ValueError("Runtime wheel still requires Semgrep")
-    print(f"Wheel compliance OK: {wheel.name}, {len(rule_files)} first-party rule file(s)")
+    print(f"Wheel compliance OK: {wheel.name}, {len(rule_files)} upstream rule file(s)")
 
 
 if __name__ == "__main__":

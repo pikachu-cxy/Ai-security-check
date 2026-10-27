@@ -23,7 +23,7 @@ from .preparation_budget import preparation_budget, current_budget
 
 
 CONTRACT = 'installation-readiness-v1'
-CORE_TOOLS = ('semgrep', 'gitleaks', 'trivy')
+CORE_TOOLS = ('opengrep', 'gitleaks', 'trivy')
 # Reviewed against the trivy-db commit pinned by built-in Trivy 0.74.0.
 # A product engine upgrade must review this compatibility value together.
 TRIVY_DATABASE_SCHEMA_VERSION = 2
@@ -37,7 +37,7 @@ _EXCEPTION_TYPES = frozenset({'OSError', 'PermissionError', 'FileNotFoundError',
     'TimeoutError', 'ValueError', 'TypeError', 'RuntimeError', 'KeyError',
     'AttributeError', 'ImportError', 'OtherException'})
 _VERSION = re.compile(r'[0-9]{1,6}(?:\.[0-9]{1,6}){1,3}')
-_LABELS = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
+_LABELS = {'opengrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
 
 
 @contextmanager

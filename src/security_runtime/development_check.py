@@ -72,6 +72,9 @@ def clean_paths(values, *, tolerant=False):
     for name in values:
         try:
             name = relative_path(name)
+            from .development_scope import excluded_artifact
+            if excluded_artifact(name):
+                continue
             if any(char in name for char in '*?[]'):
                 raise ValueError('DEVELOPMENT_PATH_SELECTION_INVALID')
             folded = os.path.normcase(name)
@@ -125,6 +128,7 @@ class DevelopmentCheckStore(SignedRecords):
         undelivered = {r['check_ref'] for r in rows if r.get('kind') == 'delivery'
                        and not r.get('host_report_submitted')}
         removed = {r['check_ref'] for r in rows if r.get('kind') == 'check'
+            and not r.get('has_unified_risks')
             and r['state'] in TERMINAL and r['finish_requested']
             and r['check_ref'] not in focused | undelivered
             and r['updated_at'] < self.now()-RETENTION_SECONDS}
@@ -138,6 +142,8 @@ class DevelopmentCheckStore(SignedRecords):
                     self._put(db, row['key'], dict(row, events=events))
 
     def append(self, db, row, paths, unknown, event_id):
+        paths, invalid = clean_paths(paths, tolerant=True)
+        unknown = unknown or invalid
         if event_id is not None:
             if not isinstance(event_id, str) or not 1 <= len(event_id) <= 256:
                 raise ValueError('DEVELOPMENT_EVENT_INVALID')
@@ -145,6 +151,8 @@ class DevelopmentCheckStore(SignedRecords):
             event_id = hashlib.sha256(event_id.encode()).hexdigest()
             if event_id in row['events']:
                 return row, False
+        if not paths and not unknown:
+            return self._put(db, row['check_ref'], row), False
         selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
         row = dict(row, observed_paths=selected,
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
@@ -152,6 +160,7 @@ class DevelopmentCheckStore(SignedRecords):
             events=([*row['events'], event_id][-MAX_EVENTS:] if event_id else row['events']),
             state='DIRTY', reason_code=None, finish_requested=False,
             attempt_count=0, busy_attempts=0, next_attempt_at=0, failed_seq=None,
+            failure_diagnostic=None,
             launch_failures=0, launch_retry_at=0)
         return self._put(db, row['check_ref'], row), True
 
@@ -210,6 +219,7 @@ def projection(store, row):
         result_is_saved_version=bool(row['scan_id']), source_freshness='NOT_RECHECKED_ON_READ',
         execution=result.get('execution'), scan_status=result.get('status'),
         scan_coverage=result.get('coverage'),
+        failure_diagnostic=row.get('failure_diagnostic'),
         next_action=dict(tool='finish_development_check' if state in {'DIRTY', 'INTERRUPTED', 'FAILED'}
             else 'get_development_check', arguments=dict(
             workspace_path=str(store.root), check_ref=row['check_ref'])),
@@ -302,10 +312,12 @@ class DevelopmentCheckService:
         stop_window(store, check_ref, self.owner)
         with store.transaction() as db:
             row = store._get(db, check_ref)
+            selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
+            row = dict(row, observed_paths=selected, scope_unknown=row['scope_unknown'] or invalid)
             state = row['state']
             worker = store._get(db, '$worker')
             running = worker and worker.get('lease_until', 0) > self.now()
-            if row['dirty_seq'] == 0:
+            if row['dirty_seq'] == 0 or (not selected and not row['scope_unknown']):
                 state = 'NO_OBSERVED_CHANGES'
             elif (row['dirty_seq'] > row['scanned_seq'] and
                     row.get('failed_seq') != row['dirty_seq'] and (state != 'RUNNING' or not running)):
@@ -398,6 +410,14 @@ class DevelopmentCheckService:
         store = self.store(root)
         row = store.load(check_ref, self.owner)
         result = projection(store, row)
+        if row.get('has_development_review'):
+            from .development_risks import DevelopmentRisks
+            risks = DevelopmentRisks(self, store.root, check_ref).load()
+            result['host_review_completed'] = any(
+                r['dirty_seq'] == row['dirty_seq'] for r in risks['reviews'])
+            result['host_review_trust'] = 'HOST_REPORTED_NOT_SCANNER_PROOF'
+            result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
+                workspace_path=str(store.root), check_ref=check_ref))
         if row['scan_id']:
             from .storage import ReadOnlySQLiteStore
             from .mcp_tools.presentation import _agent_result

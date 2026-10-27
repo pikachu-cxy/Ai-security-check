@@ -131,8 +131,7 @@ class InstallationUpgrade:
         from .toolchain import default_data_root, VERSIONS
         data = default_data_root()
         suffix = '.exe' if os.name == 'nt' else ''
-        managed = {name: data / 'tools' / name / VERSIONS[name] / (name + suffix) for name in ('gitleaks', 'trivy')}
-        managed['semgrep'] = data / 'engines/semgrep' / VERSIONS['semgrep'] / 'runtime' / ('Scripts' if os.name == 'nt' else 'bin') / ('semgrep' + suffix)
+        managed = {name: data / 'tools' / name / VERSIONS[name] / (name + suffix) for name in ('opengrep', 'gitleaks', 'trivy')}
         # File presence is not execution or a successful version probe.
         result['engines'] = {name: 'MANAGED_FILE_PRESENT_VERSION_UNPROBED' if path.is_file()
                              else 'MANAGED_FILE_MISSING_EXTERNAL_ENGINE_UNPROBED'

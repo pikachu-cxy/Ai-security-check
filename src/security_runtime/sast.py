@@ -31,3 +31,15 @@ class SemgrepEngineProvider:
         return [str(Path(executable).resolve()), "scan", "--config", str(request.config_path or request.rule_pack.path),
                 "--json", "--time", "--quiet", "--metrics", "off", "--disable-version-check",
                 "--no-rewrite-rule-ids", "--dataflow-traces", "--no-git-ignore", *request.scan_scope]
+
+
+class OpenGrepEngineProvider(SemgrepEngineProvider):
+    engine_id = "opengrep"
+
+    def command(self, executable: str, request: SASTRequest) -> list[str]:
+        command = super().command(executable, request)
+        # Native OpenGrep has no telemetry/metrics switch; passing Semgrep's
+        # Python-only option fails instead of scanning.
+        index = command.index('--metrics')
+        del command[index:index+2]
+        return command

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
-from .licensing import GITLEAKS_LICENSE, TRIVY_LICENSE, SEMGREP_LICENSE, OSV_SCANNER_LICENSE, LicenseMetadata
+from .licensing import GITLEAKS_LICENSE, TRIVY_LICENSE, SEMGREP_LICENSE, OPENGREP_LICENSE, OSV_SCANNER_LICENSE, LicenseMetadata
 
 
 class EngineType(StrEnum):
@@ -50,6 +50,10 @@ class ManagedEngine(Protocol):
 
 
 BUILTIN_ENGINES = {
+    "opengrep": EngineDescriptor("opengrep", "OpenGrep", EngineType.BINARY, "1.32.0", "Official GitHub Release",
+                                "https://github.com/opengrep/opengrep", "LGPL-2.1-only", True,
+                                "OpenGrep and contributors", ("windows", "linux", "macos"), "PINNED_RELEASE",
+                                ExecutionTrust.SAFE_LOCAL, OPENGREP_LICENSE),
     "semgrep": EngineDescriptor("semgrep", "Semgrep", EngineType.PYTHON_PACKAGE, "1.178.0", "PyPI",
                                 "https://semgrep.dev", "LGPL-2.1-only", False, "", ("windows", "linux", "macos"), "MANAGED_PYTHON_PACKAGE", ExecutionTrust.SAFE_LOCAL, SEMGREP_LICENSE),
     "gitleaks": EngineDescriptor("gitleaks", "Gitleaks", EngineType.BINARY, "8.30.0", "Official GitHub Release",
@@ -59,4 +63,4 @@ BUILTIN_ENGINES = {
     "osv-scanner": EngineDescriptor("osv-scanner", "OSV-Scanner", EngineType.BINARY, "2.6.0", "Official GitHub Release",
                               "https://github.com/google/osv-scanner", "Apache-2.0", False, "", ("windows", "linux", "macos"), "PINNED_RELEASE", ExecutionTrust.SAFE_LOCAL, OSV_SCANNER_LICENSE),
 }
-ON_DEMAND_ENGINES = frozenset({"osv-scanner"})
+ON_DEMAND_ENGINES = frozenset({"osv-scanner", "semgrep"})  # Historical explicit use only; never a fallback.

@@ -32,7 +32,7 @@ def saved_scan_preparation():
     if not validate_readiness_receipt(receipt):
         return result
     issues = []
-    for name in ('semgrep', 'gitleaks', 'trivy'):
+    for name in ('opengrep', 'gitleaks', 'trivy'):
         item = receipt['tools'][name]
         # The validated receipt supplies closed enums; no arbitrary messages,
         # executable paths, arguments or exception text enter Host context.

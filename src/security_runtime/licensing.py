@@ -107,6 +107,11 @@ SEMGREP_LICENSE = LicenseMetadata(
     "LGPL-2.1-only", "GNU Lesser General Public License v2.1", "https://github.com/semgrep/semgrep/blob/v1.178.0/LICENSE",
     True, True, Permission.WITH_OBLIGATIONS, Permission.WITH_OBLIGATIONS, True, True, True, False, "", False,
     LicenseClass.WEAK_COPYLEFT, "Copyright Semgrep, Inc. and contributors")
+OPENGREP_LICENSE = LicenseMetadata(
+    "LGPL-2.1-only", "GNU Lesser General Public License v2.1", "https://github.com/opengrep/opengrep/blob/v1.32.0/LICENSE",
+    True, True, Permission.WITH_OBLIGATIONS, Permission.WITH_OBLIGATIONS, True, True, True, True,
+    "OpenGrep and contributors; retain upstream LGPL license and corresponding source reference.", False,
+    LicenseClass.WEAK_COPYLEFT, "Copyright OpenGrep, Semgrep and contributors")
 
 
 CODEQL_FUTURE_LICENSE = LicenseMetadata(

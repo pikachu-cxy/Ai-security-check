@@ -2,6 +2,10 @@
 
 
 修复影响分析（repair-impact-v1）：
+轻量开发若已声明 development-risks-v1，先按 development-check 的统一风险分支保存 AI/扫描器发现，
+使用 prepare_development_risk_fix 和 submit_development_risk_resolution 处理原风险；不能因静态零发现拒绝修复。
+该分支同样要求具体用户授权、影响分析、当前证据及原问题复查，AI 结论不冒充扫描器证明。
+以下 task_ref/assessment_ref 门槛适用于原扫描器任务组和严格任务，不能将轻量 check_ref 填入这些字段。
 漏洞后果与拟修复方案对正常业务的影响分别保存并经同一 reply_plan 呈现，不另建提示链。
 先生成具体建议再分析；generate_fix 只生成建议，不要求先取得影响 READY，也不授予编辑权限。
 用户对选定问题明确回复修复后，保留原响应的任务／风险引用和编号映射，不按新摘要排序换对象。

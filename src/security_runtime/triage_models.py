@@ -119,7 +119,7 @@ def category(finding):
             finding.get('technical_details', {}).get('rule_id') == 'ai-security.javascript.dynamic-function' and
             value == 'code-injection'):
         return 'code'
-    return 'code' if 'semgrep' in finding.get('scanner_sources',[]) else 'unsupported'
+    return 'code' if set(finding.get('scanner_sources',[])) & {'semgrep','opengrep'} else 'unsupported'
 
 
 def iac_classification(finding):

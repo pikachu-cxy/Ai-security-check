@@ -51,9 +51,9 @@ class WorkspaceBaselineSeeds:
         # Conservative compatibility contract, not source snapshot equality.
         # Exact actual scanner versions/coverage proofs also remain in projection.
         return dict(workspace_id=identity(os.path.normcase(str(root))), schema=SCHEMA,
-            runtime_version=__version__, hook_schema='hook-v1', quick_providers='semgrep-gitleaks-v1',
+            runtime_version=__version__, hook_schema='hook-v1', quick_providers='opengrep-gitleaks-v1',
             rule_pack=pack.checksum, catalog=identity(encode([asdict(r) for r in pack.catalog]).decode()),
-            scanner_versions={n: VERSIONS[n] for n in ('semgrep', 'gitleaks')}, config=fingerprint(desired[-1]))
+            scanner_versions={n: VERSIONS[n] for n in ('opengrep', 'gitleaks')}, config=fingerprint(desired[-1]))
 
     def load(self, root):
         """Read only; reject corruption without reflecting or quarantining it."""

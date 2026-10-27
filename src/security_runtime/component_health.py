@@ -18,7 +18,7 @@ from .hook_state import HookStateStore, no_links
 from .storage import SQLiteStore
 
 
-LABELS = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
+LABELS = {'opengrep': '代码检查', 'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查'}
 ISSUES = {
     'ENGINE_TEMP_DIRECTORY_UNAVAILABLE': ('无法准备引擎专用的短私有临时目录。', '检查目录权限，或将 SECURITY_RUNTIME_ENGINE_TEMP_ROOT 指向项目外已存在的短本地目录；不要修改系统临时目录。'),
     'ENGINE_TEMP_PATH_TOO_LONG': ('引擎临时目录超过本地通信地址的长度预算。', '为 SECURITY_RUNTIME_ENGINE_TEMP_ROOT 选择更短的本地目录；不会自动使用共享目录或放宽权限。'),

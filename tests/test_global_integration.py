@@ -608,7 +608,7 @@ def test_manual_runtime_keeps_full_registry_while_hook_stays_core(installed, pro
         assert manual_names == {a.name for a in ScannerRegistry().adapters}
         assert len(manual_names) > len(hook_names)
         assert hook_names == {'semgrep', 'native-js-function', 'gitleaks', 'trivy-vuln'}
-        assert {a.name for a in core.runtime.registry.fallback_adapters} == {'osv-scanner'}
+        assert core.runtime.registry.fallback_adapters == []
         assert instances[0].store.path == core.runtime.store.path
         assert child._tool_manager.get_tool('scan_project') is not None
     finally: pool.close()

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import threading
+import json
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -73,16 +74,33 @@ class RulePackUpdateProvider(RulePackProvider, Protocol):
     def rollback(self, rule_pack_id: str, version: str) -> None: ...
 
 
-FIRST_PARTY_RULE_PACK = RulePackDescriptor(
-    "ai-security-core", "AI Security Runtime Core Rules", "1.6.0", "AI Security Runtime",
-    "Copyright AI Security Runtime contributors", "Apache-2.0", "https://www.apache.org/licenses/LICENSE-2.0",
-    True, True, True, True, "bundled local package",
-    RuleProvenance("FIRST_PARTY", "AI Security Runtime contributors", "2026-09-29",
-                   ("https://cwe.mitre.org/data/definitions/78.html",), "Apache-2.0"),
-    True, RulePackClass.FIRST_PARTY)
+OPENGREP_RULES_COMMIT = 'f1d2b562b414783763fd02a6ed2736eaed622efa'
+DEFAULT_RULE_PACK = RulePackDescriptor(
+    'opengrep-rules', 'OpenGrep Rules', OPENGREP_RULES_COMMIT, 'OpenGrep / upstream contributors',
+    'Copyright Semgrep, Inc. and rule contributors', 'LGPL-2.1-only WITH Commons-Clause',
+    'https://github.com/opengrep/opengrep-rules/blob/'+OPENGREP_RULES_COMMIT+'/LICENSE',
+    False, True, False, True, 'https://github.com/opengrep/opengrep-rules/tree/'+OPENGREP_RULES_COMMIT,
+    RuleProvenance('THIRD_PARTY', 'Semgrep and rule contributors', '2024-12-13',
+                   ('https://github.com/opengrep/opengrep-rules',), 'LGPL-2.1-only WITH Commons-Clause'),
+    True, RulePackClass.RESTRICTED)
+# Import compatibility only. This no longer denotes a first-party pack.
+FIRST_PARTY_RULE_PACK = DEFAULT_RULE_PACK
+
+
+def execution_rule(rule, relative, descriptor):
+    """Namespace upstream occurrences without modifying the vendored YAML."""
+    if descriptor.rule_pack_id != 'opengrep-rules':
+        return rule
+    value = dict(rule)
+    value['id'] = str(Path(relative).with_suffix('')).replace('\\', '.').replace('/', '.')+'.'+rule['id']
+    return value
 
 
 def can_bundle_rule_pack(descriptor: RulePackDescriptor) -> bool:
+    # Explicit product scope: pinned upstream pack for the free personal
+    # distribution. This exception does NOT assert commercial/SaaS rights.
+    if descriptor == DEFAULT_RULE_PACK:
+        return True
     return bool(descriptor.bundled and descriptor.pack_class in {RulePackClass.FIRST_PARTY, RulePackClass.PERMISSIVE_THIRD_PARTY}
                 and descriptor.commercial_use_allowed and descriptor.redistribution_allowed and descriptor.hosted_service_allowed)
 
@@ -97,7 +115,7 @@ class BundledRulePackProvider:
     def resolve(self, rule_pack_id: str) -> ResolvedRulePack:
         if rule_pack_id != FIRST_PARTY_RULE_PACK.rule_pack_id:
             raise KeyError(rule_pack_id)
-        return RulePackManager._validate(FIRST_PARTY_RULE_PACK, self.path)
+        return RulePackManager._validate(DEFAULT_RULE_PACK, self.path, require_first_party_metadata=False)
 
 
 class RulePackManager:
@@ -113,7 +131,7 @@ class RulePackManager:
         if not path.is_dir():
             raise ValueError('Rule pack directory is missing')
         files = sorted(path.rglob('*.yml')) + sorted(path.rglob('*.yaml'))
-        if not files or len(files) > 1000:
+        if not files or len(files) > 10000:
             raise ValueError('Rule pack file budget exceeded')
         files += [p for p in (path/'catalog.json',path/'capabilities.json',path/'LICENSE',path/'NOTICE') if p.is_file()]
         digest = hashlib.sha256()
@@ -136,7 +154,7 @@ class RulePackManager:
             if self._content_identity(path) != key[2]:
                 raise ValueError('Rule pack changed during validation')
             size=sum(p.stat().st_size for p in (*path.rglob('*.yml'),*path.rglob('*.yaml')))
-            if len(result.catalog)<=1000 and size<=4_000_000:
+            if len(result.catalog)<=10000 and size<=32_000_000:
                 if len(self._resolved_cache) >= 8:
                     self._resolved_cache.pop(next(iter(self._resolved_cache)))
                 self._resolved_cache[key] = result
@@ -145,12 +163,12 @@ class RulePackManager:
     def discover(self) -> list[ResolvedRulePack]:
         return self.provider.discover()
 
-    def resolve(self, rule_pack_id: str = "ai-security-core", *, user_path: Path | None = None) -> ResolvedRulePack:
+    def resolve(self, rule_pack_id: str = "opengrep-rules", *, user_path: Path | None = None) -> ResolvedRulePack:
         if user_path is None:
             if type(self.provider) is BundledRulePackProvider:
                 if rule_pack_id != FIRST_PARTY_RULE_PACK.rule_pack_id:
                     raise KeyError(rule_pack_id)
-                return self._cached_resolve(FIRST_PARTY_RULE_PACK,self.provider.path)
+                return self._cached_resolve(DEFAULT_RULE_PACK,self.provider.path, require_first_party_metadata=False)
             self.cache_hit = False  # External providers retain their lifecycle.
             return self.provider.resolve(rule_pack_id)
         descriptor = RulePackDescriptor(
@@ -178,7 +196,7 @@ class RulePackManager:
         if descriptor.bundled and not (path / "LICENSE").is_file():
             raise ValueError("Bundled rule pack LICENSE is missing")
         files = sorted(path.rglob("*.yml")) + sorted(path.rglob("*.yaml"))
-        if not files or len(files) > 1000:
+        if not files or len(files) > 10000:
             raise ValueError("Rule pack has no rules or exceeds the file limit")
         digest = hashlib.sha256()
         definitions = {}
@@ -186,13 +204,14 @@ class RulePackManager:
             if file.is_symlink() or file.stat().st_size > 1_000_000:
                 raise ValueError("Rule file is a symlink or too large")
             content = file.read_bytes()
-            if any(marker in content for marker in (b"--config" + b"=auto", b"semgrep" + b".dev/registry", b"semgrep" + b"-rules")):
-                raise ValueError("Rule pack references a remote registry")
+            # References in metadata are attribution, not executable remote
+            # configs. Only local YAML is passed to the engine.
             data = yaml.safe_load(content)
             if not isinstance(data,dict) or not isinstance(data.get('rules'),list) or not data['rules']:
                 raise ValueError(f'Rule pack has no valid rules: {file.name}')
             for rule in data['rules']:
                 validate_rule(rule,descriptor,first_party=require_first_party_metadata)
+                rule = execution_rule(rule, file.relative_to(path).as_posix(), descriptor)
                 if rule['id'] in definitions:
                     raise ValueError('Duplicate rule id')
                 definitions[rule['id']]=(rule,file.relative_to(path).as_posix())

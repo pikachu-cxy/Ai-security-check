@@ -22,6 +22,7 @@ def publish(store, db, row):
         owner=row['owner'], root_identity=row['root_identity'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], scan_path=row['scan_path'], result=row.get('result'),
         status=row['state'], reason_code=row.get('reason_code'),
+        failure_diagnostic=row.get('failure_diagnostic'),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'], scope_unknown=row['scope_unknown'], full_project=False),
         created_at=store.now(), host_report_submitted=False, continuation_count=0)
     value['result_version'] = hashlib.sha256(json.dumps(value, sort_keys=True,
@@ -51,6 +52,7 @@ def facts(row, *, summary=False):
                      scope_unknown=scope['scope_unknown'], full_project=False)
     return dict(check_ref=row['check_ref'], scanned_seq=row['scanned_seq'], scan_id=row['scan_id'],
         result_version=row['result_version'], status=row['status'], scope=scope,
+        failure_diagnostic=row.get('failure_diagnostic'),
         delivery='HOST_REPORTED' if row['host_report_submitted'] else 'PENDING',
         host_report_submitted=row['host_report_submitted'], user_consumption='UNKNOWN',
         repair_authorized=False, next_action=dict(tool='get_development_result', arguments=dict(

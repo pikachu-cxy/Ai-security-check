@@ -331,6 +331,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
     authorized = repair_flow
     unpersisted_gap = bool(summary.get('security_task_ref') and summary.get('hook_check_recording') == 'UNAVAILABLE')
     unfinished_check = bool(validated_root is not None and not authorized and
+        not result.get('development_check_ref') and
         not summary.get('security_task_ref') and result.get('tool_classification') != 'READ_ONLY' and
         result['status'] in {'BUSY', 'INCONCLUSIVE', 'FAILED', 'PARTIAL'} and
         not result['execution']['scanner_run'])

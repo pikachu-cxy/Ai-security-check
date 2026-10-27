@@ -175,9 +175,11 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
         assert rejected['reason_code'] == 'DEVELOPMENT_CHECK_REQUEST_INVALID'
         assert not pool.children
         root = str(projects[0])
-        tokens = [routed('handle_readiness_event', event='SessionStart',
-                         workspace_path=root, session_id=session)['task_session_ref']
+        events = [routed('handle_readiness_event', event='SessionStart',
+                         workspace_path=root, session_id=session)
                   for session in ('first', 'second')]
+        assert all('task_session_ref' in event for event in events), events
+        tokens = [event['task_session_ref'] for event in events]
         check = routed('begin_development_check', workspace_path=root,
                        session_ref=tokens[0], task_key='one')
         assert check['check_ref'].startswith('dc1-')
@@ -187,6 +189,15 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
         current = routed('get_development_check', workspace_path=root,
                          session_ref=tokens[0], check_ref=check['check_ref'])
         assert current['check_ref'] == check['check_ref']
+        risks = routed('get_development_risks', workspace_path=root,
+                       session_ref=tokens[0], check_ref=check['check_ref'])
+        assert risks['total'] == 0 and not risks['scanner_run']
+        other_risks = routed('get_development_risks', workspace_path=root,
+                            session_ref=tokens[1], check_ref=check['check_ref'])
+        assert other_risks['reason_code'] == 'TASK_SESSION_SCOPE_MISMATCH'
+        invalid = routed('submit_development_review', workspace_path=root, session_ref=tokens[0],
+                         check_ref=check['check_ref'], expected_seq=999, observations=[])
+        assert invalid['reason_code'] == 'DEVELOPMENT_RISK_VERSION_STALE'
         schema = next(tool.inputSchema for tool in asyncio.run(server.list_tools())
                       if tool.name == 'finish_development_check')
         assert schema['properties']['wait_seconds']['minimum'] == 0

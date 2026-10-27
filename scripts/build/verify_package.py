@@ -95,7 +95,7 @@ for mode in ('smart_auto', 'ask_before_fix'):
     assert RemediationPolicy().decide(rule=RULE, priority='ACTIONABLE', coverage=True,
         deterministic=True, mode=mode).action == 'CONFIRM_REQUIRED'
 assert REQUIRED_GUIDANCE_TOOLS <= {t.name for t in create_server()._tool_manager.list_tools()}
-for engine in ('semgrep', 'gitleaks', 'trivy'):
+for engine in ('opengrep', 'gitleaks', 'trivy'):
     assert (package / 'licenses' / engine / 'LICENSE').is_file()
     assert (package / 'licenses' / engine / 'NOTICE').is_file()
 assert (package / 'python_downloads.json').is_file()

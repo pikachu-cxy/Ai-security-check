@@ -4,7 +4,11 @@ import asyncio
 import pytest
 
 from security_runtime.development_check import DevelopmentCheckService
-from security_runtime.development_continuation import stop, context, MAX_CONTINUATIONS
+from functools import partial
+from security_runtime.development_continuation import stop as host_stop, pending_context as context, MAX_CONTINUATIONS
+
+# These legacy budget tests exercise the explicit trusted-host opt-in only.
+stop = partial(host_stop, allow_continuation=True)
 from security_runtime.development_delivery import publish, acknowledge
 from security_runtime.development_scheduler import recover_once
 from security_runtime.tasks.ownership import TaskOwnershipError

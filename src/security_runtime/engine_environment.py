@@ -98,7 +98,7 @@ def engine_environment(engine_id, environment, *, workspace=None):
     only the exact directory created here, after checking its file identity.
     """
     child = dict(environment)
-    if engine_id != 'semgrep':
+    if engine_id not in {'semgrep', 'opengrep'}:
         yield child
         return
     directory = None
@@ -140,7 +140,7 @@ def engine_environment(engine_id, environment, *, workspace=None):
         # them or its shared home log, including during a version-only probe.
         from .component_health import _settings_bytes
         try:
-            _, settings, _ = _settings_bytes(child)
+            _, settings, _ = _settings_bytes(child) if engine_id == 'semgrep' else (None, None, None)
         except (OSError, ValueError):
             raise DiagnosticError(ErrorDiagnostic('COMPONENT_SETTINGS_UNREADABLE',
                 'Semgrep settings cannot be read safely.',
@@ -151,6 +151,10 @@ def engine_environment(engine_id, environment, *, workspace=None):
         settings_path.write_bytes(settings if settings is not None else b'{}\n')
         child.update(SEMGREP_LOG_FILE=str(config / 'semgrep.log'),
             SEMGREP_SETTINGS_FILE=str(settings_path), XDG_CONFIG_HOME=str(directory))
+        if engine_id == 'opengrep':
+            child.update(OPENGREP_LOG_FILE=str(config/'opengrep.log'),
+                         OPENGREP_SETTINGS_FILE=str(settings_path), OPENGREP_SEND_METRICS='off',
+                         SEMGREP_SEND_METRICS='off')
         if WINDOWS:
             # Python checks TMPDIR first; Win32 checks TMP before TEMP.
             child.update(TEMP=str(directory), TMP=str(directory), TMPDIR=str(directory))

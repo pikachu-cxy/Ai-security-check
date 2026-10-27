@@ -20,6 +20,8 @@ from security_runtime.remediation_policy import RemediationPolicy
 
 ROOT=Path(__file__).resolve().parents[1]
 PACK=RulePackManager().resolve()
+if PACK.program is None:
+    pytest.skip('Historical ai-security-core capability corpus was retired; OpenGrep is covered by test_opengrep_migration.', allow_module_level=True)
 CAPABILITIES=PACK.program.capabilities
 
 

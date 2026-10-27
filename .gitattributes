@@ -5,3 +5,6 @@ src/security_runtime/skills/** text eol=lf
 
 # Historical writer evidence must remain byte-identical to its pinned Git blob.
 tests/fixtures/legacy_writers/*.py.txt -text
+
+# Vendored upstream snapshot hashes bind exact imported bytes on every OS.
+src/security_runtime/rules/** -text

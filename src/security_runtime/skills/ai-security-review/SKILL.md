@@ -31,6 +31,8 @@ AI Security Runtime 核心指导
 | 明确深度审计或攻击链分析 | [深度审计](references/deep-audit.md)，topic=deep-audit；先读扫描工作流 |
 
 只加载当前分支；风险或修复意图出现时再读相应方法。扫描范围、复用、分页、修复分支及字段示例由各方法维护。
+声明 development-risks-v1 时，轻量发现先按 development-check 保存统一风险再提示修复；
+AI 独立发现也可修复，关联扫描器发现后采用有证据的 AI 复核判断，保留原始命中。
 
 ## 不可省略的边界
 

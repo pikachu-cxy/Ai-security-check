@@ -27,7 +27,7 @@ from .rule_coverage import plan_rules
 from .rule_program import annotate as annotate_capability, aggregate as aggregate_capabilities
 from dataclasses import replace
 import yaml
-from .sast import SASTRequest, SemgrepEngineProvider
+from .sast import SASTRequest, SemgrepEngineProvider, OpenGrepEngineProvider
 from .target import TargetDetector
 from .dependency_inputs import is_dependency_input
 from .local_evidence import snapshot_fingerprint, scanner_evidence_metadata
@@ -324,20 +324,21 @@ class PatternSASTScanner(BaseScanner):
     """Local rule-pack scanner whose execution engine is replaceable."""
 
     capabilities = frozenset({Capability.CODE_SAST})
-    supported_languages = frozenset({"Python", "JavaScript", "TypeScript", "Vue", "Java", "Go", "PHP"})
+    from .target import EXTENSIONS as _target_extensions
+    supported_languages = frozenset(_target_extensions.values()) | {"Dockerfile"}
     filter_changed_lines = True
     timeout = 45
 
     def __init__(self, tool_manager: ToolManager | None = None, *, rule_packs: RulePackManager | None = None, engine_provider=None):
         super().__init__(tool_manager)
         self.rule_packs = rule_packs or RulePackManager()
-        self.engine_provider = engine_provider or SemgrepEngineProvider()
+        self.engine_provider = engine_provider or OpenGrepEngineProvider()
         self._plan_cache = {}  # Immutable selection templates; fresh proof sets per invocation.
         self._config_cache = {}
         self._planning_lock = threading.RLock()
 
     def supports(self, profile: TargetProfile, context: ScanContext) -> bool:
-        return bool(profile.languages) and (context.mode == "release" or bool(context.files))
+        return bool(profile.files) and (context.mode == "release" or bool(context.files))
 
     def _bind_preparations(self):
         from .scanner_cache import preparation_bucket
@@ -374,7 +375,7 @@ class PatternSASTScanner(BaseScanner):
             # Engine execution sets never enter a template/cache.
             if hit:
                 template=self._plan_cache[key]
-            return replace(template, pack=pack, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
+            return replace(template, pack=pack, engine_id=self.engine_provider.engine_id, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
                 embedded_coverage={},unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
                     'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
                     'rule_plan_cache':'HIT' if hit else 'MISS',
@@ -419,8 +420,10 @@ class PatternSASTScanner(BaseScanner):
                 cache_observed('selected_config',hit)
                 if not hit:
                     definitions=[]
+                    from .rulepacks import execution_rule
                     for relative in sorted({r.path for r in plan.rules}):
-                        definitions.extend(rule for rule in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules'] if rule['id'] in selected_ids)
+                        definitions.extend(rule for original in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
+                            for rule in [execution_rule(original,relative,rule_pack.descriptor)] if rule['id'] in selected_ids)
                     config_text=yaml.safe_dump({'rules':definitions},sort_keys=False)
                     if len(config_text.encode())<=1_000_000:
                         if len(self._config_cache) >= 16:
@@ -503,12 +506,13 @@ class PatternSASTScanner(BaseScanner):
                 finding.category=record.category
                 finding.confidence=record.confidence
                 finding.technical_details.update(rule_category=record.category,cwe=list(record.cwe),
+                    original_rule_id=record.provenance.get('original_rule_id',rule_id), rule_source_path=record.path,
                     rule_confidence=record.confidence,rule_maturity=record.maturity,rule_severity=record.severity,
                     rule_version=record.rule_version,framework=record.framework,validation_status='NOT_VALIDATED')
                 if record.mode == 'taint':
                     trace=finding.technical_details.get('scanner_evidence_metadata',{}).get('dataflow_trace')
                     finding.technical_details['dataflow_support'] = {
-                        'basis':'SEMGREP_TAINT_RULE', 'scope':'ENGINE_LOCAL_ANALYSIS',
+                        'basis':self.engine_provider.engine_id.upper()+'_TAINT_RULE', 'scope':'ENGINE_LOCAL_ANALYSIS',
                         'trace_status':'PROVIDED' if trace else 'NOT_PROVIDED',
                         'runtime_execution':False, 'cross_file_expansion':False}
                 if rule_pack.program:
@@ -546,6 +550,14 @@ class PatternSASTScanner(BaseScanner):
 class SemgrepAdapter(PatternSASTScanner):
     name = scanner_id = "semgrep"
     display_name = "Semgrep"
+
+    def __init__(self, *args, engine_provider=None, **kwargs):
+        super().__init__(*args, engine_provider=engine_provider or SemgrepEngineProvider(), **kwargs)
+
+
+class OpenGrepAdapter(PatternSASTScanner):
+    name = scanner_id = "opengrep"
+    display_name = "OpenGrep"
 
 
 class GitleaksAdapter(BaseScanner):
@@ -696,9 +708,7 @@ class TrivyAdapter(BaseScanner):
             if context.mode == 'quick' and not local_recheck_requested():
                 with local_recheck():
                     found, run = super().scan(context, normalizer)
-                was_offline = True
             else:
-                was_offline = offline_scanning()
                 found, run = super().scan(context, normalizer)
         finally:
             _trivy_inventory.reset(token)
@@ -708,9 +718,6 @@ class TrivyAdapter(BaseScanner):
             run.coverage_notes = state['notes']
         else:
             run.coverage_contract = 'NONE'
-        if was_offline and run.status==RunStatus.SUCCESS:
-            run.coverage_contract='PARTIAL'
-            run.coverage_notes.append('Offline Trivy extraction does not attest a complete resolved dependency graph.')
         if self.checks == 'vuln' and run.status == RunStatus.SUCCESS:
             fresh = self.tool_manager.database_freshness()['status']
             run.dependency_inventory['vulnerability_db_freshness'] = fresh if fresh in {'FRESH', 'STALE', 'UNKNOWN', 'MISSING'} else 'UNKNOWN'
@@ -777,7 +784,12 @@ class TrivyAdapter(BaseScanner):
     @staticmethod
     def _dependency_inventory(data, context, duration_ms):
         planned = {f for f in (*context.files, *context.context_files) if is_dependency_input(f)}
-        lockfiles = {'package-lock.json', 'pnpm-lock.yaml', 'yarn.lock', 'poetry.lock', 'Pipfile.lock', 'gradle.lockfile', 'buildscript-gradle.lockfile'}
+        # Trivy reports npm packages against the lockfile. The adjacent manifest
+        # is part of that same input unit, not a second expected package report.
+        paired = {name: str(Path(name).with_name('package-lock.json')).replace('\\', '/')
+                  for name in planned if Path(name).name == 'package.json'
+                  and str(Path(name).with_name('package-lock.json')).replace('\\', '/') in planned}
+        units = planned - paired.keys()
         packages = []
         observed = set()
         per_manifest = {}
@@ -787,7 +799,7 @@ class TrivyAdapter(BaseScanner):
             if target not in planned:
                 continue
             extracted = result.get('Packages')
-            if not isinstance(extracted, list) or not extracted:
+            if not isinstance(extracted, list):
                 continue
             observed.add(target)
             per_manifest[target] = len(extracted)
@@ -797,19 +809,19 @@ class TrivyAdapter(BaseScanner):
                     packages.append(tuple(value if isinstance(value, str) else '' for value in fields))
                 else:
                     packages.append(('', '', ''))
-        if observed != planned or not planned:
-            notes.append('One or more planned dependency inputs produced no package inventory confirmation; empty findings do not attest dependency safety.')
+        confirmed = observed & units
+        if confirmed != units or not units:
+            notes.append('Trivy did not return a package inventory for one or more dependency units.')
         if any(not all(package) for package in packages):
             notes.append('One or more extracted packages have an unconfirmed name, version or ecosystem.')
-        if any(Path(name).name not in lockfiles for name in planned):
-            notes.append('Manifest inventory confirms extracted declared versions only; a complete transitive or installed dependency graph is not attested.')
         coverage = 'PARTIAL' if notes else 'FULL'
         return {'coverage': coverage, 'notes': notes, 'inventory': {
             'package_occurrences': len(packages),
             'unique_packages': len(set(packages)),
             'confirmed_package_occurrences': sum(bool(all(package)) for package in packages),
-            'confirmed_manifests': len(observed), 'planned_manifests': len(planned),
-            'unconfirmed_manifests': sorted(planned - observed),
+            'confirmed_manifests': len(confirmed), 'planned_manifests': len(units),
+            'unconfirmed_manifests': sorted(units - confirmed),
+            'paired_manifests': paired,
             'per_manifest': per_manifest, 'complete_dependency_graph_attested': False,
             'package_coordinates': [dict(manifest=str(result.get('Target', '')).replace('\\', '/'),
                 ecosystem=str(result.get('Type', '')), package=p.get('Name', ''), version=p.get('Version', ''))
@@ -863,16 +875,15 @@ class TrivyMisconfigAdapter(TrivyAdapter):
 class ScannerRegistry:
     def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None, *, fallback_adapters=None):
         self.tool_manager = tool_manager or ToolManager()
-        from .osv import OSVDependencyAdapter
         from .dynamic_function import NativeFunctionScanner
         from .dataflow import BoundedDataflowScanner
         from .go_sql import GoSQLScanner
-        self.fallback_adapters = fallback_adapters if fallback_adapters is not None else ([OSVDependencyAdapter(self.tool_manager)] if adapters is None else [])
-        self.adapters = adapters if adapters is not None else [SemgrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GoSQLScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.fallback_adapters = fallback_adapters if fallback_adapters is not None else []
+        self.adapters = adapters if adapters is not None else [OpenGrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GoSQLScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []
-        used_ids = {"semgrep", "native-js-function", "native-dataflow", "native-go-sql", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
+        used_ids = {"opengrep", "semgrep", "native-js-function", "native-dataflow", "native-go-sql", "gitleaks", "trivy", "trivy-vuln", "trivy-misconfig"}
         for entry in importlib.metadata.entry_points(group=SCANNER_ENTRY_POINT):
             try:
                 loaded = entry.load()

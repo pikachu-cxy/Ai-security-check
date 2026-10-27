@@ -8,6 +8,8 @@ spec = importlib.util.spec_from_file_location('r1_evaluation', Path(__file__).re
 r1 = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(r1)
 PROGRAM = r1.RulePackManager().resolve().program
+if PROGRAM is None:
+    pytest.skip('Historical ai-security-core capability corpus was retired; OpenGrep is covered by test_opengrep_migration.', allow_module_level=True)
 
 
 def finding(cid, line=10):

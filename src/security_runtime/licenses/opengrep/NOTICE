@@ -1,0 +1,7 @@
+OpenGrep 1.32.0
+Copyright OpenGrep, Semgrep and contributors.
+Licensed under GNU LGPL version 2.1; see LICENSE in this directory.
+Upstream source: https://github.com/opengrep/opengrep/tree/v1.32.0
+Source archive: https://github.com/opengrep/opengrep/archive/refs/tags/v1.32.0.tar.gz
+The Runtime invokes the unmodified upstream executable as a separate process.
+This notice does not change the separate license of opengrep-rules.

@@ -47,14 +47,8 @@ def test_unsupported_vue_is_not_hidden_beside_supported_javascript():
     assert coverage['status'] == 'PARTIAL'
 
 
-def test_rule_release_preserves_versions_of_unchanged_rules():
-    import yaml
+def test_upstream_records_preserve_pinned_snapshot_identity():
     pack = RulePackManager().resolve()
-    rule = yaml.safe_load((pack.path/'java/trust-all-hostname.yml').read_text(encoding='utf-8'))['rules'][0]
-    assert rule['metadata']['rule_version'] == '1.1.0'
-    assert pack.descriptor.version == '1.6.0'
-    validate_rule(rule, pack.descriptor)
-    for version in ('', 'latest', '1.2', '1.2.3-extra', 123, '1234567.1.0'):
-        rule['metadata']['rule_version'] = version
-        with pytest.raises(ValueError, match='Rule version invalid'):
-            validate_rule(rule, pack.descriptor)
+    assert len(pack.descriptor.version) == 40
+    assert all(r.rule_version == pack.descriptor.version for r in pack.catalog)
+    assert all(r.provenance['origin'] == 'THIRD_PARTY' for r in pack.catalog)

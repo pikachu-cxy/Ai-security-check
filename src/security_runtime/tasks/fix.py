@@ -340,7 +340,7 @@ class TaskFixService:
             out['dependency_verification'] = dict(members=scopes, complete_dependency_graph_verified=False,
                 installed_package_verified=False, package_integrity_verified=False)
             fresh = [r.get('current_dependency_state', {}).get('database_freshness', 'UNKNOWN') for r in results]
-            message = ('指定声明版本的原依赖漏洞已逐项复查，当前未再检出；完整依赖图、实际安装和包完整性仍未验证。'
+            message = ('已复查指定依赖版本，未再检出原漏洞。'
                        if state == 'SCANNER_VERIFIED_RESOLVED' else
                        '依赖修复复查未能确认完成；按各项当前检查、包清单和数据新鲜度说明原因，不沿用原扫描的过期提示。')
             out['user_feedback'] = dict(message=message, scope='DECLARED_PACKAGE_ADVISORY',

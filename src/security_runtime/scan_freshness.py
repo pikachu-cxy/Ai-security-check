@@ -103,7 +103,7 @@ def summary(scan, store, root):
               'task_publication': 'NOT_DERIVED_FROM_SCAN_HISTORY',
               'current_task_or_hook_state': 'NOT_QUERIED',
              'scanners': [{'scanner': r.get('scanner') if r.get('scanner') in
-                          {'semgrep','gitleaks','trivy','trivy-misconfig','trivy-vuln','osv-scanner'} else 'OTHER',
+                          {'opengrep','semgrep','gitleaks','trivy','trivy-misconfig','trivy-vuln','osv-scanner'} else 'OTHER',
                           'status': r.get('status') if r.get('status') in
                           {'SUCCESS','FAILED','SKIPPED','UNAVAILABLE','TIMEOUT','NOT_APPLICABLE','NOT_COVERED'} else 'UNKNOWN',
                           'version': r.get('version') if isinstance(r.get('version'), str) and

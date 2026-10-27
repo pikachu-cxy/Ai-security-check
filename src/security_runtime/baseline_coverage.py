@@ -18,8 +18,8 @@ def comparison_usable(result, observation):
             or states.get('CODE_SAST') not in {'PARTIAL', 'NOT_COVERED'}
             or any(v not in {'EXECUTED', 'NOT_APPLICABLE'} for k, v in states.items() if k != 'CODE_SAST')):
         return False
-    plan = observation['plans'].get('semgrep')
-    run = next((r for r in observation['runs'] if r.scanner == 'semgrep'), None)
+    plan = (observation['plans'].get('opengrep') or observation['plans'].get('semgrep'))
+    run = next((r for r in observation['runs'] if r.scanner == getattr(plan, "engine_id", "opengrep")), None)
     if not isinstance(plan, SASTRulePlan) or run is None or run.coverage_contract != 'FULL':
         return False
     recognized = {name for names in plan.language_files.values() for name in names}
@@ -37,7 +37,7 @@ def comparison_usable(result, observation):
 
 def unproven_files(observation):
     """Paths without SAST absence/attribution proof, never source or logs."""
-    plan = observation['plans'].get('semgrep')
+    plan = (observation['plans'].get('opengrep') or observation['plans'].get('semgrep'))
     if not isinstance(plan, SASTRulePlan):
         return []
     recognized = {name for names in plan.language_files.values() for name in names}

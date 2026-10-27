@@ -11,11 +11,20 @@ MAX_CONTINUATIONS = 2
 CONTINUATION_SECONDS = 120
 
 
+def notice_key(delivery):
+    signature = (dict(status=delivery['status'], reason=delivery.get('reason_code'),
+                      diagnostic=delivery.get('failure_diagnostic'))
+                 if delivery['status'] == 'FAILED' else dict(version=delivery['result_version']))
+    return 'notice:' + delivery['check_ref'] + ':' + hashlib.sha256(
+        json.dumps(signature, sort_keys=True).encode()).hexdigest()
+
+
 def candidates(store, owner, offered=()):
     identity = root_identity(store.root)
     rows = store.rows()
     ready = [(r['check_ref'], r['scanned_seq'], 'get_development_result')
-             for r in pending(store, owner, rows=rows) if (r['check_ref'], r['scanned_seq']) not in offered]
+             for r in pending(store, owner, rows=rows) if (r['check_ref'], r['scanned_seq']) not in offered
+             and not store.read(notice_key(r))]
     queued = [(r['check_ref'], r['dirty_seq'], 'wait_development_check') for r in rows
               if r.get('kind') == 'check' and r.get('owner') == owner
               and r.get('root_identity') == identity and r.get('finish_requested')
@@ -24,6 +33,12 @@ def candidates(store, owner, offered=()):
 
 
 def context(hooks, root, owner):
+    # Saved results remain explicitly readable. Opening a chat must not inject
+    # historical check instructions into an unrelated conversation.
+    return ''
+
+
+def pending_context(hooks, root, owner):
     store = DevelopmentCheckStore(hooks, root)
     if not store.path.exists():
         return ''
@@ -37,7 +52,12 @@ def context(hooks, root, owner):
             + json.dumps([r[0] for r in items[:10]], ensure_ascii=True))
 
 
-def stop(hooks, root, owner, *, stop_hook_active=False, offered=(), turn_id=None):
+def stop(hooks, root, owner, *, stop_hook_active=False, offered=(), turn_id=None,
+         allow_continuation=False):
+    # Ordinary development delivers via complete/get, not a forced extra turn.
+    # Only a trusted host with an active task can opt into continuation.
+    if not allow_continuation:
+        return None
     store = DevelopmentCheckStore(hooks, root)
     if not store.path.exists():
         return None
@@ -50,6 +70,13 @@ def stop(hooks, root, owner, *, stop_hook_active=False, offered=(), turn_id=None
     window_key = ('continuation-window:' + owner_key(owner) + ':'
                   + hashlib.sha256(str(turn_id or ref).encode()).hexdigest())
     with store.transaction() as db:
+        from .development_delivery import key
+        delivery = store._get(db, key(ref, seq))
+        reminder_key = None
+        if delivery:
+            reminder_key = notice_key(delivery)
+            if store._get(db, reminder_key):
+                return None
         budget = store._get(db, budget_key)
         window = store._get(db, window_key)
         if budget is None:
@@ -65,6 +92,9 @@ def stop(hooks, root, owner, *, stop_hook_active=False, offered=(), turn_id=None
             return None
         store._put(db, budget_key, dict(budget, count=budget['count']+1))
         store._put(db, window_key, dict(window, count=window['count']+1))
+        if reminder_key:
+            store._put(db, reminder_key, dict(kind='continuation', check_ref=ref,
+                owner=owner, reminder_offered=True))
     arguments = dict(check_ref=ref, workspace_path=str(store.root))
     if tool == 'get_development_result':
         arguments['scanned_seq'] = seq

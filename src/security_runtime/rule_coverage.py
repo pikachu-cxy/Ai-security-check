@@ -18,6 +18,7 @@ class SASTRulePlan:
     planning_diagnostics: dict = field(default_factory=dict)
     skipped_files: dict[str, str] = field(default_factory=dict)
     embedded_coverage: dict = field(default_factory=dict)
+    engine_id: str = 'opengrep'
 
     def observe(self, data, batch):
         def relative(value):
@@ -100,7 +101,7 @@ class SASTRulePlan:
         capabilities = [c for c in program.capabilities if c.scanner_engine == 'semgrep' and
             any(r.rule_id in c.underlying_rule_ids for r in self.rules)] if program else []
         from .owasp_coverage import owasp_coverage
-        return {'engine':'semgrep','rule_pack_id':self.pack.descriptor.rule_pack_id,
+        return {'engine':self.engine_id,'rule_pack_id':self.pack.descriptor.rule_pack_id,
             'rule_pack_version':self.pack.descriptor.version,'rule_pack_checksum':self.pack.checksum,
             'detected_languages':list(self.detected_languages),'per_language':per_language,'status':aggregate,
             'total_available':len({r.rule_id for r in self.pack.catalog}),'total_selected':len({r.rule_id for r in self.rules}),
@@ -121,13 +122,19 @@ class SASTRulePlan:
                 'framework_applicability':'ENGINE_TYPED_PATTERNS; CONSERVATIVE_LANGUAGE_EXTENSION_PLAN',
                 'selected_rule_ids':[r.rule_id for r in self.rules if r.rule_id in c.underlying_rule_ids]}
                 for c in capabilities],
-            'execution_evidence':'Semgrep time.rules and paths.scanned; errors/skipped targets/rules lower coverage'}
+            'execution_evidence':self.engine_id+' time.rules and paths.scanned; errors/skipped targets/rules lower coverage'}
 
 
 def plan_rules(pack, files):
     language_files={language:tuple(name for name in files if Path(name).suffix.lower() in extensions)
                     for language,extensions in EXTENSIONS.items()}
     language_files={language:names for language,names in language_files.items() if names}
+    for language in ('generic', 'regex'):
+        if any(language in r.engine_languages for r in pack.catalog):
+            language_files[language] = tuple(files)
+    dockerfiles=tuple(n for n in files if Path(n).name.lower() == 'dockerfile')
+    if dockerfiles:
+        language_files['dockerfile']=tuple(dict.fromkeys((*language_files.get('dockerfile',()),*dockerfiles)))
     # An explicit mapper XML edit can have applicable framework rules even
     # when no .java file changed. Typed mapper patterns decide the match;
     # never expand the file scope merely to infer the repository framework.

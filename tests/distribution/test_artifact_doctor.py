@@ -39,7 +39,7 @@ def test_native_verification_git_shell_runs_hook_without_python(tmp_path, native
 
 def declared_sample():
     return {'coverage': 'PARTIAL', 'scanner_runs': [
-        {'scanner': 'semgrep', 'status': 'SUCCESS'},
+        {'scanner': 'opengrep', 'status': 'SUCCESS'},
         {'scanner': 'gitleaks', 'status': 'SUCCESS'},
         {'scanner': 'trivy-misconfig', 'status': 'NOT_APPLICABLE'},
         {'scanner': 'trivy-vuln', 'status': 'SUCCESS', 'coverage_contract': 'PARTIAL',
@@ -75,15 +75,15 @@ def test_artifact_gate_rejects_unexecuted_release_dataflow(status):
 
 def test_first_party_sample_diagnostics_preserve_gate_without_source_content():
     payload = {'coverage': 'FULL', 'findings': [], 'scanner_runs': [
-        {'scanner': 'semgrep', 'status': 'FAILED', 'error_code': 'PROBE_FAILURE',
+        {'scanner': 'opengrep', 'status': 'FAILED', 'error_code': 'PROBE_FAILURE',
          'raw_output': 'private source'}]}
-    with pytest.raises(ValueError, match='First-party scanner finding missing') as failure:
-        verify_artifact.verify_first_party_sample(payload)
+    with pytest.raises(ValueError, match='OpenGrep scanner finding missing') as failure:
+        verify_artifact.verify_upstream_sample(payload)
     assert 'PROBE_FAILURE' in str(failure.value)
     assert 'private source' not in str(failure.value)
     payload['findings'] = [{'technical_details': {'rule_id': 'ai-security.python.command-injection'},
-                            'evidence': 'private source'}]
-    verify_artifact.verify_first_party_sample(payload)
+                            'evidence': 'private source', 'scanner_sources': ['opengrep']}]
+    verify_artifact.verify_upstream_sample(payload)
     assert 'private source' not in json.dumps(verify_artifact.sample_scan_diagnostics(payload))
 
 
@@ -131,7 +131,8 @@ def test_verifier_separates_global_and_project_doctors(tmp_path, monkeypatch):
     subprocess.run(["git", "init", "-q", str(project)], check=True)
     env = dict(os.environ, CODEX_HOME=str(root / "isolated-codex-home"),
                SECURITY_RUNTIME_DATA_DIR=str(root / "managed"),
-               SECURITY_RUNTIME_STATE_DIR=str(root / "state"), SECURITY_RUNTIME_OFFLINE="1")
+               SECURITY_RUNTIME_STATE_DIR=str(root / "state"), SECURITY_RUNTIME_OFFLINE="1",
+               GIT_CEILING_DIRECTORIES=str(root.parent))
     Path(env["CODEX_HOME"]).mkdir()
     for name in ("SECURITY_RUNTIME_GLOBAL", "SECURITY_RUNTIME_WORKSPACE", "SECURITY_RUNTIME_CODEX_HOME"):
         env.pop(name, None)

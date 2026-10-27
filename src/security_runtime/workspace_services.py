@@ -49,16 +49,15 @@ def workspace_mcp_server(root, directory, binding):
 
 def workspace_services(root, directory):
     from .runtime import SecurityRuntime
-    from .scanners import ScannerRegistry, SemgrepAdapter, GitleaksAdapter, TrivyAdapter
+    from .scanners import ScannerRegistry, OpenGrepAdapter, GitleaksAdapter, TrivyAdapter
     from .dynamic_function import NativeFunctionScanner
-    from .osv import OSVDependencyAdapter
     from .toolchain import ToolManager
     from .storage import SQLiteStore
     from .hook_runtime import HookCoordinator
     manager = ToolManager()
-    registry = ScannerRegistry([SemgrepAdapter(manager), NativeFunctionScanner(),
+    registry = ScannerRegistry([OpenGrepAdapter(manager), NativeFunctionScanner(),
         GitleaksAdapter(manager), TrivyAdapter(manager)], tool_manager=manager,
-        fallback_adapters=[OSVDependencyAdapter(manager)])
+        fallback_adapters=[])
     store = SQLiteStore(directory / 'scans.db')
     runtime = SecurityRuntime(ScannerRegistry(tool_manager=manager), store)
     hook_runtime = SecurityRuntime(registry, store)

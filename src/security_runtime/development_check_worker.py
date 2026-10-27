@@ -26,6 +26,24 @@ MAX_SCAN_ATTEMPTS = 3
 MAX_BUSY_ATTEMPTS = 120
 
 
+def failure_diagnostic(error, stage='UNKNOWN'):
+    """Fixed fields only: exception text may contain source or credentials."""
+    from .scan_request import ScanInputError
+    allowed = {PermissionError, FileNotFoundError, TimeoutError, ValueError,
+               OSError, RuntimeError, ScanInputError}
+    codes = {'SCAN_INPUT_NOT_REGULAR', 'SCAN_INPUT_CAPTURE_UNAVAILABLE',
+             'SCAN_INPUT_PATH_INVALID', 'SCAN_INPUT_CONFIGURATION_UNBOUND'}
+    code = getattr(error, 'reason_code', None)
+    return dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'UNKNOWN',
+                reason_code=code if type(error) is ScanInputError and code in codes else 'UNKNOWN')
+
+
+class DevelopmentScanFailure(Exception):
+    def __init__(self, diagnostic):
+        super().__init__('Development check failed')
+        self.diagnostic = diagnostic
+
+
 def _capacity(hooks):
     # The existing input parent already normalizes the supported global layout.
     from .scan_attempt import _input_parent
@@ -192,6 +210,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
         result.scanner_diagnostics['execution_publication'] = dict(receipt)
 
     execution = ScanAttemptExecution(attempts, lease, validator=validate, after_scan=publish)
+    stage = 'RUNTIME_PREPARATION'
     try:
         no_links(Path(row['scan_path']))
         if runtime_factory is None:
@@ -200,14 +219,19 @@ def _scan(queue, row, ticket, runtime_factory=None):
             runtime = SecurityRuntime(store=SQLiteStore(Path(row['scan_path'])))
         else:
             runtime = runtime_factory(row)
-        request = scoped_request(queue.root, row['observed_paths'],
-            dependency_changes=[name for name in row['observed_paths'] if is_dependency_input(name)])
+        stage = 'INPUT_SELECTION'
+        from .development_scope import excluded_artifact
+        selected = [name for name in row['observed_paths'] if not excluded_artifact(name)]
+        request = scoped_request(queue.root, selected,
+            dependency_changes=[name for name in selected if is_dependency_input(name)])
         # Feature enables applicable IaC checks on the explicit observed files.
         # It never changes the selection to a repository inventory or Git diff.
         request = replace(request, mode='feature')
         from .verification_policy import local_recheck
+        stage = 'SCAN_EXECUTION'
         with local_recheck():
             result = runtime.scan(queue.root, mode='feature', request=request, execution=execution)
+        stage = 'RESULT_PUBLICATION'
         if execution.input_id is None or not receipt:
             raise ScanAttemptLost('DEVELOPMENT_INPUT_NOT_BOUND')
         gaps = []
@@ -233,6 +257,8 @@ def _scan(queue, row, ticket, runtime_factory=None):
             if acquired:
                 attempts.finish(lease, input_id=execution.input_id,
                     outcome='CANCELLED' if isinstance(error, ScanCancelled) else 'FAILED')
+        if isinstance(error, Exception) and not isinstance(error, ScanCancelled):
+            raise DevelopmentScanFailure(failure_diagnostic(error, stage)) from None
         raise
 
 
@@ -314,7 +340,9 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                     continue
                 try:
                     result = _scan(queue, row, ticket, runtime_factory)
-                except Exception:
+                except Exception as error:
+                    diagnostic = (error.diagnostic if isinstance(error, DevelopmentScanFailure)
+                                  else failure_diagnostic(error))
                     with queue.transaction() as db:
                         current = queue._get(db, row['check_ref'])
                         newer = current['dirty_seq'] > row['dirty_seq']
@@ -325,6 +353,7 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                             next_attempt_at=current.get('next_attempt_at', 0) if newer else
                                 queue.now()+min(2**row['attempt_count'], 8),
                             reason_code=current.get('reason_code') if newer else 'DEVELOPMENT_SCAN_FAILED',
+                            failure_diagnostic=current.get('failure_diagnostic') if newer else diagnostic,
                             updated_at=queue.now()))
                         if state == 'FAILED':
                             from .development_delivery import publish

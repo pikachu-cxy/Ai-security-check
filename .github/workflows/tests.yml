@@ -60,8 +60,8 @@ jobs:
           "$test_python" -m pip install --upgrade pip
           "$test_python" -m pip install -e ".[test,scanner-test]"
           echo "$test_bin" >> "$GITHUB_PATH"
-      - name: Verify offline scanner identity before regressions
-        run: python -c "from security_runtime.toolchain import ToolManager, ToolStatus; tool = ToolManager().ensure('semgrep', offline=True); assert tool.status == ToolStatus.READY, tool.detail"
+      - name: Prepare pinned native OpenGrep before offline regressions
+        run: python -c "from security_runtime.toolchain import ToolManager, ToolStatus; tool = ToolManager().ensure('opengrep', offline=False); assert tool.status == ToolStatus.READY, tool.detail"
       - name: Check installation and Mac release contracts before the full regression
         env:
           PYTHONUTF8: '0'

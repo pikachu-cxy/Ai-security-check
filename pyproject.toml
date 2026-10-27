@@ -15,7 +15,7 @@ dependencies = ["PyYAML==6.0.3", "mcp==1.29.0", "javalang==0.13.0", "six==1.17.0
 [project.optional-dependencies]
 mcp = []
 test = ["pytest>=8", "jsonschema>=4,<5"]
-scanner-test = ["semgrep==1.178.0"]
+scanner-test = []  # OpenGrep is installed from checksum-pinned official binaries.
 build-standalone = ["pyinstaller==6.22.3"]
 
 [project.scripts]
@@ -32,7 +32,7 @@ where = ["src"]
 version = {attr = "security_runtime._version.__version__"}
 
 [tool.setuptools.package-data]
-security_runtime = ["python_downloads.json", "assets/*.mjs", "rules/LICENSE", "rules/catalog.json", "rules/capabilities.json", "rules/*/*.yml", "licenses/*/LICENSE", "licenses/*/NOTICE", "skills/*/SKILL.md", "skills/*/agents/openai.yaml", "skills/*/references/*.md"]
+security_runtime = ["python_downloads.json", "opengrep_rules.json", "assets/*.mjs", "rules/LICENSE", "rules/README.md", "rules/**/*.yml", "rules/**/*.yaml", "licenses/*/LICENSE", "licenses/*/NOTICE", "skills/*/SKILL.md", "skills/*/agents/openai.yaml", "skills/*/references/*.md"]
 
 [tool.setuptools.data-files]
 "share/ai-security-runtime" = ["LICENSE", "EULA.md", "LICENSING.md", "THIRD_PARTY_NOTICES.md", "SOURCE_OFFER.md"]

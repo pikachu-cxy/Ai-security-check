@@ -325,7 +325,7 @@ class SecuritySummaryService:
         if topic == 'dependency':
             return (f"核查 {group['package'] or '未知包'} {group['version'] or '未知版本'} 的依赖风险",
                     '包版本与 advisory 的匹配是候选信号，不证明受影响 API 可达。',
-                    ['受影响范围、修复版本、完整依赖图与实际使用条件；缺失信息保持未知。'],
+                    ['受影响版本、修复版本与实际使用条件。'],
                     '先补齐 advisory 的受影响范围与修复版本，再核对使用前提，不编造升级版本。')
         if topic == 'iac':
             return ('复核配置规则的适用环境', '本地配置可能有误配置、加固或最佳实践问题。',

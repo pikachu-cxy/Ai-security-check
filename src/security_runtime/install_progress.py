@@ -115,7 +115,7 @@ def validate_preparation_event(value):
             'received_bytes', 'total_bytes', 'timeout_seconds', 'error_code', 'source'}:
         return None
     if (not isinstance(value.get('event'), str) or not isinstance(value.get('component'), str)
-            or value['event'] not in _EVENTS or value['component'] not in {'semgrep', 'gitleaks', 'trivy', 'vulnerability_db'}):
+            or value['event'] not in _EVENTS or value['component'] not in {'opengrep', 'gitleaks', 'trivy', 'vulnerability_db'}):
         return None
     for name in ('attempt', 'max_attempts', 'received_bytes', 'total_bytes', 'timeout_seconds'):
         if name in value and (type(value[name]) is not int or not 0 <= value[name] <= 8_000_000_000):
@@ -295,7 +295,7 @@ class InstallationProgress:
                         return
                     now = self.clock()
                     kind = event['event']
-                    label = {'semgrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查', 'vulnerability_db': '漏洞库'}[event['component']]
+                    label = {'opengrep': '代码检查', 'gitleaks': '密钥检查', 'trivy': '依赖检查', 'vulnerability_db': '漏洞库'}[event['component']]
                     if kind == 'DOWNLOAD_PROGRESS':
                         self._download_active = True
                         self._download_label = label

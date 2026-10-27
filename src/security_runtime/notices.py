@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .engines import BUILTIN_ENGINES
-from .rulepacks import FIRST_PARTY_RULE_PACK
+from .rulepacks import DEFAULT_RULE_PACK
 from .dataflow import PACK_ID, VERSION
 from .go_sql import PACK_ID as GO_SQL_PACK_ID, VERSION as GO_SQL_VERSION
 
@@ -23,18 +23,20 @@ def render_third_party_notices() -> str:
             attribution += "; see SOURCE_OFFER.md for source availability"
         lines.append(f"| {engine.display_name} | {engine.version} | {metadata.copyright} | "
                      f"{metadata.license_spdx} | {engine.homepage} | {attribution} |")
-    pack = FIRST_PARTY_RULE_PACK
+    pack = DEFAULT_RULE_PACK
     lines += [
         "", "## Rule packs", "",
         "| Component | Version | Copyright | License | Source | Attribution |",
         "| --- | --- | --- | --- | --- | --- |",
         f"| {pack.display_name} (`{pack.rule_pack_id}`) | {pack.version} | {pack.copyright} | "
-        f"{pack.license} | {pack.source} | First-party authored rules |",
+        f"{pack.license} | {pack.source} | Upstream LICENSE retained; free personal distribution; Commons Clause restrictions apply |",
         f"| Bounded Java/Python dataflow (`{PACK_ID}`) | {VERSION} | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; SQL, resolved cross-file Java/Python paths and exact Python io/codecs stream opens by default; other intrafile paths/command candidates experimental |",
         f"| Bounded Go SQL dataflow (`{GO_SQL_PACK_ID}`) | {GO_SQL_VERSION} | AI Security Runtime contributors | Apache-2.0 | bundled local package | First-party authored; same-package net/http to database/sql, at most two resolved call edges |",
         "",
-        "The bundled rule pack is independently authored. Semgrep Community Rules and Semgrep Registry Rules "
-        "are not bundled or fetched by default. User-provided rules remain under the user's own license "
+        "The bundled opengrep-rules pack is an archived fork of semgrep-rules, pinned by commit. "
+        "Its LGPL-2.1 plus Commons Clause license is distinct from the engine license. "
+        "It is not represented as permissively licensed or unrestricted for commercial/SaaS redistribution. "
+        "User-provided rules remain under the user's own license "
         "and are never copied into the managed tool directory.",
         "",
         "Other Python dependency license terms are distributed with their respective installed Python packages.",

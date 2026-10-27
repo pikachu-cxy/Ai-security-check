@@ -33,7 +33,6 @@ when distributed or published:
 
 - files explicitly carrying `SPDX-License-Identifier: Apache-2.0`;
 - the public scanner/plugin extension contract;
-- the bundled `ai-security-core` community rule pack;
 - future public SDKs, schemas, integration specifications, examples, and
   community rules when explicitly marked Apache-2.0.
 
@@ -44,7 +43,7 @@ open source.
 
 ## Third-party software
 
-Semgrep, Gitleaks, Trivy, the MCP SDK, Python dependencies, and other
+OpenGrep, historical Semgrep, Gitleaks, Trivy, the MCP SDK, Python dependencies, and other
 third-party components remain under their own licenses. Their license terms do
 not grant rights to proprietary AI Security Runtime code.
 
@@ -52,7 +51,7 @@ See `THIRD_PARTY_NOTICES.md` and `SOURCE_OFFER.md`.
 
 ## Rule-pack policy
 
-- `ai-security-core`: Apache-2.0 community/base rules.
+- bundled `opengrep-rules`: upstream LGPL-2.1 and Commons Clause; see `src/security_runtime/rules/LICENSE`. The previous `ai-security-core` YAML pack is no longer bundled.
 - future community rule packs: Apache-2.0 when explicitly marked.
 - future Pro / intelligence / commercial rule packs: proprietary unless
   otherwise stated.

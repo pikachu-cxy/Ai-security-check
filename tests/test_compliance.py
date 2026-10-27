@@ -29,7 +29,7 @@ class ComplianceTests(unittest.TestCase):
         self.assertTrue((root / "EULA.md").is_file())
         self.assertTrue((root / "LICENSING.md").is_file())
         self.assertTrue((root / "LICENSES/Apache-2.0.txt").is_file())
-        self.assertEqual(FIRST_PARTY_RULE_PACK.license, "Apache-2.0")
+        self.assertEqual(FIRST_PARTY_RULE_PACK.license, "LGPL-2.1-only WITH Commons-Clause")
         self.assertTrue((root / "THIRD_PARTY_NOTICES.md").is_file())
         self.assertEqual((root / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8"),
                          render_third_party_notices())
@@ -41,10 +41,10 @@ class ComplianceTests(unittest.TestCase):
     def test_local_rules_are_licensed_and_no_production_registry_reference(self):
         root = Path(__file__).resolve().parents[1]
         pack = RulePackManager().resolve()
-        self.assertEqual(pack.descriptor.rule_pack_id, "ai-security-core")
+        self.assertEqual(pack.descriptor.rule_pack_id, "opengrep-rules")
         self.assertTrue(can_bundle_rule_pack(pack.descriptor))
-        self.assertEqual(pack.descriptor.version, "1.6.0")
-        forbidden = ("--config=auto", "--config=p/", "--config=r/", "semgrep.dev/registry", "semgrep-rules")
+        self.assertEqual(len(pack.descriptor.version), 40)
+        forbidden = ("--config=auto", "--config=p/", "--config=r/", "semgrep.dev/registry")
         for file in (root / "src/security_runtime").rglob("*.py"):
             text = file.read_text(encoding="utf-8")
             self.assertFalse(any(term in text for term in forbidden), str(file))
@@ -69,18 +69,12 @@ class ComplianceTests(unittest.TestCase):
         for action in LicenseAction:
             self.assertEqual(LicensePolicy.permission(CODEQL_FUTURE_LICENSE, action), Permission.NO)
 
-    def test_first_party_rule_metadata_cannot_be_empty(self):
-        source = Path(__file__).resolve().parents[1] / "src/security_runtime/rules/core/python.yml"
+    def test_bundled_rules_require_license(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            (root / "LICENSE").write_text("MIT", encoding="utf-8")
-            rule = root / "python.yml"
-            rule.write_text(source.read_text(encoding="utf-8").replace(
-                "publisher: AI Security Runtime", "publisher: ''"), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "identity mismatch"):
-                RulePackManager._validate(FIRST_PARTY_RULE_PACK, root)
+            with self.assertRaisesRegex(ValueError, 'LICENSE is missing'):
+                RulePackManager._validate(FIRST_PARTY_RULE_PACK, Path(tmp), require_first_party_metadata=False)
 
     def test_unknown_or_restricted_rule_pack_cannot_be_bundled(self):
         for pack_class in (RulePackClass.UNKNOWN, RulePackClass.RESTRICTED):
             with self.subTest(pack_class=pack_class):
-                self.assertFalse(can_bundle_rule_pack(replace(FIRST_PARTY_RULE_PACK, pack_class=pack_class)))
+                self.assertFalse(can_bundle_rule_pack(replace(FIRST_PARTY_RULE_PACK, rule_pack_id="other-restricted-pack", pack_class=pack_class)))

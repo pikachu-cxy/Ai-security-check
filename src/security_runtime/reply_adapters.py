@@ -68,7 +68,7 @@ _CHECK_REASONS = {
 
 
 def _capability_notices(static):
-    providers = {'CODE_SAST': {'semgrep'},
+    providers = {'CODE_SAST': {'semgrep','opengrep'},
                  'DEPENDENCY_VULN': {'trivy', 'trivy-vuln', 'osv-scanner'}}
     labels = {'CODE_SAST': '代码安全检查', 'DEPENDENCY_VULN': '依赖检查'}
     runs = static.get('scanner_runs') or []
