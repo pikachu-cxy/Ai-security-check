@@ -168,13 +168,13 @@ def mock_registry(root):
     package = binaries.parent / 'Lib' / 'site-packages' / 'semgrep'
     package.mkdir(parents=True)
     (package / '__init__.py').write_bytes(b'# Synthetic Semgrep identity fixture\n')
-    for tool in ('semgrep', 'gitleaks', 'trivy'):
+    for tool in ('opengrep', 'gitleaks', 'trivy'):
         (binaries / tool).write_bytes(b'Synthetic mock engine; never executed')
     manager.ensure = lambda tool: ResolvedTool(tool, 'mock', str(binaries / tool), None, ToolStatus.READY)
     manager.prepare_trivy_database = lambda binary: ToolStatus.READY
     registry = ScannerRegistry(tool_manager=manager, fallback_adapters=[])
     def execute(args, cwd, timeout):
-        if Path(args[0]).name == 'semgrep':
+        if Path(args[0]).name == 'opengrep':
             import yaml
             config=yaml.safe_load(Path(args[args.index('--config')+1]).read_text(encoding='utf-8'))
             scope=args[args.index('--no-git-ignore')+1:]

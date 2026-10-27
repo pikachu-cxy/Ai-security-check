@@ -65,6 +65,17 @@ def test_artifact_gate_accepts_current_native_dataflow_inventory(dependency):
     verify_artifact.verify_sample_scan(payload, dependency=dependency)
 
 
+@pytest.mark.parametrize('status', ['NOT_APPLICABLE', 'FAILED'])
+def test_artifact_gate_checks_go_scanner_for_python_sample(status):
+    payload = declared_sample()
+    payload['scanner_runs'].append({'scanner': 'native-go-sql', 'status': status})
+    if status == 'NOT_APPLICABLE':
+        verify_artifact.verify_sample_scan(payload, dependency=True)
+    else:
+        with pytest.raises(ValueError, match='unexpected engine execution'):
+            verify_artifact.verify_sample_scan(payload, dependency=True)
+
+
 @pytest.mark.parametrize('status', ['FAILED', 'UNAVAILABLE', 'NOT_APPLICABLE'])
 def test_artifact_gate_rejects_unexecuted_release_dataflow(status):
     payload = declared_sample()

@@ -17,6 +17,7 @@ permissions:
   contents: read
 
 jobs:
+  # A release commit triggers full validation before publication.
   version:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.10]')
     runs-on: ubuntu-latest

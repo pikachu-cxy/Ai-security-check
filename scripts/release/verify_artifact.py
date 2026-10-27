@@ -245,6 +245,8 @@ def verify_sample_scan(payload, *, dependency=False):
     runs = {item['scanner']: item for item in payload['scanner_runs']}
     if 'native-js-function' in runs:
         expected['native-js-function'] = 'NOT_APPLICABLE'
+    if 'native-go-sql' in runs:
+        expected['native-go-sql'] = 'NOT_APPLICABLE'
     if 'native-dataflow' in runs:
         expected['native-dataflow'] = 'SUCCESS' if dependency else 'NOT_APPLICABLE'
     if {name: item['status'] for name, item in runs.items()} != expected:
