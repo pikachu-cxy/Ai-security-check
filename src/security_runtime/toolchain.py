@@ -592,7 +592,8 @@ class ToolManager:
                     # status probes stay at 30 seconds. run_process also bounds
                     # this by the current overall preparation budget.
                     macos_semgrep = sys.platform == 'darwin' and tool_id == 'semgrep'
-                    timeout = (90 if initial_install else 30) if macos_semgrep else 8
+                    timeout = (120 if sys.platform == 'darwin' and tool_id == 'opengrep' and initial_install
+                               else (90 if initial_install else 30) if macos_semgrep else 8)
                     from .engine_environment import engine_environment
                     with engine_environment(tool_id, environment) as probe_environment:
                         proc = run_process([str(path.resolve()), "--version"], timeout=timeout, max_output=16_000,
@@ -816,7 +817,16 @@ class ToolManager:
         with tempfile.TemporaryDirectory(dir=parent, prefix="install-") as tmp:
             staging = Path(tmp)
             archive = staging / "release.archive"
-            self.provider.download(manifest, archive)
+            cache = parent / ("verified-" + manifest.sha256)
+            if (manifest.tool_id == 'opengrep' and cache.is_file() and not cache.is_symlink()
+                    and sha256_file(cache) == manifest.sha256):
+                shutil.copyfile(cache, archive)
+            else:
+                self.provider.download(manifest, archive)
+                if manifest.tool_id == 'opengrep' and sha256_file(archive) == manifest.sha256:
+                    cache_candidate = staging / 'verified-cache'
+                    shutil.copyfile(archive, cache_candidate)
+                    os.replace(cache_candidate, cache)
             executable = staging / manifest.executable_name
             if manifest.archive_type == "binary":
                 if archive.stat().st_size > 200_000_000 or sha256_file(archive) != manifest.sha256:
@@ -838,7 +848,10 @@ class ToolManager:
                         shutil.copyfileobj(source, target)
             executable.chmod(executable.stat().st_mode | 0o111)
             archive.unlink()
-            if manifest.version not in self._version(manifest.tool_id, executable):
+            if manifest.version not in self._probe_version(manifest.tool_id, executable, initial_install=True):
+                diagnostic = self._probe_diagnostics.get((manifest.tool_id, str(executable)))
+                if diagnostic is not None:
+                    raise DiagnosticError(diagnostic)
                 raise ValueError("Release executable failed version validation")
             source_dir = Path(__file__).parent / "licenses" / manifest.tool_id
             for name in ("LICENSE", "NOTICE"):

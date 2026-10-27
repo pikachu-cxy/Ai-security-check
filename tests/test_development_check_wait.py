@@ -71,7 +71,7 @@ def test_budget_returns_pending_without_restarting_or_claiming_completion(check)
     assert result['status'] == 'QUEUED' and result['dirty_seq'] == 1 and result['scanned_seq'] == 0
     assert result['closeout_wait']['stopped_reason'] == 'TIME_BUDGET_EXHAUSTED'
     assert 'OBSERVED_EDITS_PENDING' in result['gaps']
-    assert result['next_action']['tool'] == 'get_development_check'
+    assert result['next_action']['tool'] == 'wait_development_check'
     assert len(launches) == 1 and state['calls'] == 0
 
 
@@ -201,4 +201,54 @@ def test_invalid_wait_is_rejected_before_dispatch(check, value):
     service.launcher = lambda *args: pytest.fail('invalid wait must not dispatch')
     with pytest.raises(ValueError, match='DEVELOPMENT_WAIT_INVALID'):
         asyncio.run(service.finish_and_wait(root, ref, value))
+    assert not service.get(root, ref)['finish_requested']
+
+
+def test_total_deadline_persists_without_rescan(check, monkeypatch):
+    root, service, _, state = check
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_TOTAL_WAIT_SECONDS', '3')
+    ref = dirty(check)
+    launches = []
+    service.launcher = lambda *args: launches.append(args)
+    clock = WaitClock(service)
+    service.now = lambda: 100 + clock.value
+    first = asyncio.run(service.finish_and_wait(root, ref, 2))
+    assert first['next_action']['tool'] == 'wait_development_check'
+    assert first['wait_deadline'] == 103
+    assert service.finish(root, ref)['wait_deadline'] == 103
+    before = len(launches)
+    result = asyncio.run(service.wait_saved(root, ref, 20))
+    assert clock.value == 3
+    assert result['wait_deadline_exceeded']
+    assert result['closeout_wait']['stopped_reason'] == 'TOTAL_WAIT_BUDGET_EXHAUSTED'
+    assert result['status'] == 'QUEUED' and not result['result_available']
+    assert len(launches) == before and state['calls'] == 0
+    assert service.get(root, ref)['wait_deadline'] == 103
+    asyncio.run(service.wait_saved(root, ref, 20))
+    assert clock.value == 3
+    service.record(root, ref, ['app.ts'], event_id='next-version')
+    assert service.finish(root, ref)['wait_deadline'] == 106
+
+
+def test_result_after_deadline_still_available(check, monkeypatch):
+    root, service, _, _ = check
+    ref = dirty(check)
+    clock = WaitClock(service)
+    service.now = lambda: 100 + clock.value
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_TOTAL_WAIT_SECONDS', '1')
+    result = asyncio.run(service.complete(root, ref))
+    assert result['wait_deadline_exceeded']
+    execute(check, monkeypatch)
+    result = asyncio.run(service.wait_saved(root, ref))
+    assert result['result_available'] and not result['wait_deadline_exceeded']
+    assert result['closeout_wait']['stopped_reason'] == 'STATE_AVAILABLE'
+
+
+@pytest.mark.parametrize('value', ['0', '-1', '3601', 'invalid'])
+def test_invalid_total_budget_never_dispatches(check, monkeypatch, value):
+    root, service, _, _ = check
+    ref = dirty(check)
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_TOTAL_WAIT_SECONDS', value)
+    with pytest.raises(ValueError, match='DEVELOPMENT_WAIT_CONFIGURATION_INVALID'):
+        asyncio.run(service.complete(root, ref))
     assert not service.get(root, ref)['finish_requested']

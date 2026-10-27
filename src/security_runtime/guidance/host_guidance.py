@@ -526,7 +526,7 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 | 明确深度审计或攻击链分析 | [深度审计](references/deep-audit.md)，topic=deep-audit；先读扫描工作流 |
 
 只加载当前分支；风险或修复意图出现时再读相应方法。扫描范围、复用、分页、修复分支及字段示例由各方法维护。
-声明 development-risks-v1 时，轻量发现先按 development-check 保存统一风险再提示修复；
+声明 development-risks-v1 时，轻量发现先按 development-check 保存统一风险、读取处置，再按该方法四段格式报告；
 AI 独立发现也可修复，关联扫描器发现后采用有证据的 AI 复核判断，保留原始命中。
 
 ## 不可省略的边界
@@ -535,7 +535,7 @@ AI 独立发现也可修复，关联扫描器发现后采用有证据的 AI 复�
 record_development_changes 仅补录明确编辑路径，收尾入口请求后台合并检查，
 get_development_check 只读保存结果。已有本会话 Hook 的 check_ref 则沿用，不建立修改前基线。
 具备 development_check_delivery 能力时优先 complete_development_check，由产品选择等待预算；
-超时沿 wait_development_check 原引用续等，待交付分页和历史版本读取按 development-check 方法。
+单次超时沿 wait_development_check 原引用续等，不以等待次数结束；总期限或失败按 development-check 报告缺口。
 旧 Runtime 保留 finish_development_check，不猜测新参数或能力。读取不等于用户已看到。
 核对同一构建的四项轻量工具，不以版本号或工具总数替代能力；不可用不自动退回全项目审计。
 保留原 check_ref、有效 session_ref、owner、范围与序号，不按最近任务猜测或跨会话认领。

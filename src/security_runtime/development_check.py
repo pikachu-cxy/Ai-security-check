@@ -40,6 +40,17 @@ def product_wait_seconds():
     return seconds
 
 
+def product_total_wait_seconds():
+    """Overall communication deadline, not a scanner timeout or cancellation."""
+    try:
+        seconds = int(os.environ.get('SECURITY_RUNTIME_DEVELOPMENT_TOTAL_WAIT_SECONDS', '300'))
+    except ValueError:
+        raise ValueError('DEVELOPMENT_WAIT_CONFIGURATION_INVALID') from None
+    if not 1 <= seconds <= 3600:
+        raise ValueError('DEVELOPMENT_WAIT_CONFIGURATION_INVALID')
+    return seconds
+
+
 def workspace_root(value):
     root = Path(value).absolute()
     no_links(root)
@@ -204,7 +215,13 @@ def projection(store, row):
     if watch.get('status') == 'ACTIVE' and watch.get('lease_until', 0) <= store.now():
         gaps.append('FILE_WATCH_INTERRUPTED')
         watch = dict(watch, status='INTERRUPTED')
+    pending = state in {'QUEUED', 'RUNNING'}
+    deadline = row.get('wait_deadline') if row.get('wait_seq') == row['dirty_seq'] else None
+    expired = pending and deadline is not None and store.now() >= deadline
+    next_tool = ('finish_development_check' if state == 'DIRTY' else
+                 'wait_development_check' if pending and not expired else 'get_development_check')
     return dict(contract=CONTRACT, check_ref=row['check_ref'], status=state,
+        wait_deadline=deadline, wait_deadline_exceeded=bool(expired),
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
@@ -220,8 +237,7 @@ def projection(store, row):
         execution=result.get('execution'), scan_status=result.get('status'),
         scan_coverage=result.get('coverage'),
         failure_diagnostic=row.get('failure_diagnostic'),
-        next_action=dict(tool='finish_development_check' if state in {'DIRTY', 'INTERRUPTED', 'FAILED'}
-            else 'get_development_check', arguments=dict(
+        next_action=dict(tool=next_tool, arguments=dict(
             workspace_path=str(store.root), check_ref=row['check_ref'])),
         poll_after_seconds=2 if state in {'QUEUED', 'RUNNING'} else None,
         scope_notice='只检查已观测文件及必要扫描上下文；未建立项目基线，不能判定问题是否由本次编辑引入。')
@@ -306,6 +322,7 @@ class DevelopmentCheckService:
         return projection(store, store.load(check_ref, self.owner))
 
     def finish(self, root, check_ref):
+        total_budget = product_total_wait_seconds()
         store = self.store(root)
         store.load(check_ref, self.owner)
         from .development_file_watch import stop_window
@@ -322,6 +339,8 @@ class DevelopmentCheckService:
             elif (row['dirty_seq'] > row['scanned_seq'] and
                     row.get('failed_seq') != row['dirty_seq'] and (state != 'RUNNING' or not running)):
                 state = 'QUEUED'
+            if state in {'QUEUED', 'RUNNING'} and row.get('wait_seq') != row['dirty_seq']:
+                row.update(wait_seq=row['dirty_seq'], wait_deadline=self.now()+total_budget)
             row = store._put(db, check_ref, dict(row, finish_requested=True, state=state, updated_at=self.now()))
         if state in {'QUEUED', 'RUNNING'}:
             self._wake(store)
@@ -359,9 +378,12 @@ class DevelopmentCheckService:
             row = store.load(check_ref, self.owner)
             polls += 1
             state = projection(store, row)
-            if row['dirty_seq'] != expected_seq or state['status'] not in {'QUEUED', 'RUNNING'}:
+            if (row['dirty_seq'] != expected_seq or state['status'] not in {'QUEUED', 'RUNNING'}
+                    or state['wait_deadline_exceeded']):
                 break
             remaining = deadline - self.monotonic()
+            if state['wait_deadline'] is not None:
+                remaining = min(remaining, state['wait_deadline'] - self.now())
             if remaining <= 0:
                 break
             await self.wait_sleep(min(state['poll_after_seconds'] or 2, remaining))
@@ -369,6 +391,7 @@ class DevelopmentCheckService:
         # finding access, including any edit racing with the last observation.
         result = self.get(root, check_ref)
         reason = ('VERSION_CHANGED' if result['dirty_seq'] != expected_seq else
+                  'TOTAL_WAIT_BUDGET_EXHAUSTED' if result['wait_deadline_exceeded'] else
                   'TIME_BUDGET_EXHAUSTED' if result['status'] in {'QUEUED', 'RUNNING'} else
                   'STATE_AVAILABLE')
         result['closeout_wait'] = dict(contract='bounded-closeout-wait-v1',
@@ -414,7 +437,8 @@ class DevelopmentCheckService:
             from .development_risks import DevelopmentRisks
             risks = DevelopmentRisks(self, store.root, check_ref).load()
             result['host_review_completed'] = any(
-                r['dirty_seq'] == row['dirty_seq'] for r in risks['reviews'])
+                r['dirty_seq'] == row['dirty_seq'] and r.get('scan_id') == row.get('scan_id')
+                for r in risks['reviews'])
             result['host_review_trust'] = 'HOST_REPORTED_NOT_SCANNER_PROOF'
             result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
                 workspace_path=str(store.root), check_ref=check_ref))

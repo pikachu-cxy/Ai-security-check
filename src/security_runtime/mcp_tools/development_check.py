@@ -30,7 +30,7 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_development_review(check_ref: str, expected_seq: int, observations: list[Observation],
                                   workspace_path: str | None = None, session_ref: str | None = None) -> dict:
-        """Persist AI findings/assessments using the same Finding structure as scanners; import saved scanner observations without scanning. Pass [] for a review with no AI candidates. Reuse issue_key for retries. When reviewing an existing scanner risk set same_issue_as to its exact ID; same location alone is NOT identity. Evidence-backed AI decision is authoritative, raw scanner output is retained. DISMISSED is review exclusion, never a repair proof. Save before offering repair."""
+        """Persist AI findings/assessments using the same Finding structure as scanners; import saved scanner observations without scanning. Pass [] for a review with no AI candidates. Reuse issue_key for retries. When reviewing an existing scanner risk set same_issue_as to its exact ID; same location alone is NOT identity. Evidence-backed AI decision is authoritative, raw scanner output is retained. DISMISSED is review exclusion, never a repair proof. Save before reporting a risk, even when the user forbids repair. Read unified dispositions and use the four-section format in development-check."""
         values = [v.model_dump() if isinstance(v, Observation) else v for v in observations]
         return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq)
 
@@ -123,7 +123,7 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     async def wait_development_check(check_ref: str, workspace_path: str | None = None,
                                       session_ref: str | None = None) -> dict:
-        """Await saved progress using the product's communication budget. Read-only: never submits, retries, scans or starts a worker. A timeout is not task completion. Returns original scope/version/findings/gaps; cancellation does not cancel background work."""
+        """Await saved progress using the product's communication budget. Read-only: never submits, retries, scans or starts a worker. A per-call timeout is not task completion: follow next_action until terminal state or wait_deadline_exceeded. Then review saved findings, or report the actual incomplete check. Returns original scope/version/findings/gaps; cancellation does not cancel background work."""
         service = application.development_service(check_ref, session_ref, workspace_path)
         return offered(await service.wait_saved(application.bound_path(workspace_path), check_ref))
 

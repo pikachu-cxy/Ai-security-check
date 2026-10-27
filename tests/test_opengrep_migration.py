@@ -73,6 +73,45 @@ def test_official_binary_manifests_are_pinned(tmp_path, monkeypatch, system, arc
     assert manifest.archive_type == 'binary' and len(manifest.sha256) == 64
 
 
+def test_verified_download_survives_failed_probe_and_is_reused(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from security_runtime.component_health import diagnosis
+    from security_runtime.diagnostics import DiagnosticError
+    data = b'verified test binary'
+    calls = []
+    class Provider:
+        def download(self, manifest, destination):
+            calls.append(1)
+            destination.write_bytes(data)
+    manager = ToolManager(tmp_path, provider=Provider())
+    manifest = replace(manager.manifest('opengrep'), sha256=hashlib.sha256(data).hexdigest())
+    def failed(tool, path, *, initial_install=False):
+        assert initial_install
+        manager._probe_diagnostics[(tool, str(path))] = diagnosis('COMPONENT_START_TIMEOUT')
+        return ''
+    monkeypatch.setattr(manager, '_probe_version', failed)
+    with pytest.raises(DiagnosticError) as error:
+        manager._install_binary(manifest)
+    assert error.value.diagnostic.error_code == 'COMPONENT_START_TIMEOUT'
+    monkeypatch.setattr(manager, '_probe_version', lambda *args, **kwargs: manifest.version)
+    manager._install_binary(manifest)
+    assert len(calls) == 1
+    assert (tmp_path / 'tools' / 'opengrep' / manifest.version / 'opengrep').read_bytes() == data
+
+
+def test_macos_opengrep_initial_probe_allows_cold_start(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import security_runtime.toolchain as toolchain
+    timeouts = []
+    monkeypatch.setattr(toolchain.sys, 'platform', 'darwin')
+    monkeypatch.setattr(toolchain, 'run_process', lambda *a, **kw: (timeouts.append(kw['timeout']) or
+        SimpleNamespace(returncode=0, stdout='1.32.0', stderr='')))
+    manager = ToolManager(tmp_path)
+    assert manager._probe_version('opengrep', tmp_path / 'opengrep', initial_install=True) == '1.32.0'
+    assert manager._probe_version('opengrep', tmp_path / 'opengrep') == '1.32.0'
+    assert timeouts == [120, 8]
+
+
 def test_additional_languages_are_selected(pack):
     from security_runtime.rule_coverage import plan_rules
     plan = plan_rules(pack, ('a.cs','a.rb','a.rs','Dockerfile','a.py'))

@@ -204,7 +204,7 @@ class DevelopmentRisks:
             # Revalidate every submitted evidence receipt before committing the batch.
             for value in values:
                 self.evidence(row, value.evidence_refs)
-            review = dict(dirty_seq=expected_seq, risk_ids=list(row['risks']))
+            review = dict(dirty_seq=expected_seq, scan_id=check.get('scan_id'), risk_ids=list(row['risks']))
             if review not in row['reviews']:
                 require(len(row['reviews']) < 256, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                 row['reviews'].append(review)

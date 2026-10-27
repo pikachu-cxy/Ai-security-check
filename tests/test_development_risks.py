@@ -245,3 +245,15 @@ def test_repeated_review_does_not_reopen_resolved_risk(sample):
     again = risks.submit([value], risks.current_check()['dirty_seq'])['risks'][0]
     assert again['status'] == 'CODE_REVIEWED_RESOLVED'
     assert again['finding']['status'] == again['status']
+
+
+def test_early_review_bound_to_scan_result(sample, monkeypatch):
+    root, service, ref, risks = sample
+    submit(sample)
+    assert service.get(root, ref)['host_review_completed']
+    scanner(sample, monkeypatch)
+    row = risks.load()
+    assert not any(r['dirty_seq'] == risks.current_check()['dirty_seq'] and
+                   r.get('scan_id') == risks.current_check()['scan_id'] for r in row['reviews'])
+    risks.submit([observation(risks, same_issue_as='s1')], risks.current_check()['dirty_seq'])
+    assert risks.load()['reviews'][-1]['scan_id'] == 'scan-1'
