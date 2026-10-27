@@ -23,7 +23,7 @@ def test_unified_risk_tools_repair_round_trip(development_server):
     risk = call(server, 'get_development_risks', **base)['risks'][0]
     fix = call(server, 'prepare_development_risk_fix', risk_id=risk['id'], proposal='Bind name',
                preserve=['API'], evidence_refs=value['evidence_refs'], user_requested=True,
-               impact_summary='Only reject query syntax in name', critical_unknowns=[], **base)
+               impact_summary='Only reject query syntax in name', critical_unknowns=[], repair_paths=['risk.py'], **base)
     assert fix['ready_for_host_fix']
     (root/'risk.py').write_text('def query(conn, name):\n    return conn.execute("SELECT ?", (name,))\n')
     evidence = call(server, 'read_development_risk_context', file_path='risk.py', start_line=1, end_line=2, **base)

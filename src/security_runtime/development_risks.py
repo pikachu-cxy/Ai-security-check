@@ -80,10 +80,10 @@ class DevelopmentRisks:
     def current_check(self):
         return self.checks.load(self.ref, self.development.owner)
 
-    def read(self, file_path, start_line=1, end_line=80):
+    def read(self, file_path, start_line=1, end_line=80, *, related=False):
         name = relative_path(file_path)
         check = self.current_check()
-        require(name in check['observed_paths'], 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED')
+        require(name in check['observed_paths'] or related is True, 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED')
         require(type(start_line) is int and type(end_line) is int and
                 1 <= start_line <= end_line < start_line + 80, 'DEVELOPMENT_RISK_RANGE_INVALID')
         raw, text = WorkspaceReader(self.root).read(name)
@@ -240,7 +240,7 @@ class DevelopmentRisks:
                     source_freshness='NOT_RECHECKED_ON_READ', repair_authorized=False)
 
     def prepare_fix(self, risk_id, proposal, preserve, evidence_refs, user_requested, *,
-                    impact_summary, critical_unknowns):
+                    impact_summary, critical_unknowns, repair_paths=None):
         require(user_requested is True, 'DEVELOPMENT_RISK_FIX_AUTHORIZATION_REQUIRED')
         require(isinstance(proposal, str) and 1 <= len(proposal) <= 2000 and
                 isinstance(preserve, list) and 1 <= len(preserve) <= 20 and
@@ -256,6 +256,10 @@ class DevelopmentRisks:
             evidence = self.evidence(row, evidence_refs)
             assessment = risk['assessment']
             hashes = {e['file_path']: e['sha256'] for e in evidence}
+            targets = repair_paths
+            require(isinstance(targets, list) and 1 <= len(targets) <= 20 and
+                    all(isinstance(p, str) and p in hashes for p in targets) and
+                    len(set(targets)) == len(targets), 'DEVELOPMENT_RISK_REPAIR_PATH_INVALID')
             require(all(hashes.get(k) == v for k, v in assessment['source_hashes'].items()),
                     'DEVELOPMENT_RISK_REVIEW_CHANGED')
             require(any(e['file_path'] == risk['finding']['file_path'] and
@@ -264,7 +268,7 @@ class DevelopmentRisks:
                     'DEVELOPMENT_RISK_LOCATION_UNREAD')
             fix = dict(proposal=safe(proposal), preserve=[safe(x) for x in preserve],
                        impact_summary=safe(impact_summary), critical_unknowns=[],
-                       before_hashes=hashes, assessment_digest=digest(assessment),
+                       before_hashes=hashes, repair_paths=targets, assessment_digest=digest(assessment),
                        evidence_refs=evidence_refs, user_requested=True,
                        authorization_trust='HOST_REPORTED_USER_REQUEST', status='PREPARED')
             fix['repair_ref'] = 'drf1-' + digest([self.ref, risk_id, fix])[:32]
@@ -278,7 +282,7 @@ class DevelopmentRisks:
                 fix = existing
             self.store._put(db, self.ref, row)
         return dict(fix, risk_id=risk_id, ready_for_host_fix=fix['status'] == 'PREPARED',
-                    scanner_run=False, source_modified=False, scope=list(hashes))
+                    scanner_run=False, source_modified=False, scope=fix.get('repair_paths', [risk['finding']['file_path']]))
 
     def resolve(self, risk_id, repair_ref, outcome, evidence_refs, rationale):
         require(outcome in {'CODE_REVIEWED_RESOLVED', 'STILL_PRESENT', 'INCONCLUSIVE'},
@@ -299,8 +303,9 @@ class DevelopmentRisks:
                         e['line_start'] <= risk['finding']['line_start'] <= e['line_end'] for e in evidence),
                     'DEVELOPMENT_RISK_LOCATION_UNREAD')
             if outcome == 'CODE_REVIEWED_RESOLVED':
-                path = risk['finding']['file_path']
-                require(hashes[path] != fix['before_hashes'][path], 'DEVELOPMENT_RISK_NO_REPAIR_CHANGE')
+                targets = fix.get('repair_paths', [risk['finding']['file_path']])
+                require(any(hashes[path] != fix['before_hashes'][path] for path in targets),
+                        'DEVELOPMENT_RISK_NO_REPAIR_CHANGE')
             result = dict(outcome=outcome, evidence_refs=evidence_refs, after_hashes=hashes,
                           rationale=safe(rationale), proof='HOST_CODE_REVIEW_NOT_SCANNER_PROOF')
             require(fix['status'] == 'PREPARED' or fix.get('result') == result, 'DEVELOPMENT_RISK_REPAIR_ALREADY_CLOSED')

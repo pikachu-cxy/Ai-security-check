@@ -8,7 +8,7 @@ from security_runtime.models import Finding
 from dataclasses import asdict
 
 OWNER = dict(host='codex', session='1'*64)
-IMPACT = dict(impact_summary='Only binds input; return shape and authorized access stay unchanged', critical_unknowns=[])
+IMPACT = dict(impact_summary='Only binds input; return shape and authorized access stay unchanged', critical_unknowns=[], repair_paths=['query.py'])
 
 
 @pytest.fixture
@@ -154,6 +154,44 @@ def test_authorized_repair_and_original_risk_recheck(sample):
                            'The original argument is now a bound value; signature and rows preserved')
     assert result['proof'] == 'HOST_CODE_REVIEW_NOT_SCANNER_PROOF'
     assert DevelopmentRisks(service, root, ref).get()['risks'][0]['status'] == 'CODE_REVIEWED_RESOLVED'
+
+
+def test_repair_in_related_unobserved_file_preserves_original_risk(sample):
+    root, service, ref, risks = sample
+    (root/'permissions.py').write_text('def allowed(user):\n    return True\n')
+    item, value = submit(sample)
+    related = risks.read('permissions.py', 1, 2, related=True)
+    refs = value['evidence_refs'] + [related['evidence_ref']]
+    with pytest.raises(ValueError, match='REPAIR_PATH_INVALID'):
+        risks.prepare_fix(item['id'], 'fix access', ['keep sharing'], refs, True,
+                          **dict(IMPACT, repair_paths=['missing.py']))
+    fix = risks.prepare_fix(item['id'], 'fix access', ['keep sharing'], refs, True,
+                            **dict(IMPACT, repair_paths=['permissions.py']))
+    assert fix['scope'] == ['permissions.py']
+    assert risks.current_check()['observed_paths'] == ['query.py']
+    with pytest.raises(ValueError, match='NO_REPAIR_CHANGE'):
+        risks.resolve(item['id'], fix['repair_ref'], 'CODE_REVIEWED_RESOLVED', refs, 'No change')
+    (root/'permissions.py').write_text('def allowed(user):\n    return user == "owner"\n')
+    after = risks.read('permissions.py', 1, 2, related=True)
+    result = risks.resolve(item['id'], fix['repair_ref'], 'CODE_REVIEWED_RESOLVED',
+                           value['evidence_refs'] + [after['evidence_ref']], 'Access now checked')
+    assert result['proof'] == 'HOST_CODE_REVIEW_NOT_SCANNER_PROOF'
+
+
+def test_repair_requires_explicit_scope_and_preserves_active_preparation(sample):
+    root, service, ref, risks = sample
+    item, value = submit(sample)
+    impact = dict(IMPACT, repair_paths=None)
+    with pytest.raises(ValueError, match='REPAIR_PATH_INVALID'):
+        risks.prepare_fix(item['id'], 'fix', ['keep'], value['evidence_refs'], True, **impact)
+    first = risks.prepare_fix(item['id'], 'fix', ['keep'], value['evidence_refs'], True, **IMPACT)
+    (root/'permissions.py').write_text('def allowed(user):\n    return True\n')
+    related = risks.read('permissions.py', 1, 2, related=True)
+    with pytest.raises(ValueError, match='FIX_ALREADY_ACTIVE'):
+        risks.prepare_fix(item['id'], 'fix related file', ['keep'],
+                          value['evidence_refs'] + [related['evidence_ref']], True,
+                          **dict(IMPACT, repair_paths=['permissions.py']))
+    assert risks.get()['risks'][0]['repairs'][0]['repair_ref'] == first['repair_ref']
 
 
 def test_dismissed_risk_cannot_prepare_repair(sample):
