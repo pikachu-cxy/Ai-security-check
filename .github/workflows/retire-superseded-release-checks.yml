@@ -17,15 +17,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for run in 40694472638 40675747016; do
+          for run in 40689520859 40691466956; do
             gh api "repos/$GH_REPO/actions/runs/$run" > run.json
             python - <<'PY'
           import json
           value = json.load(open('run.json'))
           assert value['head_branch'] == 'feature/runtime-mvp'
           assert value['head_sha'] in {
-              'bfef9f95a0420e04d8cddc5d227ee836c783480d',
-              '67a738f612126e6c40ade2fda8b840d0b856da25'}
+              'e52f5f06d5e43f54e8717bbb7579999aa302abe2',
+              '151d201ea71755b89cdd90e2ce0984a3006d544a'}
           assert value['name'] == 'Runtime tests'
           PY
             if [ "$(python -c 'import json; print(json.load(open("run.json"))["status"])')" != completed ]; then
