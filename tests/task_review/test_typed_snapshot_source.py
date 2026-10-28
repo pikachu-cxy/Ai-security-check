@@ -30,6 +30,25 @@ OWNER = dict(host="codex", session="a" * 64)
 SHA = hashlib.sha256(b"value=1\n").hexdigest()
 
 
+@pytest.fixture(autouse=True)
+def supported_private_scratch(request):
+    if (os.name != 'posix' or not hasattr(os, 'O_NOFOLLOW')) and request.node.name not in {
+        'test_unverified_pointer_or_old_domain_is_not_adopted',
+        'test_unsupported_platform_rejects_before_creating_scratch',
+    }:
+        pytest.skip('Typed source scratch requires POSIX private-directory guarantees')
+
+
+@pytest.mark.skipif(os.name == 'posix' and hasattr(os, 'O_NOFOLLOW'), reason='Unsupported-platform contract')
+def test_unsupported_platform_rejects_before_creating_scratch(sample):
+    pointer, _ = write_raw(sample, rich_snapshot())
+    before = fingerprint(sample.scratch)
+    with pytest.raises(TypedSnapshotSourceError, match='^TYPED_SOURCE_PLATFORM_UNSUPPORTED$'):
+        with open_source(sample, pointer):
+            pytest.fail('Unsupported scratch platform was accepted')
+    assert fingerprint(sample.scratch) == before
+
+
 def logical(snapshot):
     return dict(maps={key: snapshot.get(key, {}) for key in MAPS},
                 lists={key: snapshot.get(key, []) for key in LISTS})

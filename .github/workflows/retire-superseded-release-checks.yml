@@ -10,23 +10,23 @@ jobs:
   cancel-owned-superseded-runs:
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel only the four superseded validation runs from this release attempt
+      - name: Cancel only superseded runtime test runs from this release attempt
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: pikachu-cxy/Ai-security-check
         shell: bash
         run: |
           set -euo pipefail
-          for run in 40679933469 40679933281 40680612384 40680612151; do
+          for run in 40689520859 40691466956; do
             gh api "repos/$GH_REPO/actions/runs/$run" > run.json
             python - <<'PY'
           import json
           value = json.load(open('run.json'))
           assert value['head_branch'] == 'feature/runtime-mvp'
           assert value['head_sha'] in {
-              '028744002758c702d7f4b326f39bc3eef4a8b618',
-              '30db5596cae8cd93f4d37487d924de296680a8eb'}
-          assert value['name'] in {'Official release', 'Runtime tests'}
+              'e52f5f06d5e43f54e8717bbb7579999aa302abe2',
+              '151d201ea71755b89cdd90e2ce0984a3006d544a'}
+          assert value['name'] == 'Runtime tests'
           PY
             if [ "$(python -c 'import json; print(json.load(open("run.json"))["status"])')" != completed ]; then
               gh api --method POST "repos/$GH_REPO/actions/runs/$run/cancel"
