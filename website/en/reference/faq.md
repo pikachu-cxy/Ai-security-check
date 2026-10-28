@@ -1,5 +1,19 @@
 # Troubleshooting
 
+## Why does Cursor still ask me to Run a tool?
+
+Cursor controls execution approval. Full installation maintains an exact routine MCP allowlist, but run mode, `~/.cursor/permissions.json`, and team policy may still require confirmation. Command and MCP allowlists are separate. Reinstall the integration from the current verified bundle and restart, preserving user policy.
+
+## User accounts and chat binding
+
+Local configuration and history belong to the operating-system user. Another OS account or computer normally needs its own integration; records do not sync automatically. Changing only an editor login does not necessarily remove local settings. Verify the real connection.
+
+Chat ownership keeps checks and decisions associated with the correct workspace and conversation. Hooks provide credentials; users do not enter them. After reconnecting, read the original check rather than creating a replacement.
+
+## Why are risk statistics empty?
+
+Select Codex, Cursor, or all editors in 0.3.10. Check the actual build, OS user, filters, and read diagnostics. The page reads saved local records; other devices, accounts, or custom legacy directories are not automatically combined. Cross-editor duplicates remain separate. See [risk statistics](../guide/risk-handling.md).
+
 ## Installation ended; is the project checked?
 
 No. Installation, component preparation, editor connection, and actual project review are separate states. [Verify the real connection](../guide/verify.md), then try the [isolated demo](../guide/demo.md).
@@ -36,7 +50,7 @@ For a rejected path, first confirm that the editor opened the source and Git rep
 
 ## A tool reports its version but is not ready
 
-Version 0.3.9 verifies Semgrep's executable, interpreter, and package identity. An unknown wrapper cannot establish readiness by reporting the expected version. Online preparation may create a separate managed environment for an automatically discovered system tool, while explicit paths and managed-component failures retain their diagnostics. Missing OSV databases, expired data, and an unknown update time have separate messages. See [preparation](../guide/installation.md#manual-preparation).
+A version string does not establish a valid executable or data set. Check OpenGrep, Gitleaks, and Trivy identities and the applicable vulnerability data. Trivy failure reports a dependency gap; it does not automatically switch to OSV. Follow [preparation](../guide/installation.md#manual-preparation) using the specific diagnostic.
 
 ## Uninstall before reinstalling
 

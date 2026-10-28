@@ -17,3 +17,11 @@ For the ordinary label function, expected examples are `"  Hello  "` → `"hello
 ## Keep a short record
 
 For each case, note completed, failed, or incomplete, along with the actual build, file scope, component status, finding location, original verification record, and diagnostic. Keep or delete the isolated folder when finished. Share only sanitized observations when [reporting a problem](../reference/faq.md#report).
+
+## Reconnect without repeating the test
+
+Keep the development check reference. After reconnecting MCP in the original chat, read that same check and risk decisions without editing, rescanning, or creating a replacement. The scope, scan version, and decisions should remain readable; missing credentials are an integration diagnostic, not a reason to guess identity.
+
+## Compare editor statistics
+
+Ask to open risk statistics and select All editors, Codex, and Cursor. Check source labels, filtered counts, and read diagnostics. Reuse saved records; do not rerun scans merely to populate the page.

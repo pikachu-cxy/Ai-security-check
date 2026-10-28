@@ -1,38 +1,26 @@
 # Security checks alongside AI development
 
-AI Security Runtime connects security checks to your coding assistant. Ask for a development change in Codex or Cursor, review the evidence and potential impact, decide which finding to address, and verify the fix against the original issue.
+AI Security Runtime connects local security checks to Codex and Cursor. Develop normally: the Runtime records affected paths and scans the recorded files at closeout. Your agent reviews candidates against code, explains risks, and follows your handling decisions.
 
-The current product release is **0.3.9**. Native bundles and the managed macOS installer have separate build identities. Check [downloads](../downloads.md) for public assets and [support](../reference/support.md) for actual validation boundaries.
+The current official release is **0.3.10**, with Windows x64, macOS Apple Silicon, and Intel bundles. A separate managed macOS installer prepares dedicated Python. See [downloads](../downloads.md) for checksums and the distinct build identities.
 
-Code rules cover defined subsets of Java, Python, and JavaScript/TypeScript. Vue single-file components, Go, PHP, and other languages have no corresponding bundled SAST rules. Secret checks, dependency ecosystems, and AI analysis have separate scope; see the [language matrix](../reference/support.md#languages).
+## Default workflow
 
-## When to use it
+Record edited paths → scan the recorded files at closeout → agent review → save risks and decisions → verify the original issue after an approved fix.
 
-- Review code and configuration changes while an agent implements a feature.
-- Understand a finding's location, trigger conditions, safeguards, and unknowns.
-- Assess the impact of a fix before authorizing it.
-- Keep the original finding and its verification linked across interruptions.
-
-## Responsibilities
+Ordinary development does not create a project-wide pre-edit baseline or require a whole-project scan. The agent may read related business logic to assess authorization or callers; that reading does not automatically expand static scan scope.
 
 | Component | Responsibility |
 | --- | --- |
-| Host agent | Understand the task, read relevant code, explain risks, and make authorized changes. |
-| Local Runtime | Save the baseline, coordinate checks, and retain evidence, decisions, and verification records. |
-| Scanning engines | Execute installed code rules, secret detection, and supported dependency checks. |
+| Local Runtime | Record paths, schedule checks, retain evidence and decisions, and validate workspace/session ownership |
+| Scanners | OpenGrep code rules, Gitleaks secrets, Trivy applicable dependencies/configuration, and bounded native analysis |
+| Host agent | Understand business logic, review triggers and safeguards, explain impact, and implement approved changes |
+| User | Select issues to fix, defer, or exclude |
 
-The Runtime does not embed an independent language model to replace the host agent. Full integration includes **Runtime + MCP + Skill + Hooks**; [manual MCP setup](./mcp.md) provides the service without automatic task orchestration.
+Rules depend on the selected files and installed rule pack. See [coverage](../reference/support.md#languages). Raw scanner candidates and evidence-backed agent conclusions remain distinct.
 
-## One connected workflow
+## Use it in your workflow
 
-Capture the workspace before editing → develop normally → check the changes and relevant context → explain risks → obtain the user's decision → verify the original finding after an approved fix.
+[Install](./quickstart.md), restart your editor, [verify the connection](./verify.md), and try the [demo](./demo.md). Full integration includes MCP, Skill, and Hooks; [manual MCP](./mcp.md) requires explicit tool use.
 
-Ordinary chat, read-only questions, and unchanged tasks should not trigger a project scan. Failed or incomplete checks retain their actual limitations.
-
-## Current scope
-
-The official 0.3.9 release includes installed rule subsets for Java, Python, and JavaScript/TypeScript, alongside secret checks, recognizable dependency manifests, and bounded contextual review. These checks do not establish that a project is secure or replace a compliance assessment or penetration test.
-
-Community rules and the public scanner extension API are Apache-2.0 licensed. The Runtime Core is proprietary; see [licensing](../reference/legal.md).
-
-[Get started](./quickstart.md) · [Daily workflow](./workflow.md) · [Data and privacy](../reference/privacy.md)
+Read saved results without rescanning, view [local risks](./risk-handling.md) separately for Codex/Cursor or together, approve specific fixes, and optionally export [usage reports](./context-cost.md). Installation, scan completion, agent review, and fix verification are separate outcomes. Explicit strict workspace-diff audits retain their original baseline and protocol.

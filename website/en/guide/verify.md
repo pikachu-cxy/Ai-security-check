@@ -41,8 +41,8 @@ Use the separate Git folder in [your first demo](./demo.md). It does not require
 
 Confirm the service is enabled in the editor and inspect its actual startup error. Fully exit old processes before checking a stale build. Keep the installation directory referenced by the configuration. Use the correct [executable path](./installation.md#runtime-path).
 
-The local [connection-status commands](./installation.md#connection-status) inspect settings but do not replace a real editor call. Current full task review requires `task-review-plan-v3`, `task-result-delivery-v1`, and their companion tools. Update the Runtime that the configuration actually starts, then reconnect; replacing the Skill alone cannot add missing Runtime capabilities.
+The local [connection-status commands](./installation.md#connection-status) inspect settings but do not replace a real editor call. Default development requires the observed-file recording, closeout, and result-reading capabilities. Only explicit strict or existing strict tasks use `task-review-plan-v3`. Update the Runtime that the configuration actually starts, then reconnect; replacing the Skill alone cannot add missing Runtime capabilities.
 
 ## Incomplete checks
 
-Read the concrete cause: unavailable components, file count or size limits, unreadable paths, or missing pre-edit evidence are different limitations. An incomplete check is neither a discovered vulnerability nor a passing result. See [troubleshooting](../reference/faq.md#report).
+Read the concrete cause: unavailable components, file count or size limits, unreadable paths, or missing pre-edit evidence in a strict audit are different limitations. An incomplete check is neither a discovered vulnerability nor a passing result. See [troubleshooting](../reference/faq.md#report).

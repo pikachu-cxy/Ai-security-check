@@ -4,7 +4,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 
 # 在 Codex 中安装与使用
 
-接入后，照常在本地 Codex 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
+当前正式完整包为 **0.3.10**。接入后，照常在本地 Codex 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
 
 ## 1. 安装到这台电脑
 
@@ -28,12 +28,12 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- codex
 ```
 
-可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)。程序保存在 `~/.local/share/AI-Security-Runtime-macos-trial`，请保留该目录；从任何终端目录都可以运行上面的命令。
+可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)及[脚本 SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256)。文档部署直接同步仓库维护的最新脚本。程序保存在 `~/.local/share/AI-Security-Runtime-macos-trial`，请保留该目录；从任何终端目录都可以运行上面的命令。
 
 <!--@include: ../../.vitepress/snippets/macos-paste.md-->
 
 ::: details Mac 当前版本与已有安装
-这条命令使用独立发行 [macos-trial-v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.10)，Runtime 版本为 0.3.10。Apple Silicon 和 Intel 的安装、构建身份及重复安装由本次 Mac CI 分别核验；真实用户电脑上的系统策略、Codex 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
+这条命令使用独立发行 [macos-trial-v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.10)，Runtime 版本为 0.3.10，但该独立发行早于正式原生包，来源提交和构建身份须分别核对。Apple Silicon 和 Intel 的安装、构建身份及重复安装由本次 Mac CI 分别核验；真实用户电脑上的系统策略、Codex 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
 
 已有 Codex 连接、Skill 和 Hook 可能更新到本次版本。请先结束正在运行的检查任务，安装期间不要同时编辑配置。安装器按现有归属与冲突规则保护其他服务和用户修改。
 
@@ -82,3 +82,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 需要帮助时，按[反馈模板](../../reference/faq.md#report)提供脱敏后的系统、芯片、编辑器版本、安装方式和失败阶段。
 
 [日常怎么用](../workflow.md) · [仅 MCP 接入](../mcp.md) · [升级与卸载](../installation.md#卸载与重新安装)
+
+## 重连与历史结果
+
+完成小任务后保留原检查，在同一聊天恢复连接时只读该检查和风险处置，不重新扫描。会话凭证由 Hook 提供；用户不需填写，Agent 不得猜测。默认扫描本次记录文件，关联业务逻辑由 Agent 按需复核。

@@ -45,15 +45,16 @@ jobs:
         working-directory: website
       - run: npm run docs:build
         working-directory: website
-      - name: Include the opt-in macOS trial installer
+      - name: Publish the current managed macOS installer
         run: |
           mkdir -p website/.vitepress/dist/install
           cp distribution/macos/install.sh website/.vitepress/dist/install/macos.sh
+          (cd website/.vitepress/dist/install && sha256sum macos.sh > macos.sh.sha256)
       - name: Check that all documented downloads are public
         id: trial-assets
         run: |
           base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.10
-          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9
+          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10
           ready=true
           for platform in macos-arm64 macos-x64; do
             for suffix in .tar.gz .tar.gz.sha256; do
@@ -64,7 +65,7 @@ jobs:
           for archive in windows-x64.zip macos-arm64.tar.gz macos-x64.tar.gz; do
             for suffix in '' .sha256; do
               curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
-                "$native_base/ai-security-runtime-v0.3.9-$archive$suffix" >/dev/null || ready=false
+                "$native_base/ai-security-runtime-v0.3.10-$archive$suffix" >/dev/null || ready=false
             done
           done
           echo "ready=$ready" >> "$GITHUB_OUTPUT"

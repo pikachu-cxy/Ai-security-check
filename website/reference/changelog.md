@@ -1,5 +1,20 @@
 # 版本与进度
 
+## 0.3.10 · 正式版
+
+2026-10-28（UTC）公开发布 [v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10)。三平台原生完整包对应提交 `082b9c1`；[成功发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/40706996250)完成精简回归、安装及原生包验收。下载与证据见[下载页](../downloads.md#build-details)。
+
+- 默认开发改为记录编辑文件、收尾合并扫描，不建立全项目基线；严格审计保留原流程。
+- 默认代码引擎 OpenGrep、密钥 Gitleaks、依赖 Trivy。OSV 不参与默认扫描或自动回退。
+- 完善 Cursor 会话路由、重连读取和常规工具白名单接入；实际审批仍受宿主策略控制。
+- 本机风险统计读取 Codex 与 Cursor 数据，可分别筛选或汇总；保留来源与处置，不跨编辑器合并去重。
+- 保留候选原始命中与 Agent 复核结论，误报排除不等于修复；修复沿原风险复查。
+- 更新发布验收与当前默认扫描器设计，并修复较大修复凭证的响应交付问题。
+
+Mac 自动安装单独使用已公开的 `macos-trial-v0.3.10`；它早于本次原生正式包构建，版本相同不代表提交和构建相同。脚本由文档部署直接取仓库 `distribution/macos/install.sh`，与两种架构的配套资产核对。
+
+以下保留历史记录，不作为当前安装或默认流程说明。
+
 ## 0.3.9 · 正式版
 
 2026-10-21：[v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 已公开，三平台正式版完整包对应源码 `fa1a26b`。[成功的发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39623506500)完成 Windows/macOS 当前改动的定向回归、合规、包完整性及三平台原生验收，未重复全库回归。完整包与 Mac 独立自动安装分别构建和校验，入口见[下载页](../downloads.md)。

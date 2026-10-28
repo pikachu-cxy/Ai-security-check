@@ -2,6 +2,8 @@
 
 Full integration configures the user-level MCP connection, companion Skill, edit-event Hooks, and the routine-tool allowlist, then starts scanner preparation. Installation does not scan or modify your project. Start with a local, single-root Git workspace; remote and multi-root workflows are not listed as validated.
 
+Current official native bundles: **0.3.10**.
+
 ## Windows {#windows}
 
 [Download and verify the Windows x64 bundle](../../downloads.md#windows). Fully extract it and keep the complete `security-check` directory. From its parent directory, run in PowerShell:
@@ -20,7 +22,7 @@ Run in Terminal:
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
 ```
 
-[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh). It detects Apple Silicon or Intel and prepares dedicated Python without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-macos-trial`.
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) and its [SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256). Documentation deployment copies the maintained repository script directly. It detects Apple Silicon or Intel and prepares dedicated Python without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-macos-trial`.
 
 This uses the separate `macos-trial-v0.3.10` / Runtime 0.3.10 release. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
 
@@ -45,3 +47,7 @@ Completely quit and reopen Cursor. In a new project chat, follow [installation v
 Whether routine tool calls need confirmation still depends on Cursor's mode and team policy. Fixes require your explicit authorization. Full integration describes installed components, not proof that every Cursor version, model, and desktop flow has passed acceptance. See [support](../../reference/support.md).
 
 [Preparation and upgrades](../installation.md) · [Removal](../installation.md#uninstall) · [Daily workflow](../workflow.md)
+
+## Reconnect and read saved results
+
+Keep the original check reference and read it and its dispositions after reconnecting in the same chat, without rescanning. Hooks provide session ownership; users do not enter credentials and agents must not invent them. Default scans cover recorded files; related business logic is reviewed by the agent as needed. The managed macOS release predates the native 0.3.10 build and has its own source identity.

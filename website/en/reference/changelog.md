@@ -2,6 +2,21 @@
 
 Source versions, published assets, CI acceptance, and real desktop validation are tracked separately. See [downloads](../downloads.md) and the original [engineering progress (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/DEVELOPMENT_PROGRESS.md).
 
+## 0.3.10 · Official release
+
+Published on 2026-10-28 UTC: [v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10), with three native bundles from `082b9c1`. The [successful release workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/40706996250) completed focused regressions, installation checks, and native package acceptance. See [downloads and evidence](../downloads.md#build-details).
+
+- Default development records edited files and scans at closeout without a project-wide baseline; strict audits retain their protocol.
+- OpenGrep code rules, Gitleaks secrets, and Trivy dependencies are the defaults. OSV is not an automatic fallback.
+- Cursor session routing, reconnect reads, and routine-tool allowlist integration; host approval policies still apply.
+- Local risk statistics read Codex and Cursor records, separately or together, preserving source and disposition without cross-editor deduplication.
+- Raw candidates and agent review remain distinct; fixes are verified against the original risk.
+- Release acceptance follows the current scanner design; larger repair-ticket delivery is preserved within response limits.
+
+Managed macOS installation separately uses the public `macos-trial-v0.3.10` build, which predates the native release. Matching version numbers do not establish the same source or build. Documentation deployment copies `distribution/macos/install.sh` directly and checks both architecture assets.
+
+The following entries are historical, not current installation instructions.
+
 ## 0.3.9 · Official release
 
 Published on 2026-10-21: [v0.3.9](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9), with native bundles built from `fa1a26b`. The [successful release run](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39623506500) completed focused Windows/macOS regressions, compliance, integrity, and native acceptance on all three platforms; it did not rerun the complete development suite. Native bundles and managed macOS installation have separate identities. See [downloads](../downloads.md).

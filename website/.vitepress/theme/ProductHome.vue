@@ -3,7 +3,7 @@ import { withBase } from 'vitepress'
 import InstallRequest from './InstallRequest.vue'
 
 const steps = [
-  { number: '01', title: '检查本次改动', text: '从编辑前的真实工作区开始，记录新增、修改与删除，保留已有改动的边界。' },
+  { number: '01', title: '检查本次改动', text: '编辑时记录涉及路径，开发收尾时合并检查这些文件，不建立全项目基线。' },
   { number: '02', title: '解释风险依据', text: '结合静态检查与宿主 Agent 的有限上下文复核，说明问题、防护、影响和未知项。' },
   { number: '03', title: '由你决定处理', text: '选择具体问题后批准修复；也可以稍后处理，或根据证据排除并保留记录。' },
   { number: '04', title: '沿原问题复查', text: '将修复与原问题关联，区分已解决、仍存在和证据不足，不用新任务覆盖旧结论。' }
@@ -14,12 +14,12 @@ const steps = [
   <main id="main-content" class="product-home">
     <section class="hero-section" aria-labelledby="product-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / 0.3.9</p>
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / 0.3.10</p>
         <h1 id="product-title">让 AI 写代码，<br>也让风险<span>有据可查。</span></h1>
         <p class="hero-description">在 Codex、Cursor 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
         <div class="hero-coverage" aria-label="当前语言与检测覆盖">
-          <strong>代码规则覆盖 Java、Python、JavaScript / TypeScript</strong>
-          <p>56 条独立规则 · 48 条默认启用。Vue 单文件组件、Go、PHP 等暂无自带 SAST 规则；密钥与依赖检查另有范围。</p>
+          <strong>OpenGrep 代码规则 · Gitleaks 密钥 · Trivy 依赖</strong>
+          <p>按实际文件和已安装规则选择检查；Agent 结合业务逻辑复核候选，结果保留真实覆盖与限制。</p>
           <a :href="withBase('/reference/support.html#语言覆盖')">查看语言、框架与检测覆盖 →</a>
         </div>
         <div class="hero-actions">
@@ -32,7 +32,7 @@ const steps = [
         <div class="example-heading"><span class="example-dots" aria-hidden="true">● ● ●</span><span>一次开发任务 / 示例</span><span class="example-tag">REVIEW</span></div>
         <div class="example-body">
           <p class="example-user">“给项目增加一个文件下载接口。”</p>
-          <div class="example-event"><span aria-hidden="true">✓</span> 已记录编辑前版本</div>
+          <div class="example-event"><span aria-hidden="true">✓</span> 已记录本次编辑文件</div>
           <div class="example-event"><span aria-hidden="true">✓</span> 已检查改动及必要关联代码</div>
           <div class="example-finding">
             <div class="finding-label">需要你关注</div>
@@ -59,7 +59,7 @@ const steps = [
       <div class="architecture-copy"><p class="eyebrow">CLEAR RESPONSIBILITIES</p><h2 id="architecture-title">Agent 理解代码，<br>Runtime 管理证据。</h2><p>扫描器提供实际执行结果；宿主 Agent 读取必要上下文、解释和修复；Runtime 核对范围、版本、授权及原问题记录。</p><a class="text-link" :href="withBase('/guide/workflow.html')">查看完整流程 <span aria-hidden="true">→</span></a></div>
       <dl class="responsibilities">
         <div><dt>你的编程助手</dt><dd>理解需求、分析上下文、执行已批准的修改</dd></div>
-        <div><dt>本地 Runtime</dt><dd>任务基线、扫描编排、证据、状态与复查</dd></div>
+        <div><dt>本地 Runtime</dt><dd>编辑记录、扫描编排、风险账本与复查</dd></div>
         <div><dt>检测能力</dt><dd>代码规则、有限数据流、密钥和依赖检查</dd></div>
       </dl>
     </section>
@@ -72,6 +72,6 @@ const steps = [
       </div>
     </section>
 
-    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">了解这次检查覆盖了什么。</h2><p>检查结果会说明发现的问题、实际覆盖范围和未完成项。当前正式版为 0.3.9，各系统与编辑器的验证记录见支持范围；零发现不代表整个项目安全。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
+    <section class="scope-section" aria-labelledby="scope-title"><h2 id="scope-title">了解这次检查覆盖了什么。</h2><p>检查结果会说明发现的问题、实际覆盖范围和未完成项。当前正式版为 0.3.10，各系统与编辑器的验证记录见支持范围；零发现不代表整个项目安全。</p><div><a :href="withBase('/reference/support.html')">支持范围</a><a :href="withBase('/reference/privacy.html')">数据与隐私</a><a :href="withBase('/reference/changelog.html')">版本与进展</a></div></section>
   </main>
 </template>

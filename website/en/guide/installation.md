@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.9 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.10**. This page covers status queries, component preparation, upgrades, and removal.
+For the **0.3.10 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.10**. This page covers status queries, component preparation, upgrades, and removal.
 
 ## Select the correct executable {#runtime-path}
 
@@ -71,7 +71,7 @@ For manual MCP setup or a specific preparation diagnostic, use:
 
 This prepares scanning engines and vulnerability data. It does not install business-project dependencies or start a project service. For a manual macOS bundle, use the corresponding executable from the path table.
 
-Version 0.3.9 distinguishes missing tools, unverifiable execution identity, missing local OSV databases, expired data, and an unknown update time. Prepare missing components online or follow the specific data diagnostic, then retry. Installing OSV alone does not populate its local databases. Online preparation may create independent managed Semgrep for an unverified auto-discovered system tool; explicitly chosen paths and broken managed installations keep their diagnostics. Initial macOS Semgrep validation has a longer cold-start allowance within the overall preparation budget; ordinary status probes remain bounded.
+Default preparation covers OpenGrep, Gitleaks, and Trivy. Missing tools, unverifiable identity, missing or stale vulnerability data, and unknown freshness retain separate diagnostics. Semgrep and OSV remain compatibility or explicit-use options, not required default readiness checks. Trivy failure does not automatically fall back to OSV.
 
 ## macOS startup {#macos-startup}
 

@@ -5,7 +5,7 @@ description: Review changes, understand risks, approve fixes, and verify the ori
 hero:
   name: AI Security Runtime
   text: AI writes code. Keep security evidence in the workflow.
-  tagline: Version 0.3.9 for Windows and Mac. Code rules cover defined Java, Python, and JavaScript/TypeScript subsets. 56 distinct rules, 48 default-on. Vue SFC, Go, PHP, and other languages have no corresponding bundled SAST rules; secret and dependency checks have separate scope.
+  tagline: Version 0.3.10 for Windows and Mac. OpenGrep code checks, Gitleaks secrets, Trivy dependencies, and evidence-backed agent review of your recorded files.
   image:
     src: /logo.svg
     alt: AI Security Runtime
@@ -21,11 +21,13 @@ hero:
       link: /en/reference/support#languages
 features:
   - title: Review the actual changes
-    details: Start with the real workspace before editing, then check additions, modifications, and deletions with necessary context.
+    details: Record affected files during editing and scan the combined scope at closeout, without a project-wide baseline.
   - title: Understand the evidence
     details: Scanners and your host agent explain the location, trigger conditions, existing safeguards, and remaining unknowns.
   - title: Choose what to fix
     details: Approve a specific fix, defer it, or record an exclusion with its rationale. Findings and user decisions remain distinct.
+  - title: Compare editor risk records
+    details: View local Codex and Cursor records separately or together, preserving their sources and handling decisions.
   - title: Verify the original finding
     details: Link fixes to their original risks. A new scan with zero findings does not replace verification of an earlier issue.
 ---

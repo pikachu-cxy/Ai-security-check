@@ -27,7 +27,7 @@ npm run docs:preview
 
 1. 将文档与工作流改动提交至默认分支 `feature/runtime-mvp`。
 2. 在仓库 **Settings → Pages → Build and deployment** 将 Source 设为 **GitHub Actions**。
-3. 文档工作流先运行 `npm ci` 和站点构建；默认分支的非 PR 构建才进入 Pages 部署，PR 只构建。
+3. 文档工作流先运行 `npm ci` 和站点构建，同步仓库的 Mac 安装脚本及其 SHA256，并检查正式版和 Mac 独立发行下载是否公开；默认分支的非 PR 构建才进入 Pages 部署，PR 只构建。
 4. 在 Actions 确认部署成功后，再把站点视为已上线。
 
 默认项目站已于 2026-10-19 首次部署成功：[pikachu-cxy.github.io/Ai-security-check/](https://pikachu-cxy.github.io/Ai-security-check/)。后续工作树编辑仍需推送并确认部署成功，不能将本地预览视为公开更新。自定义域名需要另行配置 DNS、Pages 域名与 `DOCS_BASE=/`。
@@ -43,6 +43,6 @@ npm run docs:preview
 - 版本能力以真实源码、构建身份与验证证据为准，不把路线图写成已交付功能。
 - 新版候选包、CI 产物、正式 Release 和手工验收分别记录。
 - 公开 Release 上传后，更新下载页的真实链接与对应校验文件。
-- 同时核对页脚、复制安装请求、公共重定向页、中英文日常使用和 FAQ，不能只更新下载链接。产品版本与 Mac 独立发行标识分别维护；当前为 0.3.9 / `macos-trial-v0.3.9.3`。
+- 同时核对页脚、复制安装请求、公共重定向页、中英文日常使用和 FAQ，不能只更新下载链接。产品版本与 Mac 独立发行标识分别维护；当前为 0.3.10 / `macos-trial-v0.3.10`。
 - 使用指南描述当前操作，旧版本能力与验收记录保留在更新日志；源码提交、成功的发布工作流及清单必须对应同一发行，不能引用取消或失败候选的记录。
 - 不在文档中放入私有路径、密钥、原始诊断或不真实的性能与用户数据。

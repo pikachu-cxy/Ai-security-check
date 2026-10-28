@@ -1,7 +1,7 @@
 # 下载与安装
 
-::: info 这个产品能检查哪些语言？
-**代码规则覆盖 Java、Python、JavaScript / TypeScript 的明确子集**，56 条独立规则、48 条默认启用。Vue 单文件组件、Go、PHP 等暂无自带 SAST 规则；密钥与依赖检查分别计算。[下载前查看完整语言覆盖 →](./reference/support.md#语言覆盖)
+::: info 当前检测能力
+默认使用 OpenGrep 按已安装规则包选择语言规则，配合原生有界分析、Gitleaks 密钥检查和 Trivy 依赖检查。覆盖以本次实际执行的文件与规则为准。 [查看检测范围 →](./reference/support.md#语言覆盖)
 :::
 
 选择编辑器后，按同一页面中的 Windows 或 macOS 步骤安装，再重启并验证连接。
@@ -15,17 +15,17 @@ WorkBuddy 和其他 MCP 客户端按[对应接入指南](./guide/quickstart.md#c
 
 ## Windows 完整包 {#windows}
 
-当前为 **0.3.9 正式版**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
+当前为 **0.3.10 正式版**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
 
 | 平台 | 安装包 | 校验 |
 | --- | --- | --- |
-| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip.sha256) |
+| Windows x64 | [下载 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-windows-x64.zip.sha256) |
 
 在下载目录的 PowerShell 中对照摘要：
 
 ```powershell
-Get-FileHash .\ai-security-runtime-v0.3.9-windows-x64.zip -Algorithm SHA256
-Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
+Get-FileHash .\ai-security-runtime-v0.3.10-windows-x64.zip -Algorithm SHA256
+Get-Content .\ai-security-runtime-v0.3.10-windows-x64.zip.sha256
 ```
 
 然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。旧版本升级或从源码开发版切换时，下载本页完整包和配套校验文件，重启编辑器后核对实际程序路径、来源提交与 `build_id`。
@@ -46,14 +46,14 @@ Get-Content .\ai-security-runtime-v0.3.9-windows-x64.zip.sha256
 
 | 芯片 | 完整安装包 | 校验 |
 | --- | --- | --- |
-| Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz.sha256) |
-| Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz.sha256) |
+| Apple Silicon | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-arm64.tar.gz.sha256) |
+| Intel | [下载 tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-x64.tar.gz.sha256) |
 
 在包与 `.sha256` 文件所在目录执行，Intel 将文件名中的 `macos-arm64` 换成 `macos-x64`：
 
 ```sh
-shasum -a 256 -c ai-security-runtime-v0.3.9-macos-arm64.tar.gz.sha256
-tar -xzf ai-security-runtime-v0.3.9-macos-arm64.tar.gz
+shasum -a 256 -c ai-security-runtime-v0.3.10-macos-arm64.tar.gz.sha256
+tar -xzf ai-security-runtime-v0.3.10-macos-arm64.tar.gz
 ./security-check/security-check install codex
 # Cursor 用户将上一行的 codex 替换为 cursor
 ```
@@ -66,14 +66,14 @@ tar -xzf ai-security-runtime-v0.3.9-macos-arm64.tar.gz
 
 ## 构建与验收记录 {#build-details}
 
-**0.3.9 正式版完整包**：2026-10-21 公开发布，[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的三平台包均对应源码提交 [`fa1a26b`](https://github.com/pikachu-cxy/Ai-security-check/commit/fa1a26bbc4db4eb8faae7281b689ec3205f10c26)。[本次成功的发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/39623506500)完成当前改动相关的 Windows/macOS 定向回归、合规、包完整性与三平台原生验收，未重复执行全库回归。以配套发行清单、校验值和验收证据为准，不沿用更早候选构建的记录。
+**0.3.10 正式版完整包**：2026-10-28 公开发布，[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 的三平台包均对应源码提交 [`082b9c1`](https://github.com/pikachu-cxy/Ai-security-check/commit/082b9c16c3ed823220f457677b823c64feae695a)。[本次成功的发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/40706996250)完成当前改动相关的 Windows/macOS 定向回归、合规、包完整性与三平台原生验收，未重复执行全库回归。以配套发行清单、校验值和验收证据为准，不沿用更早候选构建的记录。
 
-[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-release-evidence.zip)
+[完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-release-evidence.zip)
 
 **Mac 自动安装**：独立发行 [macos-trial-v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.10)，Runtime 版本 0.3.10。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
-本版包含[一键监控与导出报告](./guide/context-cost.md)、完整脱敏长行保存与分片交付、Semgrep 执行身份核对和受管环境准备，以及更明确的组件与漏洞数据诊断。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
+本版包含[一键监控与导出报告](./guide/context-cost.md)、完整脱敏长行保存与分片交付、OpenGrep 默认代码检查、记录文件的轻量开发检查和跨编辑器风险统计，以及更明确的组件与漏洞数据诊断。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
 
 ### 历史版本
 
-旧版本的发布、构建与验收记录见[版本与进展](./reference/changelog.md)。本页安装入口统一使用当前 0.3.9，旧版本记录不作为当前下载或安装依据。
+旧版本的发布、构建与验收记录见[版本与进展](./reference/changelog.md)。本页安装入口统一使用当前 0.3.10，旧版本记录不作为当前下载或安装依据。
