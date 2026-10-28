@@ -54,6 +54,16 @@ def test_artifact_gate_accepts_successful_declared_inventory_with_partial_graph(
     verify_artifact.verify_sample_scan(declared_sample(), dependency=True)
 
 
+def test_complete_declared_inventory_does_not_claim_a_transitive_graph():
+    value = declared_sample()
+    value['coverage'] = 'FULL'
+    run = value['scanner_runs'][-1]
+    run['coverage_contract'] = 'FULL'
+    run['coverage_notes'] = []
+    assert run['dependency_inventory']['complete_dependency_graph_attested'] is False
+    verify_artifact.verify_sample_scan(value, dependency=True)
+
+
 @pytest.mark.parametrize('dependency', [False, True])
 def test_artifact_gate_accepts_current_native_dataflow_inventory(dependency):
     payload = declared_sample()

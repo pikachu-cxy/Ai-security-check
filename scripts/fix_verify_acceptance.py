@@ -1,4 +1,4 @@
-"""Actual local Semgrep acceptance on disposable synthetic Java, never Jeepay."""
+"""Actual local OpenGrep acceptance on disposable synthetic Java, never Jeepay."""
 import argparse
 import asyncio
 import json
@@ -9,13 +9,13 @@ from pathlib import Path
 from security_runtime.findings import FindingNormalizer
 from security_runtime.models import ScanContext, ScanMode, ScanResult
 from security_runtime.runtime import SecurityRuntime
-from security_runtime.scanners import ScannerRegistry, SemgrepAdapter
+from security_runtime.scanners import ScannerRegistry, OpenGrepAdapter
 from security_runtime.storage import SQLiteStore
 from security_runtime.target import TargetDetector
 from security_runtime.verification_policy import local_recheck
 from security_runtime.security_summary import SecuritySummaryService
 from security_runtime.tasks.fix import TaskFixService
-from security_runtime.sast import SemgrepEngineProvider
+from security_runtime.sast import OpenGrepEngineProvider
 from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
 if __package__:
     from .tls_impact_fixture import assess_tls_fixture
@@ -47,8 +47,8 @@ def write_task_sources(root, hostname=True, secondary=True):
     (root / 'OtherTls.java').write_text(source(vulnerable=secondary).replace('class Fixture', 'class OtherFixture'), encoding='utf-8')
 
 
-class FailingFixtureEngine(SemgrepEngineProvider):
-    # A real Semgrep subprocess deliberately rejects this invalid flag.
+class FailingFixtureEngine(OpenGrepEngineProvider):
+    # A real OpenGrep subprocess deliberately rejects this invalid flag.
     verification_offline = verification_scope_complete = True
 
     def command(self, executable, request):
@@ -62,7 +62,7 @@ async def native_sdk_acceptance(executable):
         root, store = acceptance_workspace(temporary)
         file = root / 'Tls.java'
         write_task_sources(root)
-        adapter = SemgrepAdapter()
+        adapter = OpenGrepAdapter()
         with local_recheck():
             found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java', 'OtherTls.java')), FindingNormalizer(root))
         assert run.status == 'SUCCESS' and len(found) == 2, run
@@ -129,7 +129,7 @@ def run_acceptance():
         root, store = acceptance_workspace(temporary)
         file = root / 'Tls.java'
         file.write_text(source(), encoding='utf-8')
-        adapter = SemgrepAdapter()
+        adapter = OpenGrepAdapter()
         profile = TargetDetector().detect(root, ['Tls.java'])
         with local_recheck():
             found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java',)), FindingNormalizer(root))
@@ -171,7 +171,7 @@ def run_acceptance():
         write_task_sources(root, False, False)
         complete = [service.verify(task['task_ref'], root) for task in tasks]
         assert all(r['status'] == 'SCANNER_VERIFIED_RESOLVED' for r in complete), complete
-        broken = SemgrepAdapter(engine_provider=FailingFixtureEngine())
+        broken = OpenGrepAdapter(engine_provider=FailingFixtureEngine())
         failure = [TaskFixService(store, ScannerRegistry([broken])).verify(task['task_ref'], root) for task in tasks]
         assert all(r['status'] == 'INCONCLUSIVE' for r in failure), failure
         assert all(m['scanner_runs'][0]['status'] == 'FAILED' for r in failure for m in r['members'])
@@ -182,7 +182,7 @@ def run_acceptance():
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--executable', type=Path, help='Additionally verify actual installed/native MCP SDK with real Semgrep')
+    parser.add_argument('--executable', type=Path, help='Additionally verify actual installed/native MCP SDK with real OpenGrep')
     args = parser.parse_args()
     print('Fix verification stage: local synthetic scanner cases', flush=True)
     record = run_acceptance()

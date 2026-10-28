@@ -20,6 +20,9 @@ def isolated_state(tmp_path, monkeypatch):
 
 
 def prepared(service, *, capture=False):
+    import os
+    if capture and os.name != 'posix':
+        pytest.skip('Opt-in capture publication requires POSIX private-state guarantees')
     old, root, engine = service
     task = TaskSecurityService(engine, old.hooks, owner=session_owner('codex', 'review-control'),
         frozen_body_contexts=capture, capture_sources=capture)

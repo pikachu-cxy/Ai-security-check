@@ -218,11 +218,17 @@ class ReviewMetadataStore:
                 stream.flush()
                 os.fsync(stream.fileno())
             os.link(temporary, self.marker, follow_symlinks=False)
-            parent = os.open(self.path.parent, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0))
-            try:
-                os.fsync(parent)
-            finally:
-                os.close(parent)
+            # Windows cannot open a directory through the CRT os.open API.
+            # Keep the flushed file and exclusive hard-link publication on
+            # both platforms; POSIX additionally persists the directory entry.
+            # Missing/incomplete publication still fails the signed registry
+            # checks on reopen rather than adopting an unrelated database.
+            if os.name != 'nt':
+                parent = os.open(self.path.parent, os.O_RDONLY | getattr(os, 'O_DIRECTORY', 0) | getattr(os, 'O_NOFOLLOW', 0))
+                try:
+                    os.fsync(parent)
+                finally:
+                    os.close(parent)
         finally:
             Path(temporary).unlink(missing_ok=True)
 
@@ -333,7 +339,8 @@ class ReviewMetadataStore:
                     pass  # Another explicit initializer won; validate below.
             info = self._private(self.path)
             pinned = [info.st_dev, info.st_ino]
-            uri = self.path.as_uri() + ('?mode=rw' if write else '?mode=ro')
+            from ..closeout_state import database_uri
+            uri = database_uri(self.path, mode='rw' if write else 'ro')
             db = sqlite3.connect(uri, uri=True, timeout=15, isolation_level=None)
             # Reject corrupt oversized records inside SQLite, before a Python
             # SELECT could materialize them. Legacy task bodies are not read

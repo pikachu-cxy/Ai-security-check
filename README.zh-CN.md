@@ -6,7 +6,7 @@
 
 当前开发源码默认采用 **轻量 AI 编辑检查**：Hook 只记录已观测到的编辑文件，不启动扫描；开发收尾时后台合并检查一次，再由 Agent 分析发现和安全相关改动。普通开发不建立全项目基线、不做整个工作区快照；扫描器只为所选输入固定版本，结果保留实际范围、版本和缺口。后续编辑保持待检查，写完后再次收尾。范围未知不静默扩大为全项目扫描。显式完整差异审计、已有严格任务和原生风险修复保留原契约。公开安装包的行为以实际构建为准；设计与边界见[轻量开发检查](docs/LIGHTWEIGHT_DEVELOPMENT_CHECK.zh-CN.md)。
 
-当前源码版本为 **0.3.9 / 正式版**，公开安装包以 [v0.3.9 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
+当前源码交付目标为 **0.3.10**；正式安装包仅在发布门禁通过后公开，公开安装包以 [v0.3.10 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
 
 当前开发源码支持在聊天中说 **“打开风险统计”**，查看本机已保存的项目风险。页面只读，不启动扫描或修改处置；历史记录可能重复或缺少当前处置状态。公开安装包是否包含此功能以其实际构建为准。
 
@@ -22,7 +22,7 @@
 
 ## 当前源码状态
 
-0.3.9 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
+0.3.10 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
 
 监控是可选模块：失败、停止或从源码交付中整体移除，不改变扫描、任务复核和修复授权。报告区分聊天 token、工具耗时和观察窗口时长；不能可靠拆分的纯开发 / 纯安全 token 保持未知。
 
@@ -35,9 +35,9 @@
 该版本同时包含已有兼容与恢复修复：
 
 - Windows 扫描私有输入路径过长导致进程启动失败；固定输入、规则和产物继续保留权限、身份与清理校验。
-- Windows Semgrep 使用独立的短私有临时目录，处理超长或中文 TEMP；就绪探测包含有界合成扫描，区分本地通信权限与组件下载失败。
-- macOS 托管 Semgrep 的解释器链接仅允许指向匹配固定版本、清单与实际字节校验的托管 Python；外部链接仍被拒绝。
-- Cursor 会话基线捕获失败时保留明确失败原因，不重复捕获或发布不可核验基线。
+- 历史显式 Semgrep 模式在 Windows 使用独立的短私有临时目录，处理超长或中文 TEMP；就绪探测包含有界合成扫描，区分本地通信权限与组件下载失败。
+- 历史显式 Semgrep 模式在 macOS 的托管 Semgrep 的解释器链接仅允许指向匹配固定版本、清单与实际字节校验的托管 Python；外部链接仍被拒绝。
+- 显式历史基线流程中，Cursor 会话基线捕获失败时保留明确失败原因，不重复捕获或发布不可核验基线。
 - 执行初始化、发布锁竞争、中断及取消后的恢复；已完成结果沿原任务恢复，不重复扫描或消耗预算。
 - 风险交付保留位置、问题、可能影响、建议与未知，随用户语言自然表达；历史查询不重复索取处置选择。
 - 静态发现与代码复核风险共用当前处置投影；处置暂时不可读时保留详情并标记未知。
@@ -69,17 +69,17 @@ if ($LASTEXITCODE -ne 0) { throw '接入未完成，请保留诊断' }
 
 首次准备需要下载扫描组件和漏洞数据，不安装你的项目依赖或启动项目服务。preparation status / watch 显示准备状态；准备成功不代表项目已检查。
 
-Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临时目录中的短私有子目录；特殊账户可将 `SECURITY_RUNTIME_ENGINE_TEMP_ROOT` 指向项目外已存在的短本地目录。路径仍超限或权限不足时会返回具体诊断。沙箱拒绝本地通信时，应在获准支持该能力的环境执行检查。[设计与边界](docs/ARCHITECTURE.md#windows-native-engine-execution)
+Windows 默认使用原生 OpenGrep，无需修改系统 TEMP/TMP。历史显式 Semgrep 模式使用当前用户本地临时目录中的短私有子目录；特殊账户可将 `SECURITY_RUNTIME_ENGINE_TEMP_ROOT` 指向项目外已存在的短本地目录。路径仍超限或权限不足时会返回具体诊断。沙箱拒绝本地通信时，应在获准支持该能力的环境执行检查。[设计与边界](docs/ARCHITECTURE.md#windows-native-engine-execution)
 
 ## 使用完整安装包
 
-[v0.3.9 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.9) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
+[v0.3.10 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
 
-- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip)
-- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz)
-- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz)
+- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-windows-x64.zip)
+- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-arm64.tar.gz)
+- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-x64.tar.gz)
 
-三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
+三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，在解压目录执行下列命令。由 Codex 辅助安装时保留当前聊天，安装及准备完成后再退出并重启，使新连接生效：
 
@@ -102,16 +102,11 @@ Windows 无需修改系统 TEMP/TMP。Semgrep 自动使用当前用户本地临�
 
 ## 语言与检测覆盖
 
-0.3.9 自带规则包 `ai-security-core 1.3.2`，共 **56 条独立代码规则，48 条默认启用**：
+当前默认代码扫描器为 **OpenGrep 1.32.0**，自带 `opengrep-rules` 固定到提交 `f1d2b562b414783763fd02a6ed2736eaed622efa`，共 1,934 个上游 YAML 文件、2,007 条规则。执行时按实际输入选择适用规则；仍支持用户指定规则目录。旧的第一方 `ai-security-core` 规则包不再随包分发，历史 Semgrep 结果仍可读取。
 
-| 语言 / 文件 | 默认启用 / 已安装 | 覆盖边界 |
-| --- | --- | --- |
-| Java `.java` | 26 / 34 | 部分 JDK、Spring、MyBatis、JPA / Hibernate、Apache API；适用的 MyBatis XML 规则计入 Java |
-| Python `.py` | 16 / 16 | 部分标准库、Flask、Django、Requests / HTTPX、PyYAML、PyJWT、lxml 模式 |
-| JavaScript `.js` / `.jsx`、TypeScript `.ts` / `.tsx` | 共用 6 / 6 | 部分 Express / Node.js 的 SQL、命令、SSRF、路径与文件读写；共享规则只计一次 |
-| Vue `.vue`、Go、PHP、C / C++、C#、Ruby、Rust 等 | 无自带对应 SAST 规则 | 宿主 AI 可以分析代码，但不能据此认为已执行这些语言的扫描规则 |
+规则涉及多种语言和框架，数量不代表完整语言覆盖或检测准确率。每次结果以实际执行规则、扫描文件与解析缺口为准。Vue 以实际支持的脚本投影范围报告，不据此宣称整个组件均已检查。
 
-Java 的 8 条实验规则默认关闭。规则数量不代表完整语言、框架、OWASP 或生产准确率覆盖。Gitleaks 按模式检查纳入范围的文本文件，与代码语言规则分开；依赖输入当前包括 Python、npm/Yarn/pnpm、Maven/Gradle、Go 的清单或锁文件，识别文件名不保证完整依赖图。Composer、Cargo、Bundler、.NET 清单尚未纳入本产品依赖输入清单。
+Gitleaks 执行密钥检查；Trivy 执行受支持依赖输入的漏洞检查。Trivy 不可用时报告检查缺口，默认流程不会自动调用 OSV 接替。OSV 安装和适配代码仅保留为显式调用或历史兼容用途。
 
 完整规则方向、文件范围和依据见[当前产品覆盖说明](docs/PRODUCT_COVERAGE.zh-CN.md)及[文档站语言矩阵](website/reference/support.md#语言覆盖)。零发现不证明项目安全；不完整范围和失败原因应如实保留。检查在本机运行，语义分析由宿主 Agent 完成。
 

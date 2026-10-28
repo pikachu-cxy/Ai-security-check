@@ -13,13 +13,16 @@ on:
 
 jobs:
   tests:
-    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v0.3.9]')
+    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v')
     name: Runtime tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-15]
     runs-on: ${{ matrix.os }}
+    concurrency:
+      group: runtime-tests-${{ github.workflow }}-${{ github.ref }}-${{ matrix.os }}
+      cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
     env:
       SECURITY_RUNTIME_OFFLINE: '1'
       SECURITY_RUNTIME_CI_NODE_VERSION: '24.16.0'

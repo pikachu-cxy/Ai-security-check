@@ -59,9 +59,11 @@ def test_runtime_version_and_semgrep_delivery(capsys):
 def test_current_install_examples_follow_single_version_source():
     root = Path(__file__).resolve().parents[2]
     readme = (root / 'README.md').read_text(encoding='utf-8')
+    chinese = (root / 'README.zh-CN.md').read_text(encoding='utf-8')
     guide = (root / 'docs/PILOT_INSTALL_AND_USE.zh-CN.md').read_text(encoding='utf-8')
     for platform, extension in [('windows-x64', '.zip'), ('macos-arm64', '.tar.gz'), ('macos-x64', '.tar.gz')]:
         assert f'ai-security-runtime-v{__version__}-{platform}{extension}' in readme
+        assert f'ai-security-runtime-v{__version__}-{platform}{extension}' in chinese
     assert f'ai-security-runtime-v{__version__}-macos-arm64.tar.gz' in guide
     assert f'{__version__} / Official release' in readme
 

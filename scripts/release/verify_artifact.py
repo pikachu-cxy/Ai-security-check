@@ -251,13 +251,14 @@ def verify_sample_scan(payload, *, dependency=False):
         expected['native-dataflow'] = 'SUCCESS' if dependency else 'NOT_APPLICABLE'
     if {name: item['status'] for name, item in runs.items()} != expected:
         raise ValueError('Sample scan has unexpected engine execution: ' + json.dumps(payload['scanner_runs']))
-    if payload.get('coverage') != ('PARTIAL' if dependency else 'FULL'):
+    expected_coverage = runs['trivy-vuln'].get('coverage_contract') if dependency else 'FULL'
+    if expected_coverage not in {'FULL', 'PARTIAL'} or payload.get('coverage') != expected_coverage:
         raise ValueError('Sample scan has unexpected declared scope: ' + str(payload.get('coverage')))
     if dependency:
         run = runs['trivy-vuln']
         inventory = run.get('dependency_inventory', {})
         coordinates = inventory.get('package_coordinates', [])
-        if (run.get('coverage_contract') != 'PARTIAL' or not run.get('coverage_notes')
+        if ((run.get('coverage_contract') == 'PARTIAL' and not run.get('coverage_notes'))
                 or inventory.get('vulnerability_db_freshness') != 'FRESH'
                 or inventory.get('complete_dependency_graph_attested') is not False
                 or inventory.get('inventory_truncated') is not False
@@ -303,7 +304,10 @@ def verify_global_ownership(executable: Path, root: Path, env: dict[str, str]) -
     environment = {**env, 'CODEX_HOME': str(home), 'SECURITY_RUNTIME_CODEX_HOME': str(home),
                    'SECURITY_RUNTIME_SKILLS_DIR': str(home / 'skills')}
     def cli(action):
-        return json.loads(run([str(executable), action, '--json'], cwd=root, env=environment).stdout)
+        # Installation includes multiple separately bounded runtime/MCP probes.
+        # Let the product return its diagnostic before the harness kills it.
+        return json.loads(run([str(executable), action, '--json'], cwd=root, env=environment,
+                              timeout=180 if action in {'setup', 'repair'} else 60).stdout)
     installed = cli('setup')
     if installed['overall'] != 'CONFIGURED' or installed['mcp']['ownership_state'] != 'OWNED_AND_CURRENT':
         raise ValueError('Global semantic ownership install failed')
