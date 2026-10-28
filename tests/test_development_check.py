@@ -174,20 +174,48 @@ def test_unknown_and_deleted_scope_never_expand_to_project(check, monkeypatch):
     assert execute(check, monkeypatch) == 0
     result = service.get(root, ref)
     assert result['status'] == 'PARTIAL' and result['scan_id']
-    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['gaps']
+    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['observation_notes']
+    assert 'UNOBSERVED_PATHS_POSSIBLE' not in result['gaps']
     assert 'DELETED_PATH_SEMANTICS_NOT_REVIEWED' in result['gaps']
     assert 'OBSERVED_FILES_NOT_SCANNED' in result['gaps']
     assert all('unobserved.ts' not in names for names in state['inputs'])
+
+
+def test_recorded_files_complete_despite_unknown_observation_scope(check, monkeypatch):
+    from security_runtime import development_check_worker
+    scan = development_check_worker._scan
+    def complete_scope(*args, **kwargs):
+        # Isolate completion policy from the fixture scanner's coverage limits.
+        result = scan(*args, **kwargs)
+        return dict(result, gaps=[], status='COMPLETED', coverage='FULL')
+    monkeypatch.setattr(development_check_worker, '_scan', complete_scope)
+    root, service, runtime, state = check
+    ref = service.begin(root, 'recorded-only')['check_ref']
+    service.record(root, ref, ['app.ts'], scope_unknown=True)
+    assert execute(check, monkeypatch) == 0
+    result = service.get(root, ref)
+    assert result['status'] == 'RESULTS_READY' and result['gaps'] == []
+    assert result['scope']['scope_unknown']
+    assert result['dirty_seq'] == result['scanned_seq']
+    assert state['calls'] == 1
+    # Read old persisted PARTIAL states using the same recorded-file policy.
+    store = service.store(root)
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, state='PARTIAL'))
+    assert service.get(root, ref)['status'] == 'RESULTS_READY'
+    assert state['calls'] == 1
 
 
 def test_unknown_only_never_constructs_runtime(check, monkeypatch):
     root, service, runtime, state = check
     ref = service.begin(root, 'unknown-only')['check_ref']
     service.record(root, ref, [], scope_unknown=True)
-    assert execute(check, monkeypatch) == 0
+    service.finish(root, ref)
     result = service.get(root, ref)
-    assert state['calls'] == 0 and result['status'] == 'PARTIAL'
-    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['gaps']
+    assert state['calls'] == 0 and result['status'] == 'NO_OBSERVED_CHANGES'
+    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['observation_notes']
+    assert 'UNOBSERVED_PATHS_POSSIBLE' not in result['gaps']
 
 
 def test_result_reads_do_not_rehash_dispatch_or_scan(check, monkeypatch):
@@ -331,19 +359,21 @@ def test_manifest_only_complete_scope_is_not_a_scanner_gap(check, monkeypatch):
     from security_runtime.capabilities import Capability
     from security_runtime.models import ScannerRun
     root, service, old_runtime, state = check
-    (root/'package.json').write_text('{"name":"fixture","dependencies":{}}')
+    # JSON now has applicable SAST rules. Use a plain dependency manifest to
+    # exercise complete non-SAST coverage without omitting a required scanner.
+    (root/'requirements.txt').write_text('requests==2.32.5\n')
     class ManifestScanner:
         name = scanner_id = 'fixture-manifest'
         capabilities = frozenset({Capability.SECRET_SCAN, Capability.DEPENDENCY_VULN})
         def supports(self, profile, context):
-            return 'package.json' in context.files
+            return 'requirements.txt' in context.files
         def scan(self, context, normalizer):
             from security_runtime.verification_policy import local_recheck_requested
             assert local_recheck_requested()
             return [], ScannerRun(self.name, 'fixture', 'SUCCESS', 0)
     runtime = SecurityRuntime(ScannerRegistry([ManifestScanner()], fallback_adapters=[]), old_runtime.store)
     ref = service.begin(root, 'manifest-only')['check_ref']
-    service.record(root, ref, ['package.json'])
+    service.record(root, ref, ['requirements.txt'])
     assert execute((root, service, runtime, state), monkeypatch) == 0
     result = service.get(root, ref)
     assert result['scan_status'] == 'COMPLETED' and result['scan_coverage'] == 'SCOPED'

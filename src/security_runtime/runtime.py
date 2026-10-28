@@ -326,7 +326,7 @@ class SecurityRuntime:
                     emit('RULE_PLAN_READY',scanner=adapter.name,message=f'{len(plan.rules)} 条适用规则 · {len(plan.files)} 个 SAST 文件')
                     if not plan.rules:
                         emit('SAST_NOT_COVERED',message='代码安全未执行：当前规则包没有适用于 ' + ' / '.join(plan.detected_languages) + ' 的规则')
-        _, selected = ScannerPlanner(self.registry).plan(profile, context)
+        _, selected = ScannerPlanner(self.registry).plan(profile, context, rule_plans)
         selected=[adapter for adapter in selected if adapter.name not in rule_plans or rule_plans[adapter.name].rules]
         if no_changes or not has_targets:
             selected = []
@@ -465,6 +465,8 @@ class SecurityRuntime:
         observed['timing_ms']['scanner_orchestration'] = milliseconds(stage_start)
         stage_start = time.perf_counter()
         wanted = requested_capabilities(profile, scan_mode, context.capability_files())
+        if any(plan.rules and plan.files for plan in rule_plans.values()):
+            wanted.add(Capability.CODE_SAST)
         if Capability.DEPENDENCY_VULN in wanted and not any(
                 Capability.DEPENDENCY_VULN in run.capabilities and run.status != RunStatus.NOT_APPLICABLE for run in runs):
             runs.append(ScannerRun('dependency-inputs', '', RunStatus.UNAVAILABLE, 0,

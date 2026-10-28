@@ -454,6 +454,14 @@ def _advisory(reason, readiness=None, claims=None, recovery=None):
     if (readiness or {}).get('reason_code') in BASELINE_REASONS:
         data['bootstrap_reason'] = readiness['reason_code']
     text = {'continue': True, 'systemMessage': message}
+    # Some MCP hosts expose only text content. Keep the fixed diagnostic
+    # visible there too, without reflecting exception strings or host claims.
+    safe_reason = reason if reason in WORKSPACE_REJECTIONS | {
+        'INVALID_HOST_CLAIMS', 'WORKSPACE_CLAIM_REQUIRED', 'INVALID_SESSION_CLAIM',
+        'SESSION_WORKSPACE_MISMATCH', 'WORKSPACE_INITIALIZING', 'WORKSPACE_DEGRADED',
+        'WORKSPACE_ERROR', 'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE',
+    } else 'WORKSPACE_OR_REFERENCE_REJECTED'
+    text['diagnostic'] = dict(status='INCONCLUSIVE', reason_code=safe_reason, scanner_run=False)
     if recovery is not None:
         data['configuration_recovery'] = recovery
         text['systemMessage'] += ' ' + recovery['message']
@@ -903,6 +911,9 @@ def create_global_server(*, workspaces=None, host='codex'):
                     if cause is None:
                         break
                 return _development_request_rejected()
+            if (not handler_entered and name in DEVELOPMENT_CHECK_TOOLS
+                    and binding_stage == 'VALIDATING_CONFIGURATION'):
+                return _development_request_rejected(workspace_rejection(exc, binding_stage))
             if handler_entered and name in TASK_REVIEW_TOOLS:
                 # Ownership, expired sessions, unsupported protocol versions and
                 # malformed review requests must not masquerade as a broken

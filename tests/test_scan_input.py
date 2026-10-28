@@ -263,6 +263,62 @@ def test_rule_overlay_keeps_source_root_and_finishes_new_identity_before_executi
             assert (final.execution_root / 'app.py').read_bytes() == b'original\n'
 
 
+@pytest.mark.skipif(os.name != 'nt', reason='Windows extended-path regression')
+def test_rule_overlay_preserves_readonly_files_beyond_max_path(workspace, monkeypatch):
+    import json
+    import yaml
+    from security_runtime.findings import FindingNormalizer
+    from security_runtime.models import ScanContext
+    from security_runtime.processes import ProcessResult
+    from security_runtime.rulepacks import RulePackManager
+    from security_runtime.scanners import SemgrepAdapter
+
+    root, private = workspace
+    rules = private / 'rules'
+    rules.mkdir()
+    # The deferred overlay adds a second UUID directory, as in Codex's
+    # redirected LocalCache state directory. Keep parents short and make the
+    # final filename cross MAX_PATH without exceeding the component limit.
+    with capture(request(root), private) as source:
+        overlay_prefix = source.execution_root.parent / ('i-' + '0' * 32) / 'rules'
+        name = 'r' * max(1, 265 - len(str(overlay_prefix)) - 5) + '.yml'
+        raw = (b'rules:\n- id: long-path-test\n  languages: [python]\n'
+               b'  message: test\n  severity: WARNING\n  pattern: print(...)\n')
+        scan_input.native_io_path(rules / name).write_bytes(raw)
+        manager = RulePackManager()
+        pack = manager.resolve(user_path=rules)
+        with source.with_rules(rules) as final:
+            target = final.rules_path / name
+            assert len(str(target)) > 260
+            native = scan_input.native_io_path(target)
+            assert native.read_bytes() == raw
+            assert native.stat().st_file_attributes & stat.FILE_ATTRIBUTE_READONLY
+            assert final.check_current().state == 'CURRENT'
+            bound = manager.bind_input(pack, final.rules_path)
+            assert bound.checksum == pack.checksum
+            adapter = SemgrepAdapter(rule_packs=manager)
+            context = ScanContext(str(source.execution_root), 'feature', ('app.py',),
+                input_view=final, bound_rule_pack=bound, logical_root=str(root))
+            context = replace(context, rule_plan=adapter.plan_rules(None, context))
+            calls = []
+
+            def execute(argv, cwd, timeout):
+                config = Path(argv[argv.index('--config') + 1])
+                ids = [r['id'] for r in yaml.safe_load(config.read_text())['rules']]
+                assert ids == ['long-path-test']
+                calls.append(ids)
+                return ProcessResult(0, json.dumps({'results': [], 'errors': [],
+                    'paths': {'scanned': ['app.py']}, 'time': {'rules': ids}}), '', 1)
+
+            monkeypatch.setattr('security_runtime.scanners._execute', execute)
+            assert adapter._scan('fixture-engine', context, FindingNormalizer(root)) == []
+            assert len(calls) == 1
+            overlay = final.rules_path.parent
+        assert not overlay.exists()
+        assert (source.execution_root / 'app.py').read_bytes() == b'original\n'
+    assert not source.execution_root.parent.exists()
+
+
 def test_source_change_while_rules_are_captured_rejects_overlay(workspace, monkeypatch):
     root, private = workspace
     rules = private / 'rules'

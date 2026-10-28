@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .findings import FindingNormalizer
+from .hook_state import native_io_path
 from .equivalence import equivalence_key
 from .verification_policy import offline_scanning, local_recheck, local_recheck_requested, scanner_process_observed
 from .models import Finding, RunStatus, ScanContext, ScannerRun, TargetProfile
@@ -422,7 +423,7 @@ class PatternSASTScanner(BaseScanner):
                     definitions=[]
                     from .rulepacks import execution_rule
                     for relative in sorted({r.path for r in plan.rules}):
-                        definitions.extend(rule for original in yaml.safe_load((rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
+                        definitions.extend(rule for original in yaml.safe_load(native_io_path(rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
                             for rule in [execution_rule(original,relative,rule_pack.descriptor)] if rule['id'] in selected_ids)
                     config_text=yaml.safe_dump({'rules':definitions},sort_keys=False)
                     if len(config_text.encode())<=1_000_000:

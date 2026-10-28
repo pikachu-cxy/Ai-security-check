@@ -66,6 +66,13 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
         if event == 'preToolUse':
             result = bridge.before(payload)
         elif event == 'postToolUse':
+            # Startup context can be missed when a chat outlives its MCP process.
+            # Reissue only after feedback claims have been verified. Compact
+            # handles reuse this exact owner's record and refresh before expiry.
+            if getattr(core, 'task_audit_mode', False):
+                from .tasks.ownership import issue_session_ref, session_context
+                session_ref = issue_session_ref(core.store, root, 'cursor', bridge.session, compact=True)
+                output['additional_context'] = session_context(session_ref)
             if not may_mutate and getattr(core, 'task_audit_mode', False):
                 result = dict(status='NOT_APPLICABLE', scanner_run=False,
                               scanner_skipped_reason='READ_ONLY_ACTIVITY')
@@ -87,13 +94,13 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             record = bridge.current(headers=True)
             context = bridge.context(record)
             if context:
-                output['additional_context'] = context
+                output['additional_context'] = '\n'.join(filter(None, (output.get('additional_context'), context)))
             result = bridge.last_protocol_rejection or dict(
                 status='DELIVERED' if output else 'NOT_APPLICABLE', scanner_run=False)
             if not context and may_mutate and record is None:
                 gap = _gap_context(bindings, root, payload, result)
                 if gap:
-                    output['additional_context'] = gap
+                    output['additional_context'] = '\n'.join(filter(None, (output.get('additional_context'), gap)))
                     result['status'] = 'DELIVERED'
             if bridge.last_delivery is not None:
                 result['task_delivery'] = bridge.last_delivery
@@ -116,7 +123,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
             if normalized.kind == EventKind.SESSION_START:
                 from .tasks.ownership import issue_session_ref, session_context
-                session_ref=issue_session_ref(core.store,root,'cursor',payload['conversation_id'])
+                session_ref=issue_session_ref(core.store,root,'cursor',payload['conversation_id'],compact=True)
                 output['additional_context']=session_context(session_ref)
             if (normalized.kind == EventKind.WORKSPACE_ACTIVITY
                     and not result.get('development_check_ref')

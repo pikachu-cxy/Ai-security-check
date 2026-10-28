@@ -107,16 +107,47 @@ def test_claim_normalizes_created_parent_for_capture_and_cleanup(sample):
     assert store.read()['directories'] == []
 
 
-def test_global_input_root_is_short_and_stays_in_the_configured_state_boundary(tmp_path):
+@pytest.mark.parametrize('host_directory', ['global-workspaces', 'cursor-workspaces'])
+def test_global_input_root_is_short_and_stays_in_the_configured_state_boundary(tmp_path, host_directory):
     from security_runtime.hook_state import identity
     root = tmp_path/'project'
     root.mkdir()
     state = tmp_path/'private-state'
-    hooks = HookStateStore(state/'global-workspaces'/identity(str(root))/'hooks')
+    hooks = HookStateStore(state/host_directory/identity(str(root))/'hooks')
     store = ScanAttemptStore(hooks, root)
     assert store.private_parent == state/'i'
     assert store.legacy_private_parent == store.path.parent/'scan-inputs'
     assert not state.exists()  # Merely resolving the namespace is read-only.
+
+
+def test_cursor_v2_cleanup_does_not_delete_shortened_root_namesake(tmp_path):
+    from security_runtime.hook_state import identity
+    root = tmp_path/'project'
+    root.mkdir()
+    state = tmp_path/'private-state'
+    hooks = HookStateStore(state/'cursor-workspaces'/identity(str(root))/'hooks')
+    clock = [100.0]
+    store = ScanAttemptStore(hooks, root, now=lambda: clock[0])
+    with hooks.lock(root):
+        lease = store.claim('HOOK', 'cursor-v2', source_binding({}))
+    name = 'i-'+'e'*32
+    old = store.previous_private_parent/name
+    old.mkdir(parents=True)
+    (old/'old.py').write_text('old private input')
+    current = store.private_parent/name
+    current.mkdir()
+    (current/'canary').write_text('preserve new namespace')
+    info = old.stat()
+    with hooks.lock(root):
+        value = store.read()
+        value['directories'].append(dict(name=name, input_namespace='STATE_ROOT_V2',
+            attempt_id=lease.attempt_id, generation=lease.generation,
+            device=info.st_dev, inode=info.st_ino))
+        store._save(value)
+    clock[0] += 601
+    assert store.recover_cleanup()['cleaned'] == 1
+    assert not old.exists()
+    assert (current/'canary').read_text() == 'preserve new namespace'
 
 
 def test_legacy_cleanup_obligation_uses_its_original_root_only(sample):

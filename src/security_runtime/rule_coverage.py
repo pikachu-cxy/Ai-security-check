@@ -127,11 +127,8 @@ class SASTRulePlan:
 
 def plan_rules(pack, files):
     language_files={language:tuple(name for name in files if Path(name).suffix.lower() in extensions)
-                    for language,extensions in EXTENSIONS.items()}
+                    for language,extensions in EXTENSIONS.items() if language not in ('generic', 'regex')}
     language_files={language:names for language,names in language_files.items() if names}
-    for language in ('generic', 'regex'):
-        if any(language in r.engine_languages for r in pack.catalog):
-            language_files[language] = tuple(files)
     dockerfiles=tuple(n for n in files if Path(n).name.lower() == 'dockerfile')
     if dockerfiles:
         language_files['dockerfile']=tuple(dict.fromkeys((*language_files.get('dockerfile',()),*dockerfiles)))
@@ -141,13 +138,22 @@ def plan_rules(pack, files):
     xml=tuple(name for name in files if Path(name).suffix.lower()=='.xml')
     if xml and any(r.language=='java' and '.xml' in r.target_extensions for r in pack.catalog):
         language_files['java']=language_files.get('java',())+xml
+    # Generic rules operate only on files recognized by the typed target plan;
+    # they do not make arbitrary prose or unknown files code scan targets.
+    # XML is a recognized configuration input handled by generic/regex rules
+    # even when this pack has no Java-owned mapper rules or native XML parser.
+    code_files = tuple(name for name in files if name in xml or
+                       any(name in names for names in language_files.values()))
+    for language in ('generic', 'regex'):
+        if code_files and any(language in r.engine_languages for r in pack.catalog):
+            language_files[language] = code_files
     program = getattr(pack, 'program', None)
     selected=tuple(rule for rule in pack.catalog if (rule.maturity!='EXPERIMENTAL' or not pack.descriptor.bundled)
         and (program is None or program.enabled(rule.rule_id))
         and any(supports_language(rule, language) and
                 any(supports_file(rule,name) for name in names)
                 for language, names in language_files.items()))
-    targets=tuple(name for name in files if any(supports_file(rule,name) for rule in selected))
+    targets=tuple(name for name in code_files if any(supports_file(rule,name) for rule in selected))
     # Uncovered files are described in the plan but never passed to the engine.
     # Keep recognized inputs without an applicable parser/rule in the coverage
     # denominator (for example .vue beside .js); never silently discard them.

@@ -5,16 +5,20 @@ umask 077
 
 case "${1-}" in
   --help|-h)
-    printf '%s\n' '用法：sh install.sh cursor|codex' \
+    printf '%s\n' '用法：sh install.sh cursor|codex [本地安装包目录]' \
       '安装产品专属运行环境和编辑器连接；不会扫描项目或自动修复。' \
       '首次安装需要联网。安装后请完全退出并重启编辑器。'
     exit 0 ;;
   cursor|codex) host=$1 ;;
   *) printf '%s\n' '请指定编辑器：cursor 或 codex。' >&2; exit 2 ;;
 esac
-if [ "$#" -ne 1 ]; then
-  printf '%s\n' '只接受一个编辑器参数；高级查询请使用安装后的 security-check。' >&2
+if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
+  printf '%s\n' '用法：sh install.sh cursor|codex [本地安装包目录]' >&2
   exit 2
+fi
+payload_dir=
+if [ "$#" -eq 2 ]; then
+  payload_dir=$(CDPATH= cd -- "$2" && pwd -P) || exit 2
 fi
 if [ "$(uname -s)" != Darwin ]; then
   printf '%s\n' '这个安装入口只支持 macOS。' >&2
@@ -119,8 +123,13 @@ fi
 base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.10
 asset="ai-security-runtime-macos-trial-$platform.tar.gz"
 printf '%s\n' '[安装] 正在下载并校验产品和离线依赖。'
-download "$base/$asset" "$stage/$asset"
-download "$base/$asset.sha256" "$stage/$asset.sha256"
+if [ -n "$payload_dir" ]; then
+  cp "$payload_dir/$asset" "$stage/$asset"
+  cp "$payload_dir/$asset.sha256" "$stage/$asset.sha256"
+else
+  download "$base/$asset" "$stage/$asset"
+  download "$base/$asset.sha256" "$stage/$asset.sha256"
+fi
 # Only the uniquely named regular installer file is copied at bootstrap. All
 # remaining archive members are validated/extracted by that verified installer.
 payload_sha=$("$python" -I - "$stage/$asset" "$stage/$asset.sha256" "$stage/managed_install.py" "$asset" <<'PY'

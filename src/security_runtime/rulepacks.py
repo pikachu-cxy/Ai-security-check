@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
+from .hook_state import native_io_path
 from .rule_catalog import RuleRecord, validate_rule, load_catalog
 from .rule_program import RuleProgram, load_program
 
@@ -201,9 +202,12 @@ class RulePackManager:
         digest = hashlib.sha256()
         definitions = {}
         for file in files:
-            if file.is_symlink() or file.stat().st_size > 1_000_000:
+            # Captured overlays can exceed MAX_PATH under Windows app state
+            # redirection. Keep logical names for identity, native paths for IO.
+            native = native_io_path(file)
+            if native.is_symlink() or native.stat().st_size > 1_000_000:
                 raise ValueError("Rule file is a symlink or too large")
-            content = file.read_bytes()
+            content = native.read_bytes()
             # References in metadata are attribution, not executable remote
             # configs. Only local YAML is passed to the engine.
             data = yaml.safe_load(content)

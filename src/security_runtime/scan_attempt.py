@@ -28,21 +28,22 @@ MAX_DIRECTORIES = 64
 MAX_BYTES = 131072
 _HEX = re.compile('[a-f0-9]{64}')
 _INPUT_NAME = re.compile('(?:runtime-input-|i-)[a-f0-9]{32}')
-_INPUT_NAMESPACE = 'STATE_ROOT_V2'
+_INPUT_NAMESPACE = 'STATE_ROOT_V3'
 
 
-def _input_parent(hooks):
+def _input_parent(hooks, *, legacy=False):
     """Keep raw bytes in the state boundary without repeating workspace hashes.
 
-    The global adapter owns <state>/global-workspaces/<id>/hooks. Other Hook
-    stores own their supplied directory. Only that exact known global shape
+    Global adapters own <state>/{global,cursor}-workspaces/<id>/hooks. Other Hook
+    stores own their supplied directory. Only those exact known global shapes
     is shortened; arbitrary configured directories never escape their root.
     """
     directory = Path(hooks.directory).resolve()
     anchor = directory
     if directory.name == 'hooks':
         anchor = directory.parent
-        if _HEX.fullmatch(anchor.name) and anchor.parent.name == 'global-workspaces':
+        namespaces = {'global-workspaces'} if legacy else {'global-workspaces', 'cursor-workspaces'}
+        if _HEX.fullmatch(anchor.name) and anchor.parent.name in namespaces:
             anchor = anchor.parent.parent
     return anchor / 'i'
 
@@ -85,6 +86,7 @@ class ScanAttemptStore:
         # aliases). Compare one checked namespace, never lexical alias strings.
         self.path = directory.resolve() / 'scan-attempt.state'
         self.legacy_private_parent = self.path.parent / 'scan-inputs'
+        self.previous_private_parent = _input_parent(hooks, legacy=True)
         self.private_parent = _input_parent(hooks)
 
     def _locked(self):
@@ -249,6 +251,10 @@ class ScanAttemptStore:
             return self.legacy_private_parent
         if namespace == _INPUT_NAMESPACE:
             return self.private_parent
+        if namespace == 'STATE_ROOT_V2':
+            # Cursor V2 obligations used the workspace-hash directory. Never
+            # reinterpret their signed names as files in the shortened root.
+            return self.previous_private_parent
         raise ValueError('Unknown private input cleanup namespace')
 
     def register_directory(self, lease, path):

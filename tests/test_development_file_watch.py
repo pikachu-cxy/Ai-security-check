@@ -104,7 +104,7 @@ def test_start_failure_is_bounded_safe_and_does_not_scan(sample):
         raise PermissionError('private source and secret canary')
     assert watching.start_window(service.store(root), ref, owner, backend_factory=broken) == 'FAILED'
     result = service.get(root, ref)
-    assert 'FILE_WATCH_START_FAILED' in result['gaps']
+    assert 'FILE_WATCH_START_FAILED' in result['observation_notes']
     assert result['scope']['scope_unknown'] is True
     assert 'canary' not in json.dumps(result)
     assert launched == []
@@ -120,7 +120,7 @@ def test_capacity_and_interrupted_connection_preserve_original_record(sample, mo
         store._put(db, ref, dict(row, file_watch=dict(status='ACTIVE', lease_until=0, id='lost')))
     before = store.path.read_bytes()
     result = service.get(root, ref)
-    assert store.path.read_bytes() == before and 'FILE_WATCH_INTERRUPTED' in result['gaps']
+    assert store.path.read_bytes() == before and 'FILE_WATCH_INTERRUPTED' in result['observation_notes']
     watching.stop_window(store, ref, owner)
     assert service.get(root, ref)['check_ref'] == ref and launched == []
 
@@ -150,12 +150,12 @@ def test_connection_close_preserves_gap_and_same_ref_on_resume(sample):
     watching.close_store(store)
     lost = service.get(root,ref)
     assert lost['file_watch']['status'] == 'INTERRUPTED'
-    assert 'FILE_WATCH_INTERRUPTED' in lost['gaps'] and lost['scope']['scope_unknown']
+    assert 'FILE_WATCH_INTERRUPTED' in lost['observation_notes'] and lost['scope']['scope_unknown']
     assert watching.start_window(store,ref,owner) == 'ACTIVE'
     (root/'resumed.py').write_text('value = 1')
     result = service.finish(root,ref)
     assert result['check_ref'] == ref and result['scope']['paths'] == ['resumed.py']
-    assert 'FILE_WATCH_INTERRUPTED' in result['gaps']
+    assert 'FILE_WATCH_INTERRUPTED' in result['observation_notes']
     assert launched == ['scan']
 
 
@@ -171,7 +171,7 @@ def test_native_backend_failure_retains_gap_without_exception_content(sample):
     while watching.active(service.store(root),ref,owner) and time.monotonic()<deadline:
         time.sleep(.01)
     result = service.get(root,ref)
-    assert 'FILE_WATCH_INTERRUPTED' in result['gaps'] and result['scope']['scope_unknown']
+    assert 'FILE_WATCH_INTERRUPTED' in result['observation_notes'] and result['scope']['scope_unknown']
     assert 'canary' not in json.dumps(result) and launched == []
 
 
@@ -183,4 +183,4 @@ def test_path_budget_and_outside_event_are_explicit_gaps(sample, monkeypatch):
         (root/f'{i}.py').write_text('value = 1')
     result = service.finish(root,ref)
     assert len(result['scope']['paths']) <= 2 and result['scope']['scope_unknown']
-    assert 'FILE_WATCH_PATHS_INCOMPLETE' in result['gaps']
+    assert 'FILE_WATCH_PATHS_INCOMPLETE' in result['observation_notes']

@@ -1,4 +1,4 @@
-from .capabilities import CapabilityRegistry, requested_capabilities
+from .capabilities import Capability, CapabilityRegistry, requested_capabilities
 from .models import ScanContext, ScanPlan, TargetProfile
 from .scanners import ScannerAdapter, ScannerRegistry
 
@@ -7,9 +7,11 @@ class ScannerPlanner:
     def __init__(self, registry: ScannerRegistry):
         self.registry = registry
 
-    def plan(self, profile: TargetProfile, context: ScanContext) -> tuple[ScanPlan, list[ScannerAdapter]]:
+    def plan(self, profile: TargetProfile, context: ScanContext, rule_plans=None) -> tuple[ScanPlan, list[ScannerAdapter]]:
         available = {capability for adapter in self.registry.adapters for capability in adapter.capabilities}
         wanted = requested_capabilities(profile, context.mode, context.capability_files(), available)
+        if any(plan.rules and plan.files for plan in (rule_plans or {}).values()):
+            wanted.add(Capability.CODE_SAST)
         capabilities = CapabilityRegistry(self.registry)
         selected = [adapter for adapter in self.registry.adapters
                     if getattr(adapter,'provider_role','PRIMARY') != 'FALLBACK'

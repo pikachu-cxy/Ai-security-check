@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 from contextlib import ExitStack
 from dataclasses import asdict, replace
 import hashlib
@@ -34,6 +35,10 @@ def failure_diagnostic(error, stage='UNKNOWN'):
     codes = {'SCAN_INPUT_NOT_REGULAR', 'SCAN_INPUT_CAPTURE_UNAVAILABLE',
              'SCAN_INPUT_PATH_INVALID', 'SCAN_INPUT_CONFIGURATION_UNBOUND'}
     code = getattr(error, 'reason_code', None)
+    if isinstance(error, OSError) and (getattr(error, 'winerror', None) == 206
+                                      or error.errno == errno.ENAMETOOLONG):
+        return dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'OSError',
+                    reason_code='SCAN_INPUT_PATH_TOO_LONG')
     return dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'UNKNOWN',
                 reason_code=code if type(error) is ScanInputError and code in codes else 'UNKNOWN')
 
@@ -384,12 +389,12 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                             publish(queue, db, dict(busy, scanned_seq=row['dirty_seq'], scan_id=None, result=None))
                     else:
                         state = (('QUEUED' if current['finish_requested'] else 'DIRTY') if current['dirty_seq'] > row['dirty_seq'] else
-                            'PARTIAL' if current['scope_unknown'] or result['gaps'] else 'RESULTS_READY')
+                            'PARTIAL' if result['gaps'] else 'RESULTS_READY')
                         queue._put(db, row['check_ref'], dict(current, state=state,
                             scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result,
                             reason_code=None, updated_at=queue.now()))
                         from .development_delivery import publish
-                        publish(queue, db, dict(row, state='PARTIAL' if row['scope_unknown'] or result['gaps'] else 'RESULTS_READY',
+                        publish(queue, db, dict(row, state='PARTIAL' if result['gaps'] else 'RESULTS_READY',
                             scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result, reason_code=None))
                 if result is None:
                     time.sleep(min(0.25, max(0, deadline-time.monotonic())))

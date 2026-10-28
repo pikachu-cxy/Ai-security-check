@@ -58,10 +58,12 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
         'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
         'confirm_remediation', 'refresh_remediation_confirmation',
         'generate_fix', 'verify', 'verify_task_fix',
+        'prepare_development_risk_fix', 'submit_development_risk_resolution',
+        'set_development_risk_disposition', 'start_risk_dashboard',
         'start_usage_monitor',  # User-requested local process and log observation.
     }
     # Host event adapters are invoked by installed hooks, not routine chat.
-    host_events = {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event'}
+    host_events = {'handle_hook_event', 'handle_readiness_event', 'handle_stop_event', 'handle_before_hook_event'}
     optional_execution = {'prepare_functional_verification', 'run_functional_verification'}
     routine = set(cursor_permissions.ROUTINE_TOOLS)
     assert not routine & (explicit | host_events | optional_execution)
@@ -70,12 +72,17 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
     assert set(MCPRegistry(local).names()) == routine | explicit | host_events | optional_execution
     # Global inventory discovery must not admit or initialize any workspace.
     routed = create_global_server(host='cursor', workspaces=object())
-    global_reads = {'get_workspace_binding_status', 'get_product_epoch_status'}
+    global_reads = set(cursor_permissions.GLOBAL_READ_TOOLS)
     assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit | global_reads
 
 
 @pytest.mark.parametrize('workflow', [
-    ('get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status'),
+    ('begin_development_check', 'record_development_changes', 'finish_development_check',
+     'complete_development_check', 'wait_development_check', 'get_development_check',
+     'get_development_deliveries', 'get_development_result', 'read_development_risk_context',
+     'submit_development_review', 'get_development_risks'),
+    ('get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
+     'get_workspace_binding_status', 'get_product_epoch_status'),
     ('get_security_summary', 'get_findings', 'prepare_task_triage', 'submit_triage', 'get_triage'),
     ('prepare_triage', 'submit_triage', 'get_triage'),
     ('prepare_repair_impact', 'read_repair_impact_context', 'submit_repair_impact', 'get_repair_impact'),

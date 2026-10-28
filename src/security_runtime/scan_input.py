@@ -119,13 +119,14 @@ def _read_file(path, maximum):
     """Reject links/replacements, and never read beyond the per-file allowance."""
     checkpoint()
     no_links(path)
-    before = path.stat()
+    native = native_io_path(path)
+    before = native.stat()
     if not stat.S_ISREG(before.st_mode):
         raise ScanInputError('SCAN_INPUT_NOT_REGULAR')
     if before.st_size > maximum:
         raise ScanInputError('SCAN_INPUT_FILE_BUDGET')
     flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
-    with os.fdopen(os.open(native_io_path(path), flags), 'rb') as stream:
+    with os.fdopen(os.open(native, flags), 'rb') as stream:
         opened = os.fstat(stream.fileno())
         if _signature(before) != _signature(opened):
             raise ScanInputError('SCAN_INPUT_SOURCE_MOVING')
@@ -134,7 +135,7 @@ def _read_file(path, maximum):
     no_links(path)
     if (len(raw) > maximum or len(raw) != before.st_size
             or _signature(before) != _signature(after)
-            or _signature(before) != _signature(path.stat())):
+            or _signature(before) != _signature(native.stat())):
         raise ScanInputError('SCAN_INPUT_SOURCE_MOVING')
     return raw
 
@@ -209,12 +210,15 @@ def _private_directory(workspace, parent, *, on_created=None, on_removed=None):
 def _write(root, name, raw, *, readonly=True):
     target = root / relative_path(name)
     no_links(target)
-    target.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    native_io_path(target.parent).mkdir(parents=True, mode=0o700, exist_ok=True)
     flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, 'O_BINARY', 0)
     with os.fdopen(os.open(native_io_path(target), flags, 0o600), 'wb') as stream:
         stream.write(raw)
     if readonly:
-        target.chmod(stat.S_IREAD)
+        # Use the same extended Windows path as creation: redirected state
+        # roots plus nested rule names can exceed MAX_PATH even when parents
+        # fit the private-directory budget.
+        native_io_path(target).chmod(stat.S_IREAD)
 
 
 def _absent(root, names):

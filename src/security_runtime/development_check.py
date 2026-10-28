@@ -205,15 +205,19 @@ def projection(store, row):
             state, reason = 'INTERRUPTED', 'DEVELOPMENT_WORKER_INTERRUPTED'
     result = row.get('result') or {}
     gaps = []
-    if row['scope_unknown']:
-        gaps.append('UNOBSERVED_PATHS_POSSIBLE')
-    if row['dirty_seq'] > row['scanned_seq']:
+    if row['observed_paths'] and row['dirty_seq'] > row['scanned_seq']:
         gaps.append('OBSERVED_EDITS_PENDING')
     gaps.extend(result.get('gaps', []))
-    gaps.extend(row.get('file_watch_gaps', []))
+    # Older saved rows used observation uncertainty as a completion gate.
+    # Project the recorded-file result without rescanning or changing ownership.
+    if state == 'PARTIAL' and row['scan_id'] and not gaps:
+        state = 'RESULTS_READY'
+    observation_notes = list(row.get('file_watch_gaps', []))
+    if row['scope_unknown']:
+        observation_notes.append('UNOBSERVED_PATHS_POSSIBLE')
     watch = row.get('file_watch') or {}
     if watch.get('status') == 'ACTIVE' and watch.get('lease_until', 0) <= store.now():
-        gaps.append('FILE_WATCH_INTERRUPTED')
+        observation_notes.append('FILE_WATCH_INTERRUPTED')
         watch = dict(watch, status='INTERRUPTED')
     pending = state in {'QUEUED', 'RUNNING'}
     deadline = row.get('wait_deadline') if row.get('wait_seq') == row['dirty_seq'] else None
@@ -225,9 +229,9 @@ def projection(store, row):
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
-            scope_unknown=bool(row['scope_unknown'] or 'FILE_WATCH_INTERRUPTED' in gaps),
+            scope_unknown=bool(row['scope_unknown'] or 'FILE_WATCH_INTERRUPTED' in observation_notes),
             full_project=False, expanded_to_project=False),
-        gaps=list(dict.fromkeys(gaps)), reason_code=reason,
+        gaps=list(dict.fromkeys(gaps)), observation_notes=list(dict.fromkeys(observation_notes)), reason_code=reason,
         file_watch={name: watch[name] for name in ('contract', 'status', 'scope', 'attribution',
             'started_at', 'ended_at', 'lease_until') if name in watch},
         finish_requested=row['finish_requested'], scanner_run=False,
@@ -334,7 +338,7 @@ class DevelopmentCheckService:
             state = row['state']
             worker = store._get(db, '$worker')
             running = worker and worker.get('lease_until', 0) > self.now()
-            if row['dirty_seq'] == 0 or (not selected and not row['scope_unknown']):
+            if row['dirty_seq'] == 0 or not selected:
                 state = 'NO_OBSERVED_CHANGES'
             elif (row['dirty_seq'] > row['scanned_seq'] and
                     row.get('failed_seq') != row['dirty_seq'] and (state != 'RUNNING' or not running)):

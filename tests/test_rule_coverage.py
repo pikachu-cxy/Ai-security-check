@@ -25,14 +25,14 @@ def custom_pack(tmp_path,languages):
     return folder
 
 
-def run_fixture(tmp_path,languages,*,status='SUCCESS',evidence=True):
+def run_fixture(tmp_path,languages,*,status='SUCCESS',evidence=True,files=None):
     import subprocess
     rules = custom_pack(tmp_path, languages)
     tmp_path = tmp_path / 'project'
     tmp_path.mkdir()
     subprocess.run(['git', 'init', str(tmp_path)], check=True, capture_output=True)
-    (tmp_path/'App.java').write_text('class App {}')
-    (tmp_path/'app.js').write_text('const value=1;')
+    for name in files or ('App.java', 'app.js'):
+        (tmp_path/name).write_text('example content')
     adapter=OpenGrepAdapter()
     calls=[]
     def execute(args,cwd,timeout):
@@ -50,6 +50,31 @@ def run_fixture(tmp_path,languages,*,status='SUCCESS',evidence=True):
         runtime=SecurityRuntime(ScannerRegistry([adapter]),SQLiteStore(tmp_path/'.security-runtime/state.db'))
         result=runtime.scan(tmp_path,'release',rules_path=str(rules))
     return result,calls,ensure.call_count
+
+
+@pytest.mark.parametrize('languages', [['generic'], ['regex']])
+def test_markdown_generic_rules_are_not_dispatched(tmp_path, languages):
+    result, calls, prepared = run_fixture(tmp_path, languages, files=['README.md'])
+    assert calls == [] and prepared == 0
+    assert result.capability_results['CODE_SAST'] == 'NOT_APPLICABLE'
+
+
+def test_markdown_engine_unavailable_is_not_success(tmp_path):
+    result, calls, prepared = run_fixture(tmp_path, ['generic'], status='UNAVAILABLE', files=['App.java'])
+    assert calls == [] and prepared == 1
+    assert result.capability_results['CODE_SAST'] == 'UNAVAILABLE'
+
+
+def test_markdown_without_applicable_rule_is_not_scanned(tmp_path):
+    result, calls, prepared = run_fixture(tmp_path, ['python'], files=['README.md'])
+    assert calls == [] and prepared == 0
+    assert result.capability_results['CODE_SAST'] == 'NOT_APPLICABLE'
+
+
+def test_mixed_markdown_and_code_dispatches_both(tmp_path):
+    result, calls, _ = run_fixture(tmp_path, ['generic', 'java'], files=['README.md', 'App.java'])
+    assert calls[0] == ['App.java']
+    assert result.capability_results['CODE_SAST'] == 'EXECUTED'
 
 
 def test_zero_rules_never_prepare_or_invoke_opengrep(tmp_path):
@@ -102,8 +127,14 @@ def test_catalog_actual_count_and_selection():
     pack = RulePackManager().resolve()
     assert len(pack.catalog) == 2007
     plan = plan_rules(pack, ['App.java', 'app.js', 'Mapper.xml', 'README.md', 'config.yml'])
-    assert plan.rules and set(plan.files) == {'App.java', 'app.js', 'Mapper.xml', 'README.md', 'config.yml'}
+    assert plan.rules and set(plan.files) == {'App.java', 'app.js', 'Mapper.xml', 'config.yml'}
     assert plan.coverage()['per_language']['javascript']['selected_rules'] > 0
+
+
+def test_generic_rules_keep_xml_configuration_targets(tmp_path):
+    result, calls, _ = run_fixture(tmp_path, ['generic'], files=['Mapper.xml', 'README.md'])
+    assert calls == [['Mapper.xml']]
+    assert result.capability_results['CODE_SAST'] == 'EXECUTED'
 
 
 def test_duplicate_user_ids_rejected(tmp_path):

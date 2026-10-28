@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -14,6 +15,11 @@ from .hook_state import atomic_bytes, no_links
 from .owned_json import encode
 
 ROUTINE_TOOLS = (
+    # Observed-edit lifecycle and evidence review; no repair authorization.
+    'begin_development_check', 'record_development_changes',
+    'finish_development_check', 'complete_development_check', 'wait_development_check',
+    'get_development_check', 'get_development_deliveries', 'get_development_result',
+    'read_development_risk_context', 'submit_development_review', 'get_development_risks',
     'get_task_isolation_capabilities',
     'get_task_closeout_status', 'wait_task_closeout', 'cancel_task_closeout',
     'begin_security_task', 'switch_security_task', 'finish_security_task', 'prepare_task_security_review',
@@ -32,7 +38,9 @@ ROUTINE_TOOLS = (
     'prepare_repair_impact', 'read_repair_impact_context', 'submit_repair_impact',
     'get_repair_impact', 'get_closeout_status',
 )
-ENTRIES = tuple('ai-security-runtime:' + tool for tool in ROUTINE_TOOLS)
+# Global-only diagnostics are read-only and do not admit or scan a workspace.
+GLOBAL_READ_TOOLS = ('get_workspace_binding_status', 'get_product_epoch_status')
+ENTRIES = tuple('ai-security-runtime:' + tool for tool in (*ROUTINE_TOOLS, *GLOBAL_READ_TOOLS))
 MAX_BYTES = 262144
 CONTRACT = 'cursor-routine-permissions-v1'
 
@@ -216,7 +224,7 @@ class CursorRoutinePermissions:
         self.manifest = store.workspace_directory(home)/'routine-permissions-ownership.json'
         self.existing_allowlist = existing_allowlist or ide_allowlist
 
-    def inspect(self):
+    def inspect(self, *, allow_newer=False):
         no_links(self.path)
         no_links(self.manifest)
         raw = self.path.read_bytes() if self.path.exists() else None
@@ -236,8 +244,12 @@ class CursorRoutinePermissions:
                 key = key_path.read_bytes()
                 if (len(key) != 32 or set(signed) != {'contract', 'added', 'had_key', 'created_hash'}
                         or signed['contract'] != CONTRACT or type(signed['had_key']) is not bool
-                        or not isinstance(signed['added'], list) or len(signed['added']) > len(ENTRIES)
-                        or any(v not in ENTRIES for v in signed['added'])
+                        or not isinstance(signed['added'], list) or len(signed['added']) > 2000
+                        or any(not isinstance(v, str) or not v.startswith('ai-security-runtime:')
+                            or not re.fullmatch(r'[a-z][a-z0-9_]{0,127}', v.split(':', 1)[1])
+                            for v in signed['added'])
+                        or len(set(signed['added'])) != len(signed['added'])
+                        or not allow_newer and any(v not in ENTRIES for v in signed['added'])
                         or not (signed['created_hash'] is None or isinstance(signed['created_hash'], str)
                             and len(signed['created_hash']) == 64
                             and all(c in '0123456789abcdef' for c in signed['created_hash']))
@@ -251,10 +263,16 @@ class CursorRoutinePermissions:
 
     def status(self):
         from .risk_disposition import VERSION as disposition_contract
-        _, value, _, _ = self.inspect()
+        # Another installed process may have extended the signed ownership
+        # record. Reading it grants no tools and must not break workspace
+        # admission in this older process. Mutations retain the strict list.
+        _, value, _, record = self.inspect(allow_newer=True)
+        newer = bool(record and any(v not in ENTRIES for v in record['added']))
         entries = {v.casefold() for v in value.get('mcpAllowlist', [])}
         ready = all(v in entries for v in ENTRIES)
         return dict(status='CONFIGURED' if ready else 'NEEDS_REPAIR',
+            ownership_compatibility='NEWER_SIGNED_RECORD' if newer else 'CURRENT',
+            restart_required=newer,
             routine_tools=list(ROUTINE_TOOLS), repair_preapproved_by_product=False,
             disposition_contract=disposition_contract,
             disposition_requires_explicit_user_request=True,

@@ -225,16 +225,33 @@ def handle_cursor_event(payload, *, core=None, bindings=None, project_dir=None, 
         CURRENT.reset(token)
 
 
+def parse_hook_input(raw):
+    """Accept the extra UTF-8 preamble from Cursor's Windows PS pipeline.
+
+    Normalize only the bounded transport prefix, never JSON text or claims.
+    Keep duplicate-key rejection and the original byte budget unchanged.
+    """
+    if len(raw) > 1_000_000:
+        raise ValueError('CURSOR_HOOK_INPUT_INVALID')
+    bom = b'\xef\xbb\xbf'
+    for _ in range(2):
+        if raw.startswith(bom):
+            raw = raw[len(bom):]
+    if raw.startswith(bom):
+        raise ValueError('CURSOR_HOOK_INPUT_INVALID')
+    from .codex_integration import unique_json
+    return unique_json(raw)
+
+
 def main(*, automatic=False):
     # Cursor sends edits/output/transcript metadata; parse bounded input, never
     # persist them, and never open transcript_path or execute command text.
     raw = sys.stdin.buffer.read(1_000_001)
     try:
-        if len(raw) > 1_000_000:
-            raise ValueError()
-        from .codex_integration import unique_json
-        payload = unique_json(raw)
+        payload = parse_hook_input(raw)
     except (ValueError, UnicodeError, RecursionError):
+        # Cursor logs stderr; never reflect payload bytes or exception details.
+        print('CURSOR_HOOK_INPUT_INVALID: unable to parse bounded JSON input', file=sys.stderr)
         payload = None
     from .tasks.delivery_receipts import DeliveryWriteObserver
     delivery = DeliveryWriteObserver()

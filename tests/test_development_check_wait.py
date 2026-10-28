@@ -111,9 +111,10 @@ def test_unknown_scope_keeps_partial_gap_and_runs_no_scanner(check, monkeypatch)
     service.record(root, ref, [], scope_unknown=True)
     WaitClock(service, lambda: execute(check, monkeypatch))
     result = asyncio.run(service.finish_and_wait(root, ref, 5))
-    assert result['status'] == 'PARTIAL' and result['scan_id'] is None
+    assert result['status'] == 'NO_OBSERVED_CHANGES' and result['scan_id'] is None
     assert result['scope']['paths'] == [] and result['scope']['scope_unknown']
-    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['gaps']
+    assert 'UNOBSERVED_PATHS_POSSIBLE' in result['observation_notes']
+    assert 'UNOBSERVED_PATHS_POSSIBLE' not in result['gaps']
     assert not result['baseline_created'] and state['calls'] == 0
 
 

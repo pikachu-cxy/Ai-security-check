@@ -97,9 +97,14 @@ def inspect_binding(pool, workspace_path, session_ref=None):
     try:
         pool.validate_layers(workspace_path)
     except (ValueError, OSError, RuntimeError) as exc:
+        reason = workspace_rejection(exc, 'VALIDATING_CONFIGURATION')
         result.update(configuration_status='REJECTED', admission_status='REJECTED',
-                      reason_code=workspace_rejection(exc, 'VALIDATING_CONFIGURATION'),
-                      next_action='CHECK_INTEGRATION_CONFIGURATION')
+                      reason_code=reason,
+                      next_action={
+                          'CONFIGURATION_BUSY': 'RETRY_CONFIGURATION_VALIDATION',
+                          'CONFIGURATION_CHANGED': 'RETRY_CONFIGURATION_VALIDATION',
+                          'WORKSPACE_CONFIGURATION_ACCESS_DENIED': 'CHECK_CONFIGURATION_ACCESS',
+                      }.get(reason, 'CHECK_INTEGRATION_CONFIGURATION'))
         return result
     result.update(configuration_status='VALIDATED', admission_status='ELIGIBLE',
                   resolution_stage='BINDING_SESSION', next_action='WAIT_FOR_HOST_SESSION_START')
