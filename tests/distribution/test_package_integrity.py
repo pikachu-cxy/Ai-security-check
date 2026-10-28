@@ -77,6 +77,7 @@ def test_install_verifier_passes_source_contract_to_isolated_interpreter(tmp_pat
     namespace = runpy.run_path(str(ROOT / 'scripts/build/verify_package.py'))
     main = namespace['main']
     commands = []
+    contracts = []
 
     class ContractReached(Exception):
         pass
@@ -84,6 +85,10 @@ def test_install_verifier_passes_source_contract_to_isolated_interpreter(tmp_pat
     def run(*command, cwd):
         commands.append(command)
         if command[1] == '-c':
+            contract_path = Path(command[-1])
+            assert contract_path.parent == cwd
+            assert len(command[-1]) < 1000
+            contracts.append(json.loads(contract_path.read_text(encoding='utf-8')))
             raise ContractReached()
 
     monkeypatch.setitem(main.__globals__, 'run', run)
@@ -94,5 +99,5 @@ def test_install_verifier_passes_source_contract_to_isolated_interpreter(tmp_pat
     monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE', '1')
     with pytest.raises(ContractReached):
         main(tmp_path / 'fixture.whl', offline=True)
-    assert json.loads(commands[-1][-1]) == namespace['rule_contract']()
+    assert contracts == [namespace['rule_contract']()]
     assert '--no-index' in commands[0] and '--no-deps' in commands[0]

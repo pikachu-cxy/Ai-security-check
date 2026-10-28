@@ -56,7 +56,7 @@ from security_runtime.rulepacks import RulePackManager
 package = Path(security_runtime.__file__).resolve().parent
 assert package.is_relative_to(Path(__import__('sys').prefix).resolve()), package
 pack = RulePackManager().resolve()
-expected = json.loads(sys.argv[1])
+expected = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 assert pack.path.samefile(package / 'rules'), (pack.path, package)
 assert pack.descriptor.rule_pack_id == expected['id']
 assert pack.descriptor.version == expected['version'], (pack.descriptor.version, expected['version'])
@@ -143,7 +143,11 @@ for name in ('LICENSE', 'EULA.md', 'LICENSING.md', 'LICENSES/Apache-2.0.txt'):
     assert (share / name).is_file()
 print('Installed wheel integrity OK')
 """
-        run(str(python), "-c", check, json.dumps(expected_rules), cwd=root)
+        # Rule inventories exceed both Windows command-line limits and POSIX
+        # per-argument limits. Keep the exact contract in the isolated directory.
+        contract_path = root / 'expected-rules.json'
+        contract_path.write_text(json.dumps(expected_rules), encoding='utf-8')
+        run(str(python), "-c", check, str(contract_path), cwd=root)
         from security_runtime.trial import isolated_environment
         env = isolated_environment(root)
         completed = subprocess.run([str(cli), 'install', 'codex', '--json'],

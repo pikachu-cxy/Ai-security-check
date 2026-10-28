@@ -18,7 +18,7 @@ permissions:
 
 jobs:
   # v0.3.10 promotes Cursor session recovery and editor-scoped risk statistics.
-  # A release commit triggers full validation before publication.
+  # Full validation includes file-based rule inventory verification before publication.
   version:
     if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.10]')
     runs-on: ubuntu-latest
