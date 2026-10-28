@@ -9,7 +9,8 @@ async def fixture_payload(call, name, arguments):
 
 async def assess_tls_fixture(call, waiting, root, sources):
     for name, expected in sources.items():
-        assert name.endswith('.java') and 'HostnameVerifier' in expected and '-> true' in expected
+        assert name.endswith('.java') and 'HostnameVerifier' in expected
+        assert '-> true' in expected or 'return true;' in expected
         assert (root / name).read_text(encoding='utf-8') == expected
     required = waiting.get('repair_impact', waiting)
     action = required['next_action']

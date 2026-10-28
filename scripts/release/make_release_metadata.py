@@ -27,6 +27,9 @@ def main() -> None:
         if (verification.get("archive_sha256") != digest or verification.get("version") != __version__
                 or verification.get("platform") != platform or not verification.get("smoke")
                 or not verification.get("managed_engines") or not verification.get("plugin_discovery")
+                or verification.get('dependency_unavailable_without_fallback') is not True
+                or verification.get('observed_development_without_baseline') is not True
+                or verification.get('fix_verify_offline_synthetic') is not True
                 or verification.get("source_commit") != source_commit):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}

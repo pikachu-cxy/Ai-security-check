@@ -132,6 +132,7 @@ def test_remounted_guard_retains_same_lock_domain_and_readonly_metadata(tmp_path
 
 @pytest.mark.parametrize('case', ['missing_boot', 'recent_anchor', 'new_inode', 'different_owner'])
 def test_identity_without_complete_boot_proof_remains_rejected(monkeypatch, case):
+    monkeypatch.setattr(os, 'getuid', lambda: 1000, raising=False)
     monkeypatch.setattr(identities.sys, 'platform', 'darwin')
     monkeypatch.setattr(identities, 'boot_time', lambda:100)
     item = SimpleNamespace(st_dev=2, st_ino=42, st_uid=os.getuid(), st_birthtime=10, st_mtime=20)

@@ -2,6 +2,9 @@
 import copy
 
 import pytest
+import os
+
+pytestmark = pytest.mark.skipif(os.name != "posix", reason="Opt-in capture publication requires POSIX private-state guarantees")
 
 from security_runtime.tasks.activity import POLICY
 from security_runtime.tasks.baseline_identity import baseline_snapshot, baseline_fingerprint

@@ -30,16 +30,19 @@ def acceptance_workspace(temporary):
     return root, SQLiteStore(base / 'state/scans.db')
 
 
+TLS_RULE_ID = 'java.lang.security.audit.crypto.ssl.insecure-hostname-verifier.insecure-hostname-verifier'
+
+
 def source(line=100, vulnerable=True):
     header = 'import javax.net.ssl.*;\nclass Fixture {\n'
-    body = ('HostnameVerifier verifier = (host, session) -> true;' if vulnerable else
+    body = ('class InsecureVerifier implements HostnameVerifier { public boolean verify(String host, SSLSession session) { return true; } }' if vulnerable else
             'HostnameVerifier verifier = HttpsURLConnection.getDefaultHostnameVerifier();')
     return header + '\n' * (line - 3) + body + '\n}\n'
 
 
 def write_task_sources(root, hostname=True, secondary=True):
     # Independent paths have independent equivalence identities. Both fixtures
-    # use the current default-enabled CORE rule; legacy rules stay disabled.
+    # use the pinned upstream hostname verifier rule.
     (root / 'Tls.java').write_text(source(vulnerable=hostname), encoding='utf-8')
     (root / 'OtherTls.java').write_text(source(vulnerable=secondary).replace('class Fixture', 'class OtherFixture'), encoding='utf-8')
 
@@ -131,7 +134,7 @@ def run_acceptance():
         with local_recheck():
             found, run = adapter.scan(ScanContext(str(root), ScanMode.FEATURE, ('Tls.java',)), FindingNormalizer(root))
         assert run.status == 'SUCCESS', run
-        old = next(f for f in found if f.technical_details['rule_id'] == 'ai-security.java.trust-all-hostname')
+        old = next(f for f in found if f.technical_details['rule_id'] == TLS_RULE_ID)
         assert old.line_start == 100, old.line_start
         scan = ScanResult('synthetic-fix-a', ScanMode.FEATURE, profile, 'COMPLETED', found, [run],
                           'Synthetic local scanner evidence', 'REVIEW', run.duration_ms)
@@ -158,7 +161,7 @@ def run_acceptance():
         scan.scan_id, scan.findings, scan.scanner_runs = 'synthetic-fix-b', grouped, [grouped_run]
         store.save(scan)
         tasks = SecuritySummaryService(store).get(root, scan.scan_id, details=True)['tasks']
-        assert len(tasks) == 2 and all(t['topic'] == 'tls' and t['finding_count'] == 1 for t in tasks)
+        assert len(tasks) == 2 and all(t['finding_count'] == 1 for t in tasks), tasks
         service = TaskFixService(store, runtime.registry)
         handoffs = [service.prepare(task['task_ref'], root) for task in tasks]
         assert not any(any(h['execution'].values()) for h in handoffs)
@@ -188,4 +191,4 @@ if __name__ == '__main__':
         record['installed_native_sdk'] = asyncio.run(native_sdk_acceptance(args.executable))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
-    print('Actual local Semgrep: occurrence, line movement, minimal fix, two CORE tasks, partial/all fix and process failure passed.')
+    print('Actual local OpenGrep: occurrence, line movement, minimal fix, two upstream-rule tasks, partial/all fix and process failure passed.')

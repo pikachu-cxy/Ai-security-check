@@ -10,6 +10,9 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from security_runtime.product_epoch_capture import platform_supported
+
+pytestmark = pytest.mark.skipif(not platform_supported(), reason="Historical product epochs require POSIX descriptor observations")
 
 from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
 from security_runtime.global_workspace import workspace_state

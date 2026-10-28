@@ -2,6 +2,9 @@
 import shutil
 
 import pytest
+from security_runtime.product_epoch_capture import platform_supported
+
+pytestmark = pytest.mark.skipif(not platform_supported(), reason="Historical product epochs require POSIX descriptor observations")
 
 from security_runtime.hook_state import HookStateStore
 from security_runtime.product_epoch_service import ProductEpochService

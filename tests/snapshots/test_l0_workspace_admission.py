@@ -202,6 +202,8 @@ def test_codex_home_rejects_fake_or_broken_worktree_metadata(layout, pool, defec
     marker = target / ".git"
     admin = Path(marker.read_text(encoding="utf-8").removeprefix("gitdir: ").strip())
     if defect == "marker":
+        # Git marks .git hidden on Windows; replacing avoids CREATE_ALWAYS denial.
+        marker.unlink()
         marker.write_text("gitdir: " + str(origin / ".git") + "\n", encoding="utf-8")
     elif defect == "back_pointer":
         (admin / "gitdir").write_text(str(origin / ".git") + "\n", encoding="utf-8")

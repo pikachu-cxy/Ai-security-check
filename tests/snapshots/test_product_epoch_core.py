@@ -6,6 +6,9 @@ import shutil
 import sqlite3
 
 import pytest
+from security_runtime.product_epoch_capture import platform_supported
+
+requires_observation = pytest.mark.skipif(not platform_supported(), reason="Requires POSIX descriptor observations")
 
 from security_runtime.hook_state import HookStateStore
 from security_runtime.product_epoch_service import ProductEpochService
@@ -50,6 +53,7 @@ def test_absent_queries_and_rejected_owner_create_nothing(current):
     assert not current.hooks.directory.exists()
 
 
+@requires_observation
 def test_binary_files_and_large_files_span_steps_without_retaining_body(current):
     raw = b'\xff\x00PRIVATE_RAW_BINARY_MARKER\xfe'*100
     (current.root/'binary.bin').write_bytes(raw)
@@ -69,6 +73,7 @@ def test_binary_files_and_large_files_span_steps_without_retaining_body(current)
     slow.close()
 
 
+@requires_observation
 def test_same_root_alias_and_policy_share_epoch_but_other_policy_keeps_history(current):
     (current.root/'source.py').write_bytes(b'first')
     early_peer = ProductEpochService(current.hooks, current.root, now=current.now)
@@ -97,6 +102,7 @@ def test_same_root_alias_and_policy_share_epoch_but_other_policy_keeps_history(c
 
 
 @pytest.mark.parametrize('missing', ['key', 'database'])
+@requires_observation
 def test_missing_history_is_not_rebuilt_from_changed_source(current, missing):
     (current.root/'source.py').write_bytes(b'original')
     first = finish(current)
@@ -110,6 +116,7 @@ def test_missing_history_is_not_rebuilt_from_changed_source(current, missing):
     assert not path.exists()
 
 
+@requires_observation
 def test_replaced_root_rejects_existing_and_reopened_service(current):
     (current.root/'source.py').write_bytes(b'original')
     finish(current)
@@ -125,6 +132,7 @@ def test_replaced_root_rejects_existing_and_reopened_service(current):
 @pytest.mark.parametrize('damage', ['head_mac', 'member_mac', 'observation_mac',
                                    'missing_member', 'missing_observation', 'missing_directory',
                                    'directory_done_column', 'head_policy_column', 'missing_head'])
+@requires_observation
 def test_missing_or_tampered_signed_graph_is_not_read_as_original_history(current, damage):
     (current.root/'source.py').write_bytes(b'original')
     result = finish(current)
@@ -152,6 +160,7 @@ def test_missing_or_tampered_signed_graph_is_not_read_as_original_history(curren
             current.ensure(OWNER)
 
 
+@requires_observation
 def test_restart_continues_original_job_and_reports_observation_interval(current):
     for index in range(10):
         (current.root/f'{index}.py').write_bytes(str(index).encode())
@@ -168,6 +177,7 @@ def test_restart_continues_original_job_and_reports_observation_interval(current
     assert final['project_inventory_complete'] is False
 
 
+@requires_observation
 def test_repeated_loss_of_partial_hash_context_becomes_gap_in_original_epoch(current):
     (current.root/'large.bin').write_bytes(b'unchanged binary body'*100)
     (current.root/'small.bin').write_bytes(b'small')
@@ -189,6 +199,7 @@ def test_repeated_loss_of_partial_hash_context_becomes_gap_in_original_epoch(cur
     assert worker.lookup(original_ref, ['large.bin'])['results'][0]['status'] == 'GAP'
 
 
+@requires_observation
 def test_failed_control_commit_rolls_back_members_and_replays_directory_safely(current, monkeypatch):
     (current.root/'source.py').write_bytes(b'original')
     initial = current.ensure(OWNER)
@@ -210,6 +221,7 @@ def test_failed_control_commit_rolls_back_members_and_replays_directory_safely(c
     assert result['counts']['members'] == result['counts']['observed'] == 1
 
 
+@requires_observation
 def test_capacity_failure_preserves_original_cursor_and_resumes(current, monkeypatch):
     (current.root/'source.py').write_bytes(b'original')
     initial = current.ensure(OWNER)
@@ -229,6 +241,7 @@ def test_capacity_failure_preserves_original_cursor_and_resumes(current, monkeyp
     assert finish(current)['epoch_ref'] == initial['epoch_ref']
 
 
+@requires_observation
 def test_real_sqlite_page_capacity_pauses_without_losing_original_job(current, monkeypatch):
     for index in range(1000):
         (current.root/f'source_{index:04d}.py').write_bytes(b'body')
@@ -246,6 +259,7 @@ def test_real_sqlite_page_capacity_pauses_without_losing_original_job(current, m
     assert result['counts']['observed'] == result['counts']['members'] == 1000
 
 
+@requires_observation
 def test_links_are_excluded_without_reading_outside_root(current, tmp_path):
     outside = tmp_path.resolve()/'outside'
     outside.mkdir()
@@ -262,6 +276,7 @@ def test_links_are_excluded_without_reading_outside_root(current, tmp_path):
     assert row['status'] == 'FIRST_OBSERVED_ORDER_UNKNOWN' and 'hash' not in row
 
 
+@requires_observation
 def test_zero_scope_deadline_closes_unknown_denominator_without_following_files(current):
     (current.root/'source.py').write_bytes(b'original')
     immediate = ProductEpochService(current.hooks, current.root, now=current.now, policy=dict(scope_seconds=0))
@@ -271,6 +286,7 @@ def test_zero_scope_deadline_closes_unknown_denominator_without_following_files(
     assert result['comparison_available'] is False
 
 
+@requires_observation
 def test_untrusted_directory_identity_index_cannot_hide_a_new_directory(current):
     for name in ('first', 'second'):
         (current.root/name).mkdir()
@@ -296,6 +312,7 @@ def test_missing_platform_capability_never_allocates_or_advances(current, monkey
     assert not current.hooks.directory.exists()
 
 
+@requires_observation
 def test_lost_platform_capability_leaves_existing_job_unchanged(current, monkeypatch):
     current.ensure(OWNER)
     before = database_state(current)
@@ -304,6 +321,7 @@ def test_lost_platform_capability_leaves_existing_job_unchanged(current, monkeyp
     assert database_state(current) == before
 
 
+@requires_observation
 def test_readonly_rejects_external_wal_without_creating_sidecars(current):
     finish(current)
     with sqlite3.connect(current.store.path) as db:
@@ -316,12 +334,14 @@ def test_readonly_rejects_external_wal_without_creating_sidecars(current):
     assert {path.name:path.read_bytes() for path in current.store.directory.iterdir()} == before
 
 
+@requires_observation
 def test_private_store_cannot_be_enumerated_as_source(current):
     with pytest.raises(ProductEpochError, match='PRODUCT_EPOCH_PRIVATE_DIRECTORY_REQUIRED'):
         ProductEpochService(HookStateStore(current.root/'private'), current.root)
     assert not (current.root/'private').exists()
 
 
+@requires_observation
 def test_writer_lock_creation_is_not_product_store_allocation(current):
     with current._writer_locks.lock(current.root) as acquired:
         assert acquired
@@ -331,6 +351,7 @@ def test_writer_lock_creation_is_not_product_store_allocation(current):
     assert current.ensure(OWNER)['epoch_ref'].startswith('pe1-')
 
 
+@requires_observation
 def test_replaced_private_directory_is_not_accepted_as_original_store(current):
     finish(current)
     original = current.store.directory.with_name('original-product-epochs')
@@ -344,6 +365,7 @@ def test_replaced_private_directory_is_not_accepted_as_original_store(current):
 
 
 @pytest.mark.parametrize('damage', ['missing', 'corrupt'])
+@requires_observation
 def test_external_store_marker_is_required_for_existing_history(current, damage):
     result = finish(current)
     if damage == 'missing':
@@ -357,6 +379,7 @@ def test_external_store_marker_is_required_for_existing_history(current, damage)
             service.ensure(OWNER)
 
 
+@requires_observation
 def test_first_allocation_crash_after_marker_publication_cannot_rebuild(current, monkeypatch):
     original = current.store._publish_marker
 
@@ -374,6 +397,7 @@ def test_first_allocation_crash_after_marker_publication_cannot_rebuild(current,
     assert not current.store.path.exists()
 
 
+@requires_observation
 def test_first_database_transaction_failure_does_not_restart_from_live_source(current, monkeypatch):
     def interrupt(*args):
         raise sqlite3.OperationalError('Fixture first allocation failure')
@@ -390,6 +414,7 @@ def test_first_database_transaction_failure_does_not_restart_from_live_source(cu
 @pytest.mark.parametrize('policy', [dict(step_files=257), dict(step_bytes=8_000_001),
                                    dict(step_seconds=0), dict(scope_seconds=float('inf')),
                                    dict(ignored_names=['../source']), dict(unknown=True)])
+@requires_observation
 def test_invalid_policy_cannot_allocate_state(current, policy):
     with pytest.raises(ProductEpochError, match='PRODUCT_EPOCH_POLICY_INVALID'):
         ProductEpochService(current.hooks, current.root, policy=policy)

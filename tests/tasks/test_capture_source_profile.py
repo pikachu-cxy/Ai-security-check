@@ -11,6 +11,8 @@ from types import SimpleNamespace
 
 import pytest
 
+pytestmark = pytest.mark.skipif(os.name != "posix", reason="Opt-in capture publication requires POSIX private-state guarantees")
+
 from security_runtime.closeout_state import digest, encode
 from security_runtime.hook_state import HookStateStore
 from security_runtime.snapshot_store import SnapshotBinding, SnapshotStoreError

@@ -26,9 +26,11 @@ def release_root(tmp_path, monkeypatch):
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         (release / (name + ".sha256")).write_text(f"{digest}  {name}\n", encoding="utf-8")
         record = dict(version=__version__, source_commit="a" * 40, platform=platform,
-                      archive_sha256=digest, smoke=True, managed_engines=True, plugin_discovery=True)
+                      archive_sha256=digest, smoke=True, managed_engines=True, plugin_discovery=True,
+                      dependency_unavailable_without_fallback=True,
+                      observed_development_without_baseline=True, fix_verify_offline_synthetic=True)
         (release / (name + ".verification.json")).write_text(json.dumps(record), encoding="utf-8")
-        for suffix in ("hooks", "codex-integration", "osv-fallback", "fix-verify", "remediation", "confirmation-restart", "functional"):
+        for suffix in ("hooks", "codex-integration", "dependency-unavailable", "fix-verify", "remediation", "confirmation-restart", "functional"):
             (release / (name + f".{suffix}.json")).write_text('{"fixture": true}', encoding="utf-8")
     monkeypatch.setattr(make_release_metadata, "__file__", str(tmp_path / "scripts/release/make_release_metadata.py"))
     monkeypatch.setattr(make_release_metadata.subprocess, "check_output", lambda *a, **kw: "a" * 40)
@@ -115,6 +117,17 @@ def test_stale_verification_still_blocks_metadata(release_root):
         make_release_metadata.main()
 
 
+@pytest.mark.parametrize('field', ['dependency_unavailable_without_fallback',
+    'observed_development_without_baseline', 'fix_verify_offline_synthetic'])
+def test_missing_current_acceptance_blocks_publication(release_root, field):
+    path = next((release_root / 'dist/release').glob('*.verification.json'))
+    record = json.loads(path.read_text())
+    record.pop(field)
+    path.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match='Incomplete'):
+        make_release_metadata.main()
+
+
 def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
@@ -126,4 +139,4 @@ def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
     assert 'gh release upload "$RELEASE_TAG" dist/public-release/* --clobber' in runs
     assert runs.count("--notes-file dist/release-notes.md") == 2
     standalone = (root / ".github/workflows/standalone.yml").read_text()
-    assert "--full --osv-fallback --fix-verify --hooks --remediation --codex-integration" in standalone
+    assert "--full --dependency-unavailable --fix-verify --development" in standalone

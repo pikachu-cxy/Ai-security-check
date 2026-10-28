@@ -210,10 +210,10 @@ def run(command: list[str], *, cwd: Path, env: dict[str, str], timeout: int = 60
 
 
 def fix_verification_timeout():
-    # This harness performs many real scans and MCP round trips. The Intel
-    # macOS runner exceeded its former whole-harness deadline after the package
-    # and scanner checks had passed. Product timeouts and Windows stay unchanged.
-    return 600 if platform_key() == ('macos', 'x64') else 180
+    # The upstream pack has 2,007 rules. The local source-only multi-scan
+    # acceptance took 912s on Windows; native MCP repeats the same scenarios.
+    # This is the total harness budget, never an individual product timeout.
+    return 3600
 
 
 def sample_scan_diagnostics(payload):
@@ -382,7 +382,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("archive", type=Path)
     parser.add_argument("--full", action="store_true", help="Prepare real managed engines and run a real sample scan")
-    parser.add_argument("--osv-fallback", action="store_true", help="Also exercise actual offline OSV CLI/MCP fallback using a synthetic inventory")
+    parser.add_argument("--dependency-unavailable", action="store_true", help="Verify unavailable Trivy is reported without automatic OSV fallback")
+    parser.add_argument('--development', action='store_true', help='Verify current no-baseline Codex/Cursor hooks and recorded-file MCP checks')
     parser.add_argument('--fix-verify', action='store_true', help='Also exercise actual offline synthetic Java task fix/verify via native MCP')
     parser.add_argument('--hooks', action='store_true', help='Exercise Codex lifecycle Hook CLI with actual local engines; excludes optional Git pre-commit')
     parser.add_argument('--git-pre-commit', action='store_true', help='Opt in to advanced Git pre-commit acceptance (not a core trial gate)')
@@ -390,8 +391,10 @@ def main() -> None:
     parser.add_argument('--codex-integration', action='store_true', help='Exercise disposable owned Codex lifecycle and fresh MCP readiness without warmup')
     parser.add_argument("--data-dir", type=Path, help="Retain managed engine cache between local verification attempts")
     args = parser.parse_args()
-    if args.osv_fallback and not args.full:
-        parser.error('--osv-fallback requires --full')
+    if args.dependency_unavailable and not args.full:
+        parser.error('--dependency-unavailable requires --full')
+    if args.development and not args.full:
+        parser.error('--development requires --full')
     if args.fix_verify and not args.full:
         parser.error('--fix-verify requires --full for local managed Semgrep availability')
     if args.hooks and not args.full:
@@ -503,13 +506,10 @@ def main() -> None:
                 raise ValueError("Full sample scan has unavailable or failed engines: " + json.dumps(all_engines))
             if not osv_preexisting and (data/'tools'/'osv-scanner').exists():
                 raise ValueError('Healthy primary scanner preparation/scan unexpectedly downloaded OSV')
-            if args.osv_fallback:
-                # An explicit acceptance operation, after proving a healthy
-                # normal scan did not prepare the optional engine.
-                run([str(executable),'tools','install','osv-scanner'],cwd=project,env=env,timeout=180)
-                script=Path(__file__).resolve().parents[1] / 'osv_fallback_acceptance.py'
-                evidence=args.archive.resolve().with_name(args.archive.name+'.osv-fallback.json')
-                run([sys.executable,str(script),'--executable',str(executable),'--output',str(evidence)],cwd=root,env=env,timeout=120)
+            if args.dependency_unavailable:
+                script=Path(__file__).resolve().parents[1] / 'dependency_unavailable_acceptance.py'
+                evidence=args.archive.resolve().with_name(args.archive.name+'.dependency-unavailable.json')
+                run([sys.executable,str(script),'--executable',str(executable),'--output',str(evidence)],cwd=root,env=env,timeout=600)
             plugin = Path(env["SECURITY_RUNTIME_PLUGIN_DIR"])
             plugin.mkdir(parents=True, exist_ok=True)
             (plugin / "distribution_probe.py").write_text(PLUGIN_PROBE, encoding="utf-8")
@@ -529,6 +529,11 @@ def main() -> None:
             evidence = args.archive.resolve().with_name(args.archive.name + '.fix-verify.json')
             run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
                 cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=fix_verification_timeout())
+        if args.development:
+            script = Path(__file__).resolve().parents[1] / 'development_acceptance.py'
+            evidence = args.archive.resolve().with_name(args.archive.name + '.development.json')
+            run([sys.executable, str(script), '--executable', str(executable), '--output', str(evidence)],
+                cwd=root, env=dict(env, SECURITY_RUNTIME_OFFLINE='1'), timeout=1200)
         if args.remediation:
             script = Path(__file__).resolve().parents[1] / 'remediation_acceptance.py'
             evidence = args.archive.resolve().with_name(args.archive.name + '.remediation.json')
@@ -550,7 +555,8 @@ def main() -> None:
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
-        record['osv_offline_fallback']=args.osv_fallback
+        record['dependency_unavailable_without_fallback']=args.dependency_unavailable
+        record['observed_development_without_baseline'] = args.development
         record['fix_verify_offline_synthetic'] = args.fix_verify
         record['hooks_offline_synthetic'] = args.hooks or args.git_pre_commit
         record['git_precommit_offline_synthetic'] = args.git_pre_commit

@@ -2,6 +2,9 @@
 import copy
 
 import pytest
+from security_runtime.product_epoch_capture import platform_supported
+
+pytestmark = pytest.mark.skipif(not platform_supported(), reason="Historical product epochs require POSIX descriptor observations")
 
 from security_runtime.baseline_seed import WorkspaceBaselineSeeds
 from security_runtime.bootstrap_diagnostics import BaselinePreparationError

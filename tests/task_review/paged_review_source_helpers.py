@@ -16,6 +16,10 @@ from security_runtime.tasks.snapshot_pages import MAPS, LISTS
 
 def pack_review_sources(state, template):
     """Return baseline/end two-key pointers for immutable fixture snapshots."""
+    from security_runtime.owned_workspace_storage import _supported
+    if not _supported():
+        import pytest
+        pytest.skip('Internal paged review ownership requires POSIX private-state guarantees')
     result = {}
     store = SnapshotStore(state.path.parent / 'snapshot-pages',
                           workspace_root=state.root, key=state.key())

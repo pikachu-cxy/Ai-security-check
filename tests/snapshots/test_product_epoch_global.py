@@ -3,6 +3,9 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from security_runtime.product_epoch_capture import platform_supported
+
+pytestmark = pytest.mark.skipif(not platform_supported(), reason="Historical product epochs require POSIX descriptor observations")
 
 from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
 from security_runtime.global_workspace import workspace_state
@@ -131,3 +134,12 @@ def test_real_per_edit_before_is_independent_of_global_product_readiness(connect
     assert product.status()['epoch_ref'] == original_epoch
     assert core.store.load(core.store.path(root, 'codex', 'pending-product'))[0] is None
     assert core.store.scan_path(root, 'codex', 'pending-product').is_file()
+
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_comparison_mode(monkeypatch):
+    initialize = GlobalWorkspaces.__init__
+    def legacy_initialize(self, *args, **kwargs):
+        kwargs.setdefault("task_audit_mode", False)
+        initialize(self, *args, **kwargs)
+    monkeypatch.setattr(GlobalWorkspaces, "__init__", legacy_initialize)

@@ -8,7 +8,7 @@ AI Security Runtime checks the changes made during a development task, combines 
 
 Current development source defaults to **lightweight AI edit checks**. Hooks only record observed file paths; they do not start scanners. Finishing the coding task schedules one combined background check, then the host agent reviews findings and security-relevant changes. No whole-project baseline or workspace snapshot is created for ordinary development. Scanner inputs remain fixed for the selected files, and results retain their actual version and coverage gaps. Later edits remain pending until the next explicit finish. Unknown edit scope never silently expands to a project scan. Explicit full-difference audits, existing strict tasks, and native finding repairs keep their original contracts. Published packages follow their actual build identity; see the [development design](docs/LIGHTWEIGHT_DEVELOPMENT_CHECK.zh-CN.md).
 
-**Current source: 0.3.9 / Official release.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
+**Current source: 0.3.10 / Official release target.** The development branch is `feature/runtime-mvp`. Native bundles and the managed macOS installer have separate release records; available downloads, checksums, and build identities are listed in the [installation guide](https://pikachu-cxy.github.io/Ai-security-check/en/downloads.html). Codex is the primary validation host. Current Cursor and macOS desktop workflows still require independent validation; see [support boundaries](https://pikachu-cxy.github.io/Ai-security-check/en/reference/support.html).
 
 The current development source supports asking **“Open risk statistics”** to view locally retained project risks. The dashboard is read-only; it does not start scans or change dispositions. Historical records may contain duplicates or lack a current disposition. Availability in published packages depends on their actual build.
 
@@ -37,13 +37,13 @@ Full integration includes **Runtime + MCP + companion Skill + Hooks**. [MCP-only
 
 ## Install
 
-Version 0.3.9 is the official release for Windows x64, Mac Apple Silicon (M series), and Mac Intel. The release pipeline publishes these downloads only after regression, compliance, package-integrity, and all three native acceptance gates pass:
+Version 0.3.10 targets the official release for Windows x64, Mac Apple Silicon (M series), and Mac Intel. These versioned download links become available when the release is published. The release pipeline publishes these downloads only after regression, compliance, package-integrity, and all three native acceptance gates pass:
 
 | Platform | Bundle |
 | --- | --- |
-| Windows x64 | [ai-security-runtime-v0.3.9-windows-x64.zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-windows-x64.zip) |
-| Mac Apple Silicon | [ai-security-runtime-v0.3.9-macos-arm64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-arm64.tar.gz) |
-| Mac Intel | [ai-security-runtime-v0.3.9-macos-x64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.9/ai-security-runtime-v0.3.9-macos-x64.tar.gz) |
+| Windows x64 | [ai-security-runtime-v0.3.10-windows-x64.zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-windows-x64.zip) |
+| Mac Apple Silicon | [ai-security-runtime-v0.3.10-macos-arm64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-arm64.tar.gz) |
+| Mac Intel | [ai-security-runtime-v0.3.10-macos-x64.tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-x64.tar.gz) |
 
 ### Windows x64
 
@@ -85,7 +85,7 @@ Completely quit and reopen the editor after installation. In a new chat in the i
 
 Matching version numbers do not guarantee matching builds. Installation, component preparation, a working editor connection, and a completed project check are separate facts. See [verification](website/en/guide/verify.md), then try the [isolated demo](website/en/guide/demo.md).
 
-## Source version 0.3.9
+## Source version 0.3.10
 
 - One-step monitoring for the current Codex chat, with verified local session matching and HTML/JSON report export. Manual log selection is not required for this flow.
 - Separate reporting of chat tokens, observation time, and associated tool duration. Token use cannot reliably be split into development-only and security-only portions; unsupported measurements remain unknown.

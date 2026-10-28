@@ -17,6 +17,9 @@ import tracemalloc
 from types import SimpleNamespace
 
 import pytest
+import os
+
+pytestmark = pytest.mark.skipif(os.name != "posix", reason="Opt-in capture publication requires POSIX private-state guarantees")
 
 from security_runtime.closeout_state import digest, encode, readonly_uri
 from security_runtime.hook_state import HookStateStore

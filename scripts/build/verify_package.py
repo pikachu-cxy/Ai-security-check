@@ -18,6 +18,7 @@ def rule_contract(pack=None) -> dict:
     pack = pack if pack is not None else RulePackManager().resolve()
     return {'id': pack.descriptor.rule_pack_id, 'version': pack.descriptor.version,
             'checksum': pack.checksum, 'catalog': sorted(rule.rule_id for rule in pack.catalog),
+            'auto_fix_eligible': [c.auto_fix_eligible for c in pack.program.capabilities] if pack.program else [],
             'plans': {target: sorted(rule.rule_id for rule in plan_rules(pack, [target]).rules)
                       for target in ('app.py', 'app.js', 'view.jsx', 'app.ts', 'view.tsx')}}
 
@@ -62,12 +63,12 @@ assert pack.descriptor.rule_pack_id == expected['id']
 assert pack.descriptor.version == expected['version'], (pack.descriptor.version, expected['version'])
 assert pack.checksum == expected['checksum'], 'Installed rule content differs from build source'
 assert sorted(rule.rule_id for rule in pack.catalog) == expected['catalog']
-assert not any(c.auto_fix_eligible for c in pack.program.capabilities)
+auto_fix_eligible = [c.auto_fix_eligible for c in pack.program.capabilities] if pack.program else []
+assert auto_fix_eligible == expected['auto_fix_eligible'] and not any(auto_fix_eligible)
 from security_runtime.rule_coverage import plan_rules
 for target, expected_ids in expected['plans'].items():
     plan = plan_rules(pack, [target])
     assert plan.files == (target,) and sorted(rule.rule_id for rule in plan.rules) == expected_ids, target
-assert any(rule.rule_id == 'ai-security.java.spring-named-jdbc' for rule in pack.catalog)
 from security_runtime.tasks import fix as task_fix
 from security_runtime import equivalence, verification, verification_policy
 from security_runtime import hook_runtime, hook_state, hook_adapters
@@ -204,10 +205,12 @@ asyncio.run(asyncio.wait_for(check(), timeout=60))
         env = dict(os.environ, SECURITY_RUNTIME_STATE_DIR=str(root/'hook-state'), SECURITY_RUNTIME_OFFLINE='1')
         result = json.loads(subprocess.check_output([str(cli),'hook','session-start','--path',str(project),'--host','codex','--json'],
             env=env,cwd=root,text=True,encoding='utf-8',timeout=30))
-        assert result['status']=='BASELINE_ESTABLISHED' and not result['execution']['scanner_run']
+        assert result['status']=='CONNECTED' and not result['execution']['scanner_run'], result
+        assert result['baseline_available'] is False
         result = json.loads(subprocess.check_output([str(cli),'hook','agent-stop','--path',str(project),'--host','codex','--json'],
             env=env,cwd=root,text=True,encoding='utf-8',timeout=30))
-        assert result['status']=='REUSED_LAST_RESULT' and not result['execution']['scanner_run']
+        assert result['status']=='SESSION_FINALIZED' and not result['execution']['scanner_run'], result
+        assert result['baseline_available'] is False
         run(str(cli),'hooks','install','codex','--path',str(project),'--json',cwd=root)
         run(str(cli),'hooks','remove','codex','--path',str(project),'--json',cwd=root)
 

@@ -17,7 +17,7 @@ from scripts.build.check_wheel import check_python_modules
 from security_runtime._version import __version__
 from security_runtime.cli import main
 from security_runtime.engines import BUILTIN_ENGINES
-from security_runtime.rulepacks import FIRST_PARTY_RULE_PACK
+from security_runtime.rulepacks import DEFAULT_RULE_PACK, RulePackClass
 from security_runtime.mcp_config import resolve_runtime_command
 from security_runtime.licensing import LicenseAction, LicensePolicy, Permission, MANAGED_PYTHON_LICENSE, PYINSTALLER_BOOTLOADER_LICENSE
 
@@ -51,7 +51,9 @@ def test_runtime_version_and_semgrep_delivery(capsys):
     assert LicensePolicy.permission(PYINSTALLER_BOOTLOADER_LICENSE, LicenseAction.BUNDLE) != Permission.NO
     root = Path(__file__).resolve().parents[2]
     assert "PROPRIETARY LICENSE" in (root / "LICENSE").read_text(encoding="utf-8")
-    assert FIRST_PARTY_RULE_PACK.license == "Apache-2.0"
+    assert DEFAULT_RULE_PACK.license == "LGPL-2.1-only WITH Commons-Clause"
+    assert DEFAULT_RULE_PACK.pack_class == RulePackClass.RESTRICTED
+    assert not DEFAULT_RULE_PACK.commercial_use_allowed
 
 
 def test_current_install_examples_follow_single_version_source():

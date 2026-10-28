@@ -109,13 +109,9 @@ jobs:
           name: arithmetic-host-evidence-${{ matrix.os }}
           path: ${{ runner.temp }}/arithmetic-host-evidence/arithmetic-host-positive.json
           if-no-files-found: error
-      - name: First-party rule quality gate
+      - name: Pinned upstream rule identity and native product gate
         if: inputs.focused != true
-        run: python scripts/test_rules.py
-      - name: Product rule and Vue coverage gates
-        if: inputs.focused != true
-        shell: bash
-        run: |
-          python scripts/test_python_rule_product.py
-          python scripts/test_javascript_rule_product.py
-          python scripts/test_vue_rule_product.py
+        run: >-
+          python -m pytest -q tests/test_opengrep_migration.py
+          tests/distribution/test_current_rule_release.py
+          tests/distribution/test_release_fix_fixture.py

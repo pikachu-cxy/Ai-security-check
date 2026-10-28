@@ -60,12 +60,12 @@ def test_no_remindable_risk_never_receives_a_risk_template(kind):
     assert not plan.to_dict()['required_actions']
 
 
-def test_actual_sink_line_range_is_linked_and_known_function_retained():
+def test_actual_sink_line_range_is_linked_and_known_function_retained(tmp_path):
     finding = dict(id='sink', title='Command', file_path='src/module.py', line_start=90,
                    line_end=95, function_name='list_directory', severity='HIGH')
-    fact = finding_fact(finding, workspace='/tmp/project')
+    fact = finding_fact(finding, workspace=str(tmp_path))
     message = render_reply(plan_reply(ReplyFacts('TASK', risks=(fact,))))
-    assert '](/tmp/project/src/module.py:90)' in message
+    assert f']({tmp_path.as_posix()}/src/module.py:90)' in message
     assert '90–95' in message and 'list_directory' in message
     assert ':85' not in message
 
@@ -149,10 +149,10 @@ def test_numbered_risks_keep_single_primary_choice_and_original_authority(author
     assert not plan.to_dict()['grants_authority']
 
 
-def test_location_with_spaces_is_a_bounded_clickable_file_link():
-    fact = risk(file='src/file name.py', workspace='/tmp/project')
+def test_location_with_spaces_is_a_bounded_clickable_file_link(tmp_path):
+    fact = risk(file='src/file name.py', workspace=str(tmp_path))
     message = render_reply(plan_reply(ReplyFacts('TASK', risks=(fact,))))
-    assert '](</tmp/project/src/file%20name.py:90>)' in message
+    assert f'](<{tmp_path.as_posix()}/src/file%20name.py:90>)' in message
 
 
 def test_hook_risk_uses_same_rating_and_fixed_sections_without_fake_dependency_line():

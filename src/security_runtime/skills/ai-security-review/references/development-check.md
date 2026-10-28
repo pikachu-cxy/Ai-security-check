@@ -230,3 +230,4 @@ CONFIRMED 按确认风险报告，DISMISSED 不作为有效漏洞继续提醒，
 topic=task-review（references/quick-task-review-v3.md）。旧 task-review-plan-v3 与
 task-result-delivery-v1 的基线、九项工具、全部必需窗口和交付门槛保持原样。
 旧任务不迁移为轻量记录，不重建基线，不用轻量结果关闭旧风险或声称严格审计完成。
+

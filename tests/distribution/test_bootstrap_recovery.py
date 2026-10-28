@@ -1,4 +1,4 @@
-"""Upgrade/reconnect recovery retains pre-edit evidence and bounded diagnostics."""
+"""Explicit legacy epoch recovery; default development startup has no baseline."""
 import asyncio
 import json
 from concurrent.futures import Future
@@ -9,13 +9,27 @@ import pytest
 from security_runtime.baseline_seed import WorkspaceBaselineSeeds
 from security_runtime.product_epoch_service import ProductEpochService
 from security_runtime.bootstrap_diagnostics import BaselinePreparationError
-from security_runtime.global_mcp import create_global_server
+from security_runtime.global_mcp import create_global_server, GlobalWorkspaces
+from security_runtime.product_epoch_capture import platform_supported
 from security_runtime.global_workspace import read_bootstrap
 from security_runtime.hook_state import identity
 from security_runtime.integration_readiness import readiness_message
 from security_runtime.recent_hooks import safe_fields
 from test_codex_host_claims import connected, claims
 from test_global_integration import installed, projects, pool_fixture, ready
+
+
+@pytest.fixture(autouse=True)
+def explicit_legacy_epoch_mode(monkeypatch):
+    # These tests exercise POSIX descriptor-based historical comparison, not
+    # the default no-baseline workflow covered by test_global_integration.
+    if not platform_supported():
+        pytest.skip('Legacy product epochs require POSIX descriptor observations')
+    initialize = GlobalWorkspaces.__init__
+    def legacy_initialize(self, *args, **kwargs):
+        kwargs['task_audit_mode'] = False
+        initialize(self, *args, **kwargs)
+    monkeypatch.setattr(GlobalWorkspaces, '__init__', legacy_initialize)
 
 
 def failed_job(pool, root, session='s', reason='BASELINE_BUSY'):
