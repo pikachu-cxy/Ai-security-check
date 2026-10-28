@@ -2,6 +2,7 @@
 from contextlib import closing
 import copy
 import hashlib
+import os
 from pathlib import Path
 import sqlite3
 import tracemalloc
@@ -27,8 +28,20 @@ from security_runtime.tasks.snapshot_pages import GC_CONTRACT, pack, _binding, _
 
 
 @pytest.fixture(autouse=True)
-def isolated_state(tmp_path, monkeypatch):
+def isolated_state(tmp_path, monkeypatch, request):
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'runtime-state'))
+    if os.name != 'posix' and request.node.name not in {
+        'test_unallocated_legacy_inventory_needs_no_new_guard_or_files',
+        'test_unsupported_platform_rejects_capture_publication',
+    }:
+        pytest.skip('Opt-in capture publication requires POSIX private-state guarantees')
+
+
+@pytest.mark.skipif(os.name == 'posix', reason='Unsupported-platform contract')
+def test_unsupported_platform_rejects_capture_publication(tmp_path):
+    sample = _state(tmp_path)
+    with pytest.raises(publication.CapturePublicationError, match='^CAPTURE_PUBLICATION_STATE_UNAVAILABLE$'):
+        publication.prepare_storage(sample.state)
 
 
 def _state(tmp_path):
