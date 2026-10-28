@@ -37,7 +37,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       # Use an isolated interpreter and pinned scanner dependencies for real offline checks.
-      focused: ${{ inputs.validation == 'focused' || contains(github.event.head_commit.message, '[release-v0.3.9]') }}
+      focused: ${{ inputs.validation == 'focused' || contains(github.event.head_commit.message, '[release-focused]') || contains(github.event.head_commit.message, '[release-v0.3.9]') }}
   compliance:
     needs: tests
     uses: ./.github/workflows/compliance.yml

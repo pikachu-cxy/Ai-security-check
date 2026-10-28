@@ -14,7 +14,7 @@ import pytest
 from security_runtime.engines import BUILTIN_ENGINES
 from security_runtime.findings import FindingNormalizer
 from security_runtime.models import RunStatus, ScanContext, ScanMode
-from security_runtime.scanners import SemgrepAdapter
+from security_runtime.scanners import SemgrepAdapter, OpenGrepAdapter
 from security_runtime.processes import ProcessResult
 from security_runtime.toolchain import (
     OfficialReleaseProvider, ResolvedTool, ToolManager, ToolManifest, ToolSource,
@@ -152,11 +152,11 @@ def test_semgrep_pip_script_outside_path_is_validated_as_system_tool(tmp_path, m
     assert (resolved.status, resolved.source, Path(resolved.path)) == (ToolStatus.READY, ToolSource.SYSTEM, semgrep.resolve())
 
 
-def test_first_party_rules_scan_offline():
+def test_upstream_rules_scan_offline():
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
         (root / "app.py").write_text("import os\nuser_input = input()\nos.system(user_input)\nresult = eval(user_input)\n", encoding="utf-8")
-        adapter = SemgrepAdapter()
+        adapter = OpenGrepAdapter()
         context = ScanContext(str(root), ScanMode.QUICK, ("app.py",))
         offline_env = {"SECURITY_RUNTIME_OFFLINE": "1", "HTTP_PROXY": "http://127.0.0.1:9",
                        "HTTPS_PROXY": "http://127.0.0.1:9", "ALL_PROXY": "http://127.0.0.1:9", "NO_PROXY": ""}
@@ -164,9 +164,9 @@ def test_first_party_rules_scan_offline():
             findings, run = adapter.scan(context, FindingNormalizer(root))
         assert run.status == RunStatus.SUCCESS, run.error
         rule_ids = {finding.technical_details.get("rule_id") for finding in findings}
-        assert any("command-injection" in str(rule_id) for rule_id in rule_ids)
-        assert any("unsafe-eval" in str(rule_id) for rule_id in rule_ids)
-        assert all(finding.technical_details.get("rule_pack") == "ai-security-core" for finding in findings)
+        assert any("dangerous-system-call" in str(rule_id) for rule_id in rule_ids), rule_ids
+        assert any("eval" in str(rule_id) for rule_id in rule_ids)
+        assert all(finding.technical_details.get("rule_pack") == "opengrep-rules" for finding in findings)
 
 
 def test_unverified_system_semgrep_prepares_independent_managed_tool(tmp_path, monkeypatch):

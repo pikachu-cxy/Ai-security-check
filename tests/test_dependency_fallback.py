@@ -276,8 +276,9 @@ def test_primary_install_all_and_doctor_do_not_require_osv(tmp_path,capsys):
     output=capsys.readouterr().out
     report=json.loads(output[output.index('{'):])
     assert report['status']=='ready'
-    assert report['optional_providers'][0]['status']=='ON_DEMAND'
-    assert report['optional_providers'][0]['engine_status']=='MISSING'
+    optional = {item['name']: item for item in report['optional_providers']}
+    assert optional['osv-scanner']['status']=='ON_DEMAND'
+    assert optional['osv-scanner']['engine_status']=='MISSING'
 
 
 @pytest.mark.parametrize('platform,arch',[('windows','x64'),('linux','x64'),('macos','x64'),('macos','arm64')])

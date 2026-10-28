@@ -84,7 +84,7 @@ def test_quick_dependency_scan_uses_local_engines_and_reports_actual_inventory(t
     adapter, calls = configured_adapter(tmp_path, monkeypatch, package_output())
     with progress_context(NullProgressReporter()):
         found, run = adapter.scan(ScanContext(str(tmp_path), ScanMode.QUICK, ('requirements.txt',)), FindingNormalizer(tmp_path))
-    assert run.status == 'SUCCESS' and run.coverage_contract == 'PARTIAL'
+    assert run.status == 'SUCCESS' and run.coverage_contract == 'FULL'
     assert calls[0] == ('ensure', {'offline': True})
     assert calls[1] == ('prepare', {'offline': True})
     assert '--offline-scan' in calls[2][1] and '--list-all-pkgs' in calls[2][1]
@@ -115,7 +115,6 @@ def test_cached_scan_distinguishes_unknown_freshness_from_expired_data(tmp_path,
 
 @pytest.mark.parametrize('output', [
     {'Results': []},
-    package_output(packages=[]),
     package_output(packages=[{'Name': 'PyYAML', 'Version': ''}]),
     package_output(packages=[{'Name': [], 'Version': '5.3.1'}]),
 ])
@@ -127,6 +126,18 @@ def test_empty_or_unconfirmed_inventory_is_never_full(tmp_path, monkeypatch, out
     assert run.status == 'SUCCESS' and run.coverage_contract == 'PARTIAL'
     assert run.coverage_notes
     assert run.dependency_inventory['confirmed_package_occurrences'] == 0
+
+
+def test_explicit_empty_inventory_confirms_manifest_without_attesting_graph(tmp_path, monkeypatch):
+    (tmp_path / 'requirements.txt').write_text('# no declared packages\n')
+    output = {'Results': [{'Target': 'requirements.txt', 'Type': 'pip',
+                           'Packages': [], 'Vulnerabilities': []}]}
+    adapter, _ = configured_adapter(tmp_path, monkeypatch, output)
+    _, run = adapter.scan(ScanContext(str(tmp_path), ScanMode.RELEASE, ('requirements.txt',)), FindingNormalizer(tmp_path))
+    assert run.status == 'SUCCESS' and run.coverage_contract == 'FULL'
+    assert run.dependency_inventory['confirmed_manifests'] == 1
+    assert run.dependency_inventory['confirmed_package_occurrences'] == 0
+    assert run.dependency_inventory['complete_dependency_graph_attested'] is False
 
 
 def test_release_retains_online_preparation(tmp_path, monkeypatch):

@@ -62,10 +62,9 @@ def test_matching_version_wrapper_is_not_scan_ready(tmp_path, monkeypatch):
     assert result.path == str(wrapper.resolve())
     receipt = prepare_installation_readiness(manager=manager, offline=True)
     assert validate_readiness_receipt(receipt)
-    component = receipt['tools']['semgrep']
-    assert component['ready'] is False
-    assert component['diagnostic']['code'] == 'COMPONENT_EXECUTION_IDENTITY_UNAVAILABLE'
-    assert component['diagnostic']['automatic_download'] is False
+    # Legacy Semgrep is resolved explicitly above, never a default install prerequisite.
+    assert 'semgrep' not in receipt['tools']
+    assert set(receipt['tools']) == {'opengrep', 'gitleaks', 'trivy'}
     assert wrapper.read_bytes().startswith(b'#!/bin/sh')
 
 
