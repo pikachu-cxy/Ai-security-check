@@ -1,6 +1,6 @@
 # Usage monitoring and reports
 
-The 0.3.10 release includes one-step monitoring for the current Codex chat and report export. Install its Runtime and companion Skill, restart Codex, and verify the actual build.
+The 0.3.11 release includes one-step monitoring for the current Codex chat and report export. Install its Runtime and companion Skill, restart Codex, and verify the actual build.
 
 ## Start and export
 

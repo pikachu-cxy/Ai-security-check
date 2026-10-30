@@ -120,7 +120,7 @@ if ! "$python" -I -c 'import ssl, sys, venv; assert sys.version_info[:2] == (3, 
   printf '%s\n' 'Mac 未能启动产品专属 Python；请将上述错误反馈给文档页支持入口。当前安装尚未完成。' >&2
   exit 1
 fi
-base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.10
+base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.11
 asset="ai-security-runtime-macos-trial-$platform.tar.gz"
 printf '%s\n' '[安装] 正在下载并校验产品和离线依赖。'
 if [ -n "$payload_dir" ]; then

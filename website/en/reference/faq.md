@@ -12,7 +12,7 @@ Chat ownership keeps checks and decisions associated with the correct workspace 
 
 ## Why are risk statistics empty?
 
-Select Codex, Cursor, or all editors in 0.3.10. Check the actual build, OS user, filters, and read diagnostics. The page reads saved local records; other devices, accounts, or custom legacy directories are not automatically combined. Cross-editor duplicates remain separate. See [risk statistics](../guide/risk-handling.md).
+Select Codex, Cursor, or all editors in 0.3.11. Check the actual build, OS user, filters, and read diagnostics. The page reads saved local records; other devices, accounts, or custom legacy directories are not automatically combined. Cross-editor duplicates remain separate. See [risk statistics](../guide/risk-handling.md).
 
 ## Installation ended; is the project checked?
 

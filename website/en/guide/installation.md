@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.10 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.10**. This page covers status queries, component preparation, upgrades, and removal.
+For the **0.3.11 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.11**. This page covers status queries, component preparation, upgrades, and removal.
 
 After automatic Windows installation, copy the full status command printed by the installer. Relative-path examples below are for manual bundles; replace `.\security-check\security-check.exe` with the printed full executable path, retaining the `&` invocation operator. To upgrade, rerun the automatic command on your editor setup page.
 

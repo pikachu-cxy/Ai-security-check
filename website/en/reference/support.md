@@ -1,6 +1,6 @@
 # Support and detection coverage
 
-This page describes **0.3.10**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
+This page describes **0.3.11**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
 
 ## Platforms and editors
 
@@ -16,7 +16,7 @@ No Linux full bundle is published. Use the actual local project root. Remote, mu
 
 ## macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) offer an architecture-aware installer with dedicated Python and verified downloads. It pins the public `macos-trial-v0.3.10` release. Native bundles use `v0.3.10`. These share a version number but have different build identities; compare each with its own source and checksum.
+[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) offer an architecture-aware installer with dedicated Python and verified downloads. It pins the public `macos-trial-v0.3.11` release. Native bundles use `v0.3.11`. These share a version number but have different build identities; compare each with its own source and checksum.
 
 See the [managed installation workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml) for both architectures. Real desktop integration, first-download policy, and actual scanner readiness remain separately verifiable. There is no Apple Developer ID signing or notarization guarantee.
 

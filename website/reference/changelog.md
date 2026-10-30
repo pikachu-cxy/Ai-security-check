@@ -1,5 +1,16 @@
 # 版本与进度
 
+## 0.3.11 · 正式版
+
+本版解决开发过程中临时生成文件、模拟项目和测试临时目录混入源码检查范围的问题。三平台完整包与一键安装入口见[下载页](../downloads.md)；发行和校验信息以 [v0.3.11](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11) 的实际公开资产为准。
+
+- 开发 Agent 默认把一次性文件放在工作区外的系统临时子目录，无需用户选择或配置。
+- 保留任务产物声明、有界排除和原始观察记录；显式编辑与已跟踪源码优先保留。
+- 正式测试和新建未跟踪源码仍按原观察规则检查，不排除整个测试目录。
+- 保留具体扫描失败错误码，并修复 Windows 长路径枚举不完整的问题。
+
+采用 focused 精简发布验证，保留相关定向回归、合规、包完整性和三平台原生验收。Mac 一键安装单独使用 `macos-trial-v0.3.11`，与原生完整包分别核对构建身份。
+
 ## 0.3.10 · 正式版
 
 2026-10-28（UTC）公开发布 [v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10)。三平台原生完整包对应提交 `082b9c1`；[成功发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/40706996250)完成精简回归、安装及原生包验收。下载与证据见[下载页](../downloads.md#build-details)。

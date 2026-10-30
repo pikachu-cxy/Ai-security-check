@@ -91,13 +91,13 @@ def make_payload(tmp_path, *, build_id="a" * 64):
     payload.mkdir()
     shutil.copyfile(SOURCE, payload / "managed_install.py")
     (payload / "wheelhouse").mkdir()
-    wheel = payload / "wheelhouse/ai_security_runtime-0.3.10-py3-none-any.whl"
+    wheel = payload / "wheelhouse/ai_security_runtime-0.3.11-py3-none-any.whl"
     wheel.write_bytes(b"Test fixture; subprocess execution is mocked.")
     (payload / "requirements.txt").write_text(
-        "ai-security-runtime==0.3.10 --hash=sha256:" + installer.digest(wheel) + "\n")
+        "ai-security-runtime==0.3.11 --hash=sha256:" + installer.digest(wheel) + "\n")
     manifest = {
         "schema": installer.SCHEMA, "release_tag": installer.RELEASE_TAG,
-        "version": "0.3.10", "platform": "macos-arm64",
+        "version": "0.3.11", "platform": "macos-arm64",
         "source_commit": "b" * 40, "build_id": build_id,
         "files": {path.relative_to(payload).as_posix(): installer.digest(path)
                   for path in payload.rglob("*") if path.is_file()},

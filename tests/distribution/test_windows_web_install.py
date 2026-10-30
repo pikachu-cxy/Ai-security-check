@@ -28,7 +28,7 @@ def test_installer(tmp_path, shell, scenario):
     if scenario == 'hash':
         digest = '0' * 64
     checksum = tmp_path / 'fixture.sha256'
-    checksum.write_text('invalid' if scenario == 'checksum' else f'{digest}  ai-security-runtime-v0.3.10-windows-x64.zip\n')
+    checksum.write_text('invalid' if scenario == 'checksum' else f'{digest}  ai-security-runtime-v0.3.11-windows-x64.zip\n')
     harness = tmp_path / 'harness.ps1'
     harness.write_text(r'''
 $ErrorActionPreference = 'Stop'

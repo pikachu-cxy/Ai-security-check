@@ -2,7 +2,7 @@
 
 ## Local risk statistics
 
-Ask **“Open risk statistics.”** Version 0.3.10 offers **All editors / Codex / Cursor** filters, plus project, disposition, and text filters. Summary cards and project distribution follow the selected filters.
+Ask **“Open risk statistics.”** Version 0.3.11 offers **All editors / Codex / Cursor** filters, plus project, disposition, and text filters. Summary cards and project distribution follow the selected filters.
 
 The page reads saved records in the current operating-system user's local data directories, not only the current chat and not every device or account. Confirmed pending risks, unconfirmed candidates, deferred/excluded items, and reviewed resolutions are separate. Raw scanner counts are not confirmed vulnerability counts.
 
@@ -14,7 +14,7 @@ Viewing is read-only: it does not scan, change decisions, or start usage monitor
 
 A useful finding identifies the location, concrete problem, trigger conditions, potential impact, existing safeguards, proposed fix, and remaining unknowns. A severity label does not replace this evidence.
 
-Version 0.3.10 distinguishes unverified scanner candidates from risks assessed against code. Missing tools, stale data, and incomplete coverage are check states, not vulnerability findings or reasons to ask for a repair decision. Explanations follow the conversation language rather than requiring fixed headings.
+Version 0.3.11 distinguishes unverified scanner candidates from risks assessed against code. Missing tools, stale data, and incomplete coverage are check states, not vulnerability findings or reasons to ask for a repair decision. Explanations follow the conversation language rather than requiring fixed headings.
 
 ## Choose a disposition
 

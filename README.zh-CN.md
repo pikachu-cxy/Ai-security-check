@@ -6,7 +6,7 @@
 
 当前开发源码默认采用 **轻量 AI 编辑检查**：Hook 只记录已观测到的编辑文件，不启动扫描；开发收尾时后台合并检查一次，再由 Agent 分析发现和安全相关改动。普通开发不建立全项目基线、不做整个工作区快照；扫描器只为所选输入固定版本，结果保留实际范围、版本和缺口。后续编辑保持待检查，写完后再次收尾。范围未知不静默扩大为全项目扫描。显式完整差异审计、已有严格任务和原生风险修复保留原契约。公开安装包的行为以实际构建为准；设计与边界见[轻量开发检查](docs/LIGHTWEIGHT_DEVELOPMENT_CHECK.zh-CN.md)。
 
-当前源码交付目标为 **0.3.10**；正式安装包仅在发布门禁通过后公开，公开安装包以 [v0.3.10 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
+当前源码交付目标为 **0.3.11**；正式安装包仅在发布门禁通过后公开，公开安装包以 [v0.3.11 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11) 的实际资产为准，开发分支为 **feature/runtime-mvp**。三平台发行包来自同一发布提交，实际构建身份以 `build_id` 为准。主要验收宿主是 Codex，Cursor 自动连接器仍需独立桌面验收。源码同步、安装包发布、接入成功与项目检查完成分别认定。
 
 当前开发源码支持在聊天中说 **“打开风险统计”**，查看本机已保存的项目风险。页面只读，不启动扫描或修改处置；历史记录可能重复或缺少当前处置状态。公开安装包是否包含此功能以其实际构建为准。
 
@@ -22,7 +22,7 @@
 
 ## 当前源码状态
 
-0.3.10 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
+0.3.11 包含一键启动当前聊天的消耗监控、自动关联可验证的 Codex 会话，以及结束后一键导出 HTML / JSON 报告。无需试用者手动找日志。用法与计量边界见[实时监控指南](docs/guides/LIVE_MONITORING.zh-CN.md)。
 
 监控是可选模块：失败、停止或从源码交付中整体移除，不改变扫描、任务复核和修复授权。报告区分聊天 token、工具耗时和观察窗口时长；不能可靠拆分的纯开发 / 纯安全 token 保持未知。
 
@@ -73,13 +73,13 @@ Windows 默认使用原生 OpenGrep，无需修改系统 TEMP/TMP。历史显式
 
 ## 使用完整安装包
 
-[v0.3.10 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
+[v0.3.11 正式版](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11) 通过[发布流程](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml)的全部检查后公开以下平台包：
 
-- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-windows-x64.zip)
-- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-arm64.tar.gz)
-- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/ai-security-runtime-v0.3.10-macos-x64.tar.gz)
+- [Windows x64](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11/ai-security-runtime-v0.3.11-windows-x64.zip)
+- [Mac Apple Silicon](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11/ai-security-runtime-v0.3.11-macos-arm64.tar.gz)
+- [Mac Intel](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11/ai-security-runtime-v0.3.11-macos-x64.tar.gz)
 
-三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
+三平台包来自同一发布提交，实际源码身份和校验值见 [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11/release-manifest.json) 与 [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11/SHA256SUMS.txt)。升级时重新下载完整包和配套校验文件，重启宿主并核对 `version`、`source_commit`、`build_id`。签名、公证、macOS 真机和 Cursor 桌面验收仍分别记录。
 
 拿到与所需能力匹配的完整包后，保留全部 security-check 目录，在解压目录执行下列命令。由 Codex 辅助安装时保留当前聊天，安装及准备完成后再退出并重启，使新连接生效：
 

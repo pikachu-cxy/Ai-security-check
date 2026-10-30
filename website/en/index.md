@@ -5,7 +5,7 @@ description: Review changes, understand risks, approve fixes, and verify the ori
 hero:
   name: AI Security Runtime
   text: AI writes code. Keep security evidence in the workflow.
-  tagline: Version 0.3.10 for Windows and Mac. OpenGrep code checks, Gitleaks secrets, Trivy dependencies, and evidence-backed agent review of your recorded files.
+  tagline: Version 0.3.11 for Windows and Mac. OpenGrep code checks, Gitleaks secrets, Trivy dependencies, and evidence-backed agent review of your recorded files.
   image:
     src: /logo.svg
     alt: AI Security Runtime

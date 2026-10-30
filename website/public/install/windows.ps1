@@ -11,7 +11,7 @@ if ($architecture -ne 'AMD64') { throw 'Only Windows x64 is supported.' }
 if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$version = '0.3.10'
+$version = '0.3.11'
 $archiveName = "ai-security-runtime-v$version-windows-x64.zip"
 $baseUrl = "https://github.com/pikachu-cxy/Ai-security-check/releases/download/v$version"
 # Keep this unique directory for diagnostics and optional status commands.

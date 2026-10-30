@@ -53,8 +53,8 @@ jobs:
       - name: Check that all documented downloads are public
         id: trial-assets
         run: |
-          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.10
-          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.10
+          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.11
+          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.11
           ready=true
           for platform in macos-arm64 macos-x64; do
             for suffix in .tar.gz .tar.gz.sha256; do
@@ -65,7 +65,7 @@ jobs:
           for archive in windows-x64.zip macos-arm64.tar.gz macos-x64.tar.gz; do
             for suffix in '' .sha256; do
               curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
-                "$native_base/ai-security-runtime-v0.3.10-$archive$suffix" >/dev/null || ready=false
+                "$native_base/ai-security-runtime-v0.3.11-$archive$suffix" >/dev/null || ready=false
             done
           done
           echo "ready=$ready" >> "$GITHUB_OUTPUT"

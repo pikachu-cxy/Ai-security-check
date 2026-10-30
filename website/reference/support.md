@@ -1,6 +1,6 @@
 # 支持状态与检测范围
 
-本页对应 **0.3.10 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
+本页对应 **0.3.11 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
 
 ## 系统与宿主
 
@@ -16,7 +16,7 @@
 
 ## macOS 安装与验证 {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos)与 [Cursor](../guide/editors/cursor.md#macos) 页提供自动安装命令。脚本自动识别芯片，固定使用已公开的 `macos-trial-v0.3.10`，校验下载并准备专用 Python。正式原生完整包使用 `v0.3.10`；两者版本相同、来源构建不同，应分别核对 `build_id`、提交和校验值。
+[Codex](../guide/editors/codex.md#macos)与 [Cursor](../guide/editors/cursor.md#macos) 页提供自动安装命令。脚本自动识别芯片，固定使用已公开的 `macos-trial-v0.3.11`，校验下载并准备专用 Python。正式原生完整包使用 `v0.3.11`；两者分别构建并验收，应分别核对 `build_id`、提交和校验值。
 
 自动安装的双架构验证见 [Mac 安装工作流](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。真实 Mac 系统策略、首次下载、桌面连接和扫描组件仍按实际结果判断；当前没有 Apple Developer ID 签名或公证保证。
 

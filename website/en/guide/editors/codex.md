@@ -2,11 +2,11 @@
 
 Full integration configures the user-level MCP connection, companion Skill, and Hooks, then starts scanner preparation. Initial preparation needs network access. Installation does not scan or modify your business project. The supported starting point is a local, single-root Git workspace.
 
-Current official native bundles: **0.3.10**.
+Current official native bundles: **0.3.11**.
 
 ## Windows {#windows}
 
-Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.10 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
+Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.11 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
 
 ```powershell
 & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor codex
@@ -35,7 +35,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 
 [Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) and its [SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256). Documentation deployment copies the maintained repository script directly. It detects Apple Silicon or Intel, verifies its downloads, and prepares dedicated Python. No preinstalled Python, Git, or Homebrew is needed. The program is stored in `~/.local/share/AI-Security-Runtime-macos-trial`; keep that directory.
 
-The managed installer uses `macos-trial-v0.3.10` / Runtime 0.3.10. Existing Codex configuration owned by this product may be updated; finish active checks first and avoid editing configuration during installation. There is no Apple Developer ID signing or notarization guarantee. See [macOS support](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
+The managed installer uses `macos-trial-v0.3.11` / Runtime 0.3.11. Existing Codex configuration owned by this product may be updated; finish active checks first and avoid editing configuration during installation. There is no Apple Developer ID signing or notarization guarantee. See [macOS support](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
 
 For a verified [manual native bundle](../../downloads.md#macos-packages), run `./security-check/security-check install codex` from its parent directory instead. To switch back, use the original verified bundle's installer, restart, and verify the actual build; an earlier system-policy rejection can still apply.
 
@@ -61,4 +61,4 @@ Then try the [small development task](../quickstart.md#_3-try-a-small-developmen
 
 ## Reconnect and read saved results
 
-Keep the original check reference and read it and its dispositions after reconnecting in the same chat, without rescanning. Hooks provide session ownership; users do not enter credentials and agents must not invent them. Default scans cover recorded files; related business logic is reviewed by the agent as needed. The managed macOS release predates the native 0.3.10 build and has its own source identity.
+Keep the original check reference and read it and its dispositions after reconnecting in the same chat, without rescanning. Hooks provide session ownership; users do not enter credentials and agents must not invent them. Default scans cover recorded files; related business logic is reviewed by the agent as needed. The managed macOS release and native 0.3.11 bundles have separate build identities.

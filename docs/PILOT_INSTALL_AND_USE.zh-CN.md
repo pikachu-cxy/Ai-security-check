@@ -1,12 +1,12 @@
 # 安装、使用与反馈
 
-更新：2026-10-28。当前源码目标版本为 **0.3.10**，正式资产仅在发布门禁通过后公开，支持 Windows x64、Mac Apple Silicon（M 系列）与 Intel。下载以 [v0.3.10 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) 的实际公开资产为准；三平台使用同一发布提交。
+更新：2026-10-30。当前源码目标版本为 **0.3.11**，正式资产仅在发布门禁通过后公开，支持 Windows x64、Mac Apple Silicon（M 系列）与 Intel。下载以 [v0.3.11 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11) 的实际公开资产为准；三平台使用同一发布提交。
 
 程序在本机检查项目，宿主聊天工具自身的数据处理按其设置。源码开发安装、原生完整包和独立 Mac 自动安装分别核对构建身份；原生 CI 验收与真实桌面、Apple 签名和公证分别认定。
 
 ## 选择模式和安装包
 
-本次正式交付目标版本为 0.3.10；请确认 Release 已公开且资产齐全后下载。平台包命名示例为 `ai-security-runtime-v0.3.10-macos-arm64.tar.gz`；
+本次正式交付目标版本为 0.3.11；请确认 Release 已公开且资产齐全后下载。平台包命名示例为 `ai-security-runtime-v0.3.11-macos-arm64.tar.gz`；
 请从 README 或文档站下载页选择已发布的完整平台包，并核对同版本配套 SHA256 文件。
 
 | 模式 | 内容 | 适用 |
@@ -45,8 +45,8 @@ if ($LASTEXITCODE -ne 0) { throw '安装未完成：保留回执，不删除其�
 终端在收到的文件目录执行（替换成实际文件名）：
 ```bash
 uname -m
-shasum -a 256 ai-security-runtime-v0.3.10-macos-arm64.tar.gz
-tar -xzf ai-security-runtime-v0.3.10-macos-arm64.tar.gz
+shasum -a 256 ai-security-runtime-v0.3.11-macos-arm64.tar.gz
+tar -xzf ai-security-runtime-v0.3.11-macos-arm64.tar.gz
 cd security-check
 bundle="$(pwd)"
 exe="$bundle/security-check"
@@ -110,7 +110,7 @@ Codex的stdio配置形态和MCP使用方式参考[官方文档](https://learn.ch
 
 ## 升级、重试和卸载
 
-当前 0.3.10 支持的语言、文件后缀、默认代码规则、依赖生态及未覆盖范围见[产品覆盖说明](PRODUCT_COVERAGE.zh-CN.md)。请分别判断代码规则、密钥检查、依赖检查和宿主 AI 分析，不能只凭工具已就绪就认定某种语言已完整检查。
+当前 0.3.11 支持的语言、文件后缀、默认代码规则、依赖生态及未覆盖范围见[产品覆盖说明](PRODUCT_COVERAGE.zh-CN.md)。请分别判断代码规则、密钥检查、依赖检查和宿主 AI 分析，不能只凭工具已就绪就认定某种语言已完整检查。
 
 仍在下载且持续有进展时只观察。失败、工作进程中断或以后过期：
 ```powershell

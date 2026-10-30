@@ -2,6 +2,17 @@
 
 Source versions, published assets, CI acceptance, and real desktop validation are tracked separately. See [downloads](../downloads.md) and the original [engineering progress (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/DEVELOPMENT_PROGRESS.md).
 
+## 0.3.11 · Official release
+
+This release reduces temporary generated files, mock projects, and test fixtures entering source checks. See [downloads](../downloads.md) for native bundles and one-command installation; published assets and checksums are recorded in [v0.3.11](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11).
+
+- Agents place disposable development files in unique OS temporary directories outside the workspace, without asking users to configure paths.
+- Task output declarations, bounded exclusions, and raw observation records remain available; explicit edits and tracked source take precedence.
+- Formal tests and new untracked source remain subject to the existing observation rules. Entire test directories are not excluded.
+- Specific scanner failure codes are preserved, and Windows long-path enumeration is corrected.
+
+Focused release validation retains relevant regressions, compliance, package integrity, and native acceptance on all three platforms. Managed macOS installation uses `macos-trial-v0.3.11` with its own build identity.
+
 ## 0.3.10 · Official release
 
 Published on 2026-10-28 UTC: [v0.3.10](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10), with three native bundles from `082b9c1`. The [successful release workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/40706996250) completed focused regressions, installation checks, and native package acceptance. See [downloads and evidence](../downloads.md#build-details).

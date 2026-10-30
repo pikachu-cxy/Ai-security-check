@@ -1,6 +1,12 @@
 # Daily workflow
 
-These instructions describe **0.3.10**. After [verifying installation](./verify.md), work in a chat opened at the actual project root.
+These instructions describe **0.3.11**. After [verifying installation](./verify.md), work in a chat opened at the actual project root.
+
+## Temporary files and project source
+
+Agents place disposable scripts, mock projects, logs, and temporary test fixtures in unique OS temporary directories outside the workspace. No user path configuration is required. Formal source, tests, and project configuration remain inside the project and subject to checks.
+
+Agents can declare known outputs that must stay in the project. Explicit edits and tracked source take precedence; new untracked source remains subject to observation. Ambiguous files are not excluded by name. This is an agent behavior rule, not a process sandbox.
 
 ## Develop and check
 
