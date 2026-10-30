@@ -6,13 +6,24 @@ Current official native bundles: **0.3.10**.
 
 ## Windows {#windows}
 
-[Download and verify the Windows x64 bundle](../../downloads.md#windows). Fully extract it and keep the complete `security-check` directory. From its parent directory, run in PowerShell:
+Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.10 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
+
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').Content)) -Editor cursor
+```
+
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1). No administrator privileges are required. Finish active checks first; existing product settings may be updated. Download, checksum, or configuration failures stop installation and preserve diagnostics. Retry the same command after resolving the error.
+
+The installer prints the full preparation-status command. Downloads are retained under `%LOCALAPPDATA%\AI-Security-Runtime-downloads`; the installed runtime lives under `%LOCALAPPDATA%\AI-Security-Runtime-install`.
+
+::: details Manual installation (fallback)
+[Download and verify the complete bundle](../../downloads.md#windows), extract it, and run from the parent of `security-check`:
 
 ```powershell
 .\security-check\security-check.exe install cursor
 ```
+:::
 
-The bundle includes Python and does not require Node.js.
 
 ## macOS {#macos}
 

@@ -8,15 +8,15 @@ const editors = {
     name: 'Codex',
     target: '接入本地 Codex',
     page: 'codex',
-    steps: 'Windows 使用完整包的 install codex 入口；macOS 按本页命令自动安装并选择 codex，先说明验证范围及已有 Codex 连接可能更新。配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
-    note: '粘贴到本机 Codex 聊天。Windows 使用完整包，Mac 自动准备专用运行环境；已有 Codex 连接可能更新为所选版本。'
+    steps: 'Windows 按本页 PowerShell 命令自动安装并选择 codex；macOS 按本页命令自动安装并选择 codex，先说明验证范围及已有 Codex 连接可能更新。配置用户级 MCP、Skill 和 Hook，并自动准备检查组件。',
+    note: '粘贴到本机 Codex 聊天。Windows 自动下载校验完整包，Mac 自动准备专用运行环境；已有 Codex 连接可能更新为所选版本。'
   },
   cursor: {
     name: 'Cursor',
     target: '接入本地 Cursor',
     page: 'cursor',
-    steps: '阅读 Cursor 接入指南中的支持说明。Windows 使用完整包的 install cursor 入口；macOS 按本页命令自动安装并选择 cursor，先说明验证范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
-    note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 使用完整包，Mac 自动准备专用运行环境；已有 Cursor 连接可能更新为所选版本。'
+    steps: '阅读 Cursor 接入指南中的支持说明。Windows 按本页 PowerShell 命令自动安装并选择 cursor；macOS 按本页命令自动安装并选择 cursor，先说明验证范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
+    note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 自动下载校验完整包，Mac 自动准备专用运行环境；已有 Cursor 连接可能更新为所选版本。'
   },
   workbuddy: {
     name: 'WorkBuddy',
@@ -35,7 +35,7 @@ const editors = {
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
 const installSource = computed(() => ['codex', 'cursor'].includes(editor.value.page)
-  ? '自动识别系统与芯片。Windows 使用官方 v0.3.10 正式版完整包，下载并核验官方 SHA256 和包内完整性后再运行。macOS 按当前编辑器页面使用发行 macos-trial-v0.3.10 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。Mac 独立发行与原生完整包分别核对构建，真实桌面验收范围以支持页为准，不宣称 Apple 签名或公证已验证。'
+  ? '自动识别系统与芯片。Windows 使用本页自动安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1，自动下载并核验官方 v0.3.10 完整包后接入所选编辑器。macOS 按当前编辑器页面使用发行 macos-trial-v0.3.10 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。Mac 独立发行与原生完整包分别核对构建，真实桌面验收范围以支持页为准，不宣称 Apple 签名或公证已验证。'
   : '自动识别系统与芯片，选择官方 v0.3.10 正式版完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
 
 const copied = ref(false)

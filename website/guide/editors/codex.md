@@ -12,13 +12,24 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 
 ### Windows {#windows}
 
-从[下载页](../../downloads.md#windows)下载 Windows x64 完整包和配套 SHA256，核对后完整解压。保留整个 `security-check` 文件夹，在能看到该文件夹的目录打开 PowerShell：
+在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.10 正式完整包**、核验 SHA256、解压并接入 Codex，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
+
+```powershell
+& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').Content)) -Editor codex
+```
+
+可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1)。安装到用户目录，不需要管理员权限。请先结束正在运行的检查；已有产品连接可能更新，配置冲突时会停止并保留诊断。下载失败或校验不一致时不会运行下载的程序，处理报错后可重试同一命令。
+
+安装完成后，终端会给出查询准备进度的完整命令；下载包保存在 `%LOCALAPPDATA%\AI-Security-Runtime-downloads`，已安装程序位于 `%LOCALAPPDATA%\AI-Security-Runtime-install`。
+
+::: details 手动下载与安装（备用）
+从[下载页](../../downloads.md#windows)下载完整包及配套 SHA256，校验并完整解压，在能看到 `security-check` 文件夹的目录执行：
 
 ```powershell
 .\security-check\security-check.exe install codex
 ```
+:::
 
-完整包自带运行环境，不要求另装 Python 或 Node.js。找不到程序时，先核对解压层级和终端所在目录。
 
 ### macOS {#macos}
 

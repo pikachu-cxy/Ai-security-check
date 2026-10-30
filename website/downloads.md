@@ -8,12 +8,14 @@
 
 | 你使用的系统 | 安装入口 | 是否需要额外环境 |
 | --- | --- | --- |
-| Windows x64 | [Codex](./guide/editors/codex.md#windows) / [Cursor](./guide/editors/cursor.md#windows)：下载下面的完整包 | 不要求另装 Python 或 Node.js |
+| Windows x64 | [Codex](./guide/editors/codex.md#windows) / [Cursor](./guide/editors/cursor.md#windows)：一条 PowerShell 命令自动安装 | 不要求另装 Python 或 Node.js |
 | macOS · Apple Silicon 或 Intel | [Codex](./guide/editors/codex.md#macos) / [Cursor](./guide/editors/cursor.md#macos)：下载下方对应芯片的正式版完整包；自动安装另列 | 完整包自带 Python，自动安装准备专用 Python |
 
 WorkBuddy 和其他 MCP 客户端按[对应接入指南](./guide/quickstart.md#choose-editor)配置。项目检查与示例练习需要 Git；安装 Runtime 本身不要求 Git。
 
-## Windows 完整包 {#windows}
+## Windows 安装 {#windows}
+
+推荐使用 [Codex](./guide/editors/codex.md#windows) / [Cursor](./guide/editors/cursor.md#windows) 页面的一条 PowerShell 命令，自动完成下载、校验和解压。以下完整包用于手动安装或离线分发。
 
 当前为 **0.3.10 正式版**。下载包与配套 SHA256，核对后完整解压并保留整个 `security-check` 文件夹。
 
@@ -28,7 +30,7 @@ Get-FileHash .\ai-security-runtime-v0.3.10-windows-x64.zip -Algorithm SHA256
 Get-Content .\ai-security-runtime-v0.3.10-windows-x64.zip.sha256
 ```
 
-然后按 [Codex 安装](./guide/editors/codex.md#windows)或 [Cursor 安装](./guide/editors/cursor.md#windows)执行一条安装命令。旧版本升级或从源码开发版切换时，下载本页完整包和配套校验文件，重启编辑器后核对实际程序路径、来源提交与 `build_id`。
+完整解压后，在能看到 `security-check` 文件夹的目录执行 `.\security-check\security-check.exe install codex`（Cursor 将 `codex` 改成 `cursor`）。旧版本升级或从源码开发版切换时，下载本页完整包和配套校验文件，重启编辑器后核对实际程序路径、来源提交与 `build_id`。
 
 ## Mac 安装
 

@@ -6,6 +6,8 @@ OpenGrep selects language rules from the installed pack, alongside bounded nativ
 
 Current product: **0.3.10 Official release**, published on 2026-10-28. Native full bundles and managed macOS installation have separate release and build identities. Use the matching assets and checksums below.
 
+For Windows x64, use the one-command installer on the [Codex](./guide/editors/codex.md#windows) or [Cursor](./guide/editors/cursor.md#windows) page. The archives below remain available for manual installation.
+
 ## Official 0.3.10 full bundles {#windows}
 
 The [v0.3.10 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.10) has published all three bundles and their companion checksums. They use source commit [`082b9c1`](https://github.com/pikachu-cxy/Ai-security-check/commit/082b9c16c3ed823220f457677b823c64feae695a).
@@ -23,7 +25,7 @@ Get-FileHash .\ai-security-runtime-v0.3.10-windows-x64.zip -Algorithm SHA256
 Get-Content .\ai-security-runtime-v0.3.10-windows-x64.zip.sha256
 ```
 
-Compare the hashes, extract the complete archive, and retain the entire `security-check` directory. Follow [Codex](./guide/editors/codex.md#windows) or [Cursor](./guide/editors/cursor.md#windows) setup.
+Compare the hashes, extract the complete archive, and retain the entire `security-check` directory. Run `.\security-check\security-check.exe install codex` (or `install cursor`) from its parent directory.
 
 ## Managed macOS installation
 
