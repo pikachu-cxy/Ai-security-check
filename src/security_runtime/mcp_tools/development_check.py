@@ -6,6 +6,7 @@ from ..development_risks import Observation
 
 
 TOOLS = frozenset({'begin_development_check', 'record_development_changes',
+                   'declare_development_outputs',
                    'finish_development_check', 'get_development_check',
                    'complete_development_check', 'wait_development_check',
                    'get_development_deliveries', 'get_development_result',
@@ -95,6 +96,13 @@ def register(server, registry, *, application):
         service = application.development_service(check_ref, session_ref, workspace_path)
         return service.record(application.bound_path(workspace_path), check_ref, paths,
                               scope_unknown=scope_unknown, event_id=event_id)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def declare_development_outputs(check_ref: str, paths: list[str],
+                                    workspace_path: str | None = None, session_ref: str | None = None) -> dict:
+        """Declare exact generated-output files/directories for this check only, ideally before running tests/builds. Replace paths with [] to revoke it. Only declare outputs known from the actual command/tool configuration; do not infer from names or use this to suppress source changes. Explicitly recorded and Git-tracked files remain inputs. Paths must be workspace-relative, bounded and non-symlink, never the workspace itself. Preserves the observed journal and historical results; no scan, global ignore rule or repair authority. Closeout reports exclusions; unverifiable declarations retain inputs."""
+        service = application.development_service(check_ref, session_ref, workspace_path)
+        return service.declare_outputs(application.bound_path(workspace_path), check_ref, paths)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     async def finish_development_check(check_ref: str, workspace_path: str | None = None,

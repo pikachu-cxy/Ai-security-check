@@ -29,18 +29,44 @@ MAX_BUSY_ATTEMPTS = 120
 
 def failure_diagnostic(error, stage='UNKNOWN'):
     """Fixed fields only: exception text may contain source or credentials."""
-    from .scan_request import ScanInputError
+    from .scan_request import ScanInputError, SCAN_INPUT_REASON_CODES
     allowed = {PermissionError, FileNotFoundError, TimeoutError, ValueError,
                OSError, RuntimeError, ScanInputError}
-    codes = {'SCAN_INPUT_NOT_REGULAR', 'SCAN_INPUT_CAPTURE_UNAVAILABLE',
-             'SCAN_INPUT_PATH_INVALID', 'SCAN_INPUT_CONFIGURATION_UNBOUND'}
     code = getattr(error, 'reason_code', None)
     if isinstance(error, OSError) and (getattr(error, 'winerror', None) == 206
                                       or error.errno == errno.ENAMETOOLONG):
         return dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'OSError',
                     reason_code='SCAN_INPUT_PATH_TOO_LONG')
-    return dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'UNKNOWN',
-                reason_code=code if type(error) is ScanInputError and code in codes else 'UNKNOWN')
+    diagnostic = dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'UNKNOWN',
+                reason_code=code if type(error) is ScanInputError and isinstance(code, str)
+                and code in SCAN_INPUT_REASON_CODES else 'UNKNOWN')
+    # Only fixed internal operation names and source line numbers. Never retain
+    # traceback text, locals, arbitrary filenames or the exception message.
+    operations = {
+        'security_runtime.runtime': {'_scan', '_execute_scan'},
+        'security_runtime.scan_input': {'capture_scan_input', 'with_rules',
+            'assert_content', 'assert_intact', '_view_files', '_verify_source', 'derive'},
+    }
+    frames, trace = [], error.__traceback__
+    while trace is not None:
+        module = trace.tb_frame.f_globals.get('__name__')
+        function = trace.tb_frame.f_code.co_name
+        if module in operations and function in operations[module]:
+            frames.append(dict(module=module, function=function, line=trace.tb_lineno))
+        trace = trace.tb_next
+    if frames:
+        diagnostic['input_trace'] = frames[-8:]
+    detail = getattr(error, 'capture_diagnostic', None)
+    counts = {'expected_count', 'actual_count', 'root_length', 'max_path_length'}
+    hashes = {'missing_path_ids', 'unexpected_path_ids'}
+    if (type(error) is ScanInputError and isinstance(detail, dict)
+            and set(detail) == counts | hashes
+            and all(type(detail[k]) is int and 0 <= detail[k] <= 100_000 for k in counts)
+            and all(isinstance(detail[k], list) and len(detail[k]) <= 5
+                    and all(isinstance(v, str) and len(v) == 64
+                            and all(c in '0123456789abcdef' for c in v) for v in detail[k]) for k in hashes)):
+        diagnostic['capture'] = detail
+    return diagnostic
 
 
 class DevelopmentScanFailure(Exception):
@@ -225,8 +251,8 @@ def _scan(queue, row, ticket, runtime_factory=None):
         else:
             runtime = runtime_factory(row)
         stage = 'INPUT_SELECTION'
-        from .development_scope import excluded_artifact
-        selected = [name for name in row['observed_paths'] if not excluded_artifact(name)]
+        from .development_scope import select_outputs
+        selected, generated_outputs = select_outputs(queue.root, row)
         request = scoped_request(queue.root, selected,
             dependency_changes=[name for name in selected if is_dependency_input(name)])
         # Feature enables applicable IaC checks on the explicit observed files.
@@ -239,7 +265,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
         stage = 'RESULT_PUBLICATION'
         if execution.input_id is None or not receipt:
             raise ScanAttemptLost('DEVELOPMENT_INPUT_NOT_BOUND')
-        gaps = []
+        gaps = list(generated_outputs['gaps'])
         absent = list(request.absent_files)
         if absent:
             gaps.append('DELETED_PATH_SEMANTICS_NOT_REVIEWED')
@@ -254,6 +280,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
             gaps.append('SCANNER_COVERAGE_LIMITED')
         runs = [asdict(run) for run in result.scanner_runs]
         return dict(scan_id=result.scan_id, status=result.status, coverage=result.coverage,
+            generated_outputs=generated_outputs,
             gaps=gaps, absent_paths=absent, excluded_paths=excluded,
             execution=dict(receipt, scanner_run=any(run['status'] in {'SUCCESS', 'FAILED', 'TIMEOUT'}
                 for run in runs), host_review_completed=False, repair_authorized=False))

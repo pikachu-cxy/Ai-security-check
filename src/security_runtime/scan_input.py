@@ -234,9 +234,12 @@ def _inventory(reader):
 
 
 def _view_files(root, limit):
+    root = native_io_path(root)
+    def unreadable(error):
+        raise ScanInputError('SCAN_INPUT_VIEW_UNREADABLE') from error
     result = []
     visited = 0
-    for directory, directories, files in os.walk(root, followlinks=False):
+    for directory, directories, files in os.walk(root, followlinks=False, onerror=unreadable):
         checkpoint()
         visited += len(directories) + len(files) + 1
         if visited > limit * 4 + 1:
@@ -344,8 +347,18 @@ class CapturedScanInput:
         """Detect changed view bytes; same-user plugins are not a sandbox."""
         self._require_active()
         expected = tuple(sorted(entry.path for entry in self.manifest if entry.role in {'TARGET', 'CONTEXT'}))
-        if _view_files(self.execution_root, self._limits.files) != expected:
-            raise ScanInputError('SCAN_INPUT_VIEW_CHANGED')
+        actual = _view_files(self.execution_root, self._limits.files)
+        if actual != expected:
+            error = ScanInputError('SCAN_INPUT_VIEW_CHANGED')
+            # Fixed counts and path hashes only; no source bytes or raw paths.
+            error.capture_diagnostic = dict(expected_count=len(expected), actual_count=len(actual),
+                root_length=len(str(self.execution_root)),
+                max_path_length=max((len(str(self.execution_root / name)) for name in expected), default=0),
+                missing_path_ids=[hashlib.sha256(name.encode()).hexdigest()
+                                  for name in sorted(set(expected) - set(actual))[:5]],
+                unexpected_path_ids=[hashlib.sha256(name.encode()).hexdigest()
+                                     for name in sorted(set(actual) - set(expected))[:5]])
+            raise error
         if self.rules_path is not None:
             expected_rules = tuple(entry.path for entry in self.manifest if entry.role == 'RULES')
             if _view_files(self.rules_path, self._limits.files) != expected_rules:

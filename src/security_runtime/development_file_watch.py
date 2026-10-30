@@ -112,7 +112,7 @@ class _Window:
             from .development_check import clean_paths
             _, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *fresh])), tolerant=True)
             uncertain = uncertain or overflow
-            row, _ = self.store.append(db, row, fresh, uncertain, None)
+            row, _ = self.store.append(db, row, fresh, uncertain, None, explicit=False)
             if uncertain:
                 row = dict(row, file_watch_gaps=list(dict.fromkeys([
                     *row.get('file_watch_gaps', []), 'FILE_WATCH_PATHS_INCOMPLETE'])))

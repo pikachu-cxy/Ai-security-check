@@ -512,6 +512,9 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 不能把“不运行样例/项目”或“本轮不修改现有文件”推断为禁止静态检查。
 默认检查 AI 编辑中已观测到的文件范围，不建立全项目基线，不盘点整个工作区。
 产品启动只校验连接、配置、绑定和签名会话路由，不要求产品比较基线 A，不因此盘点或扫描项目；组件和漏洞数据状态独立如实说明。
+临时脚本、模拟项目、下载包和日志默认放在宿主系统临时目录的独占子目录，创建前确认在工作区外；无需用户选择或配置。
+正式源码、正式测试及项目配置留在项目内，未跟踪的新源码仍需检查；不可因名称像临时文件而跳过。
+此为 Agent 行为规则，不是进程沙箱；具体用法见 development-check 的“开发 Agent 临时文件规则”。
 编辑 Hook 只记录路径，不扫描或唤醒后台进程；开发收尾时合并静态检查。保存结果绑定实际输入版本，范围未知不扩为全项目扫描。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
 先核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；按版本、sha256 复用已读完整方法，
@@ -612,6 +615,8 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'operating_mode': 'AI_DEVELOPMENT_EDIT_CHECK',
                          'development_check': 'observed-development-check-v1; DEFAULT; NO_PROJECT_BASELINE; HOOK_RECORD_ONLY; BACKGROUND_ON_FINISH; OBSERVED_PATHS; READ_ONLY_SAVED_RESULTS; HOST_ANALYSIS',
                          'development_file_watch': 'development-file-watch-v1; WATCHFILES_1_3_0; NATIVE_PRE_TOOL_REGISTRATION; TASK_TIME_WINDOW; ALL_WRITERS_IN_WINDOW; WORKTREE_SCOPED; PATHS_ONLY; DRAIN_ON_FINISH; LOST_WINDOW_GAP; NO_GIT_INVENTORY',
+                         'development_temporary_files': 'agent-temp-files-v1; HOST_OS_TEMP; UNIQUE_OUTSIDE_WORKSPACE; GUIDANCE_ONLY; NO_COMMAND_REWRITE; NO_SCAN_EXCLUSION',
+                         'development_generated_outputs': 'task-generated-outputs-v1; EXPLICIT_DECLARATION; SAME_CHECK_OWNER; RAW_JOURNAL_RETAINED; EXPLICIT_AND_TRACKED_SOURCE_PROTECTED; CLOSEOUT_ONLY_BOUNDED_GIT; FAIL_CLOSED',
                          'development_check_wait': 'bounded-closeout-wait-v1; OPTIONAL_FINISH_WAIT_SECONDS_0_25; DEFAULT_DISPATCH_ONLY; ASYNC_WAIT_SAVED_STATE; STOP_ON_NEW_EDITS; NO_REDISPATCH; HOST_ANALYSIS_REQUIRED',
                          'development_check_scheduler': 'development-background-scheduler-v1; SUBMITTED_ONLY; DURABLE_BOUNDED_RETRIES; LIVE_SUPERVISOR; ADMITTED_QUEUE_RECOVERY; NO_READ_OR_EDIT_TRIGGER',
                          'development_check_delivery': 'development-result-delivery-v1; COMPLETE_AND_WAIT_TOOLS; PRODUCT_WAIT_BUDGET; VERSIONED_PENDING_OUTBOX; OWNER_SCOPED_PAGING; BOUNDED_STOP_CONTINUATION; RECONNECT_CONTEXT; TRUSTED_HOST_ACK_ONLY; USER_CONSUMPTION_UNKNOWN',

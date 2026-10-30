@@ -54,6 +54,10 @@ def test_begin_record_close_and_read_never_capture_workspace(development_server)
     assert first['check_ref'].startswith('dc1-')
     assert not launches
     ref = first['check_ref']
+    declared = call(server, 'declare_development_outputs', workspace_path=str(root),
+                    check_ref=ref, paths=['arbitrary/build-output'])
+    assert declared['scope']['generated_outputs']['declared_roots'] == ['arbitrary/build-output']
+    assert not launches
     recorded = call(server, 'record_development_changes', workspace_path=str(root),
                     check_ref=ref, paths=['src/A.java', 'src/deleted.java'], event_id='one-edit')
     assert recorded['dirty_seq'] > 0

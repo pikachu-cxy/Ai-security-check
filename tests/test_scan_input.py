@@ -14,6 +14,25 @@ from security_runtime.scan_request import ScanBinding, ScanInputError, ScanReque
 KEY = b'k' * 32
 
 
+@pytest.mark.skipif(os.name != 'nt', reason='Windows extended path regression')
+def test_private_view_inventory_includes_deep_windows_paths(tmp_path):
+    from security_runtime.hook_state import native_io_path
+    leaf = tmp_path / ('a' * 75) / ('b' * 75) / ('c' * 75) / 'app.py'
+    assert len(str(leaf.parent)) > 260
+    native_io_path(leaf.parent).mkdir(parents=True)
+    native_io_path(leaf).write_bytes(b'pass\n')
+    assert scan_input._view_files(tmp_path, 10) == (leaf.relative_to(tmp_path).as_posix(),)
+
+
+def test_private_view_inventory_never_swallows_walk_errors(tmp_path, monkeypatch):
+    def walk(root, *, followlinks, onerror):
+        onerror(PermissionError('private filesystem information'))
+        return iter(())
+    monkeypatch.setattr(scan_input.os, 'walk', walk)
+    with pytest.raises(ScanInputError, match='^SCAN_INPUT_VIEW_UNREADABLE$'):
+        scan_input._view_files(tmp_path, 10)
+
+
 @pytest.fixture
 def workspace(tmp_path):
     root = tmp_path / 'project'

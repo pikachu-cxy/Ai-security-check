@@ -133,6 +133,25 @@ def test_burst_merges_paths_and_checks_only_observed_scope(check, monkeypatch):
     assert result['static_result']['findings_access']['arguments']['scan_id'] == result['scan_id']
 
 
+def test_declared_generated_outputs_filtered_at_worker_with_auditable_scope(check, monkeypatch):
+    root, service, runtime, state = check
+    (root/'arbitrary-output').mkdir()
+    (root/'arbitrary-output/generated.ts').write_text('eval(input())\n')
+    ref = service.begin(root, 'generated')['check_ref']
+    service.declare_outputs(root, ref, ['arbitrary-output'])
+    service.record(root, ref, ['app.ts'])
+    store = service.store(root)
+    with store.transaction() as db:
+        store.append(db, store._get(db, ref), ['arbitrary-output/generated.ts'],
+                     False, None, explicit=False)
+    assert execute(check, monkeypatch) == 0
+    result = service.get(root, ref)
+    assert state['inputs'] == [('app.ts',)], state.get('failure')
+    assert result['scope']['paths'] == ['app.ts', 'arbitrary-output/generated.ts']
+    assert result['scope']['generated_outputs']['excluded_paths'] == ['arbitrary-output/generated.ts']
+    assert result['dirty_seq'] == result['scanned_seq']
+
+
 def test_scan_inflight_edit_waits_for_next_finish_on_same_ref(check, monkeypatch):
     root, service, runtime, state = check
     ref = service.begin(root, 'race')['check_ref']

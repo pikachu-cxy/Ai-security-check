@@ -105,8 +105,8 @@ def test_opted_in_failure_reminder_is_durable_and_coalesced(sample):
 
 
 def test_diagnostic_does_not_expose_exception_text(sample):
-    diagnostic = failure_diagnostic(ScanInputError('SCAN_INPUT_NOT_REGULAR'), 'INPUT_SELECTION')
-    assert diagnostic['reason_code'] == 'SCAN_INPUT_NOT_REGULAR'
+    diagnostic = failure_diagnostic(ScanInputError('SCAN_INPUT_PRIVATE_PATH_BUDGET'), 'SCAN_EXECUTION')
+    assert diagnostic['reason_code'] == 'SCAN_INPUT_PRIVATE_PATH_BUDGET'
     private = 'token=SECRET C:/private/source.py'
     assert private not in json.dumps(failure_diagnostic(PermissionError(private), 'SCAN_EXECUTION'))
     assert failure_diagnostic(ScanInputError(private))['reason_code'] == 'UNKNOWN'
@@ -114,6 +114,41 @@ def test_diagnostic_does_not_expose_exception_text(sample):
     saved(sample, diagnostic=diagnostic)
     assert service.get(root, ref)['failure_diagnostic'] == diagnostic
     assert service.saved_result(root, ref, 1)['delivery']['failure_diagnostic'] == diagnostic
+
+
+def test_all_fixed_scan_input_codes_are_preserved():
+    import ast
+    from pathlib import Path
+    from security_runtime.scan_request import SCAN_INPUT_REASON_CODES
+    for code in SCAN_INPUT_REASON_CODES:
+        assert failure_diagnostic(ScanInputError(code))['reason_code'] == code
+    # A new literal exception code must not silently disappear at closeout.
+    root = Path(__file__).resolve().parents[1] / 'src/security_runtime'
+    for source in root.rglob('*.py'):
+        tree = ast.parse(source.read_text(encoding='utf-8-sig'))
+        for call in ast.walk(tree):
+            if (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)
+                    and call.func.id == 'ScanInputError' and call.args
+                    and isinstance(call.args[0], ast.Constant)):
+                assert call.args[0].value in SCAN_INPUT_REASON_CODES, source
+
+
+@pytest.mark.parametrize('code', ['SCAN_INPUT_PRIVATE_token_SECRET',
+                                  'SCAN_INPUT_SOURCE_CHANGED\nPRIVATE', ['private']])
+def test_arbitrary_reason_codes_remain_private(code):
+    assert failure_diagnostic(ScanInputError(code))['reason_code'] == 'UNKNOWN'
+
+
+def test_capture_diagnostic_rejects_arbitrary_details():
+    error = ScanInputError('SCAN_INPUT_VIEW_CHANGED')
+    detail = dict(expected_count=2, actual_count=1, root_length=100, max_path_length=310,
+                  missing_path_ids=['a' * 64], unexpected_path_ids=[])
+    error.capture_diagnostic = detail
+    assert failure_diagnostic(error)['capture'] == detail
+    error.capture_diagnostic = dict(detail, missing_path_ids=['private/path.py'])
+    assert 'capture' not in failure_diagnostic(error)
+    error.capture_diagnostic = dict(detail, raw='secret')
+    assert 'capture' not in failure_diagnostic(error)
 
 
 def test_worker_persists_mock_failure_without_running_scanner(sample, monkeypatch):

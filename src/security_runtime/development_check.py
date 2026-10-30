@@ -152,7 +152,7 @@ class DevelopmentCheckStore(SignedRecords):
                 if events != row['events']:
                     self._put(db, row['key'], dict(row, events=events))
 
-    def append(self, db, row, paths, unknown, event_id):
+    def append(self, db, row, paths, unknown, event_id, *, explicit=True):
         paths, invalid = clean_paths(paths, tolerant=True)
         unknown = unknown or invalid
         if event_id is not None:
@@ -165,7 +165,8 @@ class DevelopmentCheckStore(SignedRecords):
         if not paths and not unknown:
             return self._put(db, row['check_ref'], row), False
         selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
-        row = dict(row, observed_paths=selected,
+        protected = sorted(set(row.get('explicit_paths', [])) | (set(paths) if explicit else set()))
+        row = dict(row, observed_paths=selected, explicit_paths=protected,
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
             dirty_seq=row['dirty_seq']+1, updated_at=self.now(), last_event_at=self.now(),
             events=([*row['events'], event_id][-MAX_EVENTS:] if event_id else row['events']),
@@ -229,6 +230,9 @@ def projection(store, row):
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
+            generated_outputs=(result if row['scanned_seq'] == row['dirty_seq'] else {}).get('generated_outputs', dict(
+                declared_roots=row.get('generated_output_roots', []), excluded_paths=[],
+                protected_paths=[], gaps=[])),
             scope_unknown=bool(row['scope_unknown'] or 'FILE_WATCH_INTERRUPTED' in observation_notes),
             full_project=False, expanded_to_project=False),
         gaps=list(dict.fromkeys(gaps)), observation_notes=list(dict.fromkeys(observation_notes)), reason_code=reason,
@@ -323,6 +327,23 @@ class DevelopmentCheckService:
         store.load(check_ref, self.owner)
         with store.transaction() as db:
             row, changed = store.append(db, store._get(db, check_ref), names, scope_unknown, event_id)
+        return projection(store, store.load(check_ref, self.owner))
+
+    def declare_outputs(self, root, check_ref, directories):
+        """Replace this check's output declaration; never run or certify a scan."""
+        from .development_scope import output_roots
+        store = self.store(root)
+        store.load(check_ref, self.owner)
+        roots = output_roots(store.root, directories)
+        with store.transaction() as db:
+            row = store._get(db, check_ref)
+            if roots != row.get('generated_output_roots', []):
+                row = dict(row, generated_output_roots=roots, dirty_seq=row['dirty_seq']+1,
+                    updated_at=self.now(), last_event_at=self.now(), state='DIRTY',
+                    finish_requested=False, reason_code=None, failure_diagnostic=None,
+                    attempt_count=0, busy_attempts=0, next_attempt_at=0, failed_seq=None,
+                    launch_failures=0, launch_retry_at=0)
+                store._put(db, check_ref, row)
         return projection(store, store.load(check_ref, self.owner))
 
     def finish(self, root, check_ref):
