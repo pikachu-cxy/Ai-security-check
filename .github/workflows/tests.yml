@@ -104,6 +104,11 @@ jobs:
           tests/test_scanner_execution_identity.py
           tests/test_tool_resolution.py
           tests/distribution/test_distribution.py
+          tests/test_development_outputs.py
+          tests/test_development_check_mcp.py
+          tests/test_development_feedback_policy.py
+          tests/test_scan_input.py
+          tests/guidance/test_guidance_catalog.py
           --basetemp="${{ runner.temp }}/focused-release-tests"
       - name: Retain actual arithmetic host execution evidence
         if: always() && inputs.focused != true

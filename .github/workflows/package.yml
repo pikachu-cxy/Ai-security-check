@@ -8,6 +8,7 @@ on:
 
 jobs:
   package:
+    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v')
     name: Package integrity (${{ matrix.os }})
     strategy:
       fail-fast: false

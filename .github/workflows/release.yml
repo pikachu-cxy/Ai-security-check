@@ -17,11 +17,11 @@ permissions:
   contents: read
 
 jobs:
-  # v0.3.10 promotes Cursor session recovery and editor-scoped risk statistics.
+  # v0.3.11 separates temporary development outputs from source checks.
   # Full validation includes file-based rule inventory verification before publication.
   # Native gates use OpenGrep and Trivy; unavailable dependencies never fall back to OSV.
   version:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.10]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.11]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +77,8 @@ jobs:
           cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
       - name: Stage platform downloads and bundled acceptance evidence
         run: python scripts/release/prepare_release_assets.py
+      - name: Include version-specific release changes
+        run: cat distribution/releases/v0.3.11.md >> dist/release-notes.md
       - name: Upload complete release as draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}

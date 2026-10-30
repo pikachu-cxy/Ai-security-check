@@ -8,6 +8,7 @@ on:
 
 jobs:
   compliance:
+    if: github.workflow == 'Official release' || github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v')
     name: Compliance
     runs-on: ubuntu-latest
     env:
