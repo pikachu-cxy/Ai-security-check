@@ -15,7 +15,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.10 正式完整包**、核验 SHA256、解压并接入 Cursor，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
 
 ```powershell
-& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').Content)) -Editor cursor
+& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
 ```
 
 可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1)。安装到用户目录，不需要管理员权限。请先结束正在运行的检查；已有产品连接可能更新，配置冲突时会停止并保留诊断。下载失败或校验不一致时不会运行下载的程序，处理报错后可重试同一命令。

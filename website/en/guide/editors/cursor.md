@@ -9,7 +9,7 @@ Current official native bundles: **0.3.10**.
 Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.10 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
 
 ```powershell
-& ([scriptblock]::Create((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').Content)) -Editor cursor
+& ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
 ```
 
 [Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1). No administrator privileges are required. Finish active checks first; existing product settings may be updated. Download, checksum, or configuration failures stop installation and preserve diagnostics. Retry the same command after resolving the error.
