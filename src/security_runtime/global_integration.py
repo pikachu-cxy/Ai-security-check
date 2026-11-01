@@ -246,7 +246,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
     def project_layers(self, candidate):
         from .global_workspace import resolve_workspace
         root = resolve_workspace(candidate, excluded=(self.store.directory,),
-                                 codex_homes=(self.home,))
+                                 codex_homes=(self.home,), allow_empty=True)
         cwd = Path(candidate).absolute().resolve()
         return [root, *reversed([p for p in (cwd, *cwd.parents) if p != root and p.is_relative_to(root)])]
 

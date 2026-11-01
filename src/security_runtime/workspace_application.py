@@ -4,6 +4,7 @@ Owns connection routing only. Domain stores remain the sole task/evidence and
 authority sources; no SDK, tool manager or host presentation is retained here.
 """
 from __future__ import annotations
+from .scan_preferences import configured
 
 from pathlib import Path
 
@@ -76,12 +77,14 @@ class WorkspaceApplication:
                 self.issued_development_checks.pop(next(iter(self.issued_development_checks)))
             self.issued_development_checks[result['check_ref']] = owner
 
+    @configured
     def scan(self, workspace=None, mode='quick', *, staged=False, rules_path=None, progress=None):
         from .explicit_scan import run_explicit_scan
         runtime=self.runtime_provider() if callable(self.runtime_provider) else self.runtime_provider
         return run_explicit_scan(runtime,self.bound_path(workspace),mode=mode,staged=staged,
                                  rules_path=rules_path,progress=progress,hooks=self.hooks)
 
+    @configured
     def scan_project(self, workspace=None, *, force_rescan=False, progress=None):
         """Revalidate immutable evidence before reusing a whole-project result."""
         from .explicit_scan import run_explicit_scan
@@ -106,6 +109,7 @@ class WorkspaceApplication:
             dict(reused=False,reason_code='FORCE_RESCAN_REQUESTED',scanner_run=True))
         return result
 
+    @configured
     def scan_files(self, workspace, files, *, progress=None):
         """Check an explicit bounded worktree selection, without Git diff scope."""
         from .explicit_scan import run_explicit_scan

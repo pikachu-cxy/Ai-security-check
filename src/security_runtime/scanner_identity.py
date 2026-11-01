@@ -15,7 +15,12 @@ MAX_FILE_BYTES = 1_500_000_000
 
 
 def database_content_fingerprint_disabled(tool, *, kind=None):
-    """Vulnerability DB content hashing is disabled; policy bundles still bind."""
+    """Preserve default cost; explicitly selected Trivy data binds actual bytes."""
+    if tool == 'trivy' and kind != 'misconfig':
+        from .scan_preferences import section
+        policy = section('vulnerability_data', 'trivy')
+        if policy['repositories'] or policy['cache_dir']:
+            return False
     return tool == 'osv-scanner' or tool == 'trivy' and kind != 'misconfig'
 
 

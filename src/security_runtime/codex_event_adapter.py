@@ -140,6 +140,7 @@ class CodexEventAdapter:
                                               cwd=arguments.get('workspace_path'))
                                if expected in {'PreToolUse', 'PostToolUse'} else ((), True))
         return NormalizedHostEvent(self.events[expected], context, operation,
+            turn_id=arguments.get('turn_id'),
             candidate_paths=candidates, scope_unknown=unknown,
             mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
             stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)

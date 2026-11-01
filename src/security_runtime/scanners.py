@@ -126,6 +126,11 @@ class ScannerAdapter(Protocol):
     def normalize(self, raw: object, normalizer: FindingNormalizer) -> list[Finding]: ...
 
 
+def _execution_limit(key):
+    from .scan_preferences import section
+    return section('scan', 'execution')[key]
+
+
 def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
     with external_tool_loader():
         environment = execution_environment(args[0])
@@ -134,7 +139,7 @@ def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
         try:
             with span('process_invocation'):
                 count('process_invocations')
-                result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=MAX_OUTPUT,
+                result = run_process(args, cwd=cwd, env=environment, timeout=timeout, max_output=_execution_limit('max_output_bytes'),
                     capture_start_failure=True)
             add_time('process_creation', getattr(result, 'timing_ms', {}).get('process_creation'))
         except (TimeoutError, OutputLimitError):
@@ -272,11 +277,19 @@ class BaseScanner:
 
     def _environment(self, binary, context):
         environment = tool_environment(Path(binary))
+        configured_secret = None
+        if (self.engine_id or self.scanner_id) == 'gitleaks':
+            from .configured_rules import gitleaks_config
+            configured_secret = gitleaks_config()
+            if configured_secret:
+                environment['GITLEAKS_CONFIG'] = configured_secret[0]
         if local_recheck_requested():
             environment['SECURITY_RUNTIME_OFFLINE'] = '1'
         if context.input_view is not None:
             variables = {'gitleaks': ('GITLEAKS_CONFIG',), 'trivy': ('TRIVY_CONFIG',)}
             for name in variables.get(self.engine_id or self.scanner_id, ()):
+                if name == "GITLEAKS_CONFIG" and configured_secret:
+                    continue
                 if not environment.get(name):
                     continue
                 source = Path(environment[name]).expanduser()
@@ -313,6 +326,11 @@ class BaseScanner:
             data = data if (isinstance(data, str) and len(data) == 64
                 and all(char in '0123456789abcdef' for char in data)) else None
         result = dict(tool=actual, data=data, data_required=data_required)
+        if tool == 'gitleaks':
+            from .configured_rules import gitleaks_config
+            configured_secret = gitleaks_config()
+            if configured_secret:
+                result['configuration_sha256'] = configured_secret[1]
         if data_disabled:
             result['data_policy'] = 'DISABLED'
         return result
@@ -456,7 +474,7 @@ class PatternSASTScanner(BaseScanner):
                 for engine_batch in sast_batches(projection.scope if projection else batch):
                     request=SASTRequest(Path(context.root),rule_pack,engine_batch,config)
                     invocation('SAST_SCAN', len(engine_batch))
-                    process=_execute(self.engine_provider.command(binary,request),context.root,self.timeout)
+                    process=_execute(self.engine_provider.command(binary,request),context.root,_execution_limit('sast_timeout_seconds'))
                     if process.return_code not in (0,1):
                         _process_failure(process)
                     payloads.append(json.loads(process.stdout))
@@ -622,13 +640,14 @@ class GitleaksAdapter(BaseScanner):
                 process = _execute([binary, "dir", target, "--report-format", "sarif", "--report-path", report,
                     "--redact=0", "--no-banner", "--no-color", "--log-level", 'trace' if trace else 'info',
                     "--max-decode-depth", "5",
-                    "--exit-code", "0"], context.root, self.timeout)
+                    "--exit-code", "0"], context.root, _execution_limit('gitleaks_timeout_seconds'))
                 if process.return_code != 0:
                     # Trace may contain source-bearing fields even with redact.
                     # Never reflect raw Secret scanner stderr in diagnostics.
                     raise DiagnosticError(ErrorDiagnostic('SECRET_SCANNER_FAILED',
                         'Secret scanner did not complete successfully.', 'Inspect local engine configuration and retry.'))
-                if Path(report).exists() and Path(report).stat().st_size > MAX_OUTPUT:
+                if (_execution_limit('max_output_bytes') and Path(report).exists()
+                        and Path(report).stat().st_size > _execution_limit('max_output_bytes')):
                     raise OutputLimitError("scanner report exceeds configured limits")
                 if not Path(report).is_file():
                     raise ValueError('Secret scanner did not produce its scoped report')
@@ -757,7 +776,7 @@ class TrivyAdapter(BaseScanner):
                 args.append('--offline-scan')
             if self.checks == 'vuln':
                 invocation('DEPENDENCY_SCAN', len(set((*context.files, *context.context_files))))
-            process = _execute([*args,str(scoped)], str(scoped), self.timeout)
+            process = _execute([*args,str(scoped)], str(scoped), _execution_limit('trivy_timeout_seconds'))
             if process.return_code != 0:
                 _process_failure(process)
             data = json.loads(process.stdout)

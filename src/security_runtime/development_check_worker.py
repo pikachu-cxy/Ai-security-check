@@ -260,7 +260,9 @@ def _scan(queue, row, ticket, runtime_factory=None):
         request = replace(request, mode='feature')
         from .verification_policy import local_recheck
         stage = 'SCAN_EXECUTION'
-        with local_recheck():
+        from .scan_preferences import preferences
+        from .user_config import DEFAULTS
+        with preferences(row.get('effective_config') or {'values': DEFAULTS}), local_recheck():
             result = runtime.scan(queue.root, mode='feature', request=request, execution=execution)
         stage = 'RESULT_PUBLICATION'
         if execution.input_id is None or not receipt:
@@ -423,6 +425,18 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                         from .development_delivery import publish
                         publish(queue, db, dict(row, state='PARTIAL' if result['gaps'] else 'RESULTS_READY',
                             scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result, reason_code=None))
+                if result is not None:
+                    from .development_check import DevelopmentCheckService
+                    from .development_risks import DevelopmentRisks
+                    try:
+                        service = DevelopmentCheckService(None, hooks, owner=row['owner'])
+                        DevelopmentRisks(service, queue.root, row['check_ref']).sync_scanner()
+                    except (ValueError, OSError):
+                        # Static output and outbox already persist. Never repeat a scan
+                        # because the separate risk projection could not be populated.
+                        with queue.transaction() as db:
+                            current = queue._get(db, row['check_ref'])
+                            queue._put(db, row['check_ref'], dict(current, risk_import_status='UNAVAILABLE'))
                 if result is None:
                     time.sleep(min(0.25, max(0, deadline-time.monotonic())))
                 else:

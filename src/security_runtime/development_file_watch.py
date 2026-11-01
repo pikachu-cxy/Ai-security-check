@@ -132,10 +132,15 @@ class _Window:
                     self.record(changes)
                 now = time.monotonic()
                 if self.closing.is_set():
-                    if changes == 'timeout':
+                    # Native notification delivery is asynchronous. A 100 ms
+                    # empty poll does not mean the final writes have arrived.
+                    # Drain for the whole bounded settlement window, without
+                    # resetting its deadline on each incoming batch.
+                    if self.close_at is None:
                         break
-                    if self.close_at is not None and now >= self.close_at:
-                        _gap(self.store, self.ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=self.id)
+                    if now >= self.close_at:
+                        if changes != 'timeout':
+                            _gap(self.store, self.ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=self.id)
                         break
                 if now - self.last_activity > IDLE_SECONDS:
                     _gap(self.store, self.ref, 'FILE_WATCH_IDLE_EXPIRED', watch_id=self.id, status='EXPIRED')
@@ -224,7 +229,8 @@ def stop_window(store, ref, owner):
     with _lock:
         window = _windows.get(_key(store, ref))
         if window is not None:
-            window.close_at = time.monotonic()+SETTLE_SECONDS
+            if window.close_at is None:
+                window.close_at = time.monotonic()+SETTLE_SECONDS
             window.closing.set()
     if window is not None:
         # No workspace lock is held while waiting for the last persisted batch.

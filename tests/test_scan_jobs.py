@@ -286,3 +286,33 @@ def test_worker_cannot_run_twice_while_original_is_active(jobs):
     finally:
         release.set()
         worker.join(5)
+
+
+@pytest.mark.parametrize('maximum', [1, 0])
+def test_worker_preserves_discovery_limit_diagnostic(jobs, tmp_path, monkeypatch, maximum):
+    from security_runtime.target import TargetDetector
+    config = tmp_path/'config.toml'
+    config.write_text(f'[scan.discovery]\nmax_files = {maximum}\n')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(config))
+    (jobs.root/'second.py').write_text('pass\n')
+    ref = submit(jobs)['job_ref']
+    row = jobs.load(ref)
+    def scan(*args, **kwargs):
+        TargetDetector().detect(jobs.root)
+        return dict(scan_id='fake-scan', status='COMPLETE', scanner_runs=[])
+    code = run_worker(jobs.root, jobs.hooks.directory, ref, row['ticket'],
+                      application_factory=lambda row: SimpleNamespace(scan_project=scan))
+    reconnected = ScanJobs(jobs.hooks, jobs.root, scan_path=jobs.scan_path)
+    status = reconnected.result(ref) if maximum else reconnected.status(ref)
+    if maximum:
+        assert code == 2 and status['status'] == 'FAILED'
+        assert status['reason_code'] == 'TARGET_DISCOVERY_LIMIT_EXCEEDED'
+        diagnostic = status['failure_diagnostic']
+        assert diagnostic['failure_stage'] == 'TARGET_DISCOVERY'
+        assert diagnostic['limit'] == 1 and diagnostic['observed'] == 2
+        assert diagnostic['configuration']['unified_file_key'] == 'scan.discovery.max_files'
+        assert '0 disables' in diagnostic['remediation']
+        assert not status['scanner_run'] and not status['result_available']
+        assert reconnected.status(ref)['failure_diagnostic'] == diagnostic
+    else:
+        assert code == 0 and reconnected.status(ref)['status'] == 'COMPLETED'

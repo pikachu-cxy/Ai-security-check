@@ -42,7 +42,7 @@ class ScanPublications:
         if row is None:
             return None
         raw, signature = row
-        if not isinstance(raw, str) or len(raw.encode()) > MAX_RECORD_BYTES:
+        if not isinstance(raw, str):
             raise ValueError('Scan publication budget exceeded')
         value = json.loads(raw)
         if (not isinstance(value, dict) or value.get('contract') != CONTRACT
@@ -76,9 +76,7 @@ class ScanPublications:
         with closing(sqlite3.connect(readonly_uri(self.path), uri=True, timeout=2)) as db:
             db.execute('PRAGMA query_only=ON')
             rows = db.execute('SELECT data,mac FROM scan_publications WHERE kind=? AND scope_key=? '
-                              'ORDER BY rowid LIMIT ?', (kind, scope_key, MAX_RECORDS+1)).fetchall()
-        if len(rows) > MAX_RECORDS:
-            raise ValueError('Scan publication capacity exceeded')
+                              'ORDER BY rowid', (kind, scope_key)).fetchall()
         values = [self._decode(row) for row in rows]
         if any(value['kind'] != kind or value['scope_key'] != scope_key for value in values):
             raise ValueError('Scan publication index binding cannot be verified')
@@ -89,8 +87,10 @@ class ScanPublications:
             raise ValueError('Invalid scan publication request')
         value = dict(contract=CONTRACT, workspace=str(self.root), kind=kind,
                      scope_key=scope_key, lease=dict(lease.__dict__), payload=payload)
+        from .scan_preferences import section
+        policy = section('storage', 'scan_publication')
         raw = encode(value)
-        if len(raw) > MAX_RECORD_BYTES:
+        if policy['max_record_bytes'] and len(raw) > policy['max_record_bytes']:
             raise ValueError('Scan publication budget exceeded')
         value = json.loads(raw)  # Canonical JSON facts, independent of caller aliases/tuples.
         no_links(self.path)
@@ -111,7 +111,8 @@ class ScanPublications:
                 return old
             count, size = db.execute('SELECT count(*),coalesce(sum(length(CAST(data AS BLOB))),0) '
                                      'FROM scan_publications').fetchone()
-            if count >= MAX_RECORDS or size+len(raw) > MAX_TOTAL_BYTES:
+            if (policy['max_records'] and count >= policy['max_records'] or
+                    policy['max_total_bytes'] and size+len(raw) > policy['max_total_bytes']):
                 raise ValueError('Scan publication capacity exceeded; pending facts retained')
             db.execute('INSERT INTO scan_publications VALUES(?,?,?,?,?)',
                        (lease.attempt_id, kind, scope_key, raw.decode(), signature))
@@ -138,8 +139,6 @@ class ScanPublications:
             db.execute('BEGIN IMMEDIATE')
             rows = db.execute('SELECT ref,kind,scope_key,data,mac FROM scan_publications '
                               'ORDER BY rowid LIMIT ?', (MAX_RECORDS+1,)).fetchall()
-            if len(rows) > MAX_RECORDS:
-                raise ValueError('Scan publication capacity exceeded')
             collected = 0
             for ref, kind, scope, raw, signature in rows:
                 value = self._decode((raw, signature))

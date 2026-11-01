@@ -61,6 +61,8 @@ def storage_errors(function):
 
 class SignedRecords:
     max_rows = 128
+    max_total_bytes = 96_000_000
+    max_database_bytes = 128_000_000
     max_record_bytes = 4_000_000
 
     def __init__(self, hooks, root, name, *, now=time.time):
@@ -72,7 +74,7 @@ class SignedRecords:
             no_links(path)
             if path.exists():
                 info = path.stat()
-                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 128_000_000:
+                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or self.max_database_bytes and info.st_size > self.max_database_bytes:
                     raise ValueError('Task operation storage unavailable')
 
     def _key(self):
@@ -143,10 +145,10 @@ class SignedRecords:
                                      observed=len(raw), limit=self.max_record_bytes)
         used = db.execute('SELECT coalesce(sum(length(CAST(data AS BLOB))),0) FROM records WHERE key<>?',
                           (key,)).fetchone()[0]
-        if used+len(raw) > 96_000_000:
+        if self.max_total_bytes and used+len(raw) > self.max_total_bytes:
             raise TaskOperationError('TASK_OPERATION_CAPACITY_REQUIRED',
-                                     observed=used+len(raw), limit=96_000_000)
-        if not self._get(db, key) and db.execute('SELECT count(*) FROM records').fetchone()[0] >= self.max_rows:
+                                     observed=used+len(raw), limit=self.max_total_bytes)
+        if self.max_rows is not None and not self._get(db, key) and db.execute('SELECT count(*) FROM records').fetchone()[0] >= self.max_rows:
             raise ValueError('Task operation capacity exceeded')
         db.execute('INSERT OR REPLACE INTO records VALUES(?,?,?)',
                    (key, raw.decode(), digest(self._key(), value)))

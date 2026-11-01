@@ -24,7 +24,7 @@ from .mcp_contracts import MCPRegistry, raw_input_failure
 from .mcp_tools.development_check import TOOLS as DEVELOPMENT_CHECK_TOOLS
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event', 'handle_before_hook_event'}
-GLOBAL_READS = {'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
+GLOBAL_READS = {'get_development_config', 'get_runtime_info', 'get_runtime_guidance', 'get_professional_guidance', 'get_scan_preparation_status',
                 'get_task_isolation_capabilities'}
 TASK_REVIEW_TOOLS = {'begin_security_task', 'switch_security_task', 'finish_security_task', 'prepare_task_security_review',
     'prepare_task_workspace', 'get_task_isolation_capabilities',
@@ -46,10 +46,20 @@ _PRODUCT_EPOCH_PAUSES = {'BUSY': 'BASELINE_BUSY',
 
 def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
     from mcp.types import CallToolResult, TextContent
+    messages = {
+        'TASK_CONNECTION_SCOPE_MISMATCH':
+            '该检查创建于连接范围，当前请求的归属与原连接不一致（可能携带了聊天 session_ref）。'
+            '请核对创建时的参数并保留原检查；不得自动迁移、删除有效凭据或重建检查绕过校验。'
+            '新检查已有有效 session_ref 时须从创建开始一致携带。连接范围检查不保证由聊天 Stop 接管。',
+        'TASK_SESSION_SCOPE_MISMATCH':
+            '该检查属于不同聊天。请使用原聊天的检查引用与有效 session_ref，不猜测归属或认领其他聊天记录。',
+        'TASK_SESSION_BINDING_REQUIRED':
+            '该检查需要原聊天的有效 session_ref；请从当前宿主原生上下文原样传递，不删除凭据重试。',
+    }
     data = dict(contract='observed-development-check-v1', status='INCONCLUSIVE',
         reason_code=reason, scanner_run=False, source_modified=False,
         security_proof=False, repair_authorized=False,
-        message='轻量检查请求未被接受。请保留原检查引用与会话归属，不扩大检查范围。')
+        message=messages.get(reason, '轻量检查请求未被接受。请保留原检查引用与会话归属，不扩大检查范围。'))
     return CallToolResult(isError=True, structuredContent=data,
         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
@@ -109,8 +119,8 @@ class GlobalWorkspaces:
         from .workspace_services import workspace_mcp_server
         return workspace_mcp_server(root, directory, binding)
 
-    def root(self, value):
-        return resolve_workspace(value, excluded=(self.base,), codex_homes=(self.integration.home,))
+    def root(self, value, *, allow_empty=False):
+        return resolve_workspace(value, excluded=(self.base,), codex_homes=(self.integration.home,), allow_empty=allow_empty)
 
     def admit(self, root):
         with self.lock:
@@ -129,7 +139,7 @@ class GlobalWorkspaces:
             directory = workspace_state(root, self.base)
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             no_links(directory)
-            workspace = WorkspaceResolver().resolve(root, allow_non_git_source=True)
+            workspace = WorkspaceResolver().resolve(root, allow_non_git_explicit=True, allow_non_git_source=True)
             binding = WorkspaceBinding(identity(os.path.normcase(str(root)))[:24], str(root),
                                        str(root) if workspace.is_git else '', self.host, 'PROJECT', '')
             self.children[root] = self.child_factory(root, directory, binding)
@@ -627,6 +637,10 @@ def create_global_server(*, workspaces=None, host='codex'):
         if name == 'get_product_epoch_status':
             data = get_product_epoch_status(**arguments)
             return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
+        if name == 'get_development_config':
+            from .user_config import describe_config
+            data = describe_config()
+            return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
         if name == 'get_runtime_guidance':
             from .guidance.guidance_catalog import get_runtime_guidance
             guide = get_runtime_guidance(arguments['topic'])
@@ -651,7 +665,7 @@ def create_global_server(*, workspaces=None, host='codex'):
             if claim is None and alias is not None:
                 claim = alias
             if claim is not None:
-                root = pool.root(claim)
+                root = pool.root(claim, allow_empty=name in HOOKS)
             else:
                 raise ValueError('WORKSPACE_CLAIM_REQUIRED')
             if claim_diag is not None:
@@ -853,8 +867,12 @@ def create_global_server(*, workspaces=None, host='codex'):
                                                       active_host, arguments['session_id'], compact=True)
                             ref = result.structuredContent.get('development_check_ref')
                             output = json.loads(result.content[0].text)
-                            extra = ('\n当前编辑事件的已观测路径记录在轻量检查 ' + ref
-                                + '；不证明写入成功或完整范围。沿此引用收尾并读取结果，不新建替代记录。') if ref else ''
+                            paths = result.structuredContent.get('scope', {}).get('paths', [])
+                            detail = ('已记录具体文件路径；不证明写入成功或完整范围。' if paths else
+                                '仅记录了可能修改，尚未取得具体文件路径。若明确知道实际编辑路径，沿原检查补录；'
+                                '否则报告范围缺口，不猜路径、不扩扫项目。')
+                            extra = ('\n当前编辑事件关联轻量检查 ' + ref + '；' + detail
+                                + '沿此引用收尾并读取结果，不新建替代记录。') if ref else ''
                             output['hookSpecificOutput'] = dict(hookEventName='PostToolUse',
                                 additionalContext=session_context(token) + extra)
                             result.structuredContent['task_session_ref'] = token
@@ -1075,7 +1093,8 @@ def create_global_server(*, workspaces=None, host='codex'):
                         '在结束时完成检查，无需用户另发继续。已经编辑而缺少原记录时如实说明缺口。'}
                     result.structuredContent = data
                     result.content = [TextContent(type='text', text=json.dumps(payload))]
-        if name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block':
+        if (name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block'
+                and (result.structuredContent or {}).get('status') not in {'STOP_FALLBACK_INCOMPLETE', 'STOP_FALLBACK_UNAVAILABLE'}):
             # Validation/admission failures are diagnostics too. A broken or
             # unready connection must not add a warning to every ordinary chat.
             return CallToolResult(structuredContent=result.structuredContent,

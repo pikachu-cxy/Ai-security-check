@@ -18,6 +18,7 @@ from .hook_state import no_links
 from .scan_request import relative_path
 from .tasks.durable import SignedRecords
 from .tasks.ownership import ownership_error, valid_owner
+from .user_config import analysis_requirements
 
 CONTRACT = 'observed-development-check-v1'
 REF = re.compile(r'dc1-[a-f0-9]{32}')
@@ -28,6 +29,15 @@ RETENTION_SECONDS = 7 * 86400
 MAX_FINISH_WAIT_SECONDS = 25
 MAX_PRODUCT_WAIT_SECONDS = 120
 TERMINAL = frozenset({'RESULTS_READY', 'PARTIAL', 'NO_OBSERVED_CHANGES', 'FAILED'})
+
+
+def note_activity(row, turn_id=None):
+    """One pending editing round, stored with its existing check; no new journal."""
+    turn = hashlib.sha256(turn_id.encode()).hexdigest() if turn_id else None
+    old = row.get('stop_activity', {})
+    if old.get('pending') and (turn is None or old.get('turn') == turn):
+        return row
+    return dict(row, stop_activity=dict(turn=turn, base_seq=row['dirty_seq'], pending=True))
 
 
 def product_wait_seconds():
@@ -105,11 +115,34 @@ def clean_paths(values, *, tolerant=False):
 
 
 class DevelopmentCheckStore(SignedRecords):
-    max_rows = 1024
+    max_rows = None
     max_record_bytes = 120_000
 
     def __init__(self, hooks, root, *, now=time.time):
         super().__init__(hooks, workspace_root(root), 'development-checks.db', now=now)
+
+    def _all(self, db):
+        # Fetch in bounded pages; capacity is an admission policy, not a read limit.
+        rows, cursor = [], ''
+        while True:
+            page = db.execute(self._select() + ' WHERE key>? ORDER BY key LIMIT 256', (cursor,)).fetchall()
+            if not page:
+                return rows
+            rows.extend(self._decode(row) for row in page)
+            cursor = page[-1][0]
+
+    def _put(self, db, key, value):
+        # Never strand existing checks: ancillary completion records can still be added.
+        if value.get('kind') == 'check' and self._get(db, key) is None:
+            from .user_config import read_config
+            config = read_config()
+            limits = config['values']['storage']
+            count = db.execute('SELECT count(*) FROM records').fetchone()[0]
+            if limits['development_record_limit_enabled'] and count >= limits['development_max_records']:
+                from .tasks.durable import TaskOperationError
+                raise TaskOperationError('TASK_OPERATION_CAPACITY_REQUIRED', observed=count,
+                                         limit=limits['development_max_records'])
+        return super()._put(db, key, value)
 
     def load(self, ref, owner=None):
         if not isinstance(ref, str) or not REF.fullmatch(ref):
@@ -124,8 +157,11 @@ class DevelopmentCheckStore(SignedRecords):
         return row
 
     def fresh(self, ref, owner, scan_path):
+        from .user_config import read_config
+        from .scan_preferences import snapshot
+        config = snapshot()
         now = self.now()
-        return dict(kind='check', contract=CONTRACT, check_ref=ref, owner=dict(owner),
+        return dict(effective_config=config, kind='check', contract=CONTRACT, check_ref=ref, owner=dict(owner),
             root_identity=root_identity(self.root), scan_path=str(Path(scan_path).absolute()),
             created_at=now, updated_at=now, last_event_at=now, dirty_seq=0,
             scanned_seq=0, attempted_seq=0, observed_paths=[], scope_unknown=False,
@@ -166,6 +202,10 @@ class DevelopmentCheckStore(SignedRecords):
             return self._put(db, row['check_ref'], row), False
         selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
         protected = sorted(set(row.get('explicit_paths', [])) | (set(paths) if explicit else set()))
+        if row.get('finish_requested') and row['dirty_seq'] <= row['scanned_seq']:
+            from .user_config import read_config
+            from .scan_preferences import snapshot
+            row = dict(row, effective_config=snapshot())
         row = dict(row, observed_paths=selected, explicit_paths=protected,
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
             dirty_seq=row['dirty_seq']+1, updated_at=self.now(), last_event_at=self.now(),
@@ -240,6 +280,8 @@ def projection(store, row):
             'started_at', 'ended_at', 'lease_until') if name in watch},
         finish_requested=row['finish_requested'], scanner_run=False,
         baseline_created=False, source_modified=False, repair_authorized=False,
+        analysis_requirements=analysis_requirements(row),
+        effective_config=row.get('effective_config'),
         host_review_completed=False, security_proof=False,
         result_is_saved_version=bool(row['scan_id']), source_freshness='NOT_RECHECKED_ON_READ',
         execution=result.get('execution'), scan_status=result.get('status'),
@@ -326,7 +368,7 @@ class DevelopmentCheckService:
         store = self.store(root)
         store.load(check_ref, self.owner)
         with store.transaction() as db:
-            row, changed = store.append(db, store._get(db, check_ref), names, scope_unknown, event_id)
+            row, changed = store.append(db, note_activity(store._get(db, check_ref)), names, scope_unknown, event_id)
         return projection(store, store.load(check_ref, self.owner))
 
     def declare_outputs(self, root, check_ref, directories):
@@ -366,6 +408,8 @@ class DevelopmentCheckService:
                 state = 'QUEUED'
             if state in {'QUEUED', 'RUNNING'} and row.get('wait_seq') != row['dirty_seq']:
                 row.update(wait_seq=row['dirty_seq'], wait_deadline=self.now()+total_budget)
+            if row.get('stop_fallback', {}).get('seq') == row['dirty_seq'] and row.get('wait_deadline'):
+                row['wait_deadline'] = min(row['wait_deadline'], row['stop_fallback']['deadline'])
             row = store._put(db, check_ref, dict(row, finish_requested=True, state=state, updated_at=self.now()))
         if state in {'QUEUED', 'RUNNING'}:
             self._wake(store)
@@ -441,7 +485,8 @@ class DevelopmentCheckService:
         row = store.read(key(check_ref, scanned_seq))
         if row is None or row['owner'] != self.owner or row['root_identity'] != root_identity(store.root):
             raise ValueError('DEVELOPMENT_RESULT_UNAVAILABLE')
-        result = dict(delivery=facts(row), result=row['result'], reason_code=row['reason_code'])
+        result = dict(delivery=facts(row), result=row['result'], reason_code=row['reason_code'],
+                      analysis_requirements=analysis_requirements(row))
         if row['scan_id']:
             from .storage import ReadOnlySQLiteStore
             from .mcp_tools.presentation import _agent_result
@@ -458,6 +503,10 @@ class DevelopmentCheckService:
         store = self.store(root)
         row = store.load(check_ref, self.owner)
         result = projection(store, row)
+        result['risk_import_status'] = row.get('risk_import_status', 'AVAILABLE')
+        if row.get('has_unified_risks'):
+            result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
+                workspace_path=str(store.root), check_ref=check_ref))
         if row.get('has_development_review'):
             from .development_risks import DevelopmentRisks
             risks = DevelopmentRisks(self, store.root, check_ref).load()
@@ -483,7 +532,7 @@ class DevelopmentCheckService:
 
 
 def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=None,
-                scan_path=None, launcher=None, prepare_only=False, watch_eligible=False):
+                scan_path=None, launcher=None, prepare_only=False, watch_eligible=False, turn_id=None):
     """Record a validated host mutation; never read project source in a hook."""
     owner_key(owner)
     names, invalid = clean_paths(paths, tolerant=True)
@@ -523,12 +572,13 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
             ref = 'dc1-'+uuid.uuid4().hex
             row = dict(store.fresh(ref, owner, service.scan_path()), automatic=True)
             store._put(db, key, dict(kind='focus', owner=dict(owner), check_ref=ref))
+        row = note_activity(row, turn_id)
         if prepare_only:
             store._put(db, row['check_ref'], row)
         elif covered and focused['check_ref'] == row['check_ref'] and not names and not invalid:
             # The live task window records actual notifications. A shell whose
             # syntax is unknown need not invent an edit or a new unknown scope.
-            pass
+            store._put(db, row['check_ref'], row)
         else:
             row, changed = store.append(db, row, names, bool(scope_unknown or invalid), event_id)
         if digest is not None:

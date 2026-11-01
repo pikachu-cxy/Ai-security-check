@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .scan_preferences import configured
 
 import time
 import uuid
@@ -65,6 +66,7 @@ class SecurityRuntime:
         self.registry = registry or ScannerRegistry()
         self.store = store or SQLiteStore()
 
+    @configured
     def scan(self, repository_path: str | Path | None = None, mode: str = "quick", staged: bool = False, rules_path: str | None = None, *, progress=None, request: ScanRequest | None = None, observer=None, execution=None) -> ScanResult:
         from .background_preparation import current_preparation, ACTIVE
         from .verification_policy import local_recheck, local_recheck_requested

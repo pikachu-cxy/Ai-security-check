@@ -164,7 +164,12 @@ class RulePackManager:
     def discover(self) -> list[ResolvedRulePack]:
         return self.provider.discover()
 
-    def resolve(self, rule_pack_id: str = "opengrep-rules", *, user_path: Path | None = None) -> ResolvedRulePack:
+    def resolve(self, rule_pack_id: str = "opengrep-rules", *, user_path: Path | None = None, _configured=True) -> ResolvedRulePack:
+        if user_path is None and _configured:
+            from .configured_rules import sast_pack
+            custom = sast_pack(self)
+            if custom is not None:
+                return custom
         if user_path is None:
             if type(self.provider) is BundledRulePackProvider:
                 if rule_pack_id != FIRST_PARTY_RULE_PACK.rule_pack_id:

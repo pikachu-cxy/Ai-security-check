@@ -68,7 +68,7 @@ def workspace_rejection(exc, stage):
             'BINDING_SESSION': 'WORKSPACE_SESSION_BINDING_MISSING'}.get(stage, 'WORKSPACE_TOOL_REJECTED')
 
 
-def resolve_workspace(value, *, excluded=(), codex_homes=()):
+def resolve_workspace(value, *, excluded=(), codex_homes=(), allow_empty=False):
     raw = str(value) if isinstance(value, (str, Path)) else ''
     if (not raw.strip() or len(raw) > 4096 or '${' in raw or any(ord(c) < 32 for c in raw)
         or raw.startswith(('\\\\', '//')) or not Path(raw).is_absolute()
@@ -121,7 +121,10 @@ def resolve_workspace(value, *, excluded=(), codex_homes=()):
                 root = parent
                 break
         if root is None:
-            root = resolver.resolve(candidate, allow_non_git_source=True).path
+            if allow_empty and next(candidate.iterdir(), None) is None:
+                root = candidate
+            else:
+                root = resolver.resolve(candidate, allow_non_git_source=True).path
     no_links(root)
     if resolver._unsafe(root):
         raise ValueError('UNSAFE_WORKSPACE')

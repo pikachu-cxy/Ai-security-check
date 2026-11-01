@@ -70,7 +70,7 @@ class DiscoveryLimitError(ValueError):
                   'failure_stage': 'TARGET_DISCOVERY', 'coverage': 'UNKNOWN',
                   'scanner_run': False, 'source_modified': False, 'security_proof': False,
                   'message': sanitize(str(self)), 'detail': sanitize(self.detail),
-                  'remediation': 'Correct the user scan-limits.toml or discovery environment settings, then retry. No vulnerability rules were executed.'}
+                  'remediation': 'Correct the unified config.toml [scan.discovery] settings or legacy discovery settings, then retry. No vulnerability rules were executed.'}
         if self.relative_path is not None:
             result['relative_path'] = sanitize(self.relative_path, 300)
         if self.limit is not None:
@@ -78,11 +78,14 @@ class DiscoveryLimitError(ValueError):
         if self.limit_kind is not None:
             result['limit_kind'] = self.limit_kind
             result['configuration'] = {
+                'unified_file_key': 'scan.discovery.' + ('max_file_bytes' if self.limit_kind == 'max_file_size' else self.limit_kind),
                 'environment_variable': LIMIT_SETTINGS[self.limit_kind],
                 'file_key': 'discovery.' + self.limit_kind,
             }
             result['remediation'] = (
-                f"Review the requested scope or adjust {LIMIT_SETTINGS[self.limit_kind]} "
+                f"Review the requested scope or adjust {result['configuration']['unified_file_key']} "
+                "in the unified config.toml (0 disables this cap). Explicit unified settings override legacy settings. "
+                f"Legacy alternatives: {LIMIT_SETTINGS[self.limit_kind]} "
                 f"or discovery.{self.limit_kind} in the user scan-limits.toml, then retry. "
                 "No vulnerability rules were executed.")
         if self.observed is not None:
@@ -129,9 +132,13 @@ def discovery_config() -> dict:
 def _limit(name: str, default: int, configured: dict, override=None) -> int:
     key = name.lower()
     environment = LIMIT_SETTINGS[key]
+    from .scan_preferences import explicit
+    unified = explicit('scan', 'discovery', 'max_file_bytes' if key == 'max_file_size' else key)
     raw = os.getenv(environment)
     if override is not None:
         value = override
+    elif unified is not None:
+        return unified
     elif raw is not None:
         try:
             value = int(raw)
@@ -154,7 +161,7 @@ class TargetDetector:
         self.max_depth = _limit("MAX_DEPTH", MAX_DEPTH, configured, max_depth)
         self.max_file_size = _limit("MAX_FILE_SIZE", MAX_FILE_SIZE, configured, max_file_size)
         self.ignored = IGNORED | set(ignored_dirs) | {name.strip() for name in os.getenv("SECURITY_RUNTIME_EXCLUDE_DIRS", "").split(",") if name.strip()}
-        if min(self.max_files, self.max_directories, self.max_depth, self.max_file_size) < 1:
+        if min(self.max_files, self.max_directories, self.max_depth, self.max_file_size) < 0:
             raise ValueError("Discovery limits must be positive")
 
     def detect(self, root: Path, files: list[str] | None = None, *, select_scan_targets=False) -> TargetProfile:
@@ -172,17 +179,17 @@ class TargetDetector:
                 subdirs[:] = [name for name in subdirs if name not in self.ignored
                               and not (Path(directory) / name).is_symlink()
                               and not (Path(directory) / name).is_junction()]
-                if depth >= self.max_depth and subdirs:
+                if self.max_depth and depth >= self.max_depth and subdirs:
                     child = (Path(directory) / subdirs[0]).relative_to(root).as_posix()
                     raise DiscoveryLimitError(f"Detected directories deeper than {self.max_depth} levels.",
                                               relative_path=child, limit=self.max_depth, limit_kind='max_depth',
                                               observed=depth + 1, observed_is_lower_bound=True)
-                if directory_count + len(subdirs) > self.max_directories:
+                if self.max_directories and directory_count + len(subdirs) > self.max_directories:
                     raise DiscoveryLimitError(f"Detected more than {self.max_directories} directories.",
                                               relative_path=Path(directory).relative_to(root).as_posix(),
                                               limit=self.max_directories, limit_kind='max_directories',
                                               observed=directory_count + len(subdirs), observed_is_lower_bound=True)
-                if len(files) + len(names) > self.max_files:
+                if self.max_files and len(files) + len(names) > self.max_files:
                     raise DiscoveryLimitError(f"Detected more than {self.max_files} files.",
                                               relative_path=Path(directory).relative_to(root).as_posix(),
                                               limit=self.max_files, limit_kind='max_files',
@@ -190,7 +197,7 @@ class TargetDetector:
                 files.extend((Path(directory) / name).relative_to(root).as_posix() for name in names)
         else:
             files = [name for name in files if not set(Path(name).parts) & self.ignored]
-            if len(files) > self.max_files:
+            if self.max_files and len(files) > self.max_files:
                 raise DiscoveryLimitError(f"Detected more than {self.max_files} files.",
                                           limit=self.max_files, limit_kind='max_files', observed=len(files))
             # An explicit Git/workspace list has a boundary already. Depth is
@@ -213,7 +220,7 @@ class TargetDetector:
                         skipped.append({'path': relative.as_posix(), 'reason': 'UNSUPPORTED_BINARY_DOCUMENT',
                                         'source': 'RUNTIME_TARGET_SELECTION', 'size_bytes': size})
                         continue
-                if (explicit or select_scan_targets) and size > self.max_file_size:
+                if self.max_file_size and (explicit or select_scan_targets) and size > self.max_file_size:
                     raise DiscoveryLimitError(f"File exceeds {self.max_file_size} bytes: {name}",
                                               code='TARGET_FILE_SIZE_LIMIT_EXCEEDED',
                                               relative_path=relative.as_posix(), limit=self.max_file_size,
@@ -232,7 +239,7 @@ class TargetDetector:
             if path.name in {"main.py", "app.py"}:
                 source = root / name
                 try:
-                    if source.stat().st_size <= self.max_file_size:
+                    if not self.max_file_size or source.stat().st_size <= self.max_file_size:
                         content = source.read_bytes()
                         if b"\0" not in content and b"fastapi" in content.lower():
                             frameworks.add("FastAPI")

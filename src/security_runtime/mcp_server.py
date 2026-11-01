@@ -155,7 +155,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
                           turn_id: str | None = None, permission_mode: str | None = None) -> dict:
-        """Quiet Codex Stop. Preserve only an existing user-approved repair continuation. Never prepare/dispatch a scan or task review from a chat ending."""
+        """Codex Stop: preserve authorized repair continuation, then apply configured bounded fallback to the focused development check. Read-only chats do not start checks."""
         from .host_event_runtime import handle_normalized_event
         from .codex_mcp_hook import codex_hook_output
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
@@ -166,14 +166,15 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             data, _ = handle_normalized_event(normalized, coordinator=hook_coordinator,
                                               continuation=remediation.continuation)
             if task_audit_mode and data.get('decision') != 'block':
-                from .development_continuation import stop
+                from .development_stop import fallback
                 from .tasks.ownership import session_owner
                 try:
-                    delivery = stop(hook_coordinator.store, normalized.context.workspace,
+                    delivery = fallback(hook_coordinator.store, normalized.context.workspace,
                         session_owner('codex', session_id), stop_hook_active=stop_hook_active,
                         offered=application.development_result_offers, turn_id=turn_id)
                 except (ValueError, OSError):
-                    delivery = None  # Preserve the outbox; never invent a successful delivery.
+                    delivery = dict(status='STOP_FALLBACK_UNAVAILABLE', scanner_run=False,
+                        systemMessage='安全检查兜底未完成，请查看配置或检查状态；原记录已保留。')
                 if delivery is not None:
                     data = delivery
             # No runtime construction, workspace inventory or new closeout on

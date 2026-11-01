@@ -130,7 +130,7 @@ def test_cursor_default_pre_and_stop_never_create_strict_baseline(repo, tmp_path
     assert bridge.followup(dict(status='completed', loop_count=0)) is None
 
 
-def test_cursor_automatic_default_records_paths_and_keeps_chat_quiet(repo, tmp_path, monkeypatch):
+def test_cursor_automatic_records_paths_refreshes_routing_and_keeps_edits_quiet(repo, tmp_path, monkeypatch):
     from test_cursor_automatic import ingress, tool
     no_old_task_reads(monkeypatch)
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'scan-state'))
@@ -142,9 +142,22 @@ def test_cursor_automatic_default_records_paths_and_keeps_chat_quiet(repo, tmp_p
     assert tool(repo, tmp_path, core, path='A.java')[1]['status'] == 'EDIT_OBSERVATION_READY'
     output, edited = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Write',
         tool_use_id='opaque', tool_input={'path': 'A.java'})
-    assert output == {} and edited['status'] == 'DIRTY'
+    # Verified feedback refreshes internal routing even when SessionStart was
+    # received; this is not a user-facing warning or a scan dispatch.
+    from security_runtime.tasks.ownership import verify_session_ref, session_owner, session_context
+    import json
+    context = output['additional_context']
+    start = context.index('{')
+    routing, _ = json.JSONDecoder().raw_decode(context[start:])
+    assert verify_session_ref(core.store, repo, routing['session_ref']) == session_owner(
+        'cursor', 'private-cursor-conversation')
+    assert output == {'additional_context': session_context(routing['session_ref'])}
+    assert edited['status'] == 'DIRTY'
     assert edited['scope']['paths'] == ['A.java'] and not edited['scanner_run']
     output, read = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Read', tool_use_id='read')
-    assert output == {} and read['scanner_skipped_reason'] == 'READ_ONLY_ACTIVITY'
-    output, stopped = ingress(repo, tmp_path, core, 'stop')
+    assert output == {'additional_context': context}
+    assert read['scanner_skipped_reason'] == 'READ_ONLY_ACTIVITY'
+    # Stop now has its own configured fallback, tested separately; an explicit
+    # abort must still remain quiet and must never dispatch a scanner.
+    output, stopped = ingress(repo, tmp_path, core, 'stop', status='aborted')
     assert output == {} and stopped['status'] == 'NOT_APPLICABLE'

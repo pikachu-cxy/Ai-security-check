@@ -191,7 +191,7 @@ class PythonFlow:
         return Value()
 
     def invoke(self, module, node, args, kwargs, line):
-        if self.a.depth >= self.a.max_depth:
+        if (self.a.max_depth and self.a.depth >= self.a.max_depth):
             self.a.gaps.add((self.file, 'CALL_DEPTH'))
             return Value()
         old, old_module = self.file, self.current_module

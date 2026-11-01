@@ -405,6 +405,10 @@ class ToolManager:
         return base / runtime / ("Scripts" if os.name == "nt" else "bin") / executable if tool_id in self.python_engines else base / executable
 
     def trivy_cache_dir(self) -> Path:
+        from .scan_preferences import section
+        configured = section('vulnerability_data', 'trivy')['cache_dir']
+        if configured:
+            return Path(configured)
         return Path(os.getenv("SECURITY_RUNTIME_TRIVY_CACHE_DIR") or os.getenv("TRIVY_CACHE_DIR") or self.root / "cache" / "trivy")
 
     def database_status(self) -> ToolStatus:
@@ -532,7 +536,12 @@ class ToolManager:
             return None
         if tool_id == 'trivy':
             root = self.trivy_cache_dir()
-            return content_identity((('checks', root / 'checks'),))
+            if kind == 'misconfig':
+                return content_identity((('checks', root / 'checks'),))
+            roots = [('vulnerability_db', root / 'db')]
+            if set(ecosystems) & {'Maven', 'maven', 'gradle', 'Java', 'java'}:
+                roots.append(('java_db', root / 'java-db'))
+            return content_identity(tuple(roots))
         return None
 
     def _version(self, tool_id: str, path: Path) -> str:
@@ -1060,8 +1069,19 @@ class ToolManager:
 
     def prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False, validate_database=None) -> ToolStatus:
         checkpoint()
+        from .scan_preferences import section
+        policy = section('vulnerability_data', 'trivy')
+        if policy['update_mode'] == 'offline' or policy['update_mode'] == 'manual' and not force:
+            offline = True
         with self._database_lock:
             fresh = self.database_freshness()['status']
+            interval_due = False
+            if policy['update_interval_seconds'] and policy['update_mode'] == 'auto':
+                updated = self.database_freshness().get('updated_at')
+                if updated:
+                    from datetime import datetime, timezone
+                    interval_due = (self.now() - datetime.fromisoformat(updated)).total_seconds() >= policy['update_interval_seconds']
+            force = force or interval_due
             if fresh == 'FRESH' and not force and (validate_database is None or validate_database(self.trivy_cache_dir() / 'db')):
                 self.data_diagnostics.pop('vulnerability_db', None)
                 return ToolStatus.READY
@@ -1071,6 +1091,8 @@ class ToolManager:
             else:
                 result = self._prepare_trivy_database(binary, offline=offline, force=force,
                                                       validate_database=validate_database)
+        if policy['stale_policy'] == 'require_fresh' and self.database_freshness()['status'] != 'FRESH':
+            result = ToolStatus.BROKEN
         diagnostic = self.data_diagnostics.get('vulnerability_db')
         emit('DATA_READY' if result == ToolStatus.READY and diagnostic is None else 'DATA_PREPARATION_FAILED',
              scanner='trivy', component='vulnerability_db', error_code=diagnostic.error_code if diagnostic else '',
@@ -1121,7 +1143,9 @@ class ToolManager:
         # Retry means another round, not silently repeating the same blocked
         # first repository. Legacy updates retain at most two invocations.
         max_attempts = 1 + budget.retries if budget else 1
-        plans = [(attempt, repository) for attempt in range(max_attempts) for repository in TRIVY_DATABASE_REPOSITORIES]
+        from .scan_preferences import section
+        repositories = section('vulnerability_data', 'trivy')['repositories'] or TRIVY_DATABASE_REPOSITORIES
+        plans = [(attempt, repository) for attempt in range(max_attempts) for repository in repositories]
         blocked_sources = set()
         previous_attempt = None
         for attempt, repository in plans:

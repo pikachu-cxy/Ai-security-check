@@ -184,7 +184,7 @@ def test_database_fingerprint_disabled_preserves_reuse_and_expiry_check(reusable
         BaseScanner.scan(adapter, context, normalizer))
     runtime.registry.adapters.append(adapter)
     result = runtime.scan(root, 'release')
-    assert result.status == 'COMPLETED' and result.scanner_diagnostics.get('result_reuse')
+    assert result.status == 'COMPLETED' and result.scanner_diagnostics.get('result_reuse'), (result.capability_results, result.scanner_diagnostics.get('input_applicability'), result.scanner_diagnostics.get('result_reuse'), result.rule_coverage)
     assert try_reuse(runtime, root).reused
     data.write_bytes(b'new database, metadata unchanged')
     assert try_reuse(runtime, root).reused
@@ -211,7 +211,7 @@ def test_unselected_default_providers_do_not_disable_valid_reuse(reusable):
                                       TrivyAdapter(), TrivyMisconfigAdapter()])
     result = runtime.scan(root, 'release')
     assert any(run.status == 'NOT_APPLICABLE' for run in result.scanner_runs)
-    assert result.status == 'COMPLETED' and result.scanner_diagnostics.get('result_reuse')
+    assert result.status == 'COMPLETED' and result.scanner_diagnostics.get('result_reuse'), (result.capability_results, result.scanner_diagnostics.get('input_applicability'), result.scanner_diagnostics.get('result_reuse'), result.rule_coverage)
     assert try_reuse(runtime, root).reused
 
 

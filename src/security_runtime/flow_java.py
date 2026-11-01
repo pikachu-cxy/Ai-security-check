@@ -160,7 +160,7 @@ class JavaFlow:
         return Value()
 
     def invoke(self, obj, method, args, line):
-        if obj.ref not in self.classes or self.a.depth >= self.a.max_depth: return Value()
+        if obj.ref not in self.classes or (self.a.max_depth and self.a.depth >= self.a.max_depth): return Value()
         file, cls = self.classes[obj.ref]
         methods = [m for m in cls.methods if m.name == method and len(m.parameters) == len(args)]
         if len(methods) != 1:
@@ -176,7 +176,7 @@ class JavaFlow:
         elif args or methods: self.a.gaps.add((self.file, 'CONSTRUCTOR_UNRESOLVED_OR_OVERLOADED'))
 
     def execute(self, obj, method, args, line):
-        if self.a.depth >= self.a.max_depth: return Value()
+        if (self.a.max_depth and self.a.depth >= self.a.max_depth): return Value()
         file, _ = self.classes[obj.ref]
         old_file, old_cls = self.file, self.cls
         self.a.calls.append((old_file, line))

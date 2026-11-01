@@ -33,7 +33,8 @@ class Observation(BaseModel):
     severity: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNRATED']
     decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
     rationale: str = Field(min_length=1, max_length=2000)
-    evidence_refs: list[str] = Field(min_length=1, max_length=20)
+    # Empty lists are rejected by the domain with an actionable recovery step.
+    evidence_refs: list[str] = Field(max_length=20)
     same_issue_as: str | None = Field(default=None, max_length=160)
 
 
@@ -141,6 +142,18 @@ class DevelopmentRisks:
                 require(len(risk['observations']) < 128, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                 risk['observations'].append(obs)
 
+    def sync_scanner(self):
+        """Persist scanner observations independently of any Agent review."""
+        with self.store.transaction() as db:
+            check = self.current_check()
+            row = self.load(db)
+            self.import_scanner(row, check)
+            self.store._put(db, self.ref, row)
+        if row['risks']:
+            with self.checks.transaction() as db:
+                current = self.checks._get(db, self.ref)
+                self.checks._put(db, self.ref, dict(current, has_unified_risks=True))
+
     def submit(self, observations, expected_seq):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
         values = [Observation.model_validate(v) for v in observations]
@@ -148,15 +161,30 @@ class DevelopmentRisks:
         with self.store.transaction() as db:
             check = self.current_check()
             require(check['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            from .user_config import batch_config
+            policy = batch_config(check)['agent']
+            for value in values:
+                required = 'review_scanner_findings' if value.same_issue_as else 'audit_business_logic'
+                require(policy[required], 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
+            require(any(policy.values()), 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
             row = self.load(db)
             self.import_scanner(row, check)
             for value in values:
                 name = relative_path(value.file_path)
                 require(name in check['observed_paths'] and value.line_end >= value.line_start,
                         'DEVELOPMENT_RISK_LOCATION_INVALID')
-                evidence = self.evidence(row, value.evidence_refs)
-                require(any(e['file_path'] == name and e['line_start'] <= value.line_start and
-                            e['line_end'] >= value.line_end for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
+                try:
+                    evidence = self.evidence(row, value.evidence_refs)
+                    require(any(e['file_path'] == name and e['line_start'] <= value.line_start and
+                                e['line_end'] >= value.line_end for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
+                except DevelopmentRiskError as error:
+                    if error.reason_code in {'DEVELOPMENT_RISK_EVIDENCE_REQUIRED',
+                            'DEVELOPMENT_RISK_EVIDENCE_UNKNOWN', 'DEVELOPMENT_RISK_EVIDENCE_STALE',
+                            'DEVELOPMENT_RISK_LOCATION_UNREAD'}:
+                        error.recovery = dict(tool='read_development_risk_context', arguments=dict(
+                            check_ref=self.ref, workspace_path=str(self.root), file_path=name,
+                            start_line=value.line_start, end_line=min(value.line_end, value.line_start+79)))
+                    raise
                 key = 'dr1-' + digest([self.ref, 'host', name, value.category, value.issue_key])[:32]
                 host_key = key
                 key = row['aliases'].get(key, key)
@@ -216,7 +244,11 @@ class DevelopmentRisks:
                 self.checks._put(checks_db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
                                                          has_development_review=True))
             self.store._put(db, self.ref, row)
-        return self.get()
+        from .development_reporting import reporting
+        result = self.get()
+        result['reporting'] = reporting(self.ref, self.root, after_review=True)
+        result['next_action'] = result['reporting']['next_action']
+        return result
 
     def get(self, offset=0, limit=5):
         require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
@@ -233,7 +265,11 @@ class DevelopmentRisks:
                       assessment=r.get('assessment'), repairs=r['repairs'][-1:],
                       observation_count=len(r['observations']), assessment_count=len(r['assessments']))
                  for r in risks[offset:offset+limit]]
+        from .development_reporting import reporting
+        next_offset = offset+limit if offset+limit < len(risks) else None
+        report = reporting(self.ref, self.root, offset=next_offset)
         return dict(contract='development-risks-v1', check_ref=self.ref,
+                    reporting=report, next_action=report.get('next_action'),
                     risks=items, total=len(risks), next_offset=offset+limit if offset+limit < len(risks) else None,
                     review_versions=row['reviews'],
                     decision_policy='EVIDENCE_BACKED_HOST_REVIEW', scanner_run=False,

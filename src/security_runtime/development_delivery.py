@@ -19,7 +19,7 @@ def publish(store, db, row):
         return
     reference = key(row['check_ref'], row['scanned_seq'])
     value = dict(kind='delivery', contract=CONTRACT, check_ref=row['check_ref'],
-        owner=row['owner'], root_identity=row['root_identity'], scanned_seq=row['scanned_seq'],
+        effective_config=row.get('effective_config'), owner=row['owner'], root_identity=row['root_identity'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], scan_path=row['scan_path'], result=row.get('result'),
         status=row['state'], reason_code=row.get('reason_code'),
         failure_diagnostic=row.get('failure_diagnostic'),
@@ -52,6 +52,7 @@ def facts(row, *, summary=False):
                      scope_unknown=scope['scope_unknown'], full_project=False)
     return dict(check_ref=row['check_ref'], scanned_seq=row['scanned_seq'], scan_id=row['scan_id'],
         result_version=row['result_version'], status=row['status'], scope=scope,
+        effective_config=row.get('effective_config'),
         failure_diagnostic=row.get('failure_diagnostic'),
         delivery='HOST_REPORTED' if row['host_report_submitted'] else 'PENDING',
         host_report_submitted=row['host_report_submitted'], user_consumption='UNKNOWN',

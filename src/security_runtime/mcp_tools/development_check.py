@@ -5,7 +5,7 @@ from typing import Annotated
 from ..development_risks import Observation
 
 
-TOOLS = frozenset({'begin_development_check', 'record_development_changes',
+TOOLS = frozenset({'get_development_config', 'begin_development_check', 'record_development_changes',
                    'declare_development_outputs',
                    'finish_development_check', 'get_development_check',
                    'complete_development_check', 'wait_development_check',
@@ -16,6 +16,12 @@ TOOLS = frozenset({'begin_development_check', 'record_development_changes',
 
 
 def register(server, registry, *, application):
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    def get_development_config() -> dict:
+        """Read effective user TOML preferences and adapter support; no writes or scan."""
+        from ..user_config import describe_config
+        return describe_config()
+
     def risks(check_ref, workspace_path, session_ref):
         from ..development_risks import DevelopmentRisks
         service = application.development_service(check_ref, session_ref, workspace_path)
@@ -33,7 +39,24 @@ def register(server, registry, *, application):
                                   workspace_path: str | None = None, session_ref: str | None = None) -> dict:
         """Persist AI findings/assessments using the same Finding structure as scanners; import saved scanner observations without scanning. Pass [] for a review with no AI candidates. Reuse issue_key for retries. When reviewing an existing scanner risk set same_issue_as to its exact ID; same location alone is NOT identity. Evidence-backed AI decision is authoritative, raw scanner output is retained. DISMISSED is review exclusion, never a repair proof. Save before reporting a risk, even when the user forbids repair. Read unified dispositions and use the four-section format in development-check."""
         values = [v.model_dump() if isinstance(v, Observation) else v for v in observations]
-        return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq)
+        from ..development_risks import DevelopmentRiskError
+        try:
+            return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq)
+        except DevelopmentRiskError as error:
+            action = getattr(error, 'recovery', None)
+            if action is None:
+                raise
+            from mcp.types import CallToolResult, TextContent
+            import json
+            from ..development_reporting import EVIDENCE_RECOVERY
+            if session_ref is not None:
+                action['arguments']['session_ref'] = session_ref
+            data = dict(status='INCONCLUSIVE', reason_code=error.reason_code,
+                message=EVIDENCE_RECOVERY, next_action=action,
+                scanner_run=False, source_modified=False, repair_authorized=False,
+                review_saved=False, security_proof=False)
+            return CallToolResult(isError=True, structuredContent=data,
+                content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
@@ -82,7 +105,7 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def begin_development_check(task_key: str, workspace_path: str | None = None,
                                 session_ref: str | None = None) -> dict:
-        """Start an actual coding task's lightweight edit record. Metadata only: no project inventory, baseline, source snapshot or scan. Use a short task key, never prompt/source. Ordinary chat needs no check. Retain the returned check_ref."""
+        """Start an actual coding task's lightweight edit record. Metadata only: no project inventory, baseline, source snapshot or scan. Use a short task key, never prompt/source. Ordinary chat needs no check. If native context provides a valid session_ref, pass it FROM CREATION and consistently on every subsequent call. Reuse this chat’s Hook check_ref instead of creating another. A connection-scoped record is not automatically adopted by chat Stop. Retain the returned check_ref."""
         service = application.development_service(session_ref=session_ref, workspace=workspace_path)
         result = service.begin(application.bound_path(workspace_path), task_key)
         application.remember_development_check(result, service.owner)

@@ -117,7 +117,9 @@ class BoundedDataflowScanner:
         self.cache = FlowCache() if cache else None
 
     def _cache_prefix(self, root, pack):
-        return (str(root), pack.checksum, tuple(sorted(self.categories)), self.experimental)
+        from .scan_preferences import section
+        return (str(root), pack.checksum, tuple(sorted(self.categories)), self.experimental,
+                tuple(sorted(section('scan', 'dataflow').items())))
 
     def required_engines(self): return ()
     def version(self): return VERSION
@@ -134,10 +136,12 @@ class BoundedDataflowScanner:
 
     def scan(self, context, normalizer):
         started = time.monotonic()
-        budget = 3 if context.mode == 'feature' else 30
+        from .scan_preferences import section
+        policy = section('scan', 'dataflow')
+        budget = policy['feature_timeout_seconds' if context.mode == 'feature' else 'release_timeout_seconds']
         plan = context.rule_plan if isinstance(context.rule_plan, DataflowPlan) else self.plan_rules(None, context)
         proof = Analysis(Path(context.root).resolve())
-        found, run = self._scan(replace(context,rule_plan=plan), normalizer, started + budget, proof)
+        found, run = self._scan(replace(context,rule_plan=plan), normalizer, started + budget if budget else None, proof)
         # Includes negative results and unresolved import/class probes, not only
         # hashes carried by findings. A change between batches invalidates all.
         stable = not proof.gaps and proof.stable()
@@ -159,7 +163,7 @@ class BoundedDataflowScanner:
             conflicting = False
             for start in range(0, len(plan.files), 80):
                 checkpoint()
-                if time.monotonic() > deadline:
+                if deadline is not None and time.monotonic() > deadline:
                     plan.errors.update(plan.files[start:])
                     break
                 batch = plan.files[start:start + 80]
@@ -220,7 +224,7 @@ class BoundedDataflowScanner:
         found = []
         for index, file in enumerate(() if reused else plan.files):
             checkpoint()
-            if time.monotonic() > deadline:
+            if deadline is not None and time.monotonic() > deadline:
                 plan.errors.update(plan.files[index:])
                 analysis.gaps.add((file, 'TIME_BUDGET'))
                 break

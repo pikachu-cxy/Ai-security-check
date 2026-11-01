@@ -18,6 +18,7 @@ import uuid
 from .hook_state import HookStateStore, no_links
 from .progress import ProgressReporter
 from .tasks.durable import SignedRecords
+from .scan_preferences import snapshot, preferences, section, configured
 
 ACTIVE = frozenset({'QUEUED', 'RUNNING'})
 LEASE_SECONDS = 90
@@ -54,11 +55,19 @@ def normalize_request(mode, files, force_rescan):
 
 
 class ScanJobs(SignedRecords):
-    max_record_bytes = 32_000
+    max_record_bytes = 120_000
 
     def __init__(self, hooks, root, *, scan_path=None, now=time.time):
         super().__init__(hooks, root, 'explicit-scan-jobs.db', now=now)
+        policy = section('storage', 'explicit_scan_jobs')
+        self.max_rows = policy['max_records'] or None
+        self.max_total_bytes = policy['max_total_bytes']
+        self.max_database_bytes = policy['max_database_bytes']
         self.scan_path = Path(scan_path).absolute() if scan_path is not None else None
+
+    def _all(self, db):
+        # Retained history remains readable after the admission capacity is lowered.
+        return [self._decode(row) for row in db.execute(self._select()+' ORDER BY rowid')]
 
     def load(self, ref):
         if not isinstance(ref, str) or not REF.fullmatch(ref):
@@ -70,10 +79,16 @@ class ScanJobs(SignedRecords):
             raise ValueError('Original scan workspace unavailable')
         return row
 
+    @configured
     def submit(self, request_key, *, mode='project', files=None, force_rescan=False, launcher=None):
         if not isinstance(request_key, str) or not REQUEST_KEY.fullmatch(request_key):
             raise ValueError('request_key must be 8-128 identifier characters')
         request = normalize_request(mode, files, force_rescan)
+        effective_config = snapshot()
+        policy = section('storage', 'explicit_scan_jobs')
+        self.max_rows = policy['max_records'] or None
+        self.max_total_bytes = policy['max_total_bytes']
+        self.max_database_bytes = policy['max_database_bytes']
         identity = root_identity(self.root)
         if self.scan_path is None:
             raise ValueError('Scan store required for submission')
@@ -91,7 +106,7 @@ class ScanJobs(SignedRecords):
                 # A lost response followed by a retry with a different key must
                 # not start a second concurrent scan of the same request.
                 row = next((r for r in rows if r['state'] in ACTIVE and r['lease_until'] > self.now() and r['request'] == request
-                            and r['root_identity'] == identity), None)
+                            and r['root_identity'] == identity and r.get('effective_config') == effective_config), None)
                 if row is not None:
                     if len(row['request_keys']) >= 32:
                         raise ValueError('Active scan request alias capacity exceeded')
@@ -103,7 +118,7 @@ class ScanJobs(SignedRecords):
                     created = True
                     ref = 'sj1-' + uuid.uuid4().hex
                     row = self._put(db, ref, dict(contract='explicit-scan-job-v1',
-                        job_ref=ref, request_keys=[request_key], request=request,
+                        job_ref=ref, request_keys=[request_key], request=request, effective_config=effective_config,
                         root_identity=identity, scan_path=str(self.scan_path),
                         state='QUEUED', ticket=secrets.token_hex(32),
                         created_at=self.now(), updated_at=self.now(),
@@ -137,6 +152,7 @@ class ScanJobs(SignedRecords):
             created_at=row['created_at'], updated_at=row['updated_at'],
             scan_id=row['scan_id'], scan_status=row.get('scan_status'),
             reason_code='WORKER_LEASE_EXPIRED' if state == 'INTERRUPTED' else row['reason_code'],
+            failure_diagnostic=row.get('failure_diagnostic'),
             result_available=state == 'COMPLETED', scanner_run=False,
             source_modified=False, repair_authorized=False,
             poll_after_seconds=2 if state in ACTIVE else None,
@@ -220,23 +236,25 @@ def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=No
         thread = threading.Thread(target=heartbeat, daemon=True)
         thread.start()
         try:
-            no_links(Path(row['scan_path']))
-            if application_factory is None:
-                from .workspace_application import WorkspaceApplication
-                from .runtime import SecurityRuntime
-                from .storage import SQLiteStore
-                runtime = SecurityRuntime(store=SQLiteStore(Path(row['scan_path'])))
-                application = WorkspaceApplication(runtime, hooks, scan_path_provider=lambda: runtime.store.path)
-            else:
-                application = application_factory(row)
-            request, reporter = row['request'], ProgressReporter(progress)
-            if request['mode'] == 'project':
-                result = application.scan_project(str(queue.root),
-                    force_rescan=request['force_rescan'], progress=reporter)
-            elif request['mode'] == 'files':
-                result = application.scan_files(str(queue.root), request['files'], progress=reporter)
-            else:
-                result = application.scan(str(queue.root), request['mode'], progress=reporter)
+            from .user_config import DEFAULTS
+            with preferences(row.get('effective_config') or {'values': DEFAULTS}):
+                no_links(Path(row['scan_path']))
+                if application_factory is None:
+                    from .workspace_application import WorkspaceApplication
+                    from .runtime import SecurityRuntime
+                    from .storage import SQLiteStore
+                    runtime = SecurityRuntime(store=SQLiteStore(Path(row['scan_path'])))
+                    application = WorkspaceApplication(runtime, hooks, scan_path_provider=lambda: runtime.store.path)
+                else:
+                    application = application_factory(row)
+                request, reporter = row['request'], ProgressReporter(progress)
+                if request['mode'] == 'project':
+                    result = application.scan_project(str(queue.root),
+                        force_rescan=request['force_rescan'], progress=reporter)
+                elif request['mode'] == 'files':
+                    result = application.scan_files(str(queue.root), request['files'], progress=reporter)
+                else:
+                    result = application.scan(str(queue.root), request['mode'], progress=reporter)
             data = result if isinstance(result, dict) else vars(result)
             reused = isinstance(result, dict) and data.get('result_reuse', {}).get('reused') is True
             queue.update(job_ref, ticket, state='COMPLETED', phase='COMPLETED',
@@ -247,6 +265,11 @@ def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=No
                     repair_authorized=False))
             return 0
         except Exception as exc:
+            from .target import DiscoveryLimitError
+            if isinstance(exc, DiscoveryLimitError):
+                queue.update(job_ref, ticket, state='FAILED', phase='FAILED',
+                    reason_code=exc.code, failure_diagnostic=exc.to_dict())
+                return 2
             from .explicit_scan import ExplicitScanBusy
             from .progress import ScanCancelled
             reason = ('SCAN_ATTEMPT_BUSY' if isinstance(exc, ExplicitScanBusy) else

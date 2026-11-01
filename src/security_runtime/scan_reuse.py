@@ -86,6 +86,11 @@ def capture_reuse_identity(registry, root, *, files, context_files=(), selected=
     from .scanner_observation import observation
     from .scanners import PatternSASTScanner
     from .toolchain import ToolStatus
+    from .scan_preferences import section
+    rule_settings = section('rules')
+    if (rule_settings['sast']['mode'] != 'builtin' or rule_settings['sast']['exclude_ids']
+            or rule_settings['gitleaks']['config_path']):
+        raise _ProofUnavailable('CUSTOM_RULE_CONFIGURATION_REQUIRES_EXECUTION')
     root = Path(root).resolve(strict=True)
     build = build_identity()
     if build.get('status') not in {'DEV', 'IDENTIFIED'} or not build.get('build_id'):
@@ -158,7 +163,8 @@ def capture_reuse_identity(registry, root, *, files, context_files=(), selected=
                         if not value['data']:
                             raise _ProofUnavailable('PROVIDER_DATA_IDENTITY_UNVERIFIABLE')
             providers.append(value)
-    return {'workspace': os.path.normcase(str(root)), 'build': build,
+    from .scan_preferences import snapshot
+    return {'preferences': snapshot()['values'], 'workspace': os.path.normcase(str(root)), 'build': build,
             'source_presentation': 'RAW_V3',
             'platform': [platform.system(), platform.machine()],
             'discovery': {'exclusions': sorted(detector.ignored), 'max_files': detector.max_files,

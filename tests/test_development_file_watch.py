@@ -38,6 +38,59 @@ def test_metadata_begin_and_read_only_access_do_not_start_a_watcher(sample):
     assert launched == []
 
 
+def test_finish_drains_delayed_notifications_after_first_empty_poll(sample, monkeypatch):
+    root, _, owner, service, ref, launched = sample
+    store = service.store(root)
+    monkeypatch.setattr(watching, 'SETTLE_SECONDS', .15)
+
+    class Delayed:
+        calls = 0
+
+        def watch(self, *_args):
+            self.calls += 1
+            if self.calls == 1:
+                # Deterministic race: closeout starts before the OS delivers
+                # its last batch. An empty poll is not a flush acknowledgement.
+                window = watching._windows[watching._key(store, ref)]
+                assert window.closing.wait(2)
+                return 'timeout'
+            time.sleep(.01)
+            if self.calls == 2:
+                return {(1, str(root/'late.py'))}
+            return 'timeout'
+
+        def close(self):
+            pass
+
+    backend = Delayed()
+    assert watching.start_window(store, ref, owner, backend_factory=lambda _: backend) == 'ACTIVE'
+    result = service.finish(root, ref)
+    assert result['scope']['paths'] == ['late.py']
+    assert result['file_watch']['status'] == 'STOPPED'
+    assert not result['scope']['scope_unknown'] and launched == ['scan']
+
+
+def test_continuous_notifications_do_not_extend_finish_budget(sample, monkeypatch):
+    root, _, owner, service, ref, _ = sample
+    monkeypatch.setattr(watching, 'SETTLE_SECONDS', .15)
+
+    class Busy:
+        def watch(self, *_args):
+            time.sleep(.01)
+            return {(2, str(root/'busy.py'))}
+
+        def close(self):
+            pass
+
+    watching.start_window(service.store(root), ref, owner, backend_factory=lambda _: Busy())
+    started = time.monotonic()
+    result = service.finish(root, ref)
+    assert time.monotonic()-started < 2
+    assert result['scope']['paths'] == ['busy.py']
+    assert 'FILE_WATCH_SETTLEMENT_TIMEOUT' in result['observation_notes']
+    assert result['scope']['scope_unknown']
+
+
 def test_real_script_changes_are_drained_before_finish_without_history_inventory(sample, monkeypatch):
     root, _, owner, service, ref, launched = sample
     for name in ('untouched.py', 'again.py', 'remove.py', 'old.py', 'atomic.py'):
