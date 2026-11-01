@@ -54,8 +54,8 @@ def test_input_zero_captures_and_revalidates(tmp_path):
 
 def test_unlimited_output_and_capped_output():
     from security_runtime.processes import run_process, OutputLimitError
-    command=[sys.executable,'-c','print("x"*1100000)']
-    assert len(run_process(command, max_output=0, timeout=0).stdout) == 1100001
+    command=[sys.executable,'-c','import sys; sys.stdout.write("x"*1100000)']
+    assert run_process(command, max_output=0, timeout=0).stdout == 'x' * 1100000
     with pytest.raises(OutputLimitError): run_process(command, max_output=10)
 
 
