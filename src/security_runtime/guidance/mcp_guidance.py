@@ -1,7 +1,7 @@
 """Small discovery entrypoint; complete versioned methods remain canonical."""
 
 MCP_INSTRUCTIONS = '''AI Security Runtime：本机安全检查与有界复核。
-普通聊天、只读操作和普通 Stop 不开始、恢复或派发检查，也不追加安全提示。
+普通聊天、只读操作不开始检查；Stop 按配置仅对当前开发记录有界补交或续接，不扫描历史任务。
 首次进入开发核查、显式扫描或风险处理前，必须读取或复用同一真实 build_identity、
 版本和 SHA-256 对应的完整 core 指导及所选主题；这是必读方法，不是可跳过的建议。
 先取 get_runtime_info(view="summary") 核对能力、工具子集和 guidance_catalog。
@@ -15,7 +15,7 @@ Hook 或 record_development_changes 仅记录路径、不唤醒扫描；收尾�
 get_development_check 只读保存结果。保留 check_ref、session_ref、owner、范围和序号，不猜归属。
 声明 development_check_delivery 时优先 complete_development_check，一次提交、产品预算等待；
 超时用 wait_development_check 原引用续等，读取不确认展示。旧 Runtime 沿 finish_development_check。
-宿主分析发现与安全相关编辑；未知范围不扩大为全项目，保存结果不证明最新全项目安全。
+按检查返回的 analysis_requirements 执行 Agent 分析；SKIPPED_BY_CONFIG 项跳过，两项均跳过时只报告静态结果。宿主分析发现与安全相关编辑时遵循配置；未知范围不扩大为全项目，保存结果不证明最新全项目安全。
 严格或已有任务保留 task-review-plan-v3、task-result-delivery-v1 和原九项工具；
 沿原 task_ref、版本、证据与累计额度继续，不在编辑后补建基线，不用轻量结果替代严格审计。
 

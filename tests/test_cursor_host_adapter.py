@@ -10,6 +10,7 @@ from security_runtime.cursor_integration import GlobalCursorIntegration, launche
 from security_runtime.recent_hooks import RecentHookStore
 from test_hook_runtime import repo, coordinator, FakeRuntime
 from test_host_event_normalization import other_repo
+from legacy_hook_helpers import legacy_comparison
 
 
 def payload(root, event='afterFileEdit', **fields):
@@ -87,6 +88,9 @@ def test_file_boundary_and_nested_repo(repo,tmp_path):
 @pytest.mark.parametrize('event',['afterFileEdit','afterShellExecution'])
 def test_real_delta_same_revert_and_readonly(repo,tmp_path,event):
     runtime=FakeRuntime();core=coordinator(tmp_path,runtime,cooldown_ms=0)
+    # This test covers retained hook-v1 full-content comparison. New native
+    # sessions use product epochs; default development only records paths.
+    legacy_comparison(core.store, repo, 'cursor', 'private-cursor-conversation')
     store=RecentHookStore(tmp_path/'recent.db');bindings=CursorBindings(tmp_path/'bindings')
     def run(raw):return handle_cursor_event(raw,core=core,bindings=bindings,store=store,project_dir=str(repo))[1]
     assert run(payload(repo,'sessionStart'))['host_claim_status']=='VALID'
@@ -170,6 +174,8 @@ def test_workspace_isolation_and_multifile_bom(repo,tmp_path):
     runtime=FakeRuntime();core=coordinator(tmp_path,runtime,cooldown_ms=0)
     store=RecentHookStore(tmp_path/'recent.db');bindings=CursorBindings(tmp_path/'bindings')
     other=other_repo(tmp_path/'other')
+    legacy_comparison(core.store, repo, 'cursor', 'session-a')
+    legacy_comparison(core.store, other, 'cursor', 'session-b')
     def run(root,event='afterFileEdit',**kwargs):
         raw=payload(root,event,conversation_id='session-a' if root==repo else 'session-b',**kwargs)
         if event=='sessionStart':raw['session_id']=raw['conversation_id']
@@ -181,6 +187,41 @@ def test_workspace_isolation_and_multifile_bom(repo,tmp_path):
     runtime.calls.clear()
     assert run(other)['status']=='NO_CHANGE' and not runtime.calls
     assert all(r['session_hash']!=store.recent(repo)['records'][0]['session_hash'] for r in store.recent(other)['records'])
+
+
+@pytest.mark.parametrize('event', ['afterFileEdit', 'afterShellExecution'])
+def test_default_cursor_records_observations_without_legacy_comparison(repo, tmp_path, monkeypatch, event):
+    from security_runtime.development_check import DevelopmentCheckService
+    from security_runtime.tasks.ownership import session_owner
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime, task_audit_mode=True)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail('Default edit hooks must not capture a baseline or scan')
+
+    monkeypatch.setattr('security_runtime.hook_runtime.capture_snapshot', forbidden)
+    monkeypatch.setattr('security_runtime.product_epoch_service.ProductEpochService.ensure', forbidden)
+    monkeypatch.setattr(runtime, 'scan', forbidden)
+    bindings, recent = CursorBindings(tmp_path/'bindings'), RecentHookStore(tmp_path/'recent.db')
+
+    def run(raw):
+        return handle_cursor_event(raw, core=core, bindings=bindings,
+                                   store=recent, project_dir=str(repo))[1]
+
+    assert run(payload(repo, 'sessionStart'))['status'] == 'CONNECTED'
+    (repo/'A.java').write_text('class A { int changed; }')
+    args = {'command': 'python opaque_script.py'} if event == 'afterShellExecution' else {}
+    result = run(payload(repo, event, **args))
+    assert result['status'] == 'DIRTY' and not result['scanner_run']
+    assert not result['baseline_available']
+    # A post-only Shell transport has no live PreToolUse watcher. It must
+    # preserve unknown scope instead of pretending to have observed all files.
+    assert result['scope']['paths'] == (['A.java'] if event == 'afterFileEdit' else [])
+    assert result['scope']['scope_unknown'] is (event == 'afterShellExecution')
+    service = DevelopmentCheckService(None, core.store, owner=session_owner(
+        'cursor', 'private-cursor-conversation'))
+    saved = service.get(repo, result['development_check_ref'])
+    assert not saved['finish_requested'] and runtime.calls == []
 
 
 def test_missing_claims_and_schema_event_specific(repo,tmp_path):
@@ -220,6 +261,25 @@ def test_stop_same_snapshot_converges_without_followup(repo,tmp_path):
         output,result=handle_cursor_event(payload(repo,'stop',loop_count=index),core=core,store=store,bindings=bindings,project_dir=str(repo))
         assert output=={} and result['status']=='SESSION_FINALIZED' and not result['scanner_run']
     assert not runtime.calls
+
+
+def test_cursor_readonly_generation_does_not_resume_old_check(repo, tmp_path, monkeypatch):
+    runtime = FakeRuntime()
+    core = coordinator(tmp_path, runtime, cooldown_ms=0)
+    core.task_audit_mode = True
+    launches = []
+    monkeypatch.setattr('security_runtime.development_check_worker.launch_worker', lambda *a, **kw: launches.append(a))
+    bindings = CursorBindings(tmp_path/'bindings')
+    recent = RecentHookStore(tmp_path/'recent.db')
+
+    def run(event, **kwargs):
+        return handle_cursor_event(payload(repo, event, **kwargs), core=core, store=recent,
+                                   bindings=bindings, project_dir=str(repo), automatic=True)
+
+    run('sessionStart')
+    run('afterFileEdit', generation_id='editing')
+    assert run('stop', generation_id='readonly')[0] == {} and not launches
+    assert run('stop', generation_id='editing')[0].get('followup_message') and len(launches) == 1
 
 
 @pytest.mark.parametrize('raw',[None,[],{'hook_event_name':[]},{'hook_event_name':'unsupported'}])

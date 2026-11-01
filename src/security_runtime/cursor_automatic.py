@@ -84,6 +84,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 paths, unknown = edit_path_hints(payload.get('tool_name'), payload.get('tool_input'), root)
                 result = task_activity(core.store, root, 'cursor', bridge.session, paths=paths,
                     scope_unknown=unknown, event_id=payload.get('tool_use_id'),
+                    turn_id=payload.get('generation_id'),
                     scan_path=getattr(getattr(core.runtime, 'store', None), 'path', None))
                 if not result.get('security_task_ref'):
                     result.update(diag, automatic_connector=True)
@@ -107,6 +108,15 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 result['response_prepared'] = True
         elif event == 'stop':
             message = bridge.followup(payload)
+            fallback_result = None
+            if not message and getattr(core, 'task_audit_mode', False):
+                from .development_stop import fallback
+                fallback_result = fallback(core.store, root, bridge.owner,
+                    stopped_normally=payload['status'] == 'completed',
+                    stop_hook_active=payload['loop_count'] > 0, turn_id=payload.get('generation_id'))
+                if fallback_result:
+                    message = fallback_result.get('reason') if fallback_result.get('decision') == 'block' else None
+
             from .tasks.attribution import session_activity
             idle = (not message and payload['status'] == 'completed' and payload['loop_count'] == 0
                     and core.store.pending_activity(root, 'cursor', bridge.session) is None)
@@ -115,6 +125,8 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             if message:
                 output['followup_message'] = message
             result = dict(status='FOLLOWUP' if message else 'NOT_APPLICABLE', scanner_run=False)
+            if fallback_result:
+                result['development_stop'] = fallback_result
             if message and bridge.last_delivery is not None:
                 result['task_delivery'] = bridge.last_delivery
                 result['response_prepared'] = True

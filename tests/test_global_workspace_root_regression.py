@@ -66,3 +66,26 @@ def test_wrapper_is_not_guessed_from_a_child_project(tmp_path):
     (child / 'src').mkdir(parents=True)
     with pytest.raises(ValueError, match='No project detected'):
         resolve_workspace(wrapper)
+
+
+def test_empty_native_hook_admission_remains_opt_in(tmp_path):
+    import pytest
+    empty = tmp_path/'new-project'
+    empty.mkdir()
+    with pytest.raises(ValueError):
+        resolve_workspace(empty)
+    assert resolve_workspace(empty, allow_empty=True) == empty.resolve()
+    with pytest.raises(ValueError):
+        resolve_workspace(empty, allow_empty=True, excluded=(empty,))
+    (empty/'notes.txt').write_text('not a source project')
+    with pytest.raises(ValueError):
+        resolve_workspace(empty, allow_empty=True)
+
+
+def test_admitted_empty_project_builds_real_workspace_services(tmp_path):
+    from security_runtime.workspace_services import workspace_services
+    root = tmp_path/'empty'
+    root.mkdir()
+    runtime, core, is_git = workspace_services(root, tmp_path/'state', admitted=True)
+    assert not is_git
+    assert core.task_audit_mode

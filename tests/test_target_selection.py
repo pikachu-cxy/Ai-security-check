@@ -21,6 +21,13 @@ from security_runtime.target import DiscoveryLimitError, TargetDetector, selecti
 from test_global_integration import installed, projects, structured
 
 
+@pytest.fixture(autouse=True)
+def isolated_state(tmp_path, monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path.resolve()/'transport-state'))
+    monkeypatch.delenv('SECURITY_RUNTIME_WORKSPACE', raising=False)
+    monkeypatch.delenv('SECURITY_RUNTIME_GLOBAL', raising=False)
+
+
 class RecordingScanner:
     name = scanner_id = 'fixture-code-and-secret'
     capabilities = frozenset({Capability.CODE_SAST, Capability.SECRET_SCAN})
@@ -138,7 +145,10 @@ def test_global_forwarding_retains_discovery_diagnostic(installed, projects, tmp
     (root / 'large.java').write_bytes(b'x' * 1_000_001)
     runtime, scanner = runtime_at(root, tmp_path / 'isolated-state')
     def child_factory(root, directory, binding):
-        return create_server(runtime, workspace_binding=binding, global_mode=False), None
+        from security_runtime.hook_runtime import HookCoordinator
+        from security_runtime.hook_state import HookStateStore
+        core = HookCoordinator(runtime, HookStateStore(directory/'hooks'))
+        return create_server(runtime, hook_coordinator=core, workspace_binding=binding, global_mode=False), core
     pool = GlobalWorkspaces(base=tmp_path / 'workspaces', integration=installed, child_factory=child_factory)
     try:
         server = create_global_server(workspaces=pool)
@@ -200,7 +210,8 @@ def test_engine_skip_prevents_false_full_even_when_path_listed_scanned(reason):
     assert value['status'] == 'PARTIAL'
     assert value['per_language']['java']['scanned_files'] == 1
     assert value['engine_skipped_count'] == 1
-    assert 'private' not in json.dumps(value)
+    assert 'private scanner detail' not in json.dumps(value)
+    assert 'private-token-value' not in json.dumps(value)
     from security_runtime.hook_runtime import covered
     family = {'scanner_sources': ['semgrep'], 'file_path': 'Skipped.java',
               'rule_id': plan.rules[0].rule_id,

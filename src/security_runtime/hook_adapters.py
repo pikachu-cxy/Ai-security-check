@@ -134,11 +134,22 @@ def run_host_event(payload,workspace,host,coordinator=None):
         args = dict(event=payload['hook_event_name'], workspace_path=payload['cwd'],
                     session_id=session, tool_name=payload.get('tool_name'),
                     tool_input=payload.get('tool_input'), stop_hook_active=payload.get('stop_hook_active', False))
+        args['turn_id'] = payload.get('turn_id')
         normalized = CodexEventAdapter().normalize(args, root, legacy=True)
         result, _ = handle_normalized_event(normalized, coordinator=coordinator or HookCoordinator())
     else:
         # Existing Cursor command/config support is not a normalized adapter v1.
         result = (coordinator or HookCoordinator()).handle(event,root,host,session)
+    if host == 'codex' and payload.get('hook_event_name') == 'Stop':
+        from .development_stop import fallback
+        from .tasks.ownership import session_owner
+        core = coordinator or HookCoordinator()
+        if getattr(core, 'task_audit_mode', False):
+            extra = fallback(core.store, root, session_owner(host, session),
+                             stop_hook_active=payload.get('stop_hook_active', False), turn_id=payload.get('turn_id'))
+            if extra:
+                return ({'decision': 'block', 'reason': extra['reason']} if extra.get('decision') == 'block'
+                        else {'systemMessage': extra.get('systemMessage', '')})
     return adapter.output(payload,result)
 
 

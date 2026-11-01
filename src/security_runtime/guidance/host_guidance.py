@@ -504,7 +504,7 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 
 ## 入口与指导身份
 
-普通聊天、只读和普通 Stop 不开始、恢复或派发检查，不追加通用安全提示。
+普通聊天、只读不开始检查；Stop 仅在配置开启且当前开发记录有待检查更新或待交付结果时有界兜底。
 用户要求“打开风险统计”或“打开风险仪表盘”时，若实际工具列表提供 start_risk_dashboard，
 调用该工具并打开返回的本机页面；这是只读查看已保存风险，不启动消耗监控、项目扫描或修复。
 用户针对某次只读查询说“本轮不要扫描”只约束该查询；之后的新开发任务不自动继承此单次限制。
@@ -552,7 +552,7 @@ get_development_check 只读保存结果。已有本会话 Hook 的 check_ref �
 写完后尽早提交后台收尾，与已授权且不写项目文件的验证及结果整理重叠；不能为填充等待增加测试或安装。
 没有独立工作且实际支持 bounded-closeout-wait-v1 时，可用收尾接口的有界等待直接读取原结果；超时沿原引用查询，不重发收尾。
 收尾后继续编辑使结果保持待检查，写完再沿原记录收尾，不自动扫描下一版。
-宿主分析发现和安全相关编辑，复用有效上下文，不强制读取全部改前/改后窗口；结果不能冒充宿主已读或全项目安全。
+宿主按返回的 analysis_requirements 分别执行命中复核和业务逻辑审计；SKIPPED_BY_CONFIG 项跳过，复用有效上下文，不强制读取全部改前/改后窗口；结果不能冒充宿主已读或全项目安全。
 继续原生修复或严格任务才使用 task-review-plan-v3、task-result-delivery-v1 和九项必需工具子集。
 严格任务第一次编辑前 begin_security_task，完成后 finish_security_task 和 prepare_task_security_review(protocol_version=3)；
 保留原 task_ref、源码版本、证据与累计额度，必需窗口、提交和交付门槛不变，不补建基线、不回退旧协议。
@@ -602,8 +602,10 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
         inventory = installed_inventory(RulePackManager().resolve())
     except (ValueError, OSError):
         inventory = {'status':'UNAVAILABLE', 'execution_proof':False}
+    from ..user_config import describe_config
     info = {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
             'build_identity': build_identity(),
+            'development_configuration': describe_config(),
             'rule_inventory':inventory,
             'professional_guidance':delivery_contract(),
             'guidance_catalog':guidance_manifest(),
@@ -650,7 +652,9 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'reply_plan': 'security-reply-plan-v1; PURE_DISPLAY; FACTS_AND_ACTIONS_SEPARATE; NO_FUNCTIONAL_TEST_INPUT',
                           'repair_impact': 'repair-impact-v1; BOUNDED_STATIC_ANALYSIS; NO_REPAIR_AUTHORITY; ORIGINAL_RISK_VERSION_BOUND',
                           'repair_impact_unknowns': UNKNOWN_CLASSIFICATION_CONTRACT,
-                         'quiet_stop': 'v1; NO_SCAN_NO_DISPATCH_NO_CHAT_MESSAGE',
+                         'quiet_stop': 'v2; READ_ONLY_CHAT_QUIET; CONFIGURED_FOCUSED_DEVELOPMENT_FALLBACK',
+                         'development_stop_fallback': 'v1; CODEX_CURSOR; FOCUSED_ONLY; VERSIONED; BOUNDED; NO_REPAIR_AUTHORITY',
+                         'development_user_config': 'v1; USER_TOML; SNAPSHOT_PER_BATCH; STATIC_ONLY_SUPPORTED',
                          'professional_audit_workflow': 'v1; HOST_STATIC_REASONING_ONLY',
                          'professional_guidance': 'professional-guidance-v1',
                          'personal_installation': 'personal-install-v1',

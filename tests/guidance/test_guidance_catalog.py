@@ -17,7 +17,8 @@ def test_core_is_short_but_keeps_non_optional_safety_boundaries_and_intent_routi
     assert len(core.encode()) < 10_000
     assert len(RUNTIME_WORKFLOW.encode()) < 20_000
     assert len(core.splitlines()) < 100
-    for required in ('普通聊天、只读和普通 Stop', '不开始、恢复或派发检查', '必读方法，并非可跳过',
+    for required in ('普通聊天、只读不开始检查',
+        'Stop 仅在配置开启且当前开发记录有待检查更新或待交付结果时有界兜底', '必读方法，并非可跳过',
         'task-review-plan-v3', '真实 build_identity', '九项必需工具子集', '不回退旧协议',
         '第一次编辑前 begin_security_task', '不以 Git HEAD', '不按最近任务猜测',
         '旧 v1/v2/缺协议任务仅供历史查询', '不追认旧改动', 'observed-development-check-v1',

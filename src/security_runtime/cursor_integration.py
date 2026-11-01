@@ -103,7 +103,7 @@ class GlobalCursorIntegration:
         events = AUTOMATIC_EVENTS if self.automatic else PRODUCTION_EVENTS
         # Only the four observed reliable event surfaces are installed.
         expected = {e: {'command': cmd, 'type': 'command', 'timeout': 120,
-                       **({'loop_limit': 1} if e == 'stop' else {})} for e in events}
+                       **({'loop_limit': 10} if e == 'stop' else {})} for e in events}
         actual = {}
         if manifest:
             for event, record in manifest['records'].items():

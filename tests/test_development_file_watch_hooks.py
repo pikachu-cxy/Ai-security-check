@@ -2,6 +2,8 @@
 import asyncio
 import copy
 import json
+import subprocess
+import sys
 
 import pytest
 
@@ -34,9 +36,12 @@ def test_pre_post_pair_shares_binding_and_budget_but_replay_is_rejected():
     assert guard.accept(fresh,'/project',diagnostics(fresh,'PreToolUse')) == 'HOST_CLAIM_BUDGET_EXCEEDED'
 
 
-@pytest.mark.parametrize('global_mode',[False, True])
+@pytest.mark.parametrize('global_mode',[False, True, 'empty'])
 def test_pre_ready_before_script_post_and_finish_collect_exact_paths(installed, projects, tmp_path, monkeypatch, global_mode):
     root = projects[0]
+    if global_mode == 'empty':
+        root = tmp_path/'empty-project'
+        root.mkdir()
     runtime = complete_runtime()
     core = coordinator(tmp_path/'core',runtime,cooldown_ms=0)
     pool = None
@@ -51,14 +56,18 @@ def test_pre_ready_before_script_post_and_finish_collect_exact_paths(installed, 
     try:
         args = dict(claims(root),event='PreToolUse')
         no_edit = call(server,'handle_before_hook_event',args)
-        assert no_edit['status'] == 'NOT_STARTED' and 'check_ref' not in no_edit
+        assert no_edit['status'] == 'NOT_STARTED' and 'check_ref' not in no_edit, no_edit
         assert not runtime.calls
         # An opaque script with no path hint still registers before it writes.
         args = dict(args,tool_use_id='script',tool_input={'command':'python opaque_script.py'})
         started = call(server,'handle_before_hook_event',args)
         assert started['host_claim_status'] == 'VALID' and started['file_watch']['status'] == 'ACTIVE', started
         ref = started['check_ref']
-        (root/'shell-created.py').write_text('value = 1')
+        # Execute an actual child script; do not rely on the test process being
+        # the writer or on parsing the opaque command for a filename.
+        subprocess.run([sys.executable, '-B', '-c',
+            "from pathlib import Path; Path('shell-created.py').write_text('value = 1')"],
+            cwd=root, check=True, timeout=10)
         after = call(server,'handle_hook_event',dict(args,event='PostToolUse'))
         assert after['host_claim_status'] == 'VALID' and not after['scanner_run'], after
         assert not runtime.calls

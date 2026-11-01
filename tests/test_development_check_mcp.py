@@ -184,6 +184,13 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
                   for session in ('first', 'second')]
         assert all('task_session_ref' in event for event in events), events
         tokens = [event['task_session_ref'] for event in events]
+        unbound = routed('begin_development_check', workspace_path=root, task_key='connection-check')
+        rejected = routed('get_development_check', workspace_path=root,
+                          check_ref=unbound['check_ref'], session_ref=tokens[0])
+        assert rejected['reason_code'] == 'TASK_CONNECTION_SCOPE_MISMATCH'
+        assert '连接范围' in rejected['message'] and '不得自动迁移' in rejected['message']
+        original = routed('get_development_check', workspace_path=root, check_ref=unbound['check_ref'])
+        assert original['dirty_seq'] == 0 and original['check_ref'] == unbound['check_ref']
         check = routed('begin_development_check', workspace_path=root,
                        session_ref=tokens[0], task_key='one')
         assert check['check_ref'].startswith('dc1-')
@@ -212,6 +219,17 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
         empty = routed('finish_development_check', workspace_path=root,
                        session_ref=tokens[0], check_ref=check['check_ref'], wait_seconds=25)
         assert empty['status'] == 'NO_OBSERVED_CHANGES' and empty['dirty_seq'] == 0
+        recorded = routed('record_development_changes', workspace_path=root, session_ref=tokens[0],
+                          check_ref=check['check_ref'], paths=['src/A.java'])
+        rejected = routed('submit_development_review', workspace_path=root, session_ref=tokens[0],
+            check_ref=check['check_ref'], expected_seq=recorded['dirty_seq'], observations=[dict(
+                issue_key='sql', file_path='src/A.java', line_start=1, line_end=1,
+                category='sql-injection', title='SQL', description='Input', impact='Read',
+                fix_advice='Bind', severity='HIGH', decision='INCONCLUSIVE', rationale='Unclear', evidence_refs=[])])
+        assert rejected['reason_code'] == 'DEVELOPMENT_RISK_EVIDENCE_REQUIRED'
+        assert not rejected['review_saved'] and not rejected['scanner_run']
+        assert rejected['next_action']['arguments']['session_ref'] == tokens[0]
+        assert rejected['next_action']['arguments']['check_ref'] == check['check_ref']
         assert empty['closeout_wait']['requested_seconds'] == 25 and not empty['scanner_run']
     finally:
         pool.close()

@@ -161,8 +161,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         register_context_usage(sub)
     except Exception:
         pass
+    sub.add_parser('development-config', help='Read effective user config as JSON; no scan or writes')
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
+    info_parser.add_argument('--fast', action='store_true', help='Read saved settings without component integrity checks')
+    data_parser=sub.add_parser('vulnerability-data', help='Read or explicitly update the configured Trivy database')
+    data_parser.add_argument('action', choices=['status', 'update'])
+    data_parser.add_argument('--json', action='store_true')
     risk_dashboard_parser=sub.add_parser('risk-dashboard',help='Open the local read-only risk statistics dashboard')
     risk_dashboard_parser.add_argument('--ready',help=argparse.SUPPRESS)
     skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
@@ -315,6 +320,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     lifecycle_parser.add_argument('--scope', choices=['global', 'project'], default='project')
     lifecycle_parser.add_argument('--path')
     lifecycle_parser.add_argument('--json', action='store_true')
+    lifecycle_parser.add_argument('--fast', action='store_true', help='Read saved global Codex configuration without live verification')
     integrations_parser = sub.add_parser("integrations", help="Inspect AI coding integrations")
     integrations_parser.add_argument("--path")
     integrations_parser.add_argument("--verbose", action="store_true")
@@ -380,6 +386,17 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'integration' and args.fast:
+            if args.action != 'status' or args.scope != 'global' or args.integration != 'codex':
+                raise ValueError('FAST_STATUS_REQUIRES_GLOBAL_CODEX_STATUS')
+            from .fast_status import codex_saved_status
+            print(json.dumps(codex_saved_status(), ensure_ascii=True))
+            return 0
+        if args.command == 'development-config':
+            from .user_config import describe_config
+            result = describe_config()
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0 if result['status'] == 'VALID' else 2
         if args.command == 'risk-dashboard':
             from .risk_dashboard import serve
             serve(args.ready)
@@ -601,7 +618,30 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             print(json.dumps(data,ensure_ascii=True) if args.json else '\n'.join([
                 'AI Security Review: '+data['status'],data.get('path',''),data.get('reason','')]))
             return 2 if data['status'] in {'USER_MANAGED','USER_MODIFIED','OWNERSHIP_CONFLICT'} else 0
+        if args.command == 'vulnerability-data':
+            from .scan_preferences import preferences, section
+            with preferences():
+                manager = ToolManager()
+                status = None
+                if args.action == 'update':
+                    print('Updating configured vulnerability data...', file=sys.stderr)
+                    resolved = manager.resolve('trivy')
+                    status = (manager.prepare_trivy_database(resolved.path, force=True)
+                              if resolved.status == ToolStatus.READY else resolved.status)
+                data = dict(status=str(status or manager.database_status()),
+                            freshness=manager.database_freshness(),
+                            configuration=section('vulnerability_data', 'trivy'),
+                            scanner_run=False)
+                print(json.dumps(data, ensure_ascii=True))
+                return 0 if args.action == 'status' or data['freshness']['status'] == 'FRESH' else 2
+        if args.command=='runtime-info' and args.fast:
+            from .user_config import describe_config
+            info = dict(version=__version__, verification='NOT_REVALIDATED',
+                        development_configuration=describe_config(), scanner_run=False)
+            print(json.dumps(info, ensure_ascii=True))
+            return 0 if info['development_configuration']['status'] == 'VALID' else 2
         if args.command=='runtime-info':
+            print('Checking runtime package integrity and capabilities...', file=sys.stderr)
             from .guidance.host_guidance import runtime_info
             info=runtime_info()
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
@@ -801,6 +841,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 and args.scope != 'project')
             or (args.command == 'doctor' and not args.project and (args.path is None or args.global_scope)))
         if global_action:
+            if args.command == 'status' or getattr(args, 'action', None) == 'status':
+                print('Checking integration ownership and runtime connection...', file=sys.stderr)
             from contextlib import nullcontext
             from .install_progress import InstallationProgress
             action = ('uninstall' if args.action == 'remove' else args.action) if args.command == 'integration' else args.command

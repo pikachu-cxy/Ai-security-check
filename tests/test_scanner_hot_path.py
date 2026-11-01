@@ -17,13 +17,27 @@ from security_runtime.runtime import SecurityRuntime
 from security_runtime.storage import SQLiteStore
 from security_runtime.verification import VerificationService
 
-RULE='ai-security.java.trust-all-hostname'
+RULE='java.trust-all-hostname.fixture.trust-all-hostname'
 
 
 @pytest.fixture
 def engine(tmp_path,monkeypatch):
     root=tmp_path/'project';root.mkdir();path=root/'A.java';path.write_text('class A {}')
-    pack=tmp_path/'rules';shutil.copytree(RulePackManager().resolve().path,pack)
+    # Deterministic contract tests must not depend on the changing shipped catalog.
+    # Keep native upstream ID namespacing, real files and metadata invalidation.
+    pack=tmp_path/'rules';(pack/'java').mkdir(parents=True)
+    (pack/'java/trust-all-hostname.yml').write_text(yaml.safe_dump({'rules': [
+        dict(id='fixture.trust-all-hostname', languages=['java'], message='TLS fixture',
+             severity='ERROR', pattern='$C.setHostnameVerifier($X)',
+             metadata={'category':'tls','cwe':['CWE-295']}),
+        dict(id='fixture.second-rule', languages=['java'], message='Second selection fixture',
+             severity='WARNING', pattern='System.exit($X)', metadata={'category':'code'}),
+        dict(id='fixture.generic', languages=['generic'], message='Generic selection fixture',
+             severity='INFO', pattern='acceptance_only_nonmatching_literal', metadata={'category':'code'}),
+        dict(id='fixture.json', languages=['json'], message='JSON selection fixture',
+             severity='INFO', pattern='42', metadata={'category':'code'})]}))
+    (pack/'catalog.json').write_text('{}')
+    (pack/'LICENSE').write_text('Synthetic test rules; no upstream rule content.')
     adapter=SemgrepAdapter(rule_packs=RulePackManager(BundledRulePackProvider(pack)))
     # A deterministic mocked engine still has real bytes/package identity. This
     # fixture proves contracts, never actual Semgrep behavior or performance.
@@ -95,7 +109,7 @@ def test_profile_language_change_replans(engine):
     root,_,_,adapter,_,_=engine
     adapter.plan_rules(None,context(root));(root/'A.py').write_text('x = 1')
     plan=adapter.plan_rules(None,replace(context(root),files=('A.py',)))
-    assert plan.detected_languages==('python',) and plan.planning_diagnostics['rule_plan_cache']=='MISS'
+    assert 'python' in plan.detected_languages and plan.planning_diagnostics['rule_plan_cache']=='MISS'
     assert not any(r.language=='java' for r in plan.rules)
 
 

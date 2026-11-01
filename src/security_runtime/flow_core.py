@@ -82,13 +82,18 @@ class Limit(Exception):
     pass
 
 
+def _flow_limit(key):
+    from .scan_preferences import section
+    return section('scan', 'dataflow')[key]
+
+
 @dataclass
 class Analysis:
     root: Path
-    max_files: int = 256
-    max_bytes: int = 8_000_000
-    max_steps: int = 1_000_000
-    max_depth: int = 6
+    max_files: int = field(default_factory=lambda: _flow_limit('max_files'))
+    max_bytes: int = field(default_factory=lambda: _flow_limit('max_total_bytes'))
+    max_steps: int = field(default_factory=lambda: _flow_limit('max_steps'))
+    max_depth: int = field(default_factory=lambda: _flow_limit('max_depth'))
     hashes: dict = field(default_factory=dict)
     issues: dict = field(default_factory=dict)
     stream_path_issues: set = field(default_factory=set)
@@ -108,9 +113,12 @@ class Analysis:
 
     def tick(self):
         self.steps += 1
+        if self.steps % 128 == 0:
+            from .progress import checkpoint
+            checkpoint()
         if self.deadline is not None and self.steps % 128 == 0 and time.monotonic() > self.deadline:
             raise Limit('TIME_BUDGET')
-        if self.steps > self.max_steps:
+        if self.max_steps and self.steps > self.max_steps:
             raise Limit('STEP_BUDGET')
 
     def read(self, name):
@@ -120,9 +128,10 @@ class Analysis:
                 any(p.is_symlink() or p.is_junction() for p in (path, *path.parents) if p != self.root and p.is_relative_to(self.root))):
             raise Limit('UNSAFE_CONTEXT_PATH')
         size = path.stat().st_size
-        if name not in self.hashes and (len(self.hashes) >= self.max_files or self.total_bytes + size > self.max_bytes):
+        if name not in self.hashes and (self.max_files and len(self.hashes) >= self.max_files or self.max_bytes and self.total_bytes + size > self.max_bytes):
             raise Limit('CONTEXT_BUDGET')
-        if size > 500_000:
+        per_file = _flow_limit('max_file_bytes')
+        if per_file and size > per_file:
             raise Limit('FILE_BUDGET')
         raw = path.read_bytes()
         digest = hashlib.sha256(raw).hexdigest()

@@ -44,7 +44,7 @@ def before_normalized_event(event, coordinator):
     context = event.context
     owner = dict(host=context.host, session=context.session_binding)
     result = record_hook(coordinator.store, context.workspace, owner,
-        scope_unknown=False, prepare_only=True,
+        scope_unknown=False, prepare_only=True, turn_id=event.turn_id,
         scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
     if result.get('check_ref'):
         store = DevelopmentCheckStore(coordinator.store, context.workspace)

@@ -62,15 +62,20 @@ def scoped_request(workspace, names, *, dependency_changes=None):
         else tuple(dependency_changes))
 
 
+def _input_limit(key):
+    from .scan_preferences import section
+    return section('scan', 'input')[key]
+
+
 @dataclass(frozen=True)
 class ScanInputLimits:
-    files: int = 10_000
-    bytes: int = 128_000_000
-    file_bytes: int = 4_000_000
-    index_bytes: int = 8_000_000
+    files: int = field(default_factory=lambda: _input_limit('max_files'))
+    bytes: int = field(default_factory=lambda: _input_limit('max_total_bytes'))
+    file_bytes: int = field(default_factory=lambda: _input_limit('max_file_bytes'))
+    index_bytes: int = field(default_factory=lambda: _input_limit('max_index_bytes'))
 
     def __post_init__(self):
-        if any(type(value) is not int or value < 1 for value in
+        if any(type(value) is not int or value < 0 for value in
                (self.files, self.bytes, self.file_bytes, self.index_bytes)):
             raise ScanInputError('SCAN_INPUT_LIMIT_INVALID')
 
@@ -123,17 +128,17 @@ def _read_file(path, maximum):
     before = native.stat()
     if not stat.S_ISREG(before.st_mode):
         raise ScanInputError('SCAN_INPUT_NOT_REGULAR')
-    if before.st_size > maximum:
+    if maximum and before.st_size > maximum:
         raise ScanInputError('SCAN_INPUT_FILE_BUDGET')
     flags = os.O_RDONLY | getattr(os, 'O_BINARY', 0) | getattr(os, 'O_NOFOLLOW', 0)
     with os.fdopen(os.open(native, flags), 'rb') as stream:
         opened = os.fstat(stream.fileno())
         if _signature(before) != _signature(opened):
             raise ScanInputError('SCAN_INPUT_SOURCE_MOVING')
-        raw = stream.read(maximum + 1)
+        raw = stream.read(maximum + 1 if maximum else -1)
         after = os.fstat(stream.fileno())
     no_links(path)
-    if (len(raw) > maximum or len(raw) != before.st_size
+    if (maximum and len(raw) > maximum or len(raw) != before.st_size
             or _signature(before) != _signature(after)
             or _signature(before) != _signature(native.stat())):
         raise ScanInputError('SCAN_INPUT_SOURCE_MOVING')
@@ -242,12 +247,12 @@ def _view_files(root, limit):
     for directory, directories, files in os.walk(root, followlinks=False, onerror=unreadable):
         checkpoint()
         visited += len(directories) + len(files) + 1
-        if visited > limit * 4 + 1:
+        if limit and visited > limit * 4 + 1:
             raise ScanInputError('SCAN_INPUT_VIEW_CHANGED')
         for name in (*directories, *files):
             no_links(Path(directory) / name)
         result.extend((Path(directory) / name).relative_to(root).as_posix() for name in files)
-        if len(result) > limit:
+        if limit and len(result) > limit:
             raise ScanInputError('SCAN_INPUT_VIEW_CHANGED')
     return tuple(sorted(result))
 
@@ -262,7 +267,7 @@ def _rule_files(root, limit):
         checkpoint()
         # A rules directory may itself be adversarial; bound name-only walking.
         visited += len(directories) + len(files) + 1
-        if visited > limit * 4:
+        if limit and visited > limit * 4:
             raise ScanInputError('SCAN_INPUT_RULE_INVENTORY_BUDGET')
         for name in directories:
             no_links(Path(directory) / name)
@@ -271,17 +276,17 @@ def _rule_files(root, limit):
                     and name not in {'catalog.json', 'capabilities.json', 'LICENSE'}):
                 continue
             result.append(relative_path((Path(directory) / name).relative_to(root).as_posix()))
-            if len(result) > limit:
+            if limit and len(result) > limit:
                 raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
     return tuple(sorted(result))
 
 
 def _index(git, limits):
     raw = git._run_bytes('ls-files', '--stage', '-z', maximum=limits.index_bytes)
-    if len(raw) > limits.index_bytes:
+    if limits.index_bytes and len(raw) > limits.index_bytes:
         raise ScanInputError('SCAN_INPUT_INDEX_BYTE_BUDGET')
     entries = raw.split(b'\0')
-    if len(entries) > limits.files + 1:
+    if limits.files and len(entries) > limits.files + 1:
         raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
     values = {}
     try:
@@ -445,9 +450,9 @@ class CapturedScanInput:
             for name in _rule_files(source, self._limits.files):
                 raw = _read_file(source / name, self._limits.file_bytes)
                 consumed += len(raw)
-                if consumed > self._limits.bytes:
+                if self._limits.bytes and consumed > self._limits.bytes:
                     raise ScanInputError('SCAN_INPUT_BYTE_BUDGET')
-                if len(self.manifest) + len(entries) >= self._limits.files:
+                if self._limits.files and len(self.manifest) + len(entries) >= self._limits.files:
                     raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
                 _write(rules, name, raw)
                 entries.append(InputEntry(name, 'RULES', len(raw), _digest(self._key, raw)))
@@ -515,7 +520,7 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
         raise ScanInputError('SCAN_INPUT_FROZEN_SOURCE_MODE_INVALID')
     source_inventory = (_inventory(inventory_reader) if inventory_reader is not None
                         else tuple(sorted(request.source_paths)))
-    if len(source_inventory) > limits.files or len(request.source_paths) + len(request.absent_files) > limits.files:
+    if limits.files and (len(source_inventory) > limits.files or len(request.source_paths) + len(request.absent_files) > limits.files):
         raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
     index_raw, index_values = None, {}
     if request.source_kind == SourceKind.INDEX:
@@ -543,12 +548,12 @@ def capture_scan_input(request, *, git=None, identity_key=None, private_parent=N
 
             def retain(name, role, raw, *, oid=None, mode=None):
                 nonlocal consumed
-                if len(raw) > limits.file_bytes:
+                if limits.file_bytes and len(raw) > limits.file_bytes:
                     raise ScanInputError('SCAN_INPUT_FILE_BUDGET')
                 consumed += len(raw)
-                if consumed > limits.bytes:
+                if limits.bytes and consumed > limits.bytes:
                     raise ScanInputError('SCAN_INPUT_BYTE_BUDGET')
-                if len(manifest) >= limits.files:
+                if limits.files and len(manifest) >= limits.files:
                     raise ScanInputError('SCAN_INPUT_FILE_COUNT_BUDGET')
                 _write(rules if role == 'RULES' else execution, name, raw)
                 manifest.append(InputEntry(name, role, len(raw), _digest(key, raw), oid, mode))

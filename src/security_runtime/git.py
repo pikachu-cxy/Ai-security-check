@@ -20,10 +20,13 @@ class GitService:
     def _run(self, *args: str) -> str:
         return self._run_bytes(*args).decode('utf-8', errors='replace').strip()
 
-    def _run_bytes(self, *args: str, maximum=4_000_000) -> bytes:
+    def _run_bytes(self, *args: str, maximum=None) -> bytes:
+        from .scan_preferences import section
+        config = section('scan', 'git')
+        maximum = config['max_output_bytes'] if maximum is None else maximum
         with tempfile.TemporaryFile() as out:
-            p = subprocess.run(["git", "-c", f"safe.directory={self.safe_directory.as_posix()}", "-c", "core.quotepath=false", '-c', 'core.fsmonitor=false', "-C", str(self.root), *args], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.PIPE, timeout=10, check=False)
-            if out.tell() > maximum:
+            p = subprocess.run(["git", "-c", f"safe.directory={self.safe_directory.as_posix()}", "-c", "core.quotepath=false", '-c', 'core.fsmonitor=false', "-C", str(self.root), *args], stdin=subprocess.DEVNULL, stdout=out, stderr=subprocess.PIPE, timeout=config['timeout_seconds'] or None, check=False)
+            if maximum and out.tell() > maximum:
                 raise GitError("Git output limit exceeded")
             out.seek(0)
             output = out.read()

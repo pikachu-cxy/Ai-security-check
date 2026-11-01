@@ -78,8 +78,11 @@ class NormalizedHostEvent:
     schema_version: str = CONTRACT
     candidate_paths: tuple[str, ...] = ()
     scope_unknown: bool = True
+    turn_id: str | None = field(default=None, repr=False)
 
     def __post_init__(self):
+        if self.turn_id is not None and (not isinstance(self.turn_id, str) or not 0 < len(self.turn_id) <= 500):
+            raise ValueError('Invalid turn identity')
         if (not isinstance(self.candidate_paths, tuple) or len(self.candidate_paths) > 1000
                 or any(not isinstance(p, str) or len(p) > 4096 for p in self.candidate_paths)
                 or type(self.scope_unknown) is not bool):

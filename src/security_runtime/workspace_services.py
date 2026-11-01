@@ -36,7 +36,7 @@ def workspace_mcp_server(root, directory, binding):
     from .mcp_server import create_server
     from .remediation import RemediationService
     from .remediation_policy import RemediationConfig
-    runtime, core, is_git = workspace_services(root, directory)
+    runtime, core, is_git = workspace_services(root, directory, admitted=True)
 
     def remediation_factory(store, **kwargs):
         # Preferences are user-wide; evidence, grants and task state are local.
@@ -47,7 +47,7 @@ def workspace_mcp_server(root, directory, binding):
         global_mode=False, hook_advisory_only=not is_git), core
 
 
-def workspace_services(root, directory):
+def workspace_services(root, directory, *, admitted=False):
     from .runtime import SecurityRuntime
     from .scanners import ScannerRegistry, OpenGrepAdapter, GitleaksAdapter, TrivyAdapter
     from .dynamic_function import NativeFunctionScanner
@@ -61,7 +61,7 @@ def workspace_services(root, directory):
     store = SQLiteStore(directory / 'scans.db')
     runtime = SecurityRuntime(ScannerRegistry(tool_manager=manager), store)
     hook_runtime = SecurityRuntime(registry, store)
-    is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True).is_git
+    is_git = WorkspaceResolver().resolve(root, allow_non_git_source=True, allow_non_git_explicit=admitted).is_git
     core = HookCoordinator(hook_runtime, HookStateStore(directory / 'hooks'),
         workspace_resolver=resolve_workspace,
         snapshot_capture=None if is_git else source_snapshot,

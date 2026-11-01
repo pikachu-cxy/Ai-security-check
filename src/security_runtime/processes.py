@@ -6,6 +6,8 @@ import threading
 import time
 import os
 import signal
+import tempfile
+from contextlib import ExitStack
 from .preparation_budget import bounded_timeout
 
 from .progress import checkpoint
@@ -50,7 +52,7 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
     checkpoint()
     # A dynamic preparation deadline may grow, but the process's static ceiling
     # remains absolute. Ordinary scans retain their original timeout contract.
-    timeout = bounded_timeout(timeout, hard=remaining_callback is not None)
+    timeout = bounded_timeout(timeout, hard=remaining_callback is not None) if timeout else None
     start = time.monotonic()
     creation_started = time.perf_counter()
     # Captured engine helpers must not create a Windows console, even when
@@ -65,101 +67,117 @@ def run_process(args, *, cwd=None, env=None, timeout=30, max_output=4_000_000, o
             raise  # Installation/probe callers retain their OS exception types.
         raise ProcessStartError(error, cwd=cwd, executable=args[0] if args else None) from None
     creation_ms = round((time.perf_counter()-creation_started)*1000, 3)
-    buffers = [bytearray(), bytearray()]
-    overflow = threading.Event()
+    with ExitStack() as captures:
+        buffers = [captures.enter_context(tempfile.SpooledTemporaryFile(max_size=1_000_000)), captures.enter_context(tempfile.SpooledTemporaryFile(max_size=1_000_000))]
+        overflow = threading.Event()
+        capture_failed = threading.Event()
 
-    def consume(stream, buffer, callback=None, chunk_callback=None):
-        pending = b''
-        discarded = False
-        try:
-            while chunk := stream.read1(4096):
-                remaining = max_output - len(buffer)
-                buffer.extend(chunk[:max(0, remaining)])
-                if len(chunk) > remaining:
-                    overflow.set()
-                    # Drain and discard until the parent kills the process.
-                if chunk_callback is not None:
-                    try:
-                        chunk_callback(chunk)
-                    except Exception:
-                        # Numeric observation failures cannot echo raw output.
-                        pass
-                if callback is not None:
-                    pending += chunk
-                    while b'\n' in pending or b'\r' in pending:
-                        endings = [index for index in (pending.find(b'\n'), pending.find(b'\r')) if index >= 0]
-                        index = min(endings)
-                        line, pending = pending[:index], pending[index + 1:]
-                        if line and not discarded and len(line) <= 256:
-                            try:
-                                callback(line.decode('utf-8', errors='replace').rstrip('\r'))
-                            except Exception:
-                                # Presentation failures cannot invalidate a receipt.
-                                pass
-                        discarded = False
-                    if len(pending) > 256:
-                        pending = b''
-                        discarded = True
-        finally:
-            stream.close()
-
-    readers = [threading.Thread(target=consume,
-               args=(stream, buffers[index], on_stderr_line if index == 1 else None,
-                   on_stderr_chunk if index == 1 else None), daemon=True)
-               for index, stream in enumerate((proc.stdout, proc.stderr))]
-    for reader in readers:
-        reader.start()
-    failure = None
-    try:
-        while proc.poll() is None:
-            checkpoint()
-            if overflow.is_set():
-                failure = OutputLimitError("scanner output limit exceeded")
-                break
-            if (time.monotonic() - start >= timeout
-                    or remaining_callback is not None and remaining_callback() <= 0):
-                failure = TimeoutError("process timed out")
-                break
-            if (idle_timeout is not None and activity_clock is not None
-                    and time.monotonic() - activity_clock() >= idle_timeout):
-                failure = ProcessIdleTimeout('download made no progress')
-                break
-            time.sleep(.01)
-    finally:
-        if proc.poll() is None:
-            if os.name == 'nt':
-                # Kill engine helpers too; use the trusted system utility only.
-                taskkill = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe')
-                try:
-                    subprocess.run([taskkill, '/PID', str(proc.pid), '/T', '/F'],
-                                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                   creationflags=subprocess.CREATE_NO_WINDOW, timeout=3)
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
-                if proc.poll() is None:
-                    proc.kill()
-            else:
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except PermissionError:
-                    # Some POSIX hosts deny group signalling during exit.
-                    # Retain the deadline/output error and reap our own child.
-                    if proc.poll() is None:
+        def consume(stream, buffer, callback=None, chunk_callback=None):
+            pending = b''
+            discarded = False
+            try:
+                while chunk := stream.read1(4096):
+                    remaining = max_output - buffer.tell() if max_output else len(chunk)
+                    buffer.write(chunk[:max(0, remaining)])
+                    if len(chunk) > remaining:
+                        overflow.set()
+                        # Drain and discard until the parent kills the process.
+                    if chunk_callback is not None:
                         try:
-                            proc.kill()
-                        except ProcessLookupError:
+                            chunk_callback(chunk)
+                        except Exception:
+                            # Numeric observation failures cannot echo raw output.
                             pass
-        proc.wait(timeout=5)
+                    if callback is not None:
+                        pending += chunk
+                        while b'\n' in pending or b'\r' in pending:
+                            endings = [index for index in (pending.find(b'\n'), pending.find(b'\r')) if index >= 0]
+                            index = min(endings)
+                            line, pending = pending[:index], pending[index + 1:]
+                            if line and not discarded and len(line) <= 256:
+                                try:
+                                    callback(line.decode('utf-8', errors='replace').rstrip('\r'))
+                                except Exception:
+                                    # Presentation failures cannot invalidate a receipt.
+                                    pass
+                            discarded = False
+                        if len(pending) > 256:
+                            pending = b''
+                            discarded = True
+            except OSError:
+                capture_failed.set()
+            finally:
+                stream.close()
+
+        readers = [threading.Thread(target=consume,
+                   args=(stream, buffers[index], on_stderr_line if index == 1 else None,
+                       on_stderr_chunk if index == 1 else None), daemon=True)
+                   for index, stream in enumerate((proc.stdout, proc.stderr))]
         for reader in readers:
-            reader.join(timeout=1)
-    if failure:
-        raise failure
-    if overflow.is_set():
-        raise OutputLimitError("scanner output limit exceeded")
-    if any(reader.is_alive() for reader in readers):
-        raise TimeoutError("process output did not close")
-    return ProcessResult(proc.returncode, *(bytes(buffer).decode('utf-8', errors='replace') for buffer in buffers),
-                         round((time.monotonic() - start) * 1000),
-                         {'process_creation': creation_ms})
+            reader.start()
+        failure = None
+        try:
+            while proc.poll() is None:
+                checkpoint()
+                if capture_failed.is_set():
+                    failure = OSError('Scanner output capture failed')
+                    break
+                if overflow.is_set():
+                    failure = OutputLimitError("scanner output limit exceeded")
+                    break
+                if (timeout is not None and time.monotonic() - start >= timeout
+                        or remaining_callback is not None and remaining_callback() <= 0):
+                    failure = TimeoutError("process timed out")
+                    break
+                if (idle_timeout is not None and activity_clock is not None
+                        and time.monotonic() - activity_clock() >= idle_timeout):
+                    failure = ProcessIdleTimeout('download made no progress')
+                    break
+                time.sleep(.01)
+        finally:
+            if proc.poll() is None:
+                if os.name == 'nt':
+                    # Kill engine helpers too; use the trusted system utility only.
+                    taskkill = os.path.join(os.environ.get('SystemRoot', 'C:\\Windows'), 'System32', 'taskkill.exe')
+                    try:
+                        subprocess.run([taskkill, '/PID', str(proc.pid), '/T', '/F'],
+                                       stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                       creationflags=subprocess.CREATE_NO_WINDOW, timeout=3)
+                    except (OSError, subprocess.TimeoutExpired):
+                        pass
+                    if proc.poll() is None:
+                        proc.kill()
+                else:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    except PermissionError:
+                        # Some POSIX hosts deny group signalling during exit.
+                        # Retain the deadline/output error and reap our own child.
+                        if proc.poll() is None:
+                            try:
+                                proc.kill()
+                            except ProcessLookupError:
+                                pass
+            proc.wait(timeout=5)
+            for reader in readers:
+                reader.join(timeout=1)
+        try:
+            if capture_failed.is_set():
+                raise OSError('Scanner output capture failed')
+            if failure:
+                raise failure
+            if overflow.is_set():
+                raise OutputLimitError("scanner output limit exceeded")
+            if any(reader.is_alive() for reader in readers):
+                raise TimeoutError("process output did not close")
+            outputs = []
+            for buffer in buffers:
+                buffer.seek(0)
+                outputs.append(buffer.read().decode('utf-8', errors='replace'))
+            return ProcessResult(proc.returncode, *outputs, round((time.monotonic() - start) * 1000),
+                                 {'process_creation': creation_ms})
+        finally:
+            for buffer in buffers:
+                buffer.close()

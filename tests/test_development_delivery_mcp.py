@@ -53,8 +53,9 @@ def test_stop_continues_original_work_then_result_offer_stops_loop_without_fake_
     result = call(server, 'get_development_result', workspace_path=str(root), check_ref=ref,
                   scanned_seq=1, session_ref=token)
     assert result['delivery']['delivery'] == 'PENDING'
+    arguments['stop_hook_active'] = True  # Continuation of the blocked turn, not a new read-only round.
     response = asyncio.run(server.call_tool('handle_stop_event', arguments))
-    assert structured(response).get('decision') != 'block'
+    assert structured(response).get('decision') == 'block'  # Reading alone is not configured review.
     pending = call(server, 'get_development_deliveries', workspace_path=str(root), session_ref=token)
     assert pending['total'] == 1 and not pending['automatic_host_ack']
 

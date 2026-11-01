@@ -1,0 +1,84 @@
+# Copy to ~/.config/ai-security-runtime/config.toml (macOS/Linux), or
+# %APPDATA%/ai-security-runtime/config.toml (Windows).
+# SECURITY_RUNTIME_CONFIG can select another absolute path. Never use a project file implicitly.
+schema_version = 1
+
+[storage]
+# Admission quota: old checks remain readable and can finish above the quota.
+development_record_limit_enabled = true
+development_max_records = 1024
+
+[agent]
+review_scanner_findings = true
+audit_business_logic = true
+
+[development.stop_fallback]
+enabled = true
+wait_timeout_seconds = 120
+max_continuations = 2
+
+# All limits below: positive = cap; 0 = disable this cap.
+# Disabling a cap does not disable cancellation, integrity checks or OS limits.
+[scan.discovery]
+max_files = 10000
+max_directories = 2000
+max_depth = 32
+max_file_bytes = 1000000
+
+[scan.input]
+max_files = 10000
+max_total_bytes = 128000000
+max_file_bytes = 4000000
+max_index_bytes = 8000000
+
+[scan.git]
+timeout_seconds = 10
+max_output_bytes = 4000000
+
+[scan.execution]
+sast_timeout_seconds = 45
+gitleaks_timeout_seconds = 30
+trivy_timeout_seconds = 90
+max_output_bytes = 4000000
+
+[scan.dataflow]
+max_files = 256
+max_total_bytes = 8000000
+max_file_bytes = 500000
+max_steps = 1000000
+max_depth = 6
+feature_timeout_seconds = 3
+release_timeout_seconds = 30
+
+[storage.explicit_scan_jobs]
+max_records = 128
+max_total_bytes = 96000000
+max_database_bytes = 128000000
+
+[storage.scan_publication]
+max_records = 32
+max_record_bytes = 8000000
+max_total_bytes = 32000000
+
+[rules.sast]
+# builtin / extend / replace. Custom paths must be absolute local directories.
+mode = "builtin"
+paths = []
+# Exact execution rule IDs. Unknown IDs and duplicate IDs are errors.
+exclude_ids = []
+
+[rules.gitleaks]
+# Absolute local native Gitleaks TOML; empty preserves existing behavior.
+config_path = ""
+
+[vulnerability_data.trivy]
+# Empty = bundled public OCI repositories; no credentials in this setting.
+repositories = []
+# Empty = existing environment/default cache location.
+cache_dir = ""
+# auto / manual / offline. Offline also blocks explicit updates.
+update_mode = "auto"
+# 0 = use upstream expiry. Positive = also refresh after this age in seconds.
+update_interval_seconds = 0
+# allow_with_gap / require_fresh. Neither removes a valid old database on failure.
+stale_policy = "allow_with_gap"
