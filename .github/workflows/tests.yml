@@ -82,7 +82,7 @@ jobs:
         env:
           SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
         run: python -m pytest -q tests --basetemp="${{ runner.temp }}/runtime-tests"
-      - name: Run focused source evidence and review closeout regressions
+      - name: Run focused source evidence, configuration and Stop regressions
         if: inputs.focused == true
         run: >-
           python -m pytest -q
@@ -104,6 +104,12 @@ jobs:
           tests/test_scanner_execution_identity.py
           tests/test_tool_resolution.py
           tests/distribution/test_distribution.py
+          tests/test_user_config_stop.py
+          tests/test_scan_preferences.py
+          tests/test_stop_recovery_minimal.py
+          tests/test_global_workspace_root_regression.py
+          tests/test_development_file_watch_hooks.py
+          tests/test_development_reporting.py
           tests/test_development_outputs.py
           tests/test_development_check_mcp.py
           tests/test_development_feedback_policy.py

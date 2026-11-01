@@ -49,6 +49,7 @@ export default defineConfig({
             { text: 'Troubleshooting', link: '/en/reference/faq' }
           ] },
           { text: 'Advanced setup', collapsed: true, items: [
+            { text: 'Custom configuration', link: '/en/guide/configuration' },
             { text: 'Preparation and upgrades', link: '/en/guide/installation' },
             { text: 'Manual MCP setup', link: '/en/guide/mcp' }
           ] },
@@ -73,7 +74,7 @@ export default defineConfig({
         lastUpdated: { text: 'Last updated' },
         editLink: { pattern: `${repository}/edit/feature/runtime-mvp/website/:path`, text: 'Edit this page on GitHub' },
         footer: {
-          message: '0.3.11 · Official release · Check the installed build and actual review coverage.',
+          message: '0.3.12 · Official release · Check the installed build and actual review coverage.',
           copyright: 'Runtime Core and third-party components have separate licenses.'
         }
       }
@@ -116,6 +117,7 @@ export default defineConfig({
         { text: '常见问题与故障排查', link: '/reference/faq' }
       ] },
       { text: '高级配置', collapsed: true, items: [
+        { text: '自定义配置', link: '/guide/configuration' },
         { text: '安装参数、准备与升级', link: '/guide/installation' },
         { text: '手动配置 MCP', link: '/guide/mcp' }
       ] },
@@ -139,7 +141,7 @@ export default defineConfig({
     lastUpdated: { text: '最近更新' },
     editLink: { pattern: `${repository}/edit/feature/runtime-mvp/website/:path`, text: '在 GitHub 上改进此页' },
     footer: {
-      message: '0.3.11 正式版 · 实际能力以所用构建与检查记录为准。',
+      message: '0.3.12 正式版 · 实际能力以所用构建与检查记录为准。',
       copyright: 'Runtime Core 许可与第三方组件许可分别适用。'
     }
   }

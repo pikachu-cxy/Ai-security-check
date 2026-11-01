@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.12 · Unified configuration and Stop fallback
+
+Adds [custom configuration](../guide/configuration.md): the default 1024-record quota, independent agent review/audit and Stop options, project scan limits, rules and vulnerability data. Fixes empty-project Shell watcher startup, ownership diagnostics and capacity failures. Stop uses consistent reports and rereads dispositions after review; read-only chat does not resume old checks.
+
+[Downloads](../downloads.md) and installation instructions target 0.3.12. Focused release validation avoids another full development run; actual outcomes remain in the release workflow and evidence. Codex/Cursor CLI require native Hooks; Claude Code/Qoder CLI remain planned.
+
 Source versions, published assets, CI acceptance, and real desktop validation are tracked separately. See [downloads](../downloads.md) and the original [engineering progress (Chinese)](https://github.com/pikachu-cxy/Ai-security-check/blob/feature/runtime-mvp/docs/DEVELOPMENT_PROGRESS.md).
 
 ## 0.3.11 · Official release

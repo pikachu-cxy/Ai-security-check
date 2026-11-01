@@ -1,5 +1,11 @@
 # 版本与进度
 
+## 0.3.12 · 统一配置与 Stop 兜底
+
+新增[自定义配置](../guide/configuration.md)：开发记录默认 1024、Agent 复核/业务审计与 Stop 独立开关、项目扫描容量、规则和漏洞数据。修复空项目 Shell 监听启动、会话归属提示和超限诊断；Stop 续接使用统一风险格式，复核后重读当前处置。只读聊天不接管旧检查。
+
+[下载入口](../downloads.md)与安装说明同步到 0.3.12。采用精简发布验证，不重复全量开发回归；实际状态以发行流程和配套证据为准。Codex / Cursor CLI 依赖宿主原生 Hook，Claude Code / Qoder CLI 仍为后续计划。
+
 ## 0.3.11 · 正式版
 
 本版解决开发过程中临时生成文件、模拟项目和测试临时目录混入源码检查范围的问题。三平台完整包与一键安装入口见[下载页](../downloads.md)；发行和校验信息以 [v0.3.11](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.11) 的实际公开资产为准。
