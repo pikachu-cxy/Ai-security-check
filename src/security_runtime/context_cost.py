@@ -284,6 +284,9 @@ class ContextCostStore:
 
     def monitoring(self):
         """Read the live setting without initializing storage; environment wins."""
+        from .usage_feature import enabled
+        if not enabled():
+            return dict(status='AVAILABLE', mode='off', source='feature_disabled')
         if os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR') == '0':
             return dict(status='AVAILABLE', mode='off', source='environment')
         override = os.getenv('SECURITY_RUNTIME_CONTEXT_MODE')
@@ -308,6 +311,9 @@ class ContextCostStore:
             return dict(status='UNAVAILABLE', mode='off', source='unavailable')
 
     def set_monitoring(self, mode, run=None):
+        from .usage_feature import enabled
+        if not enabled():
+            return dict(status='DISABLED', reason_code='MONITOR_DISABLED_BY_DEFAULT')
         if mode not in MONITOR_MODES:
             return dict(status='INVALID_MODE')
         try:

@@ -20,13 +20,9 @@ Version 0.3.12 also distinguishes pure variable references from credential-beari
 
 Protect local task databases, snapshots, backups, and shared-machine accounts according to the project's sensitivity. Do not commit runtime caches, private evidence, raw diagnostics, or credentials to Git.
 
-## Usage monitoring is separate
+## Usage monitoring
 
-Generic monitoring stores tool counts, bytes, timing, limited counters, and opaque identity metadata. Retention is up to 14 days and 10,000 call events. It excludes source code, prompts, tool arguments, response bodies, raw session identifiers, and project paths, and does not upload statistics.
-
-When you start current-chat monitoring, verified session identity is used to match bounded local log metadata and read usage counts. Missing or ambiguous identity does not select another chat. Manual imports read only the chosen file. Raw JSONL may contain project content and should be protected separately; exported reports exclude message bodies, source, log paths, and raw identity.
-
-Monitoring can stop, fail, or be omitted from a source distribution without changing core scans, review, or authorization. Keep managed packages intact. See [monitoring details](../guide/context-cost.md).
+Usage monitoring is disabled by default. Existing local statistics are retained.
 
 ## Share minimal diagnostics
 

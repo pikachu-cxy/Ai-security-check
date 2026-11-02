@@ -23,4 +23,4 @@ Rules depend on the selected files and installed rule pack. See [coverage](../re
 
 [Install](./quickstart.md), restart your editor, [verify the connection](./verify.md), and try the [demo](./demo.md). Full integration includes MCP, Skill, and Hooks; [manual MCP](./mcp.md) requires explicit tool use.
 
-Read saved results without rescanning, view [local risks](./risk-handling.md) separately for Codex/Cursor or together, approve specific fixes, and optionally export [usage reports](./context-cost.md). Installation, scan completion, agent review, and fix verification are separate outcomes. Explicit strict workspace-diff audits retain their original baseline and protocol.
+Read saved results without rescanning, view local risks, and approve specific fixes. Installation, scan completion, agent review, and fix verification are separate outcomes.

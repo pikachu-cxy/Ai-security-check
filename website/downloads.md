@@ -74,7 +74,7 @@ tar -xzf ai-security-runtime-v0.3.12-macos-arm64.tar.gz
 
 **Mac 自动安装**：独立发行 [macos-trial-v0.3.12](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.12)，Runtime 版本 0.3.12。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
-本版包含[一键监控与导出报告](./guide/context-cost.md)、完整脱敏长行保存与分片交付、OpenGrep 默认代码检查、记录文件的轻量开发检查和跨编辑器风险统计，以及更明确的组件与漏洞数据诊断。完整包与自动安装的来源提交、构建 ID 和校验值分别核对，不混用。
+本次更新默认关闭消耗监控，保留静态检查、Agent 复核与风险统计；修复关联证据与 Windows 长路径处理。三平台安装包按实际构建身份与校验值核对。
 
 ### 历史版本
 

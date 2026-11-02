@@ -140,3 +140,29 @@ def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
     assert runs.count("--notes-file dist/release-notes.md") == 2
     standalone = (root / ".github/workflows/standalone.yml").read_text()
     assert "--full --dependency-unavailable --fix-verify --development" in standalone
+
+
+@pytest.mark.parametrize('damage', [None, 'source_commit', 'usage_monitor_disabled', 'mcp_tools'])
+def test_focused_metadata_requires_current_native_monitor_receipt(release_root, damage):
+    for path in (release_root / 'dist/release').glob('*.verification.json'):
+        data = json.loads(path.read_text())
+        data.update(managed_engines=False, plugin_discovery=False,
+                    dependency_unavailable_without_fallback=False,
+                    observed_development_without_baseline=False, fix_verify_offline_synthetic=False,
+                    usage_monitor_disabled=True, mcp_tools=['start_risk_dashboard'])
+        if damage == 'source_commit':
+            data['source_commit'] = 'b' * 40
+        elif damage == 'usage_monitor_disabled':
+            data['usage_monitor_disabled'] = False
+        elif damage == 'mcp_tools':
+            data['mcp_tools'].append('start_usage_monitor')
+        path.write_text(json.dumps(data))
+    if damage:
+        with pytest.raises(ValueError, match='Incomplete or stale'):
+            make_release_metadata.main(focused=True)
+    else:
+        make_release_metadata.main(focused=True)
+        manifest = json.loads((release_root / 'dist/release/release-manifest.json').read_text())
+        assert manifest['validation_scope'] == 'focused-monitor-defaults'
+        with pytest.raises(ValueError, match='Incomplete or stale'):
+            make_release_metadata.main()

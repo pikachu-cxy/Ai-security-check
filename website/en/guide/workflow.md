@@ -56,7 +56,3 @@ See [preparation](./installation.md#manual-preparation). Dismissing candidates d
 ## Decisions and saved statistics
 
 Ask for impact analysis, authorize a specific fix, defer an issue, or provide exclusion evidence. Existing authorization for the same scope carries forward. Verification follows the original risk. [Risk handling](./risk-handling.md) covers local editor filters and aggregate statistics.
-
-## Optional monitoring
-
-In a supported Codex chat, ask “Start usage monitoring for this chat,” then export the report from the page. Chat tokens are not security-only tokens; uncertain attribution stays unknown. See [monitoring](./context-cost.md).

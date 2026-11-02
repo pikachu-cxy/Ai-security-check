@@ -21,7 +21,7 @@ The [English quick start is also available in this repository](website/en/guide/
 - [Overview](website/en/guide/overview.md) · [Quick start](website/en/guide/quickstart.md) · [Downloads](website/en/downloads.md)
 - [Codex setup](website/en/guide/editors/codex.md) · [Cursor setup](website/en/guide/editors/cursor.md) · [Manual MCP](website/en/guide/mcp.md)
 - [Daily workflow](website/en/guide/workflow.md) · [Handle findings](website/en/guide/risk-handling.md) · [First demo](website/en/guide/demo.md)
-- [Usage monitoring](website/en/guide/context-cost.md) · [Privacy](website/en/reference/privacy.md) · [Troubleshooting](website/en/reference/faq.md)
+- [Privacy](website/en/reference/privacy.md) · [Troubleshooting](website/en/reference/faq.md)
 
 The documentation site uses VitePress and GitHub Pages. Its source is in `website/`; engineering contracts and acceptance records remain in `docs/`, primarily in Chinese.
 
@@ -87,9 +87,8 @@ Matching version numbers do not guarantee matching builds. Installation, compone
 
 ## Source version 0.3.12
 
-- One-step monitoring for the current Codex chat, with verified local session matching and HTML/JSON report export. Manual log selection is not required for this flow.
-- Separate reporting of chat tokens, observation time, and associated tool duration. Token use cannot reliably be split into development-only and security-only portions; unsupported measurements remain unknown.
-- Optional monitoring that can stop, fail, or be omitted from a source distribution without changing core scans, task review, or fix authorization. Keep managed installation packages intact.
+Usage monitoring is disabled by default, including its launch tools and collection. Risk statistics remain available.
+
 - Original source evidence for new tasks, including embedded credentials, with long lines fragmented to fit response budgets. Historical evidence already lost by older tasks is not reconstructed.
 - Existing guidance deduplication, compact summaries, explicit file scopes, and verified scan-result reuse. Reuse does not replace required review or authorize a fix.
 

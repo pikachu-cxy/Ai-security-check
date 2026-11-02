@@ -6,6 +6,9 @@ from pathlib import Path
 
 
 def register(subparsers):
+    from .usage_feature import enabled
+    if not enabled():
+        return
     parser = subparsers.add_parser('context-usage', help='Read local MCP output sizes and import Codex token usage')
     actions = parser.add_subparsers(dest='context_action', required=True)
     status = actions.add_parser('status', help='Show measured calls; actual tokens require a Codex usage import')
@@ -43,6 +46,8 @@ def register(subparsers):
 
 
 def execute(args):
+    from .usage_feature import require_enabled
+    require_enabled()
     from .context_cost import ContextCostStore
     store = ContextCostStore(getattr(args, 'db', None))
     if args.context_action == 'monitor-worker':

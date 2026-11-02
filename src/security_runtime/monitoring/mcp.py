@@ -16,6 +16,11 @@ def register(server, registry, *, application):
             return dict(status='UNAVAILABLE', scanner_run=False, source_modified=False,
                         message='风险统计页面暂时无法启动。')
 
+    from ..usage_feature import enabled
+    if not enabled():
+        registry.harden(('start_risk_dashboard',))
+        return
+
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def start_usage_monitor(workspace_path: str, session_ref: str) -> dict:
         """When the user asks to start consumption monitoring, open the local page for THIS chat. Pass its existing Hook session_ref; never ask the user to find logs or expose that ref. Starts observation automatically; the page ends and exports a private token/time report with one button. No scan, model, development task or repair. Missing/ambiguous chat identity stays unavailable; never choose the latest log. Requires an updated connected Runtime."""

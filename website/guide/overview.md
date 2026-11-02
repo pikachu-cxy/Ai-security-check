@@ -27,7 +27,6 @@ AI Security Runtime 为 Codex、Cursor 提供本地安全检查。你照常提�
 - 查看历史结果与处置，不重新扫描。
 - 打开[风险统计](./risk-handling.md)，按 Codex、Cursor 分别查看或汇总本机记录。
 - 了解修复影响，授权具体修复，并继续验证原问题。
-- 可选启动[聊天消耗监控](./context-cost.md)，导出 token 与耗时报告。
 
 ## 接入与使用
 

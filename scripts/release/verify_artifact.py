@@ -69,6 +69,8 @@ async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str,
                 initialized=await asyncio.wait_for(client.initialize(), timeout=30)
                 verify_host_instructions(initialized.instructions)
                 names = {tool.name for tool in (await client.list_tools()).tools}
+                if 'start_usage_monitor' in names or 'start_risk_dashboard' not in names:
+                    raise ValueError('Default usage gate or risk dashboard registration failed')
                 if not REQUIRED_TOOLS.issubset(names):
                     raise ValueError("Standalone MCP tools incomplete")
                 runtime=await client.call_tool('get_runtime_info',{})
@@ -559,6 +561,7 @@ def main() -> None:
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
+        record['usage_monitor_disabled'] = 'start_usage_monitor' not in mcp_tools and 'start_risk_dashboard' in mcp_tools
         record['dependency_unavailable_without_fallback']=args.dependency_unavailable
         record['observed_development_without_baseline'] = args.development
         record['fix_verify_offline_synthetic'] = args.fix_verify

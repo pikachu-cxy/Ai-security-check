@@ -15,7 +15,7 @@ on:
       - '.github/workflows/docs.yml'
   workflow_dispatch:
   workflow_run:
-    workflows: ['Official release']
+    workflows: ['Official release', 'Refresh 0.3.12']
     types: [completed]
     branches: [feature/runtime-mvp]
 
@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v'))
     runs-on: ubuntu-latest
     outputs:
       trial_ready: ${{ steps.trial-assets.outputs.ready }}

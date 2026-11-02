@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-02 · 0.3.12 refresh
+
+Usage monitoring and its launch tools are disabled by default; monitoring pages have been removed. Risk statistics remain available. This refresh uses focused tests and native package smoke checks.
+
+
 ## 0.3.12 · Unified configuration and Stop fallback
 
 Adds [custom configuration](../guide/configuration.md): the default 1024-record quota, independent agent review/audit and Stop options, project scan limits, rules and vulnerability data. Fixes empty-project Shell watcher startup, ownership diagnostics and capacity failures. Stop uses consistent reports and rereads dispositions after review; read-only chat does not resume old checks.

@@ -85,6 +85,8 @@ def find_chat_log(session_hash, *, home=None):
 
 def start_monitor(project, owner, *, store=None, home=None, open_browser=True):
     """Launch an optional local process; no scanner, task or model is started."""
+    from ..usage_feature import require_enabled
+    require_enabled()
     from ..context_cost import ContextCostStore
     if not valid_owner(owner) or owner['host'] != 'codex':
         raise ValueError('MONITOR_HOST_USAGE_UNSUPPORTED')

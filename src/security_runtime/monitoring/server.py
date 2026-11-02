@@ -116,6 +116,8 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(store, *, project=None, chat_log=None, port=0):
+    from ..usage_feature import require_enabled
+    require_enabled()
     server = MonitorServer(MonitorService(store, project=project, chat_log=chat_log), port)
     print(json.dumps(dict(status='LISTENING', url=server.url, stop='Ctrl+C',
                          scope='OPTIONAL_LOOPBACK_MONITOR; NO_PROJECT_SCAN_OR_MODEL_REQUEST')), flush=True)

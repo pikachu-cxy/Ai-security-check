@@ -52,8 +52,6 @@ Default development checks scan recorded files without a project-wide baseline. 
 
 Saved reads do not revalidate disk contents. Distinguish missing files, scanner limitations, and observation notes. Unrelated files outside this task do not require a whole-project scan to complete a recorded-file check.
 
-## Statistics and monitoring
+## Risk statistics
 
 [Risk statistics](../guide/risk-handling.md) read the current local user's Codex and Cursor records, separately or together. Cross-editor entries retain their identities; this first stage does not deduplicate them or sync across devices.
-
-[Usage monitoring](../guide/context-cost.md) is optional. Automatic current-chat token association uses supported Codex local logs; missing usage adapters remain unknown.
