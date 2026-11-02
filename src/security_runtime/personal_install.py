@@ -227,7 +227,9 @@ def _setup_personal_codex(integration, workspace=None, *, skill=None, progress=N
 
 def _default_delivery_root():
     base = Path(os.environ['LOCALAPPDATA']) if os.name == 'nt' and os.environ.get('LOCALAPPDATA') else Path.home()/'.local/share'
-    return base/'AI-Security-Runtime-install'
+    # Version slots contain a SHA-256 directory and deep bundled rule paths.
+    # Keep the Windows prefix short for hosts without long-path support.
+    return base/('ASR' if os.name == 'nt' else 'AI-Security-Runtime-install')
 
 
 @verified_operation

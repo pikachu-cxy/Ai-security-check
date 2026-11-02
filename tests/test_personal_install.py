@@ -1,5 +1,6 @@
 """Personal setup is a coordinated transaction, not a Skill packaging claim."""
 import json
+import os
 import subprocess
 from types import SimpleNamespace
 from pathlib import Path
@@ -14,6 +15,13 @@ from security_runtime.upgrade import InstallationUpgrade
 from test_global_integration import installed, projects
 from test_delivery import bundle
 from security_runtime.delivery import EXE
+
+
+@pytest.mark.skipif(os.name != 'nt', reason='Windows default installation path')
+def test_windows_default_delivery_root_is_short(tmp_path, monkeypatch):
+    from security_runtime.personal_install import _default_delivery_root
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
+    assert _default_delivery_root() == tmp_path / 'ASR'
 
 
 def ready_scanning_receipt():

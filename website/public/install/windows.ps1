@@ -51,7 +51,10 @@ try {
     $exe = Join-Path $bundle 'security-check\security-check.exe'
     if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'The complete bundle is missing security-check.exe.' }
     Write-Host "Installing integration for $Editor..."
-    & $exe install $Editor --bundle (Join-Path $bundle 'security-check')
+    # Keep the versioned bundle path short on Windows systems where long paths
+    # are disabled. The runtime validates the destination before activation.
+    $installRoot = Join-Path $env:LOCALAPPDATA 'ASR'
+    & $exe install $Editor --bundle (Join-Path $bundle 'security-check') --root $installRoot
     if ($LASTEXITCODE -ne 0) { throw "Installation failed with exit code $LASTEXITCODE." }
     Write-Host "Installation completed. Fully quit and reopen $Editor. Component preparation may continue in the background."
     Write-Host "To check preparation: & '$exe' preparation status"

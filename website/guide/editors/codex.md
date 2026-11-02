@@ -20,7 +20,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 
 可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1)。安装到用户目录，不需要管理员权限。请先结束正在运行的检查；已有产品连接可能更新，配置冲突时会停止并保留诊断。下载失败或校验不一致时不会运行下载的程序，处理报错后可重试同一命令。
 
-安装完成后，终端会给出查询准备进度的完整命令；下载包保存在 `%LOCALAPPDATA%\AI-Security-Runtime-downloads`，已安装程序位于 `%LOCALAPPDATA%\AI-Security-Runtime-install`。
+安装完成后，终端会给出查询准备进度的完整命令；下载包保存在 `%LOCALAPPDATA%\AI-Security-Runtime-downloads`，已安装程序位于 `%LOCALAPPDATA%\ASR`。
 
 ::: details 手动下载与安装（备用）
 从[下载页](../../downloads.md#windows)下载完整包及配套 SHA256，校验并完整解压，在能看到 `security-check` 文件夹的目录执行：

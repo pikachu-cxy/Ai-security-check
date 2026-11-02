@@ -129,7 +129,7 @@ Activate the new bundle behind a permanent launcher first. This writes only the
 explicit installation directory, not Codex configuration. Keep it outside the bundle:
 
 ```powershell
-$runtimeInstall = Join-Path $env:LOCALAPPDATA 'AI-Security-Runtime-install'
+$runtimeInstall = Join-Path $env:LOCALAPPDATA 'ASR'
 .\security-check.exe delivery activate --root $runtimeInstall --bundle (Get-Location).Path --json
 $runtimeExe = Join-Path $runtimeInstall 'launcher/security-check.exe'
 & $runtimeExe delivery status --root $runtimeInstall --json

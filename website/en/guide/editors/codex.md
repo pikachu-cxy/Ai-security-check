@@ -14,7 +14,7 @@ Run this single command in regular **PowerShell 5.1 or later**, from any directo
 
 [Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1). No administrator privileges are required. Finish active checks first; existing product settings may be updated. Download, checksum, or configuration failures stop installation and preserve diagnostics. Retry the same command after resolving the error.
 
-The installer prints the full preparation-status command. Downloads are retained under `%LOCALAPPDATA%\AI-Security-Runtime-downloads`; the installed runtime lives under `%LOCALAPPDATA%\AI-Security-Runtime-install`.
+The installer prints the full preparation-status command. Downloads are retained under `%LOCALAPPDATA%\AI-Security-Runtime-downloads`; the installed runtime lives under `%LOCALAPPDATA%\ASR`.
 
 ::: details Manual installation (fallback)
 [Download and verify the complete bundle](../../downloads.md#windows), extract it, and run from the parent of `security-check`:

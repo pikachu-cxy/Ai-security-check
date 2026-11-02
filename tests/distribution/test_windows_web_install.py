@@ -28,7 +28,7 @@ def test_installer(tmp_path, shell, scenario):
     if scenario == 'hash':
         digest = '0' * 64
     checksum = tmp_path / 'fixture.sha256'
-    checksum.write_text('invalid' if scenario == 'checksum' else f'{digest}  ai-security-runtime-v0.3.11-windows-x64.zip\n')
+    checksum.write_text('invalid' if scenario == 'checksum' else f'{digest}  ai-security-runtime-v0.3.12-windows-x64.zip\n')
     harness = tmp_path / 'harness.ps1'
     harness.write_text(r'''
 $ErrorActionPreference = 'Stop'
@@ -47,6 +47,7 @@ function Invoke-WebRequest {
         Set-Item -LiteralPath "Function:global:$fake" -Value {
             if ($args[0] -ne 'install' -or $args[1] -ne $env:EDITOR -or $args[2] -ne '--bundle') { throw 'Wrong arguments' }
             if (-not (Test-Path -LiteralPath (Join-Path $args[3] 'security-check.exe'))) { throw 'Wrong bundle path' }
+            if ($args[4] -ne '--root' -or $args[5] -ne (Join-Path $env:LOCALAPPDATA 'ASR')) { throw 'Wrong install root' }
             Write-Output 'FIXTURE_RUNTIME_INVOKED'
             $global:LASTEXITCODE = 0
             if ($env:SCENARIO -eq 'exit') { $global:LASTEXITCODE = 17 }
