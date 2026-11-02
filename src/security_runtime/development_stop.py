@@ -48,11 +48,12 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     if not row['dirty_seq']:
         return None
     ref, seq = row['check_ref'], row['dirty_seq']
-    if (ref, seq) in offered and row['scanned_seq'] == seq:
-        required = any(batch_config(row)['agent'].values())
-        reader = service or DevelopmentCheckService(None, hooks, owner=owner)
-        if not required or reader.get(root, ref).get('host_review_completed'):
-            return None
+    service = service or DevelopmentCheckService(None, hooks, owner=owner,
+                                                 scan_path_provider=row['scan_path'])
+    saved = service.get(root, ref)
+    if (saved['status'] == 'RESULTS_READY' and row['scanned_seq'] == seq and not saved['gaps']
+            and (saved.get('host_review_completed') or not any(batch_config(row)['agent'].values()))):
+        return None
     with store.transaction() as db:
         current = store._get(db, ref)
         if current['dirty_seq'] != seq:
@@ -64,13 +65,14 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
                 return None
             progress = dict(seq=seq, count=0, deadline=store.now()+options['wait_timeout_seconds'])
         if progress['count'] >= options['max_continuations'] or progress['deadline'] <= store.now():
+            store._put(db, ref, dict(current, stop_fallback=dict(progress,
+                incomplete_reason='STOP_FALLBACK_BUDGET_EXHAUSTED')))
             return dict(status='STOP_FALLBACK_INCOMPLETE', scanner_run=False,
+                        review_progress=saved.get('review_progress'),
                         reason_code='STOP_FALLBACK_BUDGET_EXHAUSTED',
                         systemMessage='安全检查或结果报告尚未确认完成；已提交的检查和结果已保留。')
         progress = dict(progress, seq=seq, count=progress['count']+1)
         store._put(db, ref, dict(current, stop_fallback=progress))
-    service = service or DevelopmentCheckService(None, hooks, owner=owner,
-                                                 scan_path_provider=row['scan_path'])
     # finish drains the existing watcher; it never enumerates the workspace.
     if not row['finish_requested']:
         result = service.finish(root, ref)
@@ -79,10 +81,13 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     state = result['status']
     if state == 'NO_OBSERVED_CHANGES':
         return None
-    tool = 'wait_development_check' if state in {'QUEUED', 'RUNNING'} else 'get_development_check'
+    tool = ('wait_development_check' if state in {'QUEUED', 'RUNNING'} else
+            'get_development_risks' if result.get('result_available') and
+            not result.get('host_review_completed') else 'get_development_check')
     instructions = analysis_requirements(store.load(ref, owner))
     return dict(status='STOP_FALLBACK_CONTINUATION', decision='block', scanner_run=False,
         check_ref=ref, requested_seq=seq, analysis_requirements=instructions,
+        review_progress=result.get('review_progress'),
         reporting=reporting(ref, root),
         reason=('当前开发检查尚待完成或报告。沿原引用读取结果，不新建检查、不重复提交扫描。'
                 '按 analysis_requirements 执行：REQUIRED 才进行对应 Agent 分析，SKIPPED_BY_CONFIG 不执行。'

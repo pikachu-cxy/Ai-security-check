@@ -28,7 +28,8 @@ next_offset 读取完全部相关分页，不用提交响应预览或提交前�
 
 ## 完成标准与回复
 
-静态扫描只以本次已记录文件为范围。已记录文件扫描完成且候选复核完成，即为本次检查完成。
+静态扫描只以本次已记录文件为范围。已记录文件扫描完成，且配置要求的候选复核和业务逻辑审计
+均完成，才是本次检查完成。提交成功只代表本批保存；以 review_progress 的分项进度为准。
 静态结果就绪与宿主复核完成分别报告，不把扫描完成冒充复核完成。
 scope_unknown、未记录路径可能性和文件监听诊断仅为观测信息，不因此判为 PARTIAL、
 不提示覆盖缺口、不要求扩扫或盘点其他文件。无记录文件时报告无已记录改动，不声称执行了扫描。
@@ -229,10 +230,18 @@ findings_access 给出发现读取入口，沿其真实 scan_id 使用 get_findi
    证据错误按返回的 next_action 补读指定文件和行，用实际 evidence_ref 重试同一项；不得猜编号
    或删除证据绕过校验。补读重试仍失败，就报告障碍并结束，保留未完成记录；后续 Stop 也不重启
    同一失败循环。成功提交后仍须重读当前风险及处置，不能把失败当作复核完成。
-3. AI 复核已有扫描器问题时，same_issue_as 指向原 scanner finding ID 或统一 risk ID；
+3. AI 复核已有扫描器问题时，只提交 same_issue_as、scan_id、decision、rationale、evidence_refs。
+   same_issue_as 指向原 scanner finding ID 或统一 risk ID，scan_id 必须取自当前检查的扫描版本；
+   不重复填写原始位置，Runtime 从指定版本的原始扫描记录取得。旧格式提供位置时也以原始记录为准。
+   必须读取告警位置的代码，可补充跨函数、跨文件证据。过期版本、未知关联或证据错误按 next_action
+   核对后有界重试；失败批次不部分保存，item_index 为从 0 开始的失败项编号。
    同类、同行不自动等于同一问题，必须核对同一原因和执行点。重试保留 issue_key 和关联。
    同一风险保留原始扫描命中和 AI 证据，最终技术判断以有证据的 AI 复核为准。
    DISMISSED 表示复核排除，不表示修复；无法确认用 INCONCLUSIVE，不能伪造用户排除。
+   业务逻辑审计独立通过 business_reviews 保存，每项包含 file_path、rationale、evidence_refs、limitations。
+   即使没有新风险，也需说明该文件审计依据；有未解决限制就填 limitations，不伪造完整覆盖。
+   可分批保存，按 pending_business_paths 补齐本次已记录范围，不扩大静态扫描范围。
+   空 observations 不代表任何阶段完成，INCONCLUSIVE 候选仍保留待确认状态。
 4. get_development_risks 分页读取统一风险、处置和原修复结果；只对仍需提醒的问题报告一次。
    明确稍后处理或排除时，set_development_risk_disposition 保存 DEFER/EXCLUDE；RESTORE 恢复提醒。
    user_requested 只报告真实用户选择，不从 AI 结论推断。已暂缓的风险不因重提复核自动恢复。

@@ -36,6 +36,59 @@ class Observation(BaseModel):
     # Empty lists are rejected by the domain with an actionable recovery step.
     evidence_refs: list[str] = Field(max_length=20)
     same_issue_as: str | None = Field(default=None, max_length=160)
+    scan_id: str | None = Field(default=None, max_length=160)
+
+
+class ScannerReview(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    same_issue_as: str = Field(min_length=1, max_length=160)
+    scan_id: str = Field(min_length=1, max_length=160)
+    decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
+    rationale: str = Field(min_length=1, max_length=2000)
+    evidence_refs: list[str] = Field(max_length=20)
+
+
+class BusinessReview(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    file_path: str = Field(min_length=1, max_length=500)
+    rationale: str = Field(min_length=1, max_length=2000)
+    evidence_refs: list[str] = Field(max_length=20)
+    limitations: list[str] = Field(default_factory=list, max_length=20)
+
+
+def review_progress(check, row):
+    """Project saved coverage only; never infer completion from a submission."""
+    from .user_config import batch_config
+    policy = batch_config(check)['agent']
+    current = bool(check.get('scan_id') and check['scanned_seq'] == check['dirty_seq'])
+    reviews = [r for r in row['reviews'] if current and
+               r['dirty_seq'] == check['dirty_seq'] and r.get('scan_id') == check['scan_id']]
+    candidates = {r['id'] for r in row['risks'].values() if any(
+        o.get('source') == 'SCANNER' and o.get('scan_id') == check.get('scan_id')
+        for o in r['observations'])}
+    assessed = {key for r in reviews for key in r.get('reviewed_scanner_ids', [])}
+    assessed = {key for key in assessed if key in row['risks'] and
+                row['risks'][key].get('assessment', {}).get('scan_id') == check.get('scan_id') and
+                row['risks'][key].get('assessment', {}).get('dirty_seq') == check['dirty_seq'] and
+                row['risks'][key]['assessment']['decision'] != 'INCONCLUSIVE'}
+    latest_business = {b['file_path']: b for r in reviews for b in r.get('business_reviews', [])}
+    coverage = {name for name, b in latest_business.items() if not b['limitations']}
+    excluded = (check.get('result') or {}).get('generated_outputs', {}).get('excluded_paths', [])
+    pending_paths = sorted(set(check['observed_paths']) - set(excluded) - coverage)
+    imported = (check.get('risk_import_status', 'AVAILABLE') == 'AVAILABLE' and
+                row.get('imported_scan_id') == check.get('scan_id'))
+    scanner_done = current and imported and not (candidates - assessed)
+    business_done = current and not pending_paths
+    complete = current and any(policy.values()) and (
+        not policy['review_scanner_findings'] or scanner_done) and (
+        not policy['audit_business_logic'] or business_done)
+    return dict(host_review_completed=bool(complete),
+        scanner_review=('SKIPPED_BY_CONFIG' if not policy['review_scanner_findings'] else
+                        'COMPLETE' if scanner_done else 'PENDING'),
+        business_review=('SKIPPED_BY_CONFIG' if not policy['audit_business_logic'] else
+                         'COMPLETE' if business_done else 'PENDING'),
+        pending_scanner_ids=sorted(candidates - assessed) if policy['review_scanner_findings'] else [],
+        pending_business_paths=pending_paths if policy['audit_business_logic'] else [])
 
 
 def digest(value):
@@ -141,6 +194,7 @@ class DevelopmentRisks:
             if obs not in risk['observations']:
                 require(len(risk['observations']) < 128, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                 risk['observations'].append(obs)
+        row['imported_scan_id'] = check['scan_id']
 
     def sync_scanner(self):
         """Persist scanner observations independently of any Agent review."""
@@ -154,10 +208,22 @@ class DevelopmentRisks:
                 current = self.checks._get(db, self.ref)
                 self.checks._put(db, self.ref, dict(current, has_unified_risks=True))
 
-    def submit(self, observations, expected_seq):
+    def submit(self, observations, expected_seq, *, business_reviews=()):
+        try:
+            return self._submit(observations, expected_seq, business_reviews=business_reviews)
+        except DevelopmentRiskError as error:
+            if not hasattr(error, 'recovery'):
+                error.recovery = dict(tool='get_development_check', arguments=dict(
+                    check_ref=self.ref, workspace_path=str(self.root)))
+            raise
+
+    def _submit(self, observations, expected_seq, *, business_reviews=()):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
-        values = [Observation.model_validate(v) for v in observations]
+        values = [(ScannerReview if 'issue_key' not in v else Observation).model_validate(v)
+                  for v in observations]
+        business = [BusinessReview.model_validate(v) for v in business_reviews]
         require(len(values) <= 50, 'DEVELOPMENT_RISK_LIMIT')
+        require(len(business) <= 50, 'DEVELOPMENT_RISK_LIMIT')
         with self.store.transaction() as db:
             check = self.current_check()
             require(check['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
@@ -167,9 +233,39 @@ class DevelopmentRisks:
                 required = 'review_scanner_findings' if value.same_issue_as else 'audit_business_logic'
                 require(policy[required], 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
             require(any(policy.values()), 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
+            require(not business or policy['audit_business_logic'], 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
             row = self.load(db)
             self.import_scanner(row, check)
-            for value in values:
+            reviewed_ids = []
+            normalized = []
+            for index, value in enumerate(values):
+                if value.same_issue_as:
+                    try:
+                        require(value.scan_id is not None and value.scan_id == check.get('scan_id') and
+                                check['scanned_seq'] == expected_seq, 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
+                        matches = [(r, o) for r in row['risks'].values() for o in r['observations']
+                                   if o.get('source') == 'SCANNER' and o.get('scan_id') == value.scan_id
+                                   and (r['id'] == value.same_issue_as or o['scanner_id'] == value.same_issue_as)]
+                        require(len(matches) == 1, 'DEVELOPMENT_RISK_LINK_UNKNOWN')
+                    except DevelopmentRiskError as error:
+                        error.item_index = index
+                        error.recovery = dict(tool='get_development_risks', arguments=dict(
+                            check_ref=self.ref, workspace_path=str(self.root), offset=0))
+                        raise
+                    target, original_observation = matches[0]
+                    original = original_observation['finding']
+                    # Identity and location come from the immutable scan observation.
+                    if isinstance(value, ScannerReview):
+                        value = Observation(**{k: original[k] for k in (
+                            'file_path', 'line_start', 'line_end', 'category', 'title', 'description',
+                            'impact', 'fix_advice', 'severity')}, issue_key=target['id'], **value.model_dump())
+                    else:
+                        value = value.model_copy(update={k: original[k] for k in (
+                            'file_path', 'line_start', 'line_end')})
+                    value = value.model_copy(update={'same_issue_as': target['id']})
+                normalized.append(value)
+            values = normalized
+            for index, value in enumerate(values):
                 name = relative_path(value.file_path)
                 require(name in check['observed_paths'] and value.line_end >= value.line_start,
                         'DEVELOPMENT_RISK_LOCATION_INVALID')
@@ -178,6 +274,7 @@ class DevelopmentRisks:
                     require(any(e['file_path'] == name and e['line_start'] <= value.line_start and
                                 e['line_end'] >= value.line_end for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
                 except DevelopmentRiskError as error:
+                    error.item_index = index
                     if error.reason_code in {'DEVELOPMENT_RISK_EVIDENCE_REQUIRED',
                             'DEVELOPMENT_RISK_EVIDENCE_UNKNOWN', 'DEVELOPMENT_RISK_EVIDENCE_STALE',
                             'DEVELOPMENT_RISK_LOCATION_UNREAD'}:
@@ -193,9 +290,6 @@ class DevelopmentRisks:
                         o.get('scanner_id') == value.same_issue_as for o in r['observations'])]
                     require(len(matches) == 1, 'DEVELOPMENT_RISK_LINK_UNKNOWN')
                     target = matches[0]
-                    original = target['finding']
-                    require(original['file_path'] == name and original['line_start'] <= value.line_end
-                            and original['line_end'] >= value.line_start, 'DEVELOPMENT_RISK_LINK_LOCATION_MISMATCH')
                     if key in row['risks'] and key != target['id']:
                         # AI-first then scanner: preserve the original AI risk and its repairs.
                         require(not target['assessments'] and not target['repairs'],
@@ -205,6 +299,7 @@ class DevelopmentRisks:
                     else:
                         key = target['id']
                     row['aliases'][host_key] = key
+                    reviewed_ids.append(key)
                 finding = asdict(Finding(id=key, category=value.category, title=safe(value.title),
                     plain_title=safe(value.title), description=safe(value.description), impact=safe(value.impact),
                     severity=value.severity, confidence='HOST_REVIEWED', file_path=name,
@@ -215,7 +310,8 @@ class DevelopmentRisks:
                     status='OPEN', observations=[], assessments=[], repairs=[]))
                 assessment = dict(decision=value.decision, rationale=safe(value.rationale),
                     evidence_refs=value.evidence_refs, source_hashes={e['file_path']:e['sha256'] for e in evidence},
-                    dirty_seq=expected_seq, finding=finding)
+                    dirty_seq=expected_seq, scan_id=check.get('scan_id') if value.same_issue_as else None,
+                    finding=finding)
                 if assessment not in risk['assessments']:
                     require(len(risk['assessments']) < 64, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                     risk['assessments'].append(assessment)
@@ -232,8 +328,26 @@ class DevelopmentRisks:
             # Revalidate every submitted evidence receipt before committing the batch.
             for value in values:
                 self.evidence(row, value.evidence_refs)
-            review = dict(dirty_seq=expected_seq, scan_id=check.get('scan_id'), risk_ids=list(row['risks']))
-            if review not in row['reviews']:
+            business_records = []
+            for value in business:
+                name = relative_path(value.file_path)
+                require(name in check['observed_paths'], 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED')
+                try:
+                    evidence = self.evidence(row, value.evidence_refs)
+                    require(any(e['file_path'] == name for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
+                except DevelopmentRiskError as error:
+                    error.recovery = dict(tool='read_development_risk_context', arguments=dict(
+                        check_ref=self.ref, workspace_path=str(self.root), file_path=name))
+                    raise
+                business_records.append(dict(file_path=name, rationale=safe(value.rationale),
+                    evidence_refs=value.evidence_refs, limitations=[safe(s) for s in value.limitations]))
+            for value in business:
+                self.evidence(row, value.evidence_refs)
+            require(self.current_check().get('scan_id') == check.get('scan_id'),
+                    'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
+            review = dict(dirty_seq=expected_seq, scan_id=check.get('scan_id'),
+                          reviewed_scanner_ids=reviewed_ids, business_reviews=business_records)
+            if not row['reviews'] or review != row['reviews'][-1]:
                 require(len(row['reviews']) < 256, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                 row['reviews'].append(review)
             # Retain the original ownership/path journal while its risks exist.
@@ -241,6 +355,7 @@ class DevelopmentRisks:
             with self.checks.transaction() as checks_db:
                 current = self.checks._get(checks_db, self.ref)
                 require(current['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+                require(current.get('scan_id') == check.get('scan_id'), 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
                 self.checks._put(checks_db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
                                                          has_development_review=True))
             self.store._put(db, self.ref, row)
@@ -254,6 +369,7 @@ class DevelopmentRisks:
         require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
                 'DEVELOPMENT_RISK_PAGE_INVALID')
         row = self.load()
+        check = self.current_check()
         risks = list(row['risks'].values())
         items = [dict(id=r['id'], finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
                       disposition=r.get('disposition', 'ACTIVE'),
@@ -269,6 +385,8 @@ class DevelopmentRisks:
         next_offset = offset+limit if offset+limit < len(risks) else None
         report = reporting(self.ref, self.root, offset=next_offset)
         return dict(contract='development-risks-v1', check_ref=self.ref,
+                    scan_id=check.get('scan_id'), dirty_seq=check['dirty_seq'],
+                    review_progress=review_progress(check, row),
                     reporting=report, next_action=report.get('next_action'),
                     risks=items, total=len(risks), next_offset=offset+limit if offset+limit < len(risks) else None,
                     review_versions=row['reviews'],

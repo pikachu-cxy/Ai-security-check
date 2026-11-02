@@ -507,12 +507,11 @@ class DevelopmentCheckService:
         if row.get('has_unified_risks'):
             result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
                 workspace_path=str(store.root), check_ref=check_ref))
-        if row.get('has_development_review'):
-            from .development_risks import DevelopmentRisks
+        if row.get('has_development_review') or row.get('scan_id'):
+            from .development_risks import DevelopmentRisks, review_progress
             risks = DevelopmentRisks(self, store.root, check_ref).load()
-            result['host_review_completed'] = any(
-                r['dirty_seq'] == row['dirty_seq'] and r.get('scan_id') == row.get('scan_id')
-                for r in risks['reviews'])
+            result['review_progress'] = review_progress(row, risks)
+            result['host_review_completed'] = result['review_progress']['host_review_completed']
             result['host_review_trust'] = 'HOST_REPORTED_NOT_SCANNER_PROOF'
             result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
                 workspace_path=str(store.root), check_ref=check_ref))

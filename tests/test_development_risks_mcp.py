@@ -44,3 +44,26 @@ def test_transport_does_not_coerce_authorization_or_accept_extra_fields(developm
     with pytest.raises(Exception):
         asyncio.run(registry.dispatch('get_development_risks', dict(
             workspace_path=str(root), check_ref='dc1-'+'0'*32, repair_authorized=True)))
+
+
+def test_id_only_transport_and_structured_version_recovery(development_server):
+    server, root, _, launches = development_server
+    (root/'risk.py').write_text('safe = True\n')
+    base = dict(workspace_path=str(root))
+    check = call(server, 'begin_development_check', task_key='id-review', **base)
+    base['check_ref'] = check['check_ref']
+    check = call(server, 'record_development_changes', paths=['risk.py'], **base)
+    evidence = call(server, 'read_development_risk_context', file_path='risk.py', **base)
+    result = asyncio.run(server.call_tool('submit_development_review', dict(base,
+        expected_seq=check['dirty_seq'], observations=[dict(same_issue_as='unknown', scan_id='old',
+        decision='DISMISSED', rationale='Needs current candidate', evidence_refs=[evidence['evidence_ref']])])))
+    assert result.isError
+    data = result.structuredContent
+    assert data['reason_code'] == 'DEVELOPMENT_RISK_SCAN_VERSION_STALE'
+    assert data['item_index'] == 0 and data['recoverable'] and not data['review_saved']
+    assert data['next_action']['tool'] == 'get_development_risks'
+    saved = call(server, 'submit_development_review', expected_seq=check['dirty_seq'], observations=[],
+        business_reviews=[dict(file_path='risk.py', rationale='Checked constant assignment',
+                               evidence_refs=[evidence['evidence_ref']], limitations=[])], **base)
+    assert not saved['review_progress']['host_review_completed']  # No scan yet.
+    assert not launches

@@ -29,6 +29,8 @@ def sample(tmp_path, monkeypatch):
 
 def observation(risks, **kwargs):
     evidence = risks.read('query.py', 1, 2)
+    if kwargs.get('same_issue_as'):
+        kwargs.setdefault('scan_id', risks.current_check().get('scan_id'))
     return dict(issue_key='query-sql', file_path='query.py', line_start=2, line_end=2,
                 category='sql-injection', title='Unsafe query', description='Unbound SQL input',
                 impact='May read unintended rows', fix_advice='Bind values', severity='HIGH',
@@ -256,14 +258,13 @@ def test_risk_journal_survives_metadata_retention(sample):
     assert service.get(root, ref)['risk_access']['tool'] == 'get_development_risks'
 
 
-def test_invalid_link_does_not_create_duplicate_or_overwrite_scanner(sample, monkeypatch):
+def test_legacy_link_uses_original_scanner_location(sample, monkeypatch):
     scanner(sample, monkeypatch)
     risks = sample[3]
     value = observation(risks, same_issue_as='s1')
     value['line_start'] = value['line_end'] = 1
-    with pytest.raises(ValueError, match='LINK_LOCATION_MISMATCH'):
-        submit(sample, value)
-    assert risks.get()['total'] == 0  # Transaction rolled back, original scan is untouched.
+    item, _ = submit(sample, value)
+    assert item['finding']['line_start'] == item['finding']['line_end'] == 2
 
 
 def test_unknown_remediation_cannot_close_risk(sample):
@@ -288,7 +289,7 @@ def test_repeated_review_does_not_reopen_resolved_risk(sample):
 def test_early_review_bound_to_scan_result(sample, monkeypatch):
     root, service, ref, risks = sample
     submit(sample)
-    assert service.get(root, ref)['host_review_completed']
+    assert not service.get(root, ref)['host_review_completed']
     scanner(sample, monkeypatch)
     row = risks.load()
     assert not any(r['dirty_seq'] == risks.current_check()['dirty_seq'] and

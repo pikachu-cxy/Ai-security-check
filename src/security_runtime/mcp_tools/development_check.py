@@ -2,7 +2,7 @@
 from mcp.types import ToolAnnotations
 from pydantic import Field
 from typing import Annotated
-from ..development_risks import Observation
+from ..development_risks import Observation, ScannerReview, BusinessReview
 
 
 TOOLS = frozenset({'get_development_config', 'begin_development_check', 'record_development_changes',
@@ -35,13 +35,15 @@ def register(server, registry, *, application):
         return risks(check_ref, workspace_path, session_ref).read(file_path, start_line, end_line, related=related)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def submit_development_review(check_ref: str, expected_seq: int, observations: list[Observation],
-                                  workspace_path: str | None = None, session_ref: str | None = None) -> dict:
-        """Persist AI findings/assessments using the same Finding structure as scanners; import saved scanner observations without scanning. Pass [] for a review with no AI candidates. Reuse issue_key for retries. When reviewing an existing scanner risk set same_issue_as to its exact ID; same location alone is NOT identity. Evidence-backed AI decision is authoritative, raw scanner output is retained. DISMISSED is review exclusion, never a repair proof. Save before reporting a risk, even when the user forbids repair. Read unified dispositions and use the four-section format in development-check."""
-        values = [v.model_dump() if isinstance(v, Observation) else v for v in observations]
+    def submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation],
+                                  workspace_path: str | None = None, session_ref: str | None = None,
+                                  business_reviews: list[BusinessReview] | None = None) -> dict:
+        """Save an atomic review batch without scanning. Existing alerts require only same_issue_as, current scan_id, decision, rationale and evidence_refs; location comes from that original scan. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
+        values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
+        coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
         try:
-            return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq)
+            return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq, business_reviews=coverage)
         except DevelopmentRiskError as error:
             action = getattr(error, 'recovery', None)
             if action is None:
@@ -52,6 +54,12 @@ def register(server, registry, *, application):
             if session_ref is not None:
                 action['arguments']['session_ref'] = session_ref
             data = dict(status='INCONCLUSIVE', reason_code=error.reason_code,
+                item_index=getattr(error, 'item_index', None),
+                recoverable=error.reason_code in {
+                    'DEVELOPMENT_RISK_VERSION_STALE', 'DEVELOPMENT_RISK_SCAN_VERSION_STALE',
+                    'DEVELOPMENT_RISK_LINK_UNKNOWN', 'DEVELOPMENT_RISK_EVIDENCE_REQUIRED',
+                    'DEVELOPMENT_RISK_EVIDENCE_UNKNOWN', 'DEVELOPMENT_RISK_EVIDENCE_STALE',
+                    'DEVELOPMENT_RISK_LOCATION_UNREAD'},
                 message=EVIDENCE_RECOVERY, next_action=action,
                 scanner_run=False, source_modified=False, repair_authorized=False,
                 review_saved=False, security_proof=False)
