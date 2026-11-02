@@ -270,6 +270,7 @@ def projection(store, row):
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
+            directory_observations=row.get('observed_directories', []),
             generated_outputs=(result if row['scanned_seq'] == row['dirty_seq'] else {}).get('generated_outputs', dict(
                 declared_roots=row.get('generated_output_roots', []), excluded_paths=[],
                 protected_paths=[], gaps=[])),
@@ -397,6 +398,10 @@ class DevelopmentCheckService:
         with store.transaction() as db:
             row = store._get(db, check_ref)
             selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
+            if row['state'] in {'OPEN', 'DIRTY'}:
+                from .development_scope import separate_directories
+                selected, directories = separate_directories(store.root, selected)
+                row = dict(row, observed_directories=directories)
             row = dict(row, observed_paths=selected, scope_unknown=row['scope_unknown'] or invalid)
             state = row['state']
             worker = store._get(db, '$worker')

@@ -68,3 +68,23 @@ def select_outputs(root, row):
     except (OSError, ValueError, RuntimeError, __import__('subprocess').TimeoutExpired):
         facts['gaps'] = ['GENERATED_OUTPUT_SCOPE_UNVERIFIABLE']
         return observed, facts
+
+
+def separate_directories(root, names):
+    """Classify only recorded paths at closeout; never enumerate children.
+
+    Preserve missing, inaccessible, linked and special paths for the existing
+    scan-input validation. Only a verified real directory is not a file input.
+    """
+    import stat
+    from .hook_state import native_io_path, no_links
+    files, directories = [], []
+    for name in names:
+        path = root / name
+        try:
+            no_links(path)
+            directory = stat.S_ISDIR(native_io_path(path).lstat().st_mode)
+        except (OSError, ValueError):
+            directory = False
+        (directories if directory else files).append(name)
+    return files, directories

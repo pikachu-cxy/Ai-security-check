@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: refresh-published-v0.3.12
-  cancel-in-progress: false
+  cancel-in-progress: ${{ contains(github.event.head_commit.message, '[replace-build]') }}
 
 jobs:
   build:
@@ -36,7 +36,7 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[build-standalone,test]"
       - name: Test only monitoring defaults and retained risk statistics
-        run: python -m pytest -q tests/test_usage_monitor_disabled.py tests/test_risk_dashboard.py
+        run: python -m pytest -q tests/test_usage_monitor_disabled.py tests/test_risk_dashboard.py tests/test_development_directory_scope.py
       - name: Build once for this platform
         run: python scripts/build/build_standalone.py
       - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
