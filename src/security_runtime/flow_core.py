@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import copy
 import hashlib
 from pathlib import Path
+from .hook_state import native_io_path
 import time
 
 
@@ -125,15 +126,16 @@ class Analysis:
         relative = Path(name)
         path = self.root / relative
         if (relative.is_absolute() or '..' in relative.parts or not path.resolve().is_relative_to(self.root) or
-                any(p.is_symlink() or p.is_junction() for p in (path, *path.parents) if p != self.root and p.is_relative_to(self.root))):
+                any(native_io_path(p).is_symlink() or native_io_path(p).is_junction() for p in (path, *path.parents) if p != self.root and p.is_relative_to(self.root))):
             raise Limit('UNSAFE_CONTEXT_PATH')
-        size = path.stat().st_size
+        native = native_io_path(path)
+        size = native.stat().st_size
         if name not in self.hashes and (self.max_files and len(self.hashes) >= self.max_files or self.max_bytes and self.total_bytes + size > self.max_bytes):
             raise Limit('CONTEXT_BUDGET')
         per_file = _flow_limit('max_file_bytes')
         if per_file and size > per_file:
             raise Limit('FILE_BUDGET')
-        raw = path.read_bytes()
+        raw = native.read_bytes()
         digest = hashlib.sha256(raw).hexdigest()
         if name in self.hashes and self.hashes[name] != digest:
             raise Limit('SOURCE_CHANGED')
@@ -149,7 +151,7 @@ class Analysis:
         # A scan-wide snapshot is revalidated before any result is returned.
         # Avoid thousands of repeated negative SDK/import probes per batch.
         snapshot = self.shared_probes if self.shared_probes is not None else self.probes
-        present = snapshot[name] if name in snapshot else (self.root / relative).is_file()
+        present = snapshot[name] if name in snapshot else native_io_path(self.root / relative).is_file()
         snapshot[name] = present
         self.probes[name] = present
         return present
@@ -188,14 +190,14 @@ class Analysis:
 
     def stable(self):
         try:
-            if any((self.root / name).is_file() != present for name, present in self.probes.items()):
+            if any(native_io_path(self.root / name).is_file() != present for name, present in self.probes.items()):
                 return False
             for name, digest in self.hashes.items():
                 path = self.root / name
                 if (not path.resolve().is_relative_to(self.root) or
-                    any(p.is_symlink() or p.is_junction() for p in (path, *path.parents)
+                    any(native_io_path(p).is_symlink() or native_io_path(p).is_junction() for p in (path, *path.parents)
                         if p != self.root and p.is_relative_to(self.root)) or
-                    hashlib.sha256(path.read_bytes()).hexdigest() != digest):
+                    hashlib.sha256(native_io_path(path).read_bytes()).hexdigest() != digest):
                     return False
         except OSError:
             return False

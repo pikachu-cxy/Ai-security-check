@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import tomllib
 from pathlib import Path
+from .hook_state import native_io_path
 from typing import Iterable
 
 from .models import TargetProfile
@@ -173,28 +174,29 @@ class TargetDetector:
             def walk_error(error: OSError) -> None:
                 raise ValueError(f"Cannot inspect project directory: {error.filename}") from error
 
-            for directory, subdirs, names in os.walk(root, onerror=walk_error):
+            io_root = native_io_path(root)
+            for directory, subdirs, names in os.walk(io_root, onerror=walk_error):
                 directory_count += 1
-                depth = len(Path(directory).relative_to(root).parts)
+                depth = len(Path(directory).relative_to(io_root).parts)
                 subdirs[:] = [name for name in subdirs if name not in self.ignored
                               and not (Path(directory) / name).is_symlink()
                               and not (Path(directory) / name).is_junction()]
                 if self.max_depth and depth >= self.max_depth and subdirs:
-                    child = (Path(directory) / subdirs[0]).relative_to(root).as_posix()
+                    child = (Path(directory) / subdirs[0]).relative_to(io_root).as_posix()
                     raise DiscoveryLimitError(f"Detected directories deeper than {self.max_depth} levels.",
                                               relative_path=child, limit=self.max_depth, limit_kind='max_depth',
                                               observed=depth + 1, observed_is_lower_bound=True)
                 if self.max_directories and directory_count + len(subdirs) > self.max_directories:
                     raise DiscoveryLimitError(f"Detected more than {self.max_directories} directories.",
-                                              relative_path=Path(directory).relative_to(root).as_posix(),
+                                              relative_path=Path(directory).relative_to(io_root).as_posix(),
                                               limit=self.max_directories, limit_kind='max_directories',
                                               observed=directory_count + len(subdirs), observed_is_lower_bound=True)
                 if self.max_files and len(files) + len(names) > self.max_files:
                     raise DiscoveryLimitError(f"Detected more than {self.max_files} files.",
-                                              relative_path=Path(directory).relative_to(root).as_posix(),
+                                              relative_path=Path(directory).relative_to(io_root).as_posix(),
                                               limit=self.max_files, limit_kind='max_files',
                                               observed=len(files) + len(names), observed_is_lower_bound=True)
-                files.extend((Path(directory) / name).relative_to(root).as_posix() for name in names)
+                files.extend((Path(directory) / name).relative_to(io_root).as_posix() for name in names)
         else:
             files = [name for name in files if not set(Path(name).parts) & self.ignored]
             if self.max_files and len(files) > self.max_files:
@@ -208,8 +210,9 @@ class TargetDetector:
             source = root / relative
             if relative.is_absolute() or '..' in relative.parts or not source.resolve().is_relative_to(root):
                 raise ValueError("Target path is outside the workspace")
-            if any(item.is_symlink() or item.is_junction() for item in (source, *source.parents) if item != root and item.is_relative_to(root)):
+            if any(native_io_path(item).is_symlink() or native_io_path(item).is_junction() for item in (source, *source.parents) if item != root and item.is_relative_to(root)):
                 raise ValueError("Target symlinks and junctions are not supported")
+            source = native_io_path(source)
             if source.is_file():
                 size = source.stat().st_size
                 signatures = BINARY_DOCUMENTS.get(relative.suffix.lower(), ())
@@ -237,7 +240,7 @@ class TargetDetector:
             if path.name in DEPENDENCIES:
                 ecosystems.add(DEPENDENCIES[path.name])
             if path.name in {"main.py", "app.py"}:
-                source = root / name
+                source = native_io_path(root / name)
                 try:
                     if not self.max_file_size or source.stat().st_size <= self.max_file_size:
                         content = source.read_bytes()

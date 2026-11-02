@@ -11,7 +11,7 @@ from pathlib import Path
 
 from .build_identity import build_identity
 from .git import GitService
-from .hook_state import no_links
+from .hook_state import no_links, native_io_path
 from .target import TargetDetector
 
 CONTRACT = 'scan-source-context-v1'
@@ -35,6 +35,7 @@ def source_revision(root, key, *, identity_root=None, files=None, skipped_files=
     for name in files:
         path = root / name
         no_links(path)
+        path = native_io_path(path)
         before = path.stat()
         if before.st_size > 1_000_000:
             raise ValueError('SOURCE_FRESHNESS_FILE_BUDGET')

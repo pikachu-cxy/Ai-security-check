@@ -129,17 +129,18 @@ class RulePackManager:
     @staticmethod
     def _content_identity(path):
         path = path.expanduser().resolve()
-        if not path.is_dir():
+        io_root = native_io_path(path)
+        if not io_root.is_dir():
             raise ValueError('Rule pack directory is missing')
-        files = sorted(path.rglob('*.yml')) + sorted(path.rglob('*.yaml'))
+        files = sorted(io_root.rglob('*.yml')) + sorted(io_root.rglob('*.yaml'))
         if not files or len(files) > 10000:
             raise ValueError('Rule pack file budget exceeded')
-        files += [p for p in (path/'catalog.json',path/'capabilities.json',path/'LICENSE',path/'NOTICE') if p.is_file()]
+        files += [p for p in (io_root/'catalog.json',io_root/'capabilities.json',io_root/'LICENSE',io_root/'NOTICE') if p.is_file()]
         digest = hashlib.sha256()
         for file in files:
             if file.is_symlink() or file.is_junction() or file.stat().st_size > 1_000_000:
                 raise ValueError('Invalid rule pack input')
-            digest.update(file.relative_to(path).as_posix().encode());digest.update(file.read_bytes())
+            digest.update(file.relative_to(io_root).as_posix().encode());digest.update(file.read_bytes())
         return str(path),digest.digest()
 
     def _cached_resolve(self, descriptor, path, **kwargs):
@@ -154,7 +155,8 @@ class RulePackManager:
             result = self._validate(descriptor,path,**kwargs)
             if self._content_identity(path) != key[2]:
                 raise ValueError('Rule pack changed during validation')
-            size=sum(p.stat().st_size for p in (*path.rglob('*.yml'),*path.rglob('*.yaml')))
+            io_root = native_io_path(path)
+            size=sum(p.stat().st_size for p in (*io_root.rglob('*.yml'),*io_root.rglob('*.yaml')))
             if len(result.catalog)<=10000 and size<=32_000_000:
                 if len(self._resolved_cache) >= 8:
                     self._resolved_cache.pop(next(iter(self._resolved_cache)))
@@ -195,13 +197,14 @@ class RulePackManager:
     @staticmethod
     def _validate(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool = True) -> ResolvedRulePack:
         path = path.expanduser().resolve()
-        if not path.is_dir():
+        io_root = native_io_path(path)
+        if not io_root.is_dir():
             raise ValueError("Rule pack directory is missing")
         if descriptor.bundled and not can_bundle_rule_pack(descriptor):
             raise ValueError("Rule pack license blocks bundling")
-        if descriptor.bundled and not (path / "LICENSE").is_file():
+        if descriptor.bundled and not native_io_path(path / "LICENSE").is_file():
             raise ValueError("Bundled rule pack LICENSE is missing")
-        files = sorted(path.rglob("*.yml")) + sorted(path.rglob("*.yaml"))
+        files = sorted(io_root.rglob("*.yml")) + sorted(io_root.rglob("*.yaml"))
         if not files or len(files) > 10000:
             raise ValueError("Rule pack has no rules or exceeds the file limit")
         digest = hashlib.sha256()
@@ -220,18 +223,18 @@ class RulePackManager:
                 raise ValueError(f'Rule pack has no valid rules: {file.name}')
             for rule in data['rules']:
                 validate_rule(rule,descriptor,first_party=require_first_party_metadata)
-                rule = execution_rule(rule, file.relative_to(path).as_posix(), descriptor)
+                rule = execution_rule(rule, file.relative_to(io_root).as_posix(), descriptor)
                 if rule['id'] in definitions:
                     raise ValueError('Duplicate rule id')
-                definitions[rule['id']]=(rule,file.relative_to(path).as_posix())
-            digest.update(file.relative_to(path).as_posix().encode())
+                definitions[rule['id']]=(rule,file.relative_to(io_root).as_posix())
+            digest.update(file.relative_to(io_root).as_posix().encode())
             digest.update(content)
         catalog = load_catalog(path, descriptor, definitions, first_party=require_first_party_metadata)
-        if (path / 'catalog.json').is_file():
+        if native_io_path(path / 'catalog.json').is_file():
             digest.update(b'catalog.json')
-            digest.update((path / 'catalog.json').read_bytes())
+            digest.update(native_io_path(path / 'catalog.json').read_bytes())
         program = load_program(path, catalog) if descriptor.bundled and require_first_party_metadata else None
         if program is not None:
             digest.update(b'capabilities.json')
-            digest.update((path / 'capabilities.json').read_bytes())
+            digest.update(native_io_path(path / 'capabilities.json').read_bytes())
         return ResolvedRulePack(descriptor, path, digest.hexdigest(), catalog, program)

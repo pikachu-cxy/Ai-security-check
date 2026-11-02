@@ -380,8 +380,8 @@ class PatternSASTScanner(BaseScanner):
             signature=None
             validated=TargetDetector().detect(root,list(context.files)).files
             if set(validated)==set(context.files) and len(validated)<=1000:
-                if sum((root/name).stat().st_size for name in validated)<=20_000_000:
-                    signature=tuple((name,hashlib.sha256((root/name).read_bytes()).digest()) for name in validated)
+                if sum(native_io_path(root/name).stat().st_size for name in validated)<=20_000_000:
+                    signature=tuple((name,hashlib.sha256(native_io_path(root/name).read_bytes()).digest()) for name in validated)
             key=(os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
                  pack.descriptor,pack.checksum,context.files,signature)
             hit=signature is not None and key in self._plan_cache
@@ -617,10 +617,12 @@ class GitleaksAdapter(BaseScanner):
         found = []
         for target in targets:
             scoped = Path(target)
-            inputs = [scoped] if scoped.is_file() else sorted(p for p in scoped.rglob('*') if p.is_file())
+            native = native_io_path(scoped)
+            inputs = [scoped] if native.is_file() else [scoped / p.relative_to(native)
+                for p in sorted(native.rglob('*')) if p.is_file()]
             names = {p.relative_to(snapshot_root).as_posix(): p for p in inputs} if snapshot_root else {
                 p.relative_to(Path(context.root)).as_posix(): p for p in inputs}
-            sizes = {name: path.stat().st_size for name, path in names.items()}
+            sizes = {name: native_io_path(path).stat().st_size for name, path in names.items()}
             environment = execution_environment(binary)
             default_config = (not environment.get('GITLEAKS_CONFIG') and not environment.get('GITLEAKS_CONFIG_TOML') and
                 not (scoped / '.gitleaks.toml').exists() and not (Path(context.root) / '.gitleaks.toml').exists() and

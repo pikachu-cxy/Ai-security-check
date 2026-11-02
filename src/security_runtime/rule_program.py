@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from .hook_state import native_io_path
 import json
 import re
 
@@ -162,7 +163,7 @@ def validate_manifest(data, catalog):
 
 
 def load_program(path, catalog):
-    file = Path(path) / 'capabilities.json'
+    file = native_io_path(Path(path) / 'capabilities.json')
     if not file.is_file() or file.is_symlink() or file.is_junction() or file.stat().st_size > MAX_MANIFEST:
         raise ValueError('Rule Program manifest missing or unsafe')
     return validate_manifest(json.loads(file.read_text(encoding='utf-8')), catalog)

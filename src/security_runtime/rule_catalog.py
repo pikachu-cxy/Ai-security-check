@@ -1,6 +1,7 @@
 """Explicit, validated rule capabilities; YAML is execution syntax, not the catalog."""
 from dataclasses import dataclass, asdict
 from pathlib import Path
+from .hook_state import native_io_path
 import json
 import re
 
@@ -126,7 +127,7 @@ def load_catalog(path, descriptor, definitions, *, first_party=True):
                 dict(origin=descriptor.provenance.origin, original_rule_id=original_id, source_path=relative),
                 rule.get('mode','search'),relative,tuple(sorted(set().union(*(EXTENSIONS[l] for l in languages))))))
         return tuple(records)
-    file=path/'catalog.json'
+    file=native_io_path(path/'catalog.json')
     if not file.is_file() or file.is_symlink() or file.stat().st_size>1_000_000:
         raise ValueError('Rule Catalog missing or oversized')
     data=json.loads(file.read_text(encoding='utf-8'))

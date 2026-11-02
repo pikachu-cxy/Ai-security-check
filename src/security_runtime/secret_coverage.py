@@ -10,6 +10,7 @@ import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
+from .hook_state import native_io_path
 
 CONTRACT = 'gitleaks-rule-file-v1'
 _receipt = ContextVar('secret_execution_receipt', default=None)
@@ -36,13 +37,13 @@ def publish(receipt):
 def digest(path):
     from .hook_state import no_links
     no_links(Path(path).absolute())
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+    return hashlib.sha256(native_io_path(Path(path)).read_bytes()).hexdigest()
 
 
 def text_file(path):
     from .hook_state import no_links
     no_links(Path(path).absolute())
-    value = Path(path).read_bytes()
+    value = native_io_path(Path(path)).read_bytes()
     if b'\x00' in value:
         return False
     try:

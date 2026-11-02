@@ -51,9 +51,9 @@ def scoped_request(workspace, names, *, dependency_changes=None):
     for name in names:
         path = root / name
         no_links(path)
-        if path.is_file():
+        if native_io_path(path).is_file():
             present.append(name)
-        elif not path.exists():
+        elif not native_io_path(path).exists():
             absent.append(name)
         else:
             raise ScanInputError('SCAN_INPUT_NOT_REGULAR')
@@ -230,7 +230,7 @@ def _absent(root, names):
     for name in names:
         path = root / name
         no_links(path)
-        if path.exists():
+        if native_io_path(path).exists():
             raise ScanInputError('SCAN_INPUT_ABSENCE_CHANGED')
 
 
@@ -259,6 +259,7 @@ def _view_files(root, limit):
 
 def _rule_files(root, limit):
     no_links(root)
+    root = native_io_path(root)
     if not root.is_dir():
         raise ScanInputError('SCAN_INPUT_RULE_DIRECTORY_REQUIRED')
     result = []

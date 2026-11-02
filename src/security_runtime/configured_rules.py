@@ -2,6 +2,7 @@
 from contextlib import ExitStack
 from contextvars import ContextVar
 from pathlib import Path
+from .hook_state import native_io_path
 import tempfile
 import hashlib
 import yaml
@@ -39,7 +40,7 @@ def sast_pack(manager):
     for pack in packs:
         for name in sorted({record.path for record in pack.catalog}):
             definitions = []
-            for original in yaml.safe_load((pack.path/name).read_text(encoding='utf-8'))['rules']:
+            for original in yaml.safe_load(native_io_path(pack.path/name).read_text(encoding='utf-8'))['rules']:
                 rule = execution_rule(original, name, pack.descriptor)
                 if rule['id'] in ids:
                     raise ValueError('Duplicate rule id in configured packs')
