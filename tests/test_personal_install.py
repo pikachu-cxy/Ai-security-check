@@ -21,11 +21,13 @@ from security_runtime.delivery import EXE
 def test_windows_default_delivery_root_is_short(tmp_path, monkeypatch):
     from security_runtime.personal_install import _default_delivery_root
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
-    assert _default_delivery_root() == tmp_path / 'ASR'
+    assert _default_delivery_root() == tmp_path / 'AI-Security-Runtime-install'
 
 
 def ready_scanning_receipt():
-    versions = {'semgrep': '1.178.0', 'gitleaks': '8.30.0', 'trivy': '0.74.0'}
+    from security_runtime.install_readiness import CORE_TOOLS
+    from security_runtime.toolchain import VERSIONS
+    versions = {name: VERSIONS[name] for name in CORE_TOOLS}
     return {'contract': 'installation-readiness-v1', 'status': 'READY',
             'ready': True, 'message': '检查工具和漏洞数据已准备完成。',
             'network_allowed': False,

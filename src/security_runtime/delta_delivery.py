@@ -77,7 +77,8 @@ def materialized_update(delivery, archive_path, *, progress=None):
             if descriptor['changed'] != changed or set(names) != {'delta.json', 'version.json', *('files/' + n for n in changed)}:
                 raise ValueError()
             report_progress(progress, 'DELTA_APPLY')
-            bundle = Path(temporary) / 'bundle'
+            # Normalize only our newly created temporary directory (macOS /var alias).
+            bundle = Path(temporary).resolve(strict=True) / 'bundle'
             bundle.mkdir()
             for name, expected in new['files'].items():
                 relative = Path(name)
