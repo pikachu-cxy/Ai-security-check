@@ -25,7 +25,7 @@ STAGES = {
     'CAPABILITY_CHECK': '正在启动 Runtime，检查连接能力。',
     'PREPARE_LAUNCHER': '正在准备固定启动器。',
     'VERIFY_ACTIVATION': '正在校验程序激活状态。',
-    'SETUP_CHILD': '正在部署全局连接和专业 Skill，并执行安装自检（子程序最多等待 120 秒）。',
+    'SETUP_CHILD': '正在部署全局连接和专业 Skill，并执行安装自检（子程序最多等待 420 秒）。',
     'APPLY_CONFIG': '正在协同部署全局连接和专业 Skill。',
     'MIGRATE_CONFIG': '正在迁移产品托管的旧配置，保留用户内容。',
     'GLOBAL_CONFIG': '正在配置全局 MCP、Hook，并检查 Runtime 连接。',
