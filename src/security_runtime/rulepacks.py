@@ -14,6 +14,9 @@ from .rule_program import RuleProgram, load_program
 
 import yaml
 
+# LibYAML uses the same safe constructors without Python tokenization overhead.
+_SAFE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
 
 class RulePackClass(StrEnum):
     FIRST_PARTY = "FIRST_PARTY"
@@ -218,7 +221,7 @@ class RulePackManager:
             content = native.read_bytes()
             # References in metadata are attribution, not executable remote
             # configs. Only local YAML is passed to the engine.
-            data = yaml.safe_load(content)
+            data = yaml.load(content, Loader=_SAFE_LOADER)
             if not isinstance(data,dict) or not isinstance(data.get('rules'),list) or not data['rules']:
                 raise ValueError(f'Rule pack has no valid rules: {file.name}')
             for rule in data['rules']:

@@ -489,6 +489,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
                 ready = data['installation'].get('local_files_ready') is True
                 progress.finish(ready, scan_ready=data['installation'].get('scan_ready') is True)
+            if not args.json and not ready:
+                print('[诊断] ' + ', '.join(data.get('diagnostics', [])), file=sys.stderr)
             print(json.dumps(data, ensure_ascii=True) if args.json else data['installation']['message'])
             return 0 if ready else 2
         if args.command == 'delivery':
@@ -643,10 +645,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command=='runtime-info':
             print('Checking runtime package integrity and capabilities...', file=sys.stderr)
             from .guidance.host_guidance import runtime_info
-            info=runtime_info()
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
                 from .global_mcp import global_runtime_info
                 info = global_runtime_info()
+            else:
+                info = runtime_info()
             # Native stdout is UTF-8, but Windows PowerShell 5.1 can decode a
             # pipeline using its legacy console code page. ASCII escapes keep
             # JSON parseable and preserve Unicode values under either decoder.

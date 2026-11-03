@@ -16,7 +16,7 @@ datas += copy_metadata("ai-security-runtime")
 datas += copy_metadata("javalang") + copy_metadata("six")
 datas += copy_metadata("packaging")
 datas += copy_metadata("watchfiles")
-hiddenimports = ["mcp.server.fastmcp", "mcp.server.fastmcp.server", "watchfiles._rust_notify"]
+hiddenimports = ["yaml.cyaml", "yaml._yaml", "mcp.server.fastmcp", "mcp.server.fastmcp.server", "watchfiles._rust_notify"]
 
 a = Analysis(
     [str(root / "distribution" / "build" / "entry.py")],

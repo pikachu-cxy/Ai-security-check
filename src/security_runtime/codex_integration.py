@@ -121,7 +121,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
     if not probe_cwd.is_dir():
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
     try:
-        result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=30, max_output=65536)
+        result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=120, max_output=65536)
     except FileNotFoundError:
         raise IntegrationDiagnostic('RUNTIME_MISSING') from None
     except PermissionError:
@@ -148,7 +148,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
         with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
             params = StdioServerParameters(command=runtime['command'], args=[*runtime['prefix'], 'mcp'], env=env, cwd=str(probe_cwd))
             async with stdio_client(params, errlog=errors) as (reader, writer):
-                async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=20)) as session:
+                async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=120)) as session:
                     await session.initialize()
                     tools = (await session.list_tools()).tools
                     if env.get('SECURITY_RUNTIME_GLOBAL') == '1':
@@ -161,7 +161,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
                             raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
                     return {t.name for t in tools}
     try:
-        tools = asyncio.run(asyncio.wait_for(discover(), timeout=30))
+        tools = asyncio.run(asyncio.wait_for(discover(), timeout=180))
     except Exception as exc:
         def failure(error):
             if isinstance(error, IntegrationDiagnostic):

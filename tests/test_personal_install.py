@@ -283,7 +283,7 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
             assert kwargs['stdin'] == subprocess.DEVNULL
             assert stages[-1] == 'SETUP_CHILD'
             assert argv[1:] == ['setup', 'codex', '--json']
-            assert kwargs['timeout'] == 120
+            assert kwargs['timeout'] == 420
             return SimpleNamespace(returncode=0, stdout=json.dumps(setup_personal_codex(installed)).encode())
         assert argv[1:] == ['prepare-installation', '--json', '--offline']
         assert kwargs['timeout'] == 45
