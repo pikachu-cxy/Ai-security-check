@@ -251,7 +251,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
     install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
-    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
+    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor', 'workbuddy'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
     install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
     install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
@@ -304,6 +304,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     setup_parser.add_argument("--verbose", action="store_true")
     setup_parser.add_argument('--scope', choices=['global', 'project'], help='Default Codex setup is global, including --path; project scope is explicit legacy/development opt-in')
     setup_parser.add_argument('--dev', action='store_true', help='Explicitly acknowledge a DEV launcher; does not install source paths')
+    sub.add_parser('workbuddy-hook', help=argparse.SUPPRESS)
     cursor_hook_parser = sub.add_parser('cursor-hook', help=argparse.SUPPRESS)
     cursor_hook_parser.add_argument('--automatic', action='store_true', help=argparse.SUPPRESS)
     for action in ('status', 'repair', 'uninstall'):
@@ -316,7 +317,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 help='Explicitly approve backup/removal of the diagnosed same-name MCP subtree; never approve unknown Hooks or invalid ownership')
     lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
     lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
-    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor'])
+    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor', 'workbuddy'])
     lifecycle_parser.add_argument('--scope', choices=['global', 'project'], default='project')
     lifecycle_parser.add_argument('--path')
     lifecycle_parser.add_argument('--json', action='store_true')
@@ -369,6 +370,20 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         trial_arguments = parsed_argv[split + 1:]
         parsed_argv = parsed_argv[:split]
     args = parser.parse_args(parsed_argv)
+    if args.command == 'workbuddy-hook':
+        from .workbuddy_hook import main as workbuddy_hook_main
+        return workbuddy_hook_main()
+    if ((args.command == 'setup' and args.integration == 'workbuddy' and args.scope != 'project')
+            or (args.command == 'integration' and args.integration == 'workbuddy' and args.scope == 'global')):
+        from .workbuddy_connector import WorkBuddyConnectorInstallation, setup_personal_workbuddy
+        try:
+            integration = WorkBuddyConnectorInstallation(allow_dev=getattr(args, 'dev', False))
+            data = (setup_personal_workbuddy(integration, args.path) if args.command == 'setup'
+                    else integration.execute(args.action, args.path))
+        except (ValueError, OSError, KeyError, TypeError):
+            data = dict(integration='workbuddy', overall='BROKEN', diagnostics=['WORKBUDDY_CONFIGURATION_CONFLICT'])
+        print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / WorkBuddy\n'+data['overall'])
+        return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     if args.command == 'cursor-hook':
         from .cursor_hook import main as cursor_hook_main
         return cursor_hook_main(automatic=args.automatic)
@@ -477,7 +492,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 from .personal_install import install_personal_codex
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
-                    host_kwargs = {'_host': 'cursor'} if args.integration == 'cursor' else {}
+                    host_kwargs = {'_host': args.integration} if args.integration in {'cursor', 'workbuddy'} else {}
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
                         allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
@@ -643,10 +658,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command=='runtime-info':
             print('Checking runtime package integrity and capabilities...', file=sys.stderr)
             from .guidance.host_guidance import runtime_info
-            info=runtime_info()
             if os.getenv('SECURITY_RUNTIME_GLOBAL') == '1':
                 from .global_mcp import global_runtime_info
                 info = global_runtime_info()
+            else:
+                info = runtime_info()
             # Native stdout is UTF-8, but Windows PowerShell 5.1 can decode a
             # pipeline using its legacy console code page. ASCII escapes keep
             # JSON parseable and preserve Unicode values under either decoder.

@@ -3,7 +3,7 @@ from .host_lifecycle import HostConnector, connector_profile
 
 
 CONNECTORS = {
-    host: connector_profile(host).connector for host in ('codex', 'cursor')
+    host: connector_profile(host).connector for host in ('codex', 'cursor', 'workbuddy')
 }
 
 

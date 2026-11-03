@@ -360,7 +360,7 @@ class ContextCostStore:
                 record.update(run_label=label, mode='debug' if debug else 'basic')
                 if chat_owner is not None:
                     from .tasks.ownership import valid_owner
-                    if valid_owner(chat_owner) and chat_owner['host'] in {'codex', 'cursor'}:
+                    if valid_owner(chat_owner) and chat_owner['host'] in {'codex', 'cursor', 'workbuddy'}:
                         record['chat_hash'] = digest('chat', chat_owner['host'] + ':' + chat_owner['session'])
                 if debug:
                     valid_time = (type(started_at) in (int, float) and type(finished_at) in (int, float)

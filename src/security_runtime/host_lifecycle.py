@@ -106,6 +106,9 @@ class ConnectorProfile:
 _BASE_PHASES = frozenset({LifecyclePhase.SESSION_OPEN,
     LifecyclePhase.WORKSPACE_ACTIVITY, LifecyclePhase.SESSION_STOP})
 _PROFILES = {
+    ('workbuddy', 'automatic'): ConnectorProfile('workbuddy', 'automatic', True,
+        _BASE_PHASES | {LifecyclePhase.BEFORE_MUTATION, LifecyclePhase.CONTEXT_DELIVERY,
+                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT, invocation_id=True),
     ('codex', 'product'): ConnectorProfile('codex', 'product', False,
         _BASE_PHASES | {LifecyclePhase.CONTEXT_DELIVERY, LifecyclePhase.TASK_CLOSEOUT},
         StopIntent.APPROVED_REPAIR, invocation_id=True, setup_seed=True,
@@ -121,7 +124,7 @@ def connector_profile(host, mode=None):
     """Return an implemented mode; unknown modes never inherit product abilities."""
     try:
         if mode is None:
-            mode = {'codex': 'product', 'cursor': 'automatic'}.get(host)
+            mode = {'codex': 'product', 'cursor': 'automatic', 'workbuddy': 'automatic'}.get(host)
         return _PROFILES[(host, mode)]
     except (KeyError, TypeError):
         raise ValueError('UNSUPPORTED_HOST_CONNECTOR') from None

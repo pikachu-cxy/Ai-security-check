@@ -3,6 +3,9 @@ from .host_events import HostCapabilities
 
 
 def event_adapter(host):
+    if host == 'workbuddy':
+        from .workbuddy_hook import WorkBuddyEventAdapter
+        return WorkBuddyEventAdapter()
     if host == 'codex':
         from .codex_event_adapter import CodexEventAdapter
         return CodexEventAdapter()

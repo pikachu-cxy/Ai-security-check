@@ -10,7 +10,7 @@ from ..hook_state import atomic_bytes, no_links
 
 def _path(store, owner):
     from ..tasks.ownership import valid_owner
-    if not valid_owner(owner) or owner['host'] not in {'codex', 'cursor'}:
+    if not valid_owner(owner) or owner['host'] not in {'codex', 'cursor', 'workbuddy'}:
         raise ValueError('MONITOR_OWNER_INVALID')
     key = store._key()
     selector = store._digest(key, 'chat', owner['host'] + ':' + owner['session'])

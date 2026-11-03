@@ -11,7 +11,7 @@ from .development_reporting import INSTRUCTIONS, reporting
 
 def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=False,
              service=None, offered=(), turn_id=None):
-    if not stopped_normally or owner.get('host') not in {'codex', 'cursor'}:
+    if not stopped_normally or owner.get('host') not in {'codex', 'cursor', 'workbuddy'}:
         return None
     store = DevelopmentCheckStore(hooks, root)
     if not store.path.exists():

@@ -33,7 +33,7 @@ def ownership_error(recorded, requested):
         reason = 'TASK_OWNER_UNAVAILABLE'
     elif recorded.get('host') == 'connection':
         reason = 'TASK_CONNECTION_SCOPE_MISMATCH'
-    elif (recorded or {}).get('host') in {'codex', 'cursor'} and (requested or {}).get('host') == 'connection':
+    elif (recorded or {}).get('host') in {'codex', 'cursor', 'workbuddy'} and (requested or {}).get('host') == 'connection':
         reason = 'TASK_SESSION_BINDING_REQUIRED'
     else:
         reason = 'TASK_SESSION_SCOPE_MISMATCH'
@@ -47,7 +47,7 @@ def issue_session_ref(hooks, root, host, session, *, now=None, compact=False):
         return issue_session_handle(hooks, root, host, session,
                                     now=time.time if now is None else lambda: now)
     owner=session_owner(host,session)
-    if host not in {'codex','cursor'} or not valid_owner(owner): raise ValueError('Invalid task session')
+    if host not in {'codex','cursor','workbuddy'} or not valid_owner(owner): raise ValueError('Invalid task session')
     issued=time.time() if now is None else now
     payload=json.dumps(dict(v=1,workspace=hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest(),
         owner=owner,issued=issued,expires=issued+SESSION_TTL),sort_keys=True,separators=(',',':')).encode()
@@ -79,7 +79,7 @@ def verify_session_ref(hooks, root, token, *, now=None):
         instant=time.time() if now is None else now
         if (set(data)!={'v','workspace','owner','issued','expires'} or data['v']!=1
                 or data['workspace']!=hashlib.sha256(os.path.normcase(str(root)).encode()).hexdigest()
-                or not valid_owner(data['owner']) or data['owner']['host'] not in {'codex','cursor'}
+                or not valid_owner(data['owner']) or data['owner']['host'] not in {'codex','cursor','workbuddy'}
                 or type(data['issued']) not in {float,int} or type(data['expires']) not in {float,int}
                 or not data['issued']<=instant<data['expires']<=data['issued']+SESSION_TTL): raise ValueError()
         try:
@@ -117,7 +117,7 @@ def record_owner(record): return record.get('task_owner') or record.get('connect
 
 def valid_owner(owner):
     return (isinstance(owner,dict) and set(owner)=={'host','session'} and
-        owner['host'] in {'cursor','codex','connection'} and isinstance(owner['session'],str)
+        owner['host'] in {'cursor','codex','workbuddy','connection'} and isinstance(owner['session'],str)
         and len(owner['session'])==64 and all(c in '0123456789abcdef' for c in owner['session']))
 
 

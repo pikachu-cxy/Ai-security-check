@@ -19,7 +19,7 @@ def session_activity(hooks, root, owner, *, idle=False, now=time.time):
     save also invalidates it. Unknown history is never backfilled from a PID.
     """
     from .security_state import TaskSecurityStore
-    if not valid_owner(owner) or owner['host'] not in {'codex', 'cursor'}:
+    if not valid_owner(owner) or owner['host'] not in {'codex', 'cursor', 'workbuddy'}:
         return
     store = TaskSecurityStore(hooks, root, now=now)
     def applicable(record):
@@ -50,7 +50,7 @@ def _idle_session(record, instant):
     return (is_v3_record(record) and record.get('phase') == 'ACTIVE'
         and type(record.get('static_attempts')) is int and record['static_attempts'] == 0
         and not any(record.get(key) for key in ('end', 'static', 'review_plan', 'review'))
-        and valid_owner(owner) and owner['host'] in {'codex', 'cursor'}
+        and valid_owner(owner) and owner['host'] in {'codex', 'cursor', 'workbuddy'}
         and isinstance(checkpoint, dict) and set(checkpoint) == {'contract', 'observed_at', 'generation'}
         and checkpoint['contract'] == 'task-session-idle-v1'
         and type(checkpoint['generation']) is int and checkpoint['generation'] == record.get('generation')

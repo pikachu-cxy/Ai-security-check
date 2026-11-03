@@ -69,7 +69,7 @@ def bounded_record(value):
             copied['succeeded'] = value['succeeded']
         if value.get('chat_owner') is not None:
             owner = _mapping(value['chat_owner'], {'host', 'session'})
-            if owner.get('host') not in {'codex', 'cursor'} or not _HEX.fullmatch(_text(owner.get('session'), 64)):
+            if owner.get('host') not in {'codex', 'cursor', 'workbuddy'} or not _HEX.fullmatch(_text(owner.get('session'), 64)):
                 raise ValueError('INVALID_OBSERVATION_METADATA')
             copied['chat_owner'] = dict(owner)
         measures = _mapping(value.get('measurements', {}),
@@ -121,7 +121,7 @@ def bounded_record(value):
                     raise ValueError('INVALID_OBSERVATION_METADATA')
                 identity['call_id'] = call_id
             if correlation.get('host') is not None:
-                if correlation['host'] not in {'codex', 'cursor'}:
+                if correlation['host'] not in {'codex', 'cursor', 'workbuddy'}:
                     raise ValueError('INVALID_OBSERVATION_METADATA')
                 identity['host'] = correlation['host']
             for name in ('session_binding', 'trigger_invocation_binding', 'turn_binding'):

@@ -563,7 +563,7 @@ class TaskSecurityStore:
                 from .ownership import record_owner, valid_owner
                 owner = record_owner(value)
                 if (not is_v3_record(value) or value['phase'] != 'ACTIVE'
-                        or not valid_owner(owner) or owner['host'] not in {'codex', 'cursor'}):
+                        or not valid_owner(owner) or owner['host'] not in {'codex', 'cursor', 'workbuddy'}):
                     raise ValueError('Invalid task session idle checkpoint')
                 value['session_idle'] = dict(contract='task-session-idle-v1',
                     observed_at=value['activity_at'], generation=value['generation'])

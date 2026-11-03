@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_call:
     inputs:
+      workbuddy:
+        description: Only WorkBuddy adapter and touched shared contracts
+        type: boolean
+        default: false
       focused:
         description: Run release-specific regressions instead of the full development suite
         type: boolean
@@ -64,12 +68,15 @@ jobs:
           "$test_python" -m pip install -e ".[test,scanner-test]"
           echo "$test_bin" >> "$GITHUB_PATH"
       - name: Prepare pinned native OpenGrep before offline regressions
+        if: inputs.workbuddy != true
         run: python -c "from security_runtime.toolchain import ToolManager, ToolStatus; tool = ToolManager().ensure('opengrep', offline=False); assert tool.status == ToolStatus.READY, tool.detail"
       - name: Check installation and Mac release contracts before the full regression
+        if: inputs.workbuddy != true
         env:
           PYTHONUTF8: '0'
         run: python -m pytest -q tests/distribution/test_bootstrap_runtime.py tests/distribution/test_macos_installation.py tests/distribution/test_macos_release_refresh.py tests/distribution/test_macos_artifact_budget.py tests/test_node_host_preflight.py tests/distribution/test_release_assets.py
       - name: Check monitor startup and process cleanup before the full regression
+        if: inputs.workbuddy != true
         run: >-
           python -m pytest -q
           tests/test_monitoring.py
@@ -77,13 +84,27 @@ jobs:
           tests/test_monitoring_one_click.py
           tests/test_diagnostics.py
           --basetemp="${{ runner.temp }}/monitor-preflight"
+      - name: WorkBuddy adapter and touched shared contracts
+        if: inputs.workbuddy == true
+        run: >-
+          python -m pytest -q
+          tests/test_workbuddy_full.py
+          tests/distribution/test_workbuddy_release_scope.py
+          tests/test_cursor_automatic.py::test_install_preserves_user_data_idempotent_remove_keeps_shared_skill
+          tests/test_cursor_host_adapter.py
+          tests/test_session_handles.py
+          tests/test_host_lifecycle_contract.py
+          tests/test_user_config_stop.py::test_stop_submits_once_waits_and_is_bounded
+          tests/test_user_config_stop.py::test_expired_stop_budget_preserves_pending_check
+          tests/test_user_config_stop.py::test_stop_empty_disabled_cancelled_and_legacy_do_not_dispatch
+          --basetemp="${{ runner.temp }}/workbuddy-tests"
       - name: Run Runtime tests
-        if: inputs.focused != true
+        if: inputs.focused != true && inputs.workbuddy != true
         env:
           SECURITY_RUNTIME_HOST_REPORT_DIR: ${{ runner.temp }}/arithmetic-host-evidence
         run: python -m pytest -q tests --basetemp="${{ runner.temp }}/runtime-tests"
       - name: Run focused source evidence, configuration and Stop regressions
-        if: inputs.focused == true
+        if: inputs.focused == true && inputs.workbuddy != true
         run: >-
           python -m pytest -q
           tests/test_source_redaction.py
@@ -117,14 +138,14 @@ jobs:
           tests/guidance/test_guidance_catalog.py
           --basetemp="${{ runner.temp }}/focused-release-tests"
       - name: Retain actual arithmetic host execution evidence
-        if: always() && inputs.focused != true
+        if: always() && inputs.focused != true && inputs.workbuddy != true
         uses: actions/upload-artifact@v4
         with:
           name: arithmetic-host-evidence-${{ matrix.os }}
           path: ${{ runner.temp }}/arithmetic-host-evidence/arithmetic-host-positive.json
           if-no-files-found: error
       - name: Pinned upstream rule identity and native product gate
-        if: inputs.focused != true
+        if: inputs.focused != true && inputs.workbuddy != true
         run: >-
           python -m pytest -q tests/test_opengrep_migration.py
           tests/distribution/test_current_rule_release.py

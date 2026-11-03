@@ -39,7 +39,7 @@ def _key(token):
 
 def issue_session_handle(hooks, root, host, session, *, now=time.time):
     owner = session_owner(host, session)
-    if host not in {'codex', 'cursor'} or not valid_owner(owner):
+    if host not in {'codex', 'cursor', 'workbuddy'} or not valid_owner(owner):
         raise ValueError('Invalid task session')
     store = _store(hooks, root, now)
     identity = _identity(store.root)
@@ -82,7 +82,7 @@ def verify_session_handle(hooks, root, token, *, now=None, host=None):
     if row is None:
         raise SessionHandleError('HANDLE_UNAVAILABLE')
     if (row.get('kind') != 'session-route-v1' or not valid_owner(row.get('owner'))
-            or row['owner']['host'] not in {'codex', 'cursor'}
+            or row['owner']['host'] not in {'codex', 'cursor', 'workbuddy'}
             or row.get('root_identity') != _identity(store.root)
             or type(row.get('issued')) not in (int, float)
             or type(row.get('expires')) not in (int, float)

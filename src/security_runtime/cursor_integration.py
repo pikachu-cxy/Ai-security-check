@@ -39,6 +39,26 @@ def launcher(runtime, *, automatic=False):
 
 
 class GlobalCursorIntegration:
+    host = "cursor"
+    manifest_version = "cursor-global-v1"
+
+    def event_names(self):
+        return AUTOMATIC_EVENTS if self.automatic else PRODUCTION_EVENTS
+
+    def expected_hooks(self, runtime):
+        cmd = launcher(runtime, automatic=self.automatic)
+        return {e: {"command": cmd, "type": "command", "timeout": 120,
+                    **({"loop_limit": 10} if e == "stop" else {})} for e in self.event_names()}
+
+    def related_hook(self, group):
+        return "cursor-hook" in group.get("command", "")
+
+    def allowed_record_sets(self):
+        return (set(AUTOMATIC_EVENTS), set(PRODUCTION_EVENTS), set(PRODUCTION_EVENTS) | {'postToolUse'})
+
+    def finalize_config(self, value, action):
+        return value
+
     def __init__(self, *, home=None, directory=None, discover=None, allow_dev=False, automatic=False):
         self.home = cursor_home(home)
         self.store = HookStateStore(directory or SQLiteStore.default_path().parent / 'cursor-integrations')
@@ -79,8 +99,8 @@ class GlobalCursorIntegration:
         key_path = self.store.workspace_directory(self.home) / 'snapshot.key'
         no_links(key_path)
         key = key_path.read_bytes()
-        if (len(key) != 32 or set(value) != {'version', 'records'} or value['version'] != 'cursor-global-v1'
-                or not isinstance(value['records'], dict) or set(value['records']) not in (set(AUTOMATIC_EVENTS), set(PRODUCTION_EVENTS), set(PRODUCTION_EVENTS)|{'postToolUse'})
+        if (len(key) != 32 or set(value) != {'version', 'records'} or value['version'] != self.manifest_version
+                or not isinstance(value['records'], dict) or set(value['records']) not in self.allowed_record_sets()
                 or not hmac.compare_digest(signature, hmac.new(key, encode(value), hashlib.sha256).hexdigest())):
             raise ValueError('OWNERSHIP_INVALID')
         return path, value
@@ -99,11 +119,8 @@ class GlobalCursorIntegration:
         runtime = self.discover()
         if runtime['kind'] == 'DEV' and not self.allow_dev and action in {'setup', 'repair'} and manifest is None:
             raise ValueError('INSTALLED_RUNTIME_REQUIRED')
-        cmd = launcher(runtime, automatic=self.automatic)
-        events = AUTOMATIC_EVENTS if self.automatic else PRODUCTION_EVENTS
-        # Only the four observed reliable event surfaces are installed.
-        expected = {e: {'command': cmd, 'type': 'command', 'timeout': 120,
-                       **({'loop_limit': 10} if e == 'stop' else {})} for e in events}
+        events = self.event_names()
+        expected = self.expected_hooks(runtime)
         actual = {}
         if manifest:
             for event, record in manifest['records'].items():
@@ -114,10 +131,10 @@ class GlobalCursorIntegration:
         # An unowned lookalike is related, not evidence of ownership.
         for event, groups in value['hooks'].items():
             for group in groups:
-                if 'cursor-hook' in group.get('command', '') and group not in actual.get(event, []):
+                if self.related_hook(group) and group not in actual.get(event, []):
                     raise ValueError('UNOWNED_RUNTIME_HOOK')
         configured = manifest is not None and set(manifest['records']) == set(events) and all(actual.get(e) == [expected[e]] for e in events)
-        report = dict(integration='cursor', scope='GLOBAL', overall='CONFIGURED' if configured else 'NOT_INSTALLED' if not manifest else 'NEEDS_REPAIR',
+        report = dict(integration=self.host, scope='GLOBAL', overall='CONFIGURED' if configured else 'NOT_INSTALLED' if not manifest else 'NEEDS_REPAIR',
             implementation='IMPLEMENTED', config_path=str(path), fresh_host_trial='PENDING_ACTUAL_CURSOR_DESKTOP',
             continuation_status='PENDING_CURSOR_CONTINUATION_CAPABILITY', mcp_status='UNCHANGED', changed=False,
             post_tool_use_mode='NOT_ENABLED_BY_DEFAULT',
@@ -134,6 +151,7 @@ class GlobalCursorIntegration:
         if action != 'remove':
             for event, group in expected.items():
                 merged['hooks'].setdefault(event, []).append(group)
+        merged = self.finalize_config(merged, action)
         desired = encode(merged) + b'\n'
         changed = merged != value
         before_manifest = manifest_path.read_bytes() if manifest_path.exists() else None
@@ -151,7 +169,7 @@ class GlobalCursorIntegration:
                     self.write_observer(manifest_path, None)
                 manifest_path.unlink(missing_ok=True)
             else:
-                new = dict(version='cursor-global-v1', records=expected)
+                new = dict(version=self.manifest_version, records=expected)
                 key = self.store.key(self.home)
                 signed = encode({**new, 'signature': hmac.new(key, encode(new), hashlib.sha256).hexdigest()})
                 if signed != before_manifest:

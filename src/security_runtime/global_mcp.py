@@ -90,10 +90,13 @@ class GlobalWorkspaces:
         self.host = host
         self.task_audit_mode = task_audit_mode
         from .storage import SQLiteStore
-        self.base = Path(base or SQLiteStore.default_path().parent / ('cursor-workspaces' if host == 'cursor' else 'global-workspaces')).absolute()
+        self.base = Path(base or SQLiteStore.default_path().parent / (host+'-workspaces' if host in {'cursor', 'workbuddy'} else 'global-workspaces')).absolute()
         no_links(self.base)
         if integration is None:
-            if host == 'cursor':
+            if host == 'workbuddy':
+                from .workbuddy_connector import WorkBuddyConnectorInstallation
+                integration = WorkBuddyConnectorInstallation()
+            elif host == 'cursor':
                 from .cursor_connector import CursorConnectorInstallation
                 integration = CursorConnectorInstallation()
             else:
@@ -560,10 +563,17 @@ def create_global_server(*, workspaces=None, host='codex'):
         'For every workspace tool supply the current workspace_path, even if only one workspace is admitted. '
         'Never infer a workspace from an opaque reference or use the last workspace. '
         'INITIALIZING/DEGRADED readiness is not a security proof; Core Hooks never request Deep Verification.')
-    infos = {t.name: t for t in registry.tools() if active_host != 'cursor' or t.name not in HOOKS}
+    infos = {t.name: t for t in registry.tools() if active_host not in {'cursor', 'workbuddy'} or t.name not in HOOKS}
     if active_host == 'cursor':
         from .host_connectors import CURSOR_INSTRUCTIONS
         registry.add_instructions(CURSOR_INSTRUCTIONS)
+    elif active_host == 'workbuddy':
+        registry.add_instructions('\nWorkBuddy native command Hooks supply an owner-bound session_ref. '
+            'Reuse that exact ref and the current absolute workspace_path for all project calls. '
+            'SessionStart may omit cwd; post-tool context supplies the credential once the workspace is bound. '
+            'Edits are recorded by Hooks; before the normal summary finish the existing development check, '
+            'wait for its results and complete required reviews. Stop continuation reuses that check, '
+            'never creates another scan or authorizes repairs. Ordinary read-only work starts no check.')
 
     async def listed():
         from mcp.types import Tool

@@ -13,7 +13,7 @@ PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
 REPOSITORY = "pikachu-cxy/Ai-security-check"
 
 
-def main(*, focused=False) -> None:
+def main(*, focused=False, workbuddy=False) -> None:
     release = Path(__file__).resolve().parents[2] / "dist" / "release"
     artifacts = {}
     lines = []
@@ -35,16 +35,22 @@ def main(*, focused=False) -> None:
         focused_ok = (verification.get('usage_monitor_disabled') is True
                       and 'start_usage_monitor' not in verification.get('mcp_tools', [])
                       and 'start_risk_dashboard' in verification.get('mcp_tools', []))
-        if not common or not (focused_ok if focused else full):
+        workbuddy_ok = (verification.get('validation_scope') == 'workbuddy-adapter'
+                        and verification.get('workbuddy_connector') is True
+                        and {'frozen-install', 'settings-preservation', 'native-edit-record',
+                             'owner-bound-mcp', 'bounded-stop', 'owned-uninstall'} <= set(verification.get('checked', [])))
+        if not common or not (workbuddy_ok if workbuddy else focused_ok if focused else full):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}
         lines.append(f"{digest}  {name}")
     (release / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "source_commit": source_commit, "validation_scope": "focused-monitor-defaults" if focused else "full", "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
+    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "source_commit": source_commit, "validation_scope": "workbuddy-adapter" if workbuddy else "focused-monitor-defaults" if focused else "full", "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
     print(release / "release-manifest.json")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--focused", action="store_true")
-    main(focused=parser.parse_args().focused)
+    parser.add_argument("--workbuddy", action="store_true")
+    args = parser.parse_args()
+    main(focused=args.focused, workbuddy=args.workbuddy)

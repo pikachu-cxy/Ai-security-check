@@ -111,7 +111,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     installation.update(scan_ready=ready, status='INSTALLED',
         engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
-            f"请完全退出并重启 {'Cursor' if data.get('integration') == 'cursor' else 'Codex'}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
+            f"请完全退出并重启 {dict(cursor='Cursor', workbuddy='WorkBuddy').get(data.get('integration'), 'Codex')}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
             '已有配置和可用缓存会保留。'))
     if not requested_offline:
@@ -239,7 +239,11 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
     from .delivery import StableDelivery, stable_command, package_metadata
-    if _host == 'cursor':
+    if _host == 'workbuddy':
+        from .workbuddy_connector import WorkBuddyConnectorInstallation, WorkBuddyInstallPreflight, setup_personal_workbuddy
+        integration = WorkBuddyConnectorInstallation(allow_dev=allow_dev)
+        setup = setup_personal_workbuddy
+    elif _host == 'cursor':
         from .cursor_connector import CursorConnectorInstallation, CursorInstallPreflight, setup_personal_cursor
         integration = CursorConnectorInstallation(allow_dev=allow_dev)
         setup = setup_personal_cursor
@@ -278,7 +282,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     report_progress(progress, 'PACKAGE_VERIFY')
     package_metadata(supplied)
     report_progress(progress, 'CHECK_CONFIG')
-    manager = (CursorInstallPreflight(integration) if _host == 'cursor'
+    manager = (WorkBuddyInstallPreflight(integration) if _host == 'workbuddy' else CursorInstallPreflight(integration) if _host == 'cursor'
                else InstallationUpgrade(integration, ReviewSkillManager()))
     if workspace is not None:
         integration.inspect_project(workspace)
@@ -288,7 +292,11 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         blocked.append('USER_MANAGED_APPROVAL_REQUIRED')
     if blocked:
         return _blocked(manager, blocked)
-    delivery = StableDelivery(Path(root) if root is not None else _default_delivery_root())
+    delivery_probe = None
+    if _host == 'workbuddy':
+        from .workbuddy_connector import probe_delivery
+        delivery_probe = probe_delivery
+    delivery = StableDelivery(Path(root) if root is not None else _default_delivery_root(), probe=delivery_probe)
     activated = delivery.activate(supplied, progress=progress)
     # Activation verified this exact slot. Invoke it directly, avoiding an
     # unnecessary launcher hop; discover() still writes the stable command.

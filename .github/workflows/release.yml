@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       validation:
-        description: Validation scope (focused reuses completed development regressions)
+        description: Validation scope (workbuddy tests only this adapter and touched contracts)
         type: choice
-        options: [full, focused]
-        default: full
+        options: [workbuddy, focused, full]
+        default: workbuddy
   push:
     tags: ['v*']
     branches: [feature/runtime-mvp]
@@ -17,11 +17,11 @@ permissions:
   contents: read
 
 jobs:
-  # v0.3.12 publishes unified configuration and bounded Stop recovery.
+  # v0.3.13 adds the WorkBuddy adapter; its release uses scoped regression evidence.
   # Full validation includes file-based rule inventory verification before publication.
   # Native gates use OpenGrep and Trivy; unavailable dependencies never fall back to OSV.
   version:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.12]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.13]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,7 @@ jobs:
     uses: ./.github/workflows/tests.yml
     with:
       # Use an isolated interpreter and pinned scanner dependencies for real offline checks.
+      workbuddy: ${{ inputs.validation == 'workbuddy' || contains(github.event.head_commit.message, '[release-workbuddy]') }}
       focused: ${{ inputs.validation == 'focused' || contains(github.event.head_commit.message, '[release-focused]') || contains(github.event.head_commit.message, '[release-v0.3.9]') }}
   compliance:
     needs: tests
@@ -50,6 +51,8 @@ jobs:
       actions: read
       contents: write
     uses: ./.github/workflows/standalone.yml
+    with:
+      workbuddy: ${{ inputs.validation == 'workbuddy' || contains(github.event.head_commit.message, '[release-workbuddy]') }}
   publish:
     needs: build
     runs-on: ubuntu-latest
@@ -67,7 +70,7 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist/release
-      - run: python scripts/release/make_release_metadata.py
+      - run: python scripts/release/make_release_metadata.py ${{ (inputs.validation == 'workbuddy' || contains(github.event.head_commit.message, '[release-workbuddy]')) && '--workbuddy' || '' }}
       - run: python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
       - run: python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
       - run: python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
@@ -78,7 +81,7 @@ jobs:
       - name: Stage platform downloads and bundled acceptance evidence
         run: python scripts/release/prepare_release_assets.py
       - name: Include version-specific release changes
-        run: cat distribution/releases/v0.3.12.md >> dist/release-notes.md
+        run: cat distribution/releases/v0.3.13.md >> dist/release-notes.md
       - name: Upload complete release as draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}

@@ -190,7 +190,7 @@ def safe_fields(values):
         ('normalized_operation_class', {'READ_ONLY', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
         ('workspace_binding_status', {'BINDING_CONSISTENT'}),
         ('normalized_scanner_trigger_reason', {'WORKSPACE_CONTENT_DELTA'}),
-        ('event_schema', {'codex-' + e + '-v1' for e in EVENTS.values()} | {'cursor-'+e+'-v1' for e in CURSOR_EVENTS}),
+        ('event_schema', {'codex-' + e + '-v1' for e in EVENTS.values()} | {'cursor-'+e+'-v1' for e in CURSOR_EVENTS} | {'workbuddy-'+e+'-v1' for e in ('SessionStart', 'PreToolUse', 'PostToolUse', 'Stop')}),
         ('tool_name', {'Bash', 'apply_patch', 'Edit', 'Write', 'Shell'}),
         ('tool_classification', {'READ_ONLY', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
         ('continuation_status', {'PENDING_CURSOR_CONTINUATION_CAPABILITY'}),
@@ -346,7 +346,7 @@ class Observation:
         session = args.get('conversation_id') if host == 'cursor' else args.get('session_id')
         session_hash = (hashlib.sha256(session.encode('utf-8')).hexdigest() if isinstance(session, str)
                         and 0 < len(session) <= 500 and not any(0xD800 <= ord(c) <= 0xDFFF for c in session) else None)
-        event = event if host == 'cursor' and event in CURSOR_EVENTS else 'UNKNOWN' if host == 'cursor' else EVENTS[name]
+        event = event if host == 'cursor' and event in CURSOR_EVENTS else 'UNKNOWN' if host == 'cursor' else (event if event in {'SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'} else 'UNKNOWN') if host == 'workbuddy' else EVENTS[name]
         self.record = dict(diagnostic_id=uuid.uuid4().hex, event=event, event_schema=host+'-'+event+'-v1',
                            timestamp=datetime.now(timezone.utc).isoformat(), monotonic_scope=CLOCK_SCOPE,
                            workspace_hash=None, session_hash=session_hash, stages=[], completed=False,
@@ -356,8 +356,8 @@ class Observation:
                            workspace_mutation_observed=None, changed_file_count=None,
                            scanner_trigger_reason=None, scanner_skipped_reason=None, scanner_run=None,
                             handler_status='UNKNOWN', handler_reason=None)
-        if host == 'cursor':
-            self.record['host'] = 'cursor'
+        if host in {'cursor', 'workbuddy'}:
+            self.record['host'] = host
         self.record.update(safe_fields({'tool_name': args.get('tool_name')}))
         self.stage('HOOK_RECEIVED')
 

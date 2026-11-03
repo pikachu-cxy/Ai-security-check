@@ -22,7 +22,8 @@ from security_runtime.closeout_state import readonly_uri
 PAGE = Path(__file__).resolve().parent / 'assets' / 'risk_dashboard.html'
 STATE = SQLiteStore.default_path().parent
 MAX_WORKSPACES, MAX_SCANS, MAX_RISKS = 500, 100, 3000
-SOURCES = (('codex', 'Codex', 'global-workspaces'), ('cursor', 'Cursor', 'cursor-workspaces'))
+SOURCES = (('codex', 'Codex', 'global-workspaces'), ('cursor', 'Cursor', 'cursor-workspaces'),
+           ('workbuddy', 'WorkBuddy', 'workbuddy-workspaces'))
 redact = SecretRedactor().redact
 
 
