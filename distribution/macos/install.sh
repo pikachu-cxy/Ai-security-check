@@ -77,7 +77,7 @@ download() {
   download_target=$2
   printf '%s\n' "[下载] ${download_target##*/}" >&2
   if curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
-    --tlsv1.2 --connect-timeout 15 --max-time 600 \
+    --tlsv1.2 --connect-timeout 15 --speed-limit 1 --speed-time 120 \
     --output "$download_target.part" "$download_url"; then
     mv "$download_target.part" "$download_target"
     return 0
@@ -93,7 +93,7 @@ download() {
       printf '%s\n' '[失败] HTTPS 证书验证失败，请检查系统时间、证书和代理设置。' >&2 ;;
     *) printf '%s\n' '[失败] 下载未完成，请查看上方错误信息。' >&2 ;;
   esac
-  printf '%s\n' "[诊断] ${download_target##*/}（curl $download_error）：$download_url" \
+  printf '%s\n' "[诊断] ${download_target##*/}（curl ${download_error}）：${download_url}" \
     '已停止安装，不自动重试；下载内容仍须通过校验。' >&2
   return "$download_error"
 }
