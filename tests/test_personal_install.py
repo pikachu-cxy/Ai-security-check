@@ -21,7 +21,7 @@ from security_runtime.delivery import EXE
 def test_windows_default_delivery_root_is_short(tmp_path, monkeypatch):
     from security_runtime.personal_install import _default_delivery_root
     monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
-    assert _default_delivery_root() == tmp_path / 'AI-Security-Runtime-install'
+    assert _default_delivery_root() == tmp_path / 'ASR'
 
 
 def ready_scanning_receipt():
