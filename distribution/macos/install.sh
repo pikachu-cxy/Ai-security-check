@@ -75,8 +75,31 @@ trap 'exit 130' INT
 trap 'exit 143' TERM HUP
 stage=$(mktemp -d "$root/download-XXXXXXXX")
 download() {
-  curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
-    --tlsv1.2 --connect-timeout 30 --retry 2 --output "$2" "$1"
+  download_url=$1
+  download_target=$2
+  attempt=1
+  protocol=
+  while [ "$attempt" -le 3 ]; do
+    printf '%s\n' "[下载] ${download_target##*/}（第 $attempt/3 次）" >&2
+    if curl $protocol --fail --show-error --location --proto '=https' --proto-redir '=https' \
+      --tlsv1.2 --connect-timeout 30 --max-time 600 \
+      --output "$download_target.part" "$download_url"; then
+      mv "$download_target.part" "$download_target"
+      return 0
+    else
+      download_error=$?
+    fi
+    case "$download_error" in
+      16|92) protocol=--http1.1
+        printf '%s\n' '[恢复] HTTP/2 传输失败，改用 HTTP/1.1 重试。' >&2 ;;
+      5|6|7|18|22|28|35|52|55|56) ;;
+      *) break ;;
+    esac
+    if [ "$attempt" -lt 3 ]; then sleep "$attempt"; fi
+    attempt=$((attempt + 1))
+  done
+  printf '%s\n' "[失败] ${download_target##*/} 下载失败（curl $download_error）；尚未通过校验，不会继续安装。" >&2
+  return "$download_error"
 }
 verify_sha() {
   observed=$(shasum -a 256 "$1")
@@ -127,8 +150,27 @@ if [ -n "$payload_dir" ]; then
   cp "$payload_dir/$asset" "$stage/$asset"
   cp "$payload_dir/$asset.sha256" "$stage/$asset.sha256"
 else
-  download "$base/$asset" "$stage/$asset"
-  download "$base/$asset.sha256" "$stage/$asset.sha256"
+# Fetch the small checksum first; reuse archives only after matching it.
+download "$base/$asset.sha256" "$stage/$asset.sha256"
+expected_sha=$(awk 'NR == 1 {print $1}' "$stage/$asset.sha256")
+reused=false
+case "$expected_sha" in
+  *[!a-f0-9]*|'') ;;
+  *) if [ "${#expected_sha}" -eq 64 ]; then
+    for previous in "$root"/download-*/"$asset"; do
+      [ -f "$previous" ] || continue
+      check_path "$previous"
+      previous_sha=$(shasum -a 256 "$previous")
+      if [ "${previous_sha%% *}" = "$expected_sha" ]; then
+        cp "$previous" "$stage/$asset"
+        printf '%s\n' '[恢复] 已复用校验匹配的产品包，无需重新下载。'
+        reused=true
+        break
+      fi
+    done
+  fi ;;
+esac
+if [ "$reused" = false ]; then download "$base/$asset" "$stage/$asset"; fi
 fi
 # Only the uniquely named regular installer file is copied at bootstrap. All
 # remaining archive members are validated/extracted by that verified installer.
