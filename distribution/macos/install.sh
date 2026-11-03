@@ -77,28 +77,26 @@ stage=$(mktemp -d "$root/download-XXXXXXXX")
 download() {
   download_url=$1
   download_target=$2
-  attempt=1
-  protocol=
-  while [ "$attempt" -le 3 ]; do
-    printf '%s\n' "[下载] ${download_target##*/}（第 $attempt/3 次）" >&2
-    if curl $protocol --fail --show-error --location --proto '=https' --proto-redir '=https' \
-      --tlsv1.2 --connect-timeout 30 --max-time 600 \
-      --output "$download_target.part" "$download_url"; then
-      mv "$download_target.part" "$download_target"
-      return 0
-    else
-      download_error=$?
-    fi
-    case "$download_error" in
-      16|92) protocol=--http1.1
-        printf '%s\n' '[恢复] HTTP/2 传输失败，改用 HTTP/1.1 重试。' >&2 ;;
-      5|6|7|18|22|28|35|52|55|56) ;;
-      *) break ;;
-    esac
-    if [ "$attempt" -lt 3 ]; then sleep "$attempt"; fi
-    attempt=$((attempt + 1))
-  done
-  printf '%s\n' "[失败] ${download_target##*/} 下载失败（curl $download_error）；尚未通过校验，不会继续安装。" >&2
+  printf '%s\n' "[下载] ${download_target##*/}" >&2
+  if curl --fail --show-error --location --proto '=https' --proto-redir '=https' \
+    --tlsv1.2 --connect-timeout 15 --max-time 600 \
+    --output "$download_target.part" "$download_url"; then
+    mv "$download_target.part" "$download_target"
+    return 0
+  else
+    download_error=$?
+  fi
+  case "$download_error" in
+    5|6|7|16|18|28|35|52|55|56|92)
+      printf '%s\n' '[失败] 网络连接或传输异常，请检查能否访问 GitHub 及其下载服务，并检查代理/VPN 设置。网络恢复后重新运行安装命令。' >&2 ;;
+    22)
+      printf '%s\n' '[失败] 下载服务返回 HTTP 错误，请查看上方状态码；若为 404，请核对发行文件或将链接反馈给支持。' >&2 ;;
+    60)
+      printf '%s\n' '[失败] HTTPS 证书验证失败，请检查系统时间、证书和代理设置。' >&2 ;;
+    *) printf '%s\n' '[失败] 下载未完成，请查看上方错误信息。' >&2 ;;
+  esac
+  printf '%s\n' "[诊断] ${download_target##*/}（curl $download_error）：$download_url" \
+    '已停止安装，不自动重试；下载内容仍须通过校验。' >&2
   return "$download_error"
 }
 verify_sha() {
