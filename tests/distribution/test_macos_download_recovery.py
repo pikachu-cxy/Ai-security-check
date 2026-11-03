@@ -13,39 +13,23 @@ def run_download(tmp_path, body):
                           cwd=tmp_path, text=True, capture_output=True)
 
 
-def test_http2_failure_falls_back_and_publishes_complete_file(tmp_path):
-    result = run_download(tmp_path, '''
-sleep() { :; }
-curl() {
-  printf '%s\\n' "$*" >> calls
-  case "$*" in
-    *--http1.1*) printf complete > output.part; return 0 ;;
-    *) printf partial > output.part; return 16 ;;
-  esac
-}
-''')
+def test_download_failure_stops_once_with_specific_diagnosis(tmp_path):
+    for code, message in [(16, 'GitHub'), (28, 'GitHub'), (22, '404'), (60, '证书')]:
+        (tmp_path / 'calls').unlink(missing_ok=True)
+        result = run_download(tmp_path, 
+            'curl() { echo called >> calls; printf partial > output.part; return %s; }' % code)
+        assert result.returncode == code
+        assert (tmp_path / 'calls').read_text().splitlines() == ['called']
+        assert not (tmp_path / 'output').exists()
+        assert message in result.stderr
+        assert '不自动重试' in result.stderr
+
+
+def test_success_publishes_complete_download(tmp_path):
+    result = run_download(tmp_path, 'curl() { printf complete > output.part; }')
     assert result.returncode == 0, result.stderr
     assert (tmp_path / 'output').read_text() == 'complete'
-    assert len((tmp_path / 'calls').read_text().splitlines()) == 2
     assert not (tmp_path / 'output.part').exists()
-
-
-def test_retry_exhaustion_never_publishes_partial_file(tmp_path):
-    result = run_download(tmp_path, '''
-sleep() { :; }
-curl() { echo called >> calls; printf partial > output.part; return 28; }
-''')
-    assert result.returncode == 28
-    assert len((tmp_path / 'calls').read_text().splitlines()) == 3
-    assert not (tmp_path / 'output').exists()
-
-
-def test_certificate_failure_not_retried(tmp_path):
-    result = run_download(tmp_path, '''
-curl() { echo called >> calls; return 60; }
-''')
-    assert result.returncode == 60
-    assert (tmp_path / 'calls').read_text().splitlines() == ['called']
 
 
 def test_cached_archive_requires_matching_checksum(tmp_path):
