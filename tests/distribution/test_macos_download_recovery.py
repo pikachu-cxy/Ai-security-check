@@ -41,7 +41,7 @@ def test_cached_archive_requires_matching_checksum(tmp_path):
     (old / 'package').write_bytes(b'verified payload')
     digest = hashlib.sha256(b'verified payload').hexdigest()
     source = SCRIPT.read_text()
-    block = source[source.index('# Fetch the small checksum'):source.index('\nfi\n# Only the uniquely')]
+    block = source[source.index('# Fetch the small checksum'):source.index('\nfi\n# Verify before extraction')]
     for expected, reuse in [(digest, True), ('0' * 64, False)]:
         (stage / 'package').unlink(missing_ok=True)
         setup = '''set -eu
@@ -62,3 +62,44 @@ download() {
                                 env={**os.environ, 'EXPECTED': expected}, capture_output=True)
         assert result.returncode == 0, result.stderr
         assert (stage / 'package').read_bytes() == (b'verified payload' if reuse else b'downloaded')
+
+
+def test_official_bundle_installs_selected_host_and_rejects_bad_hash(tmp_path):
+    import sys
+    if sys.platform != 'darwin':
+        from unittest import SkipTest
+        raise SkipTest('macOS installer integration')
+    import hashlib
+    import io
+    import tarfile
+    import os
+    tmp_path = tmp_path.resolve()
+    payload = tmp_path / 'payload'
+    payload.mkdir()
+    archive = payload / 'ai-security-runtime-v0.3.12-macos-x64.tar.gz'
+    marker = tmp_path / 'invoked'
+    body = ('#!/bin/sh\nprintf "%s\\n" "$*" > "' + str(marker) + '"\n').encode()
+    with tarfile.open(archive, 'w:gz') as bundle:
+        info = tarfile.TarInfo('security-check/security-check')
+        info.mode = 0o755
+        info.size = len(body)
+        bundle.addfile(info, io.BytesIO(body))
+    checksum = Path(str(archive) + '.sha256')
+    script = tmp_path / 'install.sh'
+    source = SCRIPT.read_text()
+    # Isolate paths and platform detection; run the real checksum/extraction/dispatch.
+    source = source.replace('root="$HOME/.local/share/AI-Security-Runtime-downloads"',
+                            'root="' + str(tmp_path / 'downloads') + '"')
+    source = source.replace('machine=$(uname -m)', 'machine=x86_64')
+    source = source.replace('"$(/usr/sbin/sysctl -in hw.optional.arm64 2>/dev/null || true)"', '"0"')
+    script.write_text(source)
+    for host in ('codex', 'cursor'):
+        checksum.write_text(hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + archive.name + '\n')
+        result = subprocess.run(['sh', str(script), host, str(payload)], capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        assert marker.read_text().strip() == 'install ' + host
+    marker.unlink()
+    checksum.write_text('0' * 64 + '  ' + archive.name + '\n')
+    result = subprocess.run(['sh', str(script), 'codex', str(payload)], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not marker.exists()
