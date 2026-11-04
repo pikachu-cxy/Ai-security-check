@@ -1,6 +1,6 @@
 # Daily workflow
 
-These instructions describe **0.3.12**. After [verifying installation](./verify.md), work in a chat opened at the actual project root.
+These instructions describe **0.3.13**. After [verifying installation](./verify.md), work in a chat opened at the actual project root.
 
 ## Temporary files and project source
 

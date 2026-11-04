@@ -58,6 +58,26 @@ def verify_host_instructions(instructions: str | None) -> None:
         raise ValueError('Standalone host workflow instructions mismatch')
 
 
+async def verify_global_tool_surfaces(executable: Path, root: Path, env: dict[str, str]) -> dict:
+    """Verify each shipped compact surface through the frozen executable."""
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+    results = {}
+    for host, count in (("codex", 19), ("workbuddy", 15)):
+        environment = dict(env, SECURITY_RUNTIME_GLOBAL="1", SECURITY_RUNTIME_HOST=host,
+                           SECURITY_RUNTIME_WORKSPACE="", SECURITY_RUNTIME_OFFLINE="1")
+        params = StdioServerParameters(command=str(executable), args=["mcp"], cwd=root, env=environment)
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
+            async with stdio_client(params, errlog=stderr) as (read, write):
+                async with ClientSession(read, write) as client:
+                    await asyncio.wait_for(client.initialize(), timeout=30)
+                    names = sorted(tool.name for tool in (await client.list_tools()).tools)
+                    if len(names) != count or not {"development_check", "development_review", "security_task"}.issubset(names):
+                        raise ValueError(f"Unexpected {host} global tool surface: {names}")
+                    results[host] = names
+    return results
+
+
 async def verify_mcp(executable: Path, root: Path, project: Path, env: dict[str, str]) -> list[str]:
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -557,10 +577,12 @@ def main() -> None:
                 cwd=root,env=dict(env,SECURITY_RUNTIME_OFFLINE='1'),timeout=480)
         hook_checks = verify_hook_acceptances(executable, root, env, args.archive,
             hooks=args.hooks, git_pre_commit=args.git_pre_commit, codex_integration=args.codex_integration)
+        global_tools = asyncio.run(verify_global_tool_surfaces(executable, root, env))
         record = {"version": __version__, "source_commit": metadata["source_commit"], "platform": "-".join(platform_key()),
                   "archive_sha256": hashlib.sha256(args.archive.read_bytes()).hexdigest(),
                   "smoke": True, "managed_engines": args.full, "mcp_tools": mcp_tools,
                   "plugin_discovery": args.full, "release_scanner_runs": all_engines if args.full else []}
+        record['global_host_tools'] = global_tools
         record['usage_monitor_disabled'] = 'start_usage_monitor' not in mcp_tools and 'start_risk_dashboard' in mcp_tools
         record['dependency_unavailable_without_fallback']=args.dependency_unavailable
         record['observed_development_without_baseline'] = args.development

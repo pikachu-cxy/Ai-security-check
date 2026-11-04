@@ -4,7 +4,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 # 在 Cursor 中安装与使用
 
-当前正式完整包为 **0.3.12**。接入后，照常在 Cursor 的 Agent 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
+当前正式完整包为 **0.3.13**。接入后，照常在 Cursor 的 Agent 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
 
 ## 1. 安装到这台电脑
 
@@ -12,7 +12,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 ### Windows {#windows}
 
-在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.12 正式完整包**、核验 SHA256、解压并接入 Cursor，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
+在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.13 正式完整包**、核验 SHA256、解压并接入 Cursor，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
 
 ```powershell
 & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
@@ -33,32 +33,24 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 ### macOS {#macos}
 
-在 Mac 的“终端”中执行下面这一条命令。安装器自动识别 **M 系列（Apple Silicon）或 Intel**，下载并校验专用 Python 与产品包，**无需预装 Python、Git、Homebrew 或配置环境变量**。
+在 Mac 的“终端”中执行下面这一条命令。安装器自动识别 **M 系列（Apple Silicon）或 Intel**，下载并校验 0.3.13 原生完整包，**无需预装 Python、Git、Homebrew 或配置环境变量**。
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
 ```
 
-可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)及[脚本 SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256)。文档部署直接同步仓库维护的最新脚本。程序保存在 `~/.local/share/AI-Security-Runtime-macos-trial`，请保留该目录；从任何终端目录都可以运行上面的命令。
+可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh)及[脚本 SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256)。文档部署直接同步仓库维护的最新脚本。程序保存在 `~/.local/share/AI-Security-Runtime-install`，请保留该目录；从任何终端目录都可以运行上面的命令。
 
 <!--@include: ../../.vitepress/snippets/macos-paste.md-->
 
-::: details Mac 当前版本与已有安装
-这条命令使用独立发行 [macos-trial-v0.3.12](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.12)，Runtime 版本为 0.3.12，两种安装方式分别构建，来源提交和构建身份须分别核对。Apple Silicon 和 Intel 的安装、构建身份及重复安装由本次 Mac CI 分别核验；真实用户电脑上的系统策略、Cursor 桌面连接和检查体验仍需实际确认，尚无 Apple Developer ID 签名或公证保证。详见[支持状态](../../reference/support.md#macos-installation)。
+安装入口与手动下载使用同一份 **v0.3.13 正式完整包**，无需另装 Python。已有 Cursor 连接可能更新，请先结束正在运行的检查。当前没有 Apple Developer ID 签名或公证保证，系统策略问题按[支持说明](../../reference/support.md#macos-installation)处理。
 
-已有 Cursor 连接、Skill 和 Hook 可能更新到本次版本。请先结束正在运行的检查任务，安装期间不要同时编辑配置。安装器按现有归属与冲突规则保护其他服务和用户修改。
-
-如需切回原完整包，使用原已验证包重新执行 `install cursor`，再重启 Cursor 并核对实际构建。若原包本来就被系统拒绝，仍可能启动失败，不能仅凭执行过命令就认定已恢复。
-:::
-
-::: details 继续使用 macOS 完整包
-从[完整包下载](../../downloads.md#macos-packages)选择对应芯片的包并核验，完整解压后，在能看到 `security-check` 文件夹的目录执行：
+::: details 手动安装 macOS 完整包（备用）
+从[下载页](../../downloads.md#macos-packages)选择芯片对应的包，核验 SHA256 并完整解压后运行：
 
 ```sh
 ./security-check/security-check install cursor
 ```
-
-完整包与上面的自动安装入口不同，查询时请使用[对应的程序路径](../installation.md#runtime-path)。若出现 Python 动态库被系统策略拒绝，可尝试上面的自动安装方式，保留具体报错。
 :::
 
 ### 希望让助手代为安装？

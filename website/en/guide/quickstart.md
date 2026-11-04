@@ -4,7 +4,7 @@
 OpenGrep selects language rules from the installed pack, alongside bounded native analysis, Gitleaks secrets, and Trivy dependencies. Coverage follows the files and rules actually executed. [View coverage →](../reference/support.md#languages)
 :::
 
-Use the **0.3.12 official release**. Managed macOS installation uses the separate **macos-trial-v0.3.12** release, with Runtime version 0.3.12. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
+Use the **0.3.13 official release**. Automatic macOS installation uses the same v0.3.13 native release as manual downloads. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
 
 ## 1. Choose your editor {#choose-editor}
 
@@ -12,7 +12,7 @@ Use the **0.3.12 official release**. Managed macOS installation uses the separat
 | --- | --- |
 | Codex | [Windows bundle or managed macOS installation](./editors/codex.md) |
 | Cursor | [Windows bundle or managed macOS installation](./editors/cursor.md) |
-| WorkBuddy | [Project-level MCP setup](./editors/workbuddy.md) |
+| WorkBuddy | [Global MCP, Hooks and Skill](./editors/workbuddy.md) |
 | Other clients | [Manual stdio MCP integration](./editors/other.md) |
 
 The Windows bundle includes Python. The managed macOS installer prepares a dedicated Python environment and detects Apple Silicon or Intel. Runtime installation does not require Git; project checks and the demo do.

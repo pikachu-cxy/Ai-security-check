@@ -1,6 +1,6 @@
 # 安装参数、准备与升级
 
-本页适用于 **0.3.12 正式版**，Mac 自动安装对应独立发行 **macos-trial-v0.3.12**。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
+本页适用于 **0.3.13 正式版**，Mac 自动安装与手动下载使用同一份原生完整包。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
 
 Windows 自动安装后，直接复制安装器输出的完整查询命令。下方相对路径示例用于手动完整包；自动安装用户请用输出中的完整程序路径替换 `.\security-check\security-check.exe`（保留前面的 `&`）。升级可重新运行编辑器安装页的自动安装命令。
 
@@ -9,7 +9,7 @@ Windows 自动安装后，直接复制安装器输出的完整查询命令。下
 | 安装方式 | 查询时使用的程序 |
 | --- | --- |
 | Windows 完整包 | 在包的上级目录使用 `.\security-check\security-check.exe` |
-| Mac 按编辑器页自动安装 | 使用 `"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"`，可在任意目录执行 |
+| Mac 按编辑器页自动安装 | 使用 `"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"`，可在任意目录执行 |
 | Mac 手动下载完整包 | 在包的上级目录使用 `./security-check/security-check` |
 
 Mac 的两种安装方式路径不同，不要混用。以下默认展示 Windows 完整包和 Mac 自动安装；手动完整包将 Mac 示例的程序路径换成上表对应路径即可。
@@ -24,7 +24,7 @@ Mac 的两种安装方式路径不同，不要混用。以下默认展示 Window
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" preparation status
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" preparation status
 ```
 :::
 
@@ -40,7 +40,7 @@ Mac 的两种安装方式路径不同，不要混用。以下默认展示 Window
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" runtime-info --json
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" runtime-info --json
 ```
 :::
 
@@ -58,7 +58,7 @@ Codex 用户：
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" status --json
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" status --json
 ```
 :::
 
@@ -70,7 +70,7 @@ Cursor 用户：
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" integration status cursor --scope global --json
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" integration status cursor --scope global --json
 ```
 :::
 
@@ -112,7 +112,7 @@ macOS 使用上表对应程序路径。`--status` 不下载组件。代码、密
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" prepare-scanners
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" prepare-scanners
 ```
 :::
 

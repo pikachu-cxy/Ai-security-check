@@ -34,13 +34,15 @@ def main(*, focused=False) -> None:
                 and verification.get('fix_verify_offline_synthetic') is True)
         focused_ok = (verification.get('usage_monitor_disabled') is True
                       and 'start_usage_monitor' not in verification.get('mcp_tools', [])
-                      and 'start_risk_dashboard' in verification.get('mcp_tools', []))
+                      and 'start_risk_dashboard' in verification.get('mcp_tools', [])
+                      and len(verification.get('global_host_tools', {}).get('codex', [])) == 19
+                      and len(verification.get('global_host_tools', {}).get('workbuddy', [])) == 15)
         if not common or not (focused_ok if focused else full):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}
         lines.append(f"{digest}  {name}")
     (release / "SHA256SUMS.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
-    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "source_commit": source_commit, "validation_scope": "focused-monitor-defaults" if focused else "full", "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
+    (release / "release-manifest.json").write_text(json.dumps({"version": __version__, "source_commit": source_commit, "validation_scope": "focused-artifact-and-host-integration" if focused else "full", "artifacts": artifacts}, indent=2) + "\n", encoding="utf-8")
     print(release / "release-manifest.json")
 
 

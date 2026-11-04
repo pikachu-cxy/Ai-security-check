@@ -37,7 +37,7 @@
 ### 找不到程序或命令
 
 - Windows / Mac 完整包：确认已完整解压，并在能看到 `security-check` 文件夹的目录执行包内命令。
-- Mac 自动安装：终端查询使用 `"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"`，无需进入下载目录，也不要假设已加入 PATH。
+- Mac 自动安装：终端查询使用 `"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"`，无需进入下载目录，也不要假设已加入 PATH。
 
 完整查询示例见[选择程序路径](./installation.md#runtime-path)。Mac 粘贴阶段的系统提醒另见[粘贴提醒排查](../reference/faq.md#macos-paste)。
 

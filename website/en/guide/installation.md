@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.12 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. Managed macOS uses **macos-trial-v0.3.12**. This page covers status queries, component preparation, upgrades, and removal.
+For the **0.3.13 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. This page covers **0.3.13**. Automatic installation and manual downloads use the same native release bundles.
 
 After automatic Windows installation, copy the full status command printed by the installer. Relative-path examples below are for manual bundles; replace `.\security-check\security-check.exe` with the printed full executable path, retaining the `&` invocation operator. To upgrade, rerun the automatic command on your editor setup page.
 
@@ -9,7 +9,7 @@ After automatic Windows installation, copy the full status command printed by th
 | Installation | Executable |
 | --- | --- |
 | Windows full bundle | `.\security-check\security-check.exe` from the bundle's parent directory |
-| Managed macOS installation | `"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"` from any directory |
+| Managed macOS installation | `"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"` from any directory |
 | Manual macOS full bundle | `./security-check/security-check` from the bundle's parent directory |
 
 Do not mix paths from different installation methods. The examples below use the Windows bundle and managed macOS installation.
@@ -23,7 +23,7 @@ The Windows web installer uses version slots under `%LOCALAPPDATA%\ASR`. Older i
 .\security-check\security-check.exe preparation status
 ```
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" preparation status
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" preparation status
 ```
 :::
 
@@ -37,8 +37,8 @@ Replace `status` with `watch` to observe progress. These are optional queries, n
 .\security-check\security-check.exe status --json
 ```
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" runtime-info --json
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" status --json
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" runtime-info --json
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" status --json
 ```
 :::
 
@@ -67,7 +67,7 @@ For manual MCP setup or a specific preparation diagnostic, use:
 .\security-check\security-check.exe prepare-scanners
 ```
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" prepare-scanners
+"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" prepare-scanners
 ```
 :::
 

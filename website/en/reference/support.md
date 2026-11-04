@@ -1,24 +1,24 @@
 # Support and detection coverage
 
-This page describes **0.3.12**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
+This page describes **0.3.13**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
 
 ## Platforms and editors
 
 | Platform / editor | Delivery and scope |
 | --- | --- |
 | Windows x64 | Native bundle with focused Windows regression and package acceptance |
-| macOS Apple Silicon / Intel | Separately built and verified native bundles; managed Python installation is also available |
+| macOS Apple Silicon / Intel | Separately built and verified native bundles; the installer uses the same native bundles |
 | Codex / Cursor | User-level MCP, Skill, and Hooks through `install codex` / `install cursor`; routine Cursor tool allowlist |
-| WorkBuddy | Project-level MCP; no promise of automatic edit observation |
+| WorkBuddy | Global MCP, Hooks and Skill; manual MCP trust required after restart |
 | Other clients | Manual local stdio MCP setup according to the client's supported format |
 
 No Linux full bundle is published. Use the actual local project root. Remote, multi-root, model, desktop-version, and enterprise-policy combinations require their own verification; CI acceptance does not establish them all.
 
 ## macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) offer an architecture-aware installer with dedicated Python and verified downloads. It pins the public `macos-trial-v0.3.12` release. Native bundles use `v0.3.12`. These share a version number but have different build identities; compare each with its own source and checksum.
+[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) provide an architecture-aware installer for the same **v0.3.13** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
 
-See the [managed installation workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml) for both architectures. Real desktop integration, first-download policy, and actual scanner readiness remain separately verifiable. There is no Apple Developer ID signing or notarization guarantee.
+There is no Apple Developer ID signing or notarization guarantee. Real system policy and scanner readiness depend on the target computer. WorkBuddy desktop acceptance was confirmed by the user; CI package and Windows long-path checks are recorded separately.
 
 ## Cursor integration and reconnects
 

@@ -12,7 +12,7 @@ Chat ownership keeps checks and decisions associated with the correct workspace 
 
 ## Why are risk statistics empty?
 
-Select Codex, Cursor, or all editors in 0.3.12. Check the actual build, OS user, filters, and read diagnostics. The page reads saved local records; other devices, accounts, or custom legacy directories are not automatically combined. Cross-editor duplicates remain separate. See [risk statistics](../guide/risk-handling.md).
+Select Codex, Cursor, or all editors in 0.3.13. Check the actual build, OS user, filters, and read diagnostics. The page reads saved local records; other devices, accounts, or custom legacy directories are not automatically combined. Cross-editor duplicates remain separate. See [risk statistics](../guide/risk-handling.md).
 
 ## Installation ended; is the project checked?
 
@@ -36,7 +36,7 @@ See [Apple's guidance](https://support.apple.com/en-us/127377). A launch-time de
 
 ## The executable cannot be found
 
-For full bundles, check that extraction is complete and the terminal is in the parent of `security-check`. For managed macOS setup, use `"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"`; do not assume it was added to PATH. See [program paths](../guide/installation.md#runtime-path).
+For full bundles, check that extraction is complete and the terminal is in the parent of `security-check`. For managed macOS setup, use `"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"`; do not assume it was added to PATH. See [program paths](../guide/installation.md#runtime-path).
 
 ## The check is incomplete or shows zero findings
 

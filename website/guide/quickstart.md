@@ -8,7 +8,7 @@ description: 选择你的编辑器和系统，完成安装、连接验证和第�
 默认使用 OpenGrep 按已安装规则包选择语言规则，配合原生有界分析、Gitleaks 密钥检查和 Trivy 依赖检查。覆盖以本次实际执行的文件与规则为准。 [查看检测范围 →](../reference/support.md#语言覆盖)
 :::
 
-当前使用 **0.3.12 正式版**。让 AI 帮你改代码时，同时查看这次改动里的安全问题；接入后照常提出需求、查看风险，再决定如何处理。Mac 自动安装使用独立发行 `macos-trial-v0.3.12`，Runtime 版本为 0.3.12。
+当前使用 **0.3.13 正式版**。让 AI 帮你改代码时，同时查看这次改动里的安全问题；接入后照常提出需求、查看风险，再决定如何处理。Mac 自动安装与手动下载使用同一份 v0.3.13 原生完整包。
 
 <div class="doc-journey" aria-label="开始使用的四个步骤">
 <span><b>01</b> 选择编辑器</span><span><b>02</b> 按系统安装</span><span><b>03</b> 确认连接与组件</span><span><b>04</b> 做一个小任务</span>
@@ -24,7 +24,8 @@ description: 选择你的编辑器和系统，完成安装、连接验证和第�
 | --- | --- |
 | Codex：Windows 完整包 / Mac 自动安装 | [Codex 安装与使用](./editors/codex.md) |
 | Cursor：Windows 完整包 / Mac 自动安装 | [Cursor 安装与使用](./editors/cursor.md) |
-| WorkBuddy 或其他 MCP 客户端 | 按上方对应页面完成项目级或手动 MCP 配置 |
+| WorkBuddy | 按全局接入指南配置，并在重启后手动信任 MCP |
+| 其他 MCP 客户端 | 按对应页面手动配置 MCP |
 
 ## 2. 选择一种安装方式
 

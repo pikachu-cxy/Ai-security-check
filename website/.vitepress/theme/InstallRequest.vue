@@ -20,10 +20,10 @@ const editors = {
   },
   workbuddy: {
     name: 'WorkBuddy',
-    target: '为当前项目配置 WorkBuddy 的 MCP 连接',
+    target: '配置 WorkBuddy 全局 MCP、Hook 和 Skill',
     page: 'workbuddy',
-    steps: '先确认当前本地 Git 项目的绝对路径，将完整包放在长期保留的位置。准备检查组件，再使用 setup workbuddy --path "<实际项目绝对路径>" 配置该项目的 .workbuddy/mcp.json，合并并保留已有服务。这是项目级 MCP 接入，不包含自动编辑检查；桌面实际调用仍需验证。',
-    note: '粘贴到可在本机执行命令的 WorkBuddy 聊天。请求会按项目配置 MCP，连接后需主动提出检查需求。'
+    steps: '将完整包放在长期保留的短路径中，按指南准备检查组件，执行 setup workbuddy --scope global --json。重启后提示我在 MCP 管理中手动勾选 ai-security-runtime 的服务信任并启用连接；不要代替我勾选。连接后确认 15 个工具，再按指南验收自动检查。',
+    note: '粘贴到可在本机执行命令的 WorkBuddy 聊天。请求会配置全局自动检查；首次连接需要你手动信任 MCP 服务。'
   },
   other: {
     name: '其他 MCP 客户端',
@@ -35,15 +35,15 @@ const editors = {
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
 const installSource = computed(() => ['codex', 'cursor'].includes(editor.value.page)
-  ? '自动识别系统与芯片。Windows 使用本页自动安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1，自动下载并核验官方 v0.3.10 完整包后接入所选编辑器。macOS 按当前编辑器页面使用发行 macos-trial-v0.3.10 的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。Mac 独立发行与原生完整包分别核对构建，真实桌面验收范围以支持页为准，不宣称 Apple 签名或公证已验证。'
-  : '自动识别系统与芯片，选择官方 v0.3.10 正式版完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
+  ? '自动识别系统与芯片。Windows 使用本页自动安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1，自动下载并核验官方 v0.3.13 完整包后接入所选编辑器。macOS 按当前编辑器页面使用同一 v0.3.13 原生完整包的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。按实际加载的 0.3.13 构建核对，真实桌面验收范围以支持页为准，不宣称 Apple 签名或公证已验证。'
+  : '自动识别系统与芯片，选择官方 v0.3.13 正式版完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
 
 const copied = ref(false)
 const copyFailed = ref(false)
 const request = computed(() => `请根据 https://pikachu-cxy.github.io/Ai-security-check/guide/editors/${editor.value.page}.html 的官方安装说明，在当前电脑安装 AI Security Runtime，并${editor.value.target}。
 ${installSource.value}备份并保留现有配置、其他 MCP 服务及用户修改。
 ${editor.value.steps}
-核对组件及漏洞数据状态，仍在后台准备时明确说明；不要自行用源码开发安装替代官方发行或官方试用入口，不关闭系统安全保护或 TLS 校验。遇到 macOS 粘贴保护提示时，让我核对命令与来源并自行决定；检测到恶意软件时停止。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
+核对组件及漏洞数据状态，仍在后台准备时明确说明；不要自行用源码开发安装替代官方发行入口，不关闭系统安全保护或 TLS 校验。遇到 macOS 粘贴保护提示时，让我核对命令与来源并自行决定；检测到恶意软件时停止。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
 安装期间保持当前聊天，完成后核对版本、build_id、组件状态与漏洞库有效期，分别说明安装结果和仍待验证的步骤，并提示我重启${editor.value.name === '其他 MCP 客户端' ? '实际使用的客户端' : editor.value.name}生效。重启后通过实际工具调用确认连接和项目路径；无法确认的部分明确列出。不扫描或修改我的业务项目。`)
 
 watch(editor, () => {

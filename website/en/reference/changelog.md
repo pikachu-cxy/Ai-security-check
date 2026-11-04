@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.13 — 2026-11-05
+
+- Global WorkBuddy MCP, Hooks and Skill with corrected config-directory detection; manually trust the MCP service after restarting.
+- Compact tool surfaces (19 for Codex, 15 for WorkBuddy), faster installation connection checks and scan preparation/OpenGrep invocation.
+- Fix accumulated check scope, result import and duplicate Stop feedback.
+- All three native bundles and website installers now use 0.3.13, including automatic macOS installation.
+- Reuse local tests and user-confirmed WorkBuddy desktop acceptance; CI adds artifact verification and Windows long-path coverage. Published evidence records the actual results.
+
+[Downloads](../downloads.md) · [WorkBuddy guide](../guide/editors/workbuddy.md)
+
+
 ## 2026-11-02 · 0.3.12 refresh
 
 Usage monitoring and its launch tools are disabled by default; monitoring pages have been removed. Risk statistics remain available. This refresh uses focused tests and native package smoke checks.

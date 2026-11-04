@@ -14,7 +14,7 @@
 | --- | --- | --- |
 | Codex | [完整安装](./codex.md) | 主要使用路径 |
 | Cursor | [完整接入](./cursor.md) | Windows / macOS 对应完整包；先在本地单根 Git 工作区验证 |
-| WorkBuddy | [项目级 MCP](./workbuddy.md) | 需在真实桌面确认调用结果 |
+| WorkBuddy | [全局 MCP、Hook、Skill](./workbuddy.md) | 首次连接需手动信任 MCP 服务 |
 | Claude Code、VS Code / Copilot | 通用 MCP 手动配置 | 尚无本产品专用安装器或完整流程验收 |
 | Qoder、CodeBuddy | 通用 MCP 条件下手动尝试 | 尚无已注册的原生编辑事件适配 |
 

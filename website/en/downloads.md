@@ -1,60 +1,47 @@
-# Downloads and installation
+# Downloads
 
-::: info Current detection capabilities
-OpenGrep selects language rules from the installed pack, alongside bounded native analysis, Gitleaks secrets, and Trivy dependencies. Coverage follows the files and rules actually executed. [View coverage →](./reference/support.md#languages)
-:::
+Current release: **0.3.13**. The installers below and manual downloads use the same native bundles; no preinstalled Python is needed.
 
-Current product: **0.3.12 Official release**, published on 2026-11-01. Native full bundles and managed macOS installation have separate release and build identities. Use the matching assets and checksums below.
+## Install by editor {#install}
 
-For Windows x64, use the one-command installer on the [Codex](./guide/editors/codex.md#windows) or [Cursor](./guide/editors/cursor.md#windows) page. The archives below remain available for manual installation.
+[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md) · [WorkBuddy](./guide/editors/workbuddy.md)
 
-## Official 0.3.12 full bundles {#windows}
+WorkBuddy requires manually trusting and enabling `ai-security-runtime` in its MCP management screen after restart.
 
-The [v0.3.12 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.12) has published all three bundles and their companion checksums. They use source commit [v0.3.12](https://github.com/pikachu-cxy/Ai-security-check/tree/v0.3.12).
+## Native bundles {#windows}
 
-| Platform | Full bundle | Checksum |
+| Platform | Download | Checksum |
 | --- | --- | --- |
-| Windows x64 | [Download](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-windows-x64.zip.sha256) |
-| Mac Apple Silicon (M series) | [Download](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-macos-arm64.tar.gz.sha256) |
-| Mac Intel | [Download](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-macos-x64.tar.gz.sha256) |
+| Windows x64 | [zip](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-windows-x64.zip) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-windows-x64.zip.sha256) |
+| Mac Apple Silicon | [tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-macos-arm64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-macos-arm64.tar.gz.sha256) |
+| Mac Intel | [tar.gz](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-macos-x64.tar.gz) | [SHA256](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-macos-x64.tar.gz.sha256) |
 
-Download the archive and its matching checksum from the same release. The full bundles include Python and require no separate Node.js installation.
+Download the archive and matching checksum, verify, then extract and retain the complete `security-check` folder. GitHub “Source code” archives are for source development, not installation.
 
 ```powershell
-Get-FileHash .\ai-security-runtime-v0.3.12-windows-x64.zip -Algorithm SHA256
-Get-Content .\ai-security-runtime-v0.3.12-windows-x64.zip.sha256
+Get-FileHash .\ai-security-runtime-v0.3.13-windows-x64.zip -Algorithm SHA256
+Get-Content .\ai-security-runtime-v0.3.13-windows-x64.zip.sha256
 ```
 
-Compare the hashes, extract the complete archive, and retain the entire `security-check` directory. Run `.\security-check\security-check.exe install codex` (or `install cursor`) from its parent directory.
+## macOS installation {#macos}
 
-## Managed macOS installation
+[Codex](./guide/editors/codex.md#macos) and [Cursor](./guide/editors/cursor.md#macos) provide the current installer command. It detects the chip and downloads the corresponding 0.3.13 bundle.
 
-For Codex or Cursor, use the command on your [editor's setup page](./guide/quickstart.md#choose-editor). The installer detects Apple Silicon or Intel and prepares dedicated Python automatically. No preinstalled Python, Git, or Homebrew is required for installation.
-
-The managed installer uses the separate [macos-trial-v0.3.12 release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.12), with Runtime version 0.3.12. Keep its installation directory and verify its own build identity rather than comparing it to a native bundle's build ID.
-
-## Manual macOS bundles {#macos-packages}
-
-Choose the official archive for your chip from the table above. Download its matching `.sha256` file and verify before extracting. For a 0.3.12 Apple Silicon bundle:
+### Manual macOS packages {#macos-packages}
 
 ```sh
-shasum -a 256 -c ai-security-runtime-v0.3.12-macos-arm64.tar.gz.sha256
+# Apple Silicon
+shasum -a 256 -c ai-security-runtime-v0.3.13-macos-arm64.tar.gz.sha256
+tar -xzf ai-security-runtime-v0.3.13-macos-arm64.tar.gz
+./security-check/security-check install codex
 ```
 
-Use `macos-x64` for Intel. After verification, extract the archive and run `./security-check/security-check install codex` or `./security-check/security-check install cursor` from the extraction directory. Preserve the directory and executable permissions. Manual bundles and managed installation use different program paths. There is no Apple Developer ID signing or notarization guarantee; see [macOS troubleshooting](./reference/faq.md#macos-paste).
+Choose `macos-x64` on Intel; replace `codex` with `cursor` for Cursor. WorkBuddy uses its [global setup instructions](./guide/editors/workbuddy.md).
 
-## After installation
+## Source and acceptance {#build-details}
 
-Restart the editor, [verify the real connection](./guide/verify.md), and try the [isolated demo](./guide/demo.md). Matching checksums establishes content consistency, not that a project has passed a security check.
+This release reuses completed local regressions and user-confirmed WorkBuddy desktop acceptance. CI validates the three new native bundles, compact MCP surfaces, and Windows-only long-path setup; it does not repeat the full local suite. Read the published evidence for actual results.
 
-## Build and acceptance evidence {#build-details}
+[Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.13) · [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/SHA256SUMS.txt) · [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/release-manifest.json) · [Evidence ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13/ai-security-runtime-v0.3.13-release-evidence.zip)
 
-The [0.3.12 release run](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/release.yml) completed focused Windows/macOS regressions for the current changes, compliance, package-integrity, and native acceptance on all three platforms. It did not rerun the complete development suite. Read the matching `release-manifest.json` and `SHA256SUMS.txt` for source and artifact identities; do not use earlier candidate-build records.
-
-The [managed macOS workflow](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml) separately validates installation and build identity on both architectures. Isolated CI acceptance does not replace real desktop, first-download, signing, or scanner validation. See [support boundaries](./reference/support.md).
-
-[SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/SHA256SUMS.txt) · [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/release-manifest.json) · [Acceptance evidence ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-release-evidence.zip)
-
-## Configuration in this release
-
-See [custom configuration](./guide/configuration.md) for capacities, agent analysis, Stop fallback, rules, and vulnerability data.
+[Support boundaries](./reference/support.md) · [Changelog](./reference/changelog.md)

@@ -1,6 +1,6 @@
 # 自定义配置
 
-从 0.3.12 起，可在一份用户配置中调整开发记录容量、Agent 分析、Stop 兜底、大项目扫描限制、扫描规则与漏洞数据。未填写的字段使用默认值，升级不会覆盖已有用户配置。
+从 0.3.13 起，可在一份用户配置中调整开发记录容量、Agent 分析、Stop 兜底、大项目扫描限制、扫描规则与漏洞数据。未填写的字段使用默认值，升级不会覆盖已有用户配置。
 
 ## 1. 找到配置文件
 
@@ -14,7 +14,7 @@
 先运行 `security-check development-config`，查看实际路径、来源和有效值。Mac 自动安装用户可直接执行：
 
 ```sh
-RUNTIME="$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"
+RUNTIME="$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"
 "$RUNTIME" development-config
 mkdir -p "$HOME/.config/ai-security-runtime"
 ```

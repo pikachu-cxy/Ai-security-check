@@ -2,11 +2,11 @@
 
 Full integration configures the user-level MCP connection, companion Skill, edit-event Hooks, and the routine-tool allowlist, then starts scanner preparation. Installation does not scan or modify your project. Start with a local, single-root Git workspace; remote and multi-root workflows are not listed as validated.
 
-Current official native bundles: **0.3.12**.
+Current official native bundles: **0.3.13**.
 
 ## Windows {#windows}
 
-Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.12 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
+Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.13 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
 
 ```powershell
 & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
@@ -33,9 +33,9 @@ Run in Terminal:
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
 ```
 
-[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) and its [SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256). Documentation deployment copies the maintained repository script directly. It detects Apple Silicon or Intel and prepares dedicated Python without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-macos-trial`.
+[Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh) and its [SHA256](https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh.sha256). Documentation deployment copies the maintained repository script directly. It detects Apple Silicon or Intel and uses the 0.3.13 native full bundle without requiring Python, Git, or Homebrew to be preinstalled. Keep `~/.local/share/AI-Security-Runtime-install`.
 
-This uses the separate `macos-trial-v0.3.12` / Runtime 0.3.12 release. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
+This uses the same `v0.3.13` native bundle as manual downloads. Existing product-owned Cursor settings may be updated. Finish active checks and avoid concurrent configuration edits. See [macOS validation boundaries](../../reference/support.md#macos-installation) and [paste warnings](../../reference/faq.md#macos-paste).
 
 For a verified [manual native bundle](../../downloads.md#macos-packages), run `./security-check/security-check install cursor` from its parent directory. To switch back, reinstall from the original verified bundle, restart Cursor, and verify the build. Signing, notarization, and real desktop operation require separate validation.
 
@@ -61,7 +61,7 @@ Whether routine tool calls need confirmation still depends on Cursor's mode and 
 
 ## Reconnect and read saved results
 
-Keep the original check reference and read it and its dispositions after reconnecting in the same chat, without rescanning. Hooks provide session ownership; users do not enter credentials and agents must not invent them. Default scans cover recorded files; related business logic is reviewed by the agent as needed. The managed macOS release and native 0.3.12 bundles have separate build identities.
+Keep the original check reference and read it and its dispositions after reconnecting in the same chat, without rescanning. Hooks provide session ownership; users do not enter credentials and agents must not invent them. Default scans cover recorded files; related business logic is reviewed by the agent as needed. Installation and manual downloads use the same 0.3.13 native artifacts.
 
 ## CLI and optional analysis
 

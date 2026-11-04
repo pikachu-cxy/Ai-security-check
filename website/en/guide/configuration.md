@@ -1,6 +1,6 @@
 # Custom configuration
 
-Version 0.3.12 introduces one user-owned TOML file for capacities, agent analysis, Stop fallback, scan rules and vulnerability data. Omitted fields keep their defaults. Upgrades preserve your file.
+Version 0.3.13 introduces one user-owned TOML file for capacities, agent analysis, Stop fallback, scan rules and vulnerability data. Omitted fields keep their defaults. Upgrades preserve your file.
 
 ## Locate, edit and verify
 
@@ -14,7 +14,7 @@ Version 0.3.12 introduces one user-owned TOML file for capacities, agent analysi
 Run `security-check development-config` to see the actual path, source and values. For managed macOS installation:
 
 ```sh
-RUNTIME="$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"
+RUNTIME="$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"
 "$RUNTIME" development-config
 mkdir -p "$HOME/.config/ai-security-runtime"
 ```
