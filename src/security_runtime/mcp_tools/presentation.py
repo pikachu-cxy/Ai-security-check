@@ -154,6 +154,7 @@ def _agent_result(result, *, summary=False) -> dict:
                      if not summary else []),
         "recommendation": value['release_status'],
         "duration_ms": value['duration_ms'],
+        "duration_ms_scope": "BEFORE_FINALIZATION",
         "scanner_runs": [run if isinstance(run, dict) else vars(run) if summary else asdict(run)
                          for run in value['scanner_runs']],
         "target_selection": selection_summary(value['target_profile']),

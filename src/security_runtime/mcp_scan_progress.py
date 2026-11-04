@@ -78,10 +78,13 @@ def scan_timing(result, request_timing, *, reused=False):
     stages = diagnostics.get('timing_ms', {})
     measured = {key: value for key, value in stages.items()
                 if key in {'workspace_discovery', 'target_preparation', 'rule_planning',
+                    'target_selection', 'rule_pack_resolution', 'source_input_capture',
                     'reuse_proof_prepare', 'reuse_proof_seal', 'scanner_orchestration',
-                    'result_normalization_policy', 'state_persistence', 'total'}
+                    'rule_input_capture', 'rule_input_binding', 'final_input_validation',
+                    'result_normalization_policy', 'state_persistence', 'result_publication', 'total'}
                 and type(value) in {int, float} and value >= 0}
     return dict(request_timing, scan_ms=0 if reused else measured.get('total', duration),
+        scan_ms_scope='REUSED' if reused else 'RUNTIME_THROUGH_PUBLICATION' if 'total' in measured else 'BEFORE_FINALIZATION',
         scan_stages_ms={} if reused else measured,
         historical_scan_ms=diagnostics.get('result_reuse', {}).get('original_duration_ms', duration) if reused else None,
         reused=reused)

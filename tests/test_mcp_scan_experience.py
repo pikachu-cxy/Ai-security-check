@@ -76,7 +76,7 @@ def test_both_global_hosts_route_the_same_selected_file_scan(selection, host):
     child = create_server(runtime, hook_coordinator=HookCoordinator(runtime, hooks), global_mode=False)
     context = ProgressContext()
     child.get_context = lambda: context
-    pool = SimpleNamespace(host=host, root=lambda value: root,
+    pool = SimpleNamespace(host=host, task_audit_mode=True, root=lambda value, allow_empty=False: root,
         validate_layers=lambda value: None, admit=lambda value: (child, object()))
     server = create_global_server(workspaces=pool, host=host)
     out = structured(asyncio.run(server.call_tool('scan_files', dict(

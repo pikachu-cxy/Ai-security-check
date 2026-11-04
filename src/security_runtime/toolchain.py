@@ -1,6 +1,8 @@
 """Pinned, per-user scanner tool lifecycle. No system installation is changed."""
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import hashlib
 from datetime import datetime, timezone
 import importlib.metadata
@@ -188,7 +190,11 @@ def tool_environment(executable: Path) -> dict[str, str]:
     """
     env = network_environment() if sys.platform == 'darwin' else dict(os.environ)
     env["PATH"] = str(executable.resolve().parent) + os.pathsep + env.get("PATH", "")
-    for name in ("PYTHONHOME", "PYTHONPATH"):
+    # Host invocation IDs, timing destinations and this frozen application's
+    # bootloader state do not belong to independently launched engines.
+    for name in ("PYTHONHOME", "PYTHONPATH", "SECURITY_RUNTIME_PERF_DIR", "SECURITY_RUNTIME_PERF_RUN",
+                 "CODEX_TOOL_CALL_ID", "_PYI_ARCHIVE_FILE", "_PYI_APPLICATION_HOME_DIR",
+                 "_PYI_PARENT_PROCESS_LEVEL", "_PYI_LINUX_PROCESS_NAME"):
         env.pop(name, None)
     if getattr(sys, "frozen", False):
         for name in ("LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"):
@@ -239,6 +245,7 @@ class OfficialReleaseProvider:
                  error_code=diagnostic.error_code, source=diagnostic.source)
             raise DiagnosticError(diagnostic) from None
 
+    @timed("component.download")
     def _download(self, manifest: ToolManifest, destination: Path) -> None:
         if not manifest.download_url.startswith("https://github.com/"):
             raise ValueError("Only pinned official HTTPS release assets are accepted")
@@ -328,7 +335,7 @@ class ToolManager:
         self._database_lock = threading.RLock()
         self._engine_locks = {tool_id: threading.RLock() for tool_id in VERSIONS}
         self._lock_guard = threading.Lock()
-        self._version_cache = {}  # Process-local successful probes only, <=16.
+        self._version_cache = {}  # In-memory front cache of successful probes, <=16.
         self._version_cache_lock = threading.RLock()
         self._probe_diagnostics = {}
         self.versions = dict(VERSIONS)
@@ -544,8 +551,11 @@ class ToolManager:
             return content_identity(tuple(roots))
         return None
 
+    @timed("component.version")
     def _version(self, tool_id: str, path: Path) -> str:
         from .scanner_cache import preparation_bucket
+        from .preparation_cache import PreparationCache
+        persistent = PreparationCache(self.root)
         bucket = preparation_bucket('version:' + tool_id, os.path.normcase(str(self.root.resolve())))
         self._version_cache = bucket.values
         self._version_cache_lock = bucket.lock
@@ -561,8 +571,13 @@ class ToolManager:
             record_probe(tool_id, key)
             with bucket.lock:
                 cached = bucket.values.get(key) if key is not None else None
+            if cached is None and key is not None:
+                cached = persistent.get('version-probe', key)
             if cached is not None:
                 cache_observed('version_probe', True)
+                if len(bucket.values) >= 16:
+                    bucket.values.pop(next(iter(bucket.values)))
+                bucket.values[key] = cached
                 return cached
             cache_observed('version_probe', False)
             output = self._probe_version(tool_id, path)
@@ -576,8 +591,10 @@ class ToolManager:
                         if len(bucket.values) >= 16:
                             bucket.values.pop(next(iter(bucket.values)))
                         bucket.values[key] = output
+                    persistent.put('version-probe', key, output)
             return output
 
+    @timed("component.version_process")
     def _probe_version(self, tool_id: str, path: Path, *, initial_install=False) -> str:
         from .component_health import diagnosis
         key = (tool_id, str(path))
@@ -637,6 +654,7 @@ class ToolManager:
             self._probe_diagnostics[key] = diagnosis(code)
             return ""
 
+    @timed("component.integrity")
     def _check(self, tool_id: str, path: Path, source: ToolSource) -> ResolvedTool:
         path = path.expanduser().resolve()
         if not path.is_file():
@@ -749,6 +767,7 @@ class ToolManager:
             return ResolvedTool(tool_id, "", "", None, ToolStatus.UNSUPPORTED_PLATFORM)
         return ResolvedTool(tool_id, "", "", None, ToolStatus.MISSING)
 
+    @timed("component.ensure")
     def ensure(self, tool_id: str, *, offline: bool | None = None, reinstall=False) -> ResolvedTool:
         checkpoint()
         emit('ENGINE_PREPARING', scanner=tool_id, scanner_version=self.versions.get(tool_id, ''))
@@ -1067,6 +1086,7 @@ class ToolManager:
             shutil.rmtree(final, ignore_errors=True)
             raise
 
+    @timed("component.database")
     def prepare_trivy_database(self, binary: str, *, offline: bool | None = None, force=False, validate_database=None) -> ToolStatus:
         checkpoint()
         from .scan_preferences import section

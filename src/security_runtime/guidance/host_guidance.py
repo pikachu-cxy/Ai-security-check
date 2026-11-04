@@ -377,7 +377,7 @@ INLINE_PREPARED、AUTO_FIX、CONFIRM_REQUIRED、原生风险和取消意图分�
 显式检查优先使用 summary=true 的单次扫描入口并消费其返回摘要；没有必要先读摘要再立即重扫。
 单文件或明确选择的文件使用 scan_files，files 传用户指定的工作区相对文件，workspace_path 保持项目根目录；不能静默扩大成整项目扫描。
 
-异步显式扫描（explicit-scan-job-v1）优先入口：当工具提供 start_scan 时，使用 start_scan(request_key=<本次请求稳定标识>, mode=project|files|quick|feature, workspace_path=...)。同一次请求断线或超时后必须沿用原 request_key，不能新建请求或改换范围；force_rescan 也不绕过同键去重。返回 job_ref 后只调用 get_scan_status，再以 get_scan_result 读取原扫描结果；引用丢失时用 list_scan_jobs 找回。查询和结果读取不启动、重试或重新验证扫描。独立工作进程继续运行不依赖客户端；进程崩溃显示 INTERRUPTED，不自动重扫。扫描版本在工作进程开始时捕获，历史结果不证明最新源码安全。旧 scan_project/scan_files/scan_diff 保留为同步兼容接口，新显式检查优先异步入口。
+异步显式扫描（explicit-scan-job-v1）优先入口：当工具提供 start_scan 时，使用 start_scan(request_key=<本次请求稳定标识>, mode=project|files|quick|feature, workspace_path=...)。同一次请求断线或超时后必须沿用原 request_key，不能新建请求或改换范围；force_rescan 也不绕过同键去重。返回 job_ref 后遵循 next_action；接口支持 wait_seconds 时，优先 get_scan_result(wait_seconds=20) 在一次调用内等待并读取原结果，超时沿原 job_ref 续等，不先反复查询状态。旧接口无此参数时使用 get_scan_status，再以 get_scan_result 读取结果。引用丢失时用 list_scan_jobs 找回。查询和结果读取不启动、重试或重新验证扫描。报告完整后台耗时使用 timing.total_ms（含启动、扫描、最终校验、保存和清理），duration_ms 是收尾前的扫描耗时，不能当作完整等待；旧记录无完整计时则明确未知。宿主回复时间单独说明，不能归入扫描器耗时。独立工作进程继续运行不依赖客户端；进程崩溃显示 INTERRUPTED，不自动重扫。扫描版本在工作进程开始时捕获，历史结果不证明最新源码安全。旧 scan_project/scan_files/scan_diff 保留为同步兼容接口，新显式检查优先异步入口。
 
 同步兼容接口中，整个项目使用 scan_project，只检查改动使用 scan_diff。整项目重新扫描/强制重扫在 scan_project 传 force_rescan=true；
 scan_files 和 scan_diff 每次按其范围执行，不传该参数。
@@ -517,8 +517,10 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 此为 Agent 行为规则，不是进程沙箱；具体用法见 development-check 的“开发 Agent 临时文件规则”。
 编辑 Hook 只记录路径，不扫描或唤醒后台进程；开发收尾时合并静态检查。保存结果绑定实际输入版本，范围未知不扩为全项目扫描。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
-先核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；按版本、sha256 复用已读完整方法，
-不重复加载已读的同版本主题，缺失才取 get_runtime_guidance(topic)。构建或摘要变化时重新核对。
+普通开发直接使用已连接工具和随安装交付的 core、development-check 方法，不调用 get_runtime_info 作为开发前置步骤；
+安装/升级负责交付校验，连接负责提供实际工具。新聊天也不重复安装校验；缺少方法才取 get_runtime_guidance(topic)。
+显式审计、版本查询或连接异常排查时，核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；
+按版本、sha256 复用已读完整方法，构建或摘要变化时重新核对。不把安装校验当作当前扫描结果。
 入口不可用时只复用同一构建/版本/摘要的完整本地 reference；无法核对则停止对应核查并说明缺口。
 指导不升级 Runtime；核查不可用不改变用户原开发授权。
 
@@ -580,7 +582,7 @@ get_development_check 只读保存结果。已有本会话 Hook 的 check_ref �
 ''' + '\n\n' + RESPONSE_STYLE_RULES
 
 
-def runtime_info(*, remediation_config=None, include_functional_verification=False):
+def runtime_info(*, remediation_config=None, include_functional_verification=False, include_rule_inventory=True):
     from ..remediation_policy import RemediationConfig
     from ..hook_timing import ExecutionTrigger
     config = remediation_config if remediation_config is not None else RemediationConfig()
@@ -598,10 +600,12 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
     from ..professional_guidance import delivery_contract
     from .guidance_catalog import manifest as guidance_manifest
     from ..snapshot_contract import development_capabilities
-    try:
-        inventory = installed_inventory(RulePackManager().resolve())
-    except (ValueError, OSError):
-        inventory = {'status':'UNAVAILABLE', 'execution_proof':False}
+    inventory = {'status': 'NOT_REQUESTED', 'execution_proof': False}
+    if include_rule_inventory:
+        try:
+            inventory = installed_inventory(RulePackManager().resolve())
+        except (ValueError, OSError):
+            inventory = {'status':'UNAVAILABLE', 'execution_proof':False}
     from ..user_config import describe_config
     info = {'version': __version__, 'capability_contract': 'developer-guidance-v0.3',
             'build_identity': build_identity(),
@@ -633,7 +637,7 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'fixed_scan_artifacts': 'fixed-scan-artifact-v1; EXACT_ROOT_INPUT_PROVIDER_AND_MODE; COVERAGE_GAPS_PRESERVED; NO_REVIEW_OR_AUTHORITY_REUSE',
                          'task_risk_reporting': 'task-risk-report-v1; EXISTING_INTRODUCED_EXPANDED_UNKNOWN; STABLE_REPORT_ID; AUTOMATIC_HOST_FINAL_ACK_UNSUPPORTED',
                          'scan_progress': 'MCP_PROGRESS_TOKEN_OPTIONAL; SHARED_RUNTIME_PHASES',
-                         'explicit_scan_jobs': 'explicit-scan-job-v1; DETACHED_WORKER; IDEMPOTENT_REQUEST_KEY; READ_ONLY_PROGRESS_AND_RESULT; NO_AUTOMATIC_RESCAN',
+                         'explicit_scan_jobs': 'explicit-scan-job-v1; DETACHED_WORKER; IDEMPOTENT_REQUEST_KEY; READ_ONLY_PROGRESS_AND_RESULT; NO_AUTOMATIC_RESCAN; RESULT_WAIT_0_25_SECONDS; SAVED_JOB_TOTAL_TIMING',
                          'scan_timing': 'mcp-scan-timing-v1; HOST_TIME_UNKNOWN; HISTORICAL_TIME_SEPARATE',
                          'security_review_skill': 'v1',
                          'runtime_guidance': 'runtime-guidance-v1; FIXED_TOPICS; VERSION_SHA256_REUSE; NO_RUNTIME_AUTHORITY',

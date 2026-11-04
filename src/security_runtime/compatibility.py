@@ -40,7 +40,8 @@ def task_review_compatibility(info, tools=None):
     build_id = build.get('build_id') if isinstance(build, dict) else None
     if not isinstance(build_id, str) or not re.fullmatch(r'[a-f0-9]{64}', build_id):
         reasons.append('RUNTIME_BUILD_UNVERIFIED')
-    missing = sorted(TASK_REVIEW_TOOLS-set(tools)) if tools is not None else None
+    from .mcp_tool_groups import available_operations
+    missing = sorted(TASK_REVIEW_TOOLS-available_operations(info, tools)) if tools is not None else None
     if missing:
         reasons.append('TASK_REVIEW_TOOLS_MISSING')
     if tools is None:
@@ -54,6 +55,12 @@ def task_review_compatibility(info, tools=None):
 
 def tool_requirements(name):
     """Declarative adapter metadata, never a grant or substitute for service guards."""
+    from .mcp_tool_groups import GROUPS
+    if name in GROUPS:
+        members = [tool_requirements(operation) for operation in GROUPS[name]]
+        return dict(workflow='GROUPED_OPERATIONS',
+            required_features=sorted({feature for member in members for feature in member['required_features']}),
+            guard='; '.join(sorted({member['guard'] for member in members})))
     if name in DEVELOPMENT_CHECK_TOOLS:
         return dict(workflow='DEVELOPMENT_CHECK', required_features=[DEVELOPMENT_CHECK],
                     guard='OWNER_SCOPED_OBSERVED_PATHS; NO_PROJECT_BASELINE; SAVED_VERSION_ONLY')

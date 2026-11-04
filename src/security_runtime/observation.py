@@ -101,7 +101,7 @@ def _update(callback):
 def bind_chat(owner):
     """Copy a previously verified owner; never grant authority here."""
     def update(capture):
-        if (type(owner) is not dict or owner.get('host') not in {'codex', 'cursor', 'workbuddy'}
+        if (type(owner) is not dict or owner.get('host') not in {'codex', 'cursor'}
                 or type(owner.get('session')) is not str
                 or not _DIGEST.fullmatch(owner['session'])):
             return
@@ -122,7 +122,7 @@ def bind_chat(owner):
 def bind_host(host, session_binding, invocation_binding=None, turn_binding=None):
     """The Hook's triggering tool is distinct from its carrying MCP call."""
     def update(capture):
-        if capture.chat_conflict or host not in {'codex', 'cursor', 'workbuddy'}:
+        if capture.chat_conflict or host not in {'codex', 'cursor'}:
             return
         values = (session_binding, invocation_binding, turn_binding)
         if (type(session_binding) is not str or not _DIGEST.fullmatch(session_binding)

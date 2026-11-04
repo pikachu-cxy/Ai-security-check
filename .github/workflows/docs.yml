@@ -31,7 +31,7 @@ jobs:
     if: (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') && (github.event_name != 'push' || !contains(github.event.head_commit.message, '[release-v'))
     runs-on: ubuntu-latest
     outputs:
-      release_ready: ${{ steps.release-assets.outputs.ready }}
+      trial_ready: ${{ steps.trial-assets.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,10 +51,17 @@ jobs:
           cp distribution/macos/install.sh website/.vitepress/dist/install/macos.sh
           (cd website/.vitepress/dist/install && sha256sum macos.sh > macos.sh.sha256)
       - name: Check that all documented downloads are public
-        id: release-assets
+        id: trial-assets
         run: |
+          base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/macos-trial-v0.3.12
           native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12
           ready=true
+          for platform in macos-arm64 macos-x64; do
+            for suffix in .tar.gz .tar.gz.sha256; do
+              curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
+                "$base/ai-security-runtime-macos-trial-$platform$suffix" >/dev/null || ready=false
+            done
+          done
           for archive in windows-x64.zip macos-arm64.tar.gz macos-x64.tar.gz; do
             for suffix in '' .sha256; do
               curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
@@ -63,14 +70,14 @@ jobs:
           done
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
           if [ "$ready" != true ]; then
-            echo 'Documented release assets are not all public yet. Request docs deployment after the official release publishes.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Documented release assets are not all public yet. Request docs deployment after both releases publish.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/.vitepress/dist
 
   deploy:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feature/runtime-mvp' && needs.build.outputs.release_ready == 'true'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/feature/runtime-mvp' && needs.build.outputs.trial_ready == 'true'
     needs: build
     runs-on: ubuntu-latest
     permissions:

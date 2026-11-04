@@ -108,7 +108,7 @@ _BASE_PHASES = frozenset({LifecyclePhase.SESSION_OPEN,
 _PROFILES = {
     ('workbuddy', 'automatic'): ConnectorProfile('workbuddy', 'automatic', True,
         _BASE_PHASES | {LifecyclePhase.BEFORE_MUTATION, LifecyclePhase.CONTEXT_DELIVERY,
-                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT, invocation_id=True),
+                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT),
     ('codex', 'product'): ConnectorProfile('codex', 'product', False,
         _BASE_PHASES | {LifecyclePhase.CONTEXT_DELIVERY, LifecyclePhase.TASK_CLOSEOUT},
         StopIntent.APPROVED_REPAIR, invocation_id=True, setup_seed=True,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import json
 import importlib.metadata
 import logging
@@ -42,7 +44,6 @@ from .scanner_observation import observation, metadata, span, count, add_time, i
 MAX_OUTPUT = 4_000_000
 logger = logging.getLogger(__name__)
 _trivy_inventory = ContextVar('trivy_inventory', default=None)
-_sast_batch_limit = ContextVar('sast_batch_limit', default=40)
 _executing_engine = ContextVar('executing_scanner_engine', default=None)
 _executing_environment = ContextVar('executing_scanner_environment', default=None)
 
@@ -53,16 +54,6 @@ def execution_environment(binary):
     return dict(captured) if captured is not None else tool_environment(Path(binary))
 
 
-@contextmanager
-def baseline_sast_batches(enabled):
-    """Reduce baseline engine startups without changing normal edit batches."""
-    token = _sast_batch_limit.set(128 if enabled else 40)
-    try:
-        yield
-    finally:
-        _sast_batch_limit.reset(token)
-
-
 def sast_batches(files):
     # Reserve space for the executable, options/config and Windows' quoting.
     # Count UTF-16 units; non-ASCII paths are not an unlimited argv budget.
@@ -71,7 +62,7 @@ def sast_batches(files):
         cost = len(subprocess.list2cmdline([name]).encode('utf-16-le')) // 2 + 1
         if cost > 16_000:
             raise ValueError('SAST target argument budget exceeded')
-        if batch and (len(batch) >= _sast_batch_limit.get() or units + cost > 16_000):
+        if batch and units + cost > 16_000:
             yield tuple(batch)
             batch, units = [], 0
         batch.append(name)
@@ -131,6 +122,7 @@ def _execution_limit(key):
     return section('scan', 'execution')[key]
 
 
+@timed("scanner.process")
 def _execute(args: list[str], cwd: str, timeout: int) -> ProcessResult:
     with external_tool_loader():
         environment = execution_environment(args[0])
@@ -368,9 +360,10 @@ class PatternSASTScanner(BaseScanner):
             self._config_cache = bucket.values.setdefault('configs', {})
             self._planning_lock = bucket.lock
 
+    @timed("scan.rule_plan")
     def plan_rules(self, profile, context):
         if context.input_view is not None and context.bound_rule_pack is None:
-            raise ValueError('Fixed rule input is unavailable')
+            raise ValueError('Resolved rule pack is unavailable')
         from .scanner_cache import workspace_scope
         self._bind_preparations()
         started = time.perf_counter()
@@ -418,6 +411,41 @@ class PatternSASTScanner(BaseScanner):
             'relative_targets':[sanitize(name,300) for name in plan.files[:20]], 'scanner_results_reused':False}
         return findings,run
 
+    def prepare_config(self, rule_pack, rules, workspace):
+        """Prepare execution syntax only; never read targets or execute a scan."""
+        from .preparation_cache import PreparationCache
+        self._bind_preparations()
+        selected_ids = {r.rule_id for r in rules}
+        key = ('json-v1', os.path.normcase(str(Path(workspace).resolve())),
+               rule_pack.descriptor, rule_pack.checksum, tuple(sorted(selected_ids)))
+        cache = PreparationCache()
+        with self._planning_lock:
+            config_text = self._config_cache.get(key)
+            if config_text is None:
+                config_text = cache.get('selected-config', key)
+            cache_observed('selected_config', config_text is not None)
+            if config_text is None:
+                definitions = []
+                from .rulepacks import execution_rule
+                for relative in sorted({r.path for r in rules}):
+                    definitions.extend(rule for original in yaml.safe_load(native_io_path(rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
+                        for rule in [execution_rule(original, relative, rule_pack.descriptor)] if rule['id'] in selected_ids)
+                # The CLI reads JSON directly, avoiding its costly YAML span
+                # construction. Keep the same rules and engine validation.
+                try:
+                    config_text = json.dumps({'rules': definitions}, ensure_ascii=False, separators=(',', ':'))
+                except TypeError:
+                    # Preserve custom YAML-only values, such as date metadata.
+                    config_text = yaml.safe_dump({'rules': definitions}, sort_keys=False)
+                cache.put('selected-config', key, config_text)
+            config_bytes = len(config_text.encode())
+            if key not in self._config_cache and config_bytes <= 16_000_000:
+                while self._config_cache and (len(self._config_cache) >= 16 or
+                        sum(len(value.encode()) for value in self._config_cache.values()) + config_bytes > 16_000_000):
+                    self._config_cache.pop(next(iter(self._config_cache)))
+                self._config_cache[key] = config_text
+            return config_text
+
     def _scan(self, binary: str, context: ScanContext, n: FindingNormalizer) -> list[Finding]:
         self._bind_preparations()
         plan=context.rule_plan
@@ -426,30 +454,7 @@ class PatternSASTScanner(BaseScanner):
         constant_suppressed=[]
         vue_budget={'files':0,'bytes':0}
         with span('rule_config_preparation'):
-            current=(self.rule_packs.bind_input(rule_pack, rule_pack.path) if context.bound_rule_pack
-                else self.rule_packs.resolve(user_path=Path(context.rules_path) if context.rules_path else None))
-            if (current.path,current.checksum,current.descriptor)!=(rule_pack.path,rule_pack.checksum,rule_pack.descriptor):
-                raise ValueError('Rule pack changed after planning')
-        with span('rule_config_preparation'):
-            selected_ids={r.rule_id for r in plan.rules}
-            key=(os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
-                 rule_pack.descriptor,rule_pack.checksum,tuple(sorted(selected_ids)))
-            with self._planning_lock:
-                hit=key in self._config_cache
-                cache_observed('selected_config',hit)
-                if not hit:
-                    definitions=[]
-                    from .rulepacks import execution_rule
-                    for relative in sorted({r.path for r in plan.rules}):
-                        definitions.extend(rule for original in yaml.safe_load(native_io_path(rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
-                            for rule in [execution_rule(original,relative,rule_pack.descriptor)] if rule['id'] in selected_ids)
-                    config_text=yaml.safe_dump({'rules':definitions},sort_keys=False)
-                    if len(config_text.encode())<=1_000_000:
-                        if len(self._config_cache) >= 16:
-                            self._config_cache.pop(next(iter(self._config_cache)))
-                        self._config_cache[key]=config_text
-                else:
-                    config_text=self._config_cache[key]
+            config_text = self.prepare_config(rule_pack, plan.rules, context.logical_root or context.root)
         findings=[]
         # Shadow paths cannot preserve custom rule include/exclude semantics.
         # Fail closed for Vue instead of silently widening or losing that scope.
@@ -691,6 +696,8 @@ class GitleaksAdapter(BaseScanner):
         found=[]
         # Capability metadata must never disable the independent Secret engine.
         # No Gitleaks rules/config/allowlists are replaced by the Rule Program.
+        if not data:
+            return found
         try:
             program = RulePackManager().resolve().program
         except (ValueError, OSError):

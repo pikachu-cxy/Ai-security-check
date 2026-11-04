@@ -66,7 +66,7 @@ def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
 
 def global_runtime_info(*, tools=None, host=None):
     from .guidance.host_guidance import runtime_info
-    info = runtime_info()
+    info = runtime_info(include_rule_inventory=os.getenv('SECURITY_RUNTIME_MCP_SELF_TEST') != '1')
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1',
                         'readonly_workspace_binding_status': 'workspace-binding-status-v1; NO_ADMISSION; ROUTING_DIAGNOSTICS',
                         'product_epoch_status': 'product-epoch-status-v1; READ_ONLY; NO_ADMISSION; HASH_ONLY; OBSERVED_ONLY'}
@@ -75,6 +75,9 @@ def global_runtime_info(*, tools=None, host=None):
     if host is not None:
         info['host_connector'] = host
     if tools is not None:
+        if host == 'codex':
+            from .mcp_tool_groups import describe_groups
+            describe_groups(info)
         from .delivery_manifest import delivery_manifest
         info['delivery_manifest'] = delivery_manifest(info, tools)
     return info
@@ -94,7 +97,7 @@ class GlobalWorkspaces:
         no_links(self.base)
         if integration is None:
             if host == 'workbuddy':
-                from .workbuddy_connector import WorkBuddyConnectorInstallation
+                from .workbuddy_integration import WorkBuddyConnectorInstallation
                 integration = WorkBuddyConnectorInstallation()
             elif host == 'cursor':
                 from .cursor_connector import CursorConnectorInstallation
@@ -567,15 +570,11 @@ def create_global_server(*, workspaces=None, host='codex'):
     if active_host == 'cursor':
         from .host_connectors import CURSOR_INSTRUCTIONS
         registry.add_instructions(CURSOR_INSTRUCTIONS)
-    elif active_host == 'workbuddy':
-        registry.add_instructions('\nWorkBuddy native command Hooks supply an owner-bound session_ref. '
-            'Reuse that exact ref and the current absolute workspace_path for all project calls. '
-            'SessionStart may omit cwd; post-tool context supplies the credential once the workspace is bound. '
-            'Edits are recorded by Hooks; before the normal summary finish the existing development check, '
-            'wait for its results and complete required reviews. Stop continuation reuses that check, '
-            'never creates another scan or authorizes repairs. Ordinary read-only work starts no check.')
+    from .mcp_tool_groups import GROUPS, compact_tools, instructions
+    if active_host in {'codex', 'workbuddy'}:
+        registry.add_instructions(instructions())
 
-    async def listed():
+    def operation_tools():
         from mcp.types import Tool
         result = []
         for tool in infos.values():
@@ -597,13 +596,23 @@ def create_global_server(*, workspaces=None, host='codex'):
                                outputSchema=tool.output_schema, annotations=tool.annotations))
         return result
 
-    schemas = None
+    # Tool schemas are fixed for this connection; do not rebuild them per call.
+    operations = operation_tools()
+    discovery = compact_tools(operations) if active_host in {'codex', 'workbuddy'} else operations
+    schemas = {tool.name: tool.inputSchema for tool in operations}
+    validators = {name: Draft202012Validator(schema) for name, schema in schemas.items()}
+    # Validate the envelope here; original operation validation supplies the
+    # existing field-level/recoverable diagnostics for the inner arguments.
+    group_validators = {tool.name: Draft202012Validator({key: value for key, value in tool.inputSchema.items()
+                        if key not in {'oneOf', '$defs'}})
+                        for tool in discovery if tool.name in GROUPS}
+
+    async def listed():
+        return discovery
+
     host_adapter = CodexEventAdapter()
 
     async def call(name, arguments):
-        nonlocal schemas
-        if schemas is None:
-            schemas = {t.name: t.inputSchema for t in await listed()}
         # Shared strict raw-model checks precede SDK parsing and workspace admission.
         data = raw_input_failure(name, arguments, require_workspace=True)
         if data is not None:
@@ -613,7 +622,7 @@ def create_global_server(*, workspaces=None, host='codex'):
         claim_diag = (host_adapter.validate_claims(arguments, EVENTS[name], schemas[name])
                       if name in HOOKS and name in schemas else None)
         if (name not in schemas or not isinstance(arguments, dict)
-                or not Draft202012Validator(schemas[name]).is_valid(arguments)
+                or not validators[name].is_valid(arguments)
                 or claim_diag is not None and claim_diag['host_claim_status'] != 'VALID'):
             if name == 'submit_task_security_review':
                 from .task_review.contract import task_review_input_failure
@@ -1115,7 +1124,21 @@ def create_global_server(*, workspaces=None, host='codex'):
     call = instrument(call, schemas={name: tool.parameters for name, tool in infos.items()},
                       resolve_root=lambda arguments: pool.root(arguments.get('workspace_path'))
                       if isinstance(arguments, dict) else None)
-    registry.install_router(listed, call)
+    operation_call = call
+
+    async def grouped_call(name, arguments):
+        if name in group_validators:
+            if not group_validators[name].is_valid(arguments):
+                data = dict(status='INCONCLUSIVE', reason_code='TOOL_GROUP_INPUT_INVALID',
+                            scanner_run=False, source_modified=False)
+                return CallToolResult(isError=True, structuredContent=data,
+                    content=[TextContent(type='text', text=json.dumps(data))])
+            name, arguments = arguments['operation'], arguments['arguments']
+        return await operation_call(name, arguments)
+
+    registry.install_router(listed, grouped_call)
     registry.close_with(lambda: pool.close())
     registry.observe_context_cost()
+    from .performance_trace import observe_mcp
+    observe_mcp(registry)
     return server

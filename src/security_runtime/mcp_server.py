@@ -308,6 +308,8 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     elif binding is not None:
         from .development_scheduler import supervise
         supervise(hook_coordinator.store, Path(binding.root))
+    from .performance_trace import observe_mcp
+    observe_mcp(registry)
     return server
 
 

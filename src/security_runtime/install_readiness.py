@@ -5,6 +5,8 @@ dependencies. A present vulnerability database is not proof that it is current.
 """
 from __future__ import annotations
 
+from .performance_trace import timed
+
 from contextlib import contextmanager
 from dataclasses import replace
 import json
@@ -314,6 +316,7 @@ def _receipt(tools, database, failures, *, offline):
         'failures': failures}
 
 
+@timed("install.readiness")
 def prepare_installation_readiness(*, progress=None, manager=None, offline=False,
                                    timeout_seconds=300, retries=0, idle_seconds=30,
                                    adaptive=False, max_wait_seconds=None):
@@ -413,14 +416,15 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
         except Exception as exc:
             _failure(failures, 'INSTALL_DATA', 'vulnerability_db', exc)
 
-    # Verify what is available now. A downloader may return READY after retaining
+    # Offline checks performed no installation: reuse this call's observations.
+    # Verify online changes. A downloader may return READY after retaining
     # an expired previous database, so its return code is deliberately not proof.
     _report(progress, 'VERIFY_SCAN_READINESS')
     for name in CORE_TOOLS:
         try:
             checkpoint()
             budget = current_budget()
-            current = resolved[name] if budget and budget.remaining() <= 0 else manager.resolve(name)
+            current = resolved[name] if offline or (budget and budget.remaining() <= 0) else manager.resolve(name)
         except ScanCancelled:
             raise
         except Exception as exc:
@@ -441,7 +445,8 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
             # just because the final read-only verification found no binary.
             current = replace(current, diagnostic=previous.diagnostic)
         tools[name] = _component(current, tools[name]['expected_version'], name)
-    database = _database(manager, failures, 'VERIFY_SCAN_READINESS')
+    if not offline:
+        database = _database(manager, failures, 'VERIFY_SCAN_READINESS')
     return _receipt(tools, database, failures, offline=offline)
 
 

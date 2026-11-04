@@ -13,6 +13,7 @@ from .hook_user_feedback import scan_status_feedback
 from .hooks import HookEvent
 from .mcp_config import resolve_runtime_command
 from .workspace import WorkspaceResolver
+from .host_tool_events import validate_context
 
 MARKER = 'AI Security Runtime [hook-v1]'
 COMMAND_MARKER = 'ai-security-runtime-hook-v1'
@@ -57,19 +58,7 @@ class CodexHookAdapter:
         session = self.validate_context(payload, workspace)
         return event,session
 
-    @staticmethod
-    def validate_context(payload, workspace):
-        """Shared cwd/session validation, including connected PreToolUse."""
-        cwd = payload.get('cwd')
-        if not isinstance(cwd,str) or WorkspaceResolver().resolve(
-                cwd, allow_non_git_explicit=True, allow_non_git_source=True).path != workspace:
-            raise ValueError('Host event does not belong to configured workspace')
-        session = payload.get('session_id')
-        if not isinstance(session,str) or not session or len(session)>500:
-            raise ValueError('Invalid host session identity')
-        # Ignore transcript_path, tool_input/response, model and assistant text.
-        # None is source data for commands, metadata state or model prompts.
-        return session
+    validate_context = staticmethod(validate_context)
 
     def config(self,workspace):
         handler = {'type':'command','command':command(workspace,self.host,'host-event'),

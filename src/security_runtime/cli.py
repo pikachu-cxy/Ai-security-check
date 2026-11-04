@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import argparse
 import json
 import os
@@ -146,6 +148,7 @@ def render(result, *, verbose=False) -> str:
     return render_scan(result, verbose=verbose)
 
 
+@timed("runtime.cli")
 def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     # Windows redirected streams may otherwise use cp1252/cp936. MCP JSON and
     # CLI status symbols are UTF-8 on every delivery format.
@@ -251,7 +254,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
     install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
-    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor', 'workbuddy'], default='codex')
+    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
     install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
     install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
@@ -317,7 +320,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 help='Explicitly approve backup/removal of the diagnosed same-name MCP subtree; never approve unknown Hooks or invalid ownership')
     lifecycle_parser = sub.add_parser('integration', help='Manage owned project Codex connection and readiness')
     lifecycle_parser.add_argument('action', choices=['status', 'repair', 'remove'])
-    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor', 'workbuddy'])
+    lifecycle_parser.add_argument('integration', choices=['codex', 'cursor'])
     lifecycle_parser.add_argument('--scope', choices=['global', 'project'], default='project')
     lifecycle_parser.add_argument('--path')
     lifecycle_parser.add_argument('--json', action='store_true')
@@ -371,19 +374,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         parsed_argv = parsed_argv[:split]
     args = parser.parse_args(parsed_argv)
     if args.command == 'workbuddy-hook':
-        from .workbuddy_hook import main as workbuddy_hook_main
-        return workbuddy_hook_main()
-    if ((args.command == 'setup' and args.integration == 'workbuddy' and args.scope != 'project')
-            or (args.command == 'integration' and args.integration == 'workbuddy' and args.scope == 'global')):
-        from .workbuddy_connector import WorkBuddyConnectorInstallation, setup_personal_workbuddy
-        try:
-            integration = WorkBuddyConnectorInstallation(allow_dev=getattr(args, 'dev', False))
-            data = (setup_personal_workbuddy(integration, args.path) if args.command == 'setup'
-                    else integration.execute(args.action, args.path))
-        except (ValueError, OSError, KeyError, TypeError):
-            data = dict(integration='workbuddy', overall='BROKEN', diagnostics=['WORKBUDDY_CONFIGURATION_CONFLICT'])
-        print(json.dumps(data, ensure_ascii=True) if args.json else 'AI Security Runtime / WorkBuddy\n'+data['overall'])
-        return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
+        from .workbuddy_hook import main as workbuddy_main
+        return workbuddy_main()
+    if args.command == 'setup' and args.integration == 'workbuddy' and args.scope == 'global':
+        from .workbuddy_integration import WorkBuddyConnectorInstallation
+        result = WorkBuddyConnectorInstallation().setup()
+        print(json.dumps(result, ensure_ascii=True))
+        return 0
     if args.command == 'cursor-hook':
         from .cursor_hook import main as cursor_hook_main
         return cursor_hook_main(automatic=args.automatic)
@@ -492,7 +489,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 from .personal_install import install_personal_codex
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
-                    host_kwargs = {'_host': args.integration} if args.integration in {'cursor', 'workbuddy'} else {}
+                    host_kwargs = {'_host': 'cursor'} if args.integration == 'cursor' else {}
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
                         allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
@@ -504,6 +501,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
                 ready = data['installation'].get('local_files_ready') is True
                 progress.finish(ready, scan_ready=data['installation'].get('scan_ready') is True)
+            if not args.json and not ready:
+                print('[诊断] ' + ', '.join(data.get('diagnostics', [])), file=sys.stderr)
             print(json.dumps(data, ensure_ascii=True) if args.json else data['installation']['message'])
             return 0 if ready else 2
         if args.command == 'delivery':

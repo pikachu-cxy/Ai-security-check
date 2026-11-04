@@ -55,6 +55,15 @@ def test_fixed_topics_match_generated_and_installed_bytes(tmp_path):
         assert result['authority']==dict(guidance_is_not_authorization=True,repair_authorized=False,scanner_proof=False)
 
 
+def test_development_has_no_version_query_prerequisite():
+    from security_runtime.guidance.mcp_guidance import MCP_INSTRUCTIONS
+    method = guidance_catalog.get_runtime_guidance('development-check')['content']
+    for content in (HOST_INSTRUCTIONS, MCP_INSTRUCTIONS):
+        assert '不调用 get_runtime_info 作为开发前置步骤' in content
+    assert '不以 get_runtime_info 为前置调用' in method
+    assert '新任务或新聊天重复安装校验' in method
+
+
 def test_quiet_development_and_requested_security_reports_have_distinct_guidance():
     files = skill_files()
     core = files['SKILL.md'].decode('utf-8')

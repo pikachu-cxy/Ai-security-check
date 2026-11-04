@@ -86,6 +86,40 @@ def test_begin_and_empty_finish_never_capture_source_or_scan(check, monkeypatch)
     assert not (service.hooks.workspace_directory(root)/'security-tasks.db').exists()
 
 
+def test_next_edit_replaces_completed_scope_but_keeps_saved_results(check, monkeypatch):
+    root, service, _, state = check
+    (root/'next.ts').write_text('export const next = 1;\n')
+    ref = service.begin(root, 'batches')['check_ref']
+    for name in ('app.ts', 'next.ts', 'app.ts'):
+        edited = service.record(root, ref, [name])
+        assert edited['scope']['paths'] == [name]
+        assert execute(check, monkeypatch) == 0
+    assert state['inputs'] == [('app.ts',), ('next.ts',), ('app.ts',)]
+    assert service.saved_result(root, ref, 1)['delivery']['scope']['paths'] == ['app.ts']
+    assert service.saved_result(root, ref, 2)['delivery']['scope']['paths'] == ['next.ts']
+    assert service.get(root, ref)['dirty_seq'] == service.get(root, ref)['scanned_seq'] == 3
+
+
+def test_capacity_gap_is_reported_and_completed_batch_releases_space(check, monkeypatch):
+    from security_runtime import development_check
+    root, service, _, _ = check
+    (root/'new.ts').write_text('export const value = 1;\n')
+    monkeypatch.setattr(development_check, 'MAX_PATH_BYTES', len('app.ts'))
+    ref = service.begin(root, 'capacity')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    overflow = service.record(root, ref, ['new.ts'])
+    assert overflow['scope']['paths'] == ['app.ts']
+    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' in overflow['gaps']
+    assert execute(check, monkeypatch) == 0
+    saved = service.saved_result(root, ref, 2)
+    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' in saved['result']['gaps']
+    current = service.record(root, ref, ['new.ts'])
+    assert current['scope']['paths'] == ['new.ts']
+    assert not current['scope']['scope_unknown']
+    assert execute(check, monkeypatch) == 0
+    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' not in service.get(root, ref)['gaps']
+
+
 def test_hook_auto_check_adopt_replay_and_finish_then_edit(check):
     root, service, runtime, state = check
     def hook(event, paths=('app.ts',)):
@@ -109,6 +143,9 @@ def test_hook_auto_check_adopt_replay_and_finish_then_edit(check):
 
 def test_burst_merges_paths_and_checks_only_observed_scope(check, monkeypatch):
     root, service, runtime, state = check
+    config = root.parent/'review-config.toml'
+    config.write_text('[agent]\naudit_business_logic = true\n')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(config))
     ref = service.begin(root, 'burst')['check_ref']
     launches = []
     service.launcher = lambda *args: launches.append(args)
@@ -130,6 +167,8 @@ def test_burst_merges_paths_and_checks_only_observed_scope(check, monkeypatch):
     assert result['scope']['full_project'] is False
     assert result['host_review_completed'] is False
     assert result['execution']['publication'] == 'COMMITTED'
+    assert result['execution']['timing']['request_ms'] >= result['execution']['timing']['scan_ms']
+    assert result['static_result']['duration_ms_scope'] == 'BEFORE_FINALIZATION'
     assert result['static_result']['findings_access']['arguments']['scan_id'] == result['scan_id']
 
 

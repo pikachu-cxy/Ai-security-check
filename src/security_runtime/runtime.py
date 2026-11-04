@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from .performance_trace import timed
 from .scan_preferences import configured
 
 import time
@@ -106,6 +108,7 @@ class SecurityRuntime:
                 emit('SCAN_CANCELLED')
                 raise
 
+    @timed("scan.total")
     def _scan(self, repository_path, mode, staged, rules_path, request=None, observer=None, attempt=None):
         start = time.monotonic()
         observed_start = time.perf_counter()
@@ -196,8 +199,9 @@ class SecurityRuntime:
         expected_absent = request.absent_files if request is not None else ()
         if not set(expected_absent).issubset(absent):
             raise ScanInputError('SCAN_INPUT_ABSENCE_CHANGED')
+        observed['timing_ms']['target_selection'] = milliseconds(stage_start)
+        rules_started = time.perf_counter()
         rule_pack = None
-        rule_manager = None
         rule_root = Path(rules_path) if rules_path else None
         bindings = list(request.bindings if request is not None else ())
         for adapter in self.registry.adapters:
@@ -215,7 +219,7 @@ class SecurityRuntime:
                 candidate_pack = adapter.rule_packs.resolve(user_path=Path(rules_path) if rules_path else None)
                 if rule_pack is not None and candidate_pack != rule_pack:
                     raise ScanInputError('SCAN_INPUT_RULE_PACK_MISMATCH')
-                rule_pack, rule_manager = candidate_pack, adapter.rule_packs
+                rule_pack = candidate_pack
                 rule_root = rule_pack.path
             except ScanInputError:
                 raise
@@ -229,6 +233,7 @@ class SecurityRuntime:
                 raise ScanInputError('SCAN_INPUT_BINDING_CHANGED')
             if actual not in bindings:
                 bindings.append(actual)
+        observed['timing_ms']['rule_pack_resolution'] = milliseconds(rules_started)
         fixed_request = ScanRequest(workspace.path, scan_mode,
             SourceKind.INDEX if staged else SourceKind.WORKTREE, targets, context_files,
             absent, changed_dependencies if scan_mode != ScanMode.RELEASE else None,
@@ -243,14 +248,16 @@ class SecurityRuntime:
         key = self.store.evidence_key() if hasattr(self.store, 'evidence_key') else None
         initial_changed_lines = (git.changed_lines(list(targets), scan_mode, staged=staged)
             if git and scan_mode != ScanMode.RELEASE and request is None else {})
-        # Resolve source-dependent routing before copying deferred rule packs.
+        # Capture source inputs only; rules are read from the resolved pack.
         source_request = replace(fixed_request, rules_path=None)
+        capture_started = time.perf_counter()
         with capture_scan_input(source_request, git=git, identity_key=key,
                                 source_root=getattr(attempt, 'source_root', None),
                                 inventory_reader=inventory_reader,
                                 private_parent=attempt.private_parent if attempt is not None else None,
                                 on_created=attempt.input_created if attempt is not None else None,
                                 on_removed=attempt.input_removed if attempt is not None else None) as view:
+            observed['timing_ms']['source_input_capture'] = milliseconds(capture_started)
             root = view.execution_root
             profile = TargetDetector().detect(root, list(fixed_request.source_paths), select_scan_targets=True)
             profile.skipped_files = sorted([*profile.skipped_files, *skipped], key=lambda row: row['path'])
@@ -293,19 +300,14 @@ class SecurityRuntime:
                     execution = SecurityRuntime(registry, self.store)
             selected_rule_provider = any(isinstance(adapter, PatternSASTScanner) and adapter.supports(profile, context)
                 for adapter in execution.registry.adapters)
-            capture_rules = rule_root is not None and (selected_rule_provider or bool(rules_path))
-            with (view.with_rules(rule_root) if capture_rules else nullcontext(view)) as final_view:
-                bound_pack = (rule_manager.bind_input(rule_pack, final_view.rules_path)
-                    if rule_pack is not None and selected_rule_provider else None)
-                final_context = replace(context, input_view=final_view, bound_rule_pack=bound_pack,
-                    rules_path=str(final_view.rules_path) if final_view.rules_path else None)
-                if observed.get('code_selection'):
-                    observed['code_selection']['input_id'] = final_view.input_id
-                if attempt is not None:
-                    attempt.input_ready(final_view)
-                return execution._execute_scan(workspace, final_context, profile, changed_lines, observer,
-                    source_context, final_view, start, observed_start, observed, attempt)
+            final_context = replace(context, bound_rule_pack=rule_pack if selected_rule_provider else None,
+                rules_path=str(rule_root) if rule_root is not None else None)
+            if attempt is not None:
+                attempt.input_ready(view)
+            return execution._execute_scan(workspace, final_context, profile, changed_lines, observer,
+                source_context, view, start, observed_start, observed, attempt)
 
+    @timed("scan.execute")
     def _execute_scan(self, workspace, context, profile, changed_lines, hook_observer,
                       source_context, view, start, observed_start, observed, attempt=None):
         root = view.execution_root
@@ -548,6 +550,7 @@ class SecurityRuntime:
         source_context['execution_bindings'] = {run.scanner: run.scanner_diagnostics['execution_binding']
             for run in runs if 'execution_binding' in run.scanner_diagnostics}
         from .scan_freshness import complete as complete_context
+        finalization_started = time.perf_counter()
         view.assert_intact()
         if attempt is not None:
             source_context['execution_attempt'] = attempt.receipt
@@ -556,6 +559,7 @@ class SecurityRuntime:
             applicability=attempt.applicability(view) if attempt is not None else None)
         from .finding_scope_snapshot import capture_scopes
         result.source_scopes = capture_scopes(root, [asdict(finding) for finding in findings])
+        observed['timing_ms']['final_input_validation'] = milliseconds(finalization_started)
         historical_comparison = (getattr(attempt, 'original_task_comparison', False)
             and result.scan_context['fixed_input']['applicability'] == 'HISTORICAL')
         if result.scan_context['fixed_input']['applicability'] != 'CURRENT' and not historical_comparison:
@@ -586,6 +590,8 @@ class SecurityRuntime:
             except (ValueError, OSError, KeyError, TypeError, AttributeError, RuntimeError):
                 artifact_identity = None
         self.store.save(result)
+        observed['timing_ms']['state_persistence'] = milliseconds(stage_start)
+        stage_start = time.perf_counter()
         if artifact_store is not None and artifact_identity is not None:
             try:
                 artifact_store.save_result(artifact_identity, result, view)
@@ -593,7 +599,7 @@ class SecurityRuntime:
                 pass  # Optional reuse failure never discards fresh scanner facts.
         if attempt is not None:
             attempt.after_scan(view, result)
-        observed['timing_ms']['state_persistence'] = milliseconds(stage_start)
+        observed['timing_ms']['result_publication'] = milliseconds(stage_start)
         observed['timing_ms']['total'] = milliseconds(observed_start)
         emit('SCAN_COMPLETED', duration_ms=result.duration_ms, finding_count=len(result.findings))
         logger.info("scan_completed", extra={"scan_id": result.scan_id, "mode": result.mode, "duration_ms": result.duration_ms})

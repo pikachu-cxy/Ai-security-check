@@ -95,11 +95,13 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
     if not isinstance(info, dict) or info.get('version') != __version__:
         raise IntegrationDiagnostic('RUNTIME_STALE')
     features = info.get('features', {})
+    from .mcp_tool_groups import available_operations
+    tools = available_operations(info, tools)
     if (info.get('capability_contract') != CONTRACT or not isinstance(features, dict)
         or any(features.get(k) != 'v0.1' for k in ('smart_auto_remediation', 'confirmation_handoff'))
         or features.get('cold_start_readiness') != 'v0.3'
         or not REQUIRED_TOOLS.issubset(tools)
-        or not REQUIRED_GUIDANCE_TOOLS.issubset(set(info.get('required_guidance_tools', [])))):
+        or not REQUIRED_GUIDANCE_TOOLS.issubset(available_operations(info, info.get('required_guidance_tools', [])))):
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
     from .compatibility import task_review_compatibility
     compatibility = task_review_compatibility(info, tools)
@@ -109,7 +111,7 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
             'capability_contract': CONTRACT, 'mode': info.get('remediation', {}).get('mode', 'UNKNOWN')}
 
 
-def probe_runtime(runtime: dict, root: Path, env: dict, *, timeout=30, mcp_timeout=20) -> dict:
+def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
     """Only our own executable is probed, never an arbitrary config command."""
     command = [runtime['command'], *runtime['prefix']]
     # Global first-install/status probes may precede creating validated Codex
@@ -120,26 +122,25 @@ def probe_runtime(runtime: dict, root: Path, env: dict, *, timeout=30, mcp_timeo
     probe_cwd = Path(runtime['command']).absolute().parent if missing_global_home else root
     if not probe_cwd.is_dir():
         raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
-    try:
-        result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=timeout, max_output=65536)
-    except FileNotFoundError:
-        raise IntegrationDiagnostic('RUNTIME_MISSING') from None
-    except PermissionError:
-        raise IntegrationDiagnostic('RUNTIME_LAUNCH_PERMISSION_DENIED') from None
-    except TimeoutError:
-        raise IntegrationDiagnostic('RUNTIME_PROBE_TIMEOUT') from None
-    except (ValueError, OSError):
-        raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
-    if result.returncode != 0:
-        raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
-    try:
-        info = json.loads(result.stdout)
-    except (ValueError, TypeError):
-        raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
-    if env.get('SECURITY_RUNTIME_GLOBAL') == '1' and (not isinstance(info, dict)
-        or not isinstance(info.get('features'), dict)
-        or info['features'].get('global_runtime_integration') != 'v0.1'):
-        raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
+    global_mode = env.get('SECURITY_RUNTIME_GLOBAL') == '1'
+    info = None
+    if not global_mode:
+        try:
+            result = run_process([*command, 'runtime-info', '--json'], cwd=probe_cwd, env=env, timeout=120, max_output=65536)
+        except FileNotFoundError:
+            raise IntegrationDiagnostic('RUNTIME_MISSING') from None
+        except PermissionError:
+            raise IntegrationDiagnostic('RUNTIME_LAUNCH_PERMISSION_DENIED') from None
+        except TimeoutError:
+            raise IntegrationDiagnostic('RUNTIME_PROBE_TIMEOUT') from None
+        except (ValueError, OSError):
+            raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
+        if result.returncode != 0:
+            raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
+        try:
+            info = json.loads(result.stdout)
+        except (ValueError, TypeError):
+            raise IntegrationDiagnostic('CAPABILITY_MISMATCH') from None
 
     async def discover():
         from mcp import ClientSession, StdioServerParameters
@@ -148,24 +149,33 @@ def probe_runtime(runtime: dict, root: Path, env: dict, *, timeout=30, mcp_timeo
         with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as errors:
             params = StdioServerParameters(command=runtime['command'], args=[*runtime['prefix'], 'mcp'], env=env, cwd=str(probe_cwd))
             async with stdio_client(params, errlog=errors) as (reader, writer):
-                async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=mcp_timeout)) as session:
+                async with ClientSession(reader, writer, read_timeout_seconds=timedelta(seconds=120)) as session:
                     await session.initialize()
                     tools = (await session.list_tools()).tools
-                    if env.get('SECURITY_RUNTIME_GLOBAL') == '1':
+                    data = None
+                    if global_mode:
+                        from .mcp_tool_groups import operation_schemas
+                        schemas = operation_schemas(tools)
                         result = await session.call_tool('get_runtime_info', {})
                         data = result.structuredContent or json.loads(result.content[0].text)
-                        data = data.get('result', data)
-                        if (result.isError or data.get('integration_scope') != 'GLOBAL'
+                        data = data.get('result', data) if isinstance(data, dict) else None
+                        if (result.isError or not isinstance(data, dict)
+                            or not isinstance(data.get('features'), dict)
+                            or data.get('integration_scope') != 'GLOBAL'
                             or data.get('features', {}).get('global_runtime_integration') != 'v0.1'
-                            or not any(t.name == 'get_findings' and 'workspace_path' in t.inputSchema.get('properties', {}) for t in tools)):
+                            or 'workspace_path' not in schemas.get('get_findings', {}).get('properties', {})):
                             raise IntegrationDiagnostic('CAPABILITY_MISMATCH')
-                    return {t.name for t in tools}
+                    return {t.name for t in tools}, data
     try:
-        tools = asyncio.run(asyncio.wait_for(discover(), timeout=timeout))
+        tools, mcp_info = asyncio.run(asyncio.wait_for(discover(), timeout=180))
     except Exception as exc:
         def failure(error):
             if isinstance(error, IntegrationDiagnostic):
                 return error.code
+            if isinstance(error, FileNotFoundError):
+                return 'RUNTIME_MISSING'
+            if isinstance(error, PermissionError):
+                return 'RUNTIME_LAUNCH_PERMISSION_DENIED'
             if isinstance(error, TimeoutError):
                 return 'MCP_PROBE_TIMEOUT'
             if isinstance(error, BaseExceptionGroup):
@@ -175,7 +185,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict, *, timeout=30, mcp_timeo
                         return code
             return None
         raise IntegrationDiagnostic(failure(exc) or 'MCP_PROBE_FAILED') from None
-    return check_capabilities(info, tools)
+    return check_capabilities(mcp_info if global_mode else info, tools)
 
 
 def product_hooks() -> dict:

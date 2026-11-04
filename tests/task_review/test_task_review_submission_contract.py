@@ -68,8 +68,9 @@ def test_local_and_global_discovery_publish_closed_candidate_and_evidence_types(
     local = create_server(global_mode=False)
     # Discovery and malformed requests must not need an admitted workspace.
     global_server = create_global_server(workspaces=object())
-    global_tool = next(tool for tool in asyncio.run(global_server.list_tools()) if tool.name == TOOL)
-    for schema in (local._tool_manager.get_tool(TOOL).parameters, global_tool.inputSchema):
+    from security_runtime.mcp_tool_groups import operation_schemas
+    global_schema = operation_schemas(asyncio.run(global_server.list_tools()))[TOOL]
+    for schema in (local._tool_manager.get_tool(TOOL).parameters, global_schema):
         assert schema['additionalProperties'] is False
         findings = schema['properties']['findings']
         assert findings['type'] == 'array' and findings['maxItems'] == 10
@@ -87,7 +88,7 @@ def test_local_and_global_discovery_publish_closed_candidate_and_evidence_types(
         for optional in ('risk_scope', 'task_evidence', 'current_protections'):
             assert optional not in item['required']
             assert 'default' not in properties[optional]
-    assert 'workspace_path' in global_tool.inputSchema['required']
+    assert 'workspace_path' in global_schema['required']
 
 
 def test_omitted_optional_fields_and_legacy_candidate_identity_are_preserved():

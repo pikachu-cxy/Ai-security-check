@@ -201,6 +201,9 @@ def test_fully_current_offline_cache_is_ready():
     assert not any(call[0] in {'ensure', 'prepare_trivy_database'} for call in manager.calls)
     assert_valid(receipt)
 
+    assert [call for call in manager.calls if call[0] == 'resolve'] == [('resolve', name) for name in CORE_TOOLS]
+    assert manager.calls.count(('database_status',)) == 1
+
 
 def test_all_tools_missing_and_no_database_are_unavailable_offline():
     manager = Manager(freshness='MISSING', missing=CORE_TOOLS)

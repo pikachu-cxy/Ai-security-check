@@ -19,6 +19,7 @@ from .scan_request import relative_path
 from .tasks.durable import SignedRecords
 from .tasks.ownership import ownership_error, valid_owner
 from .user_config import analysis_requirements
+from .performance_trace import timed, span
 
 CONTRACT = 'observed-development-check-v1'
 REF = re.compile(r'dc1-[a-f0-9]{32}')
@@ -200,14 +201,19 @@ class DevelopmentCheckStore(SignedRecords):
                 return row, False
         if not paths and not unknown:
             return self._put(db, row['check_ref'], row), False
-        selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
-        protected = sorted(set(row.get('explicit_paths', [])) | (set(paths) if explicit else set()))
         if row.get('finish_requested') and row['dirty_seq'] <= row['scanned_seq']:
-            from .user_config import read_config
             from .scan_preferences import snapshot
-            row = dict(row, effective_config=snapshot())
+            # The saved scan/outbox owns the previous batch's scope. Keep it
+            # available for review until a real edit starts the next batch.
+            # Never reset an in-flight batch: its newer edits still need checking.
+            row = dict(row, effective_config=snapshot(), observed_paths=[],
+                explicit_paths=[], observed_directories=[], scope_unknown=False,
+                scope_capacity_exceeded=False)
+        selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
+        protected = sorted((set(row.get('explicit_paths', [])) | (set(paths) if explicit else set())) & set(selected))
         row = dict(row, observed_paths=selected, explicit_paths=protected,
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
+            scope_capacity_exceeded=bool(row.get('scope_capacity_exceeded') or overflow),
             dirty_seq=row['dirty_seq']+1, updated_at=self.now(), last_event_at=self.now(),
             events=([*row['events'], event_id][-MAX_EVENTS:] if event_id else row['events']),
             state='DIRTY', reason_code=None, finish_requested=False,
@@ -246,6 +252,8 @@ def projection(store, row):
             state, reason = 'INTERRUPTED', 'DEVELOPMENT_WORKER_INTERRUPTED'
     result = row.get('result') or {}
     gaps = []
+    if row.get('scope_capacity_exceeded'):
+        gaps.append('OBSERVED_PATH_CAPACITY_EXCEEDED')
     if row['observed_paths'] and row['dirty_seq'] > row['scanned_seq']:
         gaps.append('OBSERVED_EDITS_PENDING')
     gaps.extend(result.get('gaps', []))
@@ -305,6 +313,12 @@ class DevelopmentCheckService:
     def store(self, root):
         return DevelopmentCheckStore(self.hooks, root, now=self.now)
 
+    def _prewarm(self, root, paths=()):
+        # Trusted embeddings with their own launcher retain their own lifecycle.
+        if self.launcher is None:
+            from .scan_prewarm import start
+            start(root, paths)
+
     def scan_path(self):
         from .storage import SQLiteStore
         value = self.scan_path_provider() if callable(self.scan_path_provider) else self.scan_path_provider
@@ -360,6 +374,7 @@ class DevelopmentCheckService:
         if previous and previous['check_ref'] != row['check_ref']:
             from .development_file_watch import stop_window
             stop_window(store, previous['check_ref'], self.owner)
+        self._prewarm(store.root)
         return projection(store, row)
 
     def record(self, root, check_ref, paths, *, scope_unknown=False, event_id=None):
@@ -370,6 +385,7 @@ class DevelopmentCheckService:
         store.load(check_ref, self.owner)
         with store.transaction() as db:
             row, changed = store.append(db, note_activity(store._get(db, check_ref)), names, scope_unknown, event_id)
+        self._prewarm(store.root, names)
         return projection(store, store.load(check_ref, self.owner))
 
     def declare_outputs(self, root, check_ref, directories):
@@ -389,12 +405,15 @@ class DevelopmentCheckService:
                 store._put(db, check_ref, row)
         return projection(store, store.load(check_ref, self.owner))
 
+    @timed('check.finish')
     def finish(self, root, check_ref):
+        new_submission = False
         total_budget = product_total_wait_seconds()
         store = self.store(root)
         store.load(check_ref, self.owner)
         from .development_file_watch import stop_window
-        stop_window(store, check_ref, self.owner)
+        with span('check.watch_drain'):
+            stop_window(store, check_ref, self.owner)
         with store.transaction() as db:
             row = store._get(db, check_ref)
             selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
@@ -412,10 +431,14 @@ class DevelopmentCheckService:
                     row.get('failed_seq') != row['dirty_seq'] and (state != 'RUNNING' or not running)):
                 state = 'QUEUED'
             if state in {'QUEUED', 'RUNNING'} and row.get('wait_seq') != row['dirty_seq']:
+                new_submission = True
                 row.update(wait_seq=row['dirty_seq'], wait_deadline=self.now()+total_budget)
             if row.get('stop_fallback', {}).get('seq') == row['dirty_seq'] and row.get('wait_deadline'):
                 row['wait_deadline'] = min(row['wait_deadline'], row['stop_fallback']['deadline'])
             row = store._put(db, check_ref, dict(row, finish_requested=True, state=state, updated_at=self.now()))
+        if new_submission:
+            from .performance_trace import queue_event
+            queue_event('submitted', row)
         if state in {'QUEUED', 'RUNNING'}:
             self._wake(store)
         return projection(store, store.load(check_ref, self.owner))
@@ -432,8 +455,14 @@ class DevelopmentCheckService:
     async def complete(self, root, check_ref):
         """One submit; the product selects the communication budget."""
         budget = product_wait_seconds()  # Reject bad configuration before dispatch.
-        return await self.wait_saved(root, check_ref, budget, submitted=self.finish(root, check_ref))
+        started = self.monotonic()
+        submitted = self.finish(root, check_ref)
+        submission_ms = round((self.monotonic()-started)*1000, 3)
+        result = await self.wait_saved(root, check_ref, budget, submitted=submitted)
+        result['closeout_wait']['submission_ms'] = submission_ms
+        return result
 
+    @timed('check.wait')
     async def wait_saved(self, root, check_ref, wait_seconds=None, *, submitted=None):
         """Read-only continuation. Never finish, rescan, or wake a worker."""
         if wait_seconds is None:
@@ -460,16 +489,21 @@ class DevelopmentCheckService:
                 remaining = min(remaining, state['wait_deadline'] - self.now())
             if remaining <= 0:
                 break
-            await self.wait_sleep(min(state['poll_after_seconds'] or 2, remaining))
+            # Local metadata reads are cheap; do not delay a ready result by 2s.
+            # The external continuation hint remains unchanged.
+            await self.wait_sleep(min(0.25, remaining))
         # Reuse the normal read boundary and its full scope, gaps, version and
         # finding access, including any edit racing with the last observation.
+        read_started = self.monotonic()
         result = self.get(root, check_ref)
+        result_read_ms = round((self.monotonic()-read_started)*1000, 3)
         reason = ('VERSION_CHANGED' if result['dirty_seq'] != expected_seq else
                   'TOTAL_WAIT_BUDGET_EXHAUSTED' if result['wait_deadline_exceeded'] else
                   'TIME_BUDGET_EXHAUSTED' if result['status'] in {'QUEUED', 'RUNNING'} else
                   'STATE_AVAILABLE')
         result['closeout_wait'] = dict(contract='bounded-closeout-wait-v1',
             requested_seconds=wait_seconds, elapsed_ms=round((self.monotonic()-started)*1000, 3),
+            result_read_ms=result_read_ms,
             polls=polls, requested_dirty_seq=expected_seq, stopped_reason=reason,
             scanner_dispatched_by_wait=False, host_review_completed=False)
         return result
@@ -504,6 +538,7 @@ class DevelopmentCheckService:
                 result['static_result']['findings_access']['arguments']['workspace_path'] = str(store.root)
         return result
 
+    @timed('check.result_read')
     def get(self, root, check_ref):
         store = self.store(root)
         row = store.load(check_ref, self.owner)
@@ -532,6 +567,14 @@ class DevelopmentCheckService:
                 result['static_result'] = _agent_result(scan, summary=True)
                 if 'findings_access' in result['static_result']:
                     result['static_result']['findings_access']['arguments']['workspace_path'] = str(store.root)
+        if (result['result_available'] and result['status'] in {'RESULTS_READY', 'PARTIAL'}
+                and row['scanned_seq'] == row['dirty_seq']
+                and any(result.get('review_progress', {}).get(part) == 'PENDING'
+                        for part in ('scanner_review', 'business_review'))):
+            result['next_action'] = result['risk_access']
+            result['review_instruction'] = (
+                '最终回复前按 review_progress 完成配置要求的复核：读取告警证据并提交判断，'
+                '再重新读取风险及处置。无需运行漏洞利用；实际证据不足时保留 INCONCLUSIVE 并说明缺口。')
         return result
 
 
@@ -588,4 +631,5 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
         if digest is not None:
             store._put(db, replay_key, dict(kind='replay', events=[*replay['events'],
                 dict(id=digest, check_ref=row['check_ref'])][-MAX_EVENTS:]))
+    service._prewarm(store.root, names)
     return projection(store, store.load(row['check_ref'], owner))

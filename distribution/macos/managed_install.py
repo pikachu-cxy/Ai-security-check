@@ -33,6 +33,11 @@ class InstallError(Exception):
     """A bounded diagnostic suitable for the user's installation log."""
 
 
+def perf_mark(phase):
+    if os.environ.get('SECURITY_RUNTIME_PERF_DIR'):
+        print('@@ASR_PERF '+phase, file=sys.stderr, flush=True)
+
+
 def digest(path):
     result = hashlib.sha256()
     with Path(path).open("rb") as stream:
@@ -292,10 +297,12 @@ def activate(root, owner, host, manifest):
 
 
 def install(payload, root, host, platform):
+    perf_mark('install.payload_verify')
     manifest = verify_payload(payload, platform)
     root = validate_root(root)
     # The immutable entry point includes the bootstrap interpreter path.
     # Refuse an incompatible delivery before touching editor configuration.
+    perf_mark('install.launcher_preflight')
     preflight_launcher(root)
     versions = no_links(root / "versions")
     versions.mkdir(mode=0o700, exist_ok=True)
@@ -326,7 +333,9 @@ def install(payload, root, host, platform):
         # PBS on macOS locates its shared library relative to the interpreter.
         # Preserve normal venv interpreter links; moving/copying the binary can
         # make @executable_path point at a directory without that library.
+        perf_mark('install.venv')
         venv.EnvBuilder(with_pip=True, symlinks=sys.platform == "darwin").create(environment)
+        perf_mark('install.offline_dependencies')
         result = run([str(python), "-I", "-m", "pip", "--isolated", "--disable-pip-version-check",
                       "install", "--no-index", "--no-cache-dir", "--find-links", str(payload / "wheelhouse"),
                       "--require-hashes", "--only-binary=:all:", "-r", str(payload / "requirements.txt")],
@@ -338,6 +347,7 @@ def install(payload, root, host, platform):
         atomic_json(installed, owner)
     verify_identity(python, manifest, root)
     validate_root(root)
+    perf_mark('install.launcher_preflight')
     preflight_launcher(root)
     print(f"[安装] 程序版本 {manifest['version']}，构建 {manifest['build_id'][:12]} 已校验。正在配置 {host.title()}。", flush=True)
     code, result = json_command([str(python), "-I", "-m", "security_runtime.cli", "install", host, "--json"],

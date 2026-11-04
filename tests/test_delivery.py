@@ -80,3 +80,16 @@ def test_failed_activation_preserves_previous_pointer_and_invalid_pointer_fails_
     with pytest.raises(IntegrationDiagnostic):
         delivery.activate(tmp_path / 'second')
     assert pointer.read_text() == json.dumps(value)
+
+
+def test_deferred_connection_check_keeps_package_validation(tmp_path):
+    calls = []
+    delivery = StableDelivery(tmp_path / 'installation', probe=lambda path: calls.append(path))
+    package = bundle(tmp_path / 'package')
+    result = delivery.activate(package, defer_capability_check=True)
+    assert result['status'] == 'ACTIVATED' and not calls
+    bad = bundle(tmp_path / 'bad', b'new')
+    (bad / EXE).write_bytes(b'changed')
+    with pytest.raises(IntegrationDiagnostic):
+        delivery.activate(bad, defer_capability_check=True)
+    assert delivery.pointer()['active'] == result['active_build']

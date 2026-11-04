@@ -376,7 +376,8 @@ async def frozen_mcp(executable, env, errors):
             rows, cursor = {}, None
             for _ in range(20):
                 page = await client.list_tools(cursor=cursor)
-                rows.update((tool.name, tool.inputSchema) for tool in page.tools)
+                from security_runtime.mcp_tool_groups import operation_schemas
+                rows.update(operation_schemas(page.tools))
                 cursor = page.nextCursor
                 if cursor is None:
                     break

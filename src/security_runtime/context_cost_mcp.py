@@ -17,6 +17,9 @@ async def observe_response(call, request, *, connection_id, workspace=None, work
     # Security summaries promise not to initialize or mutate local state. The
     # optional observer must preserve that promise, including its own database.
     name = getattr(getattr(request, 'params', None), 'name', None)
+    from .mcp_tool_groups import original_call
+    arguments = getattr(getattr(request, 'params', None), 'arguments', None)
+    name, arguments = original_call(name, arguments)
     if (name == 'get_security_summary' or os.getenv('SECURITY_RUNTIME_CONTEXT_MONITOR') == '0'
             or os.getenv('SECURITY_RUNTIME_CONTEXT_MODE') == 'off'):
         return await call(request)
@@ -26,7 +29,6 @@ async def observe_response(call, request, *, connection_id, workspace=None, work
         from .context_cost_capture import capture_response
         collector = None if observation.active() else worker if worker is not None else get_worker()
         setting = collector.snapshot_settings() if collector is not None else {}
-        arguments = getattr(getattr(request, 'params', None), 'arguments', None)
         # Read only the route selector, never retain the argument dictionary.
         claimed_workspace = arguments.get('workspace_path') if isinstance(arguments, dict) else None
         if not isinstance(claimed_workspace, str) or not os.path.isabs(claimed_workspace) or len(claimed_workspace) > 4096:

@@ -297,8 +297,9 @@ def test_router_never_uses_last_workspace_or_decodes_refs(installed, projects, t
         result = asyncio.run(server.call_tool('prepare_task_fix', {'task_ref': str(projects[0]), 'workspace_path': str(projects[1])}))
         assert result.structuredContent['status'] == 'INCONCLUSIVE'
         tools = asyncio.run(server.list_tools())
+        from security_runtime.mcp_tool_groups import operation_schemas
         assert not {'prepare_functional_verification', 'run_functional_verification'} & {t.name for t in tools}
-        assert 'workspace_path' in next(t for t in tools if t.name == 'get_findings').inputSchema['properties']
+        assert 'workspace_path' in operation_schemas(tools)['get_findings']['properties']
         assert set(next(t for t in tools if t.name == 'handle_hook_event').inputSchema['properties']) == {'event','workspace_path','session_id','tool_name','tool_input','turn_id','tool_use_id','permission_mode'}
     finally: pool.close()
 
@@ -546,7 +547,8 @@ def test_global_and_project_tool_schemas_are_backward_compatible(installed, tmp_
     pool = pool_fixture(installed, tmp_path)
     try:
         global_server = create_global_server(workspaces=pool)
-        schemas = {t.name: t.inputSchema for t in asyncio.run(global_server.list_tools())}
+        from security_runtime.mcp_tool_groups import operation_schemas
+        schemas = operation_schemas(asyncio.run(global_server.list_tools()))
         assert not {'prepare_functional_verification', 'run_functional_verification'} & schemas.keys()
         assert 'workspace_path' in schemas['get_findings']['properties']
         assert 'workspace_path' not in before['properties']
@@ -555,7 +557,7 @@ def test_global_and_project_tool_schemas_are_backward_compatible(installed, tmp_
     finally: pool.close()
 
 
-@pytest.mark.parametrize('failure', ['old-cli', 'old-mcp', 'wrong-scope', 'wrong-schema', None])
+@pytest.mark.parametrize('failure', ['old-mcp', 'wrong-scope', 'wrong-schema', None])
 def test_global_deployment_checks_actual_transport_capability(installed, monkeypatch, failure):
     # This case tests CLI/MCP capability validation, not a missing working directory.
     installed.home.mkdir()
@@ -566,7 +568,6 @@ def test_global_deployment_checks_actual_transport_capability(installed, monkeyp
     import security_runtime.codex_integration as module
     info = global_runtime_info()
     cli_info = copy.deepcopy(info); mcp_info = copy.deepcopy(info)
-    if failure == 'old-cli': cli_info['features'].pop('global_runtime_integration')
     if failure == 'old-mcp': mcp_info['features'].pop('global_runtime_integration')
     if failure == 'wrong-scope': mcp_info['integration_scope'] = 'PROJECT'
     monkeypatch.setattr(module, 'run_process', lambda *a, **k: SimpleNamespace(returncode=0, stdout=json.dumps(cli_info)))

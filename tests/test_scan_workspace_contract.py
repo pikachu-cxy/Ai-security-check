@@ -116,13 +116,14 @@ def test_scan_tool_discovery_explains_directory_alias(routed):
     server, _, _ = routed
     tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
     for name in ('scan_project', 'scan_diff'):
-        tool = tools[name]
-        properties = tool.inputSchema['properties']
+        tool = tools['scan']
+        schema = tool.inputSchema['$defs'][name]
+        properties = schema['properties']
         assert 'Absolute project directory' in properties['workspace_path']['description']
         assert 'Legacy alias of workspace_path' in properties['path']['description']
         assert 'For selected files use scan_files' in properties['path']['description']
         assert 'legacy directory alias' in tool.description
-        assert 'workspace_path' in tool.inputSchema['required']
+        assert 'workspace_path' in schema['required']
 
 
 def test_directory_diagnostic_is_preserved():

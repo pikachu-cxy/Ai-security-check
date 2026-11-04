@@ -123,7 +123,7 @@ def test_impact_gate_cannot_be_omitted_by_custom_global_factory(sample, tmp_path
     runtime = SecurityRuntime(store=sample[2])
     core = HookCoordinator(runtime, HookStateStore(tmp_path / 'hooks'))
     monkeypatch.setattr('security_runtime.workspace_services.workspace_services',
-                        lambda *_: (runtime, core, True))
+                        lambda *_, **kwargs: (runtime, core, True))
     created = []
 
     def factory(*args, **kwargs):

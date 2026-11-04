@@ -1,6 +1,8 @@
 """Detached, coalescing observed-file checks. Never scans a project inventory."""
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import argparse
 import errno
 from contextlib import ExitStack
@@ -141,6 +143,7 @@ def _release_capacity(hooks, ticket, *, dispatch=True):
             pass  # Saved requests remain queued; reads never restart workers.
 
 
+@timed("check.dispatch")
 def launch_worker(hooks, root):
     """At most one process per workspace and two per shared runtime state."""
     queue = DevelopmentCheckStore(hooks, root)
@@ -205,7 +208,10 @@ def _heartbeat(queue, ticket, stop):
             return
 
 
+@timed("check.batch")
 def _scan(queue, row, ticket, runtime_factory=None):
+    from .performance_trace import queue_event
+    queue_event('attempt', row)
     from .dependency_inputs import is_dependency_input
     from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, ScanAttemptLost, source_binding
     from .scan_input import scoped_request
@@ -262,12 +268,17 @@ def _scan(queue, row, ticket, runtime_factory=None):
         stage = 'SCAN_EXECUTION'
         from .scan_preferences import preferences
         from .user_config import DEFAULTS
+        scan_started = time.monotonic()
         with preferences(row.get('effective_config') or {'values': DEFAULTS}), local_recheck():
             result = runtime.scan(queue.root, mode='feature', request=request, execution=execution)
+        from .mcp_scan_progress import scan_timing
+        timing = scan_timing(result, dict(request_ms=round((time.monotonic()-scan_started)*1000)))
         stage = 'RESULT_PUBLICATION'
         if execution.input_id is None or not receipt:
             raise ScanAttemptLost('DEVELOPMENT_INPUT_NOT_BOUND')
         gaps = list(generated_outputs['gaps'])
+        if row.get('scope_capacity_exceeded'):
+            gaps.append('OBSERVED_PATH_CAPACITY_EXCEEDED')
         absent = list(request.absent_files)
         if absent:
             gaps.append('DELETED_PATH_SEMANTICS_NOT_REVIEWED')
@@ -284,7 +295,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
         return dict(scan_id=result.scan_id, status=result.status, coverage=result.coverage,
             generated_outputs=generated_outputs,
             gaps=gaps, absent_paths=absent, excluded_paths=excluded,
-            execution=dict(receipt, scanner_run=any(run['status'] in {'SUCCESS', 'FAILED', 'TIMEOUT'}
+            execution=dict(receipt, timing=timing, scanner_run=any(run['status'] in {'SUCCESS', 'FAILED', 'TIMEOUT'}
                 for run in runs), host_review_completed=False, repair_authorized=False))
     except BaseException as error:
         with queue.hooks.lock(queue.root, wait_seconds=2) as acquired:
@@ -296,6 +307,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
         raise
 
 
+@timed("check.worker")
 def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                debounce_seconds=DEBOUNCE_SECONDS, max_seconds=MAX_WORKER_SECONDS):
     hooks = HookStateStore(Path(hooks_path).absolute())

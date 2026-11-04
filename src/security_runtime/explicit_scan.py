@@ -6,6 +6,8 @@ Low-level Runtime embeddings may omit it; shipped CLI/MCP entry points use it.
 from __future__ import annotations
 
 from pathlib import Path
+from contextlib import contextmanager
+from contextvars import ContextVar
 import time
 import uuid
 
@@ -13,6 +15,35 @@ from .hook_state import HookStateStore
 from .progress import ScanCancelled
 from .scan_attempt import ScanAttemptStore, ScanAttemptExecution, ScanAttemptLost, source_binding
 from .workspace import WorkspaceResolver
+
+_queue_deadline = ContextVar('explicit_scan_queue_deadline', default=None)
+
+
+@contextmanager
+def queued_scan(seconds=60):
+    """Async workers may wait; direct callers retain their immediate busy reply."""
+    token = _queue_deadline.set(time.monotonic() + seconds)
+    try:
+        yield
+    finally:
+        _queue_deadline.reset(token)
+
+
+def remaining_queue_wait():
+    deadline = _queue_deadline.get()
+    return max(0, deadline - time.monotonic()) if deadline is not None else 0
+
+
+@contextmanager
+def queued_workspace_lock(hooks, root):
+    while True:
+        with hooks.lock(root, wait_seconds=min(1, remaining_queue_wait())) as acquired:
+            if acquired:
+                yield True
+                return
+        if remaining_queue_wait() <= 0:
+            yield False
+            return
 
 
 class ExplicitScanBusy(ValueError):
@@ -44,16 +75,27 @@ def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
     hooks=hooks or HookStateStore(Path(runtime.store.path).parent/'hooks')
     attempts=ScanAttemptStore(hooks,root,now=now)
     attempts.recover_cleanup(limit=2)
-    with hooks.lock(root,wait_seconds=1) as acquired:
-        if not acquired: raise ExplicitScanBusy()
-        # Request metadata describes only this explicit request. It never
-        # fabricates a before-edit snapshot or resets a development task.
-        lease=attempts.claim('MANUAL','explicit-'+uuid.uuid4().hex,source_binding(dict(
-            contract='explicit-scan-request-v1', mode=mode, staged=staged,
-            requested_files=list(request.files) if request is not None else None,
-            rules_path=str(rules_path) if rules_path is not None else None,
-            baseline='NONE_EXPLICIT_REQUEST'),source_kind='INDEX' if staged else 'WORKTREE'))
-        if lease is None: raise ExplicitScanBusy()
+    # Wait before capturing source, preserving the existing versioned input and
+    # publication checks. The workspace lock is never held while waiting.
+    waiting = False
+    while True:
+        if progress is not None:
+            progress.checkpoint()
+        with hooks.lock(root,wait_seconds=1) as acquired:
+            lease = attempts.claim('MANUAL','explicit-'+uuid.uuid4().hex,source_binding(dict(
+                contract='explicit-scan-request-v1', mode=mode, staged=staged,
+                requested_files=list(request.files) if request is not None else None,
+                rules_path=str(rules_path) if rules_path is not None else None,
+                baseline='NONE_EXPLICIT_REQUEST'),source_kind='INDEX' if staged else 'WORKTREE')) if acquired else None
+        if lease is not None:
+            break
+        remaining = remaining_queue_wait()
+        if remaining <= 0:
+            raise ExplicitScanBusy()
+        if not waiting and progress is not None:
+            progress.emit('WORKSPACE_SCAN_QUEUED', message='等待本工作区正在执行的检查完成。')
+        waiting = True
+        time.sleep(min(.1, remaining))
 
     def publish(view,result):
         # Still inside the exact fixed-input lifetime; no live workspace is

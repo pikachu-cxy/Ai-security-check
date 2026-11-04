@@ -204,8 +204,6 @@ class WorkBuddyIntegration(ProjectMCPIntegration):
         if configured:
             paths.append(Path(configured))
         paths.append(Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData/Local")) / "Programs/WorkBuddyAI/WorkBuddyAI.exe")
-        paths.extend((Path("/Applications/WorkBuddy AI.app/Contents/MacOS/Electron"),
-                      Path.home()/"Applications/WorkBuddy AI.app/Contents/MacOS/Electron"))
         return tuple(paths)
 
 

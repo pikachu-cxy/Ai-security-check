@@ -38,9 +38,12 @@ Agent 可按需读取关联文件审计业务逻辑；证据读取不扩大静�
 
 ## 能力与会话
 
-首次实际开发时核对同一 build_identity 的 development_check 能力和四项工具：
+普通开发不以 get_runtime_info 为前置调用，也不因新任务或新聊天重复安装校验。
+直接使用当前连接提供的 development_check 及其四项操作：
 begin_development_check、record_development_changes、finish_development_check、get_development_check。
-复用已读同构建、同版本、同 SHA-256 的 core 与本方法。缺失时说明轻量核查不可用，
+读取或复用随安装交付的 core 与本方法；缺少方法才取 get_runtime_guidance(topic)。
+仅在用户查询版本、连接缺失/不兼容或排查升级问题时调用 get_runtime_info。
+轻量操作缺失时说明轻量核查不可用，
 保留用户开发授权，不自动改走全项目扫描或创建严格审计基线。
 所有调用传当前 workspace_path；已有有效 session_ref 时，从 begin_development_check 创建开始，
 记录、收尾、读取和复核均原样携带同一引用。Hook 已返回本聊天 check_ref 时直接沿用。

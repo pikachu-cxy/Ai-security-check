@@ -37,6 +37,24 @@ def test_three_requests_then_manager_recreation_keeps_process_cache(probe):
     assert lifetime() == first
 
 
+def test_runtime_timing_does_not_invalidate_engine_version(probe, monkeypatch):
+    from security_runtime.toolchain import tool_environment
+    manager, path, calls, _ = probe
+    manager._version('gitleaks', path)
+    monkeypatch.setenv('SECURITY_RUNTIME_PERF_DIR', '/diagnostic-only/new-run')
+    monkeypatch.setenv('SECURITY_RUNTIME_PERF_RUN', 'new-trace')
+    monkeypatch.setenv('CODEX_TOOL_CALL_ID', 'next-host-call')
+    monkeypatch.setenv('_PYI_ARCHIVE_FILE', '/different-runtime-build/security-check')
+    manager._version('gitleaks', path)
+    assert len(calls) == 1
+    assert 'SECURITY_RUNTIME_PERF_DIR' not in tool_environment(path)
+    assert 'CODEX_TOOL_CALL_ID' not in tool_environment(path)
+    assert '_PYI_ARCHIVE_FILE' not in tool_environment(path)
+    monkeypatch.setenv('PATH', os.environ.get('PATH', '') + os.pathsep + '/different-engine-path')
+    manager._version('gitleaks', path)
+    assert len(calls) == 2
+
+
 def test_rebuilt_registry_plan_is_fresh_without_losing_static_config(engine):
     root, _, _, adapter, _, _ = engine
     plan = adapter.plan_rules(None, context(root))
@@ -84,7 +102,7 @@ def test_parallel_engine_probes_and_later_single_engine_recheck_keep_own_bucket(
     assert sorted(probes) == ['gitleaks','trivy']
 
 
-def test_real_python_process_restart_changes_identity_and_starts_cold(tmp_path):
+def test_real_python_process_restart_reuses_preparation_not_process_identity(tmp_path):
     engine = tmp_path/'gitleaks'; engine.write_bytes(b'contract-only-version-fixture')
     script = tmp_path/'probe.py'
     script.write_text('''import json, sys
@@ -103,7 +121,7 @@ print(json.dumps(dict(lifetime=lifetime(),flags=flags)))
 ''', encoding='utf-8')
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[1]/'src'), PYTHONUTF8='1')
     results = [json.loads(subprocess.check_output([sys.executable, str(script), str(engine)], env=env)) for _ in range(2)]
-    assert all(data['flags'] == ['MISS', 'HIT'] for data in results)
+    assert [data['flags'] for data in results] == [['MISS', 'HIT'], ['HIT', 'HIT']]
     assert results[0]['lifetime']['runtime_instance_id'] != results[1]['lifetime']['runtime_instance_id']
 
 

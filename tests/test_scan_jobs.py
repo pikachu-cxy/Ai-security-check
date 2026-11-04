@@ -105,6 +105,41 @@ def test_same_key_cannot_change_scope_or_force_a_second_scan(jobs):
     assert jobs.status(first['job_ref'])['status'] == 'QUEUED'
 
 
+def test_same_workspace_jobs_wait_without_running_together(jobs):
+    first = submit(jobs)['job_ref']
+    second = submit(jobs, 'request-0002', mode='files', files=['app.py'])['job_ref']
+    entered, release, second_entered = threading.Event(), threading.Event(), threading.Event()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        one = pool.submit(execute, jobs, first, entered=entered, release=release)
+        assert entered.wait(5)
+        two = pool.submit(execute, jobs, second, entered=second_entered)
+        try:
+            assert not second_entered.wait(.2)
+            assert jobs.status(second)['status'] == 'QUEUED'
+        finally:
+            release.set()
+        assert one.result(5) == two.result(5) == 0
+    assert second_entered.is_set()
+    assert all(jobs.status(ref)['status'] == 'COMPLETED' for ref in (first, second))
+
+
+def test_different_workspaces_do_not_share_worker_queue(jobs, tmp_path):
+    other_root = tmp_path/'other'; other_root.mkdir()
+    other = ScanJobs(jobs.hooks, other_root, scan_path=jobs.scan_path)
+    first, second = submit(jobs)['job_ref'], submit(other)['job_ref']
+    entered, release, other_entered = threading.Event(), threading.Event(), threading.Event()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        one = pool.submit(execute, jobs, first, entered=entered, release=release)
+        assert entered.wait(5)
+        two = pool.submit(execute, other, second, entered=other_entered)
+        try:
+            assert other_entered.wait(5)
+            assert two.result(5) == 0
+        finally:
+            release.set()
+        assert one.result(5) == 0
+
+
 @pytest.mark.parametrize('kwargs', [dict(mode='bad'), dict(files=['app.py']),
     dict(mode='files', files=[]), dict(mode='files', files=['../outside.py']),
     dict(mode='quick', force_rescan=True)])
@@ -191,9 +226,54 @@ def test_result_retrieval_is_saved_and_read_only(jobs):
     assert result['scan_id'] == 'fake-scan' and result['result_is_saved_version']
     assert result['retrieval_scanner_run'] is False
     assert result['status'] == 'PARTIAL' and result['execution']['scanner_run'] is True
+    assert result['timing']['total_ms'] >= result['timing']['scan']['request_ms']
+    assert result['duration_ms_scope'] == 'BEFORE_FINALIZATION'
+    assert result['timing']['host_analysis_ms'] is None
     assert jobs.path.read_bytes() == before
     (jobs.root/'app.py').write_text('changed after original scan\n')
     assert jobs.result(ref)['scan_id'] == 'fake-scan'
+
+
+def test_wait_result_returns_original_result_and_yields_protocol_loop(jobs):
+    ref = submit(jobs)['job_ref']
+    import sqlite3
+    scan = dict(scan_id='fake-scan', target_profile=dict(path=str(jobs.root), files=[], languages=[]),
+        status='PARTIAL', coverage='PARTIAL', summary='fake', findings=[],
+        release_status='REVIEW', duration_ms=1, scanner_runs=[])
+    with sqlite3.connect(jobs.scan_path) as db:
+        db.execute('INSERT INTO scans VALUES (?,?)', ('fake-scan', json.dumps(scan)))
+
+    async def scenario():
+        waiting = asyncio.create_task(jobs.wait_result(ref, wait_seconds=2))
+        await asyncio.sleep(0.05)
+        assert not waiting.done()
+        await asyncio.to_thread(execute, jobs, ref)
+        return await waiting
+
+    result = asyncio.run(scenario())
+    assert result['scan_id'] == 'fake-scan'
+    assert result['result_is_saved_version'] and not result['retrieval_scanner_run']
+    assert len(jobs.rows()) == 1
+
+
+def test_wait_timeout_and_cancellation_do_not_modify_or_restart_job(jobs):
+    ref = submit(jobs)['job_ref']
+    before = jobs.path.read_bytes()
+    result = asyncio.run(jobs.wait_result(ref, wait_seconds=0))
+    assert result['status'] == 'QUEUED' and result['timing']['total_ms'] is None
+    assert result['next_action']['tool'] == 'get_scan_result'
+
+    async def cancel():
+        waiting = asyncio.create_task(jobs.wait_result(ref, wait_seconds=2))
+        await asyncio.sleep(0.05)
+        waiting.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await waiting
+    asyncio.run(cancel())
+    assert jobs.path.read_bytes() == before
+    for value in (-1, 26, True):
+        with pytest.raises(ValueError, match='wait_seconds'):
+            asyncio.run(jobs.wait_result(ref, wait_seconds=value))
 
 
 def test_mcp_async_tools_and_reconnect(jobs, monkeypatch):
@@ -217,6 +297,8 @@ def test_mcp_async_tools_and_reconnect(jobs, monkeypatch):
     second = asyncio.run(call(connect(), 'get_scan_status', job_ref=first['job_ref']))
     assert second['job_ref'] == first['job_ref']
     assert asyncio.run(call(connect(), 'list_scan_jobs'))['total'] == 1
+    result = asyncio.run(call(connect(), 'get_scan_result', job_ref=first['job_ref'], wait_seconds=0))
+    assert result['status'] == 'QUEUED' and not result['result_available']
 
 
 def test_independent_process_completes_without_a_client(jobs):

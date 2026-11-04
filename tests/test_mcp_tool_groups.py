@@ -1,0 +1,124 @@
+"""Compact discovery must preserve operation schemas, routing and compatibility."""
+import asyncio
+import os
+from pathlib import Path
+import sys
+from types import SimpleNamespace
+
+from jsonschema import Draft202012Validator
+
+from security_runtime.codex_integration import REQUIRED_TOOLS, check_capabilities
+from security_runtime.global_mcp import create_global_server, global_runtime_info
+from security_runtime.mcp_tool_groups import GROUPS, available_operations, operation_schemas
+from security_runtime.integration_lifecycle import IntegrationDiagnostic
+import pytest
+
+
+@pytest.mark.parametrize('usage_monitor', ['0', '1'])
+def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path, monkeypatch, usage_monitor):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
+    monkeypatch.setenv('SECURITY_RUNTIME_USAGE_MONITOR_ENABLED', usage_monitor)
+    server = create_global_server()
+    try:
+        tools = asyncio.run(server.list_tools())
+        by_name = {tool.name: tool for tool in tools}
+        info = global_runtime_info(tools=tools, host='codex')
+        assert REQUIRED_TOOLS <= available_operations(info, by_name)
+        assert set(info['required_guidance_tools']) <= by_name.keys()
+        assert check_capabilities(info, set(by_name))['status'] == 'OK'
+        with pytest.raises(IntegrationDiagnostic, match='CAPABILITY_MISMATCH'):
+            check_capabilities(info, set(by_name) - {'task_review'})
+        assert set(GROUPS) <= by_name.keys()
+        assert not {name for names in GROUPS.values() for name in names} & by_name.keys()
+        assert len(tools) <= 20
+        assert len(tools) == 19 + ('start_usage_monitor' in by_name)
+        assert set(operation_schemas(tools)) == set(by_name) | {tool.name for tool in server._tool_manager.list_tools()}
+        for tool in tools:
+            Draft202012Validator.check_schema(tool.inputSchema)
+        schema = by_name['scan'].inputSchema
+        Draft202012Validator.check_schema(schema)
+        valid = {'operation': 'scan_files', 'arguments': {'workspace_path': str(tmp_path), 'files': ['a.py']}}
+        validator = Draft202012Validator(schema)
+        assert validator.is_valid(valid)
+        assert not validator.is_valid(dict(valid, arguments={'files': ['a.py']}))
+        assert not validator.is_valid(dict(valid, arguments={'workspace_path': str(tmp_path), 'files': 'a.py'}))
+        assert not validator.is_valid(dict(valid, operation='scan_project'))
+        assert by_name['runtime_status'].annotations.readOnlyHint
+        assert not by_name['scan'].annotations.readOnlyHint
+    finally:
+        server.global_workspaces.close()
+
+
+def test_group_dispatch_keeps_workspace_and_original_validation(tmp_path, monkeypatch):
+    from mcp.server.fastmcp import FastMCP
+    child = FastMCP('fixture')
+    calls = []
+
+    @child.tool()
+    def scan_files(files: list[str], workspace_path: str, summary: bool = True) -> dict:
+        calls.append((files, workspace_path, summary))
+        return {'status': 'fixture', 'files': files}
+
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'state'))
+    admitted = []
+    pool = SimpleNamespace(host='codex', task_audit_mode=True, root=lambda path, **kw: Path(path),
+        validate_layers=lambda path: None,
+        admit=lambda root: (admitted.append(root) or child, None), close=lambda: None)
+    server = create_global_server(workspaces=pool)
+
+    async def run():
+        arguments = {'workspace_path': str(tmp_path), 'files': ['selected.py'], 'summary': False}
+        direct = await server.call_tool('scan_files', arguments)
+        grouped = await server.call_tool('scan', {'operation': 'scan_files', 'arguments': arguments})
+        assert direct == grouped, direct
+        assert calls == [(['selected.py'], str(tmp_path), False)] * 2
+        rejected = await server.call_tool('scan', {'operation': 'scan_files', 'arguments': {**arguments, 'owner': 'other'}})
+        assert rejected.structuredContent['scanner_run'] is False and len(admitted) == 2
+        # Hidden aliases still use the original strict router too.
+        direct_rejection = await server.call_tool('scan_files', {**arguments, 'owner': 'other'})
+        assert rejected == direct_rejection
+        assert len(calls) == 2
+    asyncio.run(run())
+
+
+def test_grouped_tools_over_real_stdio(tmp_path):
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+    source = str(Path(__file__).resolve().parents[1] / 'src')
+    env = dict(os.environ, PYTHONPATH=source, SECURITY_RUNTIME_STATE_DIR=str(tmp_path / 'state'),
+               SECURITY_RUNTIME_GLOBAL='1', SECURITY_RUNTIME_OFFLINE='1', SECURITY_RUNTIME_CONTEXT_MONITOR='0')
+    env.pop('__PYVENV_LAUNCHER__', None)
+    params = StdioServerParameters(command=sys.executable,
+        args=['-c', 'from security_runtime.global_mcp import create_global_server; create_global_server().run()'], env=env)
+
+    async def run():
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as client:
+                init = await client.initialize()
+                assert 'Compact global tool routing' in init.instructions
+                tools = await client.list_tools()
+                assert len(tools.tools) <= 20
+                info = await client.call_tool('get_runtime_info', {'view': 'summary'})
+                assert not info.isError
+                assert check_capabilities(info.structuredContent, {tool.name for tool in tools.tools})['status'] == 'OK'
+                assert 'runtime_status' in {tool.name for tool in tools.tools}
+                direct = await client.call_tool('get_development_config', {})
+                grouped = await client.call_tool('runtime_status', {'operation': 'get_development_config', 'arguments': {}})
+                assert not grouped.isError and direct.structuredContent == grouped.structuredContent
+                rejected = await client.call_tool('runtime_status', {'operation': 'scan_project', 'arguments': {}})
+                assert rejected.isError
+    asyncio.run(run())
+
+
+def test_installer_probe_accepts_compact_global_connection(tmp_path):
+    from security_runtime.codex_integration import probe_runtime
+    source = str(Path(__file__).resolve().parents[1] / 'src')
+    home = tmp_path / 'codex-home'
+    env = dict(os.environ, PYTHONPATH=source, SECURITY_RUNTIME_GLOBAL='1',
+        SECURITY_RUNTIME_CODEX_HOME=str(home), SECURITY_RUNTIME_STATE_DIR=str(tmp_path / 'state'),
+        SECURITY_RUNTIME_CONFIG=str(tmp_path / 'config.toml'), SECURITY_RUNTIME_CONTEXT_MONITOR='0')
+    env.pop('__PYVENV_LAUNCHER__', None)
+    result = probe_runtime({'command': sys.executable, 'prefix': ['-m', 'security_runtime.cli'],
+                           'kind': 'PYTHON_VENV'}, home, env)
+    assert result['status'] == 'OK'
+    assert not home.exists()

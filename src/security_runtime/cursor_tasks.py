@@ -22,14 +22,11 @@ HISTORICAL_CONTEXT = (
 
 
 class CursorTaskBridge:
-    def __init__(self, core, root, session, generation, *, host="cursor"):
-        if host not in {"cursor", "workbuddy"}:
-            raise ValueError("UNSUPPORTED_HOST_CONNECTOR")
-        self.host = host
+    def __init__(self, core, root, session, generation):
         self.core, self.root = core, root
-        self.owner = dict(host=host, session=identity(session))
+        self.owner = dict(host='cursor', session=identity(session))
         self.session=session
-        self.key = host + ':' + identity(session + '\x00' + generation)
+        self.key = 'cursor:' + identity(session + '\x00' + generation)
         self.tasks = TaskSecurityService(core.runtime, hooks=core.store,owner=self.owner)
         self.last_delivery = None
         self.last_protocol_rejection = None
@@ -166,9 +163,9 @@ class CursorTaskBridge:
         if not task_needs_handoff(record):
             return None
         from .tasks.ownership import issue_session_ref
-        token=issue_session_ref(self.core.store,self.root,self.host,self.session)
+        token=issue_session_ref(self.core.store,self.root,'cursor',self.session)
         context = (
-            {'cursor': 'Cursor', 'workbuddy': 'WorkBuddy'}[self.host] + ' 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
+            'Cursor 自动安全任务（仅检查与报告，不授予任何修复权限）：\n'
             + json.dumps(dict(task_ref=record['task_ref'], workspace_path=str(self.root),session_ref=token),
                          ensure_ascii=True)
             + '\n沿用此 task_ref，不要重新 begin_security_task 或从编辑后建立基线。'

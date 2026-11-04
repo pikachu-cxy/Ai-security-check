@@ -102,6 +102,22 @@ def native_io_path(path: Path) -> Path:
 def no_links(path: Path) -> None:
     # Check the original lexical parents as well: normalizing '..' for native
     # IO must not hide a linked ancestor from the existing fail-closed gate.
+    if os.name != 'nt':
+        # Traverse the same lexical parents without rebuilding Path objects for
+        # every ancestor of every captured rule. Do not normalize or cache them.
+        current = os.fspath(path)
+        while True:
+            try:
+                info = os.lstat(current)
+            except FileNotFoundError:
+                pass
+            else:
+                if stat.S_ISLNK(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400:
+                    raise ValueError('Hook state/configuration links are not supported')
+            parent = os.path.dirname(current) or '.'
+            if parent == current:
+                return
+            current = parent
     for p in (path, *path.parents):
         native = native_io_path(p)
         try:

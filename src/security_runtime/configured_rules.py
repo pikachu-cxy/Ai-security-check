@@ -24,6 +24,8 @@ def sast_pack(manager):
     config = section('rules', 'sast')
     if config['mode'] == 'builtin' and not config['exclude_ids']:
         return None
+    if config['mode'] == 'replace' and len(config['paths']) == 1 and not config['exclude_ids']:
+        return manager.resolve(user_path=Path(config['paths'][0]), _configured=False)
     resources = _resources.get()
     if resources is None:
         raise ValueError('Custom rules require a scan configuration scope')

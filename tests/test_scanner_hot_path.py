@@ -74,6 +74,15 @@ def engine(tmp_path,monkeypatch):
 def context(root): return ScanContext(str(root),ScanMode.QUICK,('A.java',))
 
 
+def test_empty_secret_report_does_not_prepare_rule_metadata(tmp_path, monkeypatch):
+    from security_runtime.scanners import GitleaksAdapter
+    from security_runtime.findings import FindingNormalizer
+    def forbidden(*args, **kwargs):
+        raise AssertionError('No findings require rule metadata')
+    monkeypatch.setattr(RulePackManager, 'resolve', forbidden)
+    assert GitleaksAdapter().normalize([], FindingNormalizer(tmp_path)) == []
+
+
 def scan(engine):
     root,_,_,adapter,_,_=engine
     from security_runtime.findings import FindingNormalizer
@@ -89,6 +98,48 @@ def test_rule_plan_cache_is_fresh_evidence_not_scanner_result(engine):
     assert second is not first
     scan(engine);scan(engine)
     assert len(calls)==2
+
+
+def test_large_selected_configuration_reused_without_reusing_scan(engine, monkeypatch):
+    from types import SimpleNamespace
+    adapter = engine[3]
+    serializations = []
+    def large_config(*args, **kwargs):
+        serializations.append(True)
+        return json.dumps(*args, **kwargs) + '\n' + ' ' * 1_100_000
+    monkeypatch.setattr('security_runtime.scanners.json', SimpleNamespace(dumps=large_config, loads=json.loads))
+    scan(engine)
+    scan(engine)
+    assert len(serializations) == 1
+    assert len(engine[4]) == 2
+    assert sum(len(value.encode()) for value in adapter._config_cache.values()) <= 16_000_000
+
+
+@pytest.mark.parametrize('yaml_date', [False, True])
+def test_execution_config_preserves_rules_and_replaces_old_yaml_cache(engine, yaml_date):
+    from security_runtime.preparation_cache import PreparationCache
+    from security_runtime.rulepacks import execution_rule
+    root, _, directory, adapter, _, _ = engine
+    path = directory/'java/trust-all-hostname.yml'
+    definitions = yaml.safe_load(path.read_text())
+    definitions['rules'][0]['message'] = '检查 TLS\n保留 Unicode 和换行'
+    if yaml_date:
+        from datetime import date
+        definitions['rules'][0]['metadata']['created_at'] = date(2026, 11, 4)
+    path.write_text(yaml.safe_dump(definitions, allow_unicode=True))
+    plan = adapter.plan_rules(None, context(root))
+    old_key = (os.path.normcase(str(root.resolve())), plan.pack.descriptor,
+               plan.pack.checksum, tuple(sorted(r.rule_id for r in plan.rules)))
+    # A cache left by the previous installer must not keep serving YAML.
+    old_text = 'rules: []\n'
+    PreparationCache().put('selected-config', old_key, old_text)
+    adapter._config_cache[old_key] = old_text
+    text = adapter.prepare_config(plan.pack, plan.rules, root)
+    parsed = yaml.safe_load(text) if yaml_date else json.loads(text)
+    selected = {r.rule_id for r in plan.rules}
+    expected = [execution_rule(rule, 'java/trust-all-hostname.yml', plan.pack.descriptor)
+                for rule in definitions['rules']]
+    assert parsed == {'rules': [rule for rule in expected if rule['id'] in selected]}
 
 
 def test_source_change_invalidates_plan_even_restored_mtime(engine):
@@ -130,13 +181,41 @@ def test_invalid_rules_cannot_hit_old_validated_pack(engine):
     with pytest.raises(ValueError): adapter.plan_rules(None,context(root))
 
 
-def test_stale_prepared_plan_rejected_before_scan(engine):
+def test_prepared_plan_does_not_require_locked_rule_version(engine):
     root,_,pack,adapter,calls,_=engine
     plan=adapter.plan_rules(None,context(root))
     file=pack/'java/trust-all-hostname.yml';file.write_bytes(file.read_bytes()+b'\n')
     from security_runtime.findings import FindingNormalizer
     _,run=adapter.scan(replace(context(root),rule_plan=plan),FindingNormalizer(root))
-    assert run.status==RunStatus.FAILED and not calls
+    assert run.status==RunStatus.SUCCESS and len(calls)==1
+
+
+@pytest.mark.parametrize('custom', [False, True])
+def test_runtime_reads_rules_in_place_and_next_scan_sees_updates(engine, monkeypatch, custom):
+    root, _, directory, adapter, calls, _ = engine
+    from security_runtime.scan_input import CapturedScanInput
+    def no_snapshot(*args, **kwargs):
+        pytest.fail('Ordinary scans must not snapshot or rebind rule packs')
+    monkeypatch.setattr(CapturedScanInput, 'with_rules', no_snapshot)
+    monkeypatch.setattr(adapter.rule_packs, 'bind_input', no_snapshot)
+    paths = []
+    prepare = adapter.prepare_config
+    def prepare_config(pack, rules, workspace):
+        paths.append(pack.path)
+        return prepare(pack, rules, workspace)
+    monkeypatch.setattr(adapter, 'prepare_config', prepare_config)
+    runtime = SecurityRuntime(ScannerRegistry([adapter], fallback_adapters=[]), SQLiteStore(root.parent/'direct.db'))
+    options = {'rules_path': str(directory)} if custom else {}
+    runtime.scan(root, 'release', **options)
+    path = directory/'java/trust-all-hostname.yml'
+    definitions = yaml.safe_load(path.read_text())
+    definitions['rules'][0]['id'] = 'fixture.updated-rule'
+    path.write_text(yaml.safe_dump(definitions))
+    runtime.scan(root, 'release', **options)
+    assert paths == [directory, directory]
+    assert len(calls) == 2
+    assert not any(rule.endswith('fixture.updated-rule') for rule in calls[0][0])
+    assert any(rule.endswith('fixture.updated-rule') for rule in calls[1][0])
 
 
 @pytest.mark.parametrize('mode',['failure','incomplete'])

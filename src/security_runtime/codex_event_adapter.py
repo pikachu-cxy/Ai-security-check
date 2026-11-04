@@ -2,87 +2,14 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path, PureWindowsPath
+from pathlib import Path
 
 from .codex_host_claims import diagnostics, schema_diagnostics
 from .hook_state import identity, no_links
-from .host_events import (EventKind, HostCapabilities, NormalizedHostEvent,
-                          OperationClass, VerifiedHostContext)
+from .host_events import OperationClass
 from .host_lifecycle import connector_profile
 
-
-def classify_bash_command(tool_input) -> str:
-    """Classify command shape without persisting or echoing command text."""
-    if not isinstance(tool_input, dict):
-        return 'UNKNOWN'
-    command = tool_input.get('command') or tool_input.get('cmd')
-    if not isinstance(command, str) or not command.strip() or len(command) > 12000:
-        return 'UNKNOWN'
-    from .shell_classification import classify_command
-    return classify_command(command)
-
-
-def edit_path_hints(tool, inputs, root, *, cwd=None):
-    """Extract bounded path hints without reading files or trusting edit success.
-
-    A failed tool can still provide a hint. Unknown or truncated scope remains
-    explicit, and patch bodies never enter the activity ledger.
-    """
-    values = []
-    unknown = False
-    directory = Path(cwd) if cwd is not None else root
-    if not directory.is_absolute() or not directory.is_relative_to(root):
-        return (), True
-    if tool == 'apply_patch':
-        patch = inputs if isinstance(inputs, str) else None
-        if isinstance(inputs, dict):
-            # Native Codex Hooks use command; retain older patch/input wrappers.
-            patch = next((inputs[name] for name in ('patch', 'input', 'command')
-                          if isinstance(inputs.get(name), str)), None)
-        if isinstance(patch, str):
-            if len(patch) > 262144 or len(patch.encode('utf-8', errors='replace')) > 262144:
-                return (), True
-            lines = patch.splitlines()
-            unknown = not (lines and lines[0] == '*** Begin Patch' and lines[-1] == '*** End Patch')
-            for line in lines:
-                for prefix in ('*** Add File: ', '*** Update File: ', '*** Delete File: ', '*** Move to: '):
-                    if line.startswith(prefix):
-                        values.append(line[len(prefix):])
-                        break
-        elif isinstance(inputs, dict):
-            # Older hosts expose only the target path; it is still a hint.
-            values.append(inputs.get('file_path') or inputs.get('path'))
-    elif tool in {'Edit', 'Write', 'Delete'} and isinstance(inputs, dict):
-        values.append(inputs.get('file_path') or inputs.get('path'))
-    selected, size = [], 0
-    for value in values:
-        if (not isinstance(value, str) or not value or len(value) > 4096
-                or any(ord(c) < 32 or 0xD800 <= ord(c) <= 0xDFFF for c in value)
-                or value.startswith(('\\\\', '//'))):
-            unknown = True
-            continue
-        path = Path(value)
-        if '..' in path.parts or '..' in PureWindowsPath(value).parts:
-            unknown = True
-            continue
-        try:
-            relative = (path if path.is_absolute() else directory / value.replace('\\', '/')).relative_to(root).as_posix()
-        except ValueError:
-            unknown = True
-            continue
-        if (not relative or relative == '.' or ':' in relative or relative.startswith('/')
-                or PureWindowsPath(relative).drive):
-            unknown = True
-            continue
-        if relative in selected:
-            continue
-        cost = len(relative.encode('utf-8'))
-        if len(selected) >= 1000 or size + cost > 64000:
-            unknown = True
-            break
-        selected.append(relative)
-        size += cost
-    return tuple(selected), unknown or not bool(selected)
+from .host_tool_events import EVENTS, classify_bash_command, edit_path_hints, normalize_tool_event
 
 
 class CodexEventAdapter:
@@ -90,8 +17,7 @@ class CodexEventAdapter:
     profile = connector_profile('codex')
     capabilities = profile.capabilities
     from .codex_host_claims import EVENTS as mcp_events
-    events = {'SessionStart': EventKind.SESSION_START, 'PreToolUse': EventKind.BEFORE_MUTATION,
-              'PostToolUse': EventKind.WORKSPACE_ACTIVITY, 'Stop': EventKind.SESSION_STOP}
+    events = EVENTS
 
     def validate_claims(self, arguments, expected, schema=None):
         return (schema_diagnostics(arguments, expected, schema) if schema is not None
@@ -116,17 +42,8 @@ class CodexEventAdapter:
             raise ValueError('Validated Codex binding required')
         if not legacy and self.validate_claims(arguments, expected)['host_claim_status'] != 'VALID':
             raise ValueError('Invalid Codex claims')
-        operation = OperationClass.UNKNOWN
-        if expected in {'PreToolUse', 'PostToolUse'}:
-            tool = arguments.get('tool_name')
-            if tool not in {'Bash', 'apply_patch', 'Edit', 'Write'}:
-                raise ValueError('Unsupported Codex activity')
-            operation = (OperationClass(classify_bash_command(arguments.get('tool_input')))
-                         if tool == 'Bash' else OperationClass.DIRECT_FILE_MUTATION)
-        invocation = arguments.get('tool_use_id')
-        context = VerifiedHostContext(self.host, root, identity(os.path.normcase(str(root))),
-            identity(arguments['session_id']), identity(invocation) if invocation else None,
-            self.capabilities, arguments['session_id'])
+        event = normalize_tool_event(arguments, root, host=self.host, capabilities=self.capabilities)
+        context = event.context
         if not legacy:
             try:
                 from .observation import bind_chat, bind_host
@@ -136,14 +53,7 @@ class CodexEventAdapter:
                           identity(turn) if turn else None)
             except Exception:
                 pass  # Optional attribution never changes validated Hook behavior.
-        candidates, unknown = (edit_path_hints(arguments.get('tool_name'), arguments.get('tool_input'), root,
-                                              cwd=arguments.get('workspace_path'))
-                               if expected in {'PreToolUse', 'PostToolUse'} else ((), True))
-        return NormalizedHostEvent(self.events[expected], context, operation,
-            turn_id=arguments.get('turn_id'),
-            candidate_paths=candidates, scope_unknown=unknown,
-            mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
-            stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
+        return event
 
     def bind_project(self, arguments, *, binding, guard=None, expected=None, legacy=False):
         """Preserve the existing project cwd/adapter and invocation checks."""

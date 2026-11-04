@@ -5,6 +5,8 @@ is separate: a failed download must not undo successfully committed user setup.
 """
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import json
 import os
 import sqlite3
@@ -38,6 +40,7 @@ def _unavailable_readiness(*, offline):
             'cached_usable':False}, 'failures':[]}
 
 
+@timed("install.readiness_child")
 def _prepare_child(executable, *, offline, progress=None):
     # The installed candidate owns its compatibility pins, including when an
     # older product version is installing a newer locally validated bundle.
@@ -111,7 +114,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     installation.update(scan_ready=ready, status='INSTALLED',
         engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
-            f"请完全退出并重启 {dict(cursor='Cursor', workbuddy='WorkBuddy').get(data.get('integration'), 'Codex')}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
+            f"请完全退出并重启 {'Cursor' if data.get('integration') == 'cursor' else 'Codex'}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
             '已有配置和可用缓存会保留。'))
     if not requested_offline:
@@ -174,6 +177,7 @@ def setup_personal_codex(integration, workspace=None, *, skill=None, progress=No
         return _setup_personal_codex(integration, workspace, skill=skill, progress=progress)
 
 
+@timed("install.host_setup")
 def _setup_personal_codex(integration, workspace=None, *, skill=None, progress=None):
     """Install/upgrade both components, or return an explicit non-success result."""
     report_progress(progress, 'CHECK_CONFIG')
@@ -233,17 +237,14 @@ def _default_delivery_root():
 
 
 @verified_operation
+@timed("install.total")
 def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False, _host='codex'):
     """Install/check caches, then start detached preparation without waiting for it."""
     offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
     from .delivery import StableDelivery, stable_command, package_metadata
-    if _host == 'workbuddy':
-        from .workbuddy_connector import WorkBuddyConnectorInstallation, WorkBuddyInstallPreflight, setup_personal_workbuddy
-        integration = WorkBuddyConnectorInstallation(allow_dev=allow_dev)
-        setup = setup_personal_workbuddy
-    elif _host == 'cursor':
+    if _host == 'cursor':
         from .cursor_connector import CursorConnectorInstallation, CursorInstallPreflight, setup_personal_cursor
         integration = CursorConnectorInstallation(allow_dev=allow_dev)
         setup = setup_personal_cursor
@@ -282,7 +283,7 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     report_progress(progress, 'PACKAGE_VERIFY')
     package_metadata(supplied)
     report_progress(progress, 'CHECK_CONFIG')
-    manager = (WorkBuddyInstallPreflight(integration) if _host == 'workbuddy' else CursorInstallPreflight(integration) if _host == 'cursor'
+    manager = (CursorInstallPreflight(integration) if _host == 'cursor'
                else InstallationUpgrade(integration, ReviewSkillManager()))
     if workspace is not None:
         integration.inspect_project(workspace)
@@ -292,12 +293,11 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         blocked.append('USER_MANAGED_APPROVAL_REQUIRED')
     if blocked:
         return _blocked(manager, blocked)
-    delivery_probe = None
-    if _host == 'workbuddy':
-        from .workbuddy_connector import probe_delivery
-        delivery_probe = probe_delivery
-    delivery = StableDelivery(Path(root) if root is not None else _default_delivery_root(), probe=delivery_probe)
-    activated = delivery.activate(supplied, progress=progress)
+    delivery = StableDelivery(Path(root) if root is not None else _default_delivery_root())
+    in_process = (_host == 'codex' and frozen
+        and Path(sys.executable).absolute().parent == supplied.absolute())
+    # This running installer proves startup; setup below performs the real MCP check.
+    activated = delivery.activate(supplied, progress=progress, defer_capability_check=in_process)
     # Activation verified this exact slot. Invoke it directly, avoiding an
     # unnecessary launcher hop; discover() still writes the stable command.
     installed_executable = delivery.slot(activated['active_build']) / ('security-check.exe' if os.name == 'nt' else 'security-check')
@@ -306,12 +306,19 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         argv += ['--scope', 'global']
     if workspace is not None:
         argv += ['--path', str(workspace)]
-    # Execute only the just-validated fixed launcher, never a config-supplied command.
-    report_progress(progress, 'SETUP_CHILD')
+    # The supplied executable can configure its identical installed copy directly.
+    # A different supplied bundle must still execute its own setup implementation.
     try:
-        completed = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
-            timeout=120, check=False,
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+        if in_process:
+            from types import SimpleNamespace
+            integration.discover = lambda: {'command': activated['launcher'], 'prefix': [], 'kind': 'FROZEN'}
+            configured = setup(integration, workspace, progress=progress)
+            completed = SimpleNamespace(returncode=0, stdout=json.dumps(configured).encode())
+        else:
+            report_progress(progress, 'SETUP_CHILD')
+            completed = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True,
+                timeout=420, check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
     except (OSError, subprocess.TimeoutExpired) as exc:
         code = 'INSTALLED_SETUP_TIMEOUT' if isinstance(exc, subprocess.TimeoutExpired) else 'INSTALLED_SETUP_FAILED'
         data = _blocked(manager, [code], status='NOT_READY')
@@ -344,7 +351,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['installation']['local_files_ready'] = False
         data['installation']['message'] += ' 程序文件已保留在安装目录，但整体安装尚未成功；不代表可扫描。'
     data['delivery'] = activated
-    data = _complete_preparation(data, offline=offline, progress=progress, executable=installed_executable)
+    data = _complete_preparation(data, offline=offline, progress=progress,
+        executable=None if in_process else installed_executable)
     if data['installation']['scan_ready']:
         report_progress(progress, 'CLEANUP')
         data['cleanup'] = delivery.cleanup()

@@ -197,6 +197,49 @@ def test_changes_during_selected_scan_are_stale_and_private_bytes_are_released(s
     assert not ScanAttemptStore(hooks,root).read()['directories']
 
 
+def test_queued_scan_waits_then_captures_its_own_source_version(selection):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+    from security_runtime.explicit_scan import queued_scan
+    root, _, hooks, reader, application = selection
+    attempts = ScanAttemptStore(hooks, root)
+    with hooks.lock(root) as acquired:
+        assert acquired
+        lease = attempts.claim('MANUAL', 'existing', source_binding({'contract':'fixture'}))
+    waiting = threading.Event()
+    reporter = ProgressReporter(lambda event: waiting.set() if event.event_type == 'WORKSPACE_SCAN_QUEUED' else None)
+    def scan():
+        with queued_scan(3):
+            return application.scan_files(root, ['demo.py'], progress=reporter)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(scan)
+        try:
+            assert waiting.wait(2)
+            assert not reader.calls
+            (root/'demo.py').write_text('latest_version()\n')
+        finally:
+            with hooks.lock(root) as acquired:
+                assert acquired
+                attempts.finish(lease)
+        result = future.result(5)
+    assert reader.calls[0]['contents']['demo.py'] == b'latest_version()\n'
+    assert result.scan_context['fixed_input']['applicability'] == 'CURRENT'
+    assert attempts.read()['lane']['attempt_id'] != lease.attempt_id
+
+
+def test_queued_scan_timeout_does_not_execute_or_change_other_attempt(selection):
+    from security_runtime.explicit_scan import queued_scan
+    root, _, hooks, reader, application = selection
+    attempts = ScanAttemptStore(hooks, root)
+    with hooks.lock(root) as acquired:
+        assert acquired
+        lease = attempts.claim('MANUAL', 'existing', source_binding({'contract':'fixture'}))
+    with queued_scan(.02), pytest.raises(ExplicitScanBusy):
+        application.scan_files(root, ['demo.py'])
+    assert not reader.calls
+    assert attempts.read()['lane']['attempt_id'] == lease.attempt_id
+
+
 def test_direct_selected_scan_rejects_diff_mode_and_staged_without_execution(selection):
     root,runtime,_,reader,_=selection
     with pytest.raises(ValueError,match='require feature mode'):

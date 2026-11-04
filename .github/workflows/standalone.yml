@@ -2,10 +2,6 @@ name: Standalone artifacts
 
 on:
   workflow_call:
-    inputs:
-      workbuddy:
-        type: boolean
-        default: false
   workflow_dispatch:
   push:
     branches: [feature/runtime-mvp]
@@ -57,14 +53,9 @@ jobs:
       - run: python scripts/build/build_standalone.py
       - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
       - name: Verify native archive, MCP, and first managed scanner preparation
-        if: inputs.workbuddy != true
         shell: bash
         run: |
           python scripts/release/verify_artifact.py --full --dependency-unavailable --fix-verify --development $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
-      - name: Verify only the frozen WorkBuddy adapter contracts
-        if: inputs.workbuddy == true
-        shell: bash
-        run: python scripts/release/verify_workbuddy_artifact.py $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}

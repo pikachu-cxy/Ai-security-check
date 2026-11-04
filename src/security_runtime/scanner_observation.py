@@ -1,5 +1,6 @@
 """Per-invocation metadata only; never scanner-result caching or authorization."""
 from contextlib import contextmanager
+from .performance_trace import span as performance_span
 from contextvars import ContextVar
 import math
 import time
@@ -33,10 +34,11 @@ def span(name):
         yield
         return
     started = time.perf_counter()
-    try:
-        yield
-    finally:
-        add_time(name, milliseconds(started))
+    with performance_span('scan.' + name):
+        try:
+            yield
+        finally:
+            add_time(name, milliseconds(started))
 
 
 def add_time(name, value):

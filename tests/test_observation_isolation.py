@@ -46,6 +46,19 @@ class Collector:
 MODES = ('off', 'on', 'full', 'settings-fault', 'write-fault')
 
 
+def test_grouped_operation_retains_monitor_workspace_and_response(tmp_path):
+    collector = Collector('on')
+    expected = {'status': 'UNCHANGED'}
+    incoming = request('scan', operation='list_scan_jobs',
+                       arguments={'workspace_path': str(tmp_path), 'limit': 20})
+    async def call(actual):
+        assert actual is incoming
+        return expected
+    assert asyncio.run(observe_response(call, incoming, connection_id='c', worker=collector)) is expected
+    assert collector.records[0]['tool'] == 'list_scan_jobs'
+    assert collector.records[0]['workspace'] == str(tmp_path)
+
+
 @pytest.fixture(autouse=True)
 def isolated_environment(monkeypatch, tmp_path):
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'runtime-state'))
@@ -131,6 +144,8 @@ def test_off_and_readonly_summary_do_not_even_access_the_collector(monkeypatch, 
     monkeypatch.delenv(switch)
     assert asyncio.run(observe_response(product, request('get_security_summary'),
         connection_id='c', worker=Forbidden())) is expected
+    assert asyncio.run(observe_response(product, request('findings', operation='get_security_summary',
+        arguments={}), connection_id='c', worker=Forbidden())) is expected
 
 
 @pytest.mark.parametrize('missing', ('observation', 'context_cost_worker', 'context_cost_capture'))

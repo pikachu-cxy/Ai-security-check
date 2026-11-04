@@ -216,3 +216,13 @@ def test_trial_setup_without_integration_never_auto_detects_other_editors(tmp_pa
         return SimpleNamespace(returncode=0)
     monkeypatch.setattr(subprocess, 'run', run)
     assert profile.run(['setup', '--scope', 'project']) == 0
+
+
+def test_install_metadata_does_not_load_scanning_rules(upgrade, monkeypatch):
+    from security_runtime.build_identity import build_identity
+    expected = build_identity()
+    def unexpected(*args, **kwargs):
+        raise AssertionError('Installation metadata must not initialize scanning rules')
+    monkeypatch.setattr('security_runtime.rulepacks.RulePackManager.resolve', unexpected)
+    assert upgrade.plan()['build_identity'] == expected
+    assert upgrade.diagnose()['build'] == expected

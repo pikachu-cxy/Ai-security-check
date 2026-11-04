@@ -25,7 +25,8 @@ async def _verify(entry: dict, workspace: Path, *, call_scan_diff: bool) -> tupl
             if initialized.serverInfo is None:
                 return False, "MCP initialize did not return server information"
             listed = await asyncio.wait_for(client.list_tools(), timeout=15)
-            names = {tool.name for tool in listed.tools}
+            from .mcp_tool_groups import operation_schemas
+            names = set(operation_schemas(listed.tools))
             if not REQUIRED_TOOLS.issubset(names):
                 return False, "MCP tool list is incomplete"
             if call_scan_diff:

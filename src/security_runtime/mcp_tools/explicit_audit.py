@@ -52,9 +52,10 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
         return scan_jobs(workspace_path).status(job_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
-    def get_scan_result(job_ref: str, workspace_path: str | None = None, summary: bool = True) -> dict:
-        """Retrieve the exact saved scan result after reconnect; no scan, freshness revalidation or repair grant. Pending jobs return progress. Use get_findings for bounded finding details."""
-        return scan_jobs(workspace_path).result(job_ref, summary=summary)
+    async def get_scan_result(job_ref: str, workspace_path: str | None = None, summary: bool = True,
+                              wait_seconds: int = 0) -> dict:
+        """Retrieve the exact saved result. Use wait_seconds=20 to await a pending job and receive its result in one call (0-25; default 0). Timeout returns progress, never starts/retries/cancels scanning. timing.total_ms is the complete job duration; duration_ms excludes finalization. Use get_findings for bounded finding details."""
+        return await scan_jobs(workspace_path).wait_result(job_ref, summary=summary, wait_seconds=wait_seconds)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def list_scan_jobs(workspace_path: str | None = None, limit: int = 20) -> dict:

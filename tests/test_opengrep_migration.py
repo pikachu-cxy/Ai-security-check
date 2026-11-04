@@ -63,6 +63,55 @@ def test_native_command_does_not_pass_removed_python_metrics_option(pack, tmp_pa
     assert '--metrics' not in command
     assert '--no-rewrite-rule-ids' in command
     assert '--disable-version-check' in command
+    assert '--experimental' in command
+
+
+def test_real_native_frontend_preserves_taint_paths_and_rule_errors(tmp_path):
+    binary = os.environ.get('SECURITY_RUNTIME_TEST_OPENGREP')
+    if not binary:
+        pytest.skip('Set SECURITY_RUNTIME_TEST_OPENGREP for native compatibility check')
+    import subprocess
+    from security_runtime.engine_environment import engine_environment
+    from security_runtime.toolchain import tool_environment
+    root = tmp_path/'project'; root.mkdir()
+    rules = tmp_path/'rules'; rules.mkdir()
+    (rules/'taint.yaml').write_text('''rules:
+- id: fixture-taint
+  languages: [python]
+  mode: taint
+  severity: ERROR
+  message: User input reaches eval
+  pattern-sources:
+  - pattern: source(...)
+  pattern-sinks:
+  - pattern: eval(...)
+  paths:
+    exclude: [ignored.py]
+''')
+    text = 'def run():\n    value = source()\n    return eval(value)\n'
+    (root/'sample.py').write_text(text)
+    (root/'ignored.py').write_text(text)
+    pack = RulePackManager().resolve(user_path=rules)
+    request = SASTRequest(root, pack, ('sample.py', 'ignored.py'))
+    native = OpenGrepEngineProvider().command(binary, request)
+    legacy = [arg for arg in native if arg != '--experimental']
+    with engine_environment('opengrep', tool_environment(Path(binary)), workspace=root) as env:
+        def run(command):
+            result = subprocess.run(command, cwd=root, env=env, capture_output=True, text=True, timeout=30)
+            return json.loads(result.stdout)
+        old, new = run(legacy), run(native)
+        assert old['results'] == new['results']
+        assert len(new['results']) == 1 and new['results'][0]['path'] == 'sample.py'
+        assert new['results'][0]['extra']['dataflow_trace']
+        assert old['errors'] == new['errors'] == []
+        assert set(old['time']['rules']) == set(new['time']['rules'])
+        assert old['paths'] == new['paths']
+        (rules/'taint.yaml').write_text('rules:\n- id: invalid-pattern\n  languages: [python]\n'
+            '  severity: ERROR\n  message: invalid\n  pattern: "(bad"\n')
+        old, new = run(legacy), run(native)
+        assert old['errors'] and new['errors']
+        assert {(e.get('type'), e.get('path')) for e in old['errors']} == {
+            (e.get('type'), e.get('path')) for e in new['errors']}
 
 
 @pytest.mark.parametrize('system,arch', [('windows','x64'),('linux','x64'),('linux','arm64'),('macos','x64'),('macos','arm64')])

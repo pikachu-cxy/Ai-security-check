@@ -24,7 +24,13 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     turn = hashlib.sha256(turn_id.encode()).hexdigest() if turn_id else None
     if activity.get('turn') is not None and activity['turn'] != turn:
         return None
-    if not activity.get('pending') and not (stop_hook_active and row.get('stop_fallback')):
+    progress = row.get('stop_fallback') or {}
+    if stop_hook_active:
+        # A historical pending check is not authority to interrupt a new turn.
+        # Missing turn identity permits one initial fallback, never continuation.
+        if turn is None or progress.get('turn') != turn:
+            return None
+    elif not activity.get('pending'):
         return None
     # Consume this round's eligibility even when Stop is disabled or already done.
     if activity.get('pending'):
@@ -51,19 +57,32 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     service = service or DevelopmentCheckService(None, hooks, owner=owner,
                                                  scan_path_provider=row['scan_path'])
     saved = service.get(root, ref)
+    # Suppress only unchanged waiting already returned by closeout in this connection.
+    # This is not acknowledgement of a report or of the user's reading it.
+    if (saved['status'] in {'QUEUED', 'RUNNING'} and row['finish_requested']
+            and (ref, seq, 'WAITING') in offered):
+        return None
     if (saved['status'] == 'RESULTS_READY' and row['scanned_seq'] == seq and not saved['gaps']
             and (saved.get('host_review_completed') or not any(batch_config(row)['agent'].values()))):
         return None
+    terminal_result = ([seq, saved.get('scan_id'), saved['status']]
+        if saved.get('result_available') and row['scanned_seq'] == seq
+        and saved['status'] in {'RESULTS_READY', 'PARTIAL'} else None)
     with store.transaction() as db:
         current = store._get(db, ref)
         if current['dirty_seq'] != seq:
             return None
         progress = current.get('stop_fallback')
+        # One continuation per saved terminal result, not a report acknowledgement.
+        # Keep coverage gaps and inconclusive reviews pending without repeating Stop.
+        if (stop_hook_active and terminal_result is not None and progress
+                and progress.get('terminal_result') == terminal_result):
+            return None
         # New edits during continuation do not reset the overall budget.
         if progress is None or (progress.get('seq') != seq and not stop_hook_active):
             if stop_hook_active:
                 return None
-            progress = dict(seq=seq, count=0, deadline=store.now()+options['wait_timeout_seconds'])
+            progress = dict(seq=seq, turn=turn, count=0, deadline=store.now()+options['wait_timeout_seconds'])
         if progress['count'] >= options['max_continuations'] or progress['deadline'] <= store.now():
             store._put(db, ref, dict(current, stop_fallback=dict(progress,
                 incomplete_reason='STOP_FALLBACK_BUDGET_EXHAUSTED')))
@@ -72,6 +91,8 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
                         reason_code='STOP_FALLBACK_BUDGET_EXHAUSTED',
                         systemMessage='安全检查或结果报告尚未确认完成；已提交的检查和结果已保留。')
         progress = dict(progress, seq=seq, count=progress['count']+1)
+        if terminal_result is not None:
+            progress['terminal_result'] = terminal_result
         store._put(db, ref, dict(current, stop_fallback=progress))
     # finish drains the existing watcher; it never enumerates the workspace.
     if not row['finish_requested']:

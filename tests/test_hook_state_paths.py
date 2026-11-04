@@ -150,7 +150,7 @@ def test_windows_ambiguous_names_fail_closed(raw):
         native_io_path(Path(raw))
 
 
-def test_native_state_paths_keep_link_rejection(tmp_path):
+def test_native_state_paths_keep_link_rejection(tmp_path, monkeypatch):
     outside = tmp_path / 'outside'; outside.mkdir()
     link = tmp_path / 'linked-state'
     if os.name == 'nt':
@@ -171,4 +171,9 @@ def test_native_state_paths_keep_link_rejection(tmp_path):
         no_links(link / '..' / 'safe' / 'record.json')
     with pytest.raises(ValueError, match='links are not supported'):
         atomic_bytes(link / '..' / 'safe' / 'record.json', b'must-not-write')
+    monkeypatch.chdir(tmp_path)
+    no_links(Path('.'))
+    no_links(Path('missing') / 'file')
+    with pytest.raises(ValueError, match='links are not supported'):
+        no_links(Path('linked-state') / '..' / 'missing' / 'file')
     assert not list(outside.iterdir())

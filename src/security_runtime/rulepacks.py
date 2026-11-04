@@ -1,10 +1,12 @@
 """Rule packs have their own provenance, licensing and lifecycle."""
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import hashlib
 import threading
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
@@ -13,6 +15,9 @@ from .rule_catalog import RuleRecord, validate_rule, load_catalog
 from .rule_program import RuleProgram, load_program
 
 import yaml
+
+# LibYAML uses the same safe constructors without Python tokenization overhead.
+_SAFE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 
 class RulePackClass(StrEnum):
@@ -64,6 +69,7 @@ class ResolvedRulePack:
 
 class RulePackProvider(Protocol):
     def discover(self) -> list[ResolvedRulePack]: ...
+    @timed("rules.resolve")
     def resolve(self, rule_pack_id: str) -> ResolvedRulePack: ...
 
 
@@ -113,6 +119,7 @@ class BundledRulePackProvider:
     def discover(self) -> list[ResolvedRulePack]:
         return [self.resolve(FIRST_PARTY_RULE_PACK.rule_pack_id)]
 
+    @timed("rules.resolve")
     def resolve(self, rule_pack_id: str) -> ResolvedRulePack:
         if rule_pack_id != FIRST_PARTY_RULE_PACK.rule_pack_id:
             raise KeyError(rule_pack_id)
@@ -127,6 +134,7 @@ class RulePackManager:
         self.cache_hit = False
 
     @staticmethod
+    @timed("rules.content_identity")
     def _content_identity(path):
         path = path.expanduser().resolve()
         io_root = native_io_path(path)
@@ -152,9 +160,7 @@ class RulePackManager:
             self.cache_hit = key in self._resolved_cache
             if self.cache_hit:
                 return self._resolved_cache[key]
-            result = self._validate(descriptor,path,**kwargs)
-            if self._content_identity(path) != key[2]:
-                raise ValueError('Rule pack changed during validation')
+            result = self._validate(descriptor, path, content_identity=key[2][1], **kwargs)
             io_root = native_io_path(path)
             size=sum(p.stat().st_size for p in (*io_root.rglob('*.yml'),*io_root.rglob('*.yaml')))
             if len(result.catalog)<=10000 and size<=32_000_000:
@@ -166,6 +172,7 @@ class RulePackManager:
     def discover(self) -> list[ResolvedRulePack]:
         return self.provider.discover()
 
+    @timed("rules.resolve")
     def resolve(self, rule_pack_id: str = "opengrep-rules", *, user_path: Path | None = None, _configured=True) -> ResolvedRulePack:
         if user_path is None and _configured:
             from .configured_rules import sast_pack
@@ -195,7 +202,33 @@ class RulePackManager:
         return captured
 
     @staticmethod
-    def _validate(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool = True) -> ResolvedRulePack:
+    @timed("rules.validate")
+    def _validate(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool = True,
+                  content_identity: bytes | None = None) -> ResolvedRulePack:
+        # First-party capability programs retain their existing validation path.
+        if require_first_party_metadata:
+            return RulePackManager._validate_uncached(descriptor, path,
+                require_first_party_metadata=True)
+        from .preparation_cache import PreparationCache
+        cache = PreparationCache()
+        # The caller already read these bytes to select the process cache entry.
+        content = content_identity if content_identity is not None else RulePackManager._content_identity(path)[1]
+        key = (repr(descriptor), content)
+        saved = cache.get('rule-pack', key)
+        if saved is not None:
+            catalog = tuple(RuleRecord(**{k: tuple(v) if isinstance(v, list) else v
+                for k, v in row.items()}) for row in saved['catalog'])
+            return ResolvedRulePack(descriptor, path.expanduser().resolve(), saved['checksum'], catalog)
+        result = RulePackManager._validate_uncached(descriptor, path,
+            require_first_party_metadata=False)
+        if RulePackManager._content_identity(path)[1] != content:
+            raise ValueError('Rule pack changed during validation')
+        cache.put('rule-pack', key, dict(checksum=result.checksum,
+            catalog=[asdict(rule) for rule in result.catalog]))
+        return result
+
+    @staticmethod
+    def _validate_uncached(descriptor: RulePackDescriptor, path: Path, *, require_first_party_metadata: bool) -> ResolvedRulePack:
         path = path.expanduser().resolve()
         io_root = native_io_path(path)
         if not io_root.is_dir():
@@ -218,7 +251,7 @@ class RulePackManager:
             content = native.read_bytes()
             # References in metadata are attribution, not executable remote
             # configs. Only local YAML is passed to the engine.
-            data = yaml.safe_load(content)
+            data = yaml.load(content, Loader=_SAFE_LOADER)
             if not isinstance(data,dict) or not isinstance(data.get('rules'),list) or not data['rules']:
                 raise ValueError(f'Rule pack has no valid rules: {file.name}')
             for rule in data['rules']:

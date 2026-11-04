@@ -22,8 +22,10 @@ AI Security Runtime 核心指导
 此为 Agent 行为规则，不是进程沙箱；具体用法见 development-check 的“开发 Agent 临时文件规则”。
 编辑 Hook 只记录路径，不扫描或唤醒后台进程；开发收尾时合并静态检查。保存结果绑定实际输入版本，范围未知不扩为全项目扫描。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
-先核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；按版本、sha256 复用已读完整方法，
-不重复加载已读的同版本主题，缺失才取 get_runtime_guidance(topic)。构建或摘要变化时重新核对。
+普通开发直接使用已连接工具和随安装交付的 core、development-check 方法，不调用 get_runtime_info 作为开发前置步骤；
+安装/升级负责交付校验，连接负责提供实际工具。新聊天也不重复安装校验；缺少方法才取 get_runtime_guidance(topic)。
+显式审计、版本查询或连接异常排查时，核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；
+按版本、sha256 复用已读完整方法，构建或摘要变化时重新核对。不把安装校验当作当前扫描结果。
 入口不可用时只复用同一构建/版本/摘要的完整本地 reference；无法核对则停止对应核查并说明缺口。
 指导不升级 Runtime；核查不可用不改变用户原开发授权。
 

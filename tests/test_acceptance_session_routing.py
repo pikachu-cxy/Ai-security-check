@@ -167,13 +167,21 @@ def test_global_task_feedback_tools_require_workspace_and_fence_native_owner(
              'set_task_risk_disposition'}
     try:
         listed = {tool.name: tool for tool in asyncio.run(server.list_tools())}
-        assert names <= listed.keys()
+        from security_runtime.mcp_tool_groups import operation_schemas
+        schemas = operation_schemas(listed.values())
+        assert names <= schemas.keys()
         for name, tool in listed.items():
+            from security_runtime.mcp_tool_groups import GROUPS
+            if name in GROUPS:
+                for operation, schema in tool.inputSchema['$defs'].items():
+                    if operation not in GLOBAL_READS:
+                        assert 'workspace_path' in schema['required']
+                continue
             if name not in GLOBAL_READS | HOOKS:
                 assert 'workspace_path' in tool.inputSchema['required']
                 assert tool.inputSchema['properties']['workspace_path']['type'] == 'string'
                 assert tool.inputSchema['properties']['workspace_path']['minLength'] == 1
-        feedback_schema = listed['get_task_risk_feedback'].inputSchema
+        feedback_schema = schemas['get_task_risk_feedback']
         assert 'session_ref' in feedback_schema['properties']
         assert 'session_ref' not in feedback_schema['required']
         assert feedback_schema['properties']['session_ref']['default'] is None

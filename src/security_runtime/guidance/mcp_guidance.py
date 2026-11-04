@@ -2,10 +2,10 @@
 
 MCP_INSTRUCTIONS = '''AI Security Runtime：本机安全检查与有界复核。
 普通聊天、只读操作不开始检查；Stop 按配置仅对当前开发记录有界补交或续接，不扫描历史任务。
-首次进入开发核查、显式扫描或风险处理前，必须读取或复用同一真实 build_identity、
-版本和 SHA-256 对应的完整 core 指导及所选主题；这是必读方法，不是可跳过的建议。
-先取 get_runtime_info(view="summary") 核对能力、工具子集和 guidance_catalog。
-同构建同摘要的已读本地完整方法可复用；缺失才 get_runtime_guidance(topic)。
+普通开发直接使用当前连接的工具及随安装交付的 core、development-check 完整方法，
+不调用 get_runtime_info 作为开发前置步骤，新任务/新聊天不重复安装校验；缺少方法才 get_runtime_guidance(topic)。
+显式扫描、风险处理或连接/版本排查才取 get_runtime_info(view="summary")，核对能力、工具子集及 guidance_catalog，
+读取或复用同一真实 build_identity、版本和 SHA-256 对应的完整 core 指导及所选主题；这是必读方法。
 主题：core；普通开发 development-check；严格或已有任务 task-review；显式扫描 runtime-workflow；
 风险呈现/处置 risk-decisions；修复或影响 repair-impact；深度审计 deep-audit。方法不可用时停止对应核查，
 保留开发授权和原记录，不降级协议或猜测方法；详细诊断可取 view="full"。

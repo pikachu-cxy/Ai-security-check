@@ -1,6 +1,6 @@
 # 安装参数、准备与升级
 
-本页适用于 **0.3.12 正式版**，Mac 自动安装和手动下载统一使用 **v0.3.12 正式完整包**。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
+本页适用于 **0.3.12 正式版**，Mac 自动安装对应独立发行 **macos-trial-v0.3.12**。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
 
 Windows 自动安装后，直接复制安装器输出的完整查询命令。下方相对路径示例用于手动完整包；自动安装用户请用输出中的完整程序路径替换 `.\security-check\security-check.exe`（保留前面的 `&`）。升级可重新运行编辑器安装页的自动安装命令。
 
@@ -9,10 +9,10 @@ Windows 自动安装后，直接复制安装器输出的完整查询命令。下
 | 安装方式 | 查询时使用的程序 |
 | --- | --- |
 | Windows 完整包 | 在包的上级目录使用 `.\security-check\security-check.exe` |
-| Mac 按编辑器页自动安装 | 使用 `"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check"`，可在任意目录执行 |
+| Mac 按编辑器页自动安装 | 使用 `"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check"`，可在任意目录执行 |
 | Mac 手动下载完整包 | 在包的上级目录使用 `./security-check/security-check` |
 
-以下稳定启动器路径适用于默认首次安装；升级后以安装输出及实际连接配置为准。以下默认展示 Windows 完整包和 Mac 自动安装；手动完整包将 Mac 示例的程序路径换成上表对应路径即可。
+Mac 的两种安装方式路径不同，不要混用。以下默认展示 Windows 完整包和 Mac 自动安装；手动完整包将 Mac 示例的程序路径换成上表对应路径即可。
 
 ## 查看准备进度
 
@@ -24,7 +24,7 @@ Windows 自动安装后，直接复制安装器输出的完整查询命令。下
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" preparation status
+"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" preparation status
 ```
 :::
 
@@ -40,11 +40,11 @@ Windows 自动安装后，直接复制安装器输出的完整查询命令。下
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" runtime-info --json
+"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" runtime-info --json
 ```
 :::
 
-核对 `version`、`build_id` 和 `source_commit`。完整包与 Mac 自动安装使用同一正式发行；实际启动路径及构建应与该发行匹配，以[对应发行记录](../downloads.md#build-details)为准。
+核对 `version`、`build_id` 和 `source_commit`。完整包与 Mac 自动安装使用不同交付方式，版本相同也可能有不同构建，以[对应发行记录](../downloads.md#build-details)为准。
 
 Windows 网页安装脚本将程序保存于 `%LOCALAPPDATA%\ASR` 的版本目录。旧版安装器或已有安装可能使用 `%LOCALAPPDATA%\AI-Security-Runtime-install`；实际启动路径以编辑器连接配置和工具返回为准。下方命令使用已校验的解压包；不要把旧源码开发目录的 Python 当成新安装程序。
 
@@ -58,7 +58,7 @@ Codex 用户：
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" status --json
+"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" status --json
 ```
 :::
 
@@ -70,7 +70,7 @@ Cursor 用户：
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" integration status cursor --scope global --json
+"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" integration status cursor --scope global --json
 ```
 :::
 
@@ -112,7 +112,7 @@ macOS 使用上表对应程序路径。`--status` 不下载组件。代码、密
 ```
 
 ```sh [macOS]
-"$HOME/.local/share/AI-Security-Runtime-install/launcher/security-check" prepare-scanners
+"$HOME/.local/share/AI-Security-Runtime-macos-trial/security-check" prepare-scanners
 ```
 :::
 
@@ -129,7 +129,7 @@ Semgrep 和 OSV 仅保留兼容或显式使用能力，不是默认安装就绪�
 | “可能是恶意软件，已阻止粘贴” | 按[粘贴提醒说明](../reference/faq.md#macos-paste)核对来源、命令和用途，属于执行前的粘贴阶段 |
 | “检测到恶意软件”或“已阻止恶意脚本” | 停止，保留原文和下载来源，不套用普通粘贴提醒的继续步骤 |
 | 完整包提示无法验证开发者 | 先校验来源与 SHA256，再按 [Apple 的应用批准指引](https://support.apple.com/zh-cn/102445)核对系统提示 |
-| `Failed to load Python shared library` / `library load disallowed by system policy` | 保留完整报错；按系统提示和 Apple 指引处理；自动安装使用同一完整包，不能绕过系统限制 |
+| `Failed to load Python shared library` / `library load disallowed by system policy` | 保留完整报错；Codex / Cursor 可改用各自页面的 Mac 自动安装入口，随后重新验证 |
 | `no such file` | 完整包核对解压层级；自动安装核对是否完成及产品目录是否保留 |
 | `Permission denied` | 先核对路径和权限；仅在可信完整包执行位丢失时补执行权限，不能用它解决签名或系统策略问题 |
 

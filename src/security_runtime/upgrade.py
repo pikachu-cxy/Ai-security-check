@@ -103,7 +103,7 @@ class InstallationUpgrade:
         return rows
 
     def diagnose(self, workspace=None, *, probe=False):
-        from .guidance.host_guidance import runtime_info
+        from .build_identity import build_identity
         from .global_workspace import read_bootstrap
         layers = self.layers(workspace)
         try:
@@ -113,7 +113,7 @@ class InstallationUpgrade:
         except (ValueError, OSError) as exc:
             launcher = {'diagnostic': reason(exc)}
         result = {'contract': CONTRACT, 'status': 'DIAGNOSED', 'layers': layers,
-                  'launcher': launcher, 'build': runtime_info()['build_identity'],
+                  'launcher': launcher, 'build': build_identity(),
                   'skill': self.skill.status(), 'live_connection': 'UNKNOWN_RECONNECT_AFTER_UPDATE',
                   'capabilities': 'NOT_PROBED_READ_ONLY', 'engines': 'NOT_PROBED_READ_ONLY',
                   'execution': {'scanner_run': False, 'configuration_modified': False, 'unknown_command_run': False}}
@@ -188,11 +188,11 @@ class InstallationUpgrade:
         if self.manage_skill:
             steps.append({'kind': 'UPGRADE_SKILL', 'layer': str(self.skill.root), 'scope': 'USER',
                           'files': sorted(self.skill.expected)})
-        from .guidance.host_guidance import runtime_info
+        from .build_identity import build_identity
         value = {'contract': CONTRACT, 'issued_at': self.now() if issued_at is None else issued_at,
                  'expires_after_seconds': TTL, 'workspace': str(Path(workspace).absolute()) if workspace is not None else None,
                  'home': str(self.integration.home), 'skill_root': str(self.skill.root),
-                 'build_identity': runtime_info()['build_identity'], 'steps': steps, 'blocked': sorted(set(blocked)),
+                 'build_identity': build_identity(), 'steps': steps, 'blocked': sorted(set(blocked)),
                  'files': [{'path': str(p), 'revision': revision(read(p))} for p in self.paths(workspace)],
                  'recovery': 'SIGNED_LOCAL_JOURNAL_CAS_ROLLBACK; KEYS_AND_SCAN_STATE_PRESERVED',
                  'reconnect_required': True}

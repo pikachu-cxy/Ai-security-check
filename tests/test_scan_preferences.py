@@ -83,6 +83,7 @@ def test_custom_rules_duplicate_exclusion_and_content(tmp_path):
     with preferences(policy(rules={'sast': settings})):
         pack=manager.resolve(); assert len(pack.catalog) == 1
         assert pack.catalog[0].rule_id == 'local.danger'
+        assert pack.path == a
     with preferences(policy(rules={'sast': dict(settings, paths=[str(a),str(b)])})):
         with pytest.raises(ValueError, match='Duplicate'): manager.resolve()
     with preferences(policy(rules={'sast': dict(settings, exclude_ids=['missing'])})):

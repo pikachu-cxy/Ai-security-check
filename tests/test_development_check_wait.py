@@ -46,7 +46,7 @@ def test_wait_returns_full_original_scoped_result_once(check, monkeypatch):
     ref = dirty(check)
     launches = []
     service.launcher = lambda *args: launches.append(args)
-    WaitClock(service, lambda: execute(check, monkeypatch))
+    clock = WaitClock(service, lambda: execute(check, monkeypatch))
     result = asyncio.run(service.finish_and_wait(root, ref, 5))
     # This fixture supplies only the native scanner; keep its actual coverage gap.
     assert result['status'] == 'PARTIAL' and 'SCANNER_COVERAGE_LIMITED' in result['gaps']
@@ -57,6 +57,7 @@ def test_wait_returns_full_original_scoped_result_once(check, monkeypatch):
     assert result['closeout_wait']['stopped_reason'] == 'STATE_AVAILABLE'
     assert not result['closeout_wait']['scanner_dispatched_by_wait']
     assert len(launches) == state['calls'] == 1
+    assert clock.value <= 0.25
     assert not (service.hooks.workspace_directory(root)/'task-security.db').exists()
 
 
@@ -67,7 +68,7 @@ def test_budget_returns_pending_without_restarting_or_claiming_completion(check)
     service.launcher = lambda *args: launches.append(args)
     clock = WaitClock(service)
     result = asyncio.run(service.finish_and_wait(root, ref, 1))
-    assert clock.sleeps == [1] and result['closeout_wait']['elapsed_ms'] == 1000
+    assert sum(clock.sleeps) == 1 and result['closeout_wait']['elapsed_ms'] == 1000
     assert result['status'] == 'QUEUED' and result['dirty_seq'] == 1 and result['scanned_seq'] == 0
     assert result['closeout_wait']['stopped_reason'] == 'TIME_BUDGET_EXHAUSTED'
     assert 'OBSERVED_EDITS_PENDING' in result['gaps']

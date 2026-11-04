@@ -9,7 +9,7 @@
 | 你使用的系统 | 安装入口 | 是否需要额外环境 |
 | --- | --- | --- |
 | Windows x64 | [Codex](./guide/editors/codex.md#windows) / [Cursor](./guide/editors/cursor.md#windows)：一条 PowerShell 命令自动安装 | 不要求另装 Python 或 Node.js |
-| macOS · Apple Silicon 或 Intel | [Codex](./guide/editors/codex.md#macos) / [Cursor](./guide/editors/cursor.md#macos)：一键安装或手动下载同一正式版完整包 | 完整包自带运行环境 |
+| macOS · Apple Silicon 或 Intel | [Codex](./guide/editors/codex.md#macos) / [Cursor](./guide/editors/cursor.md#macos)：下载下方对应芯片的正式版完整包；自动安装另列 | 完整包自带 Python，自动安装准备专用 Python |
 
 WorkBuddy 和其他 MCP 客户端按[对应接入指南](./guide/quickstart.md#choose-editor)配置。项目检查与示例练习需要 Git；安装 Runtime 本身不要求 Git。
 
@@ -34,13 +34,17 @@ Get-Content .\ai-security-runtime-v0.3.12-windows-x64.zip.sha256
 
 ## Mac 安装
 
-Mac 一键安装和下方手动下载统一使用 [v0.3.12 正式发行](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.12)。安装脚本自动识别芯片，下载、校验并解压同一正式完整包，无需额外安装 Python。网络失败立即停止并提示检查 GitHub 连接，不自动重试。
+正式版完整包见[下方三平台发行的 Mac 下载](#macos-packages)。以下自动安装命令仍使用独立试用发行，与正式版完整包分别核对来源。
+
+正式版完整包无需预装 Python，按下方命令安装。另有 Codex / Cursor 的自动安装入口，安装器会识别芯片并准备专用环境。
+
+当前自动安装使用独立发行 [macos-trial-v0.3.12](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.12)。它与完整包的程序路径、来源提交和构建身份分别记录，已有所选编辑器的连接可能更新。真实用户 Mac 的系统策略、桌面连接和组件检查仍需实际验证，详见[支持状态](./reference/support.md#macos-installation)。
 
 粘贴时遇到系统提醒，先按[提醒原因与处理方式](./reference/faq.md#macos-paste)核对原文。
 
 ### Mac 原生完整包 {#macos-packages}
 
-需要原生完整包时，M 系列选择 Apple Silicon，Intel Mac 选择 Intel；核验并完整解压，保留执行权限和整个目录。一键安装会下载相同完整包。
+需要原生完整包时，M 系列选择 Apple Silicon，Intel Mac 选择 Intel；核验并完整解压，保留执行权限和整个目录。原生完整包和独立环境自动安装都是可选入口，请选择一种并使用对应的程序路径。
 
 | 芯片 | 完整安装包 | 校验 |
 | --- | --- | --- |
@@ -68,7 +72,7 @@ tar -xzf ai-security-runtime-v0.3.12-macos-arm64.tar.gz
 
 [完整 SHA256 清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/SHA256SUMS.txt) · [发行清单](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/release-manifest.json) · [验收证据 ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.12/ai-security-runtime-v0.3.12-release-evidence.zip)
 
-**Mac 自动安装**：已统一为上述正式发行完整包。历史 macos-trial 构建和验收不作为新入口的验证证明；实际桌面接入和系统首次启动仍需独立验证。
+**Mac 自动安装**：独立发行 [macos-trial-v0.3.12](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/macos-trial-v0.3.12)，Runtime 版本 0.3.12。两种架构分别验证首次安装、构建身份、Codex / Cursor 接入及重复安装，状态见[Mac 安装流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/workflows/macos-trial.yml)。该合成验收不替代实际桌面、系统首次下载或全部扫描组件验证。
 
 本次更新默认关闭消耗监控，保留静态检查、Agent 复核与风险统计；修复关联证据与 Windows 长路径处理。三平台安装包按实际构建身份与校验值核对。
 

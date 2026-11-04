@@ -38,7 +38,9 @@ def test_global_config_read_never_requires_or_admits_a_workspace(config, host):
 
     server = create_global_server(workspaces=SimpleNamespace(host=host, root=forbidden))
     tools = {t.name: t for t in asyncio.run(server.list_tools())}
-    assert 'workspace_path' not in tools['get_development_config'].inputSchema.get('required', [])
+    schema = (tools['runtime_status'].inputSchema['$defs']['get_development_config']
+              if host == 'codex' else tools['get_development_config'].inputSchema)
+    assert 'workspace_path' not in schema.get('required', [])
     result = structured(asyncio.run(server.call_tool('get_development_config', {})))
     assert result['status'] == 'VALID'
     assert result['values']['storage']['development_max_records'] == 1024
@@ -69,11 +71,11 @@ def test_stop_submits_once_waits_and_is_bounded(check):
     service.launcher = lambda *args: calls.append(args)
     ref = service.begin(root, 'work')['check_ref']
     service.record(root, ref, ['app.ts'])
-    first = fallback(service.hooks, root, OWNER, service=service)
+    first = fallback(service.hooks, root, OWNER, service=service, turn_id='edit-turn')
     assert first['decision'] == 'block' and len(calls) == 1
-    second = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True)
+    second = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True, turn_id='edit-turn')
     assert second['decision'] == 'block' and len(calls) == 1
-    third = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True)
+    third = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True, turn_id='edit-turn')
     assert third['status'] == 'STOP_FALLBACK_INCOMPLETE' and 'decision' not in third
     assert service.get(root, ref)['finish_requested']
 
@@ -82,13 +84,13 @@ def test_expired_stop_budget_preserves_pending_check(check):
     root, service, _, _ = check
     ref = service.begin(root, 'deadline')['check_ref']
     service.record(root, ref, ['app.ts'])
-    fallback(service.hooks, root, OWNER, service=service)
+    fallback(service.hooks, root, OWNER, service=service, turn_id='edit-turn')
     store = service.store(root)
     with store.transaction() as db:
         row = store._get(db, ref)
         row['stop_fallback']['deadline'] = 0
         store._put(db, ref, row)
-    result = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True)
+    result = fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True, turn_id='edit-turn')
     assert result['status'] == 'STOP_FALLBACK_INCOMPLETE'
     assert service.get(root, ref)['status'] == 'QUEUED'
 
@@ -152,10 +154,10 @@ def test_new_edit_does_not_reset_continuation_budget(check):
     root, service, _, _ = check
     ref = service.begin(root, 'work')['check_ref']
     service.record(root, ref, ['app.ts'])
-    fallback(service.hooks, root, OWNER, service=service)
+    fallback(service.hooks, root, OWNER, service=service, turn_id='edit-turn')
     deadline = service.store(root).load(ref)['stop_fallback']['deadline']
     service.record(root, ref, ['app.ts'])
-    fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True)
+    fallback(service.hooks, root, OWNER, service=service, stop_hook_active=True, turn_id='edit-turn')
     row = service.store(root).load(ref)
     assert row['stop_fallback']['deadline'] == deadline
     assert row['stop_fallback']['count'] == 2
@@ -247,6 +249,131 @@ def test_disabled_stop_snapshot_survives_reenable_until_new_check(check, config)
 from test_development_risks import sample, scanner
 
 
+@pytest.mark.parametrize('partial', [False, True])
+def test_terminal_stop_is_not_repeated_after_inconclusive_review(check, config, monkeypatch, partial):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, state = check
+    config.write_text('[agent]\nreview_scanner_findings=true\naudit_business_logic=false')
+    (root/'app.ts').write_text('eval(userInput);\n')
+    ref = service.begin(root, 'terminal-stop')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    execute(check, monkeypatch)
+    store = service.store(root)
+    if not partial:
+        with store.transaction() as db:
+            row = store._get(db, ref)
+            store._put(db, ref, dict(row, state='RESULTS_READY',
+                result=dict(row['result'], gaps=[], status='COMPLETED', coverage='FULL')))
+    saved = service.get(root, ref)
+    assert saved['next_action']['tool'] == 'get_development_risks'
+    assert '最终回复前' in saved['review_instruction']
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id='turn')['decision'] == 'block'
+    risks = DevelopmentRisks(service, root, ref)
+    candidate = risks.get()['risks'][0]
+    evidence = risks.read('app.ts', 1, 1)
+    risks.submit([dict(same_issue_as=candidate['id'], scan_id=saved['scan_id'],
+        decision='INCONCLUSIVE', rationale='Synthetic missing caller context.',
+        evidence_refs=[evidence['evidence_ref']])], saved['dirty_seq'])
+    risks.get()
+    assert fallback(service.hooks, root, OWNER, service=service,
+                    stop_hook_active=True, turn_id='turn') is None
+    after = service.get(root, ref)
+    assert after['review_progress']['scanner_review'] == 'PENDING'
+    assert not after['host_review_completed']
+    assert after['gaps'] == saved['gaps']
+    assert store.load(ref)['stop_fallback']['count'] == 1
+    assert state['calls'] == 1
+    # A new edit must still get its own fallback, within the original budget.
+    service.record(root, ref, ['app.ts'])
+    assert service.get(root, ref)['next_action']['tool'] == 'finish_development_check'
+    assert fallback(service.hooks, root, OWNER, service=service,
+                    stop_hook_active=True, turn_id='turn')['decision'] == 'block'
+
+
+def test_waiting_stop_does_not_suppress_new_terminal_result(check, monkeypatch):
+    root, service, _, state = check
+    ref = service.begin(root, 'waiting-stop')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id='turn')['decision'] == 'block'
+    execute(check, monkeypatch)
+    assert fallback(service.hooks, root, OWNER, service=service,
+                    stop_hook_active=True, turn_id='turn')['decision'] == 'block'
+    assert fallback(service.hooks, root, OWNER, service=service,
+                    stop_hook_active=True, turn_id='turn') is None
+    assert state['calls'] == 1
+
+
+def test_static_only_result_does_not_request_agent_review(check, config, monkeypatch):
+    root, service, _, _ = check
+    config.write_text('[agent]\nreview_scanner_findings=false\naudit_business_logic=false')
+    ref = service.begin(root, 'static-next-action')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    execute(check, monkeypatch)
+    saved = service.get(root, ref)
+    assert 'review_instruction' not in saved
+    assert saved['next_action']['tool'] == 'get_development_check'
+
+
+@pytest.mark.parametrize('has_finding', [False, True])
+def test_successful_import_recovers_old_failure_and_stop_is_quiet(check, config, monkeypatch, has_finding):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, _ = check
+    config.write_text('[agent]\nreview_scanner_findings=true\naudit_business_logic=false')
+    if has_finding:
+        (root/'app.ts').write_text('eval(userInput);\n')
+    ref = service.begin(root, 'recovered-import')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    store = service.store(root)
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, risk_import_status='UNAVAILABLE'))
+    execute(check, monkeypatch)
+    assert store.load(ref)['risk_import_status'] == 'AVAILABLE'
+    # This fixture runs only the local lexical scanner. Model the other
+    # scanners' completion to isolate Stop's review-completion decision.
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        assert row['result']['gaps'] == ['SCANNER_COVERAGE_LIMITED']
+        store._put(db, ref, dict(row, state='RESULTS_READY',
+            result=dict(row['result'], gaps=[], status='COMPLETED', coverage='FULL')))
+    risks = DevelopmentRisks(service, root, ref)
+    result = risks.get()
+    assert result['total'] == int(has_finding)
+    if has_finding:
+        assert not result['review_progress']['host_review_completed']
+        evidence = risks.read('app.ts', 1, 1)
+        risks.submit([dict(same_issue_as=result['risks'][0]['id'], scan_id=result['scan_id'],
+            decision='DISMISSED', rationale='Synthetic review for the Stop lifecycle test.',
+            evidence_refs=[evidence['evidence_ref']])], result['dirty_seq'])
+    assert service.get(root, ref)['host_review_completed']
+    assert fallback(service.hooks, root, OWNER, service=service) is None
+
+
+@pytest.mark.parametrize('outcome', ['failure', 'newer_scan'])
+def test_unsuccessful_or_stale_import_cannot_clear_failure(sample, monkeypatch, outcome):
+    root, service, ref, risks = sample
+    scanner(sample, monkeypatch)
+    store = service.store(root)
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, risk_import_status='UNAVAILABLE'))
+    original = risks.import_scanner
+    def import_scanner(row, check):
+        if outcome == 'failure':
+            raise ValueError('Synthetic import failure')
+        original(row, check)
+        with store.transaction() as db:
+            current = store._get(db, ref)
+            store._put(db, ref, dict(current, scan_id='scan-2'))
+    monkeypatch.setattr(risks, 'import_scanner', import_scanner)
+    if outcome == 'failure':
+        with pytest.raises(ValueError, match='Synthetic import failure'):
+            risks.sync_scanner()
+    else:
+        risks.sync_scanner()
+    assert store.load(ref)['risk_import_status'] == 'UNAVAILABLE'
+
+
 def test_static_candidate_import_keeps_raw_findings_without_review(sample, config, monkeypatch):
     root, service, ref, risks = sample
     config.write_text('[agent]\nreview_scanner_findings=false\naudit_business_logic=false')
@@ -264,3 +391,29 @@ def test_static_candidate_import_keeps_raw_findings_without_review(sample, confi
     assert not risks.current_check().get('has_development_review')
     risks.sync_scanner()
     assert risks.get()['risks'][0]['observation_count'] == 1
+
+
+@pytest.mark.parametrize('old_turn,new_turn', [('old', 'new'), ('old', None), (None, 'new'), (None, None)])
+def test_historical_stop_cannot_block_later_turn(check, old_turn, new_turn):
+    root, service, _, _ = check
+    calls = []
+    service.launcher = lambda *args: calls.append(args)
+    ref = service.begin(root, 'old-work')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id=old_turn)['decision'] == 'block'
+    for active in (False, True):
+        assert fallback(service.hooks, root, OWNER, service=service,
+                        turn_id=new_turn, stop_hook_active=active) is None
+    assert len(calls) == 1
+    assert service.get(root, ref)['finish_requested']
+
+
+def test_new_edit_turn_retains_its_own_fallback(check):
+    root, service, _, _ = check
+    ref = service.begin(root, 'work')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    fallback(service.hooks, root, OWNER, service=service, turn_id='old')
+    service.record(root, ref, ['app.ts'])
+    result = fallback(service.hooks, root, OWNER, service=service, turn_id='new')
+    assert result['decision'] == 'block'
+    assert service.store(root).load(ref)['stop_fallback']['turn'] is not None

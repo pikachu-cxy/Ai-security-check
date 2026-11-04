@@ -27,7 +27,8 @@ def discovered():
     # Any attempted workspace admission fails: inventory and runtime info need
     # no root, task, project source, scanner, build, or installed frozen process.
     server = create_global_server(workspaces=object())
-    rows = {tool.name: tool.inputSchema for tool in asyncio.run(server.list_tools())}
+    from security_runtime.mcp_tool_groups import operation_schemas
+    rows = operation_schemas(asyncio.run(server.list_tools()))
     return server, rows
 
 
@@ -111,6 +112,9 @@ def test_expected_error_decoder_reads_real_pre_admission_rejection(builder, disc
     server, _ = discovered
     result = asyncio.run(server.call_tool('submit_task_security_review',
                                          builder.malformed_task_review_payload()))
+    grouped = asyncio.run(server.call_tool('task_review', dict(operation='submit_task_security_review',
+        arguments=builder.malformed_task_review_payload())))
+    assert grouped == result
     rejection = builder.decoded_tool(result, expected_error=True)
     assert rejection['reason_code'] == 'TASK_REVIEW_INPUT_INVALID'
     fields = {item['field'] for item in rejection['field_errors']}

@@ -101,6 +101,11 @@ def register(server, registry, *, application):
     def offered(result):
         # Response preparation is not report submission. This in-memory hint
         # only avoids a redundant Stop continuation in this connection.
+        if result.get('closeout_wait') and result.get('status') in {'QUEUED', 'RUNNING'}:
+            if len(application.development_result_offers) >= 128:
+                application.development_result_offers.pop()
+            application.development_result_offers.add(
+                (result['check_ref'], result['dirty_seq'], 'WAITING'))
         delivery = result.get('delivery', {})
         ref = delivery.get('check_ref', result.get('check_ref'))
         seq = delivery.get('scanned_seq', result.get('scanned_seq'))

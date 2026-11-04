@@ -6,6 +6,7 @@ worker remains interrupted rather than silently scanning a different version.
 from __future__ import annotations
 
 from pathlib import Path
+import asyncio
 import os
 import re
 import secrets
@@ -147,17 +148,25 @@ class ScanJobs(SignedRecords):
         state = row['state']
         if state in ACTIVE and row['lease_until'] <= self.now():
             state = 'INTERRUPTED'
+        # The legacy scan duration stops before final validation/persistence.
+        # This job interval includes startup, scanning, publication and cleanup.
+        finished = row.get('completed_at', row['updated_at'] if state == 'COMPLETED' else None)
+        timing = dict(contract='scan-job-timing-v1',
+            total_ms=round(max(0, finished-row['created_at'])*1000) if finished is not None else None,
+            scan=row.get('scan_timing'), host_analysis_ms=None, conversation_total_ms=None)
         return dict(contract=row['contract'], job_ref=ref, workspace=str(self.root),
             status=state, phase=row['phase'], providers=row['providers'],
             created_at=row['created_at'], updated_at=row['updated_at'],
             scan_id=row['scan_id'], scan_status=row.get('scan_status'),
             reason_code='WORKER_LEASE_EXPIRED' if state == 'INTERRUPTED' else row['reason_code'],
             failure_diagnostic=row.get('failure_diagnostic'),
+            timing=timing,
             result_available=state == 'COMPLETED', scanner_run=False,
             source_modified=False, repair_authorized=False,
             poll_after_seconds=2 if state in ACTIVE else None,
-            next_action=dict(tool='get_scan_result' if state == 'COMPLETED' else 'get_scan_status',
-                arguments=dict(workspace_path=str(self.root), job_ref=ref)),
+            next_action=dict(tool='get_scan_result',
+                arguments=dict(workspace_path=str(self.root), job_ref=ref,
+                               wait_seconds=20 if state in ACTIVE else 0)),
             scope_notice='扫描版本在工作进程开始时捕获；查询只读取原任务，不检查当前源码，也不重新扫描。')
 
     def listing(self, limit=20):
@@ -180,11 +189,26 @@ class ScanJobs(SignedRecords):
             raise ValueError('Original scan result unavailable')
         data = _agent_result(scan, summary=summary)
         data.update(job_ref=ref, retrieval_scanner_run=False,
+                    timing=status['timing'], duration_ms_scope='BEFORE_FINALIZATION',
                     execution=row['execution'], result_is_saved_version=True,
                     scope_notice=status['scope_notice'])
         if summary:
             data['findings_access']['arguments']['workspace_path'] = str(self.root)
         return data
+
+    async def wait_result(self, ref, *, summary=True, wait_seconds=0):
+        """Only read the original job; cancellation never cancels its worker."""
+        if type(wait_seconds) is not int or not 0 <= wait_seconds <= 25:
+            raise ValueError('wait_seconds must be an integer from 0 to 25')
+        if wait_seconds == 0:
+            return await asyncio.to_thread(self.result, ref, summary=summary)
+        deadline = time.monotonic() + wait_seconds
+        while True:
+            status = await asyncio.to_thread(self.status, ref)
+            remaining = deadline-time.monotonic()
+            if status['status'] not in ACTIVE or remaining <= 0:
+                return await asyncio.to_thread(self.result, ref, summary=summary)
+            await asyncio.sleep(min(0.5, remaining))
 
 
 def launch(queue, row):
@@ -201,6 +225,12 @@ def launch(queue, row):
 
 
 def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=None):
+    from .explicit_scan import queued_scan
+    with queued_scan():
+        return _run_worker(workspace, hooks_path, job_ref, ticket, application_factory=application_factory)
+
+
+def _run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=None):
     hooks = HookStateStore(Path(hooks_path).absolute())
     queue = ScanJobs(hooks, Path(workspace).absolute())
     # Missing original records/keys are never created during worker recovery.
@@ -208,7 +238,9 @@ def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=No
     if not secrets.compare_digest(row['ticket'], ticket) or (row['state'] != 'QUEUED' or row['lease_until'] <= queue.now()):
         return 2
     workers = HookStateStore(Path(hooks.directory)/'explicit-workers')
-    with workers.lock(queue.root, wait_seconds=0) as acquired:
+    from .explicit_scan import queued_workspace_lock
+    queue.update(job_ref, ticket, phase='WORKSPACE_SCAN_QUEUED')
+    with queued_workspace_lock(workers, queue.root) as acquired:
         if not acquired:
             queue.update(job_ref, ticket, state='FAILED', reason_code='WORKSPACE_SCAN_BUSY')
             return 2
@@ -248,6 +280,7 @@ def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=No
                 else:
                     application = application_factory(row)
                 request, reporter = row['request'], ProgressReporter(progress)
+                scan_started = time.monotonic()
                 if request['mode'] == 'project':
                     result = application.scan_project(str(queue.root),
                         force_rescan=request['force_rescan'], progress=reporter)
@@ -257,7 +290,10 @@ def run_worker(workspace, hooks_path, job_ref, ticket, *, application_factory=No
                     result = application.scan(str(queue.root), request['mode'], progress=reporter)
             data = result if isinstance(result, dict) else vars(result)
             reused = isinstance(result, dict) and data.get('result_reuse', {}).get('reused') is True
+            from .mcp_scan_progress import scan_timing
+            measured = scan_timing(result, dict(request_ms=round((time.monotonic()-scan_started)*1000)), reused=reused)
             queue.update(job_ref, ticket, state='COMPLETED', phase='COMPLETED',
+                completed_at=queue.now(), scan_timing=measured,
                 scan_id=data['scan_id'], scan_status=data['status'],
                 execution=dict(scanner_run=not reused and any(
                     (r.get('status') if isinstance(r, dict) else r.status) in {'SUCCESS', 'FAILED', 'TIMEOUT'}

@@ -1,6 +1,7 @@
 """Actual MCP routing and Hook result channels, with no scanner substitutes for delivery proof."""
 import asyncio
 import json
+import pytest
 
 from security_runtime.development_check import DevelopmentCheckStore
 from security_runtime.development_delivery import publish
@@ -82,3 +83,32 @@ def test_global_reconnect_does_not_inject_pending_check_context(audit_pool, proj
 
 from test_task_audit_startup import audit_pool  # noqa: E402,F401
 from test_global_integration import installed  # noqa: E402,F401
+
+
+@pytest.mark.parametrize('change', ['unchanged', 'new_edit', 'new_result'])
+def test_waiting_offer_only_suppresses_same_pending_batch(development_server, monkeypatch, change):
+    server, root, hooks, launches = development_server
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
+    ref, token = prepare(development_server)
+    waiting = call(server, 'complete_development_check', workspace_path=str(root),
+                   check_ref=ref, session_ref=token)
+    assert waiting['status'] == 'QUEUED' and len(launches) == 1
+    if change == 'new_edit':
+        call(server, 'record_development_changes', workspace_path=str(root),
+             check_ref=ref, paths=['src/A.java'], session_ref=token)
+    elif change == 'new_result':
+        store = DevelopmentCheckStore(hooks, root)
+        with store.transaction() as db:
+            row = store._get(db, ref)
+            row = store._put(db, ref, dict(row, state='PARTIAL', scanned_seq=row['dirty_seq'],
+                reason_code='DEVELOPMENT_SCOPE_UNKNOWN'))
+            publish(store, db, row)
+    response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop',
+        workspace_path=str(root), session_id='delivery-session',
+        stop_hook_active=False, turn_id='delivery-turn')))
+    assert (structured(response).get('decision') == 'block') is (change != 'unchanged')
+    if change == 'unchanged':
+        assert len(launches) == 1
+        row = call(server, 'get_development_check', workspace_path=str(root),
+                   check_ref=ref, session_ref=token)
+        assert row['status'] == 'QUEUED' and not row['host_review_completed']

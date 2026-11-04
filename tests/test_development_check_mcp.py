@@ -152,6 +152,7 @@ def test_wait_mcp_dispatch_yields_to_another_read(development_server, monkeypatc
 
 def test_global_router_requires_workspace_and_keeps_session_scope(installed, projects, tmp_path, monkeypatch):
     from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(tmp_path / 'user-config.toml'))
 
     def forbidden(*args, **kwargs):
         pytest.fail('Routing and metadata must not capture sources, recover old work, or scan')
@@ -172,6 +173,9 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
     server = create_global_server(workspaces=pool)
 
     def routed(name, **arguments):
+        from security_runtime.mcp_tool_groups import ROUTES
+        if name in ROUTES:
+            return structured(asyncio.run(server.call_tool(ROUTES[name], dict(operation=name, arguments=arguments))))
         return structured(asyncio.run(server.call_tool(name, arguments)))
 
     try:
@@ -209,8 +213,8 @@ def test_global_router_requires_workspace_and_keeps_session_scope(installed, pro
         invalid = routed('submit_development_review', workspace_path=root, session_ref=tokens[0],
                          check_ref=check['check_ref'], expected_seq=999, observations=[])
         assert invalid['reason_code'] == 'DEVELOPMENT_RISK_VERSION_STALE'
-        schema = next(tool.inputSchema for tool in asyncio.run(server.list_tools())
-                      if tool.name == 'finish_development_check')
+        from security_runtime.mcp_tool_groups import operation_schemas
+        schema = operation_schemas(asyncio.run(server.list_tools()))['finish_development_check']
         assert schema['properties']['wait_seconds']['minimum'] == 0
         assert schema['properties']['wait_seconds']['maximum'] == 25
         rejected = routed('finish_development_check', workspace_path=root,

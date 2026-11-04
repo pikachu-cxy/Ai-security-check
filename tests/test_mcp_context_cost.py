@@ -137,7 +137,8 @@ def test_global_hosts_share_the_compact_defaults_from_the_same_registration(host
     registry, _ = registered(large_scan(1))
     local = registry.schemas()
     routed = create_global_server(workspaces=object(), host=host)
-    exported = {tool.name: tool.inputSchema for tool in asyncio.run(routed.list_tools())}
+    from security_runtime.mcp_tool_groups import operation_schemas
+    exported = operation_schemas(asyncio.run(routed.list_tools()))
     defaults = [('scan_project', 'summary'), ('scan_diff', 'summary'), ('scan_files', 'summary'),
         ('get_findings', 'view'), ('get_triage', 'view'), ('prepare_triage', 'limit'),
         ('prepare_task_triage', 'limit'), ('prepare_task_triage', 'include_existing_reviews'),

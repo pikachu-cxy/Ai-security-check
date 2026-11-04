@@ -42,4 +42,7 @@ class OpenGrepEngineProvider(SemgrepEngineProvider):
         # Python-only option fails instead of scanning.
         index = command.index('--metrics')
         del command[index:index+2]
+        # Use the shipped native CLI, retaining full JSON/errors/coverage/traces.
+        # Without this switch the 1.32 CLI loads the legacy Python frontend.
+        command.insert(2, '--experimental')
         return command

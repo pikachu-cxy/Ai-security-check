@@ -109,9 +109,10 @@ def test_global_feedback_schema_errors_do_not_claim_workspace_or_host_failure(in
     pool, _, _ = feedback_pool(installed, tmp_path)
     server = create_global_server(workspaces=pool)
     try:
-        tools = {tool.name: tool for tool in asyncio.run(server.list_tools())}
+        from security_runtime.mcp_tool_groups import operation_schemas
+        schemas = operation_schemas(asyncio.run(server.list_tools()))
         for name in ('set_finding_disposition', 'set_task_risk_disposition', 'get_task_risk_feedback'):
-            assert 'workspace_path' in tools[name].inputSchema['required']
+            assert 'workspace_path' in schemas[name]['required']
         arguments = dict(scan_id='scan-a', finding_id='finding', feedback_session='token',
             context_hash='hash', verdict='FALSE_POSITIVE', reason='Review',
             evidence_refs=[dict(file='app.py', start_line=2, end_line=2)])

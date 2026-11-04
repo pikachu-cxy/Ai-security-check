@@ -252,7 +252,7 @@ def _base(record, freshness=None, feedback=None, static_feedback=None, *, handli
         protocol_version=(record.get('review_protocol') if type(record.get('review_protocol')) is int else None),
         history_read_only=True, scanner_run=False,
         repair_authorized=False,
-        task_scope=('HOST_SESSION' if owner.get('host') in {'codex', 'cursor', 'workbuddy'} else
+        task_scope=('HOST_SESSION' if owner.get('host') in {'codex', 'cursor'} else
                     'MCP_CONNECTION' if owner else 'LEGACY_UNOWNED'),
         review_required=record['phase'] in {'READY', 'REVIEWING'},
         changed_file_count=len(changes), changes=_sample(changes),

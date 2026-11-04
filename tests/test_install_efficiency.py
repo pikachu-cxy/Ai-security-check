@@ -72,13 +72,21 @@ def test_cleanup_preserves_live_active_unknown_and_scanner_cache(tmp_path):
     assert delivery.pointer()['previous'] is None
 
 
-def test_cleanup_defers_if_process_inventory_unknown_and_preserves_tampered_slot(tmp_path):
+def test_cleanup_defers_if_process_inventory_unknown_and_preserves_tampered_slot(tmp_path, monkeypatch):
     delivery = StableDelivery(tmp_path / 'program', probe=lambda _: {'status': 'OK'})
     first = delivery.activate(bundle(tmp_path / 'a'))['active_build']
     delivery.activate(bundle(tmp_path / 'b', b'new'))
+    import security_runtime.delivery as module
+    original, verified = module.package_metadata, []
+    def record(path, **kwargs):
+        verified.append(path)
+        return original(path, **kwargs)
+    monkeypatch.setattr(module, 'package_metadata', record)
     assert delivery.cleanup(in_use=lambda _: None)['deferred_builds'] == [first]
+    assert delivery.slot(first) not in verified
     (delivery.slot(first) / EXE).write_bytes(b'user modified')
     assert delivery.cleanup(in_use=lambda _: set())['preserved_builds'] == [first]
+    assert delivery.slot(first) in verified
 
 
 def test_delta_contains_only_changed_files_and_reconstructs_exact_bundle(tmp_path):
@@ -144,3 +152,74 @@ def test_tiny_launcher_avoids_runtime_duplication_and_legacy_overwrite(tmp_path)
     Path(activated['launcher']).write_bytes(b'tampered')
     with pytest.raises(IntegrationDiagnostic):
         delivery.status()
+
+
+def test_frozen_probe_reuses_verified_inventory_but_detects_mutation(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+    import security_runtime.delivery as module
+    from security_runtime.install_checks import single_capability_check
+    package = bundle(tmp_path / 'package', b'first')
+    walks, probes = [], []
+    original = module.package_inventory
+    def inventory(*args, **kwargs):
+        walks.append(args[0])
+        return original(*args, **kwargs)
+    def probe(*args):
+        probes.append(args)
+        return {'status': 'OK'}
+    monkeypatch.setattr(module, 'package_inventory', inventory)
+    integration = SimpleNamespace(probe=probe)
+    runtime = {'command': str(package / EXE), 'prefix': [], 'kind': 'FROZEN'}
+    with verification_session(), single_capability_check(integration):
+        integration.probe(runtime, tmp_path, {})
+        assert len(walks) == 2  # Before/after hashing; no third redundant walk.
+        integration.probe(runtime, tmp_path, {})
+        assert len(walks) == 3 and len(probes) == 1
+        integration.probe(runtime, tmp_path, {'changed': '1'})
+        assert len(probes) == 2
+        target = package / EXE
+        before = target.stat()
+        target.write_bytes(b'other')
+        os.utime(target, ns=(before.st_atime_ns, before.st_mtime_ns))
+        integration.probe(runtime, tmp_path, {})
+        assert len(probes) == 3  # Invalid identity must not reuse success.
+    assert integration.probe is probe
+
+
+def test_failed_capability_probe_is_never_cached(tmp_path):
+    from types import SimpleNamespace
+    from security_runtime.install_checks import single_capability_check
+    results = iter([{'status': 'FAILED'}, {'status': 'OK'}])
+    integration = SimpleNamespace(probe=lambda *args: next(results))
+    runtime = {'command': 'fixture', 'prefix': [], 'kind': 'DEV'}
+    with single_capability_check(integration):
+        assert integration.probe(runtime, tmp_path, {})['status'] == 'FAILED'
+        assert integration.probe(runtime, tmp_path, {})['status'] == 'OK'
+        assert integration.probe(runtime, tmp_path, {})['status'] == 'OK'
+
+
+def test_install_probe_directs_only_verified_launcher_to_current_slot(tmp_path):
+    from types import SimpleNamespace
+    from security_runtime.install_checks import single_capability_check
+    delivery = StableDelivery(tmp_path / 'program', probe=lambda _: {'status': 'OK'})
+    first = delivery.activate(bundle(tmp_path / 'first'))
+    calls = []
+    def probe(runtime, home, environment):
+        calls.append(runtime.copy())
+        return {'status': 'OK'}
+    integration = SimpleNamespace(probe=probe)
+    runtime = {'command': first['launcher'], 'prefix': [], 'kind': 'FROZEN'}
+    with verification_session(), single_capability_check(integration):
+        integration.probe(runtime, tmp_path, {})
+        integration.probe(runtime, tmp_path, {})
+        assert [r['command'] for r in calls] == [str(delivery.slot(first['active_build']) / EXE)]
+        second = delivery.activate(bundle(tmp_path / 'second', b'updated executable'))
+        integration.probe(runtime, tmp_path, {})
+        assert len(calls) == 2
+        assert calls[-1]['command'] == str(delivery.slot(second['active_build']) / EXE)
+        # A custom command prefix must keep the original launch semantics.
+        custom = {**runtime, 'prefix': ['custom-argument']}
+        integration.probe(custom, tmp_path, {})
+        assert calls[-1] == custom
+    assert runtime == {'command': first['launcher'], 'prefix': [], 'kind': 'FROZEN'}
+    assert integration.probe is probe

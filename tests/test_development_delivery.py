@@ -252,6 +252,7 @@ def test_new_edit_during_scan_keeps_outbox_bound_to_captured_scope(check, monkey
     state['callback'] = edit
     execute(check, monkeypatch)
     assert service.get(root, ref)['status'] == 'DIRTY'
+    assert service.get(root, ref)['scope']['paths'] == ['app.ts', 'later.ts']
     assert service.saved_result(root, ref, 1)['delivery']['scope']['paths'] == ['app.ts']
     assert state['calls'] == 1
 

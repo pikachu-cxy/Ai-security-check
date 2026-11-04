@@ -5,6 +5,8 @@ delivery activation executes the supplied package's capability probe.
 """
 from __future__ import annotations
 
+from .performance_trace import timed
+
 import hashlib
 import hmac
 import json
@@ -98,18 +100,19 @@ def bundle_link_name(name, target):
     return resolved
 
 
+@timed("install.package_inventory")
 def package_inventory(bundle, *, allow_internal_links=False):
     """One bounded no-follow tree walk, instead of rechecking every ancestor."""
     no_links(bundle)
     rows, total = [], 0
-    pending = [bundle]
+    pending = [(bundle, '')]
     while pending:
-        directory = pending.pop()
+        directory, prefix = pending.pop()
         with os.scandir(directory) as entries:
             for entry in entries:
                 info = entry.stat(follow_symlinks=False)
                 path = Path(entry.path)
-                name = path.relative_to(bundle).as_posix()
+                name = prefix + entry.name
                 link = ''
                 if entry.is_symlink():
                     if not allow_internal_links or os.name == 'nt':
@@ -131,7 +134,7 @@ def package_inventory(bundle, *, allow_internal_links=False):
                 rows.append((name, info.st_mode, info.st_dev,
                     info.st_ino, info.st_size, info.st_mtime_ns, _change_time(path, info), link))
                 if stat.S_ISDIR(info.st_mode):
-                    pending.append(path)
+                    pending.append((path, name + '/'))
                 else:
                     total += info.st_size
                 if len(rows) > 20_000 or total > 2_000_000_000:
@@ -172,7 +175,8 @@ def _require_storage_compatibility(current, target):
         raise IntegrationDiagnostic('DELIVERY_STATE_SCHEMA_INCOMPATIBLE')
 
 
-def package_metadata(bundle, *, _retry=True):
+@timed("install.package_verify")
+def package_metadata(bundle, *, _retry=True, _with_inventory=False):
     bundle = Path(bundle).absolute()
     no_links(bundle)
     path = bundle / 'version.json'
@@ -201,7 +205,8 @@ def package_metadata(bundle, *, _retry=True):
         cache = _verification_cache.get()
         cached = cache.get(str(bundle)) if cache is not None else None
         if cached and cached[0] == inventory:
-            return copy.deepcopy(cached[1])
+            result = copy.deepcopy(cached[1])
+            return (result, inventory) if _with_inventory else result
         actual_links = {r[0]: r[7] for r in inventory if stat.S_ISLNK(r[1])}
         if actual_links != links:
             raise ValueError()
@@ -226,22 +231,22 @@ def package_metadata(bundle, *, _retry=True):
             if _retry:
                 if cache is not None:
                     cache.pop(str(bundle), None)
-                return package_metadata(bundle, _retry=False)
+                return package_metadata(bundle, _retry=False, _with_inventory=_with_inventory)
             raise ValueError()
         result = value | {'build_id': identity}
         if cache is not None:
             cache[str(bundle)] = (inventory, copy.deepcopy(result))
-        return result
+        return (result, inventory) if _with_inventory else result
     except (ValueError, OSError, KeyError, TypeError, RecursionError):
         raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID') from None
 
 
-def launcher_metadata(directory):
+def launcher_metadata(directory, *, _with_inventory=False):
     """Accept the immutable legacy bootstrap or a checksum-verified tiny launcher."""
     directory = Path(directory)
     path = directory / 'launcher.json'
     if not path.exists():
-        return package_metadata(directory)
+        return package_metadata(directory, _with_inventory=_with_inventory)
     try:
         inventory = package_inventory(directory)
         if {r[0] for r in inventory} != {EXE, 'launcher.json'} or path.stat().st_size > 4096:
@@ -249,7 +254,8 @@ def launcher_metadata(directory):
         data = json.loads(path.read_bytes())
         if data['contract'] != 'native-launcher-v1' or file_digest(directory / EXE) != data['sha256']:
             raise ValueError()
-        return {'build_id': data['sha256'], 'launcher_contract': CONTRACT}
+        result = {'build_id': data['sha256'], 'launcher_contract': CONTRACT}
+        return (result, inventory) if _with_inventory else result
     except (ValueError, OSError, KeyError, TypeError):
         raise IntegrationDiagnostic('DELIVERY_LAUNCHER_INVALID') from None
 
@@ -315,6 +321,7 @@ class StableDelivery:
             raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
         return metadata
 
+    @timed("install.capability_probe")
     def _probe(self, bundle):
         if self.probe:
             return self.probe(bundle)
@@ -335,7 +342,8 @@ class StableDelivery:
             return probe_runtime({'kind': 'FROZEN', 'command': str(bundle / EXE), 'prefix': []}, root / 'codex-home', env)
 
     @verified_operation
-    def activate(self, bundle, *, progress=None):
+    @timed("install.activate")
+    def activate(self, bundle, *, progress=None, defer_capability_check=False):
         bundle = Path(bundle).absolute()
         report_progress(progress, 'PACKAGE_VERIFY')
         metadata = package_metadata(bundle)
@@ -360,10 +368,11 @@ class StableDelivery:
             report_progress(progress, 'VERIFY_INSTALLED')
             if package_metadata(target) != metadata:
                 raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
-            report_progress(progress, 'CAPABILITY_CHECK')
-            capability = self._probe(target)
-            if capability.get('status') != 'OK':
-                raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
+            if not defer_capability_check:
+                report_progress(progress, 'CAPABILITY_CHECK')
+                capability = self._probe(target)
+                if capability.get('status') != 'OK':
+                    raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
             report_progress(progress, 'PREPARE_LAUNCHER')
             launcher = self.root / 'launcher'
             no_links(launcher)
@@ -419,13 +428,15 @@ class StableDelivery:
                     continue
                 try:
                     no_links(directory)
+                    # Nothing will be removed when its use is unknown or live.
+                    # Avoid hashing retained historical bundles on every install.
+                    if busy is None or directory.name in busy:
+                        deferred.append(directory.name)
+                        continue
                     candidate = self.slot(directory.name)
                     metadata = package_metadata(candidate)
                     if metadata['build_id'] != directory.name or set(p.name for p in directory.iterdir()) != {'bundle'}:
                         raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
-                    if busy is None or directory.name in busy:
-                        deferred.append(directory.name)
-                        continue
                     # Resolve and validate the exact narrow target before deletion.
                     resolved = directory.resolve()
                     if resolved.parent != versions.resolve() or not is_digest(resolved.name):
@@ -440,10 +451,10 @@ class StableDelivery:
             legacy = self.root / 'launcher'
             if pointer.get('launcher') == 'launcher-v2' and legacy.exists():
                 try:
-                    package_metadata(legacy)
                     if busy is None or '@legacy-launcher' in busy:
                         bootstrap = 'DEFERRED_IN_USE'
                     else:
+                        package_metadata(legacy)
                         no_links(legacy)
                         if legacy.resolve().parent != self.root.resolve() or legacy.name != 'launcher':
                             raise IntegrationDiagnostic('DELIVERY_ROOT_INVALID')

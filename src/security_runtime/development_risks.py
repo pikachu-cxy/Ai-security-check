@@ -203,10 +203,16 @@ class DevelopmentRisks:
             row = self.load(db)
             self.import_scanner(row, check)
             self.store._put(db, self.ref, row)
-        if row['risks']:
-            with self.checks.transaction() as db:
-                current = self.checks._get(db, self.ref)
-                self.checks._put(db, self.ref, dict(current, has_unified_risks=True))
+        with self.checks.transaction() as db:
+            current = self.checks._get(db, self.ref)
+            changes = dict(has_unified_risks=True) if row['risks'] else {}
+            # Clear a previous failure only after this scan's import committed.
+            # A newer scan must retain its own import status.
+            if (check.get('scan_id') and current.get('scan_id') == check['scan_id']
+                    and current['scanned_seq'] == check['scanned_seq']):
+                changes['risk_import_status'] = 'AVAILABLE'
+            if changes:
+                self.checks._put(db, self.ref, dict(current, **changes))
 
     def submit(self, observations, expected_seq, *, business_reviews=()):
         try:

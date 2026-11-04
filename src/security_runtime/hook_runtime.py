@@ -668,8 +668,7 @@ class HookCoordinator:
                             **{k:result[k] for k in ('scanner_invocation_count',) if k in result})
         try:
             from .first_scan_attribution import probe_scope
-            from .scanners import baseline_sast_batches
-            with local_recheck() as ledger, baseline_sast_batches(baseline), (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
+            with local_recheck() as ledger, (probe_scope() if attribution_candidate else nullcontext({})) as prepared:
                 from .scan_input import scoped_request
                 request = replace(scoped_request(root, scope, dependency_changes=dependency_changes),
                     code_preference=code_preference, recheck_native=recheck_native)

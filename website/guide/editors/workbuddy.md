@@ -1,47 +1,31 @@
 # 在 WorkBuddy 中使用
 
-当前先采用**手动 MCP 接入**，与 Codex、Cursor 共用[统一手动接入入口](../mcp.md#workbuddy)和 **v0.3.12 正式完整包**。
+WorkBuddy 全局接入复用 Codex/Cursor 的开发检查流程：编辑时只记路径，开发收尾合并扫描，按配置复核告警，同一结果的 Stop 续接去重。普通聊天不启动扫描。
 
-## 1. 准备程序和项目绑定
+## 全局配置
 
-按[统一步骤](../mcp.md#_1-下载和准备)下载、校验、完整解压正式包，准备检查组件，并为实际本地 Git 项目生成 MCP JSON。程序目录需要长期保留。
+准备完整运行包和扫描组件后，使用固定安装位置中的程序：
 
-## 2. 在桌面添加连接
-
-1. 打开 **专家·技能·连接器 → 连接器 → 自定义连接器 → 添加 MCP**。
-2. 合并生成的 `mcpServers` 服务条目，保留其他连接，保存。
-3. 对已核验的本地 Runtime 点击“信任”，等待工具加载。
-4. 在目标项目新建聊天，按下面的提示实际调用。
-
-macOS WorkBuddy 5.9.4 实测界面使用 `~/.workbuddy-ai/mcp.json`。产品原有 `setup workbuddy --path "项目路径"` 生成的是项目 `.workbuddy/mcp.json`，本次桌面测试没有自动加载该文件；不能仅凭命令自检成功就认定连接成功。其他发行版本以客户端显示的配置路径为准。
-
-完整 JSON 示例、Windows 路径写法、卸载与排查见[统一手动接入页](../mcp.md#workbuddy)。
-
-## 3. 验证和使用
-
-```text
-请通过 AI Security Runtime 的 MCP 工具检查实际版本、项目路径和组件状态。
-只读取状态，不扫描或修改项目，不要用终端命令代替 MCP。
-若工具不可用，请明确说明。
+```powershell
+# Windows：建议将程序保留在短路径中，不要反复嵌套解压目录。
+C:\ASR\security-check.exe setup workbuddy --scope global --json
 ```
 
-调用成功并确认项目绑定及组件就绪后，再在独立示例项目请求：
-
-```text
-请使用 AI Security Runtime 检查当前示例项目，说明实际检查范围和发现。
-先不要修改代码。
+```sh
+# macOS：已安装 Runtime 时可复用固定启动器。
+~/.local/share/AI-Security-Runtime-install/launcher/security-check setup workbuddy --scope global --json
 ```
 
-仅 MCP 需要主动发起检查，不自动安装 Skill 或原生 Hook。
+此入口在识别到的配置目录内写入 `mcp.json`、`settings.json` 中本产品的 Hook，以及 `skills/ai-security-review`；保留其他服务器、设置和 Hook。目录优先使用 `WORKBUDDY_CONFIG_DIR`，其次使用 `CODEBUDDY_CONFIG_DIR`；未指定时优先使用已有的 `~/.workbuddy-ai`，否则使用 `~/.workbuddy`。两个目录同时存在时选择 `.workbuddy-ai`，不自动迁移或删除另一目录的配置。配置成功不等于扫描组件已经就绪，首次准备组件仍按[安装说明](../installation.md)操作。
 
-## 实测结果与原生 Hook 边界
+完全退出并重启 WorkBuddy，审核连接与 Hook 权限。在新聊天中让助手创建一个临时样例，确认编辑期间不扫描、收尾只提交当前文件，报告前完成要求的复核。再发送一个只读问题，确认旧检查不会触发 Stop。
 
-2026-11-03 通过上述桌面界面配置后，服务加载了 81 个工具，Agent 实际调用 `get_runtime_info` 成功。本轮使用本地 0.3.12 **DEV** Runtime 验证 MCP 通道；这不替代正式发行包在 WorkBuddy 中的安装及扫描验收。
+旧项目级 `.workbuddy/mcp.json` 若已有本产品配置，应先通过原项目接入的卸载入口移除，避免同时启动两套连接；全局接入不会擅自删除项目配置。
 
+## Windows 与验收范围
 
+Hook 命令使用固定程序入口，项目路径通过标准输入传递，不拼进命令行。配置写入沿用 Windows 扩展路径支持；新增真实 Windows 超过 260 字符目录的安装/重复安装用例。
 
-2026-11-03 在 macOS WorkBuddy 5.9.4 的独立测试项目中，实测原生 `SessionStart`、`PreToolUse`、`PostToolUse`、`Stop` 均触发；启动和工具执行后的附加上下文能到达 Agent。测试配置为项目 `.codebuddy/settings.local.json`。其中 `SessionStart` 输入没有 `cwd`，不能直接照搬其他宿主的项目识别逻辑。
+接入依据本机 WorkBuddy 5.9.4 的 Hook 实现和[官方 Hook 协议参考](https://www.workbuddy.cn/docs/cli/hooks)。源码测试覆盖会话隔离、路径记录、Stop 补交、全局 MCP 和配置保留；Windows 真机长路径与 WorkBuddy 桌面端最终消息展示仍需实际验收，不能由 macOS 单元测试替代。
 
-这些回执证明宿主具备原生 Hook 能力，**不代表产品完整接入已通过**。当前产品仍需 WorkBuddy 专用事件映射、会话绑定、改动收集和 Stop 续办适配及端到端验收；暂不提供完整接入配置，不承诺自动检查或自动续办修复。
-
-[更多接入边界](../../reference/support.md) · [连接失败排查](../verify.md#遇到问题时)
+项目级手动 MCP 接入仍保留：`security-check setup workbuddy --path <项目目录>`。
