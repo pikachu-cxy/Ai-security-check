@@ -45,6 +45,13 @@ def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path,
         assert not validator.is_valid(dict(valid, operation='scan_project'))
         assert by_name['runtime_status'].annotations.readOnlyHint
         assert not by_name['scan'].annotations.readOnlyHint
+        review_schema = by_name['development_review'].inputSchema
+        submit_schema = next(branch['properties']['arguments'] for branch in review_schema['oneOf']
+            if branch['properties']['operation']['const'] == 'submit_development_review')
+        assert 'expected_seq' in submit_schema['required']
+        business = submit_schema['properties']['business_reviews']['anyOf'][0]['items']
+        assert business['properties']['limitations']['type'] == 'array'
+        assert business['properties']['limitations']['items']['type'] == 'string'
     finally:
         server.global_workspaces.close()
 
@@ -107,6 +114,29 @@ def test_grouped_tools_over_real_stdio(tmp_path):
                 assert not grouped.isError and direct.structuredContent == grouped.structuredContent
                 rejected = await client.call_tool('runtime_status', {'operation': 'scan_project', 'arguments': {}})
                 assert rejected.isError
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('host', ['codex', 'workbuddy'])
+def test_review_parameter_error_is_actionable_before_workspace_admission(tmp_path, monkeypatch, host):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'state'))
+    def forbidden(*args, **kwargs):
+        pytest.fail('Invalid input must not open a workspace or save a review')
+    pool = SimpleNamespace(host=host, task_audit_mode=True, root=forbidden, close=lambda: None)
+    server = create_global_server(workspaces=pool)
+    async def run():
+        arguments = dict(check_ref='fixture', workspace_path=str(tmp_path), observations=[],
+            business_reviews=[dict(file_path='a.py', rationale='reviewed', evidence_refs=[],
+                                   limitations='PRIVATE_INPUT')])
+        result = await server.call_tool('development_review',
+            dict(operation='submit_development_review', arguments=arguments))
+        content = result.structuredContent
+        assert content['reason_code'] == 'DEVELOPMENT_REVIEW_INPUT_INVALID'
+        assert content['review_saved'] is False
+        assert {e['field'] for e in content['field_errors']} == {
+            'expected_seq', 'business_reviews[0].limitations'}
+        assert 'PRIVATE_INPUT' not in str(content)
+        assert content == (await server.call_tool('submit_development_review', arguments)).structuredContent
     asyncio.run(run())
 
 

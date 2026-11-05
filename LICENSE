@@ -1,28 +1,93 @@
-AI SECURITY RUNTIME PROPRIETARY LICENSE
+AI SECURITY RUNTIME PERSONAL NONCOMMERCIAL SOURCE-AVAILABLE LICENSE 1.0
 
-Copyright (c) 2026 AI Security Runtime. All rights reserved.
+Copyright (c) 2026 pikachu-cxy. All rights reserved.
+License identifier: LicenseRef-AI-Security-Runtime-Personal-Noncommercial-1.0
 
-Except for files or components that explicitly state a different license, the
-AI Security Runtime software, including its source code, binaries, runtime
-logic, risk and policy engines, commercial rule packs, intelligence data,
-documentation, and associated materials (the "Software"), is proprietary.
+1. Scope and licensor
 
-Permission is granted only to use the Software under the applicable AI
-Security Runtime End User License Agreement (EULA) or another written agreement
-with the copyright holder.
+This license covers AI Security Runtime source code, binaries, documentation
+and associated materials distributed with it (Software), except components
+explicitly licensed separately. The licensor is pikachu-cxy for portions owned
+by that author, and the respective copyright holders for other portions offered
+under this license. This notice does not claim ownership of third-party work.
 
-Unless expressly permitted by such an agreement or by applicable law, you may
-not copy, modify, distribute, sublicense, sell, rent, lease, provide the
-Software as a competing product or service, remove proprietary notices, or
-circumvent licensing or technical restrictions.
+2. Personal noncommercial permission
 
-Third-party components and explicitly identified open-source components remain
-licensed under their own license terms. See LICENSING.md and
-THIRD_PARTY_NOTICES.md.
+Subject to these terms, you may use, copy and modify the Software solely as a
+natural person acting personally for noncommercial learning, research,
+experimentation or hobby projects. You may redistribute the original or modified
+Software without charge for those purposes under section 3.
 
-THE SOFTWARE IS PROVIDED "AS IS" TO THE MAXIMUM EXTENT PERMITTED BY LAW,
-WITHOUT WARRANTIES OF ANY KIND, EXCEPT AS EXPRESSLY PROVIDED IN A SEPARATE
-WRITTEN AGREEMENT.
+This permission excludes commercial activity and use on behalf of an employer,
+client, company or other organization, including internal business use, paid
+consulting, commercial product development or operation, resale, commercial
+integration, and commercial or organizational hosted services. Free downloads,
+individual accounts and the absence of a fee do not make those uses personal
+noncommercial use. They require prior separate written authorization from the
+relevant copyright holder(s).
 
-For commercial licensing, redistribution, OEM, or enterprise terms, contact
-the AI Security Runtime project owner.
+3. Redistribution and corresponding source
+
+Every permitted redistribution must retain this license and copyright and
+attribution notices, identify modifications, and license the covered Software
+and your modifications under this same license. You may not impose additional
+terms or technical restrictions that prevent recipients from exercising these
+permissions.
+
+Whenever you distribute the Software or a derivative, including a binary, you
+must provide its complete corresponding source to the same recipients without
+additional charge, together with the distribution or by a clearly identified
+accessible download. Corresponding source means the preferred form for
+modification, all changes, and scripts and instructions needed to build and
+install that version. Separately licensed dependencies may be identified by
+version and source location, subject to their own obligations. For public
+distributions, corresponding source must also remain publicly available while
+you offer that distribution. A different version or evolving branch alone is
+not sufficient.
+
+Private modifications that you do not distribute need not be published.
+No permission is granted to distribute closed-source derivatives of covered
+Software. Independent projects merely scanned by the Software are not
+derivatives on that basis and have no source-disclosure obligation here.
+
+4. Separate components, rights and versions
+
+Explicitly marked Apache-2.0 files and third-party components retain their own
+licenses, which control for those components. See LICENSING.md,
+THIRD_PARTY_NOTICES.md and SOURCE_OFFER.md. This license and any commercial
+authorization do not override third-party terms. No trademark rights or
+ownership of your code, scan targets or findings are transferred.
+
+This license applies to versions distributed with it. It does not revoke or
+alter permissions already granted for earlier versions under other licenses.
+All rights not expressly granted are reserved, subject to applicable law.
+
+5. Termination
+
+Permissions terminate upon a material violation. You must then stop using,
+copying, modifying and distributing covered Software unless the relevant
+copyright holder reinstates permission in writing. Separate component licenses
+and rights that cannot legally be waived remain unaffected. Compliant
+recipients retain their own permissions.
+
+6. Warranty and liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS",
+WITHOUT WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, NON-INFRINGEMENT OR SECURITY. COPYRIGHT HOLDERS SHALL NOT BE LIABLE
+FOR DAMAGES ARISING FROM THE SOFTWARE, EXCEPT WHERE LIABILITY CANNOT LAWFULLY
+BE EXCLUDED OR A SEPARATE WRITTEN AGREEMENT PROVIDES OTHERWISE.
+
+7. Other terms and commercial requests
+
+EULA.md supplements this license for operation of the Software. This LICENSE
+controls conflicts concerning rights to use, modify or redistribute it, unless
+a separate written agreement with the relevant copyright holder expressly
+grants different rights. Summaries do not expand this license.
+
+Request commercial or organizational authorization from project maintainer
+pikachu-cxy through https://github.com/pikachu-cxy/Ai-security-check . A request
+or absence of a response is not authorization.
+
+This is a source-available license with use restrictions, not an OSI-approved
+open-source license.

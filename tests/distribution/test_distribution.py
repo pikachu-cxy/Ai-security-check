@@ -50,7 +50,12 @@ def test_runtime_version_and_semgrep_delivery(capsys):
     assert LicensePolicy.permission(MANAGED_PYTHON_LICENSE, LicenseAction.BUNDLE) == Permission.NO
     assert LicensePolicy.permission(PYINSTALLER_BOOTLOADER_LICENSE, LicenseAction.BUNDLE) != Permission.NO
     root = Path(__file__).resolve().parents[2]
-    assert "PROPRIETARY LICENSE" in (root / "LICENSE").read_text(encoding="utf-8")
+    import tomllib
+    from scripts.build.dependency_notices import REVIEWED_MISSING_LABELS
+    license_id = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["license"]
+    assert license_id == "LicenseRef-AI-Security-Runtime-Personal-Noncommercial-1.0"
+    assert license_id in (root / "LICENSE").read_text(encoding="utf-8")
+    assert REVIEWED_MISSING_LABELS["ai-security-runtime"] == license_id
     assert DEFAULT_RULE_PACK.license == "LGPL-2.1-only WITH Commons-Clause"
     assert DEFAULT_RULE_PACK.pack_class == RulePackClass.RESTRICTED
     assert not DEFAULT_RULE_PACK.commercial_use_allowed
@@ -83,6 +88,8 @@ def test_generators_require_real_versioned_release_metadata(tmp_path):
     assert "bin.install_symlink" in formula.read_text(encoding="utf-8")
     winget = tmp_path / "winget"
     generate_winget(manifest, winget)
+    locale = yaml.safe_load((winget / "PikachuCXY.AISecurityRuntime.locale.en-US.yaml").read_text(encoding="utf-8"))
+    assert locale["License"] == "AI Security Runtime Personal Noncommercial Source-Available License 1.0"
     installer = yaml.safe_load((winget / "PikachuCXY.AISecurityRuntime.installer.yaml").read_text(encoding="utf-8"))
     assert installer["NestedInstallerType"] == "portable"
     assert installer["NestedInstallerFiles"][0]["RelativeFilePath"] == "security-check\\security-check.exe"

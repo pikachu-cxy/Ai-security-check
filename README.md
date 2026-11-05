@@ -134,7 +134,7 @@ Node.js is a documentation-development dependency, not a bundled Runtime require
 
 ## Licensing and support
 
-AI Security Runtime uses a **closed-core, open-ecosystem** licensing model. The Runtime Core is proprietary. Explicitly marked components, the public scanner/plugin extension contract, are Apache-2.0 licensed. The bundled upstream rules retain LGPL-2.1 and Commons Clause terms. Third-party engines and dependencies retain their own licenses. A public repository does not make the entire Runtime open source.
+AI Security Runtime is **source-available for personal noncommercial use**, copyright (c) 2026 **pikachu-cxy** for portions owned by that author. Commercial use and use on behalf of an employer, client or organization require prior separate written authorization. Free noncommercial redistribution must retain the same license and provide complete corresponding source; closed-source distribution of covered derivatives is not permitted. Private modifications need not be published, and scanning an independent project does not require publishing its source. Explicitly marked Apache-2.0 components and third-party components retain their own licenses. See [LICENSE](LICENSE) and [LICENSING.md](LICENSING.md).
 
 Read [LICENSE](LICENSE), [licensing](LICENSING.md), [EULA](EULA.md), [third-party notices](THIRD_PARTY_NOTICES.md), and [source offer](SOURCE_OFFER.md) for the applicable terms.
 

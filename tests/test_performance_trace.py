@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import json
+import os
 from pathlib import Path
 import pytest
 from security_runtime import performance_trace as perf
@@ -51,6 +52,7 @@ def test_async_cancellation_keeps_parent_separate(monkeypatch,tmp_path):
     assert perf._PARENT.get() is None
 
 
+@pytest.mark.skipif(os.name == 'nt', reason='POSIX permissions and symlinks')
 def test_symlink_and_public_directory_rejected(monkeypatch,tmp_path):
     root=tmp_path/'private';root.mkdir(mode=0o700)
     link=tmp_path/'alias';link.symlink_to(root,target_is_directory=True)
@@ -101,6 +103,46 @@ def test_file_cap_preserves_operation(monkeypatch,tmp_path):
     @perf.timed('test.capped')
     def work(): return 'kept'
     assert work()=='kept' and not rows(tmp_path)
+
+
+def test_report_review_completion_and_overlapping_calls(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    times = iter([0, 1_000_000, 3_000_000, 5_000_000])
+    monkeypatch.setattr(perf.time, 'perf_counter_ns', lambda: next(times))
+    check = dict(check_ref='private', dirty_seq=1)
+    perf.review_event('evidence_read', check)
+    perf.review_event('saved', check, dict(scanner_review='COMPLETE', business_review='PENDING'))
+    perf.review_event('saved', check, dict(scanner_review='COMPLETE', business_review='COMPLETE'))
+    perf.review_event('evidence_read', dict(check, dirty_seq=2))
+    for identity, start, end in [('a', 0, 4_000_000), ('b', 2_000_000, 6_000_000), ('c', 8_000_000, 9_000_000)]:
+        perf._write(dict(event='start', span=identity, phase='mcp.fixture', monotonic_ns=start))
+        perf._write(dict(event='end', span=identity, phase='mcp.fixture', monotonic_ns=end, status='returned'))
+    (tmp_path/'run.json').write_text(json.dumps({'run':'a'*32}))
+    path = Path(__file__).parents[1]/'scripts/performance/report.py'
+    spec = importlib.util.spec_from_file_location('perf_report', path)
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    result = module.report(tmp_path)
+    assert result['measurement_valid']
+    assert result['mcp_timing'] == dict(observed_window_ms=9, active_call_ms=7,
+        model_thinking_ms=None, first_call_to_final_reply_ms=None)
+    assert result['review_windows'][0]['first_evidence_to_complete_ms'] == 3
+    assert result['review_windows'][1]['first_evidence_to_complete_ms'] is None
+    assert result['review_windows'][1]['review_completed'] is False
+
+
+def test_grouped_mcp_timing_uses_operation_name(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+    from mcp.types import CallToolRequest
+    configure(monkeypatch, tmp_path)
+    async def original(request): return 'unchanged'
+    handlers = {CallToolRequest: original}
+    registry = SimpleNamespace(low_level=SimpleNamespace(request_handlers=handlers),
+        names=lambda: {'submit_development_review'})
+    perf.observe_mcp(registry)
+    request = SimpleNamespace(params=SimpleNamespace(name='development_review',
+        arguments=dict(operation='submit_development_review', arguments={})))
+    assert asyncio.run(handlers[CallToolRequest](request)) == 'unchanged'
+    assert {r['phase'] for r in rows(tmp_path)} == {'mcp.submit_development_review'}
 
 
 def test_measure_runner_preserves_exit_and_excludes_output():

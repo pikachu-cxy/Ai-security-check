@@ -56,6 +56,50 @@ class BusinessReview(BaseModel):
     limitations: list[str] = Field(default_factory=list, max_length=20)
 
 
+class ReviewSubmission(BaseModel):
+    model_config = ConfigDict(extra='forbid', strict=True)
+    check_ref: str
+    expected_seq: int
+    observations: list[ScannerReview | Observation]
+    workspace_path: str | None = None
+    session_ref: str | None = None
+    business_reviews: list[BusinessReview] | None = None
+
+
+def review_input_failure(arguments, *, require_workspace=False):
+    """Explain invalid fields before routing or saving; never echo their values."""
+    from pydantic import ValidationError
+    fields = set().union(*(model.model_fields for model in
+        (ReviewSubmission, ScannerReview, Observation, BusinessReview)))
+    errors = []
+    try:
+        request = ReviewSubmission.model_validate(arguments)
+        if require_workspace and not request.workspace_path:
+            errors.append(dict(field='workspace_path', code='missing'))
+    except ValidationError as exc:
+        for error in exc.errors(include_input=False, include_context=False, include_url=False)[:12]:
+            path = ''
+            for part in error['loc']:
+                if isinstance(part, int):
+                    path += f'[{part}]'
+                elif part not in {'ScannerReview', 'Observation', 'BusinessReview'}:
+                    path += ('.' if path else '') + (part if part in fields else '<unknown>')
+            errors.append(dict(field=path or '$', code=error['type']))
+    if not errors:
+        return None
+    for error in errors:
+        field = error['field']
+        error['correction'] = (
+            '传入当前检查的 dirty_seq 整数。' if field == 'expected_seq' else
+            '传入字符串数组；没有限制时使用 []，不要传入单个字符串。' if field.endswith('limitations') else
+            '使用实际读取返回的 evidence_ref 数组。' if field.endswith('evidence_refs') else
+            '按工具参数类型补齐或修正此字段。')
+    return dict(status='INCONCLUSIVE', reason_code='DEVELOPMENT_REVIEW_INPUT_INVALID',
+        field_errors=errors, recoverable=True, review_saved=False, scanner_run=False,
+        source_modified=False, repair_authorized=False, security_proof=False,
+        message='复核参数有误，本批未保存。按字段提示修正后重试同一项复核，无需重新扫描。')
+
+
 def review_progress(check, row):
     """Project saved coverage only; never infer completion from a submission."""
     from .user_config import batch_config
@@ -154,6 +198,8 @@ class DevelopmentRisks:
             require(ref in row['evidence'] or len(row['evidence']) < 256, 'DEVELOPMENT_RISK_EVIDENCE_LIMIT')
             row['evidence'][ref] = evidence
             self.store._put(db, self.ref, row)
+        from .performance_trace import review_event
+        review_event('evidence_read', check)
         return dict(evidence_ref=ref, **evidence,
                     content=excerpt,
                     trust='UNTRUSTED_SOURCE', scanner_run=False)
@@ -369,6 +415,8 @@ class DevelopmentRisks:
             self.store._put(db, self.ref, row)
         from .development_reporting import reporting
         result = self.get()
+        from .performance_trace import review_event
+        review_event('saved', check, result['review_progress'])
         result['reporting'] = reporting(self.ref, self.root, after_review=True)
         result['next_action'] = result['reporting']['next_action']
         return result

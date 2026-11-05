@@ -87,6 +87,24 @@ def _rewrite_refs(value, prefix, replacement):
     return value
 
 
+def _inline_models(schema):
+    """Expose nested argument types to hosts that do not traverse nested $defs."""
+    definitions = schema.get('$defs', {})
+
+    def expand(value, seen=()):
+        if isinstance(value, list):
+            return [expand(item, seen) for item in value]
+        if not isinstance(value, dict):
+            return value
+        ref = value.get('$ref', '')
+        name = ref.removeprefix('#/$defs/')
+        if ref.startswith('#/$defs/') and name in definitions and name not in seen:
+            return expand({**definitions[name], **{k: v for k, v in value.items() if k != '$ref'}}, (*seen, name))
+        return {key: expand(item, seen) for key, item in value.items() if key != '$defs'}
+
+    return expand(schema)
+
+
 def compact_tools(tools):
     from mcp.types import Tool, ToolAnnotations
     indexed = {tool.name: tool for tool in tools}
@@ -98,8 +116,11 @@ def compact_tools(tools):
             'operation': {'type': 'string', 'enum': list(names)},
             'arguments': {'type': 'object', 'description': 'Original operation arguments, including workspace_path when required.'}},
             required=['operation', 'arguments'], additionalProperties=False,
-            oneOf=[{'properties': {'operation': {'const': name},
-                                 'arguments': {'$ref': '#/$defs/' + name}}} for name in names])
+            oneOf=[{'required': ['operation', 'arguments'],
+                    'properties': {'operation': {'const': tool.name},
+                        'arguments': (_rewrite_refs(_inline_models(tool.inputSchema),
+                            '#/', '#/$defs/' + tool.name + '/') if tool.name == 'submit_development_review'
+                            else {'$ref': '#/$defs/' + tool.name})}} for tool in members])
         schema['$defs'] = {tool.name: _rewrite_refs(deepcopy(tool.inputSchema), '#/', '#/$defs/' + tool.name + '/') for tool in members}
         result.append(Tool(name=group, inputSchema=schema,
             description='Choose operation and pass its exact arguments. Existing scope, ownership and authorization checks apply.\n' +

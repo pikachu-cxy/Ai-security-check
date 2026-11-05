@@ -8,12 +8,15 @@ After these checks and copying the installation guides, `scripts/release/prepare
 
 The release workflow supports version tags and explicit manual dispatch (including focused validation). It validates each native archive before creating a draft GitHub Release and publishes the draft only after all assets upload. Uninstalling the Runtime does not remove the user data directory, managed scanners, scan history, or Trivy DB.
 
-Runtime Core remains proprietary under `LICENSE` and `EULA.md`; the public
-Plugin API and `ai-security-core` rules remain Apache-2.0. Every bundle includes
-`LICENSING.md`, `EULA.md`, the original Apache license, dependency notices and
-source locations. The custom Homebrew tap uses `license :cannot_represent`
-for the proprietary product; WinGet uses `License: Proprietary`. These are
-not submissions to homebrew/core and do not relicense Core or third-party code.
+Runtime Core uses the Personal Noncommercial Source-Available License 1.0 in
+`LICENSE`, supplemented by `EULA.md`. Commercial and organizational use needs
+separate written authorization; permitted redistribution must provide complete
+corresponding source under the same license. Explicitly marked Plugin API files
+retain Apache-2.0; bundled upstream rules retain LGPL-2.1 and Commons Clause.
+Every bundle includes the license, `LICENSING.md`, `EULA.md`, dependency notices
+and source locations. Homebrew uses `license :cannot_represent` for the custom
+license; WinGet names the Personal Noncommercial Source-Available License 1.0.
+These metadata changes apply to newly built distributions, not previous archives.
 
 ## Local native verification
 

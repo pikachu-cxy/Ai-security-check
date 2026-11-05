@@ -23,7 +23,7 @@ REVIEWED_LICENSES = {
 REVIEWED_MISSING_LABELS = {
     # The product owner's Core is governed by the root LICENSE/EULA, not a
     # third-party license grant. This exact label applies only to this package.
-    "ai-security-runtime": "LicenseRef-AI-Security-Runtime-Proprietary",
+    "ai-security-runtime": "LicenseRef-AI-Security-Runtime-Personal-Noncommercial-1.0",
     "pyinstaller-hooks-contrib": "GPL-2.0-or-later (build hooks); Apache-2.0 (bundled runtime hooks)",
     "colorama": "BSD-3-Clause",
 }

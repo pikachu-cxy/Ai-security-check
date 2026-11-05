@@ -76,6 +76,20 @@ def test_repeated_submission_is_idempotent(sample):
     assert again['observation_count'] == again['assessment_count'] == 1
 
 
+def test_timing_records_only_saved_reviews(sample, monkeypatch):
+    events = []
+    monkeypatch.setattr('security_runtime.performance_trace.review_event',
+        lambda action, check, progress=None: events.append((action, progress)))
+    risks = sample[3]
+    value = observation(risks)
+    assert [e[0] for e in events] == ['evidence_read']
+    with pytest.raises(ValueError):
+        risks.submit([value], -1)
+    assert [e[0] for e in events] == ['evidence_read']
+    result = risks.submit([value], risks.current_check()['dirty_seq'])
+    assert events[-1] == ('saved', result['review_progress'])
+
+
 @pytest.mark.parametrize('decision', ['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE'])
 def test_scanner_and_ai_share_one_risk_ai_decision_wins(sample, monkeypatch, decision):
     original = scanner(sample, monkeypatch)

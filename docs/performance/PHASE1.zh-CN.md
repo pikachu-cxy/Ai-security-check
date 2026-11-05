@@ -1,5 +1,38 @@
 # 第一阶段：耗时测量与验收方案
 
+## 2026-11-05：开发流程计时补充
+
+保持五步操作：记录编辑 → 执行检查 → AI 复核 → 用户决定如何处理 → 修复后复查。本节为本次源码变更；下方早期基线和构建记录仅保留作历史参考，不代表当前安装版本。
+
+复用现有计时开关和报告命令，无新增操作步骤。Windows 不再使用 Unix 权限位决定是否丢弃计时事件；日志目录应使用当前用户的系统临时目录。
+
+报告新增以下字段（单位均为毫秒）：
+
+| 字段 | 含义 |
+| --- | --- |
+| `mcp_timing.observed_window_ms` | 本次采集中首个已闭合调用开始，到最后一个已闭合调用结束；包含调用间空档 |
+| `mcp_timing.active_call_ms` | 服务器处理调用的时间并集，重叠调用不重复相加；包括等待后台的时间 |
+| `review_windows[].first_evidence_to_complete_ms` | 同一检查版本首次读取证据，到扫描器复核和业务审计均完成或按配置跳过的首次保存；包含宿主和模型等待 |
+| `model_thinking_ms`、`first_call_to_final_reply_ms` | 保留未知；需要宿主会话时间戳才能测量，不由服务器猜测 |
+
+具体操作分别展示为 `mcp.complete_development_check`、`mcp.read_development_risk_context`、`mcp.submit_development_review` 等阶段。复核提交调用的服务器耗时不等于整段 AI 复核耗时。尚未完成的复核窗口保留未知；空提交、读取结果或提交成功本身不代表复核完成。
+
+复核参数错误会返回具体字段、类型修正提示和 `review_saved=false`，整批未保存；补齐当前 `dirty_seq` 为 `expected_seq`，将 `limitations` 传为字符串数组，再重试原项。无须重新扫描或新建检查。工具发现中直接展开这一个提交操作的嵌套参数，其他操作继续使用原有紧凑定义。
+
+Windows 源码环境可用下列只读入口验证日志链路（不启动项目扫描）：
+
+```powershell
+$env:PYTHONPATH = 'src'
+$env:SECURITY_RUNTIME_GLOBAL = '1'
+.venv/Scripts/python.exe scripts/performance/measure.py --scenario mcp --cache unknown --build phase1-working-tree -- .venv/Scripts/python.exe scripts/performance/mcp_probe.py --samples 2 -- .venv/Scripts/python.exe -m security_runtime.cli mcp
+# 将下一行路径替换为上一条命令打印的 Timing directory。
+.venv/Scripts/python.exe scripts/performance/report.py C:/Users/你的用户名/AppData/Local/Temp/asr-performance-实际目录
+```
+
+桌面验收仍需让 Codex / WorkBuddy 的实际 Runtime 进程使用本次构建及相同计时环境；源码测试通过不代表已安装版本自动更新。一次采集对应一次验收任务；从首个产品调用到最终回复的总时间，取宿主记录中两者时间戳之差，再与上述服务器和复核区间对照。不能把它们相加，否则会重复计时。
+
+---
+
 状态：计时实现和测试入口已提供；正式安装/扫描/桌面耗时验收待执行。后续性能优化待验收数据再制定。
 
 ## 范围与版本

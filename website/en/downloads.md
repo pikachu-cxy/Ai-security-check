@@ -1,5 +1,7 @@
 # Downloads
 
+**License notice:** Use the license included in the downloaded version. The new repository license does not retroactively change published archives. See [licensing](./reference/legal).
+
 Current release: **0.3.13**. The installers below and manual downloads use the same native bundles; no preinstalled Python is needed.
 
 ## Install by editor {#install}

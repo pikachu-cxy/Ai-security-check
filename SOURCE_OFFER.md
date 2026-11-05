@@ -1,4 +1,18 @@
-# Scanner source availability
+# Source availability
+
+## Runtime source
+
+For versions distributed under the Personal Noncommercial Source-Available
+License 1.0, redistributors must supply complete corresponding source under
+LICENSE, including modifications and build/install scripts and instructions.
+Use the exact matching tag or commit in
+https://github.com/pikachu-cxy/Ai-security-check (and supply any local changes),
+not merely the latest branch. Public distributions require public matching source
+while offered; other permitted distributions must provide it to their recipients.
+This obligation does not apply to independent projects merely scanned by the Runtime.
+Previously published versions retain their accompanying license terms.
+
+## Scanner source
 
 The default SAST engine is the unmodified OpenGrep 1.32.0 executable, invoked as a separate subprocess.
 Its corresponding source is https://github.com/opengrep/opengrep/tree/v1.32.0 and
