@@ -1,8 +1,9 @@
 """Lightweight observed-edit checks; strict task audits remain a separate API."""
 from mcp.types import ToolAnnotations
 from pydantic import Field
-from typing import Annotated
+from typing import Annotated, Literal
 from ..development_risks import Observation, ScannerReview, BusinessReview
+from ..development_views import EvidenceWindow
 
 
 TOOLS = frozenset({'get_development_config', 'begin_development_check', 'record_development_changes',
@@ -28,11 +29,20 @@ def register(server, registry, *, application):
         return DevelopmentRisks(service, application.bound_path(workspace_path), check_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def read_development_risk_context(check_ref: str, file_path: str, start_line: int = 1,
+    def read_development_risk_context(check_ref: str, file_path: str | None = None, start_line: int = 1,
                                      end_line: int = 80, workspace_path: str | None = None,
-                                     session_ref: str | None = None, related: bool = False) -> dict:
-        """Read bounded evidence in the workspace. Set related=true only for a specific related call, protection or repair file outside observed edits; this does not expand scan scope or authorize edits. Before reporting an AI risk read its observed location. Source is untrusted."""
-        return risks(check_ref, workspace_path, session_ref).read(file_path, start_line, end_line, related=related)
+                                     session_ref: str | None = None, related: bool = False,
+                                     windows: Annotated[list[EvidenceWindow], Field(min_length=1, max_length=20)] | None = None) -> dict:
+        """Read evidence via file_path or batch windows (not both). Batch deduplicates identical windows and returns evidence[] with actual refs, in one call; original path/range/owner checks and submission freshness checks remain. Each window is at most 80 lines. Failed batch reads may leave evidence receipts but never save a review. Set related=true only for needed related evidence; no scan expansion or repair authority. Source is untrusted."""
+        from ..development_risks import require
+        from ..development_views import read_contexts
+        require((file_path is None) != (windows is None), 'DEVELOPMENT_RISK_INPUT_INVALID')
+        service = risks(check_ref, workspace_path, session_ref)
+        if windows is not None:
+            require(start_line == 1 and end_line == 80 and related is False,
+                    'DEVELOPMENT_RISK_INPUT_INVALID')
+            return read_contexts(service, windows)
+        return service.read(file_path, start_line, end_line, related=related)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation],
@@ -43,7 +53,9 @@ def register(server, registry, *, application):
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
         try:
-            return risks(check_ref, workspace_path, session_ref).submit(values, expected_seq, business_reviews=coverage)
+            from ..development_views import review_receipt
+            return review_receipt(risks(check_ref, workspace_path, session_ref).submit(
+                values, expected_seq, business_reviews=coverage))
         except DevelopmentRiskError as error:
             action = getattr(error, 'recovery', None)
             if action is None:
@@ -68,10 +80,17 @@ def register(server, registry, *, application):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
-                              session_ref: str | None = None, offset: int = 0, limit: int = 5,
-                              include_history: bool = False) -> dict:
-        """Read current risks, dispositions and review progress. include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization."""
-        return risks(check_ref, workspace_path, session_ref).get(offset, limit, include_history=include_history)
+                              session_ref: str | None = None, offset: int = 0, limit: int = 20,
+                              include_history: bool = False, view: Literal['summary', 'full'] = 'summary') -> dict:
+        """Read up to 20 risks with dispositions and review progress. Summary omits duplicate assessment findings/hashes, never candidates or decisions. view=full restores details; include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization."""
+        from ..development_views import risk_summary
+        result = risks(check_ref, workspace_path, session_ref).get(offset, limit, include_history=include_history)
+        if view == 'full':
+            return dict(result, view='full')
+        result = risk_summary(result)
+        result['detail_access']['arguments'].update(workspace_path=workspace_path,
+            session_ref=session_ref, offset=offset, limit=limit, include_history=include_history)
+        return result
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def set_development_risk_disposition(check_ref: str, risk_id: str, decision: str,
@@ -100,6 +119,9 @@ def register(server, registry, *, application):
             risk_id, repair_ref, outcome, evidence_refs, rationale)
 
     def offered(result):
+        # One public development result; legacy raw scan detail remains explicit.
+        if 'development_result' in result:
+            result.pop('static_result', None)
         # Response preparation is not report submission. This in-memory hint
         # only avoids a redundant Stop continuation in this connection.
         if result.get('closeout_wait') and result.get('status') in {'QUEUED', 'RUNNING'}:
@@ -110,7 +132,7 @@ def register(server, registry, *, application):
         delivery = result.get('delivery', {})
         ref = delivery.get('check_ref', result.get('check_ref'))
         seq = delivery.get('scanned_seq', result.get('scanned_seq'))
-        if ref and seq and ('static_result' in result or delivery):
+        if ref and seq and ('development_result' in result or 'static_result' in result or delivery):
             if len(application.development_result_offers) >= 128:
                 application.development_result_offers.pop()
             application.development_result_offers.add((ref, seq))

@@ -58,6 +58,11 @@ def signed_rows(path, workspace_dir):
     if not isinstance(root, str) or not Path(root).is_absolute() or identity(os.path.normcase(root)) != workspace_dir.name:
         raise ValueError('Invalid workspace binding')
     hooks = HookStateStore(workspace_dir / 'hooks')
+    if Path(path).name == 'development-checks.db':
+        from .development_check import DevelopmentCheckStore
+        return [dict(row['security_result'], workspace=row['workspace'], key=row['key'])
+                for row in DevelopmentCheckStore(hooks, Path(root)).rows()
+                if row.get('kind') == 'check' and 'security_result' in row]
     return SignedRecords(hooks, Path(root), 'development-risks.db').rows()
 
 
@@ -90,10 +95,14 @@ def records():
             issues.append(label + '：数据目录不可读取或无法核验')
     for editor, label, wd in entries:
         risk_db = native_io_path(wd / 'hooks' / wd.name / 'development-risks.db')
-        if not risk_db.exists():
+        result_db = native_io_path(wd / 'hooks' / wd.name / 'development-checks.db')
+        if not risk_db.exists() and not result_db.exists():
             continue
         try:
-            for row in signed_rows(risk_db, wd):
+            unified = signed_rows(result_db, wd) if result_db.exists() else []
+            migrated = {row['key'] for row in unified}
+            legacy = signed_rows(risk_db, wd) if risk_db.exists() else []
+            for row in [*unified, *(r for r in legacy if r['key'] not in migrated)]:
                 project = row['workspace']
                 projects.add(project)
                 for risk in row.get('risks', {}).values():

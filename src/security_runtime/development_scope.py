@@ -88,3 +88,43 @@ def separate_directories(root, names):
             directory = False
         (directories if directory else files).append(name)
     return files, directories
+
+
+def filter_gitignored(root, names):
+    """Query only observed paths; Git keeps tracked files and handles negation.
+
+    Failure retains the complete input. This is a closeout filter, not a
+    temporary-file classifier or a repository inventory.
+    """
+    import subprocess
+    from .git import GitService
+    from .scan_preferences import section
+    if not names:
+        return names, [], None
+    try:
+        git = GitService(root)
+        ignored = set()
+        for start in range(0, len(names), 32):
+            chunk = names[start:start+32]
+            result = subprocess.run([
+                'git', '-c', f'safe.directory={git.safe_directory.as_posix()}',
+                '-c', 'core.fsmonitor=false', '-C', str(root),
+                'check-ignore', '-v', '-z', '--stdin'],
+                input=b''.join(name.encode('utf-8')+b'\0' for name in chunk),
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                timeout=section('scan', 'git')['timeout_seconds'] or 10, check=False)
+            if result.returncode not in (0, 1):
+                raise ValueError('GIT_IGNORE_QUERY_FAILED')
+            fields = result.stdout.split(b'\0')
+            if fields[-1:] == [b'']:
+                fields.pop()
+            if len(fields) % 4:
+                raise ValueError('GIT_IGNORE_OUTPUT_INVALID')
+            matches = {fields[i+3].decode('utf-8') for i in range(0, len(fields), 4)
+                       if not fields[i+2].startswith(b'!')}
+            if not matches.issubset(set(chunk)):
+                raise ValueError('GIT_IGNORE_OUTPUT_INVALID')
+            ignored.update(matches)
+        return [name for name in names if name not in ignored], sorted(ignored), None
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
+        return names, [], 'GIT_IGNORE_FILTER_UNAVAILABLE'

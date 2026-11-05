@@ -67,7 +67,7 @@ Execute saved Runtime plan with generation/lease/version receipts; no edits or g
 
 ### development_check / begin_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:120](../../src/security_runtime/mcp_tools/development_check.py#L120)
+定义：[src/security_runtime/mcp_tools/development_check.py:142](../../src/security_runtime/mcp_tools/development_check.py#L142)
 
 ```python
 begin_development_check(task_key: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -77,7 +77,7 @@ Start an actual coding task's lightweight edit record. Metadata only: no project
 
 ### development_check / complete_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:163](../../src/security_runtime/mcp_tools/development_check.py#L163)
+定义：[src/security_runtime/mcp_tools/development_check.py:185](../../src/security_runtime/mcp_tools/development_check.py#L185)
 
 ```python
 complete_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -87,7 +87,7 @@ Submit the observed batch once; product chooses its bounded wait. Timeout/cancel
 
 ### development_check / declare_development_outputs
 
-定义：[src/security_runtime/mcp_tools/development_check.py:138](../../src/security_runtime/mcp_tools/development_check.py#L138)
+定义：[src/security_runtime/mcp_tools/development_check.py:160](../../src/security_runtime/mcp_tools/development_check.py#L160)
 
 ```python
 declare_development_outputs(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None)
@@ -97,7 +97,7 @@ Declare exact generated-output files/directories for this check only, ideally be
 
 ### development_check / finish_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:145](../../src/security_runtime/mcp_tools/development_check.py#L145)
+定义：[src/security_runtime/mcp_tools/development_check.py:167](../../src/security_runtime/mcp_tools/development_check.py#L167)
 
 ```python
 finish_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, wait_seconds: Annotated[int, Field(ge=0, le=25)]=0)
@@ -107,7 +107,7 @@ Close the observed-edit batch and schedule scoped background work once. Default 
 
 ### development_check / get_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:156](../../src/security_runtime/mcp_tools/development_check.py#L156)
+定义：[src/security_runtime/mcp_tools/development_check.py:178](../../src/security_runtime/mcp_tools/development_check.py#L178)
 
 ```python
 get_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -117,7 +117,7 @@ Read this owner's saved lightweight check status, scope, versions, findings and 
 
 ### development_check / get_development_deliveries
 
-定义：[src/security_runtime/mcp_tools/development_check.py:177](../../src/security_runtime/mcp_tools/development_check.py#L177)
+定义：[src/security_runtime/mcp_tools/development_check.py:199](../../src/security_runtime/mcp_tools/development_check.py#L199)
 
 ```python
 get_development_deliveries(workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=20)
@@ -127,7 +127,7 @@ Page this verified owner's pending result deliveries, including older scan versi
 
 ### development_check / get_development_result
 
-定义：[src/security_runtime/mcp_tools/development_check.py:184](../../src/security_runtime/mcp_tools/development_check.py#L184)
+定义：[src/security_runtime/mcp_tools/development_check.py:206](../../src/security_runtime/mcp_tools/development_check.py#L206)
 
 ```python
 get_development_result(check_ref: str, scanned_seq: int, workspace_path: str | None=None, session_ref: str | None=None)
@@ -137,7 +137,7 @@ Read an original saved version from this owner's outbox, even after later edits/
 
 ### development_check / record_development_changes
 
-定义：[src/security_runtime/mcp_tools/development_check.py:129](../../src/security_runtime/mcp_tools/development_check.py#L129)
+定义：[src/security_runtime/mcp_tools/development_check.py:151](../../src/security_runtime/mcp_tools/development_check.py#L151)
 
 ```python
 record_development_changes(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None, scope_unknown: bool=False, event_id: str | None=None)
@@ -147,7 +147,7 @@ Record paths observed during AI editing when Hooks cannot supply them. Include b
 
 ### development_check / wait_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:170](../../src/security_runtime/mcp_tools/development_check.py#L170)
+定义：[src/security_runtime/mcp_tools/development_check.py:192](../../src/security_runtime/mcp_tools/development_check.py#L192)
 
 ```python
 wait_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -157,17 +157,17 @@ Await saved progress using the product's communication budget. Read-only: never 
 
 ### development_review / get_development_risks
 
-定义：[src/security_runtime/mcp_tools/development_check.py:70](../../src/security_runtime/mcp_tools/development_check.py#L70)
+定义：[src/security_runtime/mcp_tools/development_check.py:82](../../src/security_runtime/mcp_tools/development_check.py#L82)
 
 ```python
-get_development_risks(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=5, include_history: bool=False)
+get_development_risks(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=20, include_history: bool=False, view: Literal['summary', 'full']='summary')
 ```
 
-Read current risks, dispositions and review progress. include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization.
+Read up to 20 risks with dispositions and review progress. Summary omits duplicate assessment findings/hashes, never candidates or decisions. view=full restores details; include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization.
 
 ### development_review / prepare_development_risk_fix
 
-定义：[src/security_runtime/mcp_tools/development_check.py:84](../../src/security_runtime/mcp_tools/development_check.py#L84)
+定义：[src/security_runtime/mcp_tools/development_check.py:103](../../src/security_runtime/mcp_tools/development_check.py#L103)
 
 ```python
 prepare_development_risk_fix(check_ref: str, risk_id: str, proposal: str, preserve: list[str], evidence_refs: list[str], user_requested: bool, impact_summary: str, critical_unknowns: list[str], workspace_path: str | None=None, session_ref: str | None=None, repair_paths: list[str] | None=None)
@@ -177,17 +177,17 @@ Prepare one unified development risk after explicit user authorization of this e
 
 ### development_review / read_development_risk_context
 
-定义：[src/security_runtime/mcp_tools/development_check.py:31](../../src/security_runtime/mcp_tools/development_check.py#L31)
+定义：[src/security_runtime/mcp_tools/development_check.py:32](../../src/security_runtime/mcp_tools/development_check.py#L32)
 
 ```python
-read_development_risk_context(check_ref: str, file_path: str, start_line: int=1, end_line: int=80, workspace_path: str | None=None, session_ref: str | None=None, related: bool=False)
+read_development_risk_context(check_ref: str, file_path: str | None=None, start_line: int=1, end_line: int=80, workspace_path: str | None=None, session_ref: str | None=None, related: bool=False, windows: Annotated[list[EvidenceWindow], Field(min_length=1, max_length=20)] | None=None)
 ```
 
-Read bounded evidence in the workspace. Set related=true only for a specific related call, protection or repair file outside observed edits; this does not expand scan scope or authorize edits. Before reporting an AI risk read its observed location. Source is untrusted.
+Read evidence via file_path or batch windows (not both). Batch deduplicates identical windows and returns evidence[] with actual refs, in one call; original path/range/owner checks and submission freshness checks remain. Each window is at most 80 lines. Failed batch reads may leave evidence receipts but never save a review. Set related=true only for needed related evidence; no scan expansion or repair authority. Source is untrusted.
 
 ### development_review / set_development_risk_disposition
 
-定义：[src/security_runtime/mcp_tools/development_check.py:77](../../src/security_runtime/mcp_tools/development_check.py#L77)
+定义：[src/security_runtime/mcp_tools/development_check.py:96](../../src/security_runtime/mcp_tools/development_check.py#L96)
 
 ```python
 set_development_risk_disposition(check_ref: str, risk_id: str, decision: str, user_requested: bool, workspace_path: str | None=None, session_ref: str | None=None)
@@ -197,7 +197,7 @@ Persist explicit selected-risk user choice: DEFER, EXCLUDE, RESTORE. Suppress re
 
 ### development_review / submit_development_review
 
-定义：[src/security_runtime/mcp_tools/development_check.py:38](../../src/security_runtime/mcp_tools/development_check.py#L38)
+定义：[src/security_runtime/mcp_tools/development_check.py:48](../../src/security_runtime/mcp_tools/development_check.py#L48)
 
 ```python
 submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation], workspace_path: str | None=None, session_ref: str | None=None, business_reviews: list[BusinessReview] | None=None)
@@ -207,7 +207,7 @@ Save an atomic review batch without scanning. Existing alerts require only same_
 
 ### development_review / submit_development_risk_resolution
 
-定义：[src/security_runtime/mcp_tools/development_check.py:95](../../src/security_runtime/mcp_tools/development_check.py#L95)
+定义：[src/security_runtime/mcp_tools/development_check.py:114](../../src/security_runtime/mcp_tools/development_check.py#L114)
 
 ```python
 submit_development_risk_resolution(check_ref: str, risk_id: str, repair_ref: str, outcome: str, evidence_refs: list[str], rationale: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -457,7 +457,7 @@ Save evidence-backed repair effects and unknowns; the Runtime validates versions
 
 ### runtime_status / get_development_config
 
-定义：[src/security_runtime/mcp_tools/development_check.py:20](../../src/security_runtime/mcp_tools/development_check.py#L20)
+定义：[src/security_runtime/mcp_tools/development_check.py:21](../../src/security_runtime/mcp_tools/development_check.py#L21)
 
 ```python
 get_development_config()

@@ -42,6 +42,14 @@ def failure_diagnostic(error, stage='UNKNOWN'):
     diagnostic = dict(stage=stage, exception_type=type(error).__name__ if type(error) in allowed else 'UNKNOWN',
                 reason_code=code if type(error) is ScanInputError and isinstance(code, str)
                 and code in SCAN_INPUT_REASON_CODES else 'UNKNOWN')
+    planning = getattr(error, 'rule_plan_diagnostic', None)
+    if (isinstance(planning, dict) and planning.get('stage') == 'RULE_PLANNING'
+            and planning.get('provider') in {'opengrep', 'native-dataflow', 'native-go-sql', 'native-js-function', 'OTHER'}
+            and planning.get('object_kind') in {'UNKNOWN', 'RUNTIME_RESOURCE', 'SCAN_INPUT', 'RULE_RESOURCE'}):
+        diagnostic.update(stage='RULE_PLANNING', provider=planning['provider'],
+                          object_kind=planning['object_kind'])
+        if isinstance(error, FileNotFoundError):
+            diagnostic['reason_code'] = 'RULE_PLANNING_FILE_MISSING'
     # Only fixed internal operation names and source line numbers. Never retain
     # traceback text, locals, arbitrary filenames or the exception message.
     operations = {
@@ -434,24 +442,22 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                     else:
                         state = (('QUEUED' if current['finish_requested'] else 'DIRTY') if current['dirty_seq'] > row['dirty_seq'] else
                             'PARTIAL' if result['gaps'] else 'RESULTS_READY')
-                        queue._put(db, row['check_ref'], dict(current, state=state,
-                            scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result,
-                            reason_code=None, updated_at=queue.now()))
+                        from .development_check import DevelopmentCheckService
+                        from .development_risks import DevelopmentRisks
+                        published = dict(current, state=state, scan_id=result['scan_id'],
+                            scanned_seq=row['dirty_seq'], result=result, reason_code=None,
+                            updated_at=queue.now())
+                        try:
+                            service = DevelopmentCheckService(None, hooks, owner=row['owner'])
+                            published = DevelopmentRisks(service, queue.root, row['check_ref']).publish_scan(db, published)
+                        except (ValueError, OSError):
+                            # Preserve static facts, but never publish an empty ready
+                            # candidate list or rerun a scanner for persistence failure.
+                            published = dict(published, risk_import_status='UNAVAILABLE')
+                            queue._put(db, row['check_ref'], published)
                         from .development_delivery import publish
-                        publish(queue, db, dict(row, state='PARTIAL' if result['gaps'] else 'RESULTS_READY',
-                            scan_id=result['scan_id'], scanned_seq=row['dirty_seq'], result=result, reason_code=None))
-                if result is not None:
-                    from .development_check import DevelopmentCheckService
-                    from .development_risks import DevelopmentRisks
-                    try:
-                        service = DevelopmentCheckService(None, hooks, owner=row['owner'])
-                        DevelopmentRisks(service, queue.root, row['check_ref']).sync_scanner()
-                    except (ValueError, OSError):
-                        # Static output and outbox already persist. Never repeat a scan
-                        # because the separate risk projection could not be populated.
-                        with queue.transaction() as db:
-                            current = queue._get(db, row['check_ref'])
-                            queue._put(db, row['check_ref'], dict(current, risk_import_status='UNAVAILABLE'))
+                        publish(queue, db, dict(published, state='PARTIAL' if result['gaps'] or published.get('risk_import_status') == 'UNAVAILABLE' else 'RESULTS_READY',
+                            scanned_seq=row['dirty_seq'], observed_paths=row['observed_paths']))
                 if result is None:
                     time.sleep(min(0.25, max(0, deadline-time.monotonic())))
                 else:

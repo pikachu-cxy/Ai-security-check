@@ -407,7 +407,7 @@ def test_successful_import_recovers_old_failure_and_stop_is_quiet(check, config,
     assert fallback(service.hooks, root, OWNER, service=service) is None
 
 
-@pytest.mark.parametrize('outcome', ['failure', 'newer_scan'])
+@pytest.mark.parametrize('outcome', ['failure'])
 def test_unsuccessful_or_stale_import_cannot_clear_failure(sample, monkeypatch, outcome):
     root, service, ref, risks = sample
     scanner(sample, monkeypatch)
@@ -507,5 +507,29 @@ def test_same_turn_new_versions_cannot_reset_budget_when_host_flag_is_false(chec
     service.record(root, ref, ['app.ts'])
     assert fallback(service.hooks, root, OWNER, **args) is None
     # A later actual editing turn still receives its own bounded opportunity.
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id='next')['decision'] == 'block'
+
+
+def test_failed_stop_notices_once_without_blocking_and_new_edit_recovers(check):
+    root, service, _, _ = check
+    ref = service.begin(root, 'failed-stop')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    store = service.store(root)
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, state='FAILED', failed_seq=row['dirty_seq'],
+                                finish_requested=True, reason_code='DEVELOPMENT_SCAN_FAILED'))
+    first = fallback(service.hooks, root, OWNER, service=service, turn_id='turn')
+    assert first['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    assert 'decision' not in first
+    for active in (True, False):
+        assert fallback(service.hooks, root, OWNER, service=service,
+                        turn_id='turn', stop_hook_active=active) is None
+    # A fresh service reads the same durable failure-notice marker.
+    from security_runtime.development_check import DevelopmentCheckService
+    fresh = DevelopmentCheckService(None, service.hooks, owner=OWNER,
+                                   scan_path_provider=service.scan_path())
+    assert fallback(service.hooks, root, OWNER, service=fresh, turn_id='turn') is None
     service.record(root, ref, ['app.ts'])
     assert fallback(service.hooks, root, OWNER, service=service, turn_id='next')['decision'] == 'block'

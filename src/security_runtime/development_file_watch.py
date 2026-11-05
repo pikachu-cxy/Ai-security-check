@@ -67,8 +67,8 @@ class _Window:
         self.thread = threading.Thread(target=self.run, daemon=True, name='development-file-watch')
 
     def paths(self, changes):
-        from .development_check import MAX_PATHS, MAX_PATH_BYTES, clean_paths
-        names, uncertain, size = [], False, 0
+        from .development_check import clean_paths
+        names, uncertain = [], False
         for _kind, raw in changes:
             path = Path(raw)
             if not path.is_absolute():
@@ -89,10 +89,6 @@ class _Window:
             except (OSError, ValueError):
                 uncertain = True
                 continue
-            size += len(name.encode('utf-8', errors='replace'))
-            if len(names) >= MAX_PATHS or size > MAX_PATH_BYTES:
-                uncertain = True
-                break
             names.append(name)
         names, invalid = clean_paths(names, tolerant=True)
         return names, uncertain or invalid
@@ -117,8 +113,7 @@ class _Window:
                 row = dict(row, file_watch_gaps=list(dict.fromkeys([
                     *row.get('file_watch_gaps', []), 'FILE_WATCH_PATHS_INCOMPLETE'])))
             self.store._put(db, self.ref, row)
-        from .development_check import MAX_PATHS
-        self.seen.update(fresh[:max(0, MAX_PATHS-len(self.seen))])
+        self.seen.update(fresh)
 
     def run(self):
         heartbeat = 0

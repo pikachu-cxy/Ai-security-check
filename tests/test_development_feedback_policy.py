@@ -172,3 +172,12 @@ def test_worker_persists_mock_failure_without_running_scanner(sample, monkeypatc
     result = service.saved_result(root, ref, 1)
     assert result['delivery']['status'] == 'FAILED'
     assert result['delivery']['failure_diagnostic'] == diagnostic
+
+
+def test_rule_planning_missing_resource_diagnostic_excludes_private_path():
+    error = FileNotFoundError(2, 'missing secret token', '/private/user/secret.go')
+    error.rule_plan_diagnostic = dict(stage='RULE_PLANNING', provider='native-go-sql', object_kind='RUNTIME_RESOURCE')
+    result = failure_diagnostic(error, 'SCAN_EXECUTION')
+    assert result['reason_code'] == 'RULE_PLANNING_FILE_MISSING'
+    assert result['stage'] == 'RULE_PLANNING' and result['provider'] == 'native-go-sql'
+    assert 'secret' not in json.dumps(result) and '/private' not in json.dumps(result)

@@ -325,7 +325,23 @@ class SecurityRuntime:
         if files and not no_changes:
             for adapter in self.registry.adapters:
                 if callable(getattr(adapter,'plan_rules',None)) and adapter.supports(profile,context):
-                    rule_plans[adapter.name]=adapter.plan_rules(profile,context)
+                    try:
+                        rule_plans[adapter.name]=adapter.plan_rules(profile,context)
+                    except OSError as error:
+                        # Classify the object without persisting private filenames.
+                        category = 'UNKNOWN'
+                        if error.filename:
+                            missing = Path(error.filename).absolute()
+                            if missing.is_relative_to(Path(__file__).absolute().parent):
+                                category = 'RUNTIME_RESOURCE'
+                            elif missing.is_relative_to(Path(context.root).absolute()):
+                                category = 'SCAN_INPUT'
+                            elif context.rules_path and missing.is_relative_to(Path(context.rules_path).absolute()):
+                                category = 'RULE_RESOURCE'
+                        error.rule_plan_diagnostic = dict(stage='RULE_PLANNING',
+                            provider=adapter.name if adapter.name in {'opengrep', 'native-dataflow', 'native-go-sql', 'native-js-function'} else 'OTHER',
+                            object_kind=category)
+                        raise
                     plan=rule_plans[adapter.name]
                     emit('RULE_PLAN_READY',scanner=adapter.name,message=f'{len(plan.rules)} 条适用规则 · {len(plan.files)} 个 SAST 文件')
                     if not plan.rules:

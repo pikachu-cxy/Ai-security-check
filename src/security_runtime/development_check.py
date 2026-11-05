@@ -23,8 +23,6 @@ from .performance_trace import timed, span
 
 CONTRACT = 'observed-development-check-v1'
 REF = re.compile(r'dc1-[a-f0-9]{32}')
-MAX_PATHS = 1000
-MAX_PATH_BYTES = 64_000
 MAX_EVENTS = 256
 RETENTION_SECONDS = 7 * 86400
 MAX_FINISH_WAIT_SECONDS = 25
@@ -84,13 +82,13 @@ def owner_key(owner):
 
 
 def clean_paths(values, *, tolerant=False):
-    if not isinstance(values, (list, tuple)) or len(values) > MAX_PATHS:
+    if not isinstance(values, (list, tuple)):
         if not tolerant:
             raise ValueError('DEVELOPMENT_PATH_SELECTION_INVALID')
-        values, unknown = list(values[:MAX_PATHS]) if isinstance(values, (list, tuple)) else [], True
+        values, unknown = [], True
     else:
         unknown = False
-    names, seen, size = [], set(), 0
+    names, seen = [], set()
     for name in values:
         try:
             name = relative_path(name)
@@ -102,8 +100,6 @@ def clean_paths(values, *, tolerant=False):
             folded = os.path.normcase(name)
             if folded in seen:
                 continue
-            if size + len(name.encode()) > MAX_PATH_BYTES:
-                raise ValueError('DEVELOPMENT_PATH_BUDGET')
         except ValueError:
             if not tolerant:
                 raise ValueError('DEVELOPMENT_PATH_SELECTION_INVALID') from None
@@ -111,13 +107,14 @@ def clean_paths(values, *, tolerant=False):
             continue
         names.append(name)
         seen.add(folded)
-        size += len(name.encode())
     return sorted(names), unknown
 
 
 class DevelopmentCheckStore(SignedRecords):
     max_rows = None
-    max_record_bytes = 120_000
+    max_record_bytes = 0  # No artificial path-list storage ceiling.
+    max_total_bytes = 0
+    max_database_bytes = 0
 
     def __init__(self, hooks, root, *, now=time.time):
         super().__init__(hooks, workspace_root(root), 'development-checks.db', now=now)
@@ -246,6 +243,15 @@ def legacy_guard(hooks, root, owner, *, now=time.time):
 
 def projection(store, row):
     state, reason = row['state'], row.get('reason_code')
+    # Static publication and risk projection live in separate stores. The
+    # public ready boundary includes both, without rerunning the scan.
+    importing = (row.get('scan_id') and row['scanned_seq'] == row['dirty_seq']
+                 and row.get('risk_import_status') == 'PENDING')
+    if importing and state in {'RESULTS_READY', 'PARTIAL'}:
+        state, reason = 'RUNNING', 'DEVELOPMENT_CANDIDATES_PENDING'
+    if (row.get('risk_import_status') == 'UNAVAILABLE' and
+            state in {'RESULTS_READY', 'PARTIAL'}):
+        state, reason = 'PARTIAL', 'DEVELOPMENT_CANDIDATES_UNAVAILABLE'
     if state in {'QUEUED', 'RUNNING'}:
         worker = store.read('$worker')
         if worker and worker.get('lease_until', 0) <= store.now():
@@ -257,6 +263,8 @@ def projection(store, row):
     if row['observed_paths'] and row['dirty_seq'] > row['scanned_seq']:
         gaps.append('OBSERVED_EDITS_PENDING')
     gaps.extend(result.get('gaps', []))
+    if reason == 'DEVELOPMENT_CANDIDATES_UNAVAILABLE':
+        gaps.append('RISK_IMPORT_UNAVAILABLE')
     # Older saved rows used observation uncertainty as a completion gate.
     # Project the recorded-file result without rescanning or changing ownership.
     if state == 'PARTIAL' and row['scan_id'] and not gaps:
@@ -279,6 +287,8 @@ def projection(store, row):
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
             directory_observations=row.get('observed_directories', []),
+            gitignored_paths=row.get('gitignored_paths', []),
+            gitignore_filter_note=row.get('gitignore_filter_note'),
             generated_outputs=(result if row['scanned_seq'] == row['dirty_seq'] else {}).get('generated_outputs', dict(
                 declared_roots=row.get('generated_output_roots', []), excluded_paths=[],
                 protected_paths=[], gaps=[])),
@@ -421,7 +431,10 @@ class DevelopmentCheckService:
             if row['state'] in {'OPEN', 'DIRTY'}:
                 from .development_scope import separate_directories
                 selected, directories = separate_directories(store.root, selected)
-                row = dict(row, observed_directories=directories)
+                from .development_scope import filter_gitignored
+                selected, ignored, ignore_note = filter_gitignored(store.root, selected)
+                row = dict(row, observed_directories=directories,
+                           gitignored_paths=ignored, gitignore_filter_note=ignore_note)
             row = dict(row, observed_paths=selected, scope_unknown=row['scope_unknown'] or invalid)
             state = row['state']
             worker = store._get(db, '$worker')
@@ -560,7 +573,15 @@ class DevelopmentCheckService:
             from .storage import ReadOnlySQLiteStore
             from .mcp_tools.presentation import _agent_result
             no_links(Path(row['scan_path']))
-            scan = ReadOnlySQLiteStore(Path(row['scan_path'])).get_scan(row['scan_id'])
+            unified = row.get('security_result', {})
+            scan = unified.get('scan_facts', {}).get(row['scan_id'])
+            if scan is not None:
+                originals = [o['finding'] for risk in unified['risks'].values()
+                             for o in risk['observations'] if o.get('source') == 'SCANNER'
+                             and o.get('scan_id') == row['scan_id']]
+                scan = dict(scan, findings=originals)
+            else:
+                scan = ReadOnlySQLiteStore(Path(row['scan_path'])).get_scan(row['scan_id'])
             if scan is None or Path(scan['target_profile']['path']).resolve() != store.root:
                 result.update(reason_code='DEVELOPMENT_RESULT_UNAVAILABLE', result_available=False)
                 result['gaps'].append('SAVED_RESULT_UNAVAILABLE')
@@ -576,6 +597,25 @@ class DevelopmentCheckService:
             result['review_instruction'] = (
                 '最终回复前按 review_progress 完成配置要求的复核：读取告警证据并提交判断，'
                 '再重新读取风险及处置。无需运行漏洞利用；实际证据不足时保留 INCONCLUSIVE 并说明缺口。')
+        result['review_ready'] = False
+        if (result['result_available'] and result['status'] in {'RESULTS_READY', 'PARTIAL'}
+                and row['scanned_seq'] == row['dirty_seq']):
+            from .development_risks import DevelopmentRisks
+            from .development_views import risk_summary
+            page = DevelopmentRisks(self, store.root, check_ref).get(limit=20, include_history=False)
+            if (page['scan_id'] == row['scan_id'] and page['dirty_seq'] == row['dirty_seq']
+                    and page.get('candidates_ready')):
+                result['review_ready'] = True
+                result['development_result'] = risk_summary(page)
+                result['development_result']['scan_summary'] = result.get('static_result')
+                result['development_result']['storage_contract'] = 'embedded-development-result-v1'
+                if page.get('next_action') is not None:
+                    result['next_action'] = page['next_action']
+            else:
+                result['reason_code'] = page.get('reason_code', 'DEVELOPMENT_RESULT_VERSION_CHANGED')
+                result['next_action'] = page.get('next_action')
+                if page.get('candidate_status') == 'PENDING':
+                    result.update(status='RUNNING', poll_after_seconds=2)
         return result
 
 

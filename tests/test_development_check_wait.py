@@ -254,3 +254,62 @@ def test_invalid_total_budget_never_dispatches(check, monkeypatch, value):
     with pytest.raises(ValueError, match='DEVELOPMENT_WAIT_CONFIGURATION_INVALID'):
         asyncio.run(service.complete(root, ref))
     assert not service.get(root, ref)['finish_requested']
+
+
+def test_ready_publication_waits_for_candidate_import(check, monkeypatch):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, state = check
+    ref = dirty(check, 'candidate-barrier')
+    original = DevelopmentRisks.publish_scan
+    seen = []
+    def paused(risks, db, check):
+        snapshot = service.get(root, ref)
+        page = risks.get()
+        seen.append((snapshot, page))
+        assert snapshot['status'] == 'RUNNING'
+        assert snapshot['review_ready'] is False
+        assert page['total'] is None and 'risks' not in page
+        return original(risks, db, check)
+    monkeypatch.setattr(DevelopmentRisks, 'publish_scan', paused)
+    execute(check, monkeypatch)
+    assert seen and state['calls'] == 1
+    result = service.get(root, ref)
+    assert result['review_ready']
+    assert result['development_result']['total'] == 0
+    assert result['development_result']['risks'] == []
+
+
+def test_candidate_import_failure_is_explicit_without_rescan(check, monkeypatch):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, state = check
+    ref = dirty(check, 'candidate-failure')
+    def fail(self, db, check):
+        raise ValueError('synthetic import failure')
+    monkeypatch.setattr(DevelopmentRisks, 'publish_scan', fail)
+    execute(check, monkeypatch)
+    result = asyncio.run(service.wait_saved(root, ref, 1))
+    assert result['status'] == 'PARTIAL' and not result['review_ready']
+    assert 'RISK_IMPORT_UNAVAILABLE' in result['gaps']
+    page = DevelopmentRisks(service, root, ref).get()
+    assert page['candidate_status'] == 'UNAVAILABLE' and page['total'] is None
+    assert 'risks' not in page and state['calls'] == 1
+
+
+def test_wait_spends_original_budget_on_legacy_pending_import(check, monkeypatch):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, state = check
+    ref = dirty(check, 'candidate-budget')
+    execute(check, monkeypatch)
+    store = service.store(root)
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, risk_import_status='PENDING'))
+        worker = store._get(db, '$worker')
+        store._put(db, '$worker', dict(worker, lease_until=service.now()+100))
+    clock = WaitClock(service)
+    result = asyncio.run(service.wait_saved(root, ref, 1))
+    assert result['status'] == 'RUNNING' and not result['review_ready']
+    assert result['closeout_wait']['stopped_reason'] == 'TIME_BUDGET_EXHAUSTED'
+    clock.callback = lambda: DevelopmentRisks(service, root, ref).sync_scanner()
+    result = asyncio.run(service.wait_saved(root, ref, 1))
+    assert result['review_ready'] and state['calls'] == 1

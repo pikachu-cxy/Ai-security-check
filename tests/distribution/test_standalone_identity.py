@@ -5,10 +5,12 @@ import shutil
 import sys
 from types import ModuleType
 
-from security_runtime import dataflow
+import pytest
+from security_runtime import dataflow, go_sql
 
 
-def test_frozen_dataflow_source_identity_matches_development(tmp_path, monkeypatch):
+@pytest.mark.parametrize('provider', [dataflow, go_sql])
+def test_frozen_dataflow_source_identity_matches_development(tmp_path, monkeypatch, provider):
     root = Path(__file__).resolve().parents[2]
     hooks = ModuleType('PyInstaller.utils.hooks')
     hooks.collect_data_files = lambda *a, **k: []
@@ -26,11 +28,11 @@ def test_frozen_dataflow_source_identity_matches_development(tmp_path, monkeypat
         statements.append(statement)
     namespace = {'SPECPATH': str(spec.parent)}
     exec(compile(ast.Module(body=statements, type_ignores=[]), str(spec), 'exec'), namespace)
-    expected = dataflow.rule_pack().checksum
+    expected = provider.rule_pack().checksum
     frozen = tmp_path / 'security_runtime'
     frozen.mkdir()
     for source, destination in namespace['datas']:
         if destination == 'security_runtime' and Path(source).suffix == '.py':
             shutil.copy2(source, frozen / Path(source).name)
-    monkeypatch.setattr(dataflow, '__file__', str(frozen / 'dataflow.py'))
-    assert dataflow.rule_pack().checksum == expected
+    monkeypatch.setattr(provider, '__file__', str(frozen / (provider.__name__.split('.')[-1]+'.py')))
+    assert provider.rule_pack().checksum == expected

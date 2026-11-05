@@ -151,6 +151,7 @@ def test_wait_mcp_dispatch_yields_to_another_read(development_server, monkeypatc
 
 
 def test_global_router_requires_workspace_and_keeps_session_scope(installed, projects, tmp_path, monkeypatch):
+    (tmp_path / 'user-config.toml').write_text('[agent]\naudit_business_logic=true\n')
     from security_runtime.global_mcp import GlobalWorkspaces, create_global_server
     monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(tmp_path / 'user-config.toml'))
 

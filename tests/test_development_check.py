@@ -100,24 +100,14 @@ def test_next_edit_replaces_completed_scope_but_keeps_saved_results(check, monke
     assert service.get(root, ref)['dirty_seq'] == service.get(root, ref)['scanned_seq'] == 3
 
 
-def test_capacity_gap_is_reported_and_completed_batch_releases_space(check, monkeypatch):
-    from security_runtime import development_check
+def test_paths_above_previous_count_and_byte_caps_are_retained(check):
     root, service, _, _ = check
-    (root/'new.ts').write_text('export const value = 1;\n')
-    monkeypatch.setattr(development_check, 'MAX_PATH_BYTES', len('app.ts'))
-    ref = service.begin(root, 'capacity')['check_ref']
-    service.record(root, ref, ['app.ts'])
-    overflow = service.record(root, ref, ['new.ts'])
-    assert overflow['scope']['paths'] == ['app.ts']
-    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' in overflow['gaps']
-    assert execute(check, monkeypatch) == 0
-    saved = service.saved_result(root, ref, 2)
-    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' in saved['result']['gaps']
-    current = service.record(root, ref, ['new.ts'])
-    assert current['scope']['paths'] == ['new.ts']
-    assert not current['scope']['scope_unknown']
-    assert execute(check, monkeypatch) == 0
-    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' not in service.get(root, ref)['gaps']
+    paths = [f'src/{i:05d}_' + 'a'*80 + '.py' for i in range(1501)]
+    ref = service.begin(root, 'unlimited')['check_ref']
+    result = service.record(root, ref, paths)
+    assert result['scope']['paths'] == paths
+    assert not result['scope']['scope_unknown']
+    assert 'OBSERVED_PATH_CAPACITY_EXCEEDED' not in result['gaps']
 
 
 def test_hook_auto_check_adopt_replay_and_finish_then_edit(check):

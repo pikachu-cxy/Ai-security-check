@@ -68,6 +68,17 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
             and saved['scanned_seq'] == saved['dirty_seq'] == seq
             and (saved.get('host_review_completed') or not any(batch_config(row)['agent'].values()))):
         return None
+    if saved['status'] == 'FAILED':
+        # Failure is terminal, not work that another Stop can complete.
+        # Persist one non-blocking notice per input version, across reconnects.
+        with store.transaction() as db:
+            current = store._get(db, ref)
+            if current['dirty_seq'] != seq or current.get('stop_failure_notice_seq') == seq:
+                return None
+            store._put(db, ref, dict(current, stop_failure_notice_seq=seq))
+        return dict(status='STOP_FALLBACK_INCOMPLETE', scanner_run=False,
+                    reason_code=saved.get('reason_code'),
+                    systemMessage='本次安全检查失败，失败记录已保留；不会通过 Stop 自动重试。')
     terminal_result = ([seq, saved.get('scan_id'), saved['status']]
         if saved.get('result_available') and row['scanned_seq'] == seq
         and saved['status'] in {'RESULTS_READY', 'PARTIAL'} else None)

@@ -10,7 +10,7 @@ development_max_records = 1024
 
 [agent]
 review_scanner_findings = true
-audit_business_logic = true
+audit_business_logic = false
 
 [development.stop_fallback]
 enabled = true

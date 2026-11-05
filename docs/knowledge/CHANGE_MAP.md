@@ -27,6 +27,7 @@
 | 普通开发收尾和 MCP 固定开销 | `development_check_worker.py`、`scan_attempt.py`、`workspace_application.py`、`global_mcp.py` | `tests/test_lightweight_closeout.py`；检查 CAPTURED、失效租约、工作区解析和版本缓存复用 |
 | 仅显式授权的 BYOK 复核 | `triage_providers.py`、`triage.py`、`cli.py` | 相关 triage 测试；不得与默认宿主 Agent 复核混为一谈 |
 | 风险仪表盘显示 | `risk_dashboard.py`、`assets/` | `tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs` |
+| Go 原生包缺少规则身份资源 | `go_sql.py`、`distribution/build/security-check.spec` | `tests/distribution/test_standalone_identity.py`；原生包最小 Go 扫描 |
 | 用户配置和 Stop 预算 | `user_config.py`、`development_stop.py` | `tests/test_user_config_stop.py` |
 | 本知识库与索引 | `docs/knowledge/`、`scripts/maintenance/knowledge_index.py`、`AGENTS.md` | 索引 `--check`、本地链接检查、实际符号查询 |
 
@@ -39,3 +40,7 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 ```
 
 先搜固定错误码或接口名，再搜调用方。带星号的模块族表示搜索线索，不是一个真实文件路径。索引中的行号会随代码变动，需要重新生成；修改前始终读取当前文件。
+
+复核读取与调用成本：`development_views.py`、`mcp_tools/development_check.py`；回归见 `tests/test_development_risks.py`。索引无变化重写见 `scripts/maintenance/knowledge_index.py` 与 `tests/test_knowledge_index_writes.py`。
+
+统一结果及旧数据兼容：`development_result_store.py`、`development_risks.py:publish_scan`、`development_check_worker.py`、`risk_dashboard.py`；测试 `tests/test_development_result_store.py` 与 `tests/test_development_check_wait.py`。

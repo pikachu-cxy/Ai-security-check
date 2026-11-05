@@ -125,6 +125,8 @@ class SignedRecords:
         return value
 
     def _select(self):
+        if not self.max_record_bytes:
+            return 'SELECT key, data, CASE WHEN length(mac)=64 THEN mac END FROM records'
         return ('SELECT key, CASE WHEN length(CAST(data AS BLOB))<=' + str(self.max_record_bytes)
                 + ' THEN data END, CASE WHEN length(mac)=64 THEN mac END FROM records')
 
@@ -140,7 +142,7 @@ class SignedRecords:
     def _put(self, db, key, value):
         value = dict(value, key=key, workspace=str(self.root))
         raw = encode(value)
-        if len(raw) > self.max_record_bytes:
+        if self.max_record_bytes and len(raw) > self.max_record_bytes:
             raise TaskOperationError('TASK_OPERATION_CAPACITY_REQUIRED',
                                      observed=len(raw), limit=self.max_record_bytes)
         used = db.execute('SELECT coalesce(sum(length(CAST(data AS BLOB))),0) FROM records WHERE key<>?',

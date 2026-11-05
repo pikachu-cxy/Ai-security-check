@@ -228,15 +228,15 @@ def test_native_backend_failure_retains_gap_without_exception_content(sample):
     assert 'canary' not in json.dumps(result) and launched == []
 
 
-def test_path_budget_and_outside_event_are_explicit_gaps(sample, monkeypatch):
-    root, _, owner, service, ref, _ = sample
-    monkeypatch.setattr('security_runtime.development_check.MAX_PATHS',2)
-    watching.start_window(service.store(root),ref,owner)
-    for i in range(5):
-        (root/f'{i}.py').write_text('value = 1')
-    result = service.finish(root,ref)
-    assert len(result['scope']['paths']) <= 2 and result['scope']['scope_unknown']
-    assert 'FILE_WATCH_PATHS_INCOMPLETE' in result['observation_notes']
+def test_watcher_retains_paths_above_old_cap(sample):
+    from types import SimpleNamespace
+    root, _, _, _, _, _ = sample
+    window = object.__new__(watching._Window)
+    window.store = SimpleNamespace(root=root)
+    window.private, window.ignored = root/'private', set()
+    paths = [f'{i:05d}_' + 'a'*80 + '.py' for i in range(1501)]
+    names, unknown = window.paths([(2, str(root/name)) for name in paths])
+    assert names == paths and not unknown
 
 
 def test_watch_diagnostic_does_not_manufacture_a_new_edit_or_reopen_saved_batch(sample):

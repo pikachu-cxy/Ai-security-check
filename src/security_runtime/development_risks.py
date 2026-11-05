@@ -161,7 +161,8 @@ class DevelopmentRisks:
         self.checks = development.store(root)
         self.root = self.checks.root
         self.check = self.checks.load(check_ref, development.owner)
-        self.store = SignedRecords(development.hooks, self.root, 'development-risks.db')
+        from .development_result_store import DevelopmentResultStore
+        self.store = DevelopmentResultStore(self.checks)
 
     def fresh(self):
         return dict(contract='development-risks-v1', check_ref=self.ref,
@@ -177,6 +178,8 @@ class DevelopmentRisks:
         return row
 
     def current_check(self):
+        if self.store.active.get() is not None:
+            return self.checks._get(self.store.active.get(), self.ref)
         return self.checks.load(self.ref, self.development.owner)
 
     def read(self, file_path, start_line=1, end_line=80, *, related=False):
@@ -243,24 +246,24 @@ class DevelopmentRisks:
                 require(len(risk['observations']) < 128, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                 risk['observations'].append(obs)
         row['imported_scan_id'] = check['scan_id']
+        # Original findings are retained under each finding's SCANNER observation.
+        # Store the remaining immutable execution facts in the same result object.
+        row.setdefault('scan_facts', {})[check['scan_id']] = {
+            key: value for key, value in scan.items() if key != 'findings'}
+
+    def publish_scan(self, db, check):
+        """Merge scan facts into the canonical object before READY commits."""
+        row = self.load(db)
+        self.import_scanner(row, check)
+        check = dict(check, security_result=row, result_storage='embedded-development-result-v1',
+                     has_unified_risks=bool(row['risks']), risk_import_status='AVAILABLE')
+        self.checks._put(db, self.ref, check)
+        return check
 
     def sync_scanner(self):
         """Persist scanner observations independently of any Agent review."""
         with self.store.transaction() as db:
-            check = self.current_check()
-            row = self.load(db)
-            self.import_scanner(row, check)
-            self.store._put(db, self.ref, row)
-        with self.checks.transaction() as db:
-            current = self.checks._get(db, self.ref)
-            changes = dict(has_unified_risks=True) if row['risks'] else {}
-            # Clear a previous failure only after this scan's import committed.
-            # A newer scan must retain its own import status.
-            if (check.get('scan_id') and current.get('scan_id') == check['scan_id']
-                    and current['scanned_seq'] == check['scanned_seq']):
-                changes['risk_import_status'] = 'AVAILABLE'
-            if changes:
-                self.checks._put(db, self.ref, dict(current, **changes))
+            self.publish_scan(db, self.current_check())
 
     def submit(self, observations, expected_seq, *, business_reviews=()):
         try:
@@ -408,12 +411,11 @@ class DevelopmentRisks:
                 row['reviews'].append(review)
             # Retain the original ownership/path journal while its risks exist.
             # A failed risk commit may leave a harmless retention pin, never a lost risk.
-            with self.checks.transaction() as checks_db:
-                current = self.checks._get(checks_db, self.ref)
-                require(current['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
-                require(current.get('scan_id') == check.get('scan_id'), 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
-                self.checks._put(checks_db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
-                                                         has_development_review=True))
+            current = self.checks._get(db, self.ref)
+            require(current['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            require(current.get('scan_id') == check.get('scan_id'), 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
+            self.checks._put(db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
+                                               has_development_review=True))
             self.store._put(db, self.ref, row)
         from .development_reporting import reporting
         result = self.get(include_history=False)
@@ -428,6 +430,19 @@ class DevelopmentRisks:
                 'DEVELOPMENT_RISK_PAGE_INVALID')
         row = self.load()
         check = self.current_check()
+        # Missing/stale projection is unknown, never a successful empty page.
+        if ((check.get('finish_requested') and check['state'] in {'QUEUED', 'RUNNING'}) or
+                (check.get('scan_id') and (row.get('imported_scan_id') != check['scan_id'] or
+                 check.get('risk_import_status', 'AVAILABLE') != 'AVAILABLE'))):
+            failed = check.get('risk_import_status') == 'UNAVAILABLE'
+            return dict(contract='development-risks-v1', check_ref=self.ref,
+                scan_id=check.get('scan_id'), dirty_seq=check['dirty_seq'],
+                candidate_status='UNAVAILABLE' if failed else 'PENDING', candidates_ready=False,
+                reason_code='DEVELOPMENT_CANDIDATES_UNAVAILABLE' if failed else 'DEVELOPMENT_CANDIDATES_PENDING',
+                total=None, next_offset=None, review_progress=review_progress(check, row),
+                next_action=dict(tool='get_development_check' if failed else 'wait_development_check',
+                    arguments=dict(check_ref=self.ref, workspace_path=str(self.root))),
+                scanner_run=False, repair_authorized=False)
         risks = list(row['risks'].values())
         items = [dict(id=r['id'], finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
                       disposition=r.get('disposition', 'ACTIVE'),
@@ -443,6 +458,7 @@ class DevelopmentRisks:
         next_offset = offset+limit if offset+limit < len(risks) else None
         report = reporting(self.ref, self.root, offset=next_offset)
         return dict(contract='development-risks-v1', check_ref=self.ref,
+                    candidate_status='AVAILABLE', candidates_ready=True,
                     scan_id=check.get('scan_id'), dirty_seq=check['dirty_seq'],
                     review_progress=review_progress(check, row),
                     reporting=report, next_action=report.get('next_action'),

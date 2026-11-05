@@ -217,6 +217,26 @@ findings_access 给出发现读取入口，沿其真实 scan_id 使用 get_findi
 不可用均按实际返回保留覆盖限制。没有改前内容时不能断言问题由本次 AI 编辑新增。
 不把外部编辑、全项目依赖、跨文件逻辑或完整工作区差异说成本次已完整覆盖。
 
+### 统一开发结果
+
+实际返回 development_result 且 review_ready=true 时，直接使用其中扫描摘要、第一页 risks、
+review_progress 和处置；不为同一页再调 get_development_risks。next_offset 非空时沿当前引用继续分页。
+候选列表尚不可用时 total=null，不能解释为零风险；按 next_action 等待或报告失败，不重发扫描。
+统一对象保留原始扫描事实及后续判断。提交复核后仍须从 offset=0 读齐当前结果，不能用提交前数据报告。
+旧 Runtime 未提供统一字段时沿旧实际接口读取，不能猜测支持。
+
+### 降低读取和调用成本
+
+当前接口支持时，get_development_risks 默认 limit=20、view=summary、include_history=false；
+摘要保留全部候选、处置和复核进度，仅去掉 assessment 中重复的 finding 和源码哈希。
+需要原始完整字段时指定 view=full，历史批次按需加载。不能省略 next_offset 后续页。
+多个已知证据窗口可用 read_development_risk_context(windows=[{file_path,start_line,end_line,related}])
+一次读取，最多 20 个窗口，每个最多 80 行；不同时传 file_path。返回 evidence 数组中的实际引用。
+相同窗口去重，服务端按顺序保存证据，不启动并发写；版本变化仍拒绝，提交仍核验实际源码。
+读取失败可能留有证据收据，不代表复核已保存。旧连接缺少 windows 参数时沿单窗口读取。
+submit_development_review 成功只返回保存回执和复核进度；仍须从 offset=0 读取最终风险及处置。
+代码、文档和生成索引全部写完后，在最终回复前主动完成本批收尾及候选复核，避免把正常收尾留给 Stop。
+
 ### 统一风险保存、复核和修复
 
 若 Runtime 声明 development_risks=development-risks-v1，轻量开发的扫描器发现和 AI 发现

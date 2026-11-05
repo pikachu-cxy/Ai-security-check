@@ -332,3 +332,68 @@ def test_review_scanner_context_manifest_without_marking_it_edited(sample, monke
                  evidence_refs=[evidence['evidence_ref']])
     with pytest.raises(ValueError, match='DEVELOPMENT_RISK_LOCATION_INVALID'):
         risks.submit([value], risks.current_check()['dirty_seq'])
+
+
+def test_batch_evidence_deduplicates_and_keeps_stale_submission_guard(sample):
+    from security_runtime.development_views import EvidenceWindow, read_contexts
+    root, service, ref, risks = sample
+    window = EvidenceWindow(file_path='query.py', start_line=1, end_line=2)
+    batch = read_contexts(risks, [window, window])
+    assert len(batch['evidence']) == 1
+    value = observation(risks)
+    value['evidence_refs'] = [batch['evidence'][0]['evidence_ref']]
+    (root/'query.py').write_text('def query(conn, name):\n    return conn.execute("fixed")\n')
+    with pytest.raises(ValueError, match='EVIDENCE_STALE'):
+        risks.submit([value], batch['dirty_seq'])
+
+
+def test_batch_rejects_cross_version_and_unobserved_paths(sample, monkeypatch):
+    from security_runtime.development_views import EvidenceWindow, read_contexts
+    root, service, ref, risks = sample
+    with pytest.raises(ValueError, match='PATH_NOT_OBSERVED'):
+        read_contexts(risks, [EvidenceWindow(file_path='other.py')])
+    original = risks.read
+    def changed(*args, **kwargs):
+        result = original(*args, **kwargs)
+        service.record(root, ref, ['query.py'])
+        return result
+    monkeypatch.setattr(risks, 'read', changed)
+    with pytest.raises(ValueError, match='VERSION_STALE'):
+        read_contexts(risks, [EvidenceWindow(file_path='query.py', end_line=2)])
+
+
+def test_mcp_compact_review_defaults_preserve_findings_and_full_access(sample):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from mcp.server.fastmcp import FastMCP
+    from security_runtime.mcp_tools.development_check import register
+    root, service, ref, risks = sample
+    server = FastMCP('compact-test')
+    register(server, SimpleNamespace(harden=lambda names: None), application=SimpleNamespace(
+        development_service=lambda *a, **kw: service, bound_path=lambda p: root))
+    async def call(name, args):
+        result = await server.call_tool(name, dict(check_ref=ref, **args))
+        # FastMCP returns the structured dict alongside the text blocks.
+        return result[1] if isinstance(result, tuple) else json.loads(result[0].text)
+    async def run():
+        windows = [dict(file_path='query.py', start_line=1, end_line=2)] * 2
+        batch = await call('read_development_risk_context', dict(windows=windows))
+        assert len(batch['evidence']) == 1
+        value = observation(risks)
+        receipt = await call('submit_development_review', dict(
+            expected_seq=risks.current_check()['dirty_seq'], observations=[value]))
+        assert receipt['review_saved'] and receipt['reread_required']
+        assert 'risks' not in receipt and receipt['next_action']['arguments']['offset'] == 0
+        short = await call('get_development_risks', {})
+        full = await call('get_development_risks', dict(view='full'))
+        assert short['risks'][0]['finding'] == full['risks'][0]['finding']
+        assert short['review_progress'] == full['review_progress']
+        assert short['risks'][0]['disposition'] == full['risks'][0]['disposition']
+        assert 'finding' not in short['risks'][0]['assessment']
+        assert 'finding' in full['risks'][0]['assessment']
+        schema = next(t.inputSchema for t in await server.list_tools() if t.name == 'get_development_risks')
+        assert schema['properties']['limit']['default'] == 20
+        print('compact_bytes', len(json.dumps(short)), 'full_bytes', len(json.dumps(full)),
+              'receipt_bytes', len(json.dumps(receipt)))
+    asyncio.run(run())
