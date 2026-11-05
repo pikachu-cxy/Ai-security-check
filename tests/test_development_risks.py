@@ -296,3 +296,22 @@ def test_early_review_bound_to_scan_result(sample, monkeypatch):
                    r.get('scan_id') == risks.current_check()['scan_id'] for r in row['reviews'])
     risks.submit([observation(risks, same_issue_as='s1')], risks.current_check()['dirty_seq'])
     assert risks.load()['reviews'][-1]['scan_id'] == 'scan-1'
+
+
+def test_review_scanner_context_manifest_without_marking_it_edited(sample, monkeypatch):
+    root, service, ref, risks = sample
+    (root / 'pyproject.toml').write_text('[project]\nname="sample"\n')
+    original = scanner(sample, monkeypatch)
+    original.update(file_path='pyproject.toml', line_start=1, line_end=1)
+    evidence = risks.read('pyproject.toml', 1, 2, related=True)
+    review = dict(same_issue_as='s1', scan_id='scan-1', decision='DISMISSED',
+                  rationale='Synthetic dependency context review', evidence_refs=[evidence['evidence_ref']])
+    result = risks.submit([review], risks.current_check()['dirty_seq'])
+    assert result['risks'][0]['decision'] == 'DISMISSED'
+    assert risks.current_check()['observed_paths'] == ['query.py']
+    # An independent AI observation still cannot use this unedited location.
+    value = observation(risks)
+    value.update(file_path='pyproject.toml', line_start=1, line_end=1,
+                 evidence_refs=[evidence['evidence_ref']])
+    with pytest.raises(ValueError, match='DEVELOPMENT_RISK_LOCATION_INVALID'):
+        risks.submit([value], risks.current_check()['dirty_seq'])

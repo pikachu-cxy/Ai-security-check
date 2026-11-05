@@ -273,7 +273,9 @@ class DevelopmentRisks:
             values = normalized
             for index, value in enumerate(values):
                 name = relative_path(value.file_path)
-                require(name in check['observed_paths'] and value.line_end >= value.line_start,
+                # Linked scanner locations were resolved from this scan above.
+                require((value.same_issue_as is not None or name in check['observed_paths'])
+                        and value.line_end >= value.line_start,
                         'DEVELOPMENT_RISK_LOCATION_INVALID')
                 try:
                     evidence = self.evidence(row, value.evidence_refs)
