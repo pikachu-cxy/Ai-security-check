@@ -303,6 +303,52 @@ def test_waiting_stop_does_not_suppress_new_terminal_result(check, monkeypatch):
     assert state['calls'] == 1
 
 
+@pytest.mark.parametrize('scanner_review,business_review', [
+    (True, True), (True, False), (False, True), (False, False)])
+@pytest.mark.parametrize('prior_stop', [False, True])
+def test_reviewed_partial_result_does_not_continue_for_coverage_gaps(
+        check, config, monkeypatch, scanner_review, business_review, prior_stop):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, state = check
+    config.write_text('[agent]\n'
+        f'review_scanner_findings={str(scanner_review).lower()}\n'
+        f'audit_business_logic={str(business_review).lower()}\n')
+    ref = service.begin(root, 'partial-reviewed')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    if prior_stop:
+        assert fallback(service.hooks, root, OWNER, service=service,
+                        turn_id='turn')['decision'] == 'block'
+    execute(check, monkeypatch)
+    saved = service.get(root, ref)
+    # The real lexical-only fixture leaves scanner coverage incomplete.
+    assert saved['status'] == 'PARTIAL' and saved['gaps']
+    risks = DevelopmentRisks(service, root, ref)
+    if business_review:
+        evidence = risks.read('app.ts', 1, 2)
+        risks.submit([], saved['dirty_seq'], business_reviews=[dict(
+            file_path='app.ts', rationale='Reviewed the synthetic passthrough function.',
+            evidence_refs=[evidence['evidence_ref']], limitations=[])])
+    reviewed = service.get(root, ref)
+    assert reviewed['host_review_completed'] == (scanner_review or business_review)
+    before = service.store(root).load(ref).get('stop_fallback')
+    # Neither first Stop nor an active/reset continuation flag can create work
+    # solely because terminal coverage remains partial. This is no report ack.
+    for active in (False, True, False, True):
+        assert fallback(service.hooks, root, OWNER, service=service,
+                        stop_hook_active=active, turn_id='turn') is None
+    after = service.get(root, ref)
+    assert after['status'] == 'PARTIAL'
+    assert after['gaps'] == saved['gaps']
+    assert after['scan_id'] == saved['scan_id']
+    assert service.store(root).load(ref).get('stop_fallback') == before
+    assert state['calls'] == 1
+    # A subsequent edit invalidates completion and must retain normal fallback.
+    (root/'app.ts').write_text('export const changed = 2;\n')
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, service=service,
+                    turn_id='next')['decision'] == 'block'
+
+
 def test_static_only_result_does_not_request_agent_review(check, config, monkeypatch):
     root, service, _, _ = check
     config.write_text('[agent]\nreview_scanner_findings=false\naudit_business_logic=false')

@@ -8,7 +8,7 @@
 | 原引用与输入版本绑定 | 防止把另一任务或旧源码结果当成本轮结论 | `workspace_application.py`、`tasks/ownership.py`、`development_check.py`；保留 owner、工作区和序号校验 |
 | 轻量检查查询与执行分离 | 让刷新状态的成本和副作用可预期 | `development_check.py` 的保存结果读取与等待不扫描、不重哈希源码；不能推广成所有 `get_*` 接口都不做版本核验，例如 `closeout.py` 会验证当前版本 |
 | 文件监听记录时间窗而非作者身份 | 支持工具子进程与同工作区并发写入 | `development_file_watch.py`；不能声称证明是谁修改，也不能把未触碰的旧脏文件全纳入 |
-| 有界 Stop 与后台交付 | 保留未完成事实，同时避免相同终态无限续接 | `development_stop.py`、`development_delivery.py`；诊断不制造新编辑，读取不确认用户已看见 |
+| 有界 Stop 与后台交付 | 保留未完成事实，同时避免相同终态无限续接 | `development_stop.py`、`development_delivery.py`；当前输入版本已有终态结果且所需复核完成（或按配置全部跳过）时，覆盖限制本身不触发 Stop 续接。保留 PARTIAL 与缺口并如实报告；放行不表示用户已看见，新编辑仍需收尾 |
 | 协议层薄、领域层负责授权 | 防止不同宿主形成几套不一致行为 | `mcp_contracts.py`、`mcp_tools/`、`workspace_application.py`；分组只适配路由 |
 | 证据、判断、处置、修复分别保存 | 保留审计依据与用户决定，防止误把排除当修复 | `development_risks.py`、`risk_disposition.py`、`tasks/risk_ledger.py`；零告警不能关闭原风险 |
 | 指定修复先核对影响和范围 | 避免工具建议或模型判断越过用户选择 | `repair_impact*`、`mcp_tools/repair.py`；实际修改不得超出准备与授权范围 |

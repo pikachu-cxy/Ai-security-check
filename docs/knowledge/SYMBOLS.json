@@ -2473,7 +2473,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "ae9eebba44665f5f5edbdacfd99b3c816283623782b458be99ccd95976bf9dd0",
+      "sha256": "a6c203be0f9113886e30b26375ac5fe0726efbdd8e81e7e40b4039fd8e3b2386",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {

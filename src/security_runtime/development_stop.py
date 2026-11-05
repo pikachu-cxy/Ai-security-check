@@ -62,7 +62,10 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     if (saved['status'] in {'QUEUED', 'RUNNING'} and row['finish_requested']
             and (ref, seq, 'WAITING') in offered):
         return None
-    if (saved['status'] == 'RESULTS_READY' and row['scanned_seq'] == seq and not saved['gaps']
+    # Terminal coverage limits remain reportable facts, not unfinished work.
+    # Suppressing Stop neither clears those gaps nor acknowledges user delivery.
+    if (saved['status'] in {'RESULTS_READY', 'PARTIAL'} and saved.get('result_available')
+            and saved['scanned_seq'] == saved['dirty_seq'] == seq
             and (saved.get('host_review_completed') or not any(batch_config(row)['agent'].values()))):
         return None
     terminal_result = ([seq, saved.get('scan_id'), saved['status']]
