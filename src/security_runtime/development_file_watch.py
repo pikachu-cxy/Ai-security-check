@@ -43,10 +43,10 @@ def _gap(store, ref, reason, *, watch_id=None, status='FAILED'):
             return
         gaps = list(dict.fromkeys([*row.get('file_watch_gaps', []), reason]))
         watch = dict(row.get('file_watch', {}), status=status, ended_at=store.now())
-        # A newly discovered observation gap invalidates an earlier clean result.
-        if reason not in row.get('file_watch_gaps', []):
-            row, _ = store.append(db, row, [], True, None)
-        store._put(db, ref, dict(row, file_watch=watch, file_watch_gaps=gaps))
+        # A watcher diagnostic is not an observed edit. Preserve uncertainty,
+        # but do not advance the input version or reopen an already saved batch.
+        store._put(db, ref, dict(row, scope_unknown=True,
+                                file_watch=watch, file_watch_gaps=gaps))
 
 
 class _Window:

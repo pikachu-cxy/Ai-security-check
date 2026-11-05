@@ -7,7 +7,7 @@ import json
 from pathlib import Path, PureWindowsPath
 
 from .codex_integration import unique_json
-from .hook_state import atomic_bytes, no_links
+from .hook_state import atomic_bytes, no_links, native_io_path
 
 
 def encode(value):
@@ -32,10 +32,11 @@ class WriteTransaction:
 
     def observe(self, path, content):
         no_links(path)
-        before = path.read_bytes() if path.exists() else None
+        io = native_io_path(path)
+        before = io.read_bytes() if io.exists() else None
         self.writes.append((path, before, content))
         parent = path.parent
-        while not parent.exists() and parent != parent.parent:
+        while not native_io_path(parent).exists() and parent != parent.parent:
             self.created_directories.add(parent)
             parent = parent.parent
 
@@ -44,14 +45,15 @@ class WriteTransaction:
         for path, before, desired in reversed(self.writes):
             try:
                 no_links(path)
-                current = path.read_bytes() if path.exists() else None
+                io = native_io_path(path)
+                current = io.read_bytes() if io.exists() else None
                 if current == before:
                     continue
                 if current != desired:
                     clean = False
                     continue
                 if before is None:
-                    path.unlink(missing_ok=True)
+                    io.unlink(missing_ok=True)
                 else:
                     atomic_bytes(path, before)
             except (OSError, ValueError):
@@ -59,7 +61,7 @@ class WriteTransaction:
         for directory in sorted(self.created_directories, key=lambda p: len(p.parts), reverse=True):
             try:
                 no_links(directory)
-                directory.rmdir()  # Only newly created, empty directories.
+                native_io_path(directory).rmdir()  # Only newly created, empty directories.
             except (OSError, ValueError):
                 pass
         return clean
@@ -76,13 +78,15 @@ class OwnedJsonServer:
     def inspect(self):
         no_links(self.path)
         no_links(self.manifest)
-        raw = self.path.read_bytes() if self.path.exists() else None
+        io = native_io_path(self.path)
+        raw = io.read_bytes() if io.exists() else None
         if raw is not None and len(raw) > 262144:
             raise ValueError('CONFIG_INVALID')
         value = unique_json(raw) if raw is not None else {'mcpServers': {}}
         if not isinstance(value, dict) or not isinstance(value.get('mcpServers'), dict):
             raise ValueError('CONFIG_INVALID')
-        ownership = self.manifest.read_bytes() if self.manifest.exists() else None
+        manifest_io = native_io_path(self.manifest)
+        ownership = manifest_io.read_bytes() if manifest_io.exists() else None
         record = None
         if ownership is not None:
             if len(ownership) > 64000:
@@ -91,7 +95,7 @@ class OwnedJsonServer:
             signature = signed.pop('signature')
             key_path = self.store.workspace_directory(self.home) / 'snapshot.key'
             no_links(key_path)
-            key = key_path.read_bytes()
+            key = native_io_path(key_path).read_bytes()
             if (len(key) != 32 or set(signed) != {'contract', 'server'} or signed['contract'] != 'owned-json-mcp-v1'
                     or not isinstance(signature, str) or not hmac.compare_digest(signature,
                         hmac.new(key, encode(signed), hashlib.sha256).hexdigest())):
@@ -109,14 +113,15 @@ class OwnedJsonServer:
 
     def write(self, path, before, desired):
         no_links(path)
-        if (path.read_bytes() if path.exists() else None) != before:
+        io = native_io_path(path)
+        if (io.read_bytes() if io.exists() else None) != before:
             raise ValueError('CONFIGURATION_CHANGED')
         if before == desired:
             return
         if self.observer:
             self.observer(path, desired)
         if desired is None:
-            path.unlink(missing_ok=True)
+            io.unlink(missing_ok=True)
         else:
             atomic_bytes(path, desired)
 

@@ -96,9 +96,14 @@ static int field(const char *json,const char *name,char *out,size_t cap) {
     return string(space(s+strlen(pattern)),out,cap)!=NULL;
 }
 static int inventory(const wchar_t *root,int *files) {
-    wchar_t pattern[32768],path[32768]; WIN32_FIND_DATAW data;
-    if(swprintf(pattern,32768,L"\\\\?\\%ls\\*",root)<0) return 0;
-    HANDLE find=FindFirstFileW(pattern,&data); if(find==INVALID_HANDLE_VALUE) return 0;
+    /* Rule directories can be deep. Keep recursive path buffers off the
+     * compiler-dependent stack (MSVC defaults to a smaller stack than GCC). */
+    wchar_t *pattern=calloc(32768,sizeof(wchar_t)), *path=calloc(32768,sizeof(wchar_t));
+    WIN32_FIND_DATAW data;
+    if(!pattern || !path) {free(pattern);free(path);return 0;}
+    if(swprintf(pattern,32768,L"\\\\?\\%ls\\*",root)<0) {free(pattern);free(path);return 0;}
+    HANDLE find=FindFirstFileW(pattern,&data); free(pattern);
+    if(find==INVALID_HANDLE_VALUE) {free(path);return 0;}
     int ok=1;
     do {
         if(!wcscmp(data.cFileName,L".") || !wcscmp(data.cFileName,L"..")) continue;
@@ -108,24 +113,56 @@ static int inventory(const wchar_t *root,int *files) {
         else if(++*files>10001) {ok=0;break;}
     } while(FindNextFileW(find,&data));
     if(GetLastError()!=ERROR_NO_MORE_FILES) ok=0;
-    FindClose(find); return ok;
+    FindClose(find); free(path); return ok;
+}
+typedef struct { wchar_t *path; char expected[65]; } FileJob;
+typedef struct { FileJob *jobs; LONG count,next,failed; } VerifyJobs;
+static DWORD WINAPI verifyworker(LPVOID argument) {
+    VerifyJobs *work=(VerifyJobs*)argument;
+    for(;;) {
+        LONG index=InterlockedIncrement(&work->next)-1;
+        if(index>=work->count || InterlockedCompareExchange(&work->failed,0,0)) break;
+        char got[65];
+        if(!filehash(work->jobs[index].path,got) || strcmp(work->jobs[index].expected,got)) {
+            InterlockedExchange(&work->failed,1); break;
+        }
+    }
+    return 0;
 }
 static int verifyfiles(const wchar_t *root,const char *manifest) {
     const char *s=strstr(manifest,"\"files\":"); if(!s) return 0;
-    s=space(s+8); if(*s++!='{') return 0; int declared=0,actual=0;
+    s=space(s+8); if(*s++!='{') return 0; int declared=0,actual=0,ok=0;
+    FileJob *jobs=calloc(10000,sizeof(FileJob)); if(!jobs) return 0;
     for(;;) {
-        char name[4096],expected[65],got[65]; wchar_t relative[4096],path[32768];
+        char name[4096],expected[65]; wchar_t relative[4096],path[32768];
         s=space(s); if(*s=='}') break;
-        if(!(s=string(s,name,sizeof(name))) || *space(s)!=':') return 0;
-        s=space(s)+1; if(!(s=string(space(s),expected,sizeof(expected))) || !hex64(expected)) return 0;
-        if(!name[0] || name[0]=='/' || strstr(name,"..") || strchr(name,':') || strchr(name,'\\')) return 0;
-        if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,name,-1,relative,4096)) return 0;
+        if(!(s=string(s,name,sizeof(name))) || *space(s)!=':') goto done;
+        s=space(s)+1; if(!(s=string(space(s),expected,sizeof(expected))) || !hex64(expected)) goto done;
+        if(!name[0] || name[0]=='/' || strstr(name,"..") || strchr(name,':') || strchr(name,'\\')) goto done;
+        if(!MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,name,-1,relative,4096)) goto done;
         for(wchar_t *p=relative;*p;p++) if(*p==L'/') *p=L'\\';
-        if(swprintf(path,32768,L"%ls\\%ls",root,relative)<0 || !filehash(path,got) || strcmp(expected,got)) return 0;
-        if(++declared>10000) return 0;
-        s=space(s); if(*s=='}') break; if(*s++!=',') return 0;
+        if(declared>=10000 || swprintf(path,32768,L"%ls\\%ls",root,relative)<0) goto done;
+        jobs[declared].path=_wcsdup(path); if(!jobs[declared].path) goto done;
+        strcpy(jobs[declared++].expected,expected);
+        s=space(s); if(*s=='}') break; if(*s++!=',') goto done;
     }
-    return declared>0 && inventory(root,&actual) && actual==declared+1;
+    if(declared>0) {
+        VerifyJobs work={jobs,declared,0,0}; HANDLE threads[8]; DWORD count=0;
+        for(int i=0;i<8 && i<declared;i++) {
+            HANDLE thread=CreateThread(NULL,0,verifyworker,&work,0,NULL);
+            if(!thread) {InterlockedExchange(&work.failed,1);break;}
+            threads[count++]=thread;
+        }
+        if(count) {
+            DWORD wait=WaitForMultipleObjects(count,threads,TRUE,INFINITE);
+            /* Join each handle even if the group wait fails; workers own work. */
+            for(DWORD i=0;i<count;i++) {WaitForSingleObject(threads[i],INFINITE);CloseHandle(threads[i]);}
+            ok=wait==WAIT_OBJECT_0 && !work.failed && inventory(root,&actual) && actual==declared+1;
+        }
+    }
+done:
+    for(int i=0;i<declared;i++) free(jobs[i].path);
+    free(jobs); return ok;
 }
 int wmain(void) {
     wchar_t root[32768],path[32768],target[32768],command[32768]; DWORD n=GetModuleFileNameW(NULL,root,32768);

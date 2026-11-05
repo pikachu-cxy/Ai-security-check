@@ -65,7 +65,7 @@ class WorkBuddyConnectorInstallation:
         if any(not isinstance(v, list) or any(not isinstance(g, dict) or
                 not isinstance(g.get('hooks'), list) for g in v) for v in groups.values()):
             raise ValueError('CONFIG_INVALID')
-        ledger = SignedRecords(self.store, self.home, 'workbuddy-hooks.db') if self.home.exists() else None
+        ledger = SignedRecords(self.store, self.home, 'workbuddy-hooks.db') if native_io_path(self.home).exists() else None
         record = ledger.read('installed') if ledger else None
         old = record.get('groups', {}) if record else {}
         expected = {e: [{'hooks': [{'type': 'command', 'command': hook_command(self.discover()),
@@ -138,3 +138,43 @@ class WorkBuddyConnectorInstallation:
             finally:
                 self.skill.write_observer = None
         return {**self.configuration_status(), 'restart_required': True}
+
+
+class WorkBuddyInstallPreflight:
+    host = 'workbuddy'
+
+    def __init__(self, integration):
+        self.integration, self.skill = integration, integration.skill
+
+    def plan(self, workspace=None):
+        try:
+            self.integration.mcp().inspect()
+            self.integration.hooks()
+            if workspace is not None and any(row['related'] for row in self.integration.inspect_project(workspace)):
+                raise ValueError('LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR')
+            if self.skill.status()['status'] in {'USER_MANAGED', 'USER_MODIFIED', 'OWNERSHIP_CONFLICT'}:
+                raise ValueError('SKILL_USER_CONTENT_PRESERVED')
+            return dict(blocked=[], steps=[])
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            from .cursor_connector import cursor_reason
+            return dict(blocked=[cursor_reason(exc)], steps=[])
+
+
+def setup_personal_workbuddy(integration, workspace=None, *, progress=None):
+    from .personal_install import CONTRACT, _blocked
+    manager = WorkBuddyInstallPreflight(integration)
+    plan = manager.plan(workspace)
+    if plan['blocked']:
+        return _blocked(manager, plan['blocked'])
+    try:
+        data = integration.setup()
+    except (ValueError, OSError, KeyError, TypeError):
+        return _blocked(manager, ['WORKBUDDY_CONFIGURATION_FAILED'])
+    data['skill'] = integration.skill.status()
+    ready = data['overall'] == 'CONFIGURED' and data['skill']['status'] == 'INSTALLED'
+    data['installation'] = dict(contract=CONTRACT, status='INSTALLED' if ready else 'NOT_READY',
+        local_files_ready=ready, scan_ready=False, restart_required=True,
+        live_host_connection='NOT_VERIFIED_UNTIL_RECONNECT', risk_fix_authorized=False,
+        message='WorkBuddy 全局连接、Hook 和 Skill 已安装；请重启并审核连接信任。'
+            if ready else 'WorkBuddy 配置尚未就绪。')
+    return data

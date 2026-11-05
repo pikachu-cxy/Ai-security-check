@@ -114,7 +114,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
     installation.update(scan_ready=ready, status='INSTALLED',
         engine_preparation='AUTOMATIC_BACKGROUND; INSTALL_CACHE_CHECK_ONLY',
         message=('产品和全局连接已安装。' + receipt['message'] +
-            f"请完全退出并重启 {'Cursor' if data.get('integration') == 'cursor' else 'Codex'}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
+            f"请完全退出并重启 {dict(cursor='Cursor', workbuddy='WorkBuddy').get(data.get('integration'), 'Codex')}，按提示审核工具连接与 Hook 信任；无需逐项目安装。") if ready else
             ('产品和全局连接已安装，但安全检查准备未完成。' + receipt['message'] +
             '已有配置和可用缓存会保留。'))
     if not requested_offline:
@@ -248,6 +248,10 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         from .cursor_connector import CursorConnectorInstallation, CursorInstallPreflight, setup_personal_cursor
         integration = CursorConnectorInstallation(allow_dev=allow_dev)
         setup = setup_personal_cursor
+    elif _host == 'workbuddy':
+        from .workbuddy_integration import WorkBuddyConnectorInstallation, WorkBuddyInstallPreflight, setup_personal_workbuddy
+        integration = WorkBuddyConnectorInstallation()
+        setup = setup_personal_workbuddy
     elif _host == 'codex':
         integration = GlobalCodexIntegration(allow_dev=allow_dev)
         setup = setup_personal_codex
@@ -274,16 +278,17 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
             'engines':'AUTOMATIC_BACKGROUND', 'skill_and_rules':'BUNDLED'}
         if stable is not None and data['installation']['scan_ready']:
-            report_progress(progress, 'CLEANUP')
-            data['cleanup'] = StableDelivery(Path(stable).parents[1]).cleanup()
+            data['cleanup'] = {'status': 'DEFERRED', 'reason': 'EXPLICIT_MAINTENANCE',
+                               'removed_builds': []}
         return data
     supplied = Path(bundle) if bundle is not None else Path(sys.executable).parent
     # Validate all supplied package bytes, and configuration/Skill conflicts,
     # before running or activating that package. Hashes are not publisher proof.
     report_progress(progress, 'PACKAGE_VERIFY')
-    package_metadata(supplied)
+    expected_package = package_metadata(supplied)
     report_progress(progress, 'CHECK_CONFIG')
     manager = (CursorInstallPreflight(integration) if _host == 'cursor'
+               else WorkBuddyInstallPreflight(integration) if _host == 'workbuddy'
                else InstallationUpgrade(integration, ReviewSkillManager()))
     if workspace is not None:
         integration.inspect_project(workspace)
@@ -294,15 +299,15 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     if blocked:
         return _blocked(manager, blocked)
     delivery = StableDelivery(Path(root) if root is not None else _default_delivery_root())
-    in_process = (_host == 'codex' and frozen
+    in_process = (frozen
         and Path(sys.executable).absolute().parent == supplied.absolute())
     # This running installer proves startup; setup below performs the real MCP check.
-    activated = delivery.activate(supplied, progress=progress, defer_capability_check=in_process)
+    activated = delivery.activate(supplied, progress=progress, defer_capability_check=in_process and _host == 'codex')
     # Activation verified this exact slot. Invoke it directly, avoiding an
     # unnecessary launcher hop; discover() still writes the stable command.
     installed_executable = delivery.slot(activated['active_build']) / ('security-check.exe' if os.name == 'nt' else 'security-check')
     argv = [str(installed_executable), 'setup', _host, '--json']
-    if _host == 'cursor':
+    if _host in {'cursor', 'workbuddy'}:
         argv += ['--scope', 'global']
     if workspace is not None:
         argv += ['--path', str(workspace)]
@@ -311,7 +316,11 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
     try:
         if in_process:
             from types import SimpleNamespace
-            integration.discover = lambda: {'command': activated['launcher'], 'prefix': [], 'kind': 'FROZEN'}
+            discover = lambda: {'command': activated['launcher'], 'prefix': [], 'kind': 'FROZEN'}
+            if _host == 'cursor':
+                integration.hooks.discover = discover
+            else:
+                integration.discover = discover
             configured = setup(integration, workspace, progress=progress)
             completed = SimpleNamespace(returncode=0, stdout=json.dumps(configured).encode())
         else:
@@ -351,12 +360,28 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['installation']['local_files_ready'] = False
         data['installation']['message'] += ' 程序文件已保留在安装目录，但整体安装尚未成功；不代表可扫描。'
     data['delivery'] = activated
+    if data['installation'].get('local_files_ready'):
+        # Verify the actual configured forwarding executable, not just the slot
+        # or a same-version receipt. A stale launcher/pointer must fail closed.
+        try:
+            result = run_process([activated['launcher'], 'runtime-info', '--identity', '--json'],
+                timeout=30, max_output=256_000)
+            actual = json.loads(result.stdout)['build_identity']
+            if result.returncode or actual['build_id'] != expected_package['build_id'] or actual['version'] != expected_package['version']:
+                raise ValueError()
+            data['launcher_verification'] = dict(status='VERIFIED', **{k: actual[k] for k in ('build_id', 'version')})
+        except (ValueError, OSError, KeyError, TypeError, subprocess.TimeoutExpired, TimeoutError):
+            data['overall'] = 'BROKEN'
+            data['installation'].update(local_files_ready=False, status='NOT_READY',
+                message='启动器实际构建与安装包未能核实一致，安装未确认成功。请保留安装记录并重试。')
+            data.setdefault('diagnostics', []).append('INSTALLED_LAUNCHER_IDENTITY_MISMATCH')
     data = _complete_preparation(data, offline=offline, progress=progress,
         executable=None if in_process else installed_executable)
     if data['installation']['scan_ready']:
-        report_progress(progress, 'CLEANUP')
-        data['cleanup'] = delivery.cleanup()
-        data['delivery']['previous_build'] = delivery.pointer()['previous']
+        # Historical package verification/deletion is maintenance, not a
+        # prerequisite for a verified new installation. Keep every old slot.
+        data['cleanup'] = {'status': 'DEFERRED', 'reason': 'EXPLICIT_MAINTENANCE',
+                           'removed_builds': []}
     data['downloads'] = {'product': 'LOCAL_DELTA' if update else 'LOCAL_FULL_PACKAGE',
         'product_network_download': False, 'engines': 'AUTOMATIC_BACKGROUND',
         'skill_and_rules': 'BUNDLED'}

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from ._version import __version__
-from .hook_state import HookStateStore, atomic_bytes, no_links
+from .hook_state import HookStateStore, atomic_bytes, no_links, native_io_path
 from .storage import SQLiteStore
 
 NAME = 'ai-security-review'
@@ -153,13 +153,14 @@ class ReviewSkillManager:
         if self.write_observer is not None:
             self.write_observer(path, content)
         if content is None:
-            path.unlink(missing_ok=True)
+            native_io_path(path).unlink(missing_ok=True)
         else:
             atomic_bytes(path, content)
 
     @staticmethod
     def read(path):
         no_links(path)
+        path = native_io_path(path)
         if not path.exists(): return None
         if not path.is_file() or path.stat().st_size > MAX_BYTES:
             raise ValueError('SKILL_FILE_INVALID')
@@ -201,7 +202,8 @@ class ReviewSkillManager:
             manifest = self.manifest()
             preserved_retired = []
             if manifest is None:
-                state = 'USER_MANAGED' if self.root.exists() and any(self.root.iterdir()) else 'NOT_INSTALLED'
+                root_io = native_io_path(self.root)
+                state = 'USER_MANAGED' if root_io.exists() and any(root_io.iterdir()) else 'NOT_INSTALLED'
             else:
                 modified = []
                 missing = []
@@ -277,7 +279,7 @@ class ReviewSkillManager:
                             if self.read(self.root / name) != raw: raise ValueError('SKILL_CHANGED_DURING_UPDATE')
                             self.write(self.root / name, None)
                     for directory in ('agents','references',''):
-                        try: (self.root / directory).rmdir()
+                        try: native_io_path(self.root / directory).rmdir()
                         except OSError: pass  # Never remove extra user files.
                     self.write(self.state / 'ownership.json', None)
                 return {'skill':NAME,'status':'REMOVED','changed':bool(manifest), 'user_files_preserved':True,

@@ -99,3 +99,25 @@ def test_readback_exceptions_do_not_hide_real_or_unknown_writes(command):
 def test_wrapper_must_not_ignore_extra_commands(monkeypatch, suffix):
     monkeypatch.setattr('security_runtime.shell_classification._trusted_powershell', lambda path: True)
     assert classify_bash_command({'command': '"C:/native/powershell/pwsh.exe" '+suffix}) != 'READ_ONLY'
+
+
+@pytest.mark.skipif(__import__('os').name != 'nt', reason='Windows installed shell paths')
+@pytest.mark.parametrize('package,subpath,trusted', [
+    ('OpenAI.CodexPrimaryRuntime.v26-1104-709-0_26.1104.709.0_x64__3k8sg7r9htsxt', 'dependencies/native/powershell/pwsh.exe', True),
+    ('OpenAI.CodexPrimaryRuntime.v26-1104-709-0_26.1104.709.0_arm64__3k8sg7r9htsxt', 'dependencies/native/powershell/pwsh.exe', True),
+    ('OpenAI.CodexPrimaryRuntime.v26-1104-709-0_26.1104.709.0_x64__otherpublisher', 'dependencies/native/powershell/pwsh.exe', False),
+    ('OtherApp_26.1104.709.0_x64__3k8sg7r9htsxt', 'dependencies/native/powershell/pwsh.exe', False),
+    ('OpenAI.CodexPrimaryRuntime.v26-1104-709-0_26.1104.709.0_x64__3k8sg7r9htsxt', 'other/pwsh.exe', False),
+])
+def test_windows_store_native_shell_is_recognized_narrowly(tmp_path, monkeypatch, package, subpath, trusted):
+    import shlex
+    from security_runtime.shell_classification import _trusted_powershell
+    program_files = tmp_path/'Program Files'
+    monkeypatch.setenv('ProgramFiles', str(program_files))
+    shell = program_files/'WindowsApps'/package/subpath
+    shell.parent.mkdir(parents=True)
+    shell.write_bytes(b'fixture')
+    assert _trusted_powershell(str(shell)) is trusted
+    command = '"'+str(shell)+'" -NoProfile -Command '+shlex.quote('git status --short')
+    assert (classify_bash_command({'command': command}) == 'READ_ONLY') is trusted
+    assert classify_bash_command({'command': '"'+str(shell)+'" -Command '+shlex.quote('Set-Content x y')}) != 'READ_ONLY'

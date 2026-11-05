@@ -19,7 +19,8 @@ def single_capability_check(integration):
                 from .delivery import launcher_metadata
                 metadata, inventory = launcher_metadata(command.parent, _with_inventory=True)
                 identity = (metadata['build_id'], inventory)
-                if command.parent.name in {'launcher', 'launcher-v2'}:
+                from .delivery import is_launcher_name
+                if is_launcher_name(command.parent.name):
                     from .delivery import EXE, StableDelivery, package_metadata
                     delivery = StableDelivery(command.parent.parent)
                     pointer = delivery.pointer()

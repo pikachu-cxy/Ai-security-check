@@ -15,6 +15,23 @@ from test_delivery import bundle
 from test_global_integration import installed, projects
 
 
+def test_parallel_verification_rejects_corrupt_file(tmp_path):
+    package = bundle(tmp_path / 'parallel')
+    metadata = json.loads((package / 'version.json').read_bytes())
+    metadata.pop('build_id')
+    for index in range(40):
+        name = f'data-{index}'
+        content = str(index).encode()
+        (package / name).write_bytes(content)
+        metadata['files'][name] = hashlib.sha256(content).hexdigest()
+    metadata['build_id'] = hashlib.sha256(encode(metadata)).hexdigest()
+    (package / 'version.json').write_bytes(encode(metadata))
+    assert package_metadata(package)['build_id'] == metadata['build_id']
+    (package / 'data-39').write_bytes(b'bad')
+    with pytest.raises(IntegrationDiagnostic, match='DELIVERY_PACKAGE_INVALID'):
+        package_metadata(package)
+
+
 def test_verified_session_detects_same_length_change_and_no_persistent_cache(tmp_path):
     package = bundle(tmp_path / 'package', b'first')
     with verification_session():
@@ -152,6 +169,32 @@ def test_tiny_launcher_avoids_runtime_duplication_and_legacy_overwrite(tmp_path)
     Path(activated['launcher']).write_bytes(b'tampered')
     with pytest.raises(IntegrationDiagnostic):
         delivery.status()
+
+
+def test_new_launcher_migrates_without_overwriting_running_old_file(tmp_path):
+    from security_runtime.delivery import stable_command
+    delivery = StableDelivery(tmp_path / 'program', probe=lambda _: {'status': 'OK'})
+    packages = []
+    for index in range(2):
+        package = bundle(tmp_path / f'launcher-{index}', str(index).encode())
+        tiny = package / '_launcher/security-launcher.exe'
+        tiny.parent.mkdir()
+        tiny.write_bytes(f'launcher-{index}'.encode())
+        value = json.loads((package / 'version.json').read_bytes())
+        value.pop('build_id')
+        value['files']['_launcher/security-launcher.exe'] = hashlib.sha256(tiny.read_bytes()).hexdigest()
+        value['build_id'] = hashlib.sha256(encode(value)).hexdigest()
+        (package / 'version.json').write_bytes(encode(value))
+        packages.append(package)
+    first = delivery.activate(packages[0])
+    original = Path(first['launcher']).read_bytes()
+    second = delivery.activate(packages[1])
+    assert first['launcher'] != second['launcher']
+    assert Path(first['launcher']).read_bytes() == original
+    assert Path(second['launcher']).read_bytes() == b'launcher-1'
+    assert stable_command(delivery.slot(second['active_build']) / EXE) == second['launcher']
+    assert delivery.activate(packages[1])['launcher'] == second['launcher']
+    assert delivery.rollback()['launcher'] == first['launcher']
 
 
 def test_frozen_probe_reuses_verified_inventory_but_detects_mutation(tmp_path, monkeypatch):

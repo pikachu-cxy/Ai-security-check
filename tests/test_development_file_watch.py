@@ -237,3 +237,20 @@ def test_path_budget_and_outside_event_are_explicit_gaps(sample, monkeypatch):
     result = service.finish(root,ref)
     assert len(result['scope']['paths']) <= 2 and result['scope']['scope_unknown']
     assert 'FILE_WATCH_PATHS_INCOMPLETE' in result['observation_notes']
+
+
+def test_watch_diagnostic_does_not_manufacture_a_new_edit_or_reopen_saved_batch(sample):
+    root, _, owner, service, ref, launched = sample
+    store = service.store(root)
+    service.record(root, ref, ['app.py'])
+    service.finish(root, ref)
+    before = store.load(ref)
+    watching._gap(store, ref, 'FILE_WATCH_INTERRUPTED', status='INTERRUPTED')
+    after = store.load(ref)
+    assert after['dirty_seq'] == before['dirty_seq']
+    assert after['finish_requested'] == before['finish_requested']
+    assert after['state'] == before['state']
+    assert after['observed_paths'] == before['observed_paths']
+    assert after['scope_unknown']
+    assert 'FILE_WATCH_INTERRUPTED' in service.get(root, ref)['observation_notes']
+    assert launched == ['scan']

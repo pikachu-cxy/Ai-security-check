@@ -89,10 +89,33 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
             shutil.copy2(launcher_source, tiny)
         else:
             compiler = shutil.which('gcc')
-            if not compiler:
-                raise ValueError('Windows native launcher requires GCC on the build host')
-            subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
-                str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
+            if compiler:
+                subprocess.run([compiler, '-Os', '-s', '-municode', '-Wall', '-Wextra',
+                    str(root / 'distribution/build/launcher.c'), '-o', str(tiny), '-lbcrypt'], check=True)
+            else:
+                # Use an already-installed MSVC toolchain; never download one.
+                base = Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Microsoft Visual Studio'
+                candidates = sorted(base.glob('*/*/VC/Auxiliary/Build/vcvars64.bat'))
+                if not candidates:
+                    raise ValueError('Windows native launcher requires GCC or MSVC')
+                setup = str(candidates[-1])
+                if any(c in setup for c in '"&|<>%\r\n'):
+                    raise ValueError('Unsupported compiler setup path')
+                # cmd parses its own quotes; list2cmdline would escape the
+                # embedded quotes using C argv rules, which cmd does not use.
+                configured = subprocess.run(
+                    f'cmd /d /s /c ""{setup}" >nul && set"',
+                    capture_output=True, text=True, check=True)
+                env = dict(os.environ)
+                env.update(line.split('=', 1) for line in configured.stdout.splitlines()
+                           if '=' in line and not line.startswith('='))
+                compiler = shutil.which('cl.exe', path=env.get('Path', env.get('PATH')))
+                if not compiler:
+                    raise ValueError('MSVC compiler unavailable after setup')
+                subprocess.run([compiler, '/nologo', '/std:c11', '/O2', '/MT',
+                    str(root / 'distribution/build/launcher.c'), '/Fe:' + str(tiny),
+                    '/Fo:' + str(work / 'launcher.obj'), '/link', 'bcrypt.lib'],
+                    env=env, check=True)
     copy_standalone_documents(root, bundle)
     from security_runtime.build_identity import STATE_SCHEMA, git_provenance
     # Local builds may contend with scanners/antivirus. Runtime probes retain

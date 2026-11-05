@@ -22,6 +22,7 @@ import re
 from contextvars import ContextVar
 from contextlib import contextmanager
 from functools import wraps
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PurePosixPath
 
 from .build_identity import STATE_SCHEMA
@@ -32,6 +33,18 @@ from .install_progress import report_progress
 CONTRACT = 'stable-delivery-v1'
 EXE = 'security-check.exe' if os.name == 'nt' else 'security-check'
 _verification_cache = ContextVar('delivery_verification', default=None)
+
+
+def _parallel_map(function, items):
+    """Bound IO concurrency and scheduling overhead independently of file count."""
+    items = list(items)
+    if len(items) < 32:
+        return list(map(function, items))
+    # Eight long-lived jobs, rather than thousands of Future/lock objects.
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        batches = workers.map(lambda batch: list(map(function, batch)),
+                              [items[index::8] for index in range(8)])
+        return [value for batch in batches for value in batch]
 
 if os.name == 'nt':
     import ctypes
@@ -131,15 +144,20 @@ def package_inventory(bundle, *, allow_internal_links=False):
                 elif (getattr(info, 'st_file_attributes', 0) & 0x400
                         or not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode))):
                     raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
-                rows.append((name, info.st_mode, info.st_dev,
-                    info.st_ino, info.st_size, info.st_mtime_ns, _change_time(path, info), link))
+                rows.append((name, info, path, link))
                 if stat.S_ISDIR(info.st_mode):
                     pending.append((path, name + '/'))
                 else:
                     total += info.st_size
                 if len(rows) > 20_000 or total > 2_000_000_000:
                     raise IntegrationDiagnostic('DELIVERY_PACKAGE_INVALID')
-    return tuple(sorted(rows))
+    def identity(row):
+        name, info, path, link = row
+        return (name, info.st_mode, info.st_dev, info.st_ino, info.st_size,
+                info.st_mtime_ns, _change_time(path, info), link)
+    if os.name == 'nt' and len(rows) >= 32:
+        return tuple(sorted(_parallel_map(identity, rows)))
+    return tuple(sorted(map(identity, rows)))
 
 
 def encode(value):
@@ -150,6 +168,11 @@ def is_digest(value):
     return isinstance(value, str) and len(value) == 64 and all(c in '0123456789abcdef' for c in value)
 
 
+def is_launcher_name(value):
+    return value in {'launcher', 'launcher-v2'} or (
+        isinstance(value, str) and value.startswith('launcher-') and is_digest(value[9:]))
+
+
 def file_digest(path):
     no_links(path)
     digest = hashlib.sha256()
@@ -157,6 +180,14 @@ def file_digest(path):
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             digest.update(block)
     return digest.hexdigest()
+
+
+def _verify_file(item):
+    path, expected = item
+    with path.open('rb') as stream:
+        actual = hashlib.file_digest(stream, 'sha256').hexdigest()
+    if actual != expected:
+        raise ValueError('Package checksum mismatch')
 
 
 def _valid_storage_contracts(value):
@@ -211,6 +242,7 @@ def package_metadata(bundle, *, _retry=True, _with_inventory=False):
         if actual_links != links:
             raise ValueError()
         actual = {r[0] for r in inventory if stat.S_ISREG(r[1])}
+        checked_files = []
         for name, digest in files.items():
             relative = PurePosixPath(name)
             if (not name or relative.is_absolute() or '..' in relative.parts or ':' in name or '\\' in name
@@ -219,14 +251,12 @@ def package_metadata(bundle, *, _retry=True, _with_inventory=False):
             target = bundle / name
             if name not in actual:
                 raise ValueError()
-            digest_value = hashlib.sha256()
-            with target.open('rb') as stream:
-                for block in iter(lambda: stream.read(1024 * 1024), b''):
-                    digest_value.update(block)
-            if digest_value.hexdigest() != digest:
-                raise ValueError()
+            checked_files.append((target, digest))
         if actual != set(files) | {'version.json'}:
             raise ValueError()
+        # Validate every name before starting IO. The before/after inventory and
+        # transaction-local identity cache still apply to all files, not samples.
+        _parallel_map(_verify_file, checked_files)
         if package_inventory(bundle, allow_internal_links=bool(links)) != inventory:
             if _retry:
                 if cache is not None:
@@ -300,11 +330,14 @@ class StableDelivery:
         except (ValueError, OSError, KeyError, TypeError):
             raise IntegrationDiagnostic('DELIVERY_POINTER_INVALID') from None
 
-    def _switch(self, identity, previous, *, cleanup_ready=None):
+    def _switch(self, identity, previous, *, cleanup_ready=None, launcher=None):
         existing = self.pointer()
         if cleanup_ready is None:
             cleanup_ready = bool(existing and existing['active'] == identity and existing.get('cleanup_ready'))
-        launcher = 'launcher-v2' if (self.root / 'launcher-v2/launcher.json').is_file() else 'launcher'
+        launcher = launcher or (existing or {}).get('launcher') or (
+            'launcher-v2' if (self.root / 'launcher-v2/launcher.json').is_file() else 'launcher')
+        if not is_launcher_name(launcher):
+            raise IntegrationDiagnostic('DELIVERY_POINTER_INVALID')
         value = {'contract': CONTRACT, 'root': str(self.root), 'active': identity, 'previous': previous,
                  'state_schema': STATE_SCHEMA, 'launcher': launcher,
                  'key_id': self.store.workspace_directory(self.root).name,
@@ -364,7 +397,14 @@ class StableDelivery:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 # An interrupted copy stays inactive; explicit retry must not
                 # overwrite a potentially running/externally modified slot.
-                shutil.copytree(bundle, target, symlinks=True)
+                # Await every copy before verifying or activating the slot.
+                # Failures retain an inactive incomplete slot, as before.
+                copies = []
+                def copy_file(source, destination):
+                    copies.append((source, destination))
+                    return destination
+                shutil.copytree(bundle, target, symlinks=True, copy_function=copy_file)
+                _parallel_map(lambda pair: shutil.copy2(*pair), copies)
             report_progress(progress, 'VERIFY_INSTALLED')
             if package_metadata(target) != metadata:
                 raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
@@ -382,6 +422,13 @@ class StableDelivery:
                 # launcher a new stable path when migrating an old bootstrap.
                 if launcher.exists() and not (launcher / 'launcher.json').is_file():
                     launcher = self.root / 'launcher-v2'
+                expected_launcher = metadata['files']['_launcher/security-launcher.exe']
+                if launcher.exists() and launcher_metadata(launcher)['build_id'] != expected_launcher:
+                    # A running Windows executable cannot be replaced. Publish
+                    # the new verified launcher beside it and migrate owned host
+                    # configuration to that path. Old launchers still dispatch
+                    # the same signed active slot until the host reconnects.
+                    launcher = self.root / ('launcher-' + expected_launcher)
                 no_links(launcher)
                 if not launcher.exists():
                     launcher.mkdir()
@@ -392,9 +439,11 @@ class StableDelivery:
                 shutil.copytree(target, launcher, symlinks=True)
             # The bootstrap bundle is immutable. Future upgrades never replace
             # its EXE; dispatch validates and invokes only signed version slots.
-            launcher_metadata(launcher)
+            verified_launcher = launcher_metadata(launcher)
+            if tiny.is_file() and verified_launcher['build_id'] != expected_launcher:
+                raise IntegrationDiagnostic('DELIVERY_LAUNCHER_INVALID')
             if pointer is None or pointer['active'] != identity or pointer.get('launcher', 'launcher') != launcher.name:
-                self._switch(identity, pointer['active'] if pointer else None)
+                self._switch(identity, pointer['active'] if pointer else None, launcher=launcher.name)
             report_progress(progress, 'VERIFY_ACTIVATION')
             return self.status() | {'status': 'ACTIVATED', 'reconnect_required': True,
                                    'package_reused': reused, 'network_download': False,
@@ -480,7 +529,22 @@ class StableDelivery:
             _require_storage_compatibility(current, previous)
             if self._probe(self.slot(pointer['previous'])).get('status') != 'OK':
                 raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
-            self._switch(pointer['previous'], pointer['active'])
+            # Retain a launcher understood by the rollback Runtime as well.
+            # Old versions recognize launcher/launcher-v2 only; never force
+            # them through a newer digest-qualified configuration path.
+            expected = previous['files'].get('_launcher/security-launcher.exe')
+            launcher = None
+            names = ['launcher', 'launcher-v2'] + (['launcher-' + expected] if expected else [])
+            for name in names:
+                candidate = self.root / name
+                if candidate.exists():
+                    info = launcher_metadata(candidate)
+                    if expected is None or info['build_id'] == expected:
+                        launcher = name
+                        break
+            if launcher is None:
+                raise IntegrationDiagnostic('DELIVERY_LAUNCHER_INVALID')
+            self._switch(pointer['previous'], pointer['active'], launcher=launcher)
             return self.status() | {'status': 'ROLLED_BACK', 'reconnect_required': True,
                                    'ephemeral_authorizations_restored': False}
 
@@ -491,7 +555,7 @@ class StableDelivery:
             return {'status': 'NOT_INSTALLED', 'root': str(self.root)}
         package = self._installed_metadata(pointer['active'])
         launcher = self.root / pointer.get('launcher', 'launcher')
-        if launcher.name not in {'launcher', 'launcher-v2'} or launcher.parent != self.root:
+        if not is_launcher_name(launcher.name) or launcher.parent != self.root:
             raise IntegrationDiagnostic('DELIVERY_POINTER_INVALID')
         launcher_metadata(launcher)
         return {'status': 'INSTALLED', 'root': str(self.root), 'active_build': package['build_id'],
@@ -514,7 +578,7 @@ def stable_command(executable=None):
     if pointer is None or identity not in {pointer['active'], pointer['previous']}:
         return None  # Candidate capability probe, not an active installation.
     launcher = delivery.root / pointer.get('launcher', 'launcher')
-    if launcher.name not in {'launcher', 'launcher-v2'}:
+    if not is_launcher_name(launcher.name):
         raise IntegrationDiagnostic('DELIVERY_POINTER_INVALID')
     launcher_metadata(launcher)
     return str(launcher / EXE)

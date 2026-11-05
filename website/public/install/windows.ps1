@@ -1,6 +1,6 @@
 # Windows PowerShell 5.1 and PowerShell 7. Run as a normal user.
 [CmdletBinding()]
-param([ValidateSet('codex', 'cursor')][string]$Editor = 'codex')
+param([ValidateSet('codex', 'cursor', 'workbuddy')][string]$Editor = 'codex')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -25,6 +25,7 @@ try {
     Write-Host "Downloading AI Security Runtime $version for $Editor..."
     Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$archiveName.sha256" -OutFile $checksum
     Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$archiveName" -OutFile $archive
+    $localInstall = [Diagnostics.Stopwatch]::StartNew()
     $checksumText = (Get-Content -LiteralPath $checksum -Raw).Trim()
     $pattern = '\A([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archiveName) + '\z'
     if ($checksumText -notmatch $pattern) { throw 'Invalid release checksum file.' }
@@ -54,8 +55,28 @@ try {
     # Keep the versioned bundle path short on Windows systems where long paths
     # are disabled. The runtime validates the destination before activation.
     $installRoot = Join-Path $env:LOCALAPPDATA 'ASR'
-    & $exe install $Editor --bundle (Join-Path $bundle 'security-check') --root $installRoot
+    $receiptText = & $exe install $Editor --bundle (Join-Path $bundle 'security-check') --root $installRoot --json
     if ($LASTEXITCODE -ne 0) { throw "Installation failed with exit code $LASTEXITCODE." }
+    $receiptText | Set-Content -LiteralPath (Join-Path $stage 'installation.json') -Encoding UTF8
+    $receipt = $receiptText | ConvertFrom-Json
+    $expected = Get-Content -LiteralPath (Join-Path $bundle 'security-check\version.json') -Raw | ConvertFrom-Json
+    if (-not $receipt.installation.local_files_ready -or $receipt.delivery.active_build -ne $expected.build_id) {
+        throw 'Installation receipt does not match the downloaded build.'
+    }
+    if ($receipt.PSObject.Properties['launcher_verification']) {
+        $actual = $receipt.launcher_verification
+        if ($actual.status -ne 'VERIFIED') { throw 'Launcher verification did not succeed.' }
+    } else {
+        # Compatibility with an older installer: still verify the actual entry.
+        $actualText = & $receipt.delivery.launcher runtime-info --json
+        if ($LASTEXITCODE -ne 0) { throw 'Installed launcher could not be verified.' }
+        $actual = ($actualText | ConvertFrom-Json).build_identity
+    }
+    if ($actual.build_id -ne $expected.build_id -or $actual.version -ne $version) {
+        throw 'Installed launcher points to a different build; installation is not confirmed.'
+    }
+    $localInstall.Stop()
+    Write-Host ('Local installation (excluding downloads): {0:N2} seconds.' -f $localInstall.Elapsed.TotalSeconds)
     Write-Host "Installation completed. Fully quit and reopen $Editor. Component preparation may continue in the background."
     Write-Host "To check preparation: & '$exe' preparation status"
 } catch {

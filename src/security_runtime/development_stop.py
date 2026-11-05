@@ -75,14 +75,20 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
         progress = current.get('stop_fallback')
         # One continuation per saved terminal result, not a report acknowledgement.
         # Keep coverage gaps and inconclusive reviews pending without repeating Stop.
-        if (stop_hook_active and terminal_result is not None and progress
+        if (terminal_result is not None and progress
                 and progress.get('terminal_result') == terminal_result):
             return None
-        # New edits during continuation do not reset the overall budget.
-        if progress is None or (progress.get('seq') != seq and not stop_hook_active):
+        # Some hosts omit/reset stop_hook_active on continuation. Bind the
+        # overall budget to the verified turn, not that advisory flag or seq.
+        # Without a turn identity retain the existing conservative budget.
+        new_turn = (turn is not None and progress is not None
+                    and progress.get('turn') != turn)
+        if progress is None or (new_turn and not stop_hook_active):
             if stop_hook_active:
                 return None
             progress = dict(seq=seq, turn=turn, count=0, deadline=store.now()+options['wait_timeout_seconds'])
+        if progress.get('incomplete_reason') == 'STOP_FALLBACK_BUDGET_EXHAUSTED':
+            return None
         if progress['count'] >= options['max_continuations'] or progress['deadline'] <= store.now():
             store._put(db, ref, dict(current, stop_fallback=dict(progress,
                 incomplete_reason='STOP_FALLBACK_BUDGET_EXHAUSTED')))

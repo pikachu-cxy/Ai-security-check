@@ -96,6 +96,26 @@ def test_global_setup_preserves_settings_and_is_idempotent(tmp_path, monkeypatch
     assert not (legacy/'skills').exists()
 
 
+def test_owned_old_workbuddy_paths_upgrade_without_losing_user_settings(tmp_path, monkeypatch):
+    from security_runtime.workbuddy_integration import setup_personal_workbuddy
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'state'))
+    home = tmp_path/'host'
+    home.mkdir()
+    (home/'mcp.json').write_text(json.dumps({'mcpServers': {'other': {'command': 'user-tool'}}}))
+    (home/'settings.json').write_text(json.dumps({'theme': 'dark'}))
+    old = WorkBuddyConnectorInstallation(home=home, directory=tmp_path/'private',
+        discover=lambda:dict(command='/old/security-check', prefix=[], kind='FROZEN'))
+    assert setup_personal_workbuddy(old)['installation']['local_files_ready']
+    new = WorkBuddyConnectorInstallation(home=home, directory=tmp_path/'private',
+        discover=lambda:dict(command='/new/security-check', prefix=[], kind='FROZEN'))
+    assert setup_personal_workbuddy(new)['installation']['local_files_ready']
+    servers = json.loads((home/'mcp.json').read_bytes())['mcpServers']
+    assert servers['other'] == {'command': 'user-tool'}
+    assert servers['ai-security-runtime']['command'] == '/new/security-check'
+    settings = json.loads((home/'settings.json').read_bytes())
+    assert settings['theme'] == 'dark' and '/old/security-check' not in json.dumps(settings)
+
+
 def test_windows_command_quotes_spaces_and_long_path():
     path = 'C:\\Users\\中文 User\\' + 'deep folder\\'*25 + 'security-check.exe'
     command = hook_command(dict(command=path, prefix=[]), windows=True)

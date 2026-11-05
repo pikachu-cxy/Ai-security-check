@@ -168,6 +168,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     info_parser=sub.add_parser('runtime-info',help='Read version/capabilities and host reconnect guidance without scanning')
     info_parser.add_argument('--json',action='store_true')
     info_parser.add_argument('--fast', action='store_true', help='Read saved settings without component integrity checks')
+    info_parser.add_argument('--identity', action='store_true', help='Read running build identity without component checks')
     data_parser=sub.add_parser('vulnerability-data', help='Read or explicitly update the configured Trivy database')
     data_parser.add_argument('action', choices=['status', 'update'])
     data_parser.add_argument('--json', action='store_true')
@@ -254,7 +255,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     config_parser.add_argument("--copy", action="store_true")
     config_parser.add_argument("--help-client", action="store_true")
     install_parser = sub.add_parser('install', help='Install personal Runtime, host global connection and professional Skill together')
-    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor'], default='codex')
+    install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor', 'workbuddy'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
     install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
     install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
@@ -377,10 +378,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         from .workbuddy_hook import main as workbuddy_main
         return workbuddy_main()
     if args.command == 'setup' and args.integration == 'workbuddy' and args.scope == 'global':
-        from .workbuddy_integration import WorkBuddyConnectorInstallation
-        result = WorkBuddyConnectorInstallation().setup()
+        from .workbuddy_integration import WorkBuddyConnectorInstallation, setup_personal_workbuddy
+        result = setup_personal_workbuddy(WorkBuddyConnectorInstallation(), args.path)
         print(json.dumps(result, ensure_ascii=True))
-        return 0
+        return 0 if result['installation']['local_files_ready'] else 2
     if args.command == 'cursor-hook':
         from .cursor_hook import main as cursor_hook_main
         return cursor_hook_main(automatic=args.automatic)
@@ -489,7 +490,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 from .personal_install import install_personal_codex
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
-                    host_kwargs = {'_host': 'cursor'} if args.integration == 'cursor' else {}
+                    host_kwargs = {'_host': args.integration} if args.integration != 'codex' else {}
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
                         allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
@@ -648,6 +649,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                             scanner_run=False)
                 print(json.dumps(data, ensure_ascii=True))
                 return 0 if args.action == 'status' or data['freshness']['status'] == 'FRESH' else 2
+        if args.command == 'runtime-info' and args.identity:
+            from .build_identity import build_identity
+            print(json.dumps({'build_identity': {**build_identity(), 'version': __version__}, 'component_checks': False}))
+            return 0
         if args.command=='runtime-info' and args.fast:
             from .user_config import describe_config
             info = dict(version=__version__, verification='NOT_REVALIDATED',

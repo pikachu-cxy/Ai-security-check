@@ -417,3 +417,37 @@ def test_new_edit_turn_retains_its_own_fallback(check):
     result = fallback(service.hooks, root, OWNER, service=service, turn_id='new')
     assert result['decision'] == 'block'
     assert service.store(root).load(ref)['stop_fallback']['turn'] is not None
+
+
+def test_exhausted_stop_notice_is_emitted_only_once(check):
+    root, service, _, _ = check
+    ref = service.begin(root, 'exhausted-repeat')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    args = dict(service=service, turn_id='turn')
+    fallback(service.hooks, root, OWNER, **args)
+    fallback(service.hooks, root, OWNER, stop_hook_active=True, **args)
+    assert fallback(service.hooks, root, OWNER, stop_hook_active=True, **args)['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    for _ in range(3):
+        assert fallback(service.hooks, root, OWNER, stop_hook_active=True, **args) is None
+    assert service.get(root, ref)['status'] == 'QUEUED'
+
+
+def test_same_turn_new_versions_cannot_reset_budget_when_host_flag_is_false(check):
+    root, service, _, _ = check
+    ref = service.begin(root, 'same-turn')['check_ref']
+    args = dict(service=service, turn_id='turn', stop_hook_active=False)
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, **args)['decision'] == 'block'
+    deadline = service.store(root).load(ref)['stop_fallback']['deadline']
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, **args)['decision'] == 'block'
+    row = service.store(root).load(ref)
+    assert row['stop_fallback']['count'] == 2
+    assert row['stop_fallback']['deadline'] == deadline
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, **args)['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, **args) is None
+    # A later actual editing turn still receives its own bounded opportunity.
+    service.record(root, ref, ['app.ts'])
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id='next')['decision'] == 'block'

@@ -25,7 +25,9 @@ def test_windows_default_delivery_root_is_short(tmp_path, monkeypatch):
 
 
 def ready_scanning_receipt():
-    versions = {'semgrep': '1.178.0', 'gitleaks': '8.30.0', 'trivy': '0.74.0'}
+    from security_runtime.install_readiness import CORE_TOOLS
+    from security_runtime.toolchain import VERSIONS
+    versions = {name: VERSIONS[name] for name in CORE_TOOLS}
     return {'contract': 'installation-readiness-v1', 'status': 'READY',
             'ready': True, 'message': '检查工具和漏洞数据已准备完成。',
             'network_allowed': False,
@@ -277,6 +279,10 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
     package, root = portable
     stages = []
     def run(argv, **kwargs):
+        if argv[1:] == ['runtime-info', '--identity', '--json']:
+            assert Path(argv[0]) == root / 'launcher' / EXE
+            identity = json.loads((package / 'version.json').read_bytes())
+            return SimpleNamespace(returncode=0, stdout=json.dumps({'build_identity': identity}).encode())
         assert Path(argv[0]).is_relative_to(root / 'versions') and Path(argv[0]).name == EXE
         assert Path(argv[0]).parent.name == 'bundle'
         if argv[1] == 'setup':
@@ -294,7 +300,8 @@ def test_portable_installer_uses_validated_fixed_launcher(installed, portable, m
     assert stages[:12] == ['PREPARE', 'PACKAGE_VERIFY', 'CHECK_CONFIG', 'PACKAGE_VERIFY',
         'COPY_RUNTIME', 'VERIFY_INSTALLED', 'CAPABILITY_CHECK', 'PREPARE_LAUNCHER',
         'VERIFY_ACTIVATION', 'SETUP_CHILD', 'VERIFY_RECEIPT', 'CHECK_SCAN_CACHE']
-    assert stages[-1] == 'CLEANUP'
+    assert 'CLEANUP' not in stages
+    assert data['cleanup']['status'] == 'DEFERRED'
     assert data['delivery']['status'] == 'ACTIVATED' and data['installation']['local_files_ready']
     assert data['installation']['scan_ready']
 

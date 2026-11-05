@@ -42,7 +42,18 @@ def _trusted_powershell(value):
                    /'dependencies/native/powershell/pwsh.exe')
         system = (Path(os.environ.get('SystemRoot', r'C:\Windows'))
                   /'System32/WindowsPowerShell/v1.0/powershell.exe')
-        return any(resolved == allowed.resolve() for allowed in (bundled, system))
+        if any(resolved == allowed.resolve() for allowed in (bundled, system)):
+            return True
+        # Desktop Store installs use a versioned package under WindowsApps.
+        # Require the publisher, package shape and exact bundled shell path;
+        # a similarly named executable elsewhere must remain unknown.
+        package_root = Path(os.environ.get('ProgramFiles', r'C:\Program Files'))/'WindowsApps'
+        parts = resolved.relative_to(package_root.resolve()).parts
+        return (len(parts) == 5 and re.fullmatch(
+            r'OpenAI\.CodexPrimaryRuntime\.v\d+(?:-\d+)*_\d+(?:\.\d+){3}_'
+            r'(?:x64|arm64)__3k8sg7r9htsxt', parts[0], re.I) is not None
+            and tuple(p.casefold() for p in parts[1:]) ==
+                ('dependencies', 'native', 'powershell', 'pwsh.exe'))
     except (OSError, ValueError, RuntimeError):
         return False
 
