@@ -2,6 +2,8 @@
 
 English | [简体中文](README.zh-CN.md)
 
+Developer entry: [Project knowledge base](docs/knowledge/README.md) · [Agent instructions](AGENTS.md). Current architecture, feature status, interfaces and code locations are maintained there.
+
 Security checks, contextual review, and traceable fix verification for AI coding workflows.
 
 AI Security Runtime checks the changes made during a development task, combines scanner results with your host agent's review of relevant code, and explains concrete risks, existing safeguards, and unknowns. You choose whether to fix, defer, or exclude a finding. The agent makes authorized changes; the Runtime retains the original finding and verification evidence.
