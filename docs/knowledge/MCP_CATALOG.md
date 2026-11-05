@@ -67,7 +67,7 @@ Execute saved Runtime plan with generation/lease/version receipts; no edits or g
 
 ### development_check / begin_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:119](../../src/security_runtime/mcp_tools/development_check.py#L119)
+定义：[src/security_runtime/mcp_tools/development_check.py:120](../../src/security_runtime/mcp_tools/development_check.py#L120)
 
 ```python
 begin_development_check(task_key: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -77,7 +77,7 @@ Start an actual coding task's lightweight edit record. Metadata only: no project
 
 ### development_check / complete_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:162](../../src/security_runtime/mcp_tools/development_check.py#L162)
+定义：[src/security_runtime/mcp_tools/development_check.py:163](../../src/security_runtime/mcp_tools/development_check.py#L163)
 
 ```python
 complete_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -87,7 +87,7 @@ Submit the observed batch once; product chooses its bounded wait. Timeout/cancel
 
 ### development_check / declare_development_outputs
 
-定义：[src/security_runtime/mcp_tools/development_check.py:137](../../src/security_runtime/mcp_tools/development_check.py#L137)
+定义：[src/security_runtime/mcp_tools/development_check.py:138](../../src/security_runtime/mcp_tools/development_check.py#L138)
 
 ```python
 declare_development_outputs(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None)
@@ -97,7 +97,7 @@ Declare exact generated-output files/directories for this check only, ideally be
 
 ### development_check / finish_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:144](../../src/security_runtime/mcp_tools/development_check.py#L144)
+定义：[src/security_runtime/mcp_tools/development_check.py:145](../../src/security_runtime/mcp_tools/development_check.py#L145)
 
 ```python
 finish_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, wait_seconds: Annotated[int, Field(ge=0, le=25)]=0)
@@ -107,7 +107,7 @@ Close the observed-edit batch and schedule scoped background work once. Default 
 
 ### development_check / get_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:155](../../src/security_runtime/mcp_tools/development_check.py#L155)
+定义：[src/security_runtime/mcp_tools/development_check.py:156](../../src/security_runtime/mcp_tools/development_check.py#L156)
 
 ```python
 get_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -117,7 +117,7 @@ Read this owner's saved lightweight check status, scope, versions, findings and 
 
 ### development_check / get_development_deliveries
 
-定义：[src/security_runtime/mcp_tools/development_check.py:176](../../src/security_runtime/mcp_tools/development_check.py#L176)
+定义：[src/security_runtime/mcp_tools/development_check.py:177](../../src/security_runtime/mcp_tools/development_check.py#L177)
 
 ```python
 get_development_deliveries(workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=20)
@@ -127,7 +127,7 @@ Page this verified owner's pending result deliveries, including older scan versi
 
 ### development_check / get_development_result
 
-定义：[src/security_runtime/mcp_tools/development_check.py:183](../../src/security_runtime/mcp_tools/development_check.py#L183)
+定义：[src/security_runtime/mcp_tools/development_check.py:184](../../src/security_runtime/mcp_tools/development_check.py#L184)
 
 ```python
 get_development_result(check_ref: str, scanned_seq: int, workspace_path: str | None=None, session_ref: str | None=None)
@@ -137,7 +137,7 @@ Read an original saved version from this owner's outbox, even after later edits/
 
 ### development_check / record_development_changes
 
-定义：[src/security_runtime/mcp_tools/development_check.py:128](../../src/security_runtime/mcp_tools/development_check.py#L128)
+定义：[src/security_runtime/mcp_tools/development_check.py:129](../../src/security_runtime/mcp_tools/development_check.py#L129)
 
 ```python
 record_development_changes(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None, scope_unknown: bool=False, event_id: str | None=None)
@@ -147,7 +147,7 @@ Record paths observed during AI editing when Hooks cannot supply them. Include b
 
 ### development_check / wait_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:169](../../src/security_runtime/mcp_tools/development_check.py#L169)
+定义：[src/security_runtime/mcp_tools/development_check.py:170](../../src/security_runtime/mcp_tools/development_check.py#L170)
 
 ```python
 wait_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -160,14 +160,14 @@ Await saved progress using the product's communication budget. Read-only: never 
 定义：[src/security_runtime/mcp_tools/development_check.py:70](../../src/security_runtime/mcp_tools/development_check.py#L70)
 
 ```python
-get_development_risks(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=5)
+get_development_risks(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=5, include_history: bool=False)
 ```
 
-Read unified persisted development risks, raw sources, AI decisions and original repair outcomes. Does not scan, revalidate disk, or authorize edits. A scanner finding and its linked AI observation are one risk.
+Read current risks, dispositions and review progress. include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization.
 
 ### development_review / prepare_development_risk_fix
 
-定义：[src/security_runtime/mcp_tools/development_check.py:83](../../src/security_runtime/mcp_tools/development_check.py#L83)
+定义：[src/security_runtime/mcp_tools/development_check.py:84](../../src/security_runtime/mcp_tools/development_check.py#L84)
 
 ```python
 prepare_development_risk_fix(check_ref: str, risk_id: str, proposal: str, preserve: list[str], evidence_refs: list[str], user_requested: bool, impact_summary: str, critical_unknowns: list[str], workspace_path: str | None=None, session_ref: str | None=None, repair_paths: list[str] | None=None)
@@ -187,7 +187,7 @@ Read bounded evidence in the workspace. Set related=true only for a specific rel
 
 ### development_review / set_development_risk_disposition
 
-定义：[src/security_runtime/mcp_tools/development_check.py:76](../../src/security_runtime/mcp_tools/development_check.py#L76)
+定义：[src/security_runtime/mcp_tools/development_check.py:77](../../src/security_runtime/mcp_tools/development_check.py#L77)
 
 ```python
 set_development_risk_disposition(check_ref: str, risk_id: str, decision: str, user_requested: bool, workspace_path: str | None=None, session_ref: str | None=None)
@@ -207,7 +207,7 @@ Save an atomic review batch without scanning. Existing alerts require only same_
 
 ### development_review / submit_development_risk_resolution
 
-定义：[src/security_runtime/mcp_tools/development_check.py:94](../../src/security_runtime/mcp_tools/development_check.py#L94)
+定义：[src/security_runtime/mcp_tools/development_check.py:95](../../src/security_runtime/mcp_tools/development_check.py#L95)
 
 ```python
 submit_development_risk_resolution(check_ref: str, risk_id: str, repair_ref: str, outcome: str, evidence_refs: list[str], rationale: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -287,7 +287,7 @@ List findings/review state; opt into bounded original local evidence, optionally
 
 ### findings / get_security_summary
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:308](../../src/security_runtime/mcp_tools/explicit_audit.py#L308)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:309](../../src/security_runtime/mcp_tools/explicit_audit.py#L309)
 
 ```python
 get_security_summary(workspace_path: str | None=None, scan_id: str | None=None, details: bool=False)
@@ -297,7 +297,7 @@ Read workspace tasks without scans, AI or writes. User 'continue first' selects 
 
 ### findings / get_triage
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:332](../../src/security_runtime/mcp_tools/explicit_audit.py#L332)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:333](../../src/security_runtime/mcp_tools/explicit_audit.py#L333)
 
 ```python
 get_triage(scan_id: str, view: str='summary', offset: int=0, limit: int | None=None)
@@ -307,7 +307,7 @@ Independent triage coverage and grouped view; never changes scan coverage.
 
 ### findings / prepare_task_triage
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:317](../../src/security_runtime/mcp_tools/explicit_audit.py#L317)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:318](../../src/security_runtime/mcp_tools/explicit_audit.py#L318)
 
 ```python
 prepare_task_triage(task_ref: str, workspace_path: str | None=None, limit: int=5, retry_failed: bool=False, include_existing_reviews: bool=False)
@@ -477,7 +477,7 @@ Read existing product comparison progress without admission, capture, key creati
 
 ### runtime_status / get_professional_guidance
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:287](../../src/security_runtime/mcp_tools/explicit_audit.py#L287)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:288](../../src/security_runtime/mcp_tools/explicit_audit.py#L288)
 
 ```python
 get_professional_guidance()
@@ -487,7 +487,7 @@ Read product-owned versioned deep-audit guidance. No workspace/source/URL input,
 
 ### runtime_status / get_scan_preparation_status
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:293](../../src/security_runtime/mcp_tools/explicit_audit.py#L293)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:294](../../src/security_runtime/mcp_tools/explicit_audit.py#L294)
 
 ```python
 get_scan_preparation_status()
@@ -797,7 +797,7 @@ Record HOST_CODE_REVIEW_NOT_SCANNER_PROOF feedback with FALSE_POSITIVE, STILL_RI
 
 ### 直接声明或条件开放 / get_runtime_guidance
 
-定义：[src/security_runtime/mcp_tools/explicit_audit.py:278](../../src/security_runtime/mcp_tools/explicit_audit.py#L278)
+定义：[src/security_runtime/mcp_tools/explicit_audit.py:279](../../src/security_runtime/mcp_tools/explicit_audit.py#L279)
 
 ```python
 get_runtime_guidance(topic: Literal['core', 'runtime-workflow', 'task-review', 'development-check', 'risk-decisions', 'repair-impact', 'deep-audit'])
@@ -810,10 +810,10 @@ Read one fixed bundled method with version/hash and reuse that identity. No work
 定义：[src/security_runtime/mcp_tools/explicit_audit.py:266](../../src/security_runtime/mcp_tools/explicit_audit.py#L266)
 
 ```python
-get_runtime_info(view: Literal['full', 'summary']='full')
+get_runtime_info(view: Literal['full', 'summary']='summary')
 ```
 
-Read runtime capabilities. Opt into summary for discovery; full remains the default. Check required tool subset, not exact count; never scans or writes state.
+Read compact runtime capabilities by default; view=full includes inventories. Check required tool subset, not exact count; never scans or writes state.
 
 ### 直接声明或条件开放 / handle_before_hook_event
 

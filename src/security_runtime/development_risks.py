@@ -17,6 +17,7 @@ from .models import Finding
 from .redactor import SecretRedactor
 from .scan_request import relative_path
 from .tasks.durable import SignedRecords
+from .performance_trace import span
 
 
 class Observation(BaseModel):
@@ -184,7 +185,8 @@ class DevelopmentRisks:
         require(name in check['observed_paths'] or related is True, 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED')
         require(type(start_line) is int and type(end_line) is int and
                 1 <= start_line <= end_line < start_line + 80, 'DEVELOPMENT_RISK_RANGE_INVALID')
-        raw, text = WorkspaceReader(self.root).read(name)
+        with span('review.source_read'):
+            raw, text = WorkspaceReader(self.root).read(name)
         lines = text.splitlines()
         require(start_line <= len(lines), 'DEVELOPMENT_RISK_RANGE_INVALID')
         end_line = min(end_line, len(lines))
@@ -193,7 +195,7 @@ class DevelopmentRisks:
         evidence = dict(file_path=name, line_start=start_line, line_end=end_line,
                         sha256=hashlib.sha256(raw).hexdigest(), dirty_seq=check['dirty_seq'])
         ref = 'dre1-' + digest([self.ref, evidence])[:32]
-        with self.store.transaction() as db:
+        with span('review.evidence_save'), self.store.transaction() as db:
             row = self.load(db)
             require(ref in row['evidence'] or len(row['evidence']) < 256, 'DEVELOPMENT_RISK_EVIDENCE_LIMIT')
             row['evidence'][ref] = evidence
@@ -414,14 +416,14 @@ class DevelopmentRisks:
                                                          has_development_review=True))
             self.store._put(db, self.ref, row)
         from .development_reporting import reporting
-        result = self.get()
+        result = self.get(include_history=False)
         from .performance_trace import review_event
         review_event('saved', check, result['review_progress'])
         result['reporting'] = reporting(self.ref, self.root, after_review=True)
         result['next_action'] = result['reporting']['next_action']
         return result
 
-    def get(self, offset=0, limit=5):
+    def get(self, offset=0, limit=5, *, include_history=True):
         require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
                 'DEVELOPMENT_RISK_PAGE_INVALID')
         row = self.load()
@@ -445,7 +447,8 @@ class DevelopmentRisks:
                     review_progress=review_progress(check, row),
                     reporting=report, next_action=report.get('next_action'),
                     risks=items, total=len(risks), next_offset=offset+limit if offset+limit < len(risks) else None,
-                    review_versions=row['reviews'],
+                    **({'review_versions': row['reviews']} if include_history else {}),
+                    review_version_count=len(row['reviews']), history_included=include_history,
                     decision_policy='EVIDENCE_BACKED_HOST_REVIEW', scanner_run=False,
                     source_freshness='NOT_RECHECKED_ON_READ', repair_authorized=False)
 

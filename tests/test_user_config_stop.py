@@ -19,12 +19,23 @@ def config(tmp_path, monkeypatch):
 def test_defaults_and_invalid_settings(config):
     values = read_config()['values']
     assert values['storage']['development_max_records'] == 1024
-    assert all(values['agent'].values())
+    assert values['agent'] == dict(review_scanner_findings=True, audit_business_logic=False)
     assert values['development']['stop_fallback']['enabled']
     for text in ['oops = true', '[agent]\nreview_scanner_findings=1',
                  '[storage]\ndevelopment_max_records=0', 'invalid [']:
         config.write_text(text)
         assert describe_config()['status'] == 'INVALID'
+
+
+def test_default_analysis_policy_and_explicit_audit_opt_in(check, config):
+    root, service, _, _ = check
+    ref = service.begin(root, 'default-policy')['check_ref']
+    assert service.get(root, ref)['analysis_requirements'] == {
+        'review_scanner_findings': 'REQUIRED', 'audit_business_logic': 'SKIPPED_BY_CONFIG'}
+    config.write_text('[agent]\naudit_business_logic=true\n')
+    enabled = service.begin(root, 'audit-opt-in')['check_ref']
+    assert service.get(root, enabled)['analysis_requirements']['audit_business_logic'] == 'REQUIRED'
+    assert service.get(root, ref)['analysis_requirements']['audit_business_logic'] == 'SKIPPED_BY_CONFIG'
 
 
 @pytest.mark.parametrize('host', ['codex', 'cursor'])
@@ -290,8 +301,9 @@ def test_terminal_stop_is_not_repeated_after_inconclusive_review(check, config, 
                     stop_hook_active=True, turn_id='turn')['decision'] == 'block'
 
 
-def test_waiting_stop_does_not_suppress_new_terminal_result(check, monkeypatch):
+def test_waiting_stop_does_not_suppress_new_terminal_result(check, config, monkeypatch):
     root, service, _, state = check
+    config.write_text('[agent]\naudit_business_logic=true\n')
     ref = service.begin(root, 'waiting-stop')['check_ref']
     service.record(root, ref, ['app.ts'])
     assert fallback(service.hooks, root, OWNER, service=service, turn_id='turn')['decision'] == 'block'

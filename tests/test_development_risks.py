@@ -13,6 +13,9 @@ IMPACT = dict(impact_summary='Only binds input; return shape and authorized acce
 
 @pytest.fixture
 def sample(tmp_path, monkeypatch):
+    config = tmp_path/'config.toml'
+    config.write_text('[agent]\naudit_business_logic=true\n', encoding='utf-8')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(config))
     def forbidden(*a, **kw):
         pytest.fail('Unexpected scanner or worker')
     monkeypatch.setattr('security_runtime.runtime.SecurityRuntime.scan', forbidden)

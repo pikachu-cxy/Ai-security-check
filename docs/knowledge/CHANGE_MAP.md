@@ -24,6 +24,7 @@
 | Cursor 或 WorkBuddy 接入 | `cursor_connector.py`、`workbuddy_integration.py` 及对应 Hook 模块 | `tests/test_cursor_automatic.py`、`tests/test_workbuddy_connector.py` |
 | 下载脚本、原生包与发布 | `website/public/install/`、`scripts/build/`、`scripts/release/`、`.github/workflows/` | `tests/distribution/`；构建、上传、发布授权分开 |
 | 计时缺失或时间口径 | `performance_trace.py`、`scripts/performance/measure.py`、`scripts/performance/report.py` | `tests/test_performance_trace.py`；区分安装、扫描、复核与宿主时间 |
+| 普通开发收尾和 MCP 固定开销 | `development_check_worker.py`、`scan_attempt.py`、`workspace_application.py`、`global_mcp.py` | `tests/test_lightweight_closeout.py`；检查 CAPTURED、失效租约、工作区解析和版本缓存复用 |
 | 仅显式授权的 BYOK 复核 | `triage_providers.py`、`triage.py`、`cli.py` | 相关 triage 测试；不得与默认宿主 Agent 复核混为一谈 |
 | 风险仪表盘显示 | `risk_dashboard.py`、`assets/` | `tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs` |
 | 用户配置和 Stop 预算 | `user_config.py`、`development_stop.py` | `tests/test_user_config_stop.py` |

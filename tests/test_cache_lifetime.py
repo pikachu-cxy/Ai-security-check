@@ -84,7 +84,7 @@ def test_parallel_engine_probes_and_later_single_engine_recheck_keep_own_bucket(
     import threading
     manager = ToolManager(tmp_path/'tools')
     barrier = threading.Barrier(2); seen = {}; probes = []
-    def key(tool, path):
+    def key(tool, path, **kwargs):
         seen[tool] = seen.get(tool, 0)+1
         if seen[tool] == 1: barrier.wait(timeout=5)
         return tool, 'stable-contract-identity'

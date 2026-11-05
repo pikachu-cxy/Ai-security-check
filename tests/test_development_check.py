@@ -209,18 +209,21 @@ def test_scan_inflight_edit_waits_for_next_finish_on_same_ref(check, monkeypatch
     result = service.get(root, ref)
     assert state['calls'] == 2
     assert result['dirty_seq'] == result['scanned_seq'] == 2
-    assert result['execution']['source_applicability'] == 'CURRENT'
+    assert result['execution']['source_applicability'] == 'CAPTURED'
 
 
-def test_unreported_inflight_edit_remains_explicitly_stale(check, monkeypatch):
+def test_closeout_reports_captured_version_without_rereading_source(check, monkeypatch):
     root, service, runtime, state = check
     ref = service.begin(root, 'external-change')['check_ref']
     service.record(root, ref, ['app.ts'])
     state['callback'] = lambda context: (root/'app.ts').write_text('different bytes\n')
     assert execute(check, monkeypatch) == 0
     result = service.get(root, ref)
-    assert result['status'] == 'PARTIAL'
-    assert 'SOURCE_CHANGED_DURING_SCAN' in result['gaps']
+    assert result['execution']['source_applicability'] == 'CAPTURED'
+    assert result['source_freshness'] == 'NOT_RECHECKED_ON_READ'
+    scan = runtime.store.get_scan(result['scan_id'])
+    assert not scan['scan_context']['source_consistent']
+    assert scan['scan_context']['fixed_input']['applicability_reason'] == 'SOURCE_NOT_RECHECKED_AFTER_SCAN'
 
 
 def test_unknown_and_deleted_scope_never_expand_to_project(check, monkeypatch):

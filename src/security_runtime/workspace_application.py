@@ -32,6 +32,14 @@ class WorkspaceApplication:
         candidate = Path(value) if value is not None else Path(self.binding.root)
         if not candidate.is_absolute():
             candidate = Path(self.binding.root) / candidate
+        # The exact admitted root needs boundary validation, not another Git
+        # subprocess for each domain-service helper in the same MCP request.
+        if candidate == Path(self.binding.root):
+            from .hook_state import no_links
+            no_links(candidate)
+            if not candidate.is_dir() or candidate.resolve(strict=True) != candidate:
+                raise ValueError("Requested workspace is outside this MCP connection")
+            return self.binding.root
         resolved = WorkspaceResolver().resolve(candidate, allow_non_git_explicit=True).path
         if resolved != Path(self.binding.root):
             raise ValueError("Requested workspace is outside this MCP connection")

@@ -356,9 +356,13 @@ class ScanAttemptStore:
 class ScanAttemptExecution:
     """Runtime port: lease checkpoints, fixed-input binding and raw-input lifetime."""
     artifact_cache = True
-    def __init__(self, store, lease, *, validator=None, after_scan=None, progress=None):
+    def __init__(self, store, lease, *, validator=None, after_scan=None, progress=None,
+                 captured_only=False):
         self.store, self.lease = store, lease
         self.validator, self._after_scan = validator, after_scan
+        self.captured_only = captured_only
+        if captured_only:
+            self.artifact_cache = False
         self.progress = progress or NullProgressReporter()
         self.private_parent = store.private_parent
         self.input_id = None
@@ -409,6 +413,10 @@ class ScanAttemptExecution:
         self.source_revision = view.source_revision
 
     def applicability(self, view):
+        if self.captured_only:
+            from .scan_input import InputApplicability
+            return InputApplicability(view.input_id, view.request.source_kind, 'CAPTURED',
+                                      'SOURCE_NOT_RECHECKED_AFTER_SCAN')
         return view.check_current()
 
     def after_scan(self, view, result):

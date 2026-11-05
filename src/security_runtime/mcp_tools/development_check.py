@@ -68,9 +68,10 @@ def register(server, registry, *, application):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
-                              session_ref: str | None = None, offset: int = 0, limit: int = 5) -> dict:
-        """Read unified persisted development risks, raw sources, AI decisions and original repair outcomes. Does not scan, revalidate disk, or authorize edits. A scanner finding and its linked AI observation are one risk."""
-        return risks(check_ref, workspace_path, session_ref).get(offset, limit)
+                              session_ref: str | None = None, offset: int = 0, limit: int = 5,
+                              include_history: bool = False) -> dict:
+        """Read current risks, dispositions and review progress. include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization."""
+        return risks(check_ref, workspace_path, session_ref).get(offset, limit, include_history=include_history)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def set_development_risk_disposition(check_ref: str, risk_id: str, decision: str,

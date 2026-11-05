@@ -236,8 +236,10 @@ def _scan(queue, row, ticket, runtime_factory=None):
     def publish(view, result):
         if not _valid_worker(queue, ticket):
             raise ScanAttemptLost('DEVELOPMENT_WORKER_SUPERSEDED')
-        applicability = view.check_current()
-        outcome = 'COMPLETED' if applicability.state == 'CURRENT' else 'STALE'
+        # Publication is bound to the captured input and journal sequence. New
+        # edits remain pending in run_worker; do not reread source at closeout.
+        applicability = execution.applicability(view)
+        outcome = 'COMPLETED'
         with queue.hooks.lock(queue.root, wait_seconds=2) as acquired:
             if not acquired or not attempts.finish(lease, input_id=view.input_id,
                     scan_id=result.scan_id, outcome=outcome):
@@ -246,7 +248,8 @@ def _scan(queue, row, ticket, runtime_factory=None):
             source_applicability=applicability.state)
         result.scanner_diagnostics['execution_publication'] = dict(receipt)
 
-    execution = ScanAttemptExecution(attempts, lease, validator=validate, after_scan=publish)
+    execution = ScanAttemptExecution(attempts, lease, validator=validate, after_scan=publish,
+                                    captured_only=True)
     stage = 'RUNTIME_PREPARATION'
     try:
         no_links(Path(row['scan_path']))
@@ -286,7 +289,7 @@ def _scan(queue, row, ticket, runtime_factory=None):
         excluded = sorted(set(request.files)-actual)
         if excluded:
             gaps.append('OBSERVED_FILES_NOT_SCANNED')
-        if receipt.get('source_applicability') != 'CURRENT':
+        if receipt.get('source_applicability') not in {'CURRENT', 'CAPTURED'}:
             gaps.append('SOURCE_CHANGED_DURING_SCAN')
         if (result.status != 'COMPLETED' or any(value not in {'EXECUTED', 'NOT_APPLICABLE'}
                 for value in result.capability_results.values())):

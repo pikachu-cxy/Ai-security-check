@@ -46,6 +46,12 @@ Codex/WorkBuddy 的全局发现使用 `mcp_tool_groups.py:GROUPS` 分组；原�
 
 所有静态声明、签名及源码位置见 [MCP 目录](MCP_CATALOG.md)。该目录不是最终 JSON Schema：全局适配会补充必填工作区字段，参数模型还定义嵌套约束，部分工具只在可信嵌入模式开放。实际连接的 `tools/list` 与对应模型才是调用契约。
 
+`get_runtime_info` 默认 `view="summary"`，不解析规则库存；需要完整库存时显式传 `view="full"`。
+`get_development_risks` 默认返回当前风险及复核进度，不重复附带所有历史复核批次；`include_history=true` 可读取历史。
+扫描候选复核与业务审计使用独立字段，但优先在同一次提交中保存，再统一分页读取最终风险。
+默认 `agent.review_scanner_findings=true`、`agent.audit_business_logic=false`；业务审计按需开启。已有显式用户配置和批次快照优先，不由新默认值改写。
+普通开发结果的 `source_applicability="CAPTURED"` 只指捕获的扫描输入，收尾不重新验证磁盘源码；严格审计的 `CURRENT` 语义不变。
+
 ### 关键请求和响应约束
 
 | 流程 | 必须保持的请求事实 | 响应解释 |

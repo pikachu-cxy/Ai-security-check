@@ -13,6 +13,7 @@
 | 证据、判断、处置、修复分别保存 | 保留审计依据与用户决定，防止误把排除当修复 | `development_risks.py`、`risk_disposition.py`、`tasks/risk_ledger.py`；零告警不能关闭原风险 |
 | 指定修复先核对影响和范围 | 避免工具建议或模型判断越过用户选择 | `repair_impact*`、`mcp_tools/repair.py`；实际修改不得超出准备与授权范围 |
 | 固定输入和租约约束结果发布 | 防止并发、取消或源码变化造成过期结果覆盖 | `scan_request.py`、`scan_attempt.py`；条件发布不可被普通锁或缓存命中替代 |
+| 普通开发轻量收尾 | 编辑结束后避免重复读取输入和生成语义定位快照 | `development_check_worker.py` 使用 `CAPTURED` 表示捕获版本；只检查任务/租约，后续编辑由序号保持待检查，不证明磁盘未变化；严格审计和修复验证保留原逻辑 |
 | 安装包逐文件校验与实际启动器验证 | 防止包损坏、路径错配或旧启动器让版本显示失真 | `delivery.py`、`distribution/build/launcher.c`、`personal_install.py`；并行可以改执行方式，不能省校验项；本地哈希证明完整性，不单独证明发布者身份 |
 | 原生启动器按内容选择，避免覆盖运行中旧文件 | 允许已有安装升级并保护正在运行的连接 | `delivery.py`；旧连接可继续存在，新连接必须走已验证新构建 |
 | 安装关键路径延后旧槽位清理 | 避免清理耗时或误删使用中的构建 | `personal_install.py` 返回显式维护提示；`delivery.py:cleanup_after_reconnect` 另保留受 frozen/MCP 启动、活动构建及 `cleanup_ready` 限制的维护入口，不能描述成任何情况下都只手动清理 |

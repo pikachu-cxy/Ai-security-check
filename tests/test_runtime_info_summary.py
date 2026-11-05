@@ -13,11 +13,23 @@ from security_runtime.global_mcp import create_global_server
 from test_global_integration import structured
 
 
+@pytest.fixture(autouse=True)
+def fixed_discovery_inputs(monkeypatch):
+    # These tests exercise response projection, not the installed rules or the
+    # mutable checkout's build hashing (covered by their own contract tests).
+    monkeypatch.setattr('security_runtime.build_identity.build_identity',
+                        lambda: {'status': 'DEV', 'build_id': 'a' * 64, 'version': '0.3.13'})
+    monkeypatch.setattr('security_runtime.rulepacks.RulePackManager.resolve', lambda self: None)
+    monkeypatch.setattr('security_runtime.owasp_coverage.installed_inventory',
+                        lambda pack: {'status': 'AVAILABLE', 'execution_proof': False,
+                                      'rules': ['fixture'] * 1000})
+
+
 def test_real_summary_preserves_checks_and_reduces_response(monkeypatch, tmp_path):
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'absent'))
     registry = MCPRegistry(create_server(global_mode=False))
-    full = registry.tool('get_runtime_info').fn()
+    full = registry.tool('get_runtime_info').fn(view='full')
     before = copy.deepcopy(full)
     summary = registry.tool('get_runtime_info').fn(view='summary')
     assert runtime_info_view(full) is full and full == before
@@ -25,14 +37,14 @@ def test_real_summary_preserves_checks_and_reduces_response(monkeypatch, tmp_pat
     for key in ('build_identity', 'guidance_catalog', 'features', 'required_guidance_tools',
                 'connection_recovery', 'same_environment_check', 'execution'):
         assert summary[key] == full[key]
-    assert summary['delivery_manifest']['manifest_sha256'] == full['delivery_manifest']['manifest_sha256']
+    assert summary['rule_inventory']['status'] == 'NOT_REQUESTED'
     assert summary['delivery_manifest']['compatibility'] == full['delivery_manifest']['compatibility']
     assert summary['delivery_manifest']['tools']['names'] == full['delivery_manifest']['tools']['names']
     assert len(json.dumps(summary)) < len(json.dumps(full)) * .65
     assert not (tmp_path / 'absent').exists()
 
 
-def test_summary_is_read_only_on_both_routes_and_full_stays_default(monkeypatch, tmp_path):
+def test_summary_is_read_only_and_default_on_both_routes(monkeypatch, tmp_path):
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path / 'absent'))
     registry = MCPRegistry(create_server(global_mode=False))
@@ -40,10 +52,10 @@ def test_summary_is_read_only_on_both_routes_and_full_stays_default(monkeypatch,
     before = list(tmp_path.rglob('*'))
     for route in (lambda args: structured(asyncio.run(registry.dispatch('get_runtime_info', args, convert_result=True))),
                   lambda args: asyncio.run(routed.call_tool('get_runtime_info', args)).structuredContent):
-        full = route({})
-        assert route({'view': 'full'}) == full
+        full = route({'view': 'full'})
         summary = route({'view': 'summary'})
-        assert summary == runtime_info_view(full, 'summary')
+        assert route({}) == summary
+        assert summary['rule_inventory']['status'] == 'NOT_REQUESTED'
         assert task_review_compatibility(summary, registry.names()) == task_review_compatibility(full, registry.names())
     assert list(tmp_path.rglob('*')) == before
     tools = {tool.name: tool for tool in asyncio.run(routed.list_tools())}

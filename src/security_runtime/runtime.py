@@ -551,18 +551,22 @@ class SecurityRuntime:
             for run in runs if 'execution_binding' in run.scanner_diagnostics}
         from .scan_freshness import complete as complete_context
         finalization_started = time.perf_counter()
-        view.assert_intact()
+        captured_only = getattr(attempt, 'captured_only', False)
+        if not captured_only:
+            view.assert_intact()
         if attempt is not None:
             source_context['execution_attempt'] = attempt.receipt
             attempt.checkpoint(force=True)
         result.scan_context = complete_context(source_context, root, self.store, input_view=view,
             applicability=attempt.applicability(view) if attempt is not None else None)
         from .finding_scope_snapshot import capture_scopes
-        result.source_scopes = capture_scopes(root, [asdict(finding) for finding in findings])
+        result.source_scopes = ({} if captured_only else
+            capture_scopes(root, [asdict(finding) for finding in findings]))
         observed['timing_ms']['final_input_validation'] = milliseconds(finalization_started)
         historical_comparison = (getattr(attempt, 'original_task_comparison', False)
             and result.scan_context['fixed_input']['applicability'] == 'HISTORICAL')
-        if result.scan_context['fixed_input']['applicability'] != 'CURRENT' and not historical_comparison:
+        if (result.scan_context['fixed_input']['applicability'] != 'CURRENT'
+                and not captured_only and not historical_comparison):
             result.status, result.coverage, result.release_status = 'PARTIAL', 'UNKNOWN', 'REVIEW'
             result.summary += '\n扫描对应已捕获的文件版本；原来源已变化或无法核验，最新变化仍需检查。'
         if staged:

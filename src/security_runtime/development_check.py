@@ -377,6 +377,7 @@ class DevelopmentCheckService:
         self._prewarm(store.root)
         return projection(store, row)
 
+    @timed('check.record')
     def record(self, root, check_ref, paths, *, scope_unknown=False, event_id=None):
         if type(scope_unknown) is not bool:
             raise ValueError('DEVELOPMENT_SCOPE_INVALID')

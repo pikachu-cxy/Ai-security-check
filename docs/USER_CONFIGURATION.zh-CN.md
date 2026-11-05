@@ -23,7 +23,7 @@ Windows：`%APPDATA%/ai-security-runtime/config.toml`。
 | storage.development_record_limit_enabled | true | 关闭则不限制新检查的记录数配额，独立磁盘/单记录限制保留 |
 | storage.development_max_records | 1024 | 正整数；到达配额不再创建新检查，已有检查的完成记录仍可保存，因此总行数可能超过配额 |
 | agent.review_scanner_findings | true | 扫描命中与误报复核 |
-| agent.audit_business_logic | true | 主动分析业务逻辑与相关漏洞 |
+| agent.audit_business_logic | false | 按需开启主动业务逻辑审计；默认保留扫描命中复核 |
 | development.stop_fallback.enabled | true | 开启当前检查的 Stop 兜底 |
 | development.stop_fallback.wait_timeout_seconds | 120 | 1–3600；一次兜底总预算，非单个 Hook 同步等待秒数 |
 | development.stop_fallback.max_continuations | 2 | 1–10；有界续接，宿主本身的循环限制可能更低 |
@@ -31,6 +31,7 @@ Windows：`%APPDATA%/ai-security-runtime/config.toml`。
 容量下调不删除记录、不阻断历史读取；读取按分页获取，仍受数据库文件大小保护。
 已有检查的交付、风险保留和继续更新可越过新增检查配额，避免满额后无法收尾。
 两项 Agent 开关均关闭时只报告静态结果；状态为 SKIPPED_BY_CONFIG，不冒称已完成 AI 复核。
+未配置时业务审计默认关闭；已有用户显式设置与已保存批次的配置快照不被默认值覆盖。
 静态候选不依赖 Agent 提交入库；风险投影失败不重跑扫描，原始扫描结果与交付记录保留。
 配置控制自动开发分析；用户另行要求专项审计仍走专项流程，不把自动模式关闭当作用户禁止一切分析。
 

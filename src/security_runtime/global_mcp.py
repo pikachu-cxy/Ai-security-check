@@ -21,6 +21,7 @@ from .host_events import EventKind, OperationClass
 from .codex_event_adapter import CodexEventAdapter
 from .bootstrap_diagnostics import BASELINE_REASONS, BaselinePreparationError, baseline_failure_reason
 from .mcp_contracts import MCPRegistry, raw_input_failure
+from .performance_trace import timed
 from .mcp_tools.development_check import TOOLS as DEVELOPMENT_CHECK_TOOLS
 
 HOOKS = {'handle_readiness_event', 'handle_hook_event', 'handle_stop_event', 'handle_before_hook_event'}
@@ -64,9 +65,10 @@ def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
 
-def global_runtime_info(*, tools=None, host=None):
+def global_runtime_info(*, tools=None, host=None, include_rule_inventory=True):
     from .guidance.host_guidance import runtime_info
-    info = runtime_info(include_rule_inventory=os.getenv('SECURITY_RUNTIME_MCP_SELF_TEST') != '1')
+    info = runtime_info(include_rule_inventory=include_rule_inventory and
+                        os.getenv('SECURITY_RUNTIME_MCP_SELF_TEST') != '1')
     info['features'] = {**info['features'], 'global_runtime_integration': 'v0.1',
                         'readonly_workspace_binding_status': 'workspace-binding-status-v1; NO_ADMISSION; ROUTING_DIAGNOSTICS',
                         'product_epoch_status': 'product-epoch-status-v1; READ_ONLY; NO_ADMISSION; HASH_ONLY; OBSERVED_ONLY'}
@@ -125,9 +127,11 @@ class GlobalWorkspaces:
         from .workspace_services import workspace_mcp_server
         return workspace_mcp_server(root, directory, binding)
 
+    @timed('routing.workspace')
     def root(self, value, *, allow_empty=False):
         return resolve_workspace(value, excluded=(self.base,), codex_homes=(self.integration.home,), allow_empty=allow_empty)
 
+    @timed('routing.admission')
     def admit(self, root):
         with self.lock:
             if root in self.children:
@@ -136,12 +140,7 @@ class GlobalWorkspaces:
                 raise ValueError('WORKSPACE_CONNECTION_BUDGET_EXCEEDED')
             # Installed config fingerprints are checked without recursively
             # starting a probe MCP process or consulting Codex private state.
-            health = self.integration.configuration_status()
-            if health['overall'] != 'CONFIGURED':
-                raise ValueError('GLOBAL_CONFIGURATION_NOT_READY')
-            rows = self.integration.inspect_project(root)
-            if any(row['related'] for row in rows):
-                raise ValueError('LEGACY_PROJECT_CONFIGURATION_REQUIRES_REPAIR')
+            self.validate_layers(root)
             directory = workspace_state(root, self.base)
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
             no_links(directory)
@@ -152,6 +151,7 @@ class GlobalWorkspaces:
             self.children[root][1].task_audit_mode = self.task_audit_mode
             return self.children[root]
 
+    @timed('routing.configuration')
     def validate_layers(self, cwd):
         if self.integration.configuration_status()['overall'] != 'CONFIGURED':
             raise ValueError('GLOBAL_CONFIGURATION_NOT_READY')
@@ -646,9 +646,11 @@ def create_global_server(*, workspaces=None, host='codex'):
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
         if name == 'get_runtime_info':
             from .runtime_info_view import runtime_info_view
-            info = global_runtime_info(tools=await listed(), host=active_host)
+            view = arguments.get('view', 'summary')
+            info = global_runtime_info(tools=await listed(), host=active_host,
+                                       include_rule_inventory=view == 'full')
             info['host_connector'] = active_host
-            info = runtime_info_view(info, arguments.get('view', 'full'))
+            info = runtime_info_view(info, view)
             return CallToolResult(structuredContent=info, content=[TextContent(type='text', text=json.dumps(info))])
         if name == 'get_workspace_binding_status':
             data = get_workspace_binding_status(**arguments)

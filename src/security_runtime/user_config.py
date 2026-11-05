@@ -24,7 +24,7 @@ DEFAULTS = {
     'rules': {'sast': {'mode': 'builtin', 'paths': [], 'exclude_ids': []}, 'gitleaks': {'config_path': ''}},
     'vulnerability_data': {'trivy': {'repositories': [], 'cache_dir': '', 'update_mode': 'auto',
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
-    'agent': {'review_scanner_findings': True, 'audit_business_logic': True},
+    'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
     'development': {'stop_fallback': {'enabled': True, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 

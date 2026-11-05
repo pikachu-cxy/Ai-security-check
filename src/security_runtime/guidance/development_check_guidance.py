@@ -5,6 +5,8 @@ DEVELOPMENT_CHECK_GUIDANCE = '''# 轻量 AI 编辑检查
 协议：observed-development-check-v1。默认开发目标是发现本次 AI 编辑涉及的安全风险。
 不建立全项目修改前基线，不比较整个工作区，不要求全项目快照或完整改前/改后复核。
 扫描器仍使用所选文件的固定输入，防止扫描过程中继续编辑导致结果混用；这不是项目基线。
+普通开发收尾只检查任务有效状态，不重新读取源码或生成告警语义定位快照。
+结果的 CAPTURED 表示扫描时捕获的输入，不能声称收尾时磁盘源码已重新核验；新编辑仍按新序号待检查。
 
 ## 用户配置与 Stop 兜底
 
@@ -241,7 +243,8 @@ findings_access 给出发现读取入口，沿其真实 scan_id 使用 get_findi
    同类、同行不自动等于同一问题，必须核对同一原因和执行点。重试保留 issue_key 和关联。
    同一风险保留原始扫描命中和 AI 证据，最终技术判断以有证据的 AI 复核为准。
    DISMISSED 表示复核排除，不表示修复；无法确认用 INCONCLUSIVE，不能伪造用户排除。
-   业务逻辑审计独立通过 business_reviews 保存，每项包含 file_path、rationale、evidence_refs、limitations。
+   业务逻辑审计通过独立的 business_reviews 字段保存，每项包含 file_path、rationale、evidence_refs、limitations。
+   读齐必要证据后，优先一次提交候选复核与业务审计，再统一读取最终风险；不为中间进度拆分提交和读取。
    即使没有新风险，也需说明该文件审计依据；有未解决限制就填 limitations，不伪造完整覆盖。
    可分批保存，按 pending_business_paths 补齐本次已记录范围，不扩大静态扫描范围。
    空 observations 不代表任何阶段完成，INCONCLUSIVE 候选仍保留待确认状态。
