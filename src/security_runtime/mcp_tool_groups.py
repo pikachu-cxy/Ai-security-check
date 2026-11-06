@@ -19,21 +19,27 @@ GROUPS = {
     'task_risks': ('get_task_risk_ledger', 'prepare_task_risk_feedback', 'submit_task_risk_feedback',
         'mark_task_risk_false_positive', 'set_task_risk_disposition',
         'revoke_task_risk_feedback', 'get_task_risk_feedback'),
-    'finding_feedback': ('prepare_finding_feedback', 'submit_finding_feedback',
+    'findings': ('get_findings', 'get_security_summary', 'prepare_triage',
+        'submit_triage', 'get_triage', 'prepare_task_triage',
+        'prepare_finding_feedback', 'submit_finding_feedback',
         'mark_finding_false_positive', 'set_finding_disposition',
         'revoke_finding_feedback', 'get_finding_feedback'),
-    'findings': ('get_findings', 'get_security_summary', 'prepare_triage',
-        'submit_triage', 'get_triage', 'prepare_task_triage'),
-    'repair_impact': ('prepare_repair_impact', 'read_repair_impact_context',
-        'submit_repair_impact', 'get_repair_impact'),
     'repair': ('prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
-        'confirm_remediation', 'refresh_remediation_confirmation', 'verify_task_fix', 'generate_fix', 'verify'),
+        'confirm_remediation', 'refresh_remediation_confirmation', 'verify_task_fix', 'generate_fix', 'verify',
+        'prepare_repair_impact', 'read_repair_impact_context',
+        'submit_repair_impact', 'get_repair_impact'),
     'scan': ('start_scan', 'scan_diff', 'scan_project', 'scan_files',
-        'get_scan_status', 'get_scan_result', 'list_scan_jobs'),
-    'closeout_check': ('prepare_closeout_check', 'run_closeout_check', 'get_closeout_status'),
+        'get_scan_status', 'get_scan_result', 'list_scan_jobs',
+        'prepare_closeout_check', 'run_closeout_check', 'get_closeout_status'),
     'runtime_status': ('get_development_config', 'get_scan_preparation_status',
         'get_workspace_binding_status', 'get_product_epoch_status', 'get_task_isolation_capabilities',
-        'get_professional_guidance'),
+        'get_professional_guidance', 'get_runtime_guidance'),
+}
+MERGED_GROUPS = {'finding_feedback': 'findings', 'repair_impact': 'repair', 'closeout_check': 'scan'}
+LEGACY_MEMBERS = {
+    'finding_feedback': ('prepare_finding_feedback', 'submit_finding_feedback', 'mark_finding_false_positive', 'set_finding_disposition', 'revoke_finding_feedback', 'get_finding_feedback'),
+    'repair_impact': ('prepare_repair_impact', 'read_repair_impact_context', 'submit_repair_impact', 'get_repair_impact'),
+    'closeout_check': ('prepare_closeout_check', 'run_closeout_check', 'get_closeout_status'),
 }
 ROUTES = {operation: group for group, operations in GROUPS.items() for operation in operations}
 
@@ -72,7 +78,7 @@ def operation_schemas(tools):
 
 
 def original_call(name, arguments):
-    if isinstance(name, str) and name in GROUPS and isinstance(arguments, dict) and arguments.get('operation') in GROUPS[name]:
+    if isinstance(name, str) and isinstance(arguments, dict) and arguments.get('operation') in GROUPS.get(name, LEGACY_MEMBERS.get(name, ())):
         return arguments['operation'], arguments.get('arguments')
     return name, arguments
 

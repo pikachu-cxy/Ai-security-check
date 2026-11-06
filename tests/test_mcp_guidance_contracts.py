@@ -21,11 +21,14 @@ def test_guidance_routes_share_bundled_identity_without_workspace_admission(topi
     original=get_runtime_guidance(topic)
     project=asyncio.run(MCPRegistry(local).dispatch('get_runtime_guidance', {'topic':topic}, convert_result=True))
     global_result=asyncio.run(routed.call_tool('get_runtime_guidance', {'topic':topic}))
-    assert structured(project)==global_result.structuredContent==original
+    grouped=asyncio.run(routed.call_tool('runtime_status', {
+        'operation':'get_runtime_guidance', 'arguments':{'topic':topic}}))
+    assert structured(project)==global_result.structuredContent==grouped.structuredContent==original
     assert list(tmp_path.rglob('*'))==before
     tools={tool.name:tool for tool in asyncio.run(routed.list_tools())}
-    tool=tools['get_runtime_guidance']
-    assert set(tool.inputSchema['properties'])=={'topic'}
+    assert 'get_runtime_guidance' not in tools
+    tool=tools['runtime_status']
+    assert set(tool.inputSchema['$defs']['get_runtime_guidance']['properties'])=={'topic'}
     assert tool.annotations.readOnlyHint is True
     assert tool.annotations.destructiveHint is False and tool.annotations.openWorldHint is False
     assert not any(original['execution'].values())

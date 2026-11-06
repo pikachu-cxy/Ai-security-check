@@ -42,6 +42,7 @@ def test_possible_write_without_new_changes_does_not_reopen_old_check(check, con
 
 def test_codex_native_stop_keeps_edit_and_readonly_turns_separate(development_server, config, monkeypatch):
     server, root, _, launches = development_server
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
     monkeypatch.setattr('security_runtime.development_check_worker.launch_worker', lambda *a, **kw: launches.append(a))
     common = dict(workspace_path=str(root), session_id='rounds')
     recorded = structured(call(server, 'handle_hook_event', event='PostToolUse', tool_name='Write',
@@ -50,12 +51,14 @@ def test_codex_native_stop_keeps_edit_and_readonly_turns_separate(development_se
     quiet = structured(call(server, 'handle_stop_event', event='Stop', stop_hook_active=False, turn_id='chat', **common))
     assert quiet.get('decision') != 'block' and not launches
     active = structured(call(server, 'handle_stop_event', event='Stop', stop_hook_active=False, turn_id='editing', **common))
-    assert active['decision'] == 'block' and len(launches) == 1
+    assert active['status'] == 'STOP_FALLBACK_INCOMPLETE' and 'decision' not in active
+    assert active['check_ref'] == recorded['development_check_ref'] and len(launches) == 1
 
 
 @pytest.mark.parametrize('refs', [[], ['query.py:2'], ['scanner-id'], 'stale', 'unread'])
 def test_mcp_evidence_error_recovers_without_saving_or_scanning(development_server, config, refs):
     server, root, hooks, launches = development_server
+    config.write_text('[agent]\naudit_business_logic=true\n')
     (root/'query.py').write_text('def query(db, value):\n    return db.execute(value)\n')
     args = dict(workspace_path=str(root))
     ref = call(server, 'begin_development_check', task_key='recovery', **args)['check_ref']
@@ -81,5 +84,6 @@ def test_mcp_evidence_error_recovers_without_saving_or_scanning(development_serv
     evidence = call(server, action['tool'], **action['arguments'])
     value['evidence_refs'] = [evidence['evidence_ref']]
     result = call(server, 'submit_development_review', expected_seq=1, observations=[value], **args)
-    assert result['total'] == 1 and result['next_action']['tool'] == 'get_development_risks'
+    assert result['review_saved'] and result['next_action']['tool'] == 'get_development_risks'
+    assert call(server, 'get_development_risks', **args)['total'] == 1
     assert not launches

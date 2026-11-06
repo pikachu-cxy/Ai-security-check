@@ -17,6 +17,7 @@ from .models import Finding
 from .redactor import SecretRedactor
 from .scan_request import relative_path
 from .tasks.durable import SignedRecords
+import sqlite3
 from .performance_trace import span
 
 
@@ -34,6 +35,7 @@ class Observation(BaseModel):
     severity: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNRATED']
     decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
     rationale: str = Field(min_length=1, max_length=2000)
+    report_text: str | None = Field(default=None, min_length=1, max_length=3000)
     # Empty lists are rejected by the domain with an actionable recovery step.
     evidence_refs: list[str] = Field(max_length=20)
     same_issue_as: str | None = Field(default=None, max_length=160)
@@ -46,6 +48,7 @@ class ScannerReview(BaseModel):
     scan_id: str = Field(min_length=1, max_length=160)
     decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
     rationale: str = Field(min_length=1, max_length=2000)
+    report_text: str | None = Field(default=None, min_length=1, max_length=3000)
     evidence_refs: list[str] = Field(max_length=20)
 
 
@@ -65,6 +68,7 @@ class ReviewSubmission(BaseModel):
     workspace_path: str | None = None
     session_ref: str | None = None
     business_reviews: list[BusinessReview] | None = None
+    return_risks: bool = False
 
 
 def review_input_failure(arguments, *, require_workspace=False):
@@ -230,7 +234,6 @@ class DevelopmentRisks:
         scan = ReadOnlySQLiteStore(Path(check['scan_path'])).get_scan(check['scan_id'])
         require(scan is not None and Path(scan['target_profile']['path']).resolve() == self.root,
                 'DEVELOPMENT_RISK_SCAN_UNAVAILABLE')
-        require(len(scan['findings']) <= 100, 'DEVELOPMENT_RISK_LIMIT')
         for original in scan['findings']:
             # Scanner identity is occurrence-specific. Never group by CWE/title alone.
             identity = original.get('fingerprint') or original['id']
@@ -265,16 +268,17 @@ class DevelopmentRisks:
         with self.store.transaction() as db:
             self.publish_scan(db, self.current_check())
 
-    def submit(self, observations, expected_seq, *, business_reviews=()):
+    def submit(self, observations, expected_seq, *, business_reviews=(), return_risks=False):
         try:
-            return self._submit(observations, expected_seq, business_reviews=business_reviews)
+            return self._submit(observations, expected_seq, business_reviews=business_reviews,
+                                return_risks=return_risks)
         except DevelopmentRiskError as error:
             if not hasattr(error, 'recovery'):
                 error.recovery = dict(tool='get_development_check', arguments=dict(
                     check_ref=self.ref, workspace_path=str(self.root)))
             raise
 
-    def _submit(self, observations, expected_seq, *, business_reviews=()):
+    def _submit(self, observations, expected_seq, *, business_reviews, return_risks):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
         values = [(ScannerReview if 'issue_key' not in v else Observation).model_validate(v)
                   for v in observations]
@@ -369,8 +373,10 @@ class DevelopmentRisks:
                     status='OPEN', observations=[], assessments=[], repairs=[]))
                 assessment = dict(decision=value.decision, rationale=safe(value.rationale),
                     evidence_refs=value.evidence_refs, source_hashes={e['file_path']:e['sha256'] for e in evidence},
-                    dirty_seq=expected_seq, scan_id=check.get('scan_id') if value.same_issue_as else None,
+                    dirty_seq=expected_seq, scan_id=check.get('scan_id'),
                     finding=finding)
+                if value.report_text and value.decision == 'CONFIRMED':
+                    assessment['report_text'] = safe(value.report_text)
                 if assessment not in risk['assessments']:
                     require(len(risk['assessments']) < 64, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                     risk['assessments'].append(assessment)
@@ -381,7 +387,6 @@ class DevelopmentRisks:
                 if obs not in risk['observations']:
                     require(len(risk['observations']) < 128, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                     risk['observations'].append(obs)
-            require(len(row['risks']) <= 100, 'DEVELOPMENT_RISK_LIMIT')
             # Check again before publication: path events during evidence reads invalidate submission.
             require(self.current_check()['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
             # Revalidate every submitted evidence receipt before committing the batch.
@@ -418,18 +423,35 @@ class DevelopmentRisks:
                                                has_development_review=True))
             self.store._put(db, self.ref, row)
         from .development_reporting import reporting
-        result = self.get(include_history=False)
+        version = (expected_seq, check.get('scan_id'))
+        reread = reporting(self.ref, self.root, after_review=True)['next_action']
+        reread['arguments'].update(view='batch', expected_seq=expected_seq, scan_id=version[1])
+        try:
+            result = self.get(offset=0, limit=20 if return_risks else 5, include_history=False,
+                              batch_version=version)
+        except (ValueError, OSError, sqlite3.Error):
+            return dict(review_saved=True, reread_required=True, post_commit_read=False,
+                        next_action=reread)
         from .performance_trace import review_event
         review_event('saved', check, result['review_progress'])
+        if return_risks and result.get('candidates_ready') and (
+                result['dirty_seq'], result['scan_id']) == (expected_seq, check.get('scan_id')):
+            result.update(review_saved=True, post_commit_read=True, reread_required=False)
+            return result
         result['reporting'] = reporting(self.ref, self.root, after_review=True)
-        result['next_action'] = result['reporting']['next_action']
+        result['next_action'] = result['reporting']['next_action'] = reread
         return result
 
-    def get(self, offset=0, limit=5, *, include_history=True):
+    def get(self, offset=0, limit=5, *, include_history=True, review_only=False, batch_version=None):
         require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
                 'DEVELOPMENT_RISK_PAGE_INVALID')
-        row = self.load()
         check = self.current_check()
+        if batch_version is not None:
+            require(batch_version == (check['dirty_seq'], check.get('scan_id')),
+                    'DEVELOPMENT_RISK_VERSION_STALE')
+        row = check.get('security_result') or self.load()
+        require(row['owner'] == self.development.owner and
+                row['root_identity'] == root_identity(self.root), 'DEVELOPMENT_RISK_OWNER_MISMATCH')
         # Missing/stale projection is unknown, never a successful empty page.
         if ((check.get('finish_requested') and check['state'] in {'QUEUED', 'RUNNING'}) or
                 (check.get('scan_id') and (row.get('imported_scan_id') != check['scan_id'] or
@@ -443,7 +465,18 @@ class DevelopmentRisks:
                 next_action=dict(tool='get_development_check' if failed else 'wait_development_check',
                     arguments=dict(check_ref=self.ref, workspace_path=str(self.root))),
                 scanner_run=False, repair_authorized=False)
+        if review_only:
+            from .development_views import review_page
+            return review_page(self, check, row, review_progress(check, row), offset, limit)
         risks = list(row['risks'].values())
+        if batch_version is not None:
+            seq, scan = batch_version
+            # Earlier business assessments recorded a sequence only.
+            legacy_batch = {v.get('scan_id') for v in row['reviews'] if v['dirty_seq'] == seq} == {scan}
+            risks = [r for r in risks if any(o['source'] == 'SCANNER' and o.get('scan_id') == scan
+                                            for o in r['observations']) or any(
+                a['dirty_seq'] == seq and (a.get('scan_id') == scan or
+                    (legacy_batch and a.get('scan_id') is None)) for a in r['assessments'])]
         items = [dict(id=r['id'], finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
                       disposition=r.get('disposition', 'ACTIVE'),
                       reminder_suppressed=r.get('disposition', 'ACTIVE') != 'ACTIVE' or r['decision'] == 'DISMISSED'
@@ -457,7 +490,7 @@ class DevelopmentRisks:
         from .development_reporting import reporting
         next_offset = offset+limit if offset+limit < len(risks) else None
         report = reporting(self.ref, self.root, offset=next_offset)
-        return dict(contract='development-risks-v1', check_ref=self.ref,
+        result = dict(contract='development-risks-v1', check_ref=self.ref,
                     candidate_status='AVAILABLE', candidates_ready=True,
                     scan_id=check.get('scan_id'), dirty_seq=check['dirty_seq'],
                     review_progress=review_progress(check, row),
@@ -467,6 +500,10 @@ class DevelopmentRisks:
                     review_version_count=len(row['reviews']), history_included=include_history,
                     decision_policy='EVIDENCE_BACKED_HOST_REVIEW', scanner_run=False,
                     source_freshness='NOT_RECHECKED_ON_READ', repair_authorized=False)
+        if batch_version is not None:
+            from .development_views import batch_report_page
+            return batch_report_page(result, check)
+        return result
 
     def prepare_fix(self, risk_id, proposal, preserve, evidence_refs, user_requested, *,
                     impact_summary, critical_unknowns, repair_paths=None):

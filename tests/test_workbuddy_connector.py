@@ -44,6 +44,9 @@ def test_edit_records_without_scan_and_stop_does_not_cross_turn(check, monkeypat
     assert owner == session_owner('workbuddy', 'wb-chat')
     service = DevelopmentCheckService(runtime, core.store, owner=owner, scan_path_provider=runtime.store.path,
                                       launcher=lambda *a: None)
+    assert handle(event(root, 'PreToolUse', tool_name='write_to_file',
+                        tool_input={'path': str(root/'app.ts')}), root=root, core=core) == {}
+    assert not service.store(root).rows()
     ref = service.begin(root, 'wb-task')['check_ref']
     handle(event(root, 'PostToolUse', tool_name='write_to_file', tool_use_id='write-1',
                  tool_input={'path': str(root/'app.ts')}), root=root, core=core)
@@ -54,7 +57,10 @@ def test_edit_records_without_scan_and_stop_does_not_cross_turn(check, monkeypat
     assert handle(event(root, 'Stop', generation_id='turn-two'), root=root, core=core) == {}
     assert handle(event(root, 'Stop', session_id='other-chat'), root=root, core=core) == {}
     monkeypatch.setattr(DevelopmentCheckService, '_wake', lambda *a: None)
-    assert handle(event(root, 'Stop'), root=root, core=core)['decision'] == 'block'
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
+    output = handle(event(root, 'Stop'), root=root, core=core)
+    assert 'decision' not in output and ref in output['systemMessage']
+    assert handle(event(root, 'Stop', stop_hook_active=True), root=root, core=core) == {}
     assert service.get(root, ref)['finish_requested']
     assert state['calls'] == 0
 
@@ -161,3 +167,14 @@ def test_windows_deep_workbuddy_home(tmp_path, monkeypatch):
         discover=lambda:dict(command='C:\\ASR\\security-check.exe',prefix=[],kind='FROZEN'))
     assert adapter.setup()['overall'] == 'CONFIGURED'
     assert adapter.setup()['overall'] == 'CONFIGURED'
+
+def test_workbuddy_opaque_shell_keeps_unknown_scope(check):
+    root, service, runtime, _ = check
+    core = HookCoordinator(runtime, service.hooks, task_audit_mode=True)
+    fields = dict(tool_name='execute_command', tool_use_id='opaque-edit',
+                  tool_input={'command': 'python helper.py'})
+    assert handle(event(root, 'PreToolUse', **fields), root=root, core=core) == {}
+    handle(event(root, 'PostToolUse', **fields), root=root, core=core)
+    rows = [r for r in service.store(root).rows() if r.get('kind') == 'check']
+    assert len(rows) == 1 and rows[0]['scope_unknown']
+    assert not rows[0]['observed_paths'] and not rows[0].get('file_watch')

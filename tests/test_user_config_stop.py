@@ -178,7 +178,8 @@ from test_global_integration import structured, projects, installed
 from test_development_delivery_mcp import prepare
 
 
-def test_codex_native_stop_dispatches_and_returns_wire_continuation(development_server, monkeypatch):
+def test_codex_native_stop_timeout_notifies_without_agent_poll(development_server, monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
     import asyncio
     from test_development_check import DevelopmentCheckService
     server, root, hooks, launches = development_server
@@ -186,11 +187,9 @@ def test_codex_native_stop_dispatches_and_returns_wire_continuation(development_
     monkeypatch.setattr(DevelopmentCheckService, '_wake', lambda self, store: launches.append(str(store.root)))
     response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop',
         workspace_path=str(root), session_id='delivery-session', stop_hook_active=False, turn_id='turn')))
-    assert structured(response)['status'] == 'STOP_FALLBACK_CONTINUATION'
+    assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
     wire = json.loads(response.content[0].text)
-    assert wire['decision'] == 'block' and ref in wire['reason']
-    for instruction in ['提交成功后必须从 offset=0 重新读取', '问题', '可能影响', '建议修复', '尚未确认']:
-        assert instruction in wire['reason']
+    assert 'decision' not in wire and ref in wire['systemMessage']
     assert len(launches) == 1
     assert call(server, 'get_development_check', workspace_path=str(root), check_ref=ref,
                 session_ref=token)['finish_requested']
@@ -533,3 +532,26 @@ def test_failed_stop_notices_once_without_blocking_and_new_edit_recovers(check):
     assert fallback(service.hooks, root, OWNER, service=fresh, turn_id='turn') is None
     service.record(root, ref, ['app.ts'])
     assert fallback(service.hooks, root, OWNER, service=service, turn_id='next')['decision'] == 'block'
+
+@pytest.mark.parametrize('business', [False, True])
+def test_native_handoff_issues_evidence_and_consumes_edit_round(check, config, monkeypatch, business):
+    from security_runtime.development_risks import DevelopmentRisks
+    root, service, _, _ = check
+    config.write_text('[agent]\naudit_business_logic=' + str(business).lower())
+    (root / 'app.ts').write_text('eval(userInput);\n')
+    ref = service.begin(root, 'native-review')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    execute(check, monkeypatch)
+    args = dict(service=service, turn_id='turn', automatic=True)
+    result = fallback(service.hooks, root, OWNER, **args)
+    reason = result['reason']
+    assert result['decision'] == 'block' and '安全检查待复核' in reason and ref in reason
+    assert all(value not in reason for value in ('{', 'eval(', 'scan_id', 'submit_development_review'))
+    ledger = DevelopmentRisks(service, root, ref)
+    page = ledger.get()
+    assert f"版本 {page['dirty_seq']}" in reason
+    assert len(page['review_progress']['pending_scanner_ids']) == 1
+    assert page['review_progress']['pending_business_paths'] == (['app.ts'] if business else [])
+    assert 'eval(userInput)' in ledger.read('app.ts', 1, 1)['content']
+    assert fallback(service.hooks, root, OWNER, stop_hook_active=True, **args) is None
+    assert fallback(service.hooks, root, OWNER, **args) is None

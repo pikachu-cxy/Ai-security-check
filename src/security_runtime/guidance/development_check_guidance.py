@@ -18,13 +18,14 @@ REQUIRED 才执行对应分析，SKIPPED_BY_CONFIG 表示按配置跳过，不�
 静态风险由产品独立保存；历史 Agent 结论不能当作新版本复核。以下 Agent 复核要求只适用于开启的项。
 用户另行明确请求专项审计时走专项流程，不伪造自动检查已经完成。
 
-正常开发仍主动 complete_development_check 并读取结果。支持的 Codex/Cursor 原生 Stop 会按配置
+原生自动收尾时，普通编辑由 Hook 记录路径并等待扫描。Codex 收到“安全检查待复核”时，Hook 已提示用户；下一步直接取证，省略收到待办的进度回复。用本会话 session_ref、提示中的检查编号（check_ref）和当前工作区按会话提供的调用示例直接取证。Codex 全局入口为 mcp__ai_security_runtime__development_review，传 operation="get_development_risks" 和 arguments（workspace_path、session_ref、check_ref、view="review"），从第一页读取本批待办和证据；核对 dirty_seq 与提示版本，使用实际 scan_id 和取证引用按配置完成复核。版本不符时报告原批次已变化，不猜测替代。WorkBuddy 沿原交接包处理。普通无待办开发无需主动调用安全 MCP。
+手动模式下主动 complete_development_check 并读取结果。兼容 Stop 会按配置
 对本回合实际发生修改、且明确归属的轻量记录补交遗漏检查，或继续本轮已触发的续接；
 只读回合不因旧检查未收尾而触发 Stop。仅可能写入、未记录新变更的 Shell 操作也不重启旧检查。
 已排队不重复提交，等待/续接有总预算；超时、失败或取消如实保留未完成状态。
 读取和提供续接提示都不证明已经报告或用户已看到。配置关闭 Stop 时不影响正常主动收尾。
 Stop 续接不是简略报告模式：仍使用本方法的风险标题与四段格式。接口返回 reporting 时遵循其
-说明；submit_development_review 成功后按 next_action 从 offset=0 重新读取风险与处置，沿
+说明；submit_development_review 成功后使用 post_commit_read=true 的提交后重读页，否则从 offset=0 重新读取风险与处置，沿
 next_offset 读取完全部相关分页，不用提交响应预览或提交前的数据代替。读取失败说明缺口。
 两项 Agent 分析关闭时不提交复核，但仍读取静态风险及处置，明确候选来源，不冒充 Agent 确认。
 
@@ -38,14 +39,16 @@ scope_unknown、未记录路径可能性和文件监听诊断仅为观测信息�
 已记录文件存在扫描失败、未扫描文件、版本过期或未完成复核时，仍如实说明实际缺口。
 Agent 可按需读取关联文件审计业务逻辑；证据读取不扩大静态扫描范围。
 验收或明确查询状态时可回复“本次已记录文件的静态扫描及复核已完成，无待处理风险”。
-普通开发零待处理风险且已完成时保持静默，不额外追加安全说明。
+普通开发本次扫描零候选、无其他发现且检查完整时静默。有候选时按保存后的本批结论回复：
+真实风险给出详情；技术复核判为 DISMISSED 的误报只概述数量，混合结果也只展开真实风险。
+证据不足或仍有检查缺口时说明缺口，用户暂缓或排除不计入误报。
 
 ## 能力与会话
 
 普通开发不以 get_runtime_info 为前置调用，也不因新任务或新聊天重复安装校验。
 直接使用当前连接提供的 development_check 及其四项操作：
 begin_development_check、record_development_changes、finish_development_check、get_development_check。
-读取或复用随安装交付的 core 与本方法；缺少方法才取 get_runtime_guidance(topic)。
+读取或复用随安装交付的 core 与本方法；缺少方法才取 get_runtime_guidance(topic)。Codex/WorkBuddy 全局分组调用 runtime_status，传 {"operation":"get_runtime_guidance","arguments":{"topic":"所需主题"}}。
 仅在用户查询版本、连接缺失/不兼容或排查升级问题时调用 get_runtime_info。
 轻量操作缺失时说明轻量核查不可用，
 保留用户开发授权，不自动改走全项目扫描或创建严格审计基线。
@@ -72,7 +75,9 @@ SIGNATURE_MISMATCH 时用当前原生上下文原样重试；不可读则保留�
 “不运行样例/项目”“不安装依赖”“不修改现有文件”不等于禁止静态检查。只读任务本身不扫描，
 也不因这段指导扩大检查范围；意图有实质歧义时先结合上下文确认，不能凭假设忽略用户限制。
 
-## 编辑与收尾
+会话声明由 Git pre-commit 检查时，普通开发直接完成回复，静态检查在提交时针对暂存版本运行。
+
+## 手动模式的编辑与收尾
 
 1. 实际源码/配置开发开始时调用 begin_development_check，task_key 使用本次工作的短稳定标识，
    不含提示词或源码。该步骤只建立有界元数据，不读取源码、不扫描。已有本会话 Hook 返回的
@@ -234,8 +239,8 @@ review_progress 和处置；不为同一页再调 get_development_risks。next_o
 一次读取，最多 20 个窗口，每个最多 80 行；不同时传 file_path。返回 evidence 数组中的实际引用。
 相同窗口去重，服务端按顺序保存证据，不启动并发写；版本变化仍拒绝，提交仍核验实际源码。
 读取失败可能留有证据收据，不代表复核已保存。旧连接缺少 windows 参数时沿单窗口读取。
-submit_development_review 成功只返回保存回执和复核进度；仍须从 offset=0 读取最终风险及处置。
-代码、文档和生成索引全部写完后，在最终回复前主动完成本批收尾及候选复核，避免把正常收尾留给 Stop。
+接口支持时优先传 submit_development_review(return_risks=true)。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项提交面向用户的 report_text；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
+自动模式由 Stop 合并收尾。手动模式在代码、文档和生成索引写完后主动完成收尾。
 
 ### 统一风险保存、复核和修复
 

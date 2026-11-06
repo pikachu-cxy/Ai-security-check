@@ -62,6 +62,44 @@ def scanner(sample, monkeypatch):
     return finding
 
 
+def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, monkeypatch):
+    root, service, ref, risks = sample
+    finding = scanner(sample, monkeypatch)
+    store = service.store(root)
+    for scan, count in [('previous', 100), ('current', 14)]:
+        findings = [dict(finding, id=f'{scan}-{i}', fingerprint=f'{scan}-{i}') for i in range(count)]
+        monkeypatch.setattr('security_runtime.storage.ReadOnlySQLiteStore.get_scan',
+                            lambda *_: dict(target_profile=dict(path=str(root)), findings=findings))
+        with store.transaction() as db:
+            check = store._get(db, ref)
+            store._put(db, ref, dict(check, scan_id=scan))
+        risks.sync_scanner()
+    before = risks.get()
+    pending = before['review_progress']['pending_scanner_ids']
+    assert before['total'] == 114 and len(pending) == 14
+    compact = risks.get(limit=20, review_only=True)
+    assert compact['total'] == 15 and compact['next_offset'] is None
+    assert {item['id'] for item in compact['candidates']} == set(pending)
+    assert compact['business_paths'] == ['query.py'] and compact['evidence']
+    evidence = risks.read('query.py', 1, 2)['evidence_ref']
+    batch = [dict(same_issue_as=key, scan_id='current', decision='DISMISSED',
+                  rationale='Synthetic test alert', evidence_refs=[evidence]) for key in pending]
+    new_risk = observation(risks)
+    reviews = [dict(file_path='query.py', rationale='Reviewed query construction',
+                    evidence_refs=[evidence], limitations=[])]
+    saved = risks.submit([*batch, new_risk], check['dirty_seq'], business_reviews=reviews, return_risks=True)
+    assert saved['post_commit_read'] and saved['view'] == 'batch' and saved['total'] == 15
+    assert risks.get()['total'] == 115
+    assert {r['id'] for r in saved['risks'] if r['decision'] == 'DISMISSED'} == set(pending)
+    assert saved['review_progress']['host_review_completed']
+    after = risks.get(limit=20, review_only=True)
+    assert after['total'] == 15 and not (after['candidates'] or after['business_paths'] or after['evidence'])
+    risks.submit([new_risk], check['dirty_seq'], business_reviews=reviews)
+    restored = DevelopmentRisks(service, root, ref).load()
+    assert len(restored['risks']) == 115
+    assert sum(r['decision'] == 'CONFIRMED' for r in restored['risks'].values()) == 1
+
+
 def test_ai_finding_persists_shared_finding_schema_without_scanner(sample):
     item, _ = submit(sample)
     root, service, ref, risks = sample
@@ -69,6 +107,26 @@ def test_ai_finding_persists_shared_finding_schema_without_scanner(sample):
     assert restored['id'] == item['id']
     assert Finding(**restored['finding']).scanner_sources == []
     assert restored['sources'] == ['HOST_REVIEW']
+
+
+def test_batch_report_is_saved_read_back_and_respects_disposition(sample, monkeypatch):
+    _, _, _, risks = sample
+    scanner(sample, monkeypatch)
+    risks.sync_scanner()
+    seq = risks.current_check()['dirty_seq']
+    value = observation(risks, same_issue_as='s1', report_text='SQL at query.py:2 — bind the name.')
+    coverage = [dict(file_path='query.py', rationale='Reviewed', limitations=[],
+                     evidence_refs=value['evidence_refs'])]
+    with pytest.raises(ValueError):
+        risks.submit([dict(value, evidence_refs=['invalid'])], seq, business_reviews=coverage)
+    page = risks.submit([value], seq, business_reviews=coverage, return_risks=True)
+    assert page['report_text'] == value['report_text']
+    key = page['risks'][0]['id']
+    assert risks.load()['risks'][key]['assessment']['report_text'] == page['report_text']
+    risks.disposition(key, 'DEFER', True)
+    assert risks.get(batch_version=(seq, 'scan-1'))['report_text'] == ''
+    with pytest.raises(ValueError, match='VERSION_STALE'):
+        risks.get(batch_version=(seq, 'another-scan'))
 
 
 def test_repeated_submission_is_idempotent(sample):
@@ -386,6 +444,10 @@ def test_mcp_compact_review_defaults_preserve_findings_and_full_access(sample):
         assert receipt['review_saved'] and receipt['reread_required']
         assert 'risks' not in receipt and receipt['next_action']['arguments']['offset'] == 0
         short = await call('get_development_risks', {})
+        combined = await call('submit_development_review', dict(
+            expected_seq=risks.current_check()['dirty_seq'], observations=[value], return_risks=True))
+        assert combined['post_commit_read'] and combined['review_saved']
+        assert combined['risks'] == short['risks'] and combined['next_offset'] == short['next_offset']
         full = await call('get_development_risks', dict(view='full'))
         assert short['risks'][0]['finding'] == full['risks'][0]['finding']
         assert short['review_progress'] == full['review_progress']

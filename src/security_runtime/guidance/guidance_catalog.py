@@ -12,7 +12,7 @@ TOPICS = ('core', 'runtime-workflow', 'task-review', 'risk-decisions', 'repair-i
           'development-check')
 _VERSIONS = dict(zip(TOPICS, ('runtime-guidance-core-v1', 'runtime-workflow-v3', 'quick-task-review-v3',
                             'risk-decisions-v2', 'repair-impact-v1', '1.0.0', 'development-check-v1')))
-_REFERENCES = dict(zip(TOPICS, ('SKILL.md', 'references/runtime-workflow.md',
+_REFERENCES = dict(zip(TOPICS, ('CORE.md', 'references/runtime-workflow.md',
     'references/quick-task-review-v3.md', 'references/risk-decisions.md',
     'references/repair-impact.md', 'references/deep-audit.md', 'references/development-check.md')))
 

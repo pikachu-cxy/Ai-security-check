@@ -31,6 +31,26 @@ def recent(root):
     return RecentHookStore().recent(root)['records']
 
 
+def test_global_stop_binds_diagnostic_from_single_routing_resolution(connected, projects, monkeypatch):
+    server, pool, _ = connected
+    root = projects[0]
+    resolve = pool.root
+    calls = []
+
+    def counted(claim, **options):
+        calls.append((claim, options))
+        return resolve(claim, **options)
+
+    monkeypatch.setattr(pool, 'root', counted)
+    claim = str(root/'src')
+    args = dict(event='Stop', workspace_path=claim, session_id='s', stop_hook_active=False)
+    result = asyncio.run(server.call_tool('handle_stop_event', args))
+    assert result.structuredContent['status'] == 'ALLOW_STOP'
+    assert calls == [(claim, {'allow_empty': True})]
+    row = recent(root)[0]
+    assert row['host_claim_status'] == 'VALID' and row['completed']
+
+
 def test_observed_edit_status_stays_specific_without_recording_routing_secrets():
     from security_runtime.recent_hooks import safe_fields
     result = safe_fields(dict(handler_status='DIRTY', handler_reason='OBSERVED_EDITS_RECORDED',

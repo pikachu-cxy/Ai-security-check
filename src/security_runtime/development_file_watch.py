@@ -57,6 +57,8 @@ class _Window:
         self.done = threading.Event()
         self.seen = set()
         self.last_activity = time.monotonic()
+        self.pending_tools = set()
+        self.quiet_since = None
         self.close_at = None
         from .target import TargetDetector
         self.ignored = {os.path.normcase(p) for p in TargetDetector().ignored}
@@ -95,6 +97,9 @@ class _Window:
 
     def record(self, changes):
         names, uncertain = self.paths(changes)
+        if names or uncertain:
+            # Rewrites of a path already recorded still interrupt quiet time.
+            self.quiet_since = time.monotonic()
         fresh = [p for p in names if p not in self.seen]
         if not fresh and not uncertain:
             return
@@ -127,15 +132,12 @@ class _Window:
                     self.record(changes)
                 now = time.monotonic()
                 if self.closing.is_set():
-                    # Native notification delivery is asynchronous. A 100 ms
-                    # empty poll does not mean the final writes have arrived.
-                    # Drain for the whole bounded settlement window, without
-                    # resetting its deadline on each incoming batch.
                     if self.close_at is None:
                         break
+                    if changes == 'timeout' and now - self.quiet_since >= SETTLE_SECONDS:
+                        break
                     if now >= self.close_at:
-                        if changes != 'timeout':
-                            _gap(self.store, self.ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=self.id)
+                        _gap(self.store, self.ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=self.id)
                         break
                 if now - self.last_activity > IDLE_SECONDS:
                     _gap(self.store, self.ref, 'FILE_WATCH_IDLE_EXPIRED', watch_id=self.id, status='EXPIRED')
@@ -173,13 +175,14 @@ class _Window:
                         _windows.pop(_key(self.store, self.ref), None)
 
 
-def start_window(store, ref, owner, *, backend_factory=None):
+def start_window(store, ref, owner, *, backend_factory=None, invocation=None):
     store.load(ref, owner)
     key = _key(store, ref)
     with _lock:
         current = _windows.get(key)
         if current and current.thread.is_alive() and not current.closing.is_set():
             current.last_activity = time.monotonic()
+            current.pending_tools.add(invocation)
             return 'ACTIVE'
         if len(_windows) >= MAX_WINDOWS:
             _gap(store, ref, 'FILE_WATCH_CAPACITY_EXCEEDED')
@@ -190,6 +193,7 @@ def start_window(store, ref, owner, *, backend_factory=None):
         window = None
         try:
             window = _Window(store, ref, owner, backend_factory or _backend)
+            window.pending_tools.add(invocation)
             with store.transaction() as db:
                 row = store._get(db, ref)
                 watch = dict(contract=CONTRACT, id=window.id, status='ACTIVE',
@@ -212,24 +216,32 @@ def start_window(store, ref, owner, *, backend_factory=None):
             return 'FAILED'
 
 
-def active(store, ref, owner):
+def active(store, ref, owner, *, completed=None):
     with _lock:
         window = _windows.get(_key(store, ref))
-        return bool(window and window.owner == owner and window.thread.is_alive()
-                    and not window.closing.is_set())
+        if not (window and window.owner == owner and window.thread.is_alive()
+                and not window.closing.is_set()):
+            return False
+        if completed is not None and completed in window.pending_tools:
+            window.pending_tools.remove(completed)
+            window.quiet_since = time.monotonic()
+        return True
 
 
-def stop_window(store, ref, owner):
+def stop_window(store, ref, owner, *, deadline=None):
     row = store.load(ref, owner)
     with _lock:
         window = _windows.get(_key(store, ref))
         if window is not None:
             if window.close_at is None:
-                window.close_at = time.monotonic()+SETTLE_SECONDS
+                now = time.monotonic()
+                if window.pending_tools or window.quiet_since is None:
+                    window.quiet_since = now
+                window.close_at = deadline if deadline is not None else now + 2 * SETTLE_SECONDS
             window.closing.set()
     if window is not None:
         # No workspace lock is held while waiting for the last persisted batch.
-        if not window.done.wait(SETTLE_SECONDS+1):
+        if not window.done.wait(max(0, window.close_at - time.monotonic())):
             _gap(store, ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=window.id)
     elif row.get('file_watch', {}).get('status') == 'ACTIVE':
         _gap(store, ref, 'FILE_WATCH_INTERRUPTED', status='INTERRUPTED')
@@ -249,7 +261,6 @@ def _close(windows):
                  watch_id=window.id, status='INTERRUPTED')
         except (OSError, ValueError):
             pass
-        window.close_at = time.monotonic()+SETTLE_SECONDS
         window.closing.set()
     for window in windows:
         window.done.wait(SETTLE_SECONDS+1)

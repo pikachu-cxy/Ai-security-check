@@ -47,15 +47,20 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation],
                                   workspace_path: str | None = None, session_ref: str | None = None,
-                                  business_reviews: list[BusinessReview] | None = None) -> dict:
-        """Save an atomic review batch without scanning. Existing alerts require only same_issue_as, current scan_id, decision, rationale and evidence_refs; location comes from that original scan. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
+                                  business_reviews: list[BusinessReview] | None = None,
+                                  return_risks: bool = False) -> dict:
+        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Existing alerts require only same_issue_as, current scan_id, decision, rationale and evidence_refs; location comes from that original scan. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
         values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
         try:
             from ..development_views import review_receipt
-            return review_receipt(risks(check_ref, workspace_path, session_ref).submit(
-                values, expected_seq, business_reviews=coverage))
+            saved = risks(check_ref, workspace_path, session_ref).submit(
+                values, expected_seq, business_reviews=coverage, return_risks=return_risks)
+            result = saved if saved.get('review_saved') else review_receipt(saved)
+            if session_ref and result.get('next_action'):
+                result['next_action']['arguments']['session_ref'] = session_ref
+            return result
         except DevelopmentRiskError as error:
             action = getattr(error, 'recovery', None)
             if action is None:
@@ -81,10 +86,30 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
                               session_ref: str | None = None, offset: int = 0, limit: int = 20,
-                              include_history: bool = False, view: Literal['summary', 'full'] = 'summary') -> dict:
-        """Read up to 20 risks with dispositions and review progress. Summary omits duplicate assessment findings/hashes, never candidates or decisions. view=full restores details; include_history=true adds historical review batches. Follow next_offset; no scan, disk revalidation or repair authorization."""
-        from ..development_views import risk_summary
-        result = risks(check_ref, workspace_path, session_ref).get(offset, limit, include_history=include_history)
+                              include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch'] = 'summary',
+                              include_evidence: bool = False, expected_seq: int | None = None,
+                              scan_id: str | None = None) -> dict:
+        """For pending review, view=review reads current-scan candidates and bounded untrusted evidence. Continue the same view at next_offset. Obtain missing windows via read_development_risk_context. For a saved batch, use view=batch with its expected_seq and scan_id. For historical lookup, summary/full read ledger risks and dispositions; include_history adds historical batches, include_evidence adds bounded evidence."""
+        from ..development_views import pending_review_context, risk_summary
+        service = risks(check_ref, workspace_path, session_ref)
+        from ..development_risks import require
+        if view == 'batch':
+            require(expected_seq is not None and not include_history and not include_evidence,
+                    'DEVELOPMENT_RISK_INPUT_INVALID')
+            result = service.get(offset, limit, include_history=False, batch_version=(expected_seq, scan_id))
+            if session_ref and result.get('next_action'):
+                result['next_action']['arguments']['session_ref'] = session_ref
+            return result
+        require(expected_seq is None and scan_id is None, 'DEVELOPMENT_RISK_INPUT_INVALID')
+        if view == 'review':
+            require(not include_history, 'DEVELOPMENT_RISK_INPUT_INVALID')
+            return service.get(offset, limit, include_history=False, review_only=True)
+        result = service.get(offset, limit, include_history=include_history)
+        if include_evidence and result.get('candidates_ready'):
+            _, result['evidence'] = pending_review_context(service, result)
+            current = service.current_check()
+            require((current['dirty_seq'], current.get('scan_id')) == (result['dirty_seq'], result['scan_id']),
+                    'DEVELOPMENT_RISK_VERSION_STALE')
         if view == 'full':
             return dict(result, view='full')
         result = risk_summary(result)

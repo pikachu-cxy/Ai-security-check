@@ -145,25 +145,29 @@ class RulePackManager:
             raise ValueError('Rule pack file budget exceeded')
         files += [p for p in (io_root/'catalog.json',io_root/'capabilities.json',io_root/'LICENSE',io_root/'NOTICE') if p.is_file()]
         digest = hashlib.sha256()
+        rule_bytes = 0
         for file in files:
             if file.is_symlink() or file.is_junction() or file.stat().st_size > 1_000_000:
                 raise ValueError('Invalid rule pack input')
-            digest.update(file.relative_to(io_root).as_posix().encode());digest.update(file.read_bytes())
-        return str(path),digest.digest()
+            content = file.read_bytes()
+            digest.update(file.relative_to(io_root).as_posix().encode())
+            digest.update(content)
+            if file.suffix.lower() in {'.yml', '.yaml'}:
+                rule_bytes += len(content)
+        return str(path), digest.digest(), rule_bytes
 
     def _cached_resolve(self, descriptor, path, **kwargs):
         from .scanner_cache import preparation_bucket, workspace_key
         bucket = preparation_bucket('rule_pack')
         self._resolved_cache, self._cache_lock = bucket.values, bucket.lock
         with self._cache_lock:
-            key = (workspace_key(), repr(descriptor), self._content_identity(path), tuple(sorted(kwargs.items())))
+            location, content_hash, rule_bytes = self._content_identity(path)
+            key = (workspace_key(), repr(descriptor), (location, content_hash), tuple(sorted(kwargs.items())))
             self.cache_hit = key in self._resolved_cache
             if self.cache_hit:
                 return self._resolved_cache[key]
-            result = self._validate(descriptor, path, content_identity=key[2][1], **kwargs)
-            io_root = native_io_path(path)
-            size=sum(p.stat().st_size for p in (*io_root.rglob('*.yml'),*io_root.rglob('*.yaml')))
-            if len(result.catalog)<=10000 and size<=32_000_000:
+            result = self._validate(descriptor, path, content_identity=content_hash, **kwargs)
+            if len(result.catalog) <= 10000 and rule_bytes <= 32_000_000:
                 if len(self._resolved_cache) >= 8:
                     self._resolved_cache.pop(next(iter(self._resolved_cache)))
                 self._resolved_cache[key] = result

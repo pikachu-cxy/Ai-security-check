@@ -12,6 +12,7 @@ from security_runtime.mcp_server import create_server
 from security_runtime.runtime import SecurityRuntime
 from security_runtime.storage import SQLiteStore
 from security_runtime.tasks.ownership import issue_session_ref
+from test_development_check import check, execute
 from test_global_integration import installed, projects, structured  # noqa: F401
 
 
@@ -46,6 +47,86 @@ def development_server(projects, tmp_path, monkeypatch):
 def call(server, name, **arguments):
     result = server._tool_manager.get_tool(name).fn(**arguments)
     return asyncio.run(result) if inspect.isawaitable(result) else result
+
+
+def test_single_scan_101_candidates_paginated_review(check, tmp_path, monkeypatch):
+    from security_runtime.tasks.ownership import session_owner
+    root, service, runtime, counters = check
+    policy = tmp_path/'policy.toml'
+    policy.write_text('[agent]\nreview_scanner_findings=true\naudit_business_logic=false\n')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(policy))
+    session = 'large-batch'
+    service.owner = session_owner('codex', session)
+    lines = [f'export function run{i}(input{i}: string) {{ return eval(input{i}); }}'
+             for i in range(101)]
+    (root/'app.ts').write_text('\n'.join(lines) + '\n')
+    ref = service.begin(root, 'single-scan')['check_ref']
+    service.record(root, ref, ['app.ts'])
+    execute(check, monkeypatch)
+    server = create_server(runtime, hook_coordinator=HookCoordinator(runtime, service.hooks),
+        workspace_binding=WorkspaceBinding('large', str(root), str(root), 'codex', 'PROJECT', ''),
+        global_mode=False)
+    args = dict(workspace_path=str(root), check_ref=ref,
+                session_ref=issue_session_ref(service.hooks, root, 'codex', session))
+
+    def tool(name, **kwargs):
+        response = asyncio.run(server.call_tool(name, dict(args, **kwargs)))
+        return structured(response)
+
+    def read_pages(page):
+        items, sizes = [], []
+        while True:
+            assert page['scan_id'] == scan_id and page['total'] == 101
+            sizes.append(len(page['risks']))
+            items.extend(page['risks'])
+            if page['next_offset'] is None:
+                break
+            route = page['next_action']['arguments']
+            if page['view'] == 'batch':
+                assert (route['view'], route['scan_id'], route['expected_seq']) == ('batch', scan_id, first['dirty_seq'])
+            page = structured(asyncio.run(server.call_tool('get_development_risks', {**args, **route})))
+        assert sizes == [20, 20, 20, 20, 20, 1]
+        assert len({r['id'] for r in items}) == 101
+        return items
+
+    first = tool('get_development_risks', include_evidence=True)
+    assert first['evidence'] and all(item['evidence_ref'] for item in first['evidence'])
+    scan_id = first['scan_id']
+    raw = runtime.store.get_scan(scan_id)['findings']
+    assert len(raw) == 101
+    risks = read_pages(first)
+    assert {o['scanner_id'] for r in risks for o in r['scanner_observations']} == {f['id'] for f in raw}
+    review_ids, offset = [], 0
+    while offset is not None:
+        page = tool('get_development_risks', view='review', offset=offset)
+        assert page['scan_id'] == scan_id and page['total'] == 101
+        assert 'reporting' not in page and 'risks' not in page
+        assert page['evidence'] and all(w['evidence_ref'] for w in page['evidence'])
+        review_ids.extend(c['id'] for c in page['candidates'])
+        offset = page['next_offset']
+    assert review_ids == [r['id'] for r in risks]
+    windows = [tool('read_development_risk_context', file_path='app.ts', start_line=start,
+                    end_line=end) for start, end in [(1, 50), (51, 101)]]
+    windows = first['evidence'] + windows
+    batch = []
+    for risk in risks:
+        line = risk['finding']['line_start']
+        evidence = next(w for w in windows if w['line_start'] <= line <= w['line_end'])
+        assert lines[line-1] in evidence['content']
+        batch.append(dict(same_issue_as=risk['id'], scan_id=scan_id, decision='CONFIRMED',
+            rationale=f'run{line-1} evaluates its string argument directly.',
+            evidence_refs=[evidence['evidence_ref']]))
+    for start, remaining in [(0, 51), (50, 1), (100, 0)]:
+        saved = tool('submit_development_review', observations=batch[start:start+50],
+                     expected_seq=first['dirty_seq'], return_risks=True)
+        assert saved['post_commit_read']
+        assert len(saved['review_progress']['pending_scanner_ids']) == remaining
+        if remaining:
+            page = tool('get_development_risks', view='review', offset=101-remaining)
+            assert page['candidates'][0]['id'] == review_ids[101-remaining]
+    assert saved['review_progress']['host_review_completed']
+    assert all(r['decision'] == 'CONFIRMED' for r in read_pages(saved))
+    assert counters['calls'] == 1
 
 
 def test_begin_record_close_and_read_never_capture_workspace(development_server):

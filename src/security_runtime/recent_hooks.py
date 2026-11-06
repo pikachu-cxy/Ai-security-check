@@ -423,7 +423,16 @@ def observe(stage, **values):
             observation.available = False
 
 
-def instrument(call, *, schemas, resolve_root, adapter=None):
+def bind_current_workspace(root):
+    observation = CURRENT.get()
+    if observation is not None:
+        try:
+            observation.bind(root)
+        except Exception:
+            observation.available = False
+
+
+def instrument(call, *, schemas, resolve_root, adapter=None, routed_stop=False):
     """Wrap transport before validation; nested Global→project calls share a row."""
     if adapter is None:
         from .host_event_adapters import event_adapter
@@ -439,18 +448,22 @@ def instrument(call, *, schemas, resolve_root, adapter=None):
         token = CURRENT.set(observation)
         try:
             try:
-                root = resolve_root(arguments)
-                if root is not None:
-                    observation.bind(root)
-            except Exception:
-                pass  # Remains explicitly unbound; no routing/admission grant.
-            try:
                 diag = adapter.validate_claims(arguments, events[name], schemas[name])
                 observation.record.update(safe_fields(diag))
                 if diag['host_claim_status'] == 'INVALID':
                     observation.stage('CLAIMS_REJECTED')
             except Exception:
                 observation.available = False
+            # A valid global Stop binds when the router resolves its workspace.
+            # Invalid claims still get the original best-effort diagnostic partition.
+            if not (routed_stop and name == 'handle_stop_event'
+                    and observation.record['host_claim_status'] == 'VALID'):
+                try:
+                    root = resolve_root(arguments)
+                    if root is not None:
+                        observation.bind(root)
+                except Exception:
+                    pass  # Diagnostic binding grants no routing authority.
             try:
                 result = await call(name, arguments, *args, **kwargs)
             except BaseException:

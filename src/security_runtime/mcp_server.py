@@ -109,7 +109,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
     def handle_before_hook_event(event: str, workspace_path: str, session_id: str, tool_name: str,
                                  turn_id: str, tool_use_id: str, tool_input: dict | str | None = None,
                                  permission_mode: str | None = None) -> dict:
-        """Native PreToolUse only: register bounded task-window file notifications before a possible write. No source inventory, baseline, scanner, process wrapping or target changes. Read-only tools do not start a window."""
+        """Native PreToolUse only: prepare the edit check. Complete Codex patches supply their own paths; other possible writes start a bounded watcher. Read-only tools skip both."""
         diag, rejected, normalized = lifecycle_claims(dict(event=event, workspace_path=workspace_path,
             session_id=session_id, tool_name=tool_name, turn_id=turn_id, tool_use_id=tool_use_id,
             tool_input=tool_input, permission_mode=permission_mode), 'PreToolUse')
@@ -117,7 +117,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
         data = rejected or before_normalized_event(normalized, hook_coordinator)
         data = {**diag, **data}
         output = {'continue': True}
-        if data.get('file_watch', {}).get('status') != 'ACTIVE' and data.get('check_ref'):
+        if data.get('file_watch_start_failed'):
             output['hookSpecificOutput'] = dict(hookEventName='PreToolUse',
                 additionalContext='文件变更监听未能完整启动，保留原检查并在收尾说明实际范围缺口。')
         return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(output, ensure_ascii=False))])
@@ -141,7 +141,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
             root=Path(binding.root)
             token=issue_session_ref(hook_coordinator.store,root,'codex',session_id)
             data['task_session_ref']=token
-            data['hookSpecificOutput']['additionalContext']+='\n'+session_context(token)
+            data['hookSpecificOutput']['additionalContext']+='\n'+session_context(token, native_stop=task_audit_mode, workspace=root)
             if task_audit_mode:
                 from .development_continuation import context as delivery_context
                 from .tasks.ownership import session_owner
@@ -153,7 +153,7 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
     registry.harden(('handle_readiness_event',))
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
+    async def handle_stop_event(event: str, workspace_path: str, session_id: str, stop_hook_active: bool,
                           turn_id: str | None = None, permission_mode: str | None = None) -> dict:
         """Codex Stop: preserve authorized repair continuation, then apply configured bounded fallback to the focused development check. Read-only chats do not start checks."""
         from .host_event_runtime import handle_normalized_event
@@ -169,9 +169,10 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                 from .development_stop import fallback
                 from .tasks.ownership import session_owner
                 try:
-                    delivery = fallback(hook_coordinator.store, normalized.context.workspace,
+                    import asyncio
+                    delivery = await asyncio.to_thread(fallback, hook_coordinator.store, normalized.context.workspace,
                         session_owner('codex', session_id), stop_hook_active=stop_hook_active,
-                        offered=application.development_result_offers, turn_id=turn_id)
+                        offered=application.development_result_offers, turn_id=turn_id, automatic=True, session_id=session_id)
                 except (ValueError, OSError):
                     delivery = dict(status='STOP_FALLBACK_UNAVAILABLE', scanner_run=False,
                         systemMessage='安全检查兜底未完成，请查看配置或检查状态；原记录已保留。')

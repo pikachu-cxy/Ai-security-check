@@ -103,7 +103,7 @@ assert (package / 'python_downloads.json').is_file()
 from security_runtime.review_skill import ReviewSkillManager, skill_files
 assert 'references/runtime-workflow.md' in skill_files()
 assert 'references/deep-audit.md' in skill_files()
-assert '沉默和计划均不授权' in skill_files()['SKILL.md'].decode('utf-8')
+assert '沉默和计划均不授权' in skill_files()['CORE.md'].decode('utf-8')
 from security_runtime.compatibility import requirements, storage_contracts, TASK_REVIEW_TOOLS
 from security_runtime.guidance.guidance_catalog import TOPICS, get_runtime_guidance, manifest as guidance_manifest
 from security_runtime.tasks.security import method

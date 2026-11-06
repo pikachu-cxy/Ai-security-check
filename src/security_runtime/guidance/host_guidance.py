@@ -511,16 +511,16 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 用户明确禁止当前开发任务或持续禁止某项目/聊天扫描时，遵守其有效范围；范围不明时结合上下文判断，
 不能把“不运行样例/项目”或“本轮不修改现有文件”推断为禁止静态检查。
 默认检查 AI 编辑中已观测到的文件范围，不建立全项目基线，不盘点整个工作区。
-产品启动只校验连接、配置、绑定和签名会话路由，不要求产品比较基线 A，不因此盘点或扫描项目；组件和漏洞数据状态独立如实说明。
+产品启动校验连接与绑定；组件及漏洞数据状态单独核查。
 临时脚本、模拟项目、下载包和日志默认放在宿主系统临时目录的独占子目录，创建前确认在工作区外；无需用户选择或配置。
 正式源码、正式测试及项目配置留在项目内，未跟踪的新源码仍需检查；不可因名称像临时文件而跳过。
-此为 Agent 行为规则，不是进程沙箱；具体用法见 development-check 的“开发 Agent 临时文件规则”。
+临时文件规则详见 development-check。
 编辑 Hook 只记录路径，不扫描或唤醒后台进程；开发收尾时合并静态检查。保存结果绑定实际输入版本，范围未知不扩为全项目扫描。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
-普通开发直接使用已连接工具和随安装交付的 core、development-check 方法，不调用 get_runtime_info 作为开发前置步骤；
-安装/升级负责交付校验，连接负责提供实际工具。新聊天也不重复安装校验；缺少方法才取 get_runtime_guidance(topic)。
+原生自动收尾的普通开发无需读取 Skill 或方法文件，不调用 get_runtime_info 作为开发前置步骤；
+安装/升级负责交付校验，连接负责提供实际工具。新聊天也不重复安装校验；缺少方法才取 get_runtime_guidance(topic)。Codex/WorkBuddy 全局分组调用 runtime_status，传 {"operation":"get_runtime_guidance","arguments":{"topic":"所需主题"}}。
 显式审计、版本查询或连接异常排查时，核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；
-按版本、sha256 复用已读完整方法，构建或摘要变化时重新核对。不把安装校验当作当前扫描结果。
+不重复加载已读的同版本主题；仅在构建和 sha256 一致时复用，变化时重新核对。不把安装校验当作当前扫描结果。
 入口不可用时只复用同一构建/版本/摘要的完整本地 reference；无法核对则停止对应核查并说明缺口。
 指导不升级 Runtime；核查不可用不改变用户原开发授权。
 
@@ -528,7 +528,7 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 
 | 意图 | 必读方法 |
 | --- | --- |
-| 源码/配置开发 | [轻量编辑检查](references/development-check.md)，topic=development-check |
+| 手动开发检查或复核待办 | [轻量编辑检查](references/development-check.md)，topic=development-check |
 | 显式完整差异审计、已有严格任务 | [严格任务审计](references/quick-task-review-v3.md)，topic=task-review |
 | 显式扫描、候选调查 | [扫描工作流](references/runtime-workflow.md)，topic=runtime-workflow |
 | 风险提醒、误报或暂缓决定 | [风险交互](references/risk-decisions.md)，topic=risk-decisions |
@@ -541,7 +541,8 @@ AI 独立发现也可修复，关联扫描器发现后采用有证据的 AI 复�
 
 ## 不可省略的边界
 
-普通开发使用 observed-development-check-v1：begin_development_check 仅记元数据；
+Codex 收到复核待办才用原会话与检查编号按会话示例直接取证（Codex 全局工具 mcp__ai_security_runtime__development_review，operation=get_development_risks，view="review"），核对版本并按配置复核。WorkBuddy 使用原交接包。
+手动模式使用 observed-development-check-v1：begin_development_check 仅记元数据；
 record_development_changes 仅补录明确编辑路径，收尾入口请求后台合并检查，
 get_development_check 只读保存结果。已有本会话 Hook 的 check_ref 则沿用，不建立修改前基线。
 具备 development_check_delivery 能力时优先 complete_development_check，由产品选择等待预算；

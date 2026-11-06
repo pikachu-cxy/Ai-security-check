@@ -345,6 +345,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         metavar="{codex,cursor,kiro,workbuddy,codebuddy,qoder}")
     hooks_parser.add_argument("--path")
     hooks_parser.add_argument("--json", action="store_true")
+    hooks_parser.add_argument('--commit-only', action='store_true',
+        help='With install pre-commit: run ordinary Codex checks at Git commit instead of Stop for this repository')
     hooks_parser.add_argument('--gate', choices=['strict', 'report'], default='strict')
     hooks_parser.add_argument("--limit", type=int, default=16, help="Recent diagnostics count (1–32)")
     hooks_parser.add_argument("--unbound", action="store_true", help="Explicitly query unattributed Hook diagnostics")
@@ -987,6 +989,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             serve()
             return 0
         if args.command == "hooks":
+            if args.commit_only and (args.action != 'install' or args.hook != 'pre-commit'):
+                raise ValueError('--commit-only requires hooks install pre-commit')
             if args.action == 'generate-mcp-poc':
                 if args.hook != 'codex' or args.path is not None:
                     raise ValueError('MCP POC generation supports codex only, without --path; prints JSON without installing')
@@ -995,7 +999,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 return 0
             if args.hook == 'pre-commit':
                 from .hooks import GitHookManager
-                value = GitHookManager(Path(args.path) if args.path is not None else Path.cwd()).execute(args.action, args.gate)
+                value = GitHookManager(Path(args.path) if args.path is not None else Path.cwd()).execute(
+                    args.action, args.gate, commit_only=True if args.commit_only else None)
                 print(json.dumps(value, ensure_ascii=True))
                 return 0
             from .hook_adapters import HookIntegrationRegistry

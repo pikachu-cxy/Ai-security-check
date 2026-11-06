@@ -11,7 +11,7 @@
 | 宿主命令被误当编辑 | `shell_classification.py`、`codex_event_adapter.py`、`host_event_runtime.py` | `tests/test_shell_classification.py` 与 Hook 测试 |
 | 文件未采集、误采历史改动 | `development_file_watch.py`、`development_scope.py`、`development_check.py` | `tests/test_development_file_watch.py`、`tests/test_development_check.py` |
 | 重复扫描、后台任务迟迟不结束 | `development_check_worker.py`、`development_scheduler.py`、`development_check.py` | `tests/test_development_check.py`、`tests/test_development_check_wait.py` |
-| Stop 反复续接或结果未交付 | `development_stop.py`、`development_continuation.py`、`development_delivery.py` | `tests/test_user_config_stop.py` 与 development delivery 测试 |
+| 原生自动收尾、重复 Stop 或缺少复核证据 | `development_stop.py`、`development_continuation.py`、`development_delivery.py` | `tests/test_user_config_stop.py` 、`tests/test_workbuddy_connector.py` 与 development delivery 测试 |
 | 扫描范围、输入版本或取消 | `scan_request.py`、`scan_attempt.py`、`runtime.py` | `tests/test_scan_attempt.py`、`tests/test_explicit_scan_attempt.py` |
 | 扫描器执行、超时、结果归一化 | `scanners.py`、`processes.py`、`runtime.py`、`models.py` | 对应 scanner、runtime、dependency 测试与隔离语料 |
 | 规则选择、规则包或第三方许可 | `rules/`、`opengrep_rules.json`、`guidance/`，用符号索引找规则装载服务 | `tests/rules/`、`tests/rule_program/`；`LICENSES/` 和 `scripts/build/dependency_notices.py` |

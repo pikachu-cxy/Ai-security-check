@@ -481,7 +481,7 @@ class DevelopmentCheckService:
         """Read-only continuation. Never finish, rescan, or wake a worker."""
         if wait_seconds is None:
             wait_seconds = product_wait_seconds()
-        if type(wait_seconds) is not int or not 0 <= wait_seconds <= MAX_PRODUCT_WAIT_SECONDS:
+        if type(wait_seconds) not in (int, float) or not 0 <= wait_seconds <= MAX_PRODUCT_WAIT_SECONDS:
             raise ValueError('DEVELOPMENT_WAIT_INVALID')
         submitted = submitted or projection(self.store(root), self.store(root).load(check_ref, self.owner))
         started = self.monotonic()
@@ -633,10 +633,17 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
     hooks.key(store.root)
     key = 'focus:'+owner_key(owner)
     focused = store.read(key)
+    if owner['host'] == 'codex':
+        from .hooks import codex_commit_only
+        if codex_commit_only(store.root):
+            current = store.load(focused['check_ref'], owner) if focused else None
+            if not current or current.get('automatic') or current.get('finish_requested'):
+                return dict(status='NOT_SCANNED', reason_code='GIT_COMMIT_ONLY',
+                            scanner_run=False, coverage='NOT_APPLICABLE')
     covered = False
-    if watch_eligible and focused:
+    if focused and not prepare_only and (event_id or watch_eligible):
         from .development_file_watch import active
-        covered = active(store, focused['check_ref'], owner)
+        covered = active(store, focused['check_ref'], owner, completed=event_id) and watch_eligible
     with store.transaction() as db:
         digest = None
         replay_key = 'replay:'+owner_key(owner)

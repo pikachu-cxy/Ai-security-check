@@ -92,7 +92,40 @@ def verify_session_ref(hooks, root, token, *, now=None):
         raise ValueError('Task session reference is invalid, expired or belongs to another workspace') from None
 
 
-def session_context(token):
+def session_context(token, *, native_stop=False, workspace=None, grouped_codex=False):
+    if native_stop and workspace is not None:
+        from ..hooks import codex_commit_only
+        if codex_commit_only(workspace):
+            return ('安全任务会话路由（内部使用）：' + json.dumps({'session_ref': token})
+                    + '。当前仓库由 Git pre-commit 检查暂存内容。普通开发无需主动安全 MCP 或 Stop 收尾，'
+                    '未提交内容尚未检查。显式审计和修复沿原任务继续。')
+    if native_stop:
+        from ..user_config import describe_config
+        config = describe_config()
+        if config.get('values', {}).get('development', {}).get('stop_fallback', {}).get('enabled'):
+            if grouped_codex:
+                request = json.dumps({'operation': 'get_development_risks', 'arguments': {
+                    'workspace_path': str(workspace), 'session_ref': token,
+                    'check_ref': '<检查编号>', 'view': 'review'}}, ensure_ascii=False)
+                return ('普通开发由编辑 Hook 记录路径、Stop 自动收尾，无待办无需主动调用安全 MCP。'
+                    '收到“安全检查待复核”时，仅将下例的 <检查编号> 替换为提醒中的原编号，'
+                    '直接执行取证，无需查工具目录或重复提示进度：\n'
+                    f'text((await tools.mcp__ai_security_runtime__development_review({request})).content)\n'
+                    '核对 dirty_seq 与提醒版本；按 next_offset 续读同一视图。候选 evidence_refs 为空或证据不足时，按其完整起止行补读。按配置判断后用同一工具提交 operation=submit_development_review。'
+                    'arguments 沿用 workspace_path、session_ref、check_ref，必填 expected_seq=本次 dirty_seq、'
+                    'observations（每个扫描判断含 same_issue_as、scan_id、decision、rationale、evidence_refs），'
+                    'decision 用 CONFIRMED（确认）、DISMISSED（误报）或 INCONCLUSIVE（证据不足）。'
+                    '确认漏洞时在该项 report_text 一次写好给用户的完整说明（标题、评级来源、路径行号、'
+                    '问题、可能影响、建议修复、尚未确认）；误报由产品汇总。按需附 business_reviews，'
+                    '传 return_risks=true。成功后仅沿本批 next_action 读完，最终回复直接采用返回的 '
+                    'report_text，不重写；未提供时按实际结果及缺口报告。'
+                    '已知漏记的实际编辑才补录。显式审计及修复继续沿用原任务。')
+            return ('安全任务会话路由（内部使用）：' + json.dumps({'session_ref': token})
+                + '。普通开发由编辑 Hook 记录路径、Stop 自动收尾，无待办无需主动调用安全 MCP。'
+                '收到“安全检查待复核”即沿原检查编号调用 get_development_risks(include_evidence=true)；'
+                'Hook 已向用户显示进度，直接取证，提交复核后统一回复。已知漏记的实际编辑才补录。'
+                '显式审计及修复继续沿用原任务。')
+
     return ('安全任务会话路由（内部使用，不展示给用户，不授予修复权限）：'
         +json.dumps({'session_ref':token})
         +'。默认开发使用无全项目基线的 begin_development_check；已由编辑 Hook 返回 check_ref 时沿用，'

@@ -38,7 +38,7 @@ def test_every_hook_exit_leaves_language_to_the_host_conversation(branch):
 
 def test_managed_core_and_risk_guidance_share_style_and_translate_all_visible_copy():
     files = skill_files()
-    for name in ('SKILL.md', 'references/risk-decisions.md'):
+    for name in ('CORE.md', 'references/risk-decisions.md'):
         text = files[name].decode()
         assert RESPONSE_STYLE_RULES in text
         assert '已获明确授权的范围直接继续' in text

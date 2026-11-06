@@ -12,7 +12,9 @@ def test_discovery_is_compact_but_full_core_remains_available(monkeypatch):
     assert server._mcp_server.instructions == MCP_INSTRUCTIONS
     assert len(MCP_INSTRUCTIONS.encode()) < len(HOST_INSTRUCTIONS.encode()) * .5
     canonical = get_runtime_guidance('core')
-    assert canonical['content'].encode() == skill_entrypoint()
+    entry = skill_entrypoint().decode()
+    assert 'CORE.md' in entry and len(entry.encode()) < 1024
+    assert '普通开发无需读取 Skill' in MCP_INSTRUCTIONS
     assert HOST_INSTRUCTIONS in canonical['content']
     for required in ('不开始、恢复或派发检查', '必读方法', 'build_identity', 'SHA-256',
                      'task-review-plan-v3', 'task-result-delivery-v1',

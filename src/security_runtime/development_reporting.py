@@ -11,11 +11,15 @@ EVIDENCE_RECOVERY = (
 
 
 INSTRUCTIONS = (
-    '若配置要求复核，提交前必须先 read_development_risk_context 取得实际 evidence_ref。若提交返回可恢复错误：'
+    '若配置要求复核，提交前使用原生 Stop 随包给出的实际 evidence_ref，或用 read_development_risk_context 补读证据。若提交返回可恢复错误：'
     + EVIDENCE_RECOVERY +
     '报告前读取 get_development_risks 的当前风险及处置；若调用 submit_development_review，'
-    '提交成功后必须从 offset=0 重新读取，不能用提交前的结果或提交响应预览代替。'
+    '提交成功后必须从 offset=0 重新读取，优先传 return_risks=true。post_commit_read=true 即本批保存后重读的第一页，按本批 next_action 续读 next_offset；只有回执则按其 next_action 另读第一页。'
     '沿 next_offset 读取完全部相关分页，再组织最终回复；读取失败如实说明，不能声称报告流程完成。'
+    '仅统计本次扫描已保存技术复核为 DISMISSED 的候选；有误报时只用一句话概述数量。'
+    '混合结果只展开仍需提醒的真实风险。仅当本轮全部候选均已判为误报、要求的检查完整且无待提醒风险时，'
+    '可以说“本次扫描命中的 N 项均经复核判为误报，无需处理”。'
+    '暂缓、用户排除、已修复及证据不足均不计为误报；有缺口须说明。'
     '仅呈现未排除、未暂缓、未解决且需要提醒的风险。'
     '每项风险先写标题、级别和来源（区分 Agent 判断与扫描器原始评级）、文件行链接和已知函数名；'
     '随后分别使用“问题”“可能影响”“建议修复”“尚未确认”四个独立标签，不合并成普通段落。'

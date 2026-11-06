@@ -570,7 +570,7 @@ def create_global_server(*, workspaces=None, host='codex'):
     if active_host == 'cursor':
         from .host_connectors import CURSOR_INSTRUCTIONS
         registry.add_instructions(CURSOR_INSTRUCTIONS)
-    from .mcp_tool_groups import GROUPS, compact_tools, instructions
+    from .mcp_tool_groups import GROUPS, MERGED_GROUPS, compact_tools, instructions, original_call
     if active_host in {'codex', 'workbuddy'}:
         registry.add_instructions(instructions())
 
@@ -687,6 +687,9 @@ def create_global_server(*, workspaces=None, host='codex'):
                 claim = alias
             if claim is not None:
                 root = pool.root(claim, allow_empty=name in HOOKS)
+                if name == 'handle_stop_event':
+                    from .recent_hooks import bind_current_workspace
+                    bind_current_workspace(root)
             else:
                 raise ValueError('WORKSPACE_CLAIM_REQUIRED')
             if claim_diag is not None:
@@ -709,9 +712,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                 claim_diag['workspace_binding_stage'] = binding_stage
                 from .recent_hooks import observe
                 observe('HOOK_RECEIVED', **claim_diag)
-            pool.validate_layers(claim or root)
-            binding_stage = 'ADMITTING_WORKSPACE'
-            child, _ = pool.admit(root)
+            from .delivery import verification_session
+            with verification_session():
+                pool.validate_layers(claim or root)
+                binding_stage = 'ADMITTING_WORKSPACE'
+                child, _ = pool.admit(root)
             if name in HOOKS:
                 claim_diag.update(pool.binding_diagnostics(root, arguments['session_id']))
                 binding_stage = 'BINDING_SESSION'
@@ -734,7 +739,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     observed = await asyncio.to_thread(before_normalized_event, normalized, pool.children[root][1])
                     data = {**claim_diag, **observed}
                     output = {'continue': True}
-                    if data.get('file_watch', {}).get('status') != 'ACTIVE' and data.get('check_ref'):
+                    if data.get('file_watch_start_failed'):
                         output['hookSpecificOutput'] = dict(hookEventName='PreToolUse',
                             additionalContext='文件变更监听未能完整启动，保留原检查并在收尾说明实际范围缺口。')
                     return CallToolResult(structuredContent=data, content=[TextContent(
@@ -752,7 +757,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                 data = dict(readiness, **claim_diag, task_session_ref=token)
                 output = {'continue': True, 'systemMessage': readiness['message'],
                     'hookSpecificOutput': {'hookEventName': 'SessionStart',
-                                           'additionalContext': readiness['message'] + '\n' + session_context(token)}}
+                                           'additionalContext': readiness['message'] + '\n' + session_context(token, native_stop=active_host == 'codex' and pool.task_audit_mode, workspace=root, grouped_codex=active_host == 'codex')}}
                 from .development_continuation import context as delivery_context
                 from .tasks.ownership import session_owner
                 try:
@@ -893,9 +898,9 @@ def create_global_server(*, workspaces=None, host='codex'):
                                 '仅记录了可能修改，尚未取得具体文件路径。若明确知道实际编辑路径，沿原检查补录；'
                                 '否则报告范围缺口，不猜路径、不扩扫项目。')
                             extra = ('\n当前编辑事件关联轻量检查 ' + ref + '；' + detail
-                                + '沿此引用收尾并读取结果，不新建替代记录。') if ref else ''
+                                + '沿用此引用，按当前宿主收尾模式执行。') if ref else ''
                             output['hookSpecificOutput'] = dict(hookEventName='PostToolUse',
-                                additionalContext=session_context(token) + extra)
+                                additionalContext=session_context(token, native_stop=active_host == 'codex' and pool.task_audit_mode, workspace=root, grouped_codex=active_host == 'codex') + extra)
                             result.structuredContent['task_session_ref'] = token
                             result.content = [TextContent(type='text', text=json.dumps(output, ensure_ascii=False))]
                             pool.session_context_emitted_at[key] = time.time()
@@ -1115,7 +1120,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     result.structuredContent = data
                     result.content = [TextContent(type='text', text=json.dumps(payload))]
         if (name == 'handle_stop_event' and (result.structuredContent or {}).get('decision') != 'block'
-                and (result.structuredContent or {}).get('status') not in {'STOP_FALLBACK_INCOMPLETE', 'STOP_FALLBACK_UNAVAILABLE'}):
+                and (result.structuredContent or {}).get('status') not in {'STOP_FALLBACK_INCOMPLETE', 'STOP_FALLBACK_UNAVAILABLE', 'STOP_RESULT_NOTICE'}):
             # Validation/admission failures are diagnostics too. A broken or
             # unready connection must not add a warning to every ordinary chat.
             return CallToolResult(structuredContent=result.structuredContent,
@@ -1123,14 +1128,20 @@ def create_global_server(*, workspaces=None, host='codex'):
         return result
     call = quiet_stop_call
     from .recent_hooks import instrument
-    call = instrument(call, schemas={name: tool.parameters for name, tool in infos.items()},
+    call = instrument(call, routed_stop=True, schemas={name: tool.parameters for name, tool in infos.items()},
                       resolve_root=lambda arguments: pool.root(arguments.get('workspace_path'))
                       if isinstance(arguments, dict) else None)
     operation_call = call
 
     async def grouped_call(name, arguments):
+        invalid_legacy = False
+        if group_validators and name in MERGED_GROUPS:
+            # The old envelope accepts only its original operation subset.
+            operation, _ = original_call(name, arguments)
+            invalid_legacy = operation == name
+            name = MERGED_GROUPS[name]
         if name in group_validators:
-            if not group_validators[name].is_valid(arguments):
+            if invalid_legacy or not group_validators[name].is_valid(arguments):
                 data = dict(status='INCONCLUSIVE', reason_code='TOOL_GROUP_INPUT_INVALID',
                             scanner_run=False, source_modified=False)
                 return CallToolResult(isError=True, structuredContent=data,

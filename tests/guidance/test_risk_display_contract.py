@@ -89,7 +89,7 @@ def test_task_risk_explicitly_reports_scan_and_review_completion():
 
 def test_generated_guidance_keeps_risk_only_guard_and_fixed_structure_in_sync():
     files = skill_files()
-    for name in ('SKILL.md', 'references/risk-decisions.md'):
+    for name in ('CORE.md', 'references/risk-decisions.md'):
         text = files[name].decode()
         assert '只有当前存在仍需提醒的风险' in text
         assert '零风险且检查完整的普通开发保持静默' in text

@@ -91,12 +91,32 @@ def test_continuous_notifications_do_not_extend_finish_budget(sample, monkeypatc
     assert result['scope']['scope_unknown']
 
 
+def test_post_tool_quiet_time_counts_before_stop(sample, monkeypatch):
+    root, hooks, owner, service, ref, _ = sample
+    store = service.store(root)
+    monkeypatch.setattr(watching, 'SETTLE_SECONDS', .6)
+    watching.start_window(store, ref, owner, invocation='shell')
+    (root/'created.py').write_text('value = 1')
+    record_hook(hooks, root, owner, event_id='shell', watch_eligible=True)
+    time.sleep(.8)  # Independent work after PostToolUse.
+    # Insufficient to start a new quiet period, sufficient to deliver an already quiet window.
+    watching.stop_window(store, ref, owner, deadline=time.monotonic() + .4)
+    result = service.get(root, ref)
+    assert result['file_watch']['status'] == 'STOPPED'
+    assert result['scope']['paths'] == ['created.py'] and not result['scope']['scope_unknown']
+
+
 def test_real_script_changes_are_drained_before_finish_without_history_inventory(sample, monkeypatch):
     root, _, owner, service, ref, launched = sample
     for name in ('untouched.py', 'again.py', 'remove.py', 'old.py', 'atomic.py'):
         (root/name).write_text('morning = 1')
     (root/'nested').mkdir()
-    monkeypatch.setattr(Path, 'rglob', lambda *_a, **_k: pytest.fail('project inventory'))
+    original_rglob = Path.rglob
+    def forbid_project_inventory(path, *args, **kwargs):
+        if path.is_relative_to(root):
+            pytest.fail('project inventory')
+        return original_rglob(path, *args, **kwargs)
+    monkeypatch.setattr(Path, 'rglob', forbid_project_inventory)
     assert watching.start_window(service.store(root), ref, owner) == 'ACTIVE'
     code = """from pathlib import Path
 import os,sys

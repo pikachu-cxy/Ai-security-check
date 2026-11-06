@@ -98,8 +98,15 @@ def repair_impact_reference():
 
 
 def skill_entrypoint():
-    from .guidance.host_guidance import HOST_INSTRUCTIONS
-    return ('---\nname: ai-security-review\ndescription: Check source/config development before the final summary, or use AI Security Runtime for requested audits and explicitly authorized selected-risk fixes. Ordinary chat and read-only questions do not start checks. Requires connected ai_security_runtime MCP.\n---\n\n# Security review\n\n' + HOST_INSTRUCTIONS + '\n').encode('utf-8')
+    return """---
+name: ai-security-review
+description: Use for explicit security audits, selected risk decisions or authorized repairs with AI Security Runtime.
+---
+
+普通 Codex 开发由 Hook 自动记录和收尾，无待办直接完成开发任务。
+收到“安全检查待复核”时依照当前连接的交接说明处理本批候选。按需补读证据，沿原检查一次合并提交。
+用户明确请求扫描、风险处置或修复时，先读 CORE.md，再按请求选读对应方法。
+""".encode('utf-8')
 
 
 def generated_skill_file(name):
@@ -108,6 +115,9 @@ def generated_skill_file(name):
     from .guidance.host_guidance import RISK_DECISION_WORKFLOW
     if name == 'SKILL.md':
         return skill_entrypoint()
+    if name == 'CORE.md':
+        from .guidance.host_guidance import HOST_INSTRUCTIONS
+        return (HOST_INSTRUCTIONS + '\n').encode('utf-8')
     if name == 'references/runtime-workflow.md':
         return ('# Canonical Runtime workflow\n\n' + RUNTIME_WORKFLOW + '\n').encode('utf-8')
     if name == 'references/risk-decisions.md':
@@ -120,7 +130,7 @@ def generated_skill_file(name):
     raise ValueError('Unsupported generated Skill file')
 
 
-GENERATED_FILES = ('SKILL.md', 'references/runtime-workflow.md',
+GENERATED_FILES = ('SKILL.md', 'CORE.md', 'references/runtime-workflow.md',
                    'references/risk-decisions.md', 'references/repair-impact.md',
                    'references/development-check.md')
 

@@ -39,6 +39,7 @@ def test_core_is_short_but_keeps_non_optional_safety_boundaries_and_intent_routi
 
 def test_fixed_topics_match_generated_and_installed_bytes(tmp_path):
     files=skill_files()
+    assert 'allow_implicit_invocation: false' in files['agents/openai.yaml'].decode()
     service=ReviewSkillManager(tmp_path/'home/skills',tmp_path/'state')
     assert service.execute('install')['status']=='INSTALLED'
     source=Path(guidance_catalog.__file__).resolve().parents[1]/'skills/ai-security-review'
@@ -66,7 +67,7 @@ def test_development_has_no_version_query_prerequisite():
 
 def test_quiet_development_and_requested_security_reports_have_distinct_guidance():
     files = skill_files()
-    core = files['SKILL.md'].decode('utf-8')
+    core = files['CORE.md'].decode('utf-8')
     workflow = files['references/runtime-workflow.md'].decode('utf-8')
     for content in (HOST_INSTRUCTIONS, core):
         assert '当前任务核查完整、零发现且无检查或处置缺口时静默' in content

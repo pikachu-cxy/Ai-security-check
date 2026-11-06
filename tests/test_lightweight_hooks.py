@@ -57,6 +57,20 @@ def test_patch_bounds_and_unknown_commands_never_expand_to_workspace(repo):
     assert edit_path_hints('Write', {'file_path': 'new.py'}, repo, cwd=repo / 'src') == (('src/new.py',), False)
 
 
+@pytest.mark.parametrize('inputs', [
+    {'file_path': 'one.py'},
+    '*** Update File: one.py',
+    '*** Begin Patch\n*** Update File: one.py\n*** Move to: ../elsewhere\n*** End Patch',
+    '*** Begin Patch\n*** Add File: one.py\n*** Unknown: two.py\n*** End Patch',
+    '*** Begin Patch\n*** Add File: bad?.py\n*** End Patch',
+])
+def test_codex_pre_with_incomplete_patch_requires_watcher(repo, inputs):
+    from security_runtime.codex_event_adapter import CodexEventAdapter
+    event = CodexEventAdapter().normalize(dict(event='PreToolUse', tool_name='apply_patch',
+        tool_input=inputs, session_id='s', workspace_path=str(repo)), repo, legacy=True)
+    assert not event.complete_patch_paths
+
+
 def no_old_task_reads(monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail('Default quiet hooks must not read task snapshots, inventory, or scan')

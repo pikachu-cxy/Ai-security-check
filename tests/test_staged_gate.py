@@ -135,3 +135,29 @@ def test_worktree_uses_its_own_index_not_the_main_checkout(repo):
     with index_projection(GitService(worktree)) as snapshot:
         assert (snapshot / 'a.py').read_bytes() == b'RISK\n'
     assert (repo / 'a.py').read_bytes() == main_bytes
+
+def test_codex_commit_only_uses_verified_repo_hook_and_keeps_explicit_checks(repo):
+    from security_runtime.development_check import DevelopmentCheckService, record_hook
+    from security_runtime.development_stop import fallback
+    from security_runtime.hook_state import HookStateStore
+    from security_runtime.tasks.ownership import session_context, session_owner
+
+    owner = session_owner('codex', 'fixture')
+    hooks = HookStateStore(repo.parent / 'observed')
+    manager = GitHookManager(repo)
+    assert not manager.execute('install')['commit_only']
+    assert manager.execute('install', commit_only=True)['commit_only']
+    assert manager.execute('repair')['commit_only']
+    assert 'Git pre-commit' in session_context('test', native_stop=True, workspace=repo)
+    for prepare in (True, False):
+        result = record_hook(hooks, repo, owner, ['a.py'], prepare_only=prepare, turn_id='edit')
+        assert result['reason_code'] == 'GIT_COMMIT_ONLY' and not result['scanner_run']
+    assert fallback(hooks, repo, owner, automatic=True, turn_id='edit') is None
+
+    service = DevelopmentCheckService(None, hooks, owner=owner, launcher=lambda *a: None)
+    ref = service.begin(repo, 'explicit')['check_ref']
+    assert record_hook(hooks, repo, owner, ['a.py'])['check_ref'] == ref
+
+    manager.path.write_bytes(b'#!/bin/sh\nexit 0\n')
+    assert not manager.execute('status')['commit_only']
+    assert record_hook(hooks, repo, session_owner('codex', 'different'), ['a.py'])['check_ref']

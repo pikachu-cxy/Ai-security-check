@@ -23,7 +23,7 @@ def classify_bash_command(tool_input) -> str:
     return classify_command(command)
 
 
-def edit_path_hints(tool, inputs, root, *, cwd=None):
+def edit_path_hints(tool, inputs, root, *, cwd=None, require_patch_body=False):
     """Extract bounded path hints without reading files or trusting edit success.
 
     A failed tool can still provide a hint. Unknown or truncated scope remains
@@ -44,15 +44,21 @@ def edit_path_hints(tool, inputs, root, *, cwd=None):
             if len(patch) > 262144 or len(patch.encode('utf-8', errors='replace')) > 262144:
                 return (), True
             lines = patch.splitlines()
-            unknown = not (lines and lines[0] == '*** Begin Patch' and lines[-1] == '*** End Patch')
-            for line in lines:
+            framed = lines[:1] == ['*** Begin Patch'] and lines[-1:] == ['*** End Patch']
+            unknown = not framed
+            headers = lines[1:-1] if framed else lines
+            for line in headers:
                 for prefix in ('*** Add File: ', '*** Update File: ', '*** Delete File: ', '*** Move to: '):
                     if line.startswith(prefix):
                         values.append(line[len(prefix):])
                         break
+                else:
+                    if line.lstrip().startswith('***') and line != '*** End of File':
+                        unknown = True
         elif isinstance(inputs, dict):
             # Older hosts expose only the target path; it is still a hint.
             values.append(inputs.get('file_path') or inputs.get('path'))
+            unknown = require_patch_body
     elif tool in {'Edit', 'Write', 'Delete'} and isinstance(inputs, dict):
         values.append(inputs.get('file_path') or inputs.get('path'))
     selected, size = [], 0
@@ -117,12 +123,17 @@ def normalize_tool_event(arguments, root, *, host, capabilities):
     context = VerifiedHostContext(host, root, identity(os.path.normcase(str(root))),
         identity(arguments['session_id']), identity(invocation) if invocation else None,
         capabilities, arguments['session_id'])
+    codex_pre_patch = host == 'codex' and expected == 'PreToolUse' and arguments.get('tool_name') == 'apply_patch'
     candidates, unknown = (edit_path_hints(arguments.get('tool_name'), arguments.get('tool_input'), root,
-                                          cwd=arguments.get('workspace_path'))
+                                          cwd=arguments.get('workspace_path'), require_patch_body=codex_pre_patch)
                            if expected in {'PreToolUse', 'PostToolUse'} else ((), True))
+    if codex_pre_patch and not unknown:
+        from .development_check import clean_paths
+        _, unknown = clean_paths(candidates, tolerant=True)
     return NormalizedHostEvent(EVENTS[expected], context, operation,
         turn_id=arguments.get('turn_id'),
         candidate_paths=candidates, scope_unknown=unknown,
+        complete_patch_paths=codex_pre_patch and not unknown,
         mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
         stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
 
@@ -142,10 +153,12 @@ def before_normalized_event(event, coordinator):
     result = record_hook(coordinator.store, context.workspace, owner,
         scope_unknown=False, prepare_only=True, turn_id=event.turn_id,
         scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
-    if result.get('check_ref'):
+    if result.get('check_ref') and not event.complete_patch_paths:
         store = DevelopmentCheckStore(coordinator.store, context.workspace)
-        start_window(store, result['check_ref'], owner)
+        watch_status = start_window(store, result['check_ref'], owner, invocation=context.invocation_binding)
         result = projection(store, store.load(result['check_ref'], owner))
+        if watch_status != 'ACTIVE':
+            result['file_watch_start_failed'] = True
     return result
 
 

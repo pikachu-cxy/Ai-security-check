@@ -63,7 +63,7 @@ async def verify_global_tool_surfaces(executable: Path, root: Path, env: dict[st
     from mcp import ClientSession
     from mcp.client.stdio import StdioServerParameters, stdio_client
     results = {}
-    for host, count in (("codex", 19), ("workbuddy", 15)):
+    for host, count in (("codex", 15), ("workbuddy", 11)):
         environment = dict(env, SECURITY_RUNTIME_GLOBAL="1", SECURITY_RUNTIME_HOST=host,
                            SECURITY_RUNTIME_WORKSPACE="", SECURITY_RUNTIME_OFFLINE="1")
         params = StdioServerParameters(command=str(executable), args=["mcp"], cwd=root, env=environment)

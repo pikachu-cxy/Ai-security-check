@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import sys
 
-from .host_tool_events import normalize_tool_event, validate_context, before_normalized_event
+from .host_tool_events import normalize_tool_event, validate_context
 from .host_lifecycle import connector_profile
 
 EVENTS = ('SessionStart', 'PreToolUse', 'PostToolUse', 'Stop')
@@ -32,6 +32,10 @@ def handle(payload, *, core=None, root=None):
         raise ValueError('INVALID_TURN')
     if type(payload.get('stop_hook_active', False)) is not bool:
         raise ValueError('INVALID_STOP_GUARD')
+    # Command hooks exit before the host performs the edit. Only PostToolUse
+    # can record its path hints; an in-process watcher cannot span these calls.
+    if event == 'PreToolUse':
+        return {}
     if core is None:
         integration = WorkBuddyConnectorInstallation()
         if integration.configuration_status()['overall'] != 'CONFIGURED':
@@ -42,10 +46,10 @@ def handle(payload, *, core=None, root=None):
         _, core, _ = workspace_services(root, directory, admitted=True)
     if event == 'Stop':
         result = fallback(core.store, root, session_owner('workbuddy', session),
-            stop_hook_active=payload.get('stop_hook_active', False), turn_id=turn)
+            stop_hook_active=payload.get('stop_hook_active', False), turn_id=turn, automatic=True, session_id=session)
         if result and result.get('decision') == 'block':
             return dict(decision='block', reason=result['reason'])
-        return {}
+        return {'systemMessage': result['systemMessage']} if result and result.get('systemMessage') else {}
     tool = TOOLS.get(payload.get('tool_name'))
     if event == 'SessionStart' or tool is not None:
         args = dict(event=event, workspace_path=str(root), session_id=session,
@@ -53,13 +57,10 @@ def handle(payload, *, core=None, root=None):
             tool_use_id=payload.get('tool_use_id'), turn_id=turn)
         normalized = normalize_tool_event(args, root, host='workbuddy',
             capabilities=connector_profile('workbuddy').capabilities)
-        if event == 'PreToolUse':
-            before_normalized_event(normalized, core)
-        else:
-            handle_normalized_event(normalized, coordinator=core, lifecycle=True)
+        handle_normalized_event(normalized, coordinator=core, lifecycle=True)
     token = issue_session_ref(core.store, root, 'workbuddy', session, compact=True)
     return {'hookSpecificOutput': {'hookEventName': event,
-                                  'additionalContext': session_context(token)}}
+                                  'additionalContext': session_context(token, native_stop=True)}}
 
 
 def main():

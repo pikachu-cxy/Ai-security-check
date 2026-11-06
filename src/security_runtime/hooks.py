@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import tempfile
 import hashlib
 import hmac
 import json
@@ -35,8 +36,13 @@ def gate_exit(result, policy):
 
 
 def hook_path(root):
-    proc = subprocess.run(["git", "-c", f"safe.directory={root.as_posix()}", "-C", str(root), "rev-parse", "--git-path", "hooks"], capture_output=True, text=True, timeout=5, check=True)
-    hooks = Path(proc.stdout.strip())
+    # Never share a Windows stdio MCP channel with Git or its launcher.
+    with tempfile.TemporaryFile() as output:
+        subprocess.run(['git', '-c', f'safe.directory={root.as_posix()}', '-C', str(root),
+                        'rev-parse', '--git-path', 'hooks'], stdin=subprocess.DEVNULL,
+                       stdout=output, stderr=subprocess.DEVNULL, timeout=5, check=True)
+        output.seek(0)
+        hooks = Path(os.fsdecode(output.read()).rstrip('\r\n'))
     if not hooks.is_absolute():
         hooks = root / hooks
     destination = hooks / "pre-commit"
@@ -88,16 +94,19 @@ class GitHookManager:
                 + '  echo "AI Security Runtime unavailable: repair the owned Git hook after installing the Runtime." >&2\n'
                 + '  exit 2\nfi\nexec ' + shlex.join(argv) + '\n').encode()
 
-    def execute(self, action, policy='strict'):
+    def execute(self, action, policy='strict', *, commit_only=None):
         if action not in {'install', 'status', 'repair', 'remove'} or policy not in {'strict', 'report'}:
             raise ValueError('GIT_HOOK_ACTION_INVALID')
         raw = self._read(self.path)
         manifest = self.manifest()
         owned = manifest is not None and (raw is None or hashlib.sha256(raw).hexdigest() in
                                           {manifest['digest'], manifest.get('previous_digest')})
+        active_mode = bool(manifest and owned and raw and manifest.get('commit_only')
+                           and manifest.get('phase') == 'COMMITTED' and os.access(self.path, os.X_OK))
         if action == 'status':
             return {'status': 'INSTALLED' if owned and raw else 'REPAIR_REQUIRED' if owned else 'USER_MANAGED' if raw else 'NOT_INSTALLED',
-                    'path': str(self.path), 'policy': manifest.get('policy') if manifest else None}
+                    'path': str(self.path), 'policy': manifest.get('policy') if manifest else None,
+                    'commit_only': active_mode}
         with self.store.lock(self.root) as acquired:
             if not acquired:
                 raise ValueError('GIT_HOOK_BUSY')
@@ -113,10 +122,13 @@ class GitHookManager:
                     self.path.unlink(missing_ok=True)
                     receipt.unlink(missing_ok=True)
                 return {'status': 'REMOVED' if owned else 'NOT_INSTALLED', 'path': str(self.path)}
+            if commit_only is None:
+                commit_only = bool(manifest and manifest.get('commit_only'))
             content = self.script(policy)
             value = {'contract': 'git-pre-commit-v1', 'root': str(self.root), 'path': str(self.path),
                      'digest': hashlib.sha256(content).hexdigest(), 'policy': policy, 'phase': 'UPDATING',
-                     'previous_digest': hashlib.sha256(raw).hexdigest() if raw is not None else None}
+                     'previous_digest': hashlib.sha256(raw).hexdigest() if raw is not None else None,
+                     'commit_only': commit_only}
             key = self.store.key(self.root)
             signature = hmac.new(key, json.dumps(value, sort_keys=True).encode(), hashlib.sha256).hexdigest()
             # Signed intent is persisted first. A missing script is repairable;
@@ -129,7 +141,19 @@ class GitHookManager:
             value.update(phase='COMMITTED', previous_digest=None)
             signature = hmac.new(key, json.dumps(value, sort_keys=True).encode(), hashlib.sha256).hexdigest()
             atomic_bytes(receipt, json.dumps(value | {'signature': signature}).encode())
-            return {'status': 'INSTALLED', 'path': str(self.path), 'policy': policy}
+            return {'status': 'INSTALLED', 'path': str(self.path), 'policy': policy, 'commit_only': commit_only}
+
+
+def codex_commit_only(root):
+    # Default installations pay no Git subprocess cost. An ownership receipt
+    # is only a hint until the current effective Git hook has been verified.
+    store = HookStateStore(SQLiteStore.default_path().parent / 'git-hooks')
+    try:
+        if not (store.workspace_directory(root) / 'ownership.json').is_file():
+            return False
+        return GitHookManager(root).execute('status')['commit_only']
+    except (ValueError, OSError, subprocess.SubprocessError):
+        return False
 
 
 def install_pre_commit(root: Path, *, policy='strict') -> Path:

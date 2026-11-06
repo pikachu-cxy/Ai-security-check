@@ -1,5 +1,6 @@
 """Compact discovery must preserve operation schemas, routing and compatibility."""
 import asyncio
+import json
 import os
 from pathlib import Path
 import sys
@@ -29,9 +30,21 @@ def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path,
         with pytest.raises(IntegrationDiagnostic, match='CAPABILITY_MISMATCH'):
             check_capabilities(info, set(by_name) - {'task_review'})
         assert set(GROUPS) <= by_name.keys()
+        assert not {'finding_feedback', 'repair_impact', 'closeout_check'} & by_name.keys()
         assert not {name for names in GROUPS.values() for name in names} & by_name.keys()
         assert len(tools) <= 20
-        assert len(tools) == 19 + ('start_usage_monitor' in by_name)
+        assert len(tools) == 15 + ('start_usage_monitor' in by_name)
+        from security_runtime.tasks.ownership import session_context
+        monkeypatch.setattr('security_runtime.user_config.describe_config', lambda: {
+            'values': {'development': {'stop_fallback': {'enabled': True}}}})
+        handoff = session_context('session-test', native_stop=True, workspace=tmp_path, grouped_codex=True)
+        tool, payload = handoff.split('await tools.mcp__ai_security_runtime__', 1)[1].split('(', 1)
+        request, _ = json.JSONDecoder().raw_decode(payload)
+        assert request == {'operation': 'get_development_risks', 'arguments': {
+            'workspace_path': str(tmp_path), 'session_ref': 'session-test',
+            'check_ref': '<检查编号>', 'view': 'review'}}
+        Draft202012Validator(by_name[tool].inputSchema).validate(request)
+        assert 'expected_seq=本次 dirty_seq' in handoff and 'return_risks=true' in handoff
         assert set(operation_schemas(tools)) == set(by_name) | {tool.name for tool in server._tool_manager.list_tools()}
         for tool in tools:
             Draft202012Validator.check_schema(tool.inputSchema)
@@ -84,6 +97,13 @@ def test_group_dispatch_keeps_workspace_and_original_validation(tmp_path, monkey
         # Hidden aliases still use the original strict router too.
         direct_rejection = await server.call_tool('scan_files', {**arguments, 'owner': 'other'})
         assert rejected == direct_rejection
+        # The hidden old group accepts its own operations only.
+        args = {'workspace_path': str(tmp_path), 'unexpected': True}
+        old = await server.call_tool('closeout_check', {'operation': 'get_closeout_status', 'arguments': args})
+        new = await server.call_tool('scan', {'operation': 'get_closeout_status', 'arguments': args})
+        assert old == new
+        denied = await server.call_tool('closeout_check', {'operation': 'scan_files', 'arguments': arguments})
+        assert denied.isError
         assert len(calls) == 2
     asyncio.run(run())
 
@@ -112,6 +132,10 @@ def test_grouped_tools_over_real_stdio(tmp_path):
                 direct = await client.call_tool('get_development_config', {})
                 grouped = await client.call_tool('runtime_status', {'operation': 'get_development_config', 'arguments': {}})
                 assert not grouped.isError and direct.structuredContent == grouped.structuredContent
+                guidance = {'topic': 'core'}
+                grouped = await client.call_tool('runtime_status', {'operation': 'get_runtime_guidance', 'arguments': guidance})
+                direct = await client.call_tool('get_runtime_guidance', guidance)
+                assert not grouped.isError and grouped.structuredContent == direct.structuredContent
                 rejected = await client.call_tool('runtime_status', {'operation': 'scan_project', 'arguments': {}})
                 assert rejected.isError
     asyncio.run(run())

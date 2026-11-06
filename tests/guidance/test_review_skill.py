@@ -73,7 +73,7 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
     from security_runtime.guidance.host_guidance import REPAIR_IMPACT_GUIDANCE, REQUIRED_GUIDANCE_TOOLS
 
     files = skill_files()
-    entry = files['SKILL.md'].decode('utf-8')
+    entry = files['CORE.md'].decode('utf-8')
     assert 'references/repair-impact.md' in entry
     assert {'prepare_task_risk_fix', 'cancel_task_risk_fix'} <= REQUIRED_GUIDANCE_TOOLS
     for name in ('references/repair-impact.md',):
@@ -94,15 +94,15 @@ def test_native_fix_and_failed_impact_rules_reach_the_managed_skill():
 
 def test_closeout_scheduling_reaches_the_installed_skill_after_upgrade(tmp_path):
     previous = manager(tmp_path)
-    entry = previous.expected['SKILL.md'].decode('utf-8')
-    previous.expected['SKILL.md'] = '\n'.join(line for line in entry.split('\n')
+    entry = previous.expected['CORE.md'].decode('utf-8')
+    previous.expected['CORE.md'] = '\n'.join(line for line in entry.split('\n')
         if '尽早提交后台收尾' not in line).encode('utf-8')
     assert previous.execute('install')['status'] == 'INSTALLED'
     before_method = (previous.root/'references/quick-task-review-v3.md').read_bytes()
     current = manager(tmp_path)
     assert current.status()['status'] == 'UPGRADE_AVAILABLE'
     assert current.execute('upgrade')['status'] == 'INSTALLED'
-    installed = (current.root/'SKILL.md').read_text(encoding='utf-8')
+    installed = (current.root/'CORE.md').read_text(encoding='utf-8')
     for rule in ('尽早提交后台收尾', '已授权且不写项目文件', '不补建基线',
                  '不能为填充等待增加测试或安装', 'get_development_check', '不建立修改前基线'):
         assert rule in installed
@@ -121,7 +121,7 @@ def test_lifecycle_canonical_workflow_and_user_bytes_preserved(tmp_path):
     reference=service.root/'references/runtime-workflow.md'
     assert RUNTIME_WORKFLOW in reference.read_text(encoding='utf-8')
     assert 'references/quick-task-review-v3.md' in reference.read_text(encoding='utf-8')
-    assert 'prepare_task_security_review(protocol_version=3)' in (service.root/'SKILL.md').read_text(encoding='utf-8')
+    assert 'prepare_task_security_review(protocol_version=3)' in (service.root/'CORE.md').read_text(encoding='utf-8')
     assert not RETIRED_METHODS & service.manifest()['files'].keys()
     assert all(not (service.root/name).exists() for name in RETIRED_METHODS)
     v3_method=service.root/'references/quick-task-review-v3.md'

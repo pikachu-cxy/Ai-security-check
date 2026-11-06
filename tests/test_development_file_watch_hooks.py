@@ -24,6 +24,16 @@ def call(server, tool, args):
     return structured(asyncio.run(server.call_tool(tool, args)))
 
 
+def patch_file(server, root, filename):
+    patch = f'*** Begin Patch\n*** Add File: {filename}\n+value = 1\n*** End Patch'
+    args = dict(claims(root, filename), tool_name='apply_patch', tool_input={'command': patch})
+    raw = asyncio.run(server.call_tool('handle_before_hook_event', dict(args, event='PreToolUse')))
+    assert json.loads(raw[0][0].text if isinstance(raw, tuple) else raw.content[0].text) == {'continue': True}
+    (root/filename).write_text('value = 1\n')
+    call(server, 'handle_hook_event', args)
+    return structured(raw)
+
+
 def test_pre_post_pair_shares_binding_and_budget_but_replay_is_rejected():
     guard = CodexClaimGuard(limit=1)
     before = dict(claims('/project'), event='PreToolUse')
@@ -58,11 +68,14 @@ def test_pre_ready_before_script_post_and_finish_collect_exact_paths(installed, 
         no_edit = call(server,'handle_before_hook_event',args)
         assert no_edit['status'] == 'NOT_STARTED' and 'check_ref' not in no_edit, no_edit
         assert not runtime.calls
+        first = patch_file(server, root, 'first.py')
+        assert first.get('file_watch', {}).get('status') != 'ACTIVE'
         # An opaque script with no path hint still registers before it writes.
         args = dict(args,tool_use_id='script',tool_input={'command':'python opaque_script.py'})
         started = call(server,'handle_before_hook_event',args)
         assert started['host_claim_status'] == 'VALID' and started['file_watch']['status'] == 'ACTIVE', started
         ref = started['check_ref']
+        assert first['check_ref'] == ref
         # Execute an actual child script; do not rely on the test process being
         # the writer or on parsing the opaque command for a filename.
         subprocess.run([sys.executable, '-B', '-c',
@@ -70,11 +83,14 @@ def test_pre_ready_before_script_post_and_finish_collect_exact_paths(installed, 
             cwd=root, check=True, timeout=10)
         after = call(server,'handle_hook_event',dict(args,event='PostToolUse'))
         assert after['host_claim_status'] == 'VALID' and not after['scanner_run'], after
+        last = patch_file(server, root, 'last.py')
+        assert last['check_ref'] == ref
+        assert last['file_watch']['status'] == 'ACTIVE'
         assert not runtime.calls
         service = DevelopmentCheckService(None,core.store,owner=session_owner('codex','s'),
             scan_path_provider=tmp_path/'scan.db',launcher=lambda *_: None)
         finished = service.finish(root,ref)
-        assert finished['scope']['paths'] == ['shell-created.py']
+        assert set(finished['scope']['paths']) == {'shell-created.py', 'first.py', 'last.py'}
         assert finished['scope']['scope_unknown'] is False
         assert finished['file_watch']['status'] == 'STOPPED'
         replay = call(server,'handle_before_hook_event',args)

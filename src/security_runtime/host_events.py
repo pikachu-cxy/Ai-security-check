@@ -79,6 +79,7 @@ class NormalizedHostEvent:
     candidate_paths: tuple[str, ...] = ()
     scope_unknown: bool = True
     turn_id: str | None = field(default=None, repr=False)
+    complete_patch_paths: bool = False
 
     def __post_init__(self):
         if self.turn_id is not None and (not isinstance(self.turn_id, str) or not 0 < len(self.turn_id) <= 500):
