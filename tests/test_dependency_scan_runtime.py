@@ -97,6 +97,17 @@ def test_quick_dependency_scan_uses_local_engines_and_reports_actual_inventory(t
     assert run.scanner_diagnostics['invocations'] == [{'type': 'DEPENDENCY_SCAN', 'target_count': 1}]
 
 
+@pytest.mark.parametrize('stderr', ['WARN dependency scanner diagnostic', 'ERROR dependency scanner diagnostic'])
+def test_feature_trivy_diagnostics_do_not_override_structured_inventory(tmp_path, monkeypatch, stderr):
+    (tmp_path / 'requirements.txt').write_text('PyYAML==5.3.1\n')
+    adapter, _ = configured_adapter(tmp_path, monkeypatch, package_output(), stderr=stderr)
+    found, run = adapter.scan(ScanContext(str(tmp_path), ScanMode.FEATURE, ('requirements.txt',)),
+                              FindingNormalizer(tmp_path))
+    assert run.status == 'SUCCESS' and run.coverage_contract == 'FULL'
+    assert run.coverage_notes == []
+    assert [f.technical_details['vulnerability_id'] for f in found] == ['CVE-2020-14343']
+
+
 @pytest.mark.parametrize('freshness,code', [
     ('UNKNOWN', 'VULNERABILITY_DB_FRESHNESS_UNKNOWN'),
     ('STALE', 'VULNERABILITY_DB_STALE'),

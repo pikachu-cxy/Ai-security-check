@@ -65,7 +65,7 @@ Codex 收到复核待办时，在 `get_development_risks` 传 `view="review"`，
 | 流程 | 必须保持的请求事实 | 响应解释 |
 | --- | --- | --- |
 | 轻量检查 | 原 `check_ref`、宿主 `session_ref`、明确工作区；补录真实路径 | `dirty_seq` / `scanned_seq` 表示版本关系；状态和 `gaps` 必须一起解读 |
-| 候选复核 | `expected_seq`、原 `scan_id`、`same_issue_as`、判断与实际 `evidence_refs` | 提交原子性、错误字段及 `review_progress` 由 `development_risks.py` 定义；提交成功不保证全覆盖 |
+| 候选复核 | `expected_seq`、原 `scan_id`、取证页各候选自带的非空 `same_issue_as`（等于该项 `id`）、判断与实际 `evidence_refs` | 提交原子性、错误字段及 `review_progress` 由 `development_risks.py` 定义；提交成功不保证全覆盖 |
 | 业务审计 | `business_reviews` 中的路径、依据、证据引用与 `limitations` 字符串数组 | 空 observations 不证明业务审计完成；未确认保留实际缺口 |
 | 严格复核 | 原任务、v3 协议、当前窗口及服务器签发证据 | `task_review/contract.py` 与 `task_review/protocol.py` 管版本；不迁移原任务来绕过检查 |
 | 修复 | 用户对具体风险与范围的授权、影响证据、准备返回的允许范围 | 严重度、源码文本、工具诊断和文档示例都不授予修复权限 |
@@ -91,6 +91,10 @@ Codex 收到复核待办时，在 `get_development_risks` 传 `view="review"`，
 
 风险列表默认每页 20 条、view=summary、include_history=false；summary 只去掉 assessment 中重复 finding 和 source_hashes，保留风险、处置、版本与分页。view=full 恢复完整字段。提交成功响应默认返回保存回执、进度与 next_action，不再附风险预览；错误恢复语义不变。证据读取支持 windows 批量（最多 20 个、每个最多 80 行），与单 file_path 二选一。批量内部串行沿原校验保存，重复窗口去重，检查版本跨批变化会拒绝；失败读取可能保存部分证据收据，但从不保存复核。提交仍逐项核验证据哈希。
 
+对 `submit_development_review`，默认 `response_view="batch"` 沿用原返回。可选 `"final_report"` 同时请求提交后读回。完成单页返回 `contract=development-final-report-v1`、原报告全文、输入和扫描版本、总数、完成状态及覆盖信息。部分批次、非活动处置、未决或旧版本判断保持完整响应；读回失败时返回已保存状态及重读操作。不得用缩短回执替代版本或证据校验。
+
+取证、补读和复核提交的正常返回附 `review_timing`。其中 `start_unix_us` 是进入工具处理函数时的 Unix 微秒，`offsets_us` 是从同一调用起点算出的单调时钟偏移。已进入提交处理且有结构化恢复结果的失败调用也带计时。工具处理前的参数拒绝和不可恢复的异常依靠宿主调用事件计时。该字段供本机事后分析，最终报告以 `report_text` 为准。
+
 ## 统一开发结果对象
 
 普通开发检查的 `security_result` 嵌入签名检查记录，包含 scan_facts、原始 SCANNER observations、有效 findings、证据、复核、处置和修复历史。扫描完成时在同一个 SQLite 事务内保存这些内容与就绪状态；不存在先发布就绪、再写另一个候选库的步骤。扫描引擎的原始执行档案仍作为底层审计档案保留，不再作为开发复核的第二个可变结果来源。
@@ -99,12 +103,22 @@ MCP 收尾/等待/查询通过 `development_result` 返回扫描摘要与第一�
 
 旧 development-risks.db 只读兼容；首次写入在检查事务内嵌入旧对象，保留编号、证据、复核和处置，之后只写统一结果。旧文件不删除；仪表盘优先统一结果并按检查编号去重。升级必须结束旧驻留进程后重连，不能混用新旧进程同时写同一历史记录。
 
+在 `submit_development_review` 的 arguments 顶层传一次取证页返回的 `scan_id`，并传原 `check_ref` 与 `expected_seq`。每个扫描候选保留 `same_issue_as`、`decision`、`rationale`、`evidence_refs`，确认项照常附 `report_text`。旧调用可继续逐项传 `scan_id`。同一事务内核对批次、当前扫描和输入版本，逐项核对候选归属及证据；批次过期、逐项编号冲突、扫描候选缺少两种形式的编号或证据无效都会拒绝整批。调用者从取证页取得编号，服务端不会代猜最新扫描。
+
+同批重复命中可在次项填写 `decision=DISMISSED` 与 `duplicate_of`（同一批已确认的主候选 id），保留次项自身的 `same_issue_as`、理由和证据。服务校验同一文件的重叠证据位置、扫描和输入版本；关系无效整批回滚。报告将重复和误报分开计数。仅监听观察到的候选可返回 `edit_attribution=OBSERVED_ONLY_WRITER_UNKNOWN`。宿主最终回复先保留开发结果和实际验证，再附已保存的安全报告。
+
 复核提交支持 `return_risks=true`。返回 `post_commit_read=true` 时直接使用已保存批次第一页。后续页沿 `next_action` 传回 view=batch、expected_seq 和 scan_id；输入版本变化会拒绝续页。只收到保存回执时按其 next_action 从第一页读起。确认项可随判断原子保存 report_text。宿主可直接沿用已保存段落；误报按页计数概述，暂缓和已解决项不提醒。原 finding_feedback、repair_impact、closeout_check 分组分别并入 findings、repair、scan，旧分组保留调用兼容。
 
 自动开发可在同一工作区、同一宿主会话中复用当前检查引用；风险与处置随该引用保留。导入器按扫描 ID 导入该次扫描已保存的全部候选。Agent 按 next_offset 逐页读取（每页最多 20 条），按当前扫描 ID 和输入版本分批提交复核（每批最多 50 个判断）。累计账本超过 100 条后仍可保存新的业务审计风险；重复提交同一风险沿用原记录。
 
 
+## Trivy 依赖检查提示
+
+Trivy 成功退出、结果结构有效时，以计划清单和实际返回的包清单、包名和版本、Python 声明解析结果及漏洞库新鲜度判定本次依赖覆盖。普通诊断日志的级别不会单独触发覆盖缺口提示。清单未获得报告、包坐标无法确认、声明存在未解析项或漏洞库过期等情况仍报告限制；非零退出或无效 JSON 沿失败路径处理。这个判断的范围是本次所选清单中的报告结果。
+
 ## 原生编辑与 Stop 收尾
+
+POSIX 源码版的全局 Codex Stop 在请求内共享已验证的构建摘要。配置校验和最终回执使用同一算法，复用前重查文件清单与状态变更时间；下一请求重新计算。源码或规则的内容、路径和成员变化会使旧摘要失效。构建身份只标识 Runtime 自身，项目扫描输入仍由扫描流程独立验证。
 
 全局 MCP 收到有效的 Stop 时，由业务路由按本次请求的工作区和空目录规则解析根路径，诊断记录直接使用该路径。复用只在本次调用内生效。收到待复核提醒后，宿主 Agent 直接读取当前待办和证据；常见单候选再调用一次提交并读取保存后的结果。用户可见的 Hook 只显示简短状态。
 

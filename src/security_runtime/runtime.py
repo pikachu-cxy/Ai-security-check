@@ -204,7 +204,13 @@ class SecurityRuntime:
         rule_pack = None
         rule_root = Path(rules_path) if rules_path else None
         bindings = list(request.bindings if request is not None else ())
-        for adapter in self.registry.adapters:
+        # Only a fixed development input proven entirely absent may omit
+        # unused provider bindings. Still capture absence and publish normally.
+        only_deletions = (getattr(attempt, 'captured_only', False) and request is not None
+            and absent and not targets and not changed_dependencies and not rules_path
+            and not bindings and set(absent) == set(request.requested_files))
+        binding_adapters = () if only_deletions else self.registry.adapters
+        for adapter in binding_adapters:
             reader = getattr(adapter, 'input_bindings', None)
             if callable(reader):
                 for actual in reader():
@@ -212,7 +218,7 @@ class SecurityRuntime:
                         raise ScanInputError('SCAN_INPUT_BINDING_CHANGED')
                     if actual not in bindings:
                         bindings.append(actual)
-        for adapter in self.registry.adapters:
+        for adapter in binding_adapters:
             if not isinstance(adapter, PatternSASTScanner):
                 continue
             try:

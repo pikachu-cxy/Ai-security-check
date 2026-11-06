@@ -64,9 +64,13 @@ def manager_fixture(tmp_path):
     return manager
 
 
-def test_trivy_extracts_pyproject_and_maps_vulnerability_to_original(tmp_path):
+@pytest.mark.parametrize(('extra', 'coverage', 'unresolved'), [
+    ('', 'FULL', 0),
+    (', "requests>=2"', 'PARTIAL', 1),
+])
+def test_trivy_extracts_pyproject_and_maps_vulnerability_to_original(tmp_path, extra, coverage, unresolved):
     p = tmp_path / 'pyproject.toml'
-    original = '[project]\ndependencies=["PyYAML==5.3.1"]'
+    original = f'[project]\ndependencies=["PyYAML==5.3.1"{extra}]'
     p.write_text(original)
     context = ScanContext(str(tmp_path), ScanMode.QUICK, ('pyproject.toml',))
     def execute(args, cwd, timeout):
@@ -80,7 +84,8 @@ def test_trivy_extracts_pyproject_and_maps_vulnerability_to_original(tmp_path):
                 'VulnerabilityID': 'CVE-2020-14343', 'Severity': 'HIGH'}]}]}), '', 1)
     with patch('security_runtime.scanners._execute', side_effect=execute):
         found, run = TrivyAdapter(manager_fixture(tmp_path)).scan(context, FindingNormalizer(tmp_path))
-    assert run.status == 'SUCCESS' and run.coverage_contract == 'PARTIAL'
+    assert run.status == 'SUCCESS' and run.coverage_contract == coverage
+    assert run.dependency_inventory['python_declarations']['pyproject.toml']['unresolved_entries'] == unresolved
     assert run.dependency_inventory['per_manifest'] == {'pyproject.toml': 1}
     assert run.dependency_inventory['unconfirmed_manifests'] == []
     assert len(found) == 1

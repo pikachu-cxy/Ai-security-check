@@ -20,6 +20,10 @@ import yaml
 _SAFE_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
 
 
+def load_rule_yaml(content):
+    return yaml.load(content, Loader=_SAFE_LOADER)
+
+
 class RulePackClass(StrEnum):
     FIRST_PARTY = "FIRST_PARTY"
     PERMISSIVE_THIRD_PARTY = "PERMISSIVE_THIRD_PARTY"
@@ -255,7 +259,7 @@ class RulePackManager:
             content = native.read_bytes()
             # References in metadata are attribution, not executable remote
             # configs. Only local YAML is passed to the engine.
-            data = yaml.load(content, Loader=_SAFE_LOADER)
+            data = load_rule_yaml(content)
             if not isinstance(data,dict) or not isinstance(data.get('rules'),list) or not data['rules']:
                 raise ValueError(f'Rule pack has no valid rules: {file.name}')
             for rule in data['rules']:

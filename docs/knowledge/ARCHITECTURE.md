@@ -59,3 +59,5 @@ flowchart TD
 ## 目录职责
 
 `src/` 是产品实现，`tests/` 是回归与语料，`scripts/build/` 和 `scripts/release/` 负责构建及发布，`scripts/performance/` 负责测量，`website/` 是用户文档站与下载脚本。`dist/`、`build/` 和系统临时目录不是源码事实入口。第三方 `rules/` 通过规则目录与许可边界管理，不逐条复制进本知识库。
+
+开发复核由宿主交付本轮开发摘要和已保存的安全报告。路径来源、重复告警关联、纯删除输入分别在事件收集、风险事务和扫描执行层处理；各工作目录使用自己的检查记录。大仓库与多 worktree 的验收范围见[开发场景验收](DEVELOPMENT_ACCEPTANCE.md)。

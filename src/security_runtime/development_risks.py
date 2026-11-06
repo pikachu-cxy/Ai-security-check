@@ -7,7 +7,7 @@ No method in this module runs a scanner or captures a project baseline.
 from dataclasses import asdict
 import hashlib
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -18,7 +18,7 @@ from .redactor import SecretRedactor
 from .scan_request import relative_path
 from .tasks.durable import SignedRecords
 import sqlite3
-from .performance_trace import span
+from .performance_trace import review_mark, span
 
 
 class Observation(BaseModel):
@@ -35,6 +35,7 @@ class Observation(BaseModel):
     severity: Literal['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO', 'UNRATED']
     decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
     rationale: str = Field(min_length=1, max_length=2000)
+    duplicate_of: str | None = Field(default=None, min_length=1, max_length=160)
     report_text: str | None = Field(default=None, min_length=1, max_length=3000)
     # Empty lists are rejected by the domain with an actionable recovery step.
     evidence_refs: list[str] = Field(max_length=20)
@@ -42,12 +43,16 @@ class Observation(BaseModel):
     scan_id: str | None = Field(default=None, max_length=160)
 
 
+ScanId = Annotated[str, Field(min_length=1, max_length=160)]
+
+
 class ScannerReview(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     same_issue_as: str = Field(min_length=1, max_length=160)
-    scan_id: str = Field(min_length=1, max_length=160)
+    scan_id: ScanId | None = None
     decision: Literal['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE']
     rationale: str = Field(min_length=1, max_length=2000)
+    duplicate_of: str | None = Field(default=None, min_length=1, max_length=160)
     report_text: str | None = Field(default=None, min_length=1, max_length=3000)
     evidence_refs: list[str] = Field(max_length=20)
 
@@ -65,10 +70,12 @@ class ReviewSubmission(BaseModel):
     check_ref: str
     expected_seq: int
     observations: list[ScannerReview | Observation]
+    scan_id: ScanId | None = None
     workspace_path: str | None = None
     session_ref: str | None = None
     business_reviews: list[BusinessReview] | None = None
     return_risks: bool = False
+    response_view: Literal['batch', 'final_report'] = 'batch'
 
 
 def review_input_failure(arguments, *, require_workspace=False):
@@ -79,6 +86,8 @@ def review_input_failure(arguments, *, require_workspace=False):
     errors = []
     try:
         request = ReviewSubmission.model_validate(arguments)
+        if request.scan_id is None and any(o.same_issue_as and o.scan_id is None for o in request.observations):
+            errors.append(dict(field='scan_id', code='missing'))
         if require_workspace and not request.workspace_path:
             errors.append(dict(field='workspace_path', code='missing'))
     except ValidationError as exc:
@@ -95,6 +104,7 @@ def review_input_failure(arguments, *, require_workspace=False):
     for error in errors:
         field = error['field']
         error['correction'] = (
+            '在批次顶层传入本次取证返回的 scan_id。' if field == 'scan_id' else
             '传入当前检查的 dirty_seq 整数。' if field == 'expected_seq' else
             '传入字符串数组；没有限制时使用 []，不要传入单个字符串。' if field.endswith('limitations') else
             '使用实际读取返回的 evidence_ref 数组。' if field.endswith('evidence_refs') else
@@ -268,26 +278,31 @@ class DevelopmentRisks:
         with self.store.transaction() as db:
             self.publish_scan(db, self.current_check())
 
-    def submit(self, observations, expected_seq, *, business_reviews=(), return_risks=False):
+    def submit(self, observations, expected_seq, *, business_reviews=(), return_risks=False, scan_id=None):
         try:
             return self._submit(observations, expected_seq, business_reviews=business_reviews,
-                                return_risks=return_risks)
+                                return_risks=return_risks, scan_id=scan_id)
         except DevelopmentRiskError as error:
             if not hasattr(error, 'recovery'):
                 error.recovery = dict(tool='get_development_check', arguments=dict(
                     check_ref=self.ref, workspace_path=str(self.root)))
             raise
 
-    def _submit(self, observations, expected_seq, *, business_reviews, return_risks):
+    def _submit(self, observations, expected_seq, *, business_reviews, return_risks, scan_id):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
         values = [(ScannerReview if 'issue_key' not in v else Observation).model_validate(v)
                   for v in observations]
         business = [BusinessReview.model_validate(v) for v in business_reviews]
         require(len(values) <= 50, 'DEVELOPMENT_RISK_LIMIT')
         require(len(business) <= 50, 'DEVELOPMENT_RISK_LIMIT')
+        review_mark('validated_arguments')
         with self.store.transaction() as db:
+            review_mark('transaction_open')
             check = self.current_check()
             require(check['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            if scan_id is not None:
+                require(scan_id == check.get('scan_id') and check['scanned_seq'] == expected_seq,
+                        'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
             from .user_config import batch_config
             policy = batch_config(check)['agent']
             for value in values:
@@ -302,6 +317,8 @@ class DevelopmentRisks:
             for index, value in enumerate(values):
                 if value.same_issue_as:
                     try:
+                        if value.scan_id is None:
+                            value = value.model_copy(update={'scan_id': scan_id})
                         require(value.scan_id is not None and value.scan_id == check.get('scan_id') and
                                 check['scanned_seq'] == expected_seq, 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
                         matches = [(r, o) for r in row['risks'].values() for o in r['observations']
@@ -375,6 +392,10 @@ class DevelopmentRisks:
                     evidence_refs=value.evidence_refs, source_hashes={e['file_path']:e['sha256'] for e in evidence},
                     dirty_seq=expected_seq, scan_id=check.get('scan_id'),
                     finding=finding)
+                if value.duplicate_of is not None:
+                    require(value.same_issue_as and value.decision == 'DISMISSED', 'DEVELOPMENT_DUPLICATE_INVALID')
+                    assessment['duplicate_of'] = value.duplicate_of
+                    row['has_duplicate_links'] = True
                 if value.report_text and value.decision == 'CONFIRMED':
                     assessment['report_text'] = safe(value.report_text)
                 if assessment not in risk['assessments']:
@@ -387,8 +408,26 @@ class DevelopmentRisks:
                 if obs not in risk['observations']:
                     require(len(risk['observations']) < 128, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                     risk['observations'].append(obs)
+            if row.get('has_duplicate_links'):
+                # Validate the finished batch independently of item order, including
+                # later amendments to a primary decision. Exceptions roll it back.
+                for risk in row['risks'].values():
+                    linked = risk.get('assessment') or {}
+                    primary_id = linked.get('duplicate_of')
+                    if not primary_id or (linked['scan_id'], linked['dirty_seq']) != (check['scan_id'], expected_seq):
+                        continue
+                    primary = row['risks'].get(primary_id) or {}
+                    proof = primary.get('assessment') or {}
+                    require(primary_id != risk['id'] and proof.get('decision') == 'CONFIRMED'
+                        and (proof.get('scan_id'), proof.get('dirty_seq')) == (check['scan_id'], expected_seq)
+                        and proof['finding']['file_path'] == linked['finding']['file_path']
+                        and proof['finding']['line_start'] <= linked['finding']['line_end']
+                        and linked['finding']['line_start'] <= proof['finding']['line_end']
+                        and any(o['source'] == 'SCANNER' and o.get('scan_id') == check['scan_id']
+                                for o in primary['observations']), 'DEVELOPMENT_DUPLICATE_INVALID')
             # Check again before publication: path events during evidence reads invalidate submission.
             require(self.current_check()['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            review_mark('decisions_checked')
             # Revalidate every submitted evidence receipt before committing the batch.
             for value in values:
                 self.evidence(row, value.evidence_refs)
@@ -419,19 +458,23 @@ class DevelopmentRisks:
             current = self.checks._get(db, self.ref)
             require(current['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
             require(current.get('scan_id') == check.get('scan_id'), 'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
+            review_mark('before_write')
             self.checks._put(db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
                                                has_development_review=True))
             self.store._put(db, self.ref, row)
+        review_mark('committed')
         from .development_reporting import reporting
         version = (expected_seq, check.get('scan_id'))
         reread = reporting(self.ref, self.root, after_review=True)['next_action']
         reread['arguments'].update(view='batch', expected_seq=expected_seq, scan_id=version[1])
         try:
+            review_mark('readback_start')
             result = self.get(offset=0, limit=20 if return_risks else 5, include_history=False,
                               batch_version=version)
         except (ValueError, OSError, sqlite3.Error):
             return dict(review_saved=True, reread_required=True, post_commit_read=False,
                         next_action=reread)
+        review_mark('readback_done')
         from .performance_trace import review_event
         review_event('saved', check, result['review_progress'])
         if return_risks and result.get('candidates_ready') and (

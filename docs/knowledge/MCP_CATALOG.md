@@ -34,7 +34,7 @@
 
 ### development_check / begin_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:167](../../src/security_runtime/mcp_tools/development_check.py#L167)
+定义：[src/security_runtime/mcp_tools/development_check.py:176](../../src/security_runtime/mcp_tools/development_check.py#L176)
 
 ```python
 begin_development_check(task_key: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -44,7 +44,7 @@ Start an actual coding task's lightweight edit record. Metadata only: no project
 
 ### development_check / complete_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:210](../../src/security_runtime/mcp_tools/development_check.py#L210)
+定义：[src/security_runtime/mcp_tools/development_check.py:219](../../src/security_runtime/mcp_tools/development_check.py#L219)
 
 ```python
 complete_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -54,7 +54,7 @@ Submit the observed batch once; product chooses its bounded wait. Timeout/cancel
 
 ### development_check / declare_development_outputs
 
-定义：[src/security_runtime/mcp_tools/development_check.py:185](../../src/security_runtime/mcp_tools/development_check.py#L185)
+定义：[src/security_runtime/mcp_tools/development_check.py:194](../../src/security_runtime/mcp_tools/development_check.py#L194)
 
 ```python
 declare_development_outputs(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None)
@@ -64,7 +64,7 @@ Declare exact generated-output files/directories for this check only, ideally be
 
 ### development_check / finish_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:192](../../src/security_runtime/mcp_tools/development_check.py#L192)
+定义：[src/security_runtime/mcp_tools/development_check.py:201](../../src/security_runtime/mcp_tools/development_check.py#L201)
 
 ```python
 finish_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, wait_seconds: Annotated[int, Field(ge=0, le=25)]=0)
@@ -74,7 +74,7 @@ Close the observed-edit batch and schedule scoped background work once. Default 
 
 ### development_check / get_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:203](../../src/security_runtime/mcp_tools/development_check.py#L203)
+定义：[src/security_runtime/mcp_tools/development_check.py:212](../../src/security_runtime/mcp_tools/development_check.py#L212)
 
 ```python
 get_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -84,7 +84,7 @@ Read this owner's saved lightweight check status, scope, versions, findings and 
 
 ### development_check / get_development_deliveries
 
-定义：[src/security_runtime/mcp_tools/development_check.py:224](../../src/security_runtime/mcp_tools/development_check.py#L224)
+定义：[src/security_runtime/mcp_tools/development_check.py:233](../../src/security_runtime/mcp_tools/development_check.py#L233)
 
 ```python
 get_development_deliveries(workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=20)
@@ -94,7 +94,7 @@ Page this verified owner's pending result deliveries, including older scan versi
 
 ### development_check / get_development_result
 
-定义：[src/security_runtime/mcp_tools/development_check.py:231](../../src/security_runtime/mcp_tools/development_check.py#L231)
+定义：[src/security_runtime/mcp_tools/development_check.py:240](../../src/security_runtime/mcp_tools/development_check.py#L240)
 
 ```python
 get_development_result(check_ref: str, scanned_seq: int, workspace_path: str | None=None, session_ref: str | None=None)
@@ -104,7 +104,7 @@ Read an original saved version from this owner's outbox, even after later edits/
 
 ### development_check / record_development_changes
 
-定义：[src/security_runtime/mcp_tools/development_check.py:176](../../src/security_runtime/mcp_tools/development_check.py#L176)
+定义：[src/security_runtime/mcp_tools/development_check.py:185](../../src/security_runtime/mcp_tools/development_check.py#L185)
 
 ```python
 record_development_changes(check_ref: str, paths: list[str], workspace_path: str | None=None, session_ref: str | None=None, scope_unknown: bool=False, event_id: str | None=None)
@@ -114,7 +114,7 @@ Record paths observed during AI editing when Hooks cannot supply them. Include b
 
 ### development_check / wait_development_check
 
-定义：[src/security_runtime/mcp_tools/development_check.py:217](../../src/security_runtime/mcp_tools/development_check.py#L217)
+定义：[src/security_runtime/mcp_tools/development_check.py:226](../../src/security_runtime/mcp_tools/development_check.py#L226)
 
 ```python
 wait_development_check(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -124,7 +124,7 @@ Await saved progress using the product's communication budget. Read-only: never 
 
 ### development_review / get_development_risks
 
-定义：[src/security_runtime/mcp_tools/development_check.py:87](../../src/security_runtime/mcp_tools/development_check.py#L87)
+定义：[src/security_runtime/mcp_tools/development_check.py:96](../../src/security_runtime/mcp_tools/development_check.py#L96)
 
 ```python
 get_development_risks(check_ref: str, workspace_path: str | None=None, session_ref: str | None=None, offset: int=0, limit: int=20, include_history: bool=False, view: Literal['summary', 'full', 'review', 'batch']='summary', include_evidence: bool=False, expected_seq: int | None=None, scan_id: str | None=None)
@@ -134,7 +134,7 @@ For pending review, view=review reads current-scan candidates and bounded untrus
 
 ### development_review / prepare_development_risk_fix
 
-定义：[src/security_runtime/mcp_tools/development_check.py:128](../../src/security_runtime/mcp_tools/development_check.py#L128)
+定义：[src/security_runtime/mcp_tools/development_check.py:137](../../src/security_runtime/mcp_tools/development_check.py#L137)
 
 ```python
 prepare_development_risk_fix(check_ref: str, risk_id: str, proposal: str, preserve: list[str], evidence_refs: list[str], user_requested: bool, impact_summary: str, critical_unknowns: list[str], workspace_path: str | None=None, session_ref: str | None=None, repair_paths: list[str] | None=None)
@@ -144,7 +144,7 @@ Prepare one unified development risk after explicit user authorization of this e
 
 ### development_review / read_development_risk_context
 
-定义：[src/security_runtime/mcp_tools/development_check.py:32](../../src/security_runtime/mcp_tools/development_check.py#L32)
+定义：[src/security_runtime/mcp_tools/development_check.py:34](../../src/security_runtime/mcp_tools/development_check.py#L34)
 
 ```python
 read_development_risk_context(check_ref: str, file_path: str | None=None, start_line: int=1, end_line: int=80, workspace_path: str | None=None, session_ref: str | None=None, related: bool=False, windows: Annotated[list[EvidenceWindow], Field(min_length=1, max_length=20)] | None=None)
@@ -154,7 +154,7 @@ Read evidence via file_path or batch windows (not both). Batch deduplicates iden
 
 ### development_review / set_development_risk_disposition
 
-定义：[src/security_runtime/mcp_tools/development_check.py:121](../../src/security_runtime/mcp_tools/development_check.py#L121)
+定义：[src/security_runtime/mcp_tools/development_check.py:130](../../src/security_runtime/mcp_tools/development_check.py#L130)
 
 ```python
 set_development_risk_disposition(check_ref: str, risk_id: str, decision: str, user_requested: bool, workspace_path: str | None=None, session_ref: str | None=None)
@@ -164,17 +164,17 @@ Persist explicit selected-risk user choice: DEFER, EXCLUDE, RESTORE. Suppress re
 
 ### development_review / submit_development_review
 
-定义：[src/security_runtime/mcp_tools/development_check.py:48](../../src/security_runtime/mcp_tools/development_check.py#L48)
+定义：[src/security_runtime/mcp_tools/development_check.py:51](../../src/security_runtime/mcp_tools/development_check.py#L51)
 
 ```python
-submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation], workspace_path: str | None=None, session_ref: str | None=None, business_reviews: list[BusinessReview] | None=None, return_risks: bool=False)
+submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation], workspace_path: str | None=None, session_ref: str | None=None, business_reviews: list[BusinessReview] | None=None, return_risks: bool=False, response_view: Literal['batch', 'final_report']='batch', scan_id: ScanId | None=None)
 ```
 
-Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Existing alerts require only same_issue_as, current scan_id, decision, rationale and evidence_refs; location comes from that original scan. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof.
+Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a compact verified single page; incomplete batches retain their original view. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof.
 
 ### development_review / submit_development_risk_resolution
 
-定义：[src/security_runtime/mcp_tools/development_check.py:139](../../src/security_runtime/mcp_tools/development_check.py#L139)
+定义：[src/security_runtime/mcp_tools/development_check.py:148](../../src/security_runtime/mcp_tools/development_check.py#L148)
 
 ```python
 submit_development_risk_resolution(check_ref: str, risk_id: str, repair_ref: str, outcome: str, evidence_refs: list[str], rationale: str, workspace_path: str | None=None, session_ref: str | None=None)
@@ -424,7 +424,7 @@ Locally recheck every original task member with originating scanners/equivalence
 
 ### runtime_status / get_development_config
 
-定义：[src/security_runtime/mcp_tools/development_check.py:21](../../src/security_runtime/mcp_tools/development_check.py#L21)
+定义：[src/security_runtime/mcp_tools/development_check.py:22](../../src/security_runtime/mcp_tools/development_check.py#L22)
 
 ```python
 get_development_config()

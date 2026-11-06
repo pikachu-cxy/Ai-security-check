@@ -299,7 +299,9 @@ def _scan(queue, row, ticket, runtime_factory=None):
             gaps.append('OBSERVED_FILES_NOT_SCANNED')
         if receipt.get('source_applicability') not in {'CURRENT', 'CAPTURED'}:
             gaps.append('SOURCE_CHANGED_DURING_SCAN')
-        if (result.status != 'COMPLETED' or any(value not in {'EXECUTED', 'NOT_APPLICABLE'}
+        deletion_only = (result.status == 'NO_CHANGES' and absent and not request.files
+            and not request.dependency_changes and not actual)
+        if ((result.status != 'COMPLETED' and not deletion_only) or any(value not in {'EXECUTED', 'NOT_APPLICABLE'}
                 for value in result.capability_results.values())):
             gaps.append('SCANNER_COVERAGE_LIMITED')
         runs = [asdict(run) for run in result.scanner_runs]

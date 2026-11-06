@@ -127,13 +127,15 @@ def normalize_tool_event(arguments, root, *, host, capabilities):
     candidates, unknown = (edit_path_hints(arguments.get('tool_name'), arguments.get('tool_input'), root,
                                           cwd=arguments.get('workspace_path'), require_patch_body=codex_pre_patch)
                            if expected in {'PreToolUse', 'PostToolUse'} else ((), True))
-    if codex_pre_patch and not unknown:
+    direct_path = (host == 'codex' and expected == 'PreToolUse'
+                   and arguments.get('tool_name') in {'Edit', 'Write'})
+    if (codex_pre_patch or direct_path) and not unknown:
         from .development_check import clean_paths
         _, unknown = clean_paths(candidates, tolerant=True)
     return NormalizedHostEvent(EVENTS[expected], context, operation,
         turn_id=arguments.get('turn_id'),
         candidate_paths=candidates, scope_unknown=unknown,
-        complete_patch_paths=codex_pre_patch and not unknown,
+        complete_patch_paths=(codex_pre_patch or direct_path) and not unknown,
         mutation_hint=True if operation == OperationClass.DIRECT_FILE_MUTATION else None,
         stop_guard_active=arguments.get('stop_hook_active', False) if expected == 'Stop' else None)
 
@@ -155,7 +157,9 @@ def before_normalized_event(event, coordinator):
         scan_path=getattr(getattr(coordinator.runtime, 'store', None), 'path', None))
     if result.get('check_ref') and not event.complete_patch_paths:
         store = DevelopmentCheckStore(coordinator.store, context.workspace)
-        watch_status = start_window(store, result['check_ref'], owner, invocation=context.invocation_binding)
+        from .scan_prewarm import start as prewarm
+        watch_status = start_window(store, result['check_ref'], owner, invocation=context.invocation_binding,
+                                    prewarm=prewarm)
         result = projection(store, store.load(result['check_ref'], owner))
         if watch_status != 'ACTIVE':
             result['file_watch_start_failed'] = True

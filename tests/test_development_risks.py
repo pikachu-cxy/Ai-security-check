@@ -459,3 +459,108 @@ def test_mcp_compact_review_defaults_preserve_findings_and_full_access(sample):
         print('compact_bytes', len(json.dumps(short)), 'full_bytes', len(json.dumps(full)),
               'receipt_bytes', len(json.dumps(receipt)))
     asyncio.run(run())
+
+
+@pytest.mark.parametrize('decision', ['CONFIRMED', 'DISMISSED', 'INCONCLUSIVE'])
+def test_final_report_requires_complete_committed_single_page(sample, monkeypatch, decision):
+    from security_runtime.development_views import final_report_receipt
+    _, _, _, risks = sample
+    scanner(sample, monkeypatch)
+    risks.sync_scanner()
+    value = observation(risks, same_issue_as='s1', report_text='SQL in query.py:2. Bind the parameter.')
+    value['decision'] = decision
+    seq = risks.current_check()['dirty_seq']
+    coverage = [dict(file_path='query.py', rationale='Checked', evidence_refs=value['evidence_refs'])]
+    import asyncio
+    import json
+    from types import SimpleNamespace
+    from mcp.server.fastmcp import FastMCP
+    from security_runtime.mcp_tools.development_check import register
+    root, service, ref, _ = sample
+    server = FastMCP('final-report-test')
+    register(server, SimpleNamespace(harden=lambda names: None), application=SimpleNamespace(
+        development_service=lambda *args: service, bound_path=lambda _: root))
+    batch_scan_id = value.pop('scan_id')
+    output = asyncio.run(server.call_tool('submit_development_review', dict(
+        check_ref=ref, expected_seq=seq, scan_id=batch_scan_id, observations=[value], business_reviews=coverage,
+        response_view='final_report', return_risks=True)))
+    receipt = output[1] if isinstance(output, tuple) else json.loads(output[0].text)
+    offsets = receipt['review_timing']['offsets_us']
+    assert offsets['before_write'] <= offsets['committed'] <= offsets['readback_done'] <= offsets['response_ready']
+    page = risks.get(batch_version=(seq, 'scan-1'))
+    page.update(review_saved=True, post_commit_read=True, reread_required=False)
+    if decision == 'INCONCLUSIVE':
+        assert receipt['view'] == 'batch' and receipt['risks'] == page['risks']
+    else:
+        assert receipt['report_text'] == page['report_text']
+        assert receipt['view'] == 'final_report' and 'risks' not in receipt
+        assert receipt['dirty_seq'] == seq and receipt['scan_id'] == page['scan_id']
+        for key, override in [('next_offset', 20), ('next_action', {'tool':'read'}),
+                              ('reread_required', True), ('post_commit_read', False)]:
+            fallback = dict(page, **{key: override})
+            assert final_report_receipt(fallback) is fallback
+        assert len(risks.load()['reviews']) == 1
+
+
+def test_final_report_after_readback_failure_recovers_only_by_reading(sample, monkeypatch):
+    from security_runtime.development_views import final_report_receipt
+    _, _, _, risks = sample
+    scanner(sample, monkeypatch)
+    risks.sync_scanner()
+    seq = risks.current_check()['dirty_seq']
+    value = observation(risks, same_issue_as='s1', report_text='Bind the parameter.')
+    coverage = [dict(file_path='query.py', rationale='Checked', evidence_refs=value['evidence_refs'])]
+    with monkeypatch.context() as patch:
+        def unavailable(*args, **kwargs):
+            raise OSError('readback unavailable')
+        patch.setattr(risks, 'get', unavailable)
+        saved = risks.submit([value], seq, business_reviews=coverage, return_risks=True)
+    receipt = final_report_receipt(saved)
+    assert receipt['review_saved'] and receipt['reread_required'] and not receipt['post_commit_read']
+    assert receipt['next_action']['tool'] == 'get_development_risks'
+    assert risks.get(batch_version=(seq, 'scan-1'))['report_text'] == value['report_text']
+    assert len(risks.load()['reviews']) == 1
+
+
+def test_duplicate_links_are_verified_in_the_same_batch(sample, monkeypatch):
+    root, _, _, risks = sample
+    first = scanner(sample, monkeypatch)
+    other = dict(first, id='s2', fingerprint='second', title='Second detector')
+    monkeypatch.setattr('security_runtime.storage.ReadOnlySQLiteStore.get_scan',
+        lambda *_: dict(target_profile=dict(path=str(root)), findings=[first, other]))
+    risks.sync_scanner()
+    page = risks.get(review_only=True)
+    primary, repeated = page['candidates']
+    primary_review = dict(same_issue_as=primary['id'], decision='CONFIRMED',
+        rationale='Input reaches SQL', evidence_refs=primary['evidence_refs'], report_text='Bind the query.')
+    secondary = dict(same_issue_as=repeated['id'], decision='DISMISSED', rationale='Same input and sink',
+                     evidence_refs=repeated['evidence_refs'], duplicate_of=primary['id'])
+    def save(items):
+        return risks.submit(items, page['dirty_seq'], scan_id=page['scan_id'], return_risks=True,
+            business_reviews=[dict(file_path='query.py', rationale='Checked', evidence_refs=primary['evidence_refs'])])
+    for target in ('unknown', repeated['id']):
+        with pytest.raises(ValueError, match='DEVELOPMENT_DUPLICATE_INVALID'):
+            save([primary_review, dict(secondary, duplicate_of=target)])
+        assert not risks.load()['reviews']
+    result = save([secondary, primary_review])
+    assert '1 条重复告警' in result['report_text'] and '误报' not in result['report_text']
+    with pytest.raises(ValueError, match='DEVELOPMENT_DUPLICATE_INVALID'):
+        save([dict(primary_review, decision='DISMISSED')])
+
+
+def test_shell_only_finding_keeps_writer_uncertainty_in_evidence_and_delivery(sample, monkeypatch):
+    root, service, ref, risks = sample
+    scanner(sample, monkeypatch)
+    store = service.store(root)
+    with store.transaction() as db:
+        check = store._get(db, ref)
+        store._put(db, ref, dict(check, explicit_paths=[], file_watch={'attribution':'TIME_WINDOW_NOT_WRITER'}))
+    risks.sync_scanner()
+    page = risks.get(review_only=True)
+    item = page['candidates'][0]
+    assert item['edit_attribution'] == 'OBSERVED_ONLY_WRITER_UNKNOWN'
+    report = risks.submit([dict(same_issue_as=item['id'], decision='CONFIRMED', rationale='Unsafe SQL',
+        report_text='Unsafe query.', evidence_refs=item['evidence_refs'])], page['dirty_seq'],
+        scan_id=page['scan_id'], return_risks=True, business_reviews=[dict(file_path='query.py',
+            rationale='Checked', evidence_refs=item['evidence_refs'])])
+    assert '写入会话未经确认' in report['report_text']

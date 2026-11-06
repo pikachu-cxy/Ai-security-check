@@ -2,8 +2,9 @@
 from mcp.types import ToolAnnotations
 from pydantic import Field
 from typing import Annotated, Literal
-from ..development_risks import Observation, ScannerReview, BusinessReview
+from ..development_risks import Observation, ScannerReview, BusinessReview, ScanId
 from ..development_views import EvidenceWindow
+from ..performance_trace import timed_review
 
 
 TOOLS = frozenset({'get_development_config', 'begin_development_check', 'record_development_changes',
@@ -29,6 +30,7 @@ def register(server, registry, *, application):
         return DevelopmentRisks(service, application.bound_path(workspace_path), check_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    @timed_review
     def read_development_risk_context(check_ref: str, file_path: str | None = None, start_line: int = 1,
                                      end_line: int = 80, workspace_path: str | None = None,
                                      session_ref: str | None = None, related: bool = False,
@@ -45,19 +47,25 @@ def register(server, registry, *, application):
         return service.read(file_path, start_line, end_line, related=related)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    @timed_review
     def submit_development_review(check_ref: str, expected_seq: int, observations: list[ScannerReview | Observation],
                                   workspace_path: str | None = None, session_ref: str | None = None,
                                   business_reviews: list[BusinessReview] | None = None,
-                                  return_risks: bool = False) -> dict:
-        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Existing alerts require only same_issue_as, current scan_id, decision, rationale and evidence_refs; location comes from that original scan. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
+                                  return_risks: bool = False,
+                                  response_view: Literal['batch', 'final_report'] = 'batch',
+                                  scan_id: ScanId | None = None) -> dict:
+        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a compact verified single page; incomplete batches retain their original view. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
         values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
         try:
-            from ..development_views import review_receipt
+            from ..development_views import final_report_receipt, review_receipt
             saved = risks(check_ref, workspace_path, session_ref).submit(
-                values, expected_seq, business_reviews=coverage, return_risks=return_risks)
+                values, expected_seq, business_reviews=coverage, scan_id=scan_id,
+                return_risks=return_risks or response_view == 'final_report')
             result = saved if saved.get('review_saved') else review_receipt(saved)
+            if response_view == 'final_report':
+                result = final_report_receipt(result)
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
             return result
@@ -84,6 +92,7 @@ def register(server, registry, *, application):
                 content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
+    @timed_review
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
                               session_ref: str | None = None, offset: int = 0, limit: int = 20,
                               include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch'] = 'summary',

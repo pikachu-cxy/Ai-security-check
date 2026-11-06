@@ -323,11 +323,11 @@ class DevelopmentCheckService:
     def store(self, root):
         return DevelopmentCheckStore(self.hooks, root, now=self.now)
 
-    def _prewarm(self, root, paths=()):
+    def _prewarm(self, root, row, paths=()):
         # Trusted embeddings with their own launcher retain their own lifecycle.
         if self.launcher is None:
             from .scan_prewarm import start
-            start(root, paths)
+            start(root, paths, batch=(row['check_ref'], row['scanned_seq']))
 
     def scan_path(self):
         from .storage import SQLiteStore
@@ -384,7 +384,7 @@ class DevelopmentCheckService:
         if previous and previous['check_ref'] != row['check_ref']:
             from .development_file_watch import stop_window
             stop_window(store, previous['check_ref'], self.owner)
-        self._prewarm(store.root)
+        self._prewarm(store.root, row)
         return projection(store, row)
 
     @timed('check.record')
@@ -396,7 +396,7 @@ class DevelopmentCheckService:
         store.load(check_ref, self.owner)
         with store.transaction() as db:
             row, changed = store.append(db, note_activity(store._get(db, check_ref)), names, scope_unknown, event_id)
-        self._prewarm(store.root, names)
+        self._prewarm(store.root, row, names)
         return projection(store, store.load(check_ref, self.owner))
 
     def declare_outputs(self, root, check_ref, directories):
@@ -679,5 +679,5 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
         if digest is not None:
             store._put(db, replay_key, dict(kind='replay', events=[*replay['events'],
                 dict(id=digest, check_ref=row['check_ref'])][-MAX_EVENTS:]))
-    service._prewarm(store.root, names)
+    service._prewarm(store.root, row, names)
     return projection(store, store.load(row['check_ref'], owner))

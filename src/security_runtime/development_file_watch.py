@@ -7,6 +7,7 @@ a saved coverage gap, never a reconstructed observation of past writes.
 from __future__ import annotations
 
 import atexit
+import logging
 import os
 from pathlib import Path
 import threading
@@ -50,7 +51,8 @@ def _gap(store, ref, reason, *, watch_id=None, status='FAILED'):
 
 
 class _Window:
-    def __init__(self, store, ref, owner, backend_factory):
+    def __init__(self, store, ref, owner, backend_factory, prewarm=None):
+        self.prewarm = prewarm
         self.store, self.ref, self.owner = store, ref, dict(owner)
         self.id = uuid.uuid4().hex
         self.closing = threading.Event()
@@ -119,6 +121,12 @@ class _Window:
                     *row.get('file_watch_gaps', []), 'FILE_WATCH_PATHS_INCOMPLETE'])))
             self.store._put(db, self.ref, row)
         self.seen.update(fresh)
+        if fresh and not self.closing.is_set() and self.prewarm and os.getenv('SECURITY_RUNTIME_WATCH_PREWARM') != '0':
+            try:
+                self.prewarm(self.store.root, fresh, batch=(self.ref, row['scanned_seq']))
+            except Exception:
+                # Optional scheduling must never interrupt the observation window.
+                logging.getLogger(__name__).debug('Watch prewarm scheduling unavailable')
 
     def run(self):
         heartbeat = 0
@@ -175,7 +183,7 @@ class _Window:
                         _windows.pop(_key(self.store, self.ref), None)
 
 
-def start_window(store, ref, owner, *, backend_factory=None, invocation=None):
+def start_window(store, ref, owner, *, backend_factory=None, invocation=None, prewarm=None):
     store.load(ref, owner)
     key = _key(store, ref)
     with _lock:
@@ -192,7 +200,7 @@ def start_window(store, ref, owner, *, backend_factory=None, invocation=None):
             _gap(store, ref, 'FILE_WATCH_INTERRUPTED', status='INTERRUPTED')
         window = None
         try:
-            window = _Window(store, ref, owner, backend_factory or _backend)
+            window = _Window(store, ref, owner, backend_factory or _backend, prewarm)
             window.pending_tools.add(invocation)
             with store.transaction() as db:
                 row = store._get(db, ref)

@@ -204,3 +204,26 @@ def test_stop_routes_pending_review_and_persists_budget_exhaustion(sample, monke
     assert store.load(ref, service.owner)['stop_fallback']['incomplete_reason']
     risks.submit([review(risks)], 1, business_reviews=[business(risks)])
     assert fallback(service.hooks, root, service.owner, service=service, stop_hook_active=True) is None
+
+
+@pytest.mark.parametrize('batch_id,second_fields,reason', [
+    ('old-scan', {}, 'SCAN_VERSION_STALE'),
+    ('scan-1', {'scan_id': 'different'}, 'SCAN_VERSION_STALE'),
+    ('scan-1', {'evidence_refs': []}, 'EVIDENCE_REQUIRED'),
+    (None, {}, 'SCAN_VERSION_STALE'),
+])
+def test_batch_scan_identity_and_evidence_fail_atomically(sample, monkeypatch, batch_id, second_fields, reason):
+    original = scanner(sample, monkeypatch)
+    root, _, _, risks = sample
+    second = dict(original, id='s2', fingerprint='second')
+    monkeypatch.setattr('security_runtime.storage.ReadOnlySQLiteStore.get_scan',
+                        lambda *_: dict(target_profile=dict(path=str(root)), findings=[original, second]))
+    risks.sync_scanner()
+    first = review(risks)
+    other = dict(first, same_issue_as='s2')
+    del other['scan_id']
+    other.update(second_fields)
+    with pytest.raises(DevelopmentRiskError, match=reason):
+        risks.submit([first, other], 1, scan_id=batch_id)
+    assert len(progress(risks)['pending_scanner_ids']) == 2
+    assert not risks.load()['reviews']

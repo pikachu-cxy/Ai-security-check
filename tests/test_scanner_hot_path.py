@@ -281,7 +281,8 @@ def test_capability_cache_hit_without_version_subprocess(probe):
     assert manager._version('gitleaks',path)=='8.30.0'
     with observation('workspace') as first: manager._version('gitleaks',path)
     with observation('workspace') as second: manager._version('gitleaks',path)
-    assert second['cache']['version_probe']=='HIT' and len(calls)==2
+    assert first['cache']['version_probe'] == second['cache']['version_probe'] == 'HIT'
+    assert len(calls) == 1
     assert second['counts']=={} and 'workspace' not in metadata(second)
 
 
@@ -304,11 +305,15 @@ def test_scanner_expected_version_invalidation(probe):
     assert manager._version('gitleaks',path)=='9.0.0' and len(calls)==2
 
 
-def test_capability_workspace_isolation(probe):
-    manager,path,calls,_=probe
-    with observation('workspace-a'): manager._version('gitleaks',path)
-    with observation('workspace-b'): manager._version('gitleaks',path)
-    assert len(calls)==2
+def test_native_probe_reusable_but_execution_identity_workspace_bound(probe):
+    manager, path, calls, _ = probe
+    identities = []
+    for workspace in ('workspace-a', 'workspace-b'):
+        with observation(workspace):
+            assert manager._version('gitleaks', path) == '8.30.0'
+            identities.append(manager.execution_identity('gitleaks', path))
+    assert len(calls) == 1
+    assert all(identities) and identities[0] != identities[1]
 
 
 def test_recreated_manager_retains_capability(probe,monkeypatch,tmp_path):

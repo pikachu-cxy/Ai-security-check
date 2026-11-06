@@ -477,3 +477,21 @@ def test_arrival_between_last_queue_read_and_retirement_is_not_lost(check, monke
     result = service.get(root, ref)
     assert injected and state['calls'] == 2
     assert result['scanned_seq'] == result['dirty_seq'] == 2
+
+
+@pytest.mark.parametrize('name,ordinary', [('removed.ts', True), ('requirements.txt', False)])
+def test_deleted_inputs_preserve_absence_and_dependency_coverage(check, monkeypatch, name, ordinary):
+    root, service, runtime, state = check
+    ref = service.begin(root, 'delete')['check_ref']
+    if ordinary:
+        def unexpected():
+            pytest.fail('No adapter bindings are needed for an ordinary deleted file')
+        monkeypatch.setattr(runtime.registry.adapters[0], 'input_bindings', unexpected, raising=False)
+    service.record(root, ref, [name])
+    assert execute(check, monkeypatch) == 0
+    result = service.get(root, ref)
+    assert 'DELETED_PATH_SEMANTICS_NOT_REVIEWED' in result['gaps']
+    assert ('SCANNER_COVERAGE_LIMITED' not in result['gaps']) is ordinary
+    scan = runtime.store.get_scan(result['scan_id'])
+    assert bool(scan['scan_context']['fixed_input']['input_id'])
+    assert not scan['findings'] and state['calls'] == 0

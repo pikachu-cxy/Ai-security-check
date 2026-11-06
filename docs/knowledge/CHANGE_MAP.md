@@ -44,3 +44,5 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 复核读取与调用成本：`development_views.py`、`mcp_tools/development_check.py`；回归见 `tests/test_development_risks.py`。索引无变化重写见 `scripts/maintenance/knowledge_index.py` 与 `tests/test_knowledge_index_writes.py`。
 
 统一结果及旧数据兼容：`development_result_store.py`、`development_risks.py:publish_scan`、`development_check_worker.py`、`risk_dashboard.py`；测试 `tests/test_development_result_store.py` 与 `tests/test_development_check_wait.py`。
+
+普通开发的会话归属与重复命中：编辑工具路径处理在 `host_tool_events.py`，取证及分组汇总在 `development_views.py`，同批关联与证据校验在 `development_risks.py`。纯删除的输入绑定与覆盖状态分别在 `runtime.py`、`development_check_worker.py`。对应回归在 `tests/test_lightweight_hooks.py`、`tests/test_development_risks.py`、`tests/test_development_check.py`；真实双 worktree 数据见[开发场景验收](DEVELOPMENT_ACCEPTANCE.md)。

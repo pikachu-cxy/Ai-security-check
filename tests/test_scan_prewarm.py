@@ -83,7 +83,8 @@ def test_prewarmed_scan_uses_final_source_and_changed_rules(engine, monkeypatch)
 def test_background_preparation_coalesces_without_blocking(tmp_path, monkeypatch):
     entered, release, finished = threading.Event(), threading.Event(), threading.Event()
     calls = []
-    def prepare(root, names):
+    def prepare(root, *, latest_names):
+        names = latest_names()
         calls.append(names)
         entered.set()
         assert release.wait(5)
@@ -126,7 +127,7 @@ def test_task_and_edit_hooks_request_preparation_without_submission(check, monke
     root, service, runtime, state = check
     service.launcher = None
     requests = []
-    monkeypatch.setattr(scan_prewarm, 'start', lambda root, paths=(): requests.append(tuple(paths)))
+    monkeypatch.setattr(scan_prewarm, 'start', lambda root, paths=(), *, batch: requests.append(tuple(paths)))
     opened = service.begin(root, 'prewarm')
     edited = service.record(root, opened['check_ref'], ['app.ts'])
     hooked = record_hook(service.hooks, root, service.owner, ['app.ts'], scope_unknown=False)
@@ -144,3 +145,47 @@ def test_unusable_cache_is_optional(tmp_path, monkeypatch):
     monkeypatch.setattr(cache.hooks, 'key', unavailable)
     assert cache.get('test', 'identity') is None
     cache.put('test', 'identity', {'prepared': True})
+
+
+def test_batch_hints_are_isolated_and_failed_preparation_has_one_retry(tmp_path, monkeypatch):
+    calls = []
+
+    class InlineThread:
+        def __init__(self, *, target, **kwargs):
+            self.target = target
+
+        def start(self):
+            self.target()
+
+    def prepare(_root, *, latest_names):
+        names = latest_names()
+        calls.append(names)
+        if names == ('target.py',):
+            raise OSError('fixture')
+
+    monkeypatch.setattr(scan_prewarm.threading, 'Thread', InlineThread)
+    monkeypatch.setattr(scan_prewarm, 'prepare', prepare)
+    for _ in range(4):
+        scan_prewarm.start(tmp_path, ['one.py'], batch=('a', 0))
+    scan_prewarm.start(tmp_path, ['other.ts'], batch=('b', 0))
+    scan_prewarm.start(tmp_path, ['two.ts'], batch=('a', 1))
+    assert calls == [('target.py',), ('target.py',), ('target.ts',), ('target.ts',)]
+
+
+def test_shell_hints_arriving_during_pack_resolution_use_one_plan(tmp_path, monkeypatch):
+    resolving, released, finished = (threading.Event() for _ in range(3))
+    calls = []
+
+    def prepare(_root, *, latest_names):
+        resolving.set()
+        assert released.wait(5)
+        calls.append(latest_names())
+        finished.set()
+
+    monkeypatch.setattr(scan_prewarm, 'prepare', prepare)
+    scan_prewarm.start(tmp_path)
+    assert resolving.wait(5)
+    scan_prewarm.start(tmp_path, ['app.py', 'app.ts'])
+    released.set()
+    assert finished.wait(5)
+    assert calls == [('target.py', 'target.ts')]

@@ -237,7 +237,7 @@ review_progress 和处置；不为同一页再调 get_development_risks。next_o
 一次读取，最多 20 个窗口，每个最多 80 行；不同时传 file_path。返回 evidence 数组中的实际引用。
 相同窗口去重，服务端按顺序保存证据，不启动并发写；版本变化仍拒绝，提交仍核验实际源码。
 读取失败可能留有证据收据，不代表复核已保存。旧连接缺少 windows 参数时沿单窗口读取。
-接口支持时优先传 submit_development_review(return_risks=true)。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项提交面向用户的 report_text；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
+接口支持时优先传 submit_development_review(return_risks=true)。支持 response_view="final_report" 的 Codex 可直接获取完整单页报告。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项提交面向用户的 report_text；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
 自动模式由 Stop 合并收尾。手动模式在代码、文档和生成索引写完后主动完成收尾。
 
 ### 统一风险保存、复核和修复
@@ -251,14 +251,14 @@ review_progress 和处置；不为同一页再调 get_development_risks。next_o
 2. submit_development_review 提交 check_ref、最新 dirty_seq 作为 expected_seq 和 observations。
    每项提供稳定 issue_key、file_path、line_start/line_end、category、title、description、impact、
    fix_advice、severity、decision、rationale、evidence_refs。severity 为 CRITICAL/HIGH/MEDIUM/LOW/INFO/UNRATED；
-   decision 为 CONFIRMED/DISMISSED/INCONCLUSIVE。没有 AI 候选可提交空列表，仍导入保存的扫描器发现。
+   decision 为 CONFIRMED/DISMISSED/INCONCLUSIVE。证据证实为同一问题时用 DISMISSED 加 duplicate_of 关联同批确认项，单独汇总重复数。没有 AI 候选可提交空列表，仍导入保存的扫描器发现。
    空列表不表示扫描候选已经逐项复核。扫描完成前的 AI 保存不能代替完成后的扫描结果核对；
    读取实际候选，逐项确认、排除或说明无法确认，再提交复核。复用已有代码上下文，不重复扫描。
    源码已变时重读实际证据，不提交旧判断。读取收据证明版本和范围，不证明模型判断正确。
    证据错误按返回的 next_action 补读指定文件和行，用实际 evidence_ref 重试同一项；不得猜编号
    或删除证据绕过校验。补读重试仍失败，就报告障碍并结束，保留未完成记录；后续 Stop 也不重启
    同一失败循环。成功提交后仍须重读当前风险及处置，不能把失败当作复核完成。
-3. AI 复核已有扫描器问题时，只提交 same_issue_as、scan_id、decision、rationale、evidence_refs。
+3. AI 复核已有扫描器问题时，在批次顶层传一次 scan_id，每项提交 same_issue_as、decision、rationale、evidence_refs。旧调用仍可逐项传 scan_id。
    same_issue_as 指向原 scanner finding ID 或统一 risk ID，scan_id 必须取自当前检查的扫描版本；
    不重复填写原始位置，Runtime 从指定版本的原始扫描记录取得。旧格式提供位置时也以原始记录为准。
    必须读取告警位置的代码，可补充跨函数、跨文件证据。过期版本、未知关联或证据错误按 next_action

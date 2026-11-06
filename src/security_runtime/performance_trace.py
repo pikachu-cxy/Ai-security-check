@@ -138,3 +138,38 @@ def review_event(action, check, progress=None):
     statuses = {key: progress[key] for key in ('scanner_review', 'business_review')} if progress else {}
     _write(dict(event='review', phase='review.lifecycle', action=action,
                 batch=_batch(check), monotonic_ns=time.perf_counter_ns(), **statuses))
+
+
+# One timeline per tool invocation. Codex persists the returned metadata with its
+# tool event, so later analysis needs neither a debug environment nor a rescan.
+_REVIEW_CLOCK = ContextVar('review_clock', default=None)
+
+
+def review_mark(name):
+    clock = _REVIEW_CLOCK.get()
+    if clock is not None:
+        start, offsets = clock
+        offsets[name] = (time.monotonic_ns() - start) // 1000
+
+
+def timed_review(fn):
+    @wraps(fn)
+    def measured(*args, **kwargs):
+        wall_us = time.time_ns() // 1000
+        offsets = {}
+        token = _REVIEW_CLOCK.set((time.monotonic_ns(), offsets))
+        try:
+            result = fn(*args, **kwargs)
+            review_mark('response_ready')
+            timing = dict(start_unix_us=wall_us, offsets_us=offsets)
+            if isinstance(result, dict):
+                result['review_timing'] = timing
+            elif result.structuredContent is not None:
+                # These handlers return one public error payload in both forms.
+                from mcp.types import TextContent
+                result.structuredContent['review_timing'] = timing
+                result.content = [TextContent(type='text', text=json.dumps(result.structuredContent, ensure_ascii=False))]
+            return result
+        finally:
+            _REVIEW_CLOCK.reset(token)
+    return measured

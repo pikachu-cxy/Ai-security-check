@@ -111,7 +111,8 @@ def records():
                             linked.add((editor, wd.name, obs.get('scan_id'), obs.get('scanner_id')))
                     decision, disposition, status = risk.get('decision'), risk.get('disposition', 'ACTIVE'), risk.get('status')
                     status_label = ('已暂缓' if disposition == 'DEFER' else '已排除' if disposition == 'EXCLUDE' else
-                             '已复查' if status == 'CODE_REVIEWED_RESOLVED' else 'AI 排除' if decision == 'DISMISSED' else
+                             '已复查' if status == 'CODE_REVIEWED_RESOLVED' else
+                             '重复命中' if (risk.get('assessment') or {}).get('duplicate_of') else 'AI 排除' if decision == 'DISMISSED' else
                              '待处理' if decision == 'CONFIRMED' else '待确认')
                     results.append(display(risk.get('finding') or {}, project, status_label, '已保存的开发风险',
                         ':'.join((editor, wd.name, str(row.get('key', '')), str(risk.get('id', '')))),

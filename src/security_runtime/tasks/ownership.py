@@ -113,11 +113,11 @@ def session_context(token, *, native_stop=False, workspace=None, grouped_codex=F
                     f'text((await tools.mcp__ai_security_runtime__development_review({request})).content)\n'
                     '核对 dirty_seq 与提醒版本；按 next_offset 续读同一视图。候选 evidence_refs 为空或证据不足时，按其完整起止行补读。按配置判断后用同一工具提交 operation=submit_development_review。'
                     'arguments 沿用 workspace_path、session_ref、check_ref，必填 expected_seq=本次 dirty_seq、'
-                    'observations（每个扫描判断含 same_issue_as、scan_id、decision、rationale、evidence_refs），'
+                    '在 arguments 顶层只传一次本页 scan_id；observations 每项含 same_issue_as、decision、rationale、evidence_refs，'
                     'decision 用 CONFIRMED（确认）、DISMISSED（误报）或 INCONCLUSIVE（证据不足）。'
                     '确认漏洞时在该项 report_text 一次写好给用户的完整说明（标题、评级来源、路径行号、'
                     '问题、可能影响、建议修复、尚未确认）；误报由产品汇总。按需附 business_reviews，'
-                    '传 return_risks=true。成功后仅沿本批 next_action 读完，最终回复直接采用返回的 '
+                    '仅在证据指向同一问题时把重复项标 DISMISSED 并传 duplicate_of=同批确认项 id。仅监听到的文件不可归因为当前会话写入。传 return_risks=true 和 response_view="final_report"。成功后仅沿本批 next_action 读完。最终回复先用一句话保留原开发结果和实际验证，再原样附上返回的 '
                     'report_text，不重写；未提供时按实际结果及缺口报告。'
                     '已知漏记的实际编辑才补录。显式审计及修复继续沿用原任务。')
             return ('安全任务会话路由（内部使用）：' + json.dumps({'session_ref': token})

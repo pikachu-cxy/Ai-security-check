@@ -175,3 +175,12 @@ def test_cursor_automatic_records_paths_refreshes_routing_and_keeps_edits_quiet(
     # abort must still remain quiet and must never dispatch a scanner.
     output, stopped = ingress(repo, tmp_path, core, 'stop', status='aborted')
     assert output == {} and stopped['status'] == 'NOT_APPLICABLE'
+
+
+@pytest.mark.parametrize('tool', ['Edit', 'Write'])
+def test_codex_direct_file_scope_needs_no_workspace_watch(repo, tool):
+    from security_runtime.codex_event_adapter import CodexEventAdapter
+    args = dict(event='PreToolUse', tool_name=tool, session_id='s', workspace_path=str(repo))
+    for value, exact in [('helper.py', True), ('../elsewhere.py', False)]:
+        event = CodexEventAdapter().normalize(dict(args, tool_input={'file_path': value}), repo, legacy=True)
+        assert event.complete_patch_paths is exact

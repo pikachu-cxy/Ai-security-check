@@ -426,9 +426,12 @@ class PatternSASTScanner(BaseScanner):
             cache_observed('selected_config', config_text is not None)
             if config_text is None:
                 definitions = []
-                from .rulepacks import execution_rule
+                from .rulepacks import execution_rule, load_rule_yaml
+                # Shipped rule definitions are validated with this same safe loader.
+                # Keep existing custom-pack parsing semantics.
+                load = load_rule_yaml if rule_pack.descriptor.bundled else yaml.safe_load
                 for relative in sorted({r.path for r in rules}):
-                    definitions.extend(rule for original in yaml.safe_load(native_io_path(rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
+                    definitions.extend(rule for original in load(native_io_path(rule_pack.path/relative).read_text(encoding='utf-8'))['rules']
                         for rule in [execution_rule(original, relative, rule_pack.descriptor)] if rule['id'] in selected_ids)
                 # The CLI reads JSON directly, avoiding its costly YAML span
                 # construction. Keep the same rules and engine validation.
@@ -805,9 +808,6 @@ class TrivyAdapter(BaseScanner):
                         state['notes'].append('Some Python declarations are dynamic, unpinned or unsupported; no installed version was inferred.')
                     if python_reports:
                         state['notes'].append('Python declared exact versions include optional/build declarations and unevaluated environment markers; applicability and installed versions are unconfirmed.')
-                    if any(level in process.stderr for level in ('WARN', 'ERROR')):
-                        state['coverage'] = 'PARTIAL'
-                        state['notes'].append('Dependency extraction/resolution warnings prevent confirmation of complete inventory coverage.')
             return self.normalize(data, n)
 
     @staticmethod

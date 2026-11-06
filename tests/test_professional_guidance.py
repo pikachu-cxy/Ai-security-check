@@ -74,13 +74,15 @@ def test_global_guide_needs_no_workspace_binding_or_child(installed, tmp_path, m
     monkeypatch.setattr(installed, 'configuration_status', unexpected)
     try:
         server = create_global_server(workspaces=pool)
-        listed = {t.name: t for t in asyncio.run(server.list_tools())}
-        schema = listed['get_professional_guidance'].inputSchema
+        from security_runtime.mcp_tool_groups import operation_schemas
+        schema = operation_schemas(asyncio.run(server.list_tools()))['get_professional_guidance']
         assert 'workspace_path' not in schema.get('properties', {})
         assert schema['additionalProperties'] is False
-        result = asyncio.run(server.call_tool('get_professional_guidance', {}))
+        result = asyncio.run(server.call_tool('runtime_status', {
+            'operation': 'get_professional_guidance', 'arguments': {}}))
         assert result.structuredContent['status'] == 'READY'
-        rejected = asyncio.run(server.call_tool('get_professional_guidance', {'url': 'PRIVATE'}))
+        rejected = asyncio.run(server.call_tool('runtime_status', {
+            'operation': 'get_professional_guidance', 'arguments': {'url': 'PRIVATE'}}))
         assert 'PRIVATE' not in rejected.model_dump_json()
         assert not pool.children and not pool.jobs and not pool.base.exists()
         assert not installed.home.exists()

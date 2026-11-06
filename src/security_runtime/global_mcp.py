@@ -1027,7 +1027,12 @@ def create_global_server(*, workspaces=None, host='codex'):
             arguments.get('turn_id') if event == 'PostToolUse' else 'SessionStart'))
 
     async def quiet_stop_call(name, arguments):
-        result = await routed_call(name, arguments)
+        if name == 'handle_stop_event':
+            from .build_identity import stop_identity_session
+            with stop_identity_session():
+                result = await routed_call(name, arguments)
+        else:
+            result = await routed_call(name, arguments)
         data = (result.structuredContent or {}) if isinstance(result, CallToolResult) else {}
         if (name == 'handle_hook_event' and data.get('host_claim_status') == 'VALID'
                 and data.get('workspace_mutation_observed') is True and data.get('scanner_run') is True

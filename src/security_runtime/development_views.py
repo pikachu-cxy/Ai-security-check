@@ -95,13 +95,20 @@ def review_page(service, check, row, progress, offset, limit):
             if finding.get('description') and finding['description'] != finding['title']:
                 item['description'] = finding['description']
             details = finding.get('technical_details') or {}
-            item.update(id=key, scanner_sources=finding.get('scanner_sources', []),
+            item.update(id=key, same_issue_as=key, scanner_sources=finding.get('scanner_sources', []),
                         disposition=row['risks'][key].get('disposition', 'ACTIVE'))
             for k in ('rule_id', 'rule_severity'):
                 if details.get(k):
                     item[k] = details[k]
             candidates.append(item)
+    explicit = set(check.get('explicit_paths', ()))
+    for item in candidates:
+        if check.get('file_watch') and item['file_path'] not in explicit:
+            item['edit_attribution'] = 'OBSERVED_ONLY_WRITER_UNKNOWN'
+    from .performance_trace import review_mark
+    review_mark('evidence_start')
     evidence = pending_evidence(service, candidates, paths)
+    review_mark('evidence_ready')
     for candidate in candidates:
         candidate['evidence_refs'] = [w['evidence_ref'] for w in evidence
             if w['file_path'] == candidate['file_path'] and w['line_start'] <= candidate['line_start']
@@ -110,6 +117,8 @@ def review_page(service, check, row, progress, offset, limit):
     require((current['dirty_seq'], current.get('scan_id')) == (seq, scan), 'DEVELOPMENT_RISK_VERSION_STALE')
     return dict(view='review', check_ref=service.ref, dirty_seq=seq, scan_id=scan, candidates_ready=True,
                 scanner_review=progress['scanner_review'], business_review=progress['business_review'],
+                submission_hint='已有候选直接复制该项 same_issue_as（非空字符串）及 evidence_refs，'
+                                '在提交顶层传一次本页 scan_id，逐项填写 decision、rationale；确认项另填 report_text。重复命中传 DISMISSED 和 duplicate_of（同批确认项 id）。',
                 candidates=candidates, business_paths=paths, evidence=evidence, trust='UNTRUSTED_SOURCE',
                 gaps=result.get('gaps', []), scope_unknown=check.get('scope_unknown', False), total=len(scope),
                 next_offset=offset+limit if offset+limit < len(scope) else None)
@@ -137,19 +146,30 @@ def batch_report_page(result, check):
     page['scope_unknown'] = check.get('scope_unknown', False)
     if page['next_action']:
         page['next_action']['arguments'].update(view='batch', expected_seq=page['dirty_seq'], scan_id=page['scan_id'])
-    sections, dismissed = [], 0
+    sections, dismissed, duplicates = [], 0, 0
+    explicit = set(check.get('explicit_paths', ()))
+    unverified_writer = False
     complete = page['review_progress']['host_review_completed']
     for item in page['risks']:
         assessment = item.get('assessment') or {}
         current = (assessment.get('dirty_seq'), assessment.get('scan_id')) == (page['dirty_seq'], page['scan_id'])
         if item['decision'] == 'DISMISSED' and item['disposition'] == 'ACTIVE' and current:
-            dismissed += 1
+            if assessment.get('duplicate_of'):
+                duplicates += 1
+            else:
+                dismissed += 1
         if item['reminder_suppressed']:
             continue
         if current and assessment.get('report_text') and item['decision'] == 'CONFIRMED':
             sections.append(assessment['report_text'])
+            if check.get('file_watch') and item['finding']['file_path'] not in explicit:
+                unverified_writer = True
         else:
             complete = False
+    if unverified_writer:
+        sections.append('以上经 Shell 监听发现的风险仅能定位到工作区文件，写入会话未经确认。')
+    if duplicates:
+        sections.append(f'{duplicates} 条重复告警已关联到同批确认项。')
     if dismissed:
         sections.append(f'经复核，{dismissed} 条扫描告警为误报，无需处理。')
     if complete:
@@ -160,6 +180,23 @@ def batch_report_page(result, check):
                 sections.append('本次检查的覆盖缺口：' + '、'.join(page['gaps']) + '。')
         return dict(report_text='\n\n'.join(sections), **page)
     return page
+
+
+def final_report_receipt(page):
+    if (page.get('view') != 'batch' or not page.get('review_saved')
+            or not page.get('post_commit_read') or page['reread_required']
+            or page['next_offset'] is not None or page['next_action']
+            or not page['review_progress']['host_review_completed'] or not page.get('report_text', '').strip()
+            or any(r['disposition'] != 'ACTIVE' or r['decision'] not in {'CONFIRMED', 'DISMISSED'}
+                   or r['status'] == 'CODE_REVIEWED_RESOLVED'
+                   or (r.get('assessment') or {}).get('dirty_seq') != page['dirty_seq']
+                   or (r.get('assessment') or {}).get('scan_id') != page['scan_id']
+                   for r in page['risks'])):
+        return page
+    keys = ('check_ref', 'scan_id', 'dirty_seq', 'review_saved', 'post_commit_read',
+            'reread_required', 'next_action', 'next_offset', 'total', 'gaps', 'scope_unknown', 'report_text')
+    return dict(view='final_report', contract='development-final-report-v1', host_review_completed=True,
+                **{key: page[key] for key in keys})
 
 
 def review_receipt(result):

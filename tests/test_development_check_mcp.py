@@ -102,7 +102,9 @@ def test_single_scan_101_candidates_paginated_review(check, tmp_path, monkeypatc
         assert page['scan_id'] == scan_id and page['total'] == 101
         assert 'reporting' not in page and 'risks' not in page
         assert page['evidence'] and all(w['evidence_ref'] for w in page['evidence'])
-        review_ids.extend(c['id'] for c in page['candidates'])
+        assert list(page['review_timing']['offsets_us']) == ['evidence_start', 'evidence_ready', 'response_ready']
+        assert all(c['same_issue_as'] == c['id'] and c['id'] for c in page['candidates'])
+        review_ids.extend(c['same_issue_as'] for c in page['candidates'])
         offset = page['next_offset']
     assert review_ids == [r['id'] for r in risks]
     windows = [tool('read_development_risk_context', file_path='app.ts', start_line=start,
@@ -113,13 +115,16 @@ def test_single_scan_101_candidates_paginated_review(check, tmp_path, monkeypatc
         line = risk['finding']['line_start']
         evidence = next(w for w in windows if w['line_start'] <= line <= w['line_end'])
         assert lines[line-1] in evidence['content']
-        batch.append(dict(same_issue_as=risk['id'], scan_id=scan_id, decision='CONFIRMED',
+        batch.append(dict(same_issue_as=risk['id'], decision='CONFIRMED',
             rationale=f'run{line-1} evaluates its string argument directly.',
             evidence_refs=[evidence['evidence_ref']]))
     for start, remaining in [(0, 51), (50, 1), (100, 0)]:
-        saved = tool('submit_development_review', observations=batch[start:start+50],
-                     expected_seq=first['dirty_seq'], return_risks=True)
-        assert saved['post_commit_read']
+        saved = tool('submit_development_review', scan_id=scan_id, observations=batch[start:start+50],
+                     expected_seq=first['dirty_seq'], return_risks=True, response_view='final_report')
+        assert saved['post_commit_read'] and saved['view'] == 'batch'
+        offsets = saved['review_timing']['offsets_us']
+        assert list(offsets.values()) == sorted(offsets.values())
+        assert {'transaction_open', 'before_write', 'committed', 'readback_done', 'response_ready'} <= offsets.keys()
         assert len(saved['review_progress']['pending_scanner_ids']) == remaining
         if remaining:
             page = tool('get_development_risks', view='review', offset=101-remaining)
