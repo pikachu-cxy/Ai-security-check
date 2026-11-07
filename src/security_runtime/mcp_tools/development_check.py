@@ -62,7 +62,7 @@ def register(server, registry, *, application):
                                   return_risks: bool = False,
                                   response_view: Literal['batch', 'final_report'] = 'batch',
                                   scan_id: ScanId | None = None, audit_id: str | None = None) -> dict:
-        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a compact verified single page; incomplete batches retain their original view. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
+        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a verified whole-batch report with byte-bounded prose continuation; incomplete batches return a bounded review_receipt with remaining counts. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
         values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
@@ -70,7 +70,7 @@ def register(server, registry, *, application):
             from ..development_views import final_report_receipt, review_receipt
             saved = risks(check_ref, workspace_path, session_ref).submit(
                 values, expected_seq, business_reviews=coverage, scan_id=scan_id, audit_id=audit_id,
-                return_risks=return_risks or response_view == 'final_report')
+                return_risks=return_risks or response_view == 'final_report', final_report=response_view == 'final_report')
             result = saved if saved.get('review_saved') else review_receipt(saved)
             if response_view == 'final_report':
                 result = final_report_receipt(result)
@@ -102,11 +102,11 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=False))
     @timed_review
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
-                              session_ref: str | None = None, offset: int = 0, limit: int = 20,
-                              include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch', 'closeout'] = 'summary',
+                              session_ref: str | None = None, offset: int = 0, limit: int | None = None,
+                              include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch', 'closeout', 'final_report'] = 'summary',
                               include_evidence: bool = False, expected_seq: int | None = None,
-                              scan_id: str | None = None) -> dict:
-        """For a short Stop notice, view=closeout resolves the saved REVIEW/REPORT/INCOMPLETE handoff; follow its next_action and deliver report_text and session_url. Never start a scan. For pending review, view=review reads current-scan candidates and bounded untrusted evidence. Continue the same view at next_offset. Obtain missing windows via read_development_risk_context. For a saved batch, use view=batch with its expected_seq and scan_id. For historical lookup, summary/full read ledger risks and dispositions; include_history adds historical batches, include_evidence adds bounded evidence."""
+                              scan_id: str | None = None, report_digest: str | None = None) -> dict:
+        """For a short Stop notice, view=closeout resolves the saved REVIEW/REPORT/INCOMPLETE handoff; follow its next_action and deliver report_text and session_url. Never start a scan. For pending review, view=review reads current-scan candidates and bounded untrusted evidence; omitted limit uses the configured response byte budget. Continue the same view at next_offset. Batch missing windows via read_development_risk_context(windows=[...]) and inspect per-window errors. For a saved batch, use view=batch with its expected_seq and scan_id; follow final_report continuations with their report_digest and character offset. For historical lookup, summary/full read ledger risks and dispositions; include_history adds historical batches, include_evidence adds bounded evidence."""
         from ..development_views import pending_review_context, risk_summary
         service = risks(check_ref, workspace_path, session_ref)
         from ..development_risks import require
@@ -117,18 +117,24 @@ def register(server, registry, *, application):
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
             return result
-        if view == 'batch':
+        if view in {'batch', 'final_report'}:
             require(expected_seq is not None and not include_history and not include_evidence,
                     'DEVELOPMENT_RISK_INPUT_INVALID')
-            result = service.get(offset, limit, include_history=False, batch_version=(expected_seq, scan_id))
+            result = service.get(offset, limit, include_history=False, batch_version=(expected_seq, scan_id),
+                                 whole_report=view == 'final_report', report_digest=report_digest)
+            if session_ref and result.get('next_action'):
+                result['next_action']['arguments']['session_ref'] = session_ref
+            return result
+        if view == 'review':
+            require(not include_history, 'DEVELOPMENT_RISK_INPUT_INVALID')
+            require(expected_seq is not None or scan_id is None, 'DEVELOPMENT_RISK_INPUT_INVALID')
+            result = service.get(offset, limit, include_history=False, review_only=True,
+                                 batch_version=(expected_seq, scan_id) if expected_seq is not None else None)
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
             return result
         require(expected_seq is None and scan_id is None, 'DEVELOPMENT_RISK_INPUT_INVALID')
-        if view == 'review':
-            require(not include_history, 'DEVELOPMENT_RISK_INPUT_INVALID')
-            return service.get(offset, limit, include_history=False, review_only=True)
-        result = service.get(offset, limit, include_history=include_history)
+        result = service.get(offset, 20 if limit is None else limit, include_history=include_history)
         if include_evidence and result.get('candidates_ready'):
             _, result['evidence'] = pending_review_context(service, result)
             current = service.current_check()

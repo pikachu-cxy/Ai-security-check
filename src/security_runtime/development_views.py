@@ -15,21 +15,34 @@ def read_contexts(service, windows):
     from .development_risks import require
     check = service.current_check()
     version = (check['dirty_seq'], check.get('scan_id'))
-    evidence, seen = [], set()
-    for window in windows:
-        key = (window.file_path, window.start_line, window.end_line, window.related)
-        if key in seen:
-            continue
-        seen.add(key)
-        # Sequential reads preserve the existing evidence transaction semantics.
-        item = service.read(window.file_path, window.start_line, window.end_line,
-                            related=window.related)
-        require(item['dirty_seq'] == version[0], 'DEVELOPMENT_RISK_VERSION_STALE')
-        evidence.append(item)
+    from .review_delivery import merge_windows, json_bytes, response_budget
+    from .performance_trace import review_mark
+    review_mark('evidence_plan_start')
+    planned = merge_windows((w.file_path, w.start_line, w.end_line, w.related) for w in windows)
+    review_mark('evidence_plan_done')
+    evidence, errors = [], []
+    remaining = response_budget(check) - 8192
+    for path, start, end, related in planned:
+        try:
+            item = service.read(path, start, end, related=related)
+            require(item['dirty_seq'] == version[0], 'DEVELOPMENT_RISK_VERSION_STALE')
+            size = json_bytes(item)
+            if size > remaining:
+                errors.append(dict(file_path=path, start_line=start, end_line=end,
+                                   related=related, reason_code='RESPONSE_BUDGET_EXCEEDED'))
+                continue
+            evidence.append(item)
+            remaining -= size
+        except (ValueError, OSError) as error:
+            if getattr(error, 'reason_code', '') == 'DEVELOPMENT_RISK_VERSION_STALE':
+                raise
+            errors.append(dict(file_path=path, start_line=start, end_line=end,
+                               related=related, reason_code=getattr(error, 'reason_code', 'EVIDENCE_READ_FAILED')))
+    review_mark('evidence_ready')
     current = service.current_check()
     require((current['dirty_seq'], current.get('scan_id')) == version,
             'DEVELOPMENT_RISK_VERSION_STALE')
-    return dict(dirty_seq=version[0], scan_id=version[1], evidence=evidence,
+    return dict(dirty_seq=version[0], scan_id=version[1], evidence=evidence, errors=errors,
                 scanner_run=False, trust='UNTRUSTED_SOURCE', review_saved=False)
 
 
@@ -87,11 +100,21 @@ def review_page(service, check, row, progress, offset, limit):
     if progress['business_review'] != 'SKIPPED_BY_CONFIG' and not deferred:
         excluded = result.get('generated_outputs', {}).get('excluded_paths', [])
         scope.extend((path, None) for path in sorted(set(check['observed_paths']) - set(excluded)))
+    from .review_delivery import response_budget, json_bytes, collect_evidence
+    budget = response_budget(check)
+    evidence_budget = min(16384, (budget - 8192) // 2)
+    available = budget - 8192 - evidence_budget
     candidates, paths = [], []
-    for key, finding in scope[offset:offset+limit]:
+    consumed = 0
+    positions = []
+    for key, finding in scope[offset:offset+limit if limit is not None else len(scope)]:
         if finding is None:
             if key in progress['pending_business_paths']:
+                if consumed and json_bytes(key) > available:
+                    break
                 paths.append(key)
+                positions.append((offset+consumed, 'path', key))
+                available -= json_bytes(key)
         elif key in pending:
             item = {k: finding[k] for k in ('title', 'severity', 'file_path', 'line_start', 'line_end')}
             if finding.get('description') and finding['description'] != finding['title']:
@@ -102,30 +125,46 @@ def review_page(service, check, row, progress, offset, limit):
             for k in ('rule_id', 'rule_severity'):
                 if details.get(k):
                     item[k] = details[k]
+            cost = json_bytes(item) + 256
+            if consumed and cost > available:
+                break
             candidates.append(item)
+            positions.append((offset+consumed, 'candidate', key))
+            available -= cost
+        consumed += 1
     explicit = set(check.get('explicit_paths', ()))
     for item in candidates:
         if check.get('file_watch') and item['file_path'] not in explicit:
             item['edit_attribution'] = 'OBSERVED_ONLY_WRITER_UNKNOWN'
     from .performance_trace import review_mark
     review_mark('evidence_start')
-    evidence = pending_evidence(service, candidates, paths)
+    evidence, evidence_errors, delivery_metrics = collect_evidence(service, candidates, paths, evidence_budget)
     review_mark('evidence_ready')
     for candidate in candidates:
         candidate['evidence_refs'] = [w['evidence_ref'] for w in evidence
             if w['file_path'] == candidate['file_path'] and w['line_start'] <= candidate['line_start']
             and w['line_end'] >= candidate['line_end']][:1]
+        candidate['evidence_status'] = 'READY' if candidate['evidence_refs'] else 'MISSING'
     current = service.current_check()
     require((current['dirty_seq'], current.get('scan_id')) == (seq, scan), 'DEVELOPMENT_RISK_VERSION_STALE')
-    return dict(view='review', check_ref=service.ref, dirty_seq=seq, scan_id=scan, candidates_ready=True,
+    next_offset = offset+consumed if offset+consumed < len(scope) else None
+    page = dict(view='review', check_ref=service.ref, dirty_seq=seq, scan_id=scan, candidates_ready=True,
                 scanner_review=progress['scanner_review'], business_review=progress['business_review'],
                 submission_hint='已有候选直接复制该项 same_issue_as（非空字符串）及 evidence_refs，'
                                 '在提交顶层传一次本页 scan_id，逐项填写 decision、rationale；确认项另填 report_text。重复命中传 DISMISSED 和 duplicate_of（同批确认项 id）。',
-                candidates=candidates, business_paths=paths, evidence=evidence, trust='UNTRUSTED_SOURCE',
+                candidates=candidates, business_paths=paths, evidence=evidence, evidence_errors=evidence_errors,
+                delivery_metrics=delivery_metrics, response_budget_bytes=budget, trust='UNTRUSTED_SOURCE',
                 deferred_business_paths=progress['pending_business_paths'] if deferred else [],
                 business_delivery='FAST_HOST_BACKGROUND' if deferred else 'WAIT_CURRENT_AUDIT',
                 gaps=result.get('gaps', []), scope_unknown=check.get('scope_unknown', False), total=len(scope),
-                next_offset=offset+limit if offset+limit < len(scope) else None)
+                next_offset=next_offset, next_action=None)
+    from .review_delivery import fit_review_page
+    page = fit_review_page(page, positions, budget)
+    if page['next_offset'] is not None:
+        page['next_action'] = dict(tool='get_development_risks', arguments=dict(
+            workspace_path=str(service.root), check_ref=service.ref, view='review',
+            expected_seq=seq, scan_id=scan, offset=page['next_offset'], limit=limit))
+    return page
 
 
 def risk_summary(result):
@@ -292,13 +331,13 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             seq == check['dirty_seq'] and (marker['mode'] == 'INCOMPLETE' or scan == check.get('scan_id')) and
             (expected_seq is None or (expected_seq, scan_id) == (seq, scan)),
             'DEVELOPMENT_RISK_VERSION_STALE')
-    require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
+    require(type(offset) is int and offset >= 0 and (limit is None or type(limit) is int and 1 <= limit <= 20),
             'DEVELOPMENT_RISK_PAGE_INVALID')
     mode = marker['mode']
     if mode == 'REVIEW':
         page = service.get(offset, limit, include_history=False, review_only=True)
     elif mode == 'REPORT':
-        page = service.get(offset, limit, include_history=False, batch_version=(seq, scan))
+        page = service.get(offset, limit, include_history=False, batch_version=(seq, scan), whole_report=limit is None)
     else:
         job = check.get('parallel_audit') or {}
         items = [r for r in (check.get('security_result') or {}).get('risks', {}).values()
@@ -307,6 +346,7 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
                  and job.get('audit_id') and r.get('decision') == 'CONFIRMED'
                  and r.get('disposition', 'ACTIVE') == 'ACTIVE'
                  and r.get('status') != 'CODE_REVIEWED_RESOLVED']
+        limit = limit or 20
         selected = items[offset:offset+limit]
         text = '\n\n'.join((r.get('assessment') or {}).get('report_text') or
                            f"已保存业务风险：{r['finding']['title']}（完整报告尚不可用）" for r in selected)
@@ -338,7 +378,7 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
     page['session_url'] = session_url(check['workspace'], check['owner'])
     if mode == 'INCOMPLETE' and page['session_url']:
         page['report_text'] += '\n\n[本会话风险管理]('+page['session_url']+')'
-    if page.get('next_offset') is not None:
+    if page.get('next_offset') is not None and page.get('view') != 'final_report':
         page['next_action'] = dict(tool='get_development_risks', arguments=dict(
             workspace_path=str(service.root), check_ref=service.ref, view='closeout',
             offset=page['next_offset'], limit=limit, expected_seq=seq, scan_id=scan))

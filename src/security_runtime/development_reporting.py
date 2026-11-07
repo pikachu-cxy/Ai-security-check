@@ -11,7 +11,7 @@ EVIDENCE_RECOVERY = (
 
 
 INSTRUCTIONS = (
-    '若配置要求复核，提交前使用原生 Stop 随包给出的实际 evidence_ref，或用 read_development_risk_context 补读证据。若提交返回可恢复错误：'
+    '若配置要求复核，提交前使用原生 Stop 随包给出的实际 evidence_ref，缺失或不足证据集中用 read_development_risk_context(windows=[...]) 批量补读，复用已足够的证据；errors 项不得作成功证据。若提交返回可恢复错误：'
     + EVIDENCE_RECOVERY +
     '报告前读取 get_development_risks 的当前风险及处置；若调用 submit_development_review，'
     '提交成功后必须从 offset=0 重新读取，优先传 return_risks=true。post_commit_read=true 即本批保存后重读的第一页，按本批 next_action 续读 next_offset；只有回执则按其 next_action 另读第一页。'

@@ -66,7 +66,7 @@ def test_fast_closeout_keeps_incomplete_audit_explicit_and_wait_mode_blocks(samp
         store._put(db,ref,check)
     result=native_closeout(service,root,store.load(ref,service.owner),time.monotonic()+1,set(),None)
     assert result['status']=='STOP_AUDIT_PENDING' and result.get('decision')=='block'
-    assert '仅交付，不复核' in result['reason']
+    assert result['reason'] == f'正在整理安全检查结果。（检查编号 {ref}）'
     assert native_closeout(service,root,store.load(ref,service.owner),time.monotonic()+1,set(),None) is None
     with store.transaction() as db:
         check=store._get(db,ref)

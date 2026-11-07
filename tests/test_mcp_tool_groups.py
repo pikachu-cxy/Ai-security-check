@@ -42,7 +42,7 @@ def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path,
         request, _ = json.JSONDecoder().raw_decode(payload)
         assert request == {'operation': 'get_development_risks', 'arguments': {
             'workspace_path': str(tmp_path), 'session_ref': 'session-test',
-            'check_ref': '<检查编号>', 'view': 'review'}}
+            'check_ref': '<检查编号>', 'view': 'closeout'}}
         Draft202012Validator(by_name[tool].inputSchema).validate(request)
         for field in ('加粗漏洞名', '评级及来源', '实际风险文件链接及行号', '“问题”', '“可能影响”', '“建议修复”', '“尚未确认”', '不得合并或省略', '原样附上', '不重写'):
             assert field in handoff

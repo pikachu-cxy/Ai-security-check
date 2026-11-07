@@ -98,9 +98,9 @@ Codex 收到复核待办时，在 `get_development_risks` 传 `view="review"`，
 
 ## 低成本开发复核接口
 
-风险列表默认每页 20 条、view=summary、include_history=false；summary 只去掉 assessment 中重复 finding 和 source_hashes，保留风险、处置、版本与分页。view=full 恢复完整字段。提交成功响应默认返回保存回执、进度与 next_action，不再附风险预览；错误恢复语义不变。证据读取支持 windows 批量（最多 20 个、每个最多 80 行），与单 file_path 二选一。批量内部串行沿原校验保存，重复窗口去重，检查版本跨批变化会拒绝；失败读取可能保存部分证据收据，但从不保存复核。提交仍逐项核验证据哈希。
+历史风险列表默认每页 20 条、view=summary、include_history=false；summary 只去掉 assessment 中重复 finding 和 source_hashes，保留风险、处置、版本与分页。view=full 恢复完整字段。提交成功响应默认返回保存回执、进度与 next_action，不再附风险预览；错误恢复语义不变。证据读取支持 windows 批量（最多 20 个、每个最多 80 行），与单 file_path 二选一。批量内部串行沿原校验保存，重复窗口去重，检查版本跨批变化会拒绝；失败读取可能保存部分证据收据，但从不保存复核。提交仍逐项核验证据哈希。
 
-对 `submit_development_review`，默认 `response_view="batch"` 沿用原返回。可选 `"final_report"` 同时请求提交后读回。完成单页返回 `contract=development-final-report-v1`、原报告全文、输入和扫描版本、总数、完成状态及覆盖信息。部分批次、非活动处置、未决或旧版本判断保持完整响应；读回失败时返回已保存状态及重读操作。不得用缩短回执替代版本或证据校验。
+对 `submit_development_review`，默认 `response_view="batch"` 沿用原返回。可选 `"final_report"` 同时请求提交后读回。完成批次返回 `contract=development-final-report-v2`、整批报告及计数、输入和扫描版本、会话链接和覆盖信息；仅超预算的报告正文分页。部分批次返回有界 `review_receipt`，保留未完成状态；读回失败时返回已保存状态及重读操作。不得用缩短回执替代版本或证据校验。
 
 取证、补读和复核提交的正常返回附 `review_timing`。其中 `start_unix_us` 是进入工具处理函数时的 Unix 微秒，`offsets_us` 是从同一调用起点算出的单调时钟偏移。已进入提交处理且有结构化恢复结果的失败调用也带计时。工具处理前的参数拒绝和不可恢复的异常依靠宿主调用事件计时。该字段供本机事后分析，最终报告以 `report_text` 为准。
 
@@ -116,9 +116,9 @@ MCP 收尾/等待/查询通过 `development_result` 返回扫描摘要与第一�
 
 同批重复命中可在次项填写 `decision=DISMISSED` 与 `duplicate_of`（同一批已确认的主候选 id），保留次项自身的 `same_issue_as`、理由和证据。服务校验同一文件的重叠证据位置、扫描和输入版本；关系无效整批回滚。报告将重复和误报分开计数。仅监听观察到的候选可返回 `edit_attribution=OBSERVED_ONLY_WRITER_UNKNOWN`。宿主最终回复先保留开发结果和实际验证，再附已保存的安全报告。
 
-复核提交支持 `return_risks=true`。返回 `post_commit_read=true` 时直接使用已保存批次第一页。后续页沿 `next_action` 传回 view=batch、expected_seq 和 scan_id；输入版本变化会拒绝续页。只收到保存回执时按其 next_action 从第一页读起。确认项可随判断原子保存 report_text。宿主可直接沿用已保存段落；误报按页计数概述，暂缓和已解决项不提醒。原 finding_feedback、repair_impact、closeout_check 分组分别并入 findings、repair、scan，旧分组保留调用兼容。
+复核提交支持 `return_risks=true`。返回 `post_commit_read=true` 时直接使用已保存批次第一页。后续页沿 `next_action` 传回其实际 view、expected_seq、scan_id 及可选 report_digest；输入版本变化会拒绝续页。只收到保存回执时按其 next_action 从第一页读起。确认项可随判断原子保存 report_text。宿主可直接沿用已保存段落；final_report 中误报整批计数概述，暂缓和已解决项不提醒；显式 batch 视图保持原分页。原 finding_feedback、repair_impact、closeout_check 分组分别并入 findings、repair、scan，旧分组保留调用兼容。
 
-自动开发可在同一工作区、同一宿主会话中复用当前检查引用；风险与处置随该引用保留。导入器按扫描 ID 导入该次扫描已保存的全部候选。Agent 按 next_offset 逐页读取（每页最多 20 条），按当前扫描 ID 和输入版本分批提交复核（每批最多 50 个判断）。累计账本超过 100 条后仍可保存新的业务审计风险；重复提交同一风险沿用原记录。
+自动开发可在同一工作区、同一宿主会话中复用当前检查引用；风险与处置随该引用保留。导入器按扫描 ID 导入该次扫描已保存的全部候选。Agent 按 next_action 逐页读取（review/closeout 省略 limit 按字节预算，历史视图或显式 limit 保留每页最多 20 条），按当前扫描 ID 和输入版本分批提交复核（每批最多 50 个判断）。累计账本超过 100 条后仍可保存新的业务审计风险；重复提交同一风险沿用原记录。
 
 
 ## Trivy 依赖检查提示
@@ -199,3 +199,16 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 - INCOMPLETE：只交付已保存的本轮业务漏洞、扫描/变更收集缺口和会话链接，不等待、不轮询、不新开审计。尚未完成不得报告为零漏洞。首读时同一编辑版本的扫描恰好完成，可原子转入 REVIEW 或 REPORT；新编辑不能替代原批次。
 
 分页沿 next_action，带返回的 expected_seq、scan_id 和 view=closeout；版本变化拒绝混读。末页无剩余待办时 next_action 为空。提示去重仅表示已发出交接，不写入“用户已读”或虚构“报告送达”。报告保持可独立读懂漏洞情况的完整交付，最后附本会话风险管理链接。详细规则仅放内部会话指导、工具说明和随安装分发的指导文件。
+
+
+## 按数据量交付开发复核
+
+`development.review_response_bytes` 在产品设置的“开发收尾”分类内配置，默认 65536，允许 16384–262144 字节，保存后从下一检查批次生效。已有批次使用自己的配置快照，旧快照缺字段时采用默认值。预算针对工具返回的逻辑 JSON 正文；MCP 外层以及同时发送 text/structuredContent 的重复封装另计，不能将该值解释为模型 token 数或网络包上限。历史 summary/full 仍默认 20 条，显式 limit 保持 1–20 的兼容限制。
+
+`get_development_risks(view=review/closeout)` 不传 limit 时按响应预算规划候选页。固定扫描范围决定 offset，已提交候选不使后续位置前移；续页携带 expected_seq 与 scan_id，版本改变即拒绝。首包先保留候选完整范围，再补上下文；同文件重叠窗口在原 80 行上限内合并、跨文件轮转分配。源码正文预算最多 16 KiB，并计入整包预算。candidate.evidence_status 为 READY/MISSING；预算不足或读取失败不得当作已完成复核。超大扫描描述明确列入 metadata_omitted，编号、位置与原账本保留。
+
+`read_development_risk_context(windows=[...])` 仍最多 20 窗、每窗最多 80 行。相关文件在各窗内传 related=true，不能绕过路径、归属和源码新鲜度校验。重叠窗合并后顺序读取，成功收据在 evidence，失败/预算不足在 errors；单窗失败不丢弃其他成功结果，批次版本变化仍拒绝整个响应。单文件旧调用保持原异常语义。读取并不保存复核结论。
+
+`submit_development_review(response_view=final_report)` 沿原事务保存后，从同批完整账本读回并生成整批报告。误报/重复项整批汇总，确认项四段报告、覆盖缺口及 session_url 保留。仅完整报告正文超预算时按字符位置拆成可无损拼接的 report_text 片段，next_action 指向 `view=final_report`，携带 report_digest、输入和扫描版本。内容变化拒绝旧续页。不能逐片重做汇总、重新提交或根据读取声称用户已读。尚未完成复核返回有界 review_receipt 和待办数量，沿同批 review 续读；开发期 WAITING_FOR_STATIC_SCAN 保留等待正常收尾的指导，不主动轮询。保存成功但读回失败仅续读，不重提。每次提交仍最多 50 项，不能承诺任意大批次都只需两次调用。
+
+新增窗口规划、证据准备与报告组装时间点写入现有 review_timing；只在验收显式启用磁盘 trace 和模型遥测。以上工作发生在 Stop 交接后的读取/提交中；正常扫描、Stop 等待预算与 WorkBuddy 原随包预取不增加步骤。

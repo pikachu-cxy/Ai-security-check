@@ -12,6 +12,10 @@ development_max_records = 1024
 review_scanner_findings = true
 audit_business_logic = false
 
+# 复核逻辑 JSON 响应上限，16–256 KiB；下一检查批次生效。
+[development]
+review_response_bytes = 65536
+
 [development.stop_fallback]
 enabled = true
 wait_timeout_seconds = 120
@@ -82,3 +86,4 @@ update_mode = "auto"
 update_interval_seconds = 0
 # allow_with_gap / require_fresh. Neither removes a valid old database on failure.
 stale_policy = "allow_with_gap"
+

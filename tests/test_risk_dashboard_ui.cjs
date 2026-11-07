@@ -109,3 +109,11 @@ test('repair controls show actual ownership and prohibit duplicate or resolved h
  ctx.risk={...row,decision:'CONFIRMED',status:'CODE_REVIEWED_RESOLVED'};vm.runInContext('repairControls(risk)',ctx);assert.equal(els.repair.disabled,true);assert.match(els.repairState.textContent,/不代表扫描器验证/);
  ctx.risk={...row,decision:'DISMISSED'};vm.runInContext('repairControls(risk)',ctx);assert.equal(els.repair.disabled,true);
 });
+
+test('review response budget belongs to product settings and preserves its numeric value',async()=>{
+ const {ctx,els}=await page();
+ vm.runInContext("configForm({development:{review_response_bytes:65536}})",ctx);
+ const input=els.configFields.querySelectorAll('input').find(i=>i.dataset.path==='development.review_response_bytes');
+ assert.equal(input.value,65536);assert.equal(input.dataset.kind,'number');
+ assert.equal(input.min,'16384');assert.equal(input.max,'262144');
+});

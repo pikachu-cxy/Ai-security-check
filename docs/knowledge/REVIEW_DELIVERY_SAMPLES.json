@@ -1,0 +1,1684 @@
+{
+  "normal_stop": [
+    {
+      "version": "before",
+      "round": 1,
+      "stop_seconds": 8.221256357996026,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.801796712000001
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "stop_seconds": 6.188899038010277,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 4.4964242400000005
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "stop_seconds": 6.653340835007839,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 4.836484373999999
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "stop_seconds": 5.840833558002487,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 4.247293699
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "stop_seconds": 6.196947543998249,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 4.569455608999999
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "stop_seconds": 11.892292131989961,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 9.043435805
+    },
+    {
+      "version": "after",
+      "round": 4,
+      "stop_seconds": 9.958474967017537,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 7.310495715
+    },
+    {
+      "version": "before",
+      "round": 4,
+      "stop_seconds": 9.166045635996852,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 6.983823070000001
+    },
+    {
+      "version": "before",
+      "round": 5,
+      "stop_seconds": 8.261896036012331,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.923418886
+    },
+    {
+      "version": "after",
+      "round": 5,
+      "stop_seconds": 7.92139875900466,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.752744568
+    },
+    {
+      "version": "after",
+      "round": 6,
+      "stop_seconds": 10.155675274989335,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 7.596643913
+    },
+    {
+      "version": "before",
+      "round": 6,
+      "stop_seconds": 10.113193704019068,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 7.40708364
+    },
+    {
+      "version": "before",
+      "round": 7,
+      "stop_seconds": 7.921636218990898,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 6.118174762
+    },
+    {
+      "version": "after",
+      "round": 7,
+      "stop_seconds": 7.362049650982954,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.429244756
+    },
+    {
+      "version": "after",
+      "round": 8,
+      "stop_seconds": 9.173412012984045,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 6.768796346
+    },
+    {
+      "version": "before",
+      "round": 8,
+      "stop_seconds": 11.099712395982351,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 8.15368243
+    },
+    {
+      "version": "before",
+      "round": 9,
+      "stop_seconds": 9.872480539983371,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 7.446397673000001
+    },
+    {
+      "version": "after",
+      "round": 9,
+      "stop_seconds": 7.727082858007634,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.831673283
+    },
+    {
+      "version": "after",
+      "round": 10,
+      "stop_seconds": 9.600041236990364,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 7.132075877
+    },
+    {
+      "version": "before",
+      "round": 10,
+      "stop_seconds": 7.76924998301547,
+      "status": "RESULTS_READY",
+      "paths": [
+        "app.py"
+      ],
+      "scan_seconds": 5.844724371
+    }
+  ],
+  "delivery": [
+    {
+      "version": "before",
+      "round": 1,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.18505594099406153,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 9425,
+              "evidence_ready": 178772,
+              "response_ready": 184250
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.26953861900256015,
+          "bytes": 5694,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 56814,
+              "evidence_ready": 264608,
+              "response_ready": 269200
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.3415619620063808,
+          "bytes": 29089,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 7395,
+              "transaction_open": 9939,
+              "decisions_checked": 110401,
+              "before_write": 244475,
+              "committed": 324311,
+              "readback_start": 325266,
+              "readback_done": 339694,
+              "response_ready": 340216
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.01920020900433883,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 18847
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.8245974140008911,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 10,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.1663465480087325,
+          "bytes": 11613,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 12655,
+              "evidence_ready": 161065,
+              "response_ready": 164632
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.2113906530139502,
+          "bytes": 5694,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10573,
+              "evidence_ready": 206467,
+              "response_ready": 211083
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.2537809310015291,
+          "bytes": 29090,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 9303,
+              "transaction_open": 12577,
+              "decisions_checked": 116779,
+              "before_write": 213162,
+              "committed": 236601,
+              "readback_start": 237224,
+              "readback_done": 252385,
+              "response_ready": 252832
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.019259494001744315,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 18922
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.6620386310096364,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.3581747540156357,
+          "bytes": 11613,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 11101,
+              "evidence_ready": 350861,
+              "response_ready": 357610
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.14595857201493345,
+          "bytes": 5694,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 15606,
+              "evidence_ready": 139301,
+              "response_ready": 145675
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.1992644309939351,
+          "bytes": 29088,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4525,
+              "transaction_open": 6244,
+              "decisions_checked": 84686,
+              "before_write": 155512,
+              "committed": 183231,
+              "readback_start": 184360,
+              "readback_done": 198100,
+              "response_ready": 198464
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.017494500993052498,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 17158
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.7296820539922919,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.25562571798218414,
+          "bytes": 11613,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 14003,
+              "evidence_ready": 244267,
+              "response_ready": 255061
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.1686620149994269,
+          "bytes": 5694,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 15402,
+              "evidence_ready": 164169,
+              "response_ready": 168354
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.3699536750209518,
+          "bytes": 29091,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 10390,
+              "transaction_open": 13973,
+              "decisions_checked": 179329,
+              "before_write": 314381,
+              "committed": 347387,
+              "readback_start": 347879,
+              "readback_done": 368025,
+              "response_ready": 368471
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.023540850001154467,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 23134
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.8300539669871796,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 4,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.1336665230046492,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 9201,
+              "evidence_ready": 130187,
+              "response_ready": 133325
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.08339782999246381,
+          "bytes": 5691,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 7606,
+              "evidence_ready": 80239,
+              "response_ready": 83184
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.12799533898942173,
+          "bytes": 29088,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4608,
+              "transaction_open": 6272,
+              "decisions_checked": 56775,
+              "before_write": 104419,
+              "committed": 117942,
+              "readback_start": 118327,
+              "readback_done": 127042,
+              "response_ready": 127313
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.013639412994962186,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 13305
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.36552763800136745,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 5,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.1335070230124984,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 8455,
+              "evidence_ready": 130214,
+              "response_ready": 133159
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.08090522201382555,
+          "bytes": 5691,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 7585,
+              "evidence_ready": 77759,
+              "response_ready": 80693
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.11532767600147054,
+          "bytes": 29087,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4699,
+              "transaction_open": 6200,
+              "decisions_checked": 55271,
+              "before_write": 93694,
+              "committed": 106098,
+              "readback_start": 106434,
+              "readback_done": 114425,
+              "response_ready": 114664
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.013141097006155178,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 12882
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.3495684050139971,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 6,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.13497638000990264,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 8466,
+              "evidence_ready": 131780,
+              "response_ready": 134650
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.08188788298866712,
+          "bytes": 5691,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 7473,
+              "evidence_ready": 78813,
+              "response_ready": 81678
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.11151064099976793,
+          "bytes": 29087,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4202,
+              "transaction_open": 5898,
+              "decisions_checked": 54215,
+              "before_write": 90723,
+              "committed": 102035,
+              "readback_start": 102365,
+              "readback_done": 110562,
+              "response_ready": 110821
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.012255943001946434,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 11998
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.3473616460105404,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 7,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.12497881799936295,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 7637,
+              "evidence_ready": 121728,
+              "response_ready": 124643
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.08451221900759265,
+          "bytes": 5691,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 8334,
+              "evidence_ready": 81121,
+              "response_ready": 84300
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.12012195799616165,
+          "bytes": 29087,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4370,
+              "transaction_open": 6469,
+              "decisions_checked": 57287,
+              "before_write": 97701,
+              "committed": 110639,
+              "readback_start": 110973,
+              "readback_done": 119133,
+              "response_ready": 119425
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.012796566996257752,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 12482
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.3490856880089268,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 8,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.1404147709836252,
+          "bytes": 11612,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 8009,
+              "evidence_ready": 136983,
+              "response_ready": 140070
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.09318129002349451,
+          "bytes": 5691,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 8775,
+              "evidence_ready": 89050,
+              "response_ready": 92899
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.13505501399049535,
+          "bytes": 29088,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 3976,
+              "transaction_open": 5887,
+              "decisions_checked": 59178,
+              "before_write": 101587,
+              "committed": 114512,
+              "readback_start": 114864,
+              "readback_done": 134011,
+              "response_ready": 134290
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.014207058993633837,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 13920
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.3902819410141092,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "before",
+      "round": 9,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.159213192993775,
+          "bytes": 11613,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 11032,
+              "evidence_ready": 154478,
+              "response_ready": 158788
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.12791236100019887,
+          "bytes": 5693,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 9130,
+              "evidence_ready": 123846,
+              "response_ready": 127586
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.1254356979916338,
+          "bytes": 29088,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 6251,
+              "transaction_open": 8245,
+              "decisions_checked": 63528,
+              "before_write": 102921,
+              "committed": 115558,
+              "readback_start": 115908,
+              "readback_done": 124264,
+              "response_ready": 124517
+            }
+          }
+        },
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.013389378000283614,
+          "bytes": 12826,
+          "timing": {
+            "offsets_us": {
+              "response_ready": 13116
+            }
+          }
+        }
+      ],
+      "call_count": 4,
+      "seconds": 0.43305129901273176,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 13,
+      "evidence_bytes": 4399
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.03521521098446101,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 13945,
+              "evidence_plan_start": 13948,
+              "evidence_plan_done": 14002,
+              "evidence_ready": 31206,
+              "response_ready": 34840
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.14251682799658738,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4621,
+              "transaction_open": 7089,
+              "decisions_checked": 69561,
+              "before_write": 115416,
+              "committed": 129660,
+              "readback_start": 130477,
+              "report_pack_start": 140584,
+              "report_pack_done": 141137,
+              "readback_done": 141287,
+              "response_ready": 141977
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.18344106900622137,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 10,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.03016306899371557,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10046,
+              "evidence_plan_start": 10049,
+              "evidence_plan_done": 10102,
+              "evidence_ready": 26671,
+              "response_ready": 29739
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.13483665400417522,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 5382,
+              "transaction_open": 7114,
+              "decisions_checked": 63394,
+              "before_write": 108521,
+              "committed": 122651,
+              "readback_start": 123285,
+              "report_pack_start": 132778,
+              "report_pack_done": 133190,
+              "readback_done": 133459,
+              "response_ready": 134334
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.17203325300943106,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.03155410100589506,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10213,
+              "evidence_plan_start": 10216,
+              "evidence_plan_done": 10277,
+              "evidence_ready": 27181,
+              "response_ready": 31177
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.13902652999968268,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 5099,
+              "transaction_open": 7014,
+              "decisions_checked": 67590,
+              "before_write": 112552,
+              "committed": 126334,
+              "readback_start": 126788,
+              "report_pack_start": 137301,
+              "report_pack_done": 137683,
+              "readback_done": 137842,
+              "response_ready": 138515
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.1775744490150828,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.035499415011145175,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10829,
+              "evidence_plan_start": 10832,
+              "evidence_plan_done": 10912,
+              "evidence_ready": 30439,
+              "response_ready": 35052
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.15537758599384688,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 5735,
+              "transaction_open": 7588,
+              "decisions_checked": 76336,
+              "before_write": 124869,
+              "committed": 141335,
+              "readback_start": 141757,
+              "report_pack_start": 153342,
+              "report_pack_done": 153735,
+              "readback_done": 153924,
+              "response_ready": 154616
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.19724202298675664,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 4,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.03465442199376412,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 13455,
+              "evidence_plan_start": 13459,
+              "evidence_plan_done": 13524,
+              "evidence_ready": 30392,
+              "response_ready": 34062
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.1520300749980379,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4832,
+              "transaction_open": 6505,
+              "decisions_checked": 68749,
+              "before_write": 125095,
+              "committed": 139239,
+              "readback_start": 139631,
+              "report_pack_start": 150141,
+              "report_pack_done": 150513,
+              "readback_done": 150675,
+              "response_ready": 151305
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.1929312639986165,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 5,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.03724785798112862,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10927,
+              "evidence_plan_start": 10930,
+              "evidence_plan_done": 11077,
+              "evidence_ready": 32672,
+              "response_ready": 36879
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.13692695202189498,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 6758,
+              "transaction_open": 8396,
+              "decisions_checked": 72864,
+              "before_write": 113529,
+              "committed": 125763,
+              "readback_start": 126261,
+              "report_pack_start": 134874,
+              "report_pack_done": 135260,
+              "readback_done": 135399,
+              "response_ready": 136171
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.18066566399647854,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 6,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.02832674700766802,
+          "bytes": 11773,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 9071,
+              "evidence_plan_start": 9074,
+              "evidence_plan_done": 9124,
+              "evidence_ready": 24933,
+              "response_ready": 28003
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.13023833598708734,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 3753,
+              "transaction_open": 5764,
+              "decisions_checked": 62244,
+              "before_write": 104758,
+              "committed": 118687,
+              "readback_start": 119026,
+              "report_pack_start": 128168,
+              "report_pack_done": 128616,
+              "readback_done": 128838,
+              "response_ready": 129763
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.16407852902193554,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 7,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.04219763001310639,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 19418,
+              "evidence_plan_start": 19422,
+              "evidence_plan_done": 19480,
+              "evidence_ready": 36948,
+              "response_ready": 41690
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.15035405298112892,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 5576,
+              "transaction_open": 7228,
+              "decisions_checked": 73149,
+              "before_write": 126266,
+              "committed": 139825,
+              "readback_start": 140223,
+              "report_pack_start": 148729,
+              "report_pack_done": 149065,
+              "readback_done": 149211,
+              "response_ready": 149872
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.19859598600305617,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 8,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.030826230999082327,
+          "bytes": 11773,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 9650,
+              "evidence_plan_start": 9654,
+              "evidence_plan_done": 9721,
+              "evidence_ready": 26938,
+              "response_ready": 30469
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.11973164000664838,
+          "bytes": 1049,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 3985,
+              "transaction_open": 5987,
+              "decisions_checked": 59152,
+              "before_write": 97105,
+              "committed": 109338,
+              "readback_start": 109693,
+              "report_pack_start": 118203,
+              "report_pack_done": 118525,
+              "readback_done": 118655,
+              "response_ready": 119260
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.15577955599292181,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    },
+    {
+      "version": "after",
+      "round": 9,
+      "calls": [
+        {
+          "operation": "get_development_risks",
+          "seconds": 0.029716720018768683,
+          "bytes": 11776,
+          "timing": {
+            "offsets_us": {
+              "evidence_start": 10192,
+              "evidence_plan_start": 10196,
+              "evidence_plan_done": 10252,
+              "evidence_ready": 26206,
+              "response_ready": 29360
+            }
+          }
+        },
+        {
+          "operation": "submit_development_review",
+          "seconds": 0.1284885720233433,
+          "bytes": 1050,
+          "timing": {
+            "offsets_us": {
+              "validated_arguments": 4577,
+              "transaction_open": 6181,
+              "decisions_checked": 61636,
+              "before_write": 103140,
+              "committed": 116389,
+              "readback_start": 116745,
+              "report_pack_start": 126902,
+              "report_pack_done": 127248,
+              "readback_done": 127395,
+              "response_ready": 128024
+            }
+          }
+        }
+      ],
+      "call_count": 2,
+      "seconds": 0.16382999697816558,
+      "first_save": true,
+      "candidates": 27,
+      "evidence_windows": 1,
+      "evidence_bytes": 527
+    }
+  ],
+  "model": [
+    {
+      "version": "before",
+      "round": 1,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 8.277,
+      "stop_seconds": 11.082396000000001,
+      "stop_to_first_read": 6.598268985748291,
+      "evidence_call_seconds": 1.3342931270599365,
+      "evidence_to_submit": 14.801307916641235,
+      "submit_to_saved": 1.9243130683898926,
+      "saved_to_reply": 10.334876775741577,
+      "evidence_to_reply": 27.060497760772705,
+      "review_total": 34.99305987358093,
+      "request_before_seconds": 0.03248190879821777,
+      "request_to_full_submit": 14.768826007843018,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 647,
+      "output_tokens_turn": 1599,
+      "response_bytes": 5685,
+      "last_allow_stop_seconds": 0.975994,
+      "server_stages_ms": {
+        "candidate_prepare": 102.764,
+        "window_plan": 0.0,
+        "evidence_read": 51.131,
+        "parse": 75.467,
+        "transaction_wait": 1.948,
+        "decisions": 35.835,
+        "revalidate": 19.953,
+        "commit": 53.636,
+        "readback": 12.295,
+        "report_pack": 0.0
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 102764,
+        "evidence_ready": 153895,
+        "response_ready": 172528
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 75467,
+        "transaction_open": 77415,
+        "decisions_checked": 113250,
+        "before_write": 133203,
+        "committed": 186839,
+        "readback_start": 186886,
+        "readback_done": 199181,
+        "response_ready": 200777
+      }
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 5.413,
+      "stop_seconds": 7.727368,
+      "stop_to_first_read": 4.694325923919678,
+      "evidence_call_seconds": 1.5892341136932373,
+      "evidence_to_submit": 14.890890836715698,
+      "submit_to_saved": 1.378342866897583,
+      "saved_to_reply": 10.851110935211182,
+      "evidence_to_reply": 27.120344638824463,
+      "review_total": 33.40390467643738,
+      "request_before_seconds": 0.0395660400390625,
+      "request_to_full_submit": 14.851324796676636,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 662,
+      "output_tokens_turn": 1657,
+      "response_bytes": 5752,
+      "last_allow_stop_seconds": 1.568206,
+      "server_stages_ms": {
+        "candidate_prepare": 93.775,
+        "window_plan": 0.0,
+        "evidence_read": 54.392,
+        "parse": 58.276,
+        "transaction_wait": 1.576,
+        "decisions": 27.558,
+        "revalidate": 14.804,
+        "commit": 41.889,
+        "readback": 9.294,
+        "report_pack": 0.0
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 93775,
+        "evidence_ready": 148167,
+        "response_ready": 167992
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 58276,
+        "transaction_open": 59852,
+        "decisions_checked": 87410,
+        "before_write": 102214,
+        "committed": 144103,
+        "readback_start": 144145,
+        "readback_done": 153439,
+        "response_ready": 155018
+      }
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 7.399,
+      "stop_seconds": 10.045965,
+      "stop_to_first_read": 4.498342037200928,
+      "evidence_call_seconds": 0.9916560649871826,
+      "evidence_to_submit": 16.679954767227173,
+      "submit_to_saved": 1.5827431678771973,
+      "saved_to_reply": 9.900731086730957,
+      "evidence_to_reply": 28.163429021835327,
+      "review_total": 33.65342712402344,
+      "request_before_seconds": 0.02475595474243164,
+      "request_to_full_submit": 16.65519881248474,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 709,
+      "output_tokens_turn": 1656,
+      "response_bytes": 5649,
+      "last_allow_stop_seconds": 1.164173,
+      "server_stages_ms": {
+        "candidate_prepare": 73.08,
+        "window_plan": 0.0,
+        "evidence_read": 38.975,
+        "parse": 61.634,
+        "transaction_wait": 1.96,
+        "decisions": 36.126,
+        "revalidate": 19.141,
+        "commit": 47.397,
+        "readback": 10.895,
+        "report_pack": 0.0
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 73080,
+        "evidence_ready": 112055,
+        "response_ready": 126455
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 61634,
+        "transaction_open": 63594,
+        "decisions_checked": 99720,
+        "before_write": 118861,
+        "committed": 166258,
+        "readback_start": 166302,
+        "readback_done": 177197,
+        "response_ready": 178794
+      }
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 7.564,
+      "stop_seconds": 10.235033,
+      "stop_to_first_read": 4.33942985534668,
+      "evidence_call_seconds": 1.6575112342834473,
+      "evidence_to_submit": 14.449912786483765,
+      "submit_to_saved": 1.6051502227783203,
+      "saved_to_reply": 11.870293855667114,
+      "evidence_to_reply": 27.9253568649292,
+      "review_total": 33.922297954559326,
+      "request_before_seconds": 0.041687726974487305,
+      "request_to_full_submit": 14.408225059509277,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 658,
+      "output_tokens_turn": 1643,
+      "response_bytes": 6666,
+      "last_allow_stop_seconds": 0.987049,
+      "server_stages_ms": {
+        "candidate_prepare": 115.024,
+        "window_plan": 0.041,
+        "evidence_read": 61.879,
+        "parse": 86.127,
+        "transaction_wait": 2.676,
+        "decisions": 45.716,
+        "revalidate": 24.602,
+        "commit": 54.938,
+        "readback": 13.13,
+        "report_pack": 0.423
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 115024,
+        "evidence_plan_start": 115027,
+        "evidence_plan_done": 115068,
+        "evidence_ready": 176947,
+        "response_ready": 199558
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 86127,
+        "transaction_open": 88803,
+        "decisions_checked": 134519,
+        "before_write": 159121,
+        "committed": 214059,
+        "readback_start": 214102,
+        "report_pack_start": 226573,
+        "report_pack_done": 226996,
+        "readback_done": 227232,
+        "response_ready": 228947
+      }
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 7.078,
+      "stop_seconds": 9.256727999999999,
+      "stop_to_first_read": 4.575649976730347,
+      "evidence_call_seconds": 1.6606128215789795,
+      "evidence_to_submit": 14.398840188980103,
+      "submit_to_saved": 1.0929510593414307,
+      "saved_to_reply": 10.688318014144897,
+      "evidence_to_reply": 26.18010926246643,
+      "review_total": 32.41637206077576,
+      "request_before_seconds": 0.04451107978820801,
+      "request_to_full_submit": 14.354329109191895,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 639,
+      "output_tokens_turn": 1594,
+      "response_bytes": 6640,
+      "last_allow_stop_seconds": 1.859968,
+      "server_stages_ms": {
+        "candidate_prepare": 107.646,
+        "window_plan": 0.043,
+        "evidence_read": 64.543,
+        "parse": 46.616,
+        "transaction_wait": 1.113,
+        "decisions": 22.721,
+        "revalidate": 12.16,
+        "commit": 35.781,
+        "readback": 8.105,
+        "report_pack": 0.296
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 107646,
+        "evidence_plan_start": 107650,
+        "evidence_plan_done": 107693,
+        "evidence_ready": 172236,
+        "response_ready": 198560
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 46616,
+        "transaction_open": 47729,
+        "decisions_checked": 70450,
+        "before_write": 82610,
+        "committed": 118391,
+        "readback_start": 118425,
+        "report_pack_start": 126071,
+        "report_pack_done": 126367,
+        "readback_done": 126530,
+        "response_ready": 127881
+      }
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "model": "gpt-6.1-sol",
+      "call_count": 2,
+      "first_save": true,
+      "scan_count": 1,
+      "confirmed": 1,
+      "dismissed": 1,
+      "duplicate_submissions": 0,
+      "report_complete": true,
+      "session_link": true,
+      "hook_mcp_calls": 9,
+      "all_product_mcp_calls": 11,
+      "hook_counts": {
+        "SessionStart": 1,
+        "PreToolUse": 3,
+        "PostToolUse": 3,
+        "Stop": 2
+      },
+      "scan_seconds": 6.801,
+      "stop_seconds": 9.131782,
+      "stop_to_first_read": 5.203459978103638,
+      "evidence_call_seconds": 1.8447177410125732,
+      "evidence_to_submit": 15.85209321975708,
+      "submit_to_saved": 1.174443006515503,
+      "saved_to_reply": 10.060002088546753,
+      "evidence_to_reply": 27.086538314819336,
+      "review_total": 34.13471603393555,
+      "request_before_seconds": 0.0411529541015625,
+      "request_to_full_submit": 15.810940265655518,
+      "fragment_span_seconds": null,
+      "output_tokens_submission": 688,
+      "output_tokens_turn": 1648,
+      "response_bytes": 6669,
+      "last_allow_stop_seconds": 1.126519,
+      "server_stages_ms": {
+        "candidate_prepare": 107.583,
+        "window_plan": 0.066,
+        "evidence_read": 77.338,
+        "parse": 52.537,
+        "transaction_wait": 1.156,
+        "decisions": 24.551,
+        "revalidate": 12.07,
+        "commit": 36.947,
+        "readback": 8.303,
+        "report_pack": 0.307
+      },
+      "evidence_timing_offsets_us": {
+        "evidence_start": 107583,
+        "evidence_plan_start": 107589,
+        "evidence_plan_done": 107655,
+        "evidence_ready": 184993,
+        "response_ready": 208017
+      },
+      "save_timing_offsets_us": {
+        "validated_arguments": 52537,
+        "transaction_open": 53693,
+        "decisions_checked": 78244,
+        "before_write": 90314,
+        "committed": 127261,
+        "readback_start": 127292,
+        "report_pack_start": 135115,
+        "report_pack_done": 135422,
+        "readback_done": 135595,
+        "response_ready": 137013
+      }
+    }
+  ]
+}

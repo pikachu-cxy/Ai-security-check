@@ -25,7 +25,7 @@ DEFAULTS = {
     'vulnerability_data': {'trivy': {'repositories': [], 'cache_dir': '', 'update_mode': 'auto',
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
-    'development': {'business_audit_delivery': 'fast',
+    'development': {'business_audit_delivery': 'fast', 'review_response_bytes': 65536,
                     'stop_fallback': {'enabled': True, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 
@@ -108,6 +108,9 @@ def describe_config():
 
 
 def validate_preferences(values):
+    budget = values['development']['review_response_bytes']
+    if type(budget) is not int or not 16384 <= budget <= 262144:
+        raise ValueError('USER_CONFIG_REVIEW_RESPONSE_OUT_OF_RANGE')
     if values['development']['business_audit_delivery'] not in {'fast', 'wait'}:
         raise ValueError('USER_CONFIG_INVALID_AUDIT_DELIVERY')
     for section in (*values['scan'].values(), values['storage']['explicit_scan_jobs'], values['storage']['scan_publication']):

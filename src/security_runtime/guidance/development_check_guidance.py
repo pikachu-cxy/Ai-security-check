@@ -237,14 +237,17 @@ review_progress 和处置；不为同一页再调 get_development_risks。next_o
 
 ### 降低读取和调用成本
 
-当前接口支持时，get_development_risks 默认 limit=20、view=summary、include_history=false；
+当前接口支持时，get_development_risks 默认 view=summary、include_history=false；历史摘要默认 20 条。
+view=review/closeout 不传 limit 时按产品设置的响应字节预算分页，沿 next_offset/next_action 读齐同批。
+首次 evidence 已按文件合并重叠窗口；复用候选的 evidence_refs，不重复补读已足够的证据。
+缺失或不足证据先集中规划，再使用 windows 批量补读；相关文件逐窗口设置 related=true。
 摘要保留全部候选、处置和复核进度，仅去掉 assessment 中重复的 finding 和源码哈希。
 需要原始完整字段时指定 view=full，历史批次按需加载。不能省略 next_offset 后续页。
 多个已知证据窗口可用 read_development_risk_context(windows=[{file_path,start_line,end_line,related}])
 一次读取，最多 20 个窗口，每个最多 80 行；不同时传 file_path。返回 evidence 数组中的实际引用。
-相同窗口去重，服务端按顺序保存证据，不启动并发写；版本变化仍拒绝，提交仍核验实际源码。
+重叠窗口在 80 行边界内合并，服务端按顺序保存证据；errors 逐窗口说明未返回证据原因，不能把部分成功当作全成功。版本变化仍拒绝，提交仍核验实际源码。
 读取失败可能留有证据收据，不代表复核已保存。旧连接缺少 windows 参数时沿单窗口读取。
-接口支持时优先传 submit_development_review(return_risks=true)。支持 response_view="final_report" 的 Codex 可直接获取完整单页报告。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项首次生成面向用户的 report_text，按顺序写全加粗漏洞名、评级及来源、位置（实际风险文件链接、行号及已知函数名），再分四段使用加粗标签“问题”“可能影响”“建议修复”“尚未确认”，逐段写明内容，不得省略或合并；标签随用户语言翻译，缺失评级写未评级，未知事项如实说明；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
+接口支持时优先传 submit_development_review(return_risks=true)。支持 response_view="final_report" 的 Codex 获取整批汇总报告；仅实际报告文本超预算时分页，沿返回的 final_report next_action 续读并按顺序拼接 report_text，不重新提交。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批，保留其实际 view、offset、expected_seq、scan_id 和可选 report_digest。部分保存的 review_receipt 仅含待办数量，不代表复核完成；WAITING_FOR_STATIC_SCAN 仍等待正常 Stop，不轮询。历史账本按需另查。确认风险时同项首次生成面向用户的 report_text，按顺序写全加粗漏洞名、评级及来源、位置（实际风险文件链接、行号及已知函数名），再分四段使用加粗标签“问题”“可能影响”“建议修复”“尚未确认”，逐段写明内容，不得省略或合并；标签随用户语言翻译，缺失评级写未评级，未知事项如实说明；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。报告必须保留 session_url；报告片段不能逐页自行重复汇总。每次提交最多 50 项，不能省略每项理由、证据及确认项完整报告。只有保存回执或读取失败时再单独读取第一页，不重交复核。
 自动模式由 Stop 合并收尾。手动模式在代码、文档和生成索引写完后主动完成收尾。
 
 ### 统一风险保存、复核和修复

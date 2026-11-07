@@ -415,8 +415,8 @@ def test_batch_evidence_deduplicates_and_keeps_stale_submission_guard(sample):
 def test_batch_rejects_cross_version_and_unobserved_paths(sample, monkeypatch):
     from security_runtime.development_views import EvidenceWindow, read_contexts
     root, service, ref, risks = sample
-    with pytest.raises(ValueError, match='PATH_NOT_OBSERVED'):
-        read_contexts(risks, [EvidenceWindow(file_path='other.py')])
+    result = read_contexts(risks, [EvidenceWindow(file_path='other.py')])
+    assert not result['evidence'] and result['errors'][0]['reason_code'] == 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED'
     original = risks.read
     def changed(*args, **kwargs):
         result = original(*args, **kwargs)
@@ -462,7 +462,7 @@ def test_mcp_compact_review_defaults_preserve_findings_and_full_access(sample):
         assert 'finding' not in short['risks'][0]['assessment']
         assert 'finding' in full['risks'][0]['assessment']
         schema = next(t.inputSchema for t in await server.list_tools() if t.name == 'get_development_risks')
-        assert schema['properties']['limit']['default'] == 20
+        assert schema['properties']['limit']['default'] is None
         print('compact_bytes', len(json.dumps(short)), 'full_bytes', len(json.dumps(full)),
               'receipt_bytes', len(json.dumps(receipt)))
     asyncio.run(run())
@@ -505,7 +505,9 @@ def test_final_report_requires_complete_committed_single_page(sample, monkeypatc
     page = risks.get(batch_version=(seq, 'scan-1'))
     page.update(review_saved=True, post_commit_read=True, reread_required=False)
     if decision == 'INCONCLUSIVE':
-        assert receipt['view'] == 'batch' and receipt['risks'] == page['risks']
+        assert receipt['view'] == 'review_receipt' and 'risks' not in receipt
+        assert receipt['review_progress']['pending_scanner_count'] == 1
+        assert not receipt['host_review_completed'] and receipt['next_action']['arguments']['view'] == 'review'
     else:
         assert receipt['report_text'] == page['report_text']
         if decision == 'CONFIRMED':

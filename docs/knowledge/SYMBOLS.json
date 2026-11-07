@@ -2580,7 +2580,7 @@
     },
     {
       "path": "src/security_runtime/development_reporting.py",
-      "sha256": "3970fe1011ac571768c9f4cd3b3eb6254251ca3c11b398e4cc3ad5e70d92b8ce",
+      "sha256": "d758fbf3d2252218b66a57d661ddd574d9e9090e8cfa5e5e50668ed0e356a267",
       "purpose": "Shared reporting instructions, not a receipt that the host reported a result.",
       "symbols": [
         {
@@ -2622,7 +2622,7 @@
     },
     {
       "path": "src/security_runtime/development_risks.py",
-      "sha256": "91d5d272280486e758540e0a9c8e51c86e28620c4430ec164956fa62b8a494c3",
+      "sha256": "5bdb0d5c182d138793303a27bc6cf6cdcffe75aa18e22e450059579531e548fd",
       "purpose": "Version-bound development findings and repairs, independent of scanner truth.",
       "symbols": [
         {
@@ -2723,19 +2723,19 @@
         },
         {
           "name": "DevelopmentRisks.prepare_fix",
-          "line": 590
+          "line": 605
         },
         {
           "name": "DevelopmentRisks.resolve",
-          "line": 638
+          "line": 653
         },
         {
           "name": "DevelopmentRisks.manage",
-          "line": 671
+          "line": 686
         },
         {
           "name": "DevelopmentRisks.disposition",
-          "line": 686
+          "line": 701
         }
       ]
     },
@@ -2822,7 +2822,7 @@
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "33375a6bb0e658c23acf54a60b41186c76c40ca0acc2495045647f477316ba19",
+      "sha256": "97818399be87d169ae201d098ea4d3e42553ad118ebb52972e39f2d52a748d30",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -2835,35 +2835,35 @@
         },
         {
           "name": "pending_review_context",
-          "line": 36
+          "line": 49
         },
         {
           "name": "pending_evidence",
-          "line": 48
+          "line": 61
         },
         {
           "name": "review_page",
-          "line": 71
+          "line": 84
         },
         {
           "name": "risk_summary",
-          "line": 131
+          "line": 170
         },
         {
           "name": "batch_report_page",
-          "line": 145
+          "line": 184
         },
         {
           "name": "final_report_receipt",
-          "line": 234
+          "line": 273
         },
         {
           "name": "review_receipt",
-          "line": 251
+          "line": 290
         },
         {
           "name": "closeout_page",
-          "line": 262
+          "line": 301
         }
       ]
     },
@@ -4589,7 +4589,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "49c2ed04c9238afeda3b250c625c15f50f8346cc0508e8b0663fb4bc9a517580",
+      "sha256": "919e1ab6c2e690960e635ea5ed8f47c0b99c4204539c65cc6e83530ae22027f9",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -6679,7 +6679,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "ce2b6cf9a3ad8cddf103d31e2b7e309f3b1a0782c52ce11482afe9141338eb45",
+      "sha256": "2d6fa88d6507feaef31428b59127175fb4cf5e2031b0d008c4544c2cdc6bc3ef",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {
@@ -9634,6 +9634,41 @@
         {
           "name": "choice_labels",
           "line": 222
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/review_delivery.py",
+      "sha256": "9f57b833b5bb64ef11f891fd901a099a6dc58f5ccde64d801ed827cb68083c69",
+      "purpose": "Bounded post-Stop delivery. No scanner, worker or additional persistent cache.",
+      "symbols": [
+        {
+          "name": "json_bytes",
+          "line": 8
+        },
+        {
+          "name": "response_budget",
+          "line": 12
+        },
+        {
+          "name": "fit_review_page",
+          "line": 17
+        },
+        {
+          "name": "merge_windows",
+          "line": 60
+        },
+        {
+          "name": "collect_evidence",
+          "line": 79
+        },
+        {
+          "name": "report_page",
+          "line": 127
+        },
+        {
+          "name": "pending_report_receipt",
+          "line": 168
         }
       ]
     },
@@ -14592,7 +14627,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "82e529acb4ddb58e3217892fd42cdac663ce8b3628ebeca9ce81f090c32d7af9",
+      "sha256": "cd234f5371836693dc8b84cc87b9885d118941727c6ccc7d365e79762d8e400d",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {
@@ -16583,7 +16618,7 @@
     },
     {
       "path": "src/security_runtime/user_config.py",
-      "sha256": "298b073a8d161ac0c1a25acbc95428124729104d05c72bd75883d7c3257084e0",
+      "sha256": "b90d1b9ab86e717ccbe9f583b5f1a96787f1c4c2c7ad5f3d26862ef6070edc4a",
       "purpose": "User-owned product preferences, independent of project source and install versions.",
       "symbols": [
         {
@@ -16616,7 +16651,7 @@
         },
         {
           "name": "save_config",
-          "line": 136
+          "line": 139
         }
       ]
     },

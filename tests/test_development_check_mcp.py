@@ -102,7 +102,7 @@ def test_single_scan_101_candidates_paginated_review(check, tmp_path, monkeypatc
         assert page['scan_id'] == scan_id and page['total'] == 101
         assert 'reporting' not in page and 'risks' not in page
         assert page['evidence'] and all(w['evidence_ref'] for w in page['evidence'])
-        assert list(page['review_timing']['offsets_us']) == ['evidence_start', 'evidence_ready', 'response_ready']
+        assert list(page['review_timing']['offsets_us']) == ['evidence_start', 'evidence_plan_start', 'evidence_plan_done', 'evidence_ready', 'response_ready']
         assert all(c['same_issue_as'] == c['id'] and c['id'] for c in page['candidates'])
         review_ids.extend(c['same_issue_as'] for c in page['candidates'])
         offset = page['next_offset']
@@ -117,20 +117,25 @@ def test_single_scan_101_candidates_paginated_review(check, tmp_path, monkeypatc
         assert lines[line-1] in evidence['content']
         batch.append(dict(same_issue_as=risk['id'], decision='CONFIRMED',
             rationale=f'run{line-1} evaluates its string argument directly.',
+            report_text=f'Unsafe eval in app.ts:{line}, run{line-1}. Replace evaluation with explicit parsing.',
             evidence_refs=[evidence['evidence_ref']]))
     for start, remaining in [(0, 51), (50, 1), (100, 0)]:
         saved = tool('submit_development_review', scan_id=scan_id, observations=batch[start:start+50],
                      expected_seq=first['dirty_seq'], return_risks=True, response_view='final_report')
-        assert saved['post_commit_read'] and saved['view'] == 'batch'
+        assert saved['post_commit_read']
         offsets = saved['review_timing']['offsets_us']
         assert list(offsets.values()) == sorted(offsets.values())
         assert {'transaction_open', 'before_write', 'committed', 'readback_done', 'response_ready'} <= offsets.keys()
-        assert len(saved['review_progress']['pending_scanner_ids']) == remaining
         if remaining:
+            assert saved['view'] == 'review_receipt'
+            assert saved['review_progress']['pending_scanner_count'] == remaining
+            assert 'pending_scanner_ids' not in saved['review_progress']
             page = tool('get_development_risks', view='review', offset=101-remaining)
             assert page['candidates'][0]['id'] == review_ids[101-remaining]
-    assert saved['review_progress']['host_review_completed']
-    assert all(r['decision'] == 'CONFIRMED' for r in read_pages(saved))
+    assert saved['view'] == 'final_report' and saved['host_review_completed']
+    assert saved['total'] == saved['summary']['CONFIRMED'] == 101
+    assert all(r['decision'] == 'CONFIRMED' for r in read_pages(
+        tool('get_development_risks', view='batch', scan_id=scan_id, expected_seq=first['dirty_seq'])))
     assert counters['calls'] == 1
 
 

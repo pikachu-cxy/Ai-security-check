@@ -291,17 +291,17 @@ class DevelopmentRisks:
         with self.store.transaction() as db:
             self.publish_scan(db, self.current_check())
 
-    def submit(self, observations, expected_seq, *, business_reviews=(), return_risks=False, scan_id=None, audit_id=None):
+    def submit(self, observations, expected_seq, *, business_reviews=(), return_risks=False, scan_id=None, audit_id=None, final_report=False):
         try:
             return self._submit(observations, expected_seq, business_reviews=business_reviews,
-                                return_risks=return_risks, scan_id=scan_id, audit_id=audit_id)
+                                return_risks=return_risks, scan_id=scan_id, audit_id=audit_id, final_report=final_report)
         except DevelopmentRiskError as error:
             if not hasattr(error, 'recovery'):
                 error.recovery = dict(tool='get_development_check', arguments=dict(
                     check_ref=self.ref, workspace_path=str(self.root)))
             raise
 
-    def _submit(self, observations, expected_seq, *, business_reviews, return_risks, scan_id, audit_id):
+    def _submit(self, observations, expected_seq, *, business_reviews, return_risks, scan_id, audit_id, final_report=False):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
         values = [(ScannerReview if 'issue_key' not in v else Observation).model_validate(v)
                   for v in observations]
@@ -502,18 +502,18 @@ class DevelopmentRisks:
         from .development_reporting import reporting
         version = (expected_seq, check.get('scan_id'))
         reread = reporting(self.ref, self.root, after_review=True)['next_action']
-        reread['arguments'].update(view='batch', expected_seq=expected_seq, scan_id=version[1])
+        reread['arguments'].update(view='final_report' if final_report else 'batch', expected_seq=expected_seq, scan_id=version[1])
         try:
             review_mark('readback_start')
             result = self.get(offset=0, limit=20 if return_risks else 5, include_history=False,
-                              batch_version=version)
+                              batch_version=version, whole_report=final_report)
         except (ValueError, OSError, sqlite3.Error):
             return dict(review_saved=True, reread_required=True, post_commit_read=False,
                         next_action=reread)
         review_mark('readback_done')
         from .performance_trace import review_event
-        review_event('saved', check, result['review_progress'])
-        if return_risks and result.get('candidates_ready') and (
+        review_event('saved', check, result['review_progress'] if 'review_progress' in result else review_progress(check, row))
+        if return_risks and (result.get('candidates_ready') or result.get('view') == 'final_report') and (
                 result['dirty_seq'], result['scan_id']) == (expected_seq, check.get('scan_id')):
             result.update(review_saved=True, post_commit_read=True, reread_required=False)
             return result
@@ -521,8 +521,9 @@ class DevelopmentRisks:
         result['next_action'] = result['reporting']['next_action'] = reread
         return result
 
-    def get(self, offset=0, limit=5, *, include_history=True, review_only=False, batch_version=None):
-        require(type(offset) is int and offset >= 0 and type(limit) is int and 1 <= limit <= 20,
+    def get(self, offset=0, limit=5, *, include_history=True, review_only=False, batch_version=None,
+            whole_report=False, report_digest=None):
+        require(type(offset) is int and offset >= 0 and (limit is None or type(limit) is int and 1 <= limit <= 20),
                 'DEVELOPMENT_RISK_PAGE_INVALID')
         check = self.current_check()
         if batch_version is not None:
@@ -547,6 +548,10 @@ class DevelopmentRisks:
         if review_only:
             from .development_views import review_page
             return review_page(self, check, row, review_progress(check, row), offset, limit)
+        limit = limit or 20
+        report_offset = offset
+        if whole_report:
+            offset = 0
         risks = list(row['risks'].values())
         if batch_version is not None:
             seq, scan = batch_version
@@ -558,6 +563,8 @@ class DevelopmentRisks:
                     (legacy_batch and a.get('scan_id') is None) or
                     (a.get('audit_id') and a.get('audit_id') == (check.get('parallel_audit') or {}).get('audit_id')
                      and (check.get('parallel_audit') or {}).get('status') in {'COMPLETE', 'PARTIAL'})) for a in r['assessments'])]
+        if whole_report:
+            limit = max(1, len(risks))
         items = [dict(id=r['id'], finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
                       disposition=r.get('disposition', 'ACTIVE'),
                       reminder_suppressed=r.get('disposition', 'ACTIVE') != 'ACTIVE' or r['decision'] == 'DISMISSED'
@@ -584,7 +591,15 @@ class DevelopmentRisks:
                     source_freshness='NOT_RECHECKED_ON_READ', repair_authorized=False)
         if batch_version is not None:
             from .development_views import batch_report_page
-            return batch_report_page(result, check)
+            page = batch_report_page(result, check)
+            if whole_report and 'report_text' in page:
+                from .review_delivery import report_page
+                return report_page(page, check, self.root, report_offset, report_digest)
+            if whole_report:
+                require(report_digest is None, 'DEVELOPMENT_RISK_VERSION_STALE')
+                from .review_delivery import pending_report_receipt
+                return pending_report_receipt(page, self.root)
+            return page
         return result
 
     def prepare_fix(self, risk_id, proposal, preserve, evidence_refs, user_requested, *,
