@@ -94,28 +94,8 @@ class WorkspaceApplication:
 
     @configured
     def scan_project(self, workspace=None, *, force_rescan=False, progress=None):
-        """Revalidate immutable evidence before reusing a whole-project result."""
-        from .explicit_scan import run_explicit_scan
-        from .scan_reuse import try_reuse
-        if type(force_rescan) is not bool:
-            raise ValueError('Invalid force_rescan value')
-        runtime=self.runtime_provider() if callable(self.runtime_provider) else self.runtime_provider
-        root=self.bound_path(workspace)
-        decision=None
-        if not force_rescan:
-            if progress is not None:
-                progress.checkpoint()
-                progress.emit('SCAN_REUSE_CHECK_STARTED',message='正在核对源码、范围、规则及引擎数据是否仍适用。')
-            decision=try_reuse(runtime,root,hooks=self.hooks)
-            if decision.reused:
-                if progress is not None:
-                    progress.checkpoint()
-                    progress.emit('SCAN_RESULT_REUSED',message='当前证据已重新核验，复用上次扫描结果。')
-                return dict(decision.scan,result_reuse=decision.receipt)
-        result=run_explicit_scan(runtime,root,mode='release',progress=progress,hooks=self.hooks, force_rescan=force_rescan)
-        result.scanner_diagnostics['reuse_check']=(decision.receipt if decision is not None else
-            dict(reused=False,reason_code='FORCE_RESCAN_REQUESTED',scanner_run=True))
-        return result
+        """Whole-project scans are reserved for a future product release."""
+        raise ValueError('全项目扫描为后续规划功能，当前版本未开放。')
 
     @configured
     def scan_files(self, workspace, files, *, progress=None):

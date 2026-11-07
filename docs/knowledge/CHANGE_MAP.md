@@ -46,3 +46,39 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 统一结果及旧数据兼容：`development_result_store.py`、`development_risks.py:publish_scan`、`development_check_worker.py`、`risk_dashboard.py`；测试 `tests/test_development_result_store.py` 与 `tests/test_development_check_wait.py`。
 
 普通开发的会话归属与重复命中：编辑工具路径处理在 `host_tool_events.py`，取证及分组汇总在 `development_views.py`，同批关联与证据校验在 `development_risks.py`。纯删除的输入绑定与覆盖状态分别在 `runtime.py`、`development_check_worker.py`。对应回归在 `tests/test_lightweight_hooks.py`、`tests/test_development_risks.py`、`tests/test_development_check.py`；真实双 worktree 数据见[开发场景验收](DEVELOPMENT_ACCEPTANCE.md)。
+
+
+后台风险服务生命周期与固定会话链接位于 `dashboard_service.py`，HTTP 授权与过滤位于 `risk_dashboard.py`；MCP 启动入口在 `cli.py`，完整报告链接在 `development_views.py`，统一结果链接在 `development_check.py`。相关回归为 `tests/test_dashboard_service.py`、`tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs`、`tests/test_development_risks.py` 和 `tests/test_development_delivery.py`。
+
+## 风险管理与并行业务审计
+
+| 修改方向 | 源码 | 验证 |
+| --- | --- | --- |
+| 后台生命周期/认证/API/页面 | dashboard_service、risk_dashboard、assets/risk_dashboard.html | test_dashboard_service、test_risk_dashboard、test_risk_dashboard_ui.cjs |
+| 项目与 worktree、查询/导出 | project_identity、dashboard_catalog、dashboard_records、dashboard_export | test_dashboard_management、官方 SARIF schema、隔离万级/十万级记录 |
+| 用户处置、修复通知、设置 | risk_management、repair_notifications、development_risks、user_config | test_dashboard_management、test_user_config_stop |
+| 开发期审计、预算、收尾 | business_audit、audit_leases、codex_mcp_hook、global_mcp、development_stop、development_views | test_business_audit、test_lightweight_hooks、test_development_review_completion |
+
+同步修改 host_guidance 与 development_check_guidance 后运行 sync_review_skill.py；索引刷新不启动扫描。安装后分别核对源码、启动器、新连接和桌面驻留状态。
+
+资源删除与恢复：dashboard_entities.py、dashboard_catalog.py、risk_dashboard.py；测试 test_dashboard_entities.py。分类占比：dashboard_records.py 提供事实标记，catalog 聚合，页面渲染；不会新增 Stop 操作。
+
+历史目录删除、扫描截断或签名提示：`dashboard_history.py`（只读历史身份、分批读取与固定诊断）、`risk_dashboard.py`（聚合及非阻断目录提示）、`dashboard_catalog.py`（后台完整索引及密钥变更失效）、`assets/risk_dashboard.html`（诊断范围）。回归入口：`tests/test_dashboard_history.py`、`tests/test_dashboard_service.py`、`tests/test_risk_dashboard_ui.cjs`。不放宽 `DevelopmentCheckStore` 的活动工作区校验。
+
+资源父子关系及导航：dashboard_entities.py 的 parents/workspace_count；assets/risk_dashboard.html 的 resourceNavigate、enterChildren、renderResourceContext。设置功能折叠：configForm/configInputs。对应 test_dashboard_entities.py 与 test_risk_dashboard_ui.cjs。
+
+真实会话验收当前问题见 [FLOW_ACCEPTANCE](FLOW_ACCEPTANCE.md)：审计提交契约优先对齐 development_risks.ReviewSubmission、mcp_contracts 原始校验与 mcp_tools/development_check 提交签名；关闭复核后的报告交接检查 development_stop.native_closeout 与 hook_adapters；详情代码展示检查 dashboard_records.enrich 和页面 detail，不将复核理由当作原始代码片段。修复需覆盖 MCP 完整入口和用户可见交付，不只测领域服务。
+
+具体开发拆分及验收门槛见 [FLOW_REPAIR_PLAN](FLOW_REPAIR_PLAN.md)。报告续接去重不等于宿主已提交报告；可信回调沿 development_delivery.acknowledge，不能增加模型自报成功的确认入口。详情代码读取按需进行，不调用开发复核写接口。
+
+
+本期修复验证见 [FLOW_REPAIR_ACCEPTANCE](FLOW_REPAIR_ACCEPTANCE.md)。并行回合资格由 development_check.note_activity 与 development_stop.fallback 维护；详情代码 GET 由 dashboard_detail.detail、risk_dashboard.Handler 和页面 renderCode 负责。专项为 test_flow_repairs、test_business_audit、test_development_delivery_mcp 和 test_risk_dashboard_ui.cjs；不要把源码展示接入扫描热路径。
+
+左侧折叠导航：`assets/risk_dashboard.html` 的 nav-group 原生 details/summary 与 showView 自动展开；项目、工作区、会话筛选仍由原 resourceNavigate/enterChildren 维护。
+
+安装目录与编译产物范围：scope_policy.py 定义轻量共享策略；target.py 在大小限制之前排除确认的编译文件；development_file_watch.py 在记录事件前应用；development_scope.py/development_check.py 在显式编辑与收尾入口过滤。测试 test_scope_policy.py、test_development_file_watch.py 与 test_development_check.py。
+
+
+短提示收尾：`development_stop.py` 保存分支与批次；`development_views.py:closeout_page` 解析、处理扫描完成竞态、分页并附会话链接；`tasks/ownership.py`、`guidance/` 与 `review_skill.py` 提供内部操作规则。回归：`test_closeout_notice.py`、`test_flow_repairs.py`。
+
+OpenGrep macOS 载荷复用：`opengrep_payload.py` 在安装/显式准备时从固定校验和的官方启动器导出私有载荷，`toolchain.py` 解析及校验；`install_readiness.py`、`personal_install.py`、`cli.py` 只在安装/准备入口启用。`--status`、普通扫描和 Stop 不进行解压安装。回归：`test_opengrep_payload.py`、`test_install_readiness.py`。

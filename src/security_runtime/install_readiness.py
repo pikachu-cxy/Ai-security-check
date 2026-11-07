@@ -319,7 +319,7 @@ def _receipt(tools, database, failures, *, offline):
 @timed("install.readiness")
 def prepare_installation_readiness(*, progress=None, manager=None, offline=False,
                                    timeout_seconds=300, retries=0, idle_seconds=30,
-                                   adaptive=False, max_wait_seconds=None):
+                                   adaptive=False, max_wait_seconds=None, prepare_payload=False):
     """Reuse compatible tools; repair missing tools and refresh public data online.
 
     Explicit offline mode is resolve-only, including Python-based engines: even
@@ -329,7 +329,8 @@ def prepare_installation_readiness(*, progress=None, manager=None, offline=False
     """
     with preparation_budget(timeout_seconds, retries, idle_seconds, progress,
             adaptive=adaptive, max_wait_seconds=max_wait_seconds) as budget, _quiet_preparation_logs():
-        receipt = _prepare_installation_readiness(progress=progress, manager=manager, offline=offline)
+        receipt = _prepare_installation_readiness(progress=progress, manager=manager, offline=offline,
+                                                 prepare_payload=prepare_payload)
         receipt['preparation'] = {'budget_seconds': timeout_seconds,
             'elapsed_ms': round((time.monotonic() - budget.started) * 1000),
             'max_attempts': 1 + retries, 'attempts': budget.attempts,
@@ -339,7 +340,7 @@ def prepare_installation_readiness(*, progress=None, manager=None, offline=False
         return receipt
 
 
-def _prepare_installation_readiness(*, progress=None, manager=None, offline=False):
+def _prepare_installation_readiness(*, progress=None, manager=None, offline=False, prepare_payload=False):
     offline = bool(offline)
     failures = []
     _report(progress, 'INSTALL_TOOLS')
@@ -400,6 +401,15 @@ def _prepare_installation_readiness(*, progress=None, manager=None, offline=Fals
                     code = 'PREPARATION_BUDGET_EXHAUSTED'
                 budget.report(dict(event='COMPONENT_COMPLETE' if _component(current, expected)['ready'] else 'COMPONENT_FAILED',
                     component=name, error_code='' if _component(current, expected)['ready'] else code))
+        if prepare_payload and name == 'opengrep' and _component(current, expected, name)['ready']:
+            try:
+                from .opengrep_payload import prepare
+                if prepare(manager)['status'] == 'READY':
+                    current = manager.resolve(name)
+            except ScanCancelled:
+                raise
+            except Exception as exc:
+                _failure(failures, 'INSTALL_TOOLS', name, exc)
         tools[name] = _component(current, expected, name)
         resolved[name] = current
 

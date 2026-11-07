@@ -336,6 +336,7 @@ class ToolManager:
         self._engine_locks = {tool_id: threading.RLock() for tool_id in VERSIONS}
         self._lock_guard = threading.Lock()
         self._version_cache = {}  # In-memory front cache of successful probes, <=16.
+        self._payload_hash_cache = {}  # Verified bytes, guarded by full file metadata.
         self._version_cache_lock = threading.RLock()
         self._probe_diagnostics = {}
         self.versions = dict(VERSIONS)
@@ -495,7 +496,11 @@ class ToolManager:
     def _probe_identity(self, tool_id, path, *, environment=None, settings_metadata=False,
                         version_probe=False):
         """Content-keyed probe reuse, not an engine integrity check bypass."""
-        files = [path]
+        payload_identity = None
+        if tool_id == 'opengrep':
+            from .opengrep_payload import identity
+            payload_identity = identity(path, self)
+        files = [] if payload_identity else [path]
         if tool_id in self.python_engines:
             # Unknown/custom Python launch layouts are never cached.
             runtime = path.parent.parent
@@ -513,6 +518,8 @@ class ToolManager:
         if sum(file.stat().st_size for file in set(files)) > 512_000_000:
             return None
         digest = hashlib.sha256()
+        if payload_identity:
+            digest.update(payload_identity.encode())
         for file in sorted(set(files)):
             if file.is_junction():
                 return None
@@ -695,6 +702,15 @@ class ToolManager:
                     return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "managed notice missing")
             except (OSError, ValueError, KeyError):
                 return ResolvedTool(tool_id, "", str(path), source, ToolStatus.BROKEN, "missing or invalid install marker", diagnosis('COMPONENT_PACKAGE_INCOMPLETE'))
+        if source == ToolSource.MANAGED and tool_id == 'opengrep':
+            from .opengrep_payload import resolve
+            try:
+                payload = resolve(path, sha256_file(path), self.versions[tool_id], cache=self._payload_hash_cache)
+            except (OSError, ValueError, KeyError):
+                problem = diagnosis('COMPONENT_INTEGRITY_FAILED')
+                return ResolvedTool(tool_id, '', str(path), source, ToolStatus.BROKEN, problem.error_summary, problem)
+            if payload is not None:
+                return ResolvedTool(tool_id, self.versions[tool_id], str(payload[0]), source, ToolStatus.READY)
         from .component_probe import INTERNAL_ERRORS, capture_probe_failure
         probe = None
         try:

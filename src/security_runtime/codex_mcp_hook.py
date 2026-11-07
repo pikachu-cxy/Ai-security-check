@@ -64,6 +64,7 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                       *, binding: WorkspaceBinding | None,
                       coordinator: HookCoordinator | None = None, remediation=None,
                       turn_id=None, tool_use_id=None, permission_mode=None, claim_guard=None) -> dict:
+    import sqlite3
     started = time.perf_counter()
     decision = None
     validated_root = None
@@ -349,6 +350,26 @@ def handle_codex_hook(event: str, workspace_path: str, session_id: str, tool_nam
                 context_returned=True, delivery_receipt=receipt)
             if summary.get('feedback_delivery') == 'TASK_FINAL_SUMMARY' and not authorized:
                 output['hookSpecificOutput']['additionalContext'] = _deferred_task_context(summary)
+    if (result.get('development_check_ref') and validated_root is not None and active_coordinator is not None
+            and result.get('analysis_requirements', {}).get('audit_business_logic') == 'REQUIRED'):
+        try:
+            from .business_audit import offer
+            from .tasks.ownership import session_owner
+            note = offer(active_coordinator.store, validated_root, session_owner('codex', session_id), result['development_check_ref'])
+            if note:
+                output.setdefault('hookSpecificOutput', {'hookEventName': 'PostToolUse'})['additionalContext'] = note
+        except (OSError, ValueError, sqlite3.Error):
+            pass  # An unavailable audit handoff cannot turn an edit ACK into a failure.
+    if validated_root is not None and active_coordinator is not None:
+        try:
+            from .repair_notifications import offer as offer_repair
+            from .tasks.ownership import session_owner
+            note = offer_repair(active_coordinator.store, validated_root, session_owner('codex', session_id))
+            if note:
+                packet = output.setdefault('hookSpecificOutput', {'hookEventName': 'PostToolUse'})
+                packet['additionalContext'] = (packet.get('additionalContext', '')+'\n'+note).strip()
+        except (ValueError, OSError, sqlite3.Error):
+            pass
     measured['feedback_processing'] = round(max(0.0, elapsed(feedback_started) - task_recording_ms), 3)
     measured['hook_total'] = elapsed(started)
     summary['duration_ms'] = round(measured['hook_total'])

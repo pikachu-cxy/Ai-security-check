@@ -90,6 +90,9 @@ class _Window:
                 no_links(path)
                 if path.is_dir():
                     continue
+                from .scope_policy import is_compiled_artifact
+                if is_compiled_artifact(path):
+                    continue
             except (OSError, ValueError):
                 uncertain = True
                 continue

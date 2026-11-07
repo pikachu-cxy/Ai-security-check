@@ -8,7 +8,7 @@ GROUPS = {
         'declare_development_outputs', 'finish_development_check', 'get_development_check',
         'complete_development_check', 'wait_development_check',
         'get_development_deliveries', 'get_development_result'),
-    'development_review': ('read_development_risk_context', 'submit_development_review',
+    'development_review': ('manage_development_audit', 'read_development_risk_context', 'submit_development_review',
         'get_development_risks', 'set_development_risk_disposition',
         'prepare_development_risk_fix', 'submit_development_risk_resolution'),
     'security_task': ('begin_security_task', 'switch_security_task', 'finish_security_task',

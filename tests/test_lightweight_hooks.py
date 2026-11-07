@@ -184,3 +184,15 @@ def test_codex_direct_file_scope_needs_no_workspace_watch(repo, tool):
     for value, exact in [('helper.py', True), ('../elsewhere.py', False)]:
         event = CodexEventAdapter().normalize(dict(args, tool_input={'file_path': value}), repo, legacy=True)
         assert event.complete_patch_paths is exact
+
+
+def test_enabled_business_audit_is_offered_during_edit_not_stop(repo,tmp_path,monkeypatch):
+    config=tmp_path/'config.toml'
+    config.write_text('[agent]\naudit_business_logic = true\n')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG',str(config))
+    core=coordinator(tmp_path,FakeRuntime(),task_audit_mode=True)
+    binding=WorkspaceBinding('fixture',str(repo),str(repo),'codex','PROJECT','')
+    result=handle_codex_hook('PostToolUse',str(repo),'audit-owner','Edit',{'file_path':str(repo/'A.java')},binding=binding,coordinator=core)
+    assert not result['scanner_run']
+    output=codex_hook_output(result)
+    assert 'manage_development_audit' in output['hookSpecificOutput']['additionalContext']

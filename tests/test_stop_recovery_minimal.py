@@ -51,7 +51,7 @@ def test_codex_native_stop_keeps_edit_and_readonly_turns_separate(development_se
     quiet = structured(call(server, 'handle_stop_event', event='Stop', stop_hook_active=False, turn_id='chat', **common))
     assert quiet.get('decision') != 'block' and not launches
     active = structured(call(server, 'handle_stop_event', event='Stop', stop_hook_active=False, turn_id='editing', **common))
-    assert active['status'] == 'STOP_FALLBACK_INCOMPLETE' and 'decision' not in active
+    assert active['status'] == 'STOP_FALLBACK_INCOMPLETE' and active['decision'] == 'block'
     assert active['check_ref'] == recorded['development_check_ref'] and len(launches) == 1
 
 

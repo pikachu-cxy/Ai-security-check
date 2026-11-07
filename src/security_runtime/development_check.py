@@ -36,7 +36,19 @@ def note_activity(row, turn_id=None):
     old = row.get('stop_activity', {})
     if old.get('pending') and (turn is None or old.get('turn') == turn):
         return row
-    return dict(row, stop_activity=dict(turn=turn, base_seq=row['dirty_seq'], pending=True))
+    # Native parallel children may share the owner's session while carrying
+    # distinct turn IDs. Preserve each pending turn's original edit boundary;
+    # a later read-only turn must never inherit another turn's pending edits.
+    previous = list(row.get('stop_activity_previous', ()))
+    restored = next((a for a in previous if turn is not None and a.get('turn') == turn), None)
+    previous = [a for a in previous if a is not restored and a.get('turn') != old.get('turn')]
+    if old.get('pending') and old.get('turn') is not None and old.get('turn') != turn:
+        previous.append(old)
+    activity = restored or dict(turn=turn, base_seq=row['dirty_seq'], pending=True)
+    changed = dict(row, stop_activity=activity)
+    if previous or 'stop_activity_previous' in row:
+        changed['stop_activity_previous'] = previous[-8:]
+    return changed
 
 
 def product_wait_seconds():
@@ -430,10 +442,11 @@ class DevelopmentCheckService:
             selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
             if row['state'] in {'OPEN', 'DIRTY'}:
                 from .development_scope import separate_directories
-                selected, directories = separate_directories(store.root, selected)
+                compiled_paths = []
+                selected, directories = separate_directories(store.root, selected, compiled_paths=compiled_paths)
                 from .development_scope import filter_gitignored
                 selected, ignored, ignore_note = filter_gitignored(store.root, selected)
-                row = dict(row, observed_directories=directories,
+                row = dict(row, observed_directories=directories, excluded_compiled_paths=compiled_paths,
                            gitignored_paths=ignored, gitignore_filter_note=ignore_note)
             row = dict(row, observed_paths=selected, scope_unknown=row['scope_unknown'] or invalid)
             state = row['state']
@@ -550,6 +563,10 @@ class DevelopmentCheckService:
             result['static_result'] = _agent_result(scan, summary=True)
             if 'findings_access' in result['static_result']:
                 result['static_result']['findings_access']['arguments']['workspace_path'] = str(store.root)
+        from .dashboard_service import session_url
+        url = session_url(store.root, self.owner)
+        if url:
+            result['risk_management_url'] = url
         return result
 
     @timed('check.result_read')
@@ -557,6 +574,8 @@ class DevelopmentCheckService:
         store = self.store(root)
         row = store.load(check_ref, self.owner)
         result = projection(store, row)
+        from .business_audit import status as audit_status
+        result['business_audit'] = audit_status(row)
         result['risk_import_status'] = row.get('risk_import_status', 'AVAILABLE')
         if row.get('has_unified_risks'):
             result['risk_access'] = dict(tool='get_development_risks', arguments=dict(
@@ -609,6 +628,10 @@ class DevelopmentCheckService:
                 result['development_result'] = risk_summary(page)
                 result['development_result']['scan_summary'] = result.get('static_result')
                 result['development_result']['storage_contract'] = 'embedded-development-result-v1'
+                from .dashboard_service import session_url
+                url = session_url(store.root, self.owner)
+                if url:
+                    result['development_result']['risk_management_url'] = url
                 if page.get('next_action') is not None:
                     result['next_action'] = page['next_action']
             else:

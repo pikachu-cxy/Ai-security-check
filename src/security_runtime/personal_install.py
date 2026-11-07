@@ -99,7 +99,7 @@ def _complete_preparation(data, *, offline, progress=None, executable=None):
         report_progress(progress, 'VERIFY_SCAN_READINESS')
     else:
         try:
-            receipt = prepare_installation_readiness(progress=progress, offline=offline)
+            receipt = prepare_installation_readiness(progress=progress, offline=offline, prepare_payload=True)
             if not validate_readiness_receipt(receipt):
                 raise ValueError()
         except ScanCancelled:

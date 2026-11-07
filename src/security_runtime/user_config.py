@@ -25,7 +25,8 @@ DEFAULTS = {
     'vulnerability_data': {'trivy': {'repositories': [], 'cache_dir': '', 'update_mode': 'auto',
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
-    'development': {'stop_fallback': {'enabled': True, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
+    'development': {'business_audit_delivery': 'fast',
+                    'stop_fallback': {'enabled': True, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 
 
@@ -107,6 +108,8 @@ def describe_config():
 
 
 def validate_preferences(values):
+    if values['development']['business_audit_delivery'] not in {'fast', 'wait'}:
+        raise ValueError('USER_CONFIG_INVALID_AUDIT_DELIVERY')
     for section in (*values['scan'].values(), values['storage']['explicit_scan_jobs'], values['storage']['scan_publication']):
         if any(type(v) is not int or v < 0 for v in section.values()):
             raise ValueError('USER_CONFIG_LIMIT_MUST_BE_NONNEGATIVE_INTEGER')
@@ -128,3 +131,51 @@ def validate_preferences(values):
     for repository in data['repositories']:
         if any(c.isspace() for c in repository) or '://' in repository or '@' in repository or '?' in repository or repository.startswith('-'):
             raise ValueError('USER_CONFIG_INVALID_PUBLIC_OCI_REPOSITORY')
+
+
+def save_config(values, expected_revision):
+    """Compare and atomically replace user preferences; active batches retain snapshots."""
+    from contextlib import closing
+    import sqlite3
+    import tempfile
+    merged = _merge(DEFAULTS, values)
+    validate_preferences(merged)
+    stop = merged['development']['stop_fallback']
+    if (merged['schema_version'] != 1 or merged['storage']['development_max_records'] < 1
+            or not 1 <= stop['wait_timeout_seconds'] <= 3600 or not 1 <= stop['max_continuations'] <= 10):
+        raise ValueError('USER_CONFIG_VALUE_OUT_OF_RANGE')
+    path = config_path()
+    no_links(path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock = path.with_suffix('.lock.db')
+    no_links(lock)
+    with closing(sqlite3.connect(lock, timeout=2)) as db, db:
+        db.execute('BEGIN IMMEDIATE')
+        if read_config()['revision'] != expected_revision:
+            raise ValueError('USER_CONFIG_VERSION_CONFLICT')
+        lines = []
+        def section(items, prefix=''):
+            if prefix:
+                lines.append('['+prefix+']')
+            for key, value in items.items():
+                if not isinstance(value, dict):
+                    lines.append(key+' = '+json.dumps(value, ensure_ascii=True))
+            lines.append('')
+            for key, value in items.items():
+                if isinstance(value, dict):
+                    section(value, prefix+'.'+key if prefix else key)
+        section(merged)
+        raw = '\n'.join(lines).encode()
+        if len(raw) > 65536:
+            raise ValueError('USER_CONFIG_TOO_LARGE')
+        fd, name = tempfile.mkstemp(prefix='.preferences-', dir=path.parent)
+        try:
+            with os.fdopen(fd, 'wb') as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(stream.fileno())
+            no_links(path)
+            os.replace(name, path)
+        finally:
+            Path(name).unlink(missing_ok=True)
+    return dict(saved=True, effective='NEXT_BATCH', active_batches_unchanged=True, **read_config())

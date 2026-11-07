@@ -42,7 +42,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     def start_scan(request_key: str, workspace_path: str | None = None,
                    mode: Literal['project', 'files', 'quick', 'feature'] = 'project',
                    files: list[str] | None = None, force_rescan: bool = False) -> dict:
-        """Start a durable asynchronous scan and return immediately. Reuse the SAME request_key after any timeout/disconnect; never create another key to poll. project means whole project; files requires explicit paths; quick/feature mean Git changes. No code edits. The detached worker continues after client disconnect. Use get_scan_status/get_scan_result, or list_scan_jobs if the reference was lost. Existing scan_project/scan_files/scan_diff are synchronous compatibility entry points."""
+        """Start a durable asynchronous scan and return immediately. Reuse the SAME request_key after any timeout/disconnect; never create another key to poll. project is reserved for a future release and currently rejected; files requires explicit paths; quick/feature mean Git changes. No code edits. The detached worker continues after client disconnect. Use get_scan_status/get_scan_result, or list_scan_jobs if the reference was lost. scan_project is currently disabled; scan_files/scan_diff remain synchronous entry points."""
         return scan_jobs(workspace_path).submit(request_key, mode=mode,
             files=files, force_rescan=force_rescan)
 
@@ -90,7 +90,7 @@ def register(server, registry, *, application, runtime_engine, hook_coordinator,
     @server.tool()
     async def scan_project(workspace_path: str | None = None, path: str | None = None, summary: bool = True,
                            force_rescan: bool = False) -> dict:
-        """Check a full local project, reusing only explicitly revalidated complete proof. Set force_rescan=true for an explicit rescan. workspace_path is the project directory; path is its legacy directory alias, never a file/glob. For selected files use scan_files; never expand a file request to the project."""
+        """Reserved for a future release; whole-project scanning is currently disabled. For explicit files use scan_files."""
         if workspace_path is not None and path is not None and workspace_path != path:
             raise ValueError("Specify only one workspace path")
         root = bound_path(workspace_path if workspace_path is not None else path)

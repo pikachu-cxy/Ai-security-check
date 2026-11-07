@@ -174,6 +174,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     data_parser.add_argument('--json', action='store_true')
     risk_dashboard_parser=sub.add_parser('risk-dashboard',help='Open the local read-only risk statistics dashboard')
     risk_dashboard_parser.add_argument('--ready',help=argparse.SUPPRESS)
+    risk_dashboard_parser.add_argument('--shared',action='store_true',help=argparse.SUPPRESS)
     skill_parser=sub.add_parser('review-skill',help='Install/status/upgrade/repair/remove the companion user Security Review Skill')
     skill_parser.add_argument('action',choices=['install','status','upgrade','repair','remove'])
     skill_parser.add_argument('--skills-dir',type=Path,help='Explicit user Skill directory, for isolated profiles')
@@ -414,7 +415,7 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             return 0 if result['status'] == 'VALID' else 2
         if args.command == 'risk-dashboard':
             from .risk_dashboard import serve
-            serve(args.ready)
+            serve(args.ready, shared=args.shared)
             return 0
         if args.command == 'context-usage':
             from .context_cost_cli import execute as execute_context_usage
@@ -456,6 +457,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             adaptive = args.command == 'prepare-scanners' and not args.fixed_timeout and not offline
             kwargs = dict(offline=offline, timeout_seconds=args.timeout, retries=args.retries, idle_seconds=args.idle_timeout,
                 adaptive=adaptive, max_wait_seconds=args.max_wait if adaptive else args.timeout)
+            if not args.status:
+                kwargs['prepare_payload'] = True
             if args.status:
                 # A read-only query must not say it is downloading/updating.
                 data = prepare_installation_readiness(**kwargs)
@@ -986,6 +989,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             return 0
         if args.command == "mcp":
             from .mcp_server import serve
+            from .dashboard_service import start_background
+            start_background()
             serve()
             return 0
         if args.command == "hooks":

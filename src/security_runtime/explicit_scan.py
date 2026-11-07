@@ -63,6 +63,10 @@ def cancelled_scan():
 
 def run_explicit_scan(runtime, workspace=None, *, mode='quick', staged=False,
                       rules_path=None, progress=None, hooks=None, now=time.time, files=None, force_rescan=False):
+    if mode == 'release':
+        raise ValueError('全项目扫描为后续规划功能，当前版本未开放。')
+    if staged:
+        raise ValueError('Git commit 扫描为后续规划功能，当前版本未开放。')
     if mode not in {'quick','feature','release'} or type(staged) is not bool:
         raise ValueError('Invalid explicit scan mode')
     root=WorkspaceResolver().resolve(workspace, allow_non_git_explicit=True, allow_non_git_source=True).path

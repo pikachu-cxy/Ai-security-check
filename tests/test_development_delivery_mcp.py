@@ -36,7 +36,8 @@ def test_complete_and_wait_use_one_submission_and_have_no_mcp_ack(development_se
     assert not any('acknowledge_development' in name for name in names)
 
 
-def test_stop_continues_original_work_then_result_offer_stops_loop_without_fake_delivery(development_server):
+def test_native_stop_wait_is_bounded_without_fake_delivery(development_server, monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
     server, root, hooks, _ = development_server
     ref, token = prepare(development_server)
     call(server, 'finish_development_check', workspace_path=str(root), check_ref=ref, session_ref=token)
@@ -44,7 +45,10 @@ def test_stop_continues_original_work_then_result_offer_stops_loop_without_fake_
                      stop_hook_active=False, turn_id='delivery-turn')
     response = asyncio.run(server.call_tool('handle_stop_event', arguments))
     data = structured(response)
-    assert data['decision'] == 'block' and ref in json.loads(response.content[0].text)['reason']
+    # Native Stop waits inside the Hook. An unavailable worker is a bounded
+    # incomplete notice, not the legacy host-poll continuation.
+    assert data['status'] == 'STOP_FALLBACK_INCOMPLETE' and 'decision' not in data
+    assert ref in json.loads(response.content[0].text)['systemMessage']
     queue = DevelopmentCheckStore(hooks, root)
     with queue.transaction() as db:
         row = queue._get(db, ref)
@@ -56,7 +60,7 @@ def test_stop_continues_original_work_then_result_offer_stops_loop_without_fake_
     assert result['delivery']['delivery'] == 'PENDING'
     arguments['stop_hook_active'] = True  # Continuation of the blocked turn, not a new read-only round.
     response = asyncio.run(server.call_tool('handle_stop_event', arguments))
-    assert structured(response).get('decision') == 'block'  # Reading alone is not configured review.
+    assert structured(response).get('decision') != 'block'  # No fresh edit: do not loop.
     pending = call(server, 'get_development_deliveries', workspace_path=str(root), session_ref=token)
     assert pending['total'] == 1 and not pending['automatic_host_ack']
 
@@ -106,7 +110,11 @@ def test_waiting_offer_only_suppresses_same_pending_batch(development_server, mo
     response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop',
         workspace_path=str(root), session_id='delivery-session',
         stop_hook_active=False, turn_id='delivery-turn')))
-    assert (structured(response).get('decision') == 'block') is (change != 'unchanged')
+    assert structured(response).get('decision') != 'block'
+    # Synthetic rows here have no completed scan_id. Never invent a report
+    # or ask the model to repeat a scan when the native wait has no result.
+    if change != 'unchanged':
+        assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
     if change == 'unchanged':
         assert len(launches) == 1
         row = call(server, 'get_development_check', workspace_path=str(root),

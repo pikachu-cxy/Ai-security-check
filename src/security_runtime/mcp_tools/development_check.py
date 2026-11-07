@@ -7,7 +7,7 @@ from ..development_views import EvidenceWindow
 from ..performance_trace import timed_review
 
 
-TOOLS = frozenset({'get_development_config', 'begin_development_check', 'record_development_changes',
+TOOLS = frozenset({'manage_development_audit', 'get_development_config', 'begin_development_check', 'record_development_changes',
                    'declare_development_outputs',
                    'finish_development_check', 'get_development_check',
                    'complete_development_check', 'wait_development_check',
@@ -28,6 +28,14 @@ def register(server, registry, *, application):
         from ..development_risks import DevelopmentRisks
         service = application.development_service(check_ref, session_ref, workspace_path)
         return DevelopmentRisks(service, application.bound_path(workspace_path), check_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    def manage_development_audit(check_ref: str, action: Literal['prepare','status','started','cancel','unsupported','failed'],
+                                 workspace_path: str | None = None, session_ref: str | None = None,
+                                 audit_id: str | None = None, agent_ref: str | None = None) -> dict:
+        """Prepare a version-bound read-only parallel business audit during development. Host must actually spawn its subagent then acknowledge started with its real ID; no independent model calls. Collect evidence-backed child results and submit with the existing review operation. Cancel on edits; status preserves stale/interrupted/unsupported facts."""
+        from ..business_audit import operate
+        return operate(risks(check_ref, workspace_path, session_ref), action, audit_id, agent_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     @timed_review
@@ -53,7 +61,7 @@ def register(server, registry, *, application):
                                   business_reviews: list[BusinessReview] | None = None,
                                   return_risks: bool = False,
                                   response_view: Literal['batch', 'final_report'] = 'batch',
-                                  scan_id: ScanId | None = None) -> dict:
+                                  scan_id: ScanId | None = None, audit_id: str | None = None) -> dict:
         """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a compact verified single page; incomplete batches retain their original view. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
         values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
@@ -61,7 +69,7 @@ def register(server, registry, *, application):
         try:
             from ..development_views import final_report_receipt, review_receipt
             saved = risks(check_ref, workspace_path, session_ref).submit(
-                values, expected_seq, business_reviews=coverage, scan_id=scan_id,
+                values, expected_seq, business_reviews=coverage, scan_id=scan_id, audit_id=audit_id,
                 return_risks=return_risks or response_view == 'final_report')
             result = saved if saved.get('review_saved') else review_receipt(saved)
             if response_view == 'final_report':
@@ -95,13 +103,20 @@ def register(server, registry, *, application):
     @timed_review
     def get_development_risks(check_ref: str, workspace_path: str | None = None,
                               session_ref: str | None = None, offset: int = 0, limit: int = 20,
-                              include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch'] = 'summary',
+                              include_history: bool = False, view: Literal['summary', 'full', 'review', 'batch', 'closeout'] = 'summary',
                               include_evidence: bool = False, expected_seq: int | None = None,
                               scan_id: str | None = None) -> dict:
-        """For pending review, view=review reads current-scan candidates and bounded untrusted evidence. Continue the same view at next_offset. Obtain missing windows via read_development_risk_context. For a saved batch, use view=batch with its expected_seq and scan_id. For historical lookup, summary/full read ledger risks and dispositions; include_history adds historical batches, include_evidence adds bounded evidence."""
+        """For a short Stop notice, view=closeout resolves the saved REVIEW/REPORT/INCOMPLETE handoff; follow its next_action and deliver report_text and session_url. Never start a scan. For pending review, view=review reads current-scan candidates and bounded untrusted evidence. Continue the same view at next_offset. Obtain missing windows via read_development_risk_context. For a saved batch, use view=batch with its expected_seq and scan_id. For historical lookup, summary/full read ledger risks and dispositions; include_history adds historical batches, include_evidence adds bounded evidence."""
         from ..development_views import pending_review_context, risk_summary
         service = risks(check_ref, workspace_path, session_ref)
         from ..development_risks import require
+        if view == 'closeout':
+            from ..development_views import closeout_page
+            require(not include_history and not include_evidence, 'DEVELOPMENT_RISK_INPUT_INVALID')
+            result = closeout_page(service, offset, limit, expected_seq=expected_seq, scan_id=scan_id)
+            if session_ref and result.get('next_action'):
+                result['next_action']['arguments']['session_ref'] = session_ref
+            return result
         if view == 'batch':
             require(expected_seq is not None and not include_history and not include_evidence,
                     'DEVELOPMENT_RISK_INPUT_INVALID')

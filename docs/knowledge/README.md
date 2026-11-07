@@ -15,6 +15,11 @@
 | 为什么采用这些边界、哪些语义必须保持 | [设计约束](DESIGN_RULES.md) |
 | 新开发怎么实现、验证与交付 | [开发规范](DEVELOPMENT.md) |
 | 扫描、Agent 复核和工具交互耗时 | [性能分析](PERFORMANCE.md) |
+| 风险管理 Web 与并行业务审计实现与边界 | [产品开发方案](PRODUCT_ROADMAP.md) |
+| 本期如何手动验收 | [验收清单](WEB_ACCEPTANCE.md) |
+| 四种真实 Codex 会话验收的结果、耗时和待修问题 | [会话流程验收](FLOW_ACCEPTANCE.md) |
+| 修复后的真实开发、并行审计、修复交接与安装状态 | [修复验收](FLOW_REPAIR_ACCEPTANCE.md) |
+| 上述验收缺陷如何修复、如何控制耗时与验收 | [会话流程修复方案](FLOW_REPAIR_PLAN.md) |
 
 ## 快速定位
 

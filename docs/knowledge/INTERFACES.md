@@ -1,5 +1,14 @@
 # 当前接口设计
 
+## 当前产品范围与后续规划
+
+全项目扫描与 Git commit 扫描列为后续支持功能，当前源码关闭公开执行入口。全项目同步入口、后台 project 提交及 CLI release 模式返回未开放说明；Git pre-commit 安装/修复与 staged 扫描同样拒绝。保留旧入口用于明确报错，旧 Hook 的状态查询与移除仍可使用。已有 pre-commit 脚本不会自动删除，调用后会收到未开放错误，需通过原移除入口清理。
+
+普通开发继续通过编辑记录与 Stop 收尾检查涉及路径；commit-only 配置不再跳过 Stop。底层扫描实现保留供内部流程使用，不代表公开全项目扫描已开放。
+
+后续全项目扫描需完成范围与排除规则、异步进度、取消及大项目性能验收后再开放。后续 Git commit 扫描需完成暂存区一致性、部分暂存、Hook 共存、阻断策略及迁移验收后再开放。具体版本与日期未定。本项是源码范围变更，驻留进程须重新加载后生效。
+
+
 ## 对外入口
 
 | 接口面 | 源码定义 | 责任 |
@@ -8,7 +17,7 @@
 | MCP stdio | `mcp_server.py:create_server`、`global_mcp.py:create_global_server` | 对外工具声明、工作区路由及协议适配 |
 | 原生 Hook | Codex MCP 的 `mcp_server.py:handle_*_event`、`codex_event_adapter.py` 及各宿主适配器 | 事件入口因宿主而异；Cursor/WorkBuddy 全局 MCP 发现隐藏这四个 Hook 工具，不代表没有原生 Hook 接入 |
 | 交付启动器 | `delivery.py`、`distribution/build/launcher.c` | 读取受校验的活动槽位并运行相同构建；不把文件名或版本号当作完整性证据 |
-| 本机风险页面 | `risk_dashboard.py:Handler` | 本机临时端口、带随机路径令牌的只读页面与数据；不是公共业务 REST API |
+| 本机风险页面 | `risk_dashboard.py:Handler` | 共享本机固定端口、首次浏览器授权、项目与会话筛选的只读页面与数据；不是公共业务 REST API |
 
 ## 分组 MCP 工具的调用格式
 
@@ -135,3 +144,52 @@ Codex / WorkBuddy 的会话提示声明自动收尾时，编辑 Hook 记录实�
 在目标仓库运行 `security-check hooks install pre-commit --commit-only --path .`。程序把选择写入该仓库的私有签名安装记录。普通 Codex 编辑在 Git 提交时运行 staged quick 检查，Agent 不主动提交收尾。显式检查仍可运行；既有检查可沿原引用完成。提交前候选与用户处置分别保存，未提交内容尚未检查。Git 的提交门禁由 --gate 决定。
 
 `security-check hooks status pre-commit --path .` 返回当前有效的 commit_only。移除产品 Hook 用 `security-check hooks remove pre-commit --path .`；普通开发随即恢复 Stop 自动检查。只安装过旧版 Hook 的仓库沿用原配置。模式依赖有效且归属已验证的 Hook；用户管理、缺失或内容已变的 Hook 不抑制普通开发检查。
+
+
+## 后台风险服务首批契约
+
+MCP CLI 启动时在后台执行服务就绪检查。start_risk_dashboard 保留原工具名与返回结构，返回可复用的本机授权入口；宿主向用户交付链接。首次浏览器授权成功后，/risks 和 /api/risks 使用 HttpOnly、SameSite=Strict Cookie。读取接口仅接受 project、session、editor 参数并验证格式，会话过滤作用于验证过的保存记录。当前 project 映射工作目录身份，后续逻辑项目归并需要兼容此地址。
+
+完整确认报告末尾附固定会话链接；统一开发结果可带 risk_management_url，宿主在有需提醒的候选时将其附在完整说明后。链接读取是本地元数据查询，服务未初始化时不阻塞复核或额外启动后台服务。扫描及风险保存独立于 Web 服务状态。
+
+## 本机风险管理 v2 与并行业务审计
+
+Web 使用 `/risks` 固定入口；GET `/api/session`、`/api/risks`、`/api/config`、`/api/export`。风险查询支持 project/workspace/session/editor/check/category/severity/status/archived/q、offset/limit（每页最多 200）。列表、分层统计来自同一 SQL 读事务；BUILDING/UNAVAILABLE/PARTIAL 不解释为零风险。
+
+POST `/api/actions` 接受 items，每项为 id 和 request；request 包含 action、request_id、expected_revision、fields、reason。动作 EDIT、ARCHIVE、UNARCHIVE、DEFER、EXCLUDE、RESTORE、REPAIR、CANCEL_REPAIR；DEFER/EXCLUDE 必须提供理由。返回每项 saved/repeated/revision 或固定错误码。`/api/manual` 只允许绑定已有签名检查的 anchor_id；`/api/config` 校验 expected_revision 并原子替换，NEXT_BATCH 生效。写路由同时校验 Cookie、Origin 和 X-CSRF-Token；内部健康/受控重启另用服务凭据。
+
+`development_review` 新增 `manage_development_audit` 操作，沿原 workspace_path/session_ref/check_ref，action 为 prepare/status/started/cancel/unsupported/failed。prepare 发出 audit_id、dirty_seq、证据、未读范围与租约；started 必须提供真实 agent_ref。`submit_development_review` 增加可选 audit_id，原顶层 scan_id 去重协议保持不变。输入版本、证据、权限和租约均在保存时校验；实际发现与覆盖提交保持原 observations/business_reviews 契约。
+
+外部平台适配待定；没有通用任意 URL 上传接口。导出不触发扫描、复核或修复。
+
+GET /api/entities?kind=editor|project|workspace|session|trash 返回资源和当前 revision。POST 同路径接收 action=delete|restore、kind、id、expected_revision、request_id，删除作用于当前版本集合。仪表盘 query 返回 finding_metrics.scanner/confirmed 各自 total/categories，和列表统计使用同一事务及删除过滤。
+
+## 历史读取诊断
+
+风险查询保留 partial/issues，新增 diagnostics（code、message、editor、workspace_id、database）及 warnings。目录不存在属于非阻断历史提示，不等同于签名失败。diagnostics 不包含密钥、原始异常或记录正文；页面可展开查看受影响范围。BUILDING 单独展示“历史索引尚未完成”。
+
+Catalog.refresh 使用 records(complete=True) 建立完整的后台读索引；扫描库每次 fetchmany 100 行，签名历史每次 128 行，分页读取不构成总量截断。直接旧预览入口仍有显式容量边界。完整性仅指当前已接入本机状态目录的开发账本及原始扫描；严格审计和其他数据目录并未因此接入。
+
+资源列表新增 parents（project_id、workspace_id、editor、workspace）与 workspace_count，来自同一可见记录快照。原资源 scope/ID 与删除接口不变；前端按父级身份联动筛选，不按名称关联。设置仅调整呈现，原配置字段、类型和写入接口保持不变。
+
+
+## 会话流程修复接口
+
+ReviewSubmission 原始契约现接受可选 audit_id，与分组路由和实际 submit_development_review 签名一致。未带 audit_id 的旧扫描提交兼容；不放宽 owner、dirty_seq、租约或证据哈希检查。开发期保存回执可为 WAITING_FOR_STATIC_SCAN：review_saved/post_commit_read 表达真实保存状态，最终报告等待正常 Stop，不要求模型主动轮询或重新扫描。若扫描在现有预算内尚未完成，Stop 对本轮已保存业务确认项发出一次报告兜底（stop_audit_incomplete_notice_seq），沿成功回执交付并明确扫描未完成；不追加等待或新扫描。
+
+manage_development_audit 的 started 只增加 audit_id 和 agent_ref，不接受 expected_seq 或 scan_id；提交判断才传 expected_seq。补读参数为 start_line/end_line。审计 PARTIAL 表示已提交但存在覆盖限制，执行租约已释放，仍保留未覆盖路径；COMPLETE、PARTIAL 均在扫描发布时核验依赖证据。failed 保留 HOST_AUDIT_FAILED。
+
+Codex 原生 Stop 在关闭复核、有风险或未完成审计时发出一次“仅交付，不复核”续接。调用沿当前原会话读取保存批次，禁止重扫或追加判断。stop_report_notice / stop_review_notice 按输入和扫描版本去重，不等于用户已读或宿主提交报告。stop_activity_previous 在原签名检查内保存有界先前回合，避免同归属并行子回合覆盖主回合的待收尾边界。
+
+GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认 5）。服务端由已签名风险派生文件路径，禁止任意 path 参数；校验回收站可见性、版本、相对路径和无链接文件读取。响应含 absolute_path、line_start/end、可确定的 function、historical/current 代码块及缺失提示，最多 80 行、每行 600 字符、24k 字符；不会写入取证账本或启动扫描。多行凭据先整文件脱敏再截取。版本一致只指所读代码摘要匹配，不代表重新验证漏洞。
+
+
+## Codex 统一收尾提示
+
+待复核、待报告及扫描未完成统一显示 `正在整理安全检查结果。（检查编号 …）`。提示不携带工作区、会话引用、扫描编号、JSON 或执行规则。内部会话指导使用当前连接的 session_ref 与原 check_ref，调用 `get_development_risks(view="closeout")`。服务端签名检查记录的 stop_closeout_notice 固定 dirty_seq、scan_id 和处理分支。
+
+- REVIEW：读取本批候选和证据，沿原证据、编号及版本校验提交，保留完整漏洞报告；既有批次提交、首次保存及 final_report 语义不变。
+- REPORT：只交付保存的 report_text 与 session_url。关闭复核的候选继续明确未经 Agent 确认；不补做复核、不重复提交。
+- INCOMPLETE：只交付已保存的本轮业务漏洞、扫描/变更收集缺口和会话链接，不等待、不轮询、不新开审计。尚未完成不得报告为零漏洞。首读时同一编辑版本的扫描恰好完成，可原子转入 REVIEW 或 REPORT；新编辑不能替代原批次。
+
+分页沿 next_action，带返回的 expected_seq、scan_id 和 view=closeout；版本变化拒绝混读。末页无剩余待办时 next_action 为空。提示去重仅表示已发出交接，不写入“用户已读”或虚构“报告送达”。报告保持可独立读懂漏洞情况的完整交付，最后附本会话风险管理链接。详细规则仅放内部会话指导、工具说明和随安装分发的指导文件。

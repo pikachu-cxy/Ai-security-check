@@ -82,6 +82,8 @@ class ScanJobs(SignedRecords):
 
     @configured
     def submit(self, request_key, *, mode='project', files=None, force_rescan=False, launcher=None):
+        if mode == 'project':
+            raise ValueError('全项目扫描为后续规划功能，当前版本未开放。')
         if not isinstance(request_key, str) or not REQUEST_KEY.fullmatch(request_key):
             raise ValueError('request_key must be 8-128 identifier characters')
         request = normalize_request(mode, files, force_rescan)

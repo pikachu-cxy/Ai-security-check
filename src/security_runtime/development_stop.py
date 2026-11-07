@@ -23,8 +23,13 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     row = store.load(focus['check_ref'], owner)
     activity = row.get('stop_activity', {})
     turn = hashlib.sha256(turn_id.encode()).hexdigest() if turn_id else None
+    prior_activity = False
     if activity.get('turn') is not None and activity['turn'] != turn:
-        return None
+        activity = next((a for a in row.get('stop_activity_previous', ())
+                         if turn is not None and a.get('turn') == turn), None)
+        if activity is None:
+            return None
+        prior_activity = True
     progress = row.get('stop_fallback') or {}
     if stop_hook_active and not automatic:
         # A historical pending check is not authority to interrupt a new turn.
@@ -37,10 +42,16 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     if activity.get('pending'):
         with store.transaction() as db:
             current = store._get(db, row['check_ref'])
-            if current.get('stop_activity') != activity:
-                return None
-            store._put(db, row['check_ref'], dict(current,
-                stop_activity=dict(activity, pending=False)))
+            if prior_activity:
+                prior = list(current.get('stop_activity_previous', ()))
+                if activity not in prior:
+                    return None
+                current['stop_activity_previous'] = [a for a in prior if a != activity]
+            else:
+                if current.get('stop_activity') != activity:
+                    return None
+                current['stop_activity'] = dict(activity, pending=False)
+            store._put(db, row['check_ref'], current)
     # Do not turn old abandoned records into new work on a later read-only chat.
     if not row.get('effective_config'):
         return None
@@ -58,6 +69,10 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
     if (automatic or not stop_hook_active) and row['dirty_seq'] <= activity.get('base_seq', row['dirty_seq']):
         if (automatic and draining and row.get('file_watch', {}).get('status') == 'FAILED'
                 and 'FILE_WATCH_SETTLEMENT_TIMEOUT' in row.get('file_watch_gaps', ())):
+            if owner['host'] == 'codex':
+                service = service or DevelopmentCheckService(None, hooks, owner=owner,
+                                                             scan_path_provider=row['scan_path'])
+                return incomplete_notice(service, root, row['check_ref'], row['dirty_seq'], row)
             return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=row['check_ref'],
                         systemMessage='监听未在本轮预算内收完，尚未确认全部文件变更。')
         return None
@@ -168,28 +183,66 @@ def native_closeout(service, root, row, deadline, offered, session_id):
     page = state.get('development_result')
     if (not page or seq != state['dirty_seq'] or seq != state['scanned_seq']
             or state['status'] not in {'RESULTS_READY', 'PARTIAL'}):
-        return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref,
-            systemMessage=f"安全检查尚未取得本轮完整结果（{state['status']}）。可沿 {ref} 查看进度。")
+        return incomplete_notice(service, root, ref, seq, state)
     work = page['review_progress']
+    from .business_audit import fast_delivery, status as audit_status
+    if fast_delivery(row) and work['pending_business_paths'] and not work['pending_scanner_ids']:
+        return report_notice(service, root, row, state, page, 'STOP_AUDIT_PENDING')
     if not (work['pending_scanner_ids'] or work['pending_business_paths']):
-        active = [risk for risk in page['risks'] if not risk['reminder_suppressed']
-                  and any(o['scan_id'] == state['scan_id'] for o in risk['scanner_observations'])]
-        messages = []
-        if state['status'] == 'PARTIAL' or state.get('gaps'):
-            messages.append('本次静态检查有覆盖缺口：' + ', '.join(state.get('gaps') or ['PARTIAL']))
-        if state['scope']['scope_unknown']:
-            messages.append('仅覆盖已记录路径，部分改动范围未知。')
-        if (ref, seq) not in offered and (active or page['next_offset'] is not None):
-            messages.extend(f"扫描器 {r['finding']['severity']} · {r['finding']['title']}（{r['finding']['file_path']}:{r['finding']['line_start']}）"
-                            for r in active[:10])
-            messages.append(f'本次扫描结果可沿 {ref} 查看详情及处置。')
-        if messages:
-            return dict(status='STOP_RESULT_NOTICE', check_ref=ref, systemMessage='\n'.join(messages))
+        active = [risk for risk in page['risks'] if not risk['reminder_suppressed']]
+        if active or page['next_offset'] is not None or state.get('gaps') or state['scope']['scope_unknown']:
+            return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
         return None
     if service.owner['host'] == 'codex':
+        # A successful review already returns the report; no second report turn.
+        with service.store(root).transaction() as db:
+            current = service.store(root)._get(db, ref)
+            if current['dirty_seq'] != seq:
+                return None
+            current['stop_review_notice'] = [seq, state['scan_id']]
+            current['stop_closeout_notice'] = dict(seq=seq, scan_id=state['scan_id'], mode='REVIEW')
+            service.store(root)._put(db, ref, current)
         return dict(status='STOP_REVIEW_REQUIRED', decision='block', check_ref=ref,
-                    reason=f'安全检查待复核，完成后会在回复中说明结果。（检查编号 {ref}，版本 {seq}）')
+                    reason=closeout_message(ref))
     return review_handoff(service, root, row, state, session_id)
+
+
+def report_notice(service, root, row, state, page, status):
+    """One report-only continuation, never a report-delivery acknowledgement."""
+    marker = [row['dirty_seq'], state['scan_id']]
+    store = service.store(root)
+    with store.transaction() as db:
+        current = store._get(db, row['check_ref'])
+        if (current['dirty_seq'] != marker[0] or current.get('scan_id') != marker[1]
+                or current.get('stop_report_notice') == marker
+                or current.get('stop_review_notice') == marker):
+            return None
+        store._put(db, row['check_ref'], dict(current, stop_report_notice=marker,
+            stop_closeout_notice=dict(seq=marker[0], scan_id=marker[1], mode='REPORT')))
+    message = page.get('report_text') or '安全检查有未完成范围，请读取本批保存结果并如实报告。'
+    if service.owner['host'] != 'codex':
+        return dict(status=status, check_ref=row['check_ref'], scanner_run=False, systemMessage=message)
+    return dict(status=status, check_ref=row['check_ref'], scanner_run=False, decision='block',
+                reason=closeout_message(row['check_ref']))
+
+
+def closeout_message(ref):
+    return f"正在整理安全检查结果。（检查编号 {ref}）"
+
+
+def incomplete_notice(service, root, ref, seq, state):
+    if service.owner['host'] != 'codex':
+        return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref,
+                    systemMessage=closeout_message(ref))
+    store = service.store(root)
+    with store.transaction() as db:
+        current = store._get(db, ref)
+        marker = dict(seq=seq, scan_id=current.get('scan_id'), mode='INCOMPLETE')
+        if current['dirty_seq'] != seq or current.get('stop_closeout_notice') == marker:
+            return None
+        store._put(db, ref, dict(current, stop_closeout_notice=marker))
+    return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref, decision='block',
+                reason=closeout_message(ref))
 
 
 def review_handoff(service, root, row, state, session_id):

@@ -1,11 +1,13 @@
 """Cheap observation filtering and bounded closeout-only output declarations."""
 from pathlib import PurePosixPath
+from .scope_policy import INSTALLATION_DIRS, is_compiled_artifact
 
 
 def excluded_artifact(name):
-    # Deliberately narrow: tests/ and arbitrary .log/.db files may be source.
+    # Exact installation roots and task artifacts only; tests/ and arbitrary
+    # .log/.db files may be source, and manifests outside installs stay eligible.
     parts = PurePosixPath(str(name).replace('\\', '/')).parts
-    return any(part == '.test-tmp' or part.startswith(('.test-tmp-', '.test-tmp-run'))
+    return any(part in INSTALLATION_DIRS or part == '.test-tmp' or part.startswith(('.test-tmp-', '.test-tmp-run'))
                for part in parts)
 
 
@@ -70,11 +72,12 @@ def select_outputs(root, row):
         return observed, facts
 
 
-def separate_directories(root, names):
+def separate_directories(root, names, *, compiled_paths=None):
     """Classify only recorded paths at closeout; never enumerate children.
 
     Preserve missing, inaccessible, linked and special paths for the existing
-    scan-input validation. Only a verified real directory is not a file input.
+    scan-input validation. Optionally separate verified compiled files in this
+    same pass, before Git filtering and input capture.
     """
     import stat
     from .hook_state import native_io_path, no_links
@@ -83,7 +86,11 @@ def separate_directories(root, names):
         path = root / name
         try:
             no_links(path)
-            directory = stat.S_ISDIR(native_io_path(path).lstat().st_mode)
+            mode = native_io_path(path).lstat().st_mode
+            directory = stat.S_ISDIR(mode)
+            if compiled_paths is not None and stat.S_ISREG(mode) and is_compiled_artifact(native_io_path(path)):
+                compiled_paths.append(name)
+                continue
         except (OSError, ValueError):
             directory = False
         (directories if directory else files).append(name)

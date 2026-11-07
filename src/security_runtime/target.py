@@ -9,6 +9,7 @@ from typing import Iterable
 
 from .models import TargetProfile
 from .dependency_inputs import DEPENDENCIES
+from .scope_policy import INSTALLATION_DIRS, is_compiled_artifact
 
 
 EXTENSIONS = {".py": "Python", ".js": "JavaScript", ".jsx": "JavaScript", ".vue": "Vue", ".ts": "TypeScript", ".tsx": "TypeScript", ".java": "Java", ".go": "Go", ".php": "PHP"}
@@ -17,6 +18,7 @@ for _language, _extensions in RULE_EXTENSIONS.items():
     for _extension in _extensions - {'*'}:
         EXTENSIONS.setdefault(_extension, _language.title())
 IGNORED = {".git", ".venv", "venv", "env", ".tools", ".security-runtime", "node_modules", ".idea", ".vscode", "dist", "build", "target", "coverage", ".cache", ".pytest_cache", ".mypy_cache", "__pycache__", ".next", ".nuxt", "vendor"}
+IGNORED |= INSTALLATION_DIRS
 MAX_FILES = 10_000
 MAX_DIRECTORIES = 2_000
 MAX_DEPTH = 32
@@ -53,7 +55,7 @@ def selection_summary(profile, limit=20):
             'excluded_files': [{'path': sanitize(row['path'], 300), 'reason': row['reason'],
                                 'source': row['source'], 'size_bytes': row['size_bytes']}
                                for row in skipped[:limit]],
-            'notice': 'Excluded binary document contents were not inspected; exclusions are not clean findings.'}
+            'notice': 'Excluded binary documents and compiled artifacts were not inspected; exclusions are not clean findings.'}
 
 
 class DiscoveryLimitError(ValueError):
@@ -215,6 +217,10 @@ class TargetDetector:
             source = native_io_path(source)
             if source.is_file():
                 size = source.stat().st_size
+                if select_scan_targets and is_compiled_artifact(source):
+                    skipped.append({'path': relative.as_posix(), 'reason': 'COMPILED_ARTIFACT',
+                                    'source': 'RUNTIME_TARGET_SELECTION', 'size_bytes': size})
+                    continue
                 signatures = BINARY_DOCUMENTS.get(relative.suffix.lower(), ())
                 if select_scan_targets and signatures:
                     with source.open('rb') as stream:

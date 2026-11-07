@@ -899,8 +899,10 @@ def create_global_server(*, workspaces=None, host='codex'):
                                 '否则报告范围缺口，不猜路径、不扩扫项目。')
                             extra = ('\n当前编辑事件关联轻量检查 ' + ref + '；' + detail
                                 + '沿用此引用，按当前宿主收尾模式执行。') if ref else ''
+                            prior_context = output.get('hookSpecificOutput', {}).get('additionalContext', '')
                             output['hookSpecificOutput'] = dict(hookEventName='PostToolUse',
-                                additionalContext=session_context(token, native_stop=active_host == 'codex' and pool.task_audit_mode, workspace=root, grouped_codex=active_host == 'codex') + extra)
+                                additionalContext=session_context(token, native_stop=active_host == 'codex' and pool.task_audit_mode, workspace=root, grouped_codex=active_host == 'codex') + extra +
+                                ('\n'+prior_context if prior_context else ''))
                             result.structuredContent['task_session_ref'] = token
                             result.content = [TextContent(type='text', text=json.dumps(output, ensure_ascii=False))]
                             pool.session_context_emitted_at[key] = time.time()

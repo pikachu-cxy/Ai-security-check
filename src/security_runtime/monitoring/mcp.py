@@ -1,5 +1,7 @@
 """Optional current-chat entry; verifies existing routing, creates no task."""
 from pathlib import Path
+import sqlite3
+import subprocess
 
 from mcp.types import ToolAnnotations
 
@@ -7,12 +9,12 @@ from mcp.types import ToolAnnotations
 def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def start_risk_dashboard() -> dict:
-        """When the user asks to open risk statistics or the risk dashboard, start the local read-only dashboard and open its returned URL in the host. Reads retained local project risk records; never scans, modifies disposition, or starts token/time monitoring. Historical candidates may be duplicated or lack current disposition."""
+        """When the user asks to open risk statistics or the risk dashboard, reuse or recover the local dashboard and return its URL. The browser authorizes on first visit. Reads retained local project risk records; never scans, modifies disposition, or starts token/time monitoring. Historical candidates may be duplicated or lack current disposition."""
         from ..risk_dashboard import launch
         try:
             return dict(status='AVAILABLE', url=launch(), scanner_run=False, source_modified=False,
-                        message='本机风险统计已启动，请打开返回的本机页面。')
-        except (OSError, ValueError):
+                        message='本机风险统计入口已就绪，点击链接查看。')
+        except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError):
             return dict(status='UNAVAILABLE', scanner_run=False, source_modified=False,
                         message='风险统计页面暂时无法启动。')
 

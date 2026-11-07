@@ -13,6 +13,7 @@ IMPACT = dict(impact_summary='Only binds input; return shape and authorized acce
 
 @pytest.fixture
 def sample(tmp_path, monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'state'))
     config = tmp_path/'config.toml'
     config.write_text('[agent]\naudit_business_logic=true\n', encoding='utf-8')
     monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(config))
@@ -62,8 +63,13 @@ def scanner(sample, monkeypatch):
     return finding
 
 
-def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, monkeypatch):
+@pytest.mark.parametrize("delivery", ["fast", "wait"])
+def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, monkeypatch, delivery):
     root, service, ref, risks = sample
+    with service.store(root).transaction() as db:
+        check = service.store(root)._get(db, ref)
+        check["effective_config"]["values"]["development"]["business_audit_delivery"] = delivery
+        service.store(root)._put(db, ref, check)
     finding = scanner(sample, monkeypatch)
     store = service.store(root)
     for scan, count in [('previous', 100), ('current', 14)]:
@@ -78,9 +84,10 @@ def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, m
     pending = before['review_progress']['pending_scanner_ids']
     assert before['total'] == 114 and len(pending) == 14
     compact = risks.get(limit=20, review_only=True)
-    assert compact['total'] == 15 and compact['next_offset'] is None
+    assert compact['total'] == (14 if delivery == 'fast' else 15) and compact['next_offset'] is None
     assert {item['id'] for item in compact['candidates']} == set(pending)
-    assert compact['business_paths'] == ['query.py'] and compact['evidence']
+    assert compact['business_paths'] == ([] if delivery == 'fast' else ['query.py']) and compact['evidence']
+    assert compact['deferred_business_paths'] == (['query.py'] if delivery == 'fast' else [])
     evidence = risks.read('query.py', 1, 2)['evidence_ref']
     batch = [dict(same_issue_as=key, scan_id='current', decision='DISMISSED',
                   rationale='Synthetic test alert', evidence_refs=[evidence]) for key in pending]
@@ -93,7 +100,7 @@ def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, m
     assert {r['id'] for r in saved['risks'] if r['decision'] == 'DISMISSED'} == set(pending)
     assert saved['review_progress']['host_review_completed']
     after = risks.get(limit=20, review_only=True)
-    assert after['total'] == 15 and not (after['candidates'] or after['business_paths'] or after['evidence'])
+    assert after['total'] == (14 if delivery == 'fast' else 15) and not (after['candidates'] or after['business_paths'] or after['evidence'])
     risks.submit([new_risk], check['dirty_seq'], business_reviews=reviews)
     restored = DevelopmentRisks(service, root, ref).load()
     assert len(restored['risks']) == 115
@@ -467,7 +474,15 @@ def test_final_report_requires_complete_committed_single_page(sample, monkeypatc
     _, _, _, risks = sample
     scanner(sample, monkeypatch)
     risks.sync_scanner()
-    value = observation(risks, same_issue_as='s1', report_text='SQL in query.py:2. Bind the parameter.')
+    report = (
+        '**SQL 注入**\n\n评级及来源：高危，扫描规则评级。\n\n'
+        '位置：[query.py:2](query.py:2)\n\n'
+        '**问题**\n请求参数直接拼入 SQL。\n\n'
+        '**可能影响**\n可控输入可能改变查询条件。\n\n'
+        '**建议修复**\n使用参数绑定。\n\n'
+        '**尚未确认**\n外部调用路径尚未核实。'
+    )
+    value = observation(risks, same_issue_as='s1', report_text=report)
     value['decision'] = decision
     seq = risks.current_check()['dirty_seq']
     coverage = [dict(file_path='query.py', rationale='Checked', evidence_refs=value['evidence_refs'])]
@@ -493,6 +508,8 @@ def test_final_report_requires_complete_committed_single_page(sample, monkeypatc
         assert receipt['view'] == 'batch' and receipt['risks'] == page['risks']
     else:
         assert receipt['report_text'] == page['report_text']
+        if decision == 'CONFIRMED':
+            assert receipt['report_text'].startswith(report)
         assert receipt['view'] == 'final_report' and 'risks' not in receipt
         assert receipt['dirty_seq'] == seq and receipt['scan_id'] == page['scan_id']
         for key, override in [('next_offset', 20), ('next_action', {'tool':'read'}),
@@ -564,3 +581,20 @@ def test_shell_only_finding_keeps_writer_uncertainty_in_evidence_and_delivery(sa
         scan_id=page['scan_id'], return_risks=True, business_reviews=[dict(file_path='query.py',
             rationale='Checked', evidence_refs=item['evidence_refs'])])
     assert '写入会话未经确认' in report['report_text']
+
+
+def test_complete_report_keeps_details_and_adds_stable_session_link(sample, monkeypatch):
+    from security_runtime import dashboard_service
+    root, _, _, risks = sample
+    scanner(sample, monkeypatch)
+    risks.sync_scanner()
+    monkeypatch.setattr(dashboard_service, 'endpoint', lambda: dict(port=12345, token='x'*32))
+    seq = risks.current_check()['dirty_seq']
+    value = observation(risks, same_issue_as='s1', report_text='Complete saved vulnerability description.')
+    coverage = [dict(file_path='query.py', rationale='Checked', evidence_refs=value['evidence_refs'])]
+    first = risks.submit([value], seq, business_reviews=coverage, return_risks=True)
+    second = risks.get(batch_version=(seq, 'scan-1'))
+    assert first['report_text'] == second['report_text']
+    assert first['report_text'].startswith(value['report_text'] + '\n\n')
+    assert 'http://127.0.0.1:12345/risks?project=' in first['report_text']
+    assert '&session=' in first['report_text'] and 'x'*32 not in first['report_text']

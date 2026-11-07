@@ -3,20 +3,25 @@
 协议：observed-development-check-v1。默认开发目标是发现本次 AI 编辑涉及的安全风险。
 不建立全项目修改前基线，不比较整个工作区，不要求全项目快照或完整改前/改后复核。
 扫描器仍使用所选文件的固定输入，防止扫描过程中继续编辑导致结果混用；这不是项目基线。
-普通开发收尾只检查任务有效状态，不重新读取源码或生成告警语义定位快照。
+普通未开启业务审计的开发收尾只检查任务有效状态；已提前完成的业务审计在扫描发布时校验实际读取的证据，失效则补审，不扩大为全项目快照。
 结果的 CAPTURED 表示扫描时捕获的输入，不能声称收尾时磁盘源码已重新核验；新编辑仍按新序号待检查。
 
 ## 用户配置与 Stop 兜底
 
-get_development_config 只读返回用户 TOML 的有效值、来源与适配状态。检查记录的 effective_config
+get_development_config 只读返回用户 TOML 的有效值、来源与适配状态；分组调用 arguments={}，不传 workspace_path 或 session_ref。检查记录的 effective_config
 和 analysis_requirements 是本批次依据，不以后来修改的全局默认替换已提交批次。
 review_scanner_findings 控制扫描命中/误报复核；audit_business_logic 控制主动业务逻辑审计。
 REQUIRED 才执行对应分析，SKIPPED_BY_CONFIG 表示按配置跳过，不是未完成。
 两项均关闭时只读取并报告扫描器结果，不额外读取代码、不提交 Agent 复核、不把候选当作已确认漏洞。
 静态风险由产品独立保存；历史 Agent 结论不能当作新版本复核。以下 Agent 复核要求只适用于开启的项。
 用户另行明确请求专项审计时走专项流程，不伪造自动检查已经完成。
+业务审计开启后在开发过程中处理 manage_development_audit 的 prepare/started 交接，由宿主只读 subagent 并行分析，主开发继续。started 传 audit_id 和实际 agent_ref，不传 expected_seq；补读行号使用 start_line/end_line，不传 expected_seq 或 scan_id。提交带原 audit_id 和 expected_seq，所有依赖证据均传 evidence_refs，未知范围写 limitations。新编辑取消旧任务并补审；unsupported、failed、过期不得写成完成。
+提交参数错误仅修正报错字段，保留原 observations、证据和完整 report_text；不要清空已经发现的漏洞。修正后重试一次；同错再现时使用原 audit_id 调用 manage_development_audit(action="failed")，报告“已发现但未保存”，保留完整漏洞说明和 prepare 的 session_url；失败状态也不可用则说明未知，不循环调用。
+统一提醒读取 view="closeout" 返回 REPORT/INCOMPLETE 时，仅交付，不复核；只按返回的批次及 next_action 续读，保留开发结果并原样附 report_text、覆盖限制和会话链接，沿 next_action 读齐；不调用复核提交、不重扫、不在 Stop 开始业务审计。报告续接不是已送达的证明。
+开发期保存回执 delivery_status=WAITING_FOR_STATIC_SCAN 时，先只交付开发结果和实际验证，并说明安全报告待收尾；不要提前展开漏洞或复制子 Agent 报告。正常结束本回合触发 Stop，续接后统一交付完整风险报告和链接；不轮询、不重提、不主动扫描。
+默认 business_audit_delivery=fast：Stop 只交付静态候选复核和已完成审计，明确剩余业务待办，不从 Stop 新开完整业务审计。wait 策略才有界等待当前审计。任务最多存活 300 秒，全机同时最多两个，单会话单工作区一个；超过预算保留未完成并在宿主恢复时重新 prepare。
 
-原生自动收尾时，普通编辑由 Hook 记录路径并等待扫描。Codex 收到“安全检查待复核”时，Hook 已提示用户；下一步直接取证，省略收到待办的进度回复。用本会话 session_ref、提示中的检查编号（check_ref）和当前工作区按会话提供的调用示例直接取证。Codex 全局入口为 mcp__ai_security_runtime__development_review，传 operation="get_development_risks" 和 arguments（workspace_path、session_ref、check_ref、view="review"），从第一页读取本批待办和证据；核对 dirty_seq 与提示版本，使用实际 scan_id 和取证引用按配置完成复核。版本不符时报告原批次已变化，不猜测替代。WorkBuddy 沿原交接包处理。普通无待办开发无需主动调用安全 MCP。
+原生自动收尾时，普通编辑由 Hook 记录路径并等待扫描。Codex 收到“正在整理安全检查结果”时，Hook 已提示用户；下一步读取本批结果，省略收到待办的进度回复。用本会话 session_ref、提示中的检查编号（check_ref）和当前工作区按会话提供的调用示例读取本批结果。Codex 全局入口为 mcp__ai_security_runtime__development_review，传 operation="get_development_risks" 和 arguments（workspace_path、session_ref、check_ref、view="closeout"），从第一页读取本批待办和证据；按 closeout_mode 区分 REVIEW 与只交付的 REPORT/INCOMPLETE，使用返回的 dirty_seq，使用实际 scan_id 和取证引用按配置完成复核。版本不符时报告原批次已变化，不猜测替代。WorkBuddy 沿原交接包处理。普通无待办开发无需主动调用安全 MCP。
 手动模式下主动 complete_development_check 并读取结果。兼容 Stop 会按配置
 对本回合实际发生修改、且明确归属的轻量记录补交遗漏检查，或继续本轮已触发的续接；
 只读回合不因旧检查未收尾而触发 Stop。仅可能写入、未记录新变更的 Shell 操作也不重启旧检查。
@@ -237,7 +242,7 @@ review_progress 和处置；不为同一页再调 get_development_risks。next_o
 一次读取，最多 20 个窗口，每个最多 80 行；不同时传 file_path。返回 evidence 数组中的实际引用。
 相同窗口去重，服务端按顺序保存证据，不启动并发写；版本变化仍拒绝，提交仍核验实际源码。
 读取失败可能留有证据收据，不代表复核已保存。旧连接缺少 windows 参数时沿单窗口读取。
-接口支持时优先传 submit_development_review(return_risks=true)。支持 response_view="final_report" 的 Codex 可直接获取完整单页报告。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项提交面向用户的 report_text；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
+接口支持时优先传 submit_development_review(return_risks=true)。支持 response_view="final_report" 的 Codex 可直接获取完整单页报告。post_commit_read=true 表示已在提交后从 offset=0 读取当前结果；沿 next_action 续读本批（view=batch、expected_seq、scan_id）。历史账本按需另查。确认风险时同项首次生成面向用户的 report_text，按顺序写全加粗漏洞名、评级及来源、位置（实际风险文件链接、行号及已知函数名），再分四段使用加粗标签“问题”“可能影响”“建议修复”“尚未确认”，逐段写明内容，不得省略或合并；标签随用户语言翻译，缺失评级写未评级，未知事项如实说明；完整回读后直接沿用已保存的报告段落，检查缺口及处置仍以当前记录为准。只有保存回执或读取失败时再单独读取第一页，不重交复核。
 自动模式由 Stop 合并收尾。手动模式在代码、文档和生成索引写完后主动完成收尾。
 
 ### 统一风险保存、复核和修复

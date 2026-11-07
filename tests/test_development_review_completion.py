@@ -64,7 +64,8 @@ def test_id_review_keeps_original_location_and_related_evidence(sample, monkeypa
         row = risks.load(db)
         row['risks'][first['id']]['finding']['line_start'] = 1
         risks.store._put(db, risks.ref, row)
-    assert risks.submit([value], 1)['risks'][0]['assessment']['finding']['line_start'] == 2
+    risks.submit([value], 1)
+    assert risks.load()['risks'][first['id']]['assessment']['finding']['line_start'] == 2
 
 
 @pytest.mark.parametrize('changes,reason', [
@@ -80,7 +81,8 @@ def test_failed_batch_is_atomic_and_has_recovery(sample, monkeypatch, changes, r
     assert raised.value.item_index == 1
     assert raised.value.recovery['arguments']['check_ref'] == risks.ref
     assert risks.load()['reviews'] == []
-    assert risks.get()['total'] == 0
+    assert risks.load()['risks'] == {}
+    assert risks.get()['total'] is None and not risks.get()['candidates_ready']
 
 
 def test_evidence_must_cover_original_alert_not_only_related_file(sample, monkeypatch):
@@ -180,12 +182,13 @@ def test_scan_change_during_evidence_validation_rolls_back(sample, monkeypatch):
             service.store(root)._put(db, ref, check)
         return evidence
     monkeypatch.setattr(risks, 'evidence', changed)
-    with pytest.raises(DevelopmentRiskError, match='SCAN_VERSION_STALE'):
+    from security_runtime.tasks.durable import TaskOperationError
+    with pytest.raises(TaskOperationError, match='BUSY'):
         risks.submit([value], 1)
     assert risks.load()['reviews'] == []
 
 
-def test_stop_routes_pending_review_and_persists_budget_exhaustion(sample, monkeypatch):
+def test_stop_routes_pending_review_once_per_terminal_version(sample, monkeypatch):
     scanner(sample, monkeypatch)
     root, service, ref, risks = sample
     risks.sync_scanner()
@@ -200,8 +203,9 @@ def test_stop_routes_pending_review_and_persists_budget_exhaustion(sample, monke
     assert first['review_progress']['pending_scanner_ids']
     fallback(service.hooks, root, service.owner, service=service, stop_hook_active=True)
     last = fallback(service.hooks, root, service.owner, service=service, stop_hook_active=True)
-    assert last['status'] == 'STOP_FALLBACK_INCOMPLETE'
-    assert store.load(ref, service.owner)['stop_fallback']['incomplete_reason']
+    assert last is None  # The same terminal input is offered only once.
+    assert store.load(ref, service.owner)['stop_fallback']['count'] == 1
+    assert store.load(ref, service.owner)['stop_fallback']['terminal_result'] == [1, 'scan-1', 'RESULTS_READY']
     risks.submit([review(risks)], 1, business_reviews=[business(risks)])
     assert fallback(service.hooks, root, service.owner, service=service, stop_hook_active=True) is None
 

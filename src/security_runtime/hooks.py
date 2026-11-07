@@ -97,6 +97,8 @@ class GitHookManager:
     def execute(self, action, policy='strict', *, commit_only=None):
         if action not in {'install', 'status', 'repair', 'remove'} or policy not in {'strict', 'report'}:
             raise ValueError('GIT_HOOK_ACTION_INVALID')
+        if action in {'install', 'repair'}:
+            raise ValueError('Git commit 扫描为后续规划功能，当前版本未开放。')
         raw = self._read(self.path)
         manifest = self.manifest()
         owned = manifest is not None and (raw is None or hashlib.sha256(raw).hexdigest() in
@@ -145,15 +147,8 @@ class GitHookManager:
 
 
 def codex_commit_only(root):
-    # Default installations pay no Git subprocess cost. An ownership receipt
-    # is only a hint until the current effective Git hook has been verified.
-    store = HookStateStore(SQLiteStore.default_path().parent / 'git-hooks')
-    try:
-        if not (store.workspace_directory(root) / 'ownership.json').is_file():
-            return False
-        return GitHookManager(root).execute('status')['commit_only']
-    except (ValueError, OSError, subprocess.SubprocessError):
-        return False
+    # Commit scanning is deferred; ordinary development continues through Stop.
+    return False
 
 
 def install_pre_commit(root: Path, *, policy='strict') -> Path:

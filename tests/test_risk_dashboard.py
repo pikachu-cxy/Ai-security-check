@@ -1,6 +1,7 @@
 import json
 import os
 import sqlite3
+import subprocess
 import pytest
 
 from security_runtime import risk_dashboard
@@ -63,6 +64,17 @@ def test_risk_dashboard_mcp_entry_does_not_scan(development_server, monkeypatch)
     result = call(server, 'start_risk_dashboard')
     assert result['status'] == 'AVAILABLE'
     assert result['url'] == 'http://127.0.0.1:12345/capability/'
+    assert result['scanner_run'] is False and not launches
+
+
+@pytest.mark.parametrize('failure', [sqlite3.OperationalError('locked'), subprocess.TimeoutExpired('fixture', 2)])
+def test_dashboard_start_failure_does_not_escape_tool(development_server, monkeypatch, failure):
+    server, _, _, launches = development_server
+    def fail():
+        raise failure
+    monkeypatch.setattr(risk_dashboard, 'launch', fail)
+    result = call(server, 'start_risk_dashboard')
+    assert result['status'] == 'UNAVAILABLE'
     assert result['scanner_run'] is False and not launches
 
 
@@ -134,7 +146,7 @@ def test_bad_or_truncated_cursor_data_is_not_reported_as_complete_zero(tmp_path,
             return original(path)
         monkeypatch.setattr(risk_dashboard, 'no_links', fail)
     else:
-        monkeypatch.setattr(risk_dashboard, 'MAX_SCANS', 0)
+        monkeypatch.setattr(risk_dashboard, 'MAX_WORKSPACES', 0)
     result = risk_dashboard.records()
     assert result['partial'] and result['issues']
     assert 'private details' not in json.dumps(result)
@@ -146,3 +158,31 @@ def test_unreviewed_ledger_candidate_is_not_confirmed_risk(tmp_path, monkeypatch
     monkeypatch.setattr(risk_dashboard, 'STATE', tmp_path)
     save_editor(tmp_path, project, 'cursor-workspaces', decision=None)
     assert risk_dashboard.records()['risks'][0]['status'] == '待确认'
+
+
+def test_session_query_excludes_other_session_and_legacy_scans(tmp_path, monkeypatch):
+    project = tmp_path/'project'
+    project.mkdir()
+    base = tmp_path/'state'
+    monkeypatch.setattr(risk_dashboard, 'STATE', base)
+    wd = save_editor(base, project, 'global-workspaces')
+    hooks = HookStateStore(wd/'hooks')
+    ledger = SignedRecords(hooks, project, 'development-risks.db')
+    with ledger.transaction() as db:
+        row = ledger._get(db, 'same-check')
+        ledger._put(db, 'same-check', dict(row, owner=dict(host='codex', session='a'*64)))
+    selected = risk_dashboard.records(project_id=wd.name, session_id='a'*64, editor_id='codex')
+    assert len(selected['risks']) == 1
+    assert risk_dashboard.records(project_id=wd.name, session_id='b'*64)['risks'] == []
+    assert risk_dashboard.records(project_id='c'*64, session_id='a'*64)['risks'] == []
+
+
+def test_session_query_explains_unknown_historical_ownership(tmp_path, monkeypatch):
+    project = tmp_path/'project'
+    project.mkdir()
+    monkeypatch.setattr(risk_dashboard, 'STATE', tmp_path)
+    wd = save_editor(tmp_path, project, 'global-workspaces')
+    result = risk_dashboard.records(project_id=wd.name, session_id='a'*64)
+    assert result['risks'] == [] and result['partial']
+    assert '会话归属' in result['issues'][0]
+    assert '全部风险入口' in result['note']
