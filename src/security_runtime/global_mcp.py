@@ -1176,7 +1176,10 @@ def create_global_server(*, workspaces=None, host='codex'):
             name, arguments = arguments['operation'], arguments['arguments']
         return await operation_call(name, arguments)
 
-    registry.install_router(listed, grouped_call)
+    from .connection_lifecycle import CURRENT
+    async def diagnosed_call(name, arguments):
+        return await CURRENT.call(grouped_call, name, arguments)
+    registry.install_router(listed, diagnosed_call if CURRENT else grouped_call)
     registry.close_with(lambda: pool.close())
     registry.observe_context_cost()
     from .performance_trace import observe_mcp

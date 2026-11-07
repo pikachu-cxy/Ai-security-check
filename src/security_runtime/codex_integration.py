@@ -188,7 +188,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
     return check_capabilities(mcp_info if global_mode else info, tools)
 
 
-def product_hooks() -> dict:
+def product_hooks(runtime=None, state_directory=None) -> dict:
     # User-visible labels are part of the owned definition fingerprint. Upgrades
     # retain prior signed records and require the Host's normal trust review.
     result = codex_mcp_hook_config()
@@ -210,6 +210,16 @@ def product_hooks() -> dict:
                   'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}',
                   'turn_id': '${turn_id}', 'permission_mode': '${permission_mode}'},
         'timeout': 30, 'statusMessage': '检查风险处理进度',
+    }]}]
+    import shlex
+    import subprocess
+    runtime = runtime or current_runtime()
+    directory = state_directory or SQLiteStore.default_path().parent.absolute()
+    command = [runtime['command'], *runtime['prefix'], 'connection-guard', '--state-dir', str(directory)]
+    result['hooks']['UserPromptSubmit'] = [{'hooks': [{
+        'type': 'command',
+        'command': subprocess.list2cmdline(command) if os.name == 'nt' else shlex.join(command),
+        'timeout': 5, 'statusMessage': '检查此前未完成的安全交接',
     }]}]
     return result
 
@@ -387,7 +397,7 @@ class CodexIntegrationAdapter:
                  'startup_timeout_sec = 60', 'tool_timeout_sec = 600', f'[mcp_servers.{SERVER}.env]']
         lines.extend(k + ' = ' + q(v) for k, v in env.items())
         block = ('\n'.join(lines) + '\n' + END).encode()
-        hooks = product_hooks()
+        hooks = product_hooks(runtime, directory)
         record = {'block': identity(block.decode()), 'server': fingerprint(server),
                   'hooks': {e: fingerprint(g[0]) for e, g in hooks['hooks'].items()}}
         return runtime, env, server, block, hooks, record

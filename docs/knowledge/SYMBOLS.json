@@ -408,7 +408,7 @@
     },
     {
       "path": "src/security_runtime/cli.py",
-      "sha256": "2955f126f191766c8f7f93bbe278c8ee930e22295dc4a00c8c33e50ac2af0db4",
+      "sha256": "437c801ab74e5df92c3d1986badb7635cd1c3336287512c83123eda3ed3c8f99",
       "purpose": "",
       "symbols": [
         {
@@ -753,7 +753,7 @@
     },
     {
       "path": "src/security_runtime/codex_integration.py",
-      "sha256": "8cd59802fa82a7063a8f9efc21a831c512d1a01148f9cb8dd20671e9f2b54f4e",
+      "sha256": "ae571c04bde2882f941fae1f5eac8dfdde28497dedb1203b7abe6f40827c05fb",
       "purpose": "Owned Codex MCP/Hook lifecycle and offline setup baseline. No source/mode mutation.",
       "symbols": [
         {
@@ -786,131 +786,131 @@
         },
         {
           "name": "CodexIntegrationAdapter",
-          "line": 217
+          "line": 227
         },
         {
           "name": "CodexIntegrationAdapter.__init__",
-          "line": 221
+          "line": 231
         },
         {
           "name": "CodexIntegrationAdapter._state_path",
-          "line": 230
+          "line": 240
         },
         {
           "name": "CodexIntegrationAdapter._read",
-          "line": 238
+          "line": 248
         },
         {
           "name": "CodexIntegrationAdapter._manifest",
-          "line": 250
+          "line": 260
         },
         {
           "name": "CodexIntegrationAdapter._encode",
-          "line": 276
+          "line": 286
         },
         {
           "name": "CodexIntegrationAdapter._save",
-          "line": 279
+          "line": 289
         },
         {
           "name": "CodexIntegrationAdapter._write",
-          "line": 287
+          "line": 297
         },
         {
           "name": "CodexIntegrationAdapter._config",
-          "line": 295
+          "line": 305
         },
         {
           "name": "CodexIntegrationAdapter._config_paths",
-          "line": 324
+          "line": 334
         },
         {
           "name": "CodexIntegrationAdapter._inline_hooks",
-          "line": 328
+          "line": 338
         },
         {
           "name": "CodexIntegrationAdapter._validate_hooks",
-          "line": 353
+          "line": 363
         },
         {
           "name": "CodexIntegrationAdapter._desired",
-          "line": 374
+          "line": 384
         },
         {
           "name": "CodexIntegrationAdapter._ownership_desired",
-          "line": 395
+          "line": 405
         },
         {
           "name": "CodexIntegrationAdapter._validate_owned_block_semantics",
-          "line": 399
+          "line": 409
         },
         {
           "name": "CodexIntegrationAdapter._owned_blocks",
-          "line": 413
+          "line": 423
         },
         {
           "name": "CodexIntegrationAdapter._owned_group",
-          "line": 441
+          "line": 451
         },
         {
           "name": "CodexIntegrationAdapter._owned_handler",
-          "line": 445
+          "line": 455
         },
         {
           "name": "CodexIntegrationAdapter._related",
-          "line": 457
+          "line": 467
         },
         {
           "name": "CodexIntegrationAdapter._legacy",
-          "line": 462
+          "line": 472
         },
         {
           "name": "CodexIntegrationAdapter._legacy_handler",
-          "line": 486
+          "line": 496
         },
         {
           "name": "CodexIntegrationAdapter._inspect_mcp",
-          "line": 489
+          "line": 499
         },
         {
           "name": "CodexIntegrationAdapter._inspection",
-          "line": 507
+          "line": 517
         },
         {
           "name": "CodexIntegrationAdapter._hook_status",
-          "line": 531
+          "line": 541
         },
         {
           "name": "CodexIntegrationAdapter.status",
-          "line": 540
+          "line": 550
         },
         {
           "name": "CodexIntegrationAdapter.readiness_status",
-          "line": 573
+          "line": 583
         },
         {
           "name": "CodexIntegrationAdapter.setup",
-          "line": 595
+          "line": 605
         },
         {
           "name": "CodexIntegrationAdapter.repair",
-          "line": 598
+          "line": 608
         },
         {
           "name": "CodexIntegrationAdapter.remove",
-          "line": 601
+          "line": 611
         },
         {
           "name": "CodexIntegrationAdapter._patch_mcp",
-          "line": 604
-        },
-        {
-          "name": "CodexIntegrationAdapter._new_manifest",
           "line": 614
         },
         {
+          "name": "CodexIntegrationAdapter._new_manifest",
+          "line": 624
+        },
+        {
           "name": "CodexIntegrationAdapter._mutate",
-          "line": 619
+          "line": 629
         }
       ]
     },
@@ -1096,6 +1096,56 @@
         {
           "name": "gitleaks_config",
           "line": 64
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/connection_guard.py",
+      "sha256": "e5a88d96480f6f9088c1e31688ea930c2b9c44acc4921d4a894755e3938581b9",
+      "purpose": "Independent next-prompt recovery of signed, same-session unfinished edits.",
+      "symbols": [
+        {
+          "name": "check",
+          "line": 7
+        },
+        {
+          "name": "main",
+          "line": 33
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/connection_lifecycle.py",
+      "sha256": "41d9f9435fd1aef4c44c23b13d316b6ad11747ca92fa53fdadcad6b7e823d491",
+      "purpose": "Bounded process-exit diagnostics; no request arguments or per-call disk IO.",
+      "symbols": [
+        {
+          "name": "diagnostics",
+          "line": 14
+        },
+        {
+          "name": "Lifecycle",
+          "line": 45
+        },
+        {
+          "name": "Lifecycle.__init__",
+          "line": 46
+        },
+        {
+          "name": "Lifecycle.save",
+          "line": 55
+        },
+        {
+          "name": "Lifecycle.call",
+          "line": 70
+        },
+        {
+          "name": "Lifecycle.finish",
+          "line": 85
+        },
+        {
+          "name": "run",
+          "line": 107
         }
       ]
     },
@@ -1800,6 +1850,37 @@
       ]
     },
     {
+      "path": "src/security_runtime/dashboard_health.py",
+      "sha256": "09cb37a43213234b75e1aea82bcb945f7751f6c20083a513cd32177ac598245d",
+      "purpose": "On-demand local health checks. Never imported by scanning or Stop.",
+      "symbols": [
+        {
+          "name": "_metadata",
+          "line": 15
+        },
+        {
+          "name": "_mcp_discover",
+          "line": 27
+        },
+        {
+          "name": "probe_mcp",
+          "line": 53
+        },
+        {
+          "name": "collect",
+          "line": 61
+        },
+        {
+          "name": "_history",
+          "line": 122
+        },
+        {
+          "name": "snapshot",
+          "line": 143
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/dashboard_history.py",
       "sha256": "9857d71f086080bacecf791d2afe32f19a2dc374ba96b593b9866864ea15fdcb",
       "purpose": "Read saved history without admitting a live workspace or launching work.",
@@ -1855,7 +1936,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "f4f83d2c26cd301e6ec7e1438cae7a4e819af60a21142be522dbb210b37743e3",
+      "sha256": "b463970e12b4eced89084409a48799c97ede007f9e04ebc935a8873b26d92a3a",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
@@ -2822,7 +2903,7 @@
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "97818399be87d169ae201d098ea4d3e42553ad118ebb52972e39f2d52a748d30",
+      "sha256": "6bece7fe744a3418089f607e2b9c2007e08998df1bdbae97f43ffd329d296ff2",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -4188,7 +4269,7 @@
     },
     {
       "path": "src/security_runtime/global_integration.py",
-      "sha256": "592ae49162a7664599a4fd4b7043c0c11770ee2a15b6382a9ffd8a48c68b45d1",
+      "sha256": "bdd753a2ded08d2494fb3f52f45b0d6be2f304f1ce355dee6612a15b1f953405",
       "purpose": "Owned user-level Codex installation. No Codex trust-store access.",
       "symbols": [
         {
@@ -4265,29 +4346,29 @@
         },
         {
           "name": "GlobalCodexIntegration.status",
-          "line": 231
+          "line": 232
         },
         {
           "name": "GlobalCodexIntegration.project_layers",
-          "line": 246
+          "line": 247
         },
         {
           "name": "GlobalCodexIntegration.inspect_project",
-          "line": 253
+          "line": 254
         },
         {
           "name": "GlobalCodexIntegration.execute",
-          "line": 285
+          "line": 286
         },
         {
           "name": "render_global",
-          "line": 324
+          "line": 325
         }
       ]
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "acb185d135998a551de1740cc8a91f1397417ab6a371a076d70352345122ae27",
+      "sha256": "91bfbfe905576d6e1fe2089aea4aca82644557bc8c40b7c3f3771a42ae7104b9",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -6619,7 +6700,7 @@
     },
     {
       "path": "src/security_runtime/mcp_server.py",
-      "sha256": "d50cab8ad708e54c79d09f0069f4b482653e3b2d2340e70941bbdf84fd8dafed",
+      "sha256": "59ea5428639d8e28bea36f541c4d12975aaba04d6706b03304db41d1cc9edfa6",
       "purpose": "MCP protocol interface; all operations delegate to SecurityRuntime.",
       "symbols": [
         {
@@ -9835,7 +9916,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "fc144005897e7cd23ca3180cca4847c1760e2f8906b36cf6cf6b661eb48e42c7",
+      "sha256": "b5d8b9d312f6334161770a9ebfdac3a78a0fb05c8ba2127fd090742e63c2f0df",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -9892,15 +9973,15 @@
         },
         {
           "name": "Handler.do_POST",
-          "line": 304
+          "line": 309
         },
         {
           "name": "serve",
-          "line": 364
+          "line": 369
         },
         {
           "name": "launch",
-          "line": 384
+          "line": 389
         }
       ]
     },

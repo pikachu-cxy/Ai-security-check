@@ -1,0 +1,196 @@
+{
+  "date": "2026-11-07",
+  "build": "2ecd5a4e410face6c3a663862d7a7fcb1d315fa540f3cc121b26d4a98d65527d",
+  "baseline_build": "b67462d52f27f4f3f094bea785af1c532181b8c191ffb467b6fe71df2f85da99",
+  "normal_stop_final": [
+    {
+      "version": "before",
+      "round": 1,
+      "stop_seconds": 14.41600417799782,
+      "status": "RESULTS_READY",
+      "scan_seconds": 10.309672,
+      "outside_scan_seconds": 4.106332177997819
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "stop_seconds": 15.427552419016138,
+      "status": "RESULTS_READY",
+      "scan_seconds": 10.682913000000001,
+      "outside_scan_seconds": 4.744639419016137
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "stop_seconds": 11.8853736439778,
+      "status": "RESULTS_READY",
+      "scan_seconds": 8.754481,
+      "outside_scan_seconds": 3.1308926439778
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "stop_seconds": 12.079592442983994,
+      "status": "RESULTS_READY",
+      "scan_seconds": 8.789965,
+      "outside_scan_seconds": 3.289627442983994
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "stop_seconds": 12.626735002006171,
+      "status": "RESULTS_READY",
+      "scan_seconds": 9.334995000000001,
+      "outside_scan_seconds": 3.2917400020061702
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "stop_seconds": 11.460517437983071,
+      "status": "RESULTS_READY",
+      "scan_seconds": 8.577538,
+      "outside_scan_seconds": 2.882979437983071
+    }
+  ],
+  "normal_stop_exploratory": [
+    {
+      "version": "before",
+      "round": 1,
+      "stop_seconds": 11.825694818980992,
+      "status": "RESULTS_READY"
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "stop_seconds": 11.963827294996008,
+      "status": "RESULTS_READY"
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "stop_seconds": 14.155396857007872,
+      "status": "RESULTS_READY"
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "stop_seconds": 12.39812548601185,
+      "status": "RESULTS_READY"
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "stop_seconds": 11.893885981000494,
+      "status": "RESULTS_READY"
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "stop_seconds": 10.383124412997859,
+      "status": "RESULTS_READY"
+    }
+  ],
+  "disconnect_injected": [
+    {
+      "round": 1,
+      "guard_seconds": 0.45440871999016963,
+      "independent_guard": true,
+      "deduped": true,
+      "closed_call_error": "ClosedResourceError",
+      "closed_call_seconds": 0.0003421410219743848,
+      "dirty_seq": 1,
+      "scanned_seq": 0,
+      "scan_id": null,
+      "closeout_mode": "INCOMPLETE",
+      "gaps": [
+        "STATIC_SCAN_INCOMPLETE",
+        "STOP_HANDOFF_INTERRUPTED"
+      ],
+      "report_link": true
+    },
+    {
+      "round": 2,
+      "guard_seconds": 0.4891882269876078,
+      "independent_guard": true,
+      "deduped": true,
+      "closed_call_error": "ClosedResourceError",
+      "closed_call_seconds": 0.00038790798862464726,
+      "dirty_seq": 1,
+      "scanned_seq": 0,
+      "scan_id": null,
+      "closeout_mode": "INCOMPLETE",
+      "gaps": [
+        "STATIC_SCAN_INCOMPLETE",
+        "STOP_HANDOFF_INTERRUPTED"
+      ],
+      "report_link": true
+    },
+    {
+      "round": 3,
+      "guard_seconds": 0.5271152989880648,
+      "independent_guard": true,
+      "deduped": true,
+      "closed_call_error": "ClosedResourceError",
+      "closed_call_seconds": 0.0005840969970449805,
+      "dirty_seq": 1,
+      "scanned_seq": 0,
+      "scan_id": null,
+      "closeout_mode": "INCOMPLETE",
+      "gaps": [
+        "STATIC_SCAN_INCOMPLETE",
+        "STOP_HANDOFF_INTERRUPTED"
+      ],
+      "report_link": true
+    }
+  ],
+  "real_model": {
+    "active_review_calls": 2,
+    "first_save": true,
+    "complete_report": true,
+    "session_link": true,
+    "review_versions": 1,
+    "summary": {
+      "CONFIRMED": 1,
+      "DISMISSED": 1,
+      "INCONCLUSIVE": 0,
+      "duplicates": 0,
+      "false_positives": 1
+    },
+    "scan_count": 1,
+    "readonly_active_review_calls": 0
+  },
+  "lifecycle": [
+    {
+      "state": "EXIT_UNRECORDED",
+      "reason": "PROCESS_NOT_FOUND",
+      "exit_code": null
+    },
+    {
+      "state": "EXITED",
+      "reason": "SIGNAL",
+      "exit_code": 143
+    }
+  ],
+  "memory_instrumentation": {
+    "calls": 10000,
+    "additional_microseconds_per_call": 5.019001197069883,
+    "disk_unchanged": true
+  },
+  "final_installed_build": "138a3a17851fd5712c384c6074589a3bf330af30790234e55b85ae21d18a648f",
+  "dashboard_health": {
+    "elapsed_seconds": 15.153061880992027,
+    "browser_check_seconds": 14.35,
+    "component_statuses": {
+      "opengrep": "READY",
+      "semgrep": "READY",
+      "gitleaks": "READY",
+      "trivy": "READY",
+      "osv-scanner": "READY",
+      "native-dataflow": "READY"
+    },
+    "mcp_interfaces": 15,
+    "mcp_status": "READY",
+    "scanner_run": false,
+    "desktop_connection": "UNKNOWN"
+  }
+}

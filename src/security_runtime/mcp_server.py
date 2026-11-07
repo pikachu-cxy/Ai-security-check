@@ -315,4 +315,5 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
 
 
 def serve() -> None:
-    create_server().run(transport="stdio")
+    from .connection_lifecycle import run
+    run(lambda: create_server().run(transport="stdio"))

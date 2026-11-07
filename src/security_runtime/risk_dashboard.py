@@ -262,6 +262,11 @@ class Handler(BaseHTTPRequestHandler):
                 self.reply(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
             elif path == '/api/session':
                 self.reply(200, dict(csrf=self.server.token, service='risk-dashboard-v2'))
+            elif path == '/api/monitor':
+                from .dashboard_health import snapshot
+                if self.query():
+                    raise ValueError('HEALTH_QUERY_INVALID')
+                self.reply(200, snapshot())
             elif path == '/api/detail':
                 from .dashboard_detail import detail
                 query = self.query()

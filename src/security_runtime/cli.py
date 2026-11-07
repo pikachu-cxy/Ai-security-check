@@ -246,6 +246,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     scan_parser.add_argument("--staged", action="store_true", help=argparse.SUPPRESS)
     scan_parser.add_argument("--rules", help="Local user-provided Semgrep rule directory")
     scan_parser.add_argument('--gate', choices=['strict', 'report'], help='Git gate: 0 allowed, 1 policy blocked, 2 incomplete (strict)')
+    sub.add_parser('connection-diagnostics', help='Read bounded MCP connection exit diagnostics as JSON; never scans')
+    guard_parser = sub.add_parser('connection-guard', help=argparse.SUPPRESS)
+    guard_parser.add_argument('--state-dir', type=Path, required=True)
     mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
     config_parser = mcp_sub.add_parser("config")
@@ -402,6 +405,15 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'connection-diagnostics':
+            from .connection_lifecycle import diagnostics
+            print(json.dumps(diagnostics(), ensure_ascii=False))
+            return 0
+        if args.command == 'connection-guard':
+            os.environ['SECURITY_RUNTIME_STATE_DIR'] = str(args.state_dir)
+            from .connection_guard import main as guard_main
+            guard_main()
+            return 0
         if args.command == 'integration' and args.fast:
             if args.action != 'status' or args.scope != 'global' or args.integration != 'codex':
                 raise ValueError('FAST_STATUS_REQUIRES_GLOBAL_CODEX_STATUS')

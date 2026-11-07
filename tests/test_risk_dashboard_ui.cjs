@@ -117,3 +117,19 @@ test('review response budget belongs to product settings and preserves its numer
  assert.equal(input.value,65536);assert.equal(input.dataset.kind,'number');
  assert.equal(input.min,'16384');assert.equal(input.max,'262144');
 });
+
+test('normal overview removes legacy explanatory banner while failures remain visible',async()=>{
+ const {els}=await page({result:{status:'AVAILABLE',risks:[],total:0,partial:false,note:'汇总当前本机用户数据目录中的 Codex、Cursor、WorkBuddy 开发风险',updated_at:100}});
+ assert.equal(els.banner.textContent,'');
+});
+test('health is demand-only and distinguishes registered MCP from tested operations',async()=>{
+ const data={checked_at:100,elapsed_seconds:.2,product:{status:'ATTENTION',version:'fixture',web:'READY',path:'/runtime'},components:[{name:'<script>tool</script>',status:'MISSING',path:'/missing',rules:[]}],databases:[{name:'DB',status:'READY',freshness:'STALE',metadata:{Version:2}}],mcp:{status:'READY',interfaces:[{name:'development_review',status:'REGISTERED',operations:['submit']}]},history:[],connections:[]};
+ const {els,ctx,requests}=await page({get:url=>url==='/api/monitor'?data:null});
+ assert.ok(!requests.some(r=>r.url==='/api/monitor'));
+ vm.runInContext("showView('health')",ctx);await tick();
+ assert.equal(els.pageTitle.textContent,'健康监控');assert.equal(els.healthView.hidden,false);assert.equal(els.riskView.hidden,true);
+ assert.equal(els.healthTools.children[0].children[0].textContent,'<script>tool</script>');
+ assert.match(els.healthMcp.children[0].children[1].children[0].textContent,/未执行业务调用/);
+ assert.equal(requests.filter(r=>r.url==='/api/monitor').length,1);
+ vm.runInContext("showView('overview')",ctx);await tick();assert.equal(els.healthView.hidden,true);
+});

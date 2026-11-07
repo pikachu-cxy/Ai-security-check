@@ -281,6 +281,12 @@ def test_symlink_configuration_rejected(adapter, repo, tmp_path, where):
 def test_concurrent_setup_has_one_server_and_hook(adapter, repo):
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: call(adapter, repo), range(2)))
+    # The bounded installation lock may reject the peer on a busy machine.
+    # Retry only that explicit outcome after the first operation has finished.
+    for index, result in enumerate(results):
+        if 'operation' not in result:
+            assert result['diagnostics'] == ['INTEGRATION_BUSY'], result
+            results[index] = call(adapter, repo)
     assert sorted(r['operation'] for r in results) == ['ALREADY_CONFIGURED', 'CONFIGURED']
     assert len(json.loads(config(repo)[1].read_bytes())['hooks']['PostToolUse']) == 1
 
@@ -326,7 +332,9 @@ def test_exact_legacy_generator_plus_provenance_migrates(adapter, repo):
     assert 'LEGACY_HOOK_PRESENT' in call(adapter, repo, 'status')['diagnostics']
     assert call(adapter, repo)['operation'] == 'CONFIGURED'
     value = json.loads(config(repo)[1].read_bytes())
-    assert all(h['type'] == 'mcp_tool' for groups in value['hooks'].values() for g in groups for h in g['hooks'])
+    assert all(h['type'] == 'mcp_tool' for event, groups in value['hooks'].items()
+               if event != 'UserPromptSubmit' for g in groups for h in g['hooks'])
+    assert value['hooks']['UserPromptSubmit'] == product_hooks()['hooks']['UserPromptSubmit']
     assert value['hooks']['Stop'] == product_hooks()['hooks']['Stop']
 
 

@@ -179,7 +179,7 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                  'startup_timeout_sec = 60', 'tool_timeout_sec = 600', f'[mcp_servers.{SERVER}.env]']
         lines.extend(k + ' = ' + q(v) for k, v in env.items())
         block = ('\n'.join(lines) + '\n').encode()
-        hooks = product_hooks()
+        hooks = product_hooks(runtime, directory)
         record = {'block': identity(block.decode()), 'server': fingerprint(server),
                   'hooks': {e: fingerprint(g[0]) for e, g in hooks['hooks'].items()}}
         return runtime, env, server, block, hooks, record
@@ -223,7 +223,8 @@ class GlobalCodexIntegration(CodexIntegrationAdapter):
                               'hook_status': self._hook_status('SessionStart', configs[1][2], desired[4], manifest)},
                 'baseline': {'status': 'NOT_REQUIRED', 'required': False,
                              'message': '当前任务审计模式不要求产品启动比较基线。'},
-                'hook_definition_hash': fingerprint(product_hooks()),
+                'connection_guard': {'status': self._hook_status('UserPromptSubmit', configs[1][2], desired[4], manifest)},
+                'hook_definition_hash': fingerprint(desired[4]),
                 'hook_trust': 'HOST_MANAGED_UNKNOWN', 'live_connection': 'UNKNOWN',
                 'cold_start_host_trial': 'PENDING_ACTUAL_DESKTOP',
                 'diagnostics': diagnostics}

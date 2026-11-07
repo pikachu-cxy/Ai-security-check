@@ -69,7 +69,9 @@ def test_fresh_global_install_no_project_writes(installed, projects):
     assert not server['env']['SECURITY_RUNTIME_WORKSPACE']
     hooks = json.loads((installed.home / 'hooks.json').read_bytes())
     assert hooks == product_hooks()
-    assert all(g[0]['hooks'][0]['input']['workspace_path'] == '${cwd}' for g in hooks['hooks'].values())
+    assert all(g[0]['hooks'][0]['input']['workspace_path'] == '${cwd}'
+               for g in hooks['hooks'].values() if g[0]['hooks'][0]['type'] == 'mcp_tool')
+    assert hooks['hooks']['UserPromptSubmit'][0]['hooks'][0]['type'] == 'command'
     assert str(projects[0]) not in json.dumps(server)
 
 
@@ -378,6 +380,7 @@ def test_signed_english_hook_labels_upgrade_without_losing_ownership(installed, 
     """Old signed label fingerprints remain owned during the explicit upgrade."""
     from security_runtime import codex_integration, global_integration
     previous = copy.deepcopy(product_hooks())
+    previous['hooks'].pop('UserPromptSubmit', None)
     labels = {
         'PostToolUse': 'AI Security Runtime [codex-integration-v0.2]',
         'SessionStart': 'AI Security Runtime [readiness-v0.3]',
@@ -389,8 +392,8 @@ def test_signed_english_hook_labels_upgrade_without_losing_ownership(installed, 
     owner = installed if scope == 'global' else installed.legacy_adapter
     owner_root = installed.home if scope == 'global' else root
     with monkeypatch.context() as old_code:
-        old_code.setattr(codex_integration, 'product_hooks', lambda: copy.deepcopy(previous))
-        old_code.setattr(global_integration, 'product_hooks', lambda: copy.deepcopy(previous))
+        old_code.setattr(codex_integration, 'product_hooks', lambda *args: copy.deepcopy(previous))
+        old_code.setattr(global_integration, 'product_hooks', lambda *args: copy.deepcopy(previous))
         if scope == 'global':
             installed.execute('setup', root)
         else:

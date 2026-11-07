@@ -350,11 +350,12 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
         selected = items[offset:offset+limit]
         text = '\n\n'.join((r.get('assessment') or {}).get('report_text') or
                            f"已保存业务风险：{r['finding']['title']}（完整报告尚不可用）" for r in selected)
-        text += '\n\n静态扫描尚未取得本轮完整结果，不能判定本轮没有其他漏洞。'
         reason = marker.get('reason')
         if reason == 'STOP_HANDOFF_INTERRUPTED':
-            text += '此前已记录的修改未完成收尾交接；本次重连仅提示原检查缺口，没有自动补扫。'
-        elif reason == 'STOP_CLOSEOUT_FAILED':
+            text += '\n\n此前开发的静态扫描未完成，不能判定此前修改没有其他漏洞。本次仅恢复原检查的未完成提示，不是对当前聊天发起安全扫描，没有自动补扫。'
+        else:
+            text += '\n\n静态扫描尚未取得本轮完整结果，不能判定本轮没有其他漏洞。'
+        if reason == 'STOP_CLOSEOUT_FAILED':
             text += '收尾处理发生异常，原检查及已保存结果保留，没有重新提交扫描。'
         if check['state'] == 'FAILED':
             text += '本批扫描已失败，失败记录保留，未自动重试。'
