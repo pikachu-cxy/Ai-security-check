@@ -26,7 +26,7 @@ DEFAULTS = {
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
     'development': {'business_audit_delivery': 'fast', 'review_response_bytes': 65536,
-                    'stop_fallback': {'enabled': True, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
+                    'stop_fallback': {'enabled': True, 'native_wait_seconds': 18, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 
 
@@ -98,7 +98,9 @@ def analysis_requirements(row):
 
 def describe_config():
     try:
-        return dict(status='VALID', **read_config(), host_support={
+        config = read_config()
+        from .development_check import native_wait_seconds
+        return dict(status='VALID', **config, effective_native_wait_seconds=native_wait_seconds({'effective_config': config}), host_support={
             'codex_cli': 'IMPLEMENTED_REQUIRES_NATIVE_HOOKS',
             'cursor_cli': 'IMPLEMENTED_REQUIRES_NATIVE_HOOKS',
             'claude_code': 'PLANNED', 'qoder_cli': 'PLANNED'})
@@ -108,6 +110,12 @@ def describe_config():
 
 
 def validate_preferences(values):
+    wait = values['development']['stop_fallback']['native_wait_seconds']
+    if type(wait) is not int or not 0 <= wait <= 18:
+        raise ValueError('USER_CONFIG_NATIVE_WAIT_OUT_OF_RANGE')
+    if any(values['scan']['execution'][name] == 0 for name in
+           ('sast_timeout_seconds', 'gitleaks_timeout_seconds', 'trivy_timeout_seconds')):
+        raise ValueError('USER_CONFIG_SCANNER_TIMEOUT_MUST_BE_POSITIVE')
     budget = values['development']['review_response_bytes']
     if type(budget) is not int or not 16384 <= budget <= 262144:
         raise ValueError('USER_CONFIG_REVIEW_RESPONSE_OUT_OF_RANGE')

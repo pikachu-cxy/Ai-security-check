@@ -35,8 +35,8 @@ def candidates(store, owner, offered=()):
 def context(hooks, root, owner):
     # Recover only this conversation's observed edits whose Stop handoff was
     # interrupted. No scan/wait, no historical inventory, no other owner.
-    from .development_stop import interrupted_notice
-    notice = interrupted_notice(hooks, root, owner)
+    from .development_recovery import resume
+    notice = resume(hooks, root, owner)
     return notice['reason'] if notice else ''
 
 

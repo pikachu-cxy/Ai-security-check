@@ -25,7 +25,7 @@ def test_reconnect_reports_only_same_owner_interrupted_native_edit_once(check, c
     assert (after['dirty_seq'], after['scan_id'], after['finish_requested']) == (
         before['dirty_seq'], before['scan_id'], before['finish_requested'])
     assert after['stop_activity'] == before['stop_activity'] and counters['calls'] == 0
-    assert after['stop_closeout_notice']['reason'] == 'STOP_HANDOFF_INTERRUPTED'
+    assert after['stop_closeout_notice']['reason'] == 'RECOVERY_PENDING'
 
 
 @pytest.mark.parametrize('failure', [ValueError, OSError, RuntimeError])
@@ -136,3 +136,10 @@ def test_mcp_evidence_error_recovers_without_saving_or_scanning(development_serv
     assert result['review_saved'] and result['next_action']['tool'] == 'get_development_risks'
     assert call(server, 'get_development_risks', **args)['total'] == 1
     assert not launches
+
+
+@pytest.fixture(autouse=True)
+def recovery_launcher(monkeypatch):
+    calls = []
+    monkeypatch.setattr('security_runtime.development_recovery.launch_recovery', lambda *a: calls.append(a))
+    return calls

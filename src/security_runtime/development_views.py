@@ -260,6 +260,8 @@ def batch_report_page(result, check):
                 sections.append('本次检查仅覆盖已记录的路径，部分改动范围未知。')
             if page['gaps']:
                 sections.append('本次检查的覆盖缺口：' + '、'.join(page['gaps']) + '。')
+            if page['total'] == 0:
+                sections.insert(0, '静态检查结果已保存；在本批已记录的检查范围内，未发现扫描候选漏洞。')
         from .dashboard_service import session_url
         url = session_url(check['workspace'], check['owner'])
         page['session_url'] = url
@@ -306,7 +308,7 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
     marker = check.get('stop_closeout_notice') or {}
     # A worker may finish between the short notice and this first read. Adopt
     # only the same edit sequence, never a later edit or a different page.
-    if (marker.get('mode') == 'INCOMPLETE' and offset == 0 and expected_seq is None
+    if (marker.get('mode') in {'INCOMPLETE', 'REVIEW'} and offset == 0 and expected_seq is None
             and scan_id is None and marker.get('seq') == check['dirty_seq']
             and check['scanned_seq'] == check['dirty_seq']
             and check['state'] in {'RESULTS_READY', 'PARTIAL'}
@@ -318,12 +320,13 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
         work = review_progress(check, check['security_result'])
         review = work['pending_scanner_ids'] or (work['pending_business_paths'] and not fast_delivery(check))
         updated = dict(seq=check['dirty_seq'], scan_id=check.get('scan_id'), mode='REVIEW' if review else 'REPORT')
-        with service.checks.transaction() as db:
-            current = service.checks._get(db, service.ref)
-            require(current.get('stop_closeout_notice') == marker and
-                    (current['dirty_seq'], current.get('scan_id')) == (check['dirty_seq'], check.get('scan_id')),
-                    'DEVELOPMENT_RISK_VERSION_STALE')
-            service.checks._put(db, service.ref, dict(current, stop_closeout_notice=updated))
+        if updated != marker:
+            with service.checks.transaction() as db:
+                current = service.checks._get(db, service.ref)
+                require(current.get('stop_closeout_notice') == marker and
+                        (current['dirty_seq'], current.get('scan_id')) == (check['dirty_seq'], check.get('scan_id')),
+                        'DEVELOPMENT_RISK_VERSION_STALE')
+                service.checks._put(db, service.ref, dict(current, stop_closeout_notice=updated))
         marker = updated
     seq, scan = marker.get('seq'), marker.get('scan_id')
     require(expected_seq is not None or scan_id is None, 'DEVELOPMENT_RISK_INPUT_INVALID')
@@ -351,7 +354,13 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
         text = '\n\n'.join((r.get('assessment') or {}).get('report_text') or
                            f"已保存业务风险：{r['finding']['title']}（完整报告尚不可用）" for r in selected)
         reason = marker.get('reason')
-        if reason == 'STOP_HANDOFF_INTERRUPTED':
+        if reason == 'RECOVERY_PENDING':
+            text += '\n\n此前开发的安全检查正在沿原任务恢复；已保存的结果会直接复用，尚未完成的任务由后台继续。当前尚无完整结果，不能判定没有漏洞；结果保存后将在下一次收尾或会话输入时补交。'
+        elif reason == 'RECOVERY_START_FAILED':
+            text += '\n\n原安全检查未完成，后台恢复进程启动失败；原任务已保留，尚不能判定是否存在漏洞。'
+        elif reason == 'RECOVERY_FAILED':
+            text += '\n\n原安全检查恢复失败，已停止自动重试；原任务和已保存数据保留，尚不能判定是否存在漏洞。请检查产品连接、配置及本地文件访问状态后处理原任务。'
+        elif reason == 'STOP_HANDOFF_INTERRUPTED':
             text += '\n\n此前开发的静态扫描未完成，不能判定此前修改没有其他漏洞。本次仅恢复原检查的未完成提示，不是对当前聊天发起安全扫描，没有自动补扫。'
         else:
             text += '\n\n静态扫描尚未取得本轮完整结果，不能判定本轮没有其他漏洞。'

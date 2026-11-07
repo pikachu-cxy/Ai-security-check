@@ -67,3 +67,10 @@ def test_guard_same_owner_once_without_scanning(check, config, tmp_path, monkeyp
 def test_guard_ignores_unusable_claims(event):
     from security_runtime.connection_guard import check
     assert check(event) == {}
+
+
+@pytest.fixture(autouse=True)
+def recovery_launcher(monkeypatch):
+    calls = []
+    monkeypatch.setattr('security_runtime.development_recovery.launch_recovery', lambda *a: calls.append(a))
+    return calls

@@ -58,7 +58,7 @@ def test_grouped_audit_submission_first_save_before_scan_and_retry(audit_pool, p
     assert bad['field_errors'][0]['field']=='audit_id'
     assert 'observations' in bad['message']
     # No worker was launched by this development-time save.
-    assert not first['scanner_run']
+    assert first['scan_id'] is None
 
 
 def test_partial_audit_preserves_finding_and_report_after_scan(sample,monkeypatch,tmp_path):

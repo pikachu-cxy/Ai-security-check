@@ -23,6 +23,7 @@ def publish(store, db, row):
         scan_id=row['scan_id'], scan_path=row['scan_path'], result=row.get('result'),
         status=row['state'], reason_code=row.get('reason_code'),
         failure_diagnostic=row.get('failure_diagnostic'),
+        file_watch_gaps=list(row.get('file_watch_gaps', [])),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'], scope_unknown=row['scope_unknown'], full_project=False),
         created_at=store.now(), host_report_submitted=False, continuation_count=0)
     value['result_version'] = hashlib.sha256(json.dumps(value, sort_keys=True,

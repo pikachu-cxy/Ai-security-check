@@ -124,12 +124,12 @@ def test_queue_snapshot_and_capacity_changes(tmp_path, config):
     root=tmp_path.resolve()/'project'; root.mkdir(); (root/'a.py').write_text('pass\n')
     config.write_text('[storage.explicit_scan_jobs]\nmax_records=1\n[scan.input]\nmax_files=7')
     queue=ScanJobs(HookStateStore(tmp_path.resolve()/'state/hooks'),root,scan_path=tmp_path.resolve()/'state/scans.db')
-    one=queue.submit('request-one', launcher=lambda *a:None)
+    one=queue.submit('request-one',mode='files',files=['a.py'], launcher=lambda *a:None)
     row=queue.load(one['job_ref'])
     queue.update(row['job_ref'],row['ticket'],state='FAILED')
-    with pytest.raises(ValueError,match='capacity'): queue.submit('request-two',launcher=lambda *a:None)
+    with pytest.raises(ValueError,match='capacity'): queue.submit('request-two',mode='files',files=['a.py'],launcher=lambda *a:None)
     config.write_text('[storage.explicit_scan_jobs]\nmax_records=0\n[scan.input]\nmax_files=9')
-    two=queue.submit('request-two',launcher=lambda *a:None)
+    two=queue.submit('request-two',mode='files',files=['a.py'],launcher=lambda *a:None)
     row=queue.load(two['job_ref'])
     config.write_text('[scan.input]\nmax_files=11')
     seen=[]
@@ -137,7 +137,7 @@ def test_queue_snapshot_and_capacity_changes(tmp_path, config):
         seen.append(section('scan','input')['max_files'])
         return dict(scan_id='fake-scan',status='COMPLETE',scanner_runs=[])
     assert run_worker(root,queue.hooks.directory,row['job_ref'],row['ticket'],
-                      application_factory=lambda row:SimpleNamespace(scan_project=scan)) == 0
+                      application_factory=lambda row:SimpleNamespace(scan_files=scan)) == 0
     assert seen == [9]
     assert len(queue.listing()['jobs']) == 2
 

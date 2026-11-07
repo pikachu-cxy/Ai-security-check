@@ -13,7 +13,7 @@ def check(event, *, hooks=None):
         return {}
     from .storage import SQLiteStore
     from .hook_state import HookStateStore, identity, no_links
-    from .development_stop import interrupted_notice
+    from .development_recovery import resume
     from .tasks.ownership import session_owner
     root = Path(root)
     no_links(root)
@@ -22,10 +22,10 @@ def check(event, *, hooks=None):
     # Never admit a workspace, create a key, or infer a different owner.
     if not directory.is_dir():
         return {}
-    notice = interrupted_notice(hooks or HookStateStore(directory), root, session_owner('codex', session))
+    notice = resume(hooks or HookStateStore(directory), root, session_owner('codex', session))
     if not notice:
         return {}
-    message = '此前开发的安全检查未完成交接；本次仅恢复原检查提示，没有启动新扫描。'
+    message = '正在恢复此前开发的安全检查，沿用原检查编号和已保存结果。'
     return dict(systemMessage=message, hookSpecificOutput=dict(hookEventName='UserPromptSubmit',
         additionalContext=message + '\n' + notice['reason']))
 

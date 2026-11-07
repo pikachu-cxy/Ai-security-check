@@ -23,7 +23,8 @@ def recover_once(hooks, root, *, launcher=None):
         return False
     worker = store.read('$worker')
     if worker and worker.get('lease_until', 0) > store.now():
-        return True
+        if not retire_dead_worker(store, worker, rows):
+            return True
     eligible = [r for r in rows if r.get('launch_retry_seq') != r['dirty_seq']
                 or r.get('launch_retry_at', 0) <= store.now()]
     if not eligible:
@@ -46,6 +47,47 @@ def recover_once(hooks, root, *, launcher=None):
                 current = store._put(db, row['check_ref'], dict(row, **changes))
                 if current['state'] == 'FAILED':
                     publish(store, db, dict(current, scanned_seq=row['dirty_seq'], scan_id=None, result=None))
+    return True
+
+
+def retire_dead_worker(store, worker, rows):
+    """Only a definitively absent PID may shortcut a lease; unknown stays live.
+
+    A reused PID is conservatively live. Never signal/kill a process. This check
+    runs in recovery/supervision, not the normal scanning or Stop caller.
+    """
+    import os
+    pids = {r.get('worker_pid') for r in rows if r.get('worker_ticket') == worker.get('ticket')}
+    if len(pids) != 1:
+        return False
+    pid = pids.pop()
+    if type(pid) is not int or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return False
+    except ProcessLookupError:
+        pass
+    except OSError:
+        return False
+    with store.transaction() as db:
+        current = store._get(db, '$worker')
+        if current != worker:
+            return False
+        store._put(db, '$worker', dict(current, lease_until=0))
+    # Only release the attempt belonging to this dead worker's recorded batch.
+    from .scan_attempt import ScanAttemptStore, AttemptLease
+    attempts = ScanAttemptStore(store.hooks, store.root)
+    with store.hooks.lock(store.root, wait_seconds=0) as acquired:
+        if acquired:
+            lane = attempts.read().get('lane') or {}
+            owned = any(r['check_ref'] == lane.get('scope_key') and r['owner'] == lane.get('owner')
+                        for r in rows if r.get('worker_ticket') == worker['ticket'])
+            if owned and lane.get('state') == 'ACTIVE':
+                attempts.retire(AttemptLease(**{k: lane[k] for k in
+                    ('attempt_id', 'generation', 'lease_owner', 'cancel_generation')}))
+    from .development_check_worker import _release_capacity
+    _release_capacity(store.hooks, worker['ticket'], dispatch=False)
     return True
 
 

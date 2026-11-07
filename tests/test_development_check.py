@@ -228,7 +228,7 @@ def test_unknown_and_deleted_scope_never_expand_to_project(check, monkeypatch):
     assert 'UNOBSERVED_PATHS_POSSIBLE' in result['observation_notes']
     assert 'UNOBSERVED_PATHS_POSSIBLE' not in result['gaps']
     assert 'DELETED_PATH_SEMANTICS_NOT_REVIEWED' in result['gaps']
-    assert 'OBSERVED_FILES_NOT_SCANNED' in result['gaps']
+    assert 'node_modules/skip.ts' not in result['scope']['paths']
     assert all('unobserved.ts' not in names for names in state['inputs'])
 
 

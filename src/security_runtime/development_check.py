@@ -72,6 +72,13 @@ def product_total_wait_seconds():
     return seconds
 
 
+def native_wait_seconds(row):
+    """One effective host budget; never extend the existing native Stop wait."""
+    from .user_config import batch_config
+    options = batch_config(row)['development']['stop_fallback']
+    return min(options['native_wait_seconds'], options['wait_timeout_seconds'], product_wait_seconds())
+
+
 def workspace_root(value):
     root = Path(value).absolute()
     no_links(root)
@@ -217,7 +224,7 @@ class DevelopmentCheckStore(SignedRecords):
             # Never reset an in-flight batch: its newer edits still need checking.
             row = dict(row, effective_config=snapshot(), observed_paths=[],
                 explicit_paths=[], observed_directories=[], scope_unknown=False,
-                scope_capacity_exceeded=False)
+                scope_capacity_exceeded=False, file_watch_gaps=[])
         selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
         protected = sorted((set(row.get('explicit_paths', [])) | (set(paths) if explicit else set())) & set(selected))
         row = dict(row, observed_paths=selected, explicit_paths=protected,
@@ -429,16 +436,21 @@ class DevelopmentCheckService:
         return projection(store, store.load(check_ref, self.owner))
 
     @timed('check.finish')
-    def finish(self, root, check_ref):
+    def finish(self, root, check_ref, *, recovery_seq=None):
         new_submission = False
         total_budget = product_total_wait_seconds()
         store = self.store(root)
-        store.load(check_ref, self.owner)
+        original = store.load(check_ref, self.owner)
+        if recovery_seq is not None and original['dirty_seq'] != recovery_seq:
+            return projection(store, original)
         from .development_file_watch import stop_window
         with span('check.watch_drain'):
             stop_window(store, check_ref, self.owner)
         with store.transaction() as db:
             row = store._get(db, check_ref)
+            if (recovery_seq is not None and row['dirty_seq'] != recovery_seq
+                    and row.get('stop_activity') != original.get('stop_activity')):
+                return projection(store, row)
             selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
             if row['state'] in {'OPEN', 'DIRTY'}:
                 from .development_scope import separate_directories
@@ -685,10 +697,19 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
         row = store._get(db, focus['check_ref']) if focus else None
         if row and (row.get('owner') != owner or row.get('root_identity') != root_identity(store.root)):
             raise ValueError('DEVELOPMENT_CHECK_UNAVAILABLE')
+        predecessor = None
+        if (row and row.get('automatic') and turn_id
+                and row.get('stop_activity', {}).get('turn') != hashlib.sha256(turn_id.encode()).hexdigest()
+                and (row.get('stop_closeout_notice') or {}).get('mode') == 'INCOMPLETE'):
+            # Keep an interrupted batch reviewable under its original reference
+            # when the next development turn starts. Do not mix input versions.
+            predecessor, row = row['check_ref'], None
         if row is None:
             store.prune(db)
             ref = 'dc1-'+uuid.uuid4().hex
             row = dict(store.fresh(ref, owner, service.scan_path()), automatic=True)
+            if predecessor:
+                row['previous_closeout_ref'] = predecessor
             store._put(db, key, dict(kind='focus', owner=dict(owner), check_ref=ref))
         row = note_activity(row, turn_id)
         if prepare_only:

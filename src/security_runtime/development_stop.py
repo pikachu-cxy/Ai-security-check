@@ -68,6 +68,17 @@ def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fal
     if not focus:
         return None
     row = store.load(focus['check_ref'], owner)
+    if automatic:
+        # A completed background batch is eligible independently of the edit
+        # turn consumed by the first Stop. No polling, finish or scan here.
+        previous, seen = row, set()
+        while previous and len(seen) < 8 and previous['check_ref'] not in seen:
+            seen.add(previous['check_ref'])
+            notice = saved_handoff(hooks, root, owner, previous, service=service)
+            if notice:
+                return notice
+            predecessor = previous.get('previous_closeout_ref')
+            previous = store.load(predecessor, owner) if predecessor else None
     activity = row.get('stop_activity', {})
     turn = hashlib.sha256(turn_id.encode()).hexdigest() if turn_id else None
     prior_activity = False
@@ -108,8 +119,8 @@ def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fal
     from .development_file_watch import stop_window
     deadline = None
     if automatic:
-        from .development_check import product_wait_seconds
-        deadline = time.monotonic() + min(18, options['wait_timeout_seconds'], product_wait_seconds())
+        from .development_check import native_wait_seconds
+        deadline = time.monotonic() + native_wait_seconds(row)
     draining = row.get('file_watch', {}).get('status') == 'ACTIVE'
     stop_window(store, row['check_ref'], owner, deadline=deadline)
     row = store.load(row['check_ref'], owner)
@@ -244,7 +255,7 @@ def native_closeout(service, root, row, deadline, offered, session_id):
         # A successful review already returns the report; no second report turn.
         with service.store(root).transaction() as db:
             current = service.store(root)._get(db, ref)
-            if current['dirty_seq'] != seq:
+            if current['dirty_seq'] != seq or current.get('stop_review_notice') == [seq, state['scan_id']]:
                 return None
             current['stop_review_notice'] = [seq, state['scan_id']]
             current['stop_closeout_notice'] = dict(seq=seq, scan_id=state['scan_id'], mode='REVIEW')
@@ -275,6 +286,28 @@ def report_notice(service, root, row, state, page, status):
 
 def closeout_message(ref):
     return f"正在整理安全检查结果。（检查编号 {ref}）"
+
+
+def saved_handoff(hooks, root, owner, row, *, service=None):
+    """Promote an incomplete notice once its original result is committed."""
+    marker = row.get('stop_closeout_notice') or {}
+    if marker.get('mode') == 'INCOMPLETE' and marker.get('seq') == row['dirty_seq'] and row['state'] == 'FAILED':
+        service = service or DevelopmentCheckService(None, hooks, owner=owner, scan_path_provider=row['scan_path'])
+        return incomplete_notice(service, root, row['check_ref'], row['dirty_seq'], row, reason='SCAN_RECOVERY_FAILED')
+    if (marker.get('mode') != 'INCOMPLETE' or marker.get('seq') != row['dirty_seq']
+            or row['scanned_seq'] != row['dirty_seq'] or not row.get('scan_id')
+            or row['state'] not in {'RESULTS_READY', 'PARTIAL'}
+            or row.get('risk_import_status', 'AVAILABLE') != 'AVAILABLE'):
+        return None
+    service = service or DevelopmentCheckService(None, hooks, owner=owner,
+                                                 scan_path_provider=row['scan_path'])
+    notice = native_closeout(service, root, row, time.monotonic(), (), None)
+    if notice:
+        return notice
+    # A late zero-candidate result must also replace the earlier unknown result.
+    state = service.get(root, row['check_ref'])
+    page = state.get('development_result')
+    return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE') if page else None
 
 
 def incomplete_notice(service, root, ref, seq, state, *, reason=None):

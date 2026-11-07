@@ -408,7 +408,7 @@
     },
     {
       "path": "src/security_runtime/cli.py",
-      "sha256": "437c801ab74e5df92c3d1986badb7635cd1c3336287512c83123eda3ed3c8f99",
+      "sha256": "6f37eb0c2e2e28a424e9704548c0bf809c37ff44541a232ca8c219b341edab1f",
       "purpose": "",
       "symbols": [
         {
@@ -1101,7 +1101,7 @@
     },
     {
       "path": "src/security_runtime/connection_guard.py",
-      "sha256": "e5a88d96480f6f9088c1e31688ea930c2b9c44acc4921d4a894755e3938581b9",
+      "sha256": "395289cbe3a149677c505fce1c4ee414fdeef4e27d1ea9a5a9e6fccd83de1a31",
       "purpose": "Independent next-prompt recovery of signed, same-session unfinished edits.",
       "symbols": [
         {
@@ -2338,7 +2338,7 @@
     },
     {
       "path": "src/security_runtime/development_check.py",
-      "sha256": "106b8966d7449f31945306273261d53fede500e7d5131cf7494b156c1750abe1",
+      "sha256": "c8ecf52a095ecae55187f4b42c2e48a36c7e61c1ed415fe2958ce7b5f83716c0",
       "purpose": "Observed-file development checks, without a before-edit workspace baseline.",
       "symbols": [
         {
@@ -2354,134 +2354,138 @@
           "line": 64
         },
         {
-          "name": "workspace_root",
+          "name": "native_wait_seconds",
           "line": 75
         },
         {
+          "name": "workspace_root",
+          "line": 82
+        },
+        {
           "name": "root_identity",
-          "line": 84
+          "line": 91
         },
         {
           "name": "owner_key",
-          "line": 90
+          "line": 97
         },
         {
           "name": "clean_paths",
-          "line": 96
+          "line": 103
         },
         {
           "name": "DevelopmentCheckStore",
-          "line": 125
+          "line": 132
         },
         {
           "name": "DevelopmentCheckStore.__init__",
-          "line": 131
+          "line": 138
         },
         {
           "name": "DevelopmentCheckStore._all",
-          "line": 134
+          "line": 141
         },
         {
           "name": "DevelopmentCheckStore._put",
-          "line": 144
+          "line": 151
         },
         {
           "name": "DevelopmentCheckStore.load",
-          "line": 157
+          "line": 164
         },
         {
           "name": "DevelopmentCheckStore.fresh",
-          "line": 169
+          "line": 176
         },
         {
           "name": "DevelopmentCheckStore.prune",
-          "line": 181
+          "line": 188
         },
         {
           "name": "DevelopmentCheckStore.append",
-          "line": 201
+          "line": 208
         },
         {
           "name": "legacy_guard",
-          "line": 235
+          "line": 242
         },
         {
           "name": "projection",
-          "line": 256
+          "line": 263
         },
         {
           "name": "DevelopmentCheckService",
-          "line": 327
+          "line": 334
         },
         {
           "name": "DevelopmentCheckService.__init__",
-          "line": 328
-        },
-        {
-          "name": "DevelopmentCheckService.store",
           "line": 335
         },
         {
+          "name": "DevelopmentCheckService.store",
+          "line": 342
+        },
+        {
           "name": "DevelopmentCheckService._prewarm",
-          "line": 338
+          "line": 345
         },
         {
           "name": "DevelopmentCheckService.scan_path",
-          "line": 344
-        },
-        {
-          "name": "DevelopmentCheckService._wake",
           "line": 351
         },
         {
+          "name": "DevelopmentCheckService._wake",
+          "line": 358
+        },
+        {
           "name": "DevelopmentCheckService.begin",
-          "line": 369
+          "line": 376
         },
         {
           "name": "DevelopmentCheckService.record",
-          "line": 403
+          "line": 410
         },
         {
           "name": "DevelopmentCheckService.declare_outputs",
-          "line": 414
+          "line": 421
         },
         {
           "name": "DevelopmentCheckService.finish",
-          "line": 432
+          "line": 439
         },
         {
           "name": "DevelopmentCheckService.finish_and_wait",
-          "line": 473
+          "line": 485
         },
         {
           "name": "DevelopmentCheckService.complete",
-          "line": 482
+          "line": 494
         },
         {
           "name": "DevelopmentCheckService.wait_saved",
-          "line": 493
+          "line": 505
         },
         {
           "name": "DevelopmentCheckService.deliveries",
-          "line": 538
+          "line": 550
         },
         {
           "name": "DevelopmentCheckService.saved_result",
-          "line": 547
+          "line": 559
         },
         {
           "name": "DevelopmentCheckService.get",
-          "line": 573
+          "line": 585
         },
         {
           "name": "record_hook",
-          "line": 645
+          "line": 657
         }
       ]
     },
     {
       "path": "src/security_runtime/development_check_worker.py",
-      "sha256": "02ce8c9dc63f00d6365deac92d331ca9d5a46e404adb090d0d0b16b4373d0eb8",
+      "sha256": "453863d37bdb05f91b9b0ff0d89deac86055942e5d6dee2757a7bf97b4f3c798",
       "purpose": "Detached, coalescing observed-file checks. Never scans a project inventory.",
       "symbols": [
         {
@@ -2497,54 +2501,62 @@
           "line": 83
         },
         {
-          "name": "_capacity",
+          "name": "retryable",
           "line": 88
         },
         {
-          "name": "_pending_key",
-          "line": 99
+          "name": "saved_scan",
+          "line": 96
         },
         {
-          "name": "_reserve",
-          "line": 103
-        },
-        {
-          "name": "_renew_capacity",
-          "line": 121
-        },
-        {
-          "name": "_release_capacity",
+          "name": "_capacity",
           "line": 135
         },
         {
+          "name": "_pending_key",
+          "line": 146
+        },
+        {
+          "name": "_reserve",
+          "line": 150
+        },
+        {
+          "name": "_renew_capacity",
+          "line": 168
+        },
+        {
+          "name": "_release_capacity",
+          "line": 182
+        },
+        {
           "name": "launch_worker",
-          "line": 155
+          "line": 202
         },
         {
           "name": "_valid_worker",
-          "line": 199
+          "line": 246
         },
         {
           "name": "_heartbeat",
-          "line": 205
+          "line": 252
         },
         {
           "name": "_scan",
-          "line": 220
+          "line": 267
         },
         {
           "name": "run_worker",
-          "line": 324
+          "line": 371
         },
         {
           "name": "main",
-          "line": 478
+          "line": 528
         }
       ]
     },
     {
       "path": "src/security_runtime/development_continuation.py",
-      "sha256": "9966145de2a68c67dd967807427a660f87dd0939ba25d4c40b173c961bda2ff3",
+      "sha256": "e5ef06b2950de5b7c3705e2e4e1af576fbec2d8635b88e6e10cb56cd81e71667",
       "purpose": "Bounded owner-bound delivery hints; no scan or authenticated display claim.",
       "symbols": [
         {
@@ -2571,7 +2583,7 @@
     },
     {
       "path": "src/security_runtime/development_delivery.py",
-      "sha256": "4338fb9e06e5e7a501b3cf9d488b4de5212f91e8cb9676ddd079db8b544d8fb6",
+      "sha256": "379e364c93bc01fd1e727b52b74b3fbcde5615e3ba9f7cfbcf978eddf94ece04",
       "purpose": "Durable, version-bound outbox. Reading is not report delivery or consent.",
       "symbols": [
         {
@@ -2584,15 +2596,15 @@
         },
         {
           "name": "pending",
-          "line": 39
+          "line": 40
         },
         {
           "name": "facts",
-          "line": 48
+          "line": 49
         },
         {
           "name": "acknowledge",
-          "line": 63
+          "line": 64
         }
       ]
     },
@@ -2656,6 +2668,29 @@
         {
           "name": "_shutdown",
           "line": 280
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/development_recovery.py",
+      "sha256": "ab30b18d79e8b07efdc8daa4eeae9ba31018600d2d2986aac72adceb34c2dd13",
+      "purpose": "Recover an existing native edit batch, outside the normal scan/Stop path.",
+      "symbols": [
+        {
+          "name": "eligible",
+          "line": 15
+        },
+        {
+          "name": "resume",
+          "line": 22
+        },
+        {
+          "name": "launch_recovery",
+          "line": 79
+        },
+        {
+          "name": "run",
+          "line": 92
         }
       ]
     },
@@ -2822,7 +2857,7 @@
     },
     {
       "path": "src/security_runtime/development_scheduler.py",
-      "sha256": "26db637e12aead0250f633874c5693c9099799fa11adc25095a986a2ef6fa856",
+      "sha256": "577e6a5ccb815ffd601675e430bef3300691b052d36edbd3fcb1f3e5a353a6ee",
       "purpose": "Live product supervisor for previously submitted observed-file checks only.",
       "symbols": [
         {
@@ -2830,8 +2865,12 @@
           "line": 14
         },
         {
+          "name": "retire_dead_worker",
+          "line": 53
+        },
+        {
           "name": "supervise",
-          "line": 52
+          "line": 94
         }
       ]
     },
@@ -2864,7 +2903,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "3e9c926b85d7b39ecc70ded32f3d4591691769e1b6a986d1363cfb7f992f6cf5",
+      "sha256": "72a4f593cd7d9ae8107ad124f8a7faad5c90d478e914a1274433740122fa39d9",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -2881,29 +2920,33 @@
         },
         {
           "name": "native_closeout",
-          "line": 216
+          "line": 227
         },
         {
           "name": "report_notice",
-          "line": 257
+          "line": 268
         },
         {
           "name": "closeout_message",
-          "line": 276
+          "line": 287
+        },
+        {
+          "name": "saved_handoff",
+          "line": 291
         },
         {
           "name": "incomplete_notice",
-          "line": 280
+          "line": 313
         },
         {
           "name": "review_handoff",
-          "line": 297
+          "line": 330
         }
       ]
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "6bece7fe744a3418089f607e2b9c2007e08998df1bdbae97f43ffd329d296ff2",
+      "sha256": "ebb8cc8846f43dc777d910f09403947d13289b1d02995e4855b8882949b2c54a",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -2936,15 +2979,15 @@
         },
         {
           "name": "final_report_receipt",
-          "line": 273
+          "line": 275
         },
         {
           "name": "review_receipt",
-          "line": 290
+          "line": 292
         },
         {
           "name": "closeout_page",
-          "line": 301
+          "line": 303
         }
       ]
     },
@@ -12102,7 +12145,7 @@
     },
     {
       "path": "src/security_runtime/storage.py",
-      "sha256": "c311bfed5edc7458bd55540a59cc272a85a69fd8afb3e22791a3579fb9145f86",
+      "sha256": "7dcd3e2f1f9db6262b086ee4021c7a86b647183fbcd77f8a8dedea74ed471d17",
       "purpose": "",
       "symbols": [
         {
@@ -12214,32 +12257,36 @@
           "line": 181
         },
         {
-          "name": "ReadOnlySQLiteStore.finding_scope_snapshot",
+          "name": "ReadOnlySQLiteStore.scan_for_attempt",
           "line": 185
         },
         {
+          "name": "ReadOnlySQLiteStore.finding_scope_snapshot",
+          "line": 193
+        },
+        {
           "name": "ReadOnlySQLiteStore.equivalent_finding_references",
-          "line": 191
+          "line": 199
         },
         {
           "name": "ReadOnlySQLiteStore.latest_scan",
-          "line": 212
+          "line": 220
         },
         {
           "name": "ReadOnlySQLiteStore.triage_records",
-          "line": 226
+          "line": 234
         },
         {
           "name": "ReadOnlySQLiteStore.finding_reviews",
-          "line": 230
+          "line": 238
         },
         {
           "name": "ReadOnlySQLiteStore.finding_review_history",
-          "line": 236
+          "line": 244
         },
         {
           "name": "ReadOnlySQLiteStore.evidence_key",
-          "line": 247
+          "line": 255
         }
       ]
     },
@@ -16699,7 +16746,7 @@
     },
     {
       "path": "src/security_runtime/user_config.py",
-      "sha256": "b90d1b9ab86e717ccbe9f583b5f1a96787f1c4c2c7ad5f3d26862ef6070edc4a",
+      "sha256": "52723b000721a028ce276cc2d6586095a23bcf612337d5740593ce60d02e1e55",
       "purpose": "User-owned product preferences, independent of project source and install versions.",
       "symbols": [
         {
@@ -16728,11 +16775,11 @@
         },
         {
           "name": "validate_preferences",
-          "line": 110
+          "line": 112
         },
         {
           "name": "save_config",
-          "line": 139
+          "line": 147
         }
       ]
     },

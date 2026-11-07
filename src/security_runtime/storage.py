@@ -182,6 +182,14 @@ class ReadOnlySQLiteStore:
         rows = self._rows('scans', 'SELECT data FROM scans WHERE id=?', (scan_id,))
         return json.loads(rows[0][0]) if rows else None
 
+    def scan_for_attempt(self, attempt_id):
+        """Recovery-only lookup; another completed job may be newer already."""
+        rows = self._rows('scans', "SELECT data FROM scans WHERE "
+            "json_extract(data, '$.scan_context.execution_attempt.attempt_id')=? LIMIT 2", (attempt_id,))
+        if len(rows) > 1:
+            raise ValueError('SCAN_ATTEMPT_RESULT_AMBIGUOUS')
+        return json.loads(rows[0][0]) if rows else None
+
     def finding_scope_snapshot(self, scan_id, finding_id):
         rows = self._rows('finding_scope_snapshots',
             'SELECT data FROM finding_scope_snapshots WHERE scan_id=? AND finding_id=?',

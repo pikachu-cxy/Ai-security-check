@@ -249,6 +249,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     sub.add_parser('connection-diagnostics', help='Read bounded MCP connection exit diagnostics as JSON; never scans')
     guard_parser = sub.add_parser('connection-guard', help=argparse.SUPPRESS)
     guard_parser.add_argument('--state-dir', type=Path, required=True)
+    recovery_parser = sub.add_parser('development-recover', help=argparse.SUPPRESS)
+    for flag in ('workspace', 'hooks', 'check-ref', 'ticket'):
+        recovery_parser.add_argument('--' + flag, required=True)
     mcp_parser = sub.add_parser("mcp", help="Run or configure the MCP server")
     mcp_sub = mcp_parser.add_subparsers(dest="mcp_action")
     config_parser = mcp_sub.add_parser("config")
@@ -414,6 +417,9 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
             from .connection_guard import main as guard_main
             guard_main()
             return 0
+        if args.command == 'development-recover':
+            from .development_recovery import run
+            return run(Path(args.workspace), Path(args.hooks), args.check_ref, args.ticket)
         if args.command == 'integration' and args.fast:
             if args.action != 'status' or args.scope != 'global' or args.integration != 'codex':
                 raise ValueError('FAST_STATUS_REQUIRES_GLOBAL_CODEX_STATUS')

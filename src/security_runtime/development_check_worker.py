@@ -85,6 +85,53 @@ class DevelopmentScanFailure(Exception):
         self.diagnostic = diagnostic
 
 
+def retryable(diagnostic):
+    # Unknown/transient failures retain the bounded retry budget. Deterministic
+    # input/configuration failures cannot improve by repeating identical work.
+    return diagnostic.get('exception_type') not in {'ValueError', 'PermissionError', 'ScanInputError'} and not (
+        diagnostic.get('exception_type') == 'FileNotFoundError'
+        and diagnostic.get('stage') in {'RUNTIME_PREPARATION', 'RULE_PLANNING'})
+
+
+def saved_scan(queue, row):
+    """Exception-path reconciliation of a committed engine result, no scanner."""
+    from .scan_attempt import ScanAttemptStore, source_binding
+    from .storage import ReadOnlySQLiteStore
+    lane = ScanAttemptStore(queue.hooks, queue.root).read().get('lane') or {}
+    binding = source_binding(dict(contract=row['contract'], check_ref=row['check_ref'],
+        dirty_seq=row['dirty_seq'], observed_paths=row['observed_paths']))
+    if (lane.get('state') not in {'COMPLETED', 'FAILED'} or lane.get('kind') != 'HOOK'
+            or lane.get('scope_key') != row['check_ref'] or lane.get('owner') != row['owner']
+            or lane.get('source_binding') != binding):
+        return None
+    saved = ReadOnlySQLiteStore(Path(row['scan_path']))
+    scan = saved.get_scan(lane['scan_id']) if lane.get('scan_id') else saved.scan_for_attempt(lane['attempt_id'])
+    receipt = (scan or {}).get('scan_context', {}).get('execution_attempt', {})
+    if not lane.get('scan_id') and (not scan or any(receipt.get(k) != lane.get(k)
+            for k in ('attempt_id', 'generation', 'cancel_generation', 'input_id', 'source_revision'))):
+        return None
+    if not scan:
+        raise DevelopmentScanFailure(dict(stage='RESULT_PUBLICATION',
+            exception_type='ValueError', reason_code='SAVED_SCAN_UNAVAILABLE'))
+    actual = set(scan.get('scan_context', {}).get('input_files', []))
+    excluded = sorted(set(row['observed_paths'])-actual)
+    gaps = []
+    if excluded:
+        gaps.append('OBSERVED_FILES_NOT_SCANNED')
+    if row.get('scope_capacity_exceeded'):
+        gaps.append('OBSERVED_PATH_CAPACITY_EXCEEDED')
+    if scan['status'] != 'COMPLETED' or any(v not in {'EXECUTED', 'NOT_APPLICABLE'}
+            for v in scan.get('capability_results', {}).values()):
+        gaps.append('SCANNER_COVERAGE_LIMITED')
+    return dict(scan_id=scan['scan_id'], status=scan['status'], coverage=scan['coverage'], gaps=gaps,
+        absent_paths=[], excluded_paths=excluded,
+        generated_outputs=dict(declared_roots=row.get('generated_output_roots', []),
+                               excluded_paths=[], protected_paths=[], gaps=[]),
+        execution=dict(publication='COMMITTED', recovered_saved_result=True,
+            source_applicability='CAPTURED', scanner_run=False, host_review_completed=False,
+            repair_authorized=False, timing=dict(scan_ms=scan['duration_ms'])))
+
+
 def _capacity(hooks):
     # The existing input parent already normalizes the supported global layout.
     from .scan_attempt import _input_parent
@@ -378,7 +425,7 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                         # Older resident MCP processes do not clear the new
                         # fields on append. Bind quotas in the worker as well.
                         row = dict(row, attempt_count=0, busy_attempts=0, next_attempt_at=0)
-                    if row.get('attempt_count', 0) >= MAX_SCAN_ATTEMPTS:
+                    if row.get('attempt_count', 0) >= MAX_SCAN_ATTEMPTS and saved_scan(queue, row) is None:
                         from .development_delivery import publish
                         failed = queue._put(db, row['check_ref'], dict(row, state='FAILED',
                             failed_seq=row['dirty_seq'], reason_code='DEVELOPMENT_RETRIES_EXHAUSTED'))
@@ -386,7 +433,8 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                         continue
                     row = queue._put(db, row['check_ref'], dict(row, state='RUNNING',
                         attempted_seq=row['dirty_seq'], attempt_count=row.get('attempt_count', 0)+1,
-                        retry_seq=row['dirty_seq'], failed_seq=None, worker_ticket=ticket, reason_code=None))
+                        retry_seq=row['dirty_seq'], failed_seq=None, worker_ticket=ticket,
+                        worker_pid=os.getpid(), reason_code=None))
                 if not row['observed_paths']:
                     with queue.transaction() as db:
                         current = queue._get(db, row['check_ref'])
@@ -398,7 +446,9 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                             scan_id=None, result=None, reason_code='DEVELOPMENT_SCOPE_UNKNOWN'))
                     continue
                 try:
-                    result = _scan(queue, row, ticket, runtime_factory)
+                    result = saved_scan(queue, row) if row['attempt_count'] > 1 else None
+                    if result is None:
+                        result = _scan(queue, row, ticket, runtime_factory)
                 except Exception as error:
                     diagnostic = (error.diagnostic if isinstance(error, DevelopmentScanFailure)
                                   else failure_diagnostic(error))
@@ -406,7 +456,7 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
                         current = queue._get(db, row['check_ref'])
                         newer = current['dirty_seq'] > row['dirty_seq']
                         state = (('QUEUED' if current['finish_requested'] else 'DIRTY') if newer else
-                                 'QUEUED' if row['attempt_count'] < MAX_SCAN_ATTEMPTS else 'FAILED')
+                                 'QUEUED' if retryable(diagnostic) and row['attempt_count'] < MAX_SCAN_ATTEMPTS else 'FAILED')
                         failed = queue._put(db, row['check_ref'], dict(current, state=state,
                             failed_seq=row['dirty_seq'] if state == 'FAILED' else None,
                             next_attempt_at=current.get('next_attempt_at', 0) if newer else
