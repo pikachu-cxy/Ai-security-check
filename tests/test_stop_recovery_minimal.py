@@ -9,6 +9,55 @@ from security_runtime.development_check import record_hook
 from security_runtime.development_stop import fallback
 
 
+def test_reconnect_reports_only_same_owner_interrupted_native_edit_once(check, config):
+    from security_runtime.development_continuation import context
+    root, service, _, counters = check
+    record_hook(service.hooks, root, OWNER, ['app.ts'], turn_id='interrupted')
+    store = service.store(root)
+    from security_runtime.development_check import owner_key
+    ref = store.read('focus:' + owner_key(OWNER))['check_ref']
+    before = store.load(ref)
+    assert context(service.hooks, root, dict(OWNER, session='2'*64)) == ''
+    message = context(service.hooks, root, OWNER)
+    assert message == f'正在整理安全检查结果。（检查编号 {ref}）'
+    assert context(service.hooks, root, OWNER) == ''
+    after = store.load(ref)
+    assert (after['dirty_seq'], after['scan_id'], after['finish_requested']) == (
+        before['dirty_seq'], before['scan_id'], before['finish_requested'])
+    assert after['stop_activity'] == before['stop_activity'] and counters['calls'] == 0
+    assert after['stop_closeout_notice']['reason'] == 'STOP_HANDOFF_INTERRUPTED'
+
+
+@pytest.mark.parametrize('failure', [ValueError, OSError, RuntimeError])
+def test_native_closeout_exception_hands_off_once_without_retry(check, config, monkeypatch, failure):
+    root, service, _, counters = check
+    record_hook(service.hooks, root, OWNER, ['app.ts'], turn_id='edit')
+    calls = []
+    def broken(*args, **kwargs):
+        calls.append(1)
+        raise failure('private-detail-must-not-escape')
+    monkeypatch.setattr('security_runtime.development_stop.native_closeout', broken)
+    value = fallback(service.hooks, root, OWNER, service=service, turn_id='edit', automatic=True)
+    assert value['decision'] == 'block' and value['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    row = service.store(root).load(value['check_ref'])
+    assert row['stop_closeout_notice']['reason'] == 'STOP_CLOSEOUT_FAILED'
+    assert 'private-detail' not in str(value) + str(row)
+    assert fallback(service.hooks, root, OWNER, service=service, turn_id='edit', automatic=True) is None
+    assert calls == [1] and counters['calls'] == 0
+
+
+@pytest.mark.parametrize('scenario', ['readonly', 'manual'])
+def test_reconnect_readonly_activity_and_manual_check_stay_quiet(check, config, scenario):
+    from security_runtime.development_continuation import context
+    root, service, _, _ = check
+    if scenario == 'readonly':
+        record_hook(service.hooks, root, OWNER, prepare_only=True, turn_id='readonly')
+    else:
+        ref = service.begin(root, 'manual')['check_ref']
+        service.record(root, ref, ['app.ts'])
+    assert context(service.hooks, root, OWNER) == ''
+
+
 def test_old_check_and_different_readonly_turn_are_quiet(check, config):
     root, service, _, _ = check
     ref = service.begin(root, 'old')['check_ref']

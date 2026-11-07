@@ -4,6 +4,7 @@
 
 | 需求或现象 | 优先查看代码 | 应核对的测试或资源 |
 | --- | --- | --- |
+| Stop 静默遗漏、同会话重连恢复、诊断被工具流量覆盖 | `development_stop.py:interrupted_notice`、`development_continuation.py:context`、`global_mcp.py`、`development_views.py:closeout_page`、`recent_hooks.py` | `test_stop_recovery_minimal.py`、`test_development_delivery_mcp.py`、`test_recent_hook_diagnostics.py`；恢复仅报告，不重扫 |
 | CLI 参数、输出或退出码 | `cli.py:main` | `tests/` 中 CLI 与对应领域测试；`pyproject.toml` 命令入口 |
 | 新增或修改 MCP 对外入口/内部操作 | `mcp_tools/`、`mcp_server.py`、`mcp_tool_groups.py`、`mcp_contracts.py` | `tests/test_mcp_tool_groups.py`；具体领域 MCP 测试；重建 MCP 目录 |
 | 字段报错、复核提交结构 | `development_risks.py` 的输入模型与 `review_input_failure`、`mcp_contracts.py` | `tests/test_development_risks.py`、`tests/test_mcp_tool_groups.py` |

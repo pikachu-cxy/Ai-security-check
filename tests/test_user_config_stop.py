@@ -189,7 +189,7 @@ def test_codex_native_stop_timeout_notifies_without_agent_poll(development_serve
         workspace_path=str(root), session_id='delivery-session', stop_hook_active=False, turn_id='turn')))
     assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
     wire = json.loads(response.content[0].text)
-    assert 'decision' not in wire and ref in wire['systemMessage']
+    assert wire['decision'] == 'block' and ref in wire['reason']
     assert len(launches) == 1
     assert call(server, 'get_development_check', workspace_path=str(root), check_ref=ref,
                 session_ref=token)['finish_requested']
@@ -545,11 +545,14 @@ def test_native_handoff_issues_evidence_and_consumes_edit_round(check, config, m
     args = dict(service=service, turn_id='turn', automatic=True)
     result = fallback(service.hooks, root, OWNER, **args)
     reason = result['reason']
-    assert result['decision'] == 'block' and '安全检查待复核' in reason and ref in reason
+    assert result['decision'] == 'block' and reason == f'正在整理安全检查结果。（检查编号 {ref}）'
     assert all(value not in reason for value in ('{', 'eval(', 'scan_id', 'submit_development_review'))
     ledger = DevelopmentRisks(service, root, ref)
+    from security_runtime.development_views import closeout_page
+    page = closeout_page(ledger, 0, 20)
+    assert page['closeout_mode'] == 'REVIEW'
+    assert len(page['candidates']) == 1 and page['evidence']
     page = ledger.get()
-    assert f"版本 {page['dirty_seq']}" in reason
     assert len(page['review_progress']['pending_scanner_ids']) == 1
     assert page['review_progress']['pending_business_paths'] == (['app.ts'] if business else [])
     assert 'eval(userInput)' in ledger.read('app.ts', 1, 1)['content']

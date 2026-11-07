@@ -12,6 +12,53 @@ from .development_reporting import INSTRUCTIONS, reporting
 
 def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=False,
              service=None, offered=(), turn_id=None, automatic=False, session_id=None):
+    try:
+        return _fallback(hooks, root, owner, stopped_normally=stopped_normally,
+            stop_hook_active=stop_hook_active, service=service, offered=offered,
+            turn_id=turn_id, automatic=automatic, session_id=session_id)
+    except Exception:
+        if not automatic or not stopped_normally:
+            raise
+        # An exception after consuming eligibility must not silently lose the
+        # handoff. Read the same signed owner/turn; never restart the scanner.
+        notice = interrupted_notice(hooks, root, owner, turn_id=turn_id,
+                                    reason='STOP_CLOSEOUT_FAILED', service=service)
+        if notice is None:
+            raise
+        return notice
+
+
+def interrupted_notice(hooks, root, owner, *, turn_id=None,
+                       reason='STOP_HANDOFF_INTERRUPTED', service=None):
+    if owner.get('host') != 'codex':
+        return None
+    store = DevelopmentCheckStore(hooks, root)
+    if not store.path.exists():
+        return None
+    focus = store.read('focus:' + owner_key(owner))
+    if not focus:
+        return None
+    row = store.load(focus['check_ref'], owner)
+    if not row.get('effective_config') or not batch_config(row)['development']['stop_fallback']['enabled']:
+        return None
+    turn = hashlib.sha256(turn_id.encode()).hexdigest() if turn_id else None
+    activities = [row.get('stop_activity', {}), *row.get('stop_activity_previous', ())]
+    if not any((a.get('turn') == turn if turn is not None else a.get('pending') and a.get('turn'))
+               and row['dirty_seq'] > a.get('base_seq', row['dirty_seq']) for a in activities):
+        return None
+    if row['scanned_seq'] == row['dirty_seq'] and reason != 'STOP_CLOSEOUT_FAILED':
+        return None
+    # A saved handoff for this input already exists. Reopening a chat is not
+    # permission to repeat its report or claim the user has read it.
+    if (row.get('stop_closeout_notice') or {}).get('seq') == row['dirty_seq']:
+        return None
+    service = service or DevelopmentCheckService(None, hooks, owner=owner,
+                                                 scan_path_provider=row['scan_path'])
+    return incomplete_notice(service, root, row['check_ref'], row['dirty_seq'], row, reason=reason)
+
+
+def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=False,
+              service=None, offered=(), turn_id=None, automatic=False, session_id=None):
     if not stopped_normally or owner.get('host') not in {'codex', 'cursor', 'workbuddy'}:
         return None
     store = DevelopmentCheckStore(hooks, root)
@@ -230,7 +277,7 @@ def closeout_message(ref):
     return f"正在整理安全检查结果。（检查编号 {ref}）"
 
 
-def incomplete_notice(service, root, ref, seq, state):
+def incomplete_notice(service, root, ref, seq, state, *, reason=None):
     if service.owner['host'] != 'codex':
         return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref,
                     systemMessage=closeout_message(ref))
@@ -238,6 +285,8 @@ def incomplete_notice(service, root, ref, seq, state):
     with store.transaction() as db:
         current = store._get(db, ref)
         marker = dict(seq=seq, scan_id=current.get('scan_id'), mode='INCOMPLETE')
+        if reason is not None:
+            marker['reason'] = reason
         if current['dirty_seq'] != seq or current.get('stop_closeout_notice') == marker:
             return None
         store._put(db, ref, dict(current, stop_closeout_notice=marker))

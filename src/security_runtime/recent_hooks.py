@@ -18,6 +18,7 @@ from .storage import ReadOnlySQLiteStore, SQLiteStore
 from .hook_observation_contract import ACTIVITY_STATUSES, ACTIVITY_REASONS
 
 RETENTION = 32
+STOP_RETENTION = 4
 TOTAL_RETENTION = 1024
 UNBOUND = hashlib.sha256(b'recent-hook-unbound-v1').hexdigest()
 CLOCK_SCOPE = uuid.uuid4().hex
@@ -39,6 +40,8 @@ STATUS |= {'SESSION_FINALIZED'}
 STATUS |= {'BASELINE_CAPTURED', 'BASELINE_PARTIAL', 'BASELINE_UNAVAILABLE',
            'READ_ONLY_OR_UNSUPPORTED', 'DELIVERED', 'NOT_APPLICABLE', 'FOLLOWUP'}
 STATUS |= {'CLOSEOUT_PENDING', 'CLOSEOUT_REQUIRED', 'ALLOW_STOP_PENDING'}
+STATUS |= {'STOP_REVIEW_REQUIRED', 'STOP_RESULT_NOTICE', 'STOP_AUDIT_PENDING',
+           'STOP_FALLBACK_INCOMPLETE', 'STOP_FALLBACK_UNAVAILABLE'}
 STATUS |= {'CONNECTED', 'DIRTY'} | ACTIVITY_STATUSES
 REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQUIRED',
            'WORKSPACE_OR_REFERENCE_REJECTED', 'WORKSPACE_CLAIM_REQUIRED',
@@ -282,9 +285,16 @@ class RecentHookStore:
                                          (record['workspace_hash'] or UNBOUND, payload, record['diagnostic_id']))
                     if not updated.rowcount:
                         return False  # Evicted in-flight records cannot resurrect.
+                # Reserve four of the existing 32 slots for Stop. Read-only
+                # tools during diagnosis must not immediately erase closeout.
+                # Same transaction and hard capacity; no new diagnostic writes.
+                workspace = record['workspace_hash'] or UNBOUND
                 db.execute('DELETE FROM recent_hook_diagnostics WHERE workspace=? AND sequence NOT IN '
-                           '(SELECT sequence FROM recent_hook_diagnostics WHERE workspace=? ORDER BY sequence DESC LIMIT ?)',
-                           (record['workspace_hash'] or UNBOUND, record['workspace_hash'] or UNBOUND, RETENTION))
+                           '(SELECT sequence FROM recent_hook_diagnostics WHERE workspace=? ORDER BY '
+                           'sequence IN (SELECT sequence FROM recent_hook_diagnostics WHERE workspace=? '
+                           "AND json_extract(data,'$.event') IN ('Stop','stop') ORDER BY sequence DESC LIMIT ?) DESC, "
+                           'sequence DESC LIMIT ?)',
+                           (workspace, workspace, workspace, STOP_RETENTION, RETENTION))
                 db.execute('DELETE FROM recent_hook_diagnostics WHERE sequence NOT IN '
                            '(SELECT sequence FROM recent_hook_diagnostics ORDER BY sequence DESC LIMIT ?)', (TOTAL_RETENTION,))
                 return True

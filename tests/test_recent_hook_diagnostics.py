@@ -31,6 +31,23 @@ def recent(root):
     return RecentHookStore().recent(root)['records']
 
 
+def test_stop_diagnostics_survive_readonly_traffic_within_same_capacity(projects):
+    root = projects[0]
+    for index in range(6):
+        observation = Observation('handle_stop_event', dict(session_id='s'))
+        observation.bind(root)
+        observation.finish(dict(status='STOP_FALLBACK_INCOMPLETE'))
+    for index in range(40):
+        observation = Observation('handle_hook_event', dict(session_id='s'))
+        observation.bind(root)
+        observation.finish(dict(status='NO_CHANGE'))
+    rows = RecentHookStore().recent(root, limit=RETENTION)['records']
+    assert len(rows) == RETENTION
+    stops = [row for row in rows if row['event'] == 'Stop']
+    assert len(stops) == 4
+    assert all(row['handler_status'] == 'STOP_FALLBACK_INCOMPLETE' for row in stops)
+
+
 def test_global_stop_binds_diagnostic_from_single_routing_resolution(connected, projects, monkeypatch):
     server, pool, _ = connected
     root = projects[0]

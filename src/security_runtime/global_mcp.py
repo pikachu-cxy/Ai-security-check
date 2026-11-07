@@ -1015,6 +1015,26 @@ def create_global_server(*, workspaces=None, host='codex'):
                             recovery = configuration_recovery(pool.integration, claim or root, reason=reason)
                         except (ValueError, OSError, TypeError, RecursionError):
                             pass
+            if (name == 'handle_stop_event' and active_host == 'codex'
+                    and arguments.get('turn_id')
+                    and binding_stage in {'VALIDATING_CONFIGURATION', 'ADMITTING_WORKSPACE', 'FORWARDING_TOOL'}
+                    and root in pool.children
+                    and pool.sessions.get(identity(arguments['session_id'])) == root):
+                # Only a previously bound owner and this actual editing turn
+                # can recover a failed handoff. This does not admit a workspace,
+                # bypass configuration checks, or run/retry a scanner.
+                from .development_stop import interrupted_notice
+                from .tasks.ownership import session_owner
+                try:
+                    notice = interrupted_notice(pool.children[root][1].store, root,
+                        session_owner(active_host, arguments['session_id']),
+                        turn_id=arguments.get('turn_id'), reason='STOP_CLOSEOUT_FAILED')
+                except Exception:
+                    notice = None
+                if notice:
+                    return CallToolResult(structuredContent={**claim_diag, **notice},
+                        content=[TextContent(type='text', text=json.dumps(
+                            dict(decision='block', reason=notice['reason']), ensure_ascii=False))])
             return _advisory(reason if reason in allowed else 'WORKSPACE_OR_REFERENCE_REJECTED', claims=claim_diag,
                              recovery=recovery)
 

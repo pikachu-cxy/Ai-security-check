@@ -47,8 +47,11 @@ def test_native_stop_wait_is_bounded_without_fake_delivery(development_server, m
     data = structured(response)
     # Native Stop waits inside the Hook. An unavailable worker is a bounded
     # incomplete notice, not the legacy host-poll continuation.
-    assert data['status'] == 'STOP_FALLBACK_INCOMPLETE' and 'decision' not in data
-    assert ref in json.loads(response.content[0].text)['systemMessage']
+    assert data['status'] == 'STOP_FALLBACK_INCOMPLETE' and data['decision'] == 'block'
+    assert ref in json.loads(response.content[0].text)['reason']
+    page = call(server, 'get_development_risks', workspace_path=str(root), check_ref=ref,
+                session_ref=token, view='closeout')
+    assert page['closeout_mode'] == 'INCOMPLETE' and page['next_action'] is None
     queue = DevelopmentCheckStore(hooks, root)
     with queue.transaction() as db:
         row = queue._get(db, ref)
@@ -85,6 +88,33 @@ def test_global_reconnect_does_not_inject_pending_check_context(audit_pool, proj
     assert ref not in other.content[0].text
 
 
+def test_bound_stop_configuration_failure_reports_current_edit_without_scan(audit_pool, projects, monkeypatch):
+    from test_task_audit_startup import start
+    pool, server, _ = audit_pool
+    root = projects[0]
+    ready = start(server, root, 'interrupted')
+    edit = dict(workspace_path=str(root), session_id='interrupted', turn_id='edit',
+                tool_use_id='edited', tool_name='Write', tool_input={'file_path': str(root/'src/A.java')})
+    response = asyncio.run(server.call_tool('handle_hook_event', dict(edit, event='PostToolUse')))
+    ref = structured(response)['development_check_ref']
+    stop = dict(event='Stop', workspace_path=str(root), session_id='interrupted',
+                turn_id='edit', stop_hook_active=False)
+    validate = pool.validate_layers
+    def unavailable(*args):
+        raise ValueError('GLOBAL_CONFIGURATION_NOT_READY')
+    monkeypatch.setattr(pool, 'validate_layers', unavailable)
+    response = asyncio.run(server.call_tool('handle_stop_event', stop))
+    assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    assert json.loads(response.content[0].text) == dict(decision='block',
+        reason=f'正在整理安全检查结果。（检查编号 {ref}）')
+    monkeypatch.setattr(pool, 'validate_layers', validate)
+    response = asyncio.run(server.call_tool('get_development_risks', dict(
+        workspace_path=str(root), session_ref=ready['task_session_ref'], check_ref=ref, view='closeout')))
+    page = structured(response)
+    assert page['closeout_mode'] == 'INCOMPLETE' and page['next_action'] is None
+    assert 'STOP_CLOSEOUT_FAILED' in page['gaps'] and '收尾处理发生异常' in page['report_text']
+
+
 from test_task_audit_startup import audit_pool  # noqa: E402,F401
 from test_global_integration import installed  # noqa: E402,F401
 
@@ -110,11 +140,13 @@ def test_waiting_offer_only_suppresses_same_pending_batch(development_server, mo
     response = asyncio.run(server.call_tool('handle_stop_event', dict(event='Stop',
         workspace_path=str(root), session_id='delivery-session',
         stop_hook_active=False, turn_id='delivery-turn')))
-    assert structured(response).get('decision') != 'block'
+    assert structured(response).get('decision') == 'block'
     # Synthetic rows here have no completed scan_id. Never invent a report
     # or ask the model to repeat a scan when the native wait has no result.
-    if change != 'unchanged':
-        assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    assert structured(response)['status'] == 'STOP_FALLBACK_INCOMPLETE'
+    page = call(server, 'get_development_risks', workspace_path=str(root), check_ref=ref,
+                session_ref=token, view='closeout')
+    assert page['closeout_mode'] == 'INCOMPLETE' and page['next_action'] is None
     if change == 'unchanged':
         assert len(launches) == 1
         row = call(server, 'get_development_check', workspace_path=str(root),

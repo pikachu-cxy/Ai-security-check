@@ -2463,7 +2463,7 @@
     },
     {
       "path": "src/security_runtime/development_continuation.py",
-      "sha256": "633138ec6647486f46d65ec9a560743852624b2948ef01efb05b12e8ccbfd234",
+      "sha256": "9966145de2a68c67dd967807427a660f87dd0939ba25d4c40b173c961bda2ff3",
       "purpose": "Bounded owner-bound delivery hints; no scan or authenticated display claim.",
       "symbols": [
         {
@@ -2480,11 +2480,11 @@
         },
         {
           "name": "pending_context",
-          "line": 41
+          "line": 43
         },
         {
           "name": "stop",
-          "line": 55
+          "line": 57
         }
       ]
     },
@@ -2783,7 +2783,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "f7ffeeff3d82bdbc395faa470b33cf5901ed7b217b7ca2ada2ff517117737945",
+      "sha256": "3e9c926b85d7b39ecc70ded32f3d4591691769e1b6a986d1363cfb7f992f6cf5",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -2791,30 +2791,38 @@
           "line": 13
         },
         {
+          "name": "interrupted_notice",
+          "line": 31
+        },
+        {
+          "name": "_fallback",
+          "line": 60
+        },
+        {
           "name": "native_closeout",
-          "line": 169
+          "line": 216
         },
         {
           "name": "report_notice",
-          "line": 210
+          "line": 257
         },
         {
           "name": "closeout_message",
-          "line": 229
+          "line": 276
         },
         {
           "name": "incomplete_notice",
-          "line": 233
+          "line": 280
         },
         {
           "name": "review_handoff",
-          "line": 248
+          "line": 297
         }
       ]
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "b2ee2fc42493a1443f6460dff1445d35f50baeed6f2a2186964852ee3416c64a",
+      "sha256": "33375a6bb0e658c23acf54a60b41186c76c40ca0acc2495045647f477316ba19",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -4279,7 +4287,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "db1915310e0ae4aca1c8dbf056944ed46e1873e5ea4692bc94b6f497b62d9d0f",
+      "sha256": "acb185d135998a551de1740cc8a91f1397417ab6a371a076d70352345122ae27",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -8693,88 +8701,88 @@
     },
     {
       "path": "src/security_runtime/recent_hooks.py",
-      "sha256": "7aa1f497cb4a0197729567c901219cd02fe0e94414b054d7eef699fa075f21fa",
+      "sha256": "d9637e207566f69e0e9fe142f3fac107d1672e5b9329d65b716100ccb1774323",
       "purpose": "Bounded, non-authoritative Hook observations; never a security proof store.",
       "symbols": [
         {
           "name": "workspace_hash",
-          "line": 88
+          "line": 91
         },
         {
           "name": "safe_fields",
-          "line": 92
+          "line": 95
         },
         {
           "name": "RecentHookStore",
-          "line": 219
+          "line": 222
         },
         {
           "name": "RecentHookStore.__init__",
-          "line": 220
+          "line": 223
         },
         {
           "name": "RecentHookStore.path",
-          "line": 226
+          "line": 229
         },
         {
           "name": "RecentHookStore._initialize",
-          "line": 230
+          "line": 233
         },
         {
           "name": "RecentHookStore.repair",
-          "line": 243
+          "line": 246
         },
         {
           "name": "RecentHookStore.write",
-          "line": 247
+          "line": 250
         },
         {
           "name": "RecentHookStore._write",
-          "line": 262
+          "line": 265
         },
         {
           "name": "RecentHookStore.recent",
-          "line": 292
+          "line": 302
         },
         {
           "name": "Observation",
-          "line": 338
+          "line": 348
         },
         {
           "name": "Observation.__init__",
-          "line": 339
+          "line": 349
         },
         {
           "name": "Observation.save",
-          "line": 364
+          "line": 374
         },
         {
           "name": "Observation.bind",
-          "line": 375
+          "line": 385
         },
         {
           "name": "Observation.stage",
-          "line": 379
+          "line": 389
         },
         {
           "name": "Observation.finish",
-          "line": 386
+          "line": 396
         },
         {
           "name": "observe",
-          "line": 417
+          "line": 427
         },
         {
           "name": "bind_current_workspace",
-          "line": 426
+          "line": 436
         },
         {
           "name": "instrument",
-          "line": 435
+          "line": 445
         },
         {
           "name": "install_project_observer",
-          "line": 507
+          "line": 517
         }
       ]
     },

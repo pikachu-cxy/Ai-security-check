@@ -271,6 +271,7 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             and scan_id is None and marker.get('seq') == check['dirty_seq']
             and check['scanned_seq'] == check['dirty_seq']
             and check['state'] in {'RESULTS_READY', 'PARTIAL'}
+            and check.get('scan_id')
             and check.get('security_result', {}).get('imported_scan_id') == check.get('scan_id')
             and check.get('risk_import_status', 'AVAILABLE') == 'AVAILABLE'):
         from .development_risks import review_progress
@@ -310,6 +311,11 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
         text = '\n\n'.join((r.get('assessment') or {}).get('report_text') or
                            f"已保存业务风险：{r['finding']['title']}（完整报告尚不可用）" for r in selected)
         text += '\n\n静态扫描尚未取得本轮完整结果，不能判定本轮没有其他漏洞。'
+        reason = marker.get('reason')
+        if reason == 'STOP_HANDOFF_INTERRUPTED':
+            text += '此前已记录的修改未完成收尾交接；本次重连仅提示原检查缺口，没有自动补扫。'
+        elif reason == 'STOP_CLOSEOUT_FAILED':
+            text += '收尾处理发生异常，原检查及已保存结果保留，没有重新提交扫描。'
         if check['state'] == 'FAILED':
             text += '本批扫描已失败，失败记录保留，未自动重试。'
         if check.get('file_watch_gaps'):
@@ -323,7 +329,8 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             text += '\n\n业务逻辑审计'+label+'；本次仅交付已保存的发现，不能据此声称业务审计完成。'
         page = dict(check_ref=service.ref, dirty_seq=seq, scan_id=scan,
                     report_text=text.strip(), scanner_run=False, risks=selected,
-                    gaps=['STATIC_SCAN_INCOMPLETE', *check.get('file_watch_gaps', [])], scan_status=check['state'],
+                    gaps=['STATIC_SCAN_INCOMPLETE', *([reason] if reason in {'STOP_HANDOFF_INTERRUPTED', 'STOP_CLOSEOUT_FAILED'} else []),
+                          *check.get('file_watch_gaps', [])], scan_status=check['state'],
                     next_offset=offset+limit if offset+limit < len(items) else None,
                     total=len(items), next_action=None)
         page['business_audit'] = dict(status=audit['status'])
