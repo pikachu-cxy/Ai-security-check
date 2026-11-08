@@ -95,7 +95,10 @@ def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fal
         if turn is None or progress.get('turn') != turn:
             return None
     elif not activity.get('pending'):
-        return None
+        # Only the same development turn may receive a newly saved audit result.
+        # No worker, polling or filesystem traversal is needed for this check.
+        if not (automatic and turn is not None and activity.get('turn') == turn and audit_report_changed(row)):
+            return None
     # Consume this round's eligibility even when Stop is disabled or already done.
     if activity.get('pending'):
         with store.transaction() as db:
@@ -247,6 +250,8 @@ def native_closeout(service, root, row, deadline, offered, session_id):
         return incomplete_notice(service, root, ref, seq, state,
                                  reason=reason if reason == 'HOST_WAIT_LIMIT_REACHED' else None)
     work = page['review_progress']
+    if audit_report_changed(row) and not work['pending_scanner_ids']:
+        return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
     from .business_audit import fast_delivery, status as audit_status
     if fast_delivery(row) and work['pending_business_paths'] and not work['pending_scanner_ids']:
         return report_notice(service, root, row, state, page, 'STOP_AUDIT_PENDING')
@@ -262,11 +267,19 @@ def native_closeout(service, root, row, deadline, offered, session_id):
             if current['dirty_seq'] != seq or current.get('stop_review_notice') == [seq, state['scan_id']]:
                 return None
             current['stop_review_notice'] = [seq, state['scan_id']]
+            current['stop_noticed_audit_revision'] = current.get('audit_result_revision', 0)
             current['stop_closeout_notice'] = dict(seq=seq, scan_id=state['scan_id'], mode='REVIEW')
             service.store(root)._put(db, ref, current)
         return dict(status='STOP_REVIEW_REQUIRED', decision='block', check_ref=ref,
                     reason=closeout_message(ref))
     return review_handoff(service, root, row, state, session_id)
+
+
+def audit_report_changed(row):
+    notice = row.get('stop_closeout_notice') or {}
+    return (notice.get('seq') == row['dirty_seq'] and notice.get('scan_id') == row.get('scan_id')
+            and row.get('audit_result_revision', 0) > max(row.get('stop_noticed_audit_revision', 0),
+                                                       row.get('stop_offered_audit_revision', 0)))
 
 
 def report_notice(service, root, row, state, page, status):
@@ -276,10 +289,11 @@ def report_notice(service, root, row, state, page, status):
     with store.transaction() as db:
         current = store._get(db, row['check_ref'])
         if (current['dirty_seq'] != marker[0] or current.get('scan_id') != marker[1]
-                or current.get('stop_report_notice') == marker
-                or current.get('stop_review_notice') == marker):
+                or ((current.get('stop_report_notice') == marker
+                     or current.get('stop_review_notice') == marker) and not audit_report_changed(current))):
             return None
         store._put(db, row['check_ref'], dict(current, stop_report_notice=marker,
+            stop_noticed_audit_revision=current.get('audit_result_revision', 0),
             stop_closeout_notice=dict(seq=marker[0], scan_id=marker[1], mode='REPORT')))
     message = page.get('report_text') or '安全检查有未完成范围，请读取本批保存结果并如实报告。'
     if service.owner['host'] != 'codex':

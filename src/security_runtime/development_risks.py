@@ -273,7 +273,7 @@ class DevelopmentRisks:
                     content=excerpt,
                     trust='UNTRUSTED_SOURCE', scanner_run=False)
 
-    def evidence(self, row, refs):
+    def evidence(self, row, refs, *, include_source=False):
         require(isinstance(refs, list) and 1 <= len(refs) <= 20, 'DEVELOPMENT_RISK_EVIDENCE_REQUIRED')
         result = []
         for ref in refs:
@@ -284,9 +284,9 @@ class DevelopmentRisks:
                 require(absent(self.root, item['file_path']), 'DEVELOPMENT_RISK_EVIDENCE_STALE')
                 result.append(item)
                 continue
-            raw, _ = WorkspaceReader(self.root).read(item['file_path'])
+            raw, text = WorkspaceReader(self.root).read(item['file_path'])
             require(hashlib.sha256(raw).hexdigest() == item['sha256'], 'DEVELOPMENT_RISK_EVIDENCE_STALE')
-            result.append(item)
+            result.append(dict(item, _source=text) if include_source else item)
         return result
 
     def import_scanner(self, row, check):
@@ -422,7 +422,8 @@ class DevelopmentRisks:
                         and value.line_end >= value.line_start,
                         'DEVELOPMENT_RISK_LOCATION_INVALID')
                 try:
-                    evidence = self.evidence(row, value.evidence_refs)
+                    evidence = (self.evidence(row, value.evidence_refs, include_source=True) if stream_commit is not None
+                                else self.evidence(row, value.evidence_refs))
                     require(any(e['file_path'] == name and e['line_start'] <= value.line_start and
                                 e['line_end'] >= value.line_end for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
                 except DevelopmentRiskError as error:
@@ -437,6 +438,12 @@ class DevelopmentRisks:
                 key = 'dr1-' + digest([self.ref, 'host', name, value.category, value.issue_key])[:32]
                 host_key = key
                 key = row['aliases'].get(key, key)
+                if stream_commit is not None and not value.same_issue_as:
+                    from .development_duplicates import confirmed_sql_target
+                    primary = confirmed_sql_target(check, row, value, evidence)
+                    if primary is not None:
+                        key = primary
+                        row['aliases'][host_key] = primary
                 if value.same_issue_as:
                     matches = [r for r in row['risks'].values() if r['id'] == value.same_issue_as or any(
                         o.get('scanner_id') == value.same_issue_as for o in r['observations'])]
@@ -567,6 +574,9 @@ class DevelopmentRisks:
                 from .incremental_audit import complete
                 complete(current, stream_commit['batch_id'], stream_commit['request_id'],
                          stream_commit['valid_paths'], dependencies=stream_commit['dependencies'])
+                current['audit_result_revision'] = current.get('audit_result_revision', 0) + 1
+            if final_report:
+                current['stop_offered_audit_revision'] = current.get('audit_result_revision', 0)
             review_mark('before_write')
             self.checks._put(db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
                                                has_development_review=True))

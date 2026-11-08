@@ -1,5 +1,9 @@
 # 从开发需求定位代码
 
+## 审计轮次、晚到报告及漏洞分隔
+
+轮内执行授权：`audit_stream_service.py`、`incremental_audit.py`、`business_audit.py`；晚到结果交付：`development_risks.py`、`development_stop.py`；同一 SQL 执行位置关联：`development_duplicates.py`；报告标题和分隔：`development_report.py`、`development_views.py`。回归：`test_audit_round_lifecycle.py`、`test_three_mode_repairs.py`、`test_uat_closeout_repairs.py`。内部指导与随包引用通过 `sync_review_skill.py` 同步。
+
 ## 开发收尾验收修复
 
 报告：development_report.py / development_views.py / dashboard_presentation.py；用户处置：development_disposition.py / development_risks.py / risk_management.py / mcp_contracts.py；审计覆盖：BusinessReview / review_progress / business_audit.py；等待：stop_wait_policy.py / development_check.py / development_stop.py / user_config.py / codex_integration.py。测试：test_uat_closeout_repairs.py、test_stop_wait_policy.py、已有报告/恢复/安装/后台回归；见 UAT_REPAIR_ACCEPTANCE.md。

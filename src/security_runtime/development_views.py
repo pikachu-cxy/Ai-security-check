@@ -236,6 +236,7 @@ def batch_report_page(result, check):
         scan_state = '本批已记录文件的扫描已完成。' if not page['gaps'] else '本批扫描结果已保存，存在扫描覆盖限制。'
         sections.append(scan_state + (' 扫描候选未经 Agent 复核。' if scanner_skipped else
             f" 已确认 {totals.get('confirmed', 0)} 项，待确认 {totals.get('inconclusive', 0)} 项。"))
+    rendered_risks = 0
     for item in page['risks']:
         if item['reminder_suppressed']:
             continue
@@ -243,7 +244,10 @@ def batch_report_page(result, check):
         from .development_risks import current_assessment
         current = current_assessment(check, assessment, item['finding']['file_path'])
         if current or scanner_skipped:
+            if rendered_risks:
+                sections.append('---')
             sections.append(render_risk(item, check['workspace'], reviewed=current))
+            rendered_risks += 1
     url = session_url(check['workspace'], check['owner'])
     page['session_url'] = url
     if page['next_offset'] is None:
@@ -360,7 +364,7 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
         limit = limit or 20
         selected = items[offset:offset+limit]
         from .development_report import render_risk
-        text = '\n\n'.join(render_risk(r, check['workspace'], reviewed=True) for r in selected)
+        text = '\n\n---\n\n'.join(render_risk(r, check['workspace'], reviewed=True) for r in selected)
         reason = marker.get('reason')
         if reason == 'HOST_WAIT_LIMIT_REACHED':
             text += '\n\n已到达当前宿主允许的收尾等待上限，后台检查仍在继续；结果保存后沿本检查补交。'

@@ -8,6 +8,7 @@
 | --- | --- |
 | 产品做什么、各层如何协作 | [架构](ARCHITECTURE.md) |
 | 哪些已实现、哪些仍未验收 | [当前状态与目标](STATUS.md) |
+| 每轮新建审计、晚到报告、SQL 去重与漏洞排版验收 | [审计轮次验收](AUDIT_ROUND_ACCEPTANCE.md) |
 | 我要修改什么文件、跑哪些测试 | [修改导航](CHANGE_MAP.md) |
 | MCP、CLI、Hook、内部接口如何设计 | [接口设计](INTERFACES.md) |
 | 对外 MCP 工具有哪些、内部操作在哪里 | [对外入口 → 内部操作 → 源码索引](MCP_CATALOG.md) |
@@ -21,6 +22,7 @@
 | 本期如何手动验收 | [验收清单](WEB_ACCEPTANCE.md) |
 | 四种真实 Codex 会话验收的结果、耗时和待修问题 | [会话流程验收](FLOW_ACCEPTANCE.md) |
 | 三种配置交接缺陷修复、复测和性能边界 | [三种配置修复验收](THREE_MODE_REPAIR_ACCEPTANCE.md) |
+| 重启后桌面旧聊天续接、实际回复和耗时 | [桌面续接复测](THREE_MODE_DESKTOP_RETEST.md) |
 | 静态、复核、业务审计三种配置的真实开发回复与耗时 | [三种配置验收](THREE_MODE_ACCEPTANCE.md) |
 | 修复后的真实开发、并行审计、修复交接与安装状态 | [修复验收](FLOW_REPAIR_ACCEPTANCE.md) |
 | 上述验收缺陷如何修复、如何控制耗时与验收 | [会话流程修复方案](FLOW_REPAIR_PLAN.md) |

@@ -20,6 +20,7 @@ def authenticate(check, token, agent_ref=None):
             'AUDIT_CAPABILITY_INVALID')
     require(grant.get('agent_ref') and (agent_ref is None or grant['agent_ref'] == agent_ref),
             'AUDIT_EXECUTOR_NOT_BOUND')
+    require(grant.get('round_id') == state.progress(check).get('round_id'), 'AUDIT_ROUND_CHANGED')
     from .user_config import batch_config
     require(batch_config(check)['agent']['audit_business_logic'], 'BUSINESS_AUDIT_DISABLED')
     return grant
@@ -38,16 +39,19 @@ def manage(risks, action, *, agent_ref=None, related_paths=(), audit_token=None)
         grant = check.get('audit_delegate') or {}
         if action in {'prepare', 'rotate'}:
             state.record_changes(check, check.get('observed_paths', []) if not check.get('audit_stream') else [])
-            if not grant or grant.get('revoked') or action == 'rotate':
+            round_id = state.progress(check).get('round_id')
+            if not grant or grant.get('revoked') or grant.get('round_id') != round_id or action == 'rotate':
                 for batch in (check.get('audit_stream') or {}).get('batches', {}).values():
                     if batch.get('status') not in {'COMPLETE', 'CANCELLED'}:
                         state.cancel(check, batch['batch_id'])
                 token = 'ad1-' + secrets.token_hex(32)
                 grant = dict(token_hash=hashlib.sha256(token.encode()).hexdigest(), revoked=False,
+                             round_id=round_id,
                              related_paths=[relative_path(p) for p in related_paths], created_at=time.time())
                 check['audit_delegate'] = grant
         elif action == 'started':
             require(grant and not grant.get('revoked'), 'AUDIT_CAPABILITY_INVALID')
+            require(grant.get('round_id') == state.progress(check).get('round_id'), 'AUDIT_ROUND_CHANGED')
             require(isinstance(agent_ref, str) and 1 <= len(agent_ref) <= 200, 'BUSINESS_AUDIT_AGENT_REQUIRED')
             require(not grant.get('agent_ref') or grant['agent_ref'] == agent_ref, 'BUSINESS_AUDIT_ALREADY_CLAIMED')
             if audit_token is not None:
@@ -107,10 +111,12 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
         with risks.checks.transaction() as db:
             check = risks.checks._get(db, risks.ref)
             authenticate(check, audit_token, agent_ref)
-            batch = state.claim(check, agent_ref, token=audit_token)
+            batch = state.claim(check, agent_ref, token=audit_token, round_id=check['audit_delegate']['round_id'])
             grant = check['audit_delegate']
             grant['claimed_at'] = grant.get('claimed_at', time.time())
             grant.pop('failure', None)
+            if not batch.get('batch_id') and state.progress(check)['status'] == 'COMPLETE':
+                grant['closed'] = True
             risks.checks._put(db, risks.ref, check)
         result = dict(batch=_public_batch(batch) if batch else None, progress=state.progress(check), scanner_run=False)
         if batch.get('batch_id'):
@@ -288,13 +294,14 @@ def assessment_current(check, assessment, file_path=None):
 
 
 def _status(check, grant):
-    bound = bool(grant.get('agent_ref')) and not grant.get('revoked')
-    ready = bool(grant.get('token_hash')) and not grant.get('revoked')
     progress = state.progress(check) if state.enabled(check) else dict(status='DISABLED',pending_paths=[])
-    if grant.get('failure') and progress['pending_paths']:
+    current = grant.get('round_id') == progress.get('round_id') and not grant.get('closed')
+    bound = current and bool(grant.get('agent_ref')) and not grant.get('revoked')
+    ready = current and bool(grant.get('token_hash')) and not grant.get('revoked')
+    if current and grant.get('failure') and progress['pending_paths']:
         progress.update(status='FAILED', reason_code=grant['failure'])
     return dict(progress, scanner_run=False, executor_bound=bound,
-        executor_stage=('FAILED' if grant.get('failure') else 'CLAIMED' if grant.get('claimed_at') else
+        executor_stage=('FAILED' if current and grant.get('failure') else 'CLAIMED' if bound and grant.get('claimed_at') else
                         'DISPATCHED' if bound else 'NOT_DISPATCHED'),
         agent_ref=grant.get('agent_ref') if bound else None, delegation_ready=ready,
         delegation_revoked=bool(grant.get('revoked')),

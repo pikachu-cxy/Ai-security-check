@@ -1,5 +1,15 @@
 # 当前接口设计
 
+## 业务审计的开发轮次与报告版本
+
+持续审计以 `round_id` 绑定执行授权。每轮首批实际修改通过原 `stream_prepare → stream_started` 交接新子 Agent；轮内新增文件合并队列并复用本轮执行者。Stop 封口且保存完成后授权关闭，后续开发生成新轮次与新授权，不跨轮续接；旧版本没有 round_id 的授权也不能作为新轮执行者。历史发现、提交回执和未完成事实保留，旧凭据不得写入新轮。
+
+审计提交在原保存事务中递增报告修订号。静态报告已经返回后若同一开发回合收到晚到审计结果，Stop 只补交原扫描的最新报告，不新增扫描或重复提交；已提示的同一修订不再提示，无关只读回合不继承此资格。报告读取仍不等于用户已阅读。
+
+迟到的 Python SQL 审计与静态复核仅在同批、同文件、同源码哈希、唯一 execute/executemany 调用位置且双方均确认时关联到一个风险，保留两份观察和判断。不同类别、多个候选位置或证据不一致时不自动合并。使用提交时已读取的证据，不增加取证调用；其他语言与类别不套用此窄规则。
+
+产品报告统一使用 `### **漏洞标题**`，多项漏洞之间加入 `---` 分隔线；静态候选、确认漏洞和待确认漏洞共用渲染器，正文、处置选项及会话链接保留。
+
 ## 开发报告与处置新契约
 
 Observation/ScannerReview 增加可选 report_content（title/problem/impact/advice/unknowns/function_name），旧 report_text 保留；产品固定生成中文报告。INCONCLUSIVE 已保存即复核执行完成，仍是待确认风险，inconclusive_scanner_ids 单列；未提交候选才列 pending_scanner_ids。BusinessReview 增加 coverage、uncovered，pending_business_paths 不包含已审路径；真实缺口通过 business_coverage_gaps 单列，旧未分类限制不自动变完整。

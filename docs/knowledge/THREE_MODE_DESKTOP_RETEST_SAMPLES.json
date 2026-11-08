@@ -1,0 +1,728 @@
+{
+  "build": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+  "samples": [
+    {
+      "label": "DESKTOP-A-ALLOWLIST",
+      "total_s": 182.55,
+      "initial_output_wait_s": 118.424,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 9.412376,
+          "stages_ms": {
+            "final_input_validation": 4.864,
+            "result_normalization_policy": 0.451,
+            "result_publication": 10.095,
+            "rule_pack_resolution": 845.582,
+            "rule_planning": 21.165,
+            "scanner_orchestration": 5476.993,
+            "source_input_capture": 15.705,
+            "state_persistence": 19.646,
+            "target_preparation": 899.598,
+            "target_selection": 2.807,
+            "total": 9412.376,
+            "workspace_discovery": 74.488
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -17.829
+        }
+      ],
+      "stops": [
+        {
+          "s": 13.040968999999999,
+          "status": "STOP_RESULT_NOTICE"
+        },
+        {
+          "s": 1.7045540000000001,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 831,
+      "first_read_s": 1.388951332,
+      "first_read_return_to_turn_end_s": 10.839,
+      "development_before_first_stop_s": 34.724,
+      "stop_before_scan_s": 3.071,
+      "stop_after_scan_s": 1.568,
+      "scan_wall_s": 8.402
+    },
+    {
+      "label": "DESKTOP-A-CLEAN",
+      "total_s": 159.684,
+      "initial_output_wait_s": 117.736,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 8.349099,
+          "stages_ms": {
+            "final_input_validation": 4.016,
+            "result_normalization_policy": 0.293,
+            "result_publication": 7.699,
+            "rule_pack_resolution": 1015.212,
+            "rule_planning": 13.313,
+            "scanner_orchestration": 5358.944,
+            "source_input_capture": 14.17,
+            "state_persistence": 12.204,
+            "target_preparation": 1067.609,
+            "target_selection": 3.375,
+            "total": 8349.099,
+            "workspace_discovery": 91.319
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": -0.942
+        }
+      ],
+      "stops": [
+        {
+          "s": 12.54261,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 473,
+      "development_before_first_stop_s": 29.861,
+      "stop_before_scan_s": 4.193,
+      "stop_after_scan_s": 1.186,
+      "scan_wall_s": 7.164
+    },
+    {
+      "label": "DESKTOP-A-LOGIC",
+      "total_s": 211.436,
+      "initial_output_wait_s": 118.053,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 4.646101,
+          "stages_ms": {
+            "final_input_validation": 4.641,
+            "result_normalization_policy": 0.278,
+            "result_publication": 5.97,
+            "rule_pack_resolution": 467.811,
+            "rule_planning": 7.222,
+            "scanner_orchestration": 3357.582,
+            "source_input_capture": 7.447,
+            "state_persistence": 11.133,
+            "target_preparation": 497.294,
+            "target_selection": 1.984,
+            "total": 4646.101,
+            "workspace_discovery": 50.535
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_desktop_a.py",
+            "order_summary_desktop_a.py"
+          ],
+          "saved_after_turn_end_s": -0.492
+        }
+      ],
+      "stops": [
+        {
+          "s": 7.055111,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 1031,
+      "development_before_first_stop_s": 86.326,
+      "stop_before_scan_s": 2.162,
+      "stop_after_scan_s": 0.817,
+      "scan_wall_s": 4.076
+    },
+    {
+      "label": "DESKTOP-A-MIXED",
+      "total_s": 217.794,
+      "initial_output_wait_s": 118.611,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 6.188728,
+          "stages_ms": {
+            "final_input_validation": 3.901,
+            "result_normalization_policy": 0.493,
+            "result_publication": 8.446,
+            "rule_pack_resolution": 628.856,
+            "rule_planning": 13.182,
+            "scanner_orchestration": 4381.455,
+            "source_input_capture": 11.832,
+            "state_persistence": 26.794,
+            "target_preparation": 669.835,
+            "target_selection": 3.088,
+            "total": 6188.728,
+            "workspace_discovery": 60.443
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -30.021
+        }
+      ],
+      "stops": [
+        {
+          "s": 10.896863999999999,
+          "status": "STOP_RESULT_NOTICE"
+        },
+        {
+          "s": 0.942364,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2115,
+      "first_read_s": 2.196846407,
+      "first_read_return_to_turn_end_s": 21.443,
+      "development_before_first_stop_s": 60.691,
+      "stop_before_scan_s": 3.023,
+      "stop_after_scan_s": 2.456,
+      "scan_wall_s": 5.417
+    },
+    {
+      "label": "DESKTOP-A-READONLY",
+      "total_s": 17.282,
+      "initial_output_wait_s": 2.837,
+      "scan_count": 0,
+      "scans": [],
+      "stops": [
+        {
+          "s": 1.0567829999999998,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 202
+    },
+    {
+      "label": "DESKTOP-B-ALLOWLIST",
+      "total_s": 62.33,
+      "initial_output_wait_s": 2.741,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 11.200184,
+          "stages_ms": {
+            "final_input_validation": 5.883,
+            "result_normalization_policy": 1.088,
+            "result_publication": 13.87,
+            "rule_pack_resolution": 1038.782,
+            "rule_planning": 21.622,
+            "scanner_orchestration": 7776.693,
+            "source_input_capture": 15.028,
+            "state_persistence": 24.947,
+            "target_preparation": 1092.354,
+            "target_selection": 6.305,
+            "total": 11200.184,
+            "workspace_discovery": 149.168
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -27.013
+        }
+      ],
+      "stops": [
+        {
+          "s": 16.243755999999998,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.925755,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 875,
+      "first_read_s": 2.289154106,
+      "first_read_return_to_turn_end_s": 18.229,
+      "evidence_return_to_first_submit_s": 8.069,
+      "first_submit_to_ack_s": 1.412,
+      "server_commit_s": 0.389595,
+      "development_before_first_stop_s": 18.27,
+      "stop_before_scan_s": 4.201,
+      "stop_after_scan_s": 2.13,
+      "scan_wall_s": 9.913
+    },
+    {
+      "label": "DESKTOP-B-CLEAN",
+      "total_s": 56.003,
+      "initial_output_wait_s": 2.697,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 8.666257,
+          "stages_ms": {
+            "final_input_validation": 3.19,
+            "result_normalization_policy": 0.322,
+            "result_publication": 7.929,
+            "rule_pack_resolution": 1205.434,
+            "rule_planning": 27.388,
+            "scanner_orchestration": 4631.036,
+            "source_input_capture": 20.088,
+            "state_persistence": 12.85,
+            "target_preparation": 1276.072,
+            "target_selection": 5.6,
+            "total": 8666.257,
+            "workspace_discovery": 124.876
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": -0.628
+        }
+      ],
+      "stops": [
+        {
+          "s": 23.120018,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 456,
+      "development_before_first_stop_s": 30.549,
+      "stop_before_scan_s": 14.832,
+      "stop_after_scan_s": 1.048,
+      "scan_wall_s": 7.24
+    },
+    {
+      "label": "DESKTOP-B-LOGIC",
+      "total_s": 70.267,
+      "initial_output_wait_s": 2.829,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 5.031394000000001,
+          "stages_ms": {
+            "final_input_validation": 2.397,
+            "result_normalization_policy": 0.251,
+            "result_publication": 6.115,
+            "rule_pack_resolution": 688.188,
+            "rule_planning": 10.132,
+            "scanner_orchestration": 3143.117,
+            "source_input_capture": 11.613,
+            "state_persistence": 9.459,
+            "target_preparation": 726.764,
+            "target_selection": 3.008,
+            "total": 5031.394,
+            "workspace_discovery": 66.605
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_desktop_b.py",
+            "order_summary_desktop_b.py"
+          ],
+          "saved_after_turn_end_s": -0.516
+        }
+      ],
+      "stops": [
+        {
+          "s": 8.018729,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 1007,
+      "development_before_first_stop_s": 59.486,
+      "stop_before_scan_s": 2.973,
+      "stop_after_scan_s": 0.826,
+      "scan_wall_s": 4.219
+    },
+    {
+      "label": "DESKTOP-B-MIXED",
+      "total_s": 93.925,
+      "initial_output_wait_s": 3.079,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 11.346528000000001,
+          "stages_ms": {
+            "final_input_validation": 4.832,
+            "result_normalization_policy": 0.827,
+            "result_publication": 14.134,
+            "rule_pack_resolution": 1324.139,
+            "rule_planning": 23.456,
+            "scanner_orchestration": 7102.576,
+            "source_input_capture": 22.247,
+            "state_persistence": 33.404,
+            "target_preparation": 1396.908,
+            "target_selection": 6.426,
+            "total": 11346.528,
+            "workspace_discovery": 113.096
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -51.443
+        }
+      ],
+      "stops": [
+        {
+          "s": 18.017991000000002,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.269133,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2282,
+      "first_read_s": 2.559336242,
+      "first_read_return_to_turn_end_s": 38.712,
+      "evidence_return_to_first_submit_s": 13.723,
+      "first_submit_to_ack_s": 2.202,
+      "server_commit_s": 0.834845,
+      "development_before_first_stop_s": 23.146,
+      "stop_before_scan_s": 5.755,
+      "stop_after_scan_s": 2.48,
+      "scan_wall_s": 9.783
+    },
+    {
+      "label": "DESKTOP-B-READONLY",
+      "total_s": 18.574,
+      "initial_output_wait_s": 4.318,
+      "scan_count": 0,
+      "scans": [],
+      "stops": [
+        {
+          "s": 0.916682,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 188
+    },
+    {
+      "label": "DESKTOP-C-ALLOWLIST",
+      "total_s": 90.17,
+      "initial_output_wait_s": 2.609,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 9.126715,
+          "stages_ms": {
+            "final_input_validation": 5.699,
+            "result_normalization_policy": 0.629,
+            "result_publication": 12.682,
+            "rule_pack_resolution": 1192.058,
+            "rule_planning": 12.48,
+            "scanner_orchestration": 6361.174,
+            "source_input_capture": 14.388,
+            "state_persistence": 22.79,
+            "target_preparation": 1241.594,
+            "target_selection": 3.24,
+            "total": 9126.715,
+            "workspace_discovery": 133.486
+          },
+          "candidates": 1,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -24.959
+        }
+      ],
+      "stops": [
+        {
+          "s": 15.520335999999999,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 0.87212,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 1,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 1152,
+      "first_read_s": 1.826423879,
+      "first_read_return_to_turn_end_s": 17.299,
+      "evidence_return_to_first_submit_s": 7.485,
+      "first_submit_to_ack_s": 1.969,
+      "server_commit_s": 0.527019,
+      "development_before_first_stop_s": 48.98,
+      "stop_before_scan_s": 5.793,
+      "stop_after_scan_s": 2.018,
+      "scan_wall_s": 7.709
+    },
+    {
+      "label": "DESKTOP-C-CLEAN",
+      "total_s": 70.036,
+      "initial_output_wait_s": 3.067,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 7.862155,
+          "stages_ms": {
+            "final_input_validation": 4.551,
+            "result_normalization_policy": 0.374,
+            "result_publication": 6.976,
+            "rule_pack_resolution": 791.732,
+            "rule_planning": 14.218,
+            "scanner_orchestration": 5638.278,
+            "source_input_capture": 10.879,
+            "state_persistence": 12.946,
+            "target_preparation": 835.895,
+            "target_selection": 5.368,
+            "total": 7862.155,
+            "workspace_discovery": 90.189
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": -18.896
+        }
+      ],
+      "stops": [
+        {
+          "s": 12.200735,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.6167880000000001,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 1,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 987,
+      "first_read_s": 3.053088294,
+      "first_read_return_to_turn_end_s": 9.228,
+      "development_before_first_stop_s": 36.975,
+      "stop_before_scan_s": 3.667,
+      "stop_after_scan_s": 1.624,
+      "scan_wall_s": 6.909
+    },
+    {
+      "label": "DESKTOP-C-LOGIC",
+      "total_s": 120.801,
+      "initial_output_wait_s": 2.24,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 7.0593509999999995,
+          "stages_ms": {
+            "final_input_validation": 4.293,
+            "result_normalization_policy": 0.402,
+            "result_publication": 8.763,
+            "rule_pack_resolution": 507.678,
+            "rule_planning": 8.44,
+            "scanner_orchestration": 5486.529,
+            "source_input_capture": 10.181,
+            "state_persistence": 23.114,
+            "target_preparation": 546.608,
+            "target_selection": 1.874,
+            "total": 7059.351,
+            "workspace_discovery": 52.203
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_desktop_c.py",
+            "order_summary_desktop_c.py"
+          ],
+          "saved_after_turn_end_s": -16.939
+        }
+      ],
+      "stops": [
+        {
+          "s": 10.502666,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 0.820548,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 2,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 1765,
+      "first_read_s": 1.563943728,
+      "first_read_return_to_turn_end_s": 9.271,
+      "development_before_first_stop_s": 92.313,
+      "stop_before_scan_s": 2.694,
+      "stop_after_scan_s": 1.386,
+      "scan_wall_s": 6.422
+    },
+    {
+      "label": "DESKTOP-C-MIXED",
+      "total_s": 115.379,
+      "initial_output_wait_s": 3.429,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 10.786702,
+          "stages_ms": {
+            "final_input_validation": 6.292,
+            "result_normalization_policy": 0.73,
+            "result_publication": 14.462,
+            "rule_pack_resolution": 1056.295,
+            "rule_planning": 21.768,
+            "scanner_orchestration": 7855.897,
+            "source_input_capture": 19.149,
+            "state_persistence": 40.772,
+            "target_preparation": 1120.664,
+            "target_selection": 3.562,
+            "total": 10786.702,
+            "workspace_discovery": 83.215
+          },
+          "candidates": 5,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -56.509
+        }
+      ],
+      "stops": [
+        {
+          "s": 18.443206999999997,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.3764159999999999,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 1,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2597,
+      "first_read_s": 6.339890373,
+      "first_read_return_to_turn_end_s": 42.696,
+      "evidence_return_to_first_submit_s": 17.185,
+      "first_submit_to_ack_s": 2.097,
+      "server_commit_s": 0.916393,
+      "development_before_first_stop_s": 39.583,
+      "stop_before_scan_s": 5.338,
+      "stop_after_scan_s": 3.586,
+      "scan_wall_s": 9.519
+    },
+    {
+      "label": "DESKTOP-C-READONLY",
+      "total_s": 15.763,
+      "initial_output_wait_s": 2.891,
+      "scan_count": 0,
+      "scans": [],
+      "stops": [
+        {
+          "s": 1.351648,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 185
+    }
+  ]
+}

@@ -138,7 +138,7 @@
     },
     {
       "path": "src/security_runtime/audit_stream_service.py",
-      "sha256": "09aef356e3a3ef57acef9c8d1868cded18bf25330cbe863a6be6d111077835bb",
+      "sha256": "3ef8944bd25417436be05c0e33dc224dbec092a5c4d555af8ac8847cbd0a2c82",
       "purpose": "Owner-authorized child audit capability and durable result reception.",
       "symbols": [
         {
@@ -147,51 +147,51 @@
         },
         {
           "name": "manage",
-          "line": 28
+          "line": 29
         },
         {
           "name": "_batch",
-          "line": 94
+          "line": 98
         },
         {
           "name": "_public_batch",
-          "line": 99
-        },
-        {
-          "name": "process",
           "line": 103
         },
         {
+          "name": "process",
+          "line": 107
+        },
+        {
           "name": "validate_commit",
-          "line": 248
+          "line": 254
         },
         {
           "name": "valid_reviews",
-          "line": 258
+          "line": 264
         },
         {
           "name": "assessment_current",
-          "line": 276
+          "line": 282
         },
         {
           "name": "_status",
-          "line": 290
+          "line": 296
         },
         {
           "name": "revalidate",
-          "line": 305
+          "line": 312
         },
         {
           "name": "absent",
-          "line": 341
+          "line": 348
         },
         {
           "name": "absence_evidence",
-          "line": 352
+          "line": 359
         },
         {
           "name": "_scrub",
-          "line": 368
+          "line": 375
         }
       ]
     },
@@ -420,7 +420,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "8b53c76833bf8a5f41f1aad14d1d4e92dcc9504ef3fb292cd1da5bbcf1c6cc83",
+      "sha256": "832c1ad9412c0cefc0d14b933b643e95d58f343aac7f358e61f42165c15e2c8e",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -429,27 +429,27 @@
         },
         {
           "name": "fast_delivery",
-          "line": 36
+          "line": 39
         },
         {
           "name": "streaming",
-          "line": 43
+          "line": 46
         },
         {
           "name": "continuation",
-          "line": 49
+          "line": 52
         },
         {
           "name": "revalidate",
-          "line": 70
+          "line": 74
         },
         {
           "name": "operate",
-          "line": 89
+          "line": 93
         },
         {
           "name": "offer",
-          "line": 155
+          "line": 159
         }
       ]
     },
@@ -2780,6 +2780,21 @@
       ]
     },
     {
+      "path": "src/security_runtime/development_duplicates.py",
+      "sha256": "b34398bad02c9e18125dbfcd8e27eb1a3c936ef8dab0978722b8a78b6642fc2d",
+      "purpose": "Conservative cross-source linking from already validated source evidence.",
+      "symbols": [
+        {
+          "name": "sql_category",
+          "line": 6
+        },
+        {
+          "name": "confirmed_sql_target",
+          "line": 10
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/development_file_watch.py",
       "sha256": "07531896c22645a4deeabe1c6b384bb051f0fd5cc9d430c58abc31dd88b26b6f",
       "purpose": "Task-window path notifications. No Git, content inventory, scan or writer claim.",
@@ -2871,7 +2886,7 @@
     },
     {
       "path": "src/security_runtime/development_report.py",
-      "sha256": "64f700402ff0b50a8a980e23d7376ade3bc7535e3c4901e52aadd57bc67733dd",
+      "sha256": "dd7ea1329551fcdf8d6ff621566deb3f5b4da0a86bf71a011071ec667d2db0d5",
       "purpose": "Product-owned Chinese risk reports from saved, version-checked facts.",
       "symbols": [
         {
@@ -2932,7 +2947,7 @@
     },
     {
       "path": "src/security_runtime/development_risks.py",
-      "sha256": "ea87de4aaec5b7ba6f194695e35094cc1421a872a7eaaa7735dbc0688a476736",
+      "sha256": "a4be69f48845bb11261c6b3deaadb7fff1f8da112be8e790749fa54525be8224",
       "purpose": "Version-bound development findings and repairs, independent of scanner truth.",
       "symbols": [
         {
@@ -3037,23 +3052,23 @@
         },
         {
           "name": "DevelopmentRisks.get",
-          "line": 603
+          "line": 613
         },
         {
           "name": "DevelopmentRisks.prepare_fix",
-          "line": 696
+          "line": 706
         },
         {
           "name": "DevelopmentRisks.resolve",
-          "line": 744
+          "line": 754
         },
         {
           "name": "DevelopmentRisks.manage",
-          "line": 777
+          "line": 787
         },
         {
           "name": "DevelopmentRisks.disposition",
-          "line": 792
+          "line": 802
         }
       ]
     },
@@ -3109,7 +3124,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "235e092ae6cacdcd030efe8e56650c8cb49d7b0cbf71070adfdddf675c9a0a0a",
+      "sha256": "c43be6ee6541125cdd58a02ff39b033aba0196fc05b61a4e0f2b1d4b5739444d",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -3126,33 +3141,37 @@
         },
         {
           "name": "native_closeout",
-          "line": 227
+          "line": 230
+        },
+        {
+          "name": "audit_report_changed",
+          "line": 278
         },
         {
           "name": "report_notice",
-          "line": 272
+          "line": 285
         },
         {
           "name": "closeout_message",
-          "line": 291
+          "line": 305
         },
         {
           "name": "saved_handoff",
-          "line": 295
+          "line": 309
         },
         {
           "name": "incomplete_notice",
-          "line": 317
+          "line": 331
         },
         {
           "name": "review_handoff",
-          "line": 334
+          "line": 348
         }
       ]
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "e370aeb1d66fc6806194c2f12bf5969fff1fbf334132d2fd3a5693bdb289cac9",
+      "sha256": "69f5e5b387faecbac3323d0ef515f66a913a5a9ac0a9435eaaef80a5d9ac80f8",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -3185,15 +3204,15 @@
         },
         {
           "name": "final_report_receipt",
-          "line": 277
+          "line": 281
         },
         {
           "name": "review_receipt",
-          "line": 294
+          "line": 298
         },
         {
           "name": "closeout_page",
-          "line": 305
+          "line": 309
         }
       ]
     },
@@ -4919,7 +4938,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "ff1e18d9f3a4d7ca4195fd774b11822257849fd4264a1982fe741858a9c578b6",
+      "sha256": "331697c300325b0b3773968f35f29face6112263220872d0d8b168bec5fcda07",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -5940,7 +5959,7 @@
     },
     {
       "path": "src/security_runtime/incremental_audit.py",
-      "sha256": "10c2bd9f08d08ae5490e42b18290e8b282aad9d8d581ac17f57986cdf77a8e97",
+      "sha256": "444b26357639dd0c828285761be7fbd87e2f1a4f37ee9df72a3e21dc6f3773b1",
       "purpose": "Transactional, I/O-free state transitions for incremental business audits.",
       "symbols": [
         {
@@ -5973,31 +5992,31 @@
         },
         {
           "name": "authenticate",
-          "line": 105
+          "line": 108
         },
         {
           "name": "claim",
-          "line": 115
+          "line": 118
         },
         {
           "name": "renew",
-          "line": 147
+          "line": 154
         },
         {
           "name": "receive",
-          "line": 153
+          "line": 160
         },
         {
           "name": "complete",
-          "line": 180
+          "line": 187
         },
         {
           "name": "cancel",
-          "line": 213
+          "line": 220
         },
         {
           "name": "progress",
-          "line": 219
+          "line": 226
         }
       ]
     },

@@ -17,7 +17,10 @@ def status(check):
         from .incremental_audit import progress
         grant = check.get('audit_delegate') or {}
         result = progress(check)
-        if grant.get('revoked'):
+        if grant.get('round_id') != result.get('round_id'):
+            if result['pending_paths']:
+                result['status'] = 'READY'
+        elif grant.get('revoked'):
             result['status'] = 'CANCELLED'
         elif grant.get('failure') and result['pending_paths']:
             result.update(status='FAILED', reason_code=grant['failure'])
@@ -54,14 +57,15 @@ def continuation(check):
     if not state['pending_paths']:
         return None
     grant = check.get('audit_delegate') or {}
-    bound = bool(grant.get('agent_ref')) and not grant.get('revoked')
+    bound = (bool(grant.get('agent_ref')) and not grant.get('revoked') and not grant.get('closed')
+             and grant.get('round_id') == state.get('round_id'))
     return dict(contract='incremental-business-audit-v1', **state,
         agent_ref=grant.get('agent_ref') if bound else None,
-        executor_failure=grant.get('failure'),
+        executor_failure=grant.get('failure') if bound else None,
         next_action=None if bound else dict(tool='manage_development_audit', arguments=dict(
             workspace_path=check['workspace'], check_ref=check['check_ref'], action='stream_prepare')),
         instructions='继续开发期已登记的审计任务，不启动新的扫描或另建审计。'
-        '主 Agent 按本回执 agent_ref 续接原子 Agent，无需先调用 stream_status；尚未派发则完成原待办。'
+        '主 Agent 只在本轮按 agent_ref 续接原子 Agent，无需先调用 stream_status；尚未派发则为本轮创建新子 Agent。'
         '子 Agent 通过 process_development_audit 直接领取和保存，主 Agent 不转交结果。'
         '若执行者不可恢复，明确保留中断状态；重新授权须撤销原凭据后 stream_rotate。'
         '不要在 Hook 中等待模型或循环查状态；保存后读取同批最终报告。')
@@ -165,10 +169,10 @@ def offer(hooks, root, owner, ref):
         store._put(db, ref, check)
     return ('已启用持续增量业务审计：首批修改后通过 development_review 的 manage_development_audit '
             'action=stream_prepare 准备原任务，check_ref='+ref+'，沿用当前 workspace_path 和 session_ref，不必先查状态。'
-            '收到 registration 后立即创建只读子 Agent（先等待完整交接包），主开发继续；'
+            '每轮开发收到 registration 后立即新建只读子 Agent（名称附 round_id 后缀，先等待完整交接包），主开发继续；'
             '将 registration 加真实 agent_ref 和父会话 session_ref 调用 stream_started。'
             '把返回的完整 child_call 原样交给子 Agent，不转交父会话凭据。'
             '子 Agent 直接执行 child_call 领取证据，再直接保存；提交同时取得下一批待审修改。'
-            '主开发继续，新修改合并入队，不取消整个任务。复用原子 Agent；已停止时由宿主续接。'
+            '主开发继续，新修改合并入队，不取消整个任务。本轮内复用原子 Agent；下一轮新建，不跨轮续接。'
             '主 Agent 不转抄结果；收到子 Agent 完成消息后核对保存回执。Stop 只封口，不在 Hook 内等待模型。'
             '宿主不能派发时明确保留待办，不能把这条提示当成已经启动审计。')

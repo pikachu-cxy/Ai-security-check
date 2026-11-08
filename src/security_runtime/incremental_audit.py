@@ -96,6 +96,9 @@ def cutoff(check, paths=None):
             for field in ('required', 'pending', 'accepted'):
                 current[field] = {p: v for p, v in current[field].items() if p in allowed}
         current['cutoff_seq'] = check['dirty_seq']
+        grant = check.get('audit_delegate') or {}
+        if not current['pending'] and grant.get('round_id') == current['round_id']:
+            grant['closed'] = True
     return current['round_id']
 
 
@@ -112,7 +115,7 @@ def authenticate(check, batch_id, token, agent_ref=None):
     return batch
 
 
-def claim(check, agent_ref, *, now=None, limit=50, token=None):
+def claim(check, agent_ref, *, now=None, limit=50, token=None, round_id=None):
     """One active batch per executor; caller may supply its issued task capability."""
     _require(enabled(check), 'BUSINESS_AUDIT_DISABLED')
     _require(isinstance(agent_ref, str) and 0 < len(agent_ref) <= 200, 'BUSINESS_AUDIT_AGENT_REQUIRED')
@@ -120,6 +123,8 @@ def claim(check, agent_ref, *, now=None, limit=50, token=None):
     now = time.time() if now is None else now
     stream = _stream(check)
     for batch in stream['batches'].values():
+        if round_id is not None and batch['round_id'] != round_id:
+            continue
         if batch['agent_ref'] == agent_ref and batch['status'] in {'RUNNING', 'RECEIVED'}:
             if token is not None:
                 authenticate(check, batch['batch_id'], token, agent_ref)
@@ -127,6 +132,8 @@ def claim(check, agent_ref, *, now=None, limit=50, token=None):
     held = {(b['round_id'], p, seq) for b in stream['batches'].values()
             if b['status'] in {'RUNNING', 'RECEIVED'} for p, seq in b['versions'].items()}
     for current in stream['rounds']:
+        if round_id is not None and current['round_id'] != round_id:
+            continue
         versions = dict((p, seq) for p, seq in current['pending'].items()
                         if p not in current.get('superseded', {})
                         and (current['round_id'], p, seq) not in held)

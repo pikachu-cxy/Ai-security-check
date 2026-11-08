@@ -42,7 +42,7 @@ def render_risk(item, workspace, *, reviewed):
     location = quote(str(Path(workspace) / path), safe='/:')
     label = path.replace('[', '\\[').replace(']', '\\]')
     function = content.get('function_name', '')
-    parts = [f"**{p['title_zh']}**", f'{severity} · {state} · 风险编号 {item["id"]}',
+    parts = [f"### **{p['title_zh']}**", f'{severity} · {state} · 风险编号 {item["id"]}',
              f'位置：[{label}:{line}]({location}:{line})' + (f' · 函数：{redact(function)}' if function else '')]
     if metadata:
         parts.append('；'.join(metadata))

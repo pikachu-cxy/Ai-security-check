@@ -79,6 +79,8 @@ def test_structured_and_inconclusive_report_is_delivered_once(sample, monkeypatc
     assert result['view']=='final_report' and result['next_action'] is None
     assert '已确认 1 项，待确认 1 项' in result['report_text']
     assert result['report_text'].count('**问题**')==2
+    assert result['report_text'].count('### **') == 2
+    assert result['report_text'].count('\n\n---\n\n') == 1
     assert result['report_text'].count('**修复／暂不处理**')==1
     assert '未读取外部调用入口' in result['report_text']
     assert not risks.get(review_only=True)['candidates']
@@ -114,6 +116,7 @@ def test_static_chinese_template_preserves_dependency_details():
         impact='English impact',fix_advice='Upgrade',severity='HIGH',file_path='requirements.txt',line_start=1,
         technical_details=dict(package='PyYAML',installed_version='5.3.1',vulnerability_id='CVE-2020-14343',fixed_versions=['5.4'])))
     report=render_risk(item,'/tmp/project',reviewed=False)
+    assert report.startswith('### **')
     assert '依赖漏洞风险' in report and '未经 Agent 确认' in report
     assert 'English rule' not in report and 'PyYAML' in report and 'CVE-2020-14343' in report and '5.4' in report
 

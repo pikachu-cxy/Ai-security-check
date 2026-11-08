@@ -1,0 +1,925 @@
+{
+  "environment": "macOS, local Codex CLI, isolated profile, existing acceptance projects",
+  "model_rounds": [
+    {
+      "label": "ROUND-A1-ALLOWLIST",
+      "seconds": 89.02470207214355,
+      "product_calls": 2,
+      "child_calls": 0,
+      "total_agent_product_calls": 2,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        8.535
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_RESULT_NOTICE",
+          "seconds": 11.6
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 1.036
+        }
+      ],
+      "titles": 1,
+      "separators": 0,
+      "audit_saves": [],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": 15.309,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 4.645,
+          "result_normalization_policy": 0.506,
+          "result_publication": 8.401,
+          "rule_pack_resolution": 1108.464,
+          "rule_planning": 12.335,
+          "scanner_orchestration": 6006.544,
+          "source_input_capture": 16.44,
+          "state_persistence": 14.483,
+          "target_preparation": 1167.918,
+          "target_selection": 3.516,
+          "total": 8535.391,
+          "workspace_discovery": 106.215
+        }
+      ]
+    },
+    {
+      "label": "ROUND-A1-CLEAN",
+      "seconds": 77.93034982681274,
+      "product_calls": 1,
+      "child_calls": 0,
+      "total_agent_product_calls": 1,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        6.657
+      ],
+      "native_stops": [
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 9.284
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": null,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 5.441,
+          "result_normalization_policy": 0.509,
+          "result_publication": 12.803,
+          "rule_pack_resolution": 775.148,
+          "rule_planning": 12.691,
+          "scanner_orchestration": 4650.056,
+          "source_input_capture": 12.0,
+          "state_persistence": 18.679,
+          "target_preparation": 819.396,
+          "target_selection": 2.755,
+          "total": 6657.198,
+          "workspace_discovery": 86.554
+        }
+      ]
+    },
+    {
+      "label": "ROUND-A1-MIXED",
+      "seconds": 137.95894193649292,
+      "product_calls": 2,
+      "child_calls": 0,
+      "total_agent_product_calls": 2,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        6.157
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_RESULT_NOTICE",
+          "seconds": 10.38
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.834
+        }
+      ],
+      "titles": 5,
+      "separators": 4,
+      "audit_saves": [],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": 29.154,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 2.511,
+          "result_normalization_policy": 0.446,
+          "result_publication": 7.66,
+          "rule_pack_resolution": 899.977,
+          "rule_planning": 12.713,
+          "scanner_orchestration": 4187.207,
+          "source_input_capture": 11.951,
+          "state_persistence": 19.627,
+          "target_preparation": 941.339,
+          "target_selection": 3.983,
+          "total": 6157.362,
+          "workspace_discovery": 127.892
+        }
+      ]
+    },
+    {
+      "label": "ROUND-B1-ALLOWLIST",
+      "seconds": 114.12106609344482,
+      "product_calls": 3,
+      "child_calls": 0,
+      "total_agent_product_calls": 3,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        9.949
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 12.969
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.763
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [],
+      "review_submit_service_seconds": [
+        0.16
+      ],
+      "evidence_to_final_seconds": 19.779,
+      "evidence_to_first_submit_seconds": 9.271,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 7.107,
+          "result_normalization_policy": 1.145,
+          "result_publication": 12.192,
+          "rule_pack_resolution": 1023.557,
+          "rule_planning": 20.654,
+          "scanner_orchestration": 7071.337,
+          "source_input_capture": 19.603,
+          "state_persistence": 21.23,
+          "target_preparation": 1086.342,
+          "target_selection": 4.725,
+          "total": 9948.973,
+          "workspace_discovery": 99.959
+        }
+      ]
+    },
+    {
+      "label": "ROUND-B1-CLEAN",
+      "seconds": 89.39000701904297,
+      "product_calls": 1,
+      "child_calls": 0,
+      "total_agent_product_calls": 1,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        10.238
+      ],
+      "native_stops": [
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 13.221
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": null,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 5.265,
+          "result_normalization_policy": 1.06,
+          "result_publication": 13.057,
+          "rule_pack_resolution": 1018.714,
+          "rule_planning": 20.472,
+          "scanner_orchestration": 7306.803,
+          "source_input_capture": 18.087,
+          "state_persistence": 19.72,
+          "target_preparation": 1086.643,
+          "target_selection": 4.588,
+          "total": 10237.826,
+          "workspace_discovery": 103.848
+        }
+      ]
+    },
+    {
+      "label": "ROUND-B1-MIXED",
+      "seconds": 163.78964185714722,
+      "product_calls": 3,
+      "child_calls": 0,
+      "total_agent_product_calls": 3,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        7.749
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 10.624
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.669
+        }
+      ],
+      "titles": 3,
+      "separators": 2,
+      "audit_saves": [],
+      "review_submit_service_seconds": [
+        0.349
+      ],
+      "evidence_to_final_seconds": 59.835,
+      "evidence_to_first_submit_seconds": 29.866,
+      "audit_complete": null,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 2.65,
+          "result_normalization_policy": 0.465,
+          "result_publication": 7.68,
+          "rule_pack_resolution": 894.292,
+          "rule_planning": 15.974,
+          "scanner_orchestration": 5538.086,
+          "source_input_capture": 48.419,
+          "state_persistence": 23.775,
+          "target_preparation": 977.872,
+          "target_selection": 4.672,
+          "total": 7749.451,
+          "workspace_discovery": 129.51
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C1-ALLOWLIST",
+      "seconds": 143.5466969013214,
+      "product_calls": 6,
+      "child_calls": 2,
+      "total_agent_product_calls": 8,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        5.521
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 7.599
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 1.066
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "claim_to_received_seconds": 14.347
+        }
+      ],
+      "review_submit_service_seconds": [
+        0.162
+      ],
+      "evidence_to_final_seconds": 17.474,
+      "evidence_to_first_submit_seconds": 7.097,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 4.217,
+          "result_normalization_policy": 0.844,
+          "result_publication": 7.423,
+          "rule_pack_resolution": 655.923,
+          "rule_planning": 10.293,
+          "scanner_orchestration": 3871.457,
+          "source_input_capture": 10.378,
+          "state_persistence": 12.242,
+          "target_preparation": 694.664,
+          "target_selection": 2.256,
+          "total": 5520.643,
+          "workspace_discovery": 70.505
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C1-CLEAN",
+      "seconds": 129.3046910762787,
+      "product_calls": 4,
+      "child_calls": 4,
+      "total_agent_product_calls": 8,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        6.514
+      ],
+      "native_stops": [
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 8.599
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "claim_to_received_seconds": 22.215
+        }
+      ],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": null,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 4.157,
+          "result_normalization_policy": 0.455,
+          "result_publication": 7.893,
+          "rule_pack_resolution": 663.62,
+          "rule_planning": 9.475,
+          "scanner_orchestration": 4530.566,
+          "source_input_capture": 28.254,
+          "state_persistence": 14.664,
+          "target_preparation": 743.479,
+          "target_selection": 2.425,
+          "total": 6514.317,
+          "workspace_discovery": 66.335
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C1-LOGIC",
+      "seconds": 153.7106912136078,
+      "product_calls": 5,
+      "child_calls": 2,
+      "total_agent_product_calls": 7,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        6.435
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_RESULT_NOTICE",
+          "seconds": 8.248
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.621
+        }
+      ],
+      "titles": 1,
+      "separators": 0,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "order_round_c1.py",
+            "order_summary_round_c1.py"
+          ],
+          "claim_to_received_seconds": 24.792
+        }
+      ],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": 17.024,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 4.185,
+          "result_normalization_policy": 0.66,
+          "result_publication": 11.415,
+          "rule_pack_resolution": 507.217,
+          "rule_planning": 16.963,
+          "scanner_orchestration": 4699.417,
+          "source_input_capture": 8.433,
+          "state_persistence": 12.85,
+          "target_preparation": 538.706,
+          "target_selection": 1.808,
+          "total": 6435.035,
+          "workspace_discovery": 55.674
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C1-MIXED",
+      "seconds": 203.26058197021484,
+      "product_calls": 6,
+      "child_calls": 2,
+      "total_agent_product_calls": 8,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        6.616
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 11.124
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.88
+        }
+      ],
+      "titles": 3,
+      "separators": 2,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "claim_to_received_seconds": 26.809
+        }
+      ],
+      "review_submit_service_seconds": [
+        0.177
+      ],
+      "evidence_to_final_seconds": 54.715,
+      "evidence_to_first_submit_seconds": 27.043,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 2.683,
+          "result_normalization_policy": 0.465,
+          "result_publication": 7.674,
+          "rule_pack_resolution": 1243.263,
+          "rule_planning": 15.62,
+          "scanner_orchestration": 4127.498,
+          "source_input_capture": 18.86,
+          "state_persistence": 19.119,
+          "target_preparation": 1312.521,
+          "target_selection": 5.795,
+          "total": 6615.98,
+          "workspace_discovery": 131.472
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C2-ALLOWLIST",
+      "seconds": 130.54491686820984,
+      "product_calls": 6,
+      "child_calls": 2,
+      "total_agent_product_calls": 8,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        6.936
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 9.344
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.915
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "claim_to_received_seconds": 13.131
+        }
+      ],
+      "review_submit_service_seconds": [
+        0.189
+      ],
+      "evidence_to_final_seconds": 17.431,
+      "evidence_to_first_submit_seconds": 7.007,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 5.18,
+          "result_normalization_policy": 0.611,
+          "result_publication": 10.151,
+          "rule_pack_resolution": 615.455,
+          "rule_planning": 132.829,
+          "scanner_orchestration": 5271.397,
+          "source_input_capture": 9.586,
+          "state_persistence": 16.773,
+          "target_preparation": 651.917,
+          "target_selection": 2.151,
+          "total": 6936.105,
+          "workspace_discovery": 67.654
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C2-CLEAN",
+      "seconds": 111.09819078445435,
+      "product_calls": 4,
+      "child_calls": 4,
+      "total_agent_product_calls": 8,
+      "static_submits": 0,
+      "static_saved": [],
+      "saved_scan_seconds": [
+        4.597
+      ],
+      "native_stops": [
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 6.223
+        }
+      ],
+      "titles": 0,
+      "separators": 0,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "claim_to_received_seconds": 23.624
+        }
+      ],
+      "review_submit_service_seconds": [],
+      "evidence_to_final_seconds": null,
+      "evidence_to_first_submit_seconds": null,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 2.225,
+          "result_normalization_policy": 0.23,
+          "result_publication": 6.495,
+          "rule_pack_resolution": 524.133,
+          "rule_planning": 9.124,
+          "scanner_orchestration": 3246.047,
+          "source_input_capture": 9.236,
+          "state_persistence": 9.669,
+          "target_preparation": 558.521,
+          "target_selection": 1.909,
+          "total": 4596.599,
+          "workspace_discovery": 60.672
+        }
+      ]
+    },
+    {
+      "label": "ROUND-C2-MIXED",
+      "seconds": 175.4496431350708,
+      "product_calls": 6,
+      "child_calls": 2,
+      "total_agent_product_calls": 8,
+      "static_submits": 1,
+      "static_saved": [
+        true
+      ],
+      "saved_scan_seconds": [
+        6.119
+      ],
+      "native_stops": [
+        {
+          "status": "STOP_REVIEW_REQUIRED",
+          "seconds": 8.889
+        },
+        {
+          "status": "ALLOW_STOP",
+          "seconds": 0.986
+        }
+      ],
+      "titles": 3,
+      "separators": 2,
+      "audit_saves": [
+        {
+          "status": "APPLIED",
+          "late": false,
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "claim_to_received_seconds": 18.364
+        }
+      ],
+      "review_submit_service_seconds": [
+        0.382
+      ],
+      "evidence_to_final_seconds": 51.284,
+      "evidence_to_first_submit_seconds": 22.491,
+      "audit_complete": true,
+      "scan_stages_ms": [
+        {
+          "final_input_validation": 2.531,
+          "result_normalization_policy": 0.424,
+          "result_publication": 7.23,
+          "rule_pack_resolution": 777.52,
+          "rule_planning": 14.899,
+          "scanner_orchestration": 4133.905,
+          "source_input_capture": 15.361,
+          "state_persistence": 17.527,
+          "target_preparation": 829.501,
+          "target_selection": 3.156,
+          "total": 6119.134,
+          "workspace_discovery": 81.02
+        }
+      ]
+    }
+  ],
+  "performance": {
+    "zero-peer-benchmark": [
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 8.247523366997484,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 10.418352409033105,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 8.719341389951296,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 8.46188015199732,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 8.325761006970424,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 9.244345773011446,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      }
+    ],
+    "warm-peer-benchmark": [
+      {
+        "version": "after",
+        "round": 0,
+        "stop_seconds": 9.131094107986428,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 0,
+        "stop_seconds": 10.722159088007174,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 9.699295119033195,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 7.949039630999323,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 8.95009752002079,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 8.803935546020512,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 7.769449108978733,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 12.56562330701854,
+        "status": "RESULTS_READY",
+        "build_id": "14b2916c77665bdca40be730329459a5d9669da6dda18e962a6dc4fb1320c6cc",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      }
+    ],
+    "zero-peer-second-benchmark": [
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 7.098251186020207,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 8.083424802985974,
+        "status": "RESULTS_READY",
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 7.1343684190069325,
+        "status": "RESULTS_READY",
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 9.712607626977842,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 7.690240549040027,
+        "status": "RESULTS_READY",
+        "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 7.2405341700068675,
+        "status": "RESULTS_READY",
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "paths": [
+          "app.py"
+        ],
+        "timing": {},
+        "scan_status": "COMPLETED"
+      }
+    ]
+  },
+  "limitations": [
+    "CLI process restart and resume, not desktop GUI restart",
+    "Initial model smoke test failed under restricted networking; authorized local proxy run succeeded",
+    "Two clean audit rounds corrected an invalid evidence window before first successful submission",
+    "Dependency manifest report points at line 1 while declaration follows the comment on line 2",
+    "Timing variation retained; no guarantee every wall-clock sample is faster"
+  ]
+}

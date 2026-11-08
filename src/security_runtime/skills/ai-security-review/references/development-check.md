@@ -15,10 +15,10 @@ REQUIRED 才执行对应分析，SKIPPED_BY_CONFIG 表示按配置跳过，不�
 两项均关闭时只读取并报告扫描器结果，不额外读取代码、不提交 Agent 复核、不把候选当作已确认漏洞。
 静态风险由产品独立保存；历史 Agent 结论不能当作新版本复核。以下 Agent 复核要求只适用于开启的项。
 用户另行明确请求专项审计时走专项流程，不伪造自动检查已经完成。
-业务审计开启后，编辑记录合并为一个持续增量审计任务，不为每个文件创建子 Agent。
+业务审计开启后，每轮开发新建只读子 Agent；本轮新增和修改文件合并为增量队列，不为每个文件创建子 Agent，也不跨开发轮次复用原执行者。使用返回的 round_id 后缀命名子任务，避免与旧子任务重名；历史结果仍由产品保留。
 首批有效编辑后主 Agent 直接用 manage_development_audit(action="stream_prepare") 取得 registration，无需先查 stream_status，也不要等开发结束才派发。实际创建只读子 Agent（先等待完整交接包）后，将 registration 加真实 agent_ref 和当前父会话 session_ref 调用 stream_started；把返回的完整 child_call 原样交给子 Agent。凭据只在必要的子任务上下文传递，不写入报告、URL、项目文件；不向子 Agent 转交父会话 session_ref。
 子 Agent 原样执行 child_call 领取固定批次并取得证据。必填 workspace_path、check_ref、agent_ref、audit_token、action；不得省略或猜测，首次证据足够时不另调 read；缺失证据用 action="read" 批量读取。关联路径未获授权时返回 requested_related_paths，由主 Agent 使用 stream_authorize_paths 明确授权，不能绕过范围校验。
-子 Agent 自己判断并以 action="submit"、batch_id、稳定 request_id、observations 和 business_reviews 直接保存，主 Agent 不转抄结果。每项保留理由、证据、coverage 和实际 uncovered。提交回执同时提供下一批；无增量时结束子任务，后续编辑由宿主续接原执行者，不忙轮询。
+子 Agent 自己判断并以 action="submit"、batch_id、稳定 request_id、observations 和 business_reviews 直接保存，主 Agent 不转抄结果。每项保留理由、证据、coverage 和实际 uncovered。提交回执同时提供下一批；暂时无增量时结束当前执行，本轮后续编辑才可续接它，不忙轮询。Stop 固定范围后保存完成即结束本轮审计，下一轮重新创建执行者，旧授权不能领取新轮文件。
 received 只表示持久接收，review_saved/applied 及进度才说明当前结果已应用。旧版本、迟到结果保留但不得冒充当前覆盖；传输失败复用原 request_id，action="recover" 恢复已收到结果。准备重复不返回旧明文凭据；确需替换执行者或凭据丢失时由父会话 stream_rotate 撤销旧授权，保留历史收据。
 Stop 确定本轮截止范围，不在 Hook 内运行或等待模型。audit_continuation 表示继续开发期已登记的原任务，允许宿主完成尚未派发的原待办或续接尾部增量；不是新开全项目审计。主 Agent 使用已有交接回执的 agent_ref 和子 Agent 保存回执协调，不循环调用 stream_status。正常收尾前等待已启动子任务返回保存回执，避免其尚未领取时就结束。已收到普通子 Agent 回复不等于产品已保存；失败时用 stream_failed 和原 agent_ref 记录，保留已保存静态报告。
 当前 Codex 原生 agent Hook 不可用，产品只能发出明确宿主交接；不能宣称提示已经自动派发。宿主不支持或无法续接时保留具体待办，不标完成。
