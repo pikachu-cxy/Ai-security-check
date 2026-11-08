@@ -56,6 +56,7 @@ def test_finish_drains_delayed_notifications_after_first_empty_poll(sample, monk
                 return 'timeout'
             time.sleep(.01)
             if self.calls == 2:
+                (root/'late.py').write_text('value = 1')
                 return {(1, str(root/'late.py'))}
             return 'timeout'
 
@@ -72,6 +73,7 @@ def test_finish_drains_delayed_notifications_after_first_empty_poll(sample, monk
 
 def test_continuous_notifications_do_not_extend_finish_budget(sample, monkeypatch):
     root, _, owner, service, ref, _ = sample
+    (root/'busy.py').write_text('value = 1')
     monkeypatch.setattr(watching, 'SETTLE_SECONDS', .15)
 
     class Busy:
@@ -135,7 +137,9 @@ os.replace(r/'replace.tmp',r/'atomic.py')
     assert launched == []
     result = service.finish(root, ref)
     paths = set(result['scope']['paths'])
-    assert {'again.py','nested/generated.py','remove.py','old.py','renamed.py','atomic.py','external.py'} <= paths
+    assert {'again.py','nested/generated.py','renamed.py','atomic.py','external.py'} <= paths
+    assert not {'remove.py', 'old.py', 'replace.tmp'} & paths
+    assert {'remove.py', 'old.py'} <= set(result['scope']['skipped_missing_watch_paths'])
     assert 'untouched.py' not in paths
     assert result['file_watch']['status'] == 'STOPPED'
     assert launched == ['scan']

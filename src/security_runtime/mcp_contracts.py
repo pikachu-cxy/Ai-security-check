@@ -35,6 +35,11 @@ def _development_review_input(name, arguments, require_workspace):
     return review_input_failure(arguments, require_workspace=require_workspace)
 
 
+def _development_disposition_input(name, arguments, require_workspace):
+    from .development_disposition import input_failure
+    return input_failure(arguments, require_workspace=require_workspace)
+
+
 def _task_protocol_input(name, arguments, require_workspace):
     from .task_review.protocol import PROTOCOL_VERSION, validate_protocol, UnsupportedTaskReviewProtocol
     if not isinstance(arguments, dict):
@@ -69,6 +74,8 @@ def _guidance_input(name, arguments, require_workspace):
 
 
 RAW_TOOL_CONTRACTS = (
+    RawToolContract(frozenset({'set_development_risk_disposition'}),
+                    'development-disposition-v2', _development_disposition_input),
     RawToolContract(frozenset({'submit_development_review'}),
                     'development-risks-v1', _development_review_input),
     RawToolContract(frozenset({'get_runtime_guidance'}), 'runtime-guidance-v1', _guidance_input),

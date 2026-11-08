@@ -17,10 +17,17 @@
 | 扫描、Agent 复核和工具交互耗时 | [性能分析](PERFORMANCE.md) |
 | 风险管理 Web 与并行业务审计实现与边界 | [产品开发方案](PRODUCT_ROADMAP.md) |
 | 中断恢复、结果补交及性能验收 | [恢复验收](RECOVERY_ACCEPTANCE.md) |
+| 中文漏洞说明与开发会话名称 | [后台展示验收](WEB_PRESENTATION_ACCEPTANCE.md) |
 | 本期如何手动验收 | [验收清单](WEB_ACCEPTANCE.md) |
 | 四种真实 Codex 会话验收的结果、耗时和待修问题 | [会话流程验收](FLOW_ACCEPTANCE.md) |
+| 三种配置交接缺陷修复、复测和性能边界 | [三种配置修复验收](THREE_MODE_REPAIR_ACCEPTANCE.md) |
+| 静态、复核、业务审计三种配置的真实开发回复与耗时 | [三种配置验收](THREE_MODE_ACCEPTANCE.md) |
 | 修复后的真实开发、并行审计、修复交接与安装状态 | [修复验收](FLOW_REPAIR_ACCEPTANCE.md) |
 | 上述验收缺陷如何修复、如何控制耗时与验收 | [会话流程修复方案](FLOW_REPAIR_PLAN.md) |
+
+## 本期收尾修复
+
+中文报告、用户处置、审计状态与等待设置见 [验收修复](UAT_REPAIR_ACCEPTANCE.md)，包含功能结果、宿主限制和全部性能样本。
 
 ## 快速定位
 

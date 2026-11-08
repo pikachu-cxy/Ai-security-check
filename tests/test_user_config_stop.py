@@ -288,8 +288,9 @@ def test_terminal_stop_is_not_repeated_after_inconclusive_review(check, config, 
     assert fallback(service.hooks, root, OWNER, service=service,
                     stop_hook_active=True, turn_id='turn') is None
     after = service.get(root, ref)
-    assert after['review_progress']['scanner_review'] == 'PENDING'
-    assert not after['host_review_completed']
+    assert after['review_progress']['scanner_review'] == 'COMPLETE'
+    assert after['review_progress']['inconclusive_scanner_ids']
+    assert after['host_review_completed']
     assert after['gaps'] == saved['gaps']
     assert store.load(ref)['stop_fallback']['count'] == 1
     assert state['calls'] == 1

@@ -18,7 +18,7 @@ def enrich(item, row, risk, scope=None):
     observations = risk.get('observations', [])
     assessment = risk.get('assessment') or {}
     return dict(item, **scope, session_id=(row.get('owner') or {}).get('session', ''),
-        check_id=row.get('key', ''), revision=revision(risk),
+        check_id=row.get('key', ''), revision=revision(risk), last_security_activity_at=row.get('updated_at'),
         archived=bool(management.get('archived')), management=management,
         file_path=item.get('location', '').rsplit(':', 1)[0] if finding.get('line_start') else finding.get('file_path', ''),
         line_start=finding.get('line_start'), line_end=finding.get('line_end'),
@@ -30,6 +30,8 @@ def enrich(item, row, risk, scope=None):
         confirmed_risk=risk.get('decision') == 'CONFIRMED' and not assessment.get('duplicate_of'),
         evidence=redact(str(finding.get('evidence', '')))[:8000],
         report_text=redact(str(assessment.get('report_text', '')))[:20000],
+        report_content={k:redact(str(v))[:2000] for k,v in (assessment.get('report_content') or {}).items()},
+        technical_details=finding.get('technical_details') or {},
         assessment=redact(str(assessment.get('rationale', '')))[:4000],
         source_freshness='HISTORICAL_NOT_RECHECKED', editable=bool(row.get('owner')),
         disposition_review_required=bool(management.get('disposition_review_required') or

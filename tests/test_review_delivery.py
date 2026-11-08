@@ -158,3 +158,46 @@ def test_budget_setting_round_trip_only_applies_to_next_check(sample):
     next_ref = service.begin(root, 'next-budget')['check_ref']
     assert next_ref != ref
     assert batch_config(service.store(root).load(next_ref, service.owner))['development']['review_response_bytes'] == 131072
+
+
+def test_final_report_keeps_gap_facts_but_hides_internal_codes(sample, monkeypatch):
+    risks = seed(sample, monkeypatch, count=1)
+    root, service, ref, _ = sample
+    store = service.store(root)
+    with store.transaction() as db:
+        check = store._get(db, ref)
+        store._put(db, ref, dict(check, result=dict(check.get('result') or {}, gaps=['SCANNER_COVERAGE_LIMITED'])))
+    page = risks.get(limit=None, review_only=True)
+    saved = risks.submit([dict(same_issue_as=c['id'], decision='DISMISSED',
+        rationale='Known safe fixture', evidence_refs=c['evidence_refs']) for c in page['candidates']],
+        page['dirty_seq'], scan_id=page['scan_id'], return_risks=True, final_report=True)
+    assert saved['gaps'] == ['SCANNER_COVERAGE_LIMITED']
+    assert 'SCANNER_COVERAGE_LIMITED' not in saved['report_text']
+    assert '覆盖限制' in saved['report_text']
+    assert saved['summary']['false_positives'] == 1
+    assert saved['review_saved'] and saved['next_action'] is None
+
+
+@pytest.mark.parametrize('gaps', [[], ['SCANNER_COVERAGE_LIMITED']])
+def test_recorded_file_completion_is_independent_of_watch_diagnostics(sample, monkeypatch, gaps):
+    risks = seed(sample, monkeypatch, count=1)
+    root, service, ref, _ = sample
+    store = service.store(root)
+    with store.transaction() as db:
+        check = store._get(db, ref)
+        store._put(db, ref, dict(check, scope_unknown=True,
+            file_watch_gaps=['FILE_WATCH_INTERRUPTED'],
+            result=dict(check.get('result') or {}, gaps=gaps)))
+    page = risks.get(limit=None, review_only=True)
+    saved = risks.submit([dict(same_issue_as=c['id'], decision='DISMISSED',
+        rationale='Known safe fixture', evidence_refs=c['evidence_refs']) for c in page['candidates']],
+        page['dirty_seq'], scan_id=page['scan_id'], return_risks=True, final_report=True)
+    assert saved['review_saved'] and saved['next_action'] is None
+    assert saved['scope_unknown'] and saved['gaps'] == gaps
+    assert store.load(ref)['file_watch_gaps'] == ['FILE_WATCH_INTERRUPTED']
+    assert '范围未知' not in saved['report_text']
+    assert '1 条扫描告警为误报' in saved['report_text']
+    assert saved['host_review_completed']
+    assert saved['gaps'] == gaps
+    assert '经复核，1 条扫描告警为误报，无需处理。' in saved['report_text']
+    assert ('覆盖限制' in saved['report_text']) == bool(gaps)

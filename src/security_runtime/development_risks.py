@@ -19,6 +19,7 @@ from .scan_request import relative_path
 from .tasks.durable import SignedRecords
 import sqlite3
 from .performance_trace import review_mark, span
+from .development_report import ReportContent, business_coverage
 
 
 class Observation(BaseModel):
@@ -37,6 +38,7 @@ class Observation(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
     duplicate_of: str | None = Field(default=None, min_length=1, max_length=160)
     report_text: str | None = Field(default=None, min_length=1, max_length=3000)
+    report_content: ReportContent | None = None
     # Empty lists are rejected by the domain with an actionable recovery step.
     evidence_refs: list[str] = Field(max_length=20)
     same_issue_as: str | None = Field(default=None, max_length=160)
@@ -54,6 +56,7 @@ class ScannerReview(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
     duplicate_of: str | None = Field(default=None, min_length=1, max_length=160)
     report_text: str | None = Field(default=None, min_length=1, max_length=3000)
+    report_content: ReportContent | None = None
     evidence_refs: list[str] = Field(max_length=20)
 
 
@@ -63,6 +66,8 @@ class BusinessReview(BaseModel):
     rationale: str = Field(min_length=1, max_length=2000)
     evidence_refs: list[str] = Field(max_length=20)
     limitations: list[str] = Field(default_factory=list, max_length=20)
+    coverage: Literal['COMPLETE', 'PARTIAL'] | None = None
+    uncovered: list[Annotated[str, Field(min_length=1, max_length=1000)]] = Field(default_factory=list, max_length=20)
 
 
 class ReviewSubmission(BaseModel):
@@ -130,8 +135,8 @@ def review_progress(check, row):
     assessed = {key for r in reviews for key in r.get('reviewed_scanner_ids', [])}
     assessed = {key for key in assessed if key in row['risks'] and
                 row['risks'][key].get('assessment', {}).get('scan_id') == check.get('scan_id') and
-                row['risks'][key].get('assessment', {}).get('dirty_seq') == check['dirty_seq'] and
-                row['risks'][key]['assessment']['decision'] != 'INCONCLUSIVE'}
+                row['risks'][key].get('assessment', {}).get('dirty_seq') == check['dirty_seq']}
+    inconclusive = sorted(key for key in assessed if row['risks'][key]['assessment']['decision'] == 'INCONCLUSIVE')
     job = check.get('parallel_audit') or {}
     early = [r for r in row['reviews'] if current and job.get('status') in {'COMPLETE', 'PARTIAL'}
              and job.get('dirty_seq') == check['dirty_seq'] and r.get('audit_id') == job.get('audit_id')
@@ -139,8 +144,14 @@ def review_progress(check, row):
     latest_business = {b['file_path']: b for r in [*early, *reviews]
                        if not r.get('audit_id') or (job.get('status') in {'COMPLETE', 'PARTIAL'} and
                            r['audit_id'] == job.get('audit_id') and job.get('dirty_seq') == check['dirty_seq'])
-                       for b in r.get('business_reviews', [])}
-    coverage = {name for name, b in latest_business.items() if not b['limitations']}
+                       for b in r.get('business_reviews', []) if not r.get('stream_batch_id')}
+    if check.get('audit_stream'):
+        from .audit_stream_service import valid_reviews
+        latest_business.update(valid_reviews(check))
+    coverage = set(latest_business)
+    coverage_gaps = [dict(file_path=name, coverage=business_coverage(b),
+                        reasons=b.get('uncovered') or b.get('limitations', []))
+                     for name, b in latest_business.items() if business_coverage(b) != 'COMPLETE']
     excluded = (check.get('result') or {}).get('generated_outputs', {}).get('excluded_paths', [])
     pending_paths = sorted(set(check['observed_paths']) - set(excluded) - coverage)
     imported = (check.get('risk_import_status', 'AVAILABLE') == 'AVAILABLE' and
@@ -154,9 +165,39 @@ def review_progress(check, row):
         scanner_review=('SKIPPED_BY_CONFIG' if not policy['review_scanner_findings'] else
                         'COMPLETE' if scanner_done else 'PENDING'),
         business_review=('SKIPPED_BY_CONFIG' if not policy['audit_business_logic'] else
-                         'COMPLETE' if business_done else 'PENDING'),
+                         ('PARTIAL' if coverage_gaps else 'COMPLETE') if business_done else 'PENDING'),
+        inconclusive_scanner_ids=inconclusive if policy['review_scanner_findings'] else [],
+        business_coverage_gaps=coverage_gaps if policy['audit_business_logic'] else [],
         pending_scanner_ids=sorted(candidates - assessed) if policy['review_scanner_findings'] else [],
         pending_business_paths=pending_paths if policy['audit_business_logic'] else [])
+
+
+def current_assessment(check, assessment, file_path):
+    """One current-version rule for reports, reminders and scanner projection."""
+    if not assessment:
+        return False
+    if assessment.get('stream_batch_id'):
+        from .audit_stream_service import assessment_current
+        return assessment_current(check, assessment, file_path)
+    if (check.get('scan_id') and check['scanned_seq'] == check['dirty_seq']
+            and (assessment.get('dirty_seq'), assessment.get('scan_id')) ==
+                (check['dirty_seq'], check['scan_id'])):
+        return True
+    job = check.get('parallel_audit') or {}
+    return bool(assessment.get('audit_id') and assessment['audit_id'] == job.get('audit_id')
+                and job.get('status') in {'COMPLETE', 'PARTIAL'}
+                and assessment.get('dirty_seq') == job.get('dirty_seq') == check['dirty_seq'])
+
+
+def current_risk(check, risk):
+    """Keep history intact; old technical decisions cannot suppress new hits."""
+    if current_assessment(check, risk.get('assessment'), risk['finding']['file_path']):
+        return risk
+    observed = next((o for o in reversed(risk['observations'])
+                     if o.get('source') == 'SCANNER' and o.get('scan_id') == check.get('scan_id')), None)
+    if observed is None:
+        return risk
+    return dict(risk, finding=observed['finding'], decision='INCONCLUSIVE', status='OPEN', assessment=None)
 
 
 def digest(value):
@@ -238,6 +279,11 @@ class DevelopmentRisks:
         for ref in refs:
             require(ref in row['evidence'], 'DEVELOPMENT_RISK_EVIDENCE_UNKNOWN')
             item = row['evidence'][ref]
+            if item.get('kind') == 'ABSENCE':
+                from .audit_stream_service import absent
+                require(absent(self.root, item['file_path']), 'DEVELOPMENT_RISK_EVIDENCE_STALE')
+                result.append(item)
+                continue
             raw, _ = WorkspaceReader(self.root).read(item['file_path'])
             require(hashlib.sha256(raw).hexdigest() == item['sha256'], 'DEVELOPMENT_RISK_EVIDENCE_STALE')
             result.append(item)
@@ -301,11 +347,14 @@ class DevelopmentRisks:
                     check_ref=self.ref, workspace_path=str(self.root)))
             raise
 
-    def _submit(self, observations, expected_seq, *, business_reviews, return_risks, scan_id, audit_id, final_report=False):
+    def _submit(self, observations, expected_seq, *, business_reviews, return_risks, scan_id, audit_id, final_report=False, stream_commit=None):
         require(type(expected_seq) is int, 'DEVELOPMENT_RISK_VERSION_INVALID')
         values = [(ScannerReview if 'issue_key' not in v else Observation).model_validate(v)
                   for v in observations]
         business = [BusinessReview.model_validate(v) for v in business_reviews]
+        for value in business:
+            require(value.coverage != 'PARTIAL' or bool(value.uncovered), 'BUSINESS_COVERAGE_DETAIL_REQUIRED')
+            require(value.coverage != 'COMPLETE' or not value.uncovered, 'BUSINESS_COVERAGE_CONFLICT')
         require(len(values) <= 50, 'DEVELOPMENT_RISK_LIMIT')
         require(len(business) <= 50, 'DEVELOPMENT_RISK_LIMIT')
         review_mark('validated_arguments')
@@ -313,11 +362,15 @@ class DevelopmentRisks:
             review_mark('transaction_open')
             check = self.current_check()
             require(check['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            if stream_commit is not None:
+                from .audit_stream_service import authenticate, validate_commit
+                authenticate(check, stream_commit['token'], stream_commit['agent_ref'])
+                validate_commit(check, stream_commit)
             if audit_id is not None:
                 import time
                 job = check.get('parallel_audit') or {}
                 require(job.get('audit_id') == audit_id and job.get('dirty_seq') == expected_seq
-                    and job.get('status') in {'READY', 'RUNNING', 'COMPLETE', 'PARTIAL'}
+                    and job.get('status') in {'RUNNING', 'COMPLETE', 'PARTIAL'}
                     and job.get('lease_until', 0) >= time.time(), 'BUSINESS_AUDIT_VERSION_STALE')
             if scan_id is not None:
                 require(scan_id == check.get('scan_id') and check['scanned_seq'] == expected_seq,
@@ -411,6 +464,8 @@ class DevelopmentRisks:
                     evidence_refs=value.evidence_refs, source_hashes={e['file_path']:e['sha256'] for e in evidence},
                     dirty_seq=expected_seq, scan_id=check.get('scan_id'),
                     finding=finding)
+                if stream_commit is not None:
+                    assessment['stream_batch_id'] = stream_commit['batch_id']
                 if audit_id is not None:
                     assessment['audit_id'] = audit_id
                 if value.duplicate_of is not None:
@@ -419,6 +474,8 @@ class DevelopmentRisks:
                     row['has_duplicate_links'] = True
                 if value.report_text and value.decision == 'CONFIRMED':
                     assessment['report_text'] = safe(value.report_text)
+                if value.report_content is not None:
+                    assessment['report_content'] = {k: safe(v) for k, v in value.report_content.model_dump().items()}
                 if assessment not in risk['assessments']:
                     require(len(risk['assessments']) < 64, 'DEVELOPMENT_RISK_HISTORY_LIMIT')
                     risk['assessments'].append(assessment)
@@ -439,13 +496,27 @@ class DevelopmentRisks:
                         continue
                     primary = row['risks'].get(primary_id) or {}
                     proof = primary.get('assessment') or {}
+                    stream_primary = bool(proof.get('stream_batch_id') and
+                        current_assessment(check, proof, proof['finding']['file_path']))
+                    source_current = (stream_primary or
+                        ((proof.get('scan_id'), proof.get('dirty_seq')) == (check['scan_id'], expected_seq)
+                         and any(o['source'] == 'SCANNER' and o.get('scan_id') == check['scan_id']
+                                 for o in primary.get('observations', []))))
+                    # A business finding may anchor the source line while the
+                    # scanner anchors the sink. Require current issued evidence
+                    # covering that location; matching filenames alone never suffice.
+                    covered = bool(proof.get('finding') and
+                        proof['finding']['line_start'] <= linked['finding']['line_end'] and
+                        linked['finding']['line_start'] <= proof['finding']['line_end'])
+                    if stream_primary:
+                        covered = any(e['file_path'] == linked['finding']['file_path'] and
+                            e['line_start'] <= linked['finding']['line_start'] and
+                            e['line_end'] >= linked['finding']['line_end']
+                            for e in self.evidence(row, proof['evidence_refs']))
                     require(primary_id != risk['id'] and proof.get('decision') == 'CONFIRMED'
-                        and (proof.get('scan_id'), proof.get('dirty_seq')) == (check['scan_id'], expected_seq)
+                        and source_current
                         and proof['finding']['file_path'] == linked['finding']['file_path']
-                        and proof['finding']['line_start'] <= linked['finding']['line_end']
-                        and linked['finding']['line_start'] <= proof['finding']['line_end']
-                        and any(o['source'] == 'SCANNER' and o.get('scan_id') == check['scan_id']
-                                for o in primary['observations']), 'DEVELOPMENT_DUPLICATE_INVALID')
+                        and covered, 'DEVELOPMENT_DUPLICATE_INVALID')
             # Check again before publication: path events during evidence reads invalidate submission.
             require(self.current_check()['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
             review_mark('decisions_checked')
@@ -464,13 +535,16 @@ class DevelopmentRisks:
                         check_ref=self.ref, workspace_path=str(self.root), file_path=name))
                     raise
                 business_records.append(dict(file_path=name, rationale=safe(value.rationale),
-                    evidence_refs=value.evidence_refs, limitations=[safe(s) for s in value.limitations]))
+                    evidence_refs=value.evidence_refs, limitations=[safe(s) for s in value.limitations],
+                    coverage=value.coverage, uncovered=[safe(s) for s in value.uncovered]))
             for value in business:
                 self.evidence(row, value.evidence_refs)
             require(self.current_check().get('scan_id') == check.get('scan_id'),
                     'DEVELOPMENT_RISK_SCAN_VERSION_STALE')
             review = dict(dirty_seq=expected_seq, scan_id=check.get('scan_id'),
                           reviewed_scanner_ids=reviewed_ids, business_reviews=business_records)
+            if stream_commit is not None:
+                review['stream_batch_id'] = stream_commit['batch_id']
             if audit_id is not None:
                 review['audit_id'] = audit_id
             if not row['reviews'] or review != row['reviews'][-1]:
@@ -484,10 +558,15 @@ class DevelopmentRisks:
             if audit_id is not None:
                 coverage = {b['file_path']: b for r in row['reviews'] if r.get('audit_id') == audit_id
                             for b in r.get('business_reviews', [])}
-                covered = {k for k,b in coverage.items() if not b['limitations']}
+                covered = {k for k,b in coverage.items() if business_coverage(b) == 'COMPLETE'}
                 current['parallel_audit']['status'] = ('COMPLETE' if set(check['observed_paths']) <= covered else
                     'PARTIAL' if set(check['observed_paths']) <= set(coverage) else 'RUNNING')
                 current['parallel_audit']['covered_paths'] = sorted(covered)
+                current['parallel_audit']['reviewed_paths'] = sorted(coverage)
+            if stream_commit is not None:
+                from .incremental_audit import complete
+                complete(current, stream_commit['batch_id'], stream_commit['request_id'],
+                         stream_commit['valid_paths'], dependencies=stream_commit['dependencies'])
             review_mark('before_write')
             self.checks._put(db, self.ref, dict(current, has_unified_risks=bool(row['risks']),
                                                has_development_review=True))
@@ -557,15 +636,18 @@ class DevelopmentRisks:
             seq, scan = batch_version
             # Earlier business assessments recorded a sequence only.
             legacy_batch = {v.get('scan_id') for v in row['reviews'] if v['dirty_seq'] == seq} == {scan}
-            risks = [r for r in risks if any(o['source'] == 'SCANNER' and o.get('scan_id') == scan
+            from .audit_stream_service import assessment_current
+            risks = [r for r in risks if any(assessment_current(check, a, r['finding']['file_path']) for a in r['assessments']) or any(o['source'] == 'SCANNER' and o.get('scan_id') == scan
                                             for o in r['observations']) or any(
-                a['dirty_seq'] == seq and (a.get('scan_id') == scan or
+                not a.get('stream_batch_id') and a['dirty_seq'] == seq and (a.get('scan_id') == scan or
                     (legacy_batch and a.get('scan_id') is None) or
                     (a.get('audit_id') and a.get('audit_id') == (check.get('parallel_audit') or {}).get('audit_id')
                      and (check.get('parallel_audit') or {}).get('status') in {'COMPLETE', 'PARTIAL'})) for a in r['assessments'])]
+        risks = [current_risk(check, risk) for risk in risks]
         if whole_report:
             limit = max(1, len(risks))
-        items = [dict(id=r['id'], finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
+        from .risk_management import revision
+        items = [dict(id=r['id'], **({'revision':revision(r)} if include_history else {}), finding=dict(r['finding'], status=r['status']), decision=r['decision'], status=r['status'],
                       disposition=r.get('disposition', 'ACTIVE'),
                       reminder_suppressed=r.get('disposition', 'ACTIVE') != 'ACTIVE' or r['decision'] == 'DISMISSED'
                           or r['status'] == 'CODE_REVIEWED_RESOLVED',
@@ -591,6 +673,15 @@ class DevelopmentRisks:
                     source_freshness='NOT_RECHECKED_ON_READ', repair_authorized=False)
         if batch_version is not None:
             from .development_views import batch_report_page
+            active = [r for r in risks if r.get('disposition', 'ACTIVE') == 'ACTIVE'
+                      and r['status'] != 'CODE_REVIEWED_RESOLVED']
+            result['offset'] = offset
+            result['report_totals'] = dict(
+                confirmed=sum(r['decision'] == 'CONFIRMED' for r in active),
+                actionable_confirmed=sum(r['decision'] == 'CONFIRMED' for r in active),
+                inconclusive=sum(r['decision'] == 'INCONCLUSIVE' for r in active),
+                duplicates=sum(r['decision'] == 'DISMISSED' and bool((r.get('assessment') or {}).get('duplicate_of')) for r in active),
+                false_positives=sum(r['decision'] == 'DISMISSED' and not (r.get('assessment') or {}).get('duplicate_of') for r in active))
             page = batch_report_page(result, check)
             if whole_report and 'report_text' in page:
                 from .review_delivery import report_page
@@ -698,14 +789,43 @@ class DevelopmentRisks:
                 self.store._put(db, self.ref, row)
         return dict(receipt, risk_id=risk_id, scanner_run=False, risk_closed=False)
 
-    def disposition(self, risk_id, decision, user_requested):
+    def disposition(self, risk_id, decision, user_requested, *, reason='', expected_seq=None,
+                    expected_revision=None, request_id=None):
         require(user_requested is True, 'DEVELOPMENT_RISK_USER_DECISION_REQUIRED')
         require(decision in {'DEFER', 'EXCLUDE', 'RESTORE'}, 'DEVELOPMENT_RISK_DISPOSITION_INVALID')
+        from .risk_management import apply, bind_disposition, revision, revalidate_dispositions
+        require(isinstance(reason, str) and len(reason) <= 4000, 'MANAGEMENT_REASON_REQUIRED')
         with self.store.transaction() as db:
+            check = self.current_check()
+            require(expected_seq is None or (type(expected_seq) is int and expected_seq == check['dirty_seq']),
+                    'DEVELOPMENT_RISK_VERSION_STALE')
             row = self.load(db)
             require(risk_id in row['risks'], 'DEVELOPMENT_RISK_UNKNOWN')
             risk = row['risks'][risk_id]
-            risk['disposition'] = 'ACTIVE' if decision == 'RESTORE' else decision
-            self.store._put(db, self.ref, row)
-        return dict(risk_id=risk_id, disposition=risk['disposition'], saved=True,
+            # Legacy callers omitted a reason. Record that absence, never invent one.
+            reason = reason.strip() or '用户明确选择，未填写具体原因'
+            history = risk.get('management', {}).get('history', [])
+            previous = next((h for h in history if request_id and h['request_id'] == request_id), None)
+            before_validation = revision(risk)
+            if not previous:
+                revalidate_dispositions(self.root, {risk_id: risk})
+            request = dict(action=decision, reason=reason, expected_revision=expected_revision or
+                           (previous or {}).get('expected_revision') or revision(risk))
+            request['request_id'] = request_id or 'chat-' + digest([risk_id, request])[:40]
+            prior = risk.get('management', {})
+            repeated = (request_id is None and expected_revision is None
+                and revision(risk) == before_validation
+                and risk.get('disposition', 'ACTIVE') == ('ACTIVE' if decision == 'RESTORE' else decision)
+                and prior.get('disposition_reason') == safe(reason))
+            if repeated:
+                receipt = dict(saved=True, repeated=True, revision=revision(risk))
+            else:
+                risk, receipt = apply(risk, request)
+                if not receipt['repeated']:
+                    if decision in {'DEFER', 'EXCLUDE'}:
+                        bind_disposition(self.root, risk)
+                        receipt['revision'] = revision(risk)
+                    row['risks'][risk_id] = risk
+                    self.store._put(db, self.ref, row)
+        return dict(**receipt, risk_id=risk_id, disposition=risk.get('disposition', 'ACTIVE'),
                     risk_closed=False, scanner_run=False)

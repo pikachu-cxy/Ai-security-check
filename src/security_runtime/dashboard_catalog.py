@@ -19,6 +19,8 @@ class Catalog:
         self.stop = threading.Event()
         self.wake = threading.Event()
         self.signature = None
+        from .dashboard_sessions import TitleSync
+        self.titles = TitleSync(self)
 
     def inventory(self):
         from .risk_dashboard import STATE, SOURCES
@@ -58,6 +60,8 @@ class Catalog:
         db.execute("ATTACH DATABASE ? AS management", (str(management),))
         from .dashboard_entities import setup
         setup(db)
+        from .dashboard_sessions import setup as setup_titles
+        setup_titles(db)
         return db
 
     def replace(self, result):
@@ -103,6 +107,7 @@ class Catalog:
             while not self.stop.is_set():
                 self.wake.clear()
                 self.refresh()
+                self.titles.request()
                 self.wake.wait(5)
         thread = threading.Thread(target=run, name='risk-catalog', daemon=True)
         thread.start()
@@ -150,7 +155,11 @@ class Catalog:
                     field = ALIASES.get(key,key)
                     sessions = [s for s in sessions if s.get(field) == query[key] or
                                 key == 'project' and s.get('workspace_id') == query[key]]
-            result['sessions'] = sessions[:200]
+            from .dashboard_sessions import names, decorate
+            mapping = names(db)
+            result['sessions'] = [decorate(s,mapping) for s in sessions[:200]]
+            result['session_names'] = {s['session_id']:decorate(s,mapping)['session_name'] for s in sessions if s.get('session_id')}
+            result['title_sync_status'] = self.titles.status
             result['sessions_omitted'] = max(0, len(sessions)-200)
             total = db.execute('SELECT count(*) FROM risks'+where, args).fetchone()[0]
             stats = {k: dict(db.execute('SELECT '+k+',count(*) FROM risks'+where+' GROUP BY '+k, args))
@@ -163,7 +172,8 @@ class Catalog:
             result['finding_metrics'] = aggregates
             rows = db.execute('SELECT data FROM risks'+where+' ORDER BY id LIMIT ? OFFSET ?',
                               (*args, 100001 if export else limit, 0 if export else offset)).fetchall()
-            result.update(risks=[json.loads(r[0]) for r in rows], total=total, statistics=stats,
+            from .dashboard_presentation import present
+            result.update(risks=[present(decorate(json.loads(r[0]),mapping)) for r in rows], total=total, statistics=stats,
                           offset=offset, next_offset=None if offset+limit >= total else offset+limit)
             if query.get('session') or query.get('session_id'):
                 result['note'] += ' 当前只展示已验证会话归属的记录，历史归属未知项请在全部风险查看。'

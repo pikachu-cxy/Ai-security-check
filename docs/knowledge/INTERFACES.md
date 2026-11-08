@@ -1,5 +1,26 @@
 # 当前接口设计
 
+## 开发报告与处置新契约
+
+Observation/ScannerReview 增加可选 report_content（title/problem/impact/advice/unknowns/function_name），旧 report_text 保留；产品固定生成中文报告。INCONCLUSIVE 已保存即复核执行完成，仍是待确认风险，inconclusive_scanner_ids 单列；未提交候选才列 pending_scanner_ids。BusinessReview 增加 coverage、uncovered，pending_business_paths 不包含已审路径；真实缺口通过 business_coverage_gaps 单列，旧未分类限制不自动变完整。
+
+set_development_risk_disposition 支持 decision 标准字段和 disposition 兼容别名，冲突拒绝；新增 reason、expected_seq、expected_revision、request_id。include_history=true 的风险读取提供 revision。旧无 reason 请求明确记录原因未填写，不虚构；无 request_id 的相同当前决定有界去重，显式编号重试复用首次 CAS 版本。返回 saved/repeated/revision/disposition，用户 EXCLUDE 不等于技术 DISMISSED。
+
+development.stop_fallback.wait_mode 默认 bounded，可选 wait_for_result；后者仅用于 Codex，仍有核验的宿主上限，不提供虚假的无限值。Stop 安装定义 600 秒，等待预留 10 秒；旧连接仍需重连，未知配置按 18 秒回退。report_render_start/report_render_done 新增于既有复核计时回执，无新增调用。
+
+
+## 退役数据流提供器
+
+ScannerRegistry 不再构造 native-dataflow/native-go-sql，并在默认、显式和 fallback 注册时排除这些提供器；插件 ID 仍保留拒绝重名。历史结果中的 provider 名称继续可读，不删除历史确认漏洞，不把旧 PARTIAL 改成 FULL。运行时 bounded_dataflow/native_go_sql 能力为 DISABLED；健康组件为 DISABLED、optional=true，不因停用而将产品判异常。scan.dataflow 旧配置仅为格式兼容，不参与当前扫描调度，前端隐藏调节项但保存其他配置时保留原值。
+
+
+## 后台展示与会话名称接口
+
+风险读模型新增 presentation（title_zh、technical_explanation_zh、plain_impact_zh、advice_zh、unknowns_zh、content_source、source_revision、presentation_version）及 session_name/title_source/title_synced_at；原字段保留。展示内容不参与漏洞身份和签名。CSV 增加中文列与名称，SARIF 保留原始说明和展示扩展属性。
+
+POST /api/session-alias 接收 id、alias、expected_alias；只允许现有可见会话，空别名恢复宿主名称；旧别名冲突返回 409。沿用 Cookie、Origin、CSRF。POST /api/session-titles/refresh 接收空对象，异步合并刷新，不等待扫描或模型。GET /api/entities 返回 title_sync_status 和名称来源；名称、活动时间不改变删除 CAS。扫描与 MCP 协议不增加接口。
+
+
 ## 当前产品范围与后续规划
 
 全项目扫描与 Git commit 扫描列为后续支持功能，当前源码关闭公开执行入口。全项目同步入口、后台 project 提交及 CLI release 模式返回未开放说明；Git pre-commit 安装/修复与 staged 扫描同样拒绝。保留旧入口用于明确报错，旧 Hook 的状态查询与移除仍可使用。已有 pre-commit 脚本不会自动删除，调用后会收到未开放错误，需通过原移除入口清理。
@@ -165,6 +186,9 @@ Codex 可从完整 `apply_patch` 补丁取得全部路径（重命名包括原�
 
 监听器从写工具的 PostToolUse 开始累计静默时间，收到相关文件事件（含同一路径再次写入）时重新计时。收到 Stop 后，监听器在静默条件满足、最后一批已保存并取得空轮询后交付。未配对的写工具从 Stop 开始观察静默。Codex 自动收尾时，监听和扫描结果等待共享 Stop 的剩余预算；持续写入耗尽预算时保留已记录路径和范围缺口。静默只描述已观察的通知，不能证明后台子进程今后不会继续写入。
 
+跨连接监听通过签名检查的 file_watch.control 保存进程、回环端口及随机能力凭据，仅支持 touch/complete/stop；凭据不投影到公开结果。已有实例在本进程时仍走原内存路径；异进程不得根据本地实例缺失判定中断，也不得在未确认原持有者失效时抢占。并发启动在原存储事务内选定持有者，其他连接关闭未采用的原生监听并复用原实例。跨连接 Stop 仍用原剩余预算排空，成功回执后才算停止；真正中断或超时保留诊断。INCOMPLETE 将 file_watch_gaps 放入 observation_notes，gaps 只保留实际扫描/交接缺口。无新增公开 MCP 接口或 Hook 类型。
+
+
 Codex / WorkBuddy 的会话提示声明自动收尾时，编辑 Hook 记录实际路径，Stop 消费本轮编辑标记，沿原检查提交并等待保存结果。重复 Stop 和只读回合不触发复核。等待统一通过 `native_wait_seconds` 计算实际单次预算，默认上限仍为 18 秒，覆盖预算耗尽或执行失败时给出原引用与未完成提示，后台记录仍可读取。
 
 有扫描候选或业务审计待办时，Codex 自动 Stop 的可见续接只含统一状态和检查编号。Agent 通过当前会话的 closeout 视图读取保存的输入版本、待办和证据，复核后报告结果。WorkBuddy 仍在交接包内预取最多 8 个窗口、合计最多 16,000 字节的源码。Agent 可一次提交两类判断，直接使用提交后重读页。用户处置按风险 ID 单独保存。关闭产品 Stop 开关时，宿主按手动模式完成原检查。WorkBuddy 的命令 Hook 在每个事件后退出，直接写文件由 PostToolUse 记录路径，无法确定路径的 Shell 写入保留范围未知。
@@ -220,7 +244,11 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 
 - REVIEW：读取本批候选和证据，沿原证据、编号及版本校验提交，保留完整漏洞报告；既有批次提交、首次保存及 final_report 语义不变。
 - REPORT：只交付保存的 report_text 与 session_url。关闭复核的候选继续明确未经 Agent 确认；不补做复核、不重复提交。
-- INCOMPLETE：只交付已保存的本轮业务漏洞、扫描/变更收集缺口和会话链接，不等待、不轮询、不新开审计。尚未完成不得报告为零漏洞。首读时同一编辑版本的扫描恰好完成，可原子转入 REVIEW 或 REPORT；新编辑不能替代原批次。
+- INCOMPLETE：只交付已保存的本轮业务漏洞、实际扫描未完成状态和会话链接，不等待、不轮询、不新开审计。尚未完成不得报告为零漏洞。首读时同一编辑版本的扫描恰好完成，可原子转入 REVIEW 或 REPORT；新编辑不能替代原批次。
+
+`scope_unknown` 与 `file_watch_gaps` 保留原始诊断语义，供内部排查；不在用户报告追加采集范围未知提示。`batch_report_page` 在已完成、无实际扫描 gaps 的批次可输出“本批已记录文件的扫描已完成。”，不声明全项目覆盖。零候选完成批次不因 scope_unknown 单独触发 Stop；NO_OBSERVED_CHANGES 不声明扫描成功。INCOMPLETE 继续说明真实未完成/失败原因，不追加文件收集泛化提示。真实扫描 gaps、复核决策、会话链接和版本校验不变。
+
+开发记录新增 `watch_paths`，只由已验证的监听写入路径生成，不能以缺少 explicit_paths 推断来源。两类记录允许交集，直接编辑优先。收尾 `scope` 及原批次交付快照增加 `explicit_paths`、`watch_paths`、`skipped_missing_watch_paths`；列表摘要仍仅返回路径计数，不扩展分页正文。后者只表示收尾原有 lstat 已确认不存在的监听补充路径，不表示扫描通过；新路径事件撤销该路径的旧跳过记录，新批次清理来源及跳过记录。旧快照不重写，来源缺失沿原严格路径处理。
 
 分页沿 next_action，带返回的 expected_seq、scan_id 和 view=closeout；版本变化拒绝混读。末页无剩余待办时 next_action 为空。提示去重仅表示已发出交接，不写入“用户已读”或虚构“报告送达”。报告保持可独立读懂漏洞情况的完整交付，最后附本会话风险管理链接。详细规则仅放内部会话指导、工具说明和随安装分发的指导文件。
 
@@ -236,3 +264,18 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 `submit_development_review(response_view=final_report)` 沿原事务保存后，从同批完整账本读回并生成整批报告。误报/重复项整批汇总，确认项四段报告、覆盖缺口及 session_url 保留。仅完整报告正文超预算时按字符位置拆成可无损拼接的 report_text 片段，next_action 指向 `view=final_report`，携带 report_digest、输入和扫描版本。内容变化拒绝旧续页。不能逐片重做汇总、重新提交或根据读取声称用户已读。尚未完成复核返回有界 review_receipt 和待办数量，沿同批 review 续读；开发期 WAITING_FOR_STATIC_SCAN 保留等待正常收尾的指导，不主动轮询。保存成功但读回失败仅续读，不重提。每次提交仍最多 50 项，不能承诺任意大批次都只需两次调用。
 
 新增窗口规划、证据准备与报告组装时间点写入现有 review_timing；只在验收显式启用磁盘 trace 和模型遥测。以上工作发生在 Stop 交接后的读取/提交中；正常扫描、Stop 等待预算与 WorkBuddy 原随包预取不增加步骤。
+
+## 用户报告中的覆盖说明
+
+最终报告保留必要的中文覆盖限制说明，不把内部 gaps 枚举直接拼接进 report_text。结构化 gaps 与原始诊断保持原值，供内部分析和后台诊断使用；该展示变化不修改扫描覆盖判定，不触发补扫或额外 MCP 调用。
+
+
+## 三种配置收尾与增量审计交接
+
+`stream_prepare` 在原回执提供 `registration`；宿主创建真实只读子 Agent 后，补入真实 `agent_ref`、父 `session_ref` 调用 `stream_started`，并回传 prepare 的 `audit_token`。started 验证凭据并返回可直接执行的 `child_call`，包含工作区、检查引用、执行者、专用凭据与 claim 动作。旧 started 不传令牌仍可读取绑定状态，但不会得到完整 child_call；持久记录只保留凭据哈希。
+
+子任务首次 claim 返回固定批次、首批证据及从 Observation 模型生成的必填字段清单。证据足够直接 submit；不重新读取同一窗口。参数校验失败返回有界 `field_errors`，嵌套字段使用 observations.0.description 等路径；未知字段只返回合法字段列表，不回显输入值、任意键名或凭据。领取、保存和状态查询仍沿原权限边界。
+
+`stream_failed` 由父会话携带已绑定 agent_ref 记录执行失败；不需要旧协议的 audit_id。`executor_stage` 区分未派发、已派发、已领取与失败，不能把登记成功当作审计已保存。已绑定 continuation 直接提供原执行者，无需先额外查询状态。
+
+静态复核完成而业务审计未完成时，原提交回执仍返回完整静态报告、链接和独立 audit_continuation；`STATIC_REPORT_READY_AUDIT_PENDING` 不代表业务审计完成。候选首次响应可附同文件当前有效 `related_confirmed`，仅供判断是否同一问题。跨来源关联使用原 duplicate_of，须校验当前审计结果与覆盖扫描位置的证据；不以文件相同自动合并。相关摘要受原响应预算裁剪，不挤掉候选身份；截断明确标识。

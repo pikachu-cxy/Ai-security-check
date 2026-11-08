@@ -59,7 +59,7 @@ def signed_rows(path, workspace_dir):
     if Path(path).name == 'development-checks.db':
         from .business_audit import status as audit_status
         return [dict(row.get('security_result') or {'risks': {}}, workspace=row['workspace'], key=row['key'],
-                     has_security_result='security_result' in row,
+                     has_security_result='security_result' in row, updated_at=row.get('updated_at'),
                      owner=row['owner'], check_metadata=dict(state=row['state'], dirty_seq=row['dirty_seq'],
                      scanned_seq=row['scanned_seq'], audit=audit_status(row), gaps=(row.get('result') or {}).get('gaps', [])))
                 for row in history.rows() if row.get('kind') == 'check']
@@ -132,6 +132,7 @@ def records(*, project_id=None, session_id=None, editor_id=None, workspace_id=No
                         missing_projects.add(project)
                 if row.get('check_metadata'):
                     sessions.append(dict(row['check_metadata'], **scopes[project], editor=editor,
+                        last_security_activity_at=row.get('updated_at'),
                         session_id=(row.get('owner') or {}).get('session', ''), check_id=row['key'],
                         anchor_id=':'.join((editor, wd.name, row['key'], '$scope'))))
                 projects.add(project)
@@ -279,10 +280,12 @@ class Handler(BaseHTTPRequestHandler):
                 query = self.query()
                 if set(query) != {'kind'} or not self.server.catalog:
                     raise ValueError('ENTITY_QUERY_INVALID')
+                self.server.catalog.titles.request()
                 self.reply(200, listing(self.server.catalog, query['kind']))
             elif path == '/api/config':
                 from .user_config import read_config
-                self.reply(200, dict(effective='NEXT_BATCH', **read_config()))
+                from .stop_wait_policy import host_limit
+                self.reply(200, dict(effective='NEXT_BATCH', stop_wait_support=host_limit(), **read_config()))
             elif path in ('/api/risks', '/api/export'):
                 query = self.query()
                 if self.server.catalog:
@@ -348,6 +351,16 @@ class Handler(BaseHTTPRequestHandler):
                 if not self.server.catalog:
                     raise ValueError('ENTITY_INDEX_UNAVAILABLE')
                 self.reply(200, change(self.server.catalog, data))
+            elif path == '/api/session-alias':
+                from .dashboard_sessions import alias
+                if not self.server.catalog:
+                    raise ValueError('ENTITY_INDEX_UNAVAILABLE')
+                self.reply(200, alias(self.server.catalog,data))
+            elif path == '/api/session-titles/refresh':
+                if data or not self.server.catalog:
+                    raise ValueError('SESSION_REFRESH_INVALID')
+                self.server.catalog.titles.request()
+                self.reply(200, dict(status=self.server.catalog.titles.status))
             elif path == '/api/manual':
                 self.reply(200, create(data))
             elif path == '/api/config':

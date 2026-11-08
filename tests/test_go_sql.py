@@ -77,7 +77,7 @@ def test_invalid_helper_does_not_contribute_partial_index(tmp_path):
     assert not found and run.status=='PARTIAL'
 
 
-def test_runtime_captures_native_go_evidence(tmp_path):
+def test_runtime_excludes_retired_native_go_provider(tmp_path):
     from security_runtime.runtime import SecurityRuntime
     from security_runtime.scanners import ScannerRegistry
     from security_runtime.storage import SQLiteStore
@@ -85,9 +85,9 @@ def test_runtime_captures_native_go_evidence(tmp_path):
     write(root,{'handler.go':HANDLER,'query.go':HELPER})
     runtime=SecurityRuntime(ScannerRegistry([GoSQLScanner()],fallback_adapters=[]),SQLiteStore(tmp_path/'state'/'scan.db'))
     result=runtime.scan(root,'release')
-    assert len(result.findings)==1
-    assert result.findings[0].technical_details['dataflow_trace']
-    assert result.coverage!='FULL'
+    assert not result.findings
+    assert all(run.scanner != 'native-go-sql' for run in result.scanner_runs)
+    assert result.coverage != 'FULL'
 
 
 @pytest.mark.parametrize('query',[
@@ -170,6 +170,6 @@ def test_traversal_and_symlinks_fail_closed(tmp_path):
 
 def test_provider_is_separate_and_quick_mode_stays_lightweight(tmp_path):
     from security_runtime.scanners import ScannerRegistry
-    assert any(s.name=='native-go-sql' for s in ScannerRegistry().adapters)
+    assert not any(s.name=='native-go-sql' for s in ScannerRegistry().adapters)
     assert not GoSQLScanner().supports(None,ScanContext(str(tmp_path),ScanMode.QUICK,('app.go',)))
     assert len(rule_pack().catalog)==1

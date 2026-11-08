@@ -8,7 +8,7 @@ GROUPS = {
         'declare_development_outputs', 'finish_development_check', 'get_development_check',
         'complete_development_check', 'wait_development_check',
         'get_development_deliveries', 'get_development_result'),
-    'development_review': ('manage_development_audit', 'read_development_risk_context', 'submit_development_review',
+    'development_review': ('manage_development_audit', 'process_development_audit', 'read_development_risk_context', 'submit_development_review',
         'get_development_risks', 'set_development_risk_disposition',
         'prepare_development_risk_fix', 'submit_development_risk_resolution'),
     'security_task': ('begin_security_task', 'switch_security_task', 'finish_security_task',
@@ -125,7 +125,8 @@ def compact_tools(tools):
             oneOf=[{'required': ['operation', 'arguments'],
                     'properties': {'operation': {'const': tool.name},
                         'arguments': (_rewrite_refs(_inline_models(tool.inputSchema),
-                            '#/', '#/$defs/' + tool.name + '/') if tool.name == 'submit_development_review'
+                            '#/', '#/$defs/' + tool.name + '/') if tool.name in {
+                                'submit_development_review', 'process_development_audit', 'manage_development_audit'}
                             else {'$ref': '#/$defs/' + tool.name})}} for tool in members])
         schema['$defs'] = {tool.name: _rewrite_refs(deepcopy(tool.inputSchema), '#/', '#/$defs/' + tool.name + '/') for tool in members}
         result.append(Tool(name=group, inputSchema=schema,

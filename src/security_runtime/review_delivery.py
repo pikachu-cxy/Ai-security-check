@@ -21,7 +21,11 @@ def fit_review_page(page, positions, budget):
     page['deferred_business_path_count'] = len(page['deferred_business_paths'])
     page['deferred_business_paths_truncated'] = False
     while json_bytes(page) > target:
-        if page['evidence']:
+        related = next((c for c in page['candidates'] if c.get('related_confirmed')), None)
+        if related:
+            related['related_confirmed'].pop()
+            related['related_confirmed_truncated'] = True
+        elif page['evidence']:
             page['evidence'].pop()
             refs = {w['evidence_ref'] for w in page['evidence']}
             for candidate in page['candidates']:
@@ -161,6 +165,11 @@ def report_page(page, check, root, offset=0, expected_digest=None):
         report_offset=offset, next_offset=following, next_action=action,
         total=page['total'], summary=counts, session_url=page.get('session_url'),
         gaps=page['gaps'], scope_unknown=page['scope_unknown'], response_budget_bytes=budget)
+    from .business_audit import continuation, status
+    audit = continuation(check)
+    if audit:
+        result.update(audit_continuation=audit, business_audit=status(check),
+                      delivery_status='STATIC_REPORT_READY_AUDIT_PENDING')
     review_mark('report_pack_done')
     return result
 

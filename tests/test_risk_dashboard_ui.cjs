@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(path.join(__dirname,'../src/security_runtime/assets/risk_dashboard.html'),'utf8');
 class Element {
  constructor(tag='div'){this.tag=tag;this.value='';this.textContent='';this.children=[];this.style={};this.dataset={};this.checked=false;this.classList={add:()=>{},remove:()=>{},toggle:()=>{}}}
- append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} focus(){} addEventListener(n,fn){this['on'+n]=fn}
+ append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} focus(){} showModal(){this.open=true} close(){this.open=false} addEventListener(n,fn){this['on'+n]=fn}
  querySelectorAll(selector){return this.children.flatMap(c=>[...((c.tag==='input'||c.tag==='select')?[c]:[]),...c.querySelectorAll(selector)])}
 }
 const row={id:'risk1',title:'<script>unsafe</script>',editor:'codex',editor_label:'Codex',project:'project',location:'query.py:2',severity:'高',status:'待处理',editable:true,revision:'revision',description:'description'};
@@ -66,8 +66,8 @@ test('project to worktree to session navigation isolates siblings and risk filte
  els.entityRows.children[0].children[0].children[0].onclick();await tick();
  assert.equal(els.pageTitle.textContent,'工作区管理');assert.equal(els.entityRows.children.length,2);assert.equal(els.entityProject.value,'p');
  els.entityRows.children[0].children[0].children[0].onclick();await tick();
- assert.equal(els.pageTitle.textContent,'会话管理');assert.equal(els.entityRows.children.length,1);
- els.entityRows.children[0].children[3].children[0].children[0].onclick();await tick();
+ assert.equal(els.pageTitle.textContent,'开发会话管理');assert.equal(els.entityRows.children.length,1);
+ els.entityRows.children[0].children[3].children[0].children.find(b=>b.textContent==='查看风险').onclick();await tick();
  const query=new URL(requests.filter(r=>r.url?.startsWith('/api/risks?')).at(-1).url,'http://localhost').searchParams;
  assert.equal(query.get('project'),'p');assert.equal(query.get('workspace'),'w1');assert.equal(query.get('editor'),'codex');assert.equal(query.get('session'),'shared-session');
  vm.runInContext("resourceNavigate('workspace')",ctx);await tick();assert.equal(els.entityRows.children.length,2);
@@ -88,13 +88,13 @@ test('collapsible functional settings preserve all values and save nested typed 
  assert.equal(saved.expected_revision,'settings-v1');assert.equal(saved.values.agent.audit_business_logic,true);assert.equal(saved.values.scan.execution.sast_timeout_seconds,60);assert.equal(saved.values.development.business_audit_delivery,'wait');assert.equal(saved.values.storage.development_max_records,1024);assert.deepEqual(saved.values.rules.sast.paths,[]);
 });
 test('detail loads code only on open and exposes four report sections before folded metadata',async()=>{
- const saved={...row,decision:'CONFIRMED',report_text:'**SQL injection**\n评级：高\n**问题**\nUnsafe SQL\n**可能影响**\nRead data\n**建议修复**\nBind parameters\n**尚未确认**\nDeployment',management:{}};
+ const saved={...row,decision:'CONFIRMED',report_text:'**SQL injection**\n评级：高\n**问题**\nUnsafe SQL\n**可能影响**\nRead data\n**建议修复**\nBind parameters\n**尚未确认**\nDeployment',management:{},presentation:{title_zh:'SQL 注入风险',technical_explanation_zh:'参数进入 SQL 拼接。',plain_impact_zh:'可能读取其他账户数据。',advice_zh:'使用参数绑定。',unknowns_zh:'部署条件尚未确认。'}};
  const code={absolute_path:'/fixture/query.py',line_start:2,function:'query',historical:null,current:{matches_record:true,label:'当前代码（与记录版本一致）',lines:[{number:2,text:'<img onerror=alert(1)>',highlight:true}]}};
  const {ctx,els,requests}=await page({get:url=>url.startsWith('/api/detail?')?code:null});
  assert.ok(!requests.some(r=>r.url?.startsWith('/api/detail?')));
  ctx.risk=saved;await vm.runInContext('detail(risk)',ctx);
- assert.equal(els.detailTitle.textContent,'SQL injection');
- assert.equal(els.detailBody.children[1].children[1].textContent,'Unsafe SQL');
+ assert.equal(els.detailTitle.textContent,'SQL 注入风险');
+ assert.equal(els.detailBody.children[1].children[1].textContent,'参数进入 SQL 拼接。');
  assert.equal(els.detailBody.children.at(-1).tag,'details');
  assert.equal(els.detailBody.children[0].children[3].children[0].children[1].textContent,'<img onerror=alert(1)>');
  assert.equal(els.repair.disabled,false);assert.equal(els.repair.textContent,'交给原会话修复');
@@ -132,4 +132,43 @@ test('health is demand-only and distinguishes registered MCP from tested operati
  assert.match(els.healthMcp.children[0].children[1].children[0].textContent,/未执行业务调用/);
  assert.equal(requests.filter(r=>r.url==='/api/monitor').length,1);
  vm.runInContext("showView('overview')",ctx);await tick();assert.equal(els.healthView.hidden,true);
+});
+
+test('Chinese projection and named chat render as text while filter retains the ID',async()=>{
+ const named={...row,session_id:'stable-id',session_name:'登录接口 <script>',presentation:{title_zh:'中文漏洞标题'}};
+ const {els}=await page({result:{status:'AVAILABLE',risks:[named],sessions:[],total:1,note:'',statistics:{},session_names:{'stable-id':named.session_name}}});
+ assert.equal(els.rows.children[0].children[1].children[0].textContent,'中文漏洞标题');
+ assert.equal(els.session.children[1].value,'stable-id');
+ assert.equal(els.session.children[1].textContent,'登录接口 <script>');
+});
+
+test('session alias uses stable ID and optimistic alias conflict guard',async()=>{
+ const {ctx,els,requests}=await page({post:{saved:true},get:url=>url.includes('/api/entities?')?{items:[]}:null});
+ ctx.entity={id:'stable-entity',session_alias:'原别名'};vm.runInContext('openSessionAlias(entity)',ctx);
+ assert.equal(els.sessionAliasDialog.open,true);els.sessionAlias.value='新别名';await els.sessionAliasSave.onclick();
+ const req=requests.find(r=>r.url==='/api/session-alias');
+ assert.deepEqual(JSON.parse(req.options.body),{id:'stable-entity',alias:'新别名',expected_alias:'原别名'});
+ assert.equal(req.options.headers['X-CSRF-Token'],'fixture-token');
+});
+
+test('retired dataflow settings are hidden and preserved only for compatibility',async()=>{
+ const {ctx,els}=await page();ctx.values={scan:{dataflow:{max_files:256},execution:{sast_timeout_seconds:45}}};
+ vm.runInContext("configForm(values)",ctx);
+ const controls=els.configFields.querySelectorAll('input');
+ assert.ok(!controls.some(e=>e.dataset.path?.startsWith('scan.dataflow')));
+ assert.ok(controls.some(e=>e.dataset.path==='scan.execution.sast_timeout_seconds'));
+ assert.equal(vm.runInContext("healthLabels.DISABLED",ctx),'已停用（不参与扫描）');
+});
+
+test('Stop waiting mode shows the host limit and round-trips without changing scanner timeouts',async()=>{
+ const values={schema_version:1,development:{stop_fallback:{wait_mode:'bounded',native_wait_seconds:18}},scan:{execution:{sast_timeout_seconds:45}}};
+ const {els,requests}=await page({get:url=>url==='/api/config'?{values,revision:'wait-v1',stop_wait_support:{message:'当前宿主最多 590 秒，不支持无限等待'}}:null,post:{values,revision:'wait-v2'}});
+ await els.settingsOpen.onclick();
+ const fields=els.configFields.querySelectorAll('input,select');
+ fields.find(e=>e.dataset.path==='development.stop_fallback.wait_mode').value='wait_for_result';
+ await els.configSave.onclick();
+ const saved=JSON.parse(requests.find(r=>r.url==='/api/config'&&r.options?.method==='POST').options.body);
+ assert.equal(saved.values.development.stop_fallback.wait_mode,'wait_for_result');
+ assert.equal(saved.values.scan.execution.sast_timeout_seconds,45);
+ assert.ok(JSON.stringify(els.configFields.children).includes('不支持无限等待'));
 });

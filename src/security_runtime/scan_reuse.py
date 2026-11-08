@@ -48,14 +48,12 @@ def _result_data(scan):
 
 
 def _known_adapters():
-    from .dataflow import BoundedDataflowScanner
     from .dynamic_function import NativeFunctionScanner
-    from .go_sql import GoSQLScanner
     from .osv import OSVDependencyAdapter
     from .scanners import (SemgrepAdapter, GitleaksAdapter, TrivyAdapter,
                            TrivyMisconfigAdapter)
     return {SemgrepAdapter, GitleaksAdapter, TrivyAdapter, TrivyMisconfigAdapter,
-            NativeFunctionScanner, BoundedDataflowScanner, GoSQLScanner, OSVDependencyAdapter}
+            NativeFunctionScanner, OSVDependencyAdapter}
 
 
 def _adapter_identity(adapter):

@@ -53,11 +53,26 @@ def test_scan_finishes_after_notice_resolves_same_edit_batch(sample,monkeypatch,
 
 def test_incomplete_does_not_wait_or_claim_clean(sample):
     root,service,ref,risks=sample
+    with service.store(root).transaction() as db:
+        row=service.store(root)._get(db,ref)
+        service.store(root)._put(db,ref,dict(row,scope_unknown=True,file_watch_gaps=['FILE_WATCH_INTERRUPTED']))
     incomplete_notice(service,root,ref,1,{})
     page=closeout_page(risks,0,20)
     assert page['closeout_mode']=='INCOMPLETE' and not page['scanner_run']
-    assert page['next_action'] is None and page['gaps']==['STATIC_SCAN_INCOMPLETE']
+    assert page['next_action'] is None and page['gaps']==['STATIC_SCAN_INCOMPLETE','FILE_WATCH_INTERRUPTED']
     assert '不能判定' in page['report_text']
+    assert '文件变更收集存在缺口' not in page['report_text']
+
+
+@pytest.mark.parametrize('status', ['NO_OBSERVED_CHANGES', 'RESULTS_READY'])
+def test_watch_uncertainty_alone_does_not_request_report_or_scan(status):
+    from types import SimpleNamespace
+    state=dict(status=status,dirty_seq=1,scanned_seq=1,scope=dict(scope_unknown=True),gaps=[],
+        development_result=dict(review_progress=dict(pending_scanner_ids=[],pending_business_paths=[]),
+                                risks=[],next_offset=None))
+    service=SimpleNamespace(get=lambda *args: state)
+    row=dict(check_ref='check',dirty_seq=1,finish_requested=True)
+    assert native_closeout(service,None,row,time.monotonic(),set(),None) is None
 
 
 def test_report_pagination_keeps_pinned_batch_and_link(sample,monkeypatch,tmp_path):

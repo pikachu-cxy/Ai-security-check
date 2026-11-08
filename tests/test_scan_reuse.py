@@ -203,11 +203,9 @@ def test_database_fingerprint_disabled_preserves_reuse_and_expiry_check(reusable
 
 
 def test_unselected_default_providers_do_not_disable_valid_reuse(reusable):
-    from security_runtime.dataflow import BoundedDataflowScanner
     from security_runtime.dynamic_function import NativeFunctionScanner
-    from security_runtime.go_sql import GoSQLScanner
     runtime, root, *_ = reusable
-    runtime.registry.adapters.extend([NativeFunctionScanner(), BoundedDataflowScanner(), GoSQLScanner(),
+    runtime.registry.adapters.extend([NativeFunctionScanner(),
                                       TrivyAdapter(), TrivyMisconfigAdapter()])
     result = runtime.scan(root, 'release')
     assert any(run.status == 'NOT_APPLICABLE' for run in result.scanner_runs)

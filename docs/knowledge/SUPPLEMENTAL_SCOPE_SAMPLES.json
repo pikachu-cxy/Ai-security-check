@@ -1,0 +1,10 @@
+{
+  "scope": "1000 existing source files; separate_directories only; watch provenance set prepared before timing; one warm-up pair omitted; alternating before/after order",
+  "baseline": "pre-change development_scope.separate_directories from isolated source snapshot",
+  "samples_ms": {
+    "before": [96.009, 98.783, 98.432, 106.605, 104.016, 105.11, 101.971],
+    "after": [96.489, 98.293, 97.32, 102.929, 105.922, 102.297, 105.939]
+  },
+  "median_ms": {"before": 101.971, "after": 102.297},
+  "limitations": "Classification microbenchmark only; excludes ledger writes, scan execution and full Stop; not an end-to-end speedup claim. Regression verifies identical lstat calls and no worker for absent supplements only."
+}

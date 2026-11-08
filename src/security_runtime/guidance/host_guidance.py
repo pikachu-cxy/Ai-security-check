@@ -516,6 +516,7 @@ HOST_INSTRUCTIONS = '''AI Security Runtime 核心指导
 正式源码、正式测试及项目配置留在项目内，未跟踪的新源码仍需检查；不可因名称像临时文件而跳过。
 临时文件规则详见 development-check。
 编辑 Hook 只记录路径，不扫描或唤醒后台进程；开发收尾时合并静态检查。保存结果绑定实际输入版本，范围未知不扩为全项目扫描。
+扫描完成以本批已记录文件为范围；scope_unknown、file_watch_gaps 仅作内部采集诊断，不追加范围未知提示、不否定已完成的扫描。真实扫描失败、覆盖限制及未完成复核仍按保存结果交付，不扩称全项目检查完成。
 按当前意图选择下列必读方法，并非可跳过的建议；普通开发不自动叠加项目扫描。
 原生自动开发无待办时不读取方法，不调用 get_runtime_info 作为开发前置步骤，不重复安装校验。缺方法才调 get_runtime_guidance(topic)；Codex/WorkBuddy 经 runtime_status 分组调用。
 显式审计、版本查询或连接异常排查时，核对 get_runtime_info 的真实 build_identity、能力与 guidance_catalog；
@@ -674,7 +675,8 @@ def runtime_info(*, remediation_config=None, include_functional_verification=Fal
                          'task_closeout': 'closeout-state-v1; GENERATION_LEASE_VERSION_BOUND',
                          'persistent_credential_closure': 'PER_ORIGINAL_DETECTOR_RULE_FILE_VERSION',
                           'dynamic_function_check': 'native-js-function-v1; CANONICAL_DYNAMIC_CODE_ONLY',
-                         'bounded_dataflow': 'v1.5; REVALIDATED_PROCESS_MEMORY_CACHE; RETAINED_BATCH_REVERSE_DEPENDENCIES; FEATURE_SOFT_BUDGET_3S_RELEASE_30S; JAVA8_PYTHON_LOCAL_AST; SQL_AND_JAVA_PYTHON_CROSS_FILE_PATH_AND_PYTHON_IO_CODECS_STREAMS; FEATURE_RELEASE; NOT_WHOLE_PROGRAM',
+                         'native_go_sql': 'DISABLED; REMOVED_FROM_PRODUCT_SCAN; HISTORICAL_RESULTS_RETAINED',
+                         'bounded_dataflow': 'DISABLED; REMOVED_FROM_PRODUCT_SCAN; HISTORICAL_RESULTS_RETAINED',
                          'automatic_patch_workflow': 'NOT_IMPLEMENTED', 'target_build': 'NOT_IMPLEMENTED',
                          'smart_auto_remediation': 'v0.1', 'confirmation_handoff': 'v0.1',
                            'codex_integration': 'v0.2', 'cold_start_readiness': 'v0.3',

@@ -72,7 +72,7 @@ class FindingNormalizer:
         elif category == "command-injection":
             plain, impact, advice = "用户输入可能被用于执行系统命令", "攻击者可能通过构造输入执行服务器命令。", "避免拼接命令；使用安全 API 并验证输入。"
         else:
-            plain, impact, advice = title or "发现潜在安全问题", evidence_text(description, 400), "检查受影响代码并修复后重新扫描。"
+            plain, impact, advice = title or "发现潜在安全问题", "具体影响尚未确认。", "检查受影响代码并修复后重新扫描。"
         # Preserve each originating Secret detector through scan persistence.
         # Old scan IDs/fingerprints are never rewritten; eq-v1 remains stable.
         discriminator = rule_id if category in {"dependency", "configuration", "secret"} else ""

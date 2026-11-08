@@ -141,11 +141,27 @@ def test_expired_worker_observation_stops_without_retry(check):
     root, service, _, _ = check
     ref = dirty(check)
     store = service.store(root)
+    submitted = service.finish(root, ref)
     with store.transaction() as db:
         store._put(db, '$worker', dict(ticket='a'*64, lease_until=service.now()-1))
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, state='RUNNING', worker_ticket='a'*64))
     clock = WaitClock(service)
-    result = asyncio.run(service.finish_and_wait(root, ref, 25))
+    result = asyncio.run(service.wait_saved(root, ref, 25, submitted=submitted))
     assert result['status'] == 'INTERRUPTED' and not clock.sleeps
+
+
+def test_queued_check_ignores_previous_expired_worker(check, monkeypatch):
+    root, service, _, state = check
+    ref = dirty(check)
+    store = service.store(root)
+    with store.transaction() as db:
+        store._put(db, '$worker', dict(ticket='old-worker', lease_until=service.now()-1))
+    clock = WaitClock(service, lambda: execute(check, monkeypatch))
+    result = asyncio.run(service.finish_and_wait(root, ref, 25))
+    assert result['status'] in {'RESULTS_READY', 'PARTIAL'} and clock.sleeps
+    assert result['result_available']
+    assert state['calls'] == 1
 
 
 def test_wait_does_not_cross_owner_or_replaced_root(check):

@@ -901,14 +901,23 @@ class TrivyMisconfigAdapter(TrivyAdapter):
         return super()._scan(binary, replace(context, files=files, context_files=()), n)
 
 
+# Reserved IDs remain unavailable to plugins and production registries. Historical
+# findings retain these provider names; source-only models remain for compatibility.
+RETIRED_DATAFLOW_PROVIDERS = frozenset({'native-dataflow', 'native-go-sql'})
+
+
+def active_provider(adapter):
+    return not ({getattr(adapter, 'name', None), getattr(adapter, 'scanner_id', None),
+                 getattr(adapter, 'engine_id', None)} & RETIRED_DATAFLOW_PROVIDERS)
+
+
 class ScannerRegistry:
     def __init__(self, adapters: list[ScannerAdapter] | None = None, tool_manager: ToolManager | None = None, *, fallback_adapters=None):
         self.tool_manager = tool_manager or ToolManager()
         from .dynamic_function import NativeFunctionScanner
-        from .dataflow import BoundedDataflowScanner
-        from .go_sql import GoSQLScanner
-        self.fallback_adapters = fallback_adapters if fallback_adapters is not None else []
-        self.adapters = adapters if adapters is not None else [OpenGrepAdapter(self.tool_manager), NativeFunctionScanner(), BoundedDataflowScanner(), GoSQLScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.fallback_adapters = [a for a in (fallback_adapters or []) if active_provider(a)]
+        self.adapters = adapters if adapters is not None else [OpenGrepAdapter(self.tool_manager), NativeFunctionScanner(), GitleaksAdapter(self.tool_manager), TrivyAdapter(self.tool_manager), TrivyMisconfigAdapter(self.tool_manager), *self._discover_plugins()]
+        self.adapters = [a for a in self.adapters if active_provider(a)]
 
     def _discover_plugins(self) -> list[ScannerAdapter]:
         plugins = []

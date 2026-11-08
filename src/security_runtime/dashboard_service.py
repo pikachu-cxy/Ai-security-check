@@ -80,7 +80,7 @@ class NoRedirect(HTTPRedirectHandler):
 def code_id():
     base = Path(__file__).parent
     names = ('dashboard_service.py', 'risk_dashboard.py', 'dashboard_records.py',
-             'dashboard_catalog.py', 'dashboard_health.py', 'dashboard_detail.py', 'dashboard_history.py', 'dashboard_entities.py', 'dashboard_export.py', 'risk_management.py',
+             'dashboard_catalog.py', 'dashboard_presentation.py', 'dashboard_sessions.py', 'dashboard_health.py', 'dashboard_detail.py', 'dashboard_history.py', 'dashboard_entities.py', 'dashboard_export.py', 'risk_management.py',
              'project_identity.py', 'user_config.py', 'assets/risk_dashboard.html',
              'development_risks.py', 'business_audit.py', 'repair_notifications.py')
     digest = hashlib.sha256()

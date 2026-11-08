@@ -66,6 +66,9 @@ def scanner(sample, monkeypatch):
 @pytest.mark.parametrize("delivery", ["fast", "wait"])
 def test_large_ledger_accepts_scanner_reviews_and_new_business_finding(sample, monkeypatch, delivery):
     root, service, ref, risks = sample
+    # This test exercises the legacy fast/wait contract, not streaming audit.
+    from security_runtime.business_audit import operate
+    operate(risks, 'prepare')
     with service.store(root).transaction() as db:
         check = service.store(root)._get(db, ref)
         check["effective_config"]["values"]["development"]["business_audit_delivery"] = delivery
@@ -127,11 +130,11 @@ def test_batch_report_is_saved_read_back_and_respects_disposition(sample, monkey
     with pytest.raises(ValueError):
         risks.submit([dict(value, evidence_refs=['invalid'])], seq, business_reviews=coverage)
     page = risks.submit([value], seq, business_reviews=coverage, return_risks=True)
-    assert page['report_text'] == value['report_text']
+    assert '**问题**' in page['report_text'] and '**修复／暂不处理**' in page['report_text']
     key = page['risks'][0]['id']
-    assert risks.load()['risks'][key]['assessment']['report_text'] == page['report_text']
+    assert risks.load()['risks'][key]['assessment']['report_text'] == value['report_text']
     risks.disposition(key, 'DEFER', True)
-    assert risks.get(batch_version=(seq, 'scan-1'))['report_text'] == ''
+    assert '**问题**' not in risks.get(batch_version=(seq, 'scan-1'))['report_text']
     with pytest.raises(ValueError, match='VERSION_STALE'):
         risks.get(batch_version=(seq, 'another-scan'))
 
@@ -505,13 +508,15 @@ def test_final_report_requires_complete_committed_single_page(sample, monkeypatc
     page = risks.get(batch_version=(seq, 'scan-1'))
     page.update(review_saved=True, post_commit_read=True, reread_required=False)
     if decision == 'INCONCLUSIVE':
-        assert receipt['view'] == 'review_receipt' and 'risks' not in receipt
-        assert receipt['review_progress']['pending_scanner_count'] == 1
-        assert not receipt['host_review_completed'] and receipt['next_action']['arguments']['view'] == 'review'
+        assert receipt['view'] == 'final_report' and 'risks' not in receipt
+        assert receipt['summary']['INCONCLUSIVE'] == 1
+        assert receipt['host_review_completed'] and receipt['next_action'] is None
+        assert 'Agent 复核后待确认' in receipt['report_text']
     else:
         assert receipt['report_text'] == page['report_text']
         if decision == 'CONFIRMED':
-            assert receipt['report_text'].startswith(report)
+            assert '请求参数直接拼入 SQL。' in receipt['report_text']
+            assert '外部调用路径尚未核实。' in receipt['report_text']
         assert receipt['view'] == 'final_report' and 'risks' not in receipt
         assert receipt['dirty_seq'] == seq and receipt['scan_id'] == page['scan_id']
         for key, override in [('next_offset', 20), ('next_action', {'tool':'read'}),
@@ -537,7 +542,7 @@ def test_final_report_after_readback_failure_recovers_only_by_reading(sample, mo
     receipt = final_report_receipt(saved)
     assert receipt['review_saved'] and receipt['reread_required'] and not receipt['post_commit_read']
     assert receipt['next_action']['tool'] == 'get_development_risks'
-    assert risks.get(batch_version=(seq, 'scan-1'))['report_text'] == value['report_text']
+    assert '**问题**' in risks.get(batch_version=(seq, 'scan-1'))['report_text']
     assert len(risks.load()['reviews']) == 1
 
 
@@ -582,7 +587,8 @@ def test_shell_only_finding_keeps_writer_uncertainty_in_evidence_and_delivery(sa
         report_text='Unsafe query.', evidence_refs=item['evidence_refs'])], page['dirty_seq'],
         scan_id=page['scan_id'], return_risks=True, business_reviews=[dict(file_path='query.py',
             rationale='Checked', evidence_refs=item['evidence_refs'])])
-    assert '写入会话未经确认' in report['report_text']
+    assert '写入会话未经确认' not in report['report_text']
+    assert 'query.py:2' in report['report_text']
 
 
 def test_complete_report_keeps_details_and_adds_stable_session_link(sample, monkeypatch):
@@ -597,6 +603,6 @@ def test_complete_report_keeps_details_and_adds_stable_session_link(sample, monk
     first = risks.submit([value], seq, business_reviews=coverage, return_risks=True)
     second = risks.get(batch_version=(seq, 'scan-1'))
     assert first['report_text'] == second['report_text']
-    assert first['report_text'].startswith(value['report_text'] + '\n\n')
+    assert '**问题**' in first['report_text'] and '**可能影响**' in first['report_text']
     assert 'http://127.0.0.1:12345/risks?project=' in first['report_text']
     assert '&session=' in first['report_text'] and 'x'*32 not in first['report_text']

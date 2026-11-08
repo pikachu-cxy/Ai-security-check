@@ -43,11 +43,16 @@ def _gap(store, ref, reason, *, watch_id=None, status='FAILED'):
         if row is None or watch_id and row.get('file_watch', {}).get('id') != watch_id:
             return
         gaps = list(dict.fromkeys([*row.get('file_watch_gaps', []), reason]))
-        watch = dict(row.get('file_watch', {}), status=status, ended_at=store.now())
+        watch = dict(row.get('file_watch', {}), status=status)
+        if status != 'ACTIVE':
+            watch['ended_at'] = store.now()
+        watch['diagnostic'] = dict(reason=reason, at=store.now(), reporter_pid=os.getpid())
         # A watcher diagnostic is not an observed edit. Preserve uncertainty,
         # but do not advance the input version or reopen an already saved batch.
         store._put(db, ref, dict(row, scope_unknown=True,
-                                file_watch=watch, file_watch_gaps=gaps))
+                                file_watch=watch, file_watch_gaps=gaps,
+                                file_watch_diagnostic=dict(watch['diagnostic'], watch_id=watch.get('id'),
+                                    owner_pid=(watch.get('control') or {}).get('pid'))))
 
 
 class _Window:
@@ -55,6 +60,7 @@ class _Window:
         self.prewarm = prewarm
         self.store, self.ref, self.owner = store, ref, dict(owner)
         self.id = uuid.uuid4().hex
+        self.control = None
         self.closing = threading.Event()
         self.done = threading.Event()
         self.seen = set()
@@ -186,6 +192,22 @@ class _Window:
                         _windows.pop(_key(self.store, self.ref), None)
 
 
+def _reuse_remote(store, ref, owner, watch, invocation):
+    from .watch_control import request, owner_lost
+    if request(watch, 'touch', invocation=invocation) is True:
+        return 'ACTIVE'
+    current = store.load(ref, owner).get('file_watch', {})
+    if current.get('id') != watch.get('id') or current.get('status') != 'ACTIVE':
+        return None
+    if owner_lost(current, store.now()):
+        _gap(store, ref, 'FILE_WATCH_INTERRUPTED', watch_id=current.get('id'), status='INTERRUPTED')
+        return None
+    # A fresh owner that cannot be contacted is not proven dead. Do not steal
+    # its watcher or discard queued notifications; retain the diagnostic.
+    _gap(store, ref, 'FILE_WATCH_OWNER_UNAVAILABLE', watch_id=current.get('id'), status='ACTIVE')
+    return 'FAILED'
+
+
 def start_window(store, ref, owner, *, backend_factory=None, invocation=None, prewarm=None):
     store.load(ref, owner)
     key = _key(store, ref)
@@ -195,27 +217,54 @@ def start_window(store, ref, owner, *, backend_factory=None, invocation=None, pr
             current.last_activity = time.monotonic()
             current.pending_tools.add(invocation)
             return 'ACTIVE'
+    # Never hold this process's window lock while contacting another owner:
+    # two MCP connections can be handling each other's workspaces concurrently.
+    old = store.load(ref, owner).get('file_watch', {})
+    if old.get('status') == 'ACTIVE':
+        reused = _reuse_remote(store, ref, owner, old, invocation)
+        if reused is not None:
+            return reused
+    with _lock:
+        current = _windows.get(key)
+        if current and current.thread.is_alive() and not current.closing.is_set():
+            current.last_activity = time.monotonic()
+            current.pending_tools.add(invocation)
+            return 'ACTIVE'
         if len(_windows) >= MAX_WINDOWS:
             _gap(store, ref, 'FILE_WATCH_CAPACITY_EXCEEDED')
             return 'FAILED'
-        old = store.load(ref, owner).get('file_watch', {})
-        if old.get('status') == 'ACTIVE':
-            _gap(store, ref, 'FILE_WATCH_INTERRUPTED', status='INTERRUPTED')
         window = None
         try:
             window = _Window(store, ref, owner, backend_factory or _backend, prewarm)
+            from .watch_control import endpoint
+            try:
+                window.control = endpoint()
+            except OSError:
+                # Local watching must still work where loopback binding is
+                # restricted. Other connections cannot claim this as dead.
+                window.control = dict(pid=os.getpid())
             window.pending_tools.add(invocation)
             with store.transaction() as db:
                 row = store._get(db, ref)
-                watch = dict(contract=CONTRACT, id=window.id, status='ACTIVE',
-                             started_at=store.now(), lease_until=store.now()+LEASE_SECONDS,
-                             scope='TASK_TIME_WINDOW', attribution='TIME_WINDOW_NOT_WRITER')
-                store._put(db, ref, dict(row, file_watch=watch))
-            if window.registration_slow:
-                _gap(store, ref, 'FILE_WATCH_START_DELAYED', watch_id=window.id, status='ACTIVE')
-            _windows[key] = window
-            window.thread.start()
-            return 'ACTIVE'
+                # Simultaneous starts in separate MCP processes elect a single
+                # owner in the existing transaction, after native registration.
+                winner = row.get('file_watch', {})
+                if winner.get('status') != 'ACTIVE':
+                    winner = None
+                    watch = dict(contract=CONTRACT, id=window.id, status='ACTIVE',
+                                 control=window.control,
+                                 started_at=store.now(), lease_until=store.now()+LEASE_SECONDS,
+                                 scope='TASK_TIME_WINDOW', attribution='TIME_WINDOW_NOT_WRITER')
+                    store._put(db, ref, dict(row, file_watch=watch))
+                    _windows[key] = window
+                    window.thread.start()
+            if winner is not None:
+                window.backend.close()
+                window = None
+            else:
+                if window.registration_slow:
+                    _gap(store, ref, 'FILE_WATCH_START_DELAYED', watch_id=window.id, status='ACTIVE')
+                return 'ACTIVE'
         except Exception:
             if window is not None:
                 _windows.pop(key, None)
@@ -223,20 +272,30 @@ def start_window(store, ref, owner, *, backend_factory=None, invocation=None, pr
                     window.backend.close()
                 except Exception:
                     pass
-            _gap(store, ref, 'FILE_WATCH_START_FAILED')
+            if window is not None or store.load(ref, owner).get('file_watch', {}).get('status') != 'ACTIVE':
+                _gap(store, ref, 'FILE_WATCH_START_FAILED', watch_id=window.id if window else None)
             return 'FAILED'
+    return _reuse_remote(store, ref, owner, winner, invocation) or 'FAILED'
 
 
-def active(store, ref, owner, *, completed=None):
+def active(store, ref, owner, *, completed=None, resolve_remote=True):
     with _lock:
         window = _windows.get(_key(store, ref))
         if not (window and window.owner == owner and window.thread.is_alive()
                 and not window.closing.is_set()):
-            return False
-        if completed is not None and completed in window.pending_tools:
-            window.pending_tools.remove(completed)
-            window.quiet_since = time.monotonic()
-        return True
+            window = None
+        if window is not None:
+            if completed is not None and completed in window.pending_tools:
+                window.pending_tools.remove(completed)
+                window.quiet_since = time.monotonic()
+            return True
+    if not resolve_remote:
+        return False
+    watch = store.load(ref, owner).get('file_watch', {})
+    if watch.get('status') == 'ACTIVE':
+        from .watch_control import request
+        return request(watch, 'complete', invocation=completed) is True
+    return False
 
 
 def stop_window(store, ref, owner, *, deadline=None):
@@ -255,7 +314,18 @@ def stop_window(store, ref, owner, *, deadline=None):
         if not window.done.wait(max(0, window.close_at - time.monotonic())):
             _gap(store, ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=window.id)
     elif row.get('file_watch', {}).get('status') == 'ACTIVE':
-        _gap(store, ref, 'FILE_WATCH_INTERRUPTED', status='INTERRUPTED')
+        from .watch_control import request, owner_lost
+        watch = row['file_watch']
+        remaining = max(0, deadline-time.monotonic()) if deadline is not None else 2*SETTLE_SECONDS
+        request(watch, 'stop', budget=remaining)
+        current = store.load(ref, owner).get('file_watch', {})
+        if current.get('id') == watch.get('id') and current.get('status') == 'ACTIVE':
+            if owner_lost(current, store.now()):
+                _gap(store, ref, 'FILE_WATCH_INTERRUPTED', watch_id=watch.get('id'), status='INTERRUPTED')
+                return
+            # Keep the original watcher running to drain its last events, but
+            # do not certify a flush that failed to acknowledge within budget.
+            _gap(store, ref, 'FILE_WATCH_SETTLEMENT_TIMEOUT', watch_id=watch.get('id'))
 
 
 def close_store(store):

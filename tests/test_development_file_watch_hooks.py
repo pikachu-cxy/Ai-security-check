@@ -91,6 +91,8 @@ def test_pre_ready_before_script_post_and_finish_collect_exact_paths(installed, 
             scan_path_provider=tmp_path/'scan.db',launcher=lambda *_: None)
         finished = service.finish(root,ref)
         assert set(finished['scope']['paths']) == {'shell-created.py', 'first.py', 'last.py'}
+        assert set(finished['scope']['explicit_paths']) == {'first.py', 'last.py'}
+        assert 'shell-created.py' in finished['scope']['watch_paths']
         assert finished['scope']['scope_unknown'] is False
         assert finished['file_watch']['status'] == 'STOPPED'
         replay = call(server,'handle_before_hook_event',args)

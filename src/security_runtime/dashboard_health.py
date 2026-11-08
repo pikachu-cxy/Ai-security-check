@@ -89,15 +89,11 @@ def collect(*, manager=None, mcp_probe=None):
                 row.update(rules=[secret['config_path']] if secret['config_path'] else [],
                            rule_version='随工具版本内置', rule_status='CONFIGURED', rule_mode='custom' if secret['config_path'] else 'embedded')
             components.append(row)
-        # Importability is a component check, not execution of a source scan.
-        try:
-            from . import dataflow
-            native = dict(name='native-dataflow', status='READY', version=__version__,
-                          path=str(Path(dataflow.__file__)), optional=False,
-                          rules=[str(base / 'flow_core.py')], rule_version=__version__, rule_status='BUILTIN')
-        except ImportError:
-            native = dict(name='native-dataflow', status='UNAVAILABLE', version=__version__, path='', optional=False)
-        components.append(native)
+        # Retired models are not imported, probed or treated as a readiness fault.
+        for name, filename in (('native-dataflow', 'dataflow.py'), ('native-go-sql', 'go_sql.py')):
+            components.append(dict(name=name, status='DISABLED', version=__version__,
+                path=str(base / filename), optional=True, rules=[], rule_version='',
+                rule_status='DISABLED', reason='已移出产品扫描流程，仅保留历史记录兼容。'))
         db = manager.trivy_cache_dir() / 'db'
         fresh = manager.database_freshness()
         readable = validate_database_directory(db)

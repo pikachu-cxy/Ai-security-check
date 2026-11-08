@@ -95,6 +95,6 @@ def apply(risk, request):
     if len(history) >= 1000:
         raise ValueError('MANAGEMENT_HISTORY_CAPACITY')
     history.append(dict(request_id=key, payload_hash=digest, action=action,
-                        reason=redact(reason), fields=fields, at=time.time()))
+                        reason=redact(reason), fields=fields, expected_revision=request.get('expected_revision'), at=time.time()))
     changed['management'] = management
     return changed, dict(saved=True, repeated=False, revision=revision(changed))

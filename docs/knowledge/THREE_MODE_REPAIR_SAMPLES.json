@@ -1,0 +1,1014 @@
+{
+  "contract": "three-mode-repair-acceptance-v1",
+  "samples": [
+    {
+      "label": "REPAIR-A-ALLOWLIST",
+      "exit_code": 0,
+      "total_seconds": 108.908,
+      "host_ttft_seconds": 9.031,
+      "scan_count": 1,
+      "scan_seconds": [
+        12.416
+      ],
+      "scan_wall_seconds": [
+        10.704
+      ],
+      "findings": [
+        1
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 12.452,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-A-CLEAN",
+      "exit_code": 0,
+      "total_seconds": 87.805,
+      "host_ttft_seconds": 9.527,
+      "scan_count": 1,
+      "scan_seconds": [
+        12.611
+      ],
+      "scan_wall_seconds": [
+        11.226
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-A-LOGIC",
+      "exit_code": 0,
+      "total_seconds": 84.866,
+      "host_ttft_seconds": 7.174,
+      "scan_count": 1,
+      "scan_seconds": [
+        7.145
+      ],
+      "scan_wall_seconds": [
+        5.461
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-A-MIXED",
+      "exit_code": 0,
+      "total_seconds": 150.312,
+      "host_ttft_seconds": 9.472,
+      "scan_count": 1,
+      "scan_seconds": [
+        7.533
+      ],
+      "scan_wall_seconds": [
+        6.761
+      ],
+      "findings": [
+        5
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 26.971,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-A2-CLEAN",
+      "exit_code": 0,
+      "total_seconds": 126.104,
+      "host_ttft_seconds": 15.948,
+      "scan_count": 1,
+      "scan_seconds": [
+        13.515
+      ],
+      "scan_wall_seconds": [
+        11.218
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-B-ALLOWLIST",
+      "exit_code": 0,
+      "total_seconds": 125.405,
+      "host_ttft_seconds": 14.286,
+      "scan_count": 1,
+      "scan_seconds": [
+        9.528
+      ],
+      "scan_wall_seconds": [
+        8.364
+      ],
+      "findings": [
+        1
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 0,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 10.6,
+      "submit_roundtrip_seconds": [
+        2.014
+      ],
+      "evidence_to_final_seconds": 21.373,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-B-CLEAN",
+      "exit_code": 0,
+      "total_seconds": 101.68,
+      "host_ttft_seconds": 12.434,
+      "scan_count": 1,
+      "scan_seconds": [
+        9.743
+      ],
+      "scan_wall_seconds": [
+        8.142
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-B-LOGIC",
+      "exit_code": 0,
+      "total_seconds": 94.88,
+      "host_ttft_seconds": 7.257,
+      "scan_count": 1,
+      "scan_seconds": [
+        11.522
+      ],
+      "scan_wall_seconds": [
+        10.2
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-B-MIXED",
+      "exit_code": 0,
+      "total_seconds": 187.503,
+      "host_ttft_seconds": 14.155,
+      "scan_count": 1,
+      "scan_seconds": [
+        7.579
+      ],
+      "scan_wall_seconds": [
+        6.488
+      ],
+      "findings": [
+        5
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 0,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 30.189,
+      "submit_roundtrip_seconds": [
+        1.601
+      ],
+      "evidence_to_final_seconds": 56.173,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C-ALLOWLIST",
+      "exit_code": 0,
+      "total_seconds": 172.97,
+      "host_ttft_seconds": 14.045,
+      "scan_count": 1,
+      "scan_seconds": [
+        7.235
+      ],
+      "scan_wall_seconds": [
+        6.153
+      ],
+      "findings": [
+        1
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 3,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 7.037,
+      "submit_roundtrip_seconds": [
+        3.456
+      ],
+      "evidence_to_final_seconds": 18.429,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        7460
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C-CLEAN",
+      "exit_code": 0,
+      "total_seconds": 180.941,
+      "host_ttft_seconds": 11.275,
+      "scan_count": 1,
+      "scan_seconds": [
+        16.013
+      ],
+      "scan_wall_seconds": [
+        11.973
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 0,
+      "management_calls": 3,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": null,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        5021
+      ],
+      "final_has_link": false
+    },
+    {
+      "label": "REPAIR-C-LOGIC",
+      "exit_code": 0,
+      "total_seconds": 185.007,
+      "host_ttft_seconds": 8.917,
+      "scan_count": 1,
+      "scan_seconds": [
+        10.549
+      ],
+      "scan_wall_seconds": [
+        9.217
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 3,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 12.38,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        4011
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C-MIXED",
+      "exit_code": 0,
+      "total_seconds": 289.687,
+      "host_ttft_seconds": 14.309,
+      "scan_count": 1,
+      "scan_seconds": [
+        21.482
+      ],
+      "scan_wall_seconds": [
+        18.768
+      ],
+      "findings": [
+        5
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 3,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 31.594,
+      "submit_roundtrip_seconds": [
+        2.031
+      ],
+      "evidence_to_final_seconds": 66.565,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        6807
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C2-LOGIC",
+      "exit_code": 0,
+      "total_seconds": 235.543,
+      "host_ttft_seconds": 10.335,
+      "scan_count": 1,
+      "scan_seconds": [
+        18.664
+      ],
+      "scan_wall_seconds": [
+        15.908
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 3,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 14.184,
+      "child_calls": {
+        "claim": 1,
+        "submit": 2
+      },
+      "child_ttft_ms": [
+        7207
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C2-MIXED",
+      "exit_code": 0,
+      "total_seconds": 307.461,
+      "host_ttft_seconds": 10.013,
+      "scan_count": 1,
+      "scan_seconds": [
+        20.594
+      ],
+      "scan_wall_seconds": [
+        17.704
+      ],
+      "findings": [
+        5
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 3,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 39.052,
+      "submit_roundtrip_seconds": [
+        4.83
+      ],
+      "evidence_to_final_seconds": 73.306,
+      "child_calls": {
+        "claim": 1,
+        "submit": 2,
+        "recover": 1
+      },
+      "child_ttft_ms": [
+        6247,
+        2056
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C3-LOGIC",
+      "exit_code": 0,
+      "total_seconds": 208.966,
+      "host_ttft_seconds": 11.132,
+      "scan_count": 1,
+      "scan_seconds": [
+        26.728
+      ],
+      "scan_wall_seconds": [
+        22.575
+      ],
+      "findings": [
+        0
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 3,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 13.511,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        6847
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-C3-MIXED",
+      "exit_code": 0,
+      "total_seconds": 277.444,
+      "host_ttft_seconds": 10.338,
+      "scan_count": 1,
+      "scan_seconds": [
+        26.178
+      ],
+      "scan_wall_seconds": [
+        22.638
+      ],
+      "findings": [
+        5
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 2,
+      "management_calls": 3,
+      "submit_attempts": 1,
+      "submit_saved": 1,
+      "evidence_to_submit_seconds": 31.81,
+      "submit_roundtrip_seconds": [
+        3.175
+      ],
+      "evidence_to_final_seconds": 61.319,
+      "child_calls": {
+        "claim": 1,
+        "submit": 1
+      },
+      "child_ttft_ms": [
+        5908
+      ],
+      "final_has_link": true
+    },
+    {
+      "label": "REPAIR-H-ALLOWLIST",
+      "exit_code": 0,
+      "total_seconds": 95.405,
+      "host_ttft_seconds": 9.851,
+      "scan_count": 1,
+      "scan_seconds": [
+        11.75
+      ],
+      "scan_wall_seconds": [
+        9.974
+      ],
+      "findings": [
+        1
+      ],
+      "coverage": [
+        "FULL"
+      ],
+      "static_calls": 1,
+      "management_calls": 0,
+      "submit_attempts": 0,
+      "submit_saved": 0,
+      "evidence_to_submit_seconds": null,
+      "submit_roundtrip_seconds": [],
+      "evidence_to_final_seconds": 11.521,
+      "child_calls": {},
+      "child_ttft_ms": [],
+      "final_has_link": true
+    }
+  ],
+  "cold_connection_stop_pairs": [
+    {
+      "version": "before",
+      "round": 1,
+      "stop_seconds": 22.33067142998334,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 14247.167905,
+        "scan.execute": 9667.821104,
+        "scanner.process": 6313.714296,
+        "check.wait": 16278.304977,
+        "check.batch": 14366.107803,
+        "check.worker": 15261.193087
+      },
+      "non_scan_seconds": 8.08350352498334
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "stop_seconds": 26.298917941050604,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 19761.228227,
+        "scan.execute": 11551.439485,
+        "scanner.process": 7565.616364,
+        "check.wait": 21925.926384,
+        "check.batch": 19927.757159,
+        "check.worker": 20896.597852
+      },
+      "non_scan_seconds": 6.537689714050604
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "stop_seconds": 21.013988494989462,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 14442.827333,
+        "scan.execute": 7961.263776,
+        "scanner.process": 5353.791123999999,
+        "check.wait": 16700.947863,
+        "check.batch": 14647.109542,
+        "check.worker": 15644.594253
+      },
+      "non_scan_seconds": 6.571161161989464
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "stop_seconds": 18.223679393995553,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12517.653203,
+        "scan.execute": 8723.767481,
+        "scanner.process": 6760.199709,
+        "check.wait": 13960.347904,
+        "check.batch": 12625.934554,
+        "check.worker": 13119.400386
+      },
+      "non_scan_seconds": 5.706026190995553
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "stop_seconds": 19.0580724219908,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 14395.184459,
+        "scan.execute": 9478.607675,
+        "scanner.process": 7321.953047,
+        "check.wait": 15881.519621,
+        "check.batch": 14496.242069,
+        "check.worker": 15116.887751
+      },
+      "non_scan_seconds": 4.662887962990801
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "stop_seconds": 18.685406845994294,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 13649.361988,
+        "scan.execute": 7628.101438,
+        "scanner.process": 5711.931852,
+        "check.wait": 15111.049163,
+        "check.batch": 13750.293074,
+        "check.worker": 14191.905556
+      },
+      "non_scan_seconds": 5.036044857994293
+    },
+    {
+      "version": "after",
+      "round": 4,
+      "stop_seconds": 19.755376287037507,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 14095.748751,
+        "scan.execute": 8351.392706,
+        "scanner.process": 5640.421676,
+        "check.wait": 16045.856739,
+        "check.batch": 14208.404354,
+        "check.worker": 15080.331943
+      },
+      "non_scan_seconds": 5.659627536037508
+    },
+    {
+      "version": "before",
+      "round": 4,
+      "stop_seconds": 19.176875204022508,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 14094.971047,
+        "scan.execute": 9380.450853,
+        "scanner.process": 7110.098136,
+        "check.wait": 15903.655435,
+        "check.batch": 14328.599716,
+        "check.worker": 14803.685636
+      },
+      "non_scan_seconds": 5.081904157022507
+    },
+    {
+      "version": "before",
+      "round": 5,
+      "stop_seconds": 17.692694305966143,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12692.788878,
+        "scan.execute": 9213.757662,
+        "scanner.process": 6622.096922000001,
+        "check.wait": 14191.461044,
+        "check.batch": 12779.031307,
+        "check.worker": 13333.704535
+      },
+      "non_scan_seconds": 4.999905427966143
+    },
+    {
+      "version": "after",
+      "round": 5,
+      "stop_seconds": 17.960365350998472,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12170.367525,
+        "scan.execute": 7809.608413,
+        "scanner.process": 5309.707988,
+        "check.wait": 13650.360222,
+        "check.batch": 12292.58039,
+        "check.worker": 12779.253555
+      },
+      "non_scan_seconds": 5.789997825998473
+    },
+    {
+      "version": "after",
+      "round": 6,
+      "stop_seconds": 16.587109651009087,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 11737.424419,
+        "scan.execute": 6514.263315,
+        "scanner.process": 4850.447269,
+        "check.wait": 13153.616278,
+        "check.batch": 11849.725373,
+        "check.worker": 12232.581449
+      },
+      "non_scan_seconds": 4.849685232009085
+    },
+    {
+      "version": "before",
+      "round": 6,
+      "stop_seconds": 17.18812325503677,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12351.980204,
+        "scan.execute": 8241.627638,
+        "scanner.process": 5402.72012,
+        "check.wait": 13738.463975,
+        "check.batch": 12452.418577,
+        "check.worker": 12910.823067
+      },
+      "non_scan_seconds": 4.836143051036771
+    },
+    {
+      "version": "before",
+      "round": 7,
+      "stop_seconds": 17.50508232403081,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12420.362952,
+        "scan.execute": 7136.909287,
+        "scanner.process": 5004.201981,
+        "check.wait": 14271.119395,
+        "check.batch": 12527.490388,
+        "check.worker": 13256.479173
+      },
+      "non_scan_seconds": 5.0847193720308095
+    },
+    {
+      "version": "after",
+      "round": 7,
+      "stop_seconds": 17.41807311202865,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "phases_ms": {
+        "scan.total": 12162.320127,
+        "scan.execute": 6945.811231,
+        "scanner.process": 5020.776479,
+        "check.wait": 13647.533084,
+        "check.batch": 12265.130015,
+        "check.worker": 12719.63366
+      },
+      "non_scan_seconds": 5.25575298502865
+    }
+  ],
+  "worktrees": [
+    {
+      "index": 0,
+      "files": 3002,
+      "scope": [
+        "app.py"
+      ],
+      "stop_seconds": 11.777014282008167,
+      "status": "RESULTS_READY",
+      "saved_scan_count_after_repeated_stop": 1
+    },
+    {
+      "index": 1,
+      "files": 3002,
+      "scope": [
+        "app.py"
+      ],
+      "stop_seconds": 10.156059221015312,
+      "status": "RESULTS_READY",
+      "saved_scan_count_after_repeated_stop": 1
+    }
+  ],
+  "warm_connection_stop_pairs_including_round_zero": [
+    {
+      "version": "after",
+      "round": 0,
+      "stop_seconds": 16.75507950800238,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 11.360169484
+    },
+    {
+      "version": "before",
+      "round": 0,
+      "stop_seconds": 18.725600656005554,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 12.246205342
+    },
+    {
+      "version": "before",
+      "round": 1,
+      "stop_seconds": 17.62614286702592,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 12.218843063
+    },
+    {
+      "version": "after",
+      "round": 1,
+      "stop_seconds": 19.989884677983355,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 15.663134982999999
+    },
+    {
+      "version": "after",
+      "round": 2,
+      "stop_seconds": 17.650427896005567,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 12.822434205
+    },
+    {
+      "version": "before",
+      "round": 2,
+      "stop_seconds": 19.127455569978338,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 13.130141726
+    },
+    {
+      "version": "before",
+      "round": 3,
+      "stop_seconds": 16.50646125798812,
+      "status": "RESULTS_READY",
+      "build_id": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 11.057300998
+    },
+    {
+      "version": "after",
+      "round": 3,
+      "stop_seconds": 17.64299750799546,
+      "status": "RESULTS_READY",
+      "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475",
+      "paths": [
+        "app.py"
+      ],
+      "timing": {},
+      "scan_status": "COMPLETED",
+      "scan_seconds": 12.172221998000001
+    }
+  ],
+  "installation": {
+    "installation_status": "INSTALLED",
+    "scan_ready": true,
+    "configuration": "CONFIGURED",
+    "user_config_unchanged": true,
+    "desktop_reconnect_required": true,
+    "version": "0.3.13",
+    "build_id": "0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475"
+  }
+}

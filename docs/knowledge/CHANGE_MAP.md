@@ -1,5 +1,21 @@
 # 从开发需求定位代码
 
+## 开发收尾验收修复
+
+报告：development_report.py / development_views.py / dashboard_presentation.py；用户处置：development_disposition.py / development_risks.py / risk_management.py / mcp_contracts.py；审计覆盖：BusinessReview / review_progress / business_audit.py；等待：stop_wait_policy.py / development_check.py / development_stop.py / user_config.py / codex_integration.py。测试：test_uat_closeout_repairs.py、test_stop_wait_policy.py、已有报告/恢复/安装/后台回归；见 UAT_REPAIR_ACCEPTANCE.md。
+
+## 自研数据流停用
+
+入口排除：scanners.ScannerRegistry/active_provider；扫描复用：scan_reuse._known_adapters；能力声明：guidance/host_guidance.py；健康与设置：dashboard_health.py/assets/risk_dashboard.html。回归：test_retired_dataflow.py、test_go_sql.py、test_scan_reuse.py、test_dashboard_health.py、test_risk_dashboard_ui.cjs。保留模型源码供历史兼容及离线单元测试，不在产品注册中使用。
+
+
+## 中文说明与聊天名称
+
+- 中文展示：dashboard_presentation.py；后台查询和导出：dashboard_catalog.py/dashboard_export.py。
+- 名称同步与别名：dashboard_sessions.py；资源展示及 HTTP：dashboard_entities.py/risk_dashboard.py。
+- 相关验证：test_dashboard_presentation.py、test_dashboard_sessions.py、test_dashboard_entities.py、test_risk_dashboard_ui.cjs；结果见 WEB_PRESENTATION_ACCEPTANCE.md。
+
+
 所有源码简称相对 `src/security_runtime/`。先读入口及相关服务，再用测试定位预期语义；不要只改调用包装层让错误消失。
 
 | 需求或现象 | 优先查看代码 | 应核对的测试或资源 |
@@ -14,7 +30,9 @@
 | 字段报错、复核提交结构 | `development_risks.py` 的输入模型与 `review_input_failure`、`mcp_contracts.py` | `tests/test_development_risks.py`、`tests/test_mcp_tool_groups.py` |
 | 工作区被拒绝、会话错绑 | `global_mcp.py:GlobalWorkspaces`、`global_workspace.py`、`workspace_binding_status.py`、`workspace_application.py` | `tests/test_global_workspace_binding.py`、`tests/snapshots/test_workspace_binding_status.py` |
 | 宿主命令被误当编辑 | `shell_classification.py`、`codex_event_adapter.py`、`host_event_runtime.py` | `tests/test_shell_classification.py` 与 Hook 测试 |
-| 文件未采集、误采历史改动 | `development_file_watch.py`、`development_scope.py`、`development_check.py` | `tests/test_development_file_watch.py`、`tests/test_development_check.py` |
+| 文件未采集、误采历史改动 | `development_file_watch.py`、`watch_control.py`、`development_scope.py`、`development_check.py` | `tests/test_development_file_watch.py`、`tests/test_watch_control.py`、`tests/test_development_check.py` |
+| 直接编辑与监听补充分类、临时文件删除导致缺口 | `development_check.py:append/finish`、`development_scope.py:watch_only_paths/separate_directories`、`development_delivery.py:publish` | `test_supplemental_scope.py`、`test_development_file_watch.py`；来源正向记录、直接编辑优先、仅不存在的补充文件静默跳过、已保存批次来源固定 |
+| 已记录文件检查完成却提示范围未知 | `development_views.py:batch_report_page/closeout_page`、`development_stop.py:native_closeout`、`development_reporting.py`、`guidance/host_guidance.py` | `test_review_delivery.py`、`test_closeout_notice.py`；采集诊断保留内部，真正扫描失败和覆盖限制仍交付 |
 | 重复扫描、后台任务迟迟不结束 | `development_check_worker.py`、`development_scheduler.py`、`development_check.py` | `tests/test_development_check.py`、`tests/test_development_check_wait.py` |
 | 原生自动收尾、重复 Stop 或缺少复核证据 | `development_stop.py`、`development_continuation.py`、`development_delivery.py` | `tests/test_user_config_stop.py` 、`tests/test_workbuddy_connector.py` 与 development delivery 测试 |
 | 扫描范围、输入版本或取消 | `scan_request.py`、`scan_attempt.py`、`runtime.py` | `tests/test_scan_attempt.py`、`tests/test_explicit_scan_attempt.py` |
@@ -87,3 +105,12 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 短提示收尾：`development_stop.py` 保存分支与批次；`development_views.py:closeout_page` 解析、处理扫描完成竞态、分页并附会话链接；`tasks/ownership.py`、`guidance/` 与 `review_skill.py` 提供内部操作规则。回归：`test_closeout_notice.py`、`test_flow_repairs.py`。
 
 OpenGrep macOS 载荷复用：`opengrep_payload.py` 在安装/显式准备时从固定校验和的官方启动器导出私有载荷，`toolchain.py` 解析及校验；`install_readiness.py`、`personal_install.py`、`cli.py` 只在安装/准备入口启用。`--status`、普通扫描和 Stop 不进行解压安装。回归：`test_opengrep_payload.py`、`test_install_readiness.py`。
+
+
+## 三种配置验收修复入口
+
+- 排队任务与工作进程租约：`development_check.py::projection`；只检查 RUNNING 且 ticket 匹配的租约。回归 `test_development_check_wait.py`。
+- 旧判断隔离：`development_risks.py::current_assessment/current_risk`；复用当前版本判断，历史记录不重写。
+- 完整报告与跨来源重复项：`development_views.py`、`review_delivery.py`、`development_risks.py::_submit`；只在结果读取与保存阶段处理。
+- 子任务交接与字段错误：`audit_stream_service.py`、`audit_stream_adapter.py`、`business_audit.py`、`mcp_tool_groups.py`；回归 `test_three_mode_repairs.py`、`test_audit_stream_mcp.py`。
+- 普通零候选回复：`tasks/ownership.py::session_context` 与 `guidance/development_check_guidance.py`；不自行预告待返回报告。

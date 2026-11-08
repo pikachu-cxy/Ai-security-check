@@ -640,6 +640,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             if name in DEVELOPMENT_CHECK_TOOLS:
+                if name == 'process_development_audit' and isinstance(arguments, dict):
+                    from .audit_stream_adapter import input_failure
+                    data = input_failure(arguments, validators[name].iter_errors(arguments))
+                    return CallToolResult(isError=True, structuredContent=data,
+                        content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
                 return _development_request_rejected('DEVELOPMENT_CHECK_REQUEST_INVALID')
             if name in TASK_REVIEW_TOOLS:
                 return _task_request_rejected('TASK_REQUEST_INVALID')

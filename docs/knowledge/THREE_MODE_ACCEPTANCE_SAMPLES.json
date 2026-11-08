@@ -1,0 +1,628 @@
+{
+  "build": "9d51190087c8946b2464099d8259bb64108aea5315e8a5c5a1333b10c7ca17df",
+  "date": "2026-11-08",
+  "units": "seconds unless stages_ms",
+  "samples": [
+    {
+      "label": "MODE-A-ALLOWLIST",
+      "total_s": 153.387,
+      "initial_output_wait_s": 117.138,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 10.55287,
+          "stages_ms": {
+            "final_input_validation": 6.389,
+            "result_normalization_policy": 0.755,
+            "result_publication": 15.055,
+            "rule_pack_resolution": 1153.294,
+            "rule_planning": 17.916,
+            "scanner_orchestration": 7352.746,
+            "source_input_capture": 17.061,
+            "state_persistence": 28.116,
+            "target_preparation": 1212.237,
+            "target_selection": 4.323,
+            "total": 10552.87,
+            "workspace_discovery": 97.367
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -1.193
+        }
+      ],
+      "stops": [
+        {
+          "s": 14.227763999999999,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 318
+    },
+    {
+      "label": "MODE-A-CLEAN",
+      "total_s": 175.143,
+      "initial_output_wait_s": 119.472,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 10.723688,
+          "stages_ms": {
+            "final_input_validation": 4.326,
+            "result_normalization_policy": 0.381,
+            "result_publication": 11.333,
+            "rule_pack_resolution": 1369.161,
+            "rule_planning": 14.955,
+            "scanner_orchestration": 6242.122,
+            "source_input_capture": 23.69,
+            "state_persistence": 15.847,
+            "target_preparation": 1462.341,
+            "target_selection": 6.649,
+            "total": 10723.688,
+            "workspace_discovery": 166.444
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": 3.611
+        }
+      ],
+      "stops": [
+        {
+          "s": 2.3420300000000003,
+          "status": "STOP_FALLBACK_INCOMPLETE"
+        },
+        {
+          "s": 2.255562,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 892,
+      "first_read_s": 3.30620091,
+      "first_read_return_to_turn_end_s": 9.468
+    },
+    {
+      "label": "MODE-A-LOGIC",
+      "total_s": 228.885,
+      "initial_output_wait_s": 116.611,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 5.466397,
+          "stages_ms": {
+            "final_input_validation": 3.591,
+            "result_normalization_policy": 0.328,
+            "result_publication": 6.198,
+            "rule_pack_resolution": 591.243,
+            "rule_planning": 10.295,
+            "scanner_orchestration": 3853.658,
+            "source_input_capture": 9.504,
+            "state_persistence": 10.937,
+            "target_preparation": 626.652,
+            "target_selection": 2.485,
+            "total": 5466.397,
+            "workspace_discovery": 63.825
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_mode_a.py",
+            "order_summary_mode_a.py"
+          ],
+          "saved_after_turn_end_s": -0.576
+        }
+      ],
+      "stops": [
+        {
+          "s": 7.957569,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 1115
+    },
+    {
+      "label": "MODE-A-MIXED",
+      "total_s": 188.717,
+      "initial_output_wait_s": 118.532,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 11.401236,
+          "stages_ms": {
+            "final_input_validation": 5.351,
+            "result_normalization_policy": 0.828,
+            "result_publication": 11.626,
+            "rule_pack_resolution": 1087.513,
+            "rule_planning": 20.315,
+            "scanner_orchestration": 8281.204,
+            "source_input_capture": 26.103,
+            "state_persistence": 36.969,
+            "target_preparation": 1166.976,
+            "target_selection": 4.764,
+            "total": 11401.236,
+            "workspace_discovery": 93.294
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -30.124
+        }
+      ],
+      "stops": [
+        {
+          "s": 15.275514999999999,
+          "status": "STOP_RESULT_NOTICE"
+        },
+        {
+          "s": 1.829338,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 1561,
+      "first_read_s": 2.823505468,
+      "first_read_return_to_turn_end_s": 22.131
+    },
+    {
+      "label": "MODE-B-ALLOWLIST",
+      "total_s": 68.488,
+      "initial_output_wait_s": 3.326,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 13.638724,
+          "stages_ms": {
+            "final_input_validation": 7.431,
+            "result_normalization_policy": 0.809,
+            "result_publication": 15.759,
+            "rule_pack_resolution": 1836.325,
+            "rule_planning": 13.431,
+            "scanner_orchestration": 9646.651,
+            "source_input_capture": 14.998,
+            "state_persistence": 31.245,
+            "target_preparation": 1901.343,
+            "target_selection": 4.588,
+            "total": 13638.724,
+            "workspace_discovery": 158.743
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -29.154
+        }
+      ],
+      "stops": [
+        {
+          "s": 19.330072,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.42489,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 822,
+      "first_read_s": 5.589786094,
+      "first_read_return_to_turn_end_s": 16.605,
+      "evidence_return_to_first_submit_s": 6.508,
+      "first_submit_to_ack_s": 2.638,
+      "server_commit_s": 0.323018
+    },
+    {
+      "label": "MODE-B-CLEAN",
+      "total_s": 59.382,
+      "initial_output_wait_s": 2.382,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 12.025869,
+          "stages_ms": {
+            "final_input_validation": 5.591,
+            "result_normalization_policy": 0.401,
+            "result_publication": 9.192,
+            "rule_pack_resolution": 1662.735,
+            "rule_planning": 17.25,
+            "scanner_orchestration": 8309.777,
+            "source_input_capture": 18.915,
+            "state_persistence": 16.178,
+            "target_preparation": 1730.39,
+            "target_selection": 7.637,
+            "total": 12025.869,
+            "workspace_discovery": 203.159
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": 6.763
+        }
+      ],
+      "stops": [
+        {
+          "s": 3.295252,
+          "status": "STOP_FALLBACK_INCOMPLETE"
+        },
+        {
+          "s": 2.3467860000000003,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 743,
+      "first_read_s": 3.93437654,
+      "first_read_return_to_turn_end_s": 10.385
+    },
+    {
+      "label": "MODE-B-LOGIC",
+      "total_s": 70.834,
+      "initial_output_wait_s": 2.994,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 5.913951,
+          "stages_ms": {
+            "final_input_validation": 4.079,
+            "result_normalization_policy": 0.307,
+            "result_publication": 7.312,
+            "rule_pack_resolution": 745.542,
+            "rule_planning": 11.423,
+            "scanner_orchestration": 3846.192,
+            "source_input_capture": 12.611,
+            "state_persistence": 10.674,
+            "target_preparation": 789.705,
+            "target_selection": 2.953,
+            "total": 5913.951,
+            "workspace_discovery": 76.917
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_mode_b.py",
+            "order_summary_mode_b.py"
+          ],
+          "saved_after_turn_end_s": -0.627
+        }
+      ],
+      "stops": [
+        {
+          "s": 8.993896000000001,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 0,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 1,
+      "report_link": false,
+      "output_tokens": 1024
+    },
+    {
+      "label": "MODE-B-MIXED",
+      "total_s": 100.001,
+      "initial_output_wait_s": 2.8,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 13.175843,
+          "stages_ms": {
+            "final_input_validation": 6.77,
+            "result_normalization_policy": 1.087,
+            "result_publication": 16.044,
+            "rule_pack_resolution": 1170.303,
+            "rule_planning": 28.279,
+            "scanner_orchestration": 9977.634,
+            "source_input_capture": 17.596,
+            "state_persistence": 45.214,
+            "target_preparation": 1235.087,
+            "target_selection": 6.17,
+            "total": 13175.843,
+            "workspace_discovery": 122.272
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -53.212
+        }
+      ],
+      "stops": [
+        {
+          "s": 20.377427,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.254916,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 2,
+      "audit_management_mcp_count": 0,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2273,
+      "first_read_s": 5.930969012,
+      "first_read_return_to_turn_end_s": 39.916,
+      "evidence_return_to_first_submit_s": 13.184,
+      "first_submit_to_ack_s": 2.355,
+      "server_commit_s": 0.551626
+    },
+    {
+      "label": "MODE-C-ALLOWLIST",
+      "total_s": 247.471,
+      "initial_output_wait_s": 2.701,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 8.629118,
+          "stages_ms": {
+            "final_input_validation": 10.545,
+            "result_normalization_policy": 1.219,
+            "result_publication": 16.55,
+            "rule_pack_resolution": 952.855,
+            "rule_planning": 12.478,
+            "scanner_orchestration": 6081.018,
+            "source_input_capture": 15.152,
+            "state_persistence": 29.583,
+            "target_preparation": 1004.01,
+            "target_selection": 3.52,
+            "total": 8629.118,
+            "workspace_discovery": 82.759
+          },
+          "candidates": 1,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "sample.py",
+            "test_sample.py"
+          ],
+          "saved_after_turn_end_s": -38.102
+        }
+      ],
+      "stops": [
+        {
+          "s": 12.861093,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 0.843173,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 3,
+      "audit_management_mcp_count": 4,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2023,
+      "first_read_s": 2.076565932,
+      "first_read_return_to_turn_end_s": 30.261,
+      "evidence_return_to_first_submit_s": 6.96,
+      "first_submit_to_ack_s": 1.508,
+      "server_commit_s": 0.358465
+    },
+    {
+      "label": "MODE-C-CLEAN",
+      "total_s": 141.069,
+      "initial_output_wait_s": 3.465,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 6.880224,
+          "stages_ms": {
+            "final_input_validation": 5.706,
+            "result_normalization_policy": 0.356,
+            "result_publication": 9.943,
+            "rule_pack_resolution": 738.303,
+            "rule_planning": 11.592,
+            "scanner_orchestration": 4873.405,
+            "source_input_capture": 12.92,
+            "state_persistence": 15.42,
+            "target_preparation": 782.446,
+            "target_selection": 2.899,
+            "total": 6880.224,
+            "workspace_discovery": 72.818
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "clean_acceptance.py",
+            "test_clean_acceptance.py"
+          ],
+          "saved_after_turn_end_s": -28.968
+        }
+      ],
+      "stops": [
+        {
+          "s": 11.033109,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.108185,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 4,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 1453,
+      "first_read_s": 2.6335362399999998,
+      "first_read_return_to_turn_end_s": 20.426
+    },
+    {
+      "label": "MODE-C-LOGIC",
+      "total_s": 164.437,
+      "initial_output_wait_s": 2.302,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 4.876372999999999,
+          "stages_ms": {
+            "final_input_validation": 4.864,
+            "result_normalization_policy": 0.778,
+            "result_publication": 6.31,
+            "rule_pack_resolution": 542.817,
+            "rule_planning": 8.611,
+            "scanner_orchestration": 3349.711,
+            "source_input_capture": 9.361,
+            "state_persistence": 12.154,
+            "target_preparation": 576.423,
+            "target_selection": 2.27,
+            "total": 4876.373,
+            "workspace_discovery": 59.281
+          },
+          "candidates": 0,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "order_mode_c.py",
+            "order_summary_mode_c.py"
+          ],
+          "saved_after_turn_end_s": -31.661
+        }
+      ],
+      "stops": [
+        {
+          "s": 8.196266,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 1.471202,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 1,
+      "audit_management_mcp_count": 5,
+      "submit_attempts": 0,
+      "saved_submissions": 0,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2249,
+      "first_read_s": 2.149520444,
+      "first_read_return_to_turn_end_s": 23.039
+    },
+    {
+      "label": "MODE-C-MIXED",
+      "total_s": 123.934,
+      "initial_output_wait_s": 2.69,
+      "scan_count": 1,
+      "scans": [
+        {
+          "seconds": 9.195716000000001,
+          "stages_ms": {
+            "final_input_validation": 4.81,
+            "result_normalization_policy": 0.528,
+            "result_publication": 8.375,
+            "rule_pack_resolution": 1568.937,
+            "rule_planning": 16.636,
+            "scanner_orchestration": 5598.314,
+            "source_input_capture": 27.073,
+            "state_persistence": 25.647,
+            "target_preparation": 1654.665,
+            "target_selection": 4.517,
+            "total": 9195.716,
+            "workspace_discovery": 83.296
+          },
+          "candidates": 5,
+          "coverage": "FULL",
+          "gaps": [],
+          "paths": [
+            "requirements.txt",
+            "sample.py",
+            "secret-fixture.ts"
+          ],
+          "saved_after_turn_end_s": -53.522
+        }
+      ],
+      "stops": [
+        {
+          "s": 13.916431000000001,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "s": 2.054013,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "review_mcp_count": 3,
+      "audit_management_mcp_count": 4,
+      "submit_attempts": 1,
+      "saved_submissions": 1,
+      "final_message_count": 2,
+      "report_link": true,
+      "output_tokens": 2347,
+      "first_read_s": 2.72262914,
+      "first_read_return_to_turn_end_s": 45.108,
+      "evidence_return_to_first_submit_s": 15.029,
+      "first_submit_to_ack_s": 2.47,
+      "server_commit_s": 0.677181
+    }
+  ]
+}

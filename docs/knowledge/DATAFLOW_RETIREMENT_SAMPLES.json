@@ -1,0 +1,16 @@
+{
+  "status": "RESULTS_READY",
+  "coverage": "FULL",
+  "scanner_names": [
+    "opengrep",
+    "native-js-function",
+    "gitleaks",
+    "trivy-vuln",
+    "trivy-misconfig"
+  ],
+  "finding_count": 1,
+  "single_saved": true,
+  "stop_seconds": 7.9210429869708605,
+  "scan_ms": 5576.87,
+  "project": "isolated Python SQL fixture"
+}

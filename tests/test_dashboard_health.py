@@ -70,3 +70,18 @@ def test_monitor_requires_authenticated_browser_and_rejects_arguments(monkeypatc
         status,_,raw=request(server,'/api/monitor',headers)
         assert status==200 and not json.loads(raw)['scanner_run']
     assert calls==[1]
+
+
+def test_retired_dataflow_is_disabled_without_import_or_health_failure(tmp_path,monkeypatch):
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG',str(tmp_path/'config.toml'))
+    monkeypatch.setattr('security_runtime.connection_lifecycle.diagnostics',lambda:{'records':[]})
+    monkeypatch.setattr('security_runtime.install_readiness.validate_database_directory',lambda _:True)
+    class Manager:
+        versions = {'opengrep':'1','gitleaks':'1','trivy':'1'}
+        def resolve(self,name):return SimpleNamespace(status='READY',version='1',path='/tools/'+name)
+        def trivy_cache_dir(self):return tmp_path
+        def database_freshness(self):return {'status':'FRESH'}
+    value=health.collect(manager=Manager(),mcp_probe=lambda:{'status':'READY','interfaces':[]})
+    retired=[v for v in value['components'] if v['name'] in {'native-dataflow','native-go-sql'}]
+    assert len(retired)==2 and all(v['status']=='DISABLED' and v['optional'] for v in retired)
+    assert value['product']['status']=='READY'

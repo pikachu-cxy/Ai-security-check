@@ -122,6 +122,80 @@
       ]
     },
     {
+      "path": "src/security_runtime/audit_stream_adapter.py",
+      "sha256": "05bb3fc27078805999e09013e178611c7e6642cf1672057e15ebfa5dd945e1d0",
+      "purpose": "Dedicated delegated audit boundary; a capability never authorizes other tools.",
+      "symbols": [
+        {
+          "name": "input_failure",
+          "line": 5
+        },
+        {
+          "name": "delegated_risks",
+          "line": 43
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/audit_stream_service.py",
+      "sha256": "09aef356e3a3ef57acef9c8d1868cded18bf25330cbe863a6be6d111077835bb",
+      "purpose": "Owner-authorized child audit capability and durable result reception.",
+      "symbols": [
+        {
+          "name": "authenticate",
+          "line": 15
+        },
+        {
+          "name": "manage",
+          "line": 28
+        },
+        {
+          "name": "_batch",
+          "line": 94
+        },
+        {
+          "name": "_public_batch",
+          "line": 99
+        },
+        {
+          "name": "process",
+          "line": 103
+        },
+        {
+          "name": "validate_commit",
+          "line": 248
+        },
+        {
+          "name": "valid_reviews",
+          "line": 258
+        },
+        {
+          "name": "assessment_current",
+          "line": 276
+        },
+        {
+          "name": "_status",
+          "line": 290
+        },
+        {
+          "name": "revalidate",
+          "line": 305
+        },
+        {
+          "name": "absent",
+          "line": 341
+        },
+        {
+          "name": "absence_evidence",
+          "line": 352
+        },
+        {
+          "name": "_scrub",
+          "line": 368
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/background_preparation.py",
       "sha256": "88beee02aa17878e0abfbb8b83963b057149c65617305d6f5d146d8ab3759a45",
       "purpose": "Owned, detached preparation; resume saved closeouts through ordinary MCP.",
@@ -346,7 +420,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "3cf71037715033c896c540bae547a5a5b52ff748989a8c8977322a7852aefe97",
+      "sha256": "8b53c76833bf8a5f41f1aad14d1d4e92dcc9504ef3fb292cd1da5bbcf1c6cc83",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -355,19 +429,27 @@
         },
         {
           "name": "fast_delivery",
-          "line": 25
+          "line": 36
+        },
+        {
+          "name": "streaming",
+          "line": 43
+        },
+        {
+          "name": "continuation",
+          "line": 49
         },
         {
           "name": "revalidate",
-          "line": 31
+          "line": 70
         },
         {
           "name": "operate",
-          "line": 47
+          "line": 89
         },
         {
           "name": "offer",
-          "line": 111
+          "line": 155
         }
       ]
     },
@@ -753,7 +835,7 @@
     },
     {
       "path": "src/security_runtime/codex_integration.py",
-      "sha256": "ae571c04bde2882f941fae1f5eac8dfdde28497dedb1203b7abe6f40827c05fb",
+      "sha256": "7f7c70a7dbc2131959d34211ec5233ce7a7a12b1ac60b633d4e9e65c42ce0221",
       "purpose": "Owned Codex MCP/Hook lifecycle and offline setup baseline. No source/mode mutation.",
       "symbols": [
         {
@@ -786,131 +868,131 @@
         },
         {
           "name": "CodexIntegrationAdapter",
-          "line": 227
+          "line": 228
         },
         {
           "name": "CodexIntegrationAdapter.__init__",
-          "line": 231
+          "line": 232
         },
         {
           "name": "CodexIntegrationAdapter._state_path",
-          "line": 240
+          "line": 241
         },
         {
           "name": "CodexIntegrationAdapter._read",
-          "line": 248
+          "line": 249
         },
         {
           "name": "CodexIntegrationAdapter._manifest",
-          "line": 260
+          "line": 261
         },
         {
           "name": "CodexIntegrationAdapter._encode",
-          "line": 286
+          "line": 287
         },
         {
           "name": "CodexIntegrationAdapter._save",
-          "line": 289
+          "line": 290
         },
         {
           "name": "CodexIntegrationAdapter._write",
-          "line": 297
+          "line": 298
         },
         {
           "name": "CodexIntegrationAdapter._config",
-          "line": 305
+          "line": 306
         },
         {
           "name": "CodexIntegrationAdapter._config_paths",
-          "line": 334
+          "line": 335
         },
         {
           "name": "CodexIntegrationAdapter._inline_hooks",
-          "line": 338
+          "line": 339
         },
         {
           "name": "CodexIntegrationAdapter._validate_hooks",
-          "line": 363
+          "line": 364
         },
         {
           "name": "CodexIntegrationAdapter._desired",
-          "line": 384
+          "line": 385
         },
         {
           "name": "CodexIntegrationAdapter._ownership_desired",
-          "line": 405
+          "line": 406
         },
         {
           "name": "CodexIntegrationAdapter._validate_owned_block_semantics",
-          "line": 409
+          "line": 410
         },
         {
           "name": "CodexIntegrationAdapter._owned_blocks",
-          "line": 423
+          "line": 424
         },
         {
           "name": "CodexIntegrationAdapter._owned_group",
-          "line": 451
+          "line": 452
         },
         {
           "name": "CodexIntegrationAdapter._owned_handler",
-          "line": 455
+          "line": 456
         },
         {
           "name": "CodexIntegrationAdapter._related",
-          "line": 467
+          "line": 468
         },
         {
           "name": "CodexIntegrationAdapter._legacy",
-          "line": 472
+          "line": 473
         },
         {
           "name": "CodexIntegrationAdapter._legacy_handler",
-          "line": 496
+          "line": 497
         },
         {
           "name": "CodexIntegrationAdapter._inspect_mcp",
-          "line": 499
+          "line": 500
         },
         {
           "name": "CodexIntegrationAdapter._inspection",
-          "line": 517
+          "line": 518
         },
         {
           "name": "CodexIntegrationAdapter._hook_status",
-          "line": 541
+          "line": 542
         },
         {
           "name": "CodexIntegrationAdapter.status",
-          "line": 550
+          "line": 551
         },
         {
           "name": "CodexIntegrationAdapter.readiness_status",
-          "line": 583
+          "line": 584
         },
         {
           "name": "CodexIntegrationAdapter.setup",
-          "line": 605
+          "line": 606
         },
         {
           "name": "CodexIntegrationAdapter.repair",
-          "line": 608
+          "line": 609
         },
         {
           "name": "CodexIntegrationAdapter.remove",
-          "line": 611
+          "line": 612
         },
         {
           "name": "CodexIntegrationAdapter._patch_mcp",
-          "line": 614
+          "line": 615
         },
         {
           "name": "CodexIntegrationAdapter._new_manifest",
-          "line": 624
+          "line": 625
         },
         {
           "name": "CodexIntegrationAdapter._mutate",
-          "line": 629
+          "line": 630
         }
       ]
     },
@@ -1751,7 +1833,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_catalog.py",
-      "sha256": "ea01f385672e9ae43f129998e7e0b8d99d0a768562feb9b198a8bf9deb32f827",
+      "sha256": "81a1ae7a7b1b4da5b0733c7cbf16d3c234956ad8a71e8e2fad20b7ca08033623",
       "purpose": "Rebuildable SQL read index, refreshed independently of Stop and risk writes.",
       "symbols": [
         {
@@ -1764,31 +1846,31 @@
         },
         {
           "name": "Catalog.inventory",
-          "line": 23
+          "line": 25
         },
         {
           "name": "Catalog.connect",
-          "line": 44
+          "line": 46
         },
         {
           "name": "Catalog.replace",
-          "line": 63
+          "line": 67
         },
         {
           "name": "Catalog.refresh",
-          "line": 82
+          "line": 86
         },
         {
           "name": "Catalog.start",
-          "line": 101
+          "line": 105
         },
         {
           "name": "Catalog.query",
-          "line": 111
+          "line": 116
         },
         {
           "name": "Catalog.close",
-          "line": 172
+          "line": 182
         }
       ]
     },
@@ -1809,7 +1891,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_entities.py",
-      "sha256": "4c7de2c29f6c222707cd8e70d95e78ae22c7d7e9f19edecdf3bd6fb85df4c7a6",
+      "sha256": "5ef6a059c13a875c46deb48896ea7b345792f4bf4183f19add0ea5c5aa29e7b1",
       "purpose": "Recoverable removal of saved dashboard records, independent of live checks.",
       "symbols": [
         {
@@ -1821,26 +1903,30 @@
           "line": 16
         },
         {
-          "name": "visible_sessions",
+          "name": "session_signature",
           "line": 23
         },
         {
-          "name": "groups",
+          "name": "visible_sessions",
           "line": 28
         },
         {
+          "name": "groups",
+          "line": 33
+        },
+        {
           "name": "listing",
-          "line": 65
+          "line": 71
         },
         {
           "name": "change",
-          "line": 73
+          "line": 93
         }
       ]
     },
     {
       "path": "src/security_runtime/dashboard_export.py",
-      "sha256": "80adef9de401e1a52394f118a779d89c7540dd2d42b4a91e1e5483aefad4e00d",
+      "sha256": "e7c409aa2e09f02ca9c6687086eb18b0e48e7ebf9a813a9e4f5f249b277e21fd",
       "purpose": "Explicit downloads of the same filtered, redacted read model as the UI.",
       "symbols": [
         {
@@ -1851,7 +1937,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_health.py",
-      "sha256": "09cb37a43213234b75e1aea82bcb945f7751f6c20083a513cd32177ac598245d",
+      "sha256": "96e3e55b32a1a503dbdec1a07abe5244e4e44b5df34575fad4a548bb91a472d6",
       "purpose": "On-demand local health checks. Never imported by scanning or Stop.",
       "symbols": [
         {
@@ -1872,11 +1958,11 @@
         },
         {
           "name": "_history",
-          "line": 122
+          "line": 118
         },
         {
           "name": "snapshot",
-          "line": 143
+          "line": 139
         }
       ]
     },
@@ -1912,8 +1998,35 @@
       ]
     },
     {
+      "path": "src/security_runtime/dashboard_presentation.py",
+      "sha256": "3fa1340c3336d45b32a96f4ae55e167962deb0e8880690a775d7caf70f4e0040",
+      "purpose": "Chinese dashboard projections; never alter findings, decisions or evidence.",
+      "symbols": [
+        {
+          "name": "chinese",
+          "line": 27
+        },
+        {
+          "name": "normalized",
+          "line": 32
+        },
+        {
+          "name": "section",
+          "line": 36
+        },
+        {
+          "name": "_render",
+          "line": 42
+        },
+        {
+          "name": "present",
+          "line": 69
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/dashboard_records.py",
-      "sha256": "083b38a424c5d100658aadfc03a6eab833f97b3669f9a944937248f38553956a",
+      "sha256": "4c240434bbe6a71896b2a70e384dd354e0935ecdd405c868741cec6b3490f708",
       "purpose": "Public read models and locally authorized writes; never scan or edit source.",
       "symbols": [
         {
@@ -1922,21 +2035,21 @@
         },
         {
           "name": "locate",
-          "line": 40
+          "line": 42
         },
         {
           "name": "mutate",
-          "line": 67
+          "line": 69
         },
         {
           "name": "create",
-          "line": 91
+          "line": 93
         }
       ]
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "b463970e12b4eced89084409a48799c97ede007f9e04ebc935a8873b26d92a3a",
+      "sha256": "9065821c1582db0470959d51bae310e706639f9f1a1f16ebd0ca81111007c5b3",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
@@ -1986,6 +2099,49 @@
         {
           "name": "start_background",
           "line": 153
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/dashboard_sessions.py",
+      "sha256": "2cb995653ca92911e75e5ecff4585848d91a1534d4cb1fae44e40d9a95415a30",
+      "purpose": "Optional local Codex title adapter; dashboard-only, metadata-only, fail soft.",
+      "symbols": [
+        {
+          "name": "setup",
+          "line": 13
+        },
+        {
+          "name": "scope",
+          "line": 17
+        },
+        {
+          "name": "names",
+          "line": 21
+        },
+        {
+          "name": "decorate",
+          "line": 25
+        },
+        {
+          "name": "alias",
+          "line": 33
+        },
+        {
+          "name": "TitleSync",
+          "line": 53
+        },
+        {
+          "name": "TitleSync.__init__",
+          "line": 54
+        },
+        {
+          "name": "TitleSync.request",
+          "line": 62
+        },
+        {
+          "name": "TitleSync.refresh",
+          "line": 74
         }
       ]
     },
@@ -2338,7 +2494,7 @@
     },
     {
       "path": "src/security_runtime/development_check.py",
-      "sha256": "c8ecf52a095ecae55187f4b42c2e48a36c7e61c1ed415fe2958ce7b5f83716c0",
+      "sha256": "9fe2cd43fd174b069a5009c74b22a2e328104d2fa9e2a77f12ab0e7ee807379a",
       "purpose": "Observed-file development checks, without a before-edit workspace baseline.",
       "symbols": [
         {
@@ -2359,127 +2515,127 @@
         },
         {
           "name": "workspace_root",
-          "line": 82
+          "line": 85
         },
         {
           "name": "root_identity",
-          "line": 91
+          "line": 94
         },
         {
           "name": "owner_key",
-          "line": 97
+          "line": 100
         },
         {
           "name": "clean_paths",
-          "line": 103
+          "line": 106
         },
         {
           "name": "DevelopmentCheckStore",
-          "line": 132
+          "line": 135
         },
         {
           "name": "DevelopmentCheckStore.__init__",
-          "line": 138
-        },
-        {
-          "name": "DevelopmentCheckStore._all",
           "line": 141
         },
         {
+          "name": "DevelopmentCheckStore._all",
+          "line": 144
+        },
+        {
           "name": "DevelopmentCheckStore._put",
-          "line": 151
+          "line": 154
         },
         {
           "name": "DevelopmentCheckStore.load",
-          "line": 164
+          "line": 167
         },
         {
           "name": "DevelopmentCheckStore.fresh",
-          "line": 176
+          "line": 179
         },
         {
           "name": "DevelopmentCheckStore.prune",
-          "line": 188
+          "line": 191
         },
         {
           "name": "DevelopmentCheckStore.append",
-          "line": 208
+          "line": 211
         },
         {
           "name": "legacy_guard",
-          "line": 242
+          "line": 250
         },
         {
           "name": "projection",
-          "line": 263
+          "line": 271
         },
         {
           "name": "DevelopmentCheckService",
-          "line": 334
-        },
-        {
-          "name": "DevelopmentCheckService.__init__",
-          "line": 335
-        },
-        {
-          "name": "DevelopmentCheckService.store",
-          "line": 342
-        },
-        {
-          "name": "DevelopmentCheckService._prewarm",
           "line": 345
         },
         {
+          "name": "DevelopmentCheckService.__init__",
+          "line": 346
+        },
+        {
+          "name": "DevelopmentCheckService.store",
+          "line": 353
+        },
+        {
+          "name": "DevelopmentCheckService._prewarm",
+          "line": 356
+        },
+        {
           "name": "DevelopmentCheckService.scan_path",
-          "line": 351
+          "line": 362
         },
         {
           "name": "DevelopmentCheckService._wake",
-          "line": 358
+          "line": 369
         },
         {
           "name": "DevelopmentCheckService.begin",
-          "line": 376
+          "line": 387
         },
         {
           "name": "DevelopmentCheckService.record",
-          "line": 410
-        },
-        {
-          "name": "DevelopmentCheckService.declare_outputs",
           "line": 421
         },
         {
+          "name": "DevelopmentCheckService.declare_outputs",
+          "line": 432
+        },
+        {
           "name": "DevelopmentCheckService.finish",
-          "line": 439
+          "line": 450
         },
         {
           "name": "DevelopmentCheckService.finish_and_wait",
-          "line": 485
+          "line": 502
         },
         {
           "name": "DevelopmentCheckService.complete",
-          "line": 494
+          "line": 511
         },
         {
           "name": "DevelopmentCheckService.wait_saved",
-          "line": 505
+          "line": 522
         },
         {
           "name": "DevelopmentCheckService.deliveries",
-          "line": 550
+          "line": 569
         },
         {
           "name": "DevelopmentCheckService.saved_result",
-          "line": 559
+          "line": 578
         },
         {
           "name": "DevelopmentCheckService.get",
-          "line": 585
+          "line": 604
         },
         {
           "name": "record_hook",
-          "line": 657
+          "line": 676
         }
       ]
     },
@@ -2583,7 +2739,7 @@
     },
     {
       "path": "src/security_runtime/development_delivery.py",
-      "sha256": "379e364c93bc01fd1e727b52b74b3fbcde5615e3ba9f7cfbcf978eddf94ece04",
+      "sha256": "7ed21edd9a738eded6ea8d362c2f0d3c384d2a9731db3ed51aba8f5a3cb3a050",
       "purpose": "Durable, version-bound outbox. Reading is not report delivery or consent.",
       "symbols": [
         {
@@ -2596,21 +2752,36 @@
         },
         {
           "name": "pending",
-          "line": 40
+          "line": 42
         },
         {
           "name": "facts",
-          "line": 49
+          "line": 51
         },
         {
           "name": "acknowledge",
-          "line": 64
+          "line": 66
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/development_disposition.py",
+      "sha256": "e9c0ba80da3afa3816b9889ef3a8d7d21dbaeb566615d4634647effb6e4805c8",
+      "purpose": "Strict, recoverable input for explicit user risk dispositions.",
+      "symbols": [
+        {
+          "name": "DispositionRequest",
+          "line": 9
+        },
+        {
+          "name": "input_failure",
+          "line": 24
         }
       ]
     },
     {
       "path": "src/security_runtime/development_file_watch.py",
-      "sha256": "498f6f1946d284e5d067c56c528a9d1a71f56de201234ad378043c2c5e39a989",
+      "sha256": "07531896c22645a4deeabe1c6b384bb051f0fd5cc9d430c58abc31dd88b26b6f",
       "purpose": "Task-window path notifications. No Git, content inventory, scan or writer claim.",
       "symbols": [
         {
@@ -2627,47 +2798,51 @@
         },
         {
           "name": "_Window",
-          "line": 53
+          "line": 58
         },
         {
           "name": "_Window.__init__",
-          "line": 54
+          "line": 59
         },
         {
           "name": "_Window.paths",
-          "line": 73
+          "line": 79
         },
         {
           "name": "_Window.record",
-          "line": 103
+          "line": 109
         },
         {
           "name": "_Window.run",
-          "line": 134
+          "line": 140
+        },
+        {
+          "name": "_reuse_remote",
+          "line": 195
         },
         {
           "name": "start_window",
-          "line": 189
+          "line": 211
         },
         {
           "name": "active",
-          "line": 230
+          "line": 281
         },
         {
           "name": "stop_window",
-          "line": 242
+          "line": 301
         },
         {
           "name": "close_store",
-          "line": 261
+          "line": 331
         },
         {
           "name": "_close",
-          "line": 268
+          "line": 338
         },
         {
           "name": "_shutdown",
-          "line": 280
+          "line": 350
         }
       ]
     },
@@ -2695,13 +2870,32 @@
       ]
     },
     {
+      "path": "src/security_runtime/development_report.py",
+      "sha256": "64f700402ff0b50a8a980e23d7376ade3bc7535e3c4901e52aadd57bc67733dd",
+      "purpose": "Product-owned Chinese risk reports from saved, version-checked facts.",
+      "symbols": [
+        {
+          "name": "ReportContent",
+          "line": 9
+        },
+        {
+          "name": "render_risk",
+          "line": 19
+        },
+        {
+          "name": "business_coverage",
+          "line": 59
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/development_reporting.py",
-      "sha256": "d758fbf3d2252218b66a57d661ddd574d9e9090e8cfa5e5e50668ed0e356a267",
+      "sha256": "4ae58fe045a49dd39bb9b5b7b2b35ef03ff4b384f1dfe1eb4ff78b96fb86883f",
       "purpose": "Shared reporting instructions, not a receipt that the host reported a result.",
       "symbols": [
         {
           "name": "reporting",
-          "line": 41
+          "line": 43
         }
       ]
     },
@@ -2738,120 +2932,128 @@
     },
     {
       "path": "src/security_runtime/development_risks.py",
-      "sha256": "5bdb0d5c182d138793303a27bc6cf6cdcffe75aa18e22e450059579531e548fd",
+      "sha256": "ea87de4aaec5b7ba6f194695e35094cc1421a872a7eaaa7735dbc0688a476736",
       "purpose": "Version-bound development findings and repairs, independent of scanner truth.",
       "symbols": [
         {
           "name": "Observation",
-          "line": 24
+          "line": 25
         },
         {
           "name": "ScannerReview",
-          "line": 49
+          "line": 51
         },
         {
           "name": "BusinessReview",
-          "line": 60
+          "line": 63
         },
         {
           "name": "ReviewSubmission",
-          "line": 68
+          "line": 73
         },
         {
           "name": "review_input_failure",
-          "line": 82
+          "line": 87
         },
         {
           "name": "review_progress",
-          "line": 120
+          "line": 125
+        },
+        {
+          "name": "current_assessment",
+          "line": 175
+        },
+        {
+          "name": "current_risk",
+          "line": 192
         },
         {
           "name": "digest",
-          "line": 162
-        },
-        {
-          "name": "DevelopmentRiskError",
-          "line": 166
-        },
-        {
-          "name": "DevelopmentRiskError.__init__",
-          "line": 167
-        },
-        {
-          "name": "require",
-          "line": 172
-        },
-        {
-          "name": "safe",
-          "line": 177
-        },
-        {
-          "name": "DevelopmentRisks",
-          "line": 181
-        },
-        {
-          "name": "DevelopmentRisks.__init__",
-          "line": 182
-        },
-        {
-          "name": "DevelopmentRisks.fresh",
-          "line": 190
-        },
-        {
-          "name": "DevelopmentRisks.load",
-          "line": 195
-        },
-        {
-          "name": "DevelopmentRisks.current_check",
           "line": 203
         },
         {
-          "name": "DevelopmentRisks.read",
+          "name": "DevelopmentRiskError",
+          "line": 207
+        },
+        {
+          "name": "DevelopmentRiskError.__init__",
           "line": 208
         },
         {
+          "name": "require",
+          "line": 213
+        },
+        {
+          "name": "safe",
+          "line": 218
+        },
+        {
+          "name": "DevelopmentRisks",
+          "line": 222
+        },
+        {
+          "name": "DevelopmentRisks.__init__",
+          "line": 223
+        },
+        {
+          "name": "DevelopmentRisks.fresh",
+          "line": 231
+        },
+        {
+          "name": "DevelopmentRisks.load",
+          "line": 236
+        },
+        {
+          "name": "DevelopmentRisks.current_check",
+          "line": 244
+        },
+        {
+          "name": "DevelopmentRisks.read",
+          "line": 249
+        },
+        {
           "name": "DevelopmentRisks.evidence",
-          "line": 235
-        },
-        {
-          "name": "DevelopmentRisks.import_scanner",
-          "line": 246
-        },
-        {
-          "name": "DevelopmentRisks.publish_scan",
           "line": 276
         },
         {
+          "name": "DevelopmentRisks.import_scanner",
+          "line": 292
+        },
+        {
+          "name": "DevelopmentRisks.publish_scan",
+          "line": 322
+        },
+        {
           "name": "DevelopmentRisks.sync_scanner",
-          "line": 289
+          "line": 335
         },
         {
           "name": "DevelopmentRisks.submit",
-          "line": 294
+          "line": 340
         },
         {
           "name": "DevelopmentRisks._submit",
-          "line": 304
+          "line": 350
         },
         {
           "name": "DevelopmentRisks.get",
-          "line": 524
+          "line": 603
         },
         {
           "name": "DevelopmentRisks.prepare_fix",
-          "line": 605
+          "line": 696
         },
         {
           "name": "DevelopmentRisks.resolve",
-          "line": 653
+          "line": 744
         },
         {
           "name": "DevelopmentRisks.manage",
-          "line": 686
+          "line": 777
         },
         {
           "name": "DevelopmentRisks.disposition",
-          "line": 701
+          "line": 792
         }
       ]
     },
@@ -2876,7 +3078,7 @@
     },
     {
       "path": "src/security_runtime/development_scope.py",
-      "sha256": "1faf6cb1a00167f4469896a3e10891907bc5fe15d18a7689360db8969799f215",
+      "sha256": "a5e24835575afc018fc273b9a306fecd41ff88ac83d04bd8eb6ed9c5152e9b0f",
       "purpose": "Cheap observation filtering and bounded closeout-only output declarations.",
       "symbols": [
         {
@@ -2892,18 +3094,22 @@
           "line": 35
         },
         {
-          "name": "separate_directories",
+          "name": "watch_only_paths",
           "line": 75
         },
         {
+          "name": "separate_directories",
+          "line": 80
+        },
+        {
           "name": "filter_gitignored",
-          "line": 100
+          "line": 111
         }
       ]
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "72a4f593cd7d9ae8107ad124f8a7faad5c90d478e914a1274433740122fa39d9",
+      "sha256": "235e092ae6cacdcd030efe8e56650c8cb49d7b0cbf71070adfdddf675c9a0a0a",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -2924,29 +3130,29 @@
         },
         {
           "name": "report_notice",
-          "line": 268
+          "line": 272
         },
         {
           "name": "closeout_message",
-          "line": 287
-        },
-        {
-          "name": "saved_handoff",
           "line": 291
         },
         {
+          "name": "saved_handoff",
+          "line": 295
+        },
+        {
           "name": "incomplete_notice",
-          "line": 313
+          "line": 317
         },
         {
           "name": "review_handoff",
-          "line": 330
+          "line": 334
         }
       ]
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "ebb8cc8846f43dc777d910f09403947d13289b1d02995e4855b8882949b2c54a",
+      "sha256": "e370aeb1d66fc6806194c2f12bf5969fff1fbf334132d2fd3a5693bdb289cac9",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -2971,23 +3177,23 @@
         },
         {
           "name": "risk_summary",
-          "line": 170
+          "line": 187
         },
         {
           "name": "batch_report_page",
-          "line": 184
+          "line": 201
         },
         {
           "name": "final_report_receipt",
-          "line": 275
+          "line": 277
         },
         {
           "name": "review_receipt",
-          "line": 292
+          "line": 294
         },
         {
           "name": "closeout_page",
-          "line": 303
+          "line": 305
         }
       ]
     },
@@ -3597,7 +3803,7 @@
     },
     {
       "path": "src/security_runtime/findings.py",
-      "sha256": "c5c4a62c274dc3540c8ade7a20f24fe66ef5fb5396af9aa0e2e84356e60a4d35",
+      "sha256": "e001400e08a82eafb33194d4e467ee3d91fe3a8a78017cbc33d71292b2195278",
       "purpose": "",
       "symbols": [
         {
@@ -4411,7 +4617,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "91bfbfe905576d6e1fe2089aea4aca82644557bc8c40b7c3f3771a42ae7104b9",
+      "sha256": "7d015adbda174bb43831c5af2a4a374ef8fc2ddc891740377da169e8297e1bf8",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -4713,7 +4919,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "919e1ab6c2e690960e635ea5ed8f47c0b99c4204539c65cc6e83530ae22027f9",
+      "sha256": "ff1e18d9f3a4d7ca4195fd774b11822257849fd4264a1982fe741858a9c578b6",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -4738,12 +4944,12 @@
     },
     {
       "path": "src/security_runtime/guidance/host_guidance.py",
-      "sha256": "23d9cba81aaf249589fad0b2c8e31cb99bd3b965a6a7ff21039d1cfcae52a82c",
+      "sha256": "6c482656518e1a564fe7f7b0cf24c17e75a2aa99dbbe10e405fb5572c8ec178e",
       "purpose": "Fixed host workflow instructions and read-only runtime capability discovery.",
       "symbols": [
         {
           "name": "runtime_info",
-          "line": 586
+          "line": 587
         }
       ]
     },
@@ -5733,6 +5939,69 @@
       ]
     },
     {
+      "path": "src/security_runtime/incremental_audit.py",
+      "sha256": "10c2bd9f08d08ae5490e42b18290e8b282aad9d8d581ac17f57986cdf77a8e97",
+      "purpose": "Transactional, I/O-free state transitions for incremental business audits.",
+      "symbols": [
+        {
+          "name": "_require",
+          "line": 22
+        },
+        {
+          "name": "_digest",
+          "line": 27
+        },
+        {
+          "name": "enabled",
+          "line": 32
+        },
+        {
+          "name": "_stream",
+          "line": 36
+        },
+        {
+          "name": "_round",
+          "line": 41
+        },
+        {
+          "name": "record_changes",
+          "line": 46
+        },
+        {
+          "name": "cutoff",
+          "line": 77
+        },
+        {
+          "name": "authenticate",
+          "line": 105
+        },
+        {
+          "name": "claim",
+          "line": 115
+        },
+        {
+          "name": "renew",
+          "line": 147
+        },
+        {
+          "name": "receive",
+          "line": 153
+        },
+        {
+          "name": "complete",
+          "line": 180
+        },
+        {
+          "name": "cancel",
+          "line": 213
+        },
+        {
+          "name": "progress",
+          "line": 219
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/install_checks.py",
       "sha256": "ab7924917646f2517dc7b23ac0480aa3151bb964411d0cbdfe813710b24d1ce8",
       "purpose": "Transaction-local capability reuse; configuration inspection always stays live.",
@@ -6625,7 +6894,7 @@
     },
     {
       "path": "src/security_runtime/mcp_contracts.py",
-      "sha256": "c30b18ef0ea16061de9d876ab97491397664105891058b91bb8bd755419cb386",
+      "sha256": "b017ce646e8ad14c20bdee11ca88646a26c204206e91a7f84c927dd7385fa572",
       "purpose": "MCP SDK boundary and shared raw-input contracts, never security policy.",
       "symbols": [
         {
@@ -6645,84 +6914,88 @@
           "line": 33
         },
         {
-          "name": "_task_protocol_input",
+          "name": "_development_disposition_input",
           "line": 38
         },
         {
+          "name": "_task_protocol_input",
+          "line": 43
+        },
+        {
           "name": "unsupported_protocol_failure",
-          "line": 49
+          "line": 54
         },
         {
           "name": "_guidance_input",
-          "line": 61
+          "line": 66
         },
         {
           "name": "raw_input_failure",
-          "line": 83
+          "line": 90
         },
         {
           "name": "MCPRegistry",
-          "line": 93
+          "line": 100
         },
         {
           "name": "MCPRegistry.__init__",
-          "line": 99
+          "line": 106
         },
         {
           "name": "MCPRegistry.tools",
-          "line": 104
+          "line": 111
         },
         {
           "name": "MCPRegistry.tool",
-          "line": 107
+          "line": 114
         },
         {
           "name": "MCPRegistry.names",
-          "line": 110
+          "line": 117
         },
         {
           "name": "MCPRegistry.schemas",
-          "line": 113
+          "line": 120
         },
         {
           "name": "MCPRegistry.harden",
-          "line": 116
+          "line": 123
         },
         {
           "name": "MCPRegistry.dispatch",
-          "line": 124
+          "line": 131
         },
         {
           "name": "MCPRegistry.wrap_dispatch",
-          "line": 127
+          "line": 134
         },
         {
           "name": "MCPRegistry.validate_raw_inputs",
-          "line": 130
+          "line": 137
         },
         {
           "name": "MCPRegistry.add_instructions",
-          "line": 148
+          "line": 155
         },
         {
           "name": "MCPRegistry.install_router",
-          "line": 151
-        },
-        {
-          "name": "MCPRegistry.close_with",
           "line": 158
         },
         {
+          "name": "MCPRegistry.close_with",
+          "line": 165
+        },
+        {
           "name": "MCPRegistry.observe_project",
-          "line": 170
+          "line": 177
         },
         {
           "name": "MCPRegistry.observe_context_cost",
-          "line": 186
+          "line": 193
         },
         {
           "name": "schema_specifications",
-          "line": 208
+          "line": 215
         }
       ]
     },
@@ -6758,7 +7031,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tool_groups.py",
-      "sha256": "b2bbad8ee9cf16b5170f0960d4a01a0b4c6bf0c5559ce849498a7571660acf9f",
+      "sha256": "915a9fc5ea3565d75e57729d7b14b01509d74ceefd0e1770f3663bd9a84e08c7",
       "purpose": "Compact global discovery; operations keep their existing handlers and checks.",
       "symbols": [
         {
@@ -6791,7 +7064,7 @@
         },
         {
           "name": "instructions",
-          "line": 141
+          "line": 142
         }
       ]
     },
@@ -6803,7 +7076,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "2d6fa88d6507feaef31428b59127175fb4cf5e2031b0d008c4544c2cdc6bc3ef",
+      "sha256": "c68995f8bdcc916ed22330afe86bb4f6a3bf82ab9282a3ebfffc263ea2206b08",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {
@@ -9763,7 +10036,7 @@
     },
     {
       "path": "src/security_runtime/review_delivery.py",
-      "sha256": "9f57b833b5bb64ef11f891fd901a099a6dc58f5ccde64d801ed827cb68083c69",
+      "sha256": "f008924c666bf0d424555fb8dcd6b3474b56b48cba9a6f08707823e3c48e0f2b",
       "purpose": "Bounded post-Stop delivery. No scanner, worker or additional persistent cache.",
       "symbols": [
         {
@@ -9780,19 +10053,19 @@
         },
         {
           "name": "merge_windows",
-          "line": 60
+          "line": 64
         },
         {
           "name": "collect_evidence",
-          "line": 79
+          "line": 83
         },
         {
           "name": "report_page",
-          "line": 127
+          "line": 131
         },
         {
           "name": "pending_report_receipt",
-          "line": 168
+          "line": 177
         }
       ]
     },
@@ -9959,7 +10232,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "b5d8b9d312f6334161770a9ebfdac3a78a0fb05c8ba2127fd090742e63c2f0df",
+      "sha256": "c5adb86d19d9f273b8bd0dd3e3af7b8406bcb0e3c5b57b7465c3f7cb3b0bc94a",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -9984,47 +10257,47 @@
         },
         {
           "name": "Server",
-          "line": 198
+          "line": 199
         },
         {
           "name": "Server.__init__",
-          "line": 200
+          "line": 201
         },
         {
           "name": "Handler",
-          "line": 209
-        },
-        {
-          "name": "Handler.log_message",
           "line": 210
         },
         {
+          "name": "Handler.log_message",
+          "line": 211
+        },
+        {
           "name": "Handler.authorized",
-          "line": 212
+          "line": 213
         },
         {
           "name": "Handler.reply",
-          "line": 223
+          "line": 224
         },
         {
           "name": "Handler.query",
-          "line": 237
+          "line": 238
         },
         {
           "name": "Handler.do_GET",
-          "line": 243
+          "line": 244
         },
         {
           "name": "Handler.do_POST",
-          "line": 309
+          "line": 312
         },
         {
           "name": "serve",
-          "line": 369
+          "line": 382
         },
         {
           "name": "launch",
-          "line": 389
+          "line": 402
         }
       ]
     },
@@ -10165,7 +10438,7 @@
     },
     {
       "path": "src/security_runtime/risk_management.py",
-      "sha256": "fee6ebba687adf74eb1d3d6a4af3aed459fbb3479b66c588f8da5e76fa7fca4f",
+      "sha256": "b6aa722f0a1acc02896b22fe6def9dcda0b0885e85b6c27df9a1edcc002decd5",
       "purpose": "User metadata and versioned management operations on the authoritative risk.",
       "symbols": [
         {
@@ -11126,7 +11399,7 @@
     },
     {
       "path": "src/security_runtime/scan_reuse.py",
-      "sha256": "8302d374a9b9b0d6ecc269ce806ec2e40d4974eafe5b7bcbad3dc0504ed7b1b0",
+      "sha256": "5e2c7a49b491f283cc4c0c8299baa2c3bed41b926b61b74661bdc975de4113f8",
       "purpose": "Explicit, fail-closed reuse of a signed completed project scan.",
       "symbols": [
         {
@@ -11155,27 +11428,27 @@
         },
         {
           "name": "_adapter_identity",
-          "line": 61
+          "line": 59
         },
         {
           "name": "capture_reuse_identity",
-          "line": 77
+          "line": 75
         },
         {
           "name": "_complete_scan",
-          "line": 176
+          "line": 174
         },
         {
           "name": "finalize_reuse_proof",
-          "line": 205
+          "line": 203
         },
         {
           "name": "_publication_current",
-          "line": 227
+          "line": 225
         },
         {
           "name": "try_reuse",
-          "line": 241
+          "line": 239
         }
       ]
     },
@@ -11294,7 +11567,7 @@
     },
     {
       "path": "src/security_runtime/scanners.py",
-      "sha256": "7254f93c5a54d1d9904aa29b1045a4fc5332a1c3c6afc65db68e18d49514f967",
+      "sha256": "3b701d137e460f2ca8b9186cfd08ebdfb3e7197b71e9d59ea9314caad33189b0",
       "purpose": "",
       "symbols": [
         {
@@ -11506,20 +11779,24 @@
           "line": 899
         },
         {
+          "name": "active_provider",
+          "line": 909
+        },
+        {
           "name": "ScannerRegistry",
-          "line": 904
+          "line": 914
         },
         {
           "name": "ScannerRegistry.__init__",
-          "line": 905
+          "line": 915
         },
         {
           "name": "ScannerRegistry._discover_plugins",
-          "line": 913
+          "line": 922
         },
         {
           "name": "ScannerRegistry.plan",
-          "line": 936
+          "line": 945
         }
       ]
     },
@@ -12140,6 +12417,21 @@
         {
           "name": "index_projection",
           "line": 16
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/stop_wait_policy.py",
+      "sha256": "46d74429d32f74b506efe670149c27c3a7c5c9dea4813b8ad01a3102514c9b64",
+      "purpose": "Native transport limits, inspected only for opt-in extended waiting.",
+      "symbols": [
+        {
+          "name": "host_limit",
+          "line": 13
+        },
+        {
+          "name": "extended",
+          "line": 43
         }
       ]
     },
@@ -14755,7 +15047,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "cd234f5371836693dc8b84cc87b9885d118941727c6ccc7d365e79762d8e400d",
+      "sha256": "6bbcc903c1a87155a8baa107725307b083f6e76621c71038927c9ab5a613f8fd",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {
@@ -14784,39 +15076,39 @@
         },
         {
           "name": "current_owner",
-          "line": 142
+          "line": 143
         },
         {
           "name": "connection_owner",
-          "line": 145
+          "line": 146
         },
         {
           "name": "session_owner",
-          "line": 148
+          "line": 149
         },
         {
           "name": "record_owner",
-          "line": 152
+          "line": 153
         },
         {
           "name": "valid_owner",
-          "line": 155
+          "line": 156
         },
         {
           "name": "owner_scope",
-          "line": 162
+          "line": 163
         },
         {
           "name": "process_stamp",
-          "line": 169
+          "line": 170
         },
         {
           "name": "writer_identity",
-          "line": 211
+          "line": 212
         },
         {
           "name": "writer_gone",
-          "line": 216
+          "line": 217
         }
       ]
     },
@@ -16746,7 +17038,7 @@
     },
     {
       "path": "src/security_runtime/user_config.py",
-      "sha256": "52723b000721a028ce276cc2d6586095a23bcf612337d5740593ce60d02e1e55",
+      "sha256": "e694ab752cd8317d64f6327269fbcb24af701755cb59dd49d1ab407722573729",
       "purpose": "User-owned product preferences, independent of project source and install versions.",
       "symbols": [
         {
@@ -16775,11 +17067,11 @@
         },
         {
           "name": "validate_preferences",
-          "line": 112
+          "line": 113
         },
         {
           "name": "save_config",
-          "line": 147
+          "line": 150
         }
       ]
     },
@@ -16932,6 +17224,53 @@
         {
           "name": "read_vue_scripts",
           "line": 267
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/watch_control.py",
+      "sha256": "c6bfe408dcd9c89b91a5ab265afdea15db512d70cd1fb8dc28137390962ce850",
+      "purpose": "Process-local watcher control; remote callers hold a signed task capability.",
+      "symbols": [
+        {
+          "name": "_Server",
+          "line": 19
+        },
+        {
+          "name": "_Server.__init__",
+          "line": 23
+        },
+        {
+          "name": "_Server.process_request",
+          "line": 27
+        },
+        {
+          "name": "_Server.process_request_thread",
+          "line": 37
+        },
+        {
+          "name": "_Server.handle_error",
+          "line": 43
+        },
+        {
+          "name": "_Handler",
+          "line": 47
+        },
+        {
+          "name": "_Handler.handle",
+          "line": 48
+        },
+        {
+          "name": "endpoint",
+          "line": 100
+        },
+        {
+          "name": "request",
+          "line": 111
+        },
+        {
+          "name": "owner_lost",
+          "line": 135
         }
       ]
     },

@@ -72,12 +72,17 @@ def select_outputs(root, row):
         return observed, facts
 
 
-def separate_directories(root, names, *, compiled_paths=None):
+def watch_only_paths(row):
+    """Positive provenance only; legacy/unclassified paths stay mandatory."""
+    return set(row.get('watch_paths', ())) - set(row.get('explicit_paths', ()))
+
+
+def separate_directories(root, names, *, compiled_paths=None, watch_only=(), missing_watch_paths=None):
     """Classify only recorded paths at closeout; never enumerate children.
 
-    Preserve missing, inaccessible, linked and special paths for the existing
-    scan-input validation. Optionally separate verified compiled files in this
-    same pass, before Git filtering and input capture.
+    Preserve explicit/unknown missing inputs, inaccessible, linked and special
+    paths for validation. Only confirmed absent watch-only paths may be skipped.
+    Reuse the existing lstat; do not add filesystem probes or inventory.
     """
     import stat
     from .hook_state import native_io_path, no_links
@@ -86,7 +91,13 @@ def separate_directories(root, names, *, compiled_paths=None):
         path = root / name
         try:
             no_links(path)
-            mode = native_io_path(path).lstat().st_mode
+            try:
+                mode = native_io_path(path).lstat().st_mode
+            except FileNotFoundError:
+                if missing_watch_paths is not None and name in watch_only:
+                    missing_watch_paths.append(name)
+                    continue
+                raise
             directory = stat.S_ISDIR(mode)
             if compiled_paths is not None and stat.S_ISREG(mode) and is_compiled_artifact(native_io_path(path)):
                 compiled_paths.append(name)

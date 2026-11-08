@@ -15,10 +15,10 @@ def render(result, format):
         output = io.StringIO(newline='')
         writer = csv.writer(output)
         fields = ('id','editor','project','workspace','session_id','check_id','title','severity','status',
-                  'category','location','description','impact','advice','unknowns')
+                  'category','location','description','impact','advice','unknowns','session_name','title_zh','technical_explanation_zh','plain_impact_zh','advice_zh','unknowns_zh')
         writer.writerow(fields)
         for row in rows:
-            values = [str(row.get(k, '')) for k in fields]
+            values = [str(row.get('presentation',{}).get(k,row.get(k, ''))) for k in fields]
             writer.writerow(["'"+v if v.lstrip().startswith(('=', '+', '-', '@', '\t', '\r')) else v for v in values])
         return 'text/csv; charset=utf-8', ('\ufeff'+output.getvalue()).encode()
     if format != 'sarif':
@@ -27,9 +27,9 @@ def render(result, format):
     for row in rows:
         value = dict(ruleId=row.get('rule_id') or row['category'],
             level={'严重':'error','高':'error','中':'warning','低':'note','信息':'note'}.get(row['severity'], 'warning'),
-            message=dict(text=row['title']+'\n'+row['description']+'\n修复建议：'+row['advice']),
+            message=dict(text=row.get('presentation',{}).get('title_zh',row['title'])+'\n'+row.get('presentation',{}).get('technical_explanation_zh',row['description'])+'\n修复建议：'+row.get('presentation',{}).get('advice_zh',row['advice'])),
             partialFingerprints={'runtimeRiskId/v1':row['id']},
-            properties={k:row.get(k) for k in ('editor','project_id','workspace_id','session_id','check_id','status','decision','scan_ids','management','source_freshness')})
+            properties={k:row.get(k) for k in ('editor','project_id','workspace_id','session_id','check_id','status','decision','scan_ids','management','source_freshness','session_name','presentation','description','impact')})
         if row.get('file_path') and row.get('line_start'):
             value['locations'] = [dict(physicalLocation=dict(
                 artifactLocation=dict(uri=quote(row['file_path'].replace('\\','/'), safe='/'), uriBaseId='%SRCROOT%'),

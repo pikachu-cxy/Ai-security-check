@@ -189,6 +189,7 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
 
 
 def product_hooks(runtime=None, state_directory=None) -> dict:
+    from .stop_wait_policy import INSTALLED_HOOK_TIMEOUT
     # User-visible labels are part of the owned definition fingerprint. Upgrades
     # retain prior signed records and require the Host's normal trust review.
     result = codex_mcp_hook_config()
@@ -209,7 +210,7 @@ def product_hooks(runtime=None, state_directory=None) -> dict:
         'input': {'event': '${hook_event_name}', 'workspace_path': '${cwd}',
                   'session_id': '${session_id}', 'stop_hook_active': '${stop_hook_active}',
                   'turn_id': '${turn_id}', 'permission_mode': '${permission_mode}'},
-        'timeout': 30, 'statusMessage': '检查风险处理进度',
+        'timeout': INSTALLED_HOOK_TIMEOUT, 'statusMessage': '检查风险处理进度',
     }]}]
     import shlex
     import subprocess

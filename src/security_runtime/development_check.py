@@ -75,6 +75,9 @@ def product_total_wait_seconds():
 def native_wait_seconds(row):
     """One effective host budget; never extend the existing native Stop wait."""
     from .user_config import batch_config
+    from .stop_wait_policy import extended, host_limit
+    if extended(row):
+        return host_limit()['effective_wait_seconds']
     options = batch_config(row)['development']['stop_fallback']
     return min(options['native_wait_seconds'], options['wait_timeout_seconds'], product_wait_seconds())
 
@@ -181,7 +184,7 @@ class DevelopmentCheckStore(SignedRecords):
         return dict(effective_config=config, kind='check', contract=CONTRACT, check_ref=ref, owner=dict(owner),
             root_identity=root_identity(self.root), scan_path=str(Path(scan_path).absolute()),
             created_at=now, updated_at=now, last_event_at=now, dirty_seq=0,
-            scanned_seq=0, attempted_seq=0, observed_paths=[], scope_unknown=False,
+            scanned_seq=0, attempted_seq=0, observed_paths=[], watch_paths=[], explicit_paths=[], scope_unknown=False,
             events=[], state='OPEN', finish_requested=False, scan_id=None,
             result=None, reason_code=None, worker_ticket=None, automatic=False)
 
@@ -223,11 +226,13 @@ class DevelopmentCheckStore(SignedRecords):
             # available for review until a real edit starts the next batch.
             # Never reset an in-flight batch: its newer edits still need checking.
             row = dict(row, effective_config=snapshot(), observed_paths=[],
-                explicit_paths=[], observed_directories=[], scope_unknown=False,
-                scope_capacity_exceeded=False, file_watch_gaps=[])
+                explicit_paths=[], watch_paths=[], skipped_missing_watch_paths=[], observed_directories=[], scope_unknown=False,
+                scope_capacity_exceeded=False, file_watch_gaps=[], file_watch_diagnostic=None)
         selected, overflow = clean_paths(list(dict.fromkeys([*row['observed_paths'], *paths])), tolerant=True)
         protected = sorted((set(row.get('explicit_paths', [])) | (set(paths) if explicit else set())) & set(selected))
-        row = dict(row, observed_paths=selected, explicit_paths=protected,
+        watched = sorted((set(row.get('watch_paths', [])) | (set() if explicit else set(paths))) & set(selected))
+        row = dict(row, observed_paths=selected, explicit_paths=protected, watch_paths=watched,
+            skipped_missing_watch_paths=sorted(set(row.get('skipped_missing_watch_paths', ())) - set(paths)),
             scope_unknown=bool(row['scope_unknown'] or unknown or overflow),
             scope_capacity_exceeded=bool(row.get('scope_capacity_exceeded') or overflow),
             dirty_seq=row['dirty_seq']+1, updated_at=self.now(), last_event_at=self.now(),
@@ -236,6 +241,9 @@ class DevelopmentCheckStore(SignedRecords):
             attempt_count=0, busy_attempts=0, next_attempt_at=0, failed_seq=None,
             failure_diagnostic=None,
             launch_failures=0, launch_retry_at=0)
+        if row.get('effective_config', {}).get('values', {}).get('agent', {}).get('audit_business_logic'):
+            from .incremental_audit import record_changes
+            record_changes(row, paths)
         return self._put(db, row['check_ref'], row), True
 
 
@@ -271,9 +279,10 @@ def projection(store, row):
     if (row.get('risk_import_status') == 'UNAVAILABLE' and
             state in {'RESULTS_READY', 'PARTIAL'}):
         state, reason = 'PARTIAL', 'DEVELOPMENT_CANDIDATES_UNAVAILABLE'
-    if state in {'QUEUED', 'RUNNING'}:
+    if state == 'RUNNING':
         worker = store.read('$worker')
-        if worker and worker.get('lease_until', 0) <= store.now():
+        if (worker and worker.get('ticket') == row.get('worker_ticket')
+                and worker.get('lease_until', 0) <= store.now()):
             state, reason = 'INTERRUPTED', 'DEVELOPMENT_WORKER_INTERRUPTED'
     result = row.get('result') or {}
     gaps = []
@@ -305,6 +314,8 @@ def projection(store, row):
         dirty_seq=row['dirty_seq'], scanned_seq=row['scanned_seq'],
         scan_id=row['scan_id'], result_available=bool(row['scan_id']),
         scope=dict(kind='OBSERVED_FILES', paths=row['observed_paths'],
+            explicit_paths=row.get('explicit_paths', []), watch_paths=row.get('watch_paths', []),
+            skipped_missing_watch_paths=row.get('skipped_missing_watch_paths', []),
             directory_observations=row.get('observed_directories', []),
             gitignored_paths=row.get('gitignored_paths', []),
             gitignore_filter_note=row.get('gitignore_filter_note'),
@@ -453,14 +464,20 @@ class DevelopmentCheckService:
                 return projection(store, row)
             selected, invalid = clean_paths(row['observed_paths'], tolerant=True)
             if row['state'] in {'OPEN', 'DIRTY'}:
-                from .development_scope import separate_directories
+                from .development_scope import separate_directories, watch_only_paths
                 compiled_paths = []
-                selected, directories = separate_directories(store.root, selected, compiled_paths=compiled_paths)
+                missing_watch_paths = []
+                selected, directories = separate_directories(store.root, selected, compiled_paths=compiled_paths,
+                    watch_only=watch_only_paths(row), missing_watch_paths=missing_watch_paths)
                 from .development_scope import filter_gitignored
                 selected, ignored, ignore_note = filter_gitignored(store.root, selected)
                 row = dict(row, observed_directories=directories, excluded_compiled_paths=compiled_paths,
+                           skipped_missing_watch_paths=sorted(set(row.get('skipped_missing_watch_paths', ())) | set(missing_watch_paths)),
                            gitignored_paths=ignored, gitignore_filter_note=ignore_note)
             row = dict(row, observed_paths=selected, scope_unknown=row['scope_unknown'] or invalid)
+            if row.get('effective_config', {}).get('values', {}).get('agent', {}).get('audit_business_logic'):
+                from .incremental_audit import cutoff
+                cutoff(row, selected)
             state = row['state']
             worker = store._get(db, '$worker')
             running = worker and worker.get('lease_until', 0) > self.now()
@@ -502,11 +519,12 @@ class DevelopmentCheckService:
         return result
 
     @timed('check.wait')
-    async def wait_saved(self, root, check_ref, wait_seconds=None, *, submitted=None):
+    async def wait_saved(self, root, check_ref, wait_seconds=None, *, submitted=None, native_extended=False):
         """Read-only continuation. Never finish, rescan, or wake a worker."""
         if wait_seconds is None:
             wait_seconds = product_wait_seconds()
-        if type(wait_seconds) not in (int, float) or not 0 <= wait_seconds <= MAX_PRODUCT_WAIT_SECONDS:
+        maximum = 590 if native_extended else MAX_PRODUCT_WAIT_SECONDS
+        if type(wait_seconds) not in (int, float) or not 0 <= wait_seconds <= maximum:
             raise ValueError('DEVELOPMENT_WAIT_INVALID')
         submitted = submitted or projection(self.store(root), self.store(root).load(check_ref, self.owner))
         started = self.monotonic()
@@ -521,10 +539,10 @@ class DevelopmentCheckService:
             polls += 1
             state = projection(store, row)
             if (row['dirty_seq'] != expected_seq or state['status'] not in {'QUEUED', 'RUNNING'}
-                    or state['wait_deadline_exceeded']):
+                    or (state['wait_deadline_exceeded'] and not native_extended)):
                 break
             remaining = deadline - self.monotonic()
-            if state['wait_deadline'] is not None:
+            if state['wait_deadline'] is not None and not native_extended:
                 remaining = min(remaining, state['wait_deadline'] - self.now())
             if remaining <= 0:
                 break
@@ -537,7 +555,8 @@ class DevelopmentCheckService:
         result = self.get(root, check_ref)
         result_read_ms = round((self.monotonic()-read_started)*1000, 3)
         reason = ('VERSION_CHANGED' if result['dirty_seq'] != expected_seq else
-                  'TOTAL_WAIT_BUDGET_EXHAUSTED' if result['wait_deadline_exceeded'] else
+                  'HOST_WAIT_LIMIT_REACHED' if native_extended and result['status'] in {'QUEUED', 'RUNNING'} else
+                  'TOTAL_WAIT_BUDGET_EXHAUSTED' if result['wait_deadline_exceeded'] and not native_extended else
                   'TIME_BUDGET_EXHAUSTED' if result['status'] in {'QUEUED', 'RUNNING'} else
                   'STATE_AVAILABLE')
         result['closeout_wait'] = dict(contract='bounded-closeout-wait-v1',
@@ -678,7 +697,8 @@ def record_hook(hooks, root, owner, paths=(), *, scope_unknown=True, event_id=No
     covered = False
     if focused and not prepare_only and (event_id or watch_eligible):
         from .development_file_watch import active
-        covered = active(store, focused['check_ref'], owner, completed=event_id) and watch_eligible
+        covered = active(store, focused['check_ref'], owner, completed=event_id,
+                         resolve_remote=watch_eligible) and watch_eligible
     with store.transaction() as db:
         digest = None
         replay_key = 'replay:'+owner_key(owner)

@@ -7,7 +7,7 @@ from ..development_views import EvidenceWindow
 from ..performance_trace import timed_review
 
 
-TOOLS = frozenset({'manage_development_audit', 'get_development_config', 'begin_development_check', 'record_development_changes',
+TOOLS = frozenset({'manage_development_audit', 'process_development_audit', 'get_development_config', 'begin_development_check', 'record_development_changes',
                    'declare_development_outputs',
                    'finish_development_check', 'get_development_check',
                    'complete_development_check', 'wait_development_check',
@@ -30,12 +30,41 @@ def register(server, registry, *, application):
         return DevelopmentRisks(service, application.bound_path(workspace_path), check_ref)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def manage_development_audit(check_ref: str, action: Literal['prepare','status','started','cancel','unsupported','failed'],
+    def manage_development_audit(check_ref: str, action: Literal['prepare','status','started','cancel','unsupported','failed',
+                                 'stream_prepare','stream_started','stream_cancel','stream_status','stream_authorize_paths','stream_rotate','stream_failed'],
                                  workspace_path: str | None = None, session_ref: str | None = None,
-                                 audit_id: str | None = None, agent_ref: str | None = None) -> dict:
-        """Prepare a version-bound read-only parallel business audit during development. Host must actually spawn its subagent then acknowledge started with its real ID; no independent model calls. Collect evidence-backed child results and submit with the existing review operation. Cancel on edits; status preserves stale/interrupted/unsupported facts."""
+                                 audit_id: str | None = None, agent_ref: str | None = None,
+                                 audit_token: str | None = None,
+                                 related_paths: Annotated[list[str], Field(max_length=50)] | None = None) -> dict:
+        """Manage a read-only business audit during development. Prefer stream_prepare, actually spawn a host subagent, then stream_started with its real ID. Pass the task-scoped capability to that child for direct process_development_audit calls; edits queue incremental work without cancelling the task. stream_status preserves pending/interrupted facts and does not dispatch a model. Legacy unprefixed actions retain their version-bound handoff contract."""
+        if action.startswith('stream_'):
+            from ..audit_stream_service import manage
+            return manage(risks(check_ref, workspace_path, session_ref), action.removeprefix('stream_'),
+                          agent_ref=agent_ref, related_paths=related_paths or [], audit_token=audit_token)
+        from ..development_risks import require
+        require(not related_paths and audit_token is None, 'DEVELOPMENT_AUDIT_INPUT_INVALID')
         from ..business_audit import operate
         return operate(risks(check_ref, workspace_path, session_ref), action, audit_id, agent_ref)
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
+    @timed_review
+    def process_development_audit(check_ref: str, action: Literal['claim','read','submit','recover','heartbeat'],
+                                  audit_token: Annotated[str, Field(min_length=32, max_length=256)],
+                                  agent_ref: Annotated[str, Field(min_length=1, max_length=200)],
+                                  workspace_path: str,
+                                  batch_id: str | None = None, request_id: str | None = None,
+                                  windows: Annotated[list[EvidenceWindow], Field(max_length=20)] | None = None,
+                                  observations: Annotated[list[Observation], Field(max_length=50)] | None = None,
+                                  business_reviews: Annotated[list[BusinessReview], Field(max_length=50)] | None = None) -> dict:
+        """Delegated incremental business audit only. Parent prepares and binds the actual child, then passes its task-scoped capability. Child claims fixed input, reads allowed evidence and submits directly; submit also offers the next batch. No parent session credential, scan, source edit, scanner-candidate dismissal or user disposition authority. Reuse request_id on retries. Received is distinct from applied; stale results remain stored and need revalidation. Keep capability out of reports, URLs and files."""
+        from ..audit_stream_adapter import delegated_risks
+        from ..audit_stream_service import process
+        service = delegated_risks(application, workspace_path, check_ref, audit_token, agent_ref)
+        return process(service, action, audit_token=audit_token, agent_ref=agent_ref,
+            batch_id=batch_id, request_id=request_id,
+            windows=[w.model_dump() if hasattr(w, 'model_dump') else w for w in (windows or [])],
+            observations=[v.model_dump() for v in (observations or [])],
+            business_reviews=[v.model_dump() for v in (business_reviews or [])])
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     @timed_review
@@ -62,7 +91,7 @@ def register(server, registry, *, application):
                                   return_risks: bool = False,
                                   response_view: Literal['batch', 'final_report'] = 'batch',
                                   scan_id: ScanId | None = None, audit_id: str | None = None) -> dict:
-        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a verified whole-batch report with byte-bounded prose continuation; incomplete batches return a bounded review_receipt with remaining counts. Follow next_action for later pages. For CONFIRMED issues write user-facing report_text with the judgment; a complete page can reuse the saved report_text. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs and limitations, even with no findings. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE stays pending. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
+        """Save an atomic review batch. Prefer return_risks=true to receive the committed scan batch. Use response_view=final_report for a verified whole-batch report with byte-bounded prose continuation; incomplete batches return a bounded review_receipt with remaining counts. Follow next_action for later pages. Use report_content for Chinese title, problem, plain impact, advice and concrete unknowns; legacy report_text remains accepted. Product renders the fixed report, location and choices. Pass scan_id once at the top level for this batch. Each existing alert supplies same_issue_as, decision, rationale and evidence_refs; location comes from that original scan. For a verified duplicate, use DISMISSED with duplicate_of set to the confirmed candidate ID on the same scan and overlapping source lines. New AI findings use Observation and stable issue_key. Independently record business_reviews per observed file with rationale, evidence_refs, coverage (COMPLETE/PARTIAL), uncovered and limitations, even with no findings. Background limitations do not imply unreviewed files; PARTIAL must name actual uncovered scope. Empty observations do not certify coverage. Read review_progress for remaining work; INCONCLUSIVE is a saved unresolved conclusion, delivered once without automatic resubmission. Reuse identity on retry, follow next_action on recoverable errors, then reread all risk pages. Raw scanner output and dispositions are retained. DISMISSED is not repair proof."""
         values = [v.model_dump() if isinstance(v, (Observation, ScannerReview)) else v for v in observations]
         coverage = [v.model_dump() if isinstance(v, BusinessReview) else v for v in (business_reviews or [])]
         from ..development_risks import DevelopmentRiskError
@@ -148,11 +177,18 @@ def register(server, registry, *, application):
         return result
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
-    def set_development_risk_disposition(check_ref: str, risk_id: str, decision: str,
-                                         user_requested: bool, workspace_path: str | None = None,
-                                         session_ref: str | None = None) -> dict:
+    def set_development_risk_disposition(check_ref: str, risk_id: str,
+                                         user_requested: bool, decision: str | None = None,
+                                         workspace_path: str | None = None,
+                                         session_ref: str | None = None, disposition: str | None = None,
+                                         reason: str = '', expected_seq: int | None = None,
+                                         expected_revision: str | None = None, request_id: str | None = None) -> dict:
         """Persist explicit selected-risk user choice: DEFER, EXCLUDE, RESTORE. Suppress reminders without deleting observations or claiming repair. AI technical dismissal belongs in submit_development_review, not a fabricated user choice."""
-        return risks(check_ref, workspace_path, session_ref).disposition(risk_id, decision, user_requested)
+        from ..development_risks import require
+        require(not (decision and disposition and decision != disposition), 'DEVELOPMENT_RISK_DISPOSITION_CONFLICT')
+        return risks(check_ref, workspace_path, session_ref).disposition(
+            risk_id, decision or disposition, user_requested, reason=reason,
+            expected_seq=expected_seq, expected_revision=expected_revision, request_id=request_id)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def prepare_development_risk_fix(check_ref: str, risk_id: str, proposal: str,

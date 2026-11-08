@@ -87,6 +87,15 @@ def review_page(service, check, row, progress, offset, limit):
     seq, scan = check['dirty_seq'], check.get('scan_id')
     require(scan and seq == check['scanned_seq'], 'DEVELOPMENT_RISK_VERSION_STALE')
     pending = set(progress['pending_scanner_ids'])
+    from .development_risks import current_assessment
+    confirmed = {}
+    for risk in row['risks'].values():
+        proof = risk.get('assessment') or {}
+        finding = risk['finding']
+        if (proof.get('stream_batch_id') and proof.get('decision') == 'CONFIRMED'
+                and current_assessment(check, proof, finding['file_path'])):
+            confirmed.setdefault(finding['file_path'], []).append(dict(id=risk['id'],
+                **{k: finding[k] for k in ('title', 'category', 'line_start', 'line_end', 'description')}))
     scope = []
     if progress['scanner_review'] != 'SKIPPED_BY_CONFIG':
         for risk in row['risks'].values():
@@ -95,9 +104,9 @@ def review_page(service, check, row, progress, offset, limit):
             if original:
                 scope.append((risk['id'], original['finding']))
     result = check.get('result') or {}
-    from .business_audit import fast_delivery
+    from .business_audit import fast_delivery, streaming, continuation
     deferred = fast_delivery(check)
-    if progress['business_review'] != 'SKIPPED_BY_CONFIG' and not deferred:
+    if progress['business_review'] != 'SKIPPED_BY_CONFIG' and not deferred and not streaming(check):
         excluded = result.get('generated_outputs', {}).get('excluded_paths', [])
         scope.extend((path, None) for path in sorted(set(check['observed_paths']) - set(excluded)))
     from .review_delivery import response_budget, json_bytes, collect_evidence
@@ -122,6 +131,8 @@ def review_page(service, check, row, progress, offset, limit):
             details = finding.get('technical_details') or {}
             item.update(id=key, same_issue_as=key, scanner_sources=finding.get('scanner_sources', []),
                         disposition=row['risks'][key].get('disposition', 'ACTIVE'))
+            if confirmed.get(finding['file_path']):
+                item['related_confirmed'] = confirmed[finding['file_path']][:8]
             for k in ('rule_id', 'rule_severity'):
                 if details.get(k):
                     item[k] = details[k]
@@ -151,7 +162,8 @@ def review_page(service, check, row, progress, offset, limit):
     page = dict(view='review', check_ref=service.ref, dirty_seq=seq, scan_id=scan, candidates_ready=True,
                 scanner_review=progress['scanner_review'], business_review=progress['business_review'],
                 submission_hint='已有候选直接复制该项 same_issue_as（非空字符串）及 evidence_refs，'
-                                '在提交顶层传一次本页 scan_id，逐项填写 decision、rationale；确认项另填 report_text。重复命中传 DISMISSED 和 duplicate_of（同批确认项 id）。',
+                                '在提交顶层传一次本页 scan_id，逐项填写 decision、rationale；确认项另填 report_text。'
+                                'related_confirmed 是当前版本已保存的同文件审计发现，不是重复判定。证据确认同一问题时传 DISMISSED 和 duplicate_of（同批确认项或该已保存审计项 id），不同问题分别报告。',
                 candidates=candidates, business_paths=paths, evidence=evidence, evidence_errors=evidence_errors,
                 delivery_metrics=delivery_metrics, response_budget_bytes=budget, trust='UNTRUSTED_SOURCE',
                 deferred_business_paths=progress['pending_business_paths'] if deferred else [],
@@ -160,6 +172,11 @@ def review_page(service, check, row, progress, offset, limit):
                 next_offset=next_offset, next_action=None)
     from .review_delivery import fit_review_page
     page = fit_review_page(page, positions, budget)
+    audit = continuation(check)
+    if audit:
+        page['audit_continuation'] = audit
+        if not candidates and page['next_offset'] is None:
+            page['next_action'] = audit['next_action']
     if page['next_offset'] is not None:
         page['next_action'] = dict(tool='get_development_risks', arguments=dict(
             workspace_path=str(service.root), check_ref=service.ref, view='review',
@@ -183,6 +200,8 @@ def risk_summary(result):
 
 def batch_report_page(result, check):
     """Only reuse saved prose after checking this version's decisions and dispositions."""
+    from .performance_trace import review_mark
+    review_mark('report_render_start')
     page = risk_summary(result)
     page['view'] = 'batch'
     page['gaps'] = (check.get('result') or {}).get('gaps', [])
@@ -200,76 +219,59 @@ def batch_report_page(result, check):
             '本回合先只回复开发结果和实际验证，并说明安全报告待收尾；不要提前展开漏洞段落或复制子 Agent 报告。'
             '正常结束本回合以触发 Stop，不轮询、不重提、不主动启动扫描；Stop 续接后统一交付完整风险报告和链接。')
         return page
-    sections, dismissed, duplicates = [], 0, 0
-    explicit = set(check.get('explicit_paths', ()))
-    unverified_writer = False
     from .business_audit import fast_delivery, status as audit_status
+    from .development_report import render_risk
+    from .dashboard_service import session_url
     progress = page['review_progress']
-    deferred_business = bool(fast_delivery(check) and progress['pending_business_paths'])
-    complete = progress['host_review_completed'] or (deferred_business and
-        progress['scanner_review'] in {'COMPLETE', 'SKIPPED_BY_CONFIG'})
     scanner_skipped = progress['scanner_review'] == 'SKIPPED_BY_CONFIG'
-    if scanner_skipped and progress['business_review'] == 'SKIPPED_BY_CONFIG':
-        complete = True
+    deferred = bool(progress['pending_business_paths'])
+    complete = (progress['host_review_completed'] or
+        (deferred and progress['scanner_review'] in {'COMPLETE', 'SKIPPED_BY_CONFIG'}) or
+        (scanner_skipped and progress['business_review'] == 'SKIPPED_BY_CONFIG'))
+    if not complete:
+        return page  # Actual unsubmitted work still has a bounded continuation.
+    sections = []
+    totals = page.get('report_totals', {})
+    if page.get('offset', 0) == 0 and (totals.get('confirmed') or totals.get('inconclusive')):
+        scan_state = '本批已记录文件的扫描已完成。' if not page['gaps'] else '本批扫描结果已保存，存在扫描覆盖限制。'
+        sections.append(scan_state + (' 扫描候选未经 Agent 复核。' if scanner_skipped else
+            f" 已确认 {totals.get('confirmed', 0)} 项，待确认 {totals.get('inconclusive', 0)} 项。"))
     for item in page['risks']:
-        assessment = item.get('assessment') or {}
-        current = (assessment.get('dirty_seq'), assessment.get('scan_id')) == (page['dirty_seq'], page['scan_id'])
-        audit = check.get('parallel_audit') or {}
-        current = current or bool(assessment.get('audit_id') and assessment['audit_id'] == audit.get('audit_id')
-            and audit.get('status') in {'COMPLETE', 'PARTIAL'} and audit.get('dirty_seq') == page['dirty_seq']
-            and assessment.get('dirty_seq') == page['dirty_seq'])
-        if item['decision'] == 'DISMISSED' and item['disposition'] == 'ACTIVE' and current:
-            if assessment.get('duplicate_of'):
-                duplicates += 1
-            else:
-                dismissed += 1
         if item['reminder_suppressed']:
             continue
-        if scanner_skipped and item['decision'] not in {'CONFIRMED', 'DISMISSED'}:
-            from pathlib import Path
-            f = item['finding']
-            location = str(Path(check['workspace']) / f['file_path'])
-            sections.append(f"**{f['title']}**\n\n{f['severity']}（扫描器评级，未经 Agent 确认） · "
-                f"[{f['file_path']}:{f['line_start']}]({location}:{f['line_start']})\n\n"
-                f"**问题**\n{f.get('description') or '扫描器未提供详细说明。'}\n\n"
-                f"**可能影响**\n{f.get('impact') or '尚未确认。'}\n\n"
-                f"**建议修复**\n{f.get('fix_advice') or '需结合实际调用与防护确定修复方案。'}\n\n"
-                '**尚未确认**\n本项仅为扫描候选，业务可达性、现有防护和利用条件未经 Agent 复核。')
-            continue
-        if current and assessment.get('report_text') and item['decision'] == 'CONFIRMED':
-            sections.append(assessment['report_text'])
-            if check.get('file_watch') and item['finding']['file_path'] not in explicit:
-                unverified_writer = True
-        else:
-            complete = False
-    if unverified_writer:
-        sections.append('以上经 Shell 监听发现的风险仅能定位到工作区文件，写入会话未经确认。')
-    if duplicates:
-        sections.append(f'{duplicates} 条重复告警已关联到同批确认项。')
-    if dismissed:
-        sections.append(f'经复核，{dismissed} 条扫描告警为误报，无需处理。')
-    if deferred_business:
-        labels = {'READY':'待派发','RUNNING':'进行中','UNSUPPORTED':'宿主不支持并行审计','NOT_STARTED':'尚未开始',
-                  'PARTIAL':'已提交，但有覆盖限制','INTERRUPTED':'已中断','NEEDS_REVIEW':'源码更新，需补审','CANCELLED':'已取消','FAILED':'失败'}
-        state = audit_status(check)['status']
-        sections.append('业务逻辑审计'+labels.get(state, '尚未完成')+'；仍有 '+str(len(progress['pending_business_paths']))+
-                        ' 个路径待审。本次先交付已保存的静态检查和复核结果，不能据此声称业务审计完成。')
-    if complete:
-        if page['next_offset'] is None:
-            if page['scope_unknown']:
-                sections.append('本次检查仅覆盖已记录的路径，部分改动范围未知。')
-            if page['gaps']:
-                sections.append('本次检查的覆盖缺口：' + '、'.join(page['gaps']) + '。')
-            if page['total'] == 0:
-                sections.insert(0, '静态检查结果已保存；在本批已记录的检查范围内，未发现扫描候选漏洞。')
-        from .dashboard_service import session_url
-        url = session_url(check['workspace'], check['owner'])
-        page['session_url'] = url
-        if url and (deferred_business or any((r['decision'] == 'CONFIRMED' or scanner_skipped) and not r['reminder_suppressed']
-                       for r in page['risks'])):
+        assessment = item.get('assessment') or {}
+        from .development_risks import current_assessment
+        current = current_assessment(check, assessment, item['finding']['file_path'])
+        if current or scanner_skipped:
+            sections.append(render_risk(item, check['workspace'], reviewed=current))
+    url = session_url(check['workspace'], check['owner'])
+    page['session_url'] = url
+    if page['next_offset'] is None:
+        if totals.get('duplicates'):
+            sections.append(f"{totals['duplicates']} 条重复告警已关联到同批确认项。")
+        if totals.get('false_positives'):
+            sections.append(f"经复核，{totals['false_positives']} 条扫描告警为误报，无需处理。")
+        if deferred:
+            labels = {'READY':'待派发', 'RUNNING':'进行中', 'UNSUPPORTED':'当前宿主不支持', 'NOT_STARTED':'尚未开始',
+                      'INTERRUPTED':'已中断', 'NEEDS_REVIEW':'源码更新，需补审', 'CANCELLED':'已取消', 'FAILED':'失败'}
+            state = audit_status(check)['status']
+            sections.append('业务逻辑审计'+labels.get(state, '尚未完成')+'；待审文件：'+
+                            '、'.join(progress['pending_business_paths'])+'。')
+        for gap in progress.get('business_coverage_gaps', []):
+            reasons = '；'.join(gap['reasons']) or '未提供具体范围'
+            label = '审计未覆盖' if gap['coverage'] == 'PARTIAL' else '历史审计覆盖范围待确认'
+            sections.append(f"{label}：{gap['file_path']} — {reasons}")
+        if page['gaps'] and page['total']:
+            sections.append('本次扫描存在覆盖限制，具体原因见本会话风险管理。')
+        if page['total'] == 0:
+            sections.insert(0, '本批已记录文件的扫描已完成，未发现扫描候选漏洞。' if not page['gaps'] else
+                            '本批扫描未发现扫描候选漏洞，但存在扫描覆盖限制。')
+        if totals.get('actionable_confirmed'):
+            sections.append('你可以选择：**修复／暂不处理**。可指定风险编号分别处理。')
+        if url and sections:
             sections.append(f'[本会话风险管理]({url})')
-        return dict(report_text='\n\n'.join(sections), **page)
-    return page
+    review_mark('report_render_done')
+    return dict(report_text='\n\n'.join(sections), **page)
 
 
 def final_report_receipt(page):
@@ -338,7 +340,13 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             'DEVELOPMENT_RISK_PAGE_INVALID')
     mode = marker['mode']
     if mode == 'REVIEW':
-        page = service.get(offset, limit, include_history=False, review_only=True)
+        from .development_risks import review_progress
+        work = review_progress(check, check.get('security_result') or service.load())
+        if not work['pending_scanner_ids'] and work['pending_business_paths']:
+            page = service.get(offset, limit, include_history=False, batch_version=(seq, scan),
+                               whole_report=limit is None)
+        else:
+            page = service.get(offset, limit, include_history=False, review_only=True)
     elif mode == 'REPORT':
         page = service.get(offset, limit, include_history=False, batch_version=(seq, scan), whole_report=limit is None)
     else:
@@ -351,10 +359,12 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
                  and r.get('status') != 'CODE_REVIEWED_RESOLVED']
         limit = limit or 20
         selected = items[offset:offset+limit]
-        text = '\n\n'.join((r.get('assessment') or {}).get('report_text') or
-                           f"已保存业务风险：{r['finding']['title']}（完整报告尚不可用）" for r in selected)
+        from .development_report import render_risk
+        text = '\n\n'.join(render_risk(r, check['workspace'], reviewed=True) for r in selected)
         reason = marker.get('reason')
-        if reason == 'RECOVERY_PENDING':
+        if reason == 'HOST_WAIT_LIMIT_REACHED':
+            text += '\n\n已到达当前宿主允许的收尾等待上限，后台检查仍在继续；结果保存后沿本检查补交。'
+        elif reason == 'RECOVERY_PENDING':
             text += '\n\n此前开发的安全检查正在沿原任务恢复；已保存的结果会直接复用，尚未完成的任务由后台继续。当前尚无完整结果，不能判定没有漏洞；结果保存后将在下一次收尾或会话输入时补交。'
         elif reason == 'RECOVERY_START_FAILED':
             text += '\n\n原安全检查未完成，后台恢复进程启动失败；原任务已保留，尚不能判定是否存在漏洞。'
@@ -368,8 +378,6 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             text += '收尾处理发生异常，原检查及已保存结果保留，没有重新提交扫描。'
         if check['state'] == 'FAILED':
             text += '本批扫描已失败，失败记录保留，未自动重试。'
-        if check.get('file_watch_gaps'):
-            text += '文件变更收集存在缺口，尚未确认全部变更范围。'
         from .business_audit import status as audit_status
         audit = audit_status(check)
         if audit['status'] not in {'COMPLETE', 'DISABLED'}:
@@ -379,8 +387,8 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             text += '\n\n业务逻辑审计'+label+'；本次仅交付已保存的发现，不能据此声称业务审计完成。'
         page = dict(check_ref=service.ref, dirty_seq=seq, scan_id=scan,
                     report_text=text.strip(), scanner_run=False, risks=selected,
-                    gaps=['STATIC_SCAN_INCOMPLETE', *([reason] if reason in {'STOP_HANDOFF_INTERRUPTED', 'STOP_CLOSEOUT_FAILED'} else []),
-                          *check.get('file_watch_gaps', [])], scan_status=check['state'],
+                    gaps=['STATIC_SCAN_INCOMPLETE', *([reason] if reason in {'STOP_HANDOFF_INTERRUPTED', 'STOP_CLOSEOUT_FAILED'} else [])],
+                    observation_notes=list(check.get('file_watch_gaps', [])), scan_status=check['state'],
                     next_offset=offset+limit if offset+limit < len(items) else None,
                     total=len(items), next_action=None)
         page['business_audit'] = dict(status=audit['status'])

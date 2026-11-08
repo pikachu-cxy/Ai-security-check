@@ -20,9 +20,14 @@ def setup(db):
     db.execute('CREATE TABLE IF NOT EXISTS management.hidden_sessions (entry TEXT, signature TEXT, PRIMARY KEY(entry,signature))')
 
 
+def session_signature(row):
+    # Display metadata must not invalidate existing deletion signatures.
+    return digest({k:v for k,v in row.items() if k != 'last_security_activity_at'})
+
+
 def visible_sessions(db, sessions):
     hidden = {r[0] for r in db.execute('SELECT signature FROM hidden_sessions')}
-    return [s for s in sessions if digest(s) not in hidden]
+    return [s for s in sessions if session_signature(s) not in hidden]
 
 
 def groups(db, kind):
@@ -52,12 +57,13 @@ def groups(db, kind):
                 session_key=digest([row.get('editor'),row.get('workspace_id'),row['session_id']])
                 if session_key not in found[key]['session_keys']:
                     found[key]['session_keys'].append(session_key)
-            found[key][category].append((row['id'],row.get('revision','')) if category=='risks' else digest(row))
+            found[key]['last_security_activity_at'] = max(found[key].get('last_security_activity_at') or 0, row.get('last_security_activity_at') or 0)
+            found[key][category].append((row['id'],row.get('revision','')) if category=='risks' else session_signature(row))
     for row in found.values():
         row['risks'].sort();row['sessions'].sort()
         row['parents'] = [v for _,v in sorted(row['parents'].items())]
         row['workspace_count'] = len({(p['editor'],p['workspace_id']) for p in row['parents']})
-        row['revision']=digest(row)
+        row['revision']=digest({k:v for k,v in row.items() if k!='last_security_activity_at'})
         row['risk_count']=len(row['risks']);row['session_count']=len(row.pop('session_keys'))
     return found
 
@@ -67,7 +73,21 @@ def listing(catalog, kind):
         db.execute('BEGIN')
         if kind=='trash':
             return dict(items=[json.loads(r[0]) for r in db.execute('SELECT data FROM deletions')])
-        return dict(items=[{k:v for k,v in r.items() if k not in {'risks','sessions'}} for r in groups(db,kind).values()])
+        from .dashboard_sessions import names, decorate
+        mapping = names(db)
+        items = []
+        for row in groups(db,kind).values():
+            item = {k:v for k,v in row.items() if k not in {'risks','sessions'}}
+            if kind == 'session':
+                title = decorate(row['scope'],mapping)
+                item.update(name=title['session_name'], session_alias=title['session_alias'], title_source=title['title_source'], title_synced_at=title['title_synced_at'])
+            elif kind == 'workspace':
+                from pathlib import Path
+                path = row['parents'][0]['workspace']
+                git = Path(path)/'.git'
+                item.update(name=Path(path).name or path, workspace_path=path, workspace_type='worktree / Git 工作目录' if git.is_file() else '主工作目录' if git.is_dir() else '普通目录 / 历史目录')
+            items.append(item)
+        return dict(items=items, title_sync_status=catalog.titles.status)
 
 
 def change(catalog, data):

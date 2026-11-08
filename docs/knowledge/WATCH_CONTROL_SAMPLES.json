@@ -1,0 +1,266 @@
+{
+  "date": "2026-11-08",
+  "platform": "macOS",
+  "experiments": [
+    {
+      "scope": "Actual native watcher start and already-quiet local stop; no scanner or model; seven alternating pairs",
+      "old_sha256": "498f6f1946d284e5d067c56c528a9d1a71f56de201234ad378043c2c5e39a989",
+      "new_sha256": "ba2258cf23a9505393a85dd7d9918ad7aee916f38a5df2ca6b8019224c76d9e2",
+      "samples": [
+        {
+          "round": 1,
+          "variant": "old",
+          "startup_ms": 85.102,
+          "stop_ms": 81.542,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 1,
+          "variant": "new",
+          "startup_ms": 20.684,
+          "stop_ms": 74.06,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 2,
+          "variant": "new",
+          "startup_ms": 17.988,
+          "stop_ms": 71.719,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 2,
+          "variant": "old",
+          "startup_ms": 14.788,
+          "stop_ms": 85.398,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 3,
+          "variant": "old",
+          "startup_ms": 14.409,
+          "stop_ms": 97.008,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 3,
+          "variant": "new",
+          "startup_ms": 13.558,
+          "stop_ms": 90.666,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 4,
+          "variant": "new",
+          "startup_ms": 13.7,
+          "stop_ms": 50.528,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 4,
+          "variant": "old",
+          "startup_ms": 13.636,
+          "stop_ms": 73.277,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 5,
+          "variant": "old",
+          "startup_ms": 12.693,
+          "stop_ms": 67.478,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 5,
+          "variant": "new",
+          "startup_ms": 15.677,
+          "stop_ms": 60.167,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 6,
+          "variant": "new",
+          "startup_ms": 21.649,
+          "stop_ms": 58.848,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 6,
+          "variant": "old",
+          "startup_ms": 15.426,
+          "stop_ms": 65.577,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 7,
+          "variant": "old",
+          "startup_ms": 18.753,
+          "stop_ms": 94.099,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 7,
+          "variant": "new",
+          "startup_ms": 24.525,
+          "stop_ms": 60.817,
+          "paths": 1,
+          "scans": 0
+        }
+      ],
+      "median": {
+        "old": {
+          "startup_ms": 14.788,
+          "stop_ms": 81.542
+        },
+        "new": {
+          "startup_ms": 17.988,
+          "stop_ms": 60.817
+        }
+      },
+      "phase": "initial"
+    },
+    {
+      "scope": "Actual native watcher start and already-quiet local stop; no scanner or model; seven alternating pairs",
+      "old_sha256": "498f6f1946d284e5d067c56c528a9d1a71f56de201234ad378043c2c5e39a989",
+      "new_sha256": "07531896c22645a4deeabe1c6b384bb051f0fd5cc9d430c58abc31dd88b26b6f",
+      "samples": [
+        {
+          "round": 1,
+          "variant": "old",
+          "startup_ms": 34.036,
+          "stop_ms": 38.73,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 1,
+          "variant": "new",
+          "startup_ms": 14.416,
+          "stop_ms": 44.968,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 2,
+          "variant": "new",
+          "startup_ms": 11.035,
+          "stop_ms": 39.395,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 2,
+          "variant": "old",
+          "startup_ms": 12.169,
+          "stop_ms": 42.743,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 3,
+          "variant": "old",
+          "startup_ms": 12.319,
+          "stop_ms": 64.791,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 3,
+          "variant": "new",
+          "startup_ms": 14.011,
+          "stop_ms": 59.921,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 4,
+          "variant": "new",
+          "startup_ms": 12.953,
+          "stop_ms": 52.41,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 4,
+          "variant": "old",
+          "startup_ms": 12.56,
+          "stop_ms": 57.108,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 5,
+          "variant": "old",
+          "startup_ms": 10.951,
+          "stop_ms": 74.333,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 5,
+          "variant": "new",
+          "startup_ms": 11.514,
+          "stop_ms": 57.111,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 6,
+          "variant": "new",
+          "startup_ms": 10.483,
+          "stop_ms": 45.419,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 6,
+          "variant": "old",
+          "startup_ms": 12.015,
+          "stop_ms": 44.155,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 7,
+          "variant": "old",
+          "startup_ms": 13.3,
+          "stop_ms": 59.863,
+          "paths": 1,
+          "scans": 0
+        },
+        {
+          "round": 7,
+          "variant": "new",
+          "startup_ms": 13.139,
+          "stop_ms": 13.128,
+          "paths": 1,
+          "scans": 0
+        }
+      ],
+      "median": {
+        "old": {
+          "startup_ms": 12.319,
+          "stop_ms": 57.108
+        },
+        "new": {
+          "startup_ms": 12.953,
+          "stop_ms": 45.419
+        }
+      },
+      "phase": "final"
+    }
+  ]
+}

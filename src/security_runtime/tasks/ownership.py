@@ -108,6 +108,7 @@ def session_context(token, *, native_stop=False, workspace=None, grouped_codex=F
                     'workspace_path': str(workspace), 'session_ref': token,
                     'check_ref': '<检查编号>', 'view': 'closeout'}}, ensure_ascii=False)
                 return ('普通开发由编辑 Hook 记录路径、Stop 自动收尾，无待办无需主动调用安全 MCP。'
+                    '未收到明确待交付回执时只回复开发结果，不预告安全报告或链接待返回；零候选正常收尾保持静默。'
                     '收到“正在整理安全检查结果”时，仅将下例的 <检查编号> 替换为提醒中的原编号，'
                     '直接读取本批结果，无需查工具目录或重复提示进度：\n'
                     f'text((await tools.mcp__ai_security_runtime__development_review({request})).content)\n'

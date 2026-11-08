@@ -230,25 +230,29 @@ def native_closeout(service, root, row, deadline, offered, session_id):
     ref, seq = row['check_ref'], row['dirty_seq']
     state = service.get(root, ref) if row['finish_requested'] else service.finish(root, ref)
     if state['status'] in {'QUEUED', 'RUNNING'}:
-        # Leave headroom within the native host's 30-second hook timeout.
+        # Leave transport headroom; default and opt-in waiting share the original task.
         seconds = max(0, deadline - time.monotonic())
-        state = asyncio.run(service.wait_saved(root, ref, seconds, submitted=state))
+        from .stop_wait_policy import extended
+        kwargs = {'native_extended': True} if extended(row) else {}
+        state = asyncio.run(service.wait_saved(root, ref, seconds, submitted=state, **kwargs))
     elif state.get('result_available') and 'review_ready' not in state:
         # A fast worker can publish before finish returns its small projection.
         state = service.get(root, ref)
-    if state['status'] == 'NO_OBSERVED_CHANGES' and not state['scope']['scope_unknown']:
+    if state['status'] == 'NO_OBSERVED_CHANGES':
         return None
     page = state.get('development_result')
     if (not page or seq != state['dirty_seq'] or seq != state['scanned_seq']
             or state['status'] not in {'RESULTS_READY', 'PARTIAL'}):
-        return incomplete_notice(service, root, ref, seq, state)
+        reason = state.get('closeout_wait', {}).get('stopped_reason')
+        return incomplete_notice(service, root, ref, seq, state,
+                                 reason=reason if reason == 'HOST_WAIT_LIMIT_REACHED' else None)
     work = page['review_progress']
     from .business_audit import fast_delivery, status as audit_status
     if fast_delivery(row) and work['pending_business_paths'] and not work['pending_scanner_ids']:
         return report_notice(service, root, row, state, page, 'STOP_AUDIT_PENDING')
     if not (work['pending_scanner_ids'] or work['pending_business_paths']):
         active = [risk for risk in page['risks'] if not risk['reminder_suppressed']]
-        if active or page['next_offset'] is not None or state.get('gaps') or state['scope']['scope_unknown']:
+        if active or page['next_offset'] is not None or state.get('gaps'):
             return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
         return None
     if service.owner['host'] == 'codex':

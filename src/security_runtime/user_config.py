@@ -26,7 +26,7 @@ DEFAULTS = {
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
     'development': {'business_audit_delivery': 'fast', 'review_response_bytes': 65536,
-                    'stop_fallback': {'enabled': True, 'native_wait_seconds': 18, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
+                    'stop_fallback': {'enabled': True, 'wait_mode': 'bounded', 'native_wait_seconds': 18, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 
 
@@ -100,7 +100,8 @@ def describe_config():
     try:
         config = read_config()
         from .development_check import native_wait_seconds
-        return dict(status='VALID', **config, effective_native_wait_seconds=native_wait_seconds({'effective_config': config}), host_support={
+        from .stop_wait_policy import host_limit
+        return dict(status='VALID', **config, stop_wait_support=host_limit(), effective_native_wait_seconds=native_wait_seconds({'effective_config': config}), host_support={
             'codex_cli': 'IMPLEMENTED_REQUIRES_NATIVE_HOOKS',
             'cursor_cli': 'IMPLEMENTED_REQUIRES_NATIVE_HOOKS',
             'claude_code': 'PLANNED', 'qoder_cli': 'PLANNED'})
@@ -110,6 +111,8 @@ def describe_config():
 
 
 def validate_preferences(values):
+    if values['development']['stop_fallback']['wait_mode'] not in {'bounded', 'wait_for_result'}:
+        raise ValueError('USER_CONFIG_STOP_WAIT_MODE_INVALID')
     wait = values['development']['stop_fallback']['native_wait_seconds']
     if type(wait) is not int or not 0 <= wait <= 18:
         raise ValueError('USER_CONFIG_NATIVE_WAIT_OUT_OF_RANGE')

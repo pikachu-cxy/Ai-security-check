@@ -20,7 +20,8 @@ def test_submission_requires_fresh_read_and_all_pages(sample):
     assert len(result['risks']) == 5 and result['total'] == 6
     action = result['next_action']
     assert action == dict(tool='get_development_risks', arguments=dict(
-        check_ref=ref, workspace_path=str(root), offset=0))
+        check_ref=ref, workspace_path=str(root), offset=0, view='batch',
+        expected_seq=1, scan_id=None))
     assert result['reporting']['reread_after_review']
     # A disposition saved after submission must be reflected by the fresh read.
     risks.disposition(result['risks'][0]['id'], 'DEFER', True)

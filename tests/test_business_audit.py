@@ -56,6 +56,9 @@ def test_fast_closeout_keeps_incomplete_audit_explicit_and_wait_mode_blocks(samp
     from test_development_risks import observation
     from security_runtime.development_stop import native_closeout
     root,service,ref,risks=sample
+    # Explicitly prepare the legacy audit whose fast/wait delivery contract
+    # this test covers; new tasks use incremental audit continuation.
+    operate(risks, 'prepare')
     scanner(sample,monkeypatch)
     monkeypatch.setattr('security_runtime.mcp_tools.presentation._agent_result',lambda *a,**kw: {'scan_id':'scan-1'})
     risks.submit([observation(risks,same_issue_as='s1',report_text='Confirmed fixture with complete saved explanation.')],1)
@@ -89,7 +92,7 @@ def test_disabled_review_still_delivers_complete_candidate_report(sample,monkeyp
     risks.sync_scanner()
     result=risks.get(batch_version=(1,'scan-1'))
     report=result['report_text']
-    for label in ('**问题**','**可能影响**','**建议修复**','**尚未确认**','未经 Agent 确认','本会话风险管理'):
+    for label in ('**问题**','**可能影响**','**建议修复**','未经 Agent 确认','本会话风险管理'):
         assert label in report
     assert not result['review_progress']['host_review_completed']
 
@@ -111,6 +114,7 @@ def test_dependency_changed_after_audit_completion_invalidates_reuse(sample,monk
     (root/'guard.py').write_text('authorized = True\n')
     job=operate(risks,'prepare')
     dependency=risks.read('guard.py',1,1,related=True)
+    operate(risks,'started',job['audit_id'], 'dependency-review-child')
     risks.submit([],1,audit_id=job['audit_id'],business_reviews=[dict(file_path='query.py',rationale='Checked guard',
         evidence_refs=job['evidence_refs']+[dependency['evidence_ref']],limitations=[])])
     (root/'guard.py').write_text('authorized = False\n')
