@@ -305,8 +305,11 @@ view=review/closeout 不传 limit 时按产品设置的响应字节预算分页�
    如果已有准备的范围不完整，不复用其授权编辑范围，也不把失败的重试当成成功；保留原记录并说明阻塞。
    修改已经发生但缺少关联文件改前证据时，不能补造前像或声称原修复记录已完成。
    该准备仅保存选定路径版本，不建立全项目基线，不冒用旧严格任务或扫描器授权接口。
-6. 修改后记录实际路径并执行用户要求的测试及正常开发收尾。重新 read_development_risk_context
-   读取原风险相关路径，先 submit_development_risk_resolution 绑定原 risk_id/repair_ref，再提交新的开发复核。
+6. 修改后记录实际路径并执行用户要求的测试及正常开发收尾。修复后额外复查默认关闭，
+   遵循 prepare 回执的 automatic_recheck_enabled / followup_instructions：关闭时不另起静态复扫、
+   业务复审、修后补取证或 submit_development_risk_resolution，修复编辑只沿普通开发扫描及当前复核开关收尾。
+   只有用户明确开启额外复查，或单独要求验证原问题时，重新 read_development_risk_context
+   读取原风险相关路径，submit_development_risk_resolution 绑定原 risk_id/repair_ref。
    outcome 为 CODE_REVIEWED_RESOLVED/STILL_PRESENT/INCONCLUSIVE；rationale 说明原原因如何消除、
    保留行为和未知。新检查零告警不能替代原问题复查；AI 复核通过不能声称扫描器验证通过。
    原问题后续复现时提交新版本证据，保留原编号和历次修复历史。

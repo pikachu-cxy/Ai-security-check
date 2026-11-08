@@ -10,6 +10,10 @@
 
 产品报告统一使用 `### **漏洞标题**`，多项漏洞之间加入 `---` 分隔线；静态候选、确认漏洞和待确认漏洞共用渲染器，正文、处置选项及会话链接保留。
 
+## 修后额外复查
+
+`development.repair_recheck_enabled=false` 为默认。普通修复准备新增 `automatic_recheck_enabled`、`ordinary_development_closeout` 和 `followup_instructions`；旧扫描器修复准备的 `verification_plan.automatic` 明确专项验证是否自动执行。关闭时修复编辑依然触发普通开发检查，不自动补读修后证据、提交原风险复查或再调用专项扫描。显式验证接口保留，历史风险不因普通零告警扫描自动关闭。设置不改变扫描器预算、Stop 等待或普通业务审计开关。
+
 ## 开发报告与处置新契约
 
 Observation/ScannerReview 增加可选 report_content（title/problem/impact/advice/unknowns/function_name），旧 report_text 保留；产品固定生成中文报告。INCONCLUSIVE 已保存即复核执行完成，仍是待确认风险，inconclusive_scanner_ids 单列；未提交候选才列 pending_scanner_ids。BusinessReview 增加 coverage、uncovered，pending_business_paths 不包含已审路径；真实缺口通过 business_coverage_gaps 单列，旧未分类限制不自动变完整。

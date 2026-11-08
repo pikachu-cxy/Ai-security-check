@@ -200,7 +200,7 @@ Save an atomic review batch. Prefer return_risks=true to receive the committed s
 submit_development_risk_resolution(check_ref: str, risk_id: str, repair_ref: str, outcome: str, evidence_refs: list[str], rationale: str, workspace_path: str | None=None, session_ref: str | None=None)
 ```
 
-Recheck the ORIGINAL risk against new evidence after its authorized repair. Outcomes: CODE_REVIEWED_RESOLVED, STILL_PRESENT, INCONCLUSIVE. Explain how evidence removes original cause and preserves behavior. Host review never claims SCANNER_VERIFIED_RESOLVED; a new zero-alert scan alone cannot close the risk. Run ordinary development closeout separately for edited files.
+Optional original-risk verification, only when enabled by the prepare receipt or explicitly requested by the user. Disabled by default as an automatic repair follow-up; edited files already use ordinary development closeout. This tool never scans. Outcomes: CODE_REVIEWED_RESOLVED, STILL_PRESENT, INCONCLUSIVE. Explain how evidence removes the original cause and preserves behavior. Host review never claims SCANNER_VERIFIED_RESOLVED; a new zero-alert scan alone cannot close the original risk.
 
 ### findings / get_finding_feedback
 
@@ -514,7 +514,7 @@ Read path and configuration eligibility, then this credential's existing routing
 
 ### scan / get_closeout_status
 
-定义：[src/security_runtime/mcp_server.py:221](../../src/security_runtime/mcp_server.py#L221)
+定义：[src/security_runtime/mcp_server.py:223](../../src/security_runtime/mcp_server.py#L223)
 
 ```python
 get_closeout_status(closeout_ref: str, workspace_path: str | None=None)
@@ -554,7 +554,7 @@ Find saved job references for this workspace after a lost response. Read-only; n
 
 ### scan / prepare_closeout_check
 
-定义：[src/security_runtime/mcp_server.py:210](../../src/security_runtime/mcp_server.py#L210)
+定义：[src/security_runtime/mcp_server.py:212](../../src/security_runtime/mcp_server.py#L212)
 
 ```python
 prepare_closeout_check(workspace_path: str | None=None, files: list[str] | None=None, source_scan_id: str | None=None)
@@ -564,7 +564,7 @@ Persist an explicit offline Core closeout plan. No edit, build, model or repair 
 
 ### scan / run_closeout_check
 
-定义：[src/security_runtime/mcp_server.py:216](../../src/security_runtime/mcp_server.py#L216)
+定义：[src/security_runtime/mcp_server.py:218](../../src/security_runtime/mcp_server.py#L218)
 
 ```python
 run_closeout_check(closeout_ref: str, workspace_path: str | None=None)

@@ -1,6 +1,6 @@
 # Use with WorkBuddy
 
-Version **0.3.13** supports global MCP, Hooks and Skill integration. Edits record paths; the end of a development task submits a combined check. Ordinary read-only chat does not start a scan.
+Version **0.3.14** supports global MCP, Hooks and Skill integration. Edits record paths; the end of a development task submits a combined check. Ordinary read-only chat does not start a scan.
 
 ## Configure globally
 
@@ -25,7 +25,7 @@ Configuration uses `WORKBUDDY_CONFIG_DIR`, then `CODEBUDDY_CONFIG_DIR`, then exi
 2. Open the connectors / MCP management screen (labels vary by version).
 3. Find `ai-security-runtime`, **manually select service trust and enable the connection**. Installation does not approve trust for you.
 4. Confirm it is connected with **15 tools**. An old 80+ tool listing suggests a stale or duplicate connection.
-5. In a new chat ask: `Only query the connected security service version and build. Do not edit or scan files.` It should report **0.3.13**.
+5. In a new chat ask: `Only query the connected security service version and build. Do not edit or scan files.` It should report **0.3.14**.
 
 ## Try development
 

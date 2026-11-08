@@ -119,7 +119,7 @@ verify_sha() {
     exit 1
   fi
 }
-version=0.3.13
+version=0.3.14
 base="https://github.com/pikachu-cxy/Ai-security-check/releases/download/v$version"
 asset="ai-security-runtime-v$version-$platform.tar.gz"
 printf '%s\n' "[安装] 正在为 $host 准备 $version macOS 正式版；不会扫描项目或自动修复。"

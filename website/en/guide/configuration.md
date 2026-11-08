@@ -32,10 +32,16 @@ development_max_records = 1024
 
 [agent]
 review_scanner_findings = true
-audit_business_logic = true
+audit_business_logic = false
+
+[development]
+review_response_bytes = 65536
+repair_recheck_enabled = false
 
 [development.stop_fallback]
 enabled = true
+wait_mode = "bounded"
+native_wait_seconds = 18
 wait_timeout_seconds = 120
 max_continuations = 2
 ```
@@ -73,7 +79,6 @@ Values below are nonnegative integers. **0 disables only that individual cap.** 
 | `[scan.input]` | `max_files=10000`, `max_total_bytes=128000000`, `max_file_bytes=4000000`, `max_index_bytes=8000000` | Fixed scan input and index |
 | `[scan.git]` | `timeout_seconds=10`, `max_output_bytes=4000000` | Git queries |
 | `[scan.execution]` | `sast_timeout_seconds=45`, `gitleaks_timeout_seconds=30`, `trivy_timeout_seconds=90`, `max_output_bytes=4000000` | Scanner execution |
-| `[scan.dataflow]` | `max_files=256`, `max_total_bytes=8000000`, `max_file_bytes=500000`, `max_steps=1000000`, `max_depth=6`, `feature_timeout_seconds=3`, `release_timeout_seconds=30` | Built-in bounded dataflow |
 | `[storage.explicit_scan_jobs]` | `max_records=128`, `max_total_bytes=96000000`, `max_database_bytes=128000000` | Explicit scan job storage |
 | `[storage.scan_publication]` | `max_records=32`, `max_record_bytes=8000000`, `max_total_bytes=32000000` | Published scan result storage |
 
@@ -87,7 +92,7 @@ max_files = 0
 max_files = 0
 ```
 
-File-size, directory, engine and dataflow limits still apply. Follow the diagnostic's exact configuration section and submit a new scan after changing it. A limit failure is not a clean scan. Lowering storage quotas does not delete history.
+File-size, directory, engine limits still apply. Follow the diagnostic's exact configuration section and submit a new scan after changing it. A limit failure is not a clean scan. Lowering storage quotas does not delete history.
 
 The zero rule does not apply to `development_max_records`, Stop time/count or database refresh interval. Physical memory, disk and engine constraints remain; cancellation, ownership, version checks, no-link checks and pagination are preserved.
 
@@ -100,7 +105,7 @@ paths = ["/absolute/path/to/my-rules"]
 exclude_ids = []
 ```
 
-`builtin` uses bundled rules and requires empty paths. `extend` adds local rules. `replace` uses only your code-scanner rules; it does not disable independent scanners or built-in dataflow. Use absolute local directories containing native scanner YAML, for example:
+`builtin` uses bundled rules and requires empty paths. `extend` adds local rules. `replace` uses only your code-scanner rules; it does not disable independent scanners . Use absolute local directories containing native scanner YAML, for example:
 
 ```yaml
 rules:
@@ -149,3 +154,9 @@ Unknown keys, wrong types, duplicate tables and invalid values produce `INVALID`
 Explicit operation arguments take priority, then explicitly supplied unified settings, legacy environment settings, legacy `scan-limits.toml`, and defaults. Configuration participates in project-result reuse identity. Fast status queries do not revalidate component health.
 
 Codex CLI and Cursor CLI require native Hook support and enabled events. Claude Code and Qoder CLI remain planned. See [daily workflow](./workflow.md) and [platform support](../reference/support.md).
+
+## Additional closeout settings
+
+Settings are also grouped in the local dashboard. Candidate review defaults to on; business audit defaults to off. `development.repair_recheck_enabled=false` disables additional post-repair verification while preserving ordinary checks of repair edits. `review_response_bytes` defaults to 65536 (range 16384–262144) and controls evidence response pagination.
+
+Stop defaults to `wait_mode="bounded"` with 18 seconds per call. `"wait_for_result"` still respects host Hook limits; it is not an unlimited wait. Retired built-in dataflow settings do not re-enable those scanners.

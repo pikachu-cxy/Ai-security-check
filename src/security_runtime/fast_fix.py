@@ -117,6 +117,9 @@ class FastFixPlans:
 
     def offer(self, output, root, record, key):
         # Acceleration consumes an existing human-approved grant; never consent.
+        from .remediation import automatic_recheck_enabled
+        if not automatic_recheck_enabled():
+            output.update(self.fallback('AUTOMATIC_RECHECK_DISABLED')); return
         if (output.get('action')!='AUTO_FIX' or output.get('reason_code')!='USER_APPROVED_REPAIR'
                 or record.get('authorization_kind')!='USER_CONFIRMED'):
             output.update(self.fallback('FAST_FIX_POLICY_NOT_ELIGIBLE')); return

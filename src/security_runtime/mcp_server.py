@@ -167,12 +167,14 @@ def create_server(runtime: SecurityRuntime | None = None, *, remediation_factory
                                               continuation=remediation.continuation)
             if task_audit_mode and data.get('decision') != 'block':
                 from .development_stop import fallback
+                from .codex_turn_scope import resolve_child_turns
                 from .tasks.ownership import session_owner
                 try:
                     import asyncio
                     delivery = await asyncio.to_thread(fallback, hook_coordinator.store, normalized.context.workspace,
                         session_owner('codex', session_id), stop_hook_active=stop_hook_active,
-                        offered=application.development_result_offers, turn_id=turn_id, automatic=True, session_id=session_id)
+                        offered=application.development_result_offers, turn_id=turn_id, automatic=True, session_id=session_id,
+                        child_turn_resolver=resolve_child_turns)
                 except (ValueError, OSError):
                     delivery = dict(status='STOP_FALLBACK_UNAVAILABLE', scanner_run=False,
                         systemMessage='安全检查兜底未完成，请查看配置或检查状态；原记录已保留。')

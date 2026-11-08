@@ -53,17 +53,17 @@ jobs:
       - name: Check that all documented downloads are public
         id: trial-assets
         run: |
-          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.13
+          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14
           ready=true
           for archive in windows-x64.zip macos-arm64.tar.gz macos-x64.tar.gz; do
             for suffix in '' .sha256; do
               curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
-                "$native_base/ai-security-runtime-v0.3.13-$archive$suffix" >/dev/null || ready=false
+                "$native_base/ai-security-runtime-v0.3.14-$archive$suffix" >/dev/null || ready=false
             done
           done
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
           if [ "$ready" != true ]; then
-            echo 'Documented release assets are not all public yet. Request docs deployment after v0.3.13 publishes.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Documented release assets are not all public yet. Request docs deployment after v0.3.14 publishes.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-pages-artifact@v3
         with:

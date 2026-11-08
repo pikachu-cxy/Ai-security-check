@@ -77,6 +77,23 @@ RECEIPT_BINDING_FIELDS = {'version', 'workspace_id', 'episode_id', 'task_ref_has
                           'origin_scan_id', 'scope_hash', 'resolved_scan_hash', 'verification_id'}
 
 
+def automatic_recheck_enabled():
+    from .user_config import read_config
+    return read_config()['values']['development']['repair_recheck_enabled']
+
+
+def confirmed_guidance():
+    if automatic_recheck_enabled():
+        return CONFIRMED_GUIDANCE
+    return ('The user has approved this exact bounded repair. Call prepare_task_fix with the supplied references, '
+            'then make only the prepared, authorized changes and preserve other behavior. '
+            'Automatic repair rechecks are disabled. Let edited files use ordinary development Hooks and the '
+            'configured scanner review/business audit; do not start an extra scan, verify_task_fix or a separate '
+            'business re-audit after the repair. Run only the functional tests the user requested. '
+            'Retain the original risk and repair history; do not claim SCANNER_VERIFIED_RESOLVED or close the '
+            'original risk from an ordinary zero-alert scan. Explicit original-risk verification remains a separate user request.')
+
+
 class SecurityReceiptError(ValueError):
     """Fixed diagnostic only; never expose rejected claims or state contents."""
     def __init__(self, diagnostic):
@@ -452,14 +469,15 @@ class RemediationService:
                     episode_reason_code='RECURRENCE_AFTER_RESOLUTION' if record['episode_number'] > 1 else 'FIRST_OCCURRENCE',
                     authorization_kind='USER_CONFIRMED',
                     grant_id=record['token_hash'],
-                    feedback_required=True, guidance=CONFIRMED_GUIDANCE,
+                    feedback_required=True, guidance=confirmed_guidance(),
+                    verification_required=automatic_recheck_enabled(),
                     interaction={'phase': 'AUTO_REMEDIATION_AUTHORIZED',
                                  'user_confirmation_required': False,
                                  'must_not_ask_user': True,
                                  'must_continue_automatically': True,
                                  'next_action': 'PREPARE_TASK_FIX'},
                     prepare={'mcp_tool': 'prepare_task_fix', 'arguments': args},
-                    verify={'mcp_tool': 'verify_task_fix', 'arguments': args},
+                    verify={'mcp_tool': 'verify_task_fix', 'arguments': args} if automatic_recheck_enabled() else None,
                     production_reachability='UNKNOWN')
 
     def _policy_binding(self, key):
@@ -845,6 +863,7 @@ class RemediationService:
             rows = self._read(path, key)
             current = self._workspace_families(path.parent, key)
             mode = self.config.read()
+            recheck_enabled = automatic_recheck_enabled()
             snapshot = self._snapshot(root)
             if result.get('change_digest') != snapshot:
                 invalidated = False
@@ -861,7 +880,7 @@ class RemediationService:
             absent = {f['equivalence_key'] for f in result.get('delta', {}).get('families', [])
                       if f['status'] == 'RESOLVED_FAMILY' and f['current_count'] == 0 and
                       f['count_certainty'] == 'COMPLETE_RULE_FILE_SCOPE'}
-            if (self.transport.supports_agent_continuation and result.get('status') == 'SCANNED'
+            if (recheck_enabled and self.transport.supports_agent_continuation and result.get('status') == 'SCANNED'
                     and result.get('last_check_status') == 'SCANNED'):
                 for family in absent:
                     existing = current.get(family)
@@ -908,6 +927,8 @@ class RemediationService:
                     continue
                 if record['phase'] not in {'OFFERED', 'AUTHORIZED'} or snapshot == record['last_snapshot_digest']:
                     continue
+                if not recheck_enabled:
+                    continue  # Ordinary edit scanning remains the only automatic scan.
                 ticket_failure = self.agent_tickets.post_failure(root, record, key)
                 self.agent_tickets.mark_stale(record, ticket_failure)
                 if ticket_failure:
@@ -1353,7 +1374,8 @@ class RemediationService:
             packet = self._fix().prepare(task_ref, root, bound_workspace=root)
             if packet['status'] != 'READY_FOR_HOST_FIX':
                 return packet
-            compact = record.get('authorization_kind') == 'USER_CONFIRMED'
+            compact = (record.get('authorization_kind') == 'USER_CONFIRMED'
+                       and packet['verification_plan']['automatic'])
             if compact:
                 from .fix_context import build, compact_packet
                 context, context_ref, diagnostics = build(self, root, record,
@@ -1382,10 +1404,11 @@ class RemediationService:
             self._observe_cycle('set_fix_path', root, record['episode_id'], 'AGENT_FIX')
             packet['remediation_authorization'] = {'action': 'AUTO_FIX', 'attempt_count': record['attempt_count'],
                                                   **self._episode_fields(record),
-                                                  'max_attempts': 2, 'guidance': CONFIRMED_GUIDANCE,
+                                                  'max_attempts': 2, 'guidance': confirmed_guidance(),
                                                   'authorization_kind': 'USER_CONFIRMED'}
             packet['host_protocol']['instructions'] = packet['remediation_authorization']['guidance']
             packet['verification_plan']['arguments']['remediation_ref'] = ref
+            packet['verification_plan']['automatic'] = automatic_recheck_enabled()
             return compact_packet(packet, context, context_ref, diagnostics,
                 reuse=security_context_ref is not None) if compact else packet
         except Exception:

@@ -12,11 +12,11 @@ from .development_reporting import INSTRUCTIONS, reporting
 
 
 def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=False,
-             service=None, offered=(), turn_id=None, automatic=False, session_id=None):
+             service=None, offered=(), turn_id=None, automatic=False, session_id=None, child_turn_resolver=None):
     try:
         return _fallback(hooks, root, owner, stopped_normally=stopped_normally,
             stop_hook_active=stop_hook_active, service=service, offered=offered,
-            turn_id=turn_id, automatic=automatic, session_id=session_id)
+            turn_id=turn_id, automatic=automatic, session_id=session_id, child_turn_resolver=child_turn_resolver)
     except Exception:
         if not automatic or not stopped_normally:
             raise
@@ -59,7 +59,7 @@ def interrupted_notice(hooks, root, owner, *, turn_id=None,
 
 
 def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=False,
-              service=None, offered=(), turn_id=None, automatic=False, session_id=None):
+              service=None, offered=(), turn_id=None, automatic=False, session_id=None, child_turn_resolver=None):
     if not stopped_normally or owner.get('host') not in {'codex', 'cursor', 'workbuddy'}:
         return None
     store = DevelopmentCheckStore(hooks, root)
@@ -86,9 +86,30 @@ def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fal
     if activity.get('turn') is not None and activity['turn'] != turn:
         activity = next((a for a in row.get('stop_activity_previous', ())
                          if turn is not None and a.get('turn') == turn), None)
+        if activity is None and automatic and turn is not None and child_turn_resolver is not None:
+            pending = [a for a in [row.get('stop_activity', {}), *row.get('stop_activity_previous', ())]
+                       if a.get('pending') and a.get('turn') and row['dirty_seq'] > a.get('base_seq', row['dirty_seq'])]
+            if pending:
+                linked = child_turn_resolver(root, session_id, turn_id, {a['turn'] for a in pending})
+                selected = [a for a in pending if a['turn'] in linked]
+                if selected and len(selected) == len(pending):
+                    # Bind only host-proven executor turns. The existing signed
+                    # batch, immutable results and normal scan path remain intact.
+                    with store.transaction() as db:
+                        current = store._get(db, row['check_ref'])
+                        if (current.get('dirty_seq') != row['dirty_seq'] or current.get('stop_activity') != row.get('stop_activity')
+                                or current.get('stop_activity_previous', ()) != row.get('stop_activity_previous', ())):
+                            return None
+                        activities = [current.get('stop_activity', {}), *current.get('stop_activity_previous', ())]
+                        activity = dict(turn=turn, base_seq=min(a['base_seq'] for a in selected), pending=True,
+                                        executor_turns=sorted({a['turn'] for a in selected}))
+                        current['stop_activity_previous'] = [a for a in activities if a and a not in selected][-8:]
+                        current['stop_activity'] = activity
+                        store._put(db, row['check_ref'], current)
+                        row = current
         if activity is None:
             return None
-        prior_activity = True
+        prior_activity = activity in row.get('stop_activity_previous', ())
     progress = row.get('stop_fallback') or {}
     if stop_hook_active and not automatic:
         # A historical pending check is not authority to interrupt a new turn.

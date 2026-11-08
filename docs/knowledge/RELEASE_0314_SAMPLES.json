@@ -1,0 +1,1594 @@
+{
+  "rounds": [
+    {
+      "mode": "A",
+      "scenario": "development",
+      "total_seconds": 132.428,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 1.447,
+          "saved": null,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [],
+      "first_save": null,
+      "stop": [
+        {
+          "seconds": 9.035,
+          "status": "STOP_RESULT_NOTICE"
+        },
+        {
+          "seconds": 0.932,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 3.294
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1586.908
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1038.807
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1383.348
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 946.656
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1326.191
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 5143.121
+        },
+        {
+          "phase": "scan.total",
+          "ms": 6726.213
+        }
+      ],
+      "evidence_to_submit_seconds": null,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 1016,
+      "all_agent_mcp_calls": 1,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "A",
+      "scenario": "restart-fix",
+      "total_seconds": 120.315,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.975,
+          "saved": null,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [],
+      "first_save": null,
+      "stop": [
+        {
+          "seconds": 6.449,
+          "status": "STOP_RESULT_NOTICE"
+        },
+        {
+          "seconds": 1.031,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "component.integrity",
+          "ms": 710.734
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 939.296
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 2872.305
+        },
+        {
+          "phase": "scan.total",
+          "ms": 4120.432
+        },
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 4.494
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1165.492
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 857.794
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1006.311
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 894.688
+        }
+      ],
+      "evidence_to_submit_seconds": null,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 711,
+      "all_agent_mcp_calls": 1,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "B",
+      "scenario": "development",
+      "total_seconds": 124.391,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.966,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.9,
+          "saved": true,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [
+        "CONFIRMED",
+        "DISMISSED"
+      ],
+      "first_save": true,
+      "stop": [
+        {
+          "seconds": 6.268,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "seconds": 0.733,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "component.integrity",
+          "ms": 672.627
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 871.814
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 2828.787
+        },
+        {
+          "phase": "scan.total",
+          "ms": 4546.092
+        },
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 3.852
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1061.835
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1031.626
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1032.659
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1351.381
+        }
+      ],
+      "evidence_to_submit_seconds": 16.256,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 932,
+      "all_agent_mcp_calls": 2,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "B",
+      "scenario": "restart-fix",
+      "total_seconds": 120.591,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 1.227,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.982,
+          "saved": true,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [
+        "DISMISSED"
+      ],
+      "first_save": true,
+      "stop": [
+        {
+          "seconds": 6.388,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "seconds": 0.737,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "component.integrity",
+          "ms": 1113.963
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1002.774
+        },
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 3.973
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 673.41
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 907.025
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 2875.568
+        },
+        {
+          "phase": "scan.total",
+          "ms": 4131.469
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 993.372
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 865.341
+        }
+      ],
+      "evidence_to_submit_seconds": 7.417,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 437,
+      "all_agent_mcp_calls": 2,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "C",
+      "scenario": "delivery-check",
+      "total_seconds": 24.885,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.866,
+          "saved": null,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [],
+      "first_save": null,
+      "stop": [
+        {
+          "seconds": 0.765,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [],
+      "evidence_to_submit_seconds": null,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 420,
+      "all_agent_mcp_calls": 1,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "C",
+      "scenario": "development",
+      "total_seconds": 185.045,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "seconds": 0.825,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "seconds": 0.869,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.909,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.91,
+          "saved": true,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [
+        "CONFIRMED",
+        "DISMISSED"
+      ],
+      "first_save": true,
+      "stop": [
+        {
+          "seconds": 6.724,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "seconds": 0.79,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "component.integrity",
+          "ms": 1066.294
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1134.277
+        },
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 3.13
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1015.62
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 868.187
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 818.031
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1015.883
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 3435.092
+        },
+        {
+          "phase": "scan.total",
+          "ms": 4786.601
+        }
+      ],
+      "evidence_to_submit_seconds": 13.452,
+      "security_link_in_final": true,
+      "report_preserved": true,
+      "final_characters": 1389,
+      "all_agent_mcp_calls": 6,
+      "child_mcp_calls": 2
+    },
+    {
+      "mode": "C",
+      "scenario": "readonly",
+      "total_seconds": 17.136,
+      "exit_code": 0,
+      "mcp_calls": [],
+      "review_decisions": [],
+      "first_save": null,
+      "stop": [
+        {
+          "seconds": 0.744,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [],
+      "evidence_to_submit_seconds": null,
+      "security_link_in_final": false,
+      "report_preserved": null,
+      "final_characters": 303,
+      "all_agent_mcp_calls": 0,
+      "child_mcp_calls": 0
+    },
+    {
+      "mode": "C",
+      "scenario": "restart-fix",
+      "total_seconds": 188.6,
+      "exit_code": 0,
+      "mcp_calls": [
+        {
+          "operation": "get_runtime_info",
+          "action": null,
+          "seconds": 0.904,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.007,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.017,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.02,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.974,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "read_development_risk_context",
+          "action": null,
+          "seconds": 0.007,
+          "saved": null,
+          "error": null,
+          "reason": "DEVELOPMENT_CHECK_REQUEST_INVALID"
+        },
+        {
+          "operation": "read_development_risk_context",
+          "action": null,
+          "seconds": 1.022,
+          "saved": false,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "prepare_development_risk_fix",
+          "action": null,
+          "seconds": 1.016,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "prepare_development_risk_fix",
+          "action": null,
+          "seconds": 1.36,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "seconds": 0.941,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "seconds": 1.126,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.98,
+          "saved": null,
+          "error": null,
+          "reason": null
+        },
+        {
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.957,
+          "saved": true,
+          "error": null,
+          "reason": null
+        }
+      ],
+      "review_decisions": [
+        "DISMISSED"
+      ],
+      "first_save": true,
+      "stop": [
+        {
+          "seconds": 6.327,
+          "status": "STOP_REVIEW_REQUIRED"
+        },
+        {
+          "seconds": 0.974,
+          "status": "ALLOW_STOP"
+        }
+      ],
+      "trace": [
+        {
+          "phase": "component.integrity",
+          "ms": 1027.575
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1060.441
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 825.192
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1017.932
+        },
+        {
+          "phase": "scan.execute",
+          "ms": 2965.132
+        },
+        {
+          "phase": "scan.total",
+          "ms": 4620.047
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 1020.911
+        },
+        {
+          "phase": "component.integrity",
+          "ms": 970.738
+        },
+        {
+          "phase": "hook.resolve_child_turns",
+          "ms": 4.171
+        }
+      ],
+      "evidence_to_submit_seconds": 8.581,
+      "security_link_in_final": true,
+      "report_preserved": false,
+      "final_characters": 476,
+      "all_agent_mcp_calls": 15,
+      "child_mcp_calls": 2
+    }
+  ],
+  "projects": [
+    {
+      "mode": "A",
+      "scan_count": 2,
+      "scans": [
+        {
+          "duration_ms": 6692,
+          "status": "COMPLETED",
+          "finding_count": 2,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 4868
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 2657
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        },
+        {
+          "duration_ms": 4090,
+          "status": "COMPLETED",
+          "finding_count": 1,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 2682
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 1554
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        }
+      ],
+      "batches": [
+        {
+          "state": "RESULTS_READY",
+          "dirty_seq": 13,
+          "scanned_seq": 13,
+          "scan_saved": true,
+          "timing": {
+            "historical_scan_ms": null,
+            "request_ms": 4133,
+            "reused": false,
+            "scan_ms": 4114.984,
+            "scan_ms_scope": "RUNTIME_THROUGH_PUBLICATION",
+            "scan_stages_ms": {
+              "final_input_validation": 4.229,
+              "result_normalization_policy": 0.402,
+              "result_publication": 5.834,
+              "rule_pack_resolution": 467.681,
+              "rule_planning": 9.689,
+              "scanner_orchestration": 2836.371,
+              "source_input_capture": 10.969,
+              "state_persistence": 14.926,
+              "target_preparation": 501.965,
+              "target_selection": 2.774,
+              "total": 4114.984,
+              "workspace_discovery": 50.847
+            }
+          },
+          "delegated_turn_count": 2
+        }
+      ]
+    },
+    {
+      "mode": "B",
+      "scan_count": 2,
+      "scans": [
+        {
+          "duration_ms": 4523,
+          "status": "COMPLETED",
+          "finding_count": 2,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 2646
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 1505
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        },
+        {
+          "duration_ms": 4107,
+          "status": "COMPLETED",
+          "finding_count": 1,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 2698
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 1502
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        }
+      ],
+      "batches": [
+        {
+          "state": "RESULTS_READY",
+          "dirty_seq": 12,
+          "scanned_seq": 12,
+          "scan_saved": true,
+          "timing": {
+            "historical_scan_ms": null,
+            "request_ms": 4152,
+            "reused": false,
+            "scan_ms": 4126.52,
+            "scan_ms_scope": "RUNTIME_THROUGH_PUBLICATION",
+            "scan_stages_ms": {
+              "final_input_validation": 3.391,
+              "result_normalization_policy": 0.317,
+              "result_publication": 5.489,
+              "rule_pack_resolution": 458.595,
+              "rule_planning": 13.006,
+              "scanner_orchestration": 2842.088,
+              "source_input_capture": 12.03,
+              "state_persistence": 10.245,
+              "target_preparation": 495.011,
+              "target_selection": 3.796,
+              "total": 4126.52,
+              "workspace_discovery": 60.464
+            }
+          },
+          "delegated_turn_count": 2
+        }
+      ]
+    },
+    {
+      "mode": "C",
+      "scan_count": 2,
+      "scans": [
+        {
+          "duration_ms": 4762,
+          "status": "COMPLETED",
+          "finding_count": 2,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 3262
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 2071
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        },
+        {
+          "duration_ms": 4596,
+          "status": "COMPLETED",
+          "finding_count": 1,
+          "scanners": [
+            {
+              "name": "opengrep",
+              "status": "SUCCESS",
+              "duration_ms": 2777
+            },
+            {
+              "name": "native-js-function",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "gitleaks",
+              "status": "SUCCESS",
+              "duration_ms": 1675
+            },
+            {
+              "name": "trivy-vuln",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            },
+            {
+              "name": "trivy-misconfig",
+              "status": "NOT_APPLICABLE",
+              "duration_ms": 0
+            }
+          ]
+        }
+      ],
+      "batches": [
+        {
+          "state": "RESULTS_READY",
+          "dirty_seq": 10,
+          "scanned_seq": 10,
+          "scan_saved": true,
+          "timing": {
+            "historical_scan_ms": null,
+            "request_ms": 4629,
+            "reused": false,
+            "scan_ms": 4614.859,
+            "scan_ms_scope": "RUNTIME_THROUGH_PUBLICATION",
+            "scan_stages_ms": {
+              "final_input_validation": 3.051,
+              "result_normalization_policy": 0.329,
+              "result_publication": 5.531,
+              "rule_pack_resolution": 533.588,
+              "rule_planning": 15.509,
+              "scanner_orchestration": 2929.68,
+              "source_input_capture": 14.341,
+              "state_persistence": 9.854,
+              "target_preparation": 572.317,
+              "target_selection": 2.291,
+              "total": 4614.859,
+              "workspace_discovery": 53.014
+            }
+          },
+          "delegated_turn_count": 2
+        }
+      ]
+    }
+  ],
+  "native_calls": [
+    {
+      "mode": "A",
+      "scenario": "development",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 115.593,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 1.444,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 70.009
+        },
+        {
+          "role": "child",
+          "at": 94.569
+        },
+        {
+          "role": "parent",
+          "at": 131.255
+        }
+      ]
+    },
+    {
+      "mode": "A",
+      "scenario": "restart-fix",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 106.548,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.973,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 14.826
+        },
+        {
+          "role": "child",
+          "at": 20.485
+        },
+        {
+          "role": "child",
+          "at": 84.941
+        },
+        {
+          "role": "child",
+          "at": 89.377
+        },
+        {
+          "role": "parent",
+          "at": 118.573
+        }
+      ]
+    },
+    {
+      "mode": "B",
+      "scenario": "development",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 91.643,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.963,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 108.799,
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.898,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 72.537
+        },
+        {
+          "role": "child",
+          "at": 74.867
+        },
+        {
+          "role": "parent",
+          "at": 123.277
+        }
+      ]
+    },
+    {
+      "mode": "B",
+      "scenario": "restart-fix",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 103.283,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 1.225,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 111.681,
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.98,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 12.597
+        },
+        {
+          "role": "child",
+          "at": 17.087
+        },
+        {
+          "role": "child",
+          "at": 76.38
+        },
+        {
+          "role": "child",
+          "at": 84.43
+        },
+        {
+          "role": "parent",
+          "at": 119.279
+        }
+      ]
+    },
+    {
+      "mode": "C",
+      "scenario": "delivery-check",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 14.642,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.865,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "parent",
+          "at": 23.011
+        }
+      ]
+    },
+    {
+      "mode": "C",
+      "scenario": "development",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 65.533,
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "seconds": 0.824,
+          "status": "READY",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 74.766,
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "seconds": 0.867,
+          "status": "READY",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "child",
+          "at": 90.961,
+          "operation": "process_development_audit",
+          "action": "claim",
+          "seconds": 1.957,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "child",
+          "at": 124.294,
+          "operation": "process_development_audit",
+          "action": "submit",
+          "seconds": 0.865,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 149.34,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.907,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 163.703,
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.909,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 67.822
+        },
+        {
+          "role": "child",
+          "at": 74.577
+        },
+        {
+          "role": "child",
+          "at": 131.905
+        },
+        {
+          "role": "parent",
+          "at": 183.932
+        }
+      ]
+    },
+    {
+      "mode": "C",
+      "scenario": "readonly",
+      "calls": [],
+      "task_ends": [
+        {
+          "role": "parent",
+          "at": 15.283
+        }
+      ]
+    },
+    {
+      "mode": "C",
+      "scenario": "restart-fix",
+      "calls": [
+        {
+          "role": "parent",
+          "at": 29.749,
+          "operation": "get_runtime_info",
+          "action": null,
+          "seconds": 0.897,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 34.15,
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.004,
+          "status": "READY",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 34.158,
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.011,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 34.164,
+          "operation": "get_runtime_guidance",
+          "action": null,
+          "seconds": 0.014,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 45.073,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.971,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 53.516,
+          "operation": "read_development_risk_context",
+          "action": null,
+          "seconds": 0.005,
+          "status": "INCONCLUSIVE",
+          "reason": "DEVELOPMENT_CHECK_REQUEST_INVALID",
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 58.294,
+          "operation": "read_development_risk_context",
+          "action": null,
+          "seconds": 1.02,
+          "status": null,
+          "reason": null,
+          "saved": false,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 70.388,
+          "operation": "prepare_development_risk_fix",
+          "action": null,
+          "seconds": 1.013,
+          "status": "PREPARED",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": false
+        },
+        {
+          "role": "parent",
+          "at": 71.751,
+          "operation": "prepare_development_risk_fix",
+          "action": null,
+          "seconds": 1.359,
+          "status": "PREPARED",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": false
+        },
+        {
+          "role": "parent",
+          "at": 96.123,
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "seconds": 0.939,
+          "status": "READY",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 108.16,
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "seconds": 1.123,
+          "status": "READY",
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "child",
+          "at": 125.519,
+          "operation": "process_development_audit",
+          "action": "claim",
+          "seconds": 2.073,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "child",
+          "at": 143.479,
+          "operation": "process_development_audit",
+          "action": "submit",
+          "seconds": 0.941,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 169.289,
+          "operation": "get_development_risks",
+          "action": null,
+          "seconds": 0.979,
+          "status": null,
+          "reason": null,
+          "saved": null,
+          "extra_recheck": null
+        },
+        {
+          "role": "parent",
+          "at": 178.827,
+          "operation": "submit_development_review",
+          "action": null,
+          "seconds": 0.956,
+          "status": null,
+          "reason": null,
+          "saved": true,
+          "extra_recheck": null
+        }
+      ],
+      "task_ends": [
+        {
+          "role": "child",
+          "at": 14.519
+        },
+        {
+          "role": "child",
+          "at": 19.095
+        },
+        {
+          "role": "child",
+          "at": 101.021
+        },
+        {
+          "role": "child",
+          "at": 110.598
+        },
+        {
+          "role": "child",
+          "at": 152.98
+        },
+        {
+          "role": "parent",
+          "at": 187.321
+        }
+      ]
+    }
+  ],
+  "installation": {
+    "version": "0.3.14",
+    "build_id": "dd6c1da9049db72fe826aaeaf506baf4e86388f48a808302c08467120600a4ad",
+    "configuration": "CONFIGURED",
+    "installed": "INSTALLED",
+    "scan_ready": true,
+    "settings_unchanged": true,
+    "new_connection_verified": true,
+    "tool_count": 15
+  },
+  "package_installation": {
+    "status": "PASS",
+    "records": [
+      {
+        "step": "old-0313-install",
+        "version": "0.3.13",
+        "active_build": "53869339614967d9618d426005ba3799bcea16a69e85d6d8aa1ae83210b9101b",
+        "local_files_ready": true
+      },
+      {
+        "step": "upgrade-to-0314",
+        "version": "0.3.14",
+        "active_build": "9eb70ac56bd9ad7713e399743f17844c954225d09531eb9b822d1790c66692fd",
+        "local_files_ready": true
+      },
+      {
+        "step": "repeat-0314-install",
+        "version": "0.3.14",
+        "active_build": "9eb70ac56bd9ad7713e399743f17844c954225d09531eb9b822d1790c66692fd",
+        "local_files_ready": true
+      }
+    ],
+    "user_settings_preserved": true,
+    "daily_installation_modified": false,
+    "scanner_run": false,
+    "note": "Repeat install reuses the active build and returns runtime.compatibility.build_id rather than a new delivery receipt. Isolated offline engine readiness remains degraded as expected."
+  },
+  "artifact_smoke": {
+    "version": "0.3.14",
+    "source_commit": "752377314c94b68f548fb55a5af1d2201796eb5c",
+    "platform": "macos-x64",
+    "archive_sha256": "2b01fb79898eb37802f18d66480dddf4cf1b690bb1c71d53021305a6cffd81f3",
+    "smoke": true,
+    "validation_scope": "native-install-startup-and-mcp-only",
+    "local_files_ready": true,
+    "settings_preserved": true,
+    "usage_monitor_disabled": true,
+    "mcp_tools": [
+      "begin_development_check",
+      "begin_security_task",
+      "cancel_task_closeout",
+      "cancel_task_risk_fix",
+      "complete_development_check",
+      "confirm_remediation",
+      "declare_development_outputs",
+      "finish_development_check",
+      "finish_security_task",
+      "generate_fix",
+      "get_closeout_status",
+      "get_development_check",
+      "get_development_config",
+      "get_development_deliveries",
+      "get_development_result",
+      "get_development_risks",
+      "get_finding_feedback",
+      "get_findings",
+      "get_professional_guidance",
+      "get_repair_impact",
+      "get_runtime_guidance",
+      "get_runtime_info",
+      "get_scan_preparation_status",
+      "get_scan_result",
+      "get_scan_status",
+      "get_security_summary",
+      "get_task_closeout_status",
+      "get_task_isolation_capabilities",
+      "get_task_review_method",
+      "get_task_review_plan",
+      "get_task_risk_feedback",
+      "get_task_risk_ledger",
+      "get_task_security_review",
+      "get_triage",
+      "handle_before_hook_event",
+      "handle_hook_event",
+      "handle_readiness_event",
+      "handle_stop_event",
+      "list_scan_jobs",
+      "manage_development_audit",
+      "mark_finding_false_positive",
+      "mark_task_risk_false_positive",
+      "prepare_closeout_check",
+      "prepare_development_risk_fix",
+      "prepare_finding_feedback",
+      "prepare_repair_impact",
+      "prepare_task_fix",
+      "prepare_task_risk_feedback",
+      "prepare_task_risk_fix",
+      "prepare_task_security_review",
+      "prepare_task_triage",
+      "prepare_task_workspace",
+      "prepare_triage",
+      "process_development_audit",
+      "read_development_risk_context",
+      "read_repair_impact_context",
+      "read_task_review_context",
+      "record_development_changes",
+      "refresh_remediation_confirmation",
+      "revoke_finding_feedback",
+      "revoke_task_risk_feedback",
+      "run_closeout_check",
+      "scan_diff",
+      "scan_files",
+      "scan_project",
+      "set_development_risk_disposition",
+      "set_finding_disposition",
+      "set_task_risk_disposition",
+      "start_risk_dashboard",
+      "start_scan",
+      "submit_development_review",
+      "submit_development_risk_resolution",
+      "submit_finding_feedback",
+      "submit_repair_impact",
+      "submit_task_review_batch",
+      "submit_task_risk_feedback",
+      "submit_task_security_review",
+      "submit_triage",
+      "switch_security_task",
+      "verify",
+      "verify_task_fix",
+      "wait_development_check",
+      "wait_task_closeout"
+    ],
+    "global_host_tools": {
+      "codex": [
+        "development_check",
+        "development_review",
+        "findings",
+        "get_runtime_info",
+        "handle_before_hook_event",
+        "handle_hook_event",
+        "handle_readiness_event",
+        "handle_stop_event",
+        "repair",
+        "runtime_status",
+        "scan",
+        "security_task",
+        "start_risk_dashboard",
+        "task_review",
+        "task_risks"
+      ],
+      "workbuddy": [
+        "development_check",
+        "development_review",
+        "findings",
+        "get_runtime_info",
+        "repair",
+        "runtime_status",
+        "scan",
+        "security_task",
+        "start_risk_dashboard",
+        "task_review",
+        "task_risks"
+      ]
+    },
+    "managed_engines": false,
+    "development_regressions_repeated": false,
+    "scanner_run": false,
+    "seconds": 20.856
+  },
+  "scope": "Synthetic Codex native Hook acceptance; no user source or credentials. Parent report-copy error retained; saved-result-only recovery did not rescan.",
+  "builds": {
+    "first_delegated_development": "6e266b5943d141e44b58bdec545e324e1f9d9ceffd879cba9d76acd0bb0321b8",
+    "final_model_matrix": "55bf41d700acdd27a55b58244079319c3d47bfef4056d57c3f770665a01df741",
+    "installed_source": "dd6c1da9049db72fe826aaeaf506baf4e86388f48a808302c08467120600a4ad",
+    "post_matrix_change": "Only the generic finding repair-advice wording changed; scan and closeout logic unchanged."
+  }
+}

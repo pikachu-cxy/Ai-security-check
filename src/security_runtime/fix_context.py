@@ -121,7 +121,8 @@ def build(service, root, record, arguments):
 
 
 def attach(service, output, root, record):
-    if (output.get('fix_path')!='AGENT_FIX' or output.get('action')!='AUTO_FIX' or
+    if (output.get('verification_required') is False or
+            output.get('fix_path')!='AGENT_FIX' or output.get('action')!='AUTO_FIX' or
             output.get('reason_code')!='USER_APPROVED_REPAIR'):
         return
     try:

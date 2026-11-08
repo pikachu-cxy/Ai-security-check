@@ -3,8 +3,10 @@
 
 修复影响分析（repair-impact-v1）：
 轻量开发若已声明 development-risks-v1，先按 development-check 的统一风险分支保存 AI/扫描器发现，
-使用 prepare_development_risk_fix 和 submit_development_risk_resolution 处理原风险；不能因静态零发现拒绝修复。
-该分支同样要求具体用户授权、影响分析、当前证据及原问题复查，AI 结论不冒充扫描器证明。
+使用 prepare_development_risk_fix 准备原风险修复；不能因静态零发现拒绝修复。
+该分支要求具体用户授权、影响分析和当前证据。修后按准备结果的 automatic_recheck_enabled 执行；
+默认关闭额外复查，只沿普通编辑 Hook 收尾，不自动补读修后证据或调用 submit_development_risk_resolution。
+用户明确要求原风险验证时仍可调用；AI 结论不冒充扫描器证明。
 以下 task_ref/assessment_ref 门槛适用于原扫描器任务组和严格任务，不能将轻量 check_ref 填入这些字段。
 漏洞后果与拟修复方案对正常业务的影响分别保存并经同一 reply_plan 呈现，不另建提示链。
 先生成具体建议再分析；generate_fix 只生成建议，不要求先取得影响 READY，也不授予编辑权限。
@@ -126,8 +128,10 @@ the same native entry point. Only ready_for_host_fix=true permits the selected e
 to prepare_task_fix or invent a scan_id. Use its returned repair_task_ref for development
 finish/review and original task/finding refs for risk_resolutions and the final ledger.
 The host coding agent edits selected local code using its structured security goal,
-constraints and adequate bounded current evidence. Scanner repairs then use
-verify_task_fix with the originating scanner. Native task repairs use their bound
+constraints and adequate bounded current evidence. Extra repair rechecks default to disabled.
+Use ordinary development Hooks after editing; call verify_task_fix with the originating scanner
+only if verification_plan.automatic is true or the user explicitly requests original-risk verification.
+Do not start a separate business re-audit after repair. Native task repairs use their bound
 repair_task_ref for finish/review and original risk references for risk_resolutions
 and the saved ledger; do not call scanner verify_task_fix for a native risk.
 Do not ask users to ferry coding_agent_prompt or UUIDs.
@@ -169,12 +173,17 @@ follow the supplied prepare.arguments verbatim. Only if retaining this legacy co
 its original security_fix_context_ref as optional security_context_ref as well.
 REUSE_HOOK_CONTEXT means preparation revalidated that context;
 it is not a new edit credential. A context/ref mismatch requires refresh, not guessing.
-Without INLINE_PREPARED: Immediately follow prepare → edit → verify. Ignore the CONFIRM_REQUIRED workflow.
+Without INLINE_PREPARED: Immediately follow prepare → edit → ordinary development closeout. Ignore the CONFIRM_REQUIRED workflow.
 SECURITY_AUTO_REMEDIATION_AUTHORIZED and its interaction contract require automatic
 continuation, including USER_CONFIRMED grants whose approval has already occurred.
 Without INLINE_PREPARED, retain the exact task_ref/remediation_ref, immediately call prepare_task_fix and
 edit only within that packet's local TLS authorization. Then allow the automatic
 Hook. Retain the original task_ref/remediation_ref and grant_id from the grant.
+Extra repair rechecks default to disabled. When verification_required is false, do not call
+verify_task_fix or start a separate business re-audit; return to normal development closeout.
+Retain the original risk history and do not claim it verified resolved from ordinary zero findings.
+The following additional verification rules apply only when the returned repair plan enables
+automatic verification or the user explicitly requests original-risk verification:
 Only a Runtime Hook security_verification receipt matching that task_ref/grant_id,
 with status SCANNER_VERIFIED_RESOLVED and phase CLOSED, permits skipping duplicate
 verify_task_fix. The signed original remediation state was closed by the same

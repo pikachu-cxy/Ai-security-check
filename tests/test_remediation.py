@@ -53,7 +53,12 @@ class SavedRuntime(FakeRuntime):
 
 
 @pytest.fixture
-def setup(repo, tmp_path, request):
+def setup(repo, tmp_path, request, monkeypatch):
+    # These legacy automatic-verifier contracts explicitly opt in. Ordinary
+    # development now leaves the additional repair recheck disabled.
+    product_config = tmp_path / 'repair-recheck-opt-in.toml'
+    product_config.write_text('[development]\nrepair_recheck_enabled=true\n')
+    monkeypatch.setenv('SECURITY_RUNTIME_CONFIG', str(product_config))
     store = SQLiteStore(tmp_path / 'db/scans.db')
     runtime = SavedRuntime(store)
     hooks = HookStateStore(tmp_path / 'hooks')

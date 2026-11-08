@@ -131,6 +131,8 @@ class TaskFixService:
         # conclusions as deterministic root cause. Fixed plans control the flow.
         unknown = list(dict.fromkeys(task['unknown_conditions'] + [condition for r in reviews
                        for condition in r['review']['preconditions_unknown']]))[:20]
+        from ..user_config import read_config
+        extra_recheck = read_config()['values']['development']['repair_recheck_enabled']
         out = {'status': 'BUDGET_EXCEEDED' if not bounded else 'EVIDENCE_INCOMPLETE' if errors else 'READY_FOR_HOST_FIX',
             'task_ref': task_ref, 'scan_id': resolved['scan_id'], 'workspace': resolved['workspace'],
             'authorization_requirements': {'user_consent_required':True,
@@ -151,7 +153,7 @@ class TaskFixService:
             'recommended_changes': plan['changes'], 'regression_requirements': plan['regression'],
             'bounded_evidence': packets, 'evidence_errors': errors,
             'evidence_truncated': len(members) > 20,
-            'verification_plan': {'mcp_tool': 'verify_task_fix', 'arguments': {'task_ref': task_ref,
+            'verification_plan': {'automatic': extra_recheck, 'mcp_tool': 'verify_task_fix', 'arguments': {'task_ref': task_ref,
                 'workspace_path': resolved['workspace']}, 'all_group_members_required': True,
                 'matching': 'OCCURRENCE_THEN_EQUIVALENCE', 'scope': 'ORIGINAL_PROVIDER_AFFECTED_FILES_ONLY',
                 'offline': True, 'limits': {'members': MAX_MEMBERS, 'files': MAX_FILES, 'bytes': MAX_BYTES},
@@ -162,8 +164,12 @@ class TaskFixService:
                     'Explicit selected-task fix intent authorizes bounded local edits; do not ask again. '
                     'No network, source upload, production operations, unrelated destructive changes, large installs or publishing implied. '
                     'For new triage use prepare_task_triage then submit_triage with its original session/hash/evidence_refs; '
-                    'fix evidence is not a submit_triage session. Edit only with adequate current evidence, then verify_task_fix. '
-                    'Reuse sufficient VALID review, rebuild STALE, handle FAILED separately. Report actual local tests/builds separately.'},
+                    'fix evidence is not a submit_triage session. Edit only with adequate current evidence. '
+                    + ('Then use verify_task_fix for the enabled repair recheck. ' if extra_recheck else
+                       'Automatic repair rechecks are disabled: use ordinary development Hooks after editing; '
+                       'do not automatically call verify_task_fix or start a separate business re-audit. '
+                       'Explicit original-risk verification remains available on user request. ')
+                    + 'Reuse sufficient VALID review, rebuild STALE, handle FAILED separately. Report actual local tests/builds separately.'},
             'execution': dict(EXECUTION), 'runtime_observed_execution': dict(EXECUTION),
             'host_reported_execution': {'status': 'NOT_REPORTED'}, 'automatic_execution': False}
         again = self.tasks.resolve(task_ref, resolved['workspace'], bound_workspace=bound_workspace)

@@ -1,39 +1,29 @@
-# Understand and handle findings
+# Risks and decisions
 
-## Local risk statistics
+## Open local risk management
 
-Ask **“Open risk statistics.”** Version 0.3.13 offers **All editors / Codex / Cursor** filters, plus project, disposition, and text filters. Summary cards and project distribution follow the selected filters.
+Ask **“Open risk statistics.”** Risk reports also include a link filtered to the current project, workspace and chat. The local service starts with the product; reading saved records does not rescan files.
 
-The page reads saved records in the current operating-system user's local data directories, not only the current chat and not every device or account. Confirmed pending risks, unconfirmed candidates, deferred/excluded items, and reviewed resolutions are separate. Raw scanner counts are not confirmed vulnerability counts.
+The sidebar provides a dashboard, risks, projects/workspaces/chats, editors, settings and health monitoring. A project contains workspaces such as separate worktrees; chats belong to their workspace. Verified host chat names appear when available, with optional aliases. Resource management supports deletion and restoration with an explicit affected scope.
 
-Records keep their editor identity and disposition. The same issue saved by both editors may count twice; this stage does not merge or deduplicate across editors. Read limits and inaccessible data are reported. Zero records alone does not prove project security.
+The dashboard separates scanner candidates from confirmed vulnerabilities and shows type counts and proportions. Counts represent saved records, not globally deduplicated vulnerabilities. Codex, Cursor and WorkBuddy records retain their origin. Details show paths, lines, available code, technical explanations, plain-language impact and repair advice. Batch decisions and SARIF/CSV/JSON export are available; an external security-platform adapter has not been selected.
 
-Viewing is read-only: it does not scan, change decisions, or start usage monitoring. Historical records do not establish current disk state.
+## Chat reports
 
-## Read the evidence
+Reports include **prominent titles**, severity and source, location, problem, impact and advice. Separators distinguish multiple risks, and a chat risk-management link follows the report. Unreviewed candidates are labelled; dismissed false positives are summarized by count. Complete ordinary checks with no actionable risks remain quiet.
 
-A useful finding identifies the location, concrete problem, trigger conditions, potential impact, existing safeguards, proposed fix, and remaining unknowns. A severity label does not replace this evidence.
+Use the latest whole-batch report returned after review submission, following additional reads only when the response requests pagination or continuation. Saved-result reads do not rescan. When business audit is enabled, it runs during development and saves its results for closeout.
 
-Version 0.3.13 distinguishes unverified scanner candidates from risks assessed against code. Missing tools, stale data, and incomplete coverage are check states, not vulnerability findings or reasons to ask for a repair decision. Each reportable risk includes its title, severity and source, file/line and known function, followed by separate Problem, Possible impact, Suggested fix, and Unconfirmed sections, translated to the conversation language. Stop continuations follow the same format. After submitting a review, the agent rereads current risks and dispositions before reporting, then offers one Fix / Defer choice. With agent analysis disabled, findings remain static candidates. Complete, risk-free ordinary development needs no risk template.
+## Decisions and repair
 
-## Choose a disposition
+- **Fix:** authorize the selected issue and scope while preserving other behavior.
+- **Defer:** save the decision to leave the issue for now, retaining its history.
+- **False positive / exclude:** save the decision and rationale separately from the agent's technical judgment.
 
-| Choice | Meaning |
-| --- | --- |
-| Fix | Authorize a specific issue and scope, without extending approval to unrelated modules. |
-| Defer | Retain the finding and record without fixing it in this task. |
-| Exclude | Record a false-positive assessment or explicit decision not to remind, with its rationale. |
+“Create/retry repair task” sends a request to the original development chat. An available coding agent performs the work; the web page does not edit source itself. An inactive chat leaves the request awaiting pickup.
 
-User decisions and technical assessments are recorded separately. Deferral or exclusion is not proof of remediation.
+## Checks after repair
 
-Existing explicit authorization for the same issue and scope carries forward without another choice. "Do not edit yet" alone does not establish that a deferral or exclusion was saved. Saved deferred or excluded items should not prompt again on every query.
+Version 0.3.14 disables **additional post-repair verification** by default. Repair edits still enter ordinary static scanning and whichever candidate review/business audit settings are enabled. No separate repair rescan or business re-audit is automatically added.
 
-## Assess impact before editing
-
-You can ask: "Explain the affected interfaces, callers, and tests before fixing this issue. Do not edit code." This remains read-only. Unresolved execution-blocking assumptions should stay explicit.
-
-## Verify the original issue
-
-After an authorized fix, the agent should examine the original trigger and the new safeguard. Outcomes can be fixed, still present, or unverified. Ordinary passing tests or a fresh scan with no findings cannot replace original-issue verification.
-
-History queries should not repeat disposition questions. For real exposed credentials, follow your incident-response and rotation process; deleting a value from code alone does not establish that exposure has been resolved.
+Original risk history is retained. A clean ordinary scan does not automatically prove an old issue resolved. Request verification of the original risk explicitly, or enable the extra repair check in product settings when needed. Changing code does not replace rotation of exposed credentials.

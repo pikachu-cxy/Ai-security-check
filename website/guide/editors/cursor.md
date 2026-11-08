@@ -4,7 +4,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 # 在 Cursor 中安装与使用
 
-当前正式完整包为 **0.3.13**。接入后，照常在 Cursor 的 Agent 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
+当前正式完整包为 **0.3.14**。接入后，照常在 Cursor 的 Agent 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
 
 ## 1. 安装到这台电脑
 
@@ -12,7 +12,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 ### Windows {#windows}
 
-在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.13 正式完整包**、核验 SHA256、解压并接入 Cursor，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
+在普通 **PowerShell（5.1 或更新版本）** 中执行这一条命令，可在任意目录运行。适用于 Windows x64，自动下载 **0.3.14 正式完整包**、核验 SHA256、解压并接入 Cursor，无需手动下载解压，也无需另装 Python、Node.js 或 Git。
 
 ```powershell
 & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
@@ -33,7 +33,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Cursor�
 
 ### macOS {#macos}
 
-在 Mac 的“终端”中执行下面这一条命令。安装器自动识别 **M 系列（Apple Silicon）或 Intel**，下载并校验 0.3.13 原生完整包，**无需预装 Python、Git、Homebrew 或配置环境变量**。
+在 Mac 的“终端”中执行下面这一条命令。安装器自动识别 **M 系列（Apple Silicon）或 Intel**，下载并校验 0.3.14 原生完整包，**无需预装 Python、Git、Homebrew 或配置环境变量**。
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
@@ -43,7 +43,7 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 
 <!--@include: ../../.vitepress/snippets/macos-paste.md-->
 
-安装入口与手动下载使用同一份 **v0.3.13 正式完整包**，无需另装 Python。已有 Cursor 连接可能更新，请先结束正在运行的检查。当前没有 Apple Developer ID 签名或公证保证，系统策略问题按[支持说明](../../reference/support.md#macos-installation)处理。
+安装入口与手动下载使用同一份 **v0.3.14 正式完整包**，无需另装 Python。已有 Cursor 连接可能更新，请先结束正在运行的检查。当前没有 Apple Developer ID 签名或公证保证，系统策略问题按[支持说明](../../reference/support.md#macos-installation)处理。
 
 ::: details 手动安装 macOS 完整包（备用）
 从[下载页](../../downloads.md#macos-packages)选择芯片对应的包，核验 SHA256 并完整解压后运行：

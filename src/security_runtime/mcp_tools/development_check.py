@@ -205,7 +205,7 @@ def register(server, registry, *, application):
     def submit_development_risk_resolution(check_ref: str, risk_id: str, repair_ref: str,
                                            outcome: str, evidence_refs: list[str], rationale: str,
                                            workspace_path: str | None = None, session_ref: str | None = None) -> dict:
-        """Recheck the ORIGINAL risk against new evidence after its authorized repair. Outcomes: CODE_REVIEWED_RESOLVED, STILL_PRESENT, INCONCLUSIVE. Explain how evidence removes original cause and preserves behavior. Host review never claims SCANNER_VERIFIED_RESOLVED; a new zero-alert scan alone cannot close the risk. Run ordinary development closeout separately for edited files."""
+        """Optional original-risk verification, only when enabled by the prepare receipt or explicitly requested by the user. Disabled by default as an automatic repair follow-up; edited files already use ordinary development closeout. This tool never scans. Outcomes: CODE_REVIEWED_RESOLVED, STILL_PRESENT, INCONCLUSIVE. Explain how evidence removes the original cause and preserves behavior. Host review never claims SCANNER_VERIFIED_RESOLVED; a new zero-alert scan alone cannot close the original risk."""
         return risks(check_ref, workspace_path, session_ref).resolve(
             risk_id, repair_ref, outcome, evidence_refs, rationale)
 

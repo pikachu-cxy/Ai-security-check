@@ -4,7 +4,7 @@
 OpenGrep selects language rules from the installed pack, alongside bounded native analysis, Gitleaks secrets, and Trivy dependencies. Coverage follows the files and rules actually executed. [View coverage →](../reference/support.md#languages)
 :::
 
-Use the **0.3.13 official release**. Automatic macOS installation uses the same v0.3.13 native release as manual downloads. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
+Use the **0.3.14 official release**. Automatic macOS installation uses the same v0.3.14 native release as manual downloads. Choose your editor, install for your operating system, restart, and verify the real connection before trying a small task.
 
 ## 1. Choose your editor {#choose-editor}
 

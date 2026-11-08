@@ -2,6 +2,8 @@
 
 ## 审计轮次、晚到报告及漏洞分隔
 
+父子开发任务 Stop 归属：`codex_turn_scope.py`、`development_stop.py`、`mcp_server.py`；测试 `test_delegated_development_closeout.py`。修后额外复测默认关闭：`user_config.py`、`development_risks.py`、`remediation.py`、`tasks/fix.py`、`repair_notifications.py` 及对应指导；测试 `test_repair_recheck_default.py`。验收与限制见 [0.3.14 验收](RELEASE_0314_ACCEPTANCE.md)。
+
 轮内执行授权：`audit_stream_service.py`、`incremental_audit.py`、`business_audit.py`；晚到结果交付：`development_risks.py`、`development_stop.py`；同一 SQL 执行位置关联：`development_duplicates.py`；报告标题和分隔：`development_report.py`、`development_views.py`。回归：`test_audit_round_lifecycle.py`、`test_three_mode_repairs.py`、`test_uat_closeout_repairs.py`。内部指导与随包引用通过 `sync_review_skill.py` 同步。
 
 ## 开发收尾验收修复

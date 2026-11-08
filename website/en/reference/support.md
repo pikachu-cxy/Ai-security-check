@@ -1,6 +1,6 @@
 # Support and detection coverage
 
-This page describes **0.3.13**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
+This page describes **0.3.14**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
 
 ## Platforms and editors
 
@@ -16,7 +16,7 @@ No Linux full bundle is published. Use the actual local project root. Remote, mu
 
 ## macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) provide an architecture-aware installer for the same **v0.3.13** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
+[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) provide an architecture-aware installer for the same **v0.3.14** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
 
 There is no Apple Developer ID signing or notarization guarantee. Real system policy and scanner readiness depend on the target computer. WorkBuddy desktop acceptance was confirmed by the user; CI package and Windows long-path checks are recorded separately.
 

@@ -748,7 +748,14 @@ class DevelopmentRisks:
             if request:
                 request.update(status='PREPARED', repair_ref=fix['repair_ref'])
             self.store._put(db, self.ref, row)
+        from .user_config import read_config
+        recheck = read_config()['values']['development']['repair_recheck_enabled']
         return dict(fix, risk_id=risk_id, ready_for_host_fix=fix['status'] == 'PREPARED',
+                    automatic_recheck_enabled=recheck, ordinary_development_closeout=True,
+                    followup_instructions=('修复后补读证据并提交原风险复查，再沿正常开发收尾。' if recheck else
+                        '修复编辑沿正常开发 Hook 扫描和当前复核设置收尾；不要另起复扫或业务复审，'
+                        '不要自动补读修后证据或调用 submit_development_risk_resolution；'
+                        '保留原风险修复历史，不将普通扫描零告警自动当作原风险已验证修复。'),
                     scanner_run=False, source_modified=False, scope=fix.get('repair_paths', [risk['finding']['file_path']]))
 
     def resolve(self, risk_id, repair_ref, outcome, evidence_refs, rationale):

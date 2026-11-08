@@ -1,6 +1,6 @@
 # 支持状态与检测范围
 
-本页对应 **0.3.13 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
+本页对应 **0.3.14 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
 
 ## 系统与宿主
 
@@ -16,7 +16,7 @@
 
 ## macOS 安装与验证 {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) 与 [Cursor](../guide/editors/cursor.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.13 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
+[Codex](../guide/editors/codex.md#macos) 与 [Cursor](../guide/editors/cursor.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.14 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
 
 当前没有 Apple Developer ID 签名或公证保证。实际系统策略和扫描组件就绪状态按目标电脑判断。WorkBuddy 桌面开发验收已由用户确认通过；发布流水线的安装包和 Windows 长路径检查另行记录。
 

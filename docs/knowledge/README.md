@@ -8,6 +8,7 @@
 | --- | --- |
 | 产品做什么、各层如何协作 | [架构](ARCHITECTURE.md) |
 | 哪些已实现、哪些仍未验收 | [当前状态与目标](STATUS.md) |
+| 0.3.14 Codex、父子任务收尾、修后额外复测与发行验收 | [0.3.14 验收](RELEASE_0314_ACCEPTANCE.md) |
 | Codex 路径保护、Cursor / WorkBuddy 兼容与真实宿主限制 | [宿主兼容验收](HOST_PARITY_ACCEPTANCE.md) |
 | 每轮新建审计、晚到报告、SQL 去重与漏洞排版验收 | [审计轮次验收](AUDIT_ROUND_ACCEPTANCE.md) |
 | 我要修改什么文件、跑哪些测试 | [修改导航](CHANGE_MAP.md) |

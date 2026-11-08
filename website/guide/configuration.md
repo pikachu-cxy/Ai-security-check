@@ -25,6 +25,10 @@ mkdir -p "$HOME/.config/ai-security-runtime"
 
 ## 2. 开发记录、Agent 与 Stop
 
+也可在后台产品设置中按功能分类展开修改。候选复核默认开启，业务审计默认关闭。`development.repair_recheck_enabled=false` 关闭额外修后复查；修复编辑仍按普通开发检查。`review_response_bytes` 默认 65536，允许 16384–262144 字节，控制证据和复核分页预算。
+
+Stop 的 `wait_mode="bounded"` 默认每次等待 18 秒；可选择 `"wait_for_result"`，但仍受当前宿主 Hook 上限约束，不等于无限等待。
+
 以下是默认设置：
 
 ```toml
@@ -36,10 +40,16 @@ development_max_records = 1024
 
 [agent]
 review_scanner_findings = true
-audit_business_logic = true
+audit_business_logic = false
+
+[development]
+review_response_bytes = 65536
+repair_recheck_enabled = false
 
 [development.stop_fallback]
 enabled = true
+wait_mode = "bounded"
+native_wait_seconds = 18
 wait_timeout_seconds = 120
 max_continuations = 2
 ```
@@ -83,7 +93,6 @@ Stop 只处理本回合已记录的修改及其续接，沿原检查提交或读
 | `[scan.input]` | `max_files=10000`、`max_total_bytes=128000000`、`max_file_bytes=4000000`、`max_index_bytes=8000000` | 固定扫描输入与索引容量 |
 | `[scan.git]` | `timeout_seconds=10`、`max_output_bytes=4000000` | Git 查询时间与输出 |
 | `[scan.execution]` | `sast_timeout_seconds=45`、`gitleaks_timeout_seconds=30`、`trivy_timeout_seconds=90`、`max_output_bytes=4000000` | 各扫描器时间与输出 |
-| `[scan.dataflow]` | `max_files=256`、`max_total_bytes=8000000`、`max_file_bytes=500000`、`max_steps=1000000`、`max_depth=6`、`feature_timeout_seconds=3`、`release_timeout_seconds=30` | 内置数据流分析范围与预算 |
 | `[storage.explicit_scan_jobs]` | `max_records=128`、`max_total_bytes=96000000`、`max_database_bytes=128000000` | 显式扫描任务存储 |
 | `[storage.scan_publication]` | `max_records=32`、`max_record_bytes=8000000`、`max_total_bytes=32000000` | 扫描发布结果存储 |
 

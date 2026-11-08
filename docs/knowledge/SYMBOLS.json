@@ -1024,6 +1024,17 @@
       ]
     },
     {
+      "path": "src/security_runtime/codex_turn_scope.py",
+      "sha256": "7186a9fe6ec56e8ec73fb8d598fcd9c77f0e2952d70123876b058b52ae1c4e38",
+      "purpose": "Bounded Codex ancestry lookup for an otherwise unmatched native Stop only.",
+      "symbols": [
+        {
+          "name": "resolve_child_turns",
+          "line": 27
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/codex_usage.py",
       "sha256": "5c221e4769ba623faa1433cab17a7a367ba2dcbceb8927a0e3c50b17b2f8d59b",
       "purpose": "Bounded, explicit import of Codex host usage; session bodies are discarded.",
@@ -2947,7 +2958,7 @@
     },
     {
       "path": "src/security_runtime/development_risks.py",
-      "sha256": "a4be69f48845bb11261c6b3deaadb7fff1f8da112be8e790749fa54525be8224",
+      "sha256": "a5f139458c9a3d9794827918ce3448cae39ec0c65a13f80bf415bece9a35261d",
       "purpose": "Version-bound development findings and repairs, independent of scanner truth.",
       "symbols": [
         {
@@ -3060,15 +3071,15 @@
         },
         {
           "name": "DevelopmentRisks.resolve",
-          "line": 754
+          "line": 761
         },
         {
           "name": "DevelopmentRisks.manage",
-          "line": 787
+          "line": 794
         },
         {
           "name": "DevelopmentRisks.disposition",
-          "line": 802
+          "line": 809
         }
       ]
     },
@@ -3124,7 +3135,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "9670599d28f615ea0675ff36d4dde8d40ec39726c335d4f80d3e059a42cd778b",
+      "sha256": "f14201be5568ad5c8e22c0a071bec8d4d96c62dca9e6fcfecc97f72fb7e0c04a",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -3141,31 +3152,31 @@
         },
         {
           "name": "native_closeout",
-          "line": 231
+          "line": 252
         },
         {
           "name": "audit_report_changed",
-          "line": 279
+          "line": 300
         },
         {
           "name": "report_notice",
-          "line": 286
+          "line": 307
         },
         {
           "name": "closeout_message",
-          "line": 306
+          "line": 327
         },
         {
           "name": "saved_handoff",
-          "line": 310
+          "line": 331
         },
         {
           "name": "incomplete_notice",
-          "line": 332
+          "line": 353
         },
         {
           "name": "review_handoff",
-          "line": 349
+          "line": 370
         }
       ]
     },
@@ -3522,7 +3533,7 @@
     },
     {
       "path": "src/security_runtime/fast_fix.py",
-      "sha256": "beca398f9cf72a337cd9619b21d8a60a0e59650278e7b336f2b010bfc46c4180",
+      "sha256": "dc79b55ebca469112ccd16ac966ab14bc07aea3c93e3198bdb2917bc86b5c322",
       "purpose": "One read-only REMOVE plan, admitted only by a trusted atomic-edit Host bridge.",
       "symbols": [
         {
@@ -3563,19 +3574,19 @@
         },
         {
           "name": "FastFixPlans.validate_and_claim",
-          "line": 170
+          "line": 173
         },
         {
           "name": "FastFixPlans.current",
-          "line": 231
+          "line": 234
         },
         {
           "name": "FastFixPlans.post_edit_matches",
-          "line": 236
+          "line": 239
         },
         {
           "name": "FastFixPlans.forget",
-          "line": 246
+          "line": 249
         }
       ]
     },
@@ -3822,7 +3833,7 @@
     },
     {
       "path": "src/security_runtime/findings.py",
-      "sha256": "e001400e08a82eafb33194d4e467ee3d91fe3a8a78017cbc33d71292b2195278",
+      "sha256": "ac82dc3f1d7de81774d588d91e8dab67fe950af97bdd792b563eb91273d083f6",
       "purpose": "",
       "symbols": [
         {
@@ -3904,7 +3915,7 @@
     },
     {
       "path": "src/security_runtime/fix_context.py",
-      "sha256": "4794cdd5247ebf78c4db03c25948a71000817c0de59acb1623ab3d1d229e2344",
+      "sha256": "4e35b3ced2be17707b85ec24874ff06a9cff63935617df95ea32a22bb7656cfd",
       "purpose": "Compact, source-free facts for the existing user-approved TLS Agent fix.",
       "symbols": [
         {
@@ -3925,7 +3936,7 @@
         },
         {
           "name": "compact_packet",
-          "line": 138
+          "line": 139
         }
       ]
     },
@@ -4938,7 +4949,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "331697c300325b0b3773968f35f29face6112263220872d0d8b168bec5fcda07",
+      "sha256": "677bbeb859bb08326e7dadc5fea4874bee2245555df5220966b9c8a0a3a5aeff",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -4963,12 +4974,12 @@
     },
     {
       "path": "src/security_runtime/guidance/host_guidance.py",
-      "sha256": "6c482656518e1a564fe7f7b0cf24c17e75a2aa99dbbe10e405fb5572c8ec178e",
+      "sha256": "641506d8b3ab8209c1d55c3667569062c4d2aa4c3c828d0933d1d06db2529faa",
       "purpose": "Fixed host workflow instructions and read-only runtime capability discovery.",
       "symbols": [
         {
           "name": "runtime_info",
-          "line": 587
+          "line": 596
         }
       ]
     },
@@ -7054,7 +7065,7 @@
     },
     {
       "path": "src/security_runtime/mcp_server.py",
-      "sha256": "59ea5428639d8e28bea36f541c4d12975aaba04d6706b03304db41d1cc9edfa6",
+      "sha256": "024d26d08507fd37e396f0396f9812d02019bb58be26379b93b0074296332894",
       "purpose": "MCP protocol interface; all operations delegate to SecurityRuntime.",
       "symbols": [
         {
@@ -7063,7 +7074,7 @@
         },
         {
           "name": "serve",
-          "line": 317
+          "line": 319
         }
       ]
     },
@@ -7114,7 +7125,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "c68995f8bdcc916ed22330afe86bb4f6a3bf82ab9282a3ebfffc263ea2206b08",
+      "sha256": "c23aea60c6f7b7c00b9aca0614e81a49eaa384e746109dd5f29d1589b6d29954",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {
@@ -9238,212 +9249,220 @@
     },
     {
       "path": "src/security_runtime/remediation.py",
-      "sha256": "1ed801f06d5e00bcadf8688c1b5ef889db353301dd0666592b8b96f6f0ef5ca2",
+      "sha256": "f940ba427d62b5687ebceaf3277822a0da6e467e26607c558bf85f80ba475007",
       "purpose": "Bounded Hook-to-host repair grants; Runtime decides/verifies, never edits.",
       "symbols": [
         {
-          "name": "SecurityReceiptError",
+          "name": "automatic_recheck_enabled",
           "line": 80
         },
         {
+          "name": "confirmed_guidance",
+          "line": 85
+        },
+        {
+          "name": "SecurityReceiptError",
+          "line": 97
+        },
+        {
           "name": "SecurityReceiptError.__init__",
-          "line": 82
+          "line": 99
         },
         {
           "name": "ConfirmationReferenceError",
-          "line": 87
+          "line": 104
         },
         {
           "name": "ConfirmationReferenceError.__init__",
-          "line": 89
+          "line": 106
         },
         {
           "name": "RemediationService",
-          "line": 94
+          "line": 111
         },
         {
           "name": "RemediationService.__init__",
-          "line": 95
+          "line": 112
         },
         {
           "name": "RemediationService._observe_cycle",
-          "line": 127
-        },
-        {
-          "name": "RemediationService._cycle_result",
-          "line": 134
-        },
-        {
-          "name": "RemediationService._cycle_scope",
-          "line": 141
-        },
-        {
-          "name": "RemediationService.mark_initial_hook_response_ready",
           "line": 144
         },
         {
-          "name": "RemediationService._fix",
-          "line": 149
+          "name": "RemediationService._cycle_result",
+          "line": 151
         },
         {
-          "name": "RemediationService._fail",
-          "line": 156
+          "name": "RemediationService._cycle_scope",
+          "line": 158
         },
         {
-          "name": "RemediationService._handling_unavailable",
+          "name": "RemediationService.mark_initial_hook_response_ready",
           "line": 161
         },
         {
+          "name": "RemediationService._fix",
+          "line": 166
+        },
+        {
+          "name": "RemediationService._fail",
+          "line": 173
+        },
+        {
+          "name": "RemediationService._handling_unavailable",
+          "line": 178
+        },
+        {
           "name": "RemediationService._read",
-          "line": 167
+          "line": 184
         },
         {
           "name": "RemediationService._validate_episode",
-          "line": 217
+          "line": 234
         },
         {
           "name": "RemediationService._workspace_families",
-          "line": 262
+          "line": 279
         },
         {
           "name": "RemediationService._receipt_scope",
-          "line": 278
+          "line": 295
         },
         {
           "name": "RemediationService._resolved_scan_hash",
-          "line": 301
+          "line": 318
         },
         {
           "name": "RemediationService._resolved_receipt",
-          "line": 315
+          "line": 332
         },
         {
           "name": "RemediationService._close",
-          "line": 353
+          "line": 370
         },
         {
           "name": "RemediationService._functional_offer",
-          "line": 381
+          "line": 398
         },
         {
           "name": "RemediationService._episode_fields",
-          "line": 387
+          "line": 404
         },
         {
           "name": "RemediationService._new_episode",
-          "line": 390
+          "line": 407
         },
         {
           "name": "RemediationService._forget",
-          "line": 402
+          "line": 419
         },
         {
           "name": "RemediationService._save",
-          "line": 410
+          "line": 427
         },
         {
           "name": "RemediationService._snapshot",
-          "line": 417
+          "line": 434
         },
         {
           "name": "RemediationService._guard",
-          "line": 425
+          "line": 442
         },
         {
           "name": "RemediationService._grant",
-          "line": 432
+          "line": 449
         },
         {
           "name": "RemediationService._policy_binding",
-          "line": 465
+          "line": 483
         },
         {
           "name": "RemediationService._allowed",
-          "line": 470
-        },
-        {
-          "name": "RemediationService._member_current",
-          "line": 479
-        },
-        {
-          "name": "RemediationService._confirmation_remaining",
           "line": 488
         },
         {
+          "name": "RemediationService._member_current",
+          "line": 497
+        },
+        {
+          "name": "RemediationService._confirmation_remaining",
+          "line": 506
+        },
+        {
           "name": "RemediationService._pending_failure",
-          "line": 498
+          "line": 516
         },
         {
           "name": "RemediationService._confirmation_fail",
-          "line": 511
+          "line": 529
         },
         {
           "name": "RemediationService._confirmation_feedback",
-          "line": 514
+          "line": 532
         },
         {
           "name": "RemediationService._current_dependency_matches",
-          "line": 549
+          "line": 567
         },
         {
           "name": "RemediationService._advisory_feedback",
-          "line": 574
+          "line": 592
         },
         {
           "name": "RemediationService.refresh_confirmation",
-          "line": 675
+          "line": 693
         },
         {
           "name": "RemediationService._pending",
-          "line": 680
+          "line": 698
         },
         {
           "name": "RemediationService.on_hook",
-          "line": 724
+          "line": 742
         },
         {
           "name": "RemediationService._security_recheck",
-          "line": 813
+          "line": 831
         },
         {
           "name": "RemediationService._on_hook",
-          "line": 832
+          "line": 850
         },
         {
           "name": "RemediationService._reference",
-          "line": 1159
+          "line": 1180
         },
         {
           "name": "RemediationService.confirm",
-          "line": 1209
+          "line": 1230
         },
         {
           "name": "RemediationService.task_gate",
-          "line": 1286
+          "line": 1307
         },
         {
           "name": "RemediationService.prepare",
-          "line": 1315
+          "line": 1336
         },
         {
           "name": "RemediationService._prepare",
-          "line": 1344
+          "line": 1365
         },
         {
           "name": "RemediationService.verify",
-          "line": 1394
+          "line": 1417
         },
         {
           "name": "RemediationService._verify",
-          "line": 1402
+          "line": 1425
         },
         {
           "name": "RemediationService.functional_receipt",
-          "line": 1473
+          "line": 1496
         },
         {
           "name": "RemediationService.functional_receipt_diagnostics",
-          "line": 1477
+          "line": 1500
         }
       ]
     },
@@ -9918,7 +9937,7 @@
     },
     {
       "path": "src/security_runtime/repair_notifications.py",
-      "sha256": "ba62ab3b8f11771b42b2de38bb97b8b8f6538cfdf99d7073e03a7217d104b622",
+      "sha256": "e46f0041e186776f58fe27c1e2b3c49370cae8cb5d8962d8705f402bc68cb409",
       "purpose": "Deliver Web repair selections only to their original, verified host owner.",
       "symbols": [
         {
@@ -14817,7 +14836,7 @@
     },
     {
       "path": "src/security_runtime/tasks/fix.py",
-      "sha256": "3e5504b46283754ed2e744a3bd3c6fd5d70550085867246ccf7dd9ac940e0071",
+      "sha256": "19d99a0ed4213ec0370238fed5cfb7b890bad4d8fb1f170247c52fb5e00c74c0",
       "purpose": "Precise task handoff: the host edits, local originating scanners verify.",
       "symbols": [
         {
@@ -14842,11 +14861,11 @@
         },
         {
           "name": "TaskFixService._safe_dependency_options",
-          "line": 193
+          "line": 199
         },
         {
           "name": "TaskFixService.verify",
-          "line": 199
+          "line": 205
         }
       ]
     },
@@ -17076,7 +17095,7 @@
     },
     {
       "path": "src/security_runtime/user_config.py",
-      "sha256": "e694ab752cd8317d64f6327269fbcb24af701755cb59dd49d1ab407722573729",
+      "sha256": "1cddd218d2031b60ce9b8325eb0340051ec7255d3a79b254180766ad0cc39b35",
       "purpose": "User-owned product preferences, independent of project source and install versions.",
       "symbols": [
         {

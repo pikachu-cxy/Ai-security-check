@@ -42,6 +42,8 @@ def offer(hooks, root, owner):
                           end_line=min(start + 79, finding['line_end'] + 5))
             action = dict(operation='read_development_risk_context', arguments=dict(
                 workspace_path=str(root), check_ref=notice['check_ref'], **window))
+            from .user_config import read_config
+            extra_recheck = read_config()['values']['development']['repair_recheck_enabled']
             messages.append('用户已在本机风险页选择修复：check_ref='+notice['check_ref']+
                 '，risk_id='+notice['risk_id']+'。任务绑定当前原项目和原会话，网页只授权此风险。'
                 '使用当前 session_ref，通过 development_review 先调用 '+json.dumps(action, ensure_ascii=False)+
@@ -50,10 +52,11 @@ def offer(hooks, root, owner):
                 '准备接口 prepare_development_risk_fix 沿用 workspace_path/session_ref/check_ref/risk_id，'
                 '必填 proposal、preserve（字符串数组）、impact_summary、critical_unknowns（无关键未知才为空数组）、'
                 'repair_paths（已取证路径数组）、evidence_refs、user_requested=true。'
-                '准备成功才修改；只改允许路径并验证，再以 start_line/end_line 读取修后证据。'
-                'submit_development_risk_resolution 沿用上述身份及 prepare 返回的 repair_ref，'
-                '必填 outcome（CODE_REVIEWED_RESOLVED/STILL_PRESENT/INCONCLUSIVE）、rationale、修后 evidence_refs。'
-                '代码复查不等于扫描验证。版本或影响不符时保留待处理；无需再次查全量工具及宽泛指导。')
+                '准备成功才修改；只改允许路径，执行用户要求的测试，沿正常开发 Hook 扫描和当前复核开关收尾。'
+                + ('额外复查已开启：以 start_line/end_line 读取修后证据，submit_development_risk_resolution 沿用身份及 repair_ref，'
+                   '必填 outcome（CODE_REVIEWED_RESOLVED/STILL_PRESENT/INCONCLUSIVE）、rationale、修后 evidence_refs。' if extra_recheck else
+                   '修复后额外复查已关闭：不要另起静态复扫或业务复审，不自动补读修后证据或调用 submit_development_risk_resolution。')
+                + '不将普通扫描零告警自动标记为原风险已验证修复。版本或影响不符时保留待处理；无需再次查全量工具及宽泛指导。')
             if len(messages) == 3:
                 break
     return '\n'.join(messages) or None
