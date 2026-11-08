@@ -208,7 +208,7 @@ class CursorHostEventAdapter:
             operation = OperationClass.DIRECT_FILE_MUTATION
         elif event == 'afterShellExecution':
             # Reuse precisely the shipped classifier; commands remain ephemeral.
-            from .codex_event_adapter import classify_bash_command
+            from .host_tool_events import classify_bash_command
             operation = OperationClass(classify_bash_command({'command': arguments['command']}))
         session = arguments['conversation_id']
         context = VerifiedHostContext('cursor', root, identity(os.path.normcase(str(root))),

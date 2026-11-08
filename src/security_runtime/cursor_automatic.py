@@ -70,22 +70,28 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             # Reissue only after feedback claims have been verified. Compact
             # handles reuse this exact owner's record and refresh before expiry.
             if getattr(core, 'task_audit_mode', False):
-                from .tasks.ownership import issue_session_ref, session_context
+                from .tasks.ownership import issue_session_ref
+                from .host_development import session_context
                 session_ref = issue_session_ref(core.store, root, 'cursor', bridge.session, compact=True)
-                output['additional_context'] = session_context(session_ref)
+                output['additional_context'] = session_context(session_ref, root)
             if not may_mutate and getattr(core, 'task_audit_mode', False):
                 result = dict(status='NOT_APPLICABLE', scanner_run=False,
                               scanner_skipped_reason='READ_ONLY_ACTIVITY')
                 result.update(diag, automatic_connector=True)
                 return output, result
             if getattr(core, 'task_audit_mode', False):
-                from .codex_event_adapter import edit_path_hints
+                from .host_tool_events import edit_path_hints
                 from .task_audit_mode import task_activity
                 paths, unknown = edit_path_hints(payload.get('tool_name'), payload.get('tool_input'), root)
                 result = task_activity(core.store, root, 'cursor', bridge.session, paths=paths,
                     scope_unknown=unknown, event_id=payload.get('tool_use_id'),
                     turn_id=payload.get('generation_id'),
                     scan_path=getattr(getattr(core.runtime, 'store', None), 'path', None))
+                if result.get('development_check_ref'):
+                    from .host_development import audit_context
+                    note = audit_context(core, root, bridge.owner, result)
+                    if note:
+                        output['additional_context'] = (output.get('additional_context', '')+'\n'+note).strip()
                 if not result.get('security_task_ref'):
                     result.update(diag, automatic_connector=True)
                     return output, result
@@ -113,7 +119,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 from .development_stop import fallback
                 fallback_result = fallback(core.store, root, bridge.owner,
                     stopped_normally=payload['status'] == 'completed',
-                    stop_hook_active=payload['loop_count'] > 0, turn_id=payload.get('generation_id'))
+                    stop_hook_active=payload['loop_count'] > 0, turn_id=payload.get('generation_id'), automatic=True, session_id=bridge.session)
                 if fallback_result:
                     message = fallback_result.get('reason') if fallback_result.get('decision') == 'block' else None
 
@@ -134,9 +140,13 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
             if normalized.kind == EventKind.SESSION_START:
-                from .tasks.ownership import issue_session_ref, session_context
+                from .tasks.ownership import issue_session_ref
+                from .host_development import session_context, reconnect_context
                 session_ref=issue_session_ref(core.store,root,'cursor',payload['conversation_id'],compact=True)
-                output['additional_context']=session_context(session_ref)
+                output['additional_context']=session_context(session_ref, root)
+                note = reconnect_context(core, root, bridge.owner)
+                if note:
+                    output['additional_context'] += '\n'+note
             if (normalized.kind == EventKind.WORKSPACE_ACTIVITY
                     and not result.get('development_check_ref')
                     and normalized.operation.value != 'READ_ONLY'):
@@ -149,6 +159,11 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                         result['task_delivery'] = task_delivery_facts(task,
                             scanner_run=result.get('execution', {}).get('scanner_run'), recording=recording)
             result['scanner_run'] = result.get('execution', {}).get('scanner_run', False)
+        if event in {'afterFileEdit', 'afterShellExecution'} and result.get('development_check_ref'):
+            from .host_development import audit_context
+            note = audit_context(core, root, bridge.owner, result)
+            if note:
+                output['additional_context'] = (output.get('additional_context', '')+'\n'+note).strip()
         result.update(diag, automatic_connector=True)
         if bridge.last_delivery is not None and delivery_observer is not None:
             receipt = bridge.last_delivery.get('delivery_receipt') or {}

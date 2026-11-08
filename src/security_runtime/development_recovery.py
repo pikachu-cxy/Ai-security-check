@@ -8,20 +8,24 @@ import subprocess
 import time
 
 from .development_check import DevelopmentCheckService, DevelopmentCheckStore, owner_key, legacy_guard
+from .host_lifecycle import COMPACT_DEVELOPMENT_HOSTS, SESSION_RECOVERY_HOSTS
 from .user_config import batch_config
 from .performance_trace import timed
 
 
 def eligible(row):
     activities = [row.get('stop_activity', {}), *row.get('stop_activity_previous', ())]
+    session_scoped = (row.get('automatic') and
+                      row.get('owner', {}).get('host') in SESSION_RECOVERY_HOSTS)
     return (row.get('effective_config') and batch_config(row)['development']['stop_fallback']['enabled']
-        and any(a.get('turn') and row['dirty_seq'] > a.get('base_seq', row['dirty_seq']) for a in activities))
+        and any((a.get('turn') or session_scoped) and
+                row['dirty_seq'] > a.get('base_seq', row['dirty_seq']) for a in activities))
 
 
 @timed('recovery.handoff')
 def resume(hooks, root, owner, *, launcher=None, _ref=None, _depth=0):
     """Only inspect the signed focus of this owner; never inventory projects."""
-    if owner.get('host') != 'codex':
+    if owner.get('host') not in COMPACT_DEVELOPMENT_HOSTS:
         return None
     store = DevelopmentCheckStore(hooks, root)
     if not store.path.exists():

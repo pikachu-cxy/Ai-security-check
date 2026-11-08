@@ -156,7 +156,7 @@ def operate(risks, action, audit_id=None, agent_ref=None):
     return job
 
 
-def offer(hooks, root, owner, ref):
+def offer(hooks, root, owner, ref, *, prefer_active_executor=False):
     from .development_check import DevelopmentCheckStore
     store = DevelopmentCheckStore(hooks, root)
     with store.transaction() as db:
@@ -167,6 +167,14 @@ def offer(hooks, root, owner, ref):
             return None
         check.update(audit_offered_seq=check['dirty_seq'], audit_offered_at=time.time())
         store._put(db, ref, check)
+        active = continuation(check) if prefer_active_executor else None
+    if active and active.get('agent_ref'):
+        import json
+        return ('本轮业务审计有新增文件待审：check_ref='+ref+'，实际子任务 ID='+
+                json.dumps(active['agent_ref'], ensure_ascii=False)+'。用当前宿主的续接工具将本轮已保存的完整 child_call '
+                '交给该子任务继续 claim/submit，主开发继续；CAUGHT_UP 只表示此前队列已处理，不代表后续编辑已审。'
+                '不要新建子任务、重复 stream_prepare/stream_started 或先查 stream_status；'
+                '不要在 Stop 新开审计，子任务自己保存，主 Agent 不代交。')
     return ('已启用持续增量业务审计：首批修改后通过 development_review 的 manage_development_audit '
             'action=stream_prepare 准备原任务，check_ref='+ref+'，沿用当前 workspace_path 和 session_ref，不必先查状态。'
             '每轮开发收到 registration 后立即新建只读子 Agent（名称附 round_id 后缀，先等待完整交接包），主开发继续；'

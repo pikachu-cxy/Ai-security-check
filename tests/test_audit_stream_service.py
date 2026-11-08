@@ -32,6 +32,21 @@ def test_child_direct_save_idempotent_after_unrelated_request(sample):
         process(risks,'submit',**dict(kw,business_reviews=[dict(review,rationale='Different payload')]))
 
 
+def test_command_host_new_edit_continues_bound_executor_without_registration(sample):
+    from security_runtime.business_audit import offer
+    root, service, ref, _ = sample
+    risks, args, batch, review = child(sample)
+    assert process(risks, 'submit', batch_id=batch['batch_id'], request_id='first-file',
+                   business_reviews=[review], **args)['review_saved']
+    (root/'later.py').write_text('later = True\n')
+    service.record(root, ref, ['later.py'])
+    before = dict(risks.current_check()['audit_delegate'])
+    note = offer(service.hooks, root, service.owner, ref, prefer_active_executor=True)
+    assert '新增文件待审' in note and '"child-actual"' in note and 'CAUGHT_UP' in note
+    assert risks.current_check()['audit_delegate'] == before
+    assert offer(service.hooks, root, service.owner, ref, prefer_active_executor=True) is None
+
+
 def test_changed_source_retains_inbox_without_current_coverage(sample):
     risks,args,batch,review=child(sample)
     (sample[0]/'query.py').write_text('changed = True\n')

@@ -59,7 +59,8 @@ def test_incomplete_does_not_wait_or_claim_clean(sample):
     incomplete_notice(service,root,ref,1,{})
     page=closeout_page(risks,0,20)
     assert page['closeout_mode']=='INCOMPLETE' and not page['scanner_run']
-    assert page['next_action'] is None and page['gaps']==['STATIC_SCAN_INCOMPLETE','FILE_WATCH_INTERRUPTED']
+    assert page['next_action'] is None and page['gaps']==['STATIC_SCAN_INCOMPLETE']
+    assert page['observation_notes']==['FILE_WATCH_INTERRUPTED']
     assert '不能判定' in page['report_text']
     assert '文件变更收集存在缺口' not in page['report_text']
 
@@ -106,3 +107,44 @@ def test_published_but_unavailable_results_keep_incomplete_report(sample,monkeyp
     page=closeout_page(risks,0,20)
     assert page['closeout_mode']=='INCOMPLETE' and page['next_action'] is None
     assert '不能判定' in page['report_text']
+
+
+@pytest.mark.parametrize('late_scan', [False, True])
+def test_pending_stream_audit_is_report_not_scanner_review(sample, monkeypatch, late_scan):
+    root, service, ref, risks = sample
+    if late_scan:
+        incomplete_notice(service, root, ref, 1, {})
+    ready(sample, monkeypatch, review=False)
+    from security_runtime.incremental_audit import record_changes
+    with service.store(root).transaction() as db:
+        row = service.store(root)._get(db, ref)
+        row['effective_config']['values']['agent']['audit_business_logic'] = True
+        record_changes(row, row['observed_paths'])
+        service.store(root)._put(db, ref, row)
+    if not late_scan:
+        native_closeout(service, root, risks.current_check(), time.monotonic(), set(), None)
+    page = closeout_page(risks, 0, 20)
+    assert page['closeout_mode'] == 'REPORT'
+    assert page['report_text'] and 'candidates' not in page
+
+
+def test_incomplete_retains_saved_stream_finding_until_its_source_changes(sample):
+    from test_audit_stream_service import child
+    from security_runtime.audit_stream_service import process
+    root, service, ref, _ = sample
+    risks, args, batch, review = child(sample)
+    value = observation(risks)
+    value['evidence_refs'] = review['evidence_refs']
+    saved = process(risks, 'submit', batch_id=batch['batch_id'], request_id='saved-before-stop',
+                    observations=[value], business_reviews=[review], **args)
+    assert saved['review_saved']
+    (root/'new.py').write_text('value = 1\n')
+    service.record(root, ref, ['new.py'])
+    incomplete_notice(service, root, ref, risks.current_check()['dirty_seq'], {})
+    page = closeout_page(risks, 0, 20)
+    assert page['closeout_mode'] == 'INCOMPLETE' and len(page['risks']) == 1
+    assert page['risks'][0]['finding']['file_path'] == 'query.py'
+    (root/'query.py').write_text('def query(conn, name):\n    return []\n')
+    service.record(root, ref, ['query.py'])
+    incomplete_notice(service, root, ref, risks.current_check()['dirty_seq'], {})
+    assert closeout_page(risks, 0, 20)['risks'] == []

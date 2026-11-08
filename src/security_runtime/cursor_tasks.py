@@ -70,7 +70,7 @@ class CursorTaskBridge:
     def may_mutate(payload):
         name, inputs = payload.get('tool_name'), payload.get('tool_input', {})
         if name == 'Shell':
-            from .codex_event_adapter import classify_bash_command
+            from .host_tool_events import classify_bash_command
             command = inputs.get('command') if isinstance(inputs, dict) else None
             # An absent/unknown command is possible activity, never execution.
             return not isinstance(command, str) or classify_bash_command({'command': command}) != 'READ_ONLY'

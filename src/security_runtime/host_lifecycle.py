@@ -74,6 +74,8 @@ class ConnectorProfile:
     invocation_id: bool = False
     setup_seed: bool = False
     live_remediation_continuation: bool = False
+    compact_development_handoff: bool = False
+    session_scoped_recovery: bool = False
 
     @property
     def capabilities(self):
@@ -108,16 +110,23 @@ _BASE_PHASES = frozenset({LifecyclePhase.SESSION_OPEN,
 _PROFILES = {
     ('workbuddy', 'automatic'): ConnectorProfile('workbuddy', 'automatic', True,
         _BASE_PHASES | {LifecyclePhase.BEFORE_MUTATION, LifecyclePhase.CONTEXT_DELIVERY,
-                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT),
+                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT, compact_development_handoff=True,
+        session_scoped_recovery=True),
     ('codex', 'product'): ConnectorProfile('codex', 'product', False,
         _BASE_PHASES | {LifecyclePhase.CONTEXT_DELIVERY, LifecyclePhase.TASK_CLOSEOUT},
         StopIntent.APPROVED_REPAIR, invocation_id=True, setup_seed=True,
-        live_remediation_continuation=True),
+        live_remediation_continuation=True, compact_development_handoff=True),
     ('cursor', 'legacy'): ConnectorProfile('cursor', 'legacy', True, _BASE_PHASES),
     ('cursor', 'automatic'): ConnectorProfile('cursor', 'automatic', True,
         _BASE_PHASES | {LifecyclePhase.BEFORE_MUTATION, LifecyclePhase.CONTEXT_DELIVERY,
-                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT),
+                        LifecyclePhase.TASK_CLOSEOUT}, StopIntent.TASK_REPORT, compact_development_handoff=True),
 }
+
+# Static transport declaration, not a per-edit probe or proof of live support.
+COMPACT_DEVELOPMENT_HOSTS = frozenset(p.host for p in _PROFILES.values()
+                                    if p.compact_development_handoff)
+SESSION_RECOVERY_HOSTS = frozenset(p.host for p in _PROFILES.values()
+                                  if p.session_scoped_recovery)
 
 
 def connector_profile(host, mode=None):
@@ -135,6 +144,8 @@ def profile_catalog():
     return dict(contract='host-connector-profiles-v1', modes=[dict(host=value.host,
         mode=value.mode, command_hooks=value.command_hooks,
         phases=sorted(phase.value for phase in value.phases), stop_intent=value.stop_intent.value,
-        invocation_id=value.invocation_id, capabilities=asdict(value.capabilities),
+        invocation_id=value.invocation_id, compact_development_handoff=value.compact_development_handoff,
+        session_scoped_recovery=value.session_scoped_recovery,
+        capabilities=asdict(value.capabilities),
         transport=asdict(value.transport_capabilities)) for value in _PROFILES.values()],
         live_host_discovery=False, security_proof=False)

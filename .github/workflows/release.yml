@@ -11,10 +11,10 @@ permissions:
   contents: read
 
 jobs:
-  # Reuse completed local regressions and user-confirmed WorkBuddy desktop acceptance.
-  # This rebuild reuses the 24 local review tests; CI checks only new artifacts.
+  # Release only after local Codex acceptance. CI verifies native installation and startup;
+  # it does not repeat development, scanner or model regressions.
   version:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || contains(github.event.head_commit.message, '[release-v0.3.13]')
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || (contains(github.event.head_commit.message, '[release-v0.3.14]') && contains(github.event.head_commit.message, '[build-release]'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,13 +45,13 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: python -m pip install -e ".[build-standalone,test]"
+      - run: python -m pip install -e ".[build-standalone]"
       - name: Build this platform once
         run: python scripts/build/build_standalone.py
       - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
-      - name: Verify frozen package and current host tool surfaces
+      - name: Fast native installation, identity and MCP smoke
         shell: bash
-        run: python scripts/release/verify_artifact.py $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+        run: python scripts/release/verify_release_smoke.py $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.platform }}
@@ -60,7 +60,6 @@ jobs:
   publish:
     env:
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_OLD_TAG: fbec4eea6d9073bcbeacfb3247d7945ef5c2d80a
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -88,9 +87,8 @@ jobs:
       - name: Stage platform downloads and bundled acceptance evidence
         run: python scripts/release/prepare_release_assets.py
       - name: Include version-specific release changes
-        run: cat distribution/releases/v0.3.13.md >> dist/release-notes.md
+        run: cat distribution/releases/v0.3.14.md >> dist/release-notes.md
       - name: Upload complete release as draft, then publish
-        if: "!contains(github.event.head_commit.message, '[refresh-v0.3.13]')"
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -111,32 +109,3 @@ jobs:
           fi
           gh release upload "$RELEASE_TAG" dist/public-release/* --clobber
           gh release edit "$RELEASE_TAG" --notes-file dist/release-notes.md --prerelease=false --draft=false --latest
-      - name: Back up the exact published release and verify original tag
-        if: contains(github.event.head_commit.message, '[refresh-v0.3.13]')
-        run: |
-          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/tags/v0.3.13 --jq '.object.sha')" = "$EXPECTED_OLD_TAG"
-          mkdir -p dist/previous/assets
-          gh api repos/$GITHUB_REPOSITORY/releases/tags/v0.3.13 > dist/previous/release.json
-          gh release download v0.3.13 --dir dist/previous/assets
-          python -c 'import json,pathlib; d=json.load(open("dist/previous/release.json")); assert not d["draft"] and not d.get("immutable"); pathlib.Path("dist/previous/notes.md").write_text(d["body"])'
-      - uses: actions/upload-artifact@v4
-        if: contains(github.event.head_commit.message, '[refresh-v0.3.13]')
-        with:
-          name: previous-v0.3.13-${{ github.sha }}
-          path: dist/previous
-          retention-days: 30
-      - name: Replace the authorized release and tag only after every build passed
-        id: replace
-        if: contains(github.event.head_commit.message, '[refresh-v0.3.13]')
-        run: |
-          echo 'started=true' >> "$GITHUB_OUTPUT"
-          gh release edit v0.3.13 --draft=true
-          gh release upload v0.3.13 dist/public-release/* --clobber
-          gh api --method PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/v0.3.13 -f sha="$GITHUB_SHA" -F force=true
-          gh release edit v0.3.13 --notes-file dist/release-notes.md --draft=false --prerelease=false --latest
-      - name: Restore the original release if replacement fails
-        if: failure() && steps.replace.outputs.started == 'true'
-        run: |
-          gh release upload v0.3.13 dist/previous/assets/* --clobber
-          gh api --method PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/v0.3.13 -f sha="$EXPECTED_OLD_TAG" -F force=true
-          gh release edit v0.3.13 --notes-file dist/previous/notes.md --draft=false --prerelease=false --latest

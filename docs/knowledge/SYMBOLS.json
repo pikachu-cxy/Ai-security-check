@@ -9,7 +9,7 @@
     },
     {
       "path": "src/security_runtime/_version.py",
-      "sha256": "f66658df441bf0f4062b9e846dee5f2bd1ee27234c8651a347d4ae81c28dd4b7",
+      "sha256": "d417a837ba3b1211d1e5be7729cb21d5a2f589768babd0444a9e99542d987fae",
       "purpose": "Single source for the Runtime release version.",
       "symbols": []
     },
@@ -420,7 +420,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "832c1ad9412c0cefc0d14b933b643e95d58f343aac7f358e61f42165c15e2c8e",
+      "sha256": "b5fa745ee36c86a5451e5b62d34990ee2c9488ef4898c9b6a1ebdfd1f7e5e6d9",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -1506,7 +1506,7 @@
     },
     {
       "path": "src/security_runtime/cursor_automatic.py",
-      "sha256": "ffe4926085f6433eab2f6e5315d4bc51033566f96a7291bf243205b29bcf2d14",
+      "sha256": "49b629f72d5e26aa60b8c25c07f0709c9a4b29ceddb1d1b9fbaba4cb8cabaacc",
       "purpose": "Local Cursor command transport for the shared task/check services.",
       "symbols": [
         {
@@ -1584,7 +1584,7 @@
     },
     {
       "path": "src/security_runtime/cursor_event_adapter.py",
-      "sha256": "74f04a83b8e77fbbdd369b05960cdd1b09fbadf7084660dd24585b7cb070fd46",
+      "sha256": "80f37d70a6285e559ef73539e0aacd014c47def4cc5a6f89e3558928ea27f669",
       "purpose": "Cursor's documented local command Hook claims, not Host attestation.",
       "symbols": [
         {
@@ -1724,54 +1724,54 @@
     },
     {
       "path": "src/security_runtime/cursor_permissions.py",
-      "sha256": "5765a161012dd94b836c8d294a48fb5b2bd402af1cf3246c00fc8a61b0b7eb6b",
+      "sha256": "49f58cf753d518a3ee25a0c7790e5ead54af5cc7b143a97de6bdee6d459e2c4a",
       "purpose": "Exact routine-tool preapprovals; preserve user JSONC and signed ownership.",
       "symbols": [
         {
           "name": "document",
-          "line": 48
+          "line": 52
         },
         {
           "name": "members",
-          "line": 95
+          "line": 99
         },
         {
           "name": "edit_allowlist",
-          "line": 120
+          "line": 124
         },
         {
           "name": "ide_allowlist",
-          "line": 187
+          "line": 191
         },
         {
           "name": "CursorRoutinePermissions",
-          "line": 220
+          "line": 224
         },
         {
           "name": "CursorRoutinePermissions.__init__",
-          "line": 221
+          "line": 225
         },
         {
           "name": "CursorRoutinePermissions.inspect",
-          "line": 227
+          "line": 231
         },
         {
           "name": "CursorRoutinePermissions.status",
-          "line": 264
+          "line": 268
         },
         {
           "name": "CursorRoutinePermissions.write",
-          "line": 282
+          "line": 286
         },
         {
           "name": "CursorRoutinePermissions.execute",
-          "line": 295
+          "line": 299
         }
       ]
     },
     {
       "path": "src/security_runtime/cursor_tasks.py",
-      "sha256": "e4e24f77d21f69b2ae0af39bb9fb8b2321a1c49747e950b395f66912190c9cd0",
+      "sha256": "af0438f6403837f2f350c9673e0c5381f2089cf9b930a5f3dcb4f9cb1e58411f",
       "purpose": "Cursor task preparation and bounded feedback. No scanner or repair authority here.",
       "symbols": [
         {
@@ -2863,24 +2863,24 @@
     },
     {
       "path": "src/security_runtime/development_recovery.py",
-      "sha256": "ab30b18d79e8b07efdc8daa4eeae9ba31018600d2d2986aac72adceb34c2dd13",
+      "sha256": "b33a28724bcdec2de1442d851745b751b0d516fa8bcd376d24efbd04224d2ec5",
       "purpose": "Recover an existing native edit batch, outside the normal scan/Stop path.",
       "symbols": [
         {
           "name": "eligible",
-          "line": 15
+          "line": 16
         },
         {
           "name": "resume",
-          "line": 22
+          "line": 26
         },
         {
           "name": "launch_recovery",
-          "line": 79
+          "line": 83
         },
         {
           "name": "run",
-          "line": 92
+          "line": 96
         }
       ]
     },
@@ -3124,54 +3124,54 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "c43be6ee6541125cdd58a02ff39b033aba0196fc05b61a4e0f2b1d4b5739444d",
+      "sha256": "9670599d28f615ea0675ff36d4dde8d40ec39726c335d4f80d3e059a42cd778b",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
           "name": "fallback",
-          "line": 13
+          "line": 14
         },
         {
           "name": "interrupted_notice",
-          "line": 31
+          "line": 32
         },
         {
           "name": "_fallback",
-          "line": 60
+          "line": 61
         },
         {
           "name": "native_closeout",
-          "line": 230
+          "line": 231
         },
         {
           "name": "audit_report_changed",
-          "line": 278
+          "line": 279
         },
         {
           "name": "report_notice",
-          "line": 285
+          "line": 286
         },
         {
           "name": "closeout_message",
-          "line": 305
+          "line": 306
         },
         {
           "name": "saved_handoff",
-          "line": 309
+          "line": 310
         },
         {
           "name": "incomplete_notice",
-          "line": 331
+          "line": 332
         },
         {
           "name": "review_handoff",
-          "line": 348
+          "line": 349
         }
       ]
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "69f5e5b387faecbac3323d0ef515f66a913a5a9ac0a9435eaaef80a5d9ac80f8",
+      "sha256": "fc5ca334b1427c8359808576086e9d4b0789b5f6b22a9ce0c150d2a6e7b1b6fc",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -4636,7 +4636,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "7d015adbda174bb43831c5af2a4a374ef8fc2ddc891740377da169e8297e1bf8",
+      "sha256": "cc6b74c12905055425b991b0347d016fdba7ae6dfc235332d6dfe9a21581db63",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -5596,7 +5596,7 @@
     },
     {
       "path": "src/security_runtime/host_connectors.py",
-      "sha256": "0e1f2ba855f5f40370f2460e899c2bab0204f1c2c1777812a0ef8de186c55ab7",
+      "sha256": "4b0ccb06be6590294945abcef52c051b13ee66ceb3dbb38276355a20d7f18192",
       "purpose": "Host transport composition. Capabilities describe transport, never authority.",
       "symbols": [
         {
@@ -5637,6 +5637,25 @@
         {
           "name": "handle_stop_event",
           "line": 143
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/host_development.py",
+      "sha256": "8585b99a2db90e0434bd5562f9ad61b0c4765e8bcd95ce757bb04d1be6394899",
+      "purpose": "Command-host delivery adaptation; no model, scan, polling or new scheduler.",
+      "symbols": [
+        {
+          "name": "session_context",
+          "line": 5
+        },
+        {
+          "name": "audit_context",
+          "line": 30
+        },
+        {
+          "name": "reconnect_context",
+          "line": 38
         }
       ]
     },
@@ -5854,7 +5873,7 @@
     },
     {
       "path": "src/security_runtime/host_lifecycle.py",
-      "sha256": "163a76be2f1fbcc73a67071d190b55095f5a908d6285c393aaaadd2ccaef7ac5",
+      "sha256": "eef7b02b0f9be41d9e94f9b088d8d20512e75d0fd62d975ffa5e39d69df58205",
       "purpose": "Implemented connector contracts, independent of transport and scanner code.",
       "symbols": [
         {
@@ -5887,23 +5906,23 @@
         },
         {
           "name": "ConnectorProfile.capabilities",
-          "line": 79
+          "line": 81
         },
         {
           "name": "ConnectorProfile.transport_capabilities",
-          "line": 89
+          "line": 91
         },
         {
           "name": "ConnectorProfile.connector",
-          "line": 99
+          "line": 101
         },
         {
           "name": "connector_profile",
-          "line": 123
+          "line": 132
         },
         {
           "name": "profile_catalog",
-          "line": 133
+          "line": 142
         }
       ]
     },
@@ -7050,7 +7069,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tool_groups.py",
-      "sha256": "915a9fc5ea3565d75e57729d7b14b01509d74ceefd0e1770f3663bd9a84e08c7",
+      "sha256": "ef5d5cab7cc361d0563a8d570b5f39dc497f58cc9c5cba050958b18ed3a55dab",
       "purpose": "Compact global discovery; operations keep their existing handlers and checks.",
       "symbols": [
         {
@@ -17295,16 +17314,16 @@
     },
     {
       "path": "src/security_runtime/workbuddy_hook.py",
-      "sha256": "9befe28f6135a909a6c6d2abf9004d249334bd5bb6c8b39c18e9ed71fef1f3ff",
+      "sha256": "c178eba17e5552c60c92bd67e81943113c2464fe394b05377e5cdd2f1c48ed9a",
       "purpose": "WorkBuddy command transport; all checks/reviews use the shared services.",
       "symbols": [
         {
           "name": "handle",
-          "line": 16
+          "line": 28
         },
         {
           "name": "main",
-          "line": 66
+          "line": 89
         }
       ]
     },

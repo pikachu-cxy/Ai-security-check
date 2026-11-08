@@ -78,7 +78,7 @@ Codex 的既有 `UserPromptSubmit` 命令 Hook 与 MCP 重连入口复用 `devel
 
 Codex/WorkBuddy 的全局发现使用 `mcp_tool_groups.py:GROUPS` 分组；原操作保持各自参数、所有权与授权检查。其他宿主的实际工具集合由连接返回决定。
 
-**Codex 全局模式对外是 15 个工具入口，启用可选的 `start_usage_monitor` 后为 16 个：9 个分组入口 + 6 个独立入口 + 1 个可选入口。** 依据是 `global_mcp.py:create_global_server` 的 `compact_tools` 路径和 `tests/test_mcp_tool_groups.py` 的数量断言。WorkBuddy 隐藏 Hook，Cursor 保留未压缩发现，因此不能把 Codex 数量当成所有宿主的统一数量。源码中的 86 处装饰器声明包含底层操作和条件接口，不是对外工具数。
+**Codex 全局模式对外是 15 个工具入口，启用可选的 `start_usage_monitor` 后为 16 个：9 个分组入口 + 6 个独立入口 + 1 个可选入口。** 依据是 `global_mcp.py:create_global_server` 的 `compact_tools` 路径和 `tests/test_mcp_tool_groups.py` 的数量断言。WorkBuddy 隐藏 Hook；Cursor 保留原始操作发现，并增加仅含五项普通复核/审计操作的 development_review 分组，因此不能把 Codex 数量当成所有宿主的统一数量。该分组不包含用户处置或修复授权，拒绝这些操作仍发生在工作区访问之前。源码中的 86 处装饰器声明包含底层操作和条件接口，不是对外工具数。
 
 ```json
 {
@@ -201,7 +201,7 @@ Codex 可从完整 `apply_patch` 补丁取得全部路径（重命名包括原�
 
 Codex / WorkBuddy 的会话提示声明自动收尾时，编辑 Hook 记录实际路径，Stop 消费本轮编辑标记，沿原检查提交并等待保存结果。重复 Stop 和只读回合不触发复核。等待统一通过 `native_wait_seconds` 计算实际单次预算，默认上限仍为 18 秒，覆盖预算耗尽或执行失败时给出原引用与未完成提示，后台记录仍可读取。
 
-有扫描候选或业务审计待办时，Codex 自动 Stop 的可见续接只含统一状态和检查编号。Agent 通过当前会话的 closeout 视图读取保存的输入版本、待办和证据，复核后报告结果。WorkBuddy 仍在交接包内预取最多 8 个窗口、合计最多 16,000 字节的源码。Agent 可一次提交两类判断，直接使用提交后重读页。用户处置按风险 ID 单独保存。关闭产品 Stop 开关时，宿主按手动模式完成原检查。WorkBuddy 的命令 Hook 在每个事件后退出，直接写文件由 PostToolUse 记录路径，无法确定路径的 Shell 写入保留范围未知。
+有扫描候选或业务审计待办时，Codex、Cursor 和 WorkBuddy 自动 Stop 的可见续接只含统一状态和检查编号。Agent 通过当前会话的 closeout 视图读取保存的输入版本、待办和证据，复核后报告结果。Cursor / WorkBuddy 自动模式使用与 Codex 相同的 closeout、证据预算和批量提交；旧严格任务继续使用原交接契约。Agent 可一次提交两类判断，直接使用提交后重读页。用户处置按风险 ID 单独保存。关闭产品 Stop 开关时，宿主按手动模式完成原检查。WorkBuddy 的命令 Hook 在每个事件后退出，直接写文件由 PostToolUse 记录路径，无法确定路径的 Shell 写入保留范围未知。
 
 ## Codex 按仓库选择 Git 提交检查
 
@@ -273,7 +273,7 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 
 `submit_development_review(response_view=final_report)` 沿原事务保存后，从同批完整账本读回并生成整批报告。误报/重复项整批汇总，确认项四段报告、覆盖缺口及 session_url 保留。仅完整报告正文超预算时按字符位置拆成可无损拼接的 report_text 片段，next_action 指向 `view=final_report`，携带 report_digest、输入和扫描版本。内容变化拒绝旧续页。不能逐片重做汇总、重新提交或根据读取声称用户已读。尚未完成复核返回有界 review_receipt 和待办数量，沿同批 review 续读；开发期 WAITING_FOR_STATIC_SCAN 保留等待正常收尾的指导，不主动轮询。保存成功但读回失败仅续读，不重提。每次提交仍最多 50 项，不能承诺任意大批次都只需两次调用。
 
-新增窗口规划、证据准备与报告组装时间点写入现有 review_timing；只在验收显式启用磁盘 trace 和模型遥测。以上工作发生在 Stop 交接后的读取/提交中；正常扫描、Stop 等待预算与 WorkBuddy 原随包预取不增加步骤。
+新增窗口规划、证据准备与报告组装时间点写入现有 review_timing；只在验收显式启用磁盘 trace 和模型遥测。以上工作发生在 Stop 交接后的读取/提交中；正常扫描与 Stop 等待预算不增加步骤；自动模式的证据准备移至原结果读取，不在命令 Hook 内重复预取。
 
 ## 用户报告中的覆盖说明
 
@@ -289,3 +289,8 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 `stream_failed` 由父会话携带已绑定 agent_ref 记录执行失败；不需要旧协议的 audit_id。`executor_stage` 区分未派发、已派发、已领取与失败，不能把登记成功当作审计已保存。已绑定 continuation 直接提供原执行者，无需先额外查询状态。
 
 静态复核完成而业务审计未完成时，原提交回执仍返回完整静态报告、链接和独立 audit_continuation；`STATIC_REPORT_READY_AUDIT_PENDING` 不代表业务审计完成。候选首次响应可附同文件当前有效 `related_confirmed`，仅供判断是否同一问题。跨来源关联使用原 duplicate_of，须校验当前审计结果与覆盖扫描位置的证据；不以文件相同自动合并。相关摘要受原响应预算裁剪，不挤掉候选身份；截断明确标识。
+
+
+## 命令宿主审计续接
+
+Cursor / WorkBuddy 的编辑适配通过 host_development 请求已有审计 offer 的执行者续接提示；同一轮已有有效绑定时返回实际子任务 ID 和沿原 child_call 继续的说明，不再提示首次注册。复用原事务、去重及节流，不新增状态查询或模型调度。business_audit.offer 的 prefer_active_executor 默认关闭，Codex 原调用保持；WorkBuddy 的后台参数和 resume/实际 ID 语义只在 workbuddy_hook 适配层说明。该声明不替代真实宿主验收，当前边界见 [宿主兼容验收](HOST_PARITY_ACCEPTANCE.md)。

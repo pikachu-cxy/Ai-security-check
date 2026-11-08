@@ -8,6 +8,7 @@
 | --- | --- |
 | 产品做什么、各层如何协作 | [架构](ARCHITECTURE.md) |
 | 哪些已实现、哪些仍未验收 | [当前状态与目标](STATUS.md) |
+| Codex 路径保护、Cursor / WorkBuddy 兼容与真实宿主限制 | [宿主兼容验收](HOST_PARITY_ACCEPTANCE.md) |
 | 每轮新建审计、晚到报告、SQL 去重与漏洞排版验收 | [审计轮次验收](AUDIT_ROUND_ACCEPTANCE.md) |
 | 我要修改什么文件、跑哪些测试 | [修改导航](CHANGE_MAP.md) |
 | MCP、CLI、Hook、内部接口如何设计 | [接口设计](INTERFACES.md) |

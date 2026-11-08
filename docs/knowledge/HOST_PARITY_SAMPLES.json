@@ -1,0 +1,585 @@
+{
+  "contract": "host-parity-acceptance-v1",
+  "scope": "Synthetic local native scanning, no model calls; round 0 in persistent set is warmup. Host-only guidance was subsequently refined; measured code build is retained per sample.",
+  "samples": {
+    "early_cold": [
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 31.080317674030084,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 30.09638930100482,
+        "build_id": "5dc8600491117e7561937bafcdc453773479e43c2c735b595f6534012229d4ed",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 29.117908354033716,
+        "build_id": "5dc8600491117e7561937bafcdc453773479e43c2c735b595f6534012229d4ed",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 35.791275900031906,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 26.313513456028886,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 29.427442499028984,
+        "build_id": "5dc8600491117e7561937bafcdc453773479e43c2c735b595f6534012229d4ed",
+        "scan_status": "COMPLETED"
+      }
+    ],
+    "final_cold": [
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 24.254850540019106,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 22.049385913007427,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 27.506554229010362,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 24.3806749759824,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 25.55999352398794,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 25.535742854001,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      }
+    ],
+    "persistent": [
+      {
+        "version": "after",
+        "round": 0,
+        "stop_seconds": 20.003618037037086,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 0,
+        "stop_seconds": 37.35593921103282,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 31.023467798018828,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 13.28583302302286,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 22.589054570998996,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 17.994199294014834,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 18.419727583997883,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 19.919802740972955,
+        "build_id": "5ebf986123acc4f837234ee6eed2977f430dcbb78d03cd4248f65ab01868b334",
+        "scan_status": "COMPLETED"
+      }
+    ],
+    "final_after_model_acceptance": [
+      {
+        "version": "after",
+        "round": 0,
+        "stop_seconds": 7.295950411004014,
+        "build_id": "23aafd26d463e651fe6267c020863978319a67c57529881640cf02378ee5ddb7",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 0,
+        "stop_seconds": 12.12343050603522,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 1,
+        "stop_seconds": 35.625395480019506,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 1,
+        "stop_seconds": 26.763689571991563,
+        "build_id": "23aafd26d463e651fe6267c020863978319a67c57529881640cf02378ee5ddb7",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 2,
+        "stop_seconds": 52.379829109006096,
+        "build_id": "23aafd26d463e651fe6267c020863978319a67c57529881640cf02378ee5ddb7",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 2,
+        "stop_seconds": 57.56681328301784,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "before",
+        "round": 3,
+        "stop_seconds": 39.126943646988366,
+        "build_id": "0556456b46010a38bbd9826a111f96364f746626c8468040654c7356a56a6d6d",
+        "scan_status": "COMPLETED"
+      },
+      {
+        "version": "after",
+        "round": 3,
+        "stop_seconds": 24.160114586993586,
+        "build_id": "23aafd26d463e651fe6267c020863978319a67c57529881640cf02378ee5ddb7",
+        "scan_status": "COMPLETED"
+      }
+    ]
+  },
+  "workbuddy_scenarios": [
+    {
+      "scenario": "HOST-PARITY-WB-A",
+      "full_task_seconds": 87.933,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 4.572,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__runtime_status",
+          "operation": "get_development_config",
+          "action": null,
+          "elapsed_seconds": 4.152,
+          "saved": null,
+          "mode": null
+        }
+      ],
+      "submitted_decisions": [],
+      "scans": [],
+      "report_verbatim_in_final": false,
+      "link_present": false
+    },
+    {
+      "scenario": "HOST-PARITY-WB-A-RETRY",
+      "full_task_seconds": 250.504,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 11.164,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 11.538,
+          "saved": null,
+          "mode": "REPORT"
+        }
+      ],
+      "submitted_decisions": [],
+      "scans": [
+        {
+          "scan_seconds": 26.177,
+          "findings": 2,
+          "source_paths": [
+            "parity_probe_a.py",
+            "parity_probe_a.py"
+          ],
+          "started_offset_seconds": 144.981
+        },
+        {
+          "scan_seconds": 27.322,
+          "findings": 0,
+          "source_paths": [],
+          "started_offset_seconds": 240.957
+        }
+      ],
+      "report_verbatim_in_final": false,
+      "link_present": true
+    },
+    {
+      "scenario": "HOST-PARITY-WB-A2",
+      "full_task_seconds": 278.757,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 19.965,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 11.484,
+          "saved": null,
+          "mode": "REPORT"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 6.675,
+          "saved": null,
+          "mode": "REPORT"
+        }
+      ],
+      "submitted_decisions": [],
+      "scans": [
+        {
+          "scan_seconds": 19.487,
+          "findings": 2,
+          "source_paths": [
+            "parity_probe_a2.py",
+            "parity_probe_a2.py"
+          ],
+          "started_offset_seconds": 241.767
+        }
+      ],
+      "report_verbatim_in_final": true,
+      "link_present": true
+    },
+    {
+      "scenario": "HOST-PARITY-WB-B",
+      "full_task_seconds": 210.359,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 9.211,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 8.212,
+          "saved": null,
+          "mode": "REVIEW"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "submit_development_review",
+          "action": null,
+          "elapsed_seconds": 4.857,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "submit_development_review",
+          "action": null,
+          "elapsed_seconds": 13.538,
+          "saved": true,
+          "mode": null
+        }
+      ],
+      "submitted_decisions": [
+        [
+          "CONFIRMED",
+          "CONFIRMED"
+        ],
+        [
+          "CONFIRMED",
+          "CONFIRMED"
+        ]
+      ],
+      "scans": [
+        {
+          "scan_seconds": 21.247,
+          "findings": 2,
+          "source_paths": [
+            "parity_probe_b.py",
+            "parity_probe_b.py"
+          ],
+          "started_offset_seconds": 121.583
+        }
+      ],
+      "report_verbatim_in_final": true,
+      "link_present": true
+    },
+    {
+      "scenario": "HOST-PARITY-WB-B2",
+      "full_task_seconds": 183.879,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 13.718,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 10.054,
+          "saved": null,
+          "mode": "REVIEW"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "submit_development_review",
+          "action": null,
+          "elapsed_seconds": 9.257,
+          "saved": true,
+          "mode": null
+        }
+      ],
+      "submitted_decisions": [
+        [
+          "DISMISSED",
+          "CONFIRMED"
+        ]
+      ],
+      "scans": [
+        {
+          "scan_seconds": 21.346,
+          "findings": 2,
+          "source_paths": [
+            "parity_probe_b2.py",
+            "parity_probe_b2.py"
+          ],
+          "started_offset_seconds": 113.646
+        }
+      ],
+      "report_verbatim_in_final": true,
+      "link_present": true
+    },
+    {
+      "scenario": "HOST-PARITY-WB-C",
+      "full_task_seconds": 745.757,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 10.701,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "elapsed_seconds": 5.785,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "elapsed_seconds": 7.325,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "elapsed_seconds": 9.236,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 12.895,
+          "saved": null,
+          "mode": "REVIEW"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "submit_development_review",
+          "action": null,
+          "elapsed_seconds": 11.082,
+          "saved": true,
+          "mode": null
+        }
+      ],
+      "submitted_decisions": [
+        [
+          "CONFIRMED",
+          "DISMISSED"
+        ]
+      ],
+      "scans": [
+        {
+          "scan_seconds": 24.634,
+          "findings": 2,
+          "source_paths": [
+            "parity_probe_c.py",
+            "parity_probe_c.py"
+          ],
+          "started_offset_seconds": 666.951
+        }
+      ],
+      "report_verbatim_in_final": true,
+      "link_present": true
+    },
+    {
+      "scenario": "HOST-PARITY-WB-C2",
+      "full_task_seconds": 436.111,
+      "product_calls": [
+        {
+          "tool": "mcp__ai-security-runtime__get_runtime_info",
+          "operation": null,
+          "action": null,
+          "elapsed_seconds": 12.168,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "manage_development_audit",
+          "action": "stream_prepare",
+          "elapsed_seconds": 12.096,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "manage_development_audit",
+          "action": "stream_started",
+          "elapsed_seconds": 15.72,
+          "saved": null,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 9.483,
+          "saved": null,
+          "mode": "INCOMPLETE"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 9.716,
+          "saved": null,
+          "mode": "REVIEW"
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "submit_development_review",
+          "action": null,
+          "elapsed_seconds": 7.829,
+          "saved": false,
+          "mode": null
+        },
+        {
+          "tool": "mcp__ai-security-runtime__development_review",
+          "operation": "get_development_risks",
+          "action": null,
+          "elapsed_seconds": 9.206,
+          "saved": null,
+          "mode": null
+        }
+      ],
+      "submitted_decisions": [
+        [
+          "CONFIRMED"
+        ]
+      ],
+      "scans": [
+        {
+          "scan_seconds": 26.771,
+          "findings": 0,
+          "source_paths": [],
+          "started_offset_seconds": 317.524
+        }
+      ],
+      "report_verbatim_in_final": true,
+      "link_present": true
+    }
+  ],
+  "final_measurement_limit": "Models were idle, but a read-only CPU snapshot showed substantial system and other runtime load; this is not a controlled idle-machine benchmark."
+}

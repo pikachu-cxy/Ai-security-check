@@ -6,6 +6,7 @@ import hashlib
 import time
 
 from .development_check import DevelopmentCheckService, DevelopmentCheckStore, owner_key, legacy_guard
+from .host_lifecycle import COMPACT_DEVELOPMENT_HOSTS
 from .user_config import analysis_requirements, batch_config
 from .development_reporting import INSTRUCTIONS, reporting
 
@@ -30,7 +31,7 @@ def fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fals
 
 def interrupted_notice(hooks, root, owner, *, turn_id=None,
                        reason='STOP_HANDOFF_INTERRUPTED', service=None):
-    if owner.get('host') != 'codex':
+    if owner.get('host') not in COMPACT_DEVELOPMENT_HOSTS:
         return None
     store = DevelopmentCheckStore(hooks, root)
     if not store.path.exists():
@@ -130,7 +131,7 @@ def _fallback(hooks, root, owner, *, stopped_normally=True, stop_hook_active=Fal
     if (automatic or not stop_hook_active) and row['dirty_seq'] <= activity.get('base_seq', row['dirty_seq']):
         if (automatic and draining and row.get('file_watch', {}).get('status') == 'FAILED'
                 and 'FILE_WATCH_SETTLEMENT_TIMEOUT' in row.get('file_watch_gaps', ())):
-            if owner['host'] == 'codex':
+            if owner['host'] in COMPACT_DEVELOPMENT_HOSTS:
                 service = service or DevelopmentCheckService(None, hooks, owner=owner,
                                                              scan_path_provider=row['scan_path'])
                 return incomplete_notice(service, root, row['check_ref'], row['dirty_seq'], row)
@@ -252,15 +253,15 @@ def native_closeout(service, root, row, deadline, offered, session_id):
     work = page['review_progress']
     if audit_report_changed(row) and not work['pending_scanner_ids']:
         return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
-    from .business_audit import fast_delivery, status as audit_status
-    if fast_delivery(row) and work['pending_business_paths'] and not work['pending_scanner_ids']:
+    from .business_audit import fast_delivery, streaming, status as audit_status
+    if (streaming(row) or fast_delivery(row)) and work['pending_business_paths'] and not work['pending_scanner_ids']:
         return report_notice(service, root, row, state, page, 'STOP_AUDIT_PENDING')
     if not (work['pending_scanner_ids'] or work['pending_business_paths']):
         active = [risk for risk in page['risks'] if not risk['reminder_suppressed']]
         if active or page['next_offset'] is not None or state.get('gaps'):
             return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
         return None
-    if service.owner['host'] == 'codex':
+    if service.owner['host'] in COMPACT_DEVELOPMENT_HOSTS:
         # A successful review already returns the report; no second report turn.
         with service.store(root).transaction() as db:
             current = service.store(root)._get(db, ref)
@@ -296,7 +297,7 @@ def report_notice(service, root, row, state, page, status):
             stop_noticed_audit_revision=current.get('audit_result_revision', 0),
             stop_closeout_notice=dict(seq=marker[0], scan_id=marker[1], mode='REPORT')))
     message = page.get('report_text') or '安全检查有未完成范围，请读取本批保存结果并如实报告。'
-    if service.owner['host'] != 'codex':
+    if service.owner['host'] not in COMPACT_DEVELOPMENT_HOSTS:
         return dict(status=status, check_ref=row['check_ref'], scanner_run=False, systemMessage=message)
     return dict(status=status, check_ref=row['check_ref'], scanner_run=False, decision='block',
                 reason=closeout_message(row['check_ref']))
@@ -329,7 +330,7 @@ def saved_handoff(hooks, root, owner, row, *, service=None):
 
 
 def incomplete_notice(service, root, ref, seq, state, *, reason=None):
-    if service.owner['host'] != 'codex':
+    if service.owner['host'] not in COMPACT_DEVELOPMENT_HOSTS:
         return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref,
                     systemMessage=closeout_message(ref))
     store = service.store(root)

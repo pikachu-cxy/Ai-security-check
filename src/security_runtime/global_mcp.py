@@ -599,6 +599,14 @@ def create_global_server(*, workspaces=None, host='codex'):
     # Tool schemas are fixed for this connection; do not rebuild them per call.
     operations = operation_tools()
     discovery = compact_tools(operations) if active_host in {'codex', 'workbuddy'} else operations
+    if active_host == 'cursor':
+        # Preserve existing per-operation approval rules and strict-task clients.
+        # The routine envelope excludes repair and user disposition operations.
+        from .cursor_permissions import REVIEW_OPERATIONS
+        review_ops = [op for op in operations if op.name in REVIEW_OPERATIONS]
+        discovery = [*operations, *(tool for tool in compact_tools(review_ops,
+                                    groups={'development_review': tuple(op.name for op in review_ops)})
+                                    if tool.name == 'development_review')]
     schemas = {tool.name: tool.inputSchema for tool in operations}
     validators = {name: Draft202012Validator(schema) for name, schema in schemas.items()}
     # Validate the envelope here; original operation validation supplies the

@@ -59,7 +59,7 @@ def test_edit_records_without_scan_and_stop_does_not_cross_turn(check, monkeypat
     monkeypatch.setattr(DevelopmentCheckService, '_wake', lambda *a: None)
     monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
     output = handle(event(root, 'Stop'), root=root, core=core)
-    assert 'decision' not in output and ref in output['systemMessage']
+    assert output == dict(decision='block', reason=f'正在整理安全检查结果。（检查编号 {ref}）')
     assert handle(event(root, 'Stop', stop_hook_active=True), root=root, core=core) == {}
     assert service.get(root, ref)['finish_requested']
     assert state['calls'] == 0

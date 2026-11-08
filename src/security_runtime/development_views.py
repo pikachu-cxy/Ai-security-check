@@ -322,9 +322,10 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
             and check.get('security_result', {}).get('imported_scan_id') == check.get('scan_id')
             and check.get('risk_import_status', 'AVAILABLE') == 'AVAILABLE'):
         from .development_risks import review_progress
-        from .business_audit import fast_delivery
+        from .business_audit import fast_delivery, streaming
         work = review_progress(check, check['security_result'])
-        review = work['pending_scanner_ids'] or (work['pending_business_paths'] and not fast_delivery(check))
+        review = work['pending_scanner_ids'] or (work['pending_business_paths'] and
+                                                not streaming(check) and not fast_delivery(check))
         updated = dict(seq=check['dirty_seq'], scan_id=check.get('scan_id'), mode='REVIEW' if review else 'REPORT')
         if updated != marker:
             with service.checks.transaction() as db:
@@ -354,11 +355,10 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
     elif mode == 'REPORT':
         page = service.get(offset, limit, include_history=False, batch_version=(seq, scan), whole_report=limit is None)
     else:
-        job = check.get('parallel_audit') or {}
+        from .development_risks import current_assessment
         items = [r for r in (check.get('security_result') or {}).get('risks', {}).values()
-                 if (r.get('assessment') or {}).get('dirty_seq') == seq
-                 and (r.get('assessment') or {}).get('audit_id') == job.get('audit_id')
-                 and job.get('audit_id') and r.get('decision') == 'CONFIRMED'
+                 if current_assessment(check, r.get('assessment'), r['finding']['file_path'])
+                 and r.get('decision') == 'CONFIRMED'
                  and r.get('disposition', 'ACTIVE') == 'ACTIVE'
                  and r.get('status') != 'CODE_REVIEWED_RESOLVED']
         limit = limit or 20

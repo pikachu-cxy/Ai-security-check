@@ -143,7 +143,7 @@ def test_grouped_tools_over_real_stdio(tmp_path):
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('host', ['codex', 'workbuddy'])
+@pytest.mark.parametrize('host', ['codex', 'cursor', 'workbuddy'])
 def test_review_parameter_error_is_actionable_before_workspace_admission(tmp_path, monkeypatch, host):
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'state'))
     def forbidden(*args, **kwargs):

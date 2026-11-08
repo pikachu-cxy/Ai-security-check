@@ -48,7 +48,7 @@
 | 安装慢、重复安装、升级残留 | `personal_install.py:install_personal_codex`、`delivery.py:StableDelivery`、`install_checks.py` | `tests/test_personal_install.py`、`tests/test_install_efficiency.py`、`tests/test_delivery.py` |
 | 启动器指向旧构建 | `delivery.py`、`distribution/build/launcher.c`、`distribution/build/entry.py` | 同时核对包、活动指针、配置命令、实际进程；`scripts/performance/install_windows.py` |
 | Codex 配置冲突或 Skill | `global_integration.py`、`review_skill.py`、`owned_json.py` | `tests/guidance/`、全局集成测试；使用实际配置中的状态目录 |
-| Cursor 或 WorkBuddy 接入 | `cursor_connector.py`、`workbuddy_integration.py` 及对应 Hook 模块 | `tests/test_cursor_automatic.py`、`tests/test_workbuddy_connector.py` |
+| Cursor 或 WorkBuddy 接入 | `host_lifecycle.py` 能力声明、`host_development.py` 共享交付上下文、`cursor_automatic.py` / `workbuddy_hook.py` 事件翻译；复用 `development_stop.py`、`development_recovery.py` 与审计领域服务 | `test_host_development_parity.py`、`test_cursor_automatic.py`、`test_workbuddy_connector.py`；真实状态见 [宿主验收](HOST_PARITY_ACCEPTANCE.md) |
 | 下载脚本、原生包与发布 | `website/public/install/`、`scripts/build/`、`scripts/release/`、`.github/workflows/` | `tests/distribution/`；构建、上传、发布授权分开 |
 | 计时缺失或时间口径 | `performance_trace.py`、`scripts/performance/measure.py`、`scripts/performance/report.py` | `tests/test_performance_trace.py`；区分安装、扫描、复核与宿主时间 |
 | 普通开发收尾和 MCP 固定开销 | `development_check_worker.py`、`scan_attempt.py`、`workspace_application.py`、`global_mcp.py` | `tests/test_lightweight_closeout.py`；检查 CAPTURED、失效租约、工作区解析和版本缓存复用 |

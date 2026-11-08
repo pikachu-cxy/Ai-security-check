@@ -264,6 +264,8 @@ def test_stop_same_snapshot_converges_without_followup(repo,tmp_path):
 
 
 def test_cursor_readonly_generation_does_not_resume_old_check(repo, tmp_path, monkeypatch):
+    # This test leaves the worker unstarted; do not exercise retry supervision.
+    monkeypatch.setenv('SECURITY_RUNTIME_DEVELOPMENT_WAIT_SECONDS', '0')
     runtime = FakeRuntime()
     core = coordinator(tmp_path, runtime, cooldown_ms=0)
     core.task_audit_mode = True

@@ -51,9 +51,11 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
 
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(tmp_path/'private'))
     monkeypatch.setenv('SECURITY_RUNTIME_WORKSPACE', '')
+    monkeypatch.setenv('SECURITY_RUNTIME_USAGE_MONITOR_ENABLED', '1')
     # These operations start scans, plan/authorize repairs, or recheck repairs.
     explicit = {
         'prepare_task_workspace',
+        'declare_development_outputs',
         'start_scan', 'scan_project', 'scan_diff', 'scan_files', 'prepare_closeout_check', 'run_closeout_check',
         'prepare_task_risk_fix', 'cancel_task_risk_fix', 'prepare_task_fix',
         'confirm_remediation', 'refresh_remediation_confirmation',
@@ -73,7 +75,7 @@ def test_every_discovered_tool_has_an_explicit_approval_decision(tmp_path, monke
     # Global inventory discovery must not admit or initialize any workspace.
     routed = create_global_server(host='cursor', workspaces=object())
     global_reads = set(cursor_permissions.GLOBAL_READ_TOOLS)
-    assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit | global_reads
+    assert {t.name for t in asyncio.run(routed.list_tools())} == routine | explicit | global_reads | set(cursor_permissions.ROUTINE_GROUPS)
 
 
 @pytest.mark.parametrize('workflow', [

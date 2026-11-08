@@ -111,12 +111,12 @@ def _inline_models(schema):
     return expand(schema)
 
 
-def compact_tools(tools):
+def compact_tools(tools, *, groups=GROUPS):
     from mcp.types import Tool, ToolAnnotations
     indexed = {tool.name: tool for tool in tools}
-    hidden = {name for names in GROUPS.values() for name in names}
+    hidden = {name for names in groups.values() for name in names}
     result = [tool for tool in tools if tool.name not in hidden]
-    for group, names in GROUPS.items():
+    for group, names in groups.items():
         members = [indexed[name] for name in names]
         schema = dict(type='object', properties={
             'operation': {'type': 'string', 'enum': list(names)},

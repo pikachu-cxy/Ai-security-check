@@ -15,6 +15,7 @@ from .hook_state import atomic_bytes, no_links
 from .owned_json import encode
 
 ROUTINE_TOOLS = (
+    'get_development_config', 'manage_development_audit', 'process_development_audit',
     # Observed-edit lifecycle and evidence review; no repair authorization.
     'begin_development_check', 'record_development_changes',
     'finish_development_check', 'complete_development_check', 'wait_development_check',
@@ -40,7 +41,10 @@ ROUTINE_TOOLS = (
 )
 # Global-only diagnostics are read-only and do not admit or scan a workspace.
 GLOBAL_READ_TOOLS = ('get_workspace_binding_status', 'get_product_epoch_status')
-ENTRIES = tuple('ai-security-runtime:' + tool for tool in (*ROUTINE_TOOLS, *GLOBAL_READ_TOOLS))
+REVIEW_OPERATIONS = frozenset({'manage_development_audit', 'process_development_audit',
+    'read_development_risk_context', 'submit_development_review', 'get_development_risks'})
+ROUTINE_GROUPS = ('development_review',)
+ENTRIES = tuple('ai-security-runtime:' + tool for tool in (*ROUTINE_TOOLS, *GLOBAL_READ_TOOLS, *ROUTINE_GROUPS))
 MAX_BYTES = 262144
 CONTRACT = 'cursor-routine-permissions-v1'
 
@@ -273,7 +277,7 @@ class CursorRoutinePermissions:
         return dict(status='CONFIGURED' if ready else 'NEEDS_REPAIR',
             ownership_compatibility='NEWER_SIGNED_RECORD' if newer else 'CURRENT',
             restart_required=newer,
-            routine_tools=list(ROUTINE_TOOLS), repair_preapproved_by_product=False,
+            routine_tools=list((*ROUTINE_TOOLS, *ROUTINE_GROUPS)), repair_preapproved_by_product=False,
             disposition_contract=disposition_contract,
             disposition_requires_explicit_user_request=True,
             exclusion_is_safety_proof=False,
