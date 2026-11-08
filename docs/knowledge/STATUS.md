@@ -14,7 +14,7 @@
 
 2026-11-08 已安装最新开发源码 0.3.13，构建 `0370c199365fdde11bd0f48107cd9a2ae15e3d155f17cacf3e8d4f8bd2178475`。安装回执 INSTALLED、配置 CONFIGURED、scan_ready=true，用户产品配置字节未改变。按实际安装启动器建立的新 MCP 连接与源码构建一致，风险 Web 服务已加载当前构建并通过健康检查。桌面已有驻留连接仍须完全退出并重新打开 Codex；新建探测连接不等于原聊天已经重连。
 
-本批使用隔离 Git 副本向 GitHub 默认分支同步最新已验收源码，不重置原工作区。源码与验收记录使用默认分支 `feature/runtime-mvp`，具体修订以 Git 提交及远端回执为准。完整功能、性能波动和验收范围见 [修复验收](THREE_MODE_REPAIR_ACCEPTANCE.md)。
+本批使用隔离 Git 副本向 GitHub 默认分支同步最新已验收源码，不重置原工作区。源码与验收记录已同步至 GitHub 默认分支 `feature/runtime-mvp`，代码提交 `2fed7090a926834132e2ed51fe68feba6e6f26e1`；远端 HEAD 已核对。完整功能、性能波动和验收范围见 [修复验收](THREE_MODE_REPAIR_ACCEPTANCE.md)。
 
 ## 文件监听跨连接归属修复
 
