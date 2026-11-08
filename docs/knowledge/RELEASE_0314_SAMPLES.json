@@ -1590,5 +1590,48 @@
     "final_model_matrix": "55bf41d700acdd27a55b58244079319c3d47bfef4056d57c3f770665a01df741",
     "installed_source": "dd6c1da9049db72fe826aaeaf506baf4e86388f48a808302c08467120600a4ad",
     "post_matrix_change": "Only the generic finding repair-advice wording changed; scan and closeout logic unchanged."
+  },
+  "public_release": {
+    "status": "PASS",
+    "site": "https://pikachu-cxy.github.io/Ai-security-check/",
+    "checks": [
+      {
+        "path": "downloads.html",
+        "status": "PASS"
+      },
+      {
+        "path": "guide/risk-handling.html",
+        "status": "PASS"
+      },
+      {
+        "path": "install/macos.sh",
+        "status": "PASS"
+      },
+      {
+        "path": "install/windows.ps1",
+        "status": "PASS"
+      }
+    ],
+    "release_manifest": {
+      "version": "0.3.14",
+      "source_commit": "10e288b3774ad854d5585c860d2884966fcaccfb",
+      "validation_scope": "focused-artifact-and-host-integration",
+      "artifacts": {
+        "windows-x64": {
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/ai-security-runtime-v0.3.14-windows-x64.zip",
+          "sha256": "2f252548827ddd0b9cfd53b0c7775467b39b2f8221bff9eb1f7cfc28eba86abf"
+        },
+        "macos-arm64": {
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/ai-security-runtime-v0.3.14-macos-arm64.tar.gz",
+          "sha256": "505d7c156ab9c3d7c6ca59a01a58acae1fab7a603cf10d0ca706292c3884fe0f"
+        },
+        "macos-x64": {
+          "url": "https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/ai-security-runtime-v0.3.14-macos-x64.tar.gz",
+          "sha256": "4306fa661c88cda0240cbcdbfe353edf972e096199ac07479b9dcaebd82f406b"
+        }
+      }
+    },
+    "release_workflow": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42506939279",
+    "docs_workflow": "https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42507170163"
   }
 }

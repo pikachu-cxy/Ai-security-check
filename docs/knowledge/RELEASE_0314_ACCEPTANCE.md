@@ -4,7 +4,7 @@
 
 本机 Codex CLI 使用真实模型、原生 Hook、隔离产品配置和合成 Python 项目验收。三种配置为 A（仅静态）、B（静态及候选复核）、C（静态、候选复核及业务审计）。开发、只读、退出进程后修复分别记录，不将模型整个开发时间当成扫描耗时。Cursor 无额度，WorkBuddy 增量验收尾项不包含在本批 Codex 通过范围。
 
-0.3.14 源码准备已同步默认分支，提交 `beee7058ce97a281824d50b97c39554b185f3a70`。首次本机源码安装构建及新连接自检见 STATUS。后续修复已完成本机源码安装与新连接核验，最终构建 `dd6c1da9049db72fe826aaeaf506baf4e86388f48a808302c08467120600a4ad`。Release 三平台构建待触发，不能以版本号相同代替构建一致。
+0.3.14 修复源码已同步默认分支，发行源码提交 `10e288b3774ad854d5585c860d2884966fcaccfb`，后续文档修正单独提交。首次本机源码安装构建及新连接自检见 STATUS。后续修复已完成本机源码安装与新连接核验，最终构建 `dd6c1da9049db72fe826aaeaf506baf4e86388f48a808302c08467120600a4ad`。Release 三平台原生构建与安装检查通过，不能以版本号相同代替构建一致。
 
 ## 父子开发任务收尾
 
@@ -74,4 +74,6 @@ C 重启修复的模型曾用错误参数补读证据，产品拒绝后正确调
 
 ## 发布状态
 
-本机功能和安装包门槛完成，保留上述模型转写及旧契约测试限制。CI 仅三平台原生构建和安装/启动/MCP 快速检查，不重复本机开发验收脚本。0.3.14 Release 和文档站更新需以远端构建及实际公开下载资产为准，当前尚待构建发布。
+本机功能和安装包门槛完成，保留上述模型转写及旧契约测试限制。CI 仅三平台原生构建和安装/启动/MCP 快速检查，不重复本机开发验收脚本。[0.3.14 Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.14) 已正式公开，非草稿、非预发布。源码提交与发行清单一致，为 `10e288b3774ad854d5585c860d2884966fcaccfb`。[发行流程](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42506939279) 的 Windows x64、macOS arm64、macOS x64 及发布全部成功。三平台各构建一次，重复开发测试工作流跳过。
+
+[文档部署](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42507170163) 成功，使用文档修正提交 `aaa4d0d2648ff03e2dd0f40a371c8e90dd87b727`；CI 核对六个包/校验链接均公开。另从线上读取 [下载页](https://pikachu-cxy.github.io/Ai-security-check/downloads.html)、风险说明、Mac/Windows 安装脚本，均为 0.3.14；Mac 脚本 SHA256 验证通过，发行清单的三平台链接与提交一致。
