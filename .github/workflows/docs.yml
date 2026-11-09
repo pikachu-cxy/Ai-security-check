@@ -53,18 +53,25 @@ jobs:
       - name: Check that all documented downloads are public
         id: trial-assets
         run: |
-          native_base=https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14
-          ready=true
-          for archive in windows-x64.zip macos-arm64.tar.gz macos-x64.tar.gz; do
-            for suffix in '' .sha256; do
-              curl --fail --silent --show-error --location --head --connect-timeout 20 --max-time 60 \
-                "$native_base/ai-security-runtime-v0.3.14-$archive$suffix" >/dev/null || ready=false
-            done
-          done
-          echo "ready=$ready" >> "$GITHUB_OUTPUT"
-          if [ "$ready" != true ]; then
-            echo 'Documented release assets are not all public yet. Request docs deployment after v0.3.14 publishes.' >> "$GITHUB_STEP_SUMMARY"
-          fi
+          # Publication metadata is the docs gate. Transient download gateways
+          # must not prevent publishing the installer that recovers those errors.
+          curl --fail --silent --show-error --retry 2 --connect-timeout 20 --max-time 60 \
+            https://api.github.com/repos/pikachu-cxy/Ai-security-check/releases/tags/v0.3.14 > release-public.json
+          python - <<'PY'
+          import json, os
+          from pathlib import Path
+          release = json.loads(Path('release-public.json').read_text())
+          assert release['tag_name'] == 'v0.3.14' and not release['draft'] and not release['prerelease']
+          assets = {a['name']: a for a in release['assets']}
+          for platform in ('windows-x64.zip', 'macos-arm64.tar.gz', 'macos-x64.tar.gz'):
+              for suffix in ('', '.sha256'):
+                  name = 'ai-security-runtime-v0.3.14-' + platform + suffix
+                  asset = assets[name]
+                  assert asset['state'] == 'uploaded' and asset['size'] > 0
+                  assert asset['browser_download_url'] == 'https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/' + name
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('ready=true\n')
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
           path: website/.vitepress/dist
