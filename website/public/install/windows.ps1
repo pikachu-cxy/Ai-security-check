@@ -1,6 +1,7 @@
 # Windows PowerShell 5.1 and PowerShell 7. Run as a normal user.
 [CmdletBinding()]
-param([ValidateSet('codex', 'cursor', 'workbuddy')][string]$Editor = 'codex')
+param([ValidateSet('codex', 'cursor', 'workbuddy')][string]$Editor = 'codex',
+      [string]$LegacyAppData = '')
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -9,6 +10,7 @@ $architecture = $env:PROCESSOR_ARCHITECTURE
 if ($env:PROCESSOR_ARCHITEW6432) { $architecture = $env:PROCESSOR_ARCHITEW6432 }
 if ($architecture -ne 'AMD64') { throw 'Only Windows x64 is supported.' }
 if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
+if (-not $env:USERPROFILE -or -not [IO.Path]::IsPathRooted($env:USERPROFILE)) { throw 'USERPROFILE must be absolute.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
 $version = '0.3.14'
@@ -54,9 +56,17 @@ try {
     Write-Host "Installing integration for $Editor..."
     # Keep the versioned bundle path short on Windows systems where long paths
     # are disabled. The runtime validates the destination before activation.
-    $installRoot = Join-Path $env:LOCALAPPDATA 'ASR'
-    $receiptText = & $exe install $Editor --bundle (Join-Path $bundle 'security-check') --root $installRoot --json
-    if ($LASTEXITCODE -ne 0) { throw "Installation failed with exit code $LASTEXITCODE." }
+    $installRoot = Join-Path $env:USERPROFILE '.asr'
+    $migrationArgs = @()
+    if ($LegacyAppData) { $migrationArgs = @('--legacy-appdata', $LegacyAppData) }
+    $receiptText = & $exe install $Editor --bundle (Join-Path $bundle 'security-check') --root $installRoot --json @migrationArgs
+    if ($LASTEXITCODE -ne 0) {
+        $installExit = $LASTEXITCODE
+        try { $failure = $receiptText | ConvertFrom-Json } catch { $failure = $null }
+        if ($failure -and $failure.PSObject.Properties['installation'] -and
+            $failure.installation.PSObject.Properties['message']) { throw $failure.installation.message }
+        throw "Installation failed with exit code $installExit."
+    }
     $receiptText | Set-Content -LiteralPath (Join-Path $stage 'installation.json') -Encoding UTF8
     $receipt = $receiptText | ConvertFrom-Json
     $expected = Get-Content -LiteralPath (Join-Path $bundle 'security-check\version.json') -Raw | ConvertFrom-Json

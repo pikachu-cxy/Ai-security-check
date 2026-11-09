@@ -31,7 +31,7 @@ Do not scan or modify the project. Explain anything unverified and the next step
 
 Open the directory containing the source and Git repository rather than an outer ZIP extraction folder. Ask the agent to supply that absolute root explicitly in the read-only status query. If rejected, check the directory, Git status, and returned diagnostic. A rejection code alone does not establish its cause or require reinstallation.
 
-After switching from source development to a downloaded release, check that the editor starts the managed executable rather than Python in the old source directory. The default full-bundle installation root is `%LOCALAPPDATA%\ASR` on Windows. Compare build ID and source commit even when the version number matches.
+After switching from source development to a downloaded release, check that the editor starts the managed executable rather than Python in the old source directory. The default full-bundle installation root is `%USERPROFILE%\.asr` on Windows. Compare build ID and source commit even when the version number matches.
 
 ## 3. Perform a real check
 

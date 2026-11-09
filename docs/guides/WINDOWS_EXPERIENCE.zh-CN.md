@@ -47,7 +47,7 @@
 安装完成后完全退出并重启 Codex，按宿主提示审核 Hook 信任，并确认 Skill 可见。
 安装成功、扫描准备通过、当前项目检查和宿主实际连接分别核对，修复仍需用户选定授权。
 安装程序不能代替用户批准 Hook。工具下载的许可和测试成功也不能冒充本机实际联网下载证据。
-默认安装目录是 `%LOCALAPPDATA%\ASR`。
+默认安装目录是 `%USERPROFILE%\.asr`。
 这是“已有本地完整包的一条安装命令”；尚未发布可以在全新机器上直接下载安装的公网命令。
 旧 ZIP 不含本入口，不能用旧包验证本轮变更。
 
@@ -177,7 +177,7 @@ Codex 自身允许受信任项目覆盖全局设置，但本产品不依赖用�
 不会自动修改 Codex 配置；目录需固定，不能放在包自身里面：
 
 ```powershell
-$runtimeInstall = Join-Path $env:LOCALAPPDATA 'ASR'
+$runtimeInstall = Join-Path $env:USERPROFILE '.asr'
 .\security-check.exe delivery activate --root $runtimeInstall --bundle (Get-Location).Path --json
 $runtimeExe = Join-Path $runtimeInstall 'launcher/security-check.exe'
 & $runtimeExe delivery status --root $runtimeInstall --json

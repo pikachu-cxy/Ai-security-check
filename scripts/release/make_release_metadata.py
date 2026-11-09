@@ -36,7 +36,9 @@ def main(*, focused=False) -> None:
                       and 'start_usage_monitor' not in verification.get('mcp_tools', [])
                       and 'start_risk_dashboard' in verification.get('mcp_tools', [])
                       and len(verification.get('global_host_tools', {}).get('codex', [])) == 15
-                      and len(verification.get('global_host_tools', {}).get('workbuddy', [])) == 11)
+                      and {'begin_development_check', 'development_review', 'start_risk_dashboard'}
+                          <= set(verification.get('global_host_tools', {}).get('cursor', []))
+                      and verification.get('native_dashboard_page') is True)
         if not common or not (focused_ok if focused else full):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}

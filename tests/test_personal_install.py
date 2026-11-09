@@ -20,8 +20,8 @@ from security_runtime.delivery import EXE
 @pytest.mark.skipif(os.name != 'nt', reason='Windows default installation path')
 def test_windows_default_delivery_root_is_short(tmp_path, monkeypatch):
     from security_runtime.personal_install import _default_delivery_root
-    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path))
-    assert _default_delivery_root() == tmp_path / 'ASR'
+    monkeypatch.setenv('USERPROFILE', str(tmp_path))
+    assert _default_delivery_root() == tmp_path / '.asr'
 
 
 def ready_scanning_receipt():
@@ -268,6 +268,9 @@ def portable(installed, tmp_path, monkeypatch):
     import security_runtime.delivery as delivery_module
     from security_runtime.delivery import StableDelivery
     import security_runtime.build_identity as identity_module
+    monkeypatch.setenv('USERPROFILE', str(tmp_path / 'profile'))
+    monkeypatch.setenv('LOCALAPPDATA', str(tmp_path / 'profile/AppData/Local'))
+    monkeypatch.setenv('APPDATA', str(tmp_path / 'profile/AppData/Roaming'))
     # Mock child execution without intercepting unrelated Git provenance calls.
     monkeypatch.setattr(identity_module, 'git_provenance', lambda root, *args: 'a' * 40 if args[0] == 'rev-parse' else ' M fixture')
     monkeypatch.setattr(integration_module, 'GlobalCodexIntegration', lambda **kwargs: installed)

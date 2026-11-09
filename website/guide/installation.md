@@ -46,7 +46,7 @@ Mac 的两种安装方式路径不同，不要混用。以下默认展示 Window
 
 核对 `version`、`build_id` 和 `source_commit`。完整包与 Mac 自动安装使用不同交付方式，版本相同也可能有不同构建，以[对应发行记录](../downloads.md#build-details)为准。
 
-Windows 网页安装脚本将程序保存于 `%LOCALAPPDATA%\ASR` 的版本目录。旧版安装器或已有安装可能使用 `%LOCALAPPDATA%\AI-Security-Runtime-install`；实际启动路径以编辑器连接配置和工具返回为准。下方命令使用已校验的解压包；不要把旧源码开发目录的 Python 当成新安装程序。
+Windows 网页安装脚本将程序保存于 `%USERPROFILE%\.asr` 的版本目录。旧版安装器或已有安装可能使用 `%LOCALAPPDATA%\AI-Security-Runtime-install`；实际启动路径以编辑器连接配置和工具返回为准。下方命令使用已校验的解压包；不要把旧源码开发目录的 Python 当成新安装程序。
 
 ## 查看接入状态
 

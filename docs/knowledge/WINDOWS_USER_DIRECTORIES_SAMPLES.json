@@ -1,0 +1,59 @@
+{
+  "date": "2026-11-09",
+  "scope": "Windows x64 isolated native install, predownloaded bundles, offline and empty engine caches; download/unzip and host reconnect excluded",
+  "old_build": "e4741e9bd2131688eece3cd155c4496a2db9ec86a06cc4a58910c7a4c7b7663a",
+  "new_build": "204e7140468068bec53c8c4a36d019ec3cb705563d6c45cdc5d5c657d634afb0",
+  "new_source_dirty": true,
+  "version": "0.3.14",
+  "final_seconds": {
+    "old_fresh": [11.644, 11.512, 11.505],
+    "new_fresh": [11.422, 9.893, 10.205],
+    "old_repeat": [7.757, 7.403, 8.128],
+    "new_repeat": [6.120, 6.079, 6.245],
+    "old_before_migration": 13.858,
+    "migration": 10.406,
+    "repeat_after_migration": 6.185
+  },
+  "final_median_seconds": {
+    "old_fresh": 11.512,
+    "new_fresh": 10.205,
+    "old_repeat": 7.757,
+    "new_repeat": 6.120
+  },
+  "intermediate_build_seconds": {
+    "old_fresh": [12.717, 13.668, 14.962],
+    "new_fresh": [10.665, 11.990, 15.864],
+    "old_repeat": [8.426, 8.583, 10.475],
+    "new_repeat": [6.249, 8.396, 8.578],
+    "old_before_migration": 11.393,
+    "migration": 12.044,
+    "repeat_after_migration": 6.663
+  },
+  "all_completed_install_exit_codes": 0,
+  "all_completed_install_local_files_ready": true,
+  "scan_ready": false,
+  "expected_diagnostic": "INSTALLATION_SCANNING_NOT_READY",
+  "migration": {
+    "config_bytes_preserved": true,
+    "state_evidence_preserved": true,
+    "old_install_preserved": true,
+    "host_config_points_to_new_root_and_state": true,
+    "repeat_complete": true,
+    "implicit_upgrade_from_legacy_installed_slot": true,
+    "implicit_upgrade_seconds": 14.066,
+    "signed_historical_reference_and_key_preserved_in_source_test": true
+  },
+  "real_host_and_independent_system_process": {
+    "shared_home_probe_content_equal": true,
+    "shared_home_probe_physical_path_equal": true,
+    "temporary_probe_and_task_removed": true
+  },
+  "limitations": [
+    "Small local sample; no guarantee every installation is faster. Intermediate sample includes a slower new fresh install.",
+    "One-time legacy copy cost depends on data size; normal installs do not add scans, engine probes or reconnect waits.",
+    "Initial long temporary profile path failed in the old bundle file-copy path; subsequent tests used short isolated profiles.",
+    "Supplemental direct-upgrade harness initially omitted the bundle subdirectory; corrected harness completed successfully without product changes.",
+    "Extended Cursor follow-up text assertion also fails on unchanged HEAD; not included among passing regression tests.",
+    "Source and validation bundle only; no release or real-user installation acceptance implied."
+  ]
+}

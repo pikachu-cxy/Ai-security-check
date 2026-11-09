@@ -1,0 +1,105 @@
+name: Refresh 0.3.14
+
+on:
+  push:
+    branches: [feature/runtime-mvp]
+    paths: ['.github/workflows/refresh-0314.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-published-v0.3.14
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-v0.3.14]')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, platform: windows-x64}
+          - {os: macos-15, platform: macos-arm64}
+          - {os: macos-15-intel, platform: macos-x64}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SECURITY_RUNTIME_USAGE_MONITOR_ENABLED: '0'
+      SECURITY_RUNTIME_CONFIG: ${{ github.workspace }}/.ci-unused-user-config.toml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e ".[build-standalone]"
+      - name: Build once for this platform
+        run: python scripts/build/build_standalone.py
+      - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
+      - name: Verify native package and default MCP surface without full scanner regressions
+        shell: bash
+        run: python scripts/release/verify_release_smoke.py $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refresh-${{ matrix.platform }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_OLD_TAG: 10e288b3774ad854d5585c860d2884966fcaccfb
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e . jsonschema
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: refresh-*
+          merge-multiple: true
+          path: dist/release
+      - name: Validate and stage all three platforms before touching the release
+        run: |
+          python scripts/release/make_release_metadata.py --focused
+          python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
+          python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
+          python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
+          cp README.zh-CN.md dist/release/INSTALL.zh-CN.md
+          cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
+          python scripts/release/prepare_release_assets.py
+          cat distribution/releases/v0.3.14.md >> dist/release-notes.md
+      - name: Back up the exact published release and verify original tag
+        run: |
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/tags/v0.3.14 --jq '.object.sha')" = "$EXPECTED_OLD_TAG"
+          mkdir -p dist/previous/assets
+          gh api repos/$GITHUB_REPOSITORY/releases/tags/v0.3.14 > dist/previous/release.json
+          gh release download v0.3.14 --dir dist/previous/assets
+          python -c 'import json,pathlib; d=json.load(open("dist/previous/release.json")); assert d["id"]==438416306 and not d["draft"] and not d.get("immutable"); pathlib.Path("dist/previous/notes.md").write_text(d["body"])'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previous-v0.3.14-${{ github.sha }}
+          path: dist/previous
+          retention-days: 30
+      - name: Replace the authorized release and tag only after every build passed
+        id: replace
+        run: |
+          echo 'started=true' >> "$GITHUB_OUTPUT"
+          gh release edit v0.3.14 --draft=true
+          gh release upload v0.3.14 dist/public-release/* --clobber
+          gh api --method PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/v0.3.14 -f sha="$GITHUB_SHA" -F force=true
+          gh release edit v0.3.14 --notes-file dist/release-notes.md --draft=false --prerelease=false --latest
+      - name: Restore the original release if replacement fails
+        if: failure() && steps.replace.outputs.started == 'true'
+        run: |
+          gh release upload v0.3.14 dist/previous/assets/* --clobber
+          gh api --method PATCH repos/$GITHUB_REPOSITORY/git/refs/tags/v0.3.14 -f sha="$EXPECTED_OLD_TAG" -F force=true
+          gh release edit v0.3.14 --notes-file dist/previous/notes.md --draft=false --prerelease=false --latest

@@ -18,33 +18,12 @@ const editors = {
     steps: '阅读 Cursor 接入指南中的支持说明。Windows 按本页 PowerShell 命令自动安装并选择 cursor；macOS 按本页命令自动安装并选择 cursor，先说明验证范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
     note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 自动下载校验完整包，Mac 自动准备专用运行环境；已有 Cursor 连接可能更新为所选版本。'
   },
-  workbuddy: {
-    name: 'WorkBuddy',
-    target: '配置 WorkBuddy 全局 MCP、Hook 和 Skill',
-    page: 'workbuddy',
-    steps: '将完整包放在长期保留的短路径中，按指南准备检查组件，执行 setup workbuddy --scope global --json。重启后提示我在 MCP 管理中手动勾选 ai-security-runtime 的服务信任并启用连接；不要代替我勾选。连接后确认 15 个工具，再按指南验收自动检查。',
-    note: '粘贴到可在本机执行命令的 WorkBuddy 聊天。请求会配置全局自动检查；首次连接需要你手动信任 MCP 服务。'
-  },
-  other: {
-    name: '其他 MCP 客户端',
-    target: '接入我实际使用的 MCP 客户端',
-    page: 'other',
-    steps: '先确认客户端名称、当前本地 Git 项目绝对路径，以及该客户端当前支持的本地 stdio MCP 格式；缺少信息时先问我。将完整包放在长期保留的位置，准备检查组件，使用 mcp config --path "<实际项目绝对路径>" 生成所需 JSON 或 TOML 服务条目，合并到该客户端对应的配置中，保留绝对程序路径、工作区绑定和其他服务。无法确认支持时说明具体限制，不猜测专用安装命令或配置位置。本路径只配置 MCP，不承诺自动编辑检查。',
-    note: '适用于支持本地 stdio MCP、可在本机执行命令的助手；粘贴时说明客户端名称和项目路径。只支持聊天的客户端请按手动步骤操作。'
-  }
+
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
-const installSource = computed(() => ['codex', 'cursor'].includes(editor.value.page)
-  ? '自动识别系统与芯片。Windows 使用本页自动安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1，自动下载并核验官方 v0.3.13 完整包后接入所选编辑器。macOS 按当前编辑器页面使用同一 v0.3.13 原生完整包的安装入口 https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh，选择对应编辑器并遵循脚本的固定下载校验，不要求我预装 Python、Git 或 Homebrew。按实际加载的 0.3.13 构建核对，真实桌面验收范围以支持页为准，不宣称 Apple 签名或公证已验证。'
-  : '自动识别系统与芯片，选择官方 v0.3.13 正式版完整包，下载并核验官方 SHA256 和包内完整性后再运行。')
-
 const copied = ref(false)
 const copyFailed = ref(false)
-const request = computed(() => `请根据 https://pikachu-cxy.github.io/Ai-security-check/guide/editors/${editor.value.page}.html 的官方安装说明，在当前电脑安装 AI Security Runtime，并${editor.value.target}。
-${installSource.value}备份并保留现有配置、其他 MCP 服务及用户修改。
-${editor.value.steps}
-核对组件及漏洞数据状态，仍在后台准备时明确说明；不要自行用源码开发安装替代官方发行入口，不关闭系统安全保护或 TLS 校验。遇到 macOS 粘贴保护提示时，让我核对命令与来源并自行决定；检测到恶意软件时停止。遇到签名、证书、权限或配置冲突时，保留具体诊断并说明下一步，不擅自删除文件或绕过安全检查。需要权限时遵循当前客户端的正常审批流程。
-安装期间保持当前聊天，完成后核对版本、build_id、组件状态与漏洞库有效期，分别说明安装结果和仍待验证的步骤，并提示我重启${editor.value.name === '其他 MCP 客户端' ? '实际使用的客户端' : editor.value.name}生效。重启后通过实际工具调用确认连接和项目路径；无法确认的部分明确列出。不扫描或修改我的业务项目。`)
+const request = computed(() => `请按 https://pikachu-cxy.github.io/Ai-security-check/install/agent.md 的官方指南，在本机安装 AI Security Runtime 并接入 ${editor.value.name}，保留现有配置，验证版本、构建与连接状态，并说明需要我完成的重启或信任步骤。`)
 
 watch(editor, () => {
   copied.value = false
@@ -69,7 +48,7 @@ async function copyRequest() {
 <template>
   <section class="install-request" aria-label="让 AI 帮你安装和接入">
     <div class="install-request-heading">
-      <strong>把安装请求发给助手</strong>
+      <strong>推荐：让 AI 帮你安装</strong>
       <button type="button" @click="copyRequest">{{ copied ? '已复制安装请求' : '复制安装请求' }}</button>
     </div>
     <label v-if="!props.editor" class="editor-select">
@@ -82,7 +61,7 @@ async function copyRequest() {
     <p role="status" aria-live="polite">{{ copied ? `已复制 ${editor.name} 安装请求，请粘贴到对应助手的聊天。` : copyFailed ? '浏览器未允许复制，请展开下方请求并手动复制。' : '安装完成后重启对应客户端，再检查连接、版本、组件和项目路径。' }}</p>
     <details :open="copyFailed">
       <summary>查看安装请求</summary>
-      <textarea aria-label="安装请求正文" readonly :value="request" rows="10" @focus="$event.target.select()"></textarea>
+      <textarea aria-label="安装请求正文" readonly :value="request" rows="4" @focus="$event.target.select()"></textarea>
     </details>
   </section>
 </template>

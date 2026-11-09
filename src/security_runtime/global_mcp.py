@@ -580,7 +580,7 @@ def create_global_server(*, workspaces=None, host='codex'):
         for tool in infos.values():
             schema = json.loads(json.dumps(tool.parameters))
             schema['additionalProperties'] = False
-            if tool.name not in HOOKS and tool.name not in GLOBAL_READS:
+            if tool.name not in HOOKS and tool.name not in GLOBAL_READS and tool.name != 'start_risk_dashboard':
                 schema['properties']['workspace_path'] = {'type': 'string', 'minLength': 1,
                     'description': 'Absolute project directory required for global workspace routing, including a single admitted workspace. Not a file or scan target. Never inferred from an opaque ref.'}
                 schema['required'] = list(dict.fromkeys([*schema.get('required', []), 'workspace_path']))
@@ -657,6 +657,10 @@ def create_global_server(*, workspaces=None, host='codex'):
             if name in TASK_REVIEW_TOOLS:
                 return _task_request_rejected('TASK_REQUEST_INVALID')
             return _advisory('INVALID_HOST_CLAIMS', claims=claim_diag)
+        if name == 'start_risk_dashboard':
+            from .monitoring.mcp import risk_dashboard_status
+            data = risk_dashboard_status()
+            return CallToolResult(structuredContent=data, content=[TextContent(type='text', text=json.dumps(data))])
         if name == 'get_runtime_info':
             from .runtime_info_view import runtime_info_view
             view = arguments.get('view', 'summary')

@@ -265,11 +265,13 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     install_parser.add_argument('integration', nargs='?', choices=['codex', 'cursor', 'workbuddy'], default='codex')
     install_parser.add_argument('--bundle', type=Path, help='Explicit local standalone bundle; portable EXE defaults to its own bundle')
     install_parser.add_argument('--update', type=Path, help='Local verified delta ZIP matching the active base build')
-    install_parser.add_argument('--root', type=Path, help='Stable personal program directory; defaults to user local application data')
+    install_parser.add_argument('--root', type=Path, help='Stable program directory; Windows defaults to USERPROFILE/.asr')
     install_parser.add_argument('--path', help='Optional project conflict check; never a project installation')
     install_parser.add_argument('--dev', action='store_true', help='Explicit source-development opt-in; not a user installation')
     install_parser.add_argument('--offline', action='store_true', help='Verify existing components and data without downloading')
     install_parser.add_argument('--json', action='store_true')
+    install_parser.add_argument('--legacy-appdata', type=Path,
+        help='Windows migration source containing Local and Roaming; select explicitly when old profiles conflict')
     background_parser = sub.add_parser('preparation', help='View automatic background preparation or retry it without reinstalling')
     background_parser.add_argument('action', choices=['status', 'watch', 'retry'], default='status', nargs='?')
     background_parser.add_argument('--json', action='store_true')
@@ -514,6 +516,8 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                 from .integration_lifecycle import IntegrationDiagnostic
                 try:
                     host_kwargs = {'_host': args.integration} if args.integration != 'codex' else {}
+                    if args.legacy_appdata is not None:
+                        host_kwargs['legacy_appdata'] = args.legacy_appdata
                     data = install_personal_codex(bundle=args.bundle, root=args.root,
                         workspace=str(Path(args.path).absolute()) if args.path else None,
                         allow_dev=args.dev, progress=progress, update=args.update, offline=args.offline, **host_kwargs)
@@ -523,6 +527,10 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
                         'installation':{'contract':'personal-install-v1', 'status':'NOT_READY',
                             'local_files_ready':False, 'scan_ready':False, 'risk_fix_authorized':False, 'restart_required':False,
                             'message':'安装未完成。请检查诊断中的包、安装目录或现有配置问题；未授权覆盖用户内容，也不能视为可扫描。'}}
+                    if os.name == 'nt':
+                        from .windows_migration import MESSAGES
+                        if code in MESSAGES:
+                            data['installation']['message'] = MESSAGES[code]
                 ready = data['installation'].get('local_files_ready') is True
                 progress.finish(ready, scan_ready=data['installation'].get('scan_ready') is True)
             if not args.json and not ready:

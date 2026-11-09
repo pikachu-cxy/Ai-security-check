@@ -1,5 +1,19 @@
 # 当前接口设计
 
+## 风险管理链接
+
+冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE；不得构造假地址。报告没有 session_url 时保留实际覆盖缺口，提示链接不可用，不输出 null 或空 Markdown 链接，也不在报告读取时同步启动后台。
+
+## Windows 用户目录
+
+Windows 默认安装根目录为 `%USERPROFILE%/.asr`，版本槽位与活动指针保留原交付格式；配置、任务状态、组件/漏洞缓存分别位于其 `config`、`state`、`data` 子目录。路径解析本身没有目录创建、进程探测或迁移副作用。显式 `SECURITY_RUNTIME_CONFIG`、`SECURITY_RUNTIME_STATE_DIR`、`SECURITY_RUNTIME_DATA_DIR` 继续优先；自定义路径不自动搬迁，也不能假定处于 AppData 的自定义路径跨宿主一致。
+
+Windows 原生安装在构造配置所有权服务前调用 `windows-user-directories-v1` 一次性迁移。配置、状态库、密钥及缓存按完整原件复制并核对，旧目录保留；程序槽位由传入的校验安装包重新建立，不复制旧活动指针。重复安装只读取小型完成回执，不遍历旧目录、不增加进程探测或启动器验证次数。非 Windows 默认位置保持原行为。旧签名任务中的扫描库路径不改写；只针对已记录迁移来源的旧默认 scans.db，在数据库打开边界解析到新库，保留原引用与证据签名。
+
+迁移发现不同的外部/宿主私有数据时返回 `LEGACY_USER_DIRECTORIES_CONFLICT_SELECT_APPDATA`，不合并数据库。用户可以通过 `install --legacy-appdata <包含 Local/Roaming 的根目录>` 或 Windows 脚本 `-LegacyAppData` 明确选定活动来源，其他原件保留。旧服务仍运行或进程身份未知时停止迁移；源数据变化、目的目录冲突、重定向读取无法匹配真实文件时也不能报告成功。重定向场景须退出相关宿主，在普通 PowerShell 安装后重连。首次数据迁移耗时单列，不当作重复安装性能。
+
+源码与网站脚本必须随同具备该迁移契约的原生包发布；改脚本的安装目录不代表旧发行包已支持配置和状态迁移。安装回执的 `user_directories` 与 `launcher_verification` 分别描述数据迁移及实际入口构建，不能替代宿主重连验收。
+
 ## 业务审计的开发轮次与报告版本
 
 持续审计以 `round_id` 绑定执行授权。每轮首批实际修改通过原 `stream_prepare → stream_started` 交接新子 Agent；轮内新增文件合并队列并复用本轮执行者。Stop 封口且保存完成后授权关闭，后续开发生成新轮次与新授权，不跨轮续接；旧版本没有 round_id 的授权也不能作为新轮执行者。历史发现、提交回执和未完成事实保留，旧凭据不得写入新轮。

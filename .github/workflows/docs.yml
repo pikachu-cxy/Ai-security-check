@@ -15,7 +15,7 @@ on:
       - '.github/workflows/docs.yml'
   workflow_dispatch:
   workflow_run:
-    workflows: ['Official release', 'Refresh 0.3.12']
+    workflows: ['Official release', 'Refresh 0.3.12', 'Refresh 0.3.14']
     types: [completed]
     branches: [feature/runtime-mvp]
 

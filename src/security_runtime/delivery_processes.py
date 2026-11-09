@@ -5,11 +5,11 @@ import os
 from pathlib import Path
 
 
-def running_slot_builds(root):
+def running_slot_builds(root, *, exclude_pid=None, include_launchers=True):
     versions = (Path(root) / 'versions').resolve()
     found = set()
     def observe(value):
-        if Path(value).absolute().parent == Path(root).absolute() / 'launcher':
+        if include_launchers and Path(value).absolute().parent == Path(root).absolute() / 'launcher':
             found.add('@legacy-launcher')
         try:
             relative = Path(value).absolute().relative_to(versions)
@@ -42,7 +42,7 @@ def running_slot_builds(root):
             ok = kernel.Process32FirstW(snapshot, ctypes.byref(entry))
             while ok:
                 # Only this product's executable can keep a Runtime slot live.
-                if entry.szExeFile.lower() in {'security-check.exe', 'security-launcher.exe'}:
+                if entry.th32ProcessID != exclude_pid and entry.szExeFile.lower() in {'security-check.exe', 'security-launcher.exe'}:
                     handle = kernel.OpenProcess(0x1000, False, entry.th32ProcessID)
                     if not handle:
                         return None
@@ -61,7 +61,7 @@ def running_slot_builds(root):
     if not proc.is_dir():
         return None
     for process in proc.iterdir():
-        if process.name.isdigit():
+        if process.name.isdigit() and int(process.name) != exclude_pid:
             try:
                 observe((process / 'exe').resolve(strict=True))
             except FileNotFoundError:

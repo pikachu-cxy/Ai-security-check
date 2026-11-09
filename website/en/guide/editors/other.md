@@ -6,7 +6,6 @@ For Claude Code, VS Code / Copilot, Qoder, CodeBuddy, or another client, first c
 | --- | --- |
 | Codex | [Full integration](./codex.md); primary workflow. |
 | Cursor | [Full integration](./cursor.md); validate a local single-root Git workspace first. |
-| WorkBuddy | [Global MCP, Hooks and Skill](./workbuddy.md); manually trust the MCP service after restart. |
 | Claude Code, VS Code / Copilot | Generic manual MCP; no product-specific installer or complete workflow acceptance. |
 | Qoder, CodeBuddy | Conditional manual MCP setup; no registered native edit-event adapter. |
 

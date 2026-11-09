@@ -166,7 +166,8 @@ def default_data_root() -> Path:
     if configured:
         return Path(configured).expanduser().resolve()
     if os.name == "nt":
-        return Path(os.getenv("LOCALAPPDATA", Path.home() / "AppData" / "Local")) / "AI-Security-Runtime"
+        from .user_paths import windows_directory
+        return windows_directory('data')
     if sys.platform == "darwin":
         return Path.home() / "Library" / "Application Support" / "AI-Security-Runtime"
     return Path(os.getenv("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "ai-security-runtime"

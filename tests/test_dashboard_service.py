@@ -8,6 +8,17 @@ import pytest
 from security_runtime import dashboard_service as service, risk_dashboard as dashboard
 
 
+def test_frozen_dashboard_uses_bundle_identity_without_source_files(monkeypatch):
+    from security_runtime import build_identity
+    monkeypatch.setattr(service.sys, 'frozen', True, raising=False)
+    monkeypatch.setattr(build_identity, 'build_identity', lambda: dict(status='IDENTIFIED', build_id='a'*64))
+    monkeypatch.setattr(service, 'Path', lambda *a: pytest.fail('frozen code must not read .py files'))
+    assert service.code_id() == 'a'*64
+    monkeypatch.setattr(build_identity, 'build_identity', lambda: dict(status='UNVERIFIABLE_LEGACY_BUNDLE'))
+    with pytest.raises(ValueError, match='DASHBOARD_BUILD_IDENTITY_UNAVAILABLE'):
+        service.code_id()
+
+
 @contextmanager
 def running(settings=None):
     server = dashboard.Server(settings)

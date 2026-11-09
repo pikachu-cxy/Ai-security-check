@@ -12,12 +12,10 @@ Use the **0.3.14 official release**. Automatic macOS installation uses the same 
 | --- | --- |
 | Codex | [Windows bundle or managed macOS installation](./editors/codex.md) |
 | Cursor | [Windows bundle or managed macOS installation](./editors/cursor.md) |
-| WorkBuddy | [Global MCP, Hooks and Skill](./editors/workbuddy.md) |
-| Other clients | [Manual stdio MCP integration](./editors/other.md) |
 
-The Windows bundle includes Python. The managed macOS installer prepares a dedicated Python environment and detects Apple Silicon or Intel. Runtime installation does not require Git; project checks and the demo do.
+Windows and macOS use native bundles with the runtime included. The macOS installer detects Apple Silicon or Intel. Runtime installation does not require Git; project checks and the demo do.
 
-You can run the documented command yourself, or ask a local assistant to follow your editor's setup page, verify the download and checksum, and preserve unrelated settings. Paste natural-language requests into chat, not a terminal.
+**Recommended: install with your AI agent.** Copy the one-sentence installation request from your editor's page into Codex or Cursor chat. The agent follows the official guide, verifies the download, preserves unrelated settings, and checks the connection. **Manual installation is the fallback:** run the commands on the same page in your terminal.
 
 ## 2. Restart and verify
 

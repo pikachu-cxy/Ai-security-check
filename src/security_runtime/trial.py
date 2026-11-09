@@ -32,6 +32,7 @@ def isolated_environment(root, inherited=None):
                SECURITY_RUNTIME_SKILLS_DIR=str(root / 'skills'),
                SECURITY_RUNTIME_TRIAL_ROOT=str(root), SECURITY_RUNTIME_TRIAL_MODE='1',
                SECURITY_RUNTIME_DATA_DIR=str(root / 'engines'), SECURITY_RUNTIME_OFFLINE='1',
+               SECURITY_RUNTIME_CONFIG=str(root / 'config.toml'),
                SECURITY_RUNTIME_TRIVY_CACHE_DIR=str(root / 'engines/cache/trivy'))
     return env
 

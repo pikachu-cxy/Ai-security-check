@@ -230,20 +230,28 @@ def _setup_personal_codex(integration, workspace=None, *, skill=None, progress=N
 
 
 def _default_delivery_root():
-    base = Path(os.environ['LOCALAPPDATA']) if os.name == 'nt' and os.environ.get('LOCALAPPDATA') else Path.home()/'.local/share'
-    # Version slots contain a SHA-256 directory and deep bundled rule paths.
-    # Keep the Windows prefix short for hosts without long-path support.
-    return base/('ASR' if os.name == 'nt' else 'AI-Security-Runtime-install')
+    if os.name == 'nt':
+        from .user_paths import windows_root
+        return windows_root()
+    return Path.home()/'.local/share/AI-Security-Runtime-install'
 
 
 @verified_operation
 @timed("install.total")
-def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False, _host='codex'):
+def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=False, progress=None, update=None, offline=False, _host='codex', legacy_appdata=None):
     """Install/check caches, then start detached preparation without waiting for it."""
     offline = bool(offline or os.getenv('SECURITY_RUNTIME_OFFLINE') == '1')
     report_progress(progress, 'PREPARE')
     from .global_integration import GlobalCodexIntegration
     from .delivery import StableDelivery, stable_command, package_metadata
+    directory_migration = None
+    if os.name == 'nt' and update is None and (bundle is not None or getattr(sys, 'frozen', False)):
+        # Migration must precede constructing ownership/configuration stores.
+        # Verify a supplied package before any migration writes. The enclosing
+        # verification session reuses this exact verification below.
+        package_metadata(Path(bundle) if bundle is not None else Path(sys.executable).parent)
+        from .windows_migration import migrate_user_directories
+        directory_migration = migrate_user_directories(legacy_appdata=legacy_appdata)
     if _host == 'cursor':
         from .cursor_connector import CursorConnectorInstallation, CursorInstallPreflight, setup_personal_cursor
         integration = CursorConnectorInstallation(allow_dev=allow_dev)
@@ -259,14 +267,27 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         raise ValueError('UNSUPPORTED_HOST_CONNECTOR')
     frozen = bool(getattr(sys, 'frozen', False))
     stable = stable_command() if frozen else None
+    if os.name == 'nt' and frozen and stable and root is None and bundle is None and update is None:
+        from .user_paths import windows_home
+        old_roots = {windows_home() / 'AppData/Local/ASR',
+                     Path(os.getenv('LOCALAPPDATA', str(windows_home() / 'AppData/Local'))) / 'ASR'}
+        if Path(stable).parents[1] in old_roots:
+            bundle, root = Path(sys.executable).parent, _default_delivery_root()
     if update is not None:
         if bundle is not None:
             raise IntegrationDiagnostic('INSTALL_UPDATE_AND_BUNDLE_CONFLICT')
         from .delta_delivery import materialized_update
         delivery_root = Path(root) if root is not None else Path(stable).parents[1] if stable else _default_delivery_root()
         with materialized_update(StableDelivery(delivery_root), update, progress=progress) as supplied:
-            result = install_personal_codex(bundle=supplied, root=delivery_root,
-                workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline, _host=_host)
+            destination = delivery_root
+            if os.name == 'nt' and root is None:
+                from .user_paths import windows_home
+                if delivery_root in {windows_home() / 'AppData/Local/ASR',
+                        Path(os.getenv('LOCALAPPDATA', str(windows_home() / 'AppData/Local'))) / 'ASR'}:
+                    destination = _default_delivery_root()
+            result = install_personal_codex(bundle=supplied, root=destination,
+                workspace=workspace, allow_dev=allow_dev, progress=progress, offline=offline, _host=_host,
+                legacy_appdata=legacy_appdata)
             result['downloads'] = {'product': 'LOCAL_DELTA', 'product_network_download': False,
                 'engines': 'AUTOMATIC_BACKGROUND', 'skill_and_rules': 'BUNDLED'}
             return result
@@ -274,6 +295,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         if root is not None and (stable is None or Path(root).absolute() != Path(stable).parents[1]):
             raise IntegrationDiagnostic('INSTALL_ROOT_REQUIRES_PORTABLE_BUNDLE')
         data = setup(integration, workspace, progress=progress)
+        if directory_migration is not None:
+            data['user_directories'] = directory_migration
         data = _complete_preparation(data, offline=offline, progress=progress)
         data['downloads'] = {'product':'EXISTING_INSTALL', 'product_network_download':False,
             'engines':'AUTOMATIC_BACKGROUND', 'skill_and_rules':'BUNDLED'}
@@ -360,6 +383,8 @@ def install_personal_codex(*, bundle=None, root=None, workspace=None, allow_dev=
         data['installation']['local_files_ready'] = False
         data['installation']['message'] += ' 程序文件已保留在安装目录，但整体安装尚未成功；不代表可扫描。'
     data['delivery'] = activated
+    if directory_migration is not None:
+        data['user_directories'] = directory_migration
     if data['installation'].get('local_files_ready'):
         # Verify the actual configured forwarding executable, not just the slot
         # or a same-version receipt. A stale launcher/pointer must fail closed.

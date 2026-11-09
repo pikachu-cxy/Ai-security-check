@@ -38,8 +38,10 @@ def config_path():
             raise ValueError('USER_CONFIG_PATH_MUST_BE_ABSOLUTE')
         return path
     # A single user setting must not follow per-workspace SECURITY_RUNTIME_STATE_DIR.
-    base = (Path(os.environ['APPDATA']) if os.name == 'nt' and os.getenv('APPDATA')
-            else Path(os.getenv('XDG_CONFIG_HOME', Path.home()/'.config')))
+    if os.name == 'nt':
+        from .user_paths import windows_directory
+        return windows_directory('config') / 'config.toml'
+    base = Path(os.getenv('XDG_CONFIG_HOME', Path.home()/'.config'))
     return base / 'ai-security-runtime' / 'config.toml'
 
 

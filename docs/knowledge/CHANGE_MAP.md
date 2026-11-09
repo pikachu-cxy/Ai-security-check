@@ -1,5 +1,13 @@
 # 从开发需求定位代码
 
+## 原生后台链接与 Agent 安装入口
+
+后台构建身份：`dashboard_service.py`；无地址报告：`development_views.py`、`host_development.py`；无项目路径全局入口：`global_mcp.py`、`monitoring/mcp.py`。回归：`test_dashboard_service.py`、`test_report_missing_dashboard.py`。原生发行验证：`scripts/release/verify_release_smoke.py`；三平台替换流程：`.github/workflows/refresh-0314.yml`。Agent 安装指南：`website/public/install/agent.md`，首页与编辑器页面复用 `InstallRequest.vue`。
+
+## Windows 用户目录与旧版迁移
+
+共享路径：`user_paths.py`；一次性迁移、冲突与旧服务门槛：`windows_migration.py`；安装编排：`personal_install.py`、`cli.py`；配置/状态/组件入口：`user_config.py`、`storage.py`、`toolchain.py`；网站脚本：`website/public/install/windows.ps1`。回归：`test_windows_user_directories.py`、`test_personal_install.py`、`distribution/test_windows_web_install.py`。默认位置与迁移契约见 [接口设计](INTERFACES.md)。
+
 ## 审计轮次、晚到报告及漏洞分隔
 
 父子开发任务 Stop 归属：`codex_turn_scope.py`、`development_stop.py`、`mcp_server.py`；测试 `test_delegated_development_closeout.py`。修后额外复测默认关闭：`user_config.py`、`development_risks.py`、`remediation.py`、`tasks/fix.py`、`repair_notifications.py` 及对应指导；测试 `test_repair_recheck_default.py`。验收与限制见 [0.3.14 验收](RELEASE_0314_ACCEPTANCE.md)。

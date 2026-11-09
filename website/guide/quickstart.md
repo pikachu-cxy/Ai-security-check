@@ -24,13 +24,11 @@ description: 选择你的编辑器和系统，完成安装、连接验证和第�
 | --- | --- |
 | Codex：Windows 完整包 / Mac 自动安装 | [Codex 安装与使用](./editors/codex.md) |
 | Cursor：Windows 完整包 / Mac 自动安装 | [Cursor 安装与使用](./editors/cursor.md) |
-| WorkBuddy | 按全局接入指南配置，并在重启后手动信任 MCP |
-| 其他 MCP 客户端 | 按对应页面手动配置 MCP |
 
 ## 2. 选择一种安装方式
 
-- **自己安装**：在编辑器页选择 Windows 或 macOS，复制对应系统的一条命令到终端。
-- **让助手安装**：复制编辑器页的“安装请求”到对应助手聊天，由它下载、校验和接入。自然语言请求不要粘贴到终端。
+- **推荐让 AI 安装**：复制编辑器页的一句话安装请求到 Codex 或 Cursor，由 Agent 下载、校验、接入并验证。自然语言请求粘贴到聊天中。
+- **手动安装备用**：在编辑器页选择 Windows 或 macOS，复制对应系统的安装命令到终端。
 
 Windows 完整包需要先下载、校验并解压，再在能看到 `security-check` 文件夹的目录打开 PowerShell。Mac 的 Codex / Cursor 自动安装命令可以在任意终端目录执行，运行环境会自动准备。
 

@@ -9,8 +9,6 @@
 | Windows x64 | 原生完整包，已完成本次 Windows 定向回归与包验收 |
 | macOS Apple Silicon / Intel | 各自原生完整包，分别构建与验收；自动安装使用同一份原生完整包 |
 | Codex / Cursor | `install codex` / `install cursor` 接入用户级 MCP、Skill、Hook；Cursor 同步常规工具白名单 |
-| WorkBuddy | 全局 MCP、Hook、Skill；重启后需手动信任 MCP |
-| 其他 MCP 客户端 | 按客户端支持的本地 stdio MCP 格式手动接入 |
 
 当前不提供 Linux 完整包。Codex / Cursor 以本地实际项目根目录为接入入口；远程、多根工作区和各宿主版本需单独验证。CI 原生验收不等于所有桌面版本、模型或企业策略下均可用。
 
@@ -18,9 +16,10 @@
 
 [Codex](../guide/editors/codex.md#macos) 与 [Cursor](../guide/editors/cursor.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.14 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
 
-当前没有 Apple Developer ID 签名或公证保证。实际系统策略和扫描组件就绪状态按目标电脑判断。WorkBuddy 桌面开发验收已由用户确认通过；发布流水线的安装包和 Windows 长路径检查另行记录。
 
 ## Cursor 接入与重连
+
+当前没有 Apple Developer ID 签名或公证保证。实际系统策略和扫描组件就绪状态按目标电脑判断。
 
 完整安装包括常规工具的精确白名单，但是否需要点击 Run 仍受 Cursor 运行模式、当前用户配置和团队策略影响。MCP 自动执行许可与产品风险修复授权分别生效。
 

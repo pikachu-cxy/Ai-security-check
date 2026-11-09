@@ -78,6 +78,14 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 def code_id():
+    # Frozen modules live in the Python archive, not as adjacent .py files.
+    # Use the same immutable bundle identity as installation and MCP probes.
+    if getattr(sys, 'frozen', False):
+        from .build_identity import build_identity
+        identity = build_identity()
+        if identity.get('status') != 'IDENTIFIED':
+            raise ValueError('DASHBOARD_BUILD_IDENTITY_UNAVAILABLE')
+        return identity['build_id']
     base = Path(__file__).parent
     names = ('dashboard_service.py', 'risk_dashboard.py', 'dashboard_records.py',
              'dashboard_catalog.py', 'dashboard_presentation.py', 'dashboard_sessions.py', 'dashboard_health.py', 'dashboard_detail.py', 'dashboard_history.py', 'dashboard_entities.py', 'dashboard_export.py', 'risk_management.py',

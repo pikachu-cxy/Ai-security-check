@@ -4,6 +4,14 @@ Full integration configures the user-level MCP connection, companion Skill, and 
 
 Current official native bundles: **0.3.14**.
 
+## Recommended: ask your agent to install
+
+Copy this request into your local Codex Agent chat. The agent follows the official guide and verifies the installation; manual commands are provided below.
+
+```text
+Follow https://pikachu-cxy.github.io/Ai-security-check/install/agent.md to install AI Security Runtime for Codex on this computer. Preserve existing settings, verify the version, build and connection, and explain any restart or trust steps I need to complete.
+```
+
 ## Windows {#windows}
 
 Run this single command in regular **PowerShell 5.1 or later**, from any directory on Windows x64. It downloads the **0.3.14 official bundle**, verifies SHA256, extracts it, and installs the integration. No manual download, extraction, Python, Node.js, or Git installation is required.
@@ -14,7 +22,7 @@ Run this single command in regular **PowerShell 5.1 or later**, from any directo
 
 [Inspect the installer](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1). No administrator privileges are required. Finish active checks first; existing product settings may be updated. Download, checksum, or configuration failures stop installation and preserve diagnostics. Retry the same command after resolving the error.
 
-The installer prints the full preparation-status command. Downloads are retained under `%LOCALAPPDATA%\AI-Security-Runtime-downloads`; the installed runtime lives under `%LOCALAPPDATA%\ASR`.
+The installer prints the full preparation-status command. Downloads are retained under `%LOCALAPPDATA%\AI-Security-Runtime-downloads`; the installed runtime lives under `%USERPROFILE%\.asr`.
 
 ::: details Manual installation (fallback)
 [Download and verify the complete bundle](../../downloads.md#windows), extract it, and run from the parent of `security-check`:

@@ -24,7 +24,7 @@ Run 是 Cursor 对工具执行的审批。完整安装维护常规 MCP 工具的
 
 ## 在哪里查看各编辑器的安装步骤？
 
-左侧“接入你的编辑器”分为 [Codex](../guide/editors/codex.md)、[Cursor](../guide/editors/cursor.md)、[WorkBuddy](../guide/editors/workbuddy.md)和[其他 MCP 客户端](../guide/editors/other.md)。每页说明对应入口、安装或配置方法，以及实际支持范围。
+左侧“接入你的编辑器”分为 [Codex](../guide/editors/codex.md)、[Cursor](../guide/editors/cursor.md)。每页说明对应入口、安装或配置方法，以及实际支持范围。
 
 ## 能不下载漏洞库吗？
 

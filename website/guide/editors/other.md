@@ -6,7 +6,7 @@
 
 复制下方请求到可在本机执行命令的助手，并说明**客户端名称和实际项目路径**。助手需要先核对该客户端的支持情况与配置格式，再按通用 MCP 路径接入；没有专用安装器的客户端仍需手动配置。
 
-<InstallRequest editor="other" />
+
 
 ## 先确认支持程度
 
@@ -14,7 +14,6 @@
 | --- | --- | --- |
 | Codex | [完整安装](./codex.md) | 主要使用路径 |
 | Cursor | [完整接入](./cursor.md) | Windows / macOS 对应完整包；先在本地单根 Git 工作区验证 |
-| WorkBuddy | [全局 MCP、Hook、Skill](./workbuddy.md) | 首次连接需手动信任 MCP 服务 |
 | Claude Code、VS Code / Copilot | 通用 MCP 手动配置 | 尚无本产品专用安装器或完整流程验收 |
 | Qoder、CodeBuddy | 通用 MCP 条件下手动尝试 | 尚无已注册的原生编辑事件适配 |
 

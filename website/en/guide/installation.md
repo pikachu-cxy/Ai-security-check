@@ -14,7 +14,7 @@ After automatic Windows installation, copy the full status command printed by th
 
 Do not mix paths from different installation methods. The examples below use the Windows bundle and managed macOS installation.
 
-The Windows web installer uses version slots under `%LOCALAPPDATA%\ASR`. Older installers and existing installations may use `%LOCALAPPDATA%\AI-Security-Runtime-install`. Check the executable actually loaded by the editor; do not use Python from an old development checkout to verify the new installation.
+The Windows web installer uses version slots under `%USERPROFILE%\.asr`. Older installers and existing installations may use `%LOCALAPPDATA%\AI-Security-Runtime-install`. Check the executable actually loaded by the editor; do not use Python from an old development checkout to verify the new installation.
 
 ## Check preparation {#preparation}
 

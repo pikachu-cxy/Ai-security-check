@@ -6,7 +6,13 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 
 当前正式完整包为 **0.3.14**。接入后，照常在本地 Codex 聊天里提出开发需求，即可查看本次改动的安全检查结果，发现问题后再决定是否修复。本页从安装到第一次检查，适用于本地单根 Git 工作区。
 
-## 1. 安装到这台电脑
+## 推荐：让 AI 帮你安装
+
+把下面的一句话复制到本机 Codex 的 Agent 聊天。助手按官方指南安装和核验；无法执行本机命令时，再使用下方手动方式。
+
+<InstallRequest editor="codex" />
+
+## 手动安装（备用）
 
 安装会配置用户级 MCP 连接、配套 Skill 和 Hook，并自动开始准备检查组件。首次需要联网；安装期间不会扫描或修改业务项目。选择你的系统，只执行对应的一条命令。
 
@@ -20,7 +26,7 @@ description: 在 Windows 或 Mac 上安装 AI Security Runtime，接入 Codex，
 
 可先[查看安装脚本](https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1)。安装到用户目录，不需要管理员权限。请先结束正在运行的检查；已有产品连接可能更新，配置冲突时会停止并保留诊断。下载失败或校验不一致时不会运行下载的程序，处理报错后可重试同一命令。
 
-安装完成后，终端会给出查询准备进度的完整命令；下载包保存在 `%LOCALAPPDATA%\AI-Security-Runtime-downloads`，已安装程序位于 `%LOCALAPPDATA%\ASR`。
+安装完成后，终端会给出查询准备进度的完整命令；下载包保存在 `%LOCALAPPDATA%\AI-Security-Runtime-downloads`，已安装程序位于 `%USERPROFILE%\.asr`。
 
 ::: details 手动下载与安装（备用）
 从[下载页](../../downloads.md#windows)下载完整包及配套 SHA256，校验并完整解压，在能看到 `security-check` 文件夹的目录执行：
@@ -52,12 +58,6 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 ./security-check/security-check install codex
 ```
 :::
-
-### 希望让助手代为安装？
-
-复制下面的**安装请求到本地 Codex 聊天**，由助手按本页下载、校验并接入。自然语言请求用于聊天，Shell 命令用于终端，选择一种方式即可。
-
-<InstallRequest editor="codex" />
 
 ## 2. 重启并确认安装成功
 

@@ -132,7 +132,7 @@ def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
     root = Path(__file__).resolve().parents[2]
     workflow = yaml.safe_load((root / ".github/workflows/release.yml").read_text())
     jobs = workflow["jobs"]
-    for job, needs in (("tests", "version"), ("compliance", "tests"), ("package", "compliance"), ("build", "package"), ("publish", "build")):
+    for job, needs in (("build", "version"), ("publish", "build")):
         assert jobs[job]["needs"] == needs
     runs = "\n".join(s.get("run", "") for s in jobs["publish"]["steps"])
     assert runs.index("make_release_metadata.py") < runs.index("validate_manager_metadata.py") < runs.index("prepare_release_assets.py") < runs.index("gh release upload")
@@ -141,21 +141,40 @@ def test_release_workflow_preserves_gates_and_uploads_only_staged_assets():
     standalone = (root / ".github/workflows/standalone.yml").read_text()
     assert "--full --dependency-unavailable --fix-verify --development" in standalone
 
+    refresh = yaml.safe_load((root / '.github/workflows/refresh-0314.yml').read_text())
+    assert refresh['jobs']['publish']['needs'] == 'build'
+    assert len(refresh['jobs']['build']['strategy']['matrix']['include']) == 3
+    steps = refresh['jobs']['publish']['steps']
+    runs = '\n'.join(s.get('run', '') for s in steps)
+    assert runs.index('make_release_metadata.py --focused') < runs.index('gh release edit v0.3.14 --draft=true')
+    assert runs.index('gh release download v0.3.14') < runs.index('gh release upload v0.3.14 dist/public-release/*')
+    restore = next(s for s in steps if s.get('name', '').startswith('Restore'))
+    assert "steps.replace.outputs.started == 'true'" in restore['if']
+    assert 'dist/previous/assets/*' in restore['run']
 
-@pytest.mark.parametrize('damage', [None, 'source_commit', 'usage_monitor_disabled', 'mcp_tools'])
+
+@pytest.mark.parametrize('damage', [None, 'source_commit', 'usage_monitor_disabled', 'mcp_tools', 'cursor', 'native_dashboard_page'])
 def test_focused_metadata_requires_current_native_monitor_receipt(release_root, damage):
     for path in (release_root / 'dist/release').glob('*.verification.json'):
         data = json.loads(path.read_text())
         data.update(managed_engines=False, plugin_discovery=False,
                     dependency_unavailable_without_fallback=False,
                     observed_development_without_baseline=False, fix_verify_offline_synthetic=False,
-                    usage_monitor_disabled=True, mcp_tools=['start_risk_dashboard'])
+                    usage_monitor_disabled=True, mcp_tools=['start_risk_dashboard'],
+                    native_dashboard_page=True,
+                    global_host_tools={'codex': ['development_check', 'development_review', 'start_risk_dashboard'] +
+                                       [f'other_{i}' for i in range(12)],
+                                       'cursor': ['begin_development_check', 'development_review', 'start_risk_dashboard']})
         if damage == 'source_commit':
             data['source_commit'] = 'b' * 40
         elif damage == 'usage_monitor_disabled':
             data['usage_monitor_disabled'] = False
         elif damage == 'mcp_tools':
             data['mcp_tools'].append('start_usage_monitor')
+        elif damage == 'cursor':
+            data['global_host_tools']['workbuddy'] = data['global_host_tools'].pop('cursor')
+        elif damage == 'native_dashboard_page':
+            data['native_dashboard_page'] = False
         path.write_text(json.dumps(data))
     if damage:
         with pytest.raises(ValueError, match='Incomplete or stale'):
@@ -163,6 +182,6 @@ def test_focused_metadata_requires_current_native_monitor_receipt(release_root, 
     else:
         make_release_metadata.main(focused=True)
         manifest = json.loads((release_root / 'dist/release/release-manifest.json').read_text())
-        assert manifest['validation_scope'] == 'focused-monitor-defaults'
+        assert manifest['validation_scope'] == 'focused-artifact-and-host-integration'
         with pytest.raises(ValueError, match='Incomplete or stale'):
             make_release_metadata.main()

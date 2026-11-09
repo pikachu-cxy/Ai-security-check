@@ -9,8 +9,6 @@ This page describes **0.3.14**. [Downloads](../downloads.md) include the release
 | Windows x64 | Native bundle with focused Windows regression and package acceptance |
 | macOS Apple Silicon / Intel | Separately built and verified native bundles; the installer uses the same native bundles |
 | Codex / Cursor | User-level MCP, Skill, and Hooks through `install codex` / `install cursor`; routine Cursor tool allowlist |
-| WorkBuddy | Global MCP, Hooks and Skill; manual MCP trust required after restart |
-| Other clients | Manual local stdio MCP setup according to the client's supported format |
 
 No Linux full bundle is published. Use the actual local project root. Remote, multi-root, model, desktop-version, and enterprise-policy combinations require their own verification; CI acceptance does not establish them all.
 
@@ -18,9 +16,10 @@ No Linux full bundle is published. Use the actual local project root. Remote, mu
 
 [Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) provide an architecture-aware installer for the same **v0.3.14** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
 
-There is no Apple Developer ID signing or notarization guarantee. Real system policy and scanner readiness depend on the target computer. WorkBuddy desktop acceptance was confirmed by the user; CI package and Windows long-path checks are recorded separately.
 
 ## Cursor integration and reconnects
+
+There is no Apple Developer ID signing or notarization guarantee. Actual system policy and scanner readiness depend on the target computer.
 
 Full installation includes an exact routine-tool allowlist. Run confirmations still depend on Cursor mode, local-user configuration, and team policy. Tool execution permission does not authorize a product risk fix.
 

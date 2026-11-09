@@ -266,7 +266,12 @@ def batch_report_page(result, check):
             label = '审计未覆盖' if gap['coverage'] == 'PARTIAL' else '历史审计覆盖范围待确认'
             sections.append(f"{label}：{gap['file_path']} — {reasons}")
         if page['gaps'] and page['total']:
-            sections.append('本次扫描存在覆盖限制，具体原因见本会话风险管理。')
+            if url:
+                sections.append('本次扫描存在覆盖限制，具体原因见本会话风险管理。')
+            else:
+                from .redactor import SecretRedactor
+                reasons = '；'.join(SecretRedactor().redact(str(gap)) for gap in page['gaps'])
+                sections.append('本次扫描存在覆盖限制：' + reasons + '。')
         if page['total'] == 0:
             sections.insert(0, '本批已记录文件的扫描已完成，未发现扫描候选漏洞。' if not page['gaps'] else
                             '本批扫描未发现扫描候选漏洞，但存在扫描覆盖限制。')
@@ -274,6 +279,8 @@ def batch_report_page(result, check):
             sections.append('你可以选择：**修复／暂不处理**。可指定风险编号分别处理。')
         if url and sections:
             sections.append(f'[本会话风险管理]({url})')
+        elif sections:
+            sections.append('本会话风险管理链接暂不可用；可请求打开风险管理页面查看连接诊断，检查结果已保留。')
     review_mark('report_render_done')
     return dict(report_text='\n\n'.join(sections), **page)
 

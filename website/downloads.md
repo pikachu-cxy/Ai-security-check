@@ -1,4 +1,8 @@
 # 下载与安装
+## 推荐：让 AI 帮你安装
+
+选择 [Codex](./guide/editors/codex.md) 或 [Cursor](./guide/editors/cursor.md)，复制安装请求到对应聊天。下方下载供手动安装备用，本次发行仅支持这两个编辑器。
+
 
 **许可提示：** 请以下载包内对应版本的许可为准。仓库新许可不追溯改变已经发布的安装包。参见[许可说明](./reference/legal)。
 
@@ -6,9 +10,8 @@
 
 ## 按编辑器安装 {#install}
 
-[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md) · [WorkBuddy](./guide/editors/workbuddy.md)
+[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md)
 
-**WorkBuddy 重启后，需要在 MCP 管理界面手动勾选 `ai-security-runtime` 的服务信任并启用连接。**
 
 ## 正式完整包 {#windows}
 
@@ -38,11 +41,9 @@ tar -xzf ai-security-runtime-v0.3.14-macos-arm64.tar.gz
 ./security-check/security-check install codex
 ```
 
-Intel 请选择 `macos-x64`。Cursor 将最后的 `codex` 改为 `cursor`；WorkBuddy 按[全局配置说明](./guide/editors/workbuddy.md)接入。
 
 ## 来源与验收范围 {#build-details}
 
-本次复用已完成的本地回归和用户确认通过的 WorkBuddy 桌面验收。发布流水线验证三平台新安装包、精简后的 MCP 连接和 Windows 长路径配置，不重复全量本地测试。具体结果以配套验收证据为准。
 
 [Release](https://github.com/pikachu-cxy/Ai-security-check/releases/tag/v0.3.14) · [SHA256SUMS.txt](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/SHA256SUMS.txt) · [release-manifest.json](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/release-manifest.json) · [Evidence ZIP](https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/ai-security-runtime-v0.3.14-release-evidence.zip)
 

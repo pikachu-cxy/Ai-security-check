@@ -23,14 +23,16 @@ class SQLiteStore:
         configured = os.getenv("SECURITY_RUNTIME_STATE_DIR")
         if configured:
             directory = Path(configured)
-        elif os.name == "nt" and os.getenv("LOCALAPPDATA"):
-            directory = Path(os.environ["LOCALAPPDATA"]) / "AI Security Runtime"
+        elif os.name == "nt":
+            from .user_paths import windows_directory
+            directory = windows_directory('state')
         else:
             directory = Path(os.getenv("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "ai-security-runtime"
         return directory / "scans.db"
 
     def __init__(self, path: Path | None = None):
-        self.path = path if path is not None else self.default_path()
+        from .user_paths import relocated_scan_path
+        self.path = relocated_scan_path(path) if path is not None else self.default_path()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._connect()) as db:
             with db:
@@ -163,7 +165,8 @@ class ReadOnlySQLiteStore:
     """Existing state only: no schema migration, directory/key creation or writes."""
 
     def __init__(self, path: Path | None = None):
-        self.path = path if path is not None else SQLiteStore.default_path()
+        from .user_paths import relocated_scan_path
+        self.path = relocated_scan_path(path) if path is not None else SQLiteStore.default_path()
 
     def _rows(self, table: str, query: str, parameters=()):
         if not self.path.is_file():
