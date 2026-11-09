@@ -17,7 +17,7 @@ INSTALLER = Path(__file__).resolve().parents[2] / 'website/public/install/window
 
 @pytest.mark.skipif(os.name != 'nt', reason='Windows installer')
 @pytest.mark.parametrize('shell', ['powershell', 'pwsh'])
-@pytest.mark.parametrize('scenario', ['codex', 'cursor', 'workbuddy', 'migration', 'migration-error', 'stale', 'hash', 'checksum', 'download', 'traversal', 'missing', 'exit', 'arm64'])
+@pytest.mark.parametrize('scenario', ['codex', 'cursor', 'workbuddy', 'migration', 'migration-error', 'stale', 'hash', 'checksum', 'download', 'traversal', 'missing', 'exit', 'arm64', 'gateway', 'gateway-archive', 'gateway-persistent', 'not-found', 'gateway-hash'])
 def test_installer(tmp_path, shell, scenario):
     executable = shutil.which(shell)
     if not executable:
@@ -29,7 +29,7 @@ def test_installer(tmp_path, shell, scenario):
             bundle.writestr(name, b'fixture, never execute')
             bundle.writestr('security-check/version.json', json.dumps(dict(build_id='a'*64, version=VERSION)))
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    if scenario == 'hash':
+    if scenario in ('hash', 'gateway-hash'):
         digest = '0' * 64
     checksum = tmp_path / 'fixture.sha256'
     checksum.write_text('invalid' if scenario == 'checksum' else f'{digest}  ai-security-runtime-v{VERSION}-windows-x64.zip\n')
@@ -43,8 +43,19 @@ $env:PROCESSOR_ARCHITEW6432 = ''
 if ($env:SCENARIO -eq 'arm64') { $env:PROCESSOR_ARCHITECTURE = 'ARM64' }
 function Invoke-WebRequest {
     param($Uri, $OutFile, [switch]$UseBasicParsing)
+    Add-Content -LiteralPath (Join-Path $env:FIXTURE_ROOT 'requests.txt') -Value $Uri
+    $isHash = ([uri]$Uri).AbsolutePath.EndsWith('.sha256')
+    $retry = ([uri]$Uri).Query -match '^\?asr_retry=[a-f0-9]{32}$'
+    if (($env:SCENARIO -in @('gateway','gateway-hash') -and $isHash -and -not $retry) -or
+        ($env:SCENARIO -eq 'gateway-archive' -and -not $isHash -and -not $retry) -or
+        $env:SCENARIO -in @('gateway-persistent','not-found')) {
+        $errorObject = New-Object System.Exception('fixture gateway error')
+        $status = if ($env:SCENARIO -eq 'not-found') {404} else {504}
+        $errorObject | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{StatusCode=$status})
+        throw $errorObject
+    }
     if ($env:SCENARIO -eq 'download') { throw 'fixture download failed' }
-    if ($Uri.EndsWith('.sha256')) {
+    if ($isHash) {
         Copy-Item -LiteralPath (Join-Path $env:FIXTURE_ROOT 'fixture.sha256') -Destination $OutFile
     } else {
         Copy-Item -LiteralPath (Join-Path $env:FIXTURE_ROOT 'fixture.zip') -Destination $OutFile
@@ -80,13 +91,23 @@ try {
     result = subprocess.run([executable, '-NoProfile', '-Command', harness.read_text(encoding='utf-8')], env=env,
                             capture_output=True, text=True, timeout=45)
     output = result.stdout + result.stderr
-    success = scenario in ('codex', 'cursor', 'workbuddy', 'migration')
+    success = scenario in ('codex', 'cursor', 'workbuddy', 'migration', 'gateway', 'gateway-archive')
     assert (result.returncode == 0) == success, output
     assert ('FIXTURE_RUNTIME_INVOKED' in output) == (success or scenario in ('exit', 'stale', 'migration-error')), output
     expected = {'hash': 'SHA256 mismatch', 'checksum': 'Invalid release checksum',
                 'download': 'fixture download failed', 'traversal': 'escapes the extraction',
                 'missing': 'missing security-check.exe', 'exit': 'exit code 17',
                 'arm64': 'Only Windows x64', 'stale': 'points to a different build',
-                'migration-error': 'fixture migration blocked'}
+                'migration-error': 'fixture migration blocked', 'gateway-hash': 'SHA256 mismatch',
+                'gateway-persistent': 'Download retry failed', 'not-found': 'Download failed'}
     assert ('Installation completed' if success else expected[scenario]) in output
     assert not list(tmp_path.rglob('escaped.exe'))
+    requests = (tmp_path / 'requests.txt').read_text().splitlines() if (tmp_path / 'requests.txt').exists() else []
+    if scenario in ('codex', 'cursor', 'migration'):
+        assert len(requests) == 2 and all('?' not in url for url in requests)
+    if scenario in ('gateway', 'gateway-archive', 'gateway-hash'):
+        assert len(requests) == 3 and sum('?asr_retry=' in url for url in requests) == 1
+    if scenario == 'gateway-persistent':
+        assert len(requests) == 2
+    if scenario == 'not-found':
+        assert len(requests) == 1

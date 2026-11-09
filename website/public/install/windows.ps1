@@ -23,10 +23,30 @@ $stage = Join-Path $downloadRoot ([guid]::NewGuid().ToString('N'))
 $null = New-Item -ItemType Directory -Path $stage
 $archive = Join-Path $stage $archiveName
 $checksum = "$archive.sha256"
+function Get-ReleaseFile {
+    param([string]$Uri, [string]$Destination)
+    try {
+        Invoke-WebRequest -UseBasicParsing -Uri $Uri -OutFile $Destination
+    } catch {
+        $response = $_.Exception.PSObject.Properties['Response']
+        if (-not $response -or -not $response.Value -or
+            [int]$response.Value.StatusCode -notin @(502, 503, 504)) {
+            throw "Download failed for $([IO.Path]::GetFileName($Destination)): $($_.Exception.Message)"
+        }
+        # A cached gateway failure can survive retries of the identical URL.
+        # Retry only this failed asset, once, on the same official origin.
+        Write-Host "Gateway error downloading $([IO.Path]::GetFileName($Destination)); retrying once..."
+        try {
+            Invoke-WebRequest -UseBasicParsing -Uri ($Uri + '?asr_retry=' + [guid]::NewGuid().ToString('N')) -OutFile $Destination
+        } catch {
+            throw "Download retry failed for $([IO.Path]::GetFileName($Destination)): $($_.Exception.Message)"
+        }
+    }
+}
 try {
     Write-Host "Downloading AI Security Runtime $version for $Editor..."
-    Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$archiveName.sha256" -OutFile $checksum
-    Invoke-WebRequest -UseBasicParsing -Uri "$baseUrl/$archiveName" -OutFile $archive
+    Get-ReleaseFile -Uri "$baseUrl/$archiveName.sha256" -Destination $checksum
+    Get-ReleaseFile -Uri "$baseUrl/$archiveName" -Destination $archive
     $localInstall = [Diagnostics.Stopwatch]::StartNew()
     $checksumText = (Get-Content -LiteralPath $checksum -Raw).Trim()
     $pattern = '\A([a-fA-F0-9]{64})\s+\*?' + [regex]::Escape($archiveName) + '\z'
