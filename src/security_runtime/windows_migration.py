@@ -28,6 +28,9 @@ MESSAGES = {
         '新目录已有不同的数据，迁移已停止并保留两份原件，请先核对要保留的状态。',
     'LEGACY_USER_DIRECTORIES_CHANGED':
         '迁移时旧数据发生变化，本次副本未发布。请停止旧版写入后重试。',
+    'LEGACY_DIRECTORY_IDENTITY_UNKNOWN':
+        '读取旧版用户数据目录时失败，文件可能在扫描过程中被其他程序删除或改写。请完全退出相关宿主后重试；'
+        '如仍失败，可用 --legacy-appdata 指定要保留的 AppData 或 LocalCache 根目录。',
 }
 OVERRIDES = {'state': 'SECURITY_RUNTIME_STATE_DIR', 'data': 'SECURITY_RUNTIME_DATA_DIR',
              'config': 'SECURITY_RUNTIME_CONFIG'}
@@ -66,9 +69,15 @@ def _inventory(root):
         for name in sorted(files):
             path = Path(directory) / name
             no_links(path)
-            with path.open('rb') as stream:
-                _physical_file(stream, path)
-                result[str(path.relative_to(root))] = hashlib.file_digest(stream, 'sha256').hexdigest()
+            try:
+                with path.open('rb') as stream:
+                    _physical_file(stream, path)
+                    result[str(path.relative_to(root))] = hashlib.file_digest(stream, 'sha256').hexdigest()
+            except OSError as exc:
+                # A legacy tree still written by a live host can lose a file
+                # between enumeration and hashing. Report a fixed diagnostic
+                # instead of letting a bare OSError read as a broken package.
+                raise IntegrationDiagnostic('LEGACY_DIRECTORY_IDENTITY_UNKNOWN') from exc
     return result
 
 

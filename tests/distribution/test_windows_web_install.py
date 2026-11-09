@@ -69,8 +69,9 @@ function Invoke-WebRequest {
             $build = 'a' * 64
             $actualBuild = if ($env:SCENARIO -eq 'stale') { 'b' * 64 } else { $build }
             $installation=@{local_files_ready=$true}
-            if ($env:SCENARIO -eq 'migration-error') { $installation.message='fixture migration blocked' }
-            @{installation=$installation; delivery=@{active_build=$build};
+            $diagnostics=@()
+            if ($env:SCENARIO -eq 'migration-error') { $installation.message='fixture migration blocked'; $diagnostics=@('LEGACY_DIRECTORY_IDENTITY_UNKNOWN') }
+            @{installation=$installation; diagnostics=$diagnostics; delivery=@{active_build=$build};
               launcher_verification=@{status='VERIFIED';version=$env:FIXTURE_VERSION;build_id=$actualBuild}} | ConvertTo-Json -Compress
             $global:LASTEXITCODE = 0
             if ($env:SCENARIO -eq 'exit') { $global:LASTEXITCODE = 17 }
@@ -101,6 +102,9 @@ try {
                 'migration-error': 'fixture migration blocked', 'gateway-hash': 'SHA256 mismatch',
                 'gateway-persistent': 'Download retry failed', 'not-found': 'Download failed'}
     assert ('Installation completed' if success else expected[scenario]) in output
+    if scenario == 'migration-error':
+        # The generic receipt message must not be the only thing the user sees.
+        assert '[Diagnostics] LEGACY_DIRECTORY_IDENTITY_UNKNOWN' in output
     assert not list(tmp_path.rglob('escaped.exe'))
     requests = (tmp_path / 'requests.txt').read_text().splitlines() if (tmp_path / 'requests.txt').exists() else []
     if scenario in ('codex', 'cursor', 'migration'):

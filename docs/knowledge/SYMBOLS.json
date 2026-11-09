@@ -17376,24 +17376,24 @@
     },
     {
       "path": "src/security_runtime/windows_migration.py",
-      "sha256": "6a6cb6db53e8c594d9f2df8c449c6e5e967ed9fa4938410b131232bfb3b61b12",
+      "sha256": "3c15b5d5c5a763217870aa91998c017f1b904c0f351576f029c401aae25bc8a2",
       "purpose": "One-time, explicit-install migration out of Windows AppData overlays.",
       "symbols": [
         {
           "name": "_physical_file",
-          "line": 36
+          "line": 39
         },
         {
           "name": "_inventory",
-          "line": 57
+          "line": 60
         },
         {
           "name": "_sources",
-          "line": 75
+          "line": 84
         },
         {
           "name": "migrate_user_directories",
-          "line": 107
+          "line": 116
         }
       ]
     },

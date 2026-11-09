@@ -12,7 +12,7 @@ Windows 默认安装根目录为 `%USERPROFILE%/.asr`，版本槽位与活动指
 
 Windows 原生安装在构造配置所有权服务前调用 `windows-user-directories-v1` 一次性迁移。配置、状态库、密钥及缓存按完整原件复制并核对，旧目录保留；程序槽位由传入的校验安装包重新建立，不复制旧活动指针。重复安装只读取小型完成回执，不遍历旧目录、不增加进程探测或启动器验证次数。非 Windows 默认位置保持原行为。旧签名任务中的扫描库路径不改写；只针对已记录迁移来源的旧默认 scans.db，在数据库打开边界解析到新库，保留原引用与证据签名。
 
-迁移发现不同的外部/宿主私有数据时返回 `LEGACY_USER_DIRECTORIES_CONFLICT_SELECT_APPDATA`，不合并数据库。用户可以通过 `install --legacy-appdata <包含 Local/Roaming 的根目录>` 或 Windows 脚本 `-LegacyAppData` 明确选定活动来源，其他原件保留。旧服务仍运行或进程身份未知时停止迁移；源数据变化、目的目录冲突、重定向读取无法匹配真实文件时也不能报告成功。重定向场景须退出相关宿主，在普通 PowerShell 安装后重连。首次数据迁移耗时单列，不当作重复安装性能。
+迁移发现不同的外部/宿主私有数据时返回 `LEGACY_USER_DIRECTORIES_CONFLICT_SELECT_APPDATA`，不合并数据库。用户可以通过 `install --legacy-appdata <包含 Local/Roaming 的根目录>` 或 Windows 脚本 `-LegacyAppData` 明确选定活动来源，其他原件保留。旧服务仍运行或进程身份未知时停止迁移；源数据变化、目的目录冲突、重定向读取无法匹配真实文件时也不能报告成功。扫描旧目录时文件被并发删除或不可读返回 `LEGACY_DIRECTORY_IDENTITY_UNKNOWN`（固定诊断，不回显路径内容），同样不发布副本、不删除原件，并提示可显式指定来源。重定向场景须退出相关宿主，在普通 PowerShell 安装后重连。首次数据迁移耗时单列，不当作重复安装性能。
 
 源码与网站脚本必须随同具备该迁移契约的原生包发布；改脚本的安装目录不代表旧发行包已支持配置和状态迁移。安装回执的 `user_directories` 与 `launcher_verification` 分别描述数据迁移及实际入口构建，不能替代宿主重连验收。
 

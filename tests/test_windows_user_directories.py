@@ -123,6 +123,21 @@ def test_copy_failure_is_retryable_and_keeps_source(profile, monkeypatch):
     assert migration.migrate_user_directories()['status'] == 'COMPLETE'
 
 
+def test_unreadable_legacy_file_reports_fixed_diagnostic(profile, monkeypatch):
+    # A live host can delete or rewrite a file between enumeration and hashing.
+    # That must surface as a known cause, never as a bare OSError that reads
+    # like a broken download package.
+    put(profile/'AppData/Local/AI Security Runtime/record')
+    def vanishing(stream, algorithm):
+        raise OSError(22, 'Invalid argument')
+    monkeypatch.setattr(migration.hashlib, 'file_digest', vanishing)
+    with pytest.raises(IntegrationDiagnostic, match='LEGACY_DIRECTORY_IDENTITY_UNKNOWN'):
+        migration.migrate_user_directories()
+    assert 'LEGACY_DIRECTORY_IDENTITY_UNKNOWN' in migration.MESSAGES
+    assert not windows_directory('state').exists()
+    assert not (windows_root()/'user-directories.json').exists()
+
+
 def test_explicit_profile_does_not_consume_future_default_migration(profile, monkeypatch):
     put(profile/'AppData/Local/AI Security Runtime/record')
     monkeypatch.setenv('SECURITY_RUNTIME_STATE_DIR', str(profile/'custom'))

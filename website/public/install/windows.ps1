@@ -83,6 +83,12 @@ try {
     if ($LASTEXITCODE -ne 0) {
         $installExit = $LASTEXITCODE
         try { $failure = $receiptText | ConvertFrom-Json } catch { $failure = $null }
+        # The receipt message is deliberately generic. The actionable cause is
+        # the diagnostics list, so print it before failing.
+        if ($failure -and $failure.PSObject.Properties['diagnostics']) {
+            $codes = @($failure.diagnostics | ForEach-Object { [string]$_ })
+            if ($codes.Count -gt 0) { Write-Host ('[Diagnostics] ' + ($codes -join ', ')) }
+        }
         if ($failure -and $failure.PSObject.Properties['installation'] -and
             $failure.installation.PSObject.Properties['message']) { throw $failure.installation.message }
         throw "Installation failed with exit code $installExit."
