@@ -100,6 +100,50 @@ def test_readonly_and_stop_do_not_open_historical_task_pages(repo, tmp_path, mon
     assert codex_hook_output(result) == {}
 
 
+@pytest.mark.parametrize('cleanup', [False, True])
+def test_readback_and_external_cleanup_never_open_watch_or_record(repo, tmp_path, monkeypatch, cleanup):
+    from security_runtime.codex_event_adapter import CodexEventAdapter
+    from security_runtime.host_tool_events import before_normalized_event
+    from security_runtime.development_stop import fallback
+    forbidden = no_old_task_reads(monkeypatch)
+    monkeypatch.setattr('security_runtime.development_file_watch.start_window', forbidden)
+    monkeypatch.setattr('security_runtime.development_check.record_hook', forbidden)
+    runtime = FakeRuntime()
+    monkeypatch.setattr(runtime, 'scan', forbidden)
+    core = coordinator(tmp_path, runtime, task_audit_mode=True)
+    command = (f'Remove-Item -LiteralPath "{tmp_path}/cache" -Recurse -Force' if cleanup
+               else "$p='app.py'; $c=Get-Content $p; $c[1..20]")
+    args = dict(tool_name='Bash', tool_input={'cmd': command}, session_id='reader',
+                workspace_path=str(repo), turn_id='read-turn', tool_use_id='read-tool')
+    adapter = CodexEventAdapter()
+    pre = adapter.normalize(dict(args, event='PreToolUse'), repo, legacy=True)
+    assert before_normalized_event(pre, core)['status'] == 'NOT_STARTED'
+    # Even concurrent writes cannot enter a watcher that was never opened.
+    (repo/'concurrent.md').write_text('another writer')
+    post = adapter.normalize(dict(args, event='PostToolUse'), repo, legacy=True)
+    result, _ = handle_normalized_event(post, coordinator=core)
+    assert result['status'] == 'NOT_SCANNED' and not result['execution']['scanner_run']
+    owner = dict(host='codex', session=post.context.session_binding)
+    assert fallback(core.store, repo, owner, automatic=True, turn_id='read-turn') is None
+
+
+def test_cursor_external_cleanup_is_not_recorded(repo, tmp_path, monkeypatch):
+    from test_cursor_automatic import ingress, tool
+    forbidden = no_old_task_reads(monkeypatch)
+    monkeypatch.setattr('security_runtime.development_check.record_hook', forbidden)
+    core = coordinator(tmp_path, FakeRuntime(), task_audit_mode=True)
+    ingress(repo, tmp_path, core, 'sessionStart')
+    command = f'Remove-Item -LiteralPath "{tmp_path}/cache" -Recurse -Force'
+    from security_runtime.cursor_tasks import CursorTaskBridge
+    bridge = CursorTaskBridge(core, repo, 's', 'generation')
+    assert bridge.before(dict(tool_name='Shell', tool_input={'command': command}))['status'] == 'READ_ONLY_OR_UNSUPPORTED'
+    # Establish the same generation binding used by native Cursor feedback.
+    tool(repo, tmp_path, core, path='A.java')
+    _, result = ingress(repo, tmp_path, core, 'postToolUse', tool_name='Shell',
+                        tool_use_id='cleanup', tool_input={'command': command})
+    assert result['status'] == 'NOT_APPLICABLE' and not result['scanner_run']
+
+
 def test_default_stop_keeps_explicit_repair_continuation(repo, tmp_path, monkeypatch):
     no_old_task_reads(monkeypatch)
     core = coordinator(tmp_path, FakeRuntime(), task_audit_mode=True)

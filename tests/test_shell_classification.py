@@ -121,3 +121,81 @@ def test_windows_store_native_shell_is_recognized_narrowly(tmp_path, monkeypatch
     command = '"'+str(shell)+'" -NoProfile -Command '+shlex.quote('git status --short')
     assert (classify_bash_command({'command': command}) == 'READ_ONLY') is trusted
     assert classify_bash_command({'command': '"'+str(shell)+'" -Command '+shlex.quote('Set-Content x y')}) != 'READ_ONLY'
+
+
+@pytest.mark.parametrize('command', [
+    "$p='src/file.py'; $c=Get-Content $p; $c[340..405]",
+    '$c=Get-Content src/file.py; $c[0..100]; $c=Get-Content other.py; $c[4..9]',
+    '$c=Get-Content -LiteralPath "a b.py" -TotalCount 20; $c[-1]; rg -n pattern src',
+    "$p='src/file.py'; Get-Content $p",
+])
+def test_local_content_readback_is_readonly(command):
+    assert classify_bash_command({'cmd': command}) == 'READ_ONLY'
+
+
+@pytest.mark.parametrize('suffix', [
+    '; Set-Content target value', '; $c[0]=3', '; $c[$(Set-Content x y)]',
+    '; $c.Clear()', '; & $c', '; $env:PATH="changed"',
+    '; $p="$(Set-Content x y)"; Get-Content $p',
+    '; $c=Unknown-Command; $c[0]', '; $c[0] > output.txt',
+])
+def test_readback_does_not_hide_writes(suffix):
+    assert classify_bash_command({'cmd': '$c=Get-Content file.py; $c[0..10]' + suffix}) != 'READ_ONLY'
+
+
+def test_unknown_content_variables_and_expressions_stay_unknown():
+    for command in ('$c[1..3]', '$c=Get-Content $unknown; $c[1]',
+                    '$c=Get-Content $(generator); $c[1]', '$c=Get-Content file; $c[1+2]'):
+        assert classify_bash_command({'cmd': command}) != 'READ_ONLY'
+
+
+def test_only_literal_external_cleanup_skips_workspace(tmp_path):
+    root = tmp_path/'project'
+    root.mkdir()
+    outside = tmp_path/'cache'
+    command = f'Remove-Item -LiteralPath "{outside}" -Recurse -Force'
+    assert classify_bash_command({'cmd': command}, workspace=root) == 'OUTSIDE_WORKSPACE_MUTATION'
+    assert classify_bash_command({'cmd': command}) == 'POSSIBLE_WORKSPACE_MUTATION'
+    for value in (root, root/'src', tmp_path, 'relative', str(outside)+'/*'):
+        assert classify_bash_command({'cmd': f'Remove-Item -Recurse "{value}"'}, workspace=root) != 'OUTSIDE_WORKSPACE_MUTATION'
+    for suffix in ('; Set-Content source.py changed', '; python cleanup.py', ' | Remove-Item source.py',
+                   '; Remove-Item source.py', ' -ErrorVariable errors'):
+        assert classify_bash_command({'cmd': command+suffix}, workspace=root) != 'OUTSIDE_WORKSPACE_MUTATION'
+
+
+def test_external_cleanup_does_not_follow_links_or_hide_access_errors(tmp_path, monkeypatch):
+    def denied(path):
+        raise PermissionError('unverified')
+    monkeypatch.setattr('security_runtime.hook_state.no_links', denied)
+    assert classify_bash_command({'cmd': f'rm -rf "{tmp_path}/cache"'}, workspace=tmp_path/'project') != 'OUTSIDE_WORKSPACE_MUTATION'
+
+
+def test_external_cleanup_through_symlink_is_not_exempt(tmp_path):
+    root = tmp_path/'project'
+    root.mkdir()
+    alias = tmp_path/'cache'
+    import os
+    if os.name == 'nt':
+        import subprocess
+        subprocess.run(['cmd', '/c', 'mklink', '/J', str(alias), str(root)], check=True, capture_output=True)
+    else:
+        alias.symlink_to(root, target_is_directory=True)
+    assert classify_bash_command({'cmd': f'Remove-Item -Recurse "{alias}"'}, workspace=root) != 'OUTSIDE_WORKSPACE_MUTATION'
+
+
+def test_external_cleanup_diagnostics_keep_the_distinction():
+    from security_runtime.recent_hooks import safe_fields
+    data = dict(normalized_operation_class='OUTSIDE_WORKSPACE_MUTATION',
+                tool_classification='OUTSIDE_WORKSPACE_MUTATION',
+                scanner_skipped_reason='OUTSIDE_WORKSPACE_ACTIVITY')
+    assert safe_fields(data) == data
+
+
+def test_external_cleanup_compares_canonical_paths(tmp_path, monkeypatch):
+    from pathlib import Path
+    root = tmp_path/'project'
+    root.mkdir()
+    alias = tmp_path/'PROJEC~1'
+    original = Path.resolve
+    monkeypatch.setattr(Path, 'resolve', lambda self, **kwargs: root if self == alias else original(self, **kwargs))
+    assert classify_bash_command({'cmd': f'Remove-Item -Recurse "{alias}"'}, workspace=root) != 'OUTSIDE_WORKSPACE_MUTATION'

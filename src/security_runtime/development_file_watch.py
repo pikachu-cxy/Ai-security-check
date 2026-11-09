@@ -84,14 +84,21 @@ class _Window:
             if not path.is_absolute():
                 uncertain = True
                 continue
+            # An unrelated notification is not a gap in this project's
+            # coverage. Compare directory components, not string prefixes;
+            # normalize traversal before containment, but validate links on
+            # the original spelling below so normalization cannot hide one.
+            lexical = Path(os.path.abspath(path))
+            if not lexical.is_relative_to(self.store.root):
+                continue
             try:
-                name = path.relative_to(self.store.root).as_posix()
+                name = lexical.relative_to(self.store.root).as_posix()
                 from .development_scope import excluded_artifact
                 if excluded_artifact(name):
                     continue
                 if any(os.path.normcase(p) in self.ignored for p in Path(name).parts):
                     continue
-                if path.is_relative_to(self.private):
+                if lexical.is_relative_to(self.private):
                     continue
                 no_links(path)
                 if path.is_dir():

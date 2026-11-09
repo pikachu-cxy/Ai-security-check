@@ -209,7 +209,7 @@ class CursorHostEventAdapter:
         elif event == 'afterShellExecution':
             # Reuse precisely the shipped classifier; commands remain ephemeral.
             from .host_tool_events import classify_bash_command
-            operation = OperationClass(classify_bash_command({'command': arguments['command']}))
+            operation = OperationClass(classify_bash_command({'command': arguments['command']}, workspace=root))
         session = arguments['conversation_id']
         context = VerifiedHostContext('cursor', root, identity(os.path.normcase(str(root))),
             identity(session), None, self.capabilities, session)

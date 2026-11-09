@@ -170,7 +170,8 @@ class HostEventJournal(_SignedRows):
     @staticmethod
     def applicable(event):
         from .host_events import EventKind, OperationClass
-        return (event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation != OperationClass.READ_ONLY
+        return (event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation not in {
+                    OperationClass.READ_ONLY, OperationClass.OUTSIDE_WORKSPACE_MUTATION}
                 and event.context.capabilities.supports_invocation_id
                 and event.context.invocation_binding is not None)
 
@@ -181,7 +182,8 @@ class HostEventJournal(_SignedRows):
                 or not isinstance(record.get('ref'), str) or not EVENT_REF.fullmatch(record['ref'])
                 or record.get('state') not in {'CLAIMED', 'DISPATCHED', 'COMPLETED', 'UNCERTAIN'}
                 or record.get('host') not in HOSTS or record.get('phase') != EventKind.WORKSPACE_ACTIVITY.value
-                or record.get('operation') not in {item.value for item in OperationClass if item != OperationClass.READ_ONLY}
+                or record.get('operation') not in {item.value for item in OperationClass if item not in {
+                    OperationClass.READ_ONLY, OperationClass.OUTSIDE_WORKSPACE_MUTATION}}
                 or type(record.get('fence')) is not int or record['fence'] < 1
                 or not valid_digest(record.get('token_hash'))
                 or not valid_digest(record.get('session')) or not valid_digest(record.get('invocation'))

@@ -60,6 +60,7 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             diag.update(bindings.accept(root, payload['conversation_id'], payload.get('generation_id') or None))
         diag.update(workspace_claim_match=True, session_claim_match=True)
         binding_verified = True
+        may_mutate = event == 'postToolUse' and CursorTaskBridge.may_mutate(payload, workspace=root)
         obs.stage('CLAIMS_VALID', **diag)
         core = core or coordinator(root, automatic=True)
         bridge = CursorTaskBridge(core, root, payload['conversation_id'], payload.get('generation_id') or '')

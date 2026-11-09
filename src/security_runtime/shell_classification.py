@@ -14,6 +14,7 @@ import shlex
 READ_ONLY = 'READ_ONLY'
 UNKNOWN = 'UNKNOWN'
 MUTATION = 'POSSIBLE_WORKSPACE_MUTATION'
+OUTSIDE_WORKSPACE = 'OUTSIDE_WORKSPACE_MUTATION'
 
 _READ_COMMANDS = {
     'cat', 'type', 'get-content', 'gc', 'ls', 'dir', 'get-childitem', 'gci',
@@ -164,6 +165,107 @@ def _commands(command):
     return commands, None
 
 
+def _statements(command):
+    """Split literal statements without interpreting quoted separators."""
+    start, quote = 0, None
+    for index, char in enumerate(command):
+        if quote:
+            if char == quote:
+                quote = None
+        elif char in '\'"':
+            quote = char
+        elif char in ';\r\n':
+            yield command[start:index].strip()
+            start = index + 1
+    yield command[start:].strip()
+
+
+def _readonly_content_fragments(command):
+    # Only recognize values established in this command. No shell evaluation,
+    # methods, interpolation, computed indices or arbitrary variable reads.
+    if '$' not in command:
+        return command
+    paths, contents, output = {}, set(), []
+    for statement in _statements(command):
+        literal = re.fullmatch(r'''\$([A-Za-z_]\w*)\s*=\s*(['"])([^'"$`\r\n]+)\2''', statement)
+        if literal and not any(c in literal[3] for c in '{}()<>;|&'):
+            name = literal[1].casefold()
+            paths[name] = literal[2] + literal[3] + literal[2]
+            contents.discard(name)
+            output.append('Get-Location')
+            continue
+        assignment = re.fullmatch(r'\$([A-Za-z_]\w*)\s*=\s*(Get-Content\s+.+)', statement, re.I)
+        expression = assignment[2] if assignment else statement
+        variable = re.fullmatch(r'Get-Content\s+\$([A-Za-z_]\w*)', expression, re.I)
+        if variable and variable[1].casefold() in paths:
+            expression = 'Get-Content ' + paths[variable[1].casefold()]
+        words, reason = _commands(expression)
+        # Avoid output/pipeline variable options: Get-Content accepts only a
+        # literal path and bounded read options in this assignment grammar.
+        if assignment and reason is None and len(words) == 1 and _content_read(words[0]):
+            name = assignment[1].casefold()
+            contents.add(name)
+            paths.pop(name, None)
+            output.append(expression)
+            continue
+        selection = re.fullmatch(r'\$([A-Za-z_]\w*)(?:\[\s*-?\d+\s*(?:\.\.\s*-?\d+\s*)?\])?', statement)
+        if selection and selection[1].casefold() in contents:
+            output.append('Get-Location')
+        else:
+            output.append(statement if assignment else expression)
+    return '; '.join(output)
+
+
+def _content_read(words):
+    if not words or words[0].casefold() != 'get-content':
+        return False
+    args, paths = iter(words[1:]), 0
+    for arg in args:
+        if arg.casefold() in {'-path', '-literalpath'}:
+            arg = next(args, '')
+        elif arg.casefold() in {'-totalcount', '-tail'}:
+            if not next(args, '').isdigit():
+                return False
+            continue
+        elif arg.casefold() == '-raw':
+            continue
+        if not arg or arg.startswith('-') or any(c in arg for c in '$`{}()<>;|&'):
+            return False
+        paths += 1
+    return paths == 1
+
+
+def _outside_removal(words, root):
+    """Prove a narrow literal cleanup cannot touch this workspace tree."""
+    if root is None or words[0].casefold() not in {'remove-item', 'rm'}:
+        return False
+    flags = ({'-recurse', '-force', '-literalpath', '-path'}
+             if words[0].casefold() == 'remove-item' else {'-r', '-f', '-rf', '-fr', '--'})
+    targets = [arg for arg in words[1:] if arg.casefold() not in flags]
+    if not targets or len(targets) > 32:
+        return False
+    try:
+        from .hook_state import no_links
+        root = Path(root)
+        no_links(root)
+        root = root.resolve(strict=True)
+        for value in targets:
+            if value.startswith(('-', '//', '\\\\')) or any(c in value for c in '*?[]$`{},;|&<>'):
+                return False
+            path = Path(value)
+            if not path.is_absolute() or '..' in path.parts:
+                return False
+            no_links(path)
+            # Windows short names and spelling aliases must not turn a
+            # workspace/ancestor deletion into an apparently external path.
+            path = path.resolve(strict=False)
+            if path.is_relative_to(root) or root.is_relative_to(path):
+                return False
+        return True
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
 def _git_readonly(args):
     # Global configuration overrides can install executable helpers. Only
     # literal directory selection and disabling a pager/optional locks qualify.
@@ -197,8 +299,9 @@ def _git_readonly(args):
         for option in unsafe) for arg in args)
 
 
-def classify_command(command):
+def classify_command(command, *, workspace=None):
     command = _readonly_powershell_fragments(_unwrap_powershell(command))
+    command = _readonly_content_fragments(command)
     commands, reason = _commands(command)
     if reason is not None:
         return reason
@@ -212,6 +315,8 @@ def classify_command(command):
         escaped_option = any('\\' in arg and arg.lstrip('\\').startswith('-') for arg in words)
         if escaped_option:
             classifications.append(UNKNOWN)
+        elif '|' not in command and '&' not in command and _outside_removal(words, workspace):
+            classifications.append(OUTSIDE_WORKSPACE)
         elif name in _WRITE_COMMANDS:
             classifications.append(MUTATION)
         elif name == 'git':
@@ -225,4 +330,6 @@ def classify_command(command):
             classifications.append(UNKNOWN)
     if MUTATION in classifications:
         return MUTATION
+    if OUTSIDE_WORKSPACE in classifications and all(value in {READ_ONLY, OUTSIDE_WORKSPACE} for value in classifications):
+        return OUTSIDE_WORKSPACE
     return READ_ONLY if all(value == READ_ONLY for value in classifications) else UNKNOWN

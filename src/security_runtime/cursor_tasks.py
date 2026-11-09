@@ -67,13 +67,14 @@ class CursorTaskBridge:
         }
 
     @staticmethod
-    def may_mutate(payload):
+    def may_mutate(payload, *, workspace=None):
         name, inputs = payload.get('tool_name'), payload.get('tool_input', {})
         if name == 'Shell':
             from .host_tool_events import classify_bash_command
             command = inputs.get('command') if isinstance(inputs, dict) else None
             # An absent/unknown command is possible activity, never execution.
-            return not isinstance(command, str) or classify_bash_command({'command': command}) != 'READ_ONLY'
+            return not isinstance(command, str) or classify_bash_command({'command': command}, workspace=workspace) not in {
+                'READ_ONLY', 'OUTSIDE_WORKSPACE_MUTATION'}
         return name in {'Write', 'Edit', 'Delete'}
 
     def before(self, payload):
@@ -83,7 +84,7 @@ class CursorTaskBridge:
         from .tasks.activity import ActivityStore, deferred
         focus = ActivityStore(self.core.store, self.root).focus(self.owner)
         if not preparing and getattr(self.core, 'task_audit_mode', False) and not focus:
-            return dict(status='EDIT_OBSERVATION_READY' if self.may_mutate(payload) else
+            return dict(status='EDIT_OBSERVATION_READY' if self.may_mutate(payload, workspace=self.root) else
                         'READ_ONLY_OR_UNSUPPORTED', scanner_run=False, baseline_created=False)
         if not preparing and focus and focus.get('task_ref') is None:
             return dict(status='TASK_SUSPENDED', scanner_run=False,
@@ -107,7 +108,7 @@ class CursorTaskBridge:
                 return dict(status='MCP_PREPARATION_DELEGATED',scanner_run=False)
             if verify_session_ref(self.core.store,self.root,token)!=self.owner:
                 return dict(status='BASELINE_UNAVAILABLE',scanner_run=False)
-        mutating = preparing or self.may_mutate(payload)
+        mutating = preparing or self.may_mutate(payload, workspace=self.root)
         if not mutating:
             return dict(status='READ_ONLY_OR_UNSUPPORTED', scanner_run=False)
         from .tasks.attribution import session_activity

@@ -53,7 +53,8 @@ REASONS = {'INVALID_HOST_CLAIMS', 'HOST_CLAIMS_REJECTED', 'WORKSPACE_BINDING_REQ
            'FIRST_SCAN_UNATTRIBUTED_RISK_PRESENT', 'NO_CHANGE', 'NO_CHANGES', 'REUSED_LAST_RESULT',
            'DEBOUNCED', 'BUSY', 'HANDLER_EXCEPTION', 'STRUCTURED_RESULT_UNAVAILABLE', 'OTHER',
             'WORKSPACE_BASELINE_ATTRIBUTION_UNAVAILABLE'}
-REASONS |= {'READ_ONLY_ACTIVITY', 'WORKSPACE_CONTENT_DELTA'}
+REASONS |= {'READ_ONLY_ACTIVITY', 'OUTSIDE_WORKSPACE_ACTIVITY', 'WORKSPACE_CONTENT_DELTA'}
+STAGES |= {'OUTSIDE_WORKSPACE_SKIPPED'}
 REASONS |= {'OBSERVED_EDITS_RECORDED'}
 REASONS |= ACTIVITY_REASONS | {'TASK_BASELINE_REQUIRED', 'TASK_BASELINE_UNAVAILABLE'}
 REASONS |= {'CURSOR_REMOTE_NOT_SUPPORTED'}
@@ -190,12 +191,12 @@ def safe_fields(values):
         ('host', {'codex', 'cursor', 'kiro', 'workbuddy', 'codebuddy', 'qoder', 'generic'}),
         ('host_event_contract', {'host-event-v1'}),
         ('normalized_event_kind', {'SESSION_START', 'WORKSPACE_ACTIVITY', 'SESSION_STOP'}),
-        ('normalized_operation_class', {'READ_ONLY', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
+        ('normalized_operation_class', {'READ_ONLY', 'OUTSIDE_WORKSPACE_MUTATION', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
         ('workspace_binding_status', {'BINDING_CONSISTENT'}),
         ('normalized_scanner_trigger_reason', {'WORKSPACE_CONTENT_DELTA'}),
         ('event_schema', {'codex-' + e + '-v1' for e in EVENTS.values()} | {'cursor-'+e+'-v1' for e in CURSOR_EVENTS}),
         ('tool_name', {'Bash', 'apply_patch', 'Edit', 'Write', 'Shell'}),
-        ('tool_classification', {'READ_ONLY', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
+        ('tool_classification', {'READ_ONLY', 'OUTSIDE_WORKSPACE_MUTATION', 'DIRECT_FILE_MUTATION', 'POSSIBLE_WORKSPACE_MUTATION', 'UNKNOWN'}),
         ('continuation_status', {'PENDING_CURSOR_CONTINUATION_CAPABILITY'}),
         ('invocation_identity_status', {'UNAVAILABLE_CONTENT_RECONCILIATION_ONLY'}),
     ):

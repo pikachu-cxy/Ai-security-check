@@ -1517,7 +1517,7 @@
     },
     {
       "path": "src/security_runtime/cursor_automatic.py",
-      "sha256": "7eb8e7322445bdb44fa82320d3f5a3aef9d83ff78657aa26e8e09014ec6706f6",
+      "sha256": "a3895d3d3375a02df160bbcd45919d734494d58e55d04880027505c691fb246c",
       "purpose": "Local Cursor command transport for the shared task/check services.",
       "symbols": [
         {
@@ -1595,7 +1595,7 @@
     },
     {
       "path": "src/security_runtime/cursor_event_adapter.py",
-      "sha256": "4c431aab6346628035a70231ca65fab7e6c62de9355f7515db021aa07696feba",
+      "sha256": "d7711739b95c34a60ae45e4948f2f8e446290b1b5b25daf0783f44e0ae02cc66",
       "purpose": "Cursor's documented local command Hook claims, not Host attestation.",
       "symbols": [
         {
@@ -1782,7 +1782,7 @@
     },
     {
       "path": "src/security_runtime/cursor_tasks.py",
-      "sha256": "b9b98e761c562152e1aed145e033c4d2fbd9bd9c55c322ca6ef0931bf863f113",
+      "sha256": "1565437b8f500b253c4be25d8f621886669cd296503f0a29a41a1f77a72e5869",
       "purpose": "Cursor task preparation and bounded feedback. No scanner or repair authority here.",
       "symbols": [
         {
@@ -1811,15 +1811,15 @@
         },
         {
           "name": "CursorTaskBridge.before",
-          "line": 79
+          "line": 80
         },
         {
           "name": "CursorTaskBridge.context",
-          "line": 150
+          "line": 151
         },
         {
           "name": "CursorTaskBridge.followup",
-          "line": 195
+          "line": 196
         }
       ]
     },
@@ -2807,7 +2807,7 @@
     },
     {
       "path": "src/security_runtime/development_file_watch.py",
-      "sha256": "731b433ed1c85bb8121281fac23efa7f6209ece55dfa4ff0b6a11ffd195e380a",
+      "sha256": "6bfc12ea98ea0b42133457b6e2b7e2464541537209298d12966d36f61850c27b",
       "purpose": "Task-window path notifications. No Git, content inventory, scan or writer claim.",
       "symbols": [
         {
@@ -2836,39 +2836,39 @@
         },
         {
           "name": "_Window.record",
-          "line": 109
+          "line": 116
         },
         {
           "name": "_Window.run",
-          "line": 140
+          "line": 147
         },
         {
           "name": "_reuse_remote",
-          "line": 195
+          "line": 202
         },
         {
           "name": "start_window",
-          "line": 211
+          "line": 218
         },
         {
           "name": "active",
-          "line": 281
+          "line": 288
         },
         {
           "name": "stop_window",
-          "line": 301
+          "line": 308
         },
         {
           "name": "close_store",
-          "line": 331
-        },
-        {
-          "name": "_close",
           "line": 338
         },
         {
+          "name": "_close",
+          "line": 345
+        },
+        {
           "name": "_shutdown",
-          "line": 350
+          "line": 357
         }
       ]
     },
@@ -4647,7 +4647,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "384cede56f8ef1536482c6d999804c9f1d48ab8ed99995abd6d6340f96f55d9b",
+      "sha256": "b58d83aba9414c0a41a83adfe0433f8622185c13b2143112618720ee1eedb775",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -5687,7 +5687,7 @@
     },
     {
       "path": "src/security_runtime/host_event_journal.py",
-      "sha256": "7bc8d1ba796336ea5f88a44540c06f2ec773ec5a3bbf066d4e0e643a66a35c71",
+      "sha256": "c3a3a235bffa24bed59d6f678c3f5ba0f638476c47fbf29094cdb74ce268fca8",
       "purpose": "Private, bounded event claims. A claim is never edit or repair authority.",
       "symbols": [
         {
@@ -5772,49 +5772,49 @@
         },
         {
           "name": "HostEventJournal._validate",
-          "line": 177
+          "line": 178
         },
         {
           "name": "HostEventJournal._claim_valid",
-          "line": 196
+          "line": 198
         },
         {
           "name": "HostEventJournal.claim",
-          "line": 202
+          "line": 204
         },
         {
           "name": "HostEventJournal._owned",
-          "line": 241
+          "line": 243
         },
         {
           "name": "HostEventJournal.start",
-          "line": 246
+          "line": 248
         },
         {
           "name": "HostEventJournal.renew",
-          "line": 256
+          "line": 258
         },
         {
           "name": "HostEventJournal.complete",
-          "line": 268
+          "line": 270
         },
         {
           "name": "HostEventJournal.uncertain",
-          "line": 281
+          "line": 283
         },
         {
           "name": "HostEventJournal.get",
-          "line": 291
+          "line": 293
         },
         {
           "name": "HostEventJournal.ack_task",
-          "line": 301
+          "line": 303
         }
       ]
     },
     {
       "path": "src/security_runtime/host_event_runtime.py",
-      "sha256": "838da96df1f74e7e714fe6e3acfe500494d3e6a84478341418d00a68df87f105",
+      "sha256": "2b2992b3ef083fe3d67241b4bdc4252e18d468e4b024dc57b660ad256a6fdc11",
       "purpose": "Normalized event dispatch; the existing coordinator remains the only scanner core.",
       "symbols": [
         {
@@ -5837,7 +5837,7 @@
     },
     {
       "path": "src/security_runtime/host_events.py",
-      "sha256": "f6fbbf0a909705641bfe31d8146d818ccb4b95103951c16ad9a850f5ae71ba11",
+      "sha256": "f48b80cc2aea4b2e2c0c7b5f9f63155f0d7065815da5a5c912e1b455f4071d4b",
       "purpose": "Internal Host Event Normalization v1. Not an MCP input or repair authority.",
       "symbols": [
         {
@@ -5850,35 +5850,35 @@
         },
         {
           "name": "VerifiedHostContext",
-          "line": 35
+          "line": 36
         },
         {
           "name": "VerifiedHostContext.__post_init__",
-          "line": 51
+          "line": 52
         },
         {
           "name": "NormalizedHostEvent",
-          "line": 69
+          "line": 70
         },
         {
           "name": "NormalizedHostEvent.__post_init__",
-          "line": 84
+          "line": 85
         },
         {
           "name": "NormalizedHostEvent.diagnostics",
-          "line": 109
+          "line": 110
         },
         {
           "name": "HostEventAdapter",
-          "line": 116
+          "line": 117
         },
         {
           "name": "HostEventAdapter.normalize",
-          "line": 120
+          "line": 121
         },
         {
           "name": "HostEventAdapter.validate_claims",
-          "line": 122
+          "line": 123
         }
       ]
     },
@@ -5939,7 +5939,7 @@
     },
     {
       "path": "src/security_runtime/host_tool_events.py",
-      "sha256": "3f4a87a2273c88f7385b714ecfe3c3b79d5d40b34a727b70183600c7f0473ba2",
+      "sha256": "75181b88a5fccd39408c33bc1bf2b0c0e548bb041036fa9ef920a650213b014c",
       "purpose": "Shared native tool-event translation and edit-window handling, without host transport.",
       "symbols": [
         {
@@ -9151,88 +9151,88 @@
     },
     {
       "path": "src/security_runtime/recent_hooks.py",
-      "sha256": "dae7500f80851c169a5c35b4c00cad7a23d351223c6f919aaa62a03ebf271e4e",
+      "sha256": "b00ff5354f31c2b1cfa7411e26a284d9e07250407a14591c9c09fc6952e7a421",
       "purpose": "Bounded, non-authoritative Hook observations; never a security proof store.",
       "symbols": [
         {
           "name": "workspace_hash",
-          "line": 91
+          "line": 92
         },
         {
           "name": "safe_fields",
-          "line": 95
+          "line": 96
         },
         {
           "name": "RecentHookStore",
-          "line": 222
-        },
-        {
-          "name": "RecentHookStore.__init__",
           "line": 223
         },
         {
+          "name": "RecentHookStore.__init__",
+          "line": 224
+        },
+        {
           "name": "RecentHookStore.path",
-          "line": 229
+          "line": 230
         },
         {
           "name": "RecentHookStore._initialize",
-          "line": 233
+          "line": 234
         },
         {
           "name": "RecentHookStore.repair",
-          "line": 246
+          "line": 247
         },
         {
           "name": "RecentHookStore.write",
-          "line": 250
+          "line": 251
         },
         {
           "name": "RecentHookStore._write",
-          "line": 265
+          "line": 266
         },
         {
           "name": "RecentHookStore.recent",
-          "line": 302
+          "line": 303
         },
         {
           "name": "Observation",
-          "line": 348
-        },
-        {
-          "name": "Observation.__init__",
           "line": 349
         },
         {
+          "name": "Observation.__init__",
+          "line": 350
+        },
+        {
           "name": "Observation.save",
-          "line": 374
+          "line": 375
         },
         {
           "name": "Observation.bind",
-          "line": 385
+          "line": 386
         },
         {
           "name": "Observation.stage",
-          "line": 389
+          "line": 390
         },
         {
           "name": "Observation.finish",
-          "line": 396
+          "line": 397
         },
         {
           "name": "observe",
-          "line": 427
+          "line": 428
         },
         {
           "name": "bind_current_workspace",
-          "line": 436
+          "line": 437
         },
         {
           "name": "instrument",
-          "line": 445
+          "line": 446
         },
         {
           "name": "install_project_observer",
-          "line": 517
+          "line": 518
         }
       ]
     },
@@ -12034,32 +12034,48 @@
     },
     {
       "path": "src/security_runtime/shell_classification.py",
-      "sha256": "806878ae565d9ccd95a4fdf81d0ee772397f6ac049a949944b0ae8b937d82e0e",
+      "sha256": "987b32859bd7e32c71cdd981d9cf1aa7bdc73ceed0fdd08096632993f1049c5a",
       "purpose": "Conservative, non-executing classification of simple shell command lists.",
       "symbols": [
         {
           "name": "_trusted_powershell",
-          "line": 30
+          "line": 31
         },
         {
           "name": "_unwrap_powershell",
-          "line": 61
+          "line": 62
         },
         {
           "name": "_readonly_powershell_fragments",
-          "line": 76
+          "line": 77
         },
         {
           "name": "_commands",
-          "line": 104
+          "line": 105
+        },
+        {
+          "name": "_statements",
+          "line": 168
+        },
+        {
+          "name": "_readonly_content_fragments",
+          "line": 183
+        },
+        {
+          "name": "_content_read",
+          "line": 219
+        },
+        {
+          "name": "_outside_removal",
+          "line": 238
         },
         {
           "name": "_git_readonly",
-          "line": 167
+          "line": 269
         },
         {
           "name": "classify_command",
-          "line": 200
+          "line": 302
         }
       ]
     },

@@ -2,11 +2,15 @@
 
 ## 0.3.14 — 2026-11-09
 
+- Recognize bounded PowerShell path variables, Get-Content assignments and constant line slices as reads. Literal cleanup commands proven to target only paths outside the project do not enter development checks.
+- File notifications are recorded only within the current project directory tree. External paths and adjacent directories with similar prefixes are ignored. Unknown scripts remain conservatively observed; a time window does not identify the writer.
+- Reinstall this refreshed bundle and restart the editor, then verify its actual build. An unchanged version number does not establish that these fixes are loaded.
+
 - Candidate review defaults to on and business audit to off; enabled audits use incremental development-time child tasks.
 - Fix parent closeout missing developer child-agent edits; merge the recorded task scope through the existing scan and report flow.
 - Additional post-repair verification defaults to off. Repair edits still receive ordinary development checks, with original risk history retained.
 - Whole-batch reports, prominent risk headings, separators and chat links; hierarchical resources, settings and health monitoring in the dashboard.
-- Shared Codex, Cursor and WorkBuddy development protocols. This release gate uses Codex; Cursor quota and the remaining WorkBuddy incremental acceptance limits are retained separately.
+- This release supports Codex and Cursor; WorkBuddy is not currently supported. Shared source services do not establish desktop acceptance for every host.
 - Streamlined native build, installation/startup and MCP checks in CI, without repeating local development acceptance scripts.
 
 ## 0.3.13 — 2026-11-05

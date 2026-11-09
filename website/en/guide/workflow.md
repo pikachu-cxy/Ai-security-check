@@ -25,6 +25,10 @@ Stop waits up to 18 seconds per call by default; background work may continue af
 
 ## Scope
 
+File watching records only files within the bound project root and its descendants. External paths and adjacent directories with similar name prefixes are ignored. Direct edit tools supply paths in their arguments. Shell commands are first classified; uncertain commands use operating-system file notifications rather than inferred edit paths. A time window identifies changes, not the chat or process that wrote them.
+
+Supported bounded PowerShell readback syntax does not start a watcher. Literal cleanup commands skip development collection only when all targets can be verified outside the project. Project deletions, dynamic paths and mixed unknown scripts remain conservatively handled.
+
 Project source, configuration, dependency manifests and lockfiles are eligible. Dependency installation directories, compiled outputs and known temporary artifacts are filtered. Disposable agent scripts, synthetic projects and logs belong in unique temporary directories outside the workspace; formal tests remain inside it.
 
 Default scanners are OpenGrep for code, Gitleaks for secrets and Trivy for dependencies. The native-dataflow/native-go-sql providers are retired. OSV is not an automatic fallback for Trivy. Dependency checking is not applicable when there are no applicable dependency inputs.

@@ -66,14 +66,17 @@ def handle_normalized_event(event: NormalizedHostEvent, *, coordinator, remediat
             EventKind.SESSION_STOP:'SESSION_FINALIZATION'}[event.kind]
     observe('CLAIMS_VALID', **normalized)
     owner = dict(host=context.host, session=context.session_binding)
-    if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation == OperationClass.READ_ONLY:
-        result = inconclusive('READ_ONLY_ACTIVITY')
+    if event.kind == EventKind.WORKSPACE_ACTIVITY and event.operation in {
+            OperationClass.READ_ONLY, OperationClass.OUTSIDE_WORKSPACE_MUTATION}:
+        reason = ('READ_ONLY_ACTIVITY' if event.operation == OperationClass.READ_ONLY else 'OUTSIDE_WORKSPACE_ACTIVITY')
+        result = inconclusive(reason)
         result.update(status='NOT_SCANNED', coverage='NOT_APPLICABLE', scanner_run=False,
             workspace_mutation_observed=False, changed_file_count=0,
-            scanner_trigger_reason=None, scanner_skipped_reason='READ_ONLY_ACTIVITY')
+            scanner_trigger_reason=None, scanner_skipped_reason=reason)
         if lifecycle:
             result.update(scanner_invocation_count=0, mutation_event_dropped=False)
-        observe('READ_ONLY_SKIPPED', scanner_run=False, **normalized)
+        observe('READ_ONLY_SKIPPED' if event.operation == OperationClass.READ_ONLY else 'OUTSIDE_WORKSPACE_SKIPPED',
+                scanner_run=False, **normalized)
         return {**result, **normalized}, None
     if event.kind == EventKind.WORKSPACE_ACTIVITY and audit:
         # The default path must not enumerate historical tasks, claim a full

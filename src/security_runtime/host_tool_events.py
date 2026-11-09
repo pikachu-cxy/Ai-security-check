@@ -12,7 +12,7 @@ EVENTS = {'SessionStart': EventKind.SESSION_START, 'PreToolUse': EventKind.BEFOR
           'PostToolUse': EventKind.WORKSPACE_ACTIVITY, 'Stop': EventKind.SESSION_STOP}
 
 
-def classify_bash_command(tool_input) -> str:
+def classify_bash_command(tool_input, *, workspace=None) -> str:
     """Classify command shape without persisting or echoing command text."""
     if not isinstance(tool_input, dict):
         return 'UNKNOWN'
@@ -20,7 +20,7 @@ def classify_bash_command(tool_input) -> str:
     if not isinstance(command, str) or not command.strip() or len(command) > 12000:
         return 'UNKNOWN'
     from .shell_classification import classify_command
-    return classify_command(command)
+    return classify_command(command, workspace=workspace)
 
 
 def edit_path_hints(tool, inputs, root, *, cwd=None, require_patch_body=False):
@@ -117,7 +117,7 @@ def normalize_tool_event(arguments, root, *, host, capabilities):
         tool = arguments.get('tool_name')
         if tool not in {'Bash', 'apply_patch', 'Edit', 'Write'}:
             raise ValueError('Unsupported host activity')
-        operation = (OperationClass(classify_bash_command(arguments.get('tool_input')))
+        operation = (OperationClass(classify_bash_command(arguments.get('tool_input'), workspace=root))
                      if tool == 'Bash' else OperationClass.DIRECT_FILE_MUTATION)
     invocation = arguments.get('tool_use_id')
     context = VerifiedHostContext(host, root, identity(os.path.normcase(str(root))),
@@ -145,9 +145,10 @@ def before_normalized_event(event, coordinator):
     from .host_events import EventKind, OperationClass
     if event.kind != EventKind.BEFORE_MUTATION:
         raise ValueError('Native pre-tool event required')
-    if event.operation == OperationClass.READ_ONLY:
+    if event.operation in {OperationClass.READ_ONLY, OperationClass.OUTSIDE_WORKSPACE_MUTATION}:
         return dict(status='NOT_STARTED', scanner_run=False, source_modified=False,
-                    baseline_created=False, reason_code='READ_ONLY_ACTIVITY')
+                    baseline_created=False, reason_code=('READ_ONLY_ACTIVITY' if event.operation == OperationClass.READ_ONLY
+                                                        else 'OUTSIDE_WORKSPACE_ACTIVITY'))
     from .development_check import record_hook, DevelopmentCheckStore, projection
     from .development_file_watch import start_window
     context = event.context

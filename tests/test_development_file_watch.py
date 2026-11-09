@@ -38,6 +38,39 @@ def test_metadata_begin_and_read_only_access_do_not_start_a_watcher(sample):
     assert launched == []
 
 
+def test_outside_notifications_do_not_record_or_mark_unknown(sample, monkeypatch):
+    root, _, owner, service, ref, launched = sample
+    store = service.store(root)
+    window = watching._Window(store, ref, owner, lambda _: object())
+    outside = {(1, str(root.parent/'other'/'file.py')),
+               (2, str(root.parent/'project-copy'/'file.py')),
+               (3, str(root/'..'/'outside.py'))}
+    assert window.paths(outside) == ([], False)
+    def forbidden():
+        pytest.fail('outside notifications must not write the edit ledger')
+    monkeypatch.setattr(store, 'transaction', forbidden)
+    window.record(outside)
+    assert window.quiet_since is None and not window.seen and not launched
+    assert service.get(root, ref)['dirty_seq'] == 0
+
+
+def test_mixed_notifications_only_record_project_children(sample):
+    root, _, owner, service, ref, launched = sample
+    store = service.store(root)
+    window = watching._Window(store, ref, owner, lambda _: object())
+    (root/'src').mkdir()
+    (root/'src'/'inside.py').write_text('value = 1')
+    with store.transaction() as db:
+        row = store._get(db, ref)
+        store._put(db, ref, dict(row, file_watch=dict(id=window.id, status='ACTIVE')))
+    window.record({(2, str(root/'src'/'inside.py')),
+                   (1, str(root.parent/'project-copy'/'outside.py'))})
+    row = store.load(ref)
+    assert row['observed_paths'] == row['watch_paths'] == ['src/inside.py']
+    assert not row['scope_unknown'] and not row.get('file_watch_gaps')
+    assert not launched
+
+
 def test_finish_drains_delayed_notifications_after_first_empty_poll(sample, monkeypatch):
     root, _, owner, service, ref, launched = sample
     store = service.store(root)

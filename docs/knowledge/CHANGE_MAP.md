@@ -1,5 +1,11 @@
 # 从开发需求定位代码
 
+## 只读与清理误触发
+
+监听路径项目边界：`development_file_watch.py:_Window.paths`，回归 `test_development_file_watch.py`；项目外通知不写编辑账本，混合通知仅保留项目内路径。
+
+命令内受限路径/内容变量与常量切片：`shell_classification.py`；工作区外字面量清理分类与 Pre/Post 跳过：`host_tool_events.py`、`host_events.py`、`host_event_runtime.py`、`global_mcp.py`；Cursor 两类入口：`cursor_event_adapter.py`、`cursor_tasks.py`、`cursor_automatic.py`；诊断与编辑事件准入：`recent_hooks.py`、`host_event_journal.py`。回归：`test_shell_classification.py`、`test_lightweight_hooks.py`，以及宿主事件、监听和补充路径测试。不得把任意清理脚本或所有 Shell 调用直接视为只读。
+
 ## 原生后台链接与 Agent 安装入口
 
 后台构建身份：`dashboard_service.py`；无地址报告：`development_views.py`、`host_development.py`；无项目路径全局入口：`global_mcp.py`、`monitoring/mcp.py`。回归：`test_dashboard_service.py`、`test_report_missing_dashboard.py`。原生发行验证：`scripts/release/verify_release_smoke.py`；三平台替换流程：`.github/workflows/refresh-0314.yml`。Agent 安装指南：`website/public/install/agent.md`，首页与编辑器页面复用 `InstallRequest.vue`。

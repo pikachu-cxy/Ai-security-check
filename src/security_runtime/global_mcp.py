@@ -762,7 +762,7 @@ def create_global_server(*, workspaces=None, host='codex'):
                     return CallToolResult(structuredContent=data, content=[TextContent(
                         type='text', text=json.dumps(output, ensure_ascii=False))])
                 read_only_hook = (normalized.kind == EventKind.WORKSPACE_ACTIVITY
-                                  and normalized.operation == OperationClass.READ_ONLY)
+                                  and normalized.operation in {OperationClass.READ_ONLY, OperationClass.OUTSIDE_WORKSPACE_MUTATION})
                 if normalized.kind == EventKind.WORKSPACE_ACTIVITY:
                     observe('CLAIMS_VALID', tool_classification=classification, **normalized.diagnostics())
             if (name in HOOKS and normalized.kind == EventKind.SESSION_START
