@@ -9,11 +9,18 @@ from mcp.types import ToolAnnotations
 
 def risk_dashboard_status():
     from ..risk_dashboard import launch
+    from ..dashboard_service import startup_status
     try:
         return dict(status='AVAILABLE', url=launch(), scanner_run=False, source_modified=False,
                     message='本机风险统计入口已就绪，点击链接查看。')
-    except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError):
-        return dict(status='UNAVAILABLE', scanner_run=False, source_modified=False,
+    except (OSError, ValueError, sqlite3.Error, subprocess.SubprocessError) as error:
+        text = str(error)
+        code = text if text.startswith(('RISK_DASHBOARD_', 'DASHBOARD_')) else 'RISK_DASHBOARD_START_FAILED'
+        if code == 'RISK_DASHBOARD_START_FAILED':
+            # The background start already tried once; report its saved reason
+            # instead of the generic failure so the user knows whether retrying helps.
+            code = (startup_status() or {}).get('reason_code') or code
+        return dict(status='UNAVAILABLE', reason_code=code, scanner_run=False, source_modified=False,
                     message='风险统计页面暂时无法启动。')
 
 def register(server, registry, *, application):

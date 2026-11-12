@@ -213,7 +213,9 @@ def batch_report_page(result, check):
         # static batch. Keep item reports in the ledger; avoid generating the
         # same final report both before and after the native Stop scan.
         from .dashboard_service import session_url
-        page['session_url'] = session_url(check['workspace'], check['owner'])
+        page['session_url'] = session_url(check['workspace'], check['owner'],
+                                          check_ref=page.get('check_ref'), seq=page.get('dirty_seq'))
+        page['link_in_report'] = False
         page['delivery_status'] = 'WAITING_FOR_STATIC_SCAN'
         page['delivery_instruction'] = ('业务审计结果已保存，静态扫描尚未发布。这是开发期保存回执，不是最终报告。'
             '本回合先只回复开发结果和实际验证，并说明安全报告待收尾；不要提前展开漏洞段落或复制子 Agent 报告。'
@@ -248,8 +250,12 @@ def batch_report_page(result, check):
                 sections.append('---')
             sections.append(render_risk(item, check['workspace'], reviewed=current))
             rendered_risks += 1
-    url = session_url(check['workspace'], check['owner'])
+    needs_link = bool(rendered_risks or totals.get('confirmed') or totals.get('inconclusive')
+                      or totals.get('false_positives') or totals.get('duplicates') or page['gaps'])
+    url = session_url(check['workspace'], check['owner'], check_ref=page['check_ref'],
+                      scan_id=page['scan_id'], seq=page['dirty_seq'])
     page['session_url'] = url
+    page['link_in_report'] = False
     if page['next_offset'] is None:
         if totals.get('duplicates'):
             sections.append(f"{totals['duplicates']} 条重复告警已关联到同批确认项。")
@@ -277,10 +283,12 @@ def batch_report_page(result, check):
                             '本批扫描未发现扫描候选漏洞，但存在扫描覆盖限制。')
         if totals.get('actionable_confirmed'):
             sections.append('你可以选择：**修复／暂不处理**。可指定风险编号分别处理。')
-        if url and sections:
-            sections.append(f'[本会话风险管理]({url})')
-        elif sections:
-            sections.append('本会话风险管理链接暂不可用；可请求打开风险管理页面查看连接诊断，检查结果已保留。')
+        if needs_link:
+            if url:
+                sections.append(f'[本会话风险管理]({url})')
+                page['link_in_report'] = True
+            else:
+                sections.append('本会话风险管理链接暂不可用；可请求打开风险管理页面查看连接诊断，检查结果已保留。')
     review_mark('report_render_done')
     return dict(report_text='\n\n'.join(sections), **page)
 
@@ -404,9 +412,13 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
                     total=len(items), next_action=None)
         page['business_audit'] = dict(status=audit['status'])
     page['closeout_mode'] = mode
-    page['session_url'] = session_url(check['workspace'], check['owner'])
-    if mode == 'INCOMPLETE' and page['session_url']:
+    page['session_url'] = session_url(check['workspace'], check['owner'],
+                                      check_ref=page.get('check_ref') or service.ref,
+                                      scan_id=scan, seq=seq)
+    if (mode == 'INCOMPLETE' and page['session_url']
+            and page['session_url'] not in page.get('report_text', '')):
         page['report_text'] += '\n\n[本会话风险管理]('+page['session_url']+')'
+        page['link_in_report'] = True
     if page.get('next_offset') is not None and page.get('view') != 'final_report':
         page['next_action'] = dict(tool='get_development_risks', arguments=dict(
             workspace_path=str(service.root), check_ref=service.ref, view='closeout',

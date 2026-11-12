@@ -164,6 +164,7 @@ def report_page(page, check, root, offset=0, expected_digest=None):
         report_text=text[offset:end], report_digest=digest, report_fragment=following is not None or offset > 0,
         report_offset=offset, next_offset=following, next_action=action,
         total=page['total'], summary=counts, session_url=page.get('session_url'),
+        link_in_report=bool(page.get('link_in_report')),
         gaps=page['gaps'], scope_unknown=page['scope_unknown'], response_budget_bytes=budget)
     from .business_audit import continuation, status
     audit = continuation(check)

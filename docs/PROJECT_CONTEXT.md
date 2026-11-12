@@ -1,6 +1,6 @@
 # 项目上下文
 
-更新日期：2026-10-22。当前产品 **0.3.9 正式版**；开发分支 `feature/runtime-mvp`。正式包发布源码为 `fa1a26b`，Mac 独立自动安装发行为 `macos-trial-v0.3.9.3`，Runtime 版本同为 0.3.9。
+更新日期：2026-11-12。当前产品 **0.3.14**；开发分支 `feature/runtime-mvp`。发行源码、构建身份、本机安装与重连状态以[当前状态](knowledge/STATUS.md)为准，本文件不重复声明具体构建哈希。
 
 当前安装入口见[安装指南](PILOT_INSTALL_AND_USE.zh-CN.md)，语言、默认规则数量与依赖边界见[产品覆盖](PRODUCT_COVERAGE.zh-CN.md)。官网首页和顶部导航均提供语言覆盖入口。
 
@@ -20,6 +20,10 @@ Codex / Cursor 输入适配 → 公共事件及工作区应用服务 → 原任�
 
 [架构与耦合边界](ARCHITECTURE_UNIFICATION_COMPLETION.zh-CN.md)、[事务恢复](PERSISTENCE_TRANSACTION_RECOVERY.zh-CN.md)、[v3 兼容](TASK_REVIEW_V3_ONLY.zh-CN.md)。
 
+## 本机风险后台与批次链接
+
+后台只监听 127.0.0.1。读接口（页面、风险列表、导出、详情、配置、监控、实体列表）不要求浏览器 Cookie，仅校验 Host；写入与 `/shutdown` 仍要求 Cookie、Origin、CSRF 或 Bearer。报告末尾链接带 project/workspace/session/editor 与 check/scan/seq，批次身份取 `(dirty_seq, scan_id)`，不假设 check_ref 对应单次开发任务。地址仅在回环端口实际可达时返回，服务退出后报告降级为链接不可用，不产生死链；端口与 token 复用，服务恢复后同一地址自动可用。风险列表默认按可信记录时间倒序、id 次序，分页与导出同序。后台启动失败写入 `dashboard/startup-status.json`，显式入口返回原因码。证据见[当前状态](knowledge/STATUS.md)与 `tests/test_dashboard_delivery.py`。
+
 ## 不可混淆的状态
 
 | 事实 | 含义 |
@@ -36,6 +40,6 @@ Codex / Cursor 输入适配 → 公共事件及工作区应用服务 → 原任�
 
 ## 交付与后续
 
-0.3.9 三平台正式包已发布，Mac 自动安装另有独立发行。文档发布不改变这些程序包的构建身份；CI、已安装进程、用户机器及完整桌面验收分别认定，不能继承历史候选结论。历史任务的失败、缺口和用户处置保留在对应记录中，不作为新任务的检查状态。
+0.3.14 三平台包已替换发布，接入范围为 Codex、Cursor。文档发布不改变这些程序包的构建身份；CI、已安装进程、用户机器及完整桌面验收分别认定，不能继承历史候选结论。历史任务的失败、缺口和用户处置保留在对应记录中，不作为新任务的检查状态。
 
 [开发进度](DEVELOPMENT_PROGRESS.md)记录当前证据，[手工验收](RUNTIME_CHAIN_REGRESSION_ACCEPTANCE.zh-CN.md)提供可重复步骤，[近期计划](NEXT_DEVELOPMENT_PLAN.zh-CN.md)规定后续顺序。旧阶段资料通过 Git 历史查看。

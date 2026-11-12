@@ -420,7 +420,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "5510d37ee922f16a530af34d98be9aa7b23c877001f57f7bf1677be82d615109",
+      "sha256": "9e55a757c39169ecfe8bc84a5771203bef83ed8ef0e9127d69637cb9d67e5150",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -449,7 +449,7 @@
         },
         {
           "name": "offer",
-          "line": 159
+          "line": 161
         }
       ]
     },
@@ -1844,44 +1844,48 @@
     },
     {
       "path": "src/security_runtime/dashboard_catalog.py",
-      "sha256": "9ce6380ae97469fa484c8ff877e81c43a0907dce69c15df645d215abd8353782",
+      "sha256": "9ecfcaed50fc4a809adc0536373f5cc017a05eaba659bf43a58715d4c5d10de9",
       "purpose": "Rebuildable SQL read index, refreshed independently of Stop and risk writes.",
       "symbols": [
         {
           "name": "Catalog",
-          "line": 15
+          "line": 18
         },
         {
           "name": "Catalog.__init__",
-          "line": 16
+          "line": 19
         },
         {
           "name": "Catalog.inventory",
-          "line": 25
+          "line": 28
         },
         {
           "name": "Catalog.connect",
-          "line": 46
+          "line": 49
         },
         {
           "name": "Catalog.replace",
-          "line": 67
+          "line": 77
         },
         {
           "name": "Catalog.refresh",
-          "line": 86
+          "line": 101
         },
         {
           "name": "Catalog.start",
-          "line": 105
+          "line": 121
         },
         {
           "name": "Catalog.query",
-          "line": 116
+          "line": 132
         },
         {
           "name": "Catalog.close",
-          "line": 182
+          "line": 204
+        },
+        {
+          "name": "batch_clause",
+          "line": 209
         }
       ]
     },
@@ -2037,79 +2041,99 @@
     },
     {
       "path": "src/security_runtime/dashboard_records.py",
-      "sha256": "971cf6df6cb3a5c849e9df95c2ef2d5c06d2b1994bdffaf5b9483855820fb2a5",
+      "sha256": "cd192ee0f0057b5e10a9cf3a1ff4f23a9758a03fe8c994ca90a9d1d898ad70e3",
       "purpose": "Public read models and locally authorized writes; never scan or edit source.",
       "symbols": [
         {
-          "name": "enrich",
+          "name": "batch_keys",
           "line": 13
         },
         {
+          "name": "enrich",
+          "line": 27
+        },
+        {
           "name": "locate",
-          "line": 42
+          "line": 57
         },
         {
           "name": "mutate",
-          "line": 69
+          "line": 84
         },
         {
           "name": "create",
-          "line": 93
+          "line": 108
         }
       ]
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "ace41b83c4c749f6f6bd4c5dc68e1f15f61f2a30cc229c7291ba0189eb6aefd4",
+      "sha256": "23bdec430426c01b087c1dff392ba88bb5f27bc3bb4de70b6891c1e742459d37",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
           "name": "directory",
-          "line": 20
+          "line": 26
         },
         {
           "name": "endpoint",
-          "line": 25
+          "line": 31
         },
         {
           "name": "save_endpoint",
-          "line": 40
+          "line": 46
+        },
+        {
+          "name": "live",
+          "line": 62
         },
         {
           "name": "address",
-          "line": 56
+          "line": 73
         },
         {
           "name": "session_url",
-          "line": 60
+          "line": 77
         },
         {
           "name": "NoRedirect",
-          "line": 75
+          "line": 106
         },
         {
           "name": "NoRedirect.redirect_request",
-          "line": 76
+          "line": 107
         },
         {
           "name": "code_id",
-          "line": 80
+          "line": 111
         },
         {
           "name": "health",
-          "line": 101
+          "line": 132
         },
         {
           "name": "healthy",
-          "line": 114
+          "line": 145
         },
         {
           "name": "ensure",
-          "line": 119
+          "line": 150
+        },
+        {
+          "name": "_save_status",
+          "line": 197
+        },
+        {
+          "name": "_reason",
+          "line": 213
+        },
+        {
+          "name": "startup_status",
+          "line": 222
         },
         {
           "name": "start_background",
-          "line": 161
+          "line": 234
         }
       ]
     },
@@ -2505,7 +2529,7 @@
     },
     {
       "path": "src/security_runtime/development_check.py",
-      "sha256": "8c7fecff7e9f089c16a3b0a3ef10e1a41281ca10e3db31b14bcbd8c0758542d5",
+      "sha256": "eb09cf2ab64376eaf2a62b69cd444a70f5e44e7882986c004b0aec43106cc281",
       "purpose": "Observed-file development checks, without a before-edit workspace baseline.",
       "symbols": [
         {
@@ -2642,11 +2666,11 @@
         },
         {
           "name": "DevelopmentCheckService.get",
-          "line": 604
+          "line": 605
         },
         {
           "name": "record_hook",
-          "line": 676
+          "line": 678
         }
       ]
     },
@@ -3182,7 +3206,7 @@
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "8f353646fb14ea15de02e04da4207404916ed79c58da5a511fe5ed9ef92e9746",
+      "sha256": "6766496c4c19d7120e49c09ccc6987de1e196fdede9fc4efa7aaab5076468781",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -3215,15 +3239,15 @@
         },
         {
           "name": "final_report_receipt",
-          "line": 288
+          "line": 296
         },
         {
           "name": "review_receipt",
-          "line": 305
+          "line": 313
         },
         {
           "name": "closeout_page",
-          "line": 316
+          "line": 324
         }
       ]
     },
@@ -5653,7 +5677,7 @@
     },
     {
       "path": "src/security_runtime/host_development.py",
-      "sha256": "9507d9ca435acc4ddab93668c9201a22c96e94565b58e71be62cb91314f23c2f",
+      "sha256": "3567adbc07b7ad27ca1009c401ea74c5891f3c9a82488336d2eaff7da30e3de4",
       "purpose": "Command-host delivery adaptation; no model, scan, polling or new scheduler.",
       "symbols": [
         {
@@ -5662,11 +5686,11 @@
         },
         {
           "name": "audit_context",
-          "line": 32
+          "line": 33
         },
         {
           "name": "reconnect_context",
-          "line": 40
+          "line": 41
         }
       ]
     },
@@ -7558,7 +7582,7 @@
     },
     {
       "path": "src/security_runtime/monitoring/mcp.py",
-      "sha256": "a089fa2c28bd4f464c07d1ef7321287d1d1d1dd78a876db86be18ec49a866120",
+      "sha256": "3533da1f6b37741cd6ed522c4ef7996e42f8e6c077b33e6c7c4852fe4dce5426",
       "purpose": "Optional current-chat entry; verifies existing routing, creates no task.",
       "symbols": [
         {
@@ -7567,7 +7591,7 @@
         },
         {
           "name": "register",
-          "line": 19
+          "line": 26
         }
       ]
     },
@@ -10097,7 +10121,7 @@
     },
     {
       "path": "src/security_runtime/review_delivery.py",
-      "sha256": "5a2148580e6e889e16b19b22db9fbacb6191bd42ba7acf231e4396005c484955",
+      "sha256": "0870059896d8f31c82490f129ec15b1e542a8d9d5c65e3d7389feb9aa19a42d0",
       "purpose": "Bounded post-Stop delivery. No scanner, worker or additional persistent cache.",
       "symbols": [
         {
@@ -10126,7 +10150,7 @@
         },
         {
           "name": "pending_report_receipt",
-          "line": 177
+          "line": 178
         }
       ]
     },
@@ -10293,7 +10317,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "3ca2efb6cc069de506afa56338f505c5890da80af32e0290f82ddf4642d42ab4",
+      "sha256": "d133422deac8f8b90ff88b80a045373f22181a112e9823f8464a807c4f46d265",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10350,15 +10374,15 @@
         },
         {
           "name": "Handler.do_POST",
-          "line": 312
+          "line": 326
         },
         {
           "name": "serve",
-          "line": 382
+          "line": 396
         },
         {
           "name": "launch",
-          "line": 402
+          "line": 416
         }
       ]
     },
@@ -15124,7 +15148,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "7d7ab9743be1fdab383b58cff90856d997a133dc506ba9139ba6c8031c6f1231",
+      "sha256": "2a6e518ebf29fd3567b8b5211b0533d3e621e37d0f13aac593e4d22e71e2dd1f",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {

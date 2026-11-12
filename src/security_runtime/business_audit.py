@@ -123,7 +123,9 @@ def operate(risks, action, audit_id=None, agent_ref=None):
             row['parallel_audit'] = job
             risks.checks._put(db, risks.ref, row)
         from .dashboard_service import session_url
-        return dict(job, session_url=session_url(str(risks.root), check['owner']), evidence=contexts, instructions=(
+        return dict(job, session_url=session_url(str(risks.root), check['owner'],
+            check_ref=check.get('check_ref'), scan_id=check.get('scan_id'),
+            seq=check.get('dirty_seq')), evidence=contexts, instructions=(
             '由当前宿主创建一个只读 subagent 并行审计本任务业务逻辑；主开发继续。'
             'started 仅沿用 workspace_path/session_ref/check_ref，另传 action、audit_id、实际 agent_ref，不传 expected_seq 或 scan_id；版本已绑定 audit_id。'
             '将本次固定 dirty_seq、证据和需求交给子 Agent。补读使用原检查的 read_development_risk_context，'

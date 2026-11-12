@@ -10,6 +10,20 @@ from .risk_management import revision, apply
 from .redactor import SecretRedactor
 
 
+def batch_keys(risk):
+    """Batch membership proven by saved assessment and observation facts only."""
+    keys = set()
+    for value in risk.get('assessments') or []:
+        if value.get('scan_id'):
+            keys.add('scan:' + str(value['scan_id']))
+        if value.get('dirty_seq') is not None:
+            keys.add('seq:' + str(value['dirty_seq']))
+    for value in risk.get('observations') or []:
+        if value.get('source') == 'SCANNER' and value.get('scan_id'):
+            keys.add('scan:' + str(value['scan_id']))
+    return sorted(keys)
+
+
 def enrich(item, row, risk, scope=None):
     redact = SecretRedactor().redact
     scope = scope or describe(row['workspace'])
@@ -19,6 +33,7 @@ def enrich(item, row, risk, scope=None):
     assessment = risk.get('assessment') or {}
     return dict(item, **scope, session_id=(row.get('owner') or {}).get('session', ''),
         check_id=row.get('key', ''), revision=revision(risk), last_security_activity_at=row.get('updated_at'),
+        activity_at=float(row.get('updated_at') or 0), batch_keys=batch_keys(risk),
         archived=bool(management.get('archived')), management=management,
         file_path=item.get('location', '').rsplit(':', 1)[0] if finding.get('line_start') else finding.get('file_path', ''),
         line_start=finding.get('line_start'), line_end=finding.get('line_end'),

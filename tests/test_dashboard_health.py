@@ -59,16 +59,15 @@ def test_history_retention_is_bounded(tmp_path, monkeypatch):
     assert len(history)==16 and history[0]['checked_at']==4
 
 
-def test_monitor_requires_authenticated_browser_and_rejects_arguments(monkeypatch):
+def test_monitor_is_loopback_readable_and_rejects_arguments(monkeypatch):
     from test_dashboard_service import running, request
     calls=[]
     monkeypatch.setattr(health,'snapshot',lambda: calls.append(1) or {'scanner_run':False})
     with running() as server:
-        assert request(server,'/api/monitor')[0]==403
-        headers={'Cookie':'dashboard='+server.token}
-        assert request(server,'/api/monitor?path=arbitrary',headers)[0]==400
-        status,_,raw=request(server,'/api/monitor',headers)
+        assert request(server,'/api/monitor?path=arbitrary')[0]==400
+        status,_,raw=request(server,'/api/monitor')
         assert status==200 and not json.loads(raw)['scanner_run']
+        assert request(server,'/api/monitor',{'Host':'example.com'})[0]==403
     assert calls==[1]
 
 

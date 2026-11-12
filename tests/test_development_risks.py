@@ -597,6 +597,8 @@ def test_complete_report_keeps_details_and_adds_stable_session_link(sample, monk
     scanner(sample, monkeypatch)
     risks.sync_scanner()
     monkeypatch.setattr(dashboard_service, 'endpoint', lambda: dict(port=12345, token='x'*32))
+    # Liveness is proved with a real socket elsewhere; here the address is a fixture.
+    monkeypatch.setattr(dashboard_service, 'live', lambda *a, **k: True)
     seq = risks.current_check()['dirty_seq']
     value = observation(risks, same_issue_as='s1', report_text='Complete saved vulnerability description.')
     coverage = [dict(file_path='query.py', rationale='Checked', evidence_refs=value['evidence_refs'])]
@@ -605,4 +607,8 @@ def test_complete_report_keeps_details_and_adds_stable_session_link(sample, monk
     assert first['report_text'] == second['report_text']
     assert '**问题**' in first['report_text'] and '**可能影响**' in first['report_text']
     assert 'http://127.0.0.1:12345/risks?project=' in first['report_text']
+    assert '&check=' in first['report_text'] and '&scan=scan-1' in first['report_text']
+    assert first['report_text'].count('http://127.0.0.1:12345') == 1
+    assert first['report_text'].rstrip().endswith(')')
+    assert first['link_in_report'] is True
     assert '&session=' in first['report_text'] and 'x'*32 not in first['report_text']

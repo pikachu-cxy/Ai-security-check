@@ -1,5 +1,12 @@
 # 当前功能状态与目标
 
+## 本机风险后台批次直达链接（源码）
+
+开发任务收尾报告末尾的本机链接改为批次级：查询串带 project/workspace/session/editor 与 check/scan/seq，`session_url` 在回环端口不可达时返回 None，报告降级为链接不可用，不再出现死链。`check_ref` 由同一聊天复用、不保证对应单次开发任务，批次身份取 `(dirty_seq, scan_id)`，与 `development_risks.get(batch_version=...)` 的过滤口径一致。后台读接口不再要求 Cookie，仅校验 Host；`/api/session` 无 Cookie 返回 csrf=null；写入与 `/shutdown` 保留 Cookie、Origin、CSRF、Bearer。风险列表默认按 `activity_at` 倒序、`id` 次序，分页与导出同序。启动失败写入 `dashboard/startup-status.json`，`start_risk_dashboard` 返回 reason_code；`ensure` 增加健康快路径，后台 15 秒与显式入口 3 秒分开超时。报告只在有确认、待确认、误报、重复或覆盖限制时附加链接，`link_in_report` 告知宿主不要再用 session_url 重复输出。
+
+验证：`tests/test_dashboard_delivery.py` 14 项通过，其中真实 HTTP 覆盖"报告链接 → `/api/risks` 只返回本批次、无 Cookie 读 200、外部 Host 403、无 Cookie 写 403"；`test_dashboard_service.py`、`test_risk_dashboard.py`、`test_report_missing_dashboard.py`、`test_development_risks.py`、`test_dashboard_health.py` 等关联组通过；`node --test tests/test_risk_dashboard_ui.cjs` 16 项通过。进程级端到端：独立状态目录启动 `risk-dashboard --shared`，`/risks` 无 Cookie 200、`/api/session` csrf=null、外部 Host 403、无 Cookie POST 403、`/shutdown` 后 `session_url` 返回 None。未修改 HEAD 隔离副本上同样失败的既有项（`test_dashboard_history` 2、`test_dashboard_management` 4 夹具错误、`test_dashboard_sessions` 1 文件占用、`test_development_risks_mcp` 2、`test_development_review_completion` 2）保留为环境或既有缺陷，未计为通过。真实 Codex 有漏洞任务的人工点击验收因额度不可用未执行。
+
+
 ## 只读命令与工作区外清理（0.3.14 替换包）
 
 PowerShell 当前命令内的字面量路径赋值、Get-Content 结果赋值和常量行切片已纳入受限只读识别，避免开启监听后把其他写入者的同期变化纳入只读聊天。Codex 与 Cursor 对已验证工作区外的字面量 Remove-Item/rm 清理使用独立的 OUTSIDE_WORKSPACE_MUTATION 分类，不创建编辑记录或启动监听；它不表示清理操作本身只读。项目内或项目祖先路径、链接、无法核验的路径、动态变量、通配符、管道及混合未知命令继续保守处理。没有全项目基线或新增扫描轮次。

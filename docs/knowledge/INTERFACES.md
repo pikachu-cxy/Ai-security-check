@@ -2,7 +2,9 @@
 
 ## 风险管理链接
 
-冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE；不得构造假地址。报告没有 session_url 时保留实际覆盖缺口，提示链接不可用，不输出 null 或空 Markdown 链接，也不在报告读取时同步启动后台。
+冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE 并带 `reason_code`；不得构造假地址。报告没有 session_url 时保留实际覆盖缺口，提示链接不可用，不输出 null 或空 Markdown 链接，也不在报告读取时同步启动后台。
+
+链接身份是保存记录里的可验证批次三元组，不是"最近一次扫描"推测：`session_url(workspace, owner, check_ref=, scan_id=, seq=)` 把 `check`、`scan`、`seq` 拼进查询串，任一身无法验证时返回 None。`check_ref` 由 `sha256(owner_key + task_key)` 派生且同一聊天会复用，因此不能假设它对应单次开发任务；区分批次的是 `(dirty_seq, scan_id)`，与 `development_risks.get(batch_version=...)` 的过滤口径一致。地址只在回环端口实际可达时返回（TCP 探测 50ms，不发 HTTP、不启动进程），服务已退出时报告直接降级为链接不可用，不产生死链。端口与 token 由 `endpoint.json` 复用，服务重新就绪后同一地址自动恢复可用。
 
 ## Windows 用户目录
 
@@ -238,7 +240,7 @@ Codex / WorkBuddy 的会话提示声明自动收尾时，编辑 Hook 记录实�
 
 ## 后台风险服务首批契约
 
-MCP CLI 启动时在后台执行服务就绪检查。start_risk_dashboard 保留原工具名与返回结构，返回可复用的本机授权入口；宿主向用户交付链接。首次浏览器授权成功后，/risks 和 /api/risks 使用 HttpOnly、SameSite=Strict Cookie。读取接口仅接受 project、session、editor 参数并验证格式，会话过滤作用于验证过的保存记录。当前 project 映射工作目录身份，后续逻辑项目归并需要兼容此地址。
+MCP CLI 启动时在后台执行服务就绪检查，失败原因写入 `dashboard/startup-status.json`，显式入口据此返回 `reason_code`。start_risk_dashboard 保留原工具名与返回结构，返回可复用的本机入口；宿主向用户交付链接。后台只监听 127.0.0.1：读接口（`/risks`、`/api/risks`、`/api/export`、`/api/detail`、`/api/config`、`/api/monitor`、`GET /api/entities`）不要求 Cookie，仅校验 Host；`/api/session` 无 Cookie 时返回 `csrf=null`，写入（`POST /api/actions`、`/api/entities`、`/api/manual`、`/api/config`）与 `/shutdown` 仍要求 Cookie、Origin、CSRF 或 Bearer。读取接口接受 project、workspace、session、editor、check、scan、seq 并验证格式；check+scan+seq 按保存的批次归属过滤，未命中返回空列表而不是回退到整个会话。默认顺序为可信记录时间 `activity_at` 倒序、`id` 次序，分页与导出共用同一顺序。当前 project 映射工作目录身份，后续逻辑项目归并需要兼容此地址。
 
 完整确认报告末尾附固定会话链接；统一开发结果可带 risk_management_url，宿主在有需提醒的候选时将其附在完整说明后。链接读取是本地元数据查询，服务未初始化时不阻塞复核或额外启动后台服务。扫描及风险保存独立于 Web 服务状态。
 

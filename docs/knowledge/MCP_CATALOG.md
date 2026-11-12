@@ -894,7 +894,7 @@ Accept bounded untrusted host execution results for the exact plan. Without a re
 
 ### 直接声明或条件开放 / start_risk_dashboard
 
-定义：[src/security_runtime/monitoring/mcp.py:21](../../src/security_runtime/monitoring/mcp.py#L21)
+定义：[src/security_runtime/monitoring/mcp.py:28](../../src/security_runtime/monitoring/mcp.py#L28)
 
 ```python
 start_risk_dashboard()
@@ -904,7 +904,7 @@ When the user asks to open risk statistics or the risk dashboard, reuse or recov
 
 ### 直接声明或条件开放 / start_usage_monitor
 
-定义：[src/security_runtime/monitoring/mcp.py:31](../../src/security_runtime/monitoring/mcp.py#L31)
+定义：[src/security_runtime/monitoring/mcp.py:38](../../src/security_runtime/monitoring/mcp.py#L38)
 
 ```python
 start_usage_monitor(workspace_path: str, session_ref: str)

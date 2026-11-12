@@ -7,7 +7,7 @@ from security_runtime.development_views import batch_report_page
 @pytest.mark.parametrize('url', [None, 'http://127.0.0.1:12345/risks?session=fixture'])
 def test_false_positive_report_with_coverage_gap_and_optional_dashboard(monkeypatch, url):
     from security_runtime import dashboard_service
-    monkeypatch.setattr(dashboard_service, 'session_url', lambda *a: url)
+    monkeypatch.setattr(dashboard_service, 'session_url', lambda *a, **k: url)
     monkeypatch.setattr(dashboard_service, 'ensure', lambda: pytest.fail('closeout must not start or wait for dashboard'))
     page = batch_report_page(dict(
         check_ref='fixture', risks=[], dirty_seq=1, scan_id='fixture-scan',

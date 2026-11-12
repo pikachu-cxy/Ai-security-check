@@ -91,7 +91,7 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 普通开发的会话归属与重复命中：编辑工具路径处理在 `host_tool_events.py`，取证及分组汇总在 `development_views.py`，同批关联与证据校验在 `development_risks.py`。纯删除的输入绑定与覆盖状态分别在 `runtime.py`、`development_check_worker.py`。对应回归在 `tests/test_lightweight_hooks.py`、`tests/test_development_risks.py`、`tests/test_development_check.py`；真实双 worktree 数据见[开发场景验收](DEVELOPMENT_ACCEPTANCE.md)。
 
 
-后台风险服务生命周期与固定会话链接位于 `dashboard_service.py`，HTTP 授权与过滤位于 `risk_dashboard.py`；MCP 启动入口在 `cli.py`，完整报告链接在 `development_views.py`，统一结果链接在 `development_check.py`。相关回归为 `tests/test_dashboard_service.py`、`tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs`、`tests/test_development_risks.py` 和 `tests/test_development_delivery.py`。
+后台风险服务生命周期、批次链接与存活探测位于 `dashboard_service.py`，HTTP 读接口与写入防护位于 `risk_dashboard.py`，批次归属与时间倒序索引位于 `dashboard_records.py:batch_keys` 与 `dashboard_catalog.py`（`risk_batches` 表、`activity_at` 列）；MCP 启动入口在 `cli.py`，完整报告链接在 `development_views.py`，统一结果链接在 `development_check.py`。相关回归为 `tests/test_dashboard_delivery.py`、`tests/test_dashboard_service.py`、`tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs`、`tests/test_development_risks.py` 和 `tests/test_development_delivery.py`。
 
 ## 风险管理与并行业务审计
 

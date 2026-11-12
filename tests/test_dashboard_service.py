@@ -42,21 +42,26 @@ def request(server, path, headers=None):
         conn.close()
 
 
-def test_authorization_and_scope_never_disclose_before_cookie(monkeypatch):
+def test_scope_validation_precedes_reads_and_foreign_host_is_refused(monkeypatch):
     queries = []
     monkeypatch.setattr(dashboard, 'records', lambda **kw: queries.append(kw) or {'risks': []})
     with running() as server:
-        assert request(server, '/api/risks')[0] == 403
+        assert request(server, '/api/risks')[0] == 200
+        assert queries == [dict()]
+        assert request(server, '/api/risks?project=bad')[0] == 400
+        assert queries == [dict()]
+        url = '/api/risks?project=' + 'a'*64 + '&session=' + 'b'*64 + '&editor=codex'
+        assert request(server, url)[0] == 200
+        assert queries[-1] == dict(project_id='a'*64, session_id='b'*64, editor_id='codex')
+        assert request(server, '/risks', {'Host': 'example.com'})[0] == 403
+        assert request(server, '/api/risks', {'Host': 'example.com'})[0] == 403
+
+
+def test_browser_authorization_still_issues_the_write_cookie(monkeypatch):
+    with running() as server:
         status, headers, _ = request(server, '/' + server.token + '/')
         assert status == 303 and headers['Location'] == '/risks'
-        cookie = headers['Set-Cookie'].split(';')[0]
-        assert 'HttpOnly' in headers['Set-Cookie']
-        assert request(server, '/api/risks?project=bad', {'Cookie': cookie})[0] == 400
-        assert queries == []
-        url = '/api/risks?project=' + 'a'*64 + '&session=' + 'b'*64 + '&editor=codex'
-        assert request(server, url, {'Cookie': cookie})[0] == 200
-        assert queries == [dict(project_id='a'*64, session_id='b'*64, editor_id='codex')]
-        assert request(server, '/risks', {'Cookie': cookie, 'Host': 'example.com'})[0] == 403
+        assert 'HttpOnly' in headers['Set-Cookie'] and 'SameSite=Strict' in headers['Set-Cookie']
 
 
 def test_address_survives_restart_and_lookup_never_starts_service(tmp_path, monkeypatch):

@@ -256,13 +256,16 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header('Cache-Control', 'no-store')
             self.send_header('Referrer-Policy', 'no-referrer')
             self.end_headers(); return
-        if not self.authorized():
-            self.send_error(403, 'Authorize this browser using Open risk statistics in your editor'); return
+        # Loopback reads stay open; the Host check above is the boundary that
+        # blocks cross-site and DNS-rebinding access to this process.
         try:
             if path in ('/risks', '/risks/'):
                 self.reply(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
             elif path == '/api/session':
-                self.reply(200, dict(csrf=self.server.token, service='risk-dashboard-v2'))
+                # Reads need no cookie; the CSRF token still requires the
+                # one-time browser authorization performed by the editor.
+                self.reply(200, dict(csrf=self.server.token if self.authorized() else None,
+                                     service='risk-dashboard-v2'))
             elif path == '/api/monitor':
                 from .dashboard_health import snapshot
                 if self.query():
@@ -291,10 +294,21 @@ class Handler(BaseHTTPRequestHandler):
                 if self.server.catalog:
                     result = self.server.catalog.query(query, export=path == '/api/export')
                 else:
-                    if set(query) - {'project','workspace','session','editor'} or any(
+                    if set(query) - {'project','workspace','session','editor','check','scan','seq'} or any(
                         not re.fullmatch('[0-9a-f]{64}', query[k]) for k in ('project','workspace','session') if k in query):
                         raise ValueError('DASHBOARD_QUERY_INVALID')
-                    result = records(**{k+'_id':v for k,v in query.items()})
+                    result = records(**{k+'_id':v for k,v in query.items()
+                                        if k in ('project','workspace','session','editor')})
+                    batch = {'scan:' + query['scan']} if query.get('scan') else set()
+                    if query.get('seq'):
+                        batch.add('seq:' + str(int(query['seq'])))
+                    if query.get('check') or batch:
+                        # Without the read index there is no batch table, so the
+                        # saved items themselves must prove membership.
+                        result['risks'] = [row for row in result['risks']
+                                           if (not query.get('check') or row.get('check_id') == query['check'])
+                                           and (not batch or batch.intersection(row.get('batch_keys') or ()))]
+                        result['total'] = len(result['risks'])
                 if path == '/api/export':
                     from .dashboard_export import render
                     format = query.get('format', 'json')
@@ -401,7 +415,8 @@ def serve(ready=None, *, shared=False):
 
 def launch():
     from .dashboard_service import ensure
-    value = ensure()
+    # Explicit user request: bounded wait, healthy service returns immediately.
+    value = ensure(timeout=3)
     return f"http://127.0.0.1:{value['port']}/{value['token']}/"
 
 

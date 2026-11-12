@@ -595,7 +595,8 @@ class DevelopmentCheckService:
             if 'findings_access' in result['static_result']:
                 result['static_result']['findings_access']['arguments']['workspace_path'] = str(store.root)
         from .dashboard_service import session_url
-        url = session_url(store.root, self.owner)
+        url = session_url(store.root, self.owner, check_ref=row.get('check_ref'),
+                          scan_id=row.get('scan_id'), seq=row.get('dirty_seq'))
         if url:
             result['risk_management_url'] = url
         return result
@@ -660,7 +661,8 @@ class DevelopmentCheckService:
                 result['development_result']['scan_summary'] = result.get('static_result')
                 result['development_result']['storage_contract'] = 'embedded-development-result-v1'
                 from .dashboard_service import session_url
-                url = session_url(store.root, self.owner)
+                url = session_url(store.root, self.owner, check_ref=row.get('check_ref'),
+                                  scan_id=row.get('scan_id'), seq=row.get('dirty_seq'))
                 if url:
                     result['development_result']['risk_management_url'] = url
                 if page.get('next_action') is not None:
