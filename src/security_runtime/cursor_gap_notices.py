@@ -16,7 +16,20 @@ def _encode(value):
 
 
 def claim_gap_notice(hooks, root, session, generation):
-    """Claim one generic notice for the currently verified session generation.
+    """Claim one generic notice for the currently verified session generation."""
+    return _claim(hooks, root, session, generation, 'cursor-gap-notices.json')
+
+
+def claim_session_context(hooks, root, session, generation):
+    """Claim one full routing context per verified Cursor session generation.
+
+    Kept separate from gap notices so neither presentation suppresses the other.
+    """
+    return _claim(hooks, root, session, generation, 'cursor-session-context.json')
+
+
+def _claim(hooks, root, session, generation, name):
+    """Bounded, signed, cross-process once-per-generation presentation claim.
 
     Callers must verify the Cursor workspace/session/generation binding first.
     The lock and signed record survive separate command-Hook processes. Only
@@ -27,7 +40,7 @@ def claim_gap_notice(hooks, root, session, generation):
     with hooks.lock(root, wait_seconds=2) as acquired:
         if not acquired:
             raise ValueError('Cursor notice state unavailable')
-        path = hooks.workspace_directory(root) / 'cursor-gap-notices.json'
+        path = hooks.workspace_directory(root) / name
         no_links(path)
         key = hooks.key(root)
         value = dict(version=1, sessions={})

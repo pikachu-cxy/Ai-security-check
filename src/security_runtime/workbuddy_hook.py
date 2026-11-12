@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 
 from .host_tool_events import normalize_tool_event, validate_context
 from .host_lifecycle import connector_profile
 
 EVENTS = ('SessionStart', 'PreToolUse', 'PostToolUse', 'Stop')
+# Only stable codes leave the process. Host paths, session values and free text
+# must never reach the transcript, so anything else collapses to a generic code.
+DIAGNOSTIC = re.compile(r'[A-Z][A-Z0-9_]{2,63}')
 TOOLS = {'write_to_file': 'Write', 'replace_in_file': 'Edit',
          'execute_command': 'Bash', 'Write': 'Write', 'Edit': 'Edit',
          'Bash': 'Bash', 'apply_patch': 'apply_patch'}
@@ -86,14 +90,28 @@ def handle(payload, *, core=None, root=None):
                                   'additionalContext': context}}
 
 
+def reason_code(exc):
+    """Map a failure to a stable code without echoing paths or session values."""
+    if isinstance(exc, json.JSONDecodeError):
+        return 'INVALID_HOST_PAYLOAD'
+    text = str(exc).strip()
+    if DIAGNOSTIC.fullmatch(text):
+        return text
+    if isinstance(exc, OSError):
+        return 'HOST_IO_FAILED'
+    return 'UNEXPECTED_FAILURE'
+
+
 def main():
     try:
         raw = sys.stdin.buffer.read(100_001)
         if len(raw) > 100_000:
             raise ValueError('HOOK_INPUT_TOO_LARGE')
         output = handle(json.loads(raw))
-    except Exception:
-        # An integration failure must not block the user's edit command.
-        output = {'systemMessage': '本次 WorkBuddy 安全检查接入未完成；正常开发可继续。'}
+    except Exception as exc:
+        # An integration failure must not block the user's edit command, but the
+        # reason has to stay observable: a bare "not ready" hides real conflicts.
+        output = {'systemMessage': '本次 WorkBuddy 安全检查接入未完成（原因：%s）；正常开发可继续。'
+                                  % reason_code(exc)}
     print(json.dumps(output, ensure_ascii=True))
     return 0

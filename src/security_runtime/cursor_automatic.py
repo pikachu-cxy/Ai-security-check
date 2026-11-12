@@ -1,6 +1,10 @@
 """Local Cursor command transport for the shared task/check services."""
 from __future__ import annotations
 
+import hashlib
+import json
+from dataclasses import replace
+
 from .cursor_event_adapter import CursorHostEventAdapter, EVENTS
 from .cursor_tasks import CursorTaskBridge
 from .host_events import EventKind
@@ -15,6 +19,21 @@ GAP = ('本次 Cursor 自动安全任务未能建立或读取编辑前的任务�
        '普通聊天、只读或无实际改动时不展示。最终当前检查完成后不保留旧提示，其他轮次不重复沿用。'
        '检查未完成不等于发现漏洞或编辑失败；不要从编辑后补建基线，'
        '不要把此消息当成修复授权或反复尝试。')
+
+
+def edit_identity(payload, paths):
+    """One replay identity for one edit delivered by two different Cursor Hooks.
+
+    Both deliveries carry the same verified generation. Only resolved,
+    workspace-relative paths enter the digest; raw tool identifiers, output and
+    command text never do. Without a generation the caller keeps the existing
+    random sequence identity as a fail-safe, never a guessed cross-path key.
+    """
+    generation = payload.get('generation_id')
+    if not isinstance(generation, str) or not generation:
+        return None
+    key = 'cursor-edit\0' + generation + '\0' + '\0'.join(sorted(str(p) for p in paths))
+    return hashlib.sha256(key.encode('utf-8', 'surrogatepass')).hexdigest()[:32]
 
 
 def _gap_context(bindings, root, payload, result):
@@ -68,13 +87,25 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
             result = bridge.before(payload)
         elif event == 'postToolUse':
             # Startup context can be missed when a chat outlives its MCP process.
-            # Reissue only after feedback claims have been verified. Compact
+            # Recover it once per verified generation, on a mutating tool only.
+            # Later tools and all read-only tools get just the compact handle,
+            # never a second copy of the ~1.5k routing instructions. Compact
             # handles reuse this exact owner's record and refresh before expiry.
             if getattr(core, 'task_audit_mode', False):
                 from .tasks.ownership import issue_session_ref
-                from .host_development import session_context
                 session_ref = issue_session_ref(core.store, root, 'cursor', bridge.session, compact=True)
-                output['additional_context'] = session_context(session_ref, root)
+                from .cursor_gap_notices import claim_session_context
+                try:
+                    first = may_mutate and claim_session_context(core.store, root,
+                        payload['conversation_id'], payload['generation_id'])
+                except (ValueError, OSError, TypeError, KeyError):
+                    first = False
+                if first:
+                    from .host_development import session_context
+                    output['additional_context'] = session_context(session_ref, root)
+                else:
+                    output['additional_context'] = ('安全任务会话凭证（内部使用）：'
+                        + json.dumps(dict(session_ref=session_ref), ensure_ascii=True))
             if not may_mutate and getattr(core, 'task_audit_mode', False):
                 result = dict(status='NOT_APPLICABLE', scanner_run=False,
                               scanner_skipped_reason='READ_ONLY_ACTIVITY')
@@ -82,10 +113,18 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 return output, result
             if getattr(core, 'task_audit_mode', False):
                 from .host_tool_events import edit_path_hints
-                from .task_audit_mode import task_activity
                 paths, unknown = edit_path_hints(payload.get('tool_name'), payload.get('tool_input'), root)
+                if not paths:
+                    # afterFileEdit / afterShellExecution own precise paths and
+                    # unknown scope. A second, pathless postToolUse observation
+                    # would duplicate the edit and widen a precise file scope.
+                    result = dict(status='NOT_APPLICABLE', scanner_run=False,
+                                  scanner_skipped_reason='CURSOR_PRECISE_EDIT_EVENT_OWNS_SCOPE')
+                    result.update(diag, automatic_connector=True)
+                    return output, result
+                from .task_audit_mode import task_activity
                 result = task_activity(core.store, root, 'cursor', bridge.session, paths=paths,
-                    scope_unknown=unknown, event_id=payload.get('tool_use_id'),
+                    scope_unknown=unknown, event_id=edit_identity(payload, paths),
                     turn_id=payload.get('generation_id'),
                     scan_path=getattr(getattr(core.runtime, 'store', None), 'path', None))
                 if result.get('development_check_ref'):
@@ -139,6 +178,10 @@ def handle_automatic_event(payload, *, core=None, bindings=None, project_dir=Non
                 result['response_prepared'] = True
         else:
             normalized = adapter.normalize(payload, root, binding_diagnostics=diag)
+            if event in {'afterFileEdit', 'afterShellExecution'}:
+                identity = edit_identity(payload, normalized.candidate_paths)
+                if identity is not None:
+                    normalized = replace(normalized, sequence_identity=identity)
             result, _ = handle_normalized_event(normalized, coordinator=core, lifecycle=True)
             if normalized.kind == EventKind.SESSION_START:
                 from .tasks.ownership import issue_session_ref
