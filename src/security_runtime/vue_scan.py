@@ -5,10 +5,28 @@ import hashlib
 
 from .local_evidence import WorkspaceReader
 from .vue_scripts import extract_vue_scripts
+from .sast_file_types import VUE_SCRIPT, file_type
 
 
 def _key(path):
-    return os.path.normcase(os.path.normpath(str(path)))
+    return os.path.normcase(os.path.normpath(str(path))).replace('\\', '/')
+
+
+def remap_paths(value, aliases, depth=0):
+    if depth > 32:
+        return None
+    if isinstance(value, dict):
+        return {key: aliases.get(_key(item), item) if key == 'path' and isinstance(item, str)
+                else remap_paths(item, aliases, depth+1) for key, item in value.items()}
+    if isinstance(value, list):
+        return [remap_paths(item, aliases, depth+1) for item in value]
+    return value
+
+
+def match_inside(item, bounds):
+    start, end = item.get('start', {}).get('offset'), item.get('end', {}).get('offset')
+    return (type(start) is int and type(end) is int and
+            bounds[0] <= start < end <= bounds[1])
 
 
 class VueProjection:
@@ -18,12 +36,14 @@ class VueProjection:
         self.details = {}
         self.scope = []
         self.fingerprints = {}
+        self.templates = {}
         self.plan = plan
         budget = budget if budget is not None else {'files': 0, 'bytes': 0}
         reader = WorkspaceReader(root)
         directory.mkdir(parents=True, exist_ok=True)
         for index, name in enumerate(files):
-            if Path(name).suffix.lower() != '.vue':
+            capability, _ = file_type(name)
+            if capability is None or capability.mode != VUE_SCRIPT:
                 self.scope.append(name)
                 continue
             detail = dict(script_blocks=0, scanned_script_blocks=0, script_languages=[], scanned_languages=[],
@@ -53,6 +73,10 @@ class VueProjection:
                 continue
             detail.update(script_blocks=len(extracted.scripts), issues=list(extracted.issues),
                           script_languages=sorted({s.language for s in extracted.scripts}))
+            if extracted.template_issue:
+                detail['issues'].append(extracted.template_issue)
+            if extracted.template_range is not None:
+                self.templates[name] = extracted.template_range
             for ordinal, script in enumerate(extracted.scripts):
                 target = directory / f'{index}-{ordinal}{script.suffix}'
                 target.write_bytes(script.shadow_bytes)
@@ -61,17 +85,7 @@ class VueProjection:
                 self.aliases[_key(path)] = name
                 self.blocks[_key(path)] = script
 
-    def map_paths(self, value, depth=0):
-        if depth > 32:
-            return None
-        if isinstance(value, dict):
-            return {k: self.aliases.get(_key(v), v) if k == 'path' and isinstance(v, str)
-                    else self.map_paths(v, depth+1) for k,v in value.items()}
-        if isinstance(value, list):
-            return [self.map_paths(v, depth+1) for v in value]
-        return value
-
-    def finish(self, payloads):
+    def finish(self, payloads, template_payloads=()):
         merged = dict(results=[], errors=[], paths={'scanned': [], 'skipped': []}, time={'rules': []})
         scanned, failed = set(), set()
         for data in payloads:
@@ -81,25 +95,32 @@ class VueProjection:
             for item in data.get('results', []):
                 block = self.blocks.get(_key(item.get('path', '')))
                 if block is not None:
-                    start, end = item.get('start', {}).get('offset'), item.get('end', {}).get('offset')
-                    # Never attribute a match in masked template/style text to JS.
-                    if (type(start) is not int or type(end) is not int
-                            or not block.content_start <= start <= end <= block.content_end):
+                    if not match_inside(item, (block.content_start, block.content_end)):
                         continue
-                merged['results'].append(self.map_paths(item))
-            merged['errors'].extend(self.map_paths(data.get('errors', [])))
+                merged['results'].append(remap_paths(item, self.aliases))
+            merged['errors'].extend(remap_paths(data.get('errors', []), self.aliases))
             merged['paths']['scanned'].extend(self.aliases.get(_key(p), p) for p in data.get('paths', {}).get('scanned', []))
-            merged['paths']['skipped'].extend(self.map_paths(data.get('paths', {}).get('skipped', [])))
+            merged['paths']['skipped'].extend(remap_paths(data.get('paths', {}).get('skipped', []), self.aliases))
             merged['time']['rules'].extend(data.get('time', {}).get('rules', []))
             merged.setdefault('skipped_rules', []).extend(data.get('skipped_rules', []))
         for alias, name in self.aliases.items():
             if alias in scanned and alias not in failed:
                 self.details[name]['scanned_script_blocks'] += 1
                 self.details[name]['scanned_languages'].append(self.blocks[alias].language)
+        for data in template_payloads:
+            failures = {_key(row.get('path', '')) for row in
+                        (*data.get('errors', []), *data.get('paths', {}).get('skipped', []))}
+            targets = {_key(name): name for name in self.templates}
+            if data.get('time', {}).get('rules') and not data.get('skipped_rules'):
+                for path in data.get('paths', {}).get('scanned', []):
+                    key = _key(path)
+                    if key in targets and key not in failures:
+                        self.details[targets[key]]['template_status'] = 'TEXT_EXECUTED'
         for name, detail in self.details.items():
-            if not detail['script_blocks']:
+            template_executed = detail['template_status'] == 'TEXT_EXECUTED'
+            if not detail['script_blocks'] and not template_executed:
                 self.plan.skipped_files[name] = 'VUE_NO_SUPPORTED_SCRIPT'
-            detail['status'] = 'PARTIAL' if detail['scanned_script_blocks'] else 'NOT_COVERED'
+            detail['status'] = 'PARTIAL' if detail['scanned_script_blocks'] or template_executed else 'NOT_COVERED'
             detail['scanned_languages'] = sorted(set(detail['scanned_languages']))
         self.plan.embedded_coverage.update(self.details)
         merged['paths']['scanned'] = sorted(set(merged['paths']['scanned']))

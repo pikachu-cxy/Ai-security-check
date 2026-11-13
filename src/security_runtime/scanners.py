@@ -12,7 +12,7 @@ import subprocess
 import os
 import hashlib
 import threading
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import ContextVar
 from pathlib import Path
 from typing import Protocol
@@ -27,6 +27,8 @@ from .toolchain import ToolManager, ToolStatus, tool_environment, external_tool_
 from .plugin_api import SCANNER_ENTRY_POINT, ScannerPluginMetadata
 from .rulepacks import RulePackManager
 from .rule_coverage import plan_rules
+from .rule_catalog import is_vue_template_rule, supports_file
+from .sast_file_types import NATIVE, POLICY_VERSION, PROFILE_EXTENSIONS, TEXT, TEXT_LANGUAGES, TS_PROJECTION, VUE_SCRIPT
 from .rule_program import annotate as annotate_capability, aggregate as aggregate_capabilities
 from dataclasses import replace
 import yaml
@@ -335,8 +337,7 @@ class PatternSASTScanner(BaseScanner):
     """Local rule-pack scanner whose execution engine is replaceable."""
 
     capabilities = frozenset({Capability.CODE_SAST})
-    from .target import EXTENSIONS as _target_extensions
-    supported_languages = frozenset(_target_extensions.values()) | {"Dockerfile"}
+    supported_languages = frozenset(PROFILE_EXTENSIONS.values()) | {"Dockerfile"}
     filter_changed_lines = True
     timeout = 45
 
@@ -375,7 +376,7 @@ class PatternSASTScanner(BaseScanner):
             if set(validated)==set(context.files) and len(validated)<=1000:
                 if sum(native_io_path(root/name).stat().st_size for name in validated)<=20_000_000:
                     signature=tuple((name,hashlib.sha256(native_io_path(root/name).read_bytes()).digest()) for name in validated)
-            key=(os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
+            key=(POLICY_VERSION, os.path.normcase(str(Path(context.logical_root or context.root).resolve())),
                  pack.descriptor,pack.checksum,context.files,signature)
             hit=signature is not None and key in self._plan_cache
             if not hit:
@@ -388,7 +389,8 @@ class PatternSASTScanner(BaseScanner):
             if hit:
                 template=self._plan_cache[key]
             return replace(template, pack=pack, engine_id=self.engine_provider.engine_id, confirmed_rules=set(), scanned_files=set(), errored_files=set(), skipped_files={},
-                embedded_coverage={},unscoped_error=False,language_files=dict(template.language_files),planning_diagnostics={
+                embedded_coverage={}, proof_index={}, rule_gaps={}, unscoped_error=False,
+                language_files=dict(template.language_files),planning_diagnostics={
                     'rule_pack_cache':'HIT' if getattr(self.rule_packs,'cache_hit',False) else 'MISS',
                     'rule_plan_cache':'HIT' if hit else 'MISS',
                     'rule_planning_ms':round((time.perf_counter()-started)*1000,3)})
@@ -404,7 +406,7 @@ class PatternSASTScanner(BaseScanner):
             run.rule_coverage=plan.coverage(run.status)
         run.scanner_diagnostics.update(plan.planning_diagnostics)
         run.scanner_diagnostics['scope']={'target_files':len(plan.files),'rules':len(plan.rules),
-            'applicable_capabilities':plan.coverage()['applicable_capabilities'],
+            'applicable_capabilities':run.rule_coverage['applicable_capabilities'],
             'languages':list(plan.detected_languages),'profile':'EXPLICIT_RULE_FILE_SCOPE',
             'repository_discovery':False,'context_files':0,
             'targets_truncated':len(plan.files)>20,
@@ -416,7 +418,7 @@ class PatternSASTScanner(BaseScanner):
         from .preparation_cache import PreparationCache
         self._bind_preparations()
         selected_ids = {r.rule_id for r in rules}
-        key = ('json-v1', os.path.normcase(str(Path(workspace).resolve())),
+        key = ('json-v1', POLICY_VERSION, os.path.normcase(str(Path(workspace).resolve())),
                rule_pack.descriptor, rule_pack.checksum, tuple(sorted(selected_ids)))
         cache = PreparationCache()
         with self._planning_lock:
@@ -456,39 +458,139 @@ class PatternSASTScanner(BaseScanner):
         constant_seconds=0.0
         constant_suppressed=[]
         vue_budget={'files':0,'bytes':0}
-        with span('rule_config_preparation'):
-            config_text = self.prepare_config(rule_pack, plan.rules, context.logical_root or context.root)
         findings=[]
-        # Shadow paths cannot preserve custom rule include/exclude semantics.
-        # Fail closed for Vue instead of silently widening or losing that scope.
-        vue_path_filters=any('paths' in rule and set(rule.get('languages',[])) & {'javascript','typescript'}
-            for rule in yaml.safe_load(config_text)['rules']) if any(
-            Path(name).suffix.lower()=='.vue' for name in plan.files) else False
-        # Serialize selected execution rules, without copying source files.
+        from .vue_scan import VueProjection, _key, match_inside, remap_paths
+        from .local_evidence import WorkspaceReader
+        text_rules = tuple(rule for rule in plan.rules if TEXT_LANGUAGES.issuperset(rule.engine_languages))
+        typed_rules = tuple(rule for rule in plan.rules if not TEXT_LANGUAGES.issuperset(rule.engine_languages))
+        vue_template = tuple(rule for rule in text_rules if is_vue_template_rule(rule))
+        config_paths = {}
         with _artifacts(context, prefix='security-runtime-rules-') as temporary:
-            config=Path(temporary)/'selected.yml'
-            with span('rule_config_preparation'):
-                config.write_text(config_text,encoding='utf-8')
-            for batch_index, batch in enumerate(sast_batches(plan.files)):
-                # Hash bounded safe files before execution, then verify again
-                # after it. Source never enters the finding store through this.
-                before = {name: snapshot_fingerprint(context.root, name) for name in batch}
-                projection = None
-                if any(Path(name).suffix.lower() == '.vue' for name in batch):
-                    from .vue_scan import VueProjection
-                    projection = VueProjection(context.root, batch, Path(temporary)/f'vue-{batch_index}',
-                        plan, vue_budget, path_filters=vue_path_filters)
-                payloads = []
-                for engine_batch in sast_batches(projection.scope if projection else batch):
-                    request=SASTRequest(Path(context.root),rule_pack,engine_batch,config)
+            def execute(names, rules, mode, *, aliases=None, analyzers=None, accept=None):
+                if not names or not rules:
+                    return
+                ids = {rule.rule_id for rule in rules}
+                key = tuple(sorted(ids))
+                config = config_paths.get(key)
+                if config is None:
+                    config = Path(temporary) / f'selected-{len(config_paths)}.yml'
+                    with span('rule_config_preparation'):
+                        config.write_text(self.prepare_config(rule_pack, rules,
+                            context.logical_root or context.root), encoding='utf-8')
+                    config_paths[key] = config
+                for engine_batch in sast_batches(names):
+                    request = SASTRequest(Path(context.root), rule_pack, engine_batch, config)
                     invocation('SAST_SCAN', len(engine_batch))
-                    process=_execute(self.engine_provider.command(binary,request),context.root,_execution_limit('sast_timeout_seconds'))
-                    if process.return_code not in (0,1):
+                    process = _execute(self.engine_provider.command(binary, request), context.root,
+                                       _execution_limit('sast_timeout_seconds'))
+                    if process.return_code not in (0, 1):
                         _process_failure(process)
-                    payloads.append(json.loads(process.stdout))
+                    data = json.loads(process.stdout)
+                    if accept is not None:
+                        data['results'] = [item for item in data.get('results', []) if accept(item)]
+                    # Absolute compatibility paths may appear in errors or
+                    # trace fields. Only original path evidence leaves here.
+                    sources = {_key(path): ((aliases or {}).get(_key(path), path),
+                                            (analyzers or {}).get(_key(path))) for path in engine_batch}
+                    plan.observe(data, engine_batch, sources=sources, allowed_rules=ids, mode=mode,
+                                 path_key=_key)
+                    yield data
+
+            for batch_index, batch in enumerate(sast_batches(plan.files)):
+                before = {name: snapshot_fingerprint(context.root, name) for name in batch}
+                groups = {kind: [] for kind in ('native', 'text', 'vue', 'ts')}
+                for name in batch:
+                    capability, _ = plan.file_types[name]
+                    kind = ('vue' if capability.mode == VUE_SCRIPT else 'ts' if capability.mode == TS_PROJECTION
+                            else 'text' if capability.language == 'template' else 'native')
+                    groups[kind].append(name)
+                def applicable(rules, names):
+                    types = {plan.file_types[name] for name in names}
+                    return tuple(rule for rule in rules if any(
+                        supports_file(rule, '', classified=classified) for classified in types))
+
+                payloads = list(execute(groups['native'], applicable(plan.rules, groups['native']), NATIVE))
+                payloads.extend(execute(groups['text'], applicable(text_rules, groups['text']), TEXT))
+                payloads.extend(execute(groups['ts'], applicable(text_rules, groups['ts']), TEXT))
+
+                fingerprints = {}
+                template_hits = set()
+                projection = None
+                if groups['vue']:
+                    # The same bounded SFC read provides script projections and
+                    # the only template intervals eligible for text findings.
+                    vue_rules = applicable(typed_rules, groups['vue'])
+                    safe_rules = tuple(rule for rule in vue_rules if not rule.has_paths)
+                    projection = VueProjection(context.root, groups['vue'], Path(temporary)/f'vue-{batch_index}',
+                        plan, vue_budget, path_filters=bool(vue_rules and not safe_rules and not vue_template))
+                    fingerprints.update(projection.fingerprints)
+                    script_languages = {alias: block.language for alias, block in projection.blocks.items()}
+                    vue_type = plan.file_types[groups['vue'][0]]
+                    languages = set(script_languages.values())
+                    script_rules = tuple(rule for rule in safe_rules if any(supports_file(
+                        rule, '', analyzer=language, classified=vue_type) for language in languages))
+                    for name, detail in projection.details.items():
+                        languages = detail['script_languages']
+                        if any(rule.has_paths and any(supports_file(rule, name, analyzer=lang) for lang in languages)
+                               for rule in vue_rules):
+                            detail['issues'].append('VUE_RULE_PATH_FILTER_UNSUPPORTED')
+                            plan.rule_gaps[name] = 'VUE_RULE_PATH_FILTER_UNSUPPORTED'
+                    def script_match(item):
+                        block = projection.blocks.get(_key(item.get('path', '')))
+                        return block is not None and match_inside(item, (block.content_start, block.content_end))
+
+                    scripts = list(execute(projection.scope, script_rules, VUE_SCRIPT, aliases=projection.aliases,
+                                           analyzers=script_languages, accept=script_match))
+                    template_names = {_key(name): name for name in projection.templates}
+                    def template_match(item):
+                        name = template_names.get(_key(item.get('path', '')))
+                        if name and match_inside(item, projection.templates[name]):
+                            item['path'] = name
+                            return True
+                        return False
+
+                    templates = list(execute(tuple(projection.templates), vue_template, NATIVE,
+                                             accept=template_match))
+                    template_hits.update(item['path'] for data in templates for item in data.get('results', []))
+                    payloads.append(projection.finish(scripts, templates))
+                    payloads.extend(templates)
+
+                if groups['ts']:
+                    rules = applicable(typed_rules, groups['ts'])
+                    safe_rules = tuple(rule for rule in rules if not rule.has_paths)
+                    names = []
+                    for name in groups['ts']:
+                        if any(rule.has_paths and supports_file(rule, name, classified=plan.file_types[name])
+                               for rule in rules):
+                            plan.rule_gaps[name] = 'TS_PROJECTION_RULE_PATH_FILTER_UNSUPPORTED'
+                        if any(supports_file(rule, name, classified=plan.file_types[name]) for rule in safe_rules):
+                            names.append(name)
+                    if names:
+                        folder = Path(temporary) / f'ts-{batch_index}'
+                        folder.mkdir()
+                        # Product calls already hold a frozen input. A standalone
+                        # adapter embedding uses the existing bounded capture.
+                        source = (nullcontext(Path(context.root)) if context.input_view is not None else
+                                  _snapshot(replace(context, files=tuple(names), context_files=())))
+                        shadows, aliases = [], {}
+                        with source as frozen:
+                            reader = WorkspaceReader(frozen)
+                            for index, name in enumerate(names):
+                                try:
+                                    raw, _ = reader.read(name)
+                                except (OSError, ValueError):
+                                    plan.rule_gaps.setdefault(name, 'TS_PROJECTION_SOURCE_UNAVAILABLE')
+                                    continue
+                                shadow = folder / f'{index}.ts'
+                                shadow.write_bytes(raw)
+                                shadows.append(str(shadow))
+                                aliases[_key(shadow)] = name
+                                fingerprints[name] = hashlib.sha256(raw).hexdigest()
+                        payloads.extend(remap_paths(data, aliases) for data in
+                                        execute(shadows, safe_rules, TS_PROJECTION, aliases=aliases))
+
                 with span('parsing_normalization'):
-                    data=projection.finish(payloads) if projection else payloads[0]
-                    plan.observe(data,batch)
+                    data = {'results': [item for payload in payloads for item in payload.get('results', [])]}
                     if rule_pack.descriptor.bundled and rule_pack.descriptor.rule_pack_id=='ai-security-core':
                         from .python_constants import filter_results
                         # The budget covers proof work, excluding external-engine startup.
@@ -503,26 +605,33 @@ class PatternSASTScanner(BaseScanner):
                         initial = before.get(finding.file_path, {})
                         final = after[finding.file_path]
                         valid = initial.get('file_sha256') and initial.get('file_sha256') == final['file_sha256']
+                        if finding.file_path in fingerprints:
+                            valid = valid and initial.get('file_sha256') == fingerprints[finding.file_path]
                         if projection and finding.file_path in projection.details:
-                            valid = valid and initial.get('file_sha256') == projection.fingerprints.get(finding.file_path)
+                            template = finding.file_path in template_hits and any(
+                                rule.rule_id == finding.technical_details['rule_id'] for rule in vue_template)
                             finding.technical_details['embedded_source'] = {'format':'VUE_SFC',
-                                'scope':'SCRIPT_BLOCKS_ONLY','template_status':'NOT_COVERED'}
+                                'scope':'TEMPLATE_TEXT_ONLY' if template else 'SCRIPT_BLOCKS_ONLY',
+                                'template_status':'TEXT_EXECUTED' if template else 'NOT_COVERED'}
                         finding.technical_details['evidence_locator'].update(
                             file_sha256=initial['file_sha256'] if valid else None,
                             snapshot_reason=None if valid else initial.get('reason') or final.get('reason') or 'SCAN_FILE_CHANGED')
                     findings.extend(normalized)
-                value=data.get('time',{}).get('rules_parse_time')
-                if isinstance(value,(int,float)):
-                    add_time('engine_reported_rules_parse',value*1000)
-                profiling=data.get('time',{}).get('profiling_times',{})
-                for key in ('config_time','core_time','ignores_time','total_time'):
-                    if isinstance(profiling.get(key),(int,float)):
-                        add_time('engine_reported_'+key,profiling[key]*1000)
+                for payload in payloads:
+                    value=payload.get('time',{}).get('rules_parse_time')
+                    if isinstance(value,(int,float)):
+                        add_time('engine_reported_rules_parse',value*1000)
+                    profiling=payload.get('time',{}).get('profiling_times',{})
+                    for key in ('config_time','core_time','ignores_time','total_time'):
+                        if isinstance(profiling.get(key),(int,float)):
+                            add_time('engine_reported_'+key,profiling[key]*1000)
         plan.planning_diagnostics['constant_proof']={'seconds':round(constant_seconds,4),
             'suppressed_count':len(constant_suppressed),'suppressed_candidates':constant_suppressed[:20],
             'truncated':len(constant_suppressed)>20,'unknown_policy':'RETAIN_ORIGINAL_ALERT'}
         plan.planning_diagnostics['vue_projection'] = dict(vue_budget,
-            max_files=64,max_bytes=4*1024*1024,template_status='NOT_COVERED')
+            max_files=64,max_bytes=4*1024*1024,template_status='TEXT_EXECUTED' if any(
+                detail['template_status'] == 'TEXT_EXECUTED' for detail in plan.embedded_coverage.values())
+                else 'NOT_COVERED')
         catalog={rule.rule_id:rule for rule in plan.rules}
         for finding in findings:
             rule_id=finding.technical_details.get('rule_id','')

@@ -1,4 +1,5 @@
 """Installation/API/pack compatibility checks; no old/new efficacy comparison."""
+from dataclasses import replace
 import hashlib
 import json
 import os
@@ -247,7 +248,129 @@ def test_generic_catalog_does_not_invent_regex_coverage(tmp_path):
     from security_runtime.rule_coverage import plan_rules
     (tmp_path/'rule.yml').write_text('rules:\n- id: plain\n  languages: [generic]\n  message: Test\n  severity: WARNING\n  pattern: danger\n')
     pack = RulePackManager().resolve(user_path=tmp_path)
-    plan = plan_rules(pack, ('nginx.conf',))
-    plan.observe({'time': {'rules': ['plain']}, 'paths': {'scanned': ['nginx.conf']}}, plan.files)
+    plan = plan_rules(pack, ('Mapper.xml', 'unknown.conf'))
+    assert plan.files == ('Mapper.xml',)
+    plan.observe({'time': {'rules': ['plain']}, 'paths': {'scanned': ['Mapper.xml']}}, plan.files)
     assert plan.detected_languages == ('generic',)
     assert plan.coverage('SUCCESS')['status'] == 'EXECUTED'
+
+
+@pytest.mark.parametrize('name,language,mode,declarations', [
+    ('a.mjs', 'javascript', 'NATIVE', {'javascript'}),
+    ('a.cjs', 'javascript', 'NATIVE', {'javascript'}),
+    ('a.mts', 'typescript', 'TS_PROJECTION', {'javascript', 'typescript'}),
+    ('a.cts', 'typescript', 'TS_PROJECTION', {'javascript', 'typescript'}),
+    ('a.ts', 'typescript', 'NATIVE', {'javascript', 'typescript'}),
+    ('a.tsx', 'typescript', 'NATIVE', {'javascript', 'typescript'}),
+    ('a.pyi', 'python', 'NATIVE', {'python'}),
+    ('a.ktm', 'kotlin', 'NATIVE', {'kotlin'}),
+    ('a.phtml', 'php', 'NATIVE', {'php'}),
+    ('a.tfvars', 'hcl', 'NATIVE', {'hcl'}),
+    ('a.edn', 'clojure', 'NATIVE', {'clojure'}),
+    ('a.C', 'cpp', 'NATIVE', set()),
+    ('a.c', 'c', 'NATIVE', {'c'}),
+    *[(f'a.{ext}', 'template', 'TEXT', set()) for ext in ('ejs', 'pug', 'mustache', 'hbs', 'jsp', 'erb', 'page')],
+    ('a.min.js', 'javascript', 'TEXT', set()),
+    *[(f'a.d.{ext}', 'typescript', 'TEXT', set()) for ext in ('ts', 'mts', 'cts')],
+    ('a.unknown', None, None, set()),
+])
+def test_file_capability_planning(pack, name, language, mode, declarations):
+    from security_runtime.rule_coverage import plan_rules
+    from security_runtime.sast_file_types import file_type
+    plan = plan_rules(pack, (name,))
+    capability, suffix = file_type(name)
+    if language is None:
+        assert capability is None and not plan.files and not plan.rules
+        return
+    assert (capability.language, capability.mode) == (language, mode)
+    assert name in plan.language_files[language]
+    typed = {rule.engine_languages[0] for rule in plan.rules
+             if len(rule.engine_languages) == 1 and rule.engine_languages[0] not in {'generic', 'regex'}}
+    # The bundled snapshot has no C++ rule; do not route .C to C.
+    if name == 'a.C':
+        assert not any('c' in rule.engine_languages for rule in plan.rules)
+    assert typed == declarations
+    if language == 'template':
+        assert plan.files == (name,) and plan.rules
+        assert all(rule.has_paths and suffix in rule.target_extensions for rule in plan.rules)
+
+
+def test_real_opengrep_module_batches(tmp_path, monkeypatch, pack):
+    binary = os.environ.get('SECURITY_RUNTIME_TEST_OPENGREP')
+    if not binary:
+        pytest.skip('Set SECURITY_RUNTIME_TEST_OPENGREP for native execution acceptance')
+    import subprocess
+    from security_runtime.findings import FindingNormalizer
+    from security_runtime import scanners
+    from security_runtime.scan_input import capture_scan_input, scoped_request
+
+    assert subprocess.check_output([binary, '--version'], text=True).strip() == '1.32.0'
+    monkeypatch.setenv('SECURITY_RUNTIME_OPENGREP_PATH', binary)
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE', '1')
+    root = tmp_path / 'project'
+    root.mkdir()
+    names = tuple(f'{kind}.{ext}' for ext in ('mjs', 'cjs', 'mts', 'cts')
+                  for kind in ('positive', 'negative'))
+    for name in names:
+        algorithm = b'md5' if name.startswith('positive') else b'sha256'
+        (root / name).write_bytes(b'const hash = crypto.createHash("' + algorithm + b'");\r\nsavePassword(hash);\r\n')
+    (root / 'not-observed.mjs').write_bytes((root / 'positive.mjs').read_bytes())
+    source = 'javascript/lang/security/audit/md5-used-as-password.yaml'
+    eval_rule = next(rule for rule in pack.catalog if rule.path == source)
+    assert eval_rule.engine_languages == ('javascript',) and not eval_rule.has_paths
+    rules = tmp_path / 'rules'
+    rules.mkdir()
+    # Use the actual upstream rule plus a narrowly scoped local path rule.
+    import yaml
+    from security_runtime.rulepacks import load_rule_yaml
+    base, = load_rule_yaml((pack.path / source).read_bytes())['rules']
+    filtered = dict(base, id='path-bound-password', paths={'include': ['positive.mjs', '*.ts']})
+    original_text = {'id': 'original-path-text', 'languages': ['regex'],
+                     'paths': {'include': ['positive.mts']}, 'pattern-regex': 'createHash',
+                     'message': 'Fixture text match', 'severity': 'WARNING'}
+    (rules / 'test.yml').write_text(yaml.safe_dump({'rules': [base, filtered, original_text]}), encoding='utf-8')
+    adapter = OpenGrepAdapter(ToolManager(tmp_path / 'tools'))
+    resolved = RulePackManager().resolve(user_path=rules)
+    calls = []
+    real_execute = scanners._execute
+
+    def execute(args, cwd, timeout):
+        calls.append(tuple(args[args.index('--no-git-ignore')+1:]))
+        assert '--scan-unknown-extensions' not in args
+        return real_execute(args, cwd, timeout)
+
+    monkeypatch.setattr(scanners, '_execute', execute)
+    with capture_scan_input(scoped_request(root, list(names))) as view:
+        context = ScanContext(str(view.execution_root), 'quick', names, input_view=view,
+                              logical_root=str(root), bound_rule_pack=resolved)
+        plan = adapter.plan_rules(None, context)
+        findings, run = adapter.scan(replace(context, rule_plan=plan),
+                                     FindingNormalizer(view.execution_root, identity_root=root))
+    assert run.status == 'SUCCESS', (run.error_code, run.scanner_diagnostics)
+    assert set((f.file_path, f.technical_details['rule_id']) for f in findings) == {
+        *((name, base['id']) for name in names if name.startswith('positive')),
+        ('positive.mjs', 'path-bound-password'),
+        ('positive.mts', 'original-path-text'),
+    }
+    assert len(calls) == 3
+    assert set(calls[0]) == {name for name in names if name.endswith(('.mjs', '.cjs'))}
+    assert set(calls[1]) == {name for name in names if name.endswith(('.mts', '.cts'))}
+    assert len(calls[2]) == 4 and all(Path(name).suffix == '.ts' for name in calls[2])
+    assert all(not Path(name).exists() for name in calls[2])
+    for finding in findings:
+        locator = finding.technical_details['evidence_locator']
+        assert locator['file_sha256'] == hashlib.sha256((root / finding.file_path).read_bytes()).hexdigest()
+        if finding.technical_details['rule_id'] == 'original-path-text':
+            assert finding.line_start == 1 and locator['start_column'] == 21
+        else:
+            assert finding.line_start == 2 and locator['start_column'] == 1
+    catalog = {rule.rule_id: rule for rule in resolved.catalog}
+    original, path_bound = catalog[base['id']], catalog['path-bound-password']
+    assert original.rule_id == base['id']
+    assert plan.proves(original, 'negative.mts')
+    assert not plan.proves(path_bound, 'positive.cjs')
+    assert not plan.proves(path_bound, 'positive.mts')
+    assert run.rule_coverage['status'] == 'PARTIAL'
+    assert {row['path'] for row in run.rule_coverage['file_gaps']
+            if row['reason'] == 'TS_PROJECTION_RULE_PATH_FILTER_UNSUPPORTED'} == {
+        name for name in names if name.endswith(('.mts', '.cts'))}

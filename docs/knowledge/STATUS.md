@@ -1,5 +1,11 @@
 # 当前功能状态与目标
 
+## 当前源码：SAST 文件能力
+
+文件识别、规则规划、引擎执行、覆盖和复查共用 [文件能力注册表](../../src/security_runtime/sast_file_types.py)。`.mjs/.cjs` 走原路径，`.mts/.cts` 从固定输入生成原字节 TS 投影，TS 通道保留引擎支持的 JS-only 规则。Vue 的受支持脚本与 `avoid-v-html` 模板文本候选分别记录，整体仍为部分覆盖。五个原生别名和七种模板文本输入的具体范围见 [覆盖说明](../PRODUCT_COVERAGE.zh-CN.md)。
+
+Windows 源码定向回归 158 项通过，包含锁定的 OpenGrep 1.32.0 对模块正反例、原路径与位置回映、路径约束跳过及 Vue 区间过滤的验证。另两项旧 Windows 失败在基线也复现（新旧 CLI 的完整 JSON 等值断言、测试寻找无 `.exe` 文件），未计入通过；未重跑安装验收。八文件对照没有目录遍历或加入额外文件。按显式文件列表分批执行，密钥和依赖检查不变。本项未进行宿主、安装包或发布验收。
+
 ## 本机风险后台批次直达链接（源码与本机验证）
 
 `a085c88` 为开发收尾报告增加带 project/workspace/session/editor 与 check/scan/seq 的本机链接。正常批次报告在末页附加一次链接，`link_in_report` 指示宿主复用原文。后台地址缺失或回环端口不可达时，`session_url` 返回 None；需要链接的正常报告保留风险结果并说明链接暂不可用。后台读接口仅校验 Host，`/api/session` 无 Cookie 返回 csrf=null，写入和关闭入口继续执行各自的鉴权。列表和导出按 `activity_at` 倒序、`id` 次序。启动失败写入 `dashboard/startup-status.json`，`start_risk_dashboard` 返回 `reason_code`。

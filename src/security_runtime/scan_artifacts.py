@@ -157,7 +157,15 @@ def coverage_receipts(plans, runs):
                 or getattr(plan, 'unscoped_error', True)):
             continue
         files = set(plan.scanned_files)-set(plan.errored_files)-set(getattr(plan, 'skipped_files', {}))
+        rules = [r for r in plan.rules if r.rule_id in plan.confirmed_rules]
+        # The historical receipt uses separate lists, so it can only express
+        # their intersection as a complete rectangle. Keep partial evidence
+        # for live recheck, but don't persist it as a cross-file absence proof.
+        from .rule_coverage import SASTRulePlan
+        if isinstance(plan, SASTRulePlan):
+            from .sast_file_types import VUE_SCRIPT
+            files = {path for path in files if plan.file_types[path][0].mode != VUE_SCRIPT
+                     and all(plan.proves(rule, path) for rule in rules)}
         values[name] = dict(files=sorted(files), provider=run.provider, version=run.version,
-            checksum=plan.pack.checksum, rules={r.rule_id:r.rule_version for r in plan.rules
-                                              if r.rule_id in plan.confirmed_rules})
+            checksum=plan.pack.checksum, rules={r.rule_id:r.rule_version for r in rules})
     return values

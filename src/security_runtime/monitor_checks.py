@@ -16,7 +16,7 @@ CAPABILITIES = {'CODE_SAST', 'SECRET_SCAN', 'DEPENDENCY_VULN', 'IAC_MISCONFIG',
     'MCP_SECURITY_STATIC', 'MCP_SECURITY_DYNAMIC', 'AGENT_DYNAMIC_SECURITY',
     'AI_INFRA_VULN', 'LLM_JAILBREAK', 'MODEL_API_INTEGRITY', 'AGENT_RUNTIME_SECURITY',
     'AI_APP_SECURITY', 'OTHER'}
-LANGUAGES = {'java', 'python', 'javascript', 'typescript', 'vue', 'go', 'php',
+LANGUAGES = {'java', 'python', 'javascript', 'typescript', 'vue', 'template', 'go', 'php',
     'c', 'cpp', 'csharp', 'ruby', 'rust', 'kotlin', 'scala', 'swift', 'html',
     'xml', 'yaml', 'json', 'dockerfile', 'terraform', 'other'}
 REASONS = {'NO_EXECUTION_EVIDENCE', 'NO_CHANGES', 'NOT_APPLICABLE', 'CHECK_FAILED',
@@ -29,7 +29,8 @@ REASONS = {'NO_EXECUTION_EVIDENCE', 'NO_CHANGES', 'NOT_APPLICABLE', 'CHECK_FAILE
     'BASELINE_INCOMPLETE', 'TASK_SCOPE_UNVERIFIED', 'REVIEW_CONTEXT_UNREAD',
     'REVIEW_CAPACITY_REQUIRED', 'TASK_STATIC_NOT_EXECUTED', 'TASK_STATIC_PARTIAL',
     'TASK_STATIC_EVIDENCE_UNKNOWN', 'TASK_CONTEXT_GAPS'}
-SCOPES = {'SCRIPT_BLOCKS_ONLY', 'PLANNED_FILES', 'UNKNOWN'}
+SCOPES = {'SCRIPT_BLOCKS_ONLY', 'SCRIPT_AND_LIMITED_TEMPLATE_TEXT', 'LIMITED_TEMPLATE_TEXT',
+          'PLANNED_FILES', 'UNKNOWN'}
 SCOPE_COUNTS = {'target_files','selected_files','skipped_files','changed_files',
                 'unverified_files','review_units','reviewed_units','unread_ranges'}
 MAX_ROWS = 24
@@ -108,6 +109,8 @@ def scan_check(scan):
             state = enum(get(value, 'status'), RULE_STATES)
             scope = enum(get(value, 'scope', 'PLANNED_FILES'), SCOPES)
             template = enum(get(value, 'template_status'), RULE_STATES)
+            if language == 'vue' and get(value, 'template_status') == 'TEXT_EXECUTED':
+                template = 'PARTIAL'
             if language == 'vue' and template == 'NOT_COVERED':
                 reasons.add('VUE_TEMPLATE_NOT_COVERED')
             if scope == 'SCRIPT_BLOCKS_ONLY':

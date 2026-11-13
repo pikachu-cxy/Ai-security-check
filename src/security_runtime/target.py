@@ -10,13 +10,9 @@ from typing import Iterable
 from .models import TargetProfile
 from .dependency_inputs import DEPENDENCIES
 from .scope_policy import INSTALLATION_DIRS, is_compiled_artifact
+from .sast_file_types import DISPLAY_NAMES, LEGACY_PROFILE_EXTENSIONS as EXTENSIONS, file_type
 
 
-EXTENSIONS = {".py": "Python", ".js": "JavaScript", ".jsx": "JavaScript", ".vue": "Vue", ".ts": "TypeScript", ".tsx": "TypeScript", ".java": "Java", ".go": "Go", ".php": "PHP"}
-from .rule_catalog import EXTENSIONS as RULE_EXTENSIONS
-for _language, _extensions in RULE_EXTENSIONS.items():
-    for _extension in _extensions - {'*'}:
-        EXTENSIONS.setdefault(_extension, _language.title())
 IGNORED = {".git", ".venv", "venv", "env", ".tools", ".security-runtime", "node_modules", ".idea", ".vscode", "dist", "build", "target", "coverage", ".cache", ".pytest_cache", ".mypy_cache", "__pycache__", ".next", ".nuxt", "vendor"}
 IGNORED |= INSTALLATION_DIRS
 MAX_FILES = 10_000
@@ -239,10 +235,9 @@ class TargetDetector:
         languages, ecosystems, frameworks = set(), set(), set()
         for name in files:
             path = Path(name)
-            if path.name.lower() == 'dockerfile':
-                languages.add('Dockerfile')
-            if path.suffix.lower() in EXTENSIONS:
-                languages.add(EXTENSIONS[path.suffix.lower()])
+            capability, _ = file_type(name)
+            if capability and capability.language != 'xml':
+                languages.add(DISPLAY_NAMES.get(capability.language, capability.language.title()))
             if path.name in DEPENDENCIES:
                 ecosystems.add(DEPENDENCIES[path.name])
             if path.name in {"main.py", "app.py"}:

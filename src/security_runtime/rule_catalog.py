@@ -1,22 +1,16 @@
 """Explicit, validated rule capabilities; YAML is execution syntax, not the catalog."""
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 from .hook_state import native_io_path
 import json
 import re
+from .sast_file_types import (EXTENSIONS, TEXT, TEXT_LANGUAGES, TS_PROJECTION, VUE_SCRIPT,
+                              TEMPLATE_SUFFIXES, file_type, restricted_text_suffixes)
 
 
-LANGUAGES = {'python', 'java', 'javascript', 'typescript', 'go', 'php', 'generic'}
-EXTENSIONS = {'python': {'.py'}, 'java': {'.java'}, 'javascript': {'.js', '.jsx'},
-              'typescript': {'.ts', '.tsx'}, 'vue': {'.vue'}, 'go': {'.go'}, 'php': {'.php'}}
-EXTENSIONS.update({'apex': {'.cls', '.trigger'}, 'bash': {'.sh', '.bash'}, 'c': {'.c', '.h'},
-    'cpp': {'.cpp', '.cc', '.cxx', '.hpp'}, 'clojure': {'.clj', '.cljs', '.cljc'},
-    'csharp': {'.cs'}, 'dart': {'.dart'}, 'dockerfile': {'.dockerfile'}, 'elixir': {'.ex', '.exs'},
-    'hcl': {'.tf', '.hcl'}, 'html': {'.html', '.htm'}, 'json': {'.json'}, 'kotlin': {'.kt', '.kts'},
-    'lua': {'.lua'}, 'ocaml': {'.ml', '.mli'}, 'ruby': {'.rb'}, 'rust': {'.rs'}, 'scala': {'.scala'},
-    'solidity': {'.sol'}, 'swift': {'.swift'}, 'yaml': {'.yml', '.yaml'}, 'generic': {'*'}, 'regex': {'*'}})
 LANGUAGE_ALIASES = {'C#':'csharp', 'js':'javascript', 'ts':'typescript', 'kt':'kotlin', 'sh':'bash', 'terraform':'hcl'}
 LANGUAGES = set(EXTENSIONS) | set(LANGUAGE_ALIASES)
+VUE_TEMPLATE_RULE = 'javascript/vue/security/audit/xss/templates/avoid-v-html.yaml'
 
 
 @dataclass(frozen=True)
@@ -39,6 +33,7 @@ class RuleRecord:
     target_extensions: tuple[str, ...]
     fixture: str = ''
     additional_fixtures: tuple[str, ...] = ()
+    has_paths: bool = False
 
 
 def supports_language(record, language):
@@ -48,19 +43,49 @@ def supports_language(record, language):
     generic mapper rules. Engine languages do not duplicate the rule ID.
     """
     if language == 'vue':
+        return is_vue_template_rule(record) or bool(set(record.engine_languages) & {'javascript', 'typescript'})
+    if language == 'typescript':
         return bool(set(record.engine_languages) & {'javascript', 'typescript'})
     return language == record.language or language in record.engine_languages
 
 
-def supports_file(record, name):
-    if '*' in record.target_extensions:
+def is_vue_template_rule(record):
+    return (getattr(record, 'path', '') == VUE_TEMPLATE_RULE
+            and getattr(record, 'engine_languages', ()) == ('regex',)
+            and record.provenance.get('original_rule_id') == 'avoid-v-html'
+            and record.provenance.get('origin') == 'THIRD_PARTY')
+
+
+def supports_file(record, name, *, analyzer=None, classified=None):
+    capability, suffix = classified if classified is not None else file_type(name)
+    if capability is None:
+        return False
+    extensions = record.target_extensions
+    languages = getattr(record, 'engine_languages', ())
+    if not languages:  # Legacy/local non-SAST provider records.
+        return suffix in extensions
+    text = bool(TEXT_LANGUAGES.intersection(languages))
+    if is_vue_template_rule(record):
+        return capability.mode == VUE_SCRIPT and analyzer is None
+    if capability.mode == VUE_SCRIPT:
+        analyzers = ('javascript', 'typescript') if analyzer == 'typescript' else (analyzer,) if analyzer else capability.analyzers
+        return bool(set(analyzers).intersection(languages) and
+                    set(extensions).intersection({'.js', '.jsx', '.ts', '.tsx'}))
+    if suffix in TEMPLATE_SUFFIXES:
+        return text and TEXT_LANGUAGES.issuperset(languages) and suffix in extensions
+    if text and ('*' in extensions or suffix in extensions) and (
+            capability.mode != TS_PROJECTION or TEXT_LANGUAGES.issuperset(languages)):
         return True
-    if 'dockerfile' in record.engine_languages and Path(name).name.lower() == 'dockerfile':
-        return True
-    extension = Path(name).suffix.lower()
-    if extension == '.vue':
-        return supports_language(record, 'vue') and bool(set(record.target_extensions) & {'.js', '.jsx', '.ts', '.tsx'})
-    return extension in record.target_extensions
+    if capability.mode == TEXT:
+        return False
+    if capability.mode == TS_PROJECTION and text:
+        return False  # A mixed typed/text rule cannot preserve both inputs in this channel.
+    if suffix in {'.ts', '.tsx', '.mts', '.cts'} and 'javascript' in languages:
+        # Catalog-owned JS-only rules can run on TS, but TS-only rules
+        # never get the reverse compatibility.
+        return bool(set(extensions).intersection({'.js', '.jsx', '.ts', '.tsx', '.mts', '.cts'}))
+    return bool(set(capability.analyzers).intersection(languages) and
+                (suffix in extensions or suffix == '' and capability.language == 'dockerfile'))
 
 
 def validate_rule(rule, descriptor, *, first_party=True):
@@ -125,7 +150,10 @@ def load_catalog(path, descriptor, definitions, *, first_party=True):
                 md.get('confidence','MEDIUM'),'UPSTREAM' if descriptor.bundled else 'USER_PROVIDED',
                 str(md.get('framework','')),descriptor.rule_pack_id,descriptor.version,tuple(references),
                 dict(origin=descriptor.provenance.origin, original_rule_id=original_id, source_path=relative),
-                rule.get('mode','search'),relative,tuple(sorted(set().union(*(EXTENSIONS[l] for l in languages))))))
+                rule.get('mode','search'),relative,tuple(sorted(set().union(
+                    *(EXTENSIONS[l] for l in languages), restricted_text_suffixes(rule)
+                    if TEXT_LANGUAGES.intersection(languages) else ()))),
+                has_paths='paths' in rule))
         return tuple(records)
     file=native_io_path(path/'catalog.json')
     if not file.is_file() or file.is_symlink() or file.stat().st_size>1_000_000:
@@ -160,7 +188,7 @@ def load_catalog(path, descriptor, definitions, *, first_party=True):
             raise ValueError('Rule Catalog target extensions invalid')
         if not record.fixture:
             raise ValueError('Default rule has no fixture declaration')
-        records.append(record)
+        records.append(replace(record, has_paths='paths' in rule))
     if seen!=set(definitions):
         raise ValueError('Rule Catalog count mismatch')
     return tuple(records)

@@ -15,7 +15,7 @@ from security_runtime.models import ScanContext
 from security_runtime.processes import ProcessResult
 from security_runtime.rule_coverage import plan_rules
 from security_runtime.rulepacks import RulePackManager
-from security_runtime.scanners import SemgrepAdapter
+from security_runtime.scanners import OpenGrepAdapter, SemgrepAdapter
 from security_runtime.vue_scan import VueProjection
 
 
@@ -295,8 +295,9 @@ def test_second_script_parse_error_preserves_first_script_execution_as_partial(t
     assert len(findings) == 1 and findings[0].file_path == 'App.vue'
     vue = coverage['per_language']['vue']
     assert coverage['status'] == vue['status'] == 'PARTIAL'
-    assert vue['executed_rule_ids'] == ['test.' + language]
-    assert vue['executed_rules'] == coverage['total_executed'] == 1
+    expected = ['test.javascript'] + (['test.typescript'] if language == 'typescript' else [])
+    assert vue['executed_rule_ids'] == expected
+    assert vue['executed_rules'] == coverage['total_executed'] == len(expected)
     detail = vue['files']['App.vue']
     assert detail['status'] == 'PARTIAL'
     assert detail['script_blocks'] == 2 and detail['scanned_script_blocks'] == 1
@@ -323,3 +324,60 @@ def test_zero_findings_after_script_execution_still_reports_template_gap(tmp_pat
 def test_unrelated_typescript_rule_is_not_claimed_executed_for_js_only_script(tmp_path):
     _, coverage, _, _ = run_adapter(tmp_path, '<script setup>const value = "fixed";</script>', include_match=False)
     assert coverage['per_language']['vue']['executed_rule_ids'] == ['test.javascript']
+
+
+@pytest.mark.parametrize('markup,expected', [
+    ('<template><div v-html="value"></div></template>', True),
+    ('<template><div v-text="value"></div></template>\n'
+     '<style>/* <div v-html="outside"> */</style>', False),
+])
+def test_real_vue_template_text_is_bounded_to_the_original_template(tmp_path, monkeypatch, markup, expected):
+    import os
+    binary = os.environ.get('SECURITY_RUNTIME_TEST_OPENGREP')
+    if not binary:
+        pytest.skip('Set SECURITY_RUNTIME_TEST_OPENGREP for native Vue template acceptance')
+    from dataclasses import replace
+    from security_runtime.rule_catalog import is_vue_template_rule
+    from security_runtime.scan_input import capture_scan_input, scoped_request
+    from security_runtime.toolchain import ToolManager
+
+    monkeypatch.setenv('SECURITY_RUNTIME_OPENGREP_PATH', binary)
+    monkeypatch.setenv('SECURITY_RUNTIME_OFFLINE', '1')
+    root = tmp_path / 'project'
+    root.mkdir()
+    template = root / 'Template.vue'
+    template.write_text(markup, encoding='utf-8')
+    script = root / 'Script.vue'
+    script.write_text('<template><p>value</p></template>\n'
+                      '<script setup>eval(location.hash);</script>', encoding='utf-8')
+    pack = RulePackManager().resolve()
+    vue_rule, = (rule for rule in pack.catalog if is_vue_template_rule(rule))
+    js_rule, = (rule for rule in pack.catalog if rule.path == 'javascript/browser/security/eval-detected.yaml')
+    blocked = replace(js_rule, has_paths=True)
+    other_js, = (rule for rule in pack.catalog
+                 if rule.path == 'javascript/lang/security/detect-eval-with-expression.yaml')
+    assert not other_js.has_paths
+    names = ('Template.vue', 'Script.vue')
+    adapter = OpenGrepAdapter(ToolManager(tmp_path / 'tools'))
+    with capture_scan_input(scoped_request(root, list(names))) as view:
+        plan = plan_rules(replace(pack, catalog=(vue_rule, blocked, other_js)), names)
+        context = ScanContext(str(view.execution_root), 'quick', names, rule_plan=plan,
+                              input_view=view, logical_root=str(root), bound_rule_pack=pack)
+        findings, run = adapter.scan(context, FindingNormalizer(view.execution_root, identity_root=root))
+    assert run.status == 'SUCCESS', run.scanner_diagnostics
+    scripts = [finding for finding in findings if finding.file_path == 'Script.vue']
+    templates = [finding for finding in findings if finding.file_path == 'Template.vue']
+    assert scripts and all(f.technical_details['rule_id'] == other_js.rule_id for f in scripts)
+    assert all(f.line_start == 2 and f.technical_details['embedded_source']['scope'] ==
+               'SCRIPT_BLOCKS_ONLY' for f in scripts)
+    assert len(templates) == int(expected)
+    if expected:
+        hit, = templates
+        assert hit.line_start == 1 and hit.technical_details['rule_id'] == vue_rule.rule_id
+        assert hit.technical_details['embedded_source']['scope'] == 'TEMPLATE_TEXT_ONLY'
+    row = run.rule_coverage['per_language']['vue']
+    assert row['status'] == run.rule_coverage['status'] == 'PARTIAL'
+    assert row['files']['Template.vue']['template_status'] == 'TEXT_EXECUTED'
+    assert row['files']['Template.vue']['scanned_script_blocks'] == 0
+    assert row['files']['Script.vue']['scanned_script_blocks'] == 1
+    assert 'VUE_RULE_PATH_FILTER_UNSUPPORTED' in row['files']['Script.vue']['issues']

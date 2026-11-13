@@ -7,6 +7,8 @@ from .equivalence import equivalence_key
 from .findings import FindingNormalizer
 from .models import ScanContext, ScanMode, RunStatus
 from .target import TargetDetector
+from .rule_catalog import supports_file
+from .sast_file_types import VUE_SCRIPT, file_type
 from .verification_policy import local_recheck
 from .progress import ScanCancelled, checkpoint, progress_context
 
@@ -194,7 +196,8 @@ class VerificationService:
                                 wanted = {rid for original in rules[(name,path)] for rid in
                                     (program.family_rules(original) if program else (original,))}
                                 plan = replace(plan, rules=tuple(r for r in plan.rules if r.rule_id in wanted),
-                                    confirmed_rules=set(),scanned_files=set(),errored_files=set(),skipped_files={},unscoped_error=False)
+                                    confirmed_rules=set(),scanned_files=set(),errored_files=set(),
+                                    skipped_files={},proof_index={},rule_gaps={},unscoped_error=False)
                             context = replace(context, rule_plan=plan)
                         if not adapter.supports(profile, context):
                             cache[key] = ([], None, plan, 'ORIGINAL_SCOPE_UNSUPPORTED', False)
@@ -285,15 +288,19 @@ class VerificationService:
                 covered = (covered and bool(compatible) and rule in plan.confirmed_rules
                     and path in plan.scanned_files and path not in plan.errored_files
                     and path not in getattr(plan, 'skipped_files', {}) and not plan.unscoped_error)
-                if Path(path).suffix.lower() == '.vue':
+                capability, _ = file_type(path)
+                if capability and capability.mode == VUE_SCRIPT:
                     # Script projections currently prove candidates only; a
                     # template/block/language change cannot attest absence.
                     covered = False
+                prove = getattr(plan, 'proves', None)
+                if callable(prove):
+                    covered = covered and prove(selected, path)
                 if getattr(plan.pack, 'program', None):
                     required = set(plan.pack.program.family_rules(rule))
-                    applicable = {r.rule_id for r in plan.pack.catalog if r.rule_id in required and
-                        Path(path).suffix.lower() in r.target_extensions}
-                    covered = covered and bool(applicable) and applicable.issubset(plan.confirmed_rules)
+                    applicable = [r for r in plan.pack.catalog if r.rule_id in required and supports_file(r, path)]
+                    covered = covered and bool(applicable) and all(r.rule_id in plan.confirmed_rules and
+                        (not callable(prove) or prove(r, path)) for r in applicable)
             else:
                 # These JSON adapters currently attest candidates, not which
                 # original detector/checks evaluated the file. An exit code

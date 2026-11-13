@@ -118,6 +118,53 @@ def test_same_complete_receipts_still_prove_absence_for_standalone_javascript(tm
     assert result['verification_status'] == 'SCANNER_VERIFIED_RESOLVED'
 
 
+def test_recheck_does_not_cross_join_file_and_rule_receipts(tmp_path):
+    from security_runtime.rule_coverage import plan_rules
+    from security_runtime.rulepacks import RulePackManager
+    from security_runtime.sast_file_types import TS_PROJECTION
+
+    rules = tmp_path / 'rules'
+    rules.mkdir()
+    (rules / 'rules.yml').write_text('''rules:
+- id: original
+  languages: [javascript]
+  paths:
+    include: ['*.mjs', '*.ts']
+  message: Original
+  severity: WARNING
+  pattern: eval(...)
+- id: unrelated
+  languages: [typescript]
+  message: Other
+  severity: WARNING
+  pattern: eval(...)
+''')
+    pack = RulePackManager().resolve(user_path=rules)
+    names = ('worked.mjs', 'skipped.mts')
+    for name in names:
+        (tmp_path / name).write_text('const fixed = 1;')
+    plan = plan_rules(pack, names)
+    plan.observe({'paths': {'scanned': ['worked.mjs']}, 'time': {'rules': ['original']}},
+                 ('worked.mjs',), allowed_rules={'original'})
+    plan.observe({'paths': {'scanned': ['projection.ts']}, 'time': {'rules': ['unrelated']}},
+                 ('projection.ts',), sources={'projection.ts': ('skipped.mts', None)},
+                 allowed_rules={'unrelated'}, mode=TS_PROJECTION)
+    scanner = VuePlannedScanner(plan)
+    rows = []
+    for name in names:
+        finding = FindingNormalizer(tmp_path).make(scanner='fixture', category='xss',
+            title='Original', description='Fixture', severity='HIGH', confidence='HIGH',
+            file_path=name, line=1, rule_id='original')
+        finding.technical_details.update(engine='fixture', rule_pack=pack.descriptor.rule_pack_id,
+            rule_pack_version=pack.descriptor.version, rule_pack_checksum=pack.checksum,
+            rule_version=pack.descriptor.version)
+        rows.append(asdict(finding))
+    results = VerificationService(ScannerRegistry([scanner])).verify_many(
+        tmp_path, rows, {'target_profile': {'files': list(names)}})
+    assert [row['status'] for row in results] == ['RESOLVED', 'INCONCLUSIVE']
+    assert 'ORIGINAL_RULE_FILE_COVERAGE_NOT_PROVEN' in results[1]['reason']
+
+
 def test_vue_sast_boundary_does_not_override_bound_gitleaks_absence_receipt(tmp_path):
     (tmp_path / 'App.vue').write_text('<script setup>const fixed = 1;</script>', encoding='utf-8')
     old = FindingNormalizer(tmp_path).make(scanner='gitleaks', category='secret',

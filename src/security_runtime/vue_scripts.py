@@ -48,6 +48,8 @@ class VueExtraction:
     scripts: tuple[VueScript, ...] = ()
     issues: tuple[str, ...] = ()
     has_template: bool = False
+    template_range: tuple[int, int] | None = None
+    template_issue: str | None = None
 
     @property
     def complete(self) -> bool:
@@ -175,7 +177,7 @@ class _Parser:
                     raise _Unsupported('MALFORMED_SFC')
                 stack.pop()
                 if not stack:
-                    return cursor
+                    return opening, cursor
             elif self_closing or name in _VOID_TAGS:
                 continue
             elif name in {'script', 'style', 'textarea', 'title'}:
@@ -204,6 +206,8 @@ def extract_vue_scripts(source: bytes) -> VueExtraction:
         return VueExtraction(issues=('MALFORMED_SFC',))
     parser, cursor = _Parser(source), 3 if source.startswith(b'\xef\xbb\xbf') else 0
     blocks, issues, seen, has_template = [], [], set(), False
+    template_range = None
+    template_issue = None
     try:
         while cursor < len(source):
             if source[cursor] in _SPACE:
@@ -226,9 +230,17 @@ def extract_vue_scripts(source: bytes) -> VueExtraction:
                 if has_template:
                     raise _Unsupported('DUPLICATE_TEMPLATE')
                 has_template = True
-                cursor = body_start if self_closing else (
-                    parser.template_end(body_start) if attrs.get('lang') in (None, '', 'html')
-                    else parser.raw_end(name, body_start)[1])
+                if self_closing:
+                    cursor = body_start
+                elif attrs.get('lang') not in (None, '', 'html'):
+                    cursor = parser.raw_end(name, body_start)[1]
+                    template_issue = 'UNSUPPORTED_TEMPLATE_LANGUAGE'
+                else:
+                    body_end, cursor = parser.template_end(body_start)
+                    if any(key in attrs for key in ('src', ':src', 'v-bind:src', ':lang', 'v-bind:lang')):
+                        template_issue = 'UNSUPPORTED_TEMPLATE_ATTRIBUTES'
+                    else:
+                        template_range = (body_start, body_end)
                 continue
             body_end, cursor = (body_start, body_start) if self_closing else parser.raw_end(name, body_start)
             if name != 'script':
@@ -261,7 +273,7 @@ def extract_vue_scripts(source: bytes) -> VueExtraction:
     blank = source.translate(_BLANK_TABLE)
     scripts = tuple(VueScript(language, setup, start, end, blank[:start] + source[start:end] + blank[end:])
                     for language, setup, start, end in blocks)
-    return VueExtraction(scripts, tuple(dict.fromkeys(issues)), has_template)
+    return VueExtraction(scripts, tuple(dict.fromkeys(issues)), has_template, template_range, template_issue)
 
 
 def read_vue_scripts(path: Path) -> VueExtraction:

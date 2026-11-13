@@ -1,5 +1,9 @@
 # 从开发需求定位代码
 
+## SAST 文件能力与复查
+
+`sast_file_types.py` 定义文件名、复合后缀、分析器和执行方式；`target.py` 只对已有目标分类。`rule_catalog.py` 区分规则声明语言和实际适用分析器；`rule_coverage.py` 规划并保存单次引擎调用的文件与规则证据。`scanners.py` 按原路径、兼容投影和受限文本分批；`vue_scripts.py` / `vue_scan.py` 保留 SFC 区间、路径回映及限制。`verification.py`、`hook_runtime.py` 与 `scan_artifacts.py` 不将批次规则和扫描文件列表直接组合为修复证明。回归入口：`test_opengrep_migration.py`、`test_vue_scan.py`、`test_vue_recheck.py`、`test_rule_coverage.py`。
+
 ## 只读与清理误触发
 
 监听路径项目边界：`development_file_watch.py:_Window.paths`，回归 `test_development_file_watch.py`；项目外通知不写编辑账本，混合通知仅保留项目内路径。

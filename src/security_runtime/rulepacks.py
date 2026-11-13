@@ -166,7 +166,8 @@ class RulePackManager:
         self._resolved_cache, self._cache_lock = bucket.values, bucket.lock
         with self._cache_lock:
             location, content_hash, rule_bytes = self._content_identity(path)
-            key = (workspace_key(), repr(descriptor), (location, content_hash), tuple(sorted(kwargs.items())))
+            from .sast_file_types import POLICY_VERSION
+            key = (POLICY_VERSION, workspace_key(), repr(descriptor), (location, content_hash), tuple(sorted(kwargs.items())))
             self.cache_hit = key in self._resolved_cache
             if self.cache_hit:
                 return self._resolved_cache[key]
@@ -221,7 +222,8 @@ class RulePackManager:
         cache = PreparationCache()
         # The caller already read these bytes to select the process cache entry.
         content = content_identity if content_identity is not None else RulePackManager._content_identity(path)[1]
-        key = (repr(descriptor), content)
+        from .sast_file_types import POLICY_VERSION
+        key = (POLICY_VERSION, repr(descriptor), content)
         saved = cache.get('rule-pack', key)
         if saved is not None:
             catalog = tuple(RuleRecord(**{k: tuple(v) if isinstance(v, list) else v

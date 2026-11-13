@@ -1,6 +1,5 @@
 """Asynchronous preparation for observed development; never scans source."""
 import logging
-from pathlib import Path
 import threading
 
 _lock = threading.Lock()
@@ -27,12 +26,9 @@ def prepare(workspace, names=(), *, latest_names=None):
 
 def start(workspace, paths=(), *, batch=None):
     """Coalesce language hints. Return immediately without reading source."""
-    from .rule_catalog import EXTENSIONS
-    extensions = {suffix for values in EXTENSIONS.values() for suffix in values}
-    names = {('Dockerfile' if Path(name).name.lower() == 'dockerfile'
-              else 'target' + Path(name).suffix.lower()) for name in paths
-             if Path(name).suffix.lower() in extensions | {'.xml'}
-             or Path(name).name.lower() == 'dockerfile'}
+    from .sast_file_types import file_type
+    names = {('target' + suffix if suffix else 'Dockerfile')
+             for capability, suffix in map(file_type, paths) if capability is not None}
     key = (str(workspace), batch)
     with _lock:
         if key not in _requests:

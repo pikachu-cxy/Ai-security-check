@@ -5220,136 +5220,136 @@
     },
     {
       "path": "src/security_runtime/hook_runtime.py",
-      "sha256": "6f5c1f525d46fc018571d19b3d2ee1a130fb1b98badb08b7f1907ee9d9f64b81",
+      "sha256": "834a6dc930deea9cae9f664b805bb1781fabb28e4a32753de71fac4b958ef4b8",
       "purpose": "Host-neutral advisory quick checks; eq-v1 families are counted, not instances.",
       "symbols": [
         {
           "name": "safe_path",
-          "line": 36
+          "line": 38
         },
         {
           "name": "metadata",
-          "line": 45
+          "line": 47
         },
         {
           "name": "_validate_rule_versions",
-          "line": 51
+          "line": 53
         },
         {
           "name": "HookSnapshot",
-          "line": 61
+          "line": 63
         },
         {
           "name": "captured_input_matches",
-          "line": 76
+          "line": 78
         },
         {
           "name": "capture_recheck_expectation",
-          "line": 99
+          "line": 101
         },
         {
           "name": "incremental_scope",
-          "line": 134
+          "line": 136
         },
         {
           "name": "validate_state",
-          "line": 153
+          "line": 155
         },
         {
           "name": "_git",
-          "line": 275
+          "line": 277
         },
         {
           "name": "CapturedSnapshot",
-          "line": 285
-        },
-        {
-          "name": "CapturedSnapshot.__new__",
           "line": 287
         },
         {
+          "name": "CapturedSnapshot.__new__",
+          "line": 289
+        },
+        {
           "name": "snapshot_inventory_budget",
-          "line": 294
+          "line": 296
         },
         {
           "name": "capture_snapshot",
-          "line": 313
+          "line": 315
         },
         {
           "name": "family_multiset",
-          "line": 394
+          "line": 396
         },
         {
           "name": "covered",
-          "line": 451
+          "line": 453
         },
         {
           "name": "family_delta",
-          "line": 509
+          "line": 516
         },
         {
           "name": "HookCoordinator",
-          "line": 538
+          "line": 545
         },
         {
           "name": "HookCoordinator.__init__",
-          "line": 539
+          "line": 546
         },
         {
           "name": "HookCoordinator.managed_registry",
-          "line": 558
+          "line": 565
         },
         {
           "name": "HookCoordinator._scan_scope",
-          "line": 571
+          "line": 578
         },
         {
           "name": "HookCoordinator.handle_lifecycle",
-          "line": 759
+          "line": 766
         },
         {
           "name": "HookCoordinator.handle",
-          "line": 774
+          "line": 781
         },
         {
           "name": "HookCoordinator._attempt_unavailable",
-          "line": 973
+          "line": 980
         },
         {
           "name": "HookCoordinator._claim",
-          "line": 977
+          "line": 984
         },
         {
           "name": "HookCoordinator._abandon",
-          "line": 1024
+          "line": 1031
         },
         {
           "name": "HookCoordinator._publication_snapshot",
-          "line": 1037
+          "line": 1044
         },
         {
           "name": "HookCoordinator._stage_publication",
-          "line": 1041
+          "line": 1048
         },
         {
           "name": "HookCoordinator.recover_publications",
-          "line": 1058
+          "line": 1065
         },
         {
           "name": "HookCoordinator._publish",
-          "line": 1094
+          "line": 1101
         },
         {
           "name": "HookCoordinator._session_baseline",
-          "line": 1169
+          "line": 1176
         },
         {
           "name": "HookCoordinator._session_finalize_locked",
-          "line": 1216
+          "line": 1223
         },
         {
           "name": "HookCoordinator._reconcile",
-          "line": 1238
+          "line": 1245
         }
       ]
     },
@@ -7332,7 +7332,7 @@
     },
     {
       "path": "src/security_runtime/model_panel.py",
-      "sha256": "b27cc0fe5742e41fe668012ad7d819ab1bef370c7849a32f92b1970c7d99eeee",
+      "sha256": "acfe0c347b42aa428193aa89aaaf7f74c84acd0efd1f3afa6389da8e93962623",
       "purpose": "Shared metadata-only DOM renderer for live and offline observation views.",
       "symbols": []
     },
@@ -7420,32 +7420,32 @@
     },
     {
       "path": "src/security_runtime/monitor_checks.py",
-      "sha256": "1ef8f6a5c646cf256d59761d8e1f4a2dc5f6c17a78a4026f22a55cb115b1b6c9",
+      "sha256": "53f14c284cac86b03815d171afdfb6388126543d13a15972f9dc86702acb1267",
       "purpose": "Bounded, source-free projections of existing scan execution receipts.",
       "symbols": [
         {
           "name": "get",
-          "line": 38
+          "line": 39
         },
         {
           "name": "count",
-          "line": 42
+          "line": 43
         },
         {
           "name": "enum",
-          "line": 46
+          "line": 47
         },
         {
           "name": "scan_check",
-          "line": 50
+          "line": 51
         },
         {
           "name": "task_check",
-          "line": 141
+          "line": 144
         },
         {
           "name": "validate_check",
-          "line": 221
+          "line": 224
         }
       ]
     },
@@ -10558,51 +10558,71 @@
     },
     {
       "path": "src/security_runtime/rule_catalog.py",
-      "sha256": "8b426bf405a08d0bf1915d9d0b51b46445003f42cdda025386783c9029a3ea06",
+      "sha256": "d5ffcd4686e7740c1636e0c8147b17fb068383a66bd467b4ca6177df4d4083b2",
       "purpose": "Explicit, validated rule capabilities; YAML is execution syntax, not the catalog.",
       "symbols": [
         {
           "name": "RuleRecord",
-          "line": 23
+          "line": 17
         },
         {
           "name": "supports_language",
-          "line": 44
+          "line": 39
+        },
+        {
+          "name": "is_vue_template_rule",
+          "line": 52
         },
         {
           "name": "supports_file",
-          "line": 55
+          "line": 59
         },
         {
           "name": "validate_rule",
-          "line": 66
+          "line": 91
         },
         {
           "name": "load_catalog",
-          "line": 107
+          "line": 132
         }
       ]
     },
     {
       "path": "src/security_runtime/rule_coverage.py",
-      "sha256": "67b037635a68568b48fdc4f3ddfca50129179a52824c0427c6bc8131916b59ab",
+      "sha256": "f8776854580c2c3acb4a1ee9809624a44b7f8f89c7e2c13ae815ccaeccfbf9fc",
       "purpose": "Plan applicable rules/files before preparation; account for engine evidence.",
       "symbols": [
         {
+          "name": "_relative",
+          "line": 7
+        },
+        {
+          "name": "_rule_for_language",
+          "line": 11
+        },
+        {
+          "name": "BatchProof",
+          "line": 22
+        },
+        {
           "name": "SASTRulePlan",
-          "line": 8
+          "line": 32
         },
         {
           "name": "SASTRulePlan.observe",
-          "line": 23
+          "line": 50
+        },
+        {
+          "name": "SASTRulePlan.proves",
+          "line": 103
         },
         {
           "name": "SASTRulePlan.coverage",
-          "line": 53
+          "line": 133
         },
         {
           "name": "plan_rules",
-          "line": 128
+          "line": 272
         }
       ]
     },
@@ -10674,7 +10694,7 @@
     },
     {
       "path": "src/security_runtime/rulepacks.py",
-      "sha256": "048663993c60ea51e0f985c0f16d21136b73a3a42b290b2c87ede9729df05d44",
+      "sha256": "83c729c66726d79410d9015130c9e05c5281f7b799366f2f0395fe3dd89a124f",
       "purpose": "Rule packs have their own provenance, licensing and lifecycle.",
       "symbols": [
         {
@@ -10767,23 +10787,23 @@
         },
         {
           "name": "RulePackManager.discover",
-          "line": 180
+          "line": 181
         },
         {
           "name": "RulePackManager.resolve",
-          "line": 184
+          "line": 185
         },
         {
           "name": "RulePackManager.bind_input",
-          "line": 204
+          "line": 205
         },
         {
           "name": "RulePackManager._validate",
-          "line": 214
+          "line": 215
         },
         {
           "name": "RulePackManager._validate_uncached",
-          "line": 239
+          "line": 241
         }
       ]
     },
@@ -10881,8 +10901,31 @@
       ]
     },
     {
+      "path": "src/security_runtime/sast_file_types.py",
+      "sha256": "8cb3c25640c7ece93c0d149094d221b9ce1e4e3364cf8eae78d9365429f1f38c",
+      "purpose": "Name-based capabilities for already selected SAST inputs (OpenGrep 1.32).",
+      "symbols": [
+        {
+          "name": "FileCapability",
+          "line": 17
+        },
+        {
+          "name": "FileCapability.analyzers",
+          "line": 23
+        },
+        {
+          "name": "file_type",
+          "line": 79
+        },
+        {
+          "name": "restricted_text_suffixes",
+          "line": 93
+        }
+      ]
+    },
+    {
       "path": "src/security_runtime/scan_artifacts.py",
-      "sha256": "3f58a329853e32a89f0f856f335abfccfb85deef9b343cf9ffb17b941fdc6b3b",
+      "sha256": "35e73fcf6613e50941e242e0d529156dc5334f8d65b6e7df851089b81e931278",
       "purpose": "Exact-input scanner fact reuse. Never shares task evidence or dispositions.",
       "symbols": [
         {
@@ -11391,16 +11434,16 @@
     },
     {
       "path": "src/security_runtime/scan_prewarm.py",
-      "sha256": "ae8278588bf3788dcd7b9c921d069b9d7aac2ecc4ab9d7bfe5c9363504f9a4fd",
+      "sha256": "9c0af7959a1e1719e2ac5fac540ebd27a9d14e36f7a0068bb68a6553c8901591",
       "purpose": "Asynchronous preparation for observed development; never scans source.",
       "symbols": [
         {
           "name": "prepare",
-          "line": 11
+          "line": 10
         },
         {
           "name": "start",
-          "line": 28
+          "line": 27
         }
       ]
     },
@@ -11664,236 +11707,236 @@
     },
     {
       "path": "src/security_runtime/scanners.py",
-      "sha256": "5b84fb766a28873e0ae76b78d57398d27e7732bd9797b6bb6309d08dc707a8f5",
+      "sha256": "d6cf261e457ba5987d25747048994bd78cf73f764569816c8ae499a416a36968",
       "purpose": "",
       "symbols": [
         {
           "name": "execution_environment",
-          "line": 51
+          "line": 53
         },
         {
           "name": "sast_batches",
-          "line": 57
+          "line": 59
         },
         {
           "name": "_artifacts",
-          "line": 75
+          "line": 77
         },
         {
           "name": "_snapshot",
-          "line": 86
+          "line": 88
         },
         {
           "name": "ScannerAdapter",
-          "line": 106
+          "line": 108
         },
         {
           "name": "ScannerAdapter.required_engines",
-          "line": 114
-        },
-        {
-          "name": "ScannerAdapter.supports",
-          "line": 115
-        },
-        {
-          "name": "ScannerAdapter.scan",
           "line": 116
         },
         {
-          "name": "ScannerAdapter.normalize",
+          "name": "ScannerAdapter.supports",
           "line": 117
         },
         {
+          "name": "ScannerAdapter.scan",
+          "line": 118
+        },
+        {
+          "name": "ScannerAdapter.normalize",
+          "line": 119
+        },
+        {
           "name": "_execution_limit",
-          "line": 120
+          "line": 122
         },
         {
           "name": "_execute",
-          "line": 126
+          "line": 128
         },
         {
           "name": "_process_failure",
-          "line": 144
+          "line": 146
         },
         {
           "name": "BaseScanner",
-          "line": 148
+          "line": 150
         },
         {
           "name": "BaseScanner.__init__",
-          "line": 159
+          "line": 161
         },
         {
           "name": "BaseScanner.required_engines",
-          "line": 162
+          "line": 164
         },
         {
           "name": "BaseScanner.supports",
-          "line": 165
+          "line": 167
         },
         {
           "name": "BaseScanner.version",
-          "line": 168
+          "line": 170
         },
         {
           "name": "BaseScanner.scan",
-          "line": 171
+          "line": 173
         },
         {
           "name": "BaseScanner._scan_observed",
-          "line": 177
+          "line": 179
         },
         {
           "name": "BaseScanner._scan",
-          "line": 267
+          "line": 269
         },
         {
           "name": "BaseScanner._environment",
-          "line": 270
+          "line": 272
         },
         {
           "name": "BaseScanner._input_execution_identity",
-          "line": 301
+          "line": 303
         },
         {
           "name": "BaseScanner._prepare",
-          "line": 330
+          "line": 332
         },
         {
           "name": "PatternSASTScanner",
-          "line": 334
+          "line": 336
         },
         {
           "name": "PatternSASTScanner.__init__",
-          "line": 343
+          "line": 344
         },
         {
           "name": "PatternSASTScanner.supports",
-          "line": 351
+          "line": 352
         },
         {
           "name": "PatternSASTScanner._bind_preparations",
-          "line": 354
+          "line": 355
         },
         {
           "name": "PatternSASTScanner.plan_rules",
-          "line": 364
+          "line": 365
         },
         {
           "name": "PatternSASTScanner.scan",
-          "line": 396
+          "line": 398
         },
         {
           "name": "PatternSASTScanner.prepare_config",
-          "line": 414
+          "line": 416
         },
         {
           "name": "PatternSASTScanner._scan",
-          "line": 452
+          "line": 454
         },
         {
           "name": "PatternSASTScanner.normalize",
-          "line": 552
+          "line": 661
         },
         {
           "name": "SemgrepAdapter",
-          "line": 577
+          "line": 686
         },
         {
           "name": "SemgrepAdapter.__init__",
-          "line": 581
+          "line": 690
         },
         {
           "name": "OpenGrepAdapter",
-          "line": 585
+          "line": 694
         },
         {
           "name": "GitleaksAdapter",
-          "line": 590
+          "line": 699
         },
         {
           "name": "GitleaksAdapter.scan",
-          "line": 597
+          "line": 706
         },
         {
           "name": "GitleaksAdapter.supports",
-          "line": 605
+          "line": 714
         },
         {
           "name": "GitleaksAdapter._scan",
-          "line": 608
+          "line": 717
         },
         {
           "name": "GitleaksAdapter._scan_targets",
-          "line": 623
-        },
-        {
-          "name": "GitleaksAdapter.normalize",
-          "line": 697
-        },
-        {
-          "name": "TrivyAdapter",
-          "line": 720
-        },
-        {
-          "name": "TrivyAdapter._prepare",
-          "line": 729
-        },
-        {
-          "name": "TrivyAdapter.scan",
           "line": 732
         },
         {
+          "name": "GitleaksAdapter.normalize",
+          "line": 806
+        },
+        {
+          "name": "TrivyAdapter",
+          "line": 829
+        },
+        {
+          "name": "TrivyAdapter._prepare",
+          "line": 838
+        },
+        {
+          "name": "TrivyAdapter.scan",
+          "line": 841
+        },
+        {
           "name": "TrivyAdapter.supports",
-          "line": 765
+          "line": 874
         },
         {
           "name": "TrivyAdapter._scan",
-          "line": 769
+          "line": 878
         },
         {
           "name": "TrivyAdapter._dependency_inventory",
-          "line": 814
+          "line": 923
         },
         {
           "name": "TrivyAdapter.normalize",
-          "line": 863
+          "line": 972
         },
         {
           "name": "TrivyMisconfigAdapter",
-          "line": 884
+          "line": 993
         },
         {
           "name": "TrivyMisconfigAdapter._prepare",
-          "line": 891
+          "line": 1000
         },
         {
           "name": "TrivyMisconfigAdapter.supports",
-          "line": 895
+          "line": 1004
         },
         {
           "name": "TrivyMisconfigAdapter._scan",
-          "line": 899
+          "line": 1008
         },
         {
           "name": "active_provider",
-          "line": 909
+          "line": 1018
         },
         {
           "name": "ScannerRegistry",
-          "line": 914
+          "line": 1023
         },
         {
           "name": "ScannerRegistry.__init__",
-          "line": 915
+          "line": 1024
         },
         {
           "name": "ScannerRegistry._discover_plugins",
-          "line": 922
+          "line": 1031
         },
         {
           "name": "ScannerRegistry.plan",
-          "line": 945
+          "line": 1054
         }
       ]
     },
@@ -12697,48 +12740,48 @@
     },
     {
       "path": "src/security_runtime/target.py",
-      "sha256": "c8f7f25acee6ee7f12769fa81fea142da6fe585b8c0a7f946f65a7443fb34faf",
+      "sha256": "95ab13974e035a9c0427f88710323588931e92573568d60ba641352b3d4b2bca",
       "purpose": "Bounded project profiling based primarily on names and manifests.",
       "symbols": [
         {
           "name": "selection_summary",
-          "line": 48
+          "line": 44
         },
         {
           "name": "DiscoveryLimitError",
-          "line": 61
+          "line": 57
         },
         {
           "name": "DiscoveryLimitError.__init__",
-          "line": 62
+          "line": 58
         },
         {
           "name": "DiscoveryLimitError.to_dict",
-          "line": 70
+          "line": 66
         },
         {
           "name": "_config_error",
-          "line": 100
+          "line": 96
         },
         {
           "name": "discovery_config",
-          "line": 104
+          "line": 100
         },
         {
           "name": "_limit",
-          "line": 135
+          "line": 131
         },
         {
           "name": "TargetDetector",
-          "line": 157
+          "line": 153
         },
         {
           "name": "TargetDetector.__init__",
-          "line": 158
+          "line": 154
         },
         {
           "name": "TargetDetector.detect",
-          "line": 170
+          "line": 166
         }
       ]
     },
@@ -17213,40 +17256,40 @@
     },
     {
       "path": "src/security_runtime/verification.py",
-      "sha256": "ecb4d53fc3fc72e3553a311c27414980850f49eca5bdfd8c7b020345cae5a71c",
+      "sha256": "6bd9e9d20c57fe5dd70a344249894fb9a4fd20a5a586513fdbac689794f50073",
       "purpose": "Bounded, local scanner evidence for resolution; never a code editor or build.",
       "symbols": [
         {
           "name": "same_dependency_advisory",
-          "line": 18
+          "line": 20
         },
         {
           "name": "evidence",
-          "line": 33
+          "line": 35
         },
         {
           "name": "declared_dependency_proof",
-          "line": 40
+          "line": 42
         },
         {
           "name": "VerificationService",
-          "line": 64
+          "line": 66
         },
         {
           "name": "VerificationService.__init__",
-          "line": 65
+          "line": 67
         },
         {
           "name": "VerificationService.verify_many",
-          "line": 68
+          "line": 70
         },
         {
           "name": "VerificationService._verify_many",
-          "line": 86
+          "line": 88
         },
         {
           "name": "VerificationService._verify",
-          "line": 115
+          "line": 117
         }
       ]
     },
@@ -17275,34 +17318,38 @@
     },
     {
       "path": "src/security_runtime/vue_scan.py",
-      "sha256": "23e09bc33e49e38c8cc930505dbf7446a97b8d4bf0b7c83e4c3d1566d0bc666b",
+      "sha256": "6f7c62c41205277a50d6658d37551d1284a72747d8249ac45cad96c3e18dcdd6",
       "purpose": "Disposable Vue script projections; preserve original evidence coordinates.",
       "symbols": [
         {
           "name": "_key",
-          "line": 10
+          "line": 11
         },
         {
-          "name": "VueProjection",
-          "line": 14
-        },
-        {
-          "name": "VueProjection.__init__",
+          "name": "remap_paths",
           "line": 15
         },
         {
-          "name": "VueProjection.map_paths",
-          "line": 64
+          "name": "match_inside",
+          "line": 26
+        },
+        {
+          "name": "VueProjection",
+          "line": 32
+        },
+        {
+          "name": "VueProjection.__init__",
+          "line": 33
         },
         {
           "name": "VueProjection.finish",
-          "line": 74
+          "line": 88
         }
       ]
     },
     {
       "path": "src/security_runtime/vue_scripts.py",
-      "sha256": "68c90c5022bbc823f343a8d561808fde4a94a0023ae9b6ec9e1fd6d52f1f908f",
+      "sha256": "9ad911c77abe0a509aea7c0158f725ddec047be500611331e40aa666c853e126",
       "purpose": "Bounded Vue SFC script extraction for static scanners, without compilation.",
       "symbols": [
         {
@@ -17323,43 +17370,43 @@
         },
         {
           "name": "VueExtraction.complete",
-          "line": 53
+          "line": 55
         },
         {
           "name": "_Unsupported",
-          "line": 58
+          "line": 60
         },
         {
           "name": "_Parser",
-          "line": 62
+          "line": 64
         },
         {
           "name": "_Parser.__init__",
-          "line": 63
+          "line": 65
         },
         {
           "name": "_Parser.comment",
-          "line": 67
+          "line": 69
         },
         {
           "name": "_Parser.tag",
-          "line": 73
+          "line": 75
         },
         {
           "name": "_Parser.raw_end",
-          "line": 134
+          "line": 136
         },
         {
           "name": "_Parser.template_end",
-          "line": 145
+          "line": 147
         },
         {
           "name": "extract_vue_scripts",
-          "line": 190
+          "line": 192
         },
         {
           "name": "read_vue_scripts",
-          "line": 267
+          "line": 279
         }
       ]
     },

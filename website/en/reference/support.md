@@ -34,11 +34,14 @@ Hooks provide signed chat ownership. Reconnect acceptance reads the original che
 | --- | --- |
 | Java, Python, JavaScript/TypeScript, Go, PHP | Applicable rules selected by file type and installed pack; execution reported per scan |
 | C/C++, C#, Ruby, Rust, Kotlin, Shell, YAML, and other recognized types | Recognition and rule selection do not prove a matching rule or successful parser execution |
-| Vue | Supported JS/TS script blocks; templates, styles, and external scripts are not covered |
+| JS/TS modules | `.mjs` and `.cjs` scan at their original paths. `.mts` and `.cts` scan through temporary `.ts` copies with results mapped back. Applicable JS-only rules also run on TS. Projected rules whose path filters cannot be preserved leave a coverage gap. |
+| Native aliases | `.pyi`, `.ktm`, `.phtml`, `.tfvars`, and `.edn` use their language rules. Declarations and configuration do not imply runtime or complete IaC coverage. |
+| Vue | Supported JS/TS script blocks and limited `v-html` text candidates in recognized templates. Vue coverage remains partial; styles, external scripts, and template-to-script data flow are outside this coverage. |
+| Other templates | `.ejs`, `.pug`, `.mustache`, `.hbs`, `.jsp`, `.erb`, and `.page` use explicitly applicable text rules only. |
 | Native Java/Python dataflow | Bounded propagation and calls; loops, dynamic arguments, context, and budgets can limit coverage |
 | Native Go SQL and JS/TS dynamic-code checks | Additional modeled candidates, not whole-program proofs |
 
-Available, selected, and executed rules and files are separate measures. Unsupported semantics, exclusions, and parser failures remain visible. Language support does not imply complete framework or vulnerability coverage.
+Available, selected, and executed rules and files are separate measures. Unsupported semantics, exclusions, and parser failures remain visible. Typed scans exclude `.min.js`, `.d.ts`, `.d.mts`, and `.d.cts`. This describes the current source; installed releases depend on their bundled build.
 
 ## Secrets, dependencies, and configuration
 

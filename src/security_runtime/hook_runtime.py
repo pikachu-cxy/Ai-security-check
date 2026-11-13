@@ -20,6 +20,8 @@ from .hook_state import HookStateStore, identity
 from .hooks import HookEvent
 from .models import RunStatus
 from .target import TargetDetector
+from .rule_catalog import supports_file
+from .sast_file_types import VUE_SCRIPT, file_type
 from .verification_policy import local_recheck
 from .workspace import WorkspaceResolver
 from .hook_timing import timings, elapsed, core_context, ExecutionTrigger
@@ -464,7 +466,8 @@ def covered(family, runs, plans):
         plan = plans.get(name)
         if not run or run.status != RunStatus.SUCCESS or run.coverage_contract != 'FULL' or not plan:
             return False
-        if Path(family['file_path']).suffix.lower() == '.vue':
+        capability, _ = file_type(family['file_path'])
+        if capability and capability.mode == VUE_SCRIPT:
             # Inline-script findings are useful, but partial SFC coverage is
             # not a proof that an earlier occurrence has been removed.
             return False
@@ -483,7 +486,7 @@ def covered(family, runs, plans):
         if proof['engine'] and proof['engine'] != run.provider:
             return False
         applicable = ({r.rule_id for r in plan.pack.catalog if r.rule_id in required and
-            Path(family['file_path']).suffix.lower() in r.target_extensions} if program else set(required))
+            supports_file(r, family['file_path'])} if program else set(required))
         if not applicable or not applicable.issubset(selected):
             return False
         if 'rule_versions' in proof:
@@ -502,6 +505,10 @@ def covered(family, runs, plans):
         if not applicable.issubset(plan.confirmed_rules) or family['file_path'] not in plan.scanned_files or family['file_path'] in plan.errored_files or plan.unscoped_error:
             return False
         if family['file_path'] in getattr(plan, 'skipped_files', {}):
+            return False
+        prove = getattr(plan, 'proves', None)
+        if callable(prove) and not all(prove(rule, family['file_path']) for rule in plan.rules
+                                       if rule.rule_id in applicable):
             return False
     return True
 

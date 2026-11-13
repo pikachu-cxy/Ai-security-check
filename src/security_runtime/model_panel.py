@@ -37,7 +37,7 @@ function renderModelEvidence(data,parent){
   COVERED:'已覆盖选定范围',ENABLED:'已启用',AVAILABLE:'已就绪',CANCELLED:'已取消',TIMED_OUT:'执行超时',
   TIMEOUT:'执行超时',NO_CHANGES:'没有待检查变更',SCOPED:'限定范围',MINIMAL:'少量范围',NONE:'未覆盖',NOT_STARTED:'尚未开始',RUNNING:'进行中'};
  const status=v=>words[v]||'状态未知';
- const languages={python:'Python',java:'Java',javascript:'JavaScript',typescript:'TypeScript',vue:'Vue',
+ const languages={python:'Python',java:'Java',javascript:'JavaScript',typescript:'TypeScript',vue:'Vue',template:'模板文本',
   go:'Go',php:'PHP',ruby:'Ruby',rust:'Rust',c:'C',cpp:'C++',csharp:'C#',kotlin:'Kotlin',swift:'Swift',scala:'Scala',
   html:'HTML',xml:'XML',yaml:'YAML',json:'JSON',dockerfile:'Dockerfile',terraform:'Terraform',other:'其他语言'};
  const capabilities={sast:'代码规则检查',code:'代码检查',secret:'密钥检查',secrets:'密钥检查',dependency:'依赖检查',
@@ -141,7 +141,10 @@ function renderModelEvidence(data,parent){
   const section=el('div');if(!check){section.appendChild(el('p','这条历史记录未保留检查状态和覆盖范围。'));return section}
   const counts=check.scope_counts||{};if(counts.changed_files!=null||counts.review_units!=null||counts.unverified_files!=null)section.appendChild(el('p','变更文件 '+num(counts.changed_files)+' · 未完成比较 '+num(counts.unverified_files)+' · 已复核 / 变更单元 '+num(counts.reviewed_units)+' / '+num(counts.review_units)+' · 未读内容范围 '+num(counts.unread_ranges)+'。缺失的修改前证据不会补记为已检查。'));
   if(counts.target_files!=null||counts.selected_files!=null||counts.skipped_files!=null)section.appendChild(el('p','目标文件 '+num(counts.target_files)+' · 选入检查 '+num(counts.selected_files)+' · 已跳过 '+num(counts.skipped_files)+'。文件数量不等于每行或全部规则均已覆盖。'));
-  if(list(check.languages).length)section.appendChild(table(['语言','实际规则覆盖','已执行 / 选定规则','已扫描 / 目标文件','范围限制'],check.languages.map(r=>[languages[r.language]||'其他语言',status(r.status),num(r.executed_rules)+' / '+num(r.selected_rules),num(r.scanned_files)+' / '+num(r.target_files),r.scope==='SCRIPT_BLOCKS_ONLY'?'仅脚本块；模板'+(r.template_status==='NOT_COVERED'?'未覆盖':status(r.template_status)):r.scope==='PLANNED_FILES'?'按本次目标范围':'范围未提供'])));
+  const scopeText=r=>({SCRIPT_BLOCKS_ONLY:'仅脚本块；模板未覆盖',
+    SCRIPT_AND_LIMITED_TEMPLATE_TEXT:'支持的脚本块；模板仅作 v-html 文本检查',
+    LIMITED_TEMPLATE_TEXT:'仅执行适用的模板文本规则',PLANNED_FILES:'按本次目标范围'}[r.scope]||'范围未提供');
+  if(list(check.languages).length)section.appendChild(table(['语言','实际规则覆盖','已执行 / 选定规则','已扫描 / 目标文件','范围限制'],check.languages.map(r=>[languages[r.language]||'其他语言',status(r.status),num(r.executed_rules)+' / '+num(r.selected_rules),num(r.scanned_files)+' / '+num(r.target_files),scopeText(r)])));
   if(list(check.capabilities).length)section.appendChild(table(['检查能力','执行状态'],check.capabilities.map(r=>[capabilities[r.capability]||'其他检查能力',status(r.status)])));
   if(list(check.reason_codes).length){const ul=el('ul');for(const code of check.reason_codes){const [title,action]=reason(code);ul.appendChild(el('li',title+'。'+action))}section.appendChild(ul)}
   const raw=details('技术诊断与原始状态','检查 '+(check.status||'UNKNOWN')+' · 执行 '+(check.execution_state||'UNKNOWN')+' · 规则 '+(check.rule_status||'UNKNOWN')+' · 覆盖 '+(check.coverage||'UNKNOWN'));
