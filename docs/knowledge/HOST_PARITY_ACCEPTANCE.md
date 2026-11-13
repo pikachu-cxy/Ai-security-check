@@ -6,6 +6,14 @@
 
 源码开发、实际宿主能力和已安装版本分别记录。能力声明不是当前连接可用证明，CodeBuddy CLI 支持子 Agent 也不能代替 WorkBuddy 桌面的实际验证。
 
+## 当前本机安装与 Hook 回归
+
+本机活动构建包含 `da0e966` 的 Cursor 上下文节流、跨 Hook 去重与 WorkBuddy 脱敏诊断。三端全局 MCP 配置已统一，已核实当前 Codex MCP 与本机后台构建。Codex 当前配置匹配产品签名记录；旧条目备份及调整和激活的精确先后未核实。构建与链接实测见 [当前状态](STATUS.md#本机风险后台批次直达链接源码与本机验证)。
+
+- Cursor 的 `postToolUse` 在每个已验证 generation 的首次写入工具调用后补发完整上下文，后续及只读调用使用短凭证。单次文件编辑由 `postToolUse` 与 `afterFileEdit` 双报时，两种到达顺序均只记录一次。WorkBuddy Hook 失败返回固定原因码，自由文本不进入宿主诊断。两组专项共 27 项通过。
+- Cursor 去重仍会合并独立编辑。键仅包含 generation 和路径集合。同一 generation 连续两次改同一文件，隔离复现的 `dirty_seq` 为 `1 → 1`。`afterShellExecution` 没有候选路径，同一 generation 的独立 Shell 编辑也复现 `1 → 1`。修复需同时验证独立操作各自入账、同一次操作的双报只计一次、缺少可靠关联信息时保留可观测编辑。
+- WorkBuddy 旧构建已有真实宿主 Hook、扫描、复核和完整报告记录，原报告的 `session_url` 为 null。新构建尚未取得同一提示词复跑、回复末尾只出现一个可点链接、点击后仅展示本批风险的真实 WorkBuddy 证据。Cursor 的 Hook 回归使用隔离夹具，真实宿主验证待完成。
+
 ## 实现边界
 
 - `host_lifecycle.py` 声明简短交付及会话级恢复能力，调用处使用静态集合，不新增每次编辑的宿主探测。

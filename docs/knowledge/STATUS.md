@@ -1,8 +1,12 @@
 # 当前功能状态与目标
 
-## 本机风险后台批次直达链接（源码）
+## 本机风险后台批次直达链接（源码与本机验证）
 
-开发任务收尾报告末尾的本机链接改为批次级：查询串带 project/workspace/session/editor 与 check/scan/seq，`session_url` 在回环端口不可达时返回 None，报告降级为链接不可用，不再出现死链。`check_ref` 由同一聊天复用、不保证对应单次开发任务，批次身份取 `(dirty_seq, scan_id)`，与 `development_risks.get(batch_version=...)` 的过滤口径一致。后台读接口不再要求 Cookie，仅校验 Host；`/api/session` 无 Cookie 返回 csrf=null；写入与 `/shutdown` 保留 Cookie、Origin、CSRF、Bearer。风险列表默认按 `activity_at` 倒序、`id` 次序，分页与导出同序。启动失败写入 `dashboard/startup-status.json`，`start_risk_dashboard` 返回 reason_code；`ensure` 增加健康快路径，后台 15 秒与显式入口 3 秒分开超时。报告只在有确认、待确认、误报、重复或覆盖限制时附加链接，`link_in_report` 告知宿主不要再用 session_url 重复输出。
+`a085c88` 为开发收尾报告增加带 project/workspace/session/editor 与 check/scan/seq 的本机链接。正常批次报告在末页附加一次链接，`link_in_report` 指示宿主复用原文。后台地址缺失或回环端口不可达时，`session_url` 返回 None；需要链接的正常报告保留风险结果并说明链接暂不可用。后台读接口仅校验 Host，`/api/session` 无 Cookie 返回 csrf=null，写入和关闭入口继续执行各自的鉴权。列表和导出按 `activity_at` 倒序、`id` 次序。启动失败写入 `dashboard/startup-status.json`，`start_risk_dashboard` 返回 `reason_code`。
+
+本机 0.3.14 原生包构建 `46d65954` 已激活，包元数据为 `source_commit=da0e966`、`source_dirty=true`，包含其父提交 `a085c88`。本地打包产物与已安装 EXE 的 SHA-256 一致。Codex、Cursor、WorkBuddy 全局 MCP 配置指向同一新启动器；Codex MCP 条目与五个 Hook 事件组匹配产品签名记录。当前 Codex MCP 和 53351 风险后台的实际构建均为 `46d65954`，无 Cookie 访问 `/risks` 和 `/api/session` 均返回 HTTP 200。旧安装记录和版本槽仍保留，旧进程是否全部退出未核实。
+
+链接验收仍有边界。`session_url` 在交付时只探测 TCP，端口被其他服务占用时仍可能生成错误地址，后台在交付后退出时已发链接也会暂时失效。后台目录目前用扫描 ID 或编辑序号匹配风险。内存数据库复现了扫描 ID 不同但序号相同的两批风险同时命中，批次过滤仍需修正。链接专项 14 项已在允许本机回环的环境全部复测通过，覆盖不同批次使用不同扫描 ID 和序号的正常场景。升级后尚未取得真实 WorkBuddy 使用同一提示词重跑并点击报告链接的证据，Cursor 的真实宿主验收也仍待完成。宿主配置与 Cursor 已复现缺口见 [宿主兼容验收](HOST_PARITY_ACCEPTANCE.md)。
 
 验证：`tests/test_dashboard_delivery.py` 14 项通过，其中真实 HTTP 覆盖"报告链接 → `/api/risks` 只返回本批次、无 Cookie 读 200、外部 Host 403、无 Cookie 写 403"；`test_dashboard_service.py`、`test_risk_dashboard.py`、`test_report_missing_dashboard.py`、`test_development_risks.py`、`test_dashboard_health.py` 等关联组通过；`node --test tests/test_risk_dashboard_ui.cjs` 16 项通过。进程级端到端：独立状态目录启动 `risk-dashboard --shared`，`/risks` 无 Cookie 200、`/api/session` csrf=null、外部 Host 403、无 Cookie POST 403、`/shutdown` 后 `session_url` 返回 None。未修改 HEAD 隔离副本上同样失败的既有项（`test_dashboard_history` 2、`test_dashboard_management` 4 夹具错误、`test_dashboard_sessions` 1 文件占用、`test_development_risks_mcp` 2、`test_development_review_completion` 2）保留为环境或既有缺陷，未计为通过。真实 Codex 有漏洞任务的人工点击验收因额度不可用未执行。
 

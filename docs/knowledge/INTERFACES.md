@@ -2,9 +2,11 @@
 
 ## 风险管理链接
 
-冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE 并带 `reason_code`；不得构造假地址。报告没有 session_url 时保留实际覆盖缺口，提示链接不可用，不输出 null 或空 Markdown 链接，也不在报告读取时同步启动后台。
+冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE 并带 `reason_code`。需要链接的正常批次报告在 `session_url` 为空时提示链接不可用，并保留实际覆盖缺口；`INCOMPLETE` 当前只在有地址时追加链接，无地址时正文仅说明检查未完成。报告读取不会同步启动后台。
 
-链接身份是保存记录里的可验证批次三元组，不是"最近一次扫描"推测：`session_url(workspace, owner, check_ref=, scan_id=, seq=)` 把 `check`、`scan`、`seq` 拼进查询串，任一身无法验证时返回 None。`check_ref` 由 `sha256(owner_key + task_key)` 派生且同一聊天会复用，因此不能假设它对应单次开发任务；区分批次的是 `(dirty_seq, scan_id)`，与 `development_risks.get(batch_version=...)` 的过滤口径一致。地址只在回环端口实际可达时返回（TCP 探测 50ms，不发 HTTP、不启动进程），服务已退出时报告直接降级为链接不可用，不产生死链。端口与 token 由 `endpoint.json` 复用，服务重新就绪后同一地址自动恢复可用。
+`session_url(workspace, owner, check_ref=, scan_id=, seq=)` 从保存记录取得工作区和所有者，校验调用方传入的批次值并附加 `check`、`scan`、`seq`。同一检查可跨批次复用，完整批次由 `(dirty_seq, scan_id)` 区分；未取得扫描 ID 的未完成结果可只带检查和编辑序号。当前目录索引使用扫描键或序号键命中风险，与 `development_risks.get(batch_version=...)` 的完整筛选规则仍有差异。
+
+地址生成时使用 50ms 回环 TCP 探测。端口不可达时返回 None；可达仅证明端口接受连接，服务身份与构建由显式启动路径的 `/health` 单独核对。`endpoint.json` 保存用于复用的端口与 token；旧链接在后台恢复并成功绑定原端口后可再次使用。若原端口被其他服务占用，探测可能通过，但后台仍可能无法启动。
 
 ## Windows 用户目录
 

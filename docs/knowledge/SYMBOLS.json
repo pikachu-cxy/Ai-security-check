@@ -1517,16 +1517,20 @@
     },
     {
       "path": "src/security_runtime/cursor_automatic.py",
-      "sha256": "a3895d3d3375a02df160bbcd45919d734494d58e55d04880027505c691fb246c",
+      "sha256": "1693f2bca564aaf824e76bab08f2a9c375ce143a60a6db602c34830a913ba969",
       "purpose": "Local Cursor command transport for the shared task/check services.",
       "symbols": [
         {
+          "name": "edit_identity",
+          "line": 24
+        },
+        {
           "name": "_gap_context",
-          "line": 20
+          "line": 39
         },
         {
           "name": "handle_automatic_event",
-          "line": 32
+          "line": 51
         }
       ]
     },
@@ -1634,7 +1638,7 @@
     },
     {
       "path": "src/security_runtime/cursor_gap_notices.py",
-      "sha256": "d3fc369d19e9dab0236882ad0c00fb7b344e1ec45cf9fddba4ffd0a3b0520381",
+      "sha256": "e185a8788ca9af50e1cde0dae7ee735b3812b794b382a2952bf7f5260a433403",
       "purpose": "Bounded, persistent Cursor presentation deduplication; never check evidence.",
       "symbols": [
         {
@@ -1644,6 +1648,14 @@
         {
           "name": "claim_gap_notice",
           "line": 18
+        },
+        {
+          "name": "claim_session_context",
+          "line": 23
+        },
+        {
+          "name": "_claim",
+          "line": 31
         }
       ]
     },
@@ -17423,16 +17435,20 @@
     },
     {
       "path": "src/security_runtime/workbuddy_hook.py",
-      "sha256": "37470f82773265a0574698faeb5f36928eb76bb286b47db1b333c178ea25dfd3",
+      "sha256": "612e5988c4e77492860f834a5cf8ab9e2c6f48e9d29abc0cb873700df49e1226",
       "purpose": "WorkBuddy command transport; all checks/reviews use the shared services.",
       "symbols": [
         {
           "name": "handle",
-          "line": 28
+          "line": 32
+        },
+        {
+          "name": "reason_code",
+          "line": 93
         },
         {
           "name": "main",
-          "line": 89
+          "line": 105
         }
       ]
     },

@@ -93,6 +93,8 @@ rg -n 'INSTALLED_LAUNCHER_IDENTITY_MISMATCH' src tests
 
 后台风险服务生命周期、批次链接与存活探测位于 `dashboard_service.py`，HTTP 读接口与写入防护位于 `risk_dashboard.py`，批次归属与时间倒序索引位于 `dashboard_records.py:batch_keys` 与 `dashboard_catalog.py`（`risk_batches` 表、`activity_at` 列）；MCP 启动入口在 `cli.py`，完整报告链接在 `development_views.py`，统一结果链接在 `development_check.py`。相关回归为 `tests/test_dashboard_delivery.py`、`tests/test_dashboard_service.py`、`tests/test_risk_dashboard.py`、`tests/test_risk_dashboard_ui.cjs`、`tests/test_development_risks.py` 和 `tests/test_development_delivery.py`。
 
+Cursor 上下文节流在 `cursor_automatic.py` 与 `cursor_gap_notices.py`，双报去重从 `cursor_automatic.py:edit_identity` 经 `cursor_event_adapter.py` 和 `host_event_runtime.py` 到 `development_check.py:record_hook`。排查独立编辑被合并时，分别核对同轮同文件编辑与空路径 Shell 事件。WorkBuddy 脱敏诊断在 `workbuddy_hook.py:reason_code/main`。专项回归为 `tests/test_cursor_context_dedup.py` 和 `tests/test_workbuddy_hook_diagnostics.py`。
+
 ## 风险管理与并行业务审计
 
 | 修改方向 | 源码 | 验证 |
