@@ -4,6 +4,7 @@ import { withBase } from 'vitepress'
 const editors = [
   { name: 'Codex', label: 'Windows / macOS', path: 'codex', description: '选择系统安装，重启验证后完成第一个小任务。' },
   { name: 'Cursor', label: 'Windows / macOS', path: 'cursor', description: '按系统接入 Cursor，在 Agent 聊天中查看改动检查。' },
+  { name: 'WorkBuddy', label: 'Windows / macOS', path: 'workbuddy', description: '安装后重启 WorkBuddy，并在客户端审核 MCP 服务信任。' },
 ]
 </script>
 

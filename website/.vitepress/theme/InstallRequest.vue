@@ -18,7 +18,13 @@ const editors = {
     steps: '阅读 Cursor 接入指南中的支持说明。Windows 按本页 PowerShell 命令自动安装并选择 cursor；macOS 按本页命令自动安装并选择 cursor，先说明验证范围及已有 Cursor 连接可能更新。配置用户级 MCP、配套 Skill 和 Hook，并自动准备检查组件；常规工具确认仍遵循 Cursor 的运行模式与团队策略。',
     note: '粘贴到本机 Cursor 的 Agent 聊天。Windows 自动下载校验完整包，Mac 自动准备专用运行环境；已有 Cursor 连接可能更新为所选版本。'
   },
-
+  workbuddy: {
+    name: 'WorkBuddy',
+    target: '接入本地 WorkBuddy',
+    page: 'workbuddy',
+    steps: '按 WorkBuddy 指南执行官方安装命令。完全退出并重启 WorkBuddy，再审核 MCP 服务信任。',
+    note: '粘贴到本机 WorkBuddy 聊天。安装后按提示重启并确认实际连接。'
+  },
 }
 const editor = computed(() => editors[props.editor || selectedEditor.value] || editors.codex)
 const copied = ref(false)

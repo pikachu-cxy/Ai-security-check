@@ -27,10 +27,10 @@ description: 选择你的编辑器和系统，完成安装、连接验证和第�
 
 ## 2. 选择一种安装方式
 
-- **推荐让 AI 安装**：复制编辑器页的一句话安装请求到 Codex 或 Cursor，由 Agent 下载、校验、接入并验证。自然语言请求粘贴到聊天中。
+- **推荐让 AI 安装**：复制编辑器页的一句话安装请求到 Codex、Cursor 或 WorkBuddy，由 Agent 下载、校验、接入并验证。自然语言请求粘贴到聊天中。
 - **手动安装备用**：在编辑器页选择 Windows 或 macOS，复制对应系统的安装命令到终端。
 
-Windows 完整包需要先下载、校验并解压，再在能看到 `security-check` 文件夹的目录打开 PowerShell。Mac 的 Codex / Cursor 自动安装命令可以在任意终端目录执行，运行环境会自动准备。
+Windows 完整包需要先下载、校验并解压，再在能看到 `security-check` 文件夹的目录打开 PowerShell。Mac 的 Codex / Cursor / WorkBuddy 自动安装命令可以在任意终端目录执行，运行环境会自动准备。
 
 安装会自动开始准备检查组件；首次下载可能在安装返回后继续，不需要再执行一条准备命令。Mac 遇到粘贴提醒时，先看[提醒原因与处理方式](../reference/faq.md#macos-paste)。
 

@@ -1,7 +1,7 @@
 # Downloads
 ## Recommended: ask your agent to install
 
-Choose [Codex](./guide/editors/codex.md) or [Cursor](./guide/editors/cursor.md), then copy the installation request into its chat. The downloads below are the manual alternative. This release supports only these two editors.
+Choose [Codex](./guide/editors/codex.md), [Cursor](./guide/editors/cursor.md), or [WorkBuddy](./guide/editors/workbuddy.md), then copy the installation request into its chat. The downloads below are the manual alternative.
 
 
 **License notice:** Use the license included in the downloaded version. The new repository license does not retroactively change published archives. See [licensing](./reference/legal).
@@ -10,7 +10,7 @@ Current release: **0.3.14**. The installers below and manual downloads use the s
 
 ## Install by editor {#install}
 
-[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md)
+[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md) · [WorkBuddy](./guide/editors/workbuddy.md)
 
 
 ## Native bundles {#windows}
@@ -30,7 +30,7 @@ Get-Content .\ai-security-runtime-v0.3.14-windows-x64.zip.sha256
 
 ## macOS installation {#macos}
 
-[Codex](./guide/editors/codex.md#macos) and [Cursor](./guide/editors/cursor.md#macos) provide the current installer command. It detects the chip and downloads the corresponding 0.3.14 bundle.
+[Codex](./guide/editors/codex.md#macos), [Cursor](./guide/editors/cursor.md#macos), and [WorkBuddy](./guide/editors/workbuddy.md#macos) provide the current installer command. It detects the chip and downloads the corresponding 0.3.14 bundle.
 
 ### Manual macOS packages {#macos-packages}
 

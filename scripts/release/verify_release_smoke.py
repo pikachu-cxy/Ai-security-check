@@ -24,10 +24,11 @@ from security_runtime.trial import TrialProfile, isolated_environment
 from verify_artifact import extract, run
 
 
-async def probe(executable: Path, root: Path, env: dict, expected_identity: dict) -> list[str]:
+async def probe(executable: Path, root: Path, env: dict, expected_identity: dict, *,
+                args: tuple[str, ...] = ('mcp',), verify_dashboard: bool = False) -> list[str]:
     with tempfile.TemporaryFile(mode='w+', encoding='utf-8') as stderr:
         async with stdio_client(StdioServerParameters(
-                command=str(executable), args=['mcp'], cwd=root, env=env), errlog=stderr) as (read, write):
+                command=str(executable), args=list(args), cwd=root, env=env), errlog=stderr) as (read, write):
             async with ClientSession(read, write) as client:
                 await asyncio.wait_for(client.initialize(), timeout=30)
                 names = sorted(tool.name for tool in (await client.list_tools()).tools)
@@ -42,6 +43,8 @@ async def probe(executable: Path, root: Path, env: dict, expected_identity: dict
                         identity.get(key) != expected_identity.get(key)
                         for key in ('version', 'build_id', 'source_commit')):
                     raise ValueError('Installed Runtime build identity mismatch')
+                if not verify_dashboard:
+                    return names
                 dashboard = await client.call_tool('start_risk_dashboard', {})
                 payload = dashboard.structuredContent or json.loads(dashboard.content[0].text)
                 payload = payload.get('result', payload)
@@ -75,6 +78,9 @@ def main(archive: Path) -> None:
                        LOCALAPPDATA=str(profile / 'AppData/Local'),
                        APPDATA=str(profile / 'AppData/Roaming'))
         env['SECURITY_RUNTIME_CONFIG'] = str(profile / 'product.toml')
+        workbuddy = profile / 'workbuddy-home'
+        workbuddy.mkdir()
+        env['WORKBUDDY_CONFIG_DIR'] = str(workbuddy)
         env.pop('__PYVENV_LAUNCHER__', None)
         version = run([str(executable), '--version'], cwd=root, env=env).stdout.strip()
         if version != f'AI Security Runtime {__version__}':
@@ -88,7 +94,8 @@ def main(archive: Path) -> None:
             raise ValueError('Native installation or settings preservation failed')
         command = tomllib.loads(config.read_text())['mcp_servers']['ai_security_runtime']['command']
         try:
-            names = asyncio.run(asyncio.wait_for(probe(Path(command), root, env, metadata), timeout=60))
+            names = asyncio.run(asyncio.wait_for(
+                probe(Path(command), root, env, metadata, verify_dashboard=True), timeout=60))
             hosts = {}
             for host, required in [('codex', 'development_check'), ('cursor', 'begin_development_check')]:
                 host_env = dict(env, SECURITY_RUNTIME_GLOBAL='1', SECURITY_RUNTIME_HOST=host,
@@ -97,6 +104,23 @@ def main(archive: Path) -> None:
                 if required not in host_names or 'development_review' not in host_names:
                     raise ValueError('Supported host development tools missing')
                 hosts[host] = host_names
+            settings = workbuddy / 'settings.json'
+            settings.write_text(json.dumps({'smoke_user_setting': True}), encoding='utf-8')
+            workbuddy_receipt = json.loads(run([str(executable), 'install', 'workbuddy', '--root',
+                str(profile / 'program'), '--offline', '--json'], cwd=root, env=env, timeout=180).stdout)
+            installed_settings = json.loads(settings.read_text(encoding='utf-8'))
+            if (not workbuddy_receipt['installation']['local_files_ready']
+                    or workbuddy_receipt['skill']['status'] != 'INSTALLED'
+                    or installed_settings.get('smoke_user_setting') is not True
+                    or set(installed_settings['hooks']) != {'SessionStart', 'PreToolUse', 'PostToolUse', 'Stop'}):
+                raise ValueError('WorkBuddy installation or settings preservation failed')
+            entry = json.loads((workbuddy / 'mcp.json').read_text(encoding='utf-8'))['mcpServers']['ai-security-runtime']
+            if entry['env'].get('SECURITY_RUNTIME_HOST') != 'workbuddy':
+                raise ValueError('WorkBuddy MCP host configuration mismatch')
+            hosts['workbuddy'] = asyncio.run(asyncio.wait_for(probe(Path(entry['command']), root,
+                dict(env, **entry['env']), metadata, args=tuple(entry['args'])), timeout=60))
+            if not {'development_check', 'development_review'} <= set(hosts['workbuddy']):
+                raise ValueError('WorkBuddy development tools missing')
         finally:
             # Close only this isolated profile's service, including on probe failure.
             endpoint = Path(env['SECURITY_RUNTIME_STATE_DIR']) / 'dashboard/endpoint.json'
@@ -114,6 +138,7 @@ def main(archive: Path) -> None:
                       smoke=True, validation_scope='native-install-startup-and-mcp-only',
                       local_files_ready=True, settings_preserved=True, usage_monitor_disabled=True,
                       native_dashboard_page=True, build_id=metadata['build_id'],
+                      workbuddy_installation=True,
                       mcp_tools=names, global_host_tools=hosts, managed_engines=False,
                       development_regressions_repeated=False, scanner_run=False,
                       seconds=round(time.monotonic() - started, 3))

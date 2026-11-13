@@ -10,7 +10,8 @@
 - Fix parent closeout missing developer child-agent edits; merge the recorded task scope through the existing scan and report flow.
 - Additional post-repair verification defaults to off. Repair edits still receive ordinary development checks, with original risk history retained.
 - Whole-batch reports, prominent risk headings, separators and chat links; hierarchical resources, settings and health monitoring in the dashboard.
-- This release supports Codex and Cursor; WorkBuddy is not currently supported. Shared source services do not establish desktop acceptance for every host.
+- Added [WorkBuddy installation](../guide/editors/workbuddy.md) on Windows x64, Mac Apple Silicon, and Mac Intel. Restart WorkBuddy and review MCP service trust in the app.
+- Closeout reports include links with batch parameters and dashboard startup diagnostics. Reports remain available when the dashboard link is unavailable. Cursor reduces repeated session context, and WorkBuddy Hooks expose sanitized diagnostics.
 - Streamlined native build, installation/startup and MCP checks in CI, without repeating local development acceptance scripts.
 
 ## 0.3.13 — 2026-11-05

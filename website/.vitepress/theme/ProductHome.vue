@@ -16,7 +16,7 @@ const steps = [
       <div class="hero-copy">
         <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>LOCAL SECURITY RUNTIME / 0.3.14</p>
         <h1 id="product-title">让 AI 写代码，<br>也让风险<span>有据可查。</span></h1>
-        <p class="hero-description">在 Codex、Cursor 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
+        <p class="hero-description">在 Codex、Cursor 和 WorkBuddy 中照常提出开发需求，同时查看本次改动里的安全问题。看懂风险、决定如何处理，批准修复后再沿原问题复查。</p>
         <div class="hero-coverage" aria-label="当前语言与检测覆盖">
           <strong>OpenGrep 代码规则 · Gitleaks 密钥 · Trivy 依赖</strong>
           <p>按实际文件和已安装规则选择检查；Agent 结合业务逻辑复核候选，结果保留真实覆盖与限制。</p>
@@ -26,7 +26,7 @@ const steps = [
           <a class="primary-action" :href="withBase('/guide/quickstart.html')">让 AI 帮你安装 <span aria-hidden="true">↗</span></a>
           <a class="secondary-action" :href="withBase('/guide/overview.html')">了解工作方式 <span aria-hidden="true">→</span></a>
         </div>
-        <p class="hero-note">Windows / macOS · <a :href="withBase('/guide/editors/codex.html')">Codex 安装</a> · <a :href="withBase('/guide/editors/cursor.html')">Cursor 安装</a></p>
+        <p class="hero-note">Windows / macOS · <a :href="withBase('/guide/editors/codex.html')">Codex 安装</a> · <a :href="withBase('/guide/editors/cursor.html')">Cursor 安装</a> · <a :href="withBase('/guide/editors/workbuddy.html')">WorkBuddy 安装</a></p>
       </div>
       <div class="review-example" aria-label="示意：一次开发任务的风险说明和用户选择">
         <div class="example-heading"><span class="example-dots" aria-hidden="true">● ● ●</span><span>一次开发任务 / 示例</span><span class="example-tag">REVIEW</span></div>

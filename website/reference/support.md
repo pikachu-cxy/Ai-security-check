@@ -9,12 +9,13 @@
 | Windows x64 | 原生完整包，已完成本次 Windows 定向回归与包验收 |
 | macOS Apple Silicon / Intel | 各自原生完整包，分别构建与验收；自动安装使用同一份原生完整包 |
 | Codex / Cursor | `install codex` / `install cursor` 接入用户级 MCP、Skill、Hook；Cursor 同步常规工具白名单 |
+| [WorkBuddy](../guide/editors/workbuddy.md) | `install workbuddy` 接入用户级 MCP、Skill 和 Hook，重启后按客户端提示审核服务信任 |
 
 当前不提供 Linux 完整包。Codex / Cursor 以本地实际项目根目录为接入入口；远程、多根工作区和各宿主版本需单独验证。CI 原生验收不等于所有桌面版本、模型或企业策略下均可用。
 
 ## macOS 安装与验证 {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) 与 [Cursor](../guide/editors/cursor.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.14 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
+[Codex](../guide/editors/codex.md#macos) 、[Cursor](../guide/editors/cursor.md#macos) 和 [WorkBuddy](../guide/editors/workbuddy.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.14 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
 
 
 ## Cursor 接入与重连
@@ -58,4 +59,4 @@
 
 ## 风险统计
 
-[风险统计](../guide/risk-handling.md)读取本机当前用户的 Codex、Cursor 已保存记录，可按编辑器筛选或一起查看。跨编辑器同一问题可能分别计数；第一阶段不做跨来源合并去重，也不提供云端同步。
+[风险统计](../guide/risk-handling.md)读取本机当前用户的 Codex、Cursor 和 WorkBuddy 已保存记录，可按编辑器筛选或一起查看。跨编辑器同一问题可能分别计数；第一阶段不做跨来源合并去重，也不提供云端同步。

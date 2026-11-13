@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.14 official release**, use the [Codex](./editors/codex.md) or [Cursor](./editors/cursor.md) page to install. This page covers **0.3.14**. Automatic installation and manual downloads use the same native release bundles.
+For the **0.3.14 official release**, use the [Codex](./editors/codex.md), [Cursor](./editors/cursor.md), or [WorkBuddy](./editors/workbuddy.md) page to install. This page covers **0.3.14**. Automatic installation and manual downloads use the same native release bundles.
 
 After automatic Windows installation, copy the full status command printed by the installer. Relative-path examples below are for manual bundles; replace `.\security-check\security-check.exe` with the printed full executable path, retaining the `&` invocation operator. To upgrade, rerun the automatic command on your editor setup page.
 
@@ -54,7 +54,7 @@ Use your installation's executable path on macOS. `--status` does not download. 
 
 ## Full-bundle options
 
-Options for `install codex` / `install cursor` include `--root <directory>`, `--bundle <directory>`, `--offline`, `--json`, and the source-development-only `--dev`. They are not arguments for the managed macOS shell installer, which accepts one editor name and uses a fixed product directory.
+Options for `install codex` / `install cursor` / `install workbuddy` include `--root <directory>`, `--bundle <directory>`, `--offline`, `--json`, and the source-development-only `--dev`. They are not arguments for the managed macOS shell installer, which accepts one editor name and uses a fixed product directory.
 
 `--offline` checks existing local components and data; missing capabilities remain unavailable.
 

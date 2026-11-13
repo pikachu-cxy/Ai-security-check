@@ -13,7 +13,7 @@ PLATFORMS = ("windows-x64", "macos-arm64", "macos-x64")
 REPOSITORY = "pikachu-cxy/Ai-security-check"
 
 
-def main(*, focused=False) -> None:
+def main(*, focused=False, require_workbuddy=False) -> None:
     release = Path(__file__).resolve().parents[2] / "dist" / "release"
     artifacts = {}
     lines = []
@@ -39,7 +39,10 @@ def main(*, focused=False) -> None:
                       and {'begin_development_check', 'development_review', 'start_risk_dashboard'}
                           <= set(verification.get('global_host_tools', {}).get('cursor', []))
                       and verification.get('native_dashboard_page') is True)
-        if not common or not (focused_ok if focused else full):
+        workbuddy_ok = (verification.get('workbuddy_installation') is True
+                        and {'development_check', 'development_review', 'start_risk_dashboard'}
+                        <= set(verification.get('global_host_tools', {}).get('workbuddy', [])))
+        if not common or not (focused_ok if focused else full) or (require_workbuddy and not workbuddy_ok):
             raise ValueError(f"Incomplete or stale native verification for {platform}")
         artifacts[platform] = {"url": f"https://github.com/{REPOSITORY}/releases/download/v{__version__}/{name}", "sha256": digest}
         lines.append(f"{digest}  {name}")
@@ -51,4 +54,6 @@ def main(*, focused=False) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--focused", action="store_true")
-    main(focused=parser.parse_args().focused)
+    parser.add_argument("--require-workbuddy", action="store_true")
+    args = parser.parse_args()
+    main(focused=args.focused, require_workbuddy=args.require_workbuddy)

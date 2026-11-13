@@ -38,6 +38,7 @@ export default defineConfig({
           { text: 'Connect your editor', collapsed: false, items: [
             { text: 'Codex', link: '/en/guide/editors/codex' },
             { text: 'Cursor', link: '/en/guide/editors/cursor' },
+            { text: 'WorkBuddy', link: '/en/guide/editors/workbuddy' },
             { text: 'Other MCP clients', link: '/en/guide/editors/other' }
           ] },
           { text: 'Using the runtime', collapsed: false, items: [
@@ -104,6 +105,7 @@ export default defineConfig({
       { text: '接入你的编辑器', collapsed: false, items: [
         { text: 'Codex', link: '/guide/editors/codex' },
         { text: 'Cursor', link: '/guide/editors/cursor' },
+        { text: 'WorkBuddy', link: '/guide/editors/workbuddy' },
         { text: '其他 MCP 客户端', link: '/guide/editors/other' }
       ] },
       { text: '使用与练习', collapsed: false, items: [

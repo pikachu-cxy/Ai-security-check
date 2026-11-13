@@ -11,15 +11,15 @@ perf_mark install.bootstrap
 
 case "${1-}" in
   --help|-h)
-    printf '%s\n' '用法：sh install.sh cursor|codex [本地安装包目录]' \
+    printf '%s\n' '用法：sh install.sh codex|cursor|workbuddy [本地安装包目录]' \
       '安装产品专属运行环境和编辑器连接；不会扫描项目或自动修复。' \
       '首次安装需要联网。安装后请完全退出并重启编辑器。'
     exit 0 ;;
-  cursor|codex) host=$1 ;;
-  *) printf '%s\n' '请指定编辑器：cursor 或 codex。' >&2; exit 2 ;;
+  codex|cursor|workbuddy) host=$1 ;;
+  *) printf '%s\n' '请指定编辑器：codex、cursor 或 workbuddy。' >&2; exit 2 ;;
 esac
 if [ "$#" -lt 1 ] || [ "$#" -gt 2 ]; then
-  printf '%s\n' '用法：sh install.sh cursor|codex [本地安装包目录]' >&2
+  printf '%s\n' '用法：sh install.sh codex|cursor|workbuddy [本地安装包目录]' >&2
   exit 2
 fi
 payload_dir=

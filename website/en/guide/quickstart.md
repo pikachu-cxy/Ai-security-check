@@ -15,7 +15,7 @@ Use the **0.3.14 official release**. Automatic macOS installation uses the same 
 
 Windows and macOS use native bundles with the runtime included. The macOS installer detects Apple Silicon or Intel. Runtime installation does not require Git; project checks and the demo do.
 
-**Recommended: install with your AI agent.** Copy the one-sentence installation request from your editor's page into Codex or Cursor chat. The agent follows the official guide, verifies the download, preserves unrelated settings, and checks the connection. **Manual installation is the fallback:** run the commands on the same page in your terminal.
+**Recommended: install with your AI agent.** Copy the one-sentence installation request from your editor's page into a Codex, Cursor, or WorkBuddy chat. The agent follows the official guide, verifies the download, preserves unrelated settings, and checks the connection. **Manual installation is the fallback:** run the commands on the same page in your terminal.
 
 ## 2. Restart and verify
 

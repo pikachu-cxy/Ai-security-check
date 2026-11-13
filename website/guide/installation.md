@@ -1,6 +1,6 @@
 # 安装参数、准备与升级
 
-本页适用于 **0.3.14 正式版**，Mac 自动安装与手动下载使用同一份原生完整包。首次安装请直接进入 [Codex](./editors/codex.md)或 [Cursor](./editors/cursor.md) 页面；以下用于状态查询、组件准备、升级和卸载。
+本页适用于 **0.3.14 正式版**，Mac 自动安装与手动下载使用同一份原生完整包。首次安装请直接进入 [Codex](./editors/codex.md)、[Cursor](./editors/cursor.md) 或 [WorkBuddy](./editors/workbuddy.md) 页面；以下用于状态查询、组件准备、升级和卸载。
 
 Windows 自动安装后，直接复制安装器输出的完整查询命令。下方相对路径示例用于手动完整包；自动安装用户请用输出中的完整程序路径替换 `.\security-check\security-check.exe`（保留前面的 `&`）。升级可重新运行编辑器安装页的自动安装命令。
 
@@ -86,7 +86,7 @@ macOS 使用上表对应程序路径。`--status` 不下载组件。代码、密
 
 ## 完整包的安装参数
 
-本节参数只用于完整包程序的 `install codex` / `install cursor`，不要加到 Mac 的 `curl … | bash -s -- codex` 命令后。Mac 自动安装入口当前只接受一个编辑器名称，安装目录固定。
+本节参数只用于完整包程序的 `install codex` / `install cursor` / `install workbuddy`，不要加到 Mac 的 `curl … | bash -s -- codex` 命令后。Mac 自动安装入口当前只接受一个编辑器名称，安装目录固定。
 
 例如，Windows 完整包自定义安装位置：
 
@@ -172,7 +172,7 @@ Semgrep 和 OSV 仅保留兼容或显式使用能力，不是默认安装就绪�
 
 卸载按可证明的归属移除产品配置，保留无关 MCP 服务及用户修改；遇到归属或配置冲突时按诊断处理。卸载接入和 Skill 不清空程序版本目录、组件缓存或扫描历史。手动 MCP 接入仅移除自己合并的服务条目。不要删除整个编辑器配置目录或项目源码。
 
-重新安装时，按[下载页](../downloads.md)核验当前完整包，再执行对应 `install codex` / `install cursor`，或使用 Mac 对应编辑器的一条命令安装；重启后核对实际程序路径、构建、组件与项目路径。常规升级无需先卸载。
+重新安装时，按[下载页](../downloads.md)核验当前完整包，再执行对应 `install codex` / `install cursor` / `install workbuddy`，或使用 Mac 对应编辑器的一条命令安装；重启后核对实际程序路径、构建、组件与项目路径。常规升级无需先卸载。
 
 ::: details 源码开发安装（仅开发调试）
 需要 Python 3.12+、Git，并保持源码目录稳定：

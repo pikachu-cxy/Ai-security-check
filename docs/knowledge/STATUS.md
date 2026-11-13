@@ -29,7 +29,7 @@ PowerShell 当前命令内的字面量路径赋值、Get-Content 结果赋值和
 
 ## 0.3.14 替换发行：链接与安装入口
 
-当前替换发行范围为 Codex、Cursor；WorkBuddy 暂不支持，文档站导航、安装选择和旧入口页不再提供其安装指导。AI 代装优先，手动安装备用，统一指南位于 `website/public/install/agent.md`。
+替换发行源码已接入 Codex、Cursor 和 WorkBuddy 的公开安装入口。中英文文档站提供 AI 代装、Windows PowerShell、macOS 自动安装和校验完整包后手动安装。三平台原生包发布门槛验证 WorkBuddy 安装回执、配置保留、Hook、Skill 和 MCP 构建身份。公开资产和文档部署以流水线结果为准。
 
 正式 0.3.14 已替换为源码 `ab82a2a88103f890dfee3f1662e06678e179d6f2`，标签与发布清单一致。[替换流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42571236470) 三平台各构建一次，原生安装、配置保留、实际 MCP build_id、Codex/Cursor 工具和鉴权后台页面全部通过，旧资产已备份。9 个公开资产齐全，公开元数据中的三平台 SHA256 与发行清单一致；Windows 包、校验文件和清单另已实际下载并核验。发行门槛 20 项回归及本地文档站构建通过。[文档部署](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42571565826) 成功，线上中英文日常流程及版本说明均已核验包含本次修复。
 

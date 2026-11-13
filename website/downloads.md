@@ -1,7 +1,7 @@
 # 下载与安装
 ## 推荐：让 AI 帮你安装
 
-选择 [Codex](./guide/editors/codex.md) 或 [Cursor](./guide/editors/cursor.md)，复制安装请求到对应聊天。下方下载供手动安装备用，本次发行仅支持这两个编辑器。
+选择 [Codex](./guide/editors/codex.md) 、[Cursor](./guide/editors/cursor.md) 或 [WorkBuddy](./guide/editors/workbuddy.md)，复制安装请求到对应聊天。下方下载供手动安装备用。
 
 
 **许可提示：** 请以下载包内对应版本的许可为准。仓库新许可不追溯改变已经发布的安装包。参见[许可说明](./reference/legal)。
@@ -10,7 +10,7 @@
 
 ## 按编辑器安装 {#install}
 
-[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md)
+[Codex](./guide/editors/codex.md) · [Cursor](./guide/editors/cursor.md) · [WorkBuddy](./guide/editors/workbuddy.md)
 
 
 ## 正式完整包 {#windows}
@@ -30,7 +30,7 @@ Get-Content .\ai-security-runtime-v0.3.14-windows-x64.zip.sha256
 
 ## macOS 自动安装 {#macos}
 
-[Codex](./guide/editors/codex.md#macos) 和 [Cursor](./guide/editors/cursor.md#macos) 页面提供安装命令。脚本识别芯片，下载对应的 0.3.14 完整包。
+[Codex](./guide/editors/codex.md#macos) 、[Cursor](./guide/editors/cursor.md#macos) 和 [WorkBuddy](./guide/editors/workbuddy.md#macos) 页面提供安装命令。脚本识别芯片，下载对应的 0.3.14 完整包。
 
 ### macOS 手动安装 {#macos-packages}
 

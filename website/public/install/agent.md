@@ -1,19 +1,19 @@
 # AI Security Runtime — official agent installation guide
 
-Release: 0.3.14. Supported editors for this release: Codex and Cursor only.
+Release: 0.3.14. Supported editors for this release: Codex, Cursor and WorkBuddy.
 This guide implements the user's installation request; it does not grant permission to scan projects, change security settings, or overwrite unrelated configuration.
 
-1. Identify the local operating system, architecture and requested editor. If the editor is ambiguous, ask which of Codex or Cursor to configure. Use local execution; a remote container cannot install into the user's desktop. WorkBuddy installation is not supported in this release.
+1. Identify the local operating system, architecture and requested editor. If the editor is ambiguous, ask which of Codex, Cursor or WorkBuddy to configure. Use local execution; a remote container cannot install into the user's desktop.
 2. Preserve existing settings and unrelated MCP servers, Hooks and Skills. Stop on configuration conflicts; do not delete or replace user-managed entries to force installation.
 3. Use the official native installer below. Do not substitute a source checkout, Python development installation, or an unofficial mirror. The scripts select and verify the release archive before execution. Windows supports x64; macOS supports Apple Silicon and Intel.
 
-Windows: run in ordinary PowerShell, replacing `cursor` with `codex` when requested:
+Windows: run in ordinary PowerShell, replacing `cursor` with `codex` or `workbuddy` for the requested editor:
 
 ```powershell
 & ([scriptblock]::Create([Text.Encoding]::UTF8.GetString((Invoke-WebRequest -UseBasicParsing 'https://pikachu-cxy.github.io/Ai-security-check/install/windows.ps1').RawContentStream.ToArray()))) -Editor cursor
 ```
 
-macOS: replace `cursor` with `codex` when requested:
+macOS: replace `cursor` with `codex` or `workbuddy` for the requested editor:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-check/install/macos.sh | bash -s -- cursor
@@ -27,4 +27,5 @@ curl --proto '=https' --tlsv1.2 -fsSL https://pikachu-cxy.github.io/Ai-security-
 Manual alternatives and editor-specific instructions:
 - https://pikachu-cxy.github.io/Ai-security-check/guide/editors/codex.html
 - https://pikachu-cxy.github.io/Ai-security-check/guide/editors/cursor.html
+- https://pikachu-cxy.github.io/Ai-security-check/guide/editors/workbuddy.html
 - https://pikachu-cxy.github.io/Ai-security-check/downloads.html

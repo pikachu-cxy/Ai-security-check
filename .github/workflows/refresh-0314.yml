@@ -55,7 +55,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_OLD_TAG: ab82a2a88103f890dfee3f1662e06678e179d6f2
+      EXPECTED_OLD_TAG: e6b46403ed18598e21b834bdb33b0757dbfcf1af
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,7 +69,7 @@ jobs:
           path: dist/release
       - name: Validate and stage all three platforms before touching the release
         run: |
-          python scripts/release/make_release_metadata.py --focused
+          python scripts/release/make_release_metadata.py --focused --require-workbuddy
           python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
           python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
           python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json

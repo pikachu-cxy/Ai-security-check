@@ -27,14 +27,14 @@ features:
   - title: Choose what to fix
     details: Approve a specific fix, defer it, or record an exclusion with its rationale. Findings and user decisions remain distinct.
   - title: Compare editor risk records
-    details: View local Codex and Cursor records separately or together, preserving their sources and handling decisions.
+    details: View local Codex, Cursor and WorkBuddy records separately or together, preserving their sources and handling decisions.
   - title: Verify the original finding
     details: Link fixes to their original risks. A new scan with zero findings does not replace verification of an earlier issue.
 ---
 
 ## Connect your editor
 
-[Codex installation](./guide/editors/codex.md) · [Cursor installation](./guide/editors/cursor.md) · [Other MCP clients](./guide/editors/other.md)
+[Codex installation](./guide/editors/codex.md) · [Cursor installation](./guide/editors/cursor.md) · [WorkBuddy installation](./guide/editors/workbuddy.md) · [Other MCP clients](./guide/editors/other.md)
 
 Full integration includes the Runtime, MCP connection, companion Skill, and Hooks. Manual MCP setup is also available.
 

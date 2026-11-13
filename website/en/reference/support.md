@@ -9,12 +9,13 @@ This page describes **0.3.14**. [Downloads](../downloads.md) include the release
 | Windows x64 | Native bundle with focused Windows regression and package acceptance |
 | macOS Apple Silicon / Intel | Separately built and verified native bundles; the installer uses the same native bundles |
 | Codex / Cursor | User-level MCP, Skill, and Hooks through `install codex` / `install cursor`; routine Cursor tool allowlist |
+| [WorkBuddy](../guide/editors/workbuddy.md) | User-level MCP, Skill, and Hooks through `install workbuddy`. Review service trust in WorkBuddy after restarting. |
 
 No Linux full bundle is published. Use the actual local project root. Remote, multi-root, model, desktop-version, and enterprise-policy combinations require their own verification; CI acceptance does not establish them all.
 
 ## macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) and [Cursor](../guide/editors/cursor.md#macos) provide an architecture-aware installer for the same **v0.3.14** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
+[Codex](../guide/editors/codex.md#macos), [Cursor](../guide/editors/cursor.md#macos), and [WorkBuddy](../guide/editors/workbuddy.md#macos) provide an architecture-aware installer for the same **v0.3.14** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
 
 
 ## Cursor integration and reconnects
@@ -53,4 +54,4 @@ Saved reads do not revalidate disk contents. Distinguish missing files, scanner 
 
 ## Risk statistics
 
-[Risk statistics](../guide/risk-handling.md) read the current local user's Codex and Cursor records, separately or together. Cross-editor entries retain their identities; this first stage does not deduplicate them or sync across devices.
+[Risk statistics](../guide/risk-handling.md) read the current local user's Codex, Cursor and WorkBuddy records, separately or together. Cross-editor entries retain their identities; this first stage does not deduplicate them or sync across devices.
