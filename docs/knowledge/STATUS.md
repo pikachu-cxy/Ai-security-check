@@ -29,11 +29,11 @@ PowerShell 当前命令内的字面量路径赋值、Get-Content 结果赋值和
 
 ## 0.3.14 替换发行：链接与安装入口
 
-替换发行源码已接入 Codex、Cursor 和 WorkBuddy 的公开安装入口。中英文文档站提供 AI 代装、Windows PowerShell、macOS 自动安装和校验完整包后手动安装。三平台原生包发布门槛验证 WorkBuddy 安装回执、配置保留、Hook、Skill 和 MCP 构建身份。公开资产和文档部署以流水线结果为准。
+当前公开 0.3.14 支持 Codex、Cursor 和 WorkBuddy，发行标签与清单均指向 `325ff3a15cf2955630c7a919ae81d378f0a275e8`。Windows x64、Mac Apple Silicon 和 Mac Intel 各构建一次，原生冒烟验证 WorkBuddy 安装回执、配置保留、Hook、Skill 和 MCP 构建身份。9 个资产已公开，三平台包 SHA256 与发行清单一致。[替换流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/43361165234)
 
-正式 0.3.14 已替换为源码 `ab82a2a88103f890dfee3f1662e06678e179d6f2`，标签与发布清单一致。[替换流水线](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42571236470) 三平台各构建一次，原生安装、配置保留、实际 MCP build_id、Codex/Cursor 工具和鉴权后台页面全部通过，旧资产已备份。9 个公开资产齐全，公开元数据中的三平台 SHA256 与发行清单一致；Windows 包、校验文件和清单另已实际下载并核验。发行门槛 20 项回归及本地文档站构建通过。[文档部署](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/42571565826) 成功，线上中英文日常流程及版本说明均已核验包含本次修复。
+中英文文档站的 WorkBuddy 安装页、下载页、Agent 指南和 macOS 脚本均已上线核验。提供 AI 代装、Windows PowerShell、macOS 自动安装和校验完整包后手动安装。真实 WorkBuddy 桌面重连及收尾链接验收仍独立记录。[文档部署](https://github.com/pikachu-cxy/Ai-security-check/actions/runs/43361738409)
 
-本批 Windows 包构建为 `9e28a37234f258660feb4e4f28566045efe60554d1f677061509cdda3d70befb`。目标本机安装尚未完成：官方网页下载及一次重试返回 504 后，改用同一 GitHub 官方资产 API 获取并验证原资产；安装器随后因旧版服务仍在运行而拒绝迁移，回执 NOT_READY、local_files_ready=false，Codex 配置字节未改变，旧数据保留。必须先退出相关宿主再执行已校验包，安装与当前桌面重连仍需分别核对；不得以 CI 冒烟替代本机成功证明。
+当前本机实际运行的构建见本页首节；本次公开包与本机活动安装分别核对。
 
 Cursor 实测回复出现 `session_url: null`。隔离原生包直接启动风险管理服务复现退出码 2：后台构建标识读取冻结包中不存在的 Python 源文件，服务未保存地址；旧报告仍提示到风险管理页查看覆盖限制。源码现按原生包已有 build_id 识别后台版本，源码运行保留文件摘要；报告无链接时直接说明覆盖缺口和链接不可用，宿主指导禁止输出空地址。全局 `start_risk_dashboard` 不再要求项目路径或创建工作区连接。关联 20 项回归通过；Windows 原生修复包隔离安装、设置保留、Codex/Cursor 全局工具调用和鉴权后台页面通过。另有后台两次启动及地址复用验证通过。三平台正式发行与目标桌面重连仍须分别核对。初次测试因执行环境不允许回环连接和临时目录访问失败，同组在具备本机测试权限的隔离环境通过。
 
