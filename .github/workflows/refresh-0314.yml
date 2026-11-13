@@ -55,7 +55,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_OLD_TAG: e6b46403ed18598e21b834bdb33b0757dbfcf1af
+      EXPECTED_OLD_TAG: 325ff3a15cf2955630c7a919ae81d378f0a275e8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
