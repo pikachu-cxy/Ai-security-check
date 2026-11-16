@@ -55,7 +55,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_OLD_TAG: 325ff3a15cf2955630c7a919ae81d378f0a275e8
+      EXPECTED_OLD_TAG: 07cdd6c8bb5d5e0f330abb58549125e10dc83b2a
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -92,6 +92,7 @@ jobs:
       - name: Replace the authorized release and tag only after every build passed
         id: replace
         run: |
+          test "$(gh api repos/$GITHUB_REPOSITORY/git/ref/tags/v0.3.14 --jq '.object.sha')" = "$EXPECTED_OLD_TAG"
           echo 'started=true' >> "$GITHUB_OUTPUT"
           gh release edit v0.3.14 --draft=true
           gh release upload v0.3.14 dist/public-release/* --clobber
