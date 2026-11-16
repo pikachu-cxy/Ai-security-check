@@ -14,6 +14,8 @@ from .performance_trace import timed
 
 
 def eligible(row):
+    if row['state'] == 'NO_OBSERVED_CHANGES':
+        return False
     activities = [row.get('stop_activity', {}), *row.get('stop_activity_previous', ())]
     session_scoped = (row.get('automatic') and
                       row.get('owner', {}).get('host') in SESSION_RECOVERY_HOSTS)
@@ -55,7 +57,7 @@ def resume(hooks, root, owner, *, launcher=None, _ref=None, _depth=0):
     with store.transaction() as db:
         current = store._get(db, row['check_ref'])
         old = store._get(db, key) or {}
-        if current['dirty_seq'] != row['dirty_seq']:
+        if current['dirty_seq'] != row['dirty_seq'] or current['state'] == 'NO_OBSERVED_CHANGES':
             return None
         attempts = old.get('attempts', 0) if old.get('seq') == row['dirty_seq'] else 0
         terminal = old.get('seq') == row['dirty_seq'] and (old.get('status') == 'RECOVERY_FAILED' or attempts >= 3)

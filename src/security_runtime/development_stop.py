@@ -362,6 +362,9 @@ def incomplete_notice(service, root, ref, seq, state, *, reason=None):
             marker['reason'] = reason
         if current['dirty_seq'] != seq or current.get('stop_closeout_notice') == marker:
             return None
+        if (current['state'] == 'NO_OBSERVED_CHANGES'
+                and reason in {'RECOVERY_PENDING', 'RECOVERY_START_FAILED', 'RECOVERY_FAILED'}):
+            return None
         store._put(db, ref, dict(current, stop_closeout_notice=marker))
     return dict(status='STOP_FALLBACK_INCOMPLETE', check_ref=ref, decision='block',
                 reason=closeout_message(ref))

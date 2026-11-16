@@ -70,6 +70,36 @@ def test_recovery_rejects_other_owner_and_superseded_sequence(check, config, mon
     assert not service.store(root).load(ref)['finish_requested'] and counts['calls'] == 0
 
 
+def test_finished_empty_scope_does_not_resume_or_notify(check, config):
+    root, service, _, counts = check
+    ref = native(check)
+    (root / '.gitignore').write_text('app.ts\n')
+    assert service.finish(root, ref)['status'] == 'NO_OBSERVED_CHANGES'
+    store = service.store(root)
+    row = store.load(ref)
+    assert row['dirty_seq'] == 1 and row['scanned_seq'] == 0
+    assert row['gitignored_paths'] == ['app.ts']
+
+    launches = []
+    assert resume(service.hooks, root, OWNER, launcher=lambda *args: launches.append(args)) is None
+    assert not launches and counts['calls'] == 0
+    assert store.read('recovery:' + ref) is None
+    assert not store.load(ref).get('stop_closeout_notice')
+
+
+def test_recovery_that_finishes_empty_before_notice_stays_silent(check, config):
+    root, service, _, counts = check
+    ref = native(check)
+    (root / '.gitignore').write_text('app.ts\n')
+
+    def finish_empty_scope(*args):
+        assert service.finish(root, ref)['status'] == 'NO_OBSERVED_CHANGES'
+
+    assert resume(service.hooks, root, OWNER, launcher=finish_empty_scope) is None
+    assert not service.store(root).load(ref).get('stop_closeout_notice')
+    assert counts['calls'] == 0
+
+
 def test_completed_previous_watch_gap_stays_on_old_delivery(check, config, monkeypatch):
     root, service, _, counts = check
     ref = native(check)

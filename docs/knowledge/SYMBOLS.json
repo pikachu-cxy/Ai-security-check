@@ -2910,7 +2910,7 @@
     },
     {
       "path": "src/security_runtime/development_recovery.py",
-      "sha256": "893c49b63ef51e3908813046d1942704a6f1478efbbfc2aca9d100212b0adabf",
+      "sha256": "fa384484a0e82096a5b07220a89e7e36fd881067fbb060cd8022e2d4c34bdb80",
       "purpose": "Recover an existing native edit batch, outside the normal scan/Stop path.",
       "symbols": [
         {
@@ -2919,15 +2919,15 @@
         },
         {
           "name": "resume",
-          "line": 26
+          "line": 28
         },
         {
           "name": "launch_recovery",
-          "line": 83
+          "line": 85
         },
         {
           "name": "run",
-          "line": 96
+          "line": 98
         }
       ]
     },
@@ -3171,7 +3171,7 @@
     },
     {
       "path": "src/security_runtime/development_stop.py",
-      "sha256": "842ecebf2cbf0b8e2f979a697ddd8ec52aaa6d0b5ec8c71013a34e1f92cef7af",
+      "sha256": "f01a18c706ad2c3d0a04e692c0ab4b28515660d41a5ae209529fe8f308de57f1",
       "purpose": "Native Stop fallback for the explicitly focused observed-edit check only.",
       "symbols": [
         {
@@ -3212,7 +3212,7 @@
         },
         {
           "name": "review_handoff",
-          "line": 370
+          "line": 373
         }
       ]
     },
