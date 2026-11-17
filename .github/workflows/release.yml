@@ -13,9 +13,8 @@ permissions:
 jobs:
   # Release only after local Codex acceptance. CI verifies native installation and startup;
   # it does not repeat development, scanner or model regressions.
-  # 0.3.14 local gate: three Codex modes, restart repairs and native x64 install/upgrade verified.
   version:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || (contains(github.event.head_commit.message, '[release-v0.3.14]') && contains(github.event.head_commit.message, '[build-release]'))
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || (contains(github.event.head_commit.message, '[release-v') && contains(github.event.head_commit.message, '[build-release]'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +76,7 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist/release
-      - run: python scripts/release/make_release_metadata.py --focused
+      - run: python scripts/release/make_release_metadata.py --focused --require-workbuddy
       - run: python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
       - run: python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
       - run: python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
@@ -88,7 +87,9 @@ jobs:
       - name: Stage platform downloads and bundled acceptance evidence
         run: python scripts/release/prepare_release_assets.py
       - name: Include version-specific release changes
-        run: cat distribution/releases/v0.3.14.md >> dist/release-notes.md
+        run: |
+          VERSION=$(python -c 'from security_runtime._version import __version__; print(__version__)')
+          cat "distribution/releases/v$VERSION.md" >> dist/release-notes.md
       - name: Upload complete release as draft, then publish
         env:
           GH_TOKEN: ${{ github.token }}

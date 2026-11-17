@@ -129,7 +129,11 @@ def compact_tools(tools, *, groups=GROUPS):
                                 'submit_development_review', 'process_development_audit', 'manage_development_audit'}
                             else {'$ref': '#/$defs/' + tool.name})}} for tool in members])
         schema['$defs'] = {tool.name: _rewrite_refs(deepcopy(tool.inputSchema), '#/', '#/$defs/' + tool.name + '/') for tool in members}
+        # Group UI metadata applies to every operation. Preserve it only when
+        # all operations explicitly share the same contract.
+        shared_meta = members[0].meta if all(tool.meta == members[0].meta for tool in members) else None
         result.append(Tool(name=group, inputSchema=schema,
+            _meta=shared_meta,
             description='Choose operation and pass its exact arguments. Existing scope, ownership and authorization checks apply.\n' +
                 '\n'.join(f'{tool.name}: {tool.description}' for tool in members),
             annotations=ToolAnnotations(

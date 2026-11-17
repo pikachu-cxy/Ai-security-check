@@ -147,6 +147,15 @@ def healthy(value):
     return bool(result and result.get('service') == 'risk-dashboard-v2' and result.get('build') == code_id())
 
 
+def update_url():
+    value = endpoint()
+    result = health(value)
+    if (result and result.get('service') == 'risk-dashboard-v2'
+            and result.get('build') == code_id() and result.get('runtime_updates') == 1):
+        return f"http://127.0.0.1:{value['port']}/updates"
+    return None
+
+
 def ensure(timeout=5):
     folder = directory()
     no_links(folder)

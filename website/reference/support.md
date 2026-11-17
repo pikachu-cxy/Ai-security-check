@@ -1,6 +1,6 @@
 # 支持状态与检测范围
 
-本页对应 **0.3.14 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
+本页对应 **0.3.15 正式版**。[下载页](../downloads.md)提供发行包、SHA256、来源清单与验收证据。
 
 ## 系统与宿主
 
@@ -15,7 +15,7 @@
 
 ## macOS 安装与验证 {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos) 、[Cursor](../guide/editors/cursor.md#macos) 和 [WorkBuddy](../guide/editors/workbuddy.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.14 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
+[Codex](../guide/editors/codex.md#macos) 、[Cursor](../guide/editors/cursor.md#macos) 和 [WorkBuddy](../guide/editors/workbuddy.md#macos) 页面提供自动安装命令。脚本识别芯片，下载并核验与下载页相同的 **v0.3.15 原生完整包**，无需预装 Python。来源身份和安装包验收记录见 Release 配套证据。
 
 
 ## Cursor 接入与重连

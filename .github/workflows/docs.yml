@@ -55,20 +55,23 @@ jobs:
         run: |
           # Publication metadata is the docs gate. Transient download gateways
           # must not prevent publishing the installer that recovers those errors.
+          RELEASE_TAG=$(PYTHONPATH=src python -c 'from security_runtime._version import __version__; print("v" + __version__)')
+          export RELEASE_TAG
           curl --fail --silent --show-error --retry 2 --connect-timeout 20 --max-time 60 \
-            https://api.github.com/repos/pikachu-cxy/Ai-security-check/releases/tags/v0.3.14 > release-public.json
+            "https://api.github.com/repos/pikachu-cxy/Ai-security-check/releases/tags/$RELEASE_TAG" > release-public.json
           python - <<'PY'
           import json, os
           from pathlib import Path
           release = json.loads(Path('release-public.json').read_text())
-          assert release['tag_name'] == 'v0.3.14' and not release['draft'] and not release['prerelease']
+          tag = os.environ['RELEASE_TAG']
+          assert release['tag_name'] == tag and not release['draft'] and not release['prerelease']
           assets = {a['name']: a for a in release['assets']}
           for platform in ('windows-x64.zip', 'macos-arm64.tar.gz', 'macos-x64.tar.gz'):
               for suffix in ('', '.sha256'):
-                  name = 'ai-security-runtime-v0.3.14-' + platform + suffix
+                  name = f'ai-security-runtime-{tag}-{platform}{suffix}'
                   asset = assets[name]
                   assert asset['state'] == 'uploaded' and asset['size'] > 0
-                  assert asset['browser_download_url'] == 'https://github.com/pikachu-cxy/Ai-security-check/releases/download/v0.3.14/' + name
+                  assert asset['browser_download_url'] == f'https://github.com/pikachu-cxy/Ai-security-check/releases/download/{tag}/{name}'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('ready=true\n')
           PY

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15 — 2026-11-17
+
+- Development checks can look for official updates in the background. A final security report can link to the update page, where an authenticated dashboard session can confirm installation.
+- The MCP proxy supports compatible backend switches in isolated protocol tests. Continuing work in the same editor chat still requires host verification. The bundle includes a read-only update card resource, with automatic attachment pending host verification.
+- Checks with no files to scan close quietly, including after another prompt or reconnection.
+
 ## 0.3.14 — 2026-11-09
 
 - Recognize bounded PowerShell path variables, Get-Content assignments and constant line slices as reads. Literal cleanup commands proven to target only paths outside the project do not enter development checks.

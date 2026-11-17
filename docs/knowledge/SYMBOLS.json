@@ -9,7 +9,7 @@
     },
     {
       "path": "src/security_runtime/_version.py",
-      "sha256": "14dc925942dd3f8bf05981385028f1e99688092ee0f2863ac0962a94de318bd1",
+      "sha256": "1e5f51cc0d6db66f1414fce2e9c548aa845b3bc991b181d8a8c1ebdb094d4168",
       "purpose": "Single source for the Runtime release version.",
       "symbols": []
     },
@@ -490,7 +490,7 @@
     },
     {
       "path": "src/security_runtime/cli.py",
-      "sha256": "d8afa558ab3244cf6b955847e4c81988897a14e594147ae6451a22ca59a17391",
+      "sha256": "1e3a2de0a617cfe940d1a0767a5e768234c16e30d1de1d54076a096d6a345511",
       "purpose": "",
       "symbols": [
         {
@@ -2080,7 +2080,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "23bdec430426c01b087c1dff392ba88bb5f27bc3bb4de70b6891c1e742459d37",
+      "sha256": "0d8fe3c1b8af286c712914a2fb0508d1f507e9ee7757320ce79991c081ab0326",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
@@ -2128,24 +2128,28 @@
           "line": 145
         },
         {
-          "name": "ensure",
+          "name": "update_url",
           "line": 150
         },
         {
+          "name": "ensure",
+          "line": 159
+        },
+        {
           "name": "_save_status",
-          "line": 197
+          "line": 206
         },
         {
           "name": "_reason",
-          "line": 213
-        },
-        {
-          "name": "startup_status",
           "line": 222
         },
         {
+          "name": "startup_status",
+          "line": 231
+        },
+        {
           "name": "start_background",
-          "line": 234
+          "line": 243
         }
       ]
     },
@@ -2257,7 +2261,7 @@
     },
     {
       "path": "src/security_runtime/delivery.py",
-      "sha256": "608266f8648f68ab70772e13065c5c52e3c1d99a4768c0c7cb5d58ab29bd5cd0",
+      "sha256": "1a29da4f07a01a56071348525bc3a375cf14433540a31263aaac50c681517345",
       "purpose": "Version slots behind a stable frozen launcher; no in-place EXE replacement.",
       "symbols": [
         {
@@ -2354,27 +2358,27 @@
         },
         {
           "name": "StableDelivery.cleanup",
-          "line": 453
+          "line": 462
         },
         {
           "name": "StableDelivery.rollback",
-          "line": 518
+          "line": 527
         },
         {
           "name": "StableDelivery.status",
-          "line": 552
+          "line": 561
         },
         {
           "name": "stable_command",
-          "line": 568
+          "line": 577
         },
         {
           "name": "dispatch",
-          "line": 587
+          "line": 596
         },
         {
           "name": "cleanup_after_reconnect",
-          "line": 609
+          "line": 618
         }
       ]
     },
@@ -2688,7 +2692,7 @@
     },
     {
       "path": "src/security_runtime/development_check_worker.py",
-      "sha256": "cb07a6f4720e7dd6b90c573640cc4e299ee166a11d15284b8ebd918d8a445452",
+      "sha256": "a03d1e16f57f568122202ef3496673be7afdfb32bbf05ad223c6343c93026357",
       "purpose": "Detached, coalescing observed-file checks. Never scans a project inventory.",
       "symbols": [
         {
@@ -2753,7 +2757,7 @@
         },
         {
           "name": "main",
-          "line": 528
+          "line": 530
         }
       ]
     },
@@ -4683,7 +4687,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "b58d83aba9414c0a41a83adfe0433f8622185c13b2143112618720ee1eedb775",
+      "sha256": "517bbd48ee002c1cca830049039e56c8e438658bc9e176dbe0574f3d214595ad",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -5689,7 +5693,7 @@
     },
     {
       "path": "src/security_runtime/host_development.py",
-      "sha256": "3567adbc07b7ad27ca1009c401ea74c5891f3c9a82488336d2eaff7da30e3de4",
+      "sha256": "b480d71d3f2a00b26b93ef86e16031742cce5536e3c5b2e9a17bd6c92a8edf13",
       "purpose": "Command-host delivery adaptation; no model, scan, polling or new scheduler.",
       "symbols": [
         {
@@ -5698,11 +5702,11 @@
         },
         {
           "name": "audit_context",
-          "line": 33
+          "line": 34
         },
         {
           "name": "reconnect_context",
-          "line": 41
+          "line": 42
         }
       ]
     },
@@ -7116,7 +7120,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tool_groups.py",
-      "sha256": "96d7062b5e22e599c46dda720b703039022e2b94a948f88080e676a4b0e24106",
+      "sha256": "fe2dfb9436d5cd8912f2f2ea299b978b16d839218f1a061b079107baf03ea4ce",
       "purpose": "Compact global discovery; operations keep their existing handlers and checks.",
       "symbols": [
         {
@@ -7149,7 +7153,7 @@
         },
         {
           "name": "instructions",
-          "line": 142
+          "line": 146
         }
       ]
     },
@@ -7161,7 +7165,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "e5e5819ac0323b44ed80b7d1724fee627ae58690cf63c9dd1bb8955a1875e885",
+      "sha256": "77bc4b981f0b019749db7593a088f3c40e2d29ca28a294f821fe11d0a39b819f",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {
@@ -7250,6 +7254,113 @@
         {
           "name": "register",
           "line": 10
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/mcp_update_proxy.py",
+      "sha256": "e03a18dbb79ff9b26b61cf31a62441339328d413b1ff540d57f7f75a708e8d58",
+      "purpose": "Keep an installed global MCP stdio connection across compatible updates.",
+      "symbols": [
+        {
+          "name": "hook_identity",
+          "line": 27
+        },
+        {
+          "name": "compatible",
+          "line": 35
+        },
+        {
+          "name": "structured",
+          "line": 41
+        },
+        {
+          "name": "read_messages",
+          "line": 46
+        },
+        {
+          "name": "send",
+          "line": 59
+        },
+        {
+          "name": "Backend",
+          "line": 64
+        },
+        {
+          "name": "Backend.__init__",
+          "line": 65
+        },
+        {
+          "name": "Backend.receive",
+          "line": 74
+        },
+        {
+          "name": "Backend.request",
+          "line": 80
+        },
+        {
+          "name": "Backend.send",
+          "line": 92
+        },
+        {
+          "name": "Backend.close",
+          "line": 95
+        },
+        {
+          "name": "command",
+          "line": 103
+        },
+        {
+          "name": "negotiation",
+          "line": 107
+        },
+        {
+          "name": "caller_route",
+          "line": 113
+        },
+        {
+          "name": "Proxy",
+          "line": 123
+        },
+        {
+          "name": "Proxy.__init__",
+          "line": 124
+        },
+        {
+          "name": "Proxy.pointer_stamp",
+          "line": 147
+        },
+        {
+          "name": "Proxy.bind",
+          "line": 154
+        },
+        {
+          "name": "Proxy.candidate",
+          "line": 159
+        },
+        {
+          "name": "Proxy.prepare",
+          "line": 200
+        },
+        {
+          "name": "Proxy.maybe_switch",
+          "line": 210
+        },
+        {
+          "name": "Proxy.from_host",
+          "line": 240
+        },
+        {
+          "name": "Proxy.from_backend",
+          "line": 256
+        },
+        {
+          "name": "Proxy.run",
+          "line": 295
+        },
+        {
+          "name": "serve_proxy",
+          "line": 319
         }
       ]
     },
@@ -10133,7 +10244,7 @@
     },
     {
       "path": "src/security_runtime/review_delivery.py",
-      "sha256": "0870059896d8f31c82490f129ec15b1e542a8d9d5c65e3d7389feb9aa19a42d0",
+      "sha256": "966c3ae5ee8a94bec092f3791148c800164dac2e779a30cbe085eb3425d66590",
       "purpose": "Bounded post-Stop delivery. No scanner, worker or additional persistent cache.",
       "symbols": [
         {
@@ -10163,6 +10274,10 @@
         {
           "name": "pending_report_receipt",
           "line": 178
+        },
+        {
+          "name": "attach_runtime_update",
+          "line": 195
         }
       ]
     },
@@ -10329,7 +10444,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "d133422deac8f8b90ff88b80a045373f22181a112e9823f8464a807c4f46d265",
+      "sha256": "3179607293f376ed51db3dacafaf5c4ec5fbe41007a155f2ac21c3b8ad239017",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10386,15 +10501,15 @@
         },
         {
           "name": "Handler.do_POST",
-          "line": 326
+          "line": 333
         },
         {
           "name": "serve",
-          "line": 396
+          "line": 409
         },
         {
           "name": "launch",
-          "line": 416
+          "line": 429
         }
       ]
     },
@@ -10862,6 +10977,120 @@
         {
           "name": "runtime_info_view",
           "line": 4
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/runtime_update.py",
+      "sha256": "a033c808e9d517e1ad4c6adc22e3a0fea33036b98d515cd37edce195fe1db0b6",
+      "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
+      "symbols": [
+        {
+          "name": "version_key",
+          "line": 34
+        },
+        {
+          "name": "ReleaseRedirects",
+          "line": 40
+        },
+        {
+          "name": "ReleaseRedirects.redirect_request",
+          "line": 41
+        },
+        {
+          "name": "transfer",
+          "line": 49
+        },
+        {
+          "name": "discover",
+          "line": 70
+        },
+        {
+          "name": "unpack",
+          "line": 106
+        },
+        {
+          "name": "RuntimeUpdate",
+          "line": 146
+        },
+        {
+          "name": "RuntimeUpdate.__init__",
+          "line": 147
+        },
+        {
+          "name": "RuntimeUpdate.connection",
+          "line": 156
+        },
+        {
+          "name": "RuntimeUpdate.get",
+          "line": 166
+        },
+        {
+          "name": "RuntimeUpdate.put",
+          "line": 171
+        },
+        {
+          "name": "RuntimeUpdate.cached",
+          "line": 174
+        },
+        {
+          "name": "RuntimeUpdate.active",
+          "line": 178
+        },
+        {
+          "name": "RuntimeUpdate.status",
+          "line": 195
+        },
+        {
+          "name": "RuntimeUpdate.refresh",
+          "line": 214
+        },
+        {
+          "name": "RuntimeUpdate.apply",
+          "line": 229
+        },
+        {
+          "name": "RuntimeUpdate.transition",
+          "line": 254
+        },
+        {
+          "name": "RuntimeUpdate.install",
+          "line": 262
+        },
+        {
+          "name": "installed_update",
+          "line": 302
+        },
+        {
+          "name": "spawn_update",
+          "line": 316
+        },
+        {
+          "name": "schedule_refresh",
+          "line": 325
+        },
+        {
+          "name": "update_status",
+          "line": 341
+        },
+        {
+          "name": "apply_update",
+          "line": 346
+        },
+        {
+          "name": "report_notice",
+          "line": 353
+        }
+      ]
+    },
+    {
+      "path": "src/security_runtime/runtime_update_app.py",
+      "sha256": "c03e7561e8a6461e3c1f248e6fc6402b143b1279d7ec1a2263562c98a2e3cc0b",
+      "purpose": "Read-only MCP App resource. A host must project update metadata alone.",
+      "symbols": [
+        {
+          "name": "register_update_resource",
+          "line": 8
         }
       ]
     },
@@ -15203,7 +15432,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "2a6e518ebf29fd3567b8b5211b0533d3e621e37d0f13aac593e4d22e71e2dd1f",
+      "sha256": "d06abcacf5c75b055400c77ef9a09d2c3f2799d9dc9f16c6a46c0588e2a5ca76",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {
@@ -15232,39 +15461,39 @@
         },
         {
           "name": "current_owner",
-          "line": 143
+          "line": 144
         },
         {
           "name": "connection_owner",
-          "line": 146
+          "line": 147
         },
         {
           "name": "session_owner",
-          "line": 149
+          "line": 150
         },
         {
           "name": "record_owner",
-          "line": 153
+          "line": 154
         },
         {
           "name": "valid_owner",
-          "line": 156
+          "line": 157
         },
         {
           "name": "owner_scope",
-          "line": 163
+          "line": 164
         },
         {
           "name": "process_stamp",
-          "line": 170
+          "line": 171
         },
         {
           "name": "writer_identity",
-          "line": 212
+          "line": 213
         },
         {
           "name": "writer_gone",
-          "line": 217
+          "line": 218
         }
       ]
     },
@@ -17658,7 +17887,7 @@
     },
     {
       "path": "src/security_runtime/workspace_binding_status.py",
-      "sha256": "4ceefaf45c25bc1208f54447f7765e95a4c0b1926d3bceac441f2ba8be0ba787",
+      "sha256": "1f0248d534fe0b4845c9d7aae1b348cda82c1af1f98fa270ce294514dc8899c9",
       "purpose": "Bounded path/routing diagnostics without admission or lazy state creation.",
       "symbols": [
         {
@@ -17676,6 +17905,10 @@
         {
           "name": "inspect_binding",
           "line": 76
+        },
+        {
+          "name": "restore_proxy_binding",
+          "line": 146
         }
       ]
     },

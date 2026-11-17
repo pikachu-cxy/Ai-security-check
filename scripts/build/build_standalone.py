@@ -124,6 +124,7 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
     source_dirty = bool(git_provenance(root, 'status', '--porcelain', timeout=30))
     from security_runtime.delivery import CONTRACT, encode, file_digest, package_metadata, package_inventory
     from security_runtime.compatibility import storage_contracts
+    from security_runtime.mcp_update_proxy import CONTRACT as MCP_PROXY_CONTRACT, hook_identity
     entries = package_inventory(bundle, allow_internal_links=os.name != 'nt')
     files = {r[0]: file_digest(bundle / r[0]) for r in entries
              if stat.S_ISREG(r[1]) and r[0] != 'version.json'}
@@ -133,6 +134,8 @@ def main(output_dir: Path | None = None, work_dir: Path | None = None,
         "source_dirty":source_dirty, "experience_contract":"upgrade-and-scan-v1",
         "state_schema": STATE_SCHEMA, "capability_contract": "developer-guidance-v0.3",
         "storage_contracts": storage_contracts(),
+        "mcp_proxy_contract": MCP_PROXY_CONTRACT,
+        "mcp_hook_identity": hook_identity(root / "src" / "security_runtime"),
         "launcher_contract": CONTRACT, "files": files,
         "managed_engines": ["opengrep", "gitleaks", "trivy"], "on_demand_engines": ["osv-scanner"]}
     if links:

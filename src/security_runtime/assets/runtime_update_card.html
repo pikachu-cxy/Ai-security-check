@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<style>
+  html,body{margin:0;font:15px/1.5 system-ui,sans-serif}
+  section{padding:.8rem 1rem;border:1px solid #9fb9ad;border-radius:8px}
+  p{margin:.25rem 0 .75rem} button{font:inherit;padding:.35rem .75rem}
+</style>
+<section hidden aria-labelledby="title">
+  <strong id="title">AI Security Runtime 更新</strong>
+  <p id="versions"></p>
+  <button type="button">查看并更新</button>
+  <p role="status" id="status" hidden></p>
+</section>
+<script>
+const view = document.querySelector('section');
+const status = document.getElementById('status');
+let next = 1, initialized = false, updateUrl;
+const pending = new Map();
+function emit(method, params, id) {
+  const message = {jsonrpc:'2.0', method, params};
+  if (id !== undefined) message.id = id;
+  window.parent.postMessage(message, '*');
+}
+function size() {
+  if (initialized) emit('ui/notifications/size-changed', {height:view.hidden ? 0 : view.scrollHeight});
+}
+function show(value) {
+  const version = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
+  const link = /^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/updates$/;
+  updateUrl = value && version.test(value.current_version) && version.test(value.target_version)
+    && /^[0-9a-f]{64}$/.test(value.candidate_id) && link.test(value.url) ? value.url : undefined;
+  view.hidden = !updateUrl;
+  if (updateUrl) document.getElementById('versions').textContent = value.current_version + ' → ' + value.target_version;
+  size();
+}
+window.addEventListener('message', event => {
+  if (event.source !== window.parent || event.data?.jsonrpc !== '2.0') return;
+  const message = event.data;
+  if (message.id === 0 && message.result) {
+    initialized = true;
+    emit('ui/notifications/initialized', {});
+    size();
+  } else if (initialized && message.method === 'ui/notifications/tool-result') {
+    show(message.params?.structuredContent?.runtime_update_notice);
+  } else if (initialized && pending.has(message.id)) {
+    pending.delete(message.id);
+    if (message.error || message.result?.isError) {
+      status.hidden = false;
+      status.textContent = '请使用报告中的本地更新入口。';
+      size();
+    }
+  } else if (message.method === 'ui/resource-teardown') {
+    window.parent.postMessage({jsonrpc:'2.0', id:message.id, result:{}}, '*');
+  }
+});
+document.querySelector('button').onclick = event => {
+  if (!event.isTrusted || !updateUrl) return;
+  const id = next++;
+  pending.set(id, true);
+  emit('ui/open-link', {url:updateUrl}, id);
+};
+if (window.parent !== window) emit('ui/initialize', {appInfo:{name:'runtime-update', version:'1.0.0'},
+  appCapabilities:{}, protocolVersion:'2026-01-26'}, 0);
+</script>
+</html>

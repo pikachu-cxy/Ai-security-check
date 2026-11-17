@@ -1,6 +1,6 @@
 # Support and detection coverage
 
-This page describes **0.3.14**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
+This page describes **0.3.15**. [Downloads](../downloads.md) include the release artifacts, checksums, source manifest, and acceptance evidence.
 
 ## Platforms and editors
 
@@ -15,7 +15,7 @@ No Linux full bundle is published. Use the actual local project root. Remote, mu
 
 ## macOS installation {#macos-installation}
 
-[Codex](../guide/editors/codex.md#macos), [Cursor](../guide/editors/cursor.md#macos), and [WorkBuddy](../guide/editors/workbuddy.md#macos) provide an architecture-aware installer for the same **v0.3.14** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
+[Codex](../guide/editors/codex.md#macos), [Cursor](../guide/editors/cursor.md#macos), and [WorkBuddy](../guide/editors/workbuddy.md#macos) provide an architecture-aware installer for the same **v0.3.15** native bundles listed in Downloads. Source identity and verification receipts are included in the release evidence. No preinstalled Python is needed.
 
 
 ## Cursor integration and reconnects

@@ -13,7 +13,7 @@ if (-not $env:LOCALAPPDATA) { throw 'LOCALAPPDATA is unavailable.' }
 if (-not $env:USERPROFILE -or -not [IO.Path]::IsPathRooted($env:USERPROFILE)) { throw 'USERPROFILE must be absolute.' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
-$version = '0.3.14'
+$version = '0.3.15'
 $archiveName = "ai-security-runtime-v$version-windows-x64.zip"
 $baseUrl = "https://github.com/pikachu-cxy/Ai-security-check/releases/download/v$version"
 # Keep this unique directory for diagnostics and optional status commands.

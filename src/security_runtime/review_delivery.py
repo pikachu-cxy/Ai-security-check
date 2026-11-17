@@ -190,3 +190,10 @@ def pending_report_receipt(page, root):
             workspace_path=str(root), check_ref=page['check_ref'], view='review', offset=0,
             expected_seq=page['dirty_seq'], scan_id=page['scan_id'])))
     return result
+
+
+def attach_runtime_update(result):
+    """Decorate only public delivery responses, after prose has been paginated."""
+    from .runtime_update import report_notice
+    notice = report_notice(result)
+    return dict(result, runtime_update_notice=notice) if notice else result

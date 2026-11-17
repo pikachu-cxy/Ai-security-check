@@ -103,6 +103,8 @@ def register(server, registry, *, application):
             result = saved if saved.get('review_saved') else review_receipt(saved)
             if response_view == 'final_report':
                 result = final_report_receipt(result)
+                from ..review_delivery import attach_runtime_update
+                result = attach_runtime_update(result)
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
             return result
@@ -141,11 +143,12 @@ def register(server, registry, *, application):
         from ..development_risks import require
         if view == 'closeout':
             from ..development_views import closeout_page
+            from ..review_delivery import attach_runtime_update
             require(not include_history and not include_evidence, 'DEVELOPMENT_RISK_INPUT_INVALID')
             result = closeout_page(service, offset, limit, expected_seq=expected_seq, scan_id=scan_id)
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
-            return result
+            return attach_runtime_update(result)
         if view in {'batch', 'final_report'}:
             require(expected_seq is not None and not include_history and not include_evidence,
                     'DEVELOPMENT_RISK_INPUT_INVALID')
@@ -153,6 +156,9 @@ def register(server, registry, *, application):
                                  whole_report=view == 'final_report', report_digest=report_digest)
             if session_ref and result.get('next_action'):
                 result['next_action']['arguments']['session_ref'] = session_ref
+            if view == 'final_report':
+                from ..review_delivery import attach_runtime_update
+                return attach_runtime_update(result)
             return result
         if view == 'review':
             require(not include_history, 'DEVELOPMENT_RISK_INPUT_INVALID')

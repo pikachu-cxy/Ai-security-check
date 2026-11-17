@@ -1,6 +1,6 @@
 # Install and use with WorkBuddy
 
-0.3.14 supports Windows x64, Mac Apple Silicon, and Mac Intel. Installation configures user-level MCP, Skill, and four Hooks and starts scanner preparation.
+0.3.15 supports Windows x64, Mac Apple Silicon, and Mac Intel. Installation configures user-level MCP, Skill, and four Hooks and starts scanner preparation.
 
 ## Recommended installation
 

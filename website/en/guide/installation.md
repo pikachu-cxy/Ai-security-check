@@ -1,6 +1,6 @@
 # Preparation, installation options, and upgrades
 
-For the **0.3.14 official release**, use the [Codex](./editors/codex.md), [Cursor](./editors/cursor.md), or [WorkBuddy](./editors/workbuddy.md) page to install. This page covers **0.3.14**. Automatic installation and manual downloads use the same native release bundles.
+For the **0.3.15 official release**, use the [Codex](./editors/codex.md), [Cursor](./editors/cursor.md), or [WorkBuddy](./editors/workbuddy.md) page to install. This page covers **0.3.15**. Automatic installation and manual downloads use the same native release bundles.
 
 After automatic Windows installation, copy the full status command printed by the installer. Relative-path examples below are for manual bundles; replace `.\security-check\security-check.exe` with the printed full executable path, retaining the `&` invocation operator. To upgrade, rerun the automatic command on your editor setup page.
 
@@ -82,6 +82,8 @@ For paste warnings, read [the exact-message guidance](../reference/faq.md#macos-
 There is no Developer ID signing or notarization guarantee. Do not disable system protection or TLS verification. A missing file calls for checking the executable path and extraction layout; changing executable permissions does not repair a signature or system-policy rejection.
 
 ## Upgrade or switch back
+
+Starting with 0.3.15, select **View and update** when a security report offers a newer release. In the authenticated local dashboard, confirm installation with **Update now**. After installation, check the Runtime build reported by your current chat to see whether that connection has switched. Earlier versions need a one-time upgrade through the existing installer.
 
 - **Managed macOS:** rerun your editor's documented installer, restart, and check the build. Reinstalling a pinned release does not imply a newer release exists. To switch back, run the original verified bundle's editor installer and verify the real connection before considering cleanup.
 - **Manual bundles:** finish active checks, preserve configuration, download a new bundle and matching checksum, verify, and extract to a new directory. Install for the editor, handle reported conflicts, restart, and verify the actual build and workspace.

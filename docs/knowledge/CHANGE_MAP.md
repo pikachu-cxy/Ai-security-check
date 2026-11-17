@@ -1,5 +1,11 @@
 # 从开发需求定位代码
 
+## Runtime 更新
+
+- `runtime_update.py` 负责发行检测、缓存、候选、下载与更新任务。`delivery.py` 负责槽位和活动指针。`development_check_worker.py` 派发后台刷新。
+- `mcp_tools/development_check.py` 调用 `review_delivery.py` 的末页交付装饰器，保持 `development_views.py` 原分流。后台授权与接口见 `dashboard_service.py`、`risk_dashboard.py`、`assets/runtime_updates.html`。CLI 见 `cli.py`。
+- MCP Apps 资源和兼容切换见 `runtime_update_app.py`、`assets/runtime_update_card.html`、`global_mcp.py`、`mcp_tool_groups.py`、`mcp_update_proxy.py`、`workspace_binding_status.py`。构建写入 Hook 兼容身份见 `scripts/build/build_standalone.py`。定向验收见 `test_runtime_update.py` 与 `test_mcp_runtime_updates.py`。
+
 ## SAST 文件能力与复查
 
 `sast_file_types.py` 定义文件名、复合后缀、分析器和执行方式；`target.py` 只对已有目标分类。`rule_catalog.py` 区分规则声明语言和实际适用分析器；`rule_coverage.py` 规划并保存单次引擎调用的文件与规则证据。`scanners.py` 按原路径、兼容投影和受限文本分批；`vue_scripts.py` / `vue_scan.py` 保留 SFC 区间、路径回映及限制。`verification.py`、`hook_runtime.py` 与 `scan_artifacts.py` 不将批次规则和扫描文件列表直接组合为修复证明。回归入口：`test_opengrep_migration.py`、`test_vue_scan.py`、`test_vue_recheck.py`、`test_rule_coverage.py`。

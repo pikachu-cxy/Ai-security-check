@@ -389,6 +389,8 @@ def run_worker(workspace, hooks_path, ticket, *, runtime_factory=None,
         stop = threading.Event()
         thread = threading.Thread(target=_heartbeat, args=(queue, ticket, stop), daemon=True)
         thread.start()
+        from .runtime_update import schedule_refresh
+        schedule_refresh()
         deadline, debounce_started = time.monotonic()+max_seconds, {}
         try:
             while time.monotonic() < deadline and _valid_worker(queue, ticket):

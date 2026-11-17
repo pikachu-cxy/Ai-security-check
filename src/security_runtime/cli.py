@@ -172,6 +172,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
     data_parser=sub.add_parser('vulnerability-data', help='Read or explicitly update the configured Trivy database')
     data_parser.add_argument('action', choices=['status', 'update'])
     data_parser.add_argument('--json', action='store_true')
+    update_parser = sub.add_parser('update', help='Inspect or explicitly install an official Runtime update')
+    update_parser.add_argument('action', choices=['status', 'apply', '_refresh', '_install'])
+    update_parser.add_argument('--candidate-id')
+    update_parser.add_argument('--ticket', help=argparse.SUPPRESS)
+    update_parser.add_argument('--json', action='store_true')
     risk_dashboard_parser=sub.add_parser('risk-dashboard',help='Open the local read-only risk statistics dashboard')
     risk_dashboard_parser.add_argument('--ready',help=argparse.SUPPRESS)
     risk_dashboard_parser.add_argument('--shared',action='store_true',help=argparse.SUPPRESS)
@@ -410,6 +415,22 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         return 0 if data['overall'] in {'CONFIGURED', 'REMOVED'} else 2
     try:
         configure_logging(mcp=args.command == "mcp")
+        if args.command == 'update':
+            from .runtime_update import apply_update, installed_update, update_status
+            if args.action == 'status':
+                data = update_status()
+            elif args.action == 'apply':
+                data = apply_update(args.candidate_id)
+            else:
+                update = installed_update()
+                if update is None:
+                    return 2
+                if args.action == '_refresh':
+                    update.refresh()
+                    return 0
+                return 0 if update.install(args.ticket) else 2
+            print(json.dumps(data, ensure_ascii=False))
+            return 2 if data.get('status') == 'FAILED' else 0
         if args.command == 'connection-diagnostics':
             from .connection_lifecycle import diagnostics
             print(json.dumps(diagnostics(), ensure_ascii=False))
@@ -1016,7 +1037,11 @@ def main(argv: list[str] | None = None, *, installation_progress=None) -> int:
         if args.command == "mcp":
             from .mcp_server import serve
             from .dashboard_service import start_background
-            start_background()
+            if os.getenv('SECURITY_RUNTIME_MCP_PROXY_CHILD') != '1':
+                start_background()
+                from .mcp_update_proxy import serve_proxy
+                if serve_proxy():
+                    return 0
             serve()
             return 0
         if args.command == "hooks":

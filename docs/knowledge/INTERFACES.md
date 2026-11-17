@@ -1,5 +1,13 @@
 # 当前接口设计
 
+## Runtime 更新
+
+当前报告末页可附 `runtime_update_notice`，包含 `current_version`、`target_version`、`candidate_id`、`url`、`label` 和 `fallback`。此字段独立于正文、摘要和分页。读取只消费已保存缓存，安装级目标版本限频 24 小时，同批重读不会重复提示。无候选且无缺口、未完成、历史查询和普通聊天保持静默。
+
+`GET /updates` 与 `GET /api/updates` 只读。`POST /api/updates` 只接受 `{"candidate_id": "..."}`，须通过原 Cookie、Origin 和 CSRF 校验。链接为无令牌本机地址，生成前核对同构建的后台健康和更新路由标识。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
+
+`ui://ai-security-runtime/runtime-update` 使用 `text/html;profile=mcp-app`，支持标准初始化与 `ui/open-link`。报告工具暂未绑定资源，标准桥接会传送整份工具参数与结果。带代理的包仍用全局 `security-check mcp` 入口，按 `mcp_proxy_contract`、`mcp_hook_identity`、存储契约、初始化及发现结果和签名会话路由决定切换资格。需由同一连接读取 `get_runtime_info` 核实实际构建。
+
 ## 风险管理链接
 
 冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE 并带 `reason_code`。需要链接的正常批次报告在 `session_url` 为空时提示链接不可用，并保留实际覆盖缺口；`INCOMPLETE` 当前只在有地址时追加链接，无地址时正文仅说明检查未完成。报告读取不会同步启动后台。

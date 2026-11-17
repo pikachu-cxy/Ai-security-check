@@ -141,3 +141,19 @@ def inspect_binding(pool, workspace_path, session_ref=None):
         result.update(session_binding_status='MATCH', registered_workspace=str(root),
                       routing_binding_confirmed=True, next_action=None)
     return result
+
+
+def restore_proxy_binding(pool, workspace_path, session_ref):
+    """Rehydrate memory only, from an explicitly supplied signed route."""
+    proof = inspect_binding(pool, workspace_path, session_ref)
+    if (proof.get('session_context_status') != 'VERIFIED'
+            or proof.get('session_binding_status') == 'MISMATCH'):
+        return False
+    root = Path(proof['resolved_workspace'])
+    owner = _routing_owner(pool, root, session_ref)
+    with pool.lock:
+        bound = pool.sessions.get(owner['session'])
+        if bound is not None and Path(bound) != root:
+            return False
+        pool.sessions[owner['session']] = root
+    return True

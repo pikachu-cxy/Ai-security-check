@@ -376,7 +376,7 @@ class StableDelivery:
 
     @verified_operation
     @timed("install.activate")
-    def activate(self, bundle, *, progress=None, defer_capability_check=False):
+    def activate(self, bundle, *, progress=None, defer_capability_check=False, expected_active=None):
         bundle = Path(bundle).absolute()
         report_progress(progress, 'PACKAGE_VERIFY')
         metadata = package_metadata(bundle)
@@ -386,6 +386,8 @@ class StableDelivery:
             if not acquired:
                 raise IntegrationDiagnostic('DELIVERY_BUSY')
             pointer = self.pointer()
+            if expected_active is not None and (pointer is None or pointer['active'] != expected_active):
+                raise IntegrationDiagnostic('DELIVERY_ACTIVE_CONFLICT')
             if pointer is not None:
                 current = self._installed_metadata(pointer['active'])
                 _require_storage_compatibility(current, metadata)
@@ -445,7 +447,14 @@ class StableDelivery:
             if pointer is None or pointer['active'] != identity or pointer.get('launcher', 'launcher') != launcher.name:
                 self._switch(identity, pointer['active'] if pointer else None, launcher=launcher.name)
             report_progress(progress, 'VERIFY_ACTIVATION')
-            return self.status() | {'status': 'ACTIVATED', 'reconnect_required': True,
+            try:
+                status = self.status()
+            except (OSError, ValueError):
+                if expected_active is not None:
+                    self._switch(pointer['active'], pointer['previous'], launcher=pointer.get('launcher'),
+                                 cleanup_ready=pointer.get('cleanup_ready', False))
+                raise
+            return status | {'status': 'ACTIVATED', 'reconnect_required': True,
                                    'package_reused': reused, 'network_download': False,
                                    'publisher_authenticity': 'USER_SUPPLIED_PACKAGE_NOT_ATTESTED'}
 

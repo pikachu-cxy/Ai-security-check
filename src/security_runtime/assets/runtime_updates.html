@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>工具更新 · AI Security Runtime</title>
+<style>
+  :root{color-scheme:light;font:16px/1.6 "Segoe UI",sans-serif;background:#f3f7f5;color:#172a24}
+  main{margin:6vh auto;padding:1.5rem;width:min(38rem,calc(100% - 5rem));background:white;border:1px solid #cbd9d2;border-radius:12px}
+  a{color:#14634d} h1{margin:.6rem 0} dl{display:grid;grid-template-columns:8em 1fr;margin:1rem 0}
+  dd{margin:0;font-weight:650} button{font:inherit;padding:.5em 1em;border:0;border-radius:8px;background:#17624e;color:white}
+  button:disabled{background:#596963} :focus-visible{outline:3px solid #174e99;outline-offset:3px}
+  #state{min-height:3em}
+</style>
+<main>
+  <a href="/risks">返回漏洞列表</a>
+  <h1>AI Security Runtime 更新</h1>
+  <dl><dt>已安装版本</dt><dd id="active">—</dd><dt>可安装版本</dt><dd id="target">—</dd></dl>
+  <p id="state" role="status" aria-live="polite"></p>
+  <button id="apply" disabled>立即更新</button>
+</main>
+<script>
+const byId = id => document.getElementById(id);
+const stages = {QUEUED:'已提交更新', DOWNLOADING:'正在下载并核对发行信息', VERIFYING:'正在校验安装包',
+  ACTIVATING:'正在试启动并切换安装', INSTALLED_RECONNECT_REQUIRED:'已安装，重连后生效',
+  INSTALLED_AWAITING_CONNECTION:'已安装。兼容连接会尝试切换，当前会话是否已切换以宿主构建信息为准。',
+  FAILED:'更新未完成。请查看失败原因后重试。'};
+const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING']);
+let csrf, candidate, waiting, timer;
+async function json(url, options) {
+  const response = await fetch(url, options);
+  if (!response.ok) throw new Error(response.status === 403 ? '请从已授权的风险管理页面进入。' : '更新服务暂时不可用。');
+  return response.json();
+}
+async function refresh() {
+  clearTimeout(timer);
+  try {
+    const [session, update] = await Promise.all([json('/api/session'), json('/api/updates')]);
+    csrf = session.csrf;
+    candidate = update.candidate?.id;
+    const job = update.job || {};
+    byId('active').textContent = update.active_version || '无法验证安装';
+    byId('target').textContent = update.candidate?.version || job.version || '—';
+    waiting = activeStages.has(job.status);
+    let state = stages[job.status] || (candidate ? '有可安装的正式发行版。' : '当前没有可安装的已核验新版。');
+    if (job.status === 'FAILED' && job.reason) state += ' ' + job.reason;
+    if (candidate && !csrf) state += ' 请从已授权的风险管理入口进入后更新。';
+    byId('state').textContent = state;
+    byId('apply').disabled = !candidate || !csrf || waiting;
+    if (waiting) timer = setTimeout(refresh, 1500);
+  } catch (error) {
+    byId('state').textContent = error.message;
+    byId('apply').disabled = true;
+  }
+}
+byId('apply').onclick = async () => {
+  if (!csrf || !candidate || waiting) return;
+  byId('apply').disabled = waiting = true;
+  try {
+    await json('/api/updates', {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
+      body:JSON.stringify({candidate_id:candidate})});
+    await refresh();
+  } catch (error) {
+    byId('state').textContent = error.message;
+    byId('apply').disabled = waiting = false;
+  }
+};
+refresh();
+</script>
+</html>

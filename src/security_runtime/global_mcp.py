@@ -561,6 +561,9 @@ def create_global_server(*, workspaces=None, host='codex'):
 
     registry = MCPRegistry(server)
     active_host = getattr(pool, 'host', host)
+    from .runtime_update_app import register_update_resource
+    register_update_resource(server)
+    proxy_key = os.environ.pop('SECURITY_RUNTIME_MCP_PROXY_KEY', '') if os.getenv('SECURITY_RUNTIME_MCP_PROXY_CHILD') == '1' else ''
     server.global_workspaces = pool
     registry.add_instructions('\nGlobal host integration: workspace_path is an untrusted claim. '
         'For every workspace tool supply the current workspace_path, even if only one workspace is admitted. '
@@ -593,7 +596,8 @@ def create_global_server(*, workspaces=None, host='codex'):
             if tool.name in HOOKS:
                 description = 'Global cwd-routed Hook. ' + description.replace('Requires SECURITY_RUNTIME_WORKSPACE binding;', 'Requires validated workspace admission;')
             result.append(Tool(name=tool.name, description=description, inputSchema=schema,
-                               outputSchema=tool.output_schema, annotations=tool.annotations))
+                               outputSchema=tool.output_schema, annotations=tool.annotations,
+                               _meta=getattr(tool, 'meta', None)))
         return result
 
     # Tool schemas are fixed for this connection; do not rebuild them per call.
@@ -1178,6 +1182,21 @@ def create_global_server(*, workspaces=None, host='codex'):
     operation_call = call
 
     async def grouped_call(name, arguments):
+        if name == '_runtime_proxy_restore':
+            import secrets
+            from .workspace_binding_status import restore_proxy_binding
+            restored = False
+            if (proxy_key and isinstance(arguments, dict) and
+                    set(arguments) == {'key', 'workspace_path', 'session_ref'} and
+                    all(isinstance(value, str) for value in arguments.values()) and
+                    secrets.compare_digest(proxy_key, arguments['key'])):
+                try:
+                    restored = restore_proxy_binding(pool, arguments['workspace_path'], arguments['session_ref'])
+                except (OSError, ValueError, TypeError, KeyError):
+                    pass
+            data = dict(routing_binding_confirmed=restored)
+            return CallToolResult(isError=not restored, structuredContent=data,
+                                  content=[TextContent(type='text', text=json.dumps(data))])
         invalid_legacy = False
         if group_validators and name in MERGED_GROUPS:
             # The old envelope accepts only its original operation subset.

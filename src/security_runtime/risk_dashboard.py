@@ -248,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/health':
             if self.headers.get('Authorization') != 'Bearer ' + self.server.token:
                 self.send_error(403); return
-            self.reply(200, dict(service='risk-dashboard-v2', build=self.server.code_id)); return
+            self.reply(200, dict(service='risk-dashboard-v2', build=self.server.code_id, runtime_updates=1)); return
         if path == f'/{self.server.token}/':
             self.send_response(303)
             self.send_header('Set-Cookie', f'dashboard={self.server.token}; HttpOnly; SameSite=Strict; Path=/')
@@ -261,6 +261,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path in ('/risks', '/risks/'):
                 self.reply(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
+            elif path == '/updates':
+                self.reply(200, PAGE.with_name('runtime_updates.html').read_bytes(), 'text/html; charset=utf-8')
+            elif path == '/api/updates':
+                from .runtime_update import update_status
+                if self.query():
+                    raise ValueError('UPDATE_QUERY_INVALID')
+                self.reply(200, update_status())
             elif path == '/api/session':
                 # Reads need no cookie; the CSRF token still requires the
                 # one-time browser authorization performed by the editor.
@@ -382,6 +389,12 @@ class Handler(BaseHTTPRequestHandler):
                 if set(data) != {'values','expected_revision'}:
                     raise ValueError('DASHBOARD_CONFIG_INVALID')
                 self.reply(200, save_config(**data))
+            elif path == '/api/updates':
+                from .runtime_update import apply_update
+                if set(data) != {'candidate_id'}:
+                    raise ValueError('UPDATE_BODY_INVALID')
+                self.reply(202, apply_update(data['candidate_id']))
+                return
             else:
                 self.send_error(404); return
             if self.server.catalog:
