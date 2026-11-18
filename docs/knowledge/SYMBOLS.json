@@ -9,7 +9,7 @@
     },
     {
       "path": "src/security_runtime/_version.py",
-      "sha256": "63b7870ac375953b9ad65e04bcb0f0c48a3372330ae19fdd6a1080e7cbbeda44",
+      "sha256": "d9c6bdb9a8259b866e85065ce6128b17deb1a721c5fb6dc112f6f108b440d6f8",
       "purpose": "Single source for the Runtime release version.",
       "symbols": []
     },

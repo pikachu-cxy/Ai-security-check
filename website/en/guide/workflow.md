@@ -1,6 +1,6 @@
 # Daily workflow
 
-These instructions describe **0.3.15**. After [verifying installation](./verify.md), develop in a chat opened at the actual project root.
+These instructions describe **0.3.16**. After [verifying installation](./verify.md), develop in a chat opened at the actual project root.
 
 ## From development to a report
 

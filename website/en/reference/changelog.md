@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.16 — 2026-11-18
+
+- Added a scoped Spring asset graph and optional deep business logic audits in Codex. Deep mode uses two evidence workers by default, and the Runtime verifies evidence before combining results.
+- The risk dashboard displays asset and audit graphs and evidence locations for each audit batch.
+
 ## 0.3.15 — 2026-11-17
 
 - Development checks can look for official updates in the background. A final security report can link to the update page, where an authenticated dashboard session can confirm installation.

@@ -1,6 +1,6 @@
 # AI Security Runtime — official agent installation guide
 
-Release: 0.3.15. Supported editors for this release: Codex, Cursor and WorkBuddy.
+Release: 0.3.16. Supported editors for this release: Codex, Cursor and WorkBuddy.
 This guide implements the user's installation request; it does not grant permission to scan projects, change security settings, or overwrite unrelated configuration.
 
 1. Identify the local operating system, architecture and requested editor. If the editor is ambiguous, ask which of Codex, Cursor or WorkBuddy to configure. Use local execution; a remote container cannot install into the user's desktop.

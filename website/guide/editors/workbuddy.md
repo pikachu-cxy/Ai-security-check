@@ -1,6 +1,6 @@
 # 在 WorkBuddy 中安装与使用
 
-0.3.15 完整包支持 Windows x64、Mac Apple Silicon 和 Mac Intel。安装配置用户级 MCP、Skill 和四个 Hook，并准备检查组件。
+0.3.16 完整包支持 Windows x64、Mac Apple Silicon 和 Mac Intel。安装配置用户级 MCP、Skill 和四个 Hook，并准备检查组件。
 
 ## 推荐安装
 

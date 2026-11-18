@@ -2,7 +2,7 @@
 
 AI Security Runtime connects local security checks to Codex, Cursor and WorkBuddy. Develop normally: the Runtime records affected paths and scans the recorded files at closeout. Your agent reviews candidates against code, explains risks, and follows your handling decisions.
 
-The current official release is **0.3.15**, with Windows x64, macOS Apple Silicon, and Intel bundles. Automatic installers use the same native bundles without preinstalled Python. See [downloads](../downloads.md) for checksums.
+The current official release is **0.3.16**, with Windows x64, macOS Apple Silicon, and Intel bundles. Automatic installers use the same native bundles without preinstalled Python. See [downloads](../downloads.md) for checksums.
 
 ## Default workflow
 

@@ -5,7 +5,9 @@ on:
   push:
     tags: ['v*']
     branches: [feature/runtime-mvp]
-    paths: ['.github/workflows/release.yml']
+    paths:
+      - '.github/workflows/release.yml'
+      - 'src/security_runtime/_version.py'
 
 permissions:
   contents: read

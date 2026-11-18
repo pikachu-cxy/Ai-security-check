@@ -2,7 +2,7 @@
 
 AI Security Runtime 为 Codex、Cursor、WorkBuddy 提供本地安全检查。你照常提出开发需求，产品记录涉及的文件，在开发收尾时合并扫描；Agent 结合代码复核候选，说明风险，再按你的决定处理。
 
-当前正式版为 **0.3.15**，提供 Windows x64、macOS Apple Silicon 和 Intel 完整包。自动安装脚本使用同一份原生包，无需预装 Python。下载及校验见[下载页](../downloads.md)。
+当前正式版为 **0.3.16**，提供 Windows x64、macOS Apple Silicon 和 Intel 完整包。自动安装脚本使用同一份原生包，无需预装 Python。下载及校验见[下载页](../downloads.md)。
 
 ## 默认如何工作
 

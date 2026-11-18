@@ -24,6 +24,6 @@ Use the latest whole-batch report returned after review submission, following ad
 
 ## Checks after repair
 
-Version 0.3.15 disables **additional post-repair verification** by default. Repair edits still enter ordinary static scanning and whichever candidate review/business audit settings are enabled. No separate repair rescan or business re-audit is automatically added.
+Version 0.3.16 disables **additional post-repair verification** by default. Repair edits still enter ordinary static scanning and whichever candidate review/business audit settings are enabled. No separate repair rescan or business re-audit is automatically added.
 
 Original risk history is retained. A clean ordinary scan does not automatically prove an old issue resolved. Request verification of the original risk explicitly, or enable the extra repair check in product settings when needed. Changing code does not replace rotation of exposed credentials.
