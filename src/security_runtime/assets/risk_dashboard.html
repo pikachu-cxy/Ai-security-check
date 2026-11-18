@@ -11,6 +11,7 @@
 <div class="actions"><button id="filter">筛选</button><button id="clear">全部风险</button><button id="refresh">刷新</button><button id="manualOpen">新增人工风险</button><select id="batchAction"><option value="DEFER">暂不处理</option><option value="EXCLUDE">标记误报</option><option value="RESTORE">恢复提醒</option><option value="ARCHIVE">归档</option><option value="UNARCHIVE">恢复归档</option></select><input id="batchReason" aria-label="处置原因" placeholder="处置原因（暂缓/误报必填）"><button id="batchSave">应用到选中项</button><select id="exportFormat"><option value="sarif">SARIF</option><option value="csv">CSV</option><option value="json">JSON</option></select><button id="export">导出当前筛选全部结果</button></div>
 <p class="muted" id="count"></p><div class="table"><table><thead><tr><th><input id="selectAll" type="checkbox" aria-label="选择本页"></th><th>风险 / 位置</th><th>项目 / 会话</th><th>评级</th><th>状态</th><th>操作</th></tr></thead><tbody id="rows"></tbody></table></div><p id="empty" hidden>当前筛选没有记录。</p><div class="footer"><button id="prev">上一页</button><span id="page"></span><button id="next">下一页</button></div><details><summary>分层统计（当前筛选）</summary><div id="statistics"></div></details></section>
 </div><section id="healthView" hidden><div class="panel"><div class="health-toolbar"><div><h2>产品健康监控</h2><p class="muted">按需检查本机组件与独立 MCP 连接，不扫描项目、不下载组件或漏洞库。30 秒内刷新复用结果。</p></div><button id="healthRefresh" class="primary">刷新状态</button></div><p id="healthStatus" role="status"></p><div id="healthProduct" class="health-grid"></div></div><section class="health-section"><h2>底层工具</h2><div id="healthTools" class="health-grid"></div></section><section class="health-section"><h2>漏洞数据库</h2><div id="healthDatabases" class="health-grid"></div></section><section class="health-section panel"><h2>MCP 接口</h2><p class="muted">绿灯表示独立连接握手成功、接口已注册；仅运行状态接口做只读调用验证。其余业务接口不执行，不代表当前聊天连接在线。</p><div class="table"><table><thead><tr><th>接口</th><th>状态</th><th>操作</th></tr></thead><tbody id="healthMcp"></tbody></table></div></section><details class="health-section panel"><summary>连接与退出诊断</summary><p class="muted">包含宿主连接与独立探测进程的退出记录。进程存在不代表连接健康；未记录退出原因时保留未知，不推断为正常。</p><div id="healthConnections"></div></details><details class="health-section panel"><summary>最近 16 次健康检查</summary><div id="healthHistory"></div></details></section><section id="entityView" class="panel" hidden><nav id="entityBreadcrumbs" class="breadcrumbs" aria-label="资源层级"></nav><div class="management-toolbar"><div><h2 id="entityTitle"></h2><p class="muted" id="entityHelp"></p></div><button id="entityRefresh">刷新</button></div><div id="entityContext" class="resource-context"><label>所属项目<select id="entityProject"></select></label><label id="entityWorkspaceLabel">所属工作区<select id="entityWorkspace"></select></label></div><label>搜索资源<input id="entitySearch" placeholder="搜索名称或路径"></label><p id="entityCount" class="muted"></p><div class="table"><table><thead><tr><th>名称 / 范围</th><th>关联风险</th><th>会话记录</th><th>操作</th></tr></thead><tbody id="entityRows"></tbody></table></div></section><section id="settings" class="panel"><h2>产品设置</h2><p>保存后从下一检查批次生效。当前批次保留原配置；此处不会启动扫描。</p><div id="configFields" class="settings-groups"></div><button id="configSave" class="primary">保存设置</button> <button id="configClose">关闭</button></section><dialog id="sessionAliasDialog"><h2>设置开发会话别名</h2><p>仅修改后台显示，不会修改编辑器聊天名称；清空后恢复使用编辑器名称。</p><input id="sessionAlias" maxlength="200" aria-label="会话别名"><button id="sessionAliasSave">保存</button><button id="sessionAliasCancel">取消</button></dialog><dialog id="deleteDialog"><h2>删除关联记录？</h2><p id="deleteSummary"></p><p class="muted">这些已有记录将移入回收站，并从列表、统计及导出中移除。可以恢复；不会删除源码、关闭扫描或卸载编辑器。后续新增记录仍会显示。</p><div class="actions"><button id="deleteCancel">取消</button><button id="deleteConfirm" class="danger">移入回收站</button></div></dialog></main></div><div id="overlay"><section class="drawer" role="dialog" aria-modal="true" aria-labelledby="detailTitle"><div class="drawer-top"><h2 id="detailTitle"></h2><button id="close">关闭</button></div><p class="muted" id="detailMeta"></p><div id="detailBody"></div><section id="editFields"><h3>处置</h3><p id="repairState" class="muted"></p><div class="actions"><button id="repair" class="primary">交给原会话修复</button><button data-action="DEFER">暂不处理</button><button data-action="EXCLUDE">标记误报</button></div><label>处置理由（暂不处理或误报时填写）<textarea id="reason"></textarea></label><details><summary>修复交接说明</summary><p>由原项目、原会话的 Agent 在下一次操作后接收。后台不会唤醒闲置会话，也不会直接改代码。</p><pre id="repairInstruction"></pre><button id="cancelRepair" data-action="CANCEL_REPAIR">取消待执行修复</button></details><details class="detail-management"><summary>更多管理</summary><label>备注<textarea id="note"></textarea></label><label>负责人<input id="assignee"></label><label>人工评级（保留原始评级）<select id="manualRating"><option value="">未设置</option><option>HIGH</option><option>MEDIUM</option><option>LOW</option><option>CRITICAL</option><option>INFO</option></select></label><label>业务影响<textarea id="businessImpact"></textarea></label><button id="editSave">保存备注</button><div class="actions"><button data-action="RESTORE">恢复提醒</button><button data-action="ARCHIVE">归档</button><button data-action="UNARCHIVE">恢复归档</button></div></details></section></section></div>
+<dialog id="auditGraphDialog"><h2>本轮局部审计图</h2><button id="auditGraphClose">关闭</button><div id="auditGraphBody"></div></dialog>
 <script>
 const $=id=>document.getElementById(id), filters=['editor','project','workspace','session','category','severity','status','archived','q'];
 let sessionNames={},titleRefreshAttempts=0;
@@ -41,11 +42,11 @@ $('batchSave').onclick=()=>{const items=rows.filter(r=>selected.has(r.id)).map(r
 $('filter').onclick=()=>{offset=0;load()};$('refresh').onclick=load;$('clear').onclick=()=>{for(const key of filters)$(key).value=key==='archived'?'false':'';offset=0;history.replaceState(null,'','/risks');load()};$('prev').onclick=()=>{offset=Math.max(0,offset-50);load()};$('next').onclick=()=>{offset+=50;load()};
 $('export').onclick=()=>{const q=query();q.delete('offset');q.set('format',$('exportFormat').value);window.location.assign('/api/export?'+q)};
 $('manualOpen').onclick=()=>$('manual').style.display='block';$('manualClose').onclick=()=>$('manual').style.display='none';$('manualSave').onclick=async()=>{try{const anchor=rows.find(r=>selected.has(r.id));const anchorId=anchor?.id||$('manualAnchor').value;if(!anchorId)throw Error('请先选择已有项目的检查记录。');await api('/api/manual',{anchor_id:anchorId,request_id:crypto.randomUUID(),finding:{title:$('manualTitle').value,file_path:$('manualPath').value,line_start:Number($('manualLine').value),line_end:Number($('manualEnd').value),severity:$('manualSeverity').value,category:$('manualCategory').value,description:$('manualDescription').value,evidence:$('manualDescription').value,impact:$('manualImpact').value,fix_advice:$('manualAdvice').value}});notice('人工风险已保存。');$('manualClose').onclick();setTimeout(load,400)}catch(e){notice(e.message)}};
-const configLabels={repair_recheck_enabled:'修复后额外复查（默认关闭；修改仍按普通开发检查）',review_response_bytes:'复核响应大小（字节，16384–262144，默认 65536）',max_records:'记录数量上限',max_total_bytes:'总容量上限（字节）',max_database_bytes:'数据库上限（字节）',max_record_bytes:'单条记录上限（字节）',max_files:'文件数量上限',max_directories:'目录数量上限',max_depth:'最大深度',max_file_bytes:'单文件上限（字节）',max_index_bytes:'索引上限（字节）',timeout_seconds:'超时（秒）',max_output_bytes:'输出上限（字节）',sast_timeout_seconds:'代码扫描超时（秒）',gitleaks_timeout_seconds:'密钥扫描超时（秒）',trivy_timeout_seconds:'依赖扫描超时（秒）',max_steps:'数据流步数上限',feature_timeout_seconds:'开发扫描超时（秒）',release_timeout_seconds:'发布扫描超时（秒）',mode:'规则模式',paths:'自定义规则路径（逗号分隔）',exclude_ids:'排除的规则（逗号分隔）',config_path:'密钥规则配置路径',repositories:'漏洞库镜像地址（逗号分隔）',cache_dir:'缓存目录',update_mode:'漏洞库更新方式',update_interval_seconds:'更新间隔（秒）',stale_policy:'过期数据策略',business_audit_delivery:'业务审计交付策略（fast 先交付 / wait 等待）',agent:'Agent 复核',review_scanner_findings:'复核扫描候选',audit_business_logic:'业务逻辑审计',storage:'记录保留',development:'开发收尾',scan:'扫描限制',rules:'规则设置',vulnerability_data:'漏洞数据库',stop_fallback:'收尾等待',wait_mode:'收尾等待模式',enabled:'启用',native_wait_seconds:'单次 Stop 等待（秒，0–18；超时后后台继续）',wait_timeout_seconds:'兼容续接总预算（秒，非扫描超时）',max_continuations:'最多续接次数',development_max_records:'开发记录上限',development_record_limit_enabled:'启用记录上限',schema_version:'配置格式版本'};
+const configLabels={business_audit_mode:'业务审计模式',business_audit_workers:'深度业务审计并发 Worker（2–3）',repair_recheck_enabled:'修复后额外复查（默认关闭；修改仍按普通开发检查）',review_response_bytes:'复核响应大小（字节，16384–262144，默认 65536）',max_records:'记录数量上限',max_total_bytes:'总容量上限（字节）',max_database_bytes:'数据库上限（字节）',max_record_bytes:'单条记录上限（字节）',max_files:'文件数量上限',max_directories:'目录数量上限',max_depth:'最大深度',max_file_bytes:'单文件上限（字节）',max_index_bytes:'索引上限（字节）',timeout_seconds:'超时（秒）',max_output_bytes:'输出上限（字节）',sast_timeout_seconds:'代码扫描超时（秒）',gitleaks_timeout_seconds:'密钥扫描超时（秒）',trivy_timeout_seconds:'依赖扫描超时（秒）',max_steps:'数据流步数上限',feature_timeout_seconds:'开发扫描超时（秒）',release_timeout_seconds:'发布扫描超时（秒）',mode:'规则模式',paths:'自定义规则路径（逗号分隔）',exclude_ids:'排除的规则（逗号分隔）',config_path:'密钥规则配置路径',repositories:'漏洞库镜像地址（逗号分隔）',cache_dir:'缓存目录',update_mode:'漏洞库更新方式',update_interval_seconds:'更新间隔（秒）',stale_policy:'过期数据策略',business_audit_delivery:'业务审计交付策略（fast 先交付 / wait 等待）',agent:'Agent 复核',review_scanner_findings:'复核扫描候选',audit_business_logic:'业务逻辑审计',storage:'记录保留',development:'开发收尾',scan:'扫描限制',rules:'规则设置',vulnerability_data:'漏洞数据库',stop_fallback:'收尾等待',wait_mode:'收尾等待模式',enabled:'启用',native_wait_seconds:'单次 Stop 等待（秒，0–18；超时后后台继续）',wait_timeout_seconds:'兼容续接总预算（秒，非扫描超时）',max_continuations:'最多续接次数',development_max_records:'开发记录上限',development_record_limit_enabled:'启用记录上限',schema_version:'配置格式版本'};
 const settingGroups={agent:['Agent 复核与审计','选择扫描候选复核和业务逻辑审计'],development:['开发收尾','设置审计交付和收尾等待'],scan:['静态扫描','设置范围、输入容量、执行时间和数据流分析'],rules:['扫描规则','管理代码与密钥检测规则'],vulnerability_data:['漏洞数据库','设置更新方式、镜像和过期策略'],storage:['记录与存储','设置历史记录及存储容量']};
 Object.assign(configLabels,{discovery:'文件发现范围',input:'扫描输入容量',git:'Git 读取限制',execution:'扫描器执行',dataflow:'数据流分析',sast:'代码扫描规则',gitleaks:'密钥扫描规则',trivy:'依赖漏洞数据库',explicit_scan_jobs:'手动扫描任务',scan_publication:'扫描结果存储'});
 function configForm(values){for(const key of [...Object.keys(settingGroups),...Object.keys(values).filter(k=>!settingGroups[k]&&k!=='schema_version')]){if(!(key in values))continue;const [title,description]=settingGroups[key]||[configLabels[key]||key,'其他产品选项'];const group=text('details');group.className='settings-group';const summary=text('summary',title);summary.append(text('small',description));const body=text('div');body.className='config-grid';if(values[key]&&typeof values[key]==='object'&&!Array.isArray(values[key]))configInputs(values[key],key,body);else configInputs({[key]:values[key]},'',body);if(key==='development')body.append(text('p',config?.stop_wait_support?.message||'等待结果模式受编辑器的 Hook 和 MCP 超时限制，不代表无限等待。'));group.append(summary,body);$('configFields').append(group)}}
-function configInputs(values,prefix,target){for(const [key,value] of Object.entries(values)){const path=prefix?prefix+'.'+key:key;if(path==='scan.dataflow'){target.append(text('p','自研数据流分析已移出扫描流程；旧配置仅保留兼容，不再生效。'));continue}if(value&&typeof value==='object'&&!Array.isArray(value)){target.append(Object.assign(text('h3',configLabels[key]||key),{className:'settings-subgroup'}));configInputs(value,path,target);continue}if(key==='schema_version')continue;const label=text('label',(configLabels[key]||key));label.title=path;const enums={wait_mode:{bounded:'限时收尾（默认）',wait_for_result:'等待检查结果（受宿主上限限制）'},business_audit_delivery:{fast:'先交付已完成结果',wait:'等待审计完成'},mode:{builtin:'内置规则',extend:'扩展规则',replace:'替换规则'},update_mode:{auto:'自动更新',manual:'手动更新',offline:'离线'},stale_policy:{allow_with_gap:'允许使用并报告过期',require_fresh:'必须使用最新数据'}};const input=text(enums[key]?'select':'input');if(enums[key])for(const [v,label] of Object.entries(enums[key])){const option=text('option',label);option.value=v;input.append(option)}if(key==='review_response_bytes'){input.min='16384';input.max='262144';input.step='1024'}input.dataset.path=path;input.dataset.kind=Array.isArray(value)?'array':typeof value;if(typeof value==='boolean'){input.type='checkbox';input.checked=value}else{input.type=typeof value==='number'?'number':'text';input.value=Array.isArray(value)?value.join(', '):value}label.append(input);target.append(label)}}
+function configInputs(values,prefix,target){for(const [key,value] of Object.entries(values)){const path=prefix?prefix+'.'+key:key;if(path==='scan.dataflow'){target.append(text('p','自研数据流分析已移出扫描流程；旧配置仅保留兼容，不再生效。'));continue}if(value&&typeof value==='object'&&!Array.isArray(value)){target.append(Object.assign(text('h3',configLabels[key]||key),{className:'settings-subgroup'}));configInputs(value,path,target);continue}if(key==='schema_version')continue;const label=text('label',(configLabels[key]||key));label.title=path;const enums={business_audit_mode:{standard:'标准（单 Worker）',deep:'深度（Planner 与并发 Worker）'},wait_mode:{bounded:'限时收尾（默认）',wait_for_result:'等待检查结果（受宿主上限限制）'},business_audit_delivery:{fast:'先交付已完成结果',wait:'等待审计完成'},mode:{builtin:'内置规则',extend:'扩展规则',replace:'替换规则'},update_mode:{auto:'自动更新',manual:'手动更新',offline:'离线'},stale_policy:{allow_with_gap:'允许使用并报告过期',require_fresh:'必须使用最新数据'}};const input=text(enums[key]?'select':'input');if(enums[key])for(const [v,label] of Object.entries(enums[key])){const option=text('option',label);option.value=v;input.append(option)}if(key==='review_response_bytes'){input.min='16384';input.max='262144';input.step='1024'}input.dataset.path=path;input.dataset.kind=Array.isArray(value)?'array':typeof value;if(typeof value==='boolean'){input.type='checkbox';input.checked=value}else{input.type=typeof value==='number'?'number':'text';input.value=Array.isArray(value)?value.join(', '):value}label.append(input);target.append(label)}}
 $('settingsOpen').onclick=async()=>{showView('settings');try{config=await api('/api/config');$('configFields').replaceChildren();configForm(config.values);$('settings').style.display='block'}catch(e){notice(e.message)}};$('configClose').onclick=()=>showView('risks');$('configSave').onclick=async()=>{try{const values=structuredClone(config.values);for(const input of $('configFields').querySelectorAll('input,select')){const parts=input.dataset.path.split('.');let target=values;for(const key of parts.slice(0,-1))target=target[key];target[parts.at(-1)]=input.dataset.kind==='boolean'?input.checked:input.dataset.kind==='number'?Number(input.value):input.dataset.kind==='array'?input.value.split(',').map(s=>s.trim()).filter(Boolean):input.value}config=await api('/api/config',{values,expected_revision:config.revision});notice('设置已保存，从下一检查批次生效。')}catch(e){notice(e.message)}};
 async function initialize(){const initial=new URLSearchParams(window.location.search);for(const key of filters)if(initial.has(key)){if(['project','workspace','session','category'].includes(key)){const option=text('option','链接指定的'+({project:'项目',workspace:'工作区',session:'会话',check:'检查批次',category:'类型'})[key]);option.value=initial.get(key);$(key).append(option)}$(key).value=initial.get(key);}try{csrf=(await api('/api/session')).csrf;await load()}catch(e){notice(e.message)}}
 const healthLabels={DISABLED:'已停用（不参与扫描）',READY:'可用',ATTENTION:'需要关注',READ_VERIFIED:'只读调用通过',REGISTERED:'已注册（未执行业务调用）',UNAVAILABLE:'不可用',MISSING:'缺失',BROKEN:'异常',VERSION_MISMATCH:'版本不匹配',UNKNOWN:'未确认',PRESENT:'文件存在（未执行验证）',FRESH:'有效期内',STALE:'已过期',UNSUPPORTED_PLATFORM:'当前平台不支持',OFFLINE:'离线',RUNNING:'进程记录：运行中',EXITED:'已退出',EXIT_UNRECORDED:'进程已结束，退出未记录',PROCESS_STATUS_UNKNOWN:'进程状态未知'};
@@ -94,5 +95,92 @@ function entityAction(e,action){return api('/api/entities',{action,kind:e.kind,i
 $('deleteConfirm').onclick=async()=>{if(!deleting)return;$('deleteConfirm').disabled=true;try{await entityAction(deleting,'delete');$('deleteDialog').close();notice('已移入回收站，可在左侧回收站恢复。');await loadEntities()}catch(e){notice(e.message);$('deleteDialog').close()}finally{$('deleteConfirm').disabled=false}};
 $('deleteCancel').onclick=()=>$('deleteDialog').close();$('entityRefresh').onclick=loadEntities;$('entitySearch').oninput=renderEntities;
 for(const button of document.querySelectorAll('[data-view]'))button.onclick=()=>resourceNavigate(button.dataset.view);
+const auditAssetLabels={ENTRY:'入口',METHOD:'方法',DECLARED_GUARD:'声明式校验',CHECK_CANDIDATE:'校验候选',
+ WRITE_CANDIDATE:'写操作候选',STATE_REFERENCE:'业务状态引用',CALL:'显式调用'};
+$('auditGraphClose').onclick=()=>$('auditGraphDialog').close();
+const auditGraphButton=text('button','查看本轮审计图');
+$('refresh').parentElement?.append(auditGraphButton);
+auditGraphButton.onclick=()=>{
+ const url=new URLSearchParams(window.location.search);
+ const scope=new URLSearchParams();
+ for(const key of ['editor','workspace','check','seq'])if(url.get(key))scope.set(key,url.get(key));
+ if(scope.size!==4){
+  notice('请通过安全报告中的本会话风险管理链接打开对应检查批次。');
+  return;
+ }
+ showAuditGraphs(scope);
+};
+async function showAuditGraphs(scope){
+ const body=$('auditGraphBody');
+ body.replaceChildren(text('p','正在加载本轮局部审计图…'));
+ if(!$('auditGraphDialog').open)$('auditGraphDialog').showModal();
+ try{
+  const data=await api('/api/audit-graphs?'+scope);
+  const {asset_graph:assets,audit_graph:audit}=data;
+  const output=text('div');
+  const locations=new Map();
+  const viewCode=(ref,asset)=>{
+   const button=text('button','查看证据代码');
+   button.onclick=async()=>{
+    const query=new URLSearchParams(scope);
+    query.set('evidence',ref);
+    if(asset)query.set('asset',asset);
+    try{
+     renderCode(output,await api('/api/audit-graphs?'+query));
+     output.scrollIntoView({block:'nearest'});
+    }catch(error){output.replaceChildren(text('p',error.message));}
+   };
+   return button;
+  };
+  const assetLink=id=>{
+   const target=locations.get(id);
+   const link=text('button',target?.name||id);
+   link.onclick=()=>{target.element.open=true;target.element.scrollIntoView({block:'nearest'});};
+   link.disabled=!target;
+   return link;
+  };
+  const assetPanel=text('section');
+  assetPanel.append(text('h3','资产图'));
+  for(const node of assets.nodes){
+   const location=node.file_path+':'+node.line_start;
+   const entry=text('details');
+   entry.append(text('summary',(auditAssetLabels[node.kind]||node.kind)+' · '+node.name+' · '+location),
+    text('p',node.binding==='UNKNOWN'?'调用绑定未知':node.id),viewCode(node.evidence_ref,node.id));
+   locations.set(node.id,{name:node.name,element:entry});
+   assetPanel.append(entry);
+  }
+  for(const edge of assets.edges){
+   const source=locations.get(edge.from_id);
+   if(!source)continue;
+   const row=text('p');
+   row.append(text('span',({DECLARES:'声明',CONTAINS:'包含',LOCAL_DECLARATION_CANDIDATE:'本地声明候选'})[edge.kind]||edge.kind),
+    assetLink(edge.to_id));
+   source.element.append(row);
+  }
+  if(!assets.nodes.length)assetPanel.append(text('p','本批没有可查看的 Spring 事实。'));
+  for(const gap of assets.gaps||[]){
+   assetPanel.append(text('p',[gap.file_path,gap.label].filter(Boolean).join(' · ')));
+  }
+  const auditPanel=text('section');
+  auditPanel.append(text('h3','审计图'));
+  const state={COMPLETE:'本轮计划范围已完成',PARTIAL:'部分完成',WORKING:'取证中',PLANNING:'规划中'};
+  if(audit.stop_reason)auditPanel.append(text('p',(state[audit.status]||audit.status)+' · '+audit.stop_reason));
+  for(const task of audit.tasks){
+   const detail=text('details');
+   detail.append(text('summary',task.id+' · '+task.title),text('p',task.question||''),
+    text('p','状态 '+(state[task.state]||({VERIFIED:'证据已核验',RUNNING:'取证中',QUEUED:'待领取'})[task.state]||task.state)));
+   if(task.depends_on.length)detail.append(text('p','依赖 '+task.depends_on.join('、')));
+   if(task.conclusion)detailBlock(detail,'审计结论',task.conclusion);
+   if(task.hypotheses.length)detailBlock(detail,'Worker 假设',task.hypotheses.join('；'));
+   if(task.gaps.length)detailBlock(detail,'未覆盖',task.gaps.join('；'));
+   for(const id of task.asset_ids)detail.append(assetLink(id));
+   for(const ref of task.evidence_refs)detail.append(viewCode(ref));
+   auditPanel.append(detail);
+  }
+  if(!audit.tasks.length)auditPanel.append(text('p','本批没有已记录的审计任务。'));
+  for(const gap of audit.gaps)auditPanel.append(text('p',gap));
+  body.replaceChildren(assetPanel,auditPanel,output);
+ }catch(error){body.replaceChildren(text('p',error.message));}
+}
 initialize();
 </script></body></html>

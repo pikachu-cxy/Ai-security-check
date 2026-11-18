@@ -252,11 +252,15 @@ def batch_report_page(result, check):
             rendered_risks += 1
     needs_link = bool(rendered_risks or totals.get('confirmed') or totals.get('inconclusive')
                       or totals.get('false_positives') or totals.get('duplicates') or page['gaps'])
+    from .audit_graph_view import report_lines
+    audit_lines = report_lines(check)
+    needs_link = needs_link or bool(audit_lines)
     url = session_url(check['workspace'], check['owner'], check_ref=page['check_ref'],
                       scan_id=page['scan_id'], seq=page['dirty_seq'])
     page['session_url'] = url
     page['link_in_report'] = False
     if page['next_offset'] is None:
+        sections.extend(audit_lines)
         if totals.get('duplicates'):
             sections.append(f"{totals['duplicates']} 条重复告警已关联到同批确认项。")
         if totals.get('false_positives'):
@@ -359,10 +363,30 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
     require(type(offset) is int and offset >= 0 and (limit is None or type(limit) is int and 1 <= limit <= 20),
             'DEVELOPMENT_RISK_PAGE_INVALID')
     mode = marker['mode']
+    from .deep_audit import current as deep_current, finish as finish_deep
+    job = deep_current(check)
+    if offset == 0 and job and job['stage'] in {'PLANNING', 'WORKING'}:
+        ready = job['tasks'] and all(task['state'] == 'VERIFIED' for task in job['tasks'])
+        reason = '宿主收尾时核对已提交的任务' if ready else '宿主收尾时仍有待处理的审计计划或证据'
+        try:
+            finish_deep(service, reason)
+        except ValueError as error:
+            if getattr(error, 'reason_code', None) != 'DEEP_AUDIT_FINALIZATION_CHANGED':
+                raise
+            latest = service.current_check()
+            require(latest['dirty_seq'] == seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            finish_deep(service, '宿主收尾时收到了新的审计回执')
+        check = service.current_check()
+        require(check['dirty_seq'] == seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+        with service.checks.transaction() as db:
+            current = service.checks._get(db, service.ref)
+            require(current['dirty_seq'] == seq, 'DEVELOPMENT_RISK_VERSION_STALE')
+            current['stop_noticed_audit_revision'] = current.get('audit_result_revision', 0)
+            service.checks._put(db, service.ref, current)
     if mode == 'REVIEW':
         from .development_risks import review_progress
         work = review_progress(check, check.get('security_result') or service.load())
-        if not work['pending_scanner_ids'] and work['pending_business_paths']:
+        if not work['pending_scanner_ids'] and (work['pending_business_paths'] or job):
             page = service.get(offset, limit, include_history=False, batch_version=(seq, scan),
                                whole_report=limit is None)
         else:
@@ -404,6 +428,8 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
                      'PARTIAL':'存在覆盖限制', 'INTERRUPTED':'已中断', 'NEEDS_REVIEW':'源码更新，需补审',
                      'CANCELLED':'已取消', 'READY':'待派发', 'RUNNING':'进行中'}.get(audit['status'], '未完成')
             text += '\n\n业务逻辑审计'+label+'；本次仅交付已保存的发现，不能据此声称业务审计完成。'
+        from .audit_graph_view import report_lines
+        text += ''.join('\n\n' + line for line in report_lines(check))
         page = dict(check_ref=service.ref, dirty_seq=seq, scan_id=scan,
                     report_text=text.strip(), scanner_run=False, risks=selected,
                     gaps=['STATIC_SCAN_INCOMPLETE', *([reason] if reason in {'STOP_HANDOFF_INTERRUPTED', 'STOP_CLOSEOUT_FAILED'} else [])],

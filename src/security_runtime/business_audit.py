@@ -13,6 +13,15 @@ def status(check):
     job = dict(check.get('parallel_audit') or {})
     if not batch_config(check)['agent']['audit_business_logic']:
         return dict(status='DISABLED')
+    from .deep_audit import current
+    deep = current(check)
+    if deep:
+        from .incremental_audit import progress
+        stage = deep['stage']
+        return dict(progress(check), streaming=True, status=(
+            stage if stage in {'COMPLETE', 'PARTIAL'} else
+            'INTERRUPTED' if time.time() >= deep['deadline'] else
+            'READY' if stage == 'PLANNING' else 'RUNNING'))
     if check.get('audit_delegate'):
         from .incremental_audit import progress
         grant = check.get('audit_delegate') or {}
@@ -54,6 +63,16 @@ def continuation(check):
         return None
     from .incremental_audit import progress
     state = progress(check)
+    from .deep_audit import current
+    deep = current(check)
+    if deep:
+        if deep['stage'] in {'COMPLETE', 'PARTIAL'}:
+            return None
+        return dict(contract='deep-business-audit-v1', **state,
+            next_action=dict(tool='manage_development_audit', arguments=dict(
+                workspace_path=check['workspace'], check_ref=check['check_ref'], action='deep_status')),
+            instructions='沿原深度审计读取状态。尚有关键证据缺口时调用 deep_finish 说明停止原因并继续原报告交付。'
+                         '保持已经保存的证据和发现，不在 Stop 新派发任务或循环查状态。')
     if not state['pending_paths']:
         return None
     grant = check.get('audit_delegate') or {}
@@ -76,6 +95,9 @@ def revalidate(risks, check, row):
     if check.get('audit_stream'):
         from .audit_stream_service import revalidate as revalidate_stream
         revalidate_stream(risks, check, row)
+    if check.get('deep_audit'):
+        from .deep_audit import revalidate as revalidate_deep
+        revalidate_deep(risks, check, row)
     job = check.get('parallel_audit') or {}
     if job.get('status') not in {'COMPLETE', 'PARTIAL'} or job.get('dirty_seq') != check['dirty_seq']:
         return
@@ -170,6 +192,11 @@ def offer(hooks, root, owner, ref, *, prefer_active_executor=False):
         check.update(audit_offered_seq=check['dirty_seq'], audit_offered_at=time.time())
         store._put(db, ref, check)
         active = continuation(check) if prefer_active_executor else None
+    if batch_config(check)['development']['business_audit_mode'] == 'deep':
+        return ('本轮启用深度业务审计，check_ref='+ref+'。通过 development_review 调用 manage_development_audit'
+                ' 的 deep_prepare，使用当前 workspace_path 和父 session_ref。仅当前宿主实际有并行子 Agent 能力时'
+                '传 host_parallel=true。按返回指令规划并并发派发，子 Agent 直接提交证据，父任务继续开发。'
+                '宿主不支持时沿返回的单 Worker registration 继续并保留降级原因。Stop 沿原检查交付。')
     if active and active.get('agent_ref'):
         import json
         return ('本轮业务审计有新增文件待审：check_ref='+ref+'，实际子任务 ID='+

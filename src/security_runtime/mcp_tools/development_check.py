@@ -5,6 +5,7 @@ from typing import Annotated, Literal
 from ..development_risks import Observation, ScannerReview, BusinessReview, ScanId
 from ..development_views import EvidenceWindow
 from ..performance_trace import timed_review
+from ..deep_audit import AuditTask, TaskResult
 
 
 TOOLS = frozenset({'manage_development_audit', 'process_development_audit', 'get_development_config', 'begin_development_check', 'record_development_changes',
@@ -31,12 +32,22 @@ def register(server, registry, *, application):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def manage_development_audit(check_ref: str, action: Literal['prepare','status','started','cancel','unsupported','failed',
-                                 'stream_prepare','stream_started','stream_cancel','stream_status','stream_authorize_paths','stream_rotate','stream_failed'],
+                                 'stream_prepare','stream_started','stream_cancel','stream_status','stream_authorize_paths','stream_rotate','stream_failed',
+                                 'deep_prepare','deep_plan','deep_started','deep_status','deep_finish','deep_authorize_paths'],
                                  workspace_path: str | None = None, session_ref: str | None = None,
                                  audit_id: str | None = None, agent_ref: str | None = None,
                                  audit_token: str | None = None,
-                                 related_paths: Annotated[list[str], Field(max_length=50)] | None = None) -> dict:
-        """Manage a read-only business audit during development. Prefer stream_prepare, actually spawn a host subagent, then stream_started with its real ID. Pass the task-scoped capability to that child for direct process_development_audit calls; edits queue incremental work without cancelling the task. stream_status preserves pending/interrupted facts and does not dispatch a model. Legacy unprefixed actions retain their version-bound handoff contract."""
+                                 related_paths: Annotated[list[str], Field(max_length=50)] | None = None,
+                                 tasks: Annotated[list[AuditTask], Field(max_length=4)] | None = None,
+                                 reason: Annotated[str, Field(max_length=500)] | None = None,
+                                 task_id: Annotated[str, Field(max_length=20)] | None = None,
+                                 host_parallel: bool = False) -> dict:
+        """Manage a read-only business audit during development. Standard mode uses stream_prepare and stream_started with the actual host child ID. Optional deep mode uses deep_prepare, deep_plan, separate deep_started registrations, deep_status and deep_finish. deep_authorize_paths grants new related paths to one task. Pass each child its own capability for direct process_development_audit calls. Only the host starts models. Legacy unprefixed actions retain their handoff contract."""
+        if action.startswith('deep_'):
+            from ..deep_audit import manage
+            return manage(risks(check_ref, workspace_path, session_ref), action.removeprefix('deep_'),
+                          tasks=tasks or [], agent_ref=agent_ref, reason=reason,
+                          related_paths=related_paths or [], host_parallel=host_parallel, task_id=task_id)
         if action.startswith('stream_'):
             from ..audit_stream_service import manage
             return manage(risks(check_ref, workspace_path, session_ref), action.removeprefix('stream_'),
@@ -55,8 +66,9 @@ def register(server, registry, *, application):
                                   batch_id: str | None = None, request_id: str | None = None,
                                   windows: Annotated[list[EvidenceWindow], Field(max_length=20)] | None = None,
                                   observations: Annotated[list[Observation], Field(max_length=50)] | None = None,
-                                  business_reviews: Annotated[list[BusinessReview], Field(max_length=50)] | None = None) -> dict:
-        """Delegated incremental business audit only. Parent prepares and binds the actual child, then passes its task-scoped capability. Child claims fixed input, reads allowed evidence and submits directly; submit also offers the next batch. No parent session credential, scan, source edit, scanner-candidate dismissal or user disposition authority. Reuse request_id on retries. Received is distinct from applied; stale results remain stored and need revalidation. Keep capability out of reports, URLs and files."""
+                                  business_reviews: Annotated[list[BusinessReview], Field(max_length=50)] | None = None,
+                                  task_result: TaskResult | None = None) -> dict:
+        """Delegated read-only business audit. Child claims fixed input, reads allowed evidence and submits directly with a stable request_id. In deep mode use task.batch_id and include task_result with the structured conclusion, evidence and gaps, then claim the next task. VERIFIED is a validated task receipt, with audit publication handled separately by Runtime. No parent session credential, scan, source edit, scanner-candidate dismissal or user disposition authority. Keep capability out of reports, URLs and files."""
         from ..audit_stream_adapter import delegated_risks
         from ..audit_stream_service import process
         service = delegated_risks(application, workspace_path, check_ref, audit_token, agent_ref)
@@ -64,7 +76,7 @@ def register(server, registry, *, application):
             batch_id=batch_id, request_id=request_id,
             windows=[w.model_dump() if hasattr(w, 'model_dump') else w for w in (windows or [])],
             observations=[v.model_dump() for v in (observations or [])],
-            business_reviews=[v.model_dump() for v in (business_reviews or [])])
+            business_reviews=[v.model_dump() for v in (business_reviews or [])], task_result=task_result)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     @timed_review

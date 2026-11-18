@@ -26,6 +26,7 @@ DEFAULTS = {
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
     'development': {'business_audit_delivery': 'fast', 'review_response_bytes': 65536, 'repair_recheck_enabled': False,
+                    'business_audit_mode': 'standard', 'business_audit_workers': 2,
                     'stop_fallback': {'enabled': True, 'wait_mode': 'bounded', 'native_wait_seconds': 18, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 
@@ -126,6 +127,9 @@ def validate_preferences(values):
         raise ValueError('USER_CONFIG_REVIEW_RESPONSE_OUT_OF_RANGE')
     if values['development']['business_audit_delivery'] not in {'fast', 'wait'}:
         raise ValueError('USER_CONFIG_INVALID_AUDIT_DELIVERY')
+    if (values['development']['business_audit_mode'] not in {'standard', 'deep'}
+            or values['development']['business_audit_workers'] not in {2, 3}):
+        raise ValueError('USER_CONFIG_INVALID_DEEP_AUDIT')
     for section in (*values['scan'].values(), values['storage']['explicit_scan_jobs'], values['storage']['scan_publication']):
         if any(type(v) is not int or v < 0 for v in section.values()):
             raise ValueError('USER_CONFIG_LIMIT_MUST_BE_NONNEGATIVE_INTEGER')

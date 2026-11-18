@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(path.join(__dirname,'../src/security_runtime/assets/risk_dashboard.html'),'utf8');
 class Element {
  constructor(tag='div'){this.tag=tag;this.value='';this.textContent='';this.children=[];this.style={};this.dataset={};this.checked=false;this.classList={add:()=>{},remove:()=>{},toggle:()=>{}}}
- append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} focus(){} showModal(){this.open=true} close(){this.open=false} addEventListener(n,fn){this['on'+n]=fn}
+ append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} focus(){} scrollIntoView(){} showModal(){this.open=true} close(){this.open=false} addEventListener(n,fn){this['on'+n]=fn}
  querySelectorAll(selector){return this.children.flatMap(c=>[...((c.tag==='input'||c.tag==='select')?[c]:[]),...c.querySelectorAll(selector)])}
 }
 const row={id:'risk1',title:'<script>unsafe</script>',editor:'codex',editor_label:'Codex',project:'project',location:'query.py:2',severity:'高',status:'待处理',editable:true,revision:'revision',description:'description'};
@@ -55,6 +55,26 @@ test('history diagnostics expose the affected scope and distinguish indexing fro
 });
 
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
+test('local audit tasks open their asset and request scoped evidence code',async()=>{
+ const asset={id:'asset1',kind:'ENTRY',name:'refund',file_path:'Refund.java',line_start:104,evidence_ref:'ref1'};
+ const task={id:'w1-t1',title:'归属',state:'VERIFIED',question:'退款是否检查归属？',asset_ids:['asset1'],
+   conclusion:'观察到归属校验',hypotheses:[],depends_on:[],evidence_refs:['ref1'],gaps:[]};
+ const graph={asset_graph:{nodes:[asset],edges:[]},audit_graph:{tasks:[task],gaps:[]}};
+ const code={absolute_path:'/fixture/Refund.java',line_start:104,line_end:104,
+   current:{matches_record:true,lines:[{number:104,text:'verifyOwner(caller);',highlight:true}]}};
+ const {ctx,els,requests}=await page({search:'?editor=codex&workspace=work&check=check1&seq=2',
+   get:url=>url.startsWith('/api/audit-graphs?')?(url.includes('evidence=')?code:graph):null});
+ vm.runInContext('auditGraphButton.onclick()',ctx);
+ await tick();
+ const [assets,audit,output]=els.auditGraphBody.children;
+ audit.children[1].children.find(b=>b.tag==='button'&&b.textContent==='refund').onclick();
+ assert.equal(assets.children[1].open,true);
+ await assets.children[1].children.find(b=>b.tag==='button').onclick();
+ const evidenceRequest=requests.at(-1).url;
+ assert.match(evidenceRequest,/seq=2/);
+ assert.match(evidenceRequest,/evidence=ref1&asset=asset1/);
+ assert.equal(output.children[0].textContent,'/fixture/Refund.java:104');
+});
 test('project to worktree to session navigation isolates siblings and risk filters',async()=>{
  const parent=(p,w,editor='codex')=>({project_id:p,workspace_id:w,editor,workspace:'/'+w});
  const entity=(kind,id,scope,parents)=>({kind,id,name:id,scope,parents,risk_count:1,session_count:1,workspace_count:2});

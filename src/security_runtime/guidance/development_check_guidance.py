@@ -17,7 +17,9 @@ REQUIRED 才执行对应分析，SKIPPED_BY_CONFIG 表示按配置跳过，不�
 两项均关闭时只读取并报告扫描器结果，不额外读取代码、不提交 Agent 复核、不把候选当作已确认漏洞。
 静态风险由产品独立保存；历史 Agent 结论不能当作新版本复核。以下 Agent 复核要求只适用于开启的项。
 用户另行明确请求专项审计时走专项流程，不伪造自动检查已经完成。
-业务审计开启后，每轮开发新建只读子 Agent；本轮新增和修改文件合并为增量队列，不为每个文件创建子 Agent，也不跨开发轮次复用原执行者。使用返回的 round_id 后缀命名子任务，避免与旧子任务重名；历史结果仍由产品保留。
+收到深度业务审计派发提示时，主会话使用 deep_prepare 和当前 owner 身份。只有当前宿主具备多个真实并行子 Agent 时才传 host_parallel=true；返回单 Worker 交接包时走标准流式流程。
+深度模式的 Planner 只读取 deep_prepare 的局部事实和之后 deep_status 的增量摘要。按业务问题提出 deep_plan，再并发创建配置数量的真实只读 Worker；分别通过 deep_started 登记真实 agent_ref 并独立交接 child_call。Worker 自己领取、取证、提交 task_result 并领取后续任务。主会话只协调状态与规划。关键缺口最多补一轮，由 deep_finish 提议结束并记录理由，最终状态以 Runtime 判断为准。
+标准业务审计开启后，每轮开发新建只读子 Agent；本轮新增和修改文件合并为增量队列，不为每个文件创建子 Agent，也不跨开发轮次复用原执行者。使用返回的 round_id 后缀命名子任务，避免与旧子任务重名；历史结果仍由产品保留。
 首批有效编辑后主 Agent 直接用 manage_development_audit(action="stream_prepare") 取得 registration，无需先查 stream_status，也不要等开发结束才派发。实际创建只读子 Agent（先等待完整交接包）后，将 registration 加真实 agent_ref 和当前父会话 session_ref 调用 stream_started；把返回的完整 child_call 原样交给子 Agent。凭据只在必要的子任务上下文传递，不写入报告、URL、项目文件；不向子 Agent 转交父会话 session_ref。
 子 Agent 原样执行 child_call 领取固定批次并取得证据。必填 workspace_path、check_ref、agent_ref、audit_token、action；不得省略或猜测，首次证据足够时不另调 read；缺失证据用 action="read" 批量读取。关联路径未获授权时返回 requested_related_paths，由主 Agent 使用 stream_authorize_paths 明确授权，不能绕过范围校验。
 子 Agent 自己判断并以 action="submit"、batch_id、稳定 request_id、observations 和 business_reviews 直接保存，主 Agent 不转抄结果。每项保留理由、证据、coverage 和实际 uncovered。提交回执同时提供下一批；暂时无增量时结束当前执行，本轮后续编辑才可续接它，不忙轮询。Stop 固定范围后保存完成即结束本轮审计，下一轮重新创建执行者，旧授权不能领取新轮文件。

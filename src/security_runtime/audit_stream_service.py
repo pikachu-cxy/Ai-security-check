@@ -13,6 +13,9 @@ from .scan_request import relative_path
 
 
 def authenticate(check, token, agent_ref=None):
+    if isinstance(token, str) and token.startswith('deep1-'):
+        from .deep_audit import authenticate as authenticate_deep
+        return authenticate_deep(check, token, agent_ref)
     grant = check.get('audit_delegate') or {}
     require(isinstance(token, str) and 20 <= len(token) <= 200, 'AUDIT_CAPABILITY_INVALID')
     require(not grant.get('revoked') and grant.get('token_hash') and
@@ -38,6 +41,8 @@ def manage(risks, action, *, agent_ref=None, related_paths=(), audit_token=None)
         require(batch_config(check)['agent']['audit_business_logic'], 'BUSINESS_AUDIT_DISABLED')
         grant = check.get('audit_delegate') or {}
         if action in {'prepare', 'rotate'}:
+            from .deep_audit import current
+            require(not current(check), 'DEEP_AUDIT_ACTIVE')
             state.record_changes(check, check.get('observed_paths', []) if not check.get('audit_stream') else [])
             round_id = state.progress(check).get('round_id')
             if not grant or grant.get('revoked') or grant.get('round_id') != round_id or action == 'rotate':
@@ -101,11 +106,17 @@ def _batch(check, batch_id, token, agent_ref):
 
 
 def _public_batch(batch):
-    return {k: v for k, v in batch.items() if k not in {'token', 'token_hash', 'receipts'}}
+    return {k: v for k, v in batch.items() if k not in {'token', 'token_hash', 'receipts', 'asset_graph'}}
 
 
 def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=None,
-            windows=None, observations=(), business_reviews=()):
+            windows=None, observations=(), business_reviews=(), task_result=None):
+    if isinstance(audit_token, str) and audit_token.startswith('deep1-'):
+        from .deep_audit import process as process_deep
+        return process_deep(risks, action, audit_token=audit_token, agent_ref=agent_ref,
+            batch_id=batch_id, request_id=request_id, windows=windows, observations=observations,
+            business_reviews=business_reviews, task_result=task_result)
+    require(task_result is None, 'DEEP_AUDIT_RESULT_INVALID')
     authenticate(risks.current_check(), audit_token, agent_ref)
     if action == 'claim':
         with risks.checks.transaction() as db:
@@ -120,9 +131,21 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             risks.checks._put(db, risks.ref, check)
         result = dict(batch=_public_batch(batch) if batch else None, progress=state.progress(check), scanner_run=False)
         if batch.get('batch_id'):
+            from . import audit_assets
+            windows, nodes, edges, gaps = audit_assets.plan(
+                risks.root, batch['versions'], grant.get('related_paths', []))
             result['context'] = process(risks, 'read', audit_token=audit_token, agent_ref=agent_ref,
-                batch_id=batch['batch_id'], windows=[dict(file_path=p, start_line=1, end_line=80)
-                    for p in list(batch['versions'])[:8]])
+                batch_id=batch['batch_id'], windows=windows)
+            graph = audit_assets.bound(audit_assets.project(
+                nodes, edges, gaps, result['context']['evidence']), 6500)
+            result['context']['asset_graph'] = graph
+            with risks.checks.transaction() as db:
+                current = risks.checks._get(db, risks.ref)
+                live = _batch(current, batch['batch_id'], audit_token, agent_ref)
+                require(current['dirty_seq'] == result['context']['dirty_seq'], 'AUDIT_ROUND_CHANGED')
+                live['asset_graph'] = graph
+                live['asset_graph_seq'] = current['dirty_seq']
+                risks.checks._put(db, risks.ref, current)
             result['submission_contract'] = dict(
                 observation_required=[name for name, field in Observation.model_fields.items() if field.is_required()],
                 observation_extra_fields_allowed=False,
@@ -271,6 +294,11 @@ def valid_reviews(check):
         if record['seq'] != latest.get(name):
             continue
         receipt = stream['receipts'][record['request_id']]
+        batch = stream['batches'].get(receipt['batch_id'], {})
+        if batch.get('aggregate'):
+            job = check.get('deep_audit') or {}
+            if job.get('publication_id') != receipt['batch_id'] or job['dirty_seq'] != check['dirty_seq']:
+                continue
         if name not in receipt.get('applied_paths', []):
             continue
         for review in receipt['payload'].get('business_reviews', []):

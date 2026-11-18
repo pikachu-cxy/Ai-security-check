@@ -121,7 +121,8 @@ def code_id():
     names = ('dashboard_service.py', 'risk_dashboard.py', 'dashboard_records.py',
              'dashboard_catalog.py', 'dashboard_presentation.py', 'dashboard_sessions.py', 'dashboard_health.py', 'dashboard_detail.py', 'dashboard_history.py', 'dashboard_entities.py', 'dashboard_export.py', 'risk_management.py',
              'project_identity.py', 'user_config.py', 'assets/risk_dashboard.html',
-             'development_risks.py', 'business_audit.py', 'repair_notifications.py')
+             'development_risks.py', 'business_audit.py', 'audit_graph_view.py',
+             'deep_audit.py', 'repair_notifications.py')
     digest = hashlib.sha256()
     for name in names:
         digest.update(name.encode())

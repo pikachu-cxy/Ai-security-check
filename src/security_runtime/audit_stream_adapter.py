@@ -14,7 +14,9 @@ def input_failure(arguments, errors):
         else:
             yield error
     known = {'check_ref', 'workspace_path', 'agent_ref', 'audit_token', 'action',
-             'batch_id', 'request_id', 'observations', 'business_reviews', 'windows'}
+             'batch_id', 'request_id', 'observations', 'business_reviews', 'windows', 'task_result',
+             'conclusion', 'gaps', 'hypotheses', 'resolves', 'suggestions',
+             'from_id', 'to_id', 'from_line', 'to_line', 'evidence_ref', 'kind'}
     from .development_risks import Observation, BusinessReview
     from .development_report import ReportContent
     known.update(Observation.model_fields)

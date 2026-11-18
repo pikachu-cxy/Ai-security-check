@@ -57,6 +57,14 @@ def record_changes(check, paths):
                        cutoff_seq=None, required={}, pending={}, accepted={})
         stream['rounds'].append(current)
     affected = set(names)
+    deep = check.get('deep_audit')
+    if deep and deep['dirty_seq'] != check['dirty_seq'] and deep['stage'] != 'SUPERSEDED':
+        deep['stage'] = 'SUPERSEDED'
+        affected.update(deep['paths'])
+        for task in deep['tasks']:
+            if task['state'] == 'RUNNING':
+                cancel(check, task['batch_id'])
+                task['state'] = 'SUPERSEDED'
     for name in names:
         affected.update(stream['dependents'].get(name, []))
     # A frozen historical input cannot be re-read after a subsequent edit.
@@ -123,6 +131,8 @@ def claim(check, agent_ref, *, now=None, limit=50, token=None, round_id=None):
     now = time.time() if now is None else now
     stream = _stream(check)
     for batch in stream['batches'].values():
+        if batch.get('task_id'):
+            continue
         if round_id is not None and batch['round_id'] != round_id:
             continue
         if batch['agent_ref'] == agent_ref and batch['status'] in {'RUNNING', 'RECEIVED'}:
@@ -130,7 +140,7 @@ def claim(check, agent_ref, *, now=None, limit=50, token=None, round_id=None):
                 authenticate(check, batch['batch_id'], token, agent_ref)
             return {k: v for k, v in batch.items() if k != 'token_hash'}
     held = {(b['round_id'], p, seq) for b in stream['batches'].values()
-            if b['status'] in {'RUNNING', 'RECEIVED'} for p, seq in b['versions'].items()}
+            if b['status'] in {'RUNNING', 'RECEIVED'} for p, seq in b.get('versions', {}).items()}
     for current in stream['rounds']:
         if round_id is not None and current['round_id'] != round_id:
             continue

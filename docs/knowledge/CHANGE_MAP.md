@@ -146,3 +146,10 @@ OpenGrep macOS 载荷复用：`opengrep_payload.py` 在安装/显式准备时从
 - 完整报告与跨来源重复项：`development_views.py`、`review_delivery.py`、`development_risks.py::_submit`；只在结果读取与保存阶段处理。
 - 子任务交接与字段错误：`audit_stream_service.py`、`audit_stream_adapter.py`、`business_audit.py`、`mcp_tool_groups.py`；回归 `test_three_mode_repairs.py`、`test_audit_stream_mcp.py`。
 - 普通零候选回复：`tasks/ownership.py::session_context` 与 `guidance/development_check_guidance.py`；不自行预告待返回报告。
+## 局部业务审计入口
+
+| 修改范围 | 源码入口 | 定向验证 |
+| --- | --- | --- |
+| Spring 事实与首包 | `audit_assets.py`、`audit_stream_service.py:process` | `tests/test_audit_assets.py`、`tests/test_audit_stream_service.py` |
+| Planner 协议、任务租约与最终发布 | `deep_audit.py`、`incremental_audit.py`、`development_risks.py`、`mcp_tools/development_check.py` | `tests/test_deep_audit.py`、`tests/test_incremental_audit.py`、`tests/test_business_audit.py` |
+| 原报告交付和两图追溯 | `development_views.py`、`development_stop.py`、`audit_graph_view.py`、`risk_dashboard.py`、`assets/risk_dashboard.html` | `tests/test_deep_audit.py`、`tests/test_dashboard_delivery.py`、`tests/test_risk_dashboard_ui.cjs` |

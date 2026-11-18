@@ -72,10 +72,13 @@ class SignedRecords:
     def _paths(self):
         for path in (self.path, *(Path(str(self.path)+s) for s in ('-journal', '-wal', '-shm'))):
             no_links(path)
-            if path.exists():
-                info = path.stat()
-                if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or self.max_database_bytes and info.st_size > self.max_database_bytes:
-                    raise ValueError('Task operation storage unavailable')
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                continue  # SQLite may remove a sidecar when a concurrent transaction commits.
+            if (not stat.S_ISREG(info.st_mode) or getattr(info, 'st_file_attributes', 0) & 0x400
+                    or info.st_nlink != 1 or self.max_database_bytes and info.st_size > self.max_database_bytes):
+                raise ValueError('Task operation storage unavailable')
 
     def _key(self):
         path = self.path.parent / 'snapshot.key'

@@ -158,6 +158,8 @@ def review_progress(check, row):
                 row.get('imported_scan_id') == check.get('scan_id'))
     scanner_done = current and imported and not (candidates - assessed)
     business_done = current and not pending_paths
+    deep = check.get('deep_audit') or {}
+    deep_partial = deep.get('dirty_seq') == check['dirty_seq'] and deep['stage'] == 'PARTIAL'
     complete = current and any(policy.values()) and (
         not policy['review_scanner_findings'] or scanner_done) and (
         not policy['audit_business_logic'] or business_done)
@@ -165,6 +167,7 @@ def review_progress(check, row):
         scanner_review=('SKIPPED_BY_CONFIG' if not policy['review_scanner_findings'] else
                         'COMPLETE' if scanner_done else 'PENDING'),
         business_review=('SKIPPED_BY_CONFIG' if not policy['audit_business_logic'] else
+                         'PARTIAL' if deep_partial else
                          ('PARTIAL' if coverage_gaps else 'COMPLETE') if business_done else 'PENDING'),
         inconclusive_scanner_ids=inconclusive if policy['review_scanner_findings'] else [],
         business_coverage_gaps=coverage_gaps if policy['audit_business_logic'] else [],
@@ -265,8 +268,9 @@ class DevelopmentRisks:
         with span('review.evidence_save'), self.store.transaction() as db:
             row = self.load(db)
             require(ref in row['evidence'] or len(row['evidence']) < 256, 'DEVELOPMENT_RISK_EVIDENCE_LIMIT')
-            row['evidence'][ref] = evidence
-            self.store._put(db, self.ref, row)
+            if row['evidence'].get(ref) != evidence:
+                row['evidence'][ref] = evidence
+                self.store._put(db, self.ref, row)
         from .performance_trace import review_event
         review_event('evidence_read', check)
         return dict(evidence_ref=ref, **evidence,
@@ -363,9 +367,13 @@ class DevelopmentRisks:
             check = self.current_check()
             require(check['dirty_seq'] == expected_seq, 'DEVELOPMENT_RISK_VERSION_STALE')
             if stream_commit is not None:
-                from .audit_stream_service import authenticate, validate_commit
-                authenticate(check, stream_commit['token'], stream_commit['agent_ref'])
-                validate_commit(check, stream_commit)
+                if stream_commit.get('deep'):
+                    from .deep_audit import validate_finish
+                    validate_finish(self, self.load(db), check, stream_commit)
+                else:
+                    from .audit_stream_service import authenticate, validate_commit
+                    authenticate(check, stream_commit['token'], stream_commit['agent_ref'])
+                    validate_commit(check, stream_commit)
             if audit_id is not None:
                 import time
                 job = check.get('parallel_audit') or {}
@@ -383,7 +391,8 @@ class DevelopmentRisks:
             require(any(policy.values()), 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
             require(not business or policy['audit_business_logic'], 'DEVELOPMENT_AGENT_ANALYSIS_DISABLED')
             row = self.load(db)
-            self.import_scanner(row, check)
+            if not (stream_commit and stream_commit.get('deep')):
+                self.import_scanner(row, check)
             reviewed_ids = []
             normalized = []
             for index, value in enumerate(values):
@@ -571,9 +580,13 @@ class DevelopmentRisks:
                 current['parallel_audit']['covered_paths'] = sorted(covered)
                 current['parallel_audit']['reviewed_paths'] = sorted(coverage)
             if stream_commit is not None:
-                from .incremental_audit import complete
-                complete(current, stream_commit['batch_id'], stream_commit['request_id'],
-                         stream_commit['valid_paths'], dependencies=stream_commit['dependencies'])
+                if stream_commit.get('deep'):
+                    from .deep_audit import seal_finish
+                    seal_finish(current, stream_commit, business_records)
+                else:
+                    from .incremental_audit import complete
+                    complete(current, stream_commit['batch_id'], stream_commit['request_id'],
+                             stream_commit['valid_paths'], dependencies=stream_commit['dependencies'])
                 current['audit_result_revision'] = current.get('audit_result_revision', 0) + 1
             if final_report:
                 current['stop_offered_audit_revision'] = current.get('audit_result_revision', 0)
@@ -621,6 +634,9 @@ class DevelopmentRisks:
         row = check.get('security_result') or self.load()
         require(row['owner'] == self.development.owner and
                 row['root_identity'] == root_identity(self.root), 'DEVELOPMENT_RISK_OWNER_MISMATCH')
+        if whole_report and check.get('deep_audit'):
+            from .deep_audit import revalidate
+            revalidate(self, check, row)
         # Missing/stale projection is unknown, never a successful empty page.
         if ((check.get('finish_requested') and check['state'] in {'QUEUED', 'RUNNING'}) or
                 (check.get('scan_id') and (row.get('imported_scan_id') != check['scan_id'] or

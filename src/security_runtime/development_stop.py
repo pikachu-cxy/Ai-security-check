@@ -279,7 +279,8 @@ def native_closeout(service, root, row, deadline, offered, session_id):
         return report_notice(service, root, row, state, page, 'STOP_AUDIT_PENDING')
     if not (work['pending_scanner_ids'] or work['pending_business_paths']):
         active = [risk for risk in page['risks'] if not risk['reminder_suppressed']]
-        if active or page['next_offset'] is not None or state.get('gaps'):
+        from .deep_audit import current as deep_current
+        if active or page['next_offset'] is not None or state.get('gaps') or deep_current(row):
             return report_notice(service, root, row, state, page, 'STOP_RESULT_NOTICE')
         return None
     if service.owner['host'] in COMPACT_DEVELOPMENT_HOSTS:

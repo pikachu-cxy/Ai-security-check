@@ -285,6 +285,9 @@ class Handler(BaseHTTPRequestHandler):
                     raise ValueError('DETAIL_QUERY_INVALID')
                 self.reply(200, detail(query['id'], query['revision'],
                     context=int(query.get('context', '5')), catalog=self.server.catalog))
+            elif path == '/api/audit-graphs':
+                from .audit_graph_view import dashboard_view
+                self.reply(200, dashboard_view(self.query()))
             elif path == '/api/entities':
                 from .dashboard_entities import listing
                 query = self.query()

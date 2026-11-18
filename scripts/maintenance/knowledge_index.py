@@ -33,7 +33,7 @@ def collect():
     for path in sorted(SOURCE.rglob('*.py')):
         if any(part in {'rules', '__pycache__'} for part in path.relative_to(SOURCE).parts):
             continue
-        source_bytes = path.read_bytes()
+        source_bytes = path.read_bytes().replace(b'\r\n', b'\n')
         tree = ast.parse(source_bytes.decode('utf-8-sig'), filename=str(path))
         relative = path.relative_to(ROOT).as_posix()
         doc = ast.get_docstring(tree) or ''
