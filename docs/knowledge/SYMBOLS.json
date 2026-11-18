@@ -2130,84 +2130,76 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "6bb4db3e6bbdb12b8564c6d7e20c2cf9570b49604b16d72e1ef673f40049e5a4",
+      "sha256": "536e3bd0d54af7223a181175562cdd5914b6a87d2ac9341a4171e3ba9aecb182",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
           "name": "directory",
-          "line": 27
+          "line": 26
         },
         {
           "name": "endpoint",
-          "line": 32
+          "line": 31
         },
         {
           "name": "save_endpoint",
-          "line": 47
+          "line": 46
         },
         {
           "name": "live",
-          "line": 63
+          "line": 62
         },
         {
           "name": "address",
-          "line": 74
+          "line": 73
         },
         {
           "name": "session_url",
-          "line": 78
+          "line": 77
         },
         {
           "name": "NoRedirect",
-          "line": 107
+          "line": 106
         },
         {
           "name": "NoRedirect.redirect_request",
-          "line": 108
+          "line": 107
         },
         {
           "name": "code_id",
-          "line": 112
+          "line": 111
         },
         {
           "name": "health",
-          "line": 135
+          "line": 134
         },
         {
           "name": "healthy",
-          "line": 148
-        },
-        {
-          "name": "update_signature",
-          "line": 153
-        },
-        {
-          "name": "valid_update_grant",
-          "line": 157
+          "line": 147
         },
         {
           "name": "update_url",
-          "line": 166
+          "line": 152
         },
         {
           "name": "ensure",
-          "line": 177
+          "line": 161
         },
         {
           "name": "_save_status",
-          "line": 224
+          "line": 208
         },
         {
           "name": "_reason",
-          "line": 240
+          "line": 224
         },
         {
           "name": "startup_status",
-          "line": 249
+          "line": 233
         },
         {
           "name": "start_background",
-          "line": 261
+          "line": 245
         }
       ]
     },
@@ -10609,7 +10601,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "df2e728594269a17799d6c8f3a6289e5743eef887acff992b17468ab4d76d3bd",
+      "sha256": "38bd4e29bc51f41744db2f5f7564a9d7057de119b17778a467199490a5aae8b4",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10670,11 +10662,11 @@
         },
         {
           "name": "serve",
-          "line": 433
+          "line": 413
         },
         {
           "name": "launch",
-          "line": 453
+          "line": 433
         }
       ]
     },
@@ -11147,7 +11139,7 @@
     },
     {
       "path": "src/security_runtime/runtime_update.py",
-      "sha256": "b459cf34d20ed169b1e10176686cac2a46237505480a37b8cb59c329200a9124",
+      "sha256": "ea0f64d4b6e41ef54db43f049fad4c2bfe250f8f0cea285ddd57a2d047744908",
       "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
       "symbols": [
         {

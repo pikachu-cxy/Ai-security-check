@@ -248,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == '/health':
             if self.headers.get('Authorization') != 'Bearer ' + self.server.token:
                 self.send_error(403); return
-            self.reply(200, dict(service='risk-dashboard-v2', build=self.server.code_id, runtime_updates=2)); return
+            self.reply(200, dict(service='risk-dashboard-v2', build=self.server.code_id, runtime_updates=3)); return
         if path == f'/{self.server.token}/':
             self.send_response(303)
             self.send_header('Set-Cookie', f'dashboard={self.server.token}; HttpOnly; SameSite=Strict; Path=/')
@@ -342,10 +342,9 @@ class Handler(BaseHTTPRequestHandler):
             import threading
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
-        csrf = self.headers.get('X-CSRF-Token', '')
-        dashboard_write = self.authorized() and secrets.compare_digest(csrf, self.server.token)
         if (self.headers.get('Origin') != self.server.origin
-                or not dashboard_write and path not in ('/api/updates/session', '/api/updates')):
+                or (path != '/api/updates' and (not self.authorized()
+                    or not secrets.compare_digest(self.headers.get('X-CSRF-Token', ''), self.server.token)))):
             self.send_error(403); return
         try:
             if self.headers.get('Content-Type') != 'application/json' or self.headers.get('Transfer-Encoding'):
@@ -357,6 +356,12 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError('DASHBOARD_BODY_INVALID')
+            if path == '/api/updates':
+                from .runtime_update import apply_update
+                if set(data) != {'candidate_id'}:
+                    raise ValueError('UPDATE_BODY_INVALID')
+                self.reply(202, apply_update(data['candidate_id']))
+                return
             from .dashboard_records import mutate, create
             if path == '/api/actions':
                 if set(data) != {'items'} or not isinstance(data['items'], list) or not 1 <= len(data['items']) <= 200:
@@ -394,36 +399,11 @@ class Handler(BaseHTTPRequestHandler):
                 if set(data) != {'values','expected_revision'}:
                     raise ValueError('DASHBOARD_CONFIG_INVALID')
                 self.reply(200, save_config(**data))
-            elif path == '/api/updates/session':
-                from .dashboard_service import valid_update_grant
-                grant = data.get('grant')
-                if (set(data) != {'grant'} or not isinstance(grant, str)
-                        or not valid_update_grant(self.server.token, grant, grant.split('.', 1)[0])):
-                    self.send_error(403); return
-                self.send_response(204)
-                self.send_header('Set-Cookie',
-                    f'runtime_update={grant}; HttpOnly; SameSite=Strict; Path=/api/updates')
-                self.send_header('Cache-Control', 'no-store')
-                self.end_headers(); return
-            elif path == '/api/updates':
-                from .dashboard_service import valid_update_grant
-                from .runtime_update import apply_update
-                if not dashboard_write:
-                    cookies = SimpleCookie()
-                    cookies.load(self.headers.get('Cookie', ''))
-                    cookie = cookies.get('runtime_update')
-                    if (not valid_update_grant(self.server.token, csrf, data.get('candidate_id'))
-                            or not cookie or not secrets.compare_digest(cookie.value, csrf)):
-                        self.send_error(403); return
-                if set(data) != {'candidate_id'}:
-                    raise ValueError('UPDATE_BODY_INVALID')
-                self.reply(202, apply_update(data['candidate_id']))
-                return
             else:
                 self.send_error(404); return
             if self.server.catalog:
                 self.server.catalog.wake.set()
-        except (ValueError, CookieError) as exc:
+        except ValueError as exc:
             self.reply(409 if 'CONFLICT' in str(exc) else 400,
                        dict(error='版本冲突，请刷新后重试。' if 'CONFLICT' in str(exc) else '操作未保存，请检查参数与记录状态。'))
         except (OSError, sqlite3.Error):

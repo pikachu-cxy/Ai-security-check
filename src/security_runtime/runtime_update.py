@@ -367,7 +367,7 @@ def report_notice(report):
         if not candidate or version_key(candidate['version']) <= version_key(service.active()['version']):
             return None
         from .dashboard_service import update_url
-        url = update_url(candidate['id'])
+        url = update_url()
         batch = hashlib.sha256(json.dumps([report.get('check_ref'), report.get('dirty_seq'),
                                           report.get('scan_id')]).encode()).hexdigest()
         with service.connection(write=True) as db:
@@ -384,6 +384,6 @@ def report_notice(report):
         label = '查看并更新'
         return dict(current_version=__version__, target_version=candidate['version'], candidate_id=candidate['id'],
                     url=url, label=label, markdown=f'存在新版本是否更新：[{label}]({url})' if url else None,
-                    fallback=None if url else '存在新版本是否更新：请从已授权的风险管理页面进入工具更新。')
+                    fallback=None if url else '存在新版本是否更新：请在风险管理页面打开「工具更新」。')
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
         return None

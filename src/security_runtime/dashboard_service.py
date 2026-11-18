@@ -2,7 +2,6 @@
 from contextlib import closing
 import json
 import hashlib
-import hmac
 import os
 from pathlib import Path
 import re
@@ -150,27 +149,12 @@ def healthy(value):
     return bool(result and result.get('service') == 'risk-dashboard-v2' and result.get('build') == code_id())
 
 
-def update_signature(token, payload):
-    return hmac.digest(token.encode(), ('runtime-update:' + payload).encode(), 'sha256').hex()
-
-
-def valid_update_grant(token, grant, candidate):
-    match = re.fullmatch(r'([0-9a-f]{64})\.([0-9]{1,12})\.([0-9a-f]{64})', grant)
-    if not match:
-        return False
-    target, expiry, signature = match.groups()
-    return (target == candidate and int(expiry) > time.time()
-            and hmac.compare_digest(signature, update_signature(token, f'{target}.{expiry}')))
-
-
-def update_url(candidate):
+def update_url():
     value = endpoint()
     result = health(value)
     if (result and result.get('service') == 'risk-dashboard-v2'
-            and result.get('build') == code_id() and result.get('runtime_updates') == 2
-            and re.fullmatch(r'[0-9a-f]{64}', candidate)):
-        payload = f'{candidate}.{int(time.time()) + 86400}'
-        return f"http://127.0.0.1:{value['port']}/updates#grant={payload}.{update_signature(value['token'], payload)}"
+            and result.get('build') == code_id() and result.get('runtime_updates') == 3):
+        return f"http://127.0.0.1:{value['port']}/updates"
     return None
 
 

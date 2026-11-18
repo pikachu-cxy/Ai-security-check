@@ -118,7 +118,7 @@ def test_report_and_last_page_preserve_digest_and_deduplicate(installation, monk
     service, fake, _, clock = installation
     service.refresh()
     monkeypatch.setattr(update, 'installed_update', lambda: service)
-    monkeypatch.setattr(dashboard_service, 'update_url', lambda candidate: 'http://127.0.0.1:54321/updates')
+    monkeypatch.setattr(dashboard_service, 'update_url', lambda: 'http://127.0.0.1:54321/updates')
     fake.failure = 'offline'  # Report assembly uses only the installation cache.
     sample = dict(view='final_report', check_ref='check', dirty_seq=1, scan_id='scan',
                   risks=[], total=1, gaps=[], scope_unknown=False,
@@ -142,7 +142,7 @@ def test_report_delivery_scope_and_text_fallback(installation, monkeypatch, mode
     service, _, _, _ = installation
     service.refresh()
     monkeypatch.setattr(update, 'installed_update', lambda: service)
-    monkeypatch.setattr(dashboard_service, 'update_url', lambda candidate: None)
+    monkeypatch.setattr(dashboard_service, 'update_url', lambda: None)
     report = dict(check_ref='check', dirty_seq=1, scan_id='scan', host_review_completed=True,
                   report_text='saved report', total=1, gaps=[])
     if mode == 'static':
@@ -159,9 +159,7 @@ def test_report_delivery_scope_and_text_fallback(installation, monkeypatch, mode
         assert result == report
 
 
-@pytest.mark.parametrize('entry', ['dashboard_cookie', 'report_link'])
-def test_update_page_requires_authenticated_same_origin_post(installation, monkeypatch, entry):
-    from urllib.parse import urlsplit
+def test_update_page_accepts_same_origin_post_without_dashboard_authorization(installation, monkeypatch):
     from security_runtime.risk_dashboard import Server
     service, fake, _, _ = installation
     service.refresh()
@@ -180,43 +178,28 @@ def test_update_page_requires_authenticated_same_origin_post(installation, monke
         client.request(method, path, body=body, headers=headers or {})
         response = client.getresponse()
         response.read()
-        return response.status, response.getheader('Set-Cookie')
+        return response.status, response.read()
 
     try:
-        url = dashboard_service.update_url(candidate)
-        assert url.startswith(server.origin + '/updates#grant=')
-        assert server.token not in url
+        assert dashboard_service.update_url() == server.origin + '/updates'
         with monkeypatch.context() as mismatched:
             mismatched.setattr(dashboard_service, 'code_id', lambda: 'other-build')
-            assert dashboard_service.update_url(candidate) is None
+            assert dashboard_service.update_url() is None
         assert request('GET', '/updates')[0] == 200
         assert request('GET', '/api/updates')[0] == 200
         assert not jobs and not fake.downloads
         body = json.dumps({'candidate_id': candidate})
         headers = {'Origin': server.origin, 'Content-Type': 'application/json'}
-        assert request('POST', '/api/updates', headers, body)[0] == 403
-        if entry == 'report_link':
-            grant = urlsplit(url).fragment.removeprefix('grant=')
-            exchange = '/api/updates/session'
-            status, _ = request('POST', exchange, dict(headers, Origin='https://example.invalid'), json.dumps({'grant': grant}))
-            assert status == 403
-            status, _ = request('POST', exchange, headers, json.dumps({'grant': grant + '0'}))
-            assert status == 403
-            assert request('POST', '/api/updates', dict(headers, **{'X-CSRF-Token': grant}), body)[0] == 403
-            status, cookie = request('POST', exchange, headers, json.dumps({'grant': grant}))
-            assert status == 204 and 'HttpOnly; SameSite=Strict; Path=/api/updates' in cookie
-            headers.update({'Cookie': cookie.split(';', 1)[0], 'X-CSRF-Token': grant})
-            assert request('POST', '/api/updates', {k: v for k, v in headers.items() if k != 'X-CSRF-Token'}, body)[0] == 403
-            assert request('POST', '/api/updates', headers, json.dumps({'candidate_id': '0' * 64}))[0] == 403
-            assert request('POST', '/api/actions', headers, '{}')[0] == 403
-            assert request('POST', '/shutdown', headers, '{}')[0] == 403
-            with monkeypatch.context() as expired:
-                expired.setattr(dashboard_service.time, 'time', lambda: int(grant.split('.')[1]))
-                assert request('POST', '/api/updates', headers, body)[0] == 403
-            assert not jobs and not fake.downloads
-        else:
-            headers.update({'Cookie': 'dashboard=' + server.token, 'X-CSRF-Token': server.token})
         assert request('POST', '/api/updates', dict(headers, Origin='https://example.invalid'), body)[0] == 403
+        assert request('POST', '/api/updates', dict(headers, Host='example.invalid'), body)[0] == 403
+        assert request('POST', '/api/updates', {'Content-Type': 'application/json'}, body)[0] == 403
+        assert request('POST', '/api/updates', {'Origin': server.origin, 'Content-Type': 'text/plain'}, body)[0] == 400
+        assert request('POST', '/api/updates', headers, json.dumps({'candidate_id': '0' * 64}))[0] == 400
+        assert request('POST', '/api/updates', headers, json.dumps({'url': 'https://example.invalid'}))[0] == 400
+        assert request('POST', '/api/actions', headers, '{}')[0] == 403
+        assert request('POST', '/api/config', headers, '{}')[0] == 403
+        assert request('POST', '/shutdown', headers, '{}')[0] == 403
+        assert not jobs and not fake.downloads
         assert request('POST', '/api/updates', headers, body)[0] == 202
         assert request('POST', '/api/updates', headers, body)[0] == 202
         assert len(jobs) == 1 and not fake.downloads
