@@ -27,7 +27,7 @@ function size() {
 }
 function show(value) {
   const version = /^\d{1,9}\.\d{1,9}\.\d{1,9}$/;
-  const link = /^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/updates#grant=[0-9a-f]{64}\.[0-9]{1,12}\.[0-9a-f]{64}$/;
+  const link = /^http:\/\/127\.0\.0\.1:[0-9]{1,5}\/updates$/;
   updateUrl = value && version.test(value.current_version) && version.test(value.target_version)
     && /^[0-9a-f]{64}$/.test(value.candidate_id) && link.test(value.url) ? value.url : undefined;
   view.hidden = !updateUrl;
