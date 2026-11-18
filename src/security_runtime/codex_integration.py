@@ -91,9 +91,15 @@ def current_runtime() -> dict:
     return {'command': str(executable), 'prefix': [] if frozen else ['-I', '-m', 'security_runtime.cli'], 'kind': kind}
 
 
-def check_capabilities(info: dict, tools: set[str]) -> dict:
-    if not isinstance(info, dict) or info.get('version') != __version__:
-        raise IntegrationDiagnostic('RUNTIME_STALE')
+def check_capabilities(info: dict, tools: set[str], *, expected_version: str | None = None,
+                       expected_build_id: str | None = None) -> dict:
+    version = __version__ if expected_version is None else expected_version
+    if not isinstance(info, dict) or info.get('version') != version:
+        raise IntegrationDiagnostic('RUNTIME_STALE' if expected_version is None else 'DELIVERY_PROBE_VERSION_MISMATCH')
+    if expected_build_id is not None:
+        build = info.get('build_identity')
+        if not isinstance(build, dict) or build.get('build_id') != expected_build_id or build.get('version') != version:
+            raise IntegrationDiagnostic('DELIVERY_PROBE_BUILD_MISMATCH')
     features = info.get('features', {})
     from .mcp_tool_groups import available_operations
     tools = available_operations(info, tools)
@@ -111,7 +117,8 @@ def check_capabilities(info: dict, tools: set[str]) -> dict:
             'capability_contract': CONTRACT, 'mode': info.get('remediation', {}).get('mode', 'UNKNOWN')}
 
 
-def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
+def probe_runtime(runtime: dict, root: Path, env: dict, *, expected_version: str | None = None,
+                  expected_build_id: str | None = None) -> dict:
     """Only our own executable is probed, never an arbitrary config command."""
     command = [runtime['command'], *runtime['prefix']]
     # Global first-install/status probes may precede creating validated Codex
@@ -185,7 +192,8 @@ def probe_runtime(runtime: dict, root: Path, env: dict) -> dict:
                         return code
             return None
         raise IntegrationDiagnostic(failure(exc) or 'MCP_PROBE_FAILED') from None
-    return check_capabilities(mcp_info if global_mode else info, tools)
+    return check_capabilities(mcp_info if global_mode else info, tools,
+                              expected_version=expected_version, expected_build_id=expected_build_id)
 
 
 def product_hooks(runtime=None, state_directory=None) -> dict:

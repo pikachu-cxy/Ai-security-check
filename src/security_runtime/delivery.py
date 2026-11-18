@@ -355,7 +355,7 @@ class StableDelivery:
         return metadata
 
     @timed("install.capability_probe")
-    def _probe(self, bundle):
+    def _probe(self, bundle, metadata):
         if self.probe:
             return self.probe(bundle)
         from .codex_integration import probe_runtime
@@ -372,7 +372,9 @@ class StableDelivery:
             env = isolated_environment(root)
             env.update(SECURITY_RUNTIME_GLOBAL='1', SECURITY_RUNTIME_WORKSPACE='',
                        SECURITY_RUNTIME_INTEGRATION='codex', SECURITY_RUNTIME_MCP_SELF_TEST='1')
-            return probe_runtime({'kind': 'FROZEN', 'command': str(bundle / EXE), 'prefix': []}, root / 'codex-home', env)
+            return probe_runtime({'kind': 'FROZEN', 'command': str(bundle / EXE), 'prefix': []},
+                                 root / 'codex-home', env, expected_version=metadata['version'],
+                                 expected_build_id=metadata['build_id'])
 
     @verified_operation
     @timed("install.activate")
@@ -412,7 +414,7 @@ class StableDelivery:
                 raise IntegrationDiagnostic('DELIVERY_SLOT_CONFLICT')
             if not defer_capability_check:
                 report_progress(progress, 'CAPABILITY_CHECK')
-                capability = self._probe(target)
+                capability = self._probe(target, metadata)
                 if capability.get('status') != 'OK':
                     raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
             report_progress(progress, 'PREPARE_LAUNCHER')
@@ -536,7 +538,7 @@ class StableDelivery:
             if current['state_schema'] != previous['state_schema'] or previous['state_schema'] != STATE_SCHEMA:
                 raise IntegrationDiagnostic('DELIVERY_STATE_SCHEMA_INCOMPATIBLE')
             _require_storage_compatibility(current, previous)
-            if self._probe(self.slot(pointer['previous'])).get('status') != 'OK':
+            if self._probe(self.slot(pointer['previous']), previous).get('status') != 'OK':
                 raise IntegrationDiagnostic('DELIVERY_CAPABILITY_MISMATCH')
             # Retain a launcher understood by the rollback Runtime as well.
             # Old versions recognize launcher/launcher-v2 only; never force

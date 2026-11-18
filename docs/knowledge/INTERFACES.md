@@ -8,6 +8,8 @@
 
 `ui://ai-security-runtime/runtime-update` 使用 `text/html;profile=mcp-app`，支持标准初始化与 `ui/open-link`。报告工具暂未绑定资源，标准桥接会传送整份工具参数与结果。带代理的包仍用全局 `security-check mcp` 入口，按 `mcp_proxy_contract`、`mcp_hook_identity`、存储契约、初始化及发现结果和签名会话路由决定切换资格。需由同一连接读取 `get_runtime_info` 核实实际构建。
 
+安装或回滚切换活动槽位前，试启动按已核验目标清单比对 MCP 返回的版本和构建 ID，继续核验能力契约。版本或构建不符分别返回 `DELIVERY_PROBE_VERSION_MISMATCH` 和 `DELIVERY_PROBE_BUILD_MISMATCH`。
+
 ## 风险管理链接
 
 冻结包的后台身份复用已校验包 build_id，不读取归档中的源码路径。`start_risk_dashboard` 在全局 Codex/Cursor 接入均不要求 workspace_path；调用共享后台服务，不准入工作区、不扫描。返回 AVAILABLE 与实际 URL，或 UNAVAILABLE 并带 `reason_code`。需要链接的正常批次报告在 `session_url` 为空时提示链接不可用，并保留实际覆盖缺口；`INCOMPLETE` 当前只在有地址时追加链接，无地址时正文仅说明检查未完成。报告读取不会同步启动后台。
