@@ -16,7 +16,7 @@
   <h1>AI Security Runtime 更新</h1>
   <dl><dt>已安装版本</dt><dd id="active">—</dd><dt>可安装版本</dt><dd id="target">—</dd></dl>
   <p id="state" role="status" aria-live="polite"></p>
-  <button id="apply" disabled>立即更新</button>
+  <button id="apply" hidden disabled>立即更新</button>
 </main>
 <script>
 const byId = id => document.getElementById(id);
@@ -25,11 +25,17 @@ const stages = {QUEUED:'已提交更新', DOWNLOADING:'正在下载并核对发�
   INSTALLED_AWAITING_CONNECTION:'已安装。兼容连接会尝试切换，当前会话是否已切换以宿主构建信息为准。',
   FAILED:'更新未完成。请查看失败原因后重试。'};
 const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING']);
+const authorizationMessage = '请从最新安全报告的更新链接，或从已授权的风险管理页面进入。';
 let csrf, candidate, waiting, timer;
+function candidateGrant() {
+  const grant = new URLSearchParams(location.hash.slice(1)).get('grant');
+  const match = /^([0-9a-f]{64})\.[0-9]{1,12}\.[0-9a-f]{64}$/.exec(grant);
+  return match && match[1] === candidate ? grant : null;
+}
 async function json(url, options) {
   const response = await fetch(url, options);
-  if (!response.ok) throw new Error(response.status === 403 ? '请从已授权的风险管理页面进入。' : '更新服务暂时不可用。');
-  return response.json();
+  if (!response.ok) throw new Error(response.status === 403 ? '更新授权无效或已过期。' + authorizationMessage : '更新服务暂时不可用。');
+  return response.status === 204 ? null : response.json();
 }
 async function refresh() {
   clearTimeout(timer);
@@ -43,9 +49,11 @@ async function refresh() {
     waiting = activeStages.has(job.status);
     let state = stages[job.status] || (candidate ? '有可安装的正式发行版。' : '当前没有可安装的已核验新版。');
     if (job.status === 'FAILED' && job.reason) state += ' ' + job.reason;
-    if (candidate && !csrf) state += ' 请从已授权的风险管理入口进入后更新。';
+    const canApply = Boolean(candidate && (csrf || candidateGrant()));
+    if (candidate && !canApply && !waiting) state += ' ' + authorizationMessage;
     byId('state').textContent = state;
-    byId('apply').disabled = !candidate || !csrf || waiting;
+    byId('apply').hidden = !canApply;
+    byId('apply').disabled = !canApply || waiting;
     if (waiting) timer = setTimeout(refresh, 1500);
   } catch (error) {
     byId('state').textContent = error.message;
@@ -53,17 +61,26 @@ async function refresh() {
   }
 }
 byId('apply').onclick = async () => {
-  if (!csrf || !candidate || waiting) return;
+  const grant = candidateGrant();
+  if (!candidate || waiting || (!csrf && !grant)) return;
+  const candidateId = candidate;
+  const sessionCsrf = csrf;
   byId('apply').disabled = waiting = true;
+  byId('state').textContent = '正在提交更新…';
   try {
-    await json('/api/updates', {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},
-      body:JSON.stringify({candidate_id:candidate})});
+    if (!sessionCsrf) {
+      await json('/api/updates/session', {method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({grant})});
+    }
+    await json('/api/updates', {method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':sessionCsrf || grant},
+      body:JSON.stringify({candidate_id:candidateId})});
     await refresh();
   } catch (error) {
     byId('state').textContent = error.message;
     byId('apply').disabled = waiting = false;
   }
 };
+window.addEventListener('hashchange', refresh);
 refresh();
 </script>
 </html>

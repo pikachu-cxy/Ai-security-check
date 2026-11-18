@@ -351,7 +351,7 @@ def apply_update(candidate_id):
 
 
 def report_notice(report):
-    """Return optional, token-free metadata for the final page of a current report."""
+    """Return optional update metadata for the final page of a current report."""
     complete = (report.get('host_review_completed')
                 or (report.get('review_progress') or {}).get('host_review_completed'))
     if (not report.get('scan_id') or not report.get('report_text') or report.get('next_action')
@@ -367,7 +367,7 @@ def report_notice(report):
         if not candidate or version_key(candidate['version']) <= version_key(service.active()['version']):
             return None
         from .dashboard_service import update_url
-        url = update_url()
+        url = update_url(candidate['id'])
         batch = hashlib.sha256(json.dumps([report.get('check_ref'), report.get('dirty_seq'),
                                           report.get('scan_id')]).encode()).hexdigest()
         with service.connection(write=True) as db:
@@ -381,7 +381,9 @@ def report_notice(report):
             service.put(db, 'notice:' + candidate['version'], dict(batch=batch, until=service.now() + 86400))
             service.put(db, 'report:' + batch, dict(offered=True))
         from ._version import __version__
+        label = '查看并更新'
         return dict(current_version=__version__, target_version=candidate['version'], candidate_id=candidate['id'],
-                    url=url, label='查看并更新', fallback=None if url else '请从现有风险管理入口进入工具更新。')
+                    url=url, label=label, markdown=f'存在新版本是否更新：[{label}]({url})' if url else None,
+                    fallback=None if url else '存在新版本是否更新：请从已授权的风险管理页面进入工具更新。')
     except (OSError, ValueError, KeyError, TypeError, sqlite3.Error):
         return None

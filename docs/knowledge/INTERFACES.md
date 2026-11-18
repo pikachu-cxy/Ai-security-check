@@ -2,9 +2,9 @@
 
 ## Runtime 更新
 
-当前报告末页可附 `runtime_update_notice`，包含 `current_version`、`target_version`、`candidate_id`、`url`、`label` 和 `fallback`。此字段独立于正文、摘要和分页。读取只消费已保存缓存，安装级目标版本限频 24 小时，同批重读不会重复提示。无候选且无缺口、未完成、历史查询和普通聊天保持静默。
+当前报告末页可附 `runtime_update_notice`，包含 `current_version`、`target_version`、`candidate_id`、`url`、`label`、`markdown` 和 `fallback`。宿主在报告后原样附上「存在新版本是否更新：查看并更新」对应的 Markdown，有链接时点击进入更新页。此字段独立于正文、摘要和分页。读取只消费已保存缓存，安装级目标版本限频 24 小时，同批重读不会重复提示。无候选且无缺口、未完成、历史查询和普通聊天保持静默。
 
-`GET /updates` 与 `GET /api/updates` 只读。`POST /api/updates` 只接受 `{"candidate_id": "..."}`，须通过原 Cookie、Origin 和 CSRF 校验。链接为无令牌本机地址，生成前核对同构建的后台健康和更新路由标识。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
+`GET /updates` 与 `GET /api/updates` 只读。报告链接生成前核对同构建的后台健康和更新路由标识。链接片段中的签名授权有效期 24 小时，只绑定予以核验的候选版本和当前后台身份，仪表盘全局令牌不会进入报告。页面点击后通过同源 `POST /api/updates/session` 交换仅用于更新的 HttpOnly Cookie，再向 `POST /api/updates` 提交 `{"candidate_id": "..."}`。安装 POST 验证 Origin、更新 Cookie、匹配的 CSRF 头和签名授权，也兼容已授权仪表盘的原 Cookie 和 CSRF。更新授权不能用于风险处置、设置或关闭服务。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
 
 `ui://ai-security-runtime/runtime-update` 使用 `text/html;profile=mcp-app`，支持标准初始化与 `ui/open-link`。报告工具暂未绑定资源，标准桥接会传送整份工具参数与结果。带代理的包仍用全局 `security-check mcp` 入口，按 `mcp_proxy_contract`、`mcp_hook_identity`、存储契约、初始化及发现结果和签名会话路由决定切换资格。需由同一连接读取 `get_runtime_info` 核实实际构建。
 

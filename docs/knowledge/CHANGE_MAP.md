@@ -3,7 +3,7 @@
 ## Runtime 更新
 
 - `runtime_update.py` 负责发行检测、缓存、候选、下载与更新任务。`delivery.py` 负责槽位和活动指针。`development_check_worker.py` 派发后台刷新。
-- `mcp_tools/development_check.py` 调用 `review_delivery.py` 的末页交付装饰器，保持 `development_views.py` 原分流。后台授权与接口见 `dashboard_service.py`、`risk_dashboard.py`、`assets/runtime_updates.html`。CLI 见 `cli.py`。
+- `mcp_tools/development_check.py` 调用 `review_delivery.py` 的末页交付装饰器，保持 `development_views.py` 原分流。宿主按 `host_development.py` 与 `tasks/ownership.py` 的指导附上更新尾注。候选链接签名、授权交换及按钮见 `dashboard_service.py`、`risk_dashboard.py`、`assets/runtime_updates.html`。CLI 见 `cli.py`。
 - MCP Apps 资源和兼容切换见 `runtime_update_app.py`、`assets/runtime_update_card.html`、`global_mcp.py`、`mcp_tool_groups.py`、`mcp_update_proxy.py`、`workspace_binding_status.py`。构建写入 Hook 兼容身份见 `scripts/build/build_standalone.py`。定向验收见 `test_runtime_update.py` 与 `test_mcp_runtime_updates.py`。
 
 ## SAST 文件能力与复查

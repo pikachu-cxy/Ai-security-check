@@ -2130,76 +2130,84 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "be55c7704fe7ffada74ec0a03a5230801dc921bdda0af9143bb3f42a1a9eb958",
+      "sha256": "6bb4db3e6bbdb12b8564c6d7e20c2cf9570b49604b16d72e1ef673f40049e5a4",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
           "name": "directory",
-          "line": 26
+          "line": 27
         },
         {
           "name": "endpoint",
-          "line": 31
+          "line": 32
         },
         {
           "name": "save_endpoint",
-          "line": 46
+          "line": 47
         },
         {
           "name": "live",
-          "line": 62
+          "line": 63
         },
         {
           "name": "address",
-          "line": 73
+          "line": 74
         },
         {
           "name": "session_url",
-          "line": 77
+          "line": 78
         },
         {
           "name": "NoRedirect",
-          "line": 106
-        },
-        {
-          "name": "NoRedirect.redirect_request",
           "line": 107
         },
         {
+          "name": "NoRedirect.redirect_request",
+          "line": 108
+        },
+        {
           "name": "code_id",
-          "line": 111
+          "line": 112
         },
         {
           "name": "health",
-          "line": 133
+          "line": 135
         },
         {
           "name": "healthy",
-          "line": 146
+          "line": 148
+        },
+        {
+          "name": "update_signature",
+          "line": 153
+        },
+        {
+          "name": "valid_update_grant",
+          "line": 157
         },
         {
           "name": "update_url",
-          "line": 151
+          "line": 166
         },
         {
           "name": "ensure",
-          "line": 160
+          "line": 177
         },
         {
           "name": "_save_status",
-          "line": 207
+          "line": 224
         },
         {
           "name": "_reason",
-          "line": 223
+          "line": 240
         },
         {
           "name": "startup_status",
-          "line": 232
+          "line": 249
         },
         {
           "name": "start_background",
-          "line": 244
+          "line": 261
         }
       ]
     },
@@ -5850,7 +5858,7 @@
     },
     {
       "path": "src/security_runtime/host_development.py",
-      "sha256": "f91d12c3142e07bc279709d7ca3dd20e99f0355c9e3c7587a913a12e4e13a8d5",
+      "sha256": "859ada599cfd3b1420dc7eeb87da5c96765524ffb82bff557c04a5291cb97d8c",
       "purpose": "Command-host delivery adaptation; no model, scan, polling or new scheduler.",
       "symbols": [
         {
@@ -10601,7 +10609,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "22c7875dedddb33d75a21930fc6a550f7af33ba12f0715ddcc54d750c87af170",
+      "sha256": "df2e728594269a17799d6c8f3a6289e5743eef887acff992b17468ab4d76d3bd",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10662,11 +10670,11 @@
         },
         {
           "name": "serve",
-          "line": 412
+          "line": 433
         },
         {
           "name": "launch",
-          "line": 432
+          "line": 453
         }
       ]
     },
@@ -11139,7 +11147,7 @@
     },
     {
       "path": "src/security_runtime/runtime_update.py",
-      "sha256": "a033c808e9d517e1ad4c6adc22e3a0fea33036b98d515cd37edce195fe1db0b6",
+      "sha256": "b459cf34d20ed169b1e10176686cac2a46237505480a37b8cb59c329200a9124",
       "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
       "symbols": [
         {
@@ -15589,7 +15597,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "2af5229325c65b6aba64c97ec7ce4851d47cf8e750de834e3a275e68adb69055",
+      "sha256": "998849053bf682f132a72437f261332adf37c9e599b64738af9975ab446a9a0e",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {
