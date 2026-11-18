@@ -885,7 +885,7 @@
     },
     {
       "path": "src/security_runtime/codex_integration.py",
-      "sha256": "7f7c70a7dbc2131959d34211ec5233ce7a7a12b1ac60b633d4e9e65c42ce0221",
+      "sha256": "1746920bdb9d7ad737246007c959df3f683d1103a65f3655a81b2988a800854e",
       "purpose": "Owned Codex MCP/Hook lifecycle and offline setup baseline. No source/mode mutation.",
       "symbols": [
         {
@@ -910,139 +910,139 @@
         },
         {
           "name": "probe_runtime",
-          "line": 114
+          "line": 120
         },
         {
           "name": "product_hooks",
-          "line": 191
+          "line": 199
         },
         {
           "name": "CodexIntegrationAdapter",
-          "line": 228
+          "line": 236
         },
         {
           "name": "CodexIntegrationAdapter.__init__",
-          "line": 232
+          "line": 240
         },
         {
           "name": "CodexIntegrationAdapter._state_path",
-          "line": 241
-        },
-        {
-          "name": "CodexIntegrationAdapter._read",
           "line": 249
         },
         {
+          "name": "CodexIntegrationAdapter._read",
+          "line": 257
+        },
+        {
           "name": "CodexIntegrationAdapter._manifest",
-          "line": 261
+          "line": 269
         },
         {
           "name": "CodexIntegrationAdapter._encode",
-          "line": 287
+          "line": 295
         },
         {
           "name": "CodexIntegrationAdapter._save",
-          "line": 290
-        },
-        {
-          "name": "CodexIntegrationAdapter._write",
           "line": 298
         },
         {
-          "name": "CodexIntegrationAdapter._config",
+          "name": "CodexIntegrationAdapter._write",
           "line": 306
         },
         {
+          "name": "CodexIntegrationAdapter._config",
+          "line": 314
+        },
+        {
           "name": "CodexIntegrationAdapter._config_paths",
-          "line": 335
+          "line": 343
         },
         {
           "name": "CodexIntegrationAdapter._inline_hooks",
-          "line": 339
+          "line": 347
         },
         {
           "name": "CodexIntegrationAdapter._validate_hooks",
-          "line": 364
+          "line": 372
         },
         {
           "name": "CodexIntegrationAdapter._desired",
-          "line": 385
+          "line": 393
         },
         {
           "name": "CodexIntegrationAdapter._ownership_desired",
-          "line": 406
+          "line": 414
         },
         {
           "name": "CodexIntegrationAdapter._validate_owned_block_semantics",
-          "line": 410
+          "line": 418
         },
         {
           "name": "CodexIntegrationAdapter._owned_blocks",
-          "line": 424
+          "line": 432
         },
         {
           "name": "CodexIntegrationAdapter._owned_group",
-          "line": 452
+          "line": 460
         },
         {
           "name": "CodexIntegrationAdapter._owned_handler",
-          "line": 456
+          "line": 464
         },
         {
           "name": "CodexIntegrationAdapter._related",
-          "line": 468
+          "line": 476
         },
         {
           "name": "CodexIntegrationAdapter._legacy",
-          "line": 473
+          "line": 481
         },
         {
           "name": "CodexIntegrationAdapter._legacy_handler",
-          "line": 497
+          "line": 505
         },
         {
           "name": "CodexIntegrationAdapter._inspect_mcp",
-          "line": 500
+          "line": 508
         },
         {
           "name": "CodexIntegrationAdapter._inspection",
-          "line": 518
+          "line": 526
         },
         {
           "name": "CodexIntegrationAdapter._hook_status",
-          "line": 542
+          "line": 550
         },
         {
           "name": "CodexIntegrationAdapter.status",
-          "line": 551
+          "line": 559
         },
         {
           "name": "CodexIntegrationAdapter.readiness_status",
-          "line": 584
+          "line": 592
         },
         {
           "name": "CodexIntegrationAdapter.setup",
-          "line": 606
+          "line": 614
         },
         {
           "name": "CodexIntegrationAdapter.repair",
-          "line": 609
+          "line": 617
         },
         {
           "name": "CodexIntegrationAdapter.remove",
-          "line": 612
+          "line": 620
         },
         {
           "name": "CodexIntegrationAdapter._patch_mcp",
-          "line": 615
+          "line": 623
         },
         {
           "name": "CodexIntegrationAdapter._new_manifest",
-          "line": 625
+          "line": 633
         },
         {
           "name": "CodexIntegrationAdapter._mutate",
-          "line": 630
+          "line": 638
         }
       ]
     },
@@ -2418,7 +2418,7 @@
     },
     {
       "path": "src/security_runtime/delivery.py",
-      "sha256": "b56d5bc41668bd71eff6749c0720c4d334264b4fa56f54c9a7d2fc47c70bbacc",
+      "sha256": "82665e2399316138d20e15c4e67744ad2ee09a89d3c1509c1c45c5624829e948",
       "purpose": "Version slots behind a stable frozen launcher; no in-place EXE replacement.",
       "symbols": [
         {
@@ -2511,31 +2511,31 @@
         },
         {
           "name": "StableDelivery.activate",
-          "line": 379
+          "line": 381
         },
         {
           "name": "StableDelivery.cleanup",
-          "line": 462
+          "line": 464
         },
         {
           "name": "StableDelivery.rollback",
-          "line": 527
+          "line": 529
         },
         {
           "name": "StableDelivery.status",
-          "line": 561
+          "line": 563
         },
         {
           "name": "stable_command",
-          "line": 577
+          "line": 579
         },
         {
           "name": "dispatch",
-          "line": 596
+          "line": 598
         },
         {
           "name": "cleanup_after_reconnect",
-          "line": 618
+          "line": 620
         }
       ]
     },

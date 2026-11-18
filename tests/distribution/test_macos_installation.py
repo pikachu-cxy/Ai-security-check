@@ -172,13 +172,15 @@ def test_delivery_probe_resolves_only_its_private_temporary_directory(tmp_path, 
     @contextmanager
     def temporary(**_kwargs):
         yield str(alias)
-    def probe(runtime, home, environment):
+    def probe(runtime, home, environment, *, expected_version, expected_build_id):
         no_links(home)
         assert home.is_relative_to(actual)
+        assert (expected_version, expected_build_id) == ('0.3.16', 'a' * 64)
         return {'status': 'OK'}
     monkeypatch.setattr('security_runtime.delivery.tempfile.TemporaryDirectory', temporary)
     monkeypatch.setattr('security_runtime.codex_integration.probe_runtime', probe)
-    assert StableDelivery(tmp_path / 'delivery')._probe(tmp_path / 'bundle')['status'] == 'OK'
+    metadata = {'version': '0.3.16', 'build_id': 'a' * 64}
+    assert StableDelivery(tmp_path / 'delivery')._probe(tmp_path / 'bundle', metadata)['status'] == 'OK'
 
 
 def test_windows_python_install_keeps_original_path_without_transaction(tmp_path, monkeypatch):
@@ -241,4 +243,4 @@ def test_windows_delivery_probe_keeps_strict_temporary_path_validation(tmp_path,
     monkeypatch.setattr(sys, 'platform', 'win32')
     monkeypatch.setattr('security_runtime.delivery.tempfile.TemporaryDirectory', temporary)
     with pytest.raises(ValueError, match='links'):
-        StableDelivery(tmp_path / 'delivery')._probe(tmp_path / 'bundle')
+        StableDelivery(tmp_path / 'delivery')._probe(tmp_path / 'bundle', {'version': '0.3.16', 'build_id': 'a' * 64})

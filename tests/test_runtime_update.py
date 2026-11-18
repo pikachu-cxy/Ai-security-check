@@ -25,20 +25,21 @@ def package(path, version):
 
 
 class FakeRelease:
-    def __init__(self, tmp_path):
+    def __init__(self, tmp_path, version='0.3.15'):
+        self.version = version
         target = tmp_path / 'target'
-        self.build = package(target, '0.3.15')
+        self.build = package(target, version)
         path = tmp_path / 'release.zip'
         with zipfile.ZipFile(path, 'w') as archive:
             for file in target.iterdir():
                 archive.write(file, 'security-check/' + file.name)
         self.archive = path.read_bytes()
         self.digest = hashlib.sha256(self.archive).hexdigest()
-        self.name = 'ai-security-runtime-v0.3.15-windows-x64.zip'
-        self.base = update.DOWNLOAD + '/v0.3.15/'
+        self.name = f'ai-security-runtime-v{version}-windows-x64.zip'
+        self.base = f'{update.DOWNLOAD}/v{version}/'
         self.downloads = 0
         self.failure = ''
-        self.release = dict(tag_name='v0.3.15', published_at='now', draft=False, prerelease=False,
+        self.release = dict(tag_name=f'v{version}', published_at='now', draft=False, prerelease=False,
             assets=[dict(name=name, state='uploaded', browser_download_url=self.base + name)
                     for name in ('release-manifest.json', self.name, self.name + '.sha256')])
 
@@ -51,7 +52,7 @@ class FakeRelease:
         if url == update.LATEST:
             return json.dumps(self.release).encode()
         if url == self.base + 'release-manifest.json':
-            return json.dumps(dict(version='0.3.15', source_commit='a' * 40,
+            return json.dumps(dict(version=self.version, source_commit='a' * 40,
                 artifacts={'windows-x64': dict(url=self.base + self.name, sha256=self.digest)})).encode()
         if url == self.base + self.name + '.sha256':
             return f'{self.digest}  {self.name}\n'.encode()
@@ -112,6 +113,41 @@ def test_apply_uses_explicit_job_and_preserves_previous(installation, case):
     assert status['current_mcp_build'] is None
     assert all(path.read_bytes() == b'preserve me' for path in private)
     assert service.delivery.slot(service.running_build).is_dir()
+
+
+@pytest.mark.parametrize('failure', [None, 'version', 'build'])
+def test_cross_version_update_probes_verified_target(tmp_path, monkeypatch, failure):
+    from security_runtime import codex_integration
+    from security_runtime.guidance.host_guidance import runtime_info
+
+    monkeypatch.setattr(codex_integration, '__version__', '0.3.15')
+    old = package(tmp_path / 'old', '0.3.15')
+    release = FakeRelease(tmp_path, version='0.3.16')
+    delivery = StableDelivery(tmp_path / 'install')
+    delivery.activate(tmp_path / 'old', defer_capability_check=True)
+
+    def probe(runtime, root, env, **expectation):
+        slot = Path(runtime['command']).parent
+        manifest = json.loads((slot / 'version.json').read_bytes())
+        version = '0.3.15' if failure == 'version' else manifest['version']
+        build_id = old if failure == 'build' else manifest['build_id']
+        info = dict(runtime_info(), version=version, build_identity=dict(version=version, build_id=build_id))
+        return codex_integration.check_capabilities(info, codex_integration.REQUIRED_TOOLS, **expectation)
+
+    monkeypatch.setattr(codex_integration, 'probe_runtime', probe)
+    service = update.RuntimeUpdate(delivery, old, 'windows-x64', fetch=release)
+    service.refresh()
+    tickets = []
+    service.apply(service.status()['candidate']['id'], tickets.append)
+    assert service.install(tickets[0]) == (failure is None)
+    status = service.status()
+    if failure:
+        assert status['active_build'] == old
+        assert status['job']['reason'] == f'DELIVERY_PROBE_{failure.upper()}_MISMATCH'
+    else:
+        assert status['active_build'] == release.build
+        monkeypatch.setattr(codex_integration, '__version__', '0.3.16')
+        assert delivery.rollback()['active_build'] == old
 
 
 def test_report_and_last_page_preserve_digest_and_deduplicate(installation, monkeypatch):

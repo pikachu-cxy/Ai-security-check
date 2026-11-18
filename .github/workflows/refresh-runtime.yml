@@ -73,12 +73,12 @@ jobs:
           TAG=$(python -c 'from security_runtime._version import __version__; print("v" + __version__)')
           case "$GITHUB_REF:$TAG" in
             refs/heads/codex/refresh-v0.3.15:v0.3.15)
-              OLD_TAG=c0862c0c218f7f85a57660912c1d5189cf621731
+              OLD_TAG=fa9129826fe40b812e4fe88e692d6acf82559241
               RELEASE_ID=448404833
               MARK_LATEST=false
               ;;
             refs/heads/feature/runtime-mvp:v0.3.16)
-              OLD_TAG=02dfccf3dffc5d50b874a3e362895864e58c4621
+              OLD_TAG=1c453c486b146df71a3609d0458ac4842eff6c99
               RELEASE_ID=449616723
               MARK_LATEST=true
               ;;
