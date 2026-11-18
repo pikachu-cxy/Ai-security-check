@@ -122,7 +122,7 @@ def session_context(token, *, native_stop=False, workspace=None, grouped_codex=F
                     '标签随用户语言翻译，缺失评级写未评级，未知事项如实说明。误报由产品汇总。按需附 business_reviews，'
                     '仅在证据指向同一问题时把重复项标 DISMISSED 并传 duplicate_of=同批确认项 id。仅监听到的文件不可归因为当前会话写入。每次提交最多 50 项；传 return_risks=true 和 response_view="final_report"。成功后仅沿本批 next_action 读完，报告片段按顺序拼接，不按页重复汇总；链接已由产品写在报告末尾，link_in_report 为 true 时不再用 session_url 追加第二遍。最终回复先用一句话保留原开发结果和实际验证，再原样附上返回的 '
                     'report_text，不重写；未提供时按实际结果及缺口报告。'
-                    '有 runtime_update_notice 时，在正文后单独展示目标版本和「查看并更新」链接；url 为空则展示 fallback，不猜测地址。'
+                    '有 runtime_update_notice 时，在正文后原样附 markdown；没有 markdown 则展示 fallback。'
                     '例外：开发期保存回执 delivery_status=WAITING_FOR_STATIC_SCAN 时，先只交付开发结果和实际验证，说明安全报告待收尾，'
                     '不要提前展开漏洞或复制子 Agent 报告；正常结束触发 Stop，续接后再统一交付完整报告和链接，不轮询或主动扫描。'
                     '已知漏记的实际编辑才补录。显式审计及修复继续沿用原任务。')

@@ -2,6 +2,7 @@
 from contextlib import closing
 import json
 import hashlib
+import hmac
 import os
 from pathlib import Path
 import re
@@ -121,6 +122,7 @@ def code_id():
     names = ('dashboard_service.py', 'risk_dashboard.py', 'dashboard_records.py',
              'dashboard_catalog.py', 'dashboard_presentation.py', 'dashboard_sessions.py', 'dashboard_health.py', 'dashboard_detail.py', 'dashboard_history.py', 'dashboard_entities.py', 'dashboard_export.py', 'risk_management.py',
              'project_identity.py', 'user_config.py', 'assets/risk_dashboard.html',
+             'assets/runtime_updates.html', 'runtime_update.py',
              'development_risks.py', 'business_audit.py', 'repair_notifications.py')
     digest = hashlib.sha256()
     for name in names:
@@ -147,12 +149,27 @@ def healthy(value):
     return bool(result and result.get('service') == 'risk-dashboard-v2' and result.get('build') == code_id())
 
 
-def update_url():
+def update_signature(token, payload):
+    return hmac.digest(token.encode(), ('runtime-update:' + payload).encode(), 'sha256').hex()
+
+
+def valid_update_grant(token, grant, candidate):
+    match = re.fullmatch(r'([0-9a-f]{64})\.([0-9]{1,12})\.([0-9a-f]{64})', grant)
+    if not match:
+        return False
+    target, expiry, signature = match.groups()
+    return (target == candidate and int(expiry) > time.time()
+            and hmac.compare_digest(signature, update_signature(token, f'{target}.{expiry}')))
+
+
+def update_url(candidate):
     value = endpoint()
     result = health(value)
     if (result and result.get('service') == 'risk-dashboard-v2'
-            and result.get('build') == code_id() and result.get('runtime_updates') == 1):
-        return f"http://127.0.0.1:{value['port']}/updates"
+            and result.get('build') == code_id() and result.get('runtime_updates') == 2
+            and re.fullmatch(r'[0-9a-f]{64}', candidate)):
+        payload = f'{candidate}.{int(time.time()) + 86400}'
+        return f"http://127.0.0.1:{value['port']}/updates#grant={payload}.{update_signature(value['token'], payload)}"
     return None
 
 

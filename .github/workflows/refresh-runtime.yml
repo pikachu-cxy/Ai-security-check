@@ -1,0 +1,136 @@
+name: Refresh published Runtime
+
+on:
+  push:
+    branches: [codex/refresh-v0.3.15, feature/runtime-mvp]
+    paths: ['.github/workflows/refresh-runtime.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: refresh-published-runtime-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: contains(github.event.head_commit.message, '[refresh-release]')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: windows-latest, platform: windows-x64}
+          - {os: macos-15, platform: macos-arm64}
+          - {os: macos-15-intel, platform: macos-x64}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      SECURITY_RUNTIME_USAGE_MONITOR_ENABLED: '0'
+      SECURITY_RUNTIME_CONFIG: ${{ github.workspace }}/.ci-unused-user-config.toml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e ".[build-standalone]"
+      - name: Build once for this platform
+        run: python scripts/build/build_standalone.py
+      - run: python scripts/build/package_artifact.py --platform ${{ matrix.platform }}
+      - name: Verify native package and default MCP surface without full scanner regressions
+        shell: bash
+        run: python scripts/release/verify_release_smoke.py $(find dist/release -type f \( -name '*.zip' -o -name '*.tar.gz' \))
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refresh-${{ matrix.platform }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: python -m pip install -e . jsonschema
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: refresh-*
+          merge-multiple: true
+          path: dist/release
+      - name: Select the authorized release and validate every platform
+        run: |
+          TAG=$(python -c 'from security_runtime._version import __version__; print("v" + __version__)')
+          case "$GITHUB_REF:$TAG" in
+            refs/heads/codex/refresh-v0.3.15:v0.3.15)
+              OLD_TAG=114c94c5468f83714e047255d500d073979c3746
+              RELEASE_ID=448404833
+              MARK_LATEST=false
+              ;;
+            refs/heads/feature/runtime-mvp:v0.3.16)
+              OLD_TAG=9cf67438faa09517fcab125d227373121b718b89
+              RELEASE_ID=449616723
+              MARK_LATEST=true
+              ;;
+            *) echo 'Unexpected release branch or version'; exit 1 ;;
+          esac
+          git merge-base --is-ancestor "$OLD_TAG" "$GITHUB_SHA"
+          printf 'TAG=%s\nOLD_TAG=%s\nRELEASE_ID=%s\nMARK_LATEST=%s\n' "$TAG" "$OLD_TAG" "$RELEASE_ID" "$MARK_LATEST" >> "$GITHUB_ENV"
+          python scripts/release/make_release_metadata.py --focused --require-workbuddy
+          python scripts/release/update_homebrew_formula.py --manifest dist/release/release-manifest.json
+          python scripts/release/generate_winget_manifest.py --manifest dist/release/release-manifest.json
+          python scripts/maintenance/validate_manager_metadata.py --manifest dist/release/release-manifest.json
+          cp README.zh-CN.md dist/release/INSTALL.zh-CN.md
+          cp docs/PILOT_INSTALL_AND_USE.zh-CN.md dist/release/PILOT_INSTALL_AND_USE.zh-CN.md
+          python scripts/release/prepare_release_assets.py
+          cat "distribution/releases/$TAG.md" >> dist/release-notes.md
+      - name: Back up the currently published release
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" = "$OLD_TAG"
+          mkdir -p dist/previous/assets
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" > dist/previous/release.json
+          gh release download "$TAG" --dir dist/previous/assets
+          python - <<'PY'
+          import hashlib, json, os
+          from pathlib import Path
+          backup = Path('dist/previous')
+          release = json.loads((backup / 'release.json').read_text())
+          assert release['id'] == int(os.environ['RELEASE_ID'])
+          assert not release['draft'] and not release['prerelease'] and not release.get('immutable')
+          expected = {asset['name']: asset['digest'] for asset in release['assets']}
+          assert expected and set(expected) == {path.name for path in Path('dist/public-release').iterdir()}
+          assert set(expected) == {path.name for path in (backup / 'assets').iterdir()}
+          for name, digest in expected.items():
+              assert digest == 'sha256:' + hashlib.sha256((backup / 'assets' / name).read_bytes()).hexdigest(), name
+          (backup / 'notes.md').write_text(release['body'], encoding='utf-8')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: previous-release-${{ github.sha }}
+          path: dist/previous
+          retention-days: 30
+      - name: Replace the release assets and move the tag after all builds pass
+        id: replace
+        run: |
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')" = "$OLD_TAG"
+          gh release edit "$TAG" --draft=true
+          echo 'started=true' >> "$GITHUB_OUTPUT"
+          gh release upload "$TAG" dist/public-release/* --clobber
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$GITHUB_SHA" -F force=true
+          gh release edit "$TAG" --notes-file dist/release-notes.md --draft=false --prerelease=false --latest="$MARK_LATEST"
+      - name: Restore the prior release on replacement failure
+        if: failure() && steps.replace.outputs.started == 'true'
+        run: |
+          gh release upload "$TAG" dist/previous/assets/* --clobber
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$TAG" -f sha="$OLD_TAG" -F force=true
+          gh release edit "$TAG" --notes-file dist/previous/notes.md --draft=false --prerelease=false --latest="$MARK_LATEST"

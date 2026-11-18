@@ -93,7 +93,7 @@
     },
     {
       "path": "src/security_runtime/arithmetic_regression.py",
-      "sha256": "81a24e0a516b2c0c57cb8b0511a0b0fda9baeba3de15522d3da12199d831a7a5",
+      "sha256": "e5edbfae7274d230ba56aeb5a9a0cb22ee21e48291cc853d70f2bf278a0c37d6",
       "purpose": "Prepare a bounded arithmetic regression command for execution by the host.",
       "symbols": [
         {
@@ -1036,7 +1036,7 @@
     },
     {
       "path": "src/security_runtime/codex_usage.py",
-      "sha256": "5c221e4769ba623faa1433cab17a7a367ba2dcbceb8927a0e3c50b17b2f8d59b",
+      "sha256": "fd3f7503e34d62a3abfbb7e9b0d945598d0a155e1a51f95140adcf5925da254a",
       "purpose": "Bounded, explicit import of Codex host usage; session bodies are discarded.",
       "symbols": [
         {
@@ -1051,7 +1051,7 @@
     },
     {
       "path": "src/security_runtime/collector_health.py",
-      "sha256": "25f54710932b217a0fcf0c7696affb21de25aada08a5f12cd685240ac977bc8c",
+      "sha256": "012c448cdb2d5b9f51e360f66fb2fdf5270cbeef625b2c6db2b0f4ca36d9c55c",
       "purpose": "Worker-owned checkpoints; a stale checkpoint signals uncertainty, not losslessness.",
       "symbols": [
         {
@@ -1355,7 +1355,7 @@
     },
     {
       "path": "src/security_runtime/context_cost_capture.py",
-      "sha256": "0e13927c05191f721702abdfbf8630dc7a72416d55c57bdd216520f89fdb6f79",
+      "sha256": "911d7c81b26420da16901999683ee17ad6e8787f886baf6822701c493caec36c",
       "purpose": "Bounded response projection; only numeric metadata leaves this module.",
       "symbols": [
         {
@@ -1396,7 +1396,7 @@
     },
     {
       "path": "src/security_runtime/context_cost_sync.py",
-      "sha256": "9620ecf64adfbd6c7be90de98e0934f23d89f93d32fb55ef7820e72ffe7ae6bf",
+      "sha256": "dce72c385e182ed5ff511f229d0c6278931742101df04241e47f40bbe1a430e3",
       "purpose": "Optional synchronous product boundary; no storage or shutdown waits.",
       "symbols": [
         {
@@ -1407,7 +1407,7 @@
     },
     {
       "path": "src/security_runtime/context_cost_worker.py",
-      "sha256": "98f665885f62b469215b8fd3a40732e32da6ed1c81dc608486e9395b4e52d2c0",
+      "sha256": "442928d9d0d09209837883613a42a9743ff0d7fdfa2361d11378e12a110b5cca",
       "purpose": "Optional bounded metadata collector; product calls never wait for storage.",
       "symbols": [
         {
@@ -1638,7 +1638,7 @@
     },
     {
       "path": "src/security_runtime/cursor_gap_notices.py",
-      "sha256": "e185a8788ca9af50e1cde0dae7ee735b3812b794b382a2952bf7f5260a433403",
+      "sha256": "2f84ef31722d849845650010337db91c8a788ef7dc408e915fc411d176bac421",
       "purpose": "Bounded, persistent Cursor presentation deduplication; never check evidence.",
       "symbols": [
         {
@@ -2080,76 +2080,84 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "0d8fe3c1b8af286c712914a2fb0508d1f507e9ee7757320ce79991c081ab0326",
+      "sha256": "1c5f81f37dd26e91b8c3ce9a0f046c259b3d721deb0cb0ae958a7c4ca3a97eb5",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
           "name": "directory",
-          "line": 26
+          "line": 27
         },
         {
           "name": "endpoint",
-          "line": 31
+          "line": 32
         },
         {
           "name": "save_endpoint",
-          "line": 46
+          "line": 47
         },
         {
           "name": "live",
-          "line": 62
+          "line": 63
         },
         {
           "name": "address",
-          "line": 73
+          "line": 74
         },
         {
           "name": "session_url",
-          "line": 77
+          "line": 78
         },
         {
           "name": "NoRedirect",
-          "line": 106
-        },
-        {
-          "name": "NoRedirect.redirect_request",
           "line": 107
         },
         {
+          "name": "NoRedirect.redirect_request",
+          "line": 108
+        },
+        {
           "name": "code_id",
-          "line": 111
+          "line": 112
         },
         {
           "name": "health",
-          "line": 132
+          "line": 134
         },
         {
           "name": "healthy",
-          "line": 145
+          "line": 147
+        },
+        {
+          "name": "update_signature",
+          "line": 152
+        },
+        {
+          "name": "valid_update_grant",
+          "line": 156
         },
         {
           "name": "update_url",
-          "line": 150
+          "line": 165
         },
         {
           "name": "ensure",
-          "line": 159
+          "line": 176
         },
         {
           "name": "_save_status",
-          "line": 206
+          "line": 223
         },
         {
           "name": "_reason",
-          "line": 222
+          "line": 239
         },
         {
           "name": "startup_status",
-          "line": 231
+          "line": 248
         },
         {
           "name": "start_background",
-          "line": 243
+          "line": 260
         }
       ]
     },
@@ -3320,7 +3328,7 @@
     },
     {
       "path": "src/security_runtime/download_estimate.py",
-      "sha256": "1b832ece74070877391904ff988a0ac497b9912f975846d27fe89bb768e892ae",
+      "sha256": "00c3819aa65083c46b1359dd50c7bc9b62399fab131e4e36c7bde3a7363c9602",
       "purpose": "Bounded estimates from real byte deltas, never a synthetic countdown.",
       "symbols": [
         {
@@ -3481,7 +3489,7 @@
     },
     {
       "path": "src/security_runtime/engine_probe.py",
-      "sha256": "2499451ea73bc7ceb5a58b160ff65d028c10d2e4f4d7868699525cd6a27723dc",
+      "sha256": "19a25a63379dd713cb42478076be9eb10dd99880c78677a779af60650945a7e3",
       "purpose": "Bounded synthetic engine execution probes, never project scan evidence.",
       "symbols": [
         {
@@ -3982,7 +3990,7 @@
     },
     {
       "path": "src/security_runtime/flow_cache.py",
-      "sha256": "b92cdb788180a35e0e17437491a4ef53212fa454c7149c9128b2ae7dd349e760",
+      "sha256": "47d25493a93e36d11dd9bee51d44416e9607bd75413e2cb19b9557cc8cd34d1c",
       "purpose": "Bounded process-local caches. No disk deserialization or stat-only freshness.",
       "symbols": [
         {
@@ -4309,7 +4317,7 @@
     },
     {
       "path": "src/security_runtime/functional_feedback.py",
-      "sha256": "6d8855b5c1ea0b20f7bbb93fa40615abcd945e415392a463d4f538d34c908538",
+      "sha256": "15ced9016a25bbc34e2c8f08d978287cc8c4763a6b7941738a359d812585ddf0",
       "purpose": "Explicit verifier results; personal repair feedback has no verifier offer.",
       "symbols": [
         {
@@ -4802,7 +4810,7 @@
     },
     {
       "path": "src/security_runtime/global_toml.py",
-      "sha256": "0ecda768e4d3c768d2b6a62d9868b46036ae64d7271735e2e03035308b7ba7b8",
+      "sha256": "683af53ba9c34a3757c5d7fc4bc174948c024aa0df5a2da4fba9d806e912cff4",
       "purpose": "Bounded edits to one MCP subtree; never serialize the shared TOML document.",
       "symbols": [
         {
@@ -4868,7 +4876,7 @@
     },
     {
       "path": "src/security_runtime/go_sql.py",
-      "sha256": "6640d9de032a64c67828b9a7d898235642029870195c634a90bfc62bceeff885",
+      "sha256": "ca295f4e9f5d6fd1ef4ffabff27fa406db7fab9bcaf6b1ad0dddb59f88ab23f0",
       "purpose": "Small, bounded Go SQL flow model; no target execution or whole-program claims.",
       "symbols": [
         {
@@ -4995,7 +5003,7 @@
     },
     {
       "path": "src/security_runtime/guidance/guidance_catalog.py",
-      "sha256": "e1974ab6b4383a6b7f0373206664c46e7a18351b02a209cbe3b8839a647e4390",
+      "sha256": "907fee7ef5f49905e449afbba69165efd48cca74c3b8ce6c139cb9b1e88065d3",
       "purpose": "Bounded product guidance topics; no workspace, execution or authority input.",
       "symbols": [
         {
@@ -5135,7 +5143,7 @@
     },
     {
       "path": "src/security_runtime/hook_diagnostic_recovery.py",
-      "sha256": "c04230ee03d008494ec65122baa38425da7d7b493b59d0e0dbd567e35e07e78c",
+      "sha256": "a38a62ee6774fc2ec089289df2ebdd835878a5e8fcda35682646eb5111a9ac58",
       "purpose": "Recover only non-authoritative Hook observations, retaining corrupt bytes.",
       "symbols": [
         {
@@ -5693,7 +5701,7 @@
     },
     {
       "path": "src/security_runtime/host_development.py",
-      "sha256": "b480d71d3f2a00b26b93ef86e16031742cce5536e3c5b2e9a17bd6c92a8edf13",
+      "sha256": "254c852701263682d5b5a6d4c154f45eace0dfd68f511292fc5640e942da3b02",
       "purpose": "Command-host delivery adaptation; no model, scan, polling or new scheduler.",
       "symbols": [
         {
@@ -6847,7 +6855,7 @@
     },
     {
       "path": "src/security_runtime/logging_utils.py",
-      "sha256": "f974493add92d372b1274778507a2ca56bb02a11f3140bc568c1efdde144db97",
+      "sha256": "218539be7a0d432a934e55cd829eeb1c039cf5c94b3f3ae68ab4ee1c7a10361a",
       "purpose": "",
       "symbols": [
         {
@@ -6870,7 +6878,7 @@
     },
     {
       "path": "src/security_runtime/managed_identity.py",
-      "sha256": "db90426c4ad65bd548187d62517191295ff45dce82a89baacb988e5f2083c70d",
+      "sha256": "0b211e25de3691f392542bef94c119f66edb36dab7a83bbca13b65b077d69be4",
       "purpose": "Content identity for managed wheels; checksums are not publisher signatures.",
       "symbols": [
         {
@@ -7259,7 +7267,7 @@
     },
     {
       "path": "src/security_runtime/mcp_update_proxy.py",
-      "sha256": "e03a18dbb79ff9b26b61cf31a62441339328d413b1ff540d57f7f75a708e8d58",
+      "sha256": "20d99520e1d42987a7c087e25316630b3f93ccb5a4169a2bba721042fcb1eb65",
       "purpose": "Keep an installed global MCP stdio connection across compatible updates.",
       "symbols": [
         {
@@ -7400,7 +7408,7 @@
     },
     {
       "path": "src/security_runtime/model_observation.py",
-      "sha256": "2715fcecff1f63847b79562cf032c9207cf135d73726b9995a5b65940fc33897",
+      "sha256": "248c363f760631d9b6733abcfa6ea5f1cfd34930d35e32516910dcb4bc079c06",
       "purpose": "Optional metadata for the exact bounded BYOK request, never a model caller.",
       "symbols": [
         {
@@ -7449,7 +7457,7 @@
     },
     {
       "path": "src/security_runtime/model_report.py",
-      "sha256": "96cd50545beff82fbde5635848dd83c9c1d538f443feae56aa1bb35eb1c0cd5d",
+      "sha256": "6e969cd98bb48bec8a12d0568f7b7fecd2a1cf850ba797fc521540e5fe7dd30d",
       "purpose": "Read-only request projections; host totals never get added to BYOK usage.",
       "symbols": [
         {
@@ -7531,7 +7539,7 @@
     },
     {
       "path": "src/security_runtime/monitor_checks.py",
-      "sha256": "53f14c284cac86b03815d171afdfb6388126543d13a15972f9dc86702acb1267",
+      "sha256": "c0f12bb57c68ca5e8fe6fd04d85fdf3f1e72d1741c34c2a580ce8d691f47dd1f",
       "purpose": "Bounded, source-free projections of existing scan execution receipts.",
       "symbols": [
         {
@@ -7562,7 +7570,7 @@
     },
     {
       "path": "src/security_runtime/monitor_history.py",
-      "sha256": "3a5f73f329925597868f69cabe4a54f46eb55a84f7a03411a4c6a97d18de3434",
+      "sha256": "38e38de0c490088bb10397bbeee07e1c318abb4b276706e737e67006248ce7e2",
       "purpose": "Explicit bounded read-only history import, independent of product startup.",
       "symbols": [
         {
@@ -7573,7 +7581,7 @@
     },
     {
       "path": "src/security_runtime/monitor_risks.py",
-      "sha256": "a9846a1ccb049cef4832371b53f6f5e208d433c3308456671f8acc765f8a8c15",
+      "sha256": "e238c54398cbdb0cd36c07abe88ea5f2259a5b1ec07f371da0536e01d858f3d2",
       "purpose": "Reconcile retained optional observations; never consult product authority.",
       "symbols": [
         {
@@ -7624,7 +7632,7 @@
     },
     {
       "path": "src/security_runtime/monitoring/host_context.py",
-      "sha256": "073a348ec200048c9c62e4e4a60b49e15da7858e5c28363d27d018b96a69e67c",
+      "sha256": "34da39680a85c6acd7966db34cb830833f9bbb7f3dbc85a1c2559426c1dc0151",
       "purpose": "Bounded projection of already-read transcript items, never final model input.",
       "symbols": [
         {
@@ -7731,7 +7739,7 @@
     },
     {
       "path": "src/security_runtime/monitoring/report.py",
-      "sha256": "6b726d9d5e362d9f1089f00218778203df06e6045c3f355742545f5b02311e2f",
+      "sha256": "fd0693fc95e9d5f10ef2183249367cdc87fd6fa262096872259d897f4337a0ce",
       "purpose": "Downloadable metadata-only trial bundle, including an offline HTML view.",
       "symbols": [
         {
@@ -7945,7 +7953,7 @@
     },
     {
       "path": "src/security_runtime/observation.py",
-      "sha256": "64bb58c5e23cdb178a0580bbe23178a8108ce0d509a893f738d525ceca9c8642",
+      "sha256": "d31680e00b564eb15b8c79b1b3af1b896572305922fbe1ea7d382b9c75a0c9b2",
       "purpose": "In-memory optional facts; never routing, authority or persistence.",
       "symbols": [
         {
@@ -8409,7 +8417,7 @@
     },
     {
       "path": "src/security_runtime/preparation_budget.py",
-      "sha256": "8fe4a048dbcb840c907d7e8a27a72a4372668e8cb84ffc4f64e3e533701cea2e",
+      "sha256": "ded9c315035020b4f5da00a4dc148a19fd363d2d16625a50c8cf0d8432391404",
       "purpose": "A command-local preparation budget; scan execution remains independent.",
       "symbols": [
         {
@@ -8483,7 +8491,7 @@
     },
     {
       "path": "src/security_runtime/privacy.py",
-      "sha256": "7000c86fec050c155f4ec3aa2ad96698a04ab89ee8fbcb1dc759d731c2315437",
+      "sha256": "4405c83f4c74a964d8a71fd0fdd24947dcc33f71c32a2b45af1d430554e1b49b",
       "purpose": "",
       "symbols": [
         {
@@ -8601,7 +8609,7 @@
     },
     {
       "path": "src/security_runtime/private_directories.py",
-      "sha256": "b901acec775947bd7c71707132167286acfb999c97ac84983edcd7a9fc188852",
+      "sha256": "0b7e3c6a9630b064c6d0ee8efe82a1f78efe77598a4b0b73d0e7e8717ccb2171",
       "purpose": "OS-level private directory creation, independent of scan input/lifecycle.",
       "symbols": [
         {
@@ -9032,7 +9040,7 @@
     },
     {
       "path": "src/security_runtime/product_metrics.py",
-      "sha256": "224fd97cd4356ae3529ba9fc325936dc5236f30a5141e09ab111519ac12686c0",
+      "sha256": "1ee16a4aa9822432bbcad0058a83b6aa9baf503bd787559e81377b986ddd7eb6",
       "purpose": "Optional product outcome metadata. Never a business authority or source reader.",
       "symbols": [
         {
@@ -9192,7 +9200,7 @@
     },
     {
       "path": "src/security_runtime/python_constants.py",
-      "sha256": "f3520fe34ceb7627fa7923450c8a97b976b378ab56c7a862de41b8c2308181c1",
+      "sha256": "09d67921cc9c634e311e517a08a73f4a553f3adbc925b73a88d4d1b6aaa04630",
       "purpose": "Bounded local value and exact literal-guard proofs for built-in injection rules.",
       "symbols": [
         {
@@ -10350,7 +10358,7 @@
     },
     {
       "path": "src/security_runtime/risk.py",
-      "sha256": "781d8deb59674d11ac02cf994433eb51e1761da12447ced1b0d2b51fa958e74f",
+      "sha256": "d19a48df772ca2cff1769675c3a4176320e47f2c0d3f965c850b3d4dfc874c72",
       "purpose": "",
       "symbols": [
         {
@@ -10444,7 +10452,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "3179607293f376ed51db3dacafaf5c4ec5fbe41007a155f2ac21c3b8ad239017",
+      "sha256": "d5f0ef75b3cbd0b13ca7d0d9b38666743349271fb9fee7dc1d6722e083378562",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10505,11 +10513,11 @@
         },
         {
           "name": "serve",
-          "line": 409
+          "line": 430
         },
         {
           "name": "launch",
-          "line": 429
+          "line": 450
         }
       ]
     },
@@ -10971,7 +10979,7 @@
     },
     {
       "path": "src/security_runtime/runtime_info_view.py",
-      "sha256": "79c75a6ae573c10870f285fc71723d3da08e84af2736e7c8c6d0fdcfdc700ebd",
+      "sha256": "c1d89d573f6cc0bf0a6312cf8cee6fedf8c6136f3540e0c6667dfe5837f44a61",
       "purpose": "Opt-in transport projection; capability checks and full discovery stay intact.",
       "symbols": [
         {
@@ -10982,7 +10990,7 @@
     },
     {
       "path": "src/security_runtime/runtime_update.py",
-      "sha256": "a033c808e9d517e1ad4c6adc22e3a0fea33036b98d515cd37edce195fe1db0b6",
+      "sha256": "7b4854cd71c6f0d493e592614ea16cafc6db25978ad17866062906e268fa392f",
       "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
       "symbols": [
         {
@@ -11085,7 +11093,7 @@
     },
     {
       "path": "src/security_runtime/runtime_update_app.py",
-      "sha256": "c03e7561e8a6461e3c1f248e6fc6402b143b1279d7ec1a2263562c98a2e3cc0b",
+      "sha256": "c79bbe1f56be7b6c06bbe10040b98cb3f5792e5bf0ba429c4043780050520ba2",
       "purpose": "Read-only MCP App resource. A host must project update metadata alone.",
       "symbols": [
         {
@@ -11131,7 +11139,7 @@
     },
     {
       "path": "src/security_runtime/sast_file_types.py",
-      "sha256": "8cb3c25640c7ece93c0d149094d221b9ce1e4e3364cf8eae78d9365429f1f38c",
+      "sha256": "b490a00bbe44075ae4d22fad4ce7019aa005b323453492345e6ef9cdbebc5f4f",
       "purpose": "Name-based capabilities for already selected SAST inputs (OpenGrep 1.32).",
       "symbols": [
         {
@@ -11154,7 +11162,7 @@
     },
     {
       "path": "src/security_runtime/scan_artifacts.py",
-      "sha256": "35e73fcf6613e50941e242e0d529156dc5334f8d65b6e7df851089b81e931278",
+      "sha256": "b857a3a566db40e90e537118b749d029e06f992e3de0506e3d07cf498b11b08b",
       "purpose": "Exact-input scanner fact reuse. Never shares task evidence or dispositions.",
       "symbols": [
         {
@@ -12323,7 +12331,7 @@
     },
     {
       "path": "src/security_runtime/selected_scan.py",
-      "sha256": "9a6a8baf29ac57ee66e998f9568244b8c5cd04d136d7a9a490b658559c425116",
+      "sha256": "7d007a729d339f8529614003ee2b25c02120edc00d6773d8eb3ffe64e0cad74f",
       "purpose": "Explicit file selection; never substitute repository discovery or Git changes.",
       "symbols": [
         {
@@ -12342,7 +12350,7 @@
     },
     {
       "path": "src/security_runtime/shell_classification.py",
-      "sha256": "987b32859bd7e32c71cdd981d9cf1aa7bdc73ceed0fdd08096632993f1049c5a",
+      "sha256": "0fac1c41004189c7664dca1646d93fb834f3f2c0e127687044caae463d12ef5a",
       "purpose": "Conservative, non-executing classification of simple shell command lists.",
       "symbols": [
         {
@@ -13043,7 +13051,7 @@
     },
     {
       "path": "src/security_runtime/task_closeout_worker.py",
-      "sha256": "a9ea28e1e349bda270873d9848409cc3d457bfacad96665f8d36ad302683af4d",
+      "sha256": "04d37ace9e7612fd90e432b40943f7ca83f5cee0f34187312117d18e5693c211",
       "purpose": "Detached closeout dispatcher. No model calls, task creation or source edits.",
       "symbols": [
         {
@@ -14340,7 +14348,7 @@
     },
     {
       "path": "src/security_runtime/task_workspaces.py",
-      "sha256": "40fb196b7d59b8c3d76385b29775109a324c33d6b2be80c1e08ac477d2805a39",
+      "sha256": "f8ad8855f6dfd226c59f61c41f894347707e8b26f514d6289649bd0dd29c8eed",
       "purpose": "Managed task source copies. Host activation and OS write isolation are separate.",
       "symbols": [
         {
@@ -14401,7 +14409,7 @@
     },
     {
       "path": "src/security_runtime/tasks/activity.py",
-      "sha256": "87e399d7a01ec8fb6ddae4761766651834ac0abcc46d701831ef1253918f0ae0",
+      "sha256": "57eb7b027a1cd74f9d4517d96aa5f780b289cb8a87de3f4a889c6c0752c40031",
       "purpose": "Small signed lifecycle/activity records. Hints are not source or scan proof.",
       "symbols": [
         {
@@ -14515,7 +14523,7 @@
     },
     {
       "path": "src/security_runtime/tasks/audit_scope.py",
-      "sha256": "95c8c862147acb2a71e52a942ca1e9c9bed2123768961ac58a301678421d6497",
+      "sha256": "3a97a5338dfc7076a04d296193ae0dd103ddbe3b9933b1ef4e136344283b7ee9",
       "purpose": "New results audit workspace differences, not the authors of those changes.",
       "symbols": [
         {
@@ -14541,7 +14549,7 @@
     },
     {
       "path": "src/security_runtime/tasks/baseline_inputs.py",
-      "sha256": "8e05b19c96ebb996e61568b2125a353cad455c65f18d274bd9c128a71546a0c1",
+      "sha256": "abf05d855d9b048a31febd3c5e36e26fd15fe573d8707725682e65876b897154",
       "purpose": "Private original scanner bytes, captured once alongside the task baseline.",
       "symbols": [
         {
@@ -15149,7 +15157,7 @@
     },
     {
       "path": "src/security_runtime/tasks/execution_diagnostics.py",
-      "sha256": "c32d81ae21cd3b8e41259cfe6652a18ab5e770534f9e4781a71078516391de51",
+      "sha256": "e9e55d325760a2b162d4196baf9525afaf94ebc13176b64a99b45c4020cbaee4",
       "purpose": "Closed, source-free execution diagnostics; never exception text or locals.",
       "symbols": [
         {
@@ -15362,7 +15370,7 @@
     },
     {
       "path": "src/security_runtime/tasks/lifecycle.py",
-      "sha256": "07975d39bbb2c15b41532b6d88e6eaa0584ddb75319f12bab8cfbb8d44bd0709",
+      "sha256": "3b6fc0e029add001343af884b7c154fc6995716c8ce7dfe6bbb0783561234957",
       "purpose": "Explicit task focus; switching never changes either task's baseline.",
       "symbols": [
         {
@@ -15432,7 +15440,7 @@
     },
     {
       "path": "src/security_runtime/tasks/ownership.py",
-      "sha256": "d06abcacf5c75b055400c77ef9a09d2c3f2799d9dc9f16c6a46c0588e2a5ca76",
+      "sha256": "b1fb2f5d3634514dd97f70b34d702c3a86fd9b05603ca79ba6f7fd92839ec27d",
       "purpose": "Internal task routing scopes; never an edit grant or a client-supplied owner.",
       "symbols": [
         {
@@ -15841,7 +15849,7 @@
     },
     {
       "path": "src/security_runtime/tasks/risk_attribution.py",
-      "sha256": "651959d3245135efd5fb7dc272017cdfdf8bc2c54766382740539f31078cc7bf",
+      "sha256": "9dfa8ce7f74a16d559ac99c25263d7144368d5f254fe88953754858a09ec0aee",
       "purpose": "Task-relative risk facts and evidence-bound host causal assessments.",
       "symbols": [
         {
@@ -16149,7 +16157,7 @@
     },
     {
       "path": "src/security_runtime/tasks/risk_reporting.py",
-      "sha256": "d3977b9c7bee304dc05950d394f4283a0c8ba95aca1c3b69cf2a0fa562b350b3",
+      "sha256": "e7721a246eb94f4252a5ccf4833b32e5b932794bb1f266ed397796052d082c1f",
       "purpose": "Stable report identity and semantic reminder receipts, separate from risk truth.",
       "symbols": [
         {
@@ -16838,7 +16846,7 @@
     },
     {
       "path": "src/security_runtime/token_usage.py",
-      "sha256": "84ecf22cedfa0ce671e213a820f147a82ea9f27f5b05adbede42cd9925ddaa6a",
+      "sha256": "ec5193fd89a8f122f49d6c44237dab8409c47c554a14668f217967107771028f",
       "purpose": "Host-neutral validation for reported token counters, never token estimates.",
       "symbols": [
         {
@@ -17169,7 +17177,7 @@
     },
     {
       "path": "src/security_runtime/triage_handoff.py",
-      "sha256": "f08abe813abd9cd532527a42a976bfed15f7a0f13ae0e07a4fc3b0bbf9c6a8cb",
+      "sha256": "a135cb089303c557debf259703efd0a442d685401a9a9a93dc90103d028b1786",
       "purpose": "Bound complete host evidence responses without changing evidence identities.",
       "symbols": [
         {
@@ -17462,7 +17470,7 @@
     },
     {
       "path": "src/security_runtime/user_paths.py",
-      "sha256": "c84a6404f61f9c89b3d1c116ae80e0e657bcc8a9064a0c6eab1bfb3ed63a4405",
+      "sha256": "58f48b0a1bd1ef76358f1c8c27c1d9c1ac71063ac66f609d7a36e0ba8169c9d3",
       "purpose": "Shared Windows defaults outside packaged hosts' AppData overlays.",
       "symbols": [
         {
@@ -17547,7 +17555,7 @@
     },
     {
       "path": "src/security_runtime/vue_scan.py",
-      "sha256": "6f7c62c41205277a50d6658d37551d1284a72747d8249ac45cad96c3e18dcdd6",
+      "sha256": "4923c9e11fe49655dbabee6c8267064a366274b807ac02e10882a63bf720a728",
       "purpose": "Disposable Vue script projections; preserve original evidence coordinates.",
       "symbols": [
         {
@@ -17578,7 +17586,7 @@
     },
     {
       "path": "src/security_runtime/vue_scripts.py",
-      "sha256": "9ad911c77abe0a509aea7c0158f725ddec047be500611331e40aa666c853e126",
+      "sha256": "02997297cef3a98e57281a8bd3b35a244f492a5d95bf01cb4e74cce661e47177",
       "purpose": "Bounded Vue SFC script extraction for static scanners, without compilation.",
       "symbols": [
         {
@@ -17688,7 +17696,7 @@
     },
     {
       "path": "src/security_runtime/windows_migration.py",
-      "sha256": "3c15b5d5c5a763217870aa91998c017f1b904c0f351576f029c401aae25bc8a2",
+      "sha256": "823d1549105983e7b574a1e58b1d536af1af334c40ae7e62c837af38a9633dbd",
       "purpose": "One-time, explicit-install migration out of Windows AppData overlays.",
       "symbols": [
         {

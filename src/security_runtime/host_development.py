@@ -18,7 +18,7 @@ def session_context(token, root):
         '填写 title、problem、impact、advice、unknowns、function_name（中文具体说明，问题专业解释，影响通俗解释）。'
         'return_risks=true、response_view=final_report。沿 next_action 读完同批分页，'
         '先一句话保留开发结果，再原样附完整 report_text；不得改成摘要、同上或省略漏洞段落。'
-        '有 runtime_update_notice 时，在正文后单独展示目标版本和「查看并更新」链接；url 为空则展示 fallback，不猜测地址。'
+        '有 runtime_update_notice 时，在正文后原样附 markdown；没有 markdown 则展示 fallback。'
         'report_text 末尾已含本批次唯一的风险管理链接；link_in_report 为 true 时不要再用 session_url 追加第二遍。'
         'session_url 只有 link_in_report 为 false 且非空时才作为 Markdown 链接补充展示；'
         '为空时保留报告中的链接不可用说明，不要输出 session_url: null、空链接或自行猜测网址。'
