@@ -339,8 +339,9 @@ class Handler(BaseHTTPRequestHandler):
             import threading
             threading.Thread(target=self.server.shutdown, daemon=True).start()
             return
+        update_path = path in ('/api/updates', '/api/updates/refresh')
         if (self.headers.get('Origin') != self.server.origin
-                or (path != '/api/updates' and (not self.authorized()
+                or (not update_path and (not self.authorized()
                     or not secrets.compare_digest(self.headers.get('X-CSRF-Token', ''), self.server.token)))):
             self.send_error(403); return
         try:
@@ -353,6 +354,12 @@ class Handler(BaseHTTPRequestHandler):
             data = json.loads(self.rfile.read(size))
             if not isinstance(data, dict):
                 raise ValueError('DASHBOARD_BODY_INVALID')
+            if path == '/api/updates/refresh':
+                from .runtime_update import schedule_refresh
+                if data:
+                    raise ValueError('UPDATE_BODY_INVALID')
+                self.reply(202, dict(status=schedule_refresh()))
+                return
             if path == '/api/updates':
                 from .runtime_update import apply_update
                 if set(data) != {'candidate_id'}:
@@ -401,6 +408,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.server.catalog:
                 self.server.catalog.wake.set()
         except ValueError as exc:
+            if path == '/api/updates' and str(exc) == 'UPDATE_CANDIDATE_STALE':
+                self.reply(409, dict(code='UPDATE_CANDIDATE_STALE'))
+                return
             self.reply(409 if 'CONFLICT' in str(exc) else 400,
                        dict(error='版本冲突，请刷新后重试。' if 'CONFLICT' in str(exc) else '操作未保存，请检查参数与记录状态。'))
         except (OSError, sqlite3.Error):

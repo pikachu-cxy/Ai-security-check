@@ -195,14 +195,33 @@ def test_report_delivery_scope_and_text_fallback(installation, monkeypatch, mode
         assert result == report
 
 
+def test_fallback_does_not_consume_link_notice(installation, monkeypatch):
+    service, _, _, _ = installation
+    service.refresh()
+    monkeypatch.setattr(update, 'installed_update', lambda: service)
+    url = [None]
+    monkeypatch.setattr(dashboard_service, 'update_url', lambda: url[0])
+    report = dict(check_ref='check', dirty_seq=1, scan_id='scan', host_review_completed=True,
+                  report_text='saved report', total=1, gaps=[])
+    later = dict(report, dirty_seq=2)
+    assert update.report_notice(report)['fallback']
+    assert update.report_notice(report) is None
+    assert update.report_notice(later) is None
+    url[0] = 'http://127.0.0.1:54321/updates'
+    assert update.report_notice(later)['url'] == url[0]
+    assert update.report_notice(later) is None
+
+
 def test_update_page_accepts_same_origin_post_without_dashboard_authorization(installation, monkeypatch):
     from security_runtime.risk_dashboard import Server
-    service, fake, _, _ = installation
+    service, fake, _, clock = installation
     service.refresh()
     candidate = service.status()['candidate']['id']
     monkeypatch.setattr(update, 'installed_update', lambda: service)
     jobs = []
-    monkeypatch.setattr(update, 'spawn_update', lambda action, ticket: jobs.append(ticket))
+    refreshes = []
+    monkeypatch.setattr(update, 'spawn_update',
+                        lambda action, ticket=None: (jobs if action == '_install' else refreshes).append(ticket))
     server = Server()
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -213,7 +232,6 @@ def test_update_page_accepts_same_origin_post_without_dashboard_authorization(in
     def request(method, path, headers=None, body=None):
         client.request(method, path, body=body, headers=headers or {})
         response = client.getresponse()
-        response.read()
         return response.status, response.read()
 
     try:
@@ -230,8 +248,22 @@ def test_update_page_accepts_same_origin_post_without_dashboard_authorization(in
         assert request('POST', '/api/updates', dict(headers, Host='example.invalid'), body)[0] == 403
         assert request('POST', '/api/updates', {'Content-Type': 'application/json'}, body)[0] == 403
         assert request('POST', '/api/updates', {'Origin': server.origin, 'Content-Type': 'text/plain'}, body)[0] == 400
-        assert request('POST', '/api/updates', headers, json.dumps({'candidate_id': '0' * 64}))[0] == 400
+        assert request('POST', '/api/updates', headers, json.dumps({'candidate_id': '0' * 64}))[0] == 409
         assert request('POST', '/api/updates', headers, json.dumps({'url': 'https://example.invalid'}))[0] == 400
+        assert request('POST', '/api/updates/refresh', dict(headers, Origin='https://example.invalid'), '{}')[0] == 403
+        assert request('POST', '/api/updates/refresh', headers, body)[0] == 400
+        status, response = request('POST', '/api/updates/refresh', headers, '{}')
+        assert status == 202 and json.loads(response)['status'] == 'FRESH'
+        assert not refreshes
+        clock[0] += update.FRESH + 1
+        status, response = request('POST', '/api/updates', headers, body)
+        assert status == 409 and json.loads(response)['code'] == 'UPDATE_CANDIDATE_STALE'
+        assert not jobs
+        status, response = request('POST', '/api/updates/refresh', headers, '{}')
+        assert status == 202 and json.loads(response)['status'] == 'CHECKING'
+        assert refreshes == [None]
+        assert not jobs and not fake.downloads
+        service.refresh()
         assert request('POST', '/api/actions', headers, '{}')[0] == 403
         assert request('POST', '/api/config', headers, '{}')[0] == 403
         assert request('POST', '/shutdown', headers, '{}')[0] == 403

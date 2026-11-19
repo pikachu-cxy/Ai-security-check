@@ -10444,7 +10444,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "be0cea4a7606f22ac2173b68927ba84a9ef6be400c96395fc98842b602cd14b5",
+      "sha256": "219ff8008117d15dadb3911c502386bac3f8dec9769838b4fb84e10e324d942b",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10505,11 +10505,11 @@
         },
         {
           "name": "serve",
-          "line": 410
+          "line": 420
         },
         {
           "name": "launch",
-          "line": 430
+          "line": 440
         }
       ]
     },
@@ -10982,7 +10982,7 @@
     },
     {
       "path": "src/security_runtime/runtime_update.py",
-      "sha256": "ea0f64d4b6e41ef54db43f049fad4c2bfe250f8f0cea285ddd57a2d047744908",
+      "sha256": "a28e66c35d73314bb26630496522e94c72b80d45b925b44e8217c0e8a03f2a7b",
       "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
       "symbols": [
         {
@@ -11043,43 +11043,43 @@
         },
         {
           "name": "RuntimeUpdate.refresh",
-          "line": 214
+          "line": 219
         },
         {
           "name": "RuntimeUpdate.apply",
-          "line": 229
+          "line": 234
         },
         {
           "name": "RuntimeUpdate.transition",
-          "line": 254
+          "line": 259
         },
         {
           "name": "RuntimeUpdate.install",
-          "line": 262
+          "line": 267
         },
         {
           "name": "installed_update",
-          "line": 302
+          "line": 307
         },
         {
           "name": "spawn_update",
-          "line": 316
+          "line": 321
         },
         {
           "name": "schedule_refresh",
-          "line": 325
+          "line": 330
         },
         {
           "name": "update_status",
-          "line": 341
+          "line": 350
         },
         {
           "name": "apply_update",
-          "line": 346
+          "line": 355
         },
         {
           "name": "report_notice",
-          "line": 353
+          "line": 362
         }
       ]
     },

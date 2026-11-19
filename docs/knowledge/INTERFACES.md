@@ -2,7 +2,11 @@
 
 ## Runtime 更新
 
+`POST /api/updates/refresh` 只接收同源空 JSON 对象，复用后台发行检查、缓存和退避。返回 `CHECKING`、`FRESH`、`BACKOFF`、`OFFLINE` 或 `UNAVAILABLE`。页面只在手动检查后有界读取状态。安装提交遇到无效的已缓存候选返回 HTTP 409 和 `UPDATE_CANDIDATE_STALE`，页面重新读取状态并等待用户再次确认。
+
 当前报告末页可附 `runtime_update_notice`，包含 `current_version`、`target_version`、`candidate_id`、`url`、`label`、`markdown` 和 `fallback`。宿主在报告后原样附上「存在新版本是否更新：查看并更新」对应的 Markdown，有链接时点击进入更新页。此字段独立于正文、摘要和分页。读取只消费已保存缓存，安装级目标版本限频 24 小时，同批重读不会重复提示。无候选且无缺口、未完成、历史查询和普通聊天保持静默。
+
+文字回退和可点击链接分别限频。已交付文字回退的批次仍可在后台恢复后获得链接，已交付链接的批次继续沿用原去重规则。
 
 `GET /updates` 与 `GET /api/updates` 只读。报告链接生成前核对同构建的后台健康和更新路由标识，指向普通本机 `/updates`。直接访问或从风险管理的「工具更新」进入都可以在页面点击确认。安装 `POST /api/updates` 验证回环 Host、同源 Origin 和 JSON 请求，只接收 `{"candidate_id": "..."}`，无需 Cookie 或链接授权。服务校验本地官方候选是否有效，并在后台重新核验发行和包摘要。风险处置、设置和关闭服务继续沿用原鉴权。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
 

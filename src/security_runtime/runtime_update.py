@@ -203,11 +203,16 @@ class RuntimeUpdate:
             candidate = None
         if job.get('status') in BUSY and self.now() > job['deadline']:
             job = dict(job, status='FAILED', reason='UPDATE_INTERRUPTED')
+        retry_at = release.get('retry_at', 0)
+        release_check = release.get('state', 'NOT_CHECKED')
+        if self.now() < release.get('expires', 0):
+            release_check = 'FRESH'
+        elif release_check == 'CHECKING' and self.now() >= retry_at:
+            release_check = 'STALE'
         return dict(status='AVAILABLE' if candidate else 'NO_CANDIDATE',
                     active_version=active['version'], active_build=active['build_id'],
                     service_build=self.running_build, current_mcp_build=None,
-                    release_check=('FRESH' if self.now() < release.get('expires', 0)
-                                   else release.get('state', 'NOT_CHECKED')),
+                    release_check=release_check, release_check_retry_at=retry_at,
                     candidate={k: candidate[k] for k in ('id', 'version')} if candidate else None,
                     job={k: job[k] for k in ('status', 'reason', 'version') if k in job})
 
@@ -324,18 +329,22 @@ def spawn_update(action, ticket=None):
 
 def schedule_refresh():
     if os.getenv('SECURITY_RUNTIME_OFFLINE') == '1':
-        return
+        return 'OFFLINE'
     try:
         service = installed_update()
         if service is None:
-            return
+            return 'UNAVAILABLE'
         if service.db.is_file():
             with service.connection() as db:
-                if service.now() < service.get(db, 'release').get('retry_at', 0):
-                    return
+                release = service.get(db, 'release')
+                if service.now() < release.get('retry_at', 0):
+                    if service.now() < release.get('expires', 0):
+                        return 'FRESH'
+                    return 'CHECKING' if release.get('state') == 'CHECKING' else 'BACKOFF'
         spawn_update('_refresh')
+        return 'CHECKING'
     except (OSError, ValueError, sqlite3.Error):
-        return
+        return 'UNAVAILABLE'
 
 
 def update_status():
@@ -373,13 +382,17 @@ def report_notice(report):
         with service.connection(write=True) as db:
             if service.cached(db) != candidate:
                 return None
-            previous = service.get(db, 'notice:' + candidate['version'])
-            if previous.get('batch') == batch or service.now() < previous.get('until', 0):
-                return None
             if service.get(db, 'report:' + batch):
                 return None
-            service.put(db, 'notice:' + candidate['version'], dict(batch=batch, until=service.now() + 86400))
-            service.put(db, 'report:' + batch, dict(offered=True))
+            notice_key = ('notice:' if url else 'fallback-notice:') + candidate['version']
+            report_key = ('report:' if url else 'fallback-report:') + batch
+            previous = service.get(db, notice_key)
+            if previous.get('batch') == batch or service.now() < previous.get('until', 0):
+                return None
+            if not url and service.get(db, report_key):
+                return None
+            service.put(db, notice_key, dict(batch=batch, until=service.now() + 86400))
+            service.put(db, report_key, dict(offered=True))
         from ._version import __version__
         label = '查看并更新'
         return dict(current_version=__version__, target_version=candidate['version'], candidate_id=candidate['id'],
