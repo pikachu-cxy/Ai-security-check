@@ -2,11 +2,13 @@
 
 ## Runtime 更新
 
+页面读取状态失败时使用中文提示，每隔 1.5 秒重试，连续失败最多重试 20 次。安装提交没有返回回执时只重新读取状态。后端确认安装及接入同步成功后，页面提示完全退出并重启当前编辑器；候选栏只显示已核验的可安装版本。
+
 在线更新激活后进入 `SYNCING_CODEX`。已存在签名托管记录时，由新构建调用全局接入修复入口并校验结果；没有托管记录时跳过。修复不批准接管用户自建连接。同步失败返回 `INSTALLED_CODEX_REPAIR_REQUIRED`，活动版本保留，并在日志中记录同步失败。
 
 安装级 `runtime-updates.db` 的 `update_log` 表保存最近 512 条更新诊断事件。通过只读 SQLite 连接执行 `SELECT event FROM update_log ORDER BY id DESC LIMIT 50`。事件 JSON 包含时间、操作编号、阶段和结果，按阶段附耗时、版本、原因和传输字节数、上限、总时限、HTTP 状态。安装提交与后台工作进程共享操作编号。日志不写入执行票据、链接或原始异常消息。日志写入失败不影响更新流程。旧安装没有历史事件时该表可能不存在。
 
-`POST /api/updates/refresh` 只接收同源空 JSON 对象，复用后台发行检查、缓存和退避。返回 `CHECKING`、`FRESH`、`BACKOFF`、`OFFLINE` 或 `UNAVAILABLE`。页面只在手动检查后有界读取状态。安装提交遇到无效的已缓存候选返回 HTTP 409 和 `UPDATE_CANDIDATE_STALE`，页面重新读取状态并等待用户再次确认。
+`POST /api/updates/refresh` 只接收同源空 JSON 对象，复用后台发行检查、缓存和退避。返回 `CHECKING`、`FRESH`、`BACKOFF`、`OFFLINE` 或 `UNAVAILABLE`。安装提交遇到无效的已缓存候选返回 HTTP 409 和 `UPDATE_CANDIDATE_STALE`，页面重新读取状态并等待用户再次确认。
 
 当前报告末页可附 `runtime_update_notice`，包含 `current_version`、`target_version`、`candidate_id`、`url`、`label`、`markdown` 和 `fallback`。宿主在报告后原样附上「存在新版本是否更新：查看并更新」对应的 Markdown，有链接时点击进入更新页。此字段独立于正文、摘要和分页。读取只消费已保存缓存，安装级目标版本限频 24 小时，同批重读不会重复提示。无候选且无缺口、未完成、历史查询和普通聊天保持静默。
 

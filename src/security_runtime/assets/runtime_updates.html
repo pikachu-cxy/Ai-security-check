@@ -21,16 +21,18 @@
 </main>
 <script>
 const byId = id => document.getElementById(id);
+const restartHint = '更新已安装。请完全退出并重启 Codex 或当前编辑器，使更新生效。';
 const stages = {QUEUED:'已提交更新', DOWNLOADING:'正在下载并核对发行信息', VERIFYING:'正在校验安装包',
-  ACTIVATING:'正在试启动并切换安装', INSTALLED_RECONNECT_REQUIRED:'已安装，重连后生效',
+  ACTIVATING:'正在试启动并切换安装', INSTALLED_RECONNECT_REQUIRED:restartHint,
   SYNCING_CODEX:'正在同步 Codex 全局接入',
   INSTALLED_CODEX_REPAIR_REQUIRED:'程序已激活，Codex 接入同步失败，需要修复全局接入。',
-  INSTALLED_AWAITING_CONNECTION:'已安装。兼容连接会尝试切换，当前会话是否已切换以宿主构建信息为准。',
+  INSTALLED_AWAITING_CONNECTION:restartHint,
   FAILED:'更新未完成。请查看失败原因后重试。'};
 const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING','SYNCING_CODEX']);
+const installedStages = new Set(['INSTALLED_RECONNECT_REQUIRED','INSTALLED_AWAITING_CONNECTION','INSTALLED_CODEX_REPAIR_REQUIRED']);
 const checkStates = {NOT_CHECKED:'尚未检查更新。', STALE:'上次检查结果已过期。',
   CHECKING:'正在检查更新…', UNAVAILABLE:'暂时无法核验发行信息，请稍后重试。'};
-let candidate, waiting, timer, retryAt, previousRetryAt, checkUntil = 0;
+let candidate, waiting, timer, retryAt, previousRetryAt, checkUntil = 0, statusFailures = 0;
 async function json(url, options) {
   const response = await fetch(url, options);
   if (response.status === 409) {
@@ -43,11 +45,12 @@ async function json(url, options) {
 async function refresh(message) {
   clearTimeout(timer);
   try {
-    const update = await json('/api/updates');
+    const update = await json('/api/updates', {cache:'no-store'});
+    statusFailures = 0;
     candidate = update.candidate?.id;
     const job = update.job || {};
     byId('active').textContent = update.active_version || '无法验证安装';
-    byId('target').textContent = update.candidate?.version || job.version || '—';
+    byId('target').textContent = update.candidate?.version || '—';
     waiting = activeStages.has(job.status);
     retryAt = update.release_check_retry_at;
     const checking = Date.now() < checkUntil && update.release_check !== 'FRESH'
@@ -55,23 +58,29 @@ async function refresh(message) {
     if (!checking) checkUntil = 0;
     const canCheck = Object.hasOwn(checkStates, update.release_check);
     let state = stages[job.status];
-    if (!waiting && !candidate && (canCheck || checking) && job.status !== 'INSTALLED_CODEX_REPAIR_REQUIRED') {
+    if (!waiting && !candidate && (canCheck || checking) && !installedStages.has(job.status)) {
       state = checking ? checkStates.CHECKING : checkStates[update.release_check];
     }
     state ||= candidate ? '有可安装的正式发行版。' : update.release_check === 'FRESH'
       ? '当前没有可安装的已核验新版。' : '无法验证本机安装。';
     if (job.status === 'FAILED' && state === stages.FAILED && job.reason) state += ' ' + job.reason;
-    byId('state').textContent = message || state;
+    byId('state').textContent = waiting || installedStages.has(job.status) ? state : message || state;
     byId('apply').hidden = !candidate;
     byId('apply').disabled = !candidate || waiting;
     byId('check').hidden = !canCheck || Boolean(candidate) || waiting;
     byId('check').disabled = checking || waiting;
     if (waiting || checking) timer = setTimeout(refresh, 1500);
-  } catch (error) {
-    checkUntil = 0;
-    byId('state').textContent = error.message;
+  } catch {
+    byId('target').textContent = '—';
     byId('apply').disabled = true;
-    byId('check').disabled = false;
+    byId('check').disabled = true;
+    if (++statusFailures <= 20) {
+      byId('state').textContent = '暂时无法读取更新状态，正在重新连接本机更新服务…';
+      timer = setTimeout(refresh, 1500);
+    } else {
+      checkUntil = 0;
+      byId('state').textContent = '暂时无法确认更新结果。请稍后刷新此页面查看。';
+    }
   }
 }
 byId('check').onclick = async () => {
@@ -84,8 +93,8 @@ byId('check').onclick = async () => {
     const messages = {OFFLINE:'当前为离线模式。', BACKOFF:'请稍后再检查更新。',
       UNAVAILABLE:'暂时无法启动更新检查，请稍后重试。'};
     await refresh(messages[status]);
-  } catch (error) {
-    byId('state').textContent = error.message;
+  } catch {
+    byId('state').textContent = '暂时无法提交更新检查，请稍后重试。';
     byId('check').disabled = false;
   }
 };
@@ -103,9 +112,8 @@ byId('apply').onclick = async () => {
     } else {
       await refresh();
     }
-  } catch (error) {
-    byId('state').textContent = error.message;
-    byId('apply').disabled = waiting = false;
+  } catch {
+    await refresh('未收到更新提交回执，请核对当前状态后重试。');
   }
 };
 refresh();
