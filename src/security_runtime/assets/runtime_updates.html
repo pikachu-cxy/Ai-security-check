@@ -17,6 +17,7 @@
   <dl><dt>已安装版本</dt><dd id="active">—</dd><dt>可安装版本</dt><dd id="target">—</dd></dl>
   <p id="state" role="status" aria-live="polite"></p>
   <button id="apply" hidden disabled>立即更新</button>
+  <button id="check" hidden disabled>检查更新</button>
 </main>
 <script>
 const byId = id => document.getElementById(id);
@@ -25,13 +26,19 @@ const stages = {QUEUED:'已提交更新', DOWNLOADING:'正在下载并核对发�
   INSTALLED_AWAITING_CONNECTION:'已安装。兼容连接会尝试切换，当前会话是否已切换以宿主构建信息为准。',
   FAILED:'更新未完成。请查看失败原因后重试。'};
 const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING']);
-let candidate, waiting, timer;
+const checkStates = {NOT_CHECKED:'尚未检查更新。', STALE:'上次检查结果已过期。',
+  CHECKING:'正在检查更新…', UNAVAILABLE:'暂时无法核验发行信息，请稍后重试。'};
+let candidate, waiting, timer, retryAt, previousRetryAt, checkUntil = 0;
 async function json(url, options) {
   const response = await fetch(url, options);
+  if (response.status === 409) {
+    const data = await response.json();
+    if (data.code === 'UPDATE_CANDIDATE_STALE') return data;
+  }
   if (!response.ok) throw new Error(response.status === 403 ? '请在本机工具更新页面提交更新。' : '更新服务暂时不可用。');
   return response.json();
 }
-async function refresh() {
+async function refresh(message) {
   clearTimeout(timer);
   try {
     const update = await json('/api/updates');
@@ -40,25 +47,60 @@ async function refresh() {
     byId('active').textContent = update.active_version || '无法验证安装';
     byId('target').textContent = update.candidate?.version || job.version || '—';
     waiting = activeStages.has(job.status);
-    let state = stages[job.status] || (candidate ? '有可安装的正式发行版。' : '当前没有可安装的已核验新版。');
-    if (job.status === 'FAILED' && job.reason) state += ' ' + job.reason;
-    byId('state').textContent = state;
+    retryAt = update.release_check_retry_at;
+    const checking = Date.now() < checkUntil && update.release_check !== 'FRESH'
+      && (update.release_check !== 'UNAVAILABLE' || retryAt === previousRetryAt);
+    if (!checking) checkUntil = 0;
+    const canCheck = Object.hasOwn(checkStates, update.release_check);
+    let state = stages[job.status];
+    if (!waiting && !candidate && (canCheck || checking)) {
+      state = checking ? checkStates.CHECKING : checkStates[update.release_check];
+    }
+    state ||= candidate ? '有可安装的正式发行版。' : update.release_check === 'FRESH'
+      ? '当前没有可安装的已核验新版。' : '无法验证本机安装。';
+    if (job.status === 'FAILED' && state === stages.FAILED && job.reason) state += ' ' + job.reason;
+    byId('state').textContent = message || state;
     byId('apply').hidden = !candidate;
     byId('apply').disabled = !candidate || waiting;
-    if (waiting) timer = setTimeout(refresh, 1500);
+    byId('check').hidden = !canCheck || Boolean(candidate) || waiting;
+    byId('check').disabled = checking || waiting;
+    if (waiting || checking) timer = setTimeout(refresh, 1500);
   } catch (error) {
+    checkUntil = 0;
     byId('state').textContent = error.message;
     byId('apply').disabled = true;
+    byId('check').disabled = false;
   }
 }
+byId('check').onclick = async () => {
+  byId('check').disabled = true;
+  previousRetryAt = retryAt;
+  try {
+    const {status} = await json('/api/updates/refresh', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'});
+    if (status === 'CHECKING') checkUntil = Date.now() + 45000;
+    const messages = {OFFLINE:'当前为离线模式。', BACKOFF:'请稍后再检查更新。',
+      UNAVAILABLE:'暂时无法启动更新检查，请稍后重试。'};
+    await refresh(messages[status]);
+  } catch (error) {
+    byId('state').textContent = error.message;
+    byId('check').disabled = false;
+  }
+};
 byId('apply').onclick = async () => {
   if (!candidate || waiting) return;
   byId('apply').disabled = waiting = true;
   byId('state').textContent = '正在提交更新…';
   try {
-    await json('/api/updates', {method:'POST',headers:{'Content-Type':'application/json'},
+    const result = await json('/api/updates', {method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({candidate_id:candidate})});
-    await refresh();
+    if (result.code === 'UPDATE_CANDIDATE_STALE') {
+      candidate = undefined;
+      byId('apply').hidden = true;
+      await refresh('更新信息已过期，请重新检查。');
+    } else {
+      await refresh();
+    }
   } catch (error) {
     byId('state').textContent = error.message;
     byId('apply').disabled = waiting = false;
