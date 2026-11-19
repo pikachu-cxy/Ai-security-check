@@ -2,6 +2,8 @@
 
 ## 局部资产图与深度业务审计（源码）
 
+本批实现提交 `23ffe4e`，分支 `feature/runtime-mvp`，基于 `03deb46`。
+
 标准流式业务审计保留单 Worker，用已记录及显式授权路径生成通用源码片段并定位首包。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：`FILE` 只用于分组，Planner 的任务只绑定 `SOURCE_REGION`。片段带路径、实际行范围、源码哈希、证据引用和定位来源，只在同版本证据读取成功后入图。已删除业务审计内的 Spring 注解识别、Spring 调用候选和 Java 专属事实校验，也删除用 Java AST 复验 Worker 建议的路径；`javalang` 仍保留给静态扫描链路。
 
 行范围优先取已记录路径的 Git HEAD 差异，仅作为定位依据，不证明这些行都由本会话修改；新文件、无 Git 或无法定位差异时回退文件前 80 行并标记变更行未知。空文件、不可读文件和预算外文件只记覆盖缺口，不造节点。窗口预算先给不同文件分配首个窗口，再给单个文件分配额外窗口。`deep_prepare` 在现有响应预算内同时返回资产图和首包源码，复用已读取的证据，不为首包重复读取；只要有一个已取证的片段就不因语言降级，没有可取证资产时才回落到单 Worker。
@@ -18,7 +20,7 @@
 
 上一版 Spring 样例的请求/响应字节与耗时对照（A 前 80 行、B 事实首包、C 两轮）属于已移除的提取器，不能用于描述当前通用片段的首包体积或耗时，本批未重新测量。重复签发的同窗证据可复用收据、两个 Worker 的授权各自验证仍成立。
 
-Windows 隔离源码验收通过 7 项通用资产图测试、15 项深审任务/黑板/判定/收尾测试，另有 53 项流式审计、增量审计、业务审计与 MCP 契约回归，以及 17 项风险管理页 JavaScript 测试。同一批回归中 `test_flow_repairs.py` 4 项失败与 4 项详情用例夹具错误、`test_review_delivery.py` 1 项内部错误码断言、`test_lightweight_hooks.py` 1 项、`test_mcp_product_contracts.py` 1 项、`test_development_review_completion.py` 2 项失败在未修改 HEAD 的隔离副本同样复现，未计入通过。指导目录 1 项 `HOST_INSTRUCTIONS` 字节上限失败同样在未修改文件上复现。知识索引和宿主指导副本已重新生成。
+Windows 隔离源码验收：`python -m pytest -q tests/test_audit_assets.py tests/test_deep_audit.py tests/test_audit_stream_service.py tests/test_business_audit.py tests/test_incremental_audit.py tests/test_audit_stream_mcp.py tests/test_mcp_tool_groups.py tests/test_dashboard_delivery.py tests/test_development_risks.py tests/test_stop_wait_policy.py tests/test_stop_recovery_minimal.py` 共 149 项通过，含 8 项通用资产图、15 项深审任务/黑板/判定/收尾和 1 项深审 MCP 往返；`node --test tests/test_risk_dashboard_ui.cjs` 17 项通过；`python scripts/maintenance/knowledge_index.py --check` 一致。同一批回归中 `test_flow_repairs.py` 4 项失败与 4 项详情用例夹具错误、`test_review_delivery.py` 1 项内部错误码断言、`test_lightweight_hooks.py` 1 项、`test_mcp_product_contracts.py` 1 项、`test_development_review_completion.py` 2 项失败在未修改 HEAD 的隔离副本同样复现，未计入通过。指导目录 1 项 `HOST_INSTRUCTIONS` 字节上限失败同样在未修改文件上复现。测试进程内的并发由线程屏障模拟，真实 Codex 桌面并发未实测；本批未安装、未发布、未推送。
 
 ## 跨编辑器 Runtime 更新（源码）
 
