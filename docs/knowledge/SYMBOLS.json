@@ -108,51 +108,59 @@
     },
     {
       "path": "src/security_runtime/audit_assets.py",
-      "sha256": "fac21243cd6cc279846453d71ef74bd485e6baf0c362e12b25fc82f60d035e93",
-      "purpose": "Bounded, evidence-backed Spring source facts for a development audit.",
+      "sha256": "8c94d7a4f57448a7fa513bd07d842fb1501ef7fcb65a8dbb410548f765ffbdac",
+      "purpose": "Bounded, evidence-backed source-region assets for a development audit.",
       "symbols": [
         {
-          "name": "_changed_lines",
-          "line": 28
+          "name": "_identifier",
+          "line": 25
         },
         {
-          "name": "_parse",
-          "line": 38
+          "name": "_changed_lines",
+          "line": 30
+        },
+        {
+          "name": "_windows",
+          "line": 46
         },
         {
           "name": "plan",
-          "line": 156
+          "line": 72
         },
         {
           "name": "project",
-          "line": 211
+          "line": 142
+        },
+        {
+          "name": "first_package",
+          "line": 177
         },
         {
           "name": "bound",
-          "line": 238
+          "line": 191
         }
       ]
     },
     {
       "path": "src/security_runtime/audit_graph_view.py",
-      "sha256": "9da6c5a2ff668df3ee86b6984a3d2f1513568ed13d05d66b2e8bfce311c53531",
+      "sha256": "bbb54b12467730823d4dcae5fa27ec422fca49f8205053af15cfca411b1cceec",
       "purpose": "Read-only projections of the saved, version-bound local audit graphs.",
       "symbols": [
         {
           "name": "graphs",
-          "line": 24
+          "line": 25
         },
         {
           "name": "report_lines",
-          "line": 66
+          "line": 69
         },
         {
           "name": "dashboard_view",
-          "line": 102
+          "line": 106
         },
         {
           "name": "evidence_view",
-          "line": 152
+          "line": 156
         }
       ]
     },
@@ -173,7 +181,7 @@
     },
     {
       "path": "src/security_runtime/audit_stream_adapter.py",
-      "sha256": "9fdd28727e76e077d07c114b884d8f4f790db996e53195996ef55cea7b10d2ed",
+      "sha256": "028e5a3577e467993e054d9771f6ea5197711d3f32ed8163457561709c1dd096",
       "purpose": "Dedicated delegated audit boundary; a capability never authorizes other tools.",
       "symbols": [
         {
@@ -182,13 +190,13 @@
         },
         {
           "name": "delegated_risks",
-          "line": 45
+          "line": 47
         }
       ]
     },
     {
       "path": "src/security_runtime/audit_stream_service.py",
-      "sha256": "a1c22e0e19240f307eb13b8db91df475984ed3e280d2a2b476217fe959cb0243",
+      "sha256": "603cfdcf6c53b673fbef879f6badd995fb20afc25e4bd52483acc3cfaa020a92",
       "purpose": "Owner-authorized child audit capability and durable result reception.",
       "symbols": [
         {
@@ -213,35 +221,35 @@
         },
         {
           "name": "validate_commit",
-          "line": 277
+          "line": 280
         },
         {
           "name": "valid_reviews",
-          "line": 287
+          "line": 290
         },
         {
           "name": "assessment_current",
-          "line": 310
+          "line": 313
         },
         {
           "name": "_status",
-          "line": 324
+          "line": 327
         },
         {
           "name": "revalidate",
-          "line": 340
+          "line": 343
         },
         {
           "name": "absent",
-          "line": 376
+          "line": 379
         },
         {
           "name": "absence_evidence",
-          "line": 387
+          "line": 390
         },
         {
           "name": "_scrub",
-          "line": 403
+          "line": 406
         }
       ]
     },
@@ -2311,20 +2319,20 @@
     },
     {
       "path": "src/security_runtime/deep_audit.py",
-      "sha256": "1f403ab19990ca16b234c0a337a8ad2ac78be2d86e7f246ddc7eec59cb6dce9c",
-      "purpose": "Planner handoff and task leases for bounded, read-only business audits.",
+      "sha256": "76ecd0953dd67975633e38b43996aa6f42dbe9f0a56e06302d9f48360b241f09",
+      "purpose": "Planner handoff, shared board and task leases for bounded, read-only business audits.",
       "symbols": [
         {
           "name": "AuditTask",
-          "line": 22
+          "line": 25
         },
         {
-          "name": "FactSuggestion",
-          "line": 34
+          "name": "BoardEntry",
+          "line": 38
         },
         {
           "name": "TaskResult",
-          "line": 44
+          "line": 45
         },
         {
           "name": "current",
@@ -2339,80 +2347,88 @@
           "line": 70
         },
         {
+          "name": "_board_view",
+          "line": 81
+        },
+        {
           "name": "_planner_view",
-          "line": 78
+          "line": 87
         },
         {
           "name": "_unresolved",
-          "line": 90
+          "line": 101
         },
         {
           "name": "prepare",
-          "line": 98
+          "line": 110
         },
         {
           "name": "fallback",
-          "line": 136
+          "line": 153
         },
         {
           "name": "_initial_view",
-          "line": 148
+          "line": 165
         },
         {
           "name": "manage",
-          "line": 158
+          "line": 178
         },
         {
           "name": "_plan",
-          "line": 209
+          "line": 231
         },
         {
           "name": "_claim",
-          "line": 243
+          "line": 273
         },
         {
           "name": "_task",
-          "line": 267
+          "line": 297
         },
         {
           "name": "process",
-          "line": 278
+          "line": 308
         },
         {
-          "name": "_read",
-          "line": 313
+          "name": "_board",
+          "line": 347
         },
         {
-          "name": "_receipt",
-          "line": 339
-        },
-        {
-          "name": "_submit",
-          "line": 344
-        },
-        {
-          "name": "_verify_suggestions",
+          "name": "decide",
           "line": 388
         },
         {
+          "name": "_read",
+          "line": 411
+        },
+        {
+          "name": "_receipt",
+          "line": 437
+        },
+        {
+          "name": "_submit",
+          "line": 442
+        },
+        {
           "name": "_proof_refs",
-          "line": 428
+          "line": 485
         },
         {
           "name": "finish",
-          "line": 435
+          "line": 491
         },
         {
           "name": "validate_finish",
-          "line": 493
+          "line": 552
         },
         {
           "name": "seal_finish",
-          "line": 501
+          "line": 560
         },
         {
           "name": "revalidate",
-          "line": 529
+          "line": 589
         }
       ]
     },
@@ -3379,7 +3395,7 @@
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "c7741b2337dd182e6fb838b9b0fd6df1cebbb89d6e697b10ae58c86081842614",
+      "sha256": "562a2e8bc9d7106450cd9d3f171c0b2986d4aad4591e072cd2b23e008aa1c2bc",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -5146,7 +5162,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "fc57bbccf1c4c267b45d1d76dabded80c6e001768f7d8fc7e2ec615b31c549dc",
+      "sha256": "b152d731771ef001cc273305f27ad15ab322657a8543a74e4ff78a5d5d2dc300",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -7322,7 +7338,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "f492cde499d0415434a81d0eb37781959057c72c0411ec3ecbe424f67e83d03c",
+      "sha256": "6c4b574f3288d6951b90574c2fec360f3d2b2b432275e89c6f37b8ef95af24a1",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {

@@ -157,6 +157,6 @@ OpenGrep macOS 载荷复用：`opengrep_payload.py` 在安装/显式准备时从
 
 | 修改范围 | 源码入口 | 定向验证 |
 | --- | --- | --- |
-| Spring 事实与首包 | `audit_assets.py`、`audit_stream_service.py:process` | `tests/test_audit_assets.py`、`tests/test_audit_stream_service.py` |
-| Planner 协议、任务租约与最终发布 | `deep_audit.py`、`incremental_audit.py`、`development_risks.py`、`mcp_tools/development_check.py` | `tests/test_deep_audit.py`、`tests/test_incremental_audit.py`、`tests/test_business_audit.py` |
+| 通用源码片段与首包 | `audit_assets.py`、`audit_stream_service.py:process` | `tests/test_audit_assets.py`、`tests/test_audit_stream_service.py` |
+| Planner 协议、黑板、任务租约与最终发布 | `deep_audit.py`、`incremental_audit.py`、`development_risks.py`、`mcp_tools/development_check.py` | `tests/test_deep_audit.py`、`tests/test_incremental_audit.py`、`tests/test_business_audit.py` |
 | 原报告交付和两图追溯 | `development_views.py`、`development_stop.py`、`audit_graph_view.py`、`risk_dashboard.py`、`assets/risk_dashboard.html` | `tests/test_deep_audit.py`、`tests/test_dashboard_delivery.py`、`tests/test_risk_dashboard_ui.cjs` |

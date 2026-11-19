@@ -366,8 +366,8 @@ def closeout_page(service, offset, limit, *, expected_seq=None, scan_id=None):
     from .deep_audit import current as deep_current, finish as finish_deep
     job = deep_current(check)
     if offset == 0 and job and job['stage'] in {'PLANNING', 'WORKING'}:
-        ready = job['tasks'] and all(task['state'] == 'VERIFIED' for task in job['tasks'])
-        reason = '宿主收尾时核对已提交的任务' if ready else '宿主收尾时仍有待处理的审计计划或证据'
+        ready = job['tasks'] and all(task.get('planner_decision') == 'ACCEPTED' for task in job['tasks'])
+        reason = '宿主收尾时核对已接受的任务' if ready else '宿主收尾时仍有待处理的审计计划、证据或 Planner 判定'
         try:
             finish_deep(service, reason)
         except ValueError as error:

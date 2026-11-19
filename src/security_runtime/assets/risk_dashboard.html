@@ -95,8 +95,9 @@ function entityAction(e,action){return api('/api/entities',{action,kind:e.kind,i
 $('deleteConfirm').onclick=async()=>{if(!deleting)return;$('deleteConfirm').disabled=true;try{await entityAction(deleting,'delete');$('deleteDialog').close();notice('已移入回收站，可在左侧回收站恢复。');await loadEntities()}catch(e){notice(e.message);$('deleteDialog').close()}finally{$('deleteConfirm').disabled=false}};
 $('deleteCancel').onclick=()=>$('deleteDialog').close();$('entityRefresh').onclick=loadEntities;$('entitySearch').oninput=renderEntities;
 for(const button of document.querySelectorAll('[data-view]'))button.onclick=()=>resourceNavigate(button.dataset.view);
-const auditAssetLabels={ENTRY:'入口',METHOD:'方法',DECLARED_GUARD:'声明式校验',CHECK_CANDIDATE:'校验候选',
+const auditAssetLabels={FILE:'文件',SOURCE_REGION:'源码片段',ENTRY:'入口',METHOD:'方法',DECLARED_GUARD:'声明式校验',CHECK_CANDIDATE:'校验候选',
  WRITE_CANDIDATE:'写操作候选',STATE_REFERENCE:'业务状态引用',CALL:'显式调用'};
+const auditDecisionLabels={PENDING:'待判定',ACCEPTED:'已接受',NEEDS_EVIDENCE:'需补证',INCONCLUSIVE:'无法定论'};
 $('auditGraphClose').onclick=()=>$('auditGraphDialog').close();
 const auditGraphButton=text('button','查看本轮审计图');
 $('refresh').parentElement?.append(auditGraphButton);
@@ -157,7 +158,7 @@ async function showAuditGraphs(scope){
     assetLink(edge.to_id));
    source.element.append(row);
   }
-  if(!assets.nodes.length)assetPanel.append(text('p','本批没有可查看的 Spring 事实。'));
+  if(!assets.nodes.length)assetPanel.append(text('p','本批没有取得同版本证据的源码片段。'));
   for(const gap of assets.gaps||[]){
    assetPanel.append(text('p',[gap.file_path,gap.label].filter(Boolean).join(' · ')));
   }
@@ -165,10 +166,25 @@ async function showAuditGraphs(scope){
   auditPanel.append(text('h3','审计图'));
   const state={COMPLETE:'本轮计划范围已完成',PARTIAL:'部分完成',WORKING:'取证中',PLANNING:'规划中'};
   if(audit.stop_reason)auditPanel.append(text('p',(state[audit.status]||audit.status)+' · '+audit.stop_reason));
+  const board=data.board||[];
+  if(board.length){
+   const shared=text('details');
+   shared.append(text('summary','本轮黑板观察 · '+board.length+' 条'));
+   for(const entry of board){
+    const row=text('p');
+    row.append(text('span','#'+entry.seq+' · '+entry.task_id+' · '+entry.worker),
+     text('span',' · '+entry.summary));
+    for(const ref of entry.evidence_refs)row.append(viewCode(ref));
+    shared.append(row);
+   }
+   auditPanel.append(shared);
+  }
   for(const task of audit.tasks){
    const detail=text('details');
    detail.append(text('summary',task.id+' · '+task.title),text('p',task.question||''),
-    text('p','状态 '+(state[task.state]||({VERIFIED:'证据已核验',RUNNING:'取证中',QUEUED:'待领取'})[task.state]||task.state)));
+    text('p','状态 '+(state[task.state]||({VERIFIED:'证据已核验',RUNNING:'取证中',QUEUED:'待领取'})[task.state]||task.state)
+     +' · Planner 判定 '+(auditDecisionLabels[task.planner_decision]||task.planner_decision||'待判定')));
+   if(task.acceptance)detailBlock(detail,'验收条件',task.acceptance);
    if(task.depends_on.length)detail.append(text('p','依赖 '+task.depends_on.join('、')));
    if(task.conclusion)detailBlock(detail,'审计结论',task.conclusion);
    if(task.hypotheses.length)detailBlock(detail,'Worker 假设',task.hypotheses.join('；'));

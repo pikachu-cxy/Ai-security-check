@@ -1,4 +1,4 @@
-"""Planner handoff and task leases for bounded, read-only business audits."""
+"""Planner handoff, shared board and task leases for bounded, read-only business audits."""
 import hashlib
 import hmac
 import secrets
@@ -17,12 +17,16 @@ from .user_config import batch_config
 MAX_TASKS = 4
 MAX_WINDOWS = 48
 DEADLINE_SECONDS = 600
+MAX_BOARD = 100
+MAX_BOARD_BATCH = 4
+DECISIONS = ('ACCEPTED', 'NEEDS_EVIDENCE', 'INCONCLUSIVE')
 
 
 class AuditTask(BaseModel):
     model_config = ConfigDict(extra='forbid', strict=True)
     direction: str = Field(min_length=1, max_length=100)
     question: str = Field(min_length=1, max_length=400)
+    acceptance: str = Field(min_length=1, max_length=200)
     priority: int = Field(ge=1, le=5)
     asset_ids: list[str] = Field(min_length=1, max_length=12)
     depends_on: list[str] = Field(default_factory=list, max_length=4)
@@ -31,14 +35,11 @@ class AuditTask(BaseModel):
     resolves: list[str] = Field(default_factory=list, max_length=8)
 
 
-class FactSuggestion(BaseModel):
+class BoardEntry(BaseModel):
+    """A summarized, evidence-indexed observation shared during the same round."""
     model_config = ConfigDict(extra='forbid', strict=True)
-    from_id: str | None = Field(default=None, max_length=50)
-    to_id: str | None = Field(default=None, max_length=50)
-    from_line: int | None = Field(default=None, ge=1)
-    to_line: int | None = Field(default=None, ge=1)
-    kind: Literal['DECLARES', 'CONTAINS', 'LOCAL_DECLARATION_CANDIDATE']
-    evidence_ref: str = Field(max_length=80)
+    summary: str = Field(min_length=1, max_length=400)
+    evidence_refs: list[str] = Field(min_length=1, max_length=8)
 
 
 class TaskResult(BaseModel):
@@ -48,7 +49,6 @@ class TaskResult(BaseModel):
     gaps: list[str] = Field(default_factory=list, max_length=8)
     hypotheses: list[str] = Field(default_factory=list, max_length=8)
     resolves: list[str] = Field(default_factory=list, max_length=8)
-    suggestions: list[FactSuggestion] = Field(default_factory=list, max_length=12)
 
 
 def current(check):
@@ -72,26 +72,38 @@ def status(job):
                 stage=job['stage'], wave=job['wave'], worker_limit=job['worker_limit'],
                 worker_count=len(job['workers']), stop_reason=job.get('stop_reason'),
                 windows_left=MAX_WINDOWS - job['windows_used'],
-                tasks=[{k: t[k] for k in ('id', 'direction', 'state', 'wave')} for t in job['tasks']])
+                tasks=[dict(id=t['id'], direction=t['direction'], state=t['state'], wave=t['wave'],
+                            acceptance=t['acceptance'],
+                            planner_decision=t.get('planner_decision', 'PENDING'))
+                       for t in job['tasks']])
+
+
+def _board_view(job, after_seq=0):
+    board = job.get('board') or {}
+    entries = [entry for entry in board.get('entries', []) if entry['seq'] > after_seq]
+    return dict(seq=board.get('seq', 0), entries=entries[-MAX_BOARD:])
 
 
 def _planner_view(job):
-    tasks = [t for t in job['tasks'] if t['wave'] == job['wave']]
-    ready = bool(tasks) and all(t['state'] == 'VERIFIED' for t in tasks)
-    if not ready:
-        return status(job)
-    return dict(status(job), new_facts=job.get('new_facts', []),
-                conclusions=[dict(task_id=t['id'], conclusion=t['result']['conclusion'],
-                                  gaps=t['result']['gaps']) for t in tasks],
+    return dict(status(job), board=_board_view(job),
+                conclusions=[dict(task_id=t['id'], acceptance=t['acceptance'], state=t['state'],
+                                  planner_decision=t.get('planner_decision', 'PENDING'),
+                                  conclusion=t['result']['conclusion'],
+                                  evidence_refs=t['result']['evidence_refs'],
+                                  gaps=t['result']['gaps'])
+                             for t in job['tasks'] if t.get('result')],
                 unresolved=_unresolved(job),
-                planner_instruction='可结束并说明理由，或只为影响结论的未解决缺口提交第二轮任务。')
+                planner_instruction='已发布的观察和已提交任务的结论可立即读取，不必等整波任务完成。'
+                '用 deep_decide_task 对当前回执判定 ACCEPTED、NEEDS_EVIDENCE 或 INCONCLUSIVE；'
+                '只有 ACCEPTED 解锁依赖任务。需要补证时提交引用原缺口且不依赖原任务的第二轮任务。')
 
 
 def _unresolved(job):
-    resolved = {gap for t in job['tasks'] if t['state'] == 'VERIFIED'
+    resolved = {gap for t in job['tasks']
+                if t['state'] == 'VERIFIED' and t.get('planner_decision') == 'ACCEPTED'
                 for gap in t['result']['resolves']}
     return [dict(id=f"{t['id']}:{i}", task_id=t['id'], reason=gap)
-            for t in job['tasks'] if t['state'] == 'VERIFIED'
+            for t in job['tasks'] if t.get('result')
             for i, gap in enumerate(t['result']['gaps']) if f"{t['id']}:{i}" not in resolved]
 
 
@@ -113,9 +125,13 @@ def prepare(risks, related_paths, host_parallel):
                                     for w in windows])
     graph = audit_assets.project(nodes, edges, gaps, context['evidence'])
     graph['gaps'].extend(dict(file_path=e['file_path'], reason=e['reason_code']) for e in context['errors'])
-    audit_assets.bound(graph, response_budget(check) - 6000)
+    budget = response_budget(check) - 6000
+    # Reserve half of the remaining budget for readable source excerpts so the
+    # first package never degrades into bare paths and line numbers.
+    audit_assets.bound(graph, max(2000, budget // 2))
     if not graph['nodes']:
-        return fallback(risks, check, related, 'NO_SUPPORTED_ASSETS')
+        return fallback(risks, check, related, 'NO_EVIDENCE_BACKED_ASSETS')
+    package = audit_assets.first_package(context['evidence'], budget - json_bytes(graph))
     with risks.checks.transaction() as db:
         row = risks.checks._get(db, risks.ref)
         require(row['dirty_seq'] == check['dirty_seq'] == context['dirty_seq'], 'AUDIT_ROUND_CHANGED')
@@ -125,7 +141,8 @@ def prepare(risks, related_paths, host_parallel):
         stream.record_changes(row, paths if not row.get('audit_stream') else [])
         round_id = stream.progress(row)['round_id']
         job = dict(dirty_seq=row['dirty_seq'], round_id=round_id, wave=0, stage='PLANNING',
-                   asset_graph=graph, paths=paths, related=related, tasks=[], workers={},
+                   asset_graph=graph, first_package=package, paths=paths, related=related, tasks=[],
+                   workers={}, board=dict(seq=0, entries=[], requests={}),
                    worker_limit=policy['development']['business_audit_workers'],
                    windows_used=len(windows), deadline=time.time() + DEADLINE_SECONDS)
         row['deep_audit'] = job
@@ -146,17 +163,20 @@ def fallback(risks, check, related_paths, reason):
 
 
 def _initial_view(job):
-    return dict(status(job), asset_graph=job['asset_graph'], changed_paths=job['paths'][:50],
-                execution_mode='deep',
-                planner_instruction='按业务问题规划最多 4 个只读任务，填目标 asset_ids、方向、问题、优先级、'
-                f"建议证据范围及依赖。Planner 只规划。提交 deep_plan 后，先并发启动 {job['worker_limit']} 个真实只读子 Agent，"
+    return dict(status(job), asset_graph=job['asset_graph'],
+                first_package=job.get('first_package', []),
+                changed_paths=job['paths'][:50], execution_mode='deep',
+                planner_instruction='按业务问题规划最多 4 个只读任务，每个任务绑定 SOURCE_REGION 资产 ID，'
+                '填写方向、问题、一句可核对的验收条件、优先级、建议证据范围及依赖。'
+                '只使用 first_package 与 asset_graph 中的实际代码，不推断未取得的片段。'
+                f"提交 deep_plan 后，先并发启动 {job['worker_limit']} 个真实只读子 Agent，"
                 '用 deep_started 分别登记实际 ID，再分别交付各自 child_call。'
-                '子 Agent 直接提交并领取后续任务，父会话通过 deep_status 获取结构化结论。'
-                '若无法派发，使用 deep_finish 结束并记录宿主限制。')
+                '子 Agent 自己领取、取证、发布观察并提交；父会话用 deep_status 查看黑板与结论，'
+                '用 deep_decide_task 验收，无法派发时使用 deep_finish 结束并记录宿主限制。')
 
 
 def manage(risks, action, *, tasks=(), agent_ref=None, reason=None, related_paths=(), host_parallel=False,
-           task_id=None):
+           task_id=None, receipt_id=None, decision=None):
     if action == 'prepare':
         return prepare(risks, related_paths, host_parallel)
     if action == 'status':
@@ -164,6 +184,8 @@ def manage(risks, action, *, tasks=(), agent_ref=None, reason=None, related_path
         return _planner_view(job) if job else dict(stage='AUDIT_ROUND_CHANGED')
     if action == 'finish':
         return finish(risks, reason)
+    if action == 'decide_task':
+        return decide(risks, task_id, receipt_id, decision, reason)
     token = None
     with risks.checks.transaction() as db:
         row = risks.checks._get(db, risks.ref)
@@ -209,11 +231,12 @@ def manage(risks, action, *, tasks=(), agent_ref=None, reason=None, related_path
 def _plan(job, values):
     wave = job['wave'] + 1
     require(1 <= len(values) <= MAX_TASKS and wave <= 2, 'DEEP_AUDIT_PLAN_LIMIT')
-    require(all(t['state'] == 'VERIFIED' for t in job['tasks']), 'DEEP_AUDIT_TASKS_PENDING')
-    assets = {node['id']: node for node in job['asset_graph']['nodes']}
+    require(not any(t['state'] == 'RUNNING' for t in job['tasks']), 'DEEP_AUDIT_TASKS_PENDING')
+    assets = {node['id']: node for node in job['asset_graph']['nodes']
+              if node['kind'] == 'SOURCE_REGION'}
     unresolved = {gap['id'] for gap in _unresolved(job)}
     allowed = set(job['paths']) | set(job['related'])
-    verified = {t['id'] for t in job['tasks']}
+    known = {t['id'] for t in job['tasks']}
     signatures = set()
     additions = []
     for index, value in enumerate(values, 1):
@@ -223,20 +246,27 @@ def _plan(job, values):
         paths = {assets[a]['file_path'] for a in task['asset_ids']} | {relative_path(p) for p in task['paths']}
         task['paths'] = sorted(paths)
         require(len(paths) <= 8 and paths <= allowed, 'DEEP_AUDIT_PATH_FORBIDDEN')
-        require(set(task['depends_on']) <= verified, 'DEEP_AUDIT_DEPENDENCY_INVALID')
+        require(set(task['depends_on']) <= known, 'DEEP_AUDIT_DEPENDENCY_INVALID')
         require(all(w['file_path'] in paths and w['start_line'] <= w['end_line'] < w['start_line'] + 80
                     for w in task['evidence_windows']), 'AUDIT_WINDOWS_INVALID')
         require((wave == 1 and not task['resolves']) or
                 (task['resolves'] and set(task['resolves']) <= unresolved), 'DEEP_AUDIT_FOLLOWUP_INVALID')
+        # A follow-up task must stay claimable while the task it supplements is
+        # still undecided; otherwise the round deadlocks.
+        require(not (set(task['depends_on']) & {gap.split(':')[0] for gap in task['resolves']}),
+                'DEEP_AUDIT_FOLLOWUP_DEPENDENCY_INVALID')
         direction = safe(task['direction']).strip()
         question = safe(task['question']).strip()
+        acceptance = safe(task['acceptance']).strip()
         signature = (direction.casefold(), question.casefold(), tuple(sorted(set(task['asset_ids']))))
-        require(direction and question and signature not in signatures, 'DEEP_AUDIT_TASK_DUPLICATE')
+        require(direction and question and acceptance and signature not in signatures,
+                'DEEP_AUDIT_TASK_DUPLICATE')
         signatures.add(signature)
         additions.append(dict(task, id=identifier, direction=direction, question=question,
-                              state='QUEUED', wave=wave))
-        verified.add(identifier)
-    job.update(wave=wave, stage='WORKING', new_facts=[])
+                              acceptance=acceptance, state='QUEUED', wave=wave,
+                              planner_decision='PENDING'))
+        known.add(identifier)
+    job.update(wave=wave, stage='WORKING')
     job['tasks'].extend(additions)
 
 
@@ -250,9 +280,9 @@ def _claim(row, job, agent_ref, token):
     for task in job['tasks']:
         if task['state'] == 'RUNNING' and batches[task['batch_id']]['agent_ref'] == agent_ref:
             return task
-    done = {t['id'] for t in job['tasks'] if t['state'] == 'VERIFIED'}
+    accepted = {t['id'] for t in job['tasks'] if t.get('planner_decision') == 'ACCEPTED'}
     for task in sorted(job['tasks'], key=lambda t: -t['priority']):
-        if task['state'] != 'QUEUED' or not set(task['depends_on']) <= done:
+        if task['state'] != 'QUEUED' or not set(task['depends_on']) <= accepted:
             continue
         require(len(batches) < stream.MAX_BATCHES, 'BUSINESS_AUDIT_CAPACITY_REQUIRED')
         identifier = 'ab-' + secrets.token_hex(12)
@@ -276,9 +306,12 @@ def _task(row, job, batch_id, token, agent_ref, *, retry=False):
 
 
 def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=None,
-            windows=(), observations=(), business_reviews=(), task_result=None):
+            windows=(), observations=(), business_reviews=(), task_result=None,
+            board_entries=(), after_seq=0):
     if action == 'read':
         return _read(risks, audit_token, agent_ref, batch_id, windows)
+    if action == 'board':
+        return _board(risks, audit_token, agent_ref, batch_id, request_id, board_entries, after_seq)
     with risks.checks.transaction() as db:
         row = risks.checks._get(db, risks.ref)
         job = authenticate(row, audit_token, agent_ref)
@@ -290,7 +323,8 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
                 output['task'] = {k: v for k, v in task.items() if k != 'result'}
                 output['assets'] = [n for n in job['asset_graph']['nodes'] if n['id'] in task['asset_ids']]
                 output['instructions'] = ('先按需要 read 后直接 submit，使用已读取的 evidence_refs、'
-                    'business_reviews、observations 和 task_result。提交后可用 claim 领下一项。'
+                    'business_reviews、observations 和 task_result。未提交前可用 board 发布有证据的观察；'
+                    'board 只共享摘要和引用索引，其他任务仍需自行取证。提交后可用 claim 领下一项。'
                     '没有任务时向父会话报告空闲，等待续接。')
         elif action == 'recover':
             task, batch = _task(row, job, batch_id, audit_token, agent_ref, retry=True)
@@ -308,6 +342,70 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
                              observations, business_reviews, task_result)
         risks.checks._put(db, risks.ref, row)
     return output
+
+
+def _board(risks, token, agent_ref, batch_id, request_id, entries, after_seq):
+    require(type(after_seq) is int and 0 <= after_seq <= 1_000_000, 'DEEP_AUDIT_BOARD_INPUT_INVALID')
+    values = [BoardEntry.model_validate(v).model_dump() for v in entries]
+    require(len(values) <= MAX_BOARD_BATCH, 'DEEP_AUDIT_BOARD_INPUT_INVALID')
+    repeated = False
+    with risks.checks.transaction() as db:
+        row = risks.checks._get(db, risks.ref)
+        job = authenticate(row, token, agent_ref)
+        board = job.setdefault('board', dict(seq=0, entries=[], requests={}))
+        if values:
+            require(job['stage'] == 'WORKING' and time.time() < job['deadline'], 'DEEP_AUDIT_CLOSED')
+            require(isinstance(batch_id, str) and isinstance(request_id, str) and
+                    8 <= len(request_id) <= 128, 'DEEP_AUDIT_BOARD_INPUT_INVALID')
+            task, batch = _task(row, job, batch_id, token, agent_ref)
+            issued = set(batch.get('issued_evidence', []))
+            payload = [dict(summary=safe(v['summary']).strip(), evidence_refs=v['evidence_refs'])
+                       for v in values]
+            require(all(v['summary'] and set(v['evidence_refs']) <= issued for v in payload),
+                    'AUDIT_EVIDENCE_NOT_ISSUED')
+            digest = stream._digest(payload)
+            previous = board['requests'].get(request_id)
+            if previous:
+                require(previous['digest'] == digest and previous['task_id'] == task['id'],
+                        'DEEP_AUDIT_BOARD_REQUEST_CONFLICT')
+                repeated = True
+            else:
+                require(len(board['entries']) + len(payload) <= MAX_BOARD,
+                        'BUSINESS_AUDIT_CAPACITY_REQUIRED')
+                for item in payload:
+                    board['seq'] += 1
+                    board['entries'].append(dict(seq=board['seq'], task_id=task['id'],
+                        worker=agent_ref, wave=task['wave'], round_id=job['round_id'],
+                        request_id=request_id, summary=item['summary'],
+                        evidence_refs=item['evidence_refs'], published_at=time.time()))
+                board['requests'][request_id] = dict(digest=digest, task_id=task['id'],
+                                                     seq=board['seq'])
+        risks.checks._put(db, risks.ref, row)
+    return dict(_board_view(job, after_seq), repeated=repeated, round_id=job['round_id'],
+                dirty_seq=job['dirty_seq'], scanner_run=False)
+
+
+def decide(risks, task_id, receipt_id, decision, reason):
+    """Planner-only acceptance of one current task receipt."""
+    require(decision in DECISIONS, 'DEEP_AUDIT_DECISION_INVALID')
+    require(isinstance(reason, str) and 0 < len(reason.strip()) <= 300,
+            'DEEP_AUDIT_DECISION_REASON_REQUIRED')
+    with risks.checks.transaction() as db:
+        row = risks.checks._get(db, risks.ref)
+        job = current(row)
+        require(job, 'AUDIT_ROUND_CHANGED')
+        require(job['stage'] not in {'COMPLETE', 'PARTIAL'}, 'DEEP_AUDIT_CLOSED')
+        require(time.time() < job['deadline'], 'DEEP_AUDIT_BUDGET_EXHAUSTED')
+        task = next((t for t in job['tasks'] if t['id'] == task_id), None)
+        require(task and task['state'] == 'VERIFIED', 'DEEP_AUDIT_RECEIPT_UNKNOWN')
+        require(receipt_id == task.get('request_id'), 'DEEP_AUDIT_RECEIPT_UNKNOWN')
+        receipt = row['audit_stream']['receipts'].get(receipt_id)
+        require(receipt and receipt['batch_id'] == task.get('batch_id'), 'DEEP_AUDIT_RECEIPT_UNKNOWN')
+        task.update(planner_decision=decision, planner_reason=safe(reason).strip(),
+                    decided_at=time.time())
+        risks.checks._put(db, risks.ref, row)
+    return dict(status(job), task=dict(id=task['id'], state=task['state'],
+                                       planner_decision=decision))
 
 
 def _read(risks, token, agent_ref, batch_id, windows):
@@ -380,56 +478,14 @@ def _submit(risks, ledger, row, job, task, batch, token, request_id, observation
     receipt['status'] = 'VERIFIED'
     batch['status'] = 'COMPLETE'
     task.update(state='VERIFIED', request_id=request_id, result=payload['task_result'],
-                proof_paths=sorted(proof_paths))
-    _verify_suggestions(risks, ledger, job, issued, conclusion['suggestions'])
+                proof_paths=sorted(proof_paths), planner_decision='PENDING')
     return _receipt(receipt, task)
-
-
-def _verify_suggestions(risks, ledger, job, issued, suggestions):
-    graph = job['asset_graph']
-    for suggestion in suggestions:
-        ref = suggestion['evidence_ref']
-        require(ref in issued, 'AUDIT_EVIDENCE_NOT_ISSUED')
-        evidence = risks.evidence(ledger, [ref], include_source=True)[0]
-        path = evidence['file_path']
-        if not path.endswith('.java'):
-            continue
-        import javalang
-        try:
-            nodes, edges, _ = audit_assets._parse(path, evidence.pop('_source'), evidence['sha256'], set(), True)
-        except (ValueError, KeyError, IndexError, RecursionError,
-                javalang.parser.JavaSyntaxError, javalang.tokenizer.LexerError):
-            continue
-        projected = audit_assets.project(nodes, edges, [], [dict(evidence, evidence_ref=ref)])
-        existing = {n['id'] for n in graph['nodes']}
-        matched = []
-        nodes = {n['id']: n for n in projected['nodes']}
-        for edge in projected['edges']:
-            if edge['kind'] != suggestion['kind']:
-                continue
-            pair = [nodes[edge[key]] for key in ('from_id', 'to_id')]
-            if all((suggestion[prefix+'_id'] is not None or suggestion[prefix+'_line'] is not None)
-                   and suggestion[prefix+'_id'] in {None, node['id']}
-                   and suggestion[prefix+'_line'] in {None, node['line_start']}
-                   for prefix, node in zip(('from', 'to'), pair)):
-                matched.append((edge, pair))
-        if len(matched) != 1:
-            continue
-        edge, pair = matched[0]
-        new = [node for node in pair if node['id'] not in existing]
-        if (edge in graph['edges'] or len(graph['edges']) >= 112
-                or len(graph['nodes']) + len(new) > 80):
-            continue
-        graph['nodes'].extend(new)
-        graph['edges'].append(edge)
-        job['new_facts'].extend([*new, edge])
 
 
 def _proof_refs(payload):
     conclusion = payload['task_result']
     items = [*payload['business_reviews'], *payload['observations'], conclusion]
-    return {ref for item in items for ref in item['evidence_refs']} | {
-        s['evidence_ref'] for s in conclusion['suggestions']}
+    return {ref for item in items for ref in item['evidence_refs']}
 
 
 def finish(risks, reason):
@@ -444,6 +500,9 @@ def finish(risks, reason):
     for task in job['tasks']:
         if task['state'] != 'VERIFIED':
             gaps.append(f"{task['id']} {task['direction']} 未完成")
+            continue
+        if task.get('planner_decision') != 'ACCEPTED':
+            gaps.append(f"{task['id']} {task['direction']} 未被 Planner 接受")
             continue
         payload = check['audit_stream']['receipts'][task['request_id']]['payload']
         refs = _proof_refs(payload)
@@ -515,6 +574,7 @@ def seal_finish(check, commit, business_reviews):
     state['receipts'][identifier] = dict(request_id=identifier, batch_id=identifier, status='RECEIVED',
         payload=dict(business_reviews=business_reviews), applied_paths=[])
     dependencies = {p: sorted({e for t in job['tasks'] if t['state'] == 'VERIFIED'
+                                and t.get('planner_decision') == 'ACCEPTED'
                                 for e in t.get('proof_paths', [])}) for p in versions}
     stream.complete(check, identifier, identifier, list(versions), dependencies=dependencies)
     for task in job['tasks']:

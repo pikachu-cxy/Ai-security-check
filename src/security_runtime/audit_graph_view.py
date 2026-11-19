@@ -8,16 +8,17 @@ import re
 
 
 GAPS = {
-    'LANGUAGE_NOT_SUPPORTED': '语言未适配资产提取，使用初始代码窗口',
-    'JAVA_EXTRACTION_FAILED': 'Java 语法或文件读取超出当前提取能力',
-    'SPRING_METHOD_NOT_LOCATED': '未定位到与本轮输入相关的 Spring 方法',
-    'CALL_BINDING_UNKNOWN': '部分显式调用的绑定未解析',
-    'AOP_AND_CONFIGURATION_UNVERIFIED': 'AOP 与外部配置未核验',
-    'CHANGED_METHOD_RANGE_UNKNOWN': '未取得方法级变更定位',
-    'CHECK_PATH_DIFF_NOT_SESSION_ATTRIBUTED': '方法由已记录路径的 HEAD 差异定位，行级编辑归属未知',
+    'SOURCE_UNREADABLE': '文件不可读，未生成源码片段',
+    'EMPTY_FILE': '文件没有可取证源码行',
+    'CHANGED_LINES_UNKNOWN': '未定位到变更行，使用文件前 80 行',
+    'CHECK_PATH_DIFF_NOT_SESSION_ATTRIBUTED': '片段由已记录路径的 HEAD 差异定位，行级编辑归属未知',
     'INITIAL_PATH_BUDGET': '初始取证文件数达到上限',
-    'INITIAL_EVIDENCE_WINDOW_LIMIT': '部分事实超出初始取证窗口',
+    'INITIAL_EVIDENCE_WINDOW_LIMIT': '部分源码片段未取得同版本证据',
     'ASSET_GRAPH_RESPONSE_LIMIT': '达到资产首包的响应容量上限',
+    'RESPONSE_BUDGET_EXCEEDED': '证据读取超出响应容量',
+    'EVIDENCE_READ_FAILED': '证据读取失败',
+    'DEVELOPMENT_RISK_RANGE_INVALID': '证据行范围超出文件',
+    'DEVELOPMENT_RISK_PATH_NOT_OBSERVED': '路径不在本轮已记录范围',
 }
 
 
@@ -32,11 +33,13 @@ def graphs(check):
         for task in job['tasks']:
             result = task.get('result', {})
             nodes.append(dict(id=task['id'], kind='TASK', title=task['direction'],
-                question=task['question'], state=task['state'], wave=task['wave'],
+                question=task['question'], acceptance=task['acceptance'], state=task['state'],
+                planner_decision=task.get('planner_decision', 'PENDING'), wave=task['wave'],
                 asset_ids=task['asset_ids'], depends_on=task['depends_on'],
                 conclusion=result.get('conclusion'), hypotheses=result.get('hypotheses', []),
                 evidence_refs=result.get('evidence_refs', []), gaps=result.get('gaps', [])))
         return dict(round_id=round_id, dirty_seq=check['dirty_seq'], asset_graph=job['asset_graph'],
+                    board=(job.get('board') or {}).get('entries', []),
                     audit_graph=dict(tasks=nodes, status=job['stage'], stop_reason=job.get('stop_reason'),
                                      gaps=job.get('gaps', []), reviewed_paths=job.get('reviewed_paths', [])))
     assets, links, gaps, tasks = {}, [], [], []
@@ -82,14 +85,15 @@ def report_lines(check):
         lines.append(f'深度业务审计{label}。')
         if audit.get('reviewed_paths'):
             lines.append('已审文件为' + '、'.join(audit['reviewed_paths']) + '。')
-        covered = [t['title'] for t in audit['tasks'] if t['state'] == 'VERIFIED']
+        covered = [t['title'] for t in audit['tasks'] if t.get('planner_decision') == 'ACCEPTED']
         if covered:
-            prefix = '历史证据回执的方向为' if job.get('evidence_stale') else '已有证据回执的方向为'
+            prefix = '历史证据回执的方向为' if job.get('evidence_stale') else '已接受的方向为'
             lines.append(prefix + '、'.join(covered) + '。')
         why = audit.get('stop_reason') or ('达到共享时间预算' if audit['status'] == 'INTERRUPTED'
                                           else '收尾时仍有任务待核验')
         lines.append('停止原因为' + why + '。')
-        pending = audit['gaps'] if terminal else [t['title'] for t in audit['tasks'] if t['state'] != 'VERIFIED']
+        pending = audit['gaps'] if terminal else [
+            t['title'] for t in audit['tasks'] if t.get('planner_decision') != 'ACCEPTED']
         if pending:
             lines.append('未审或待补证范围包括' + '；'.join(pending[:12]) + '。')
     reasons = Counter(g['reason'] for g in assets['gaps'])

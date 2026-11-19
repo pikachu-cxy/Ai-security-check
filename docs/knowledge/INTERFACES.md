@@ -346,12 +346,16 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 Cursor / WorkBuddy 的编辑适配通过 host_development 请求已有审计 offer 的执行者续接提示；同一轮已有有效绑定时返回实际子任务 ID 和沿原 child_call 继续的说明，不再提示首次注册。复用原事务、去重及节流，不新增状态查询或模型调度。business_audit.offer 的 prefer_active_executor 默认关闭，Codex 原调用保持；WorkBuddy 的后台参数和 resume/实际 ID 语义只在 workbuddy_hook 适配层说明。该声明不替代真实宿主验收，当前边界见 [宿主兼容验收](HOST_PARITY_ACCEPTANCE.md)。
 ## 局部业务审计
 
-`stream_prepare/started` 和 `process_development_audit(action=claim)` 的原身份与授权不变。流式领取的 `context.asset_graph` 提供节点、带证据引用的边和缺口。可独立使用 `read` 补证。首包不解锁图外文件，已有显式授权的关联路径才纳入提取。
+`stream_prepare/started` 和 `process_development_audit(action=claim)` 的原身份与授权不变。流式领取的 `context.asset_graph` 提供 `FILE`/`SOURCE_REGION` 节点、带证据引用的边和缺口。可独立使用 `read` 补证。首包不解锁图外文件，已有显式授权的关联路径才纳入提取。
 
-深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产子图和改动范围。配置保持 `standard` 默认值，深度模式下 `business_audit_workers` 支持 2 或 3。非 Codex 或宿主未声明并发时回落既有单 Worker 协议。Planner 提交 `deep_plan(tasks=...)`，字段为 `direction/question/priority/asset_ids/depends_on/paths/evidence_windows/resolves`。依赖可引用已核验任务和本轮更早条目。相关范围必须已由父会话授权。第二轮任务必须明确引用首轮未解决缺口。
+深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产图和已读取的首包源码。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：`FILE` 只用于分组，Planner 的任务只绑定 `SOURCE_REGION`。每个源码片段带路径、实际行范围、源码哈希、证据引用和定位来源（`GIT_HEAD_DIFF` 或 `FILE_HEAD_FALLBACK`），只有同版本证据读取成功后才入图。首包源码直接复用这次取证的内容，不为首包重复读取。配置保持 `standard` 默认值，深度模式下 `business_audit_workers` 支持 2 或 3。非 Codex、宿主未声明并发或没有可取证资产时回落既有单 Worker 协议。
 
-`deep_started(agent_ref=...)` 返回每名真实子 Agent 独立的子任务凭据。子 Agent 沿原 `claim/read/heartbeat/submit/recover` 接口，领取结果中的 `task.batch_id` 绑定任务、宿主执行者和租约。读取权限按任务核对，由父会话 `deep_authorize_paths(task_id=..., related_paths=...)` 授权新增路径。提交包含原 `observations`、`business_reviews` 和 `task_result`。后者包含 `conclusion/evidence_refs/gaps/hypotheses/resolves/suggestions`。当前 AST、有位置且来自该任务已签发证据的候选边才可进入资产图。任务回执 `VERIFIED` 表示 Runtime 核验了来源、位置、摘要与任务归属，模型论证仍是业务审计判断。
+Planner 提交 `deep_plan(tasks=...)`，字段为 `direction/question/acceptance/priority/asset_ids/depends_on/paths/evidence_windows/resolves`。`acceptance` 是一句可核对的验收条件。依赖可引用已核验任务和本轮更早条目，但只有被 Planner 接受的依赖才解锁。相关范围必须已由父会话授权。第二轮任务必须明确引用首轮未解决缺口，且不得依赖它正在补证的任务。
 
-`deep_status` 返回任务进度。当前波次结束后只提供本轮增量事实、结构化结论和待补缺口。Planner 用 `deep_finish(reason=...)` 提议结束。Runtime 复验版本、已验证任务、覆盖和共享预算，在原结果事务保存一份汇总。未完成任务、证据失效、预算耗尽或范围不足时保留部分完成。Stop 读取原交付时可收尾带缺口的深度任务，沿原扫描和报告链路。
+`deep_started(agent_ref=...)` 返回每名真实子 Agent 独立的子任务凭据。子 Agent 沿原 `claim/read/heartbeat/submit/recover` 接口，领取结果中的 `task.batch_id` 绑定任务、宿主执行者和租约。读取权限按任务核对，由父会话 `deep_authorize_paths(task_id=..., related_paths=...)` 授权新增路径。提交包含原 `observations`、`business_reviews` 和 `task_result`。后者包含 `conclusion/evidence_refs/gaps/hypotheses/resolves`。Runtime 不回写初始资产图。任务回执 `VERIFIED` 只表示 Runtime 核验了来源、位置、摘要与任务归属，模型论证仍是业务审计判断。
+
+`process_development_audit(action=board)` 是运行中的共享黑板。带 `batch_id`、`request_id` 和 `board_entries`（`summary` + `evidence_refs`）时发布，任务必须仍为 `RUNNING`、租约有效、版本未变，且引用必须已签发给该任务；Runtime 补齐 `seq`、任务 ID、Worker、轮次和发布时间。只带 `after_seq` 时读取同轮增量。同一 `request_id` 重试不新增条目，内容不同则拒绝。黑板只共享脱敏摘要和引用索引，不含源码、Worker 凭据或跨任务读取权限；把该源码用于自己的结论仍须按原权限取证。条目是有证据的观察，不是已确认风险。
+
+`deep_status` 返回任务状态、黑板条目、已提交任务的结论和待补缺口，不必等整波任务完成。`deep_decide_task(task_id, receipt_id, decision, reason)` 仅父会话可调用，对当前版本的有效回执记录 `ACCEPTED`、`NEEDS_EVIDENCE` 或 `INCONCLUSIVE`，未判定为 `PENDING`；只有 `ACCEPTED` 解锁依赖任务。Planner 用 `deep_finish(reason=...)` 提议结束：必需任务均已接受、关键缺口已解决且覆盖与版本校验通过才报 `COMPLETE`，否则 `PARTIAL` 并保留已接受结果、未接受任务和剩余缺口。未被接受的观察不作为已确认风险交付。Stop 读取原交付时可收尾带缺口的深度任务，沿原扫描和报告链路。
 
 `GET /api/audit-graphs?editor=…&workspace=…&check=…&seq=…` 在本机风险管理页读取签名检查记录和当前输入序号。可附 `evidence` 查看图中已引用证据，附匹配的 `asset` 定位节点行范围。代码经脱敏，摘要变化时只显示保存位置。该接口不提交复核或创建新证据。

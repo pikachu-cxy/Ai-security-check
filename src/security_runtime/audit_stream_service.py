@@ -110,12 +110,15 @@ def _public_batch(batch):
 
 
 def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=None,
-            windows=None, observations=(), business_reviews=(), task_result=None):
+            windows=None, observations=(), business_reviews=(), task_result=None,
+            board_entries=(), after_seq=0):
     if isinstance(audit_token, str) and audit_token.startswith('deep1-'):
         from .deep_audit import process as process_deep
         return process_deep(risks, action, audit_token=audit_token, agent_ref=agent_ref,
             batch_id=batch_id, request_id=request_id, windows=windows, observations=observations,
-            business_reviews=business_reviews, task_result=task_result)
+            business_reviews=business_reviews, task_result=task_result,
+            board_entries=board_entries, after_seq=after_seq)
+    require(not board_entries and after_seq == 0, 'DEEP_AUDIT_BOARD_INPUT_INVALID')
     require(task_result is None, 'DEEP_AUDIT_RESULT_INVALID')
     authenticate(risks.current_check(), audit_token, agent_ref)
     if action == 'claim':

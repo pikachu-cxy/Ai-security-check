@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from ..development_risks import Observation, ScannerReview, BusinessReview, ScanId
 from ..development_views import EvidenceWindow
 from ..performance_trace import timed_review
-from ..deep_audit import AuditTask, TaskResult
+from ..deep_audit import AuditTask, BoardEntry, TaskResult
 
 
 TOOLS = frozenset({'manage_development_audit', 'process_development_audit', 'get_development_config', 'begin_development_check', 'record_development_changes',
@@ -33,7 +33,8 @@ def register(server, registry, *, application):
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     def manage_development_audit(check_ref: str, action: Literal['prepare','status','started','cancel','unsupported','failed',
                                  'stream_prepare','stream_started','stream_cancel','stream_status','stream_authorize_paths','stream_rotate','stream_failed',
-                                 'deep_prepare','deep_plan','deep_started','deep_status','deep_finish','deep_authorize_paths'],
+                                 'deep_prepare','deep_plan','deep_started','deep_status','deep_finish','deep_authorize_paths',
+                                 'deep_decide_task'],
                                  workspace_path: str | None = None, session_ref: str | None = None,
                                  audit_id: str | None = None, agent_ref: str | None = None,
                                  audit_token: str | None = None,
@@ -41,13 +42,16 @@ def register(server, registry, *, application):
                                  tasks: Annotated[list[AuditTask], Field(max_length=4)] | None = None,
                                  reason: Annotated[str, Field(max_length=500)] | None = None,
                                  task_id: Annotated[str, Field(max_length=20)] | None = None,
+                                 receipt_id: Annotated[str, Field(max_length=128)] | None = None,
+                                 decision: Literal['ACCEPTED','NEEDS_EVIDENCE','INCONCLUSIVE'] | None = None,
                                  host_parallel: bool = False) -> dict:
-        """Manage a read-only business audit during development. Standard mode uses stream_prepare and stream_started with the actual host child ID. Optional deep mode uses deep_prepare, deep_plan, separate deep_started registrations, deep_status and deep_finish. deep_authorize_paths grants new related paths to one task. Pass each child its own capability for direct process_development_audit calls. Only the host starts models. Legacy unprefixed actions retain their handoff contract."""
+        """Manage a read-only business audit during development. Standard mode uses stream_prepare and stream_started with the actual host child ID. Optional deep mode uses deep_prepare (asset graph plus first readable source package), deep_plan (each task binds a SOURCE_REGION and states an acceptance condition), separate deep_started registrations, deep_status, deep_decide_task and deep_finish. deep_authorize_paths grants new related paths to one task. Only the parent session may plan, decide and finish; deep_decide_task records ACCEPTED/NEEDS_EVIDENCE/INCONCLUSIVE for one current receipt and only ACCEPTED unlocks dependent tasks. Pass each child its own capability for direct process_development_audit calls. Only the host starts models. Legacy unprefixed actions retain their handoff contract."""
         if action.startswith('deep_'):
             from ..deep_audit import manage
             return manage(risks(check_ref, workspace_path, session_ref), action.removeprefix('deep_'),
                           tasks=tasks or [], agent_ref=agent_ref, reason=reason,
-                          related_paths=related_paths or [], host_parallel=host_parallel, task_id=task_id)
+                          related_paths=related_paths or [], host_parallel=host_parallel,
+                          task_id=task_id, receipt_id=receipt_id, decision=decision)
         if action.startswith('stream_'):
             from ..audit_stream_service import manage
             return manage(risks(check_ref, workspace_path, session_ref), action.removeprefix('stream_'),
@@ -59,7 +63,7 @@ def register(server, registry, *, application):
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     @timed_review
-    def process_development_audit(check_ref: str, action: Literal['claim','read','submit','recover','heartbeat'],
+    def process_development_audit(check_ref: str, action: Literal['claim','read','submit','recover','heartbeat','board'],
                                   audit_token: Annotated[str, Field(min_length=32, max_length=256)],
                                   agent_ref: Annotated[str, Field(min_length=1, max_length=200)],
                                   workspace_path: str,
@@ -67,8 +71,10 @@ def register(server, registry, *, application):
                                   windows: Annotated[list[EvidenceWindow], Field(max_length=20)] | None = None,
                                   observations: Annotated[list[Observation], Field(max_length=50)] | None = None,
                                   business_reviews: Annotated[list[BusinessReview], Field(max_length=50)] | None = None,
-                                  task_result: TaskResult | None = None) -> dict:
-        """Delegated read-only business audit. Child claims fixed input, reads allowed evidence and submits directly with a stable request_id. In deep mode use task.batch_id and include task_result with the structured conclusion, evidence and gaps, then claim the next task. VERIFIED is a validated task receipt, with audit publication handled separately by Runtime. No parent session credential, scan, source edit, scanner-candidate dismissal or user disposition authority. Keep capability out of reports, URLs and files."""
+                                  task_result: TaskResult | None = None,
+                                  board_entries: Annotated[list[BoardEntry], Field(max_length=4)] | None = None,
+                                  after_seq: int = 0) -> dict:
+        """Delegated read-only business audit. Child claims fixed input, reads allowed evidence and submits directly with a stable request_id. In deep mode use task.batch_id and include task_result with the structured conclusion, evidence and gaps, then claim the next task. action=board publishes summarized observations (summary plus evidence refs issued to this task) while the task is still RUNNING, or reads same-round increments with after_seq. The board shares summaries and an index only: it grants no source access and no cross-task read authority, and a publication is not a confirmed risk. VERIFIED is a validated task receipt; the parent session decides acceptance separately. No parent session credential, scan, source edit, scanner-candidate dismissal or user disposition authority. Keep capability out of reports, URLs and files."""
         from ..audit_stream_adapter import delegated_risks
         from ..audit_stream_service import process
         service = delegated_risks(application, workspace_path, check_ref, audit_token, agent_ref)
@@ -76,7 +82,8 @@ def register(server, registry, *, application):
             batch_id=batch_id, request_id=request_id,
             windows=[w.model_dump() if hasattr(w, 'model_dump') else w for w in (windows or [])],
             observations=[v.model_dump() for v in (observations or [])],
-            business_reviews=[v.model_dump() for v in (business_reviews or [])], task_result=task_result)
+            business_reviews=[v.model_dump() for v in (business_reviews or [])], task_result=task_result,
+            board_entries=[v.model_dump() for v in (board_entries or [])], after_seq=after_seq)
 
     @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False))
     @timed_review

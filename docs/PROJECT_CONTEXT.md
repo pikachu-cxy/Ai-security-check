@@ -1,6 +1,6 @@
 # 项目上下文
 
-更新日期：2026-11-12。当前产品 **0.3.14**；开发分支 `feature/runtime-mvp`。发行源码、构建身份、本机安装与重连状态以[当前状态](knowledge/STATUS.md)为准，本文件不重复声明具体构建哈希。
+更新日期：2026-11-19。当前产品 **0.3.16**；开发分支 `feature/runtime-mvp`。发行源码、构建身份、本机安装与重连状态以[当前状态](knowledge/STATUS.md)为准，本文件不重复声明具体构建哈希。
 
 当前安装入口见[安装指南](PILOT_INSTALL_AND_USE.zh-CN.md)，语言、默认规则数量与依赖边界见[产品覆盖](PRODUCT_COVERAGE.zh-CN.md)。官网首页和顶部导航均提供语言覆盖入口。
 
@@ -23,6 +23,14 @@ Codex / Cursor 输入适配 → 公共事件及工作区应用服务 → 原任�
 ## 本机风险后台与批次链接
 
 后台只监听 127.0.0.1。读接口（页面、风险列表、导出、详情、配置、监控、实体列表）不要求浏览器 Cookie，仅校验 Host；写入与 `/shutdown` 仍要求 Cookie、Origin、CSRF 或 Bearer。报告末尾链接带 project/workspace/session/editor 与 check/scan/seq，批次身份取 `(dirty_seq, scan_id)`，不假设 check_ref 对应单次开发任务。地址仅在回环端口实际可达时返回，服务退出后报告降级为链接不可用，不产生死链；端口与 token 复用，服务恢复后同一地址自动可用。风险列表默认按可信记录时间倒序、id 次序，分页与导出同序。后台启动失败写入 `dashboard/startup-status.json`，显式入口返回原因码。证据见[当前状态](knowledge/STATUS.md)与 `tests/test_dashboard_delivery.py`。
+
+## 跨语言深度业务审计
+
+业务审计的资产图不再依赖语言或框架：`audit_assets.py` 只用已记录及显式授权路径生成 `FILE → SOURCE_REGION` 图，片段带路径、实际行范围、源码哈希、证据引用和定位来源，只有同版本证据读取成功后才入图。行范围优先取 Git HEAD 差异作为定位依据，不证明行级编辑归属；无法定位时回退文件前 80 行并标记变更行未知。`deep_prepare` 在既有响应预算内同时返回资产图和复用已读取证据的首包源码，只要有一个已取证片段就不因语言降级。Spring 注解识别、Spring 调用候选、Java 专属事实校验和用 Java AST 复验 Worker 建议的路径已删除；`javalang` 保留给静态扫描链路。
+
+同轮审计图是运行中的共享黑板：Worker 在任务仍为 `RUNNING` 时即可发布脱敏摘要和已签发给该任务的证据引用，其他 Worker 按游标读增量，Planner 通过 `deep_status` 立即看到条目和已提交结论。黑板只共享摘要和引用索引，不含源码、凭据或跨任务读取权限。
+
+`VERIFIED` 与 Planner 验收分离：`deep_decide_task` 记录 `ACCEPTED`、`NEEDS_EVIDENCE` 或 `INCONCLUSIVE`，未判定为 `PENDING`，只有 `ACCEPTED` 解锁依赖任务。补证任务引用原缺口并独立领取；补证被接受后由 Planner 更新原任务。`deep_finish` 只在必需任务均已接受、关键缺口已解决且覆盖与版本校验通过时报 `COMPLETE`，否则报 `PARTIAL`，未被接受的观察不作为已确认风险交付。实现与验收边界见[接口设计](knowledge/INTERFACES.md#局部业务审计)和[当前状态](knowledge/STATUS.md)。
 
 ## 不可混淆的状态
 

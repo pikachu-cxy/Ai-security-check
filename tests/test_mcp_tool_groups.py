@@ -67,6 +67,18 @@ def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path,
         business = submit_schema['properties']['business_reviews']['anyOf'][0]['items']
         assert business['properties']['limitations']['type'] == 'array'
         assert business['properties']['limitations']['items']['type'] == 'string'
+        manage_schema = next(branch['properties']['arguments'] for branch in review_schema['oneOf']
+            if branch['properties']['operation']['const'] == 'manage_development_audit')
+        assert 'deep_decide_task' in manage_schema['properties']['action']['enum']
+        assert {'receipt_id', 'decision'} <= set(manage_schema['properties'])
+        decision = manage_schema['properties']['decision']
+        choices = decision.get('enum') or next(
+            branch['enum'] for branch in decision['anyOf'] if 'enum' in branch)
+        assert choices == ['ACCEPTED', 'NEEDS_EVIDENCE', 'INCONCLUSIVE']
+        process_schema = next(branch['properties']['arguments'] for branch in review_schema['oneOf']
+            if branch['properties']['operation']['const'] == 'process_development_audit')
+        assert 'board' in process_schema['properties']['action']['enum']
+        assert {'board_entries', 'after_seq'} <= set(process_schema['properties'])
     finally:
         server.global_workspaces.close()
 

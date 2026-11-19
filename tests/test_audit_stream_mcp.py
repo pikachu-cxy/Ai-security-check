@@ -185,3 +185,57 @@ def test_nested_observation_errors_identify_fields_without_echoing_values(endpoi
             assert 'private-input-value' not in json.dumps(value)
             assert not risks.load()['reviews']
     asyncio.run(run())
+
+
+def test_deep_round_exposes_board_and_reserves_acceptance_for_the_parent(endpoint):
+    server, root, ref, risks, calls = endpoint
+    async def run():
+        async with create_connected_server_and_client_session(server) as client:
+            with risks.checks.transaction() as db:
+                row = risks.checks._get(db, ref)
+                row['effective_config']['values']['development']['business_audit_mode'] = 'deep'
+                risks.checks._put(db, ref, row)
+            prepared = await parent(client, root, ref, 'deep_prepare', host_parallel=True)
+            assert prepared['execution_mode'] == 'deep'
+            assert prepared['first_package'][0]['content']
+            region = next(node for node in prepared['asset_graph']['nodes']
+                          if node['kind'] == 'SOURCE_REGION')
+            assert region['evidence_ref'] == prepared['first_package'][0]['evidence_ref']
+            await parent(client, root, ref, 'deep_plan', tasks=[dict(
+                direction='查询绑定', question='输入是否绑定到参数？', priority=5,
+                acceptance='指出绑定位置并说明输入是否仍可控', asset_ids=[region['id']])])
+            first = await parent(client, root, ref, 'deep_started', agent_ref='deep-child-a')
+            await parent(client, root, ref, 'deep_started', agent_ref='deep-child-b')
+            child = dict(workspace_path=str(root), check_ref=ref, agent_ref='deep-child-a',
+                         audit_token=first['child_call']['arguments']['audit_token'])
+            claimed = decode(await call_child(client, child, 'claim'))
+            assert claimed['task']['acceptance'] and claimed['task']['planner_decision'] == 'PENDING'
+            batch = claimed['task']['batch_id']
+            read = decode(await call_child(client, child, 'read', batch_id=batch,
+                windows=[dict(file_path='query.py', start_line=1, end_line=2)]))
+            proof = read['evidence'][0]['evidence_ref']
+            published = decode(await call_child(client, child, 'board', batch_id=batch,
+                request_id='mcp-board-0001',
+                board_entries=[dict(summary='输入直接进入查询', evidence_refs=[proof])]))
+            assert published['seq'] == 1 and published['repeated'] is False
+            assert published['entries'][0]['worker'] == 'deep-child-a'
+            assert published['entries'][0]['task_id'] == claimed['task']['id']
+            status = await parent(client, root, ref, 'deep_status')
+            assert status['stage'] == 'WORKING' and status['board']['entries'][0]['seq'] == 1
+            denied = await client.call_tool('development_review', dict(operation='manage_development_audit',
+                arguments=dict(workspace_path=str(root), check_ref=ref, action='deep_decide_task',
+                               task_id=claimed['task']['id'], receipt_id='mcp-board-0001',
+                               decision='ACCEPTED', reason='child tries to accept')))
+            assert denied.isError
+            submitted = decode(await call_child(client, child, 'submit', batch_id=batch,
+                request_id='mcp-deep-0001', task_result=dict(conclusion='已绑定参数',
+                    evidence_refs=[proof]), business_reviews=[dict(file_path='query.py',
+                    rationale='已核对绑定与输入来源', evidence_refs=[proof], coverage='COMPLETE')]))
+            assert submitted['status'] == 'VERIFIED'
+            decided = await parent(client, root, ref, 'deep_decide_task',
+                task_id=claimed['task']['id'], receipt_id='mcp-deep-0001',
+                decision='ACCEPTED', reason='结论与证据一致')
+            assert decided['task']['planner_decision'] == 'ACCEPTED'
+            finished = await parent(client, root, ref, 'deep_finish', reason='计划内任务已接受')
+            assert finished['stage'] == 'COMPLETE'
+    asyncio.run(run())

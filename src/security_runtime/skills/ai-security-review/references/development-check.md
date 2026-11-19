@@ -16,7 +16,11 @@ REQUIRED 才执行对应分析，SKIPPED_BY_CONFIG 表示按配置跳过，不�
 静态风险由产品独立保存；历史 Agent 结论不能当作新版本复核。以下 Agent 复核要求只适用于开启的项。
 用户另行明确请求专项审计时走专项流程，不伪造自动检查已经完成。
 收到深度业务审计派发提示时，主会话使用 deep_prepare 和当前 owner 身份。只有当前宿主具备多个真实并行子 Agent 时才传 host_parallel=true；返回单 Worker 交接包时走标准流式流程。
-深度模式的 Planner 只读取 deep_prepare 的局部事实和之后 deep_status 的增量摘要。按业务问题提出 deep_plan，再并发创建配置数量的真实只读 Worker；分别通过 deep_started 登记真实 agent_ref 并独立交接 child_call。Worker 自己领取、取证、提交 task_result 并领取后续任务。主会话只协调状态与规划。关键缺口最多补一轮，由 deep_finish 提议结束并记录理由，最终状态以 Runtime 判断为准。
+深度模式的资产图与语言、框架无关：FILE 只用于分组，任务绑定 SOURCE_REGION。deep_prepare 同时返回已读取的首包源码，Planner 直接读这些片段，不只看路径和行号；片段由本轮已记录路径的 HEAD 差异定位，只说明可能相关，不证明该行由本会话修改。没有同版本证据的片段、空文件或预算外文件只记覆盖缺口，不造节点。
+Planner 按业务问题提出 deep_plan：每个任务绑定 SOURCE_REGION 资产 ID，写方向、问题、一句可核对的验收条件、优先级和依赖。再并发创建配置数量的真实只读 Worker；分别通过 deep_started 登记真实 agent_ref 并独立交接 child_call。
+Worker 自己领取、取证、发布观察、提交 task_result 并领取后续任务。task 仍为 RUNNING 时可用 action="board" 发布摘要和已签发给本任务的证据引用；其他 Worker 用 after_seq 读增量，Planner 通过 deep_status 立即看到已发布条目和已提交结论，不必等整波任务完成。黑板只共享摘要和引用索引，不含源码；把某段源码用于自己的结论仍须按原权限自行取证。重复发布同一 request_id 不新增条目；旧版本、过期租约和已封口轮次拒绝写入。黑板条目是有证据的观察，不是已确认风险。
+VERIFIED 只是 Runtime 对回执来源、位置、版本和任务归属的核验。任务是否完成由父会话用 deep_decide_task 判定：ACCEPTED、NEEDS_EVIDENCE 或 INCONCLUSIVE，未判定为 PENDING，只能判定当前回执。只有 ACCEPTED 解锁依赖任务。关键缺口最多补一轮：补证任务引用原缺口、独立领取，不依赖它正在补证的任务；补证被接受后由 Planner 再次判定原任务，不自动关闭缺口。
+主会话只协调状态、判定和规划，由 deep_finish 提议结束。必需任务均已接受、关键缺口已解决且覆盖与版本校验通过才报 COMPLETE，否则报 PARTIAL 并保留已接受结果与剩余缺口；未被接受的观察不作为已确认风险交付。
 标准业务审计开启后，每轮开发新建只读子 Agent；本轮新增和修改文件合并为增量队列，不为每个文件创建子 Agent，也不跨开发轮次复用原执行者。使用返回的 round_id 后缀命名子任务，避免与旧子任务重名；历史结果仍由产品保留。
 首批有效编辑后主 Agent 直接用 manage_development_audit(action="stream_prepare") 取得 registration，无需先查 stream_status，也不要等开发结束才派发。实际创建只读子 Agent（先等待完整交接包）后，将 registration 加真实 agent_ref 和当前父会话 session_ref 调用 stream_started；把返回的完整 child_call 原样交给子 Agent。凭据只在必要的子任务上下文传递，不写入报告、URL、项目文件；不向子 Agent 转交父会话 session_ref。
 子 Agent 原样执行 child_call 领取固定批次并取得证据。必填 workspace_path、check_ref、agent_ref、audit_token、action；不得省略或猜测，首次证据足够时不另调 read；缺失证据用 action="read" 批量读取。关联路径未获授权时返回 requested_related_paths，由主 Agent 使用 stream_authorize_paths 明确授权，不能绕过范围校验。
