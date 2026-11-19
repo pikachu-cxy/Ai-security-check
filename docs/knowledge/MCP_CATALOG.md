@@ -454,7 +454,7 @@ Read effective user TOML preferences and adapter support; no writes or scan.
 
 ### runtime_status / get_product_epoch_status
 
-定义：[src/security_runtime/global_mcp.py:557](../../src/security_runtime/global_mcp.py#L557)
+定义：[src/security_runtime/global_mcp.py:560](../../src/security_runtime/global_mcp.py#L560)
 
 ```python
 get_product_epoch_status(workspace_path: str)
@@ -504,7 +504,7 @@ Describe implemented directory isolation separately from unsupported host write 
 
 ### runtime_status / get_workspace_binding_status
 
-定义：[src/security_runtime/global_mcp.py:551](../../src/security_runtime/global_mcp.py#L551)
+定义：[src/security_runtime/global_mcp.py:554](../../src/security_runtime/global_mcp.py#L554)
 
 ```python
 get_workspace_binding_status(workspace_path: str, session_ref: str | None=None)

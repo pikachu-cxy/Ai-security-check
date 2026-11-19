@@ -55,7 +55,10 @@ def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
         'TASK_SESSION_SCOPE_MISMATCH':
             '该检查属于不同聊天。请使用原聊天的检查引用与有效 session_ref，不猜测归属或认领其他聊天记录。',
         'TASK_SESSION_BINDING_REQUIRED':
-            '该检查需要原聊天的有效 session_ref；请从当前宿主原生上下文原样传递，不删除凭据重试。',
+            '该检查需要原聊天的有效 session_ref；从本会话宿主原生上下文（SessionStart/PostToolUse 注入的 task_session_ref）'
+            '原样取用，不从 check_ref 推导、不省略、不自行构造，也不要删除凭据重试。'
+            '业务审计须在收到准备提示的开发期完成：回到原会话用有效 session_ref 重发 deep_prepare/stream_prepare；'
+            '若已到 Stop 交付阶段则本轮保留待办、如实报告未完成，不在 Stop 新开审计。',
     }
     data = dict(contract='observed-development-check-v1', status='INCONCLUSIVE',
         reason_code=reason, scanner_run=False, source_modified=False,

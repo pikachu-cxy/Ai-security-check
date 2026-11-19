@@ -478,7 +478,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "e582d00c0af1d5f14750693c45f711eef8ce9668dc9a1d548ab536ba9bbd4467",
+      "sha256": "396e158dab30e88c81d87dc62dd6864cbb56631fa5678c74ac49481562126ba4",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -4860,7 +4860,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "da1aed8c8ef701ecf3061aa071983e8aa2e4611d026ab63adf73c5c7e2db9450",
+      "sha256": "62ce60174471558b60281449c344254955a242db176b23bafc81d800bc4b1e17",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -4869,107 +4869,107 @@
         },
         {
           "name": "global_runtime_info",
-          "line": 68
+          "line": 71
         },
         {
           "name": "GlobalWorkspaces",
-          "line": 88
+          "line": 91
         },
         {
           "name": "GlobalWorkspaces.__init__",
-          "line": 89
+          "line": 92
         },
         {
           "name": "GlobalWorkspaces._child",
-          "line": 126
+          "line": 129
         },
         {
           "name": "GlobalWorkspaces.root",
-          "line": 131
+          "line": 134
         },
         {
           "name": "GlobalWorkspaces.admit",
-          "line": 135
+          "line": 138
         },
         {
           "name": "GlobalWorkspaces.validate_layers",
-          "line": 155
+          "line": 158
         },
         {
           "name": "GlobalWorkspaces.bind_session",
-          "line": 161
+          "line": 164
         },
         {
           "name": "GlobalWorkspaces.binding_diagnostics",
-          "line": 174
+          "line": 177
         },
         {
           "name": "GlobalWorkspaces.bootstrap",
-          "line": 184
+          "line": 187
         },
         {
           "name": "GlobalWorkspaces.retry_product_epoch",
-          "line": 219
+          "line": 222
         },
         {
           "name": "GlobalWorkspaces._start_epoch_initialization",
-          "line": 251
+          "line": 254
         },
         {
           "name": "GlobalWorkspaces._remember_ready",
-          "line": 285
+          "line": 288
         },
         {
           "name": "GlobalWorkspaces._snapshot_readiness",
-          "line": 291
+          "line": 294
         },
         {
           "name": "GlobalWorkspaces._restore_existing",
-          "line": 332
+          "line": 335
         },
         {
           "name": "GlobalWorkspaces._initialize_into",
-          "line": 351
+          "line": 354
         },
         {
           "name": "GlobalWorkspaces._initialization_failure",
-          "line": 363
+          "line": 366
         },
         {
           "name": "GlobalWorkspaces._initialize",
-          "line": 371
+          "line": 374
         },
         {
           "name": "GlobalWorkspaces.wait_for_bootstrap",
-          "line": 417
+          "line": 420
         },
         {
           "name": "GlobalWorkspaces.close",
-          "line": 436
+          "line": 439
         },
         {
           "name": "_NoProjectSeed",
-          "line": 449
+          "line": 452
         },
         {
           "name": "_NoProjectSeed.load",
-          "line": 451
+          "line": 454
         },
         {
           "name": "_advisory",
-          "line": 455
+          "line": 458
         },
         {
           "name": "_task_request_rejected",
-          "line": 489
+          "line": 492
         },
         {
           "name": "_scan_request_rejected",
-          "line": 523
+          "line": 526
         },
         {
           "name": "create_global_server",
-          "line": 541
+          "line": 544
         }
       ]
     },

@@ -193,9 +193,12 @@ def offer(hooks, root, owner, ref, *, prefer_active_executor=False):
         store._put(db, ref, check)
         active = continuation(check) if prefer_active_executor else None
     if batch_config(check)['development']['business_audit_mode'] == 'deep':
-        return ('本轮启用深度业务审计，check_ref='+ref+'。通过 development_review 调用 manage_development_audit'
-                ' 的 deep_prepare，使用当前 workspace_path 和父 session_ref。仅当前宿主实际有并行子 Agent 能力时'
-                '传 host_parallel=true。按返回指令规划并并发派发，子 Agent 直接提交证据，父任务继续开发。'
+        return ('本轮启用深度业务审计，check_ref='+ref+'。收到本提示即在当前开发期通过 development_review 调用'
+                ' manage_development_audit 的 deep_prepare，不要等到 Stop 交付阶段（Stop 不新建业务审计）。'
+                'session_ref 必须原样取自本会话宿主原生上下文（SessionStart/PostToolUse 注入的 task_session_ref），'
+                '不从 check_ref 推导、不省略、不自行构造；缺凭据被拒时回原生上下文取有效值重试，不要删除凭据。'
+                '使用当前 workspace_path 和父 session_ref，仅当前宿主实际有并行子 Agent 能力时传 host_parallel=true。'
+                '按返回指令规划并并发派发，子 Agent 直接提交证据，父任务继续开发。'
                 '宿主不支持时沿返回的单 Worker registration 继续并保留降级原因。Stop 沿原检查交付。')
     if active and active.get('agent_ref'):
         import json
