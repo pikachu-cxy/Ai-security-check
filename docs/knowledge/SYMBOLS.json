@@ -11139,104 +11139,124 @@
     },
     {
       "path": "src/security_runtime/runtime_update.py",
-      "sha256": "a28e66c35d73314bb26630496522e94c72b80d45b925b44e8217c0e8a03f2a7b",
+      "sha256": "6ffb2122ea81079af65eca22e50a4dd657fc6b2019c11fa826aa50cde534c8a6",
       "purpose": "Per-installation release discovery and explicitly authorized full-package updates.",
       "symbols": [
         {
           "name": "version_key",
-          "line": 34
+          "line": 36
         },
         {
           "name": "ReleaseRedirects",
-          "line": 40
+          "line": 42
         },
         {
           "name": "ReleaseRedirects.redirect_request",
-          "line": 41
+          "line": 43
+        },
+        {
+          "name": "update_error",
+          "line": 51
         },
         {
           "name": "transfer",
-          "line": 49
+          "line": 63
         },
         {
           "name": "discover",
-          "line": 70
+          "line": 93
         },
         {
           "name": "unpack",
-          "line": 106
+          "line": 129
+        },
+        {
+          "name": "sync_managed_codex",
+          "line": 169
         },
         {
           "name": "RuntimeUpdate",
-          "line": 146
+          "line": 184
         },
         {
           "name": "RuntimeUpdate.__init__",
-          "line": 147
+          "line": 185
+        },
+        {
+          "name": "RuntimeUpdate.log",
+          "line": 194
+        },
+        {
+          "name": "RuntimeUpdate.stage",
+          "line": 208
+        },
+        {
+          "name": "RuntimeUpdate.traced_fetch",
+          "line": 224
         },
         {
           "name": "RuntimeUpdate.connection",
-          "line": 156
+          "line": 243
         },
         {
           "name": "RuntimeUpdate.get",
-          "line": 166
+          "line": 253
         },
         {
           "name": "RuntimeUpdate.put",
-          "line": 171
+          "line": 258
         },
         {
           "name": "RuntimeUpdate.cached",
-          "line": 174
+          "line": 261
         },
         {
           "name": "RuntimeUpdate.active",
-          "line": 178
+          "line": 265
         },
         {
           "name": "RuntimeUpdate.status",
-          "line": 195
+          "line": 282
         },
         {
           "name": "RuntimeUpdate.refresh",
-          "line": 219
+          "line": 306
         },
         {
           "name": "RuntimeUpdate.apply",
-          "line": 234
+          "line": 325
         },
         {
           "name": "RuntimeUpdate.transition",
-          "line": 259
+          "line": 353
         },
         {
           "name": "RuntimeUpdate.install",
-          "line": 267
+          "line": 361
         },
         {
           "name": "installed_update",
-          "line": 307
+          "line": 421
         },
         {
           "name": "spawn_update",
-          "line": 321
+          "line": 436
         },
         {
           "name": "schedule_refresh",
-          "line": 330
+          "line": 445
         },
         {
           "name": "update_status",
-          "line": 350
+          "line": 466
         },
         {
           "name": "apply_update",
-          "line": 355
+          "line": 471
         },
         {
           "name": "report_notice",
-          "line": 362
+          "line": 478
         }
       ]
     },

@@ -2,6 +2,10 @@
 
 ## Runtime 更新
 
+- 更新阶段日志由 `runtime_update.py` 写入安装级 `runtime-updates.db` 的 `update_log` 表。传输失败测试和安装流程日志断言见 `tests/test_runtime_update.py`。
+
+- 激活后的 Codex 同步见 `runtime_update.py`，复用 `integration_recovery.py` 的签名迁移与配置校验，更新页展示同步进度和待修复状态。
+
 - 工具更新页的手动刷新和候选过期处理见 `risk_dashboard.py`、`runtime_update.py`、`assets/runtime_updates.html` 和 `test_runtime_update.py`。
 
 - `runtime_update.py` 负责发行检测、缓存、候选、下载与更新任务。`delivery.py` 负责槽位和活动指针。`development_check_worker.py` 派发后台刷新。

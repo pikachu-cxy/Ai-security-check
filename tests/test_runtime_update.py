@@ -90,7 +90,7 @@ def test_invalid_release_stays_quiet(installation, case):
     assert service.status()['candidate'] is None and fake.downloads == 0
 
 
-@pytest.mark.parametrize('case', ['success', 'checksum', 'interrupted', 'probe'])
+@pytest.mark.parametrize('case', ['success', 'checksum', 'interrupted', 'probe', 'codex_sync'])
 def test_apply_uses_explicit_job_and_preserves_previous(installation, case):
     service, fake, probe, _ = installation
     service.refresh()
@@ -103,16 +103,67 @@ def test_apply_uses_explicit_job_and_preserves_previous(installation, case):
     assert service.apply(candidate, tickets.append)['status'] == 'QUEUED'
     assert service.apply(candidate, tickets.append)['deduplicated']
     assert len(tickets) == 1 and fake.downloads == 0
+    synchronized = []
+
+    def sync_codex(slot):
+        assert slot == service.delivery.slot(fake.build)
+        assert service.active()['build_id'] == fake.build
+        assert service.status()['job']['status'] == 'SYNCING_CODEX'
+        synchronized.append(slot)
+        if case == 'codex_sync':
+            raise ValueError('UPDATE_CODEX_SYNC_FAILED')
+
+    service.sync_codex = sync_codex
     fake.failure = case
     if case == 'probe':
         probe['status'] = 'FAILED'
     assert service.install(tickets[0]) == (case == 'success')
     assert not service.install(tickets[0]) and fake.downloads == 1
     status = service.status()
-    assert status['active_build'] == (fake.build if case == 'success' else service.running_build)
+    activated = case in {'success', 'codex_sync'}
+    assert status['active_build'] == (fake.build if activated else service.running_build)
+    assert bool(synchronized) == activated
+    if case == 'codex_sync':
+        assert status['job']['status'] == 'INSTALLED_CODEX_REPAIR_REQUIRED'
+        assert status['job']['reason'] == 'UPDATE_CODEX_SYNC_FAILED'
     assert status['current_mcp_build'] is None
     assert all(path.read_bytes() == b'preserve me' for path in private)
     assert service.delivery.slot(service.running_build).is_dir()
+    with service.connection() as db:
+        events = [json.loads(row[0]) for row in db.execute('SELECT event FROM update_log ORDER BY id')]
+    result = events[-1]
+    assert result['stage'] == 'install_result'
+    assert result['outcome'] == status['job']['status']
+    install_events = [event for event in events if event['operation_id'] == result['operation_id']]
+    stages = {(event['stage'], event['outcome']) for event in install_events}
+    assert ('candidate_revalidation', 'SUCCEEDED') in stages
+    expected_download = 'FAILED' if case == 'interrupted' else 'SUCCEEDED'
+    assert ('archive_download', expected_download) in stages
+    assert (('archive_unpack', 'SUCCEEDED') in stages) == (case in {'success', 'probe', 'codex_sync'})
+    if activated:
+        assert ('codex_integration_sync', 'FAILED' if case == 'codex_sync' else 'SUCCEEDED') in stages
+    assert tickets[0] not in json.dumps(events)
+
+
+@pytest.mark.parametrize(('limit', 'read_at', 'reason'), [
+    (3, 1, 'UPDATE_TRANSFER_SIZE_LIMIT'),
+    (5, 13, 'UPDATE_TRANSFER_DEADLINE'),
+])
+def test_transfer_distinguishes_limits(monkeypatch, limit, read_at, reason):
+    from contextlib import nullcontext
+    from io import BytesIO
+    from types import SimpleNamespace
+
+    response = BytesIO(b'body')
+    response.status = 200
+    monkeypatch.setattr(update, 'build_opener',
+                        lambda *_: SimpleNamespace(open=lambda *_, **__: nullcontext(response)))
+    times = iter([0, read_at])
+    monkeypatch.setattr(update, 'time', SimpleNamespace(monotonic=lambda: next(times)))
+    details = {}
+    with pytest.raises(ValueError, match=reason):
+        update.transfer(update.LATEST, limit, telemetry=details)
+    assert details == dict(byte_limit=limit, timeout_s=12, bytes_received=4, http_status=200)
 
 
 @pytest.mark.parametrize('failure', [None, 'version', 'build'])
