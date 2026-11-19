@@ -143,7 +143,7 @@
     },
     {
       "path": "src/security_runtime/audit_graph_view.py",
-      "sha256": "bbb54b12467730823d4dcae5fa27ec422fca49f8205053af15cfca411b1cceec",
+      "sha256": "566aacc5b2e937993bfb219f2e6012d5281480cd584d1d9bd2a69dc5e42bf8e2",
       "purpose": "Read-only projections of the saved, version-bound local audit graphs.",
       "symbols": [
         {
@@ -2319,7 +2319,7 @@
     },
     {
       "path": "src/security_runtime/deep_audit.py",
-      "sha256": "76ecd0953dd67975633e38b43996aa6f42dbe9f0a56e06302d9f48360b241f09",
+      "sha256": "125597add7347534bfcf49a362c596494ca638bf29399fb8a0db2ff07195045a",
       "purpose": "Planner handoff, shared board and task leases for bounded, read-only business audits.",
       "symbols": [
         {
@@ -2356,79 +2356,79 @@
         },
         {
           "name": "_unresolved",
-          "line": 101
+          "line": 102
         },
         {
           "name": "prepare",
-          "line": 110
+          "line": 111
         },
         {
           "name": "fallback",
-          "line": 153
+          "line": 154
         },
         {
           "name": "_initial_view",
-          "line": 165
+          "line": 166
         },
         {
           "name": "manage",
-          "line": 178
+          "line": 179
         },
         {
           "name": "_plan",
-          "line": 231
+          "line": 232
         },
         {
           "name": "_claim",
-          "line": 273
+          "line": 274
         },
         {
           "name": "_task",
-          "line": 297
+          "line": 298
         },
         {
           "name": "process",
-          "line": 308
+          "line": 309
         },
         {
           "name": "_board",
-          "line": 347
+          "line": 348
         },
         {
           "name": "decide",
-          "line": 388
+          "line": 389
         },
         {
           "name": "_read",
-          "line": 411
+          "line": 412
         },
         {
           "name": "_receipt",
-          "line": 437
+          "line": 438
         },
         {
           "name": "_submit",
-          "line": 442
+          "line": 443
         },
         {
           "name": "_proof_refs",
-          "line": 485
+          "line": 486
         },
         {
           "name": "finish",
-          "line": 491
+          "line": 492
         },
         {
           "name": "validate_finish",
-          "line": 552
+          "line": 553
         },
         {
           "name": "seal_finish",
-          "line": 560
+          "line": 561
         },
         {
           "name": "revalidate",
-          "line": 589
+          "line": 590
         }
       ]
     },

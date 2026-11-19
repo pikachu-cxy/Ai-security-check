@@ -33,7 +33,7 @@ def graphs(check):
         for task in job['tasks']:
             result = task.get('result', {})
             nodes.append(dict(id=task['id'], kind='TASK', title=task['direction'],
-                question=task['question'], acceptance=task['acceptance'], state=task['state'],
+                question=task['question'], acceptance=task.get('acceptance', ''), state=task['state'],
                 planner_decision=task.get('planner_decision', 'PENDING'), wave=task['wave'],
                 asset_ids=task['asset_ids'], depends_on=task['depends_on'],
                 conclusion=result.get('conclusion'), hypotheses=result.get('hypotheses', []),

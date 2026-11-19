@@ -73,7 +73,7 @@ def status(job):
                 worker_count=len(job['workers']), stop_reason=job.get('stop_reason'),
                 windows_left=MAX_WINDOWS - job['windows_used'],
                 tasks=[dict(id=t['id'], direction=t['direction'], state=t['state'], wave=t['wave'],
-                            acceptance=t['acceptance'],
+                            acceptance=t.get('acceptance', ''),
                             planner_decision=t.get('planner_decision', 'PENDING'))
                        for t in job['tasks']])
 
@@ -86,7 +86,8 @@ def _board_view(job, after_seq=0):
 
 def _planner_view(job):
     return dict(status(job), board=_board_view(job),
-                conclusions=[dict(task_id=t['id'], acceptance=t['acceptance'], state=t['state'],
+                conclusions=[dict(task_id=t['id'], acceptance=t.get('acceptance', ''),
+                                  state=t['state'],
                                   planner_decision=t.get('planner_decision', 'PENDING'),
                                   conclusion=t['result']['conclusion'],
                                   evidence_refs=t['result']['evidence_refs'],
