@@ -14,10 +14,11 @@ import tarfile
 import tempfile
 import time
 from urllib.parse import urlsplit
+from urllib.error import HTTPError, URLError
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 import zipfile
 
-from .delivery import StableDelivery, bundle_link_name, is_digest, package_metadata, stable_command
+from .delivery import EXE, StableDelivery, bundle_link_name, is_digest, package_metadata, stable_command
 from .hook_state import no_links
 
 REPOSITORY = 'pikachu-cxy/Ai-security-check'
@@ -28,7 +29,8 @@ FRESH = 6 * 3600
 RETRY = 1800
 MAX_ARCHIVE = 128 * 1024 * 1024
 MAX_EXPANDED = 512 * 1024 * 1024
-BUSY = ('QUEUED', 'DOWNLOADING', 'VERIFYING', 'ACTIVATING')
+BUSY = ('QUEUED', 'DOWNLOADING', 'VERIFYING', 'ACTIVATING', 'SYNCING_CODEX')
+MAX_UPDATE_LOG_EVENTS = 512
 
 
 def version_key(version):
@@ -46,19 +48,40 @@ class ReleaseRedirects(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def transfer(url, limit, destination=None):
-    deadline = time.monotonic() + (120 if destination is not None else 12)
+def update_error(error, fallback):
+    if isinstance(error, HTTPError):
+        return 'UPDATE_HTTP_ERROR'
+    cause = error.reason if isinstance(error, URLError) else error
+    if isinstance(cause, TimeoutError):
+        return 'UPDATE_SOCKET_TIMEOUT'
+    if isinstance(error, URLError):
+        return 'UPDATE_NETWORK_ERROR'
+    code = str(error)
+    return code if re.fullmatch(r'(UPDATE|DELIVERY)_[A-Z_]+', code) else fallback
+
+
+def transfer(url, limit, destination=None, *, telemetry=None):
+    budget = 120 if destination is not None else 12
+    deadline = time.monotonic() + budget
+    if telemetry is not None:
+        telemetry.update(byte_limit=limit, timeout_s=budget, bytes_received=0)
     request = Request(url, headers={'User-Agent': 'AI-Security-Runtime', 'Accept': 'application/vnd.github+json'}
                       if url == LATEST else {'User-Agent': 'AI-Security-Runtime'})
     digest = hashlib.sha256()
     chunks = []
     size = 0
     with build_opener(ReleaseRedirects()).open(request, timeout=6) as response:
+        if telemetry is not None:
+            telemetry['http_status'] = response.status
         with (destination.open('xb') if destination is not None else nullcontext()) as output:
             while block := response.read1(65536):
                 size += len(block)
-                if size > limit or time.monotonic() > deadline:
-                    raise ValueError('UPDATE_TRANSFER_LIMIT')
+                if telemetry is not None:
+                    telemetry['bytes_received'] = size
+                if size > limit:
+                    raise ValueError('UPDATE_TRANSFER_SIZE_LIMIT')
+                if time.monotonic() > deadline:
+                    raise ValueError('UPDATE_TRANSFER_DEADLINE')
                 if destination is None:
                     chunks.append(block)
                 else:
@@ -143,14 +166,78 @@ def unpack(archive, target, platform):
     return target / 'security-check'
 
 
+def sync_managed_codex(target):
+    from .global_integration import GlobalCodexIntegration
+    integration = GlobalCodexIntegration()
+    if integration._manifest(integration.home) is None:
+        return
+    # The new executable must sign the receipt with its own build identity.
+    result = subprocess.run(
+        [str(target / EXE), 'repair', '--json'], cwd=integration.home,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        timeout=120, check=False,
+        **({'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
+    if result.returncode != 0 or json.loads(result.stdout).get('overall') != 'CONFIGURED':
+        raise ValueError('UPDATE_CODEX_SYNC_FAILED')
+
+
 class RuntimeUpdate:
-    def __init__(self, delivery, running_build, platform, *, now=time.time, fetch=transfer):
+    def __init__(self, delivery, running_build, platform, *, now=time.time, fetch=transfer, sync_codex=None):
         self.delivery = delivery
         self.running_build = running_build
         self.platform = platform
         self.now = now
         self.fetch = fetch
+        self.sync_codex = sync_codex
         self.db = delivery.root / 'runtime-updates.db'
+
+    def log(self, operation_id, stage, outcome, **details):
+        event = dict(at=self.now(), operation_id=operation_id, stage=stage,
+                     outcome=outcome, **details)
+        try:
+            with self.connection(write=True) as db:
+                db.execute('CREATE TABLE IF NOT EXISTS update_log (id INTEGER PRIMARY KEY, event TEXT NOT NULL)')
+                db.execute('INSERT INTO update_log (event) VALUES (?)', (json.dumps(event),))
+                db.execute('DELETE FROM update_log WHERE id <= '
+                           '(SELECT max(id) FROM update_log) - ?', (MAX_UPDATE_LOG_EVENTS,))
+        except (OSError, ValueError, sqlite3.Error):
+            # Diagnostics must never prevent the update or change its result.
+            pass
+
+    @contextmanager
+    def stage(self, operation_id, stage, **details):
+        start = time.monotonic()
+        self.log(operation_id, stage, 'STARTED', **details)
+        try:
+            yield details
+        except Exception as error:
+            if isinstance(error, HTTPError):
+                details['http_status'] = error.code
+            self.log(operation_id, stage, 'FAILED', **details,
+                     elapsed_ms=round((time.monotonic() - start) * 1000),
+                     reason=update_error(error, 'UPDATE_STAGE_FAILED'))
+            raise
+        else:
+            self.log(operation_id, stage, 'SUCCEEDED', **details,
+                     elapsed_ms=round((time.monotonic() - start) * 1000))
+
+    def traced_fetch(self, operation_id):
+        def fetch(url, limit, destination=None):
+            if destination is not None:
+                stage = 'archive_download'
+            elif url == LATEST:
+                stage = 'release_metadata'
+            elif url.endswith('/release-manifest.json'):
+                stage = 'release_manifest'
+            else:
+                stage = 'archive_checksum'
+            with self.stage(operation_id, stage) as details:
+                if self.fetch is transfer:
+                    return transfer(url, limit, destination, telemetry=details)
+                if destination is None:
+                    return self.fetch(url, limit)
+                return self.fetch(url, limit, destination)
+        return fetch
 
     @contextmanager
     def connection(self, *, write=False):
@@ -221,8 +308,12 @@ class RuntimeUpdate:
             if self.now() < self.get(db, 'release').get('retry_at', 0):
                 return
             self.put(db, 'release', dict(retry_at=self.now() + RETRY, state='CHECKING'))
+        operation_id = secrets.token_hex(8)
         try:
-            candidate = discover(self.active()['version'], self.platform, self.fetch)
+            with self.stage(operation_id, 'release_check', platform=self.platform) as details:
+                details['active_version'] = self.active()['version']
+                candidate = discover(details['active_version'], self.platform, self.traced_fetch(operation_id))
+                details['candidate_version'] = candidate['version'] if candidate else None
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             with self.connection(write=True) as db:
                 self.put(db, 'release', dict(retry_at=self.now() + RETRY, state='UNAVAILABLE'))
@@ -246,11 +337,14 @@ class RuntimeUpdate:
                     or version_key(candidate['version']) <= version_key(active['version'])):
                 raise ValueError('UPDATE_CANDIDATE_STALE')
             ticket = secrets.token_hex(32)
+            operation_id = secrets.token_hex(8)
             self.put(db, 'job', dict(status='QUEUED', ticket=ticket, candidate_id=candidate_id,
                                      version=candidate['version'], active=active['build_id'],
+                                     operation_id=operation_id,
                                      deadline=self.now() + 600))
         try:
-            launcher(ticket)
+            with self.stage(operation_id, 'install_worker_launch', target_version=candidate['version']):
+                launcher(ticket)
         except OSError:
             self.transition(ticket, 'FAILED', 'UPDATE_START_FAILED')
             return {'status': 'FAILED', 'reason': 'UPDATE_START_FAILED'}
@@ -270,37 +364,57 @@ class RuntimeUpdate:
             if job.get('ticket') != ticket or job.get('status') != 'QUEUED' or self.now() > job['deadline']:
                 return False
             self.put(db, 'job', dict(job, status='DOWNLOADING'))
+        operation_id = job.get('operation_id') or secrets.token_hex(8)
+        fetch = self.traced_fetch(operation_id)
         try:
-            active = self.active()
-            candidate = discover(active['version'], self.platform, self.fetch)
-            if active['build_id'] != job['active'] or not candidate or candidate['id'] != job['candidate_id']:
-                raise ValueError('UPDATE_CANDIDATE_STALE')
+            with self.stage(operation_id, 'candidate_revalidation', target_version=job['version']):
+                active = self.active()
+                candidate = discover(active['version'], self.platform, fetch)
+                if active['build_id'] != job['active'] or not candidate or candidate['id'] != job['candidate_id']:
+                    raise ValueError('UPDATE_CANDIDATE_STALE')
             # Keep staging outside the installation and near the short stable
             # root. Desktop-host TEMP can exceed Windows archive path limits.
             with tempfile.TemporaryDirectory(prefix='asr-update-', dir=self.delivery.root.parent) as temporary:
                 staging = Path(temporary).resolve(strict=True)
                 archive = staging / 'bundle'
                 url = f"{DOWNLOAD}/v{candidate['version']}/{candidate['archive']}"
-                if self.fetch(url, MAX_ARCHIVE, archive) != candidate['sha256']:
-                    raise ValueError('UPDATE_CHECKSUM_MISMATCH')
+                digest = fetch(url, MAX_ARCHIVE, archive)
+                with self.stage(operation_id, 'archive_digest_verification'):
+                    if digest != candidate['sha256']:
+                        raise ValueError('UPDATE_CHECKSUM_MISMATCH')
                 self.transition(ticket, 'VERIFYING')
-                bundle = unpack(archive, staging, self.platform)
-                meta = package_metadata(bundle)
-                if (meta['version'] != candidate['version'] or meta['source_commit'] != candidate['source_commit']
-                        or meta['source_dirty']):
-                    raise ValueError('UPDATE_PACKAGE_IDENTITY_MISMATCH')
-                if not self.transition(ticket, 'ACTIVATING'):
-                    raise ValueError('UPDATE_JOB_CONFLICT')
-                self.delivery.activate(bundle, expected_active=job['active'])
+                with self.stage(operation_id, 'archive_unpack'):
+                    bundle = unpack(archive, staging, self.platform)
+                with self.stage(operation_id, 'package_identity_verification'):
+                    meta = package_metadata(bundle)
+                    if (meta['version'] != candidate['version'] or meta['source_commit'] != candidate['source_commit']
+                            or meta['source_dirty']):
+                        raise ValueError('UPDATE_PACKAGE_IDENTITY_MISMATCH')
+                with self.stage(operation_id, 'activation'):
+                    if not self.transition(ticket, 'ACTIVATING'):
+                        raise ValueError('UPDATE_JOB_CONFLICT')
+                    self.delivery.activate(bundle, expected_active=job['active'])
         except (OSError, ValueError, KeyError, TypeError, tarfile.TarError, zipfile.BadZipFile,
                 subprocess.SubprocessError) as error:
-            code = str(error)
-            self.transition(ticket, 'FAILED', code if re.fullmatch(r'(UPDATE|DELIVERY)_[A-Z_]+', code)
-                            else 'UPDATE_INSTALL_FAILED')
+            reason = update_error(error, 'UPDATE_INSTALL_FAILED')
+            self.transition(ticket, 'FAILED', reason)
+            self.log(operation_id, 'install_result', 'FAILED', reason=reason)
             return False
+        if self.sync_codex is not None:
+            self.transition(ticket, 'SYNCING_CODEX')
+            try:
+                with self.stage(operation_id, 'codex_integration_sync'):
+                    self.sync_codex(self.delivery.slot(meta['build_id']))
+            except (OSError, ValueError, AttributeError, subprocess.SubprocessError):
+                reason = 'UPDATE_CODEX_SYNC_FAILED'
+                self.transition(ticket, 'INSTALLED_CODEX_REPAIR_REQUIRED', reason)
+                self.log(operation_id, 'install_result', 'INSTALLED_CODEX_REPAIR_REQUIRED', reason=reason)
+                return False
         from .mcp_update_proxy import compatible
-        self.transition(ticket, 'INSTALLED_AWAITING_CONNECTION' if compatible(active, meta)
-                        else 'INSTALLED_RECONNECT_REQUIRED')
+        status = ('INSTALLED_AWAITING_CONNECTION' if compatible(active, meta)
+                  else 'INSTALLED_RECONNECT_REQUIRED')
+        self.transition(ticket, status)
+        self.log(operation_id, 'install_result', status)
         return True
 
 
@@ -313,7 +427,8 @@ def installed_update():
             return None
         from .toolchain import platform_key
         return RuntimeUpdate(StableDelivery(Path(launcher).parents[1]),
-                             Path(sys.executable).absolute().parents[1].name, '-'.join(platform_key()))
+                             Path(sys.executable).absolute().parents[1].name, '-'.join(platform_key()),
+                             sync_codex=sync_managed_codex)
     except (OSError, ValueError):
         return None
 
@@ -341,7 +456,8 @@ def schedule_refresh():
                     if service.now() < release.get('expires', 0):
                         return 'FRESH'
                     return 'CHECKING' if release.get('state') == 'CHECKING' else 'BACKOFF'
-        spawn_update('_refresh')
+        with service.stage(secrets.token_hex(8), 'release_worker_launch'):
+            spawn_update('_refresh')
         return 'CHECKING'
     except (OSError, ValueError, sqlite3.Error):
         return 'UNAVAILABLE'
@@ -393,6 +509,8 @@ def report_notice(report):
                 return None
             service.put(db, notice_key, dict(batch=batch, until=service.now() + 86400))
             service.put(db, report_key, dict(offered=True))
+        service.log(secrets.token_hex(8), 'update_notice', 'LINK' if url else 'FALLBACK',
+                    target_version=candidate['version'])
         from ._version import __version__
         label = '查看并更新'
         return dict(current_version=__version__, target_version=candidate['version'], candidate_id=candidate['id'],

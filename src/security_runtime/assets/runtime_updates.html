@@ -23,9 +23,11 @@
 const byId = id => document.getElementById(id);
 const stages = {QUEUED:'已提交更新', DOWNLOADING:'正在下载并核对发行信息', VERIFYING:'正在校验安装包',
   ACTIVATING:'正在试启动并切换安装', INSTALLED_RECONNECT_REQUIRED:'已安装，重连后生效',
+  SYNCING_CODEX:'正在同步 Codex 全局接入',
+  INSTALLED_CODEX_REPAIR_REQUIRED:'程序已激活，Codex 接入同步失败，需要修复全局接入。',
   INSTALLED_AWAITING_CONNECTION:'已安装。兼容连接会尝试切换，当前会话是否已切换以宿主构建信息为准。',
   FAILED:'更新未完成。请查看失败原因后重试。'};
-const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING']);
+const activeStages = new Set(['QUEUED','DOWNLOADING','VERIFYING','ACTIVATING','SYNCING_CODEX']);
 const checkStates = {NOT_CHECKED:'尚未检查更新。', STALE:'上次检查结果已过期。',
   CHECKING:'正在检查更新…', UNAVAILABLE:'暂时无法核验发行信息，请稍后重试。'};
 let candidate, waiting, timer, retryAt, previousRetryAt, checkUntil = 0;
@@ -53,7 +55,7 @@ async function refresh(message) {
     if (!checking) checkUntil = 0;
     const canCheck = Object.hasOwn(checkStates, update.release_check);
     let state = stages[job.status];
-    if (!waiting && !candidate && (canCheck || checking)) {
+    if (!waiting && !candidate && (canCheck || checking) && job.status !== 'INSTALLED_CODEX_REPAIR_REQUIRED') {
       state = checking ? checkStates.CHECKING : checkStates[update.release_check];
     }
     state ||= candidate ? '有可安装的正式发行版。' : update.release_check === 'FRESH'
