@@ -15,11 +15,10 @@ from .review_delivery import json_bytes
 
 MAX_PATHS = 8
 WINDOW_LINES = 80
-HEAD_LINES = 80
 MERGE_GAP = 8
 FIRST_PACKAGE_ITEMS = 4
 GIT_HEAD_DIFF = 'GIT_HEAD_DIFF'
-FILE_HEAD_FALLBACK = 'FILE_HEAD_FALLBACK'
+CHANGED_LINES_UNKNOWN = 'CHANGED_LINES_UNKNOWN'
 
 
 def _identifier(kind, path, start, end):
@@ -97,11 +96,11 @@ def plan(root, paths, related=()):
             locator = GIT_HEAD_DIFF
             gaps.append(dict(file_path=name, reason='CHECK_PATH_DIFF_NOT_SESSION_ATTRIBUTED'))
         else:
-            windows = [(1, min(total, HEAD_LINES))]
-            locator = FILE_HEAD_FALLBACK
-            gaps.append(dict(file_path=name, reason='CHANGED_LINES_UNKNOWN'))
+            windows = []
+            locator = CHANGED_LINES_UNKNOWN
+            gaps.append(dict(file_path=name, reason=CHANGED_LINES_UNKNOWN))
         candidates.append(dict(file_path=name, sha256=hashlib.sha256(raw).hexdigest(),
-                               locator=locator, windows=windows))
+                               locator=locator, windows=windows, line_count=total))
     # Spread the window budget over distinct files first, then deepen one file.
     chosen, depth = [], 0
     while len(chosen) < MAX_PATHS:
@@ -118,13 +117,16 @@ def plan(root, paths, related=()):
     nodes, edges, windows = [], [], []
     for candidate in candidates:
         picked = [window for owner, window in chosen if owner is candidate]
-        if not picked:
+        if not picked and candidate['windows']:
             gaps.append(dict(file_path=candidate['file_path'], reason='INITIAL_PATH_BUDGET'))
             continue
         file_id = _identifier('FILE', candidate['file_path'], 1, 1)
-        nodes.append(dict(id=file_id, kind='FILE', name=candidate['file_path'],
+        file = dict(id=file_id, kind='FILE', name=candidate['file_path'],
                           file_path=candidate['file_path'], line_start=1, line_end=1,
-                          sha256=candidate['sha256'], source='WORKSPACE_SOURCE'))
+                          sha256=candidate['sha256'], source='WORKSPACE_SOURCE')
+        if candidate['locator'] == CHANGED_LINES_UNKNOWN:
+            file.update(locator=CHANGED_LINES_UNKNOWN, line_count=candidate['line_count'])
+        nodes.append(file)
         for start, end in picked:
             region = dict(id=_identifier('SOURCE_REGION', candidate['file_path'], start, end),
                           kind='SOURCE_REGION',
@@ -140,7 +142,7 @@ def plan(root, paths, related=()):
 
 
 def project(nodes, edges, gaps, evidence):
-    """Return only regions whose location is covered by a same-version receipt."""
+    """Keep receipt-backed regions and file-only targets for Worker reads."""
     receipts = {}
     for receipt in evidence:
         receipts.setdefault((receipt['file_path'], receipt['sha256']), []).append(receipt)
@@ -154,7 +156,8 @@ def project(nodes, edges, gaps, evidence):
                 break
         if len(backed) == 64:
             break
-    files = {}
+    files = {item['file_path']: item for item in nodes
+             if item['kind'] == 'FILE' and item.get('locator') == CHANGED_LINES_UNKNOWN}
     for item in backed.values():
         files.setdefault(item['file_path'], dict(
             id=_identifier('FILE', item['file_path'], 1, 1), kind='FILE', name=item['file_path'],

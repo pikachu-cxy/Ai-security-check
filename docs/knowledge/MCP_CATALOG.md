@@ -140,7 +140,7 @@ For a short Stop notice, view=closeout resolves the saved REVIEW/REPORT/INCOMPLE
 manage_development_audit(check_ref: str, action: Literal['prepare', 'status', 'started', 'cancel', 'unsupported', 'failed', 'stream_prepare', 'stream_started', 'stream_cancel', 'stream_status', 'stream_authorize_paths', 'stream_rotate', 'stream_failed', 'deep_prepare', 'deep_plan', 'deep_started', 'deep_status', 'deep_finish', 'deep_authorize_paths', 'deep_decide_task'], workspace_path: str | None=None, session_ref: str | None=None, audit_id: str | None=None, agent_ref: str | None=None, audit_token: str | None=None, related_paths: Annotated[list[str], Field(max_length=50)] | None=None, tasks: Annotated[list[AuditTask], Field(max_length=4)] | None=None, reason: Annotated[str, Field(max_length=500)] | None=None, task_id: Annotated[str, Field(max_length=20)] | None=None, receipt_id: Annotated[str, Field(max_length=128)] | None=None, decision: Literal['ACCEPTED', 'NEEDS_EVIDENCE', 'INCONCLUSIVE'] | None=None, host_parallel: bool=False)
 ```
 
-Manage a read-only business audit during development. Standard mode uses stream_prepare and stream_started with the actual host child ID. Optional deep mode uses deep_prepare (asset graph plus first readable source package), deep_plan (each task binds a SOURCE_REGION and states an acceptance condition), separate deep_started registrations, deep_status, deep_decide_task and deep_finish. deep_authorize_paths grants new related paths to one task. Only the parent session may plan, decide and finish; deep_decide_task records ACCEPTED/NEEDS_EVIDENCE/INCONCLUSIVE for one current receipt and only ACCEPTED unlocks dependent tasks. Pass each child its own capability for direct process_development_audit calls. Only the host starts models. Legacy unprefixed actions retain their handoff contract.
+Manage a read-only business audit during development. Standard mode uses stream_prepare and stream_started with the actual host child ID. In deep mode, deep_prepare returns the asset graph, first source package and canonical plan_task_schema. For deep_plan, each tasks item requires direction, question, acceptance, integer priority (1–5), and asset_ids (a list of SOURCE_REGION IDs or FILE IDs with unknown changed lines). Use optional paths for authorized evidence files and depends_on for existing task IDs. If rejected, correct field_errors and retry the same round once. Then use separate deep_started registrations, deep_status, deep_decide_task and deep_finish. deep_authorize_paths grants new related paths to one task. Only the parent session may plan, decide and finish; deep_decide_task records ACCEPTED/NEEDS_EVIDENCE/INCONCLUSIVE for one current receipt and only ACCEPTED unlocks dependent tasks. Pass each child its own capability for direct process_development_audit calls. Only the host starts models. Legacy unprefixed actions retain their handoff contract.
 
 ### development_review / prepare_development_risk_fix
 
@@ -454,7 +454,7 @@ Read effective user TOML preferences and adapter support; no writes or scan.
 
 ### runtime_status / get_product_epoch_status
 
-定义：[src/security_runtime/global_mcp.py:560](../../src/security_runtime/global_mcp.py#L560)
+定义：[src/security_runtime/global_mcp.py:565](../../src/security_runtime/global_mcp.py#L565)
 
 ```python
 get_product_epoch_status(workspace_path: str)
@@ -504,7 +504,7 @@ Describe implemented directory isolation separately from unsupported host write 
 
 ### runtime_status / get_workspace_binding_status
 
-定义：[src/security_runtime/global_mcp.py:554](../../src/security_runtime/global_mcp.py#L554)
+定义：[src/security_runtime/global_mcp.py:559](../../src/security_runtime/global_mcp.py#L559)
 
 ```python
 get_workspace_binding_status(workspace_path: str, session_ref: str | None=None)

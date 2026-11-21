@@ -2,8 +2,10 @@
 
 ## 0.3.16 — 2026-11-18
 
-- Added a scoped Spring asset graph and optional deep business logic audits in Codex. Deep mode uses two evidence workers by default, and the Runtime verifies evidence before combining results.
-- The risk dashboard displays asset and audit graphs and evidence locations for each audit batch.
+- Optional deep business logic audits in Codex support files and source regions across languages and use two workers by default. Planning errors and missing per-file review receipts return actionable diagnostics.
+- Workers choose evidence ranges when Git cannot locate changed lines. A single window can exceed 80 lines within the response budget.
+- Completed deep audits show a single completion line in chat. The risk dashboard retains batch assets, tasks, evidence locations, and coverage details.
+- On macOS, the risk dashboard can request system approval directly before saving settings or changing risk dispositions.
 
 ## 0.3.15 — 2026-11-17
 

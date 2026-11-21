@@ -137,8 +137,12 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             from . import audit_assets
             windows, nodes, edges, gaps = audit_assets.plan(
                 risks.root, batch['versions'], grant.get('related_paths', []))
-            result['context'] = process(risks, 'read', audit_token=audit_token, agent_ref=agent_ref,
-                batch_id=batch['batch_id'], windows=windows)
+            if windows:
+                result['context'] = process(risks, 'read', audit_token=audit_token, agent_ref=agent_ref,
+                    batch_id=batch['batch_id'], windows=windows)
+            else:
+                from .development_views import read_contexts
+                result['context'] = read_contexts(risks, [])
             graph = audit_assets.bound(audit_assets.project(
                 nodes, edges, gaps, result['context']['evidence']), 6500)
             result['context']['asset_graph'] = graph
@@ -152,7 +156,9 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             result['submission_contract'] = dict(
                 observation_required=[name for name, field in Observation.model_fields.items() if field.is_required()],
                 observation_extra_fields_allowed=False,
-                instruction='发现项使用 observations 的完整字段，report_content 不能代替必填的 description、impact、fix_advice；不传 kind。'
+                instruction='没有预取源码的文件由 Worker 按任务选择行段并调用 read。'
+                            '单窗可超过 80 行；遇到响应容量限制时缩短行段。'
+                            '发现项使用 observations 的完整字段，report_content 不能代替必填的 description、impact、fix_advice；不传 kind。'
                             '没有发现则 observations=[]，仍提交已审路径的 business_reviews。原样保留身份、batch_id 和稳定 request_id。')
         return result
     if action == 'recover' and request_id:
@@ -186,7 +192,8 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             return dict(error='AUDIT_RELATED_AUTHORIZATION_REQUIRED', requested_related_paths=missing,
                         parent_action='stream_authorize_paths', scanner_run=False)
         from .development_views import read_contexts, EvidenceWindow
-        result = read_contexts(risks, [EvidenceWindow(**dict(w, related=True)) for w in windows])
+        result = read_contexts(risks, [EvidenceWindow(**dict(w, related=True)) for w in windows],
+                               worker_selected=True)
         for error in list(result.get('errors', [])):
             try:
                 item = absence_evidence(risks, error['file_path'])

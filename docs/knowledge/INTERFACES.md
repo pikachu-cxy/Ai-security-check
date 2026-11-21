@@ -266,6 +266,8 @@ MCP CLI 启动时在后台执行服务就绪检查，失败原因写入 `dashboa
 
 完整确认报告末尾附固定会话链接；统一开发结果可带 risk_management_url，宿主在有需提醒的候选时将其附在完整说明后。链接读取是本地元数据查询，服务未初始化时不阻塞复核或额外启动后台服务。扫描及风险保存独立于 Web 服务状态。
 
+macOS 上直接打开 `/risks` 可点击「启用写入」。`POST /api/session/authorize` 只接受同源页面的空请求，需在系统对话框中明确允许才签发浏览器 Cookie 和 CSRF 值。取消或超时保留只读状态。产品设置和风险处置继续走原写入鉴权。其他平台可使用宿主返回的授权入口。
+
 ## 本机风险管理 v2 与并行业务审计
 
 Web 使用 `/risks` 固定入口；GET `/api/session`、`/api/risks`、`/api/config`、`/api/export`。风险查询支持 project/workspace/session/editor/check/category/severity/status/archived/q、offset/limit（每页最多 200）。列表、分层统计来自同一 SQL 读事务；BUILDING/UNAVAILABLE/PARTIAL 不解释为零风险。
@@ -348,7 +350,13 @@ Cursor / WorkBuddy 的编辑适配通过 host_development 请求已有审计 off
 
 `stream_prepare/started` 和 `process_development_audit(action=claim)` 的原身份与授权不变。流式领取的 `context.asset_graph` 提供 `FILE`/`SOURCE_REGION` 节点、带证据引用的边和缺口。可独立使用 `read` 补证。首包不解锁图外文件，已有显式授权的关联路径才纳入提取。
 
-深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产图和已读取的首包源码。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：`FILE` 只用于分组，Planner 的任务只绑定 `SOURCE_REGION`。每个源码片段带路径、实际行范围、源码哈希、证据引用和定位来源（`GIT_HEAD_DIFF` 或 `FILE_HEAD_FALLBACK`），只有同版本证据读取成功后才入图。首包源码直接复用这次取证的内容，不为首包重复读取。配置保持 `standard` 默认值，深度模式下 `business_audit_workers` 支持 2 或 3。非 Codex、宿主未声明并发或没有可取证资产时回落既有单 Worker 协议。
+深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产图和已读取的首包源码。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：Planner 可绑定 `SOURCE_REGION` 或变更行未知的 `FILE`。每个源码片段带路径、实际行范围、源码哈希、证据引用和定位来源（`GIT_HEAD_DIFF`），只有同版本证据读取成功后才入图。首包源码直接复用这次取证的内容。变更行未知时仅提供文件路径和总行数，由 Worker 选择并读取所需行段。配置保持 `standard` 默认值，深度模式下 `business_audit_workers` 支持 2 或 3。非 Codex、宿主未声明并发或没有可取证资产时回落既有单 Worker 协议。
+
+`deep_prepare.plan_task_schema` 由 `deep_plan.tasks` 使用的 `AuditTask` 模型生成。每项必填 `direction`、`question`、`acceptance`、整数 `priority`（1–5）和 `asset_ids` 数组；`paths` 与 `depends_on` 可选。分组和直接调用共享校验，格式错误返回 `field_errors`，保留当前轮次供修正后重试。
+
+Worker 用 `business_reviews` 逐文件记录实际审阅覆盖，文件没有发现时也可交覆盖回执。发现文件缺少同次提交的覆盖回执时返回 `AUDIT_FINDING_WITHOUT_COVERAGE`，可用当前批次已取得的同文件证据补交。文件或行号未被引用证据覆盖时返回 `DEVELOPMENT_RISK_LOCATION_UNREAD`。`task_result` 记录任务结论，逐文件覆盖以通过验收的 `business_reviews` 汇总。
+
+标准和深度业务审计的 Worker 通过 `process_development_audit(action="read")` 自定每个证据窗的起止行，单窗可以超过 80 行。实际返回仍受文件范围、源码片段容量及批次响应预算约束。
 
 Planner 提交 `deep_plan(tasks=...)`，字段为 `direction/question/acceptance/priority/asset_ids/depends_on/paths/evidence_windows/resolves`。`acceptance` 是一句可核对的验收条件。依赖可引用已核验任务和本轮更早条目，但只有被 Planner 接受的依赖才解锁。相关范围必须已由父会话授权。第二轮任务必须明确引用首轮未解决缺口，且不得依赖它正在补证的任务。
 

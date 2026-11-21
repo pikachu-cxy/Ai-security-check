@@ -10,7 +10,7 @@ import re
 GAPS = {
     'SOURCE_UNREADABLE': '文件不可读，未生成源码片段',
     'EMPTY_FILE': '文件没有可取证源码行',
-    'CHANGED_LINES_UNKNOWN': '未定位到变更行，使用文件前 80 行',
+    'CHANGED_LINES_UNKNOWN': '未定位到变更行，由 Worker 按需取证',
     'CHECK_PATH_DIFF_NOT_SESSION_ATTRIBUTED': '片段由已记录路径的 HEAD 差异定位，行级编辑归属未知',
     'INITIAL_PATH_BUDGET': '初始取证文件数达到上限',
     'INITIAL_EVIDENCE_WINDOW_LIMIT': '部分源码片段未取得同版本证据',
@@ -74,15 +74,16 @@ def report_lines(check):
     assets = data['asset_graph']
     job = check.get('deep_audit') or {}
     active = job.get('dirty_seq') == check['dirty_seq']
+    if active and audit['status'] == 'COMPLETE':
+        return ['深度业务审计本轮计划范围已完成。']
+
     lines = []
     fallback = check.get('audit_mode_fallback') or {}
     if not active and fallback.get('dirty_seq') == check['dirty_seq']:
         why = '宿主未提供并行子任务能力' if fallback['reason'] == 'HOST_PARALLEL_UNAVAILABLE' else '首包未定位到受支持的资产'
         lines.append(f'本轮使用标准单 Worker 审计，原因为{why}。')
     if active:
-        terminal = audit['status'] in {'COMPLETE', 'PARTIAL'}
-        label = '本轮计划范围已完成' if audit['status'] == 'COMPLETE' else '部分完成'
-        lines.append(f'深度业务审计{label}。')
+        lines.append('深度业务审计部分完成。')
         if audit.get('reviewed_paths'):
             lines.append('已审文件为' + '、'.join(audit['reviewed_paths']) + '。')
         covered = [t['title'] for t in audit['tasks'] if t.get('planner_decision') == 'ACCEPTED']
@@ -92,7 +93,7 @@ def report_lines(check):
         why = audit.get('stop_reason') or ('达到共享时间预算' if audit['status'] == 'INTERRUPTED'
                                           else '收尾时仍有任务待核验')
         lines.append('停止原因为' + why + '。')
-        pending = audit['gaps'] if terminal else [
+        pending = audit['gaps'] if audit['status'] == 'PARTIAL' else [
             t['title'] for t in audit['tasks'] if t.get('planner_decision') != 'ACCEPTED']
         if pending:
             lines.append('未审或待补证范围包括' + '；'.join(pending[:12]) + '。')

@@ -49,8 +49,10 @@ def test_saved_static_report_survives_pending_business_audit(sample, monkeypatch
     assert all(x in page['report_text'] for x in ['query.py', '**问题**', '**可能影响**', '**建议修复**'])
 
 
-def test_product_handoff_direct_save_without_extra_read(sample):
+def test_product_handoff_lets_worker_choose_evidence_without_git_lines(sample):
     root, service, ref, risks = sample
+    (root / 'query.py').write_text('# context\n' * 100 + 'value = 1\n', encoding='utf-8')
+    service.record(root, ref, ['query.py'])
     prepared = manage(risks, 'prepare')
     registered = manage(risks, 'started', agent_ref='real-child', audit_token=prepared['audit_token'])
     call = registered['child_call']
@@ -58,8 +60,14 @@ def test_product_handoff_direct_save_without_extra_read(sample):
     assert call['arguments']['agent_ref'] == 'real-child'
     args = {k: call['arguments'][k] for k in ['audit_token', 'agent_ref']}
     claimed = process(risks, 'claim', **args)
-    assert claimed['context']['evidence']
-    evidence = claimed['context']['evidence'][0]['evidence_ref']
+    assert claimed['context']['evidence'] == []
+    file, = claimed['context']['asset_graph']['nodes']
+    assert file['kind'] == 'FILE' and file['line_count'] == 101
+    context = process(risks, 'read', batch_id=claimed['batch']['batch_id'],
+                      windows=[dict(file_path='query.py', start_line=1, end_line=101)], **args)
+    proof, = context['evidence']
+    assert (proof['line_start'], proof['line_end']) == (1, 101)
+    evidence = proof['evidence_ref']
     result = process(risks, 'submit', batch_id=claimed['batch']['batch_id'], request_id='direct-save-first',
                      business_reviews=[dict(file_path='query.py', rationale='Reviewed fixed source and input boundary.',
                          evidence_refs=[evidence], coverage='COMPLETE', limitations=[])], **args)

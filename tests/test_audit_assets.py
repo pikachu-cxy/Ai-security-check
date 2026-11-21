@@ -68,13 +68,16 @@ def test_evidence_projection_requires_the_same_version(sample):
     assert not audit_assets.project(nodes, edges, gaps, [])['nodes']
 
 
-def test_no_git_uses_file_head_and_marks_unknown_changes(sample):
+def test_no_git_leaves_evidence_windows_to_worker(sample):
     root = sample[0]
-    (root / 'module.ts').write_text(python_source(), encoding='utf-8')
+    source = python_source()
+    (root / 'module.ts').write_text(source, encoding='utf-8')
     windows, nodes, edges, gaps = audit_assets.plan(root, ['module.ts'])
-    assert windows == [dict(file_path='module.ts', start_line=1, end_line=80)]
-    region = next(node for node in nodes if node['kind'] == 'SOURCE_REGION')
-    assert region['locator'] == audit_assets.FILE_HEAD_FALLBACK
+    assert not windows and not edges
+    file, = audit_assets.project(nodes, edges, gaps, [])['nodes']
+    assert file['kind'] == 'FILE' and file['locator'] == audit_assets.CHANGED_LINES_UNKNOWN
+    assert file['line_count'] == len(source.splitlines()) > 80
+    assert 'evidence_ref' not in file
     assert {gap['reason'] for gap in gaps} == {'CHANGED_LINES_UNKNOWN'}
 
 
@@ -82,7 +85,7 @@ def test_plain_java_needs_no_spring_annotations(sample):
     root = sample[0]
     (root / 'RefundService.java').write_text(plain_java(), encoding='utf-8')
     windows, nodes, edges, gaps = audit_assets.plan(root, ['RefundService.java'])
-    assert [node['kind'] for node in nodes] == ['FILE', 'SOURCE_REGION']
+    assert [node['kind'] for node in nodes] == ['FILE']
     assert not any(gap['reason'] in {'LANGUAGE_NOT_SUPPORTED', 'JAVA_EXTRACTION_FAILED',
                                      'SPRING_METHOD_NOT_LOCATED'} for gap in gaps)
 

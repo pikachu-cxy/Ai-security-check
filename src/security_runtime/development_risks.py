@@ -249,12 +249,12 @@ class DevelopmentRisks:
             return self.checks._get(self.store.active.get(), self.ref)
         return self.checks.load(self.ref, self.development.owner)
 
-    def read(self, file_path, start_line=1, end_line=80, *, related=False):
+    def read(self, file_path, start_line=1, end_line=80, *, related=False, worker_selected=False):
         name = relative_path(file_path)
         check = self.current_check()
         require(name in check['observed_paths'] or related is True, 'DEVELOPMENT_RISK_PATH_NOT_OBSERVED')
-        require(type(start_line) is int and type(end_line) is int and
-                1 <= start_line <= end_line < start_line + 80, 'DEVELOPMENT_RISK_RANGE_INVALID')
+        require(type(start_line) is int and type(end_line) is int and 1 <= start_line <= end_line
+                and (worker_selected or end_line < start_line + 80), 'DEVELOPMENT_RISK_RANGE_INVALID')
         with span('review.source_read'):
             raw, text = WorkspaceReader(self.root).read(name)
         lines = text.splitlines()

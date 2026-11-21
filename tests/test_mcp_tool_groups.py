@@ -71,6 +71,11 @@ def test_compact_discovery_keeps_required_contract_and_precise_schemas(tmp_path,
             if branch['properties']['operation']['const'] == 'manage_development_audit')
         assert 'deep_decide_task' in manage_schema['properties']['action']['enum']
         assert {'receipt_id', 'decision'} <= set(manage_schema['properties'])
+        from security_runtime.deep_audit import AuditTask
+        tasks_schema = manage_schema['properties']['tasks']['anyOf'][0]['items']
+        assert tasks_schema['required'] == AuditTask.model_json_schema()['required']
+        assert tasks_schema['properties']['asset_ids']['items']['type'] == 'string'
+        assert tasks_schema['properties']['priority']['type'] == 'integer'
         decision = manage_schema['properties']['decision']
         choices = decision.get('enum') or next(
             branch['enum'] for branch in decision['anyOf'] if 'enum' in branch)

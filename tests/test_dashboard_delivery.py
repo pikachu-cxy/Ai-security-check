@@ -1,5 +1,6 @@
 """Batch-scoped local delivery links: identity, liveness, open reads, ordering."""
 from contextlib import closing
+from http.client import HTTPConnection
 import json
 import socket
 import time
@@ -48,6 +49,46 @@ def test_read_routes_need_no_cookie_while_writes_keep_csrf(monkeypatch):
         assert json.loads(body)['csrf'] == server.token
         assert request(server, '/risks', {'Host': 'example.com'})[0] == 403
         assert request(server, '/api/risks', {'Host': 'example.com'})[0] == 403
+
+
+def test_direct_risks_page_can_request_write_access_on_macos(monkeypatch):
+    from security_runtime import user_config
+
+    prompts = []
+    saves = []
+    monkeypatch.setattr(dashboard.sys, 'platform', 'darwin')
+    monkeypatch.setattr(dashboard, 'monotonic', lambda: len(prompts) * 10)
+    monkeypatch.setattr(user_config, 'save_config', lambda **data: saves.append(data) or data)
+
+    def approve():
+        prompts.append(True)
+        return len(prompts) > 1
+
+    monkeypatch.setattr(dashboard, 'approve_browser_write', approve)
+
+    def authorize(server, origin, site):
+        with closing(HTTPConnection('127.0.0.1', server.server_port, timeout=2)) as conn:
+            conn.request('POST', '/api/session/authorize', headers={'Origin': origin, 'Sec-Fetch-Site': site})
+            response = conn.getresponse()
+            return response.status, response.getheader('Set-Cookie'), json.loads(response.read())
+
+    with running() as server:
+        _, _, body = request(server, '/api/session')
+        assert json.loads(body)['browser_write_prompt'] is True
+        assert authorize(server, 'https://example.com', 'cross-site')[0] == 403
+        assert authorize(server, server.origin, 'cross-site')[0] == 403
+        assert not prompts
+        assert authorize(server, server.origin, 'same-origin')[:2] == (403, None)
+        assert authorize(server, server.origin, 'same-origin')[:2] == (429, None)
+        monkeypatch.setattr(dashboard, 'monotonic', lambda: 20)
+        status, cookie, session = authorize(server, server.origin, 'same-origin')
+        assert status == 200
+        assert 'HttpOnly' in cookie and 'SameSite=Strict' in cookie
+        edit = dict(values={'agent': {'audit_business_logic': True}}, expected_revision='revision')
+        headers = {'Origin': server.origin, 'Cookie': cookie.split(';')[0], 'X-CSRF-Token': session['csrf']}
+        assert post(server, '/api/config', edit, {'Origin': server.origin})[0] == 403
+        assert post(server, '/api/config', edit, headers)[0] == 200
+        assert saves == [edit]
 
 
 def test_enrich_derives_batch_keys_and_trusted_activity_time():

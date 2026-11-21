@@ -197,10 +197,25 @@ def test_deep_round_exposes_board_and_reserves_acceptance_for_the_parent(endpoin
                 risks.checks._put(db, ref, row)
             prepared = await parent(client, root, ref, 'deep_prepare', host_parallel=True)
             assert prepared['execution_mode'] == 'deep'
-            assert prepared['first_package'][0]['content']
-            region = next(node for node in prepared['asset_graph']['nodes']
-                          if node['kind'] == 'SOURCE_REGION')
-            assert region['evidence_ref'] == prepared['first_package'][0]['evidence_ref']
+            assert prepared['first_package'] == []
+            region, = prepared['asset_graph']['nodes']
+            assert region['kind'] == 'FILE' and region['line_count'] == 2
+            assert 'evidence_ref' not in region
+            from security_runtime.deep_audit import AuditTask
+            assert prepared['plan_task_schema'] == AuditTask.model_json_schema()
+            rejected = await client.call_tool('development_review', dict(operation='manage_development_audit',
+                arguments=dict(workspace_path=str(root), session_ref='parent-owner', check_ref=ref,
+                    action='deep_plan', tasks=[dict(direction='查询', question='核对输入', acceptance='指出绑定位置',
+                        priority='HIGH', asset_id=region['id'], evidence_scope=['query.py'], dependencies=[])])))
+            error = decode(rejected)
+            assert rejected.isError and error['recoverable'] and not error['review_saved']
+            assert error['reason_code'] == 'DEVELOPMENT_CHECK_REQUEST_INVALID'
+            fields = {entry['field']: entry for entry in error['field_errors']}
+            assert fields['tasks.0.asset_ids']['code'] == 'REQUIRED'
+            assert fields['tasks.0.priority']['code'] == 'INVALID'
+            assert {'asset_ids', 'paths', 'depends_on'} <= set(fields['tasks.0']['allowed_fields'])
+            assert 'HIGH' not in json.dumps(error)
+            assert (await parent(client, root, ref, 'deep_status'))['stage'] == 'PLANNING'
             await parent(client, root, ref, 'deep_plan', tasks=[dict(
                 direction='查询绑定', question='输入是否绑定到参数？', priority=5,
                 acceptance='指出绑定位置并说明输入是否仍可控', asset_ids=[region['id']])])
@@ -227,10 +242,24 @@ def test_deep_round_exposes_board_and_reserves_acceptance_for_the_parent(endpoin
                                task_id=claimed['task']['id'], receipt_id='mcp-board-0001',
                                decision='ACCEPTED', reason='child tries to accept')))
             assert denied.isError
+            observation = dict(issue_key='audit-coverage-example', file_path='query.py',
+                line_start=2, line_end=2, category='business_logic', title='需核对调用约定',
+                description='该任务需核对调用方约定', impact='调用约定尚未核实',
+                fix_advice='核对调用约定', severity='UNRATED', decision='INCONCLUSIVE',
+                rationale='当前仅有函数证据', evidence_refs=[proof])
+            review = dict(file_path='query.py', rationale='已审阅本文件', evidence_refs=[proof], coverage='COMPLETE')
+            conclusion = dict(conclusion='已审阅查询函数', evidence_refs=[proof])
+            rejected = await call_child(client, child, 'submit', batch_id=batch,
+                request_id='mcp-deep-0001', observations=[observation], business_reviews=[], task_result=conclusion)
+            assert rejected.isError and decode(rejected)['reason_code'] == 'AUDIT_FINDING_WITHOUT_COVERAGE'
+            assert 'business_reviews' in decode(rejected)['message']
+            rejected = await call_child(client, child, 'submit', batch_id=batch,
+                request_id='mcp-deep-0001', observations=[dict(observation, line_end=3)],
+                business_reviews=[review], task_result=conclusion)
+            assert rejected.isError and decode(rejected)['reason_code'] == 'DEVELOPMENT_RISK_LOCATION_UNREAD'
             submitted = decode(await call_child(client, child, 'submit', batch_id=batch,
-                request_id='mcp-deep-0001', task_result=dict(conclusion='已绑定参数',
-                    evidence_refs=[proof]), business_reviews=[dict(file_path='query.py',
-                    rationale='已核对绑定与输入来源', evidence_refs=[proof], coverage='COMPLETE')]))
+                request_id='mcp-deep-0001', task_result=conclusion,
+                observations=[observation], business_reviews=[review]))
             assert submitted['status'] == 'VERIFIED'
             decided = await parent(client, root, ref, 'deep_decide_task',
                 task_id=claimed['task']['id'], receipt_id='mcp-deep-0001',

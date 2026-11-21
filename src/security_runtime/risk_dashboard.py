@@ -7,6 +7,10 @@ import os
 import re
 import secrets
 import sqlite3
+import subprocess
+import sys
+from threading import Lock
+from time import monotonic
 from urllib.parse import urlsplit, parse_qs
 from http.cookies import SimpleCookie, CookieError
 
@@ -21,6 +25,23 @@ MAX_WORKSPACES, MAX_RISKS = 500, 3000
 SOURCES = (('codex', 'Codex', 'global-workspaces'), ('cursor', 'Cursor', 'cursor-workspaces'),
            ('workbuddy', 'WorkBuddy', 'workbuddy-workspaces'))
 redact = SecretRedactor().redact
+
+
+def approve_browser_write():
+    """Ask the signed-in macOS user before granting a browser write access."""
+    try:
+        result = subprocess.run(
+            ['/usr/bin/osascript', '-e',
+             'set response to display dialog "允许刚才发起请求的浏览器修改 AI Security Runtime 设置和风险记录？" '
+             'with title "AI Security Runtime" buttons {"取消", "允许"} '
+             'default button "取消" cancel button "取消" giving up after 25\n'
+             'if gave up of response then return "denied"\n'
+             'return button returned of response'],
+            capture_output=True, text=True, timeout=30, check=False,
+        )
+        return result.returncode == 0 and result.stdout.strip() == '允许'
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def clean(value, fallback='未记录', limit=1500):
@@ -203,6 +224,8 @@ class Server(ThreadingHTTPServer):
         self.token = settings['token'] if settings else secrets.token_urlsafe(24)
         self.origin = f'http://127.0.0.1:{self.server_port}'
         self.catalog = catalog
+        self.write_prompt_lock = Lock()
+        self.next_write_prompt = 0.0
         from .dashboard_service import code_id
         self.code_id = code_id()
 
@@ -221,7 +244,7 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, TypeError, CookieError):
             return False
 
-    def reply(self, status, payload, kind='application/json; charset=utf-8', filename=None):
+    def reply(self, status, payload, kind='application/json; charset=utf-8', filename=None, cookie=None):
         if not isinstance(payload, bytes):
             payload = json.dumps(payload, ensure_ascii=False).encode()
         self.send_response(status)
@@ -232,8 +255,42 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header(key, value)
         if filename:
             self.send_header('Content-Disposition', 'attachment; filename="'+filename+'"')
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
         self.end_headers()
         self.wfile.write(payload)
+
+    def write_cookie(self):
+        return f'dashboard={self.server.token}; HttpOnly; SameSite=Strict; Path=/'
+
+    def authorize_browser_write(self):
+        if (sys.platform != 'darwin'
+                or self.headers.get('Origin') != self.server.origin
+                or self.headers.get('Sec-Fetch-Site') != 'same-origin'
+                or self.headers.get('Content-Length') not in (None, '0')
+                or self.headers.get('Transfer-Encoding')):
+            self.reply(403, dict(error='无法在当前页面请求写入授权。'))
+            return
+        if self.authorized():
+            self.reply(200, dict(csrf=self.server.token))
+            return
+        if not self.server.write_prompt_lock.acquire(blocking=False):
+            self.reply(429, dict(error='已有授权请求，请在系统对话框中处理。'))
+            return
+        try:
+            if monotonic() < self.server.next_write_prompt:
+                self.reply(429, dict(error='请稍等片刻，再请求写入授权。'))
+                return
+            try:
+                approved = approve_browser_write()
+            finally:
+                self.server.next_write_prompt = monotonic() + 5
+            if approved:
+                self.reply(200, dict(csrf=self.server.token), cookie=self.write_cookie())
+            else:
+                self.reply(403, dict(error='未获得写入授权。'))
+        finally:
+            self.server.write_prompt_lock.release()
 
     def query(self):
         values = parse_qs(urlsplit(self.path).query, keep_blank_values=True, max_num_fields=30)
@@ -251,7 +308,7 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(200, dict(service='risk-dashboard-v2', build=self.server.code_id, runtime_updates=3)); return
         if path == f'/{self.server.token}/':
             self.send_response(303)
-            self.send_header('Set-Cookie', f'dashboard={self.server.token}; HttpOnly; SameSite=Strict; Path=/')
+            self.send_header('Set-Cookie', self.write_cookie())
             self.send_header('Location', '/risks')
             self.send_header('Cache-Control', 'no-store')
             self.send_header('Referrer-Policy', 'no-referrer')
@@ -272,6 +329,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Reads need no cookie; the CSRF token still requires the
                 # one-time browser authorization performed by the editor.
                 self.reply(200, dict(csrf=self.server.token if self.authorized() else None,
+                                     browser_write_prompt=sys.platform == 'darwin',
                                      service='risk-dashboard-v2'))
             elif path == '/api/monitor':
                 from .dashboard_health import snapshot
@@ -337,6 +395,9 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get('Host') != urlsplit(self.server.origin).netloc:
             self.send_error(403); return
         path = urlsplit(self.path).path
+        if path == '/api/session/authorize':
+            self.authorize_browser_write()
+            return
         if path == '/shutdown' and self.headers.get('Authorization') == 'Bearer '+self.server.token:
             self.reply(200, dict(stopping=True))
             import threading

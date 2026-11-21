@@ -11,20 +11,24 @@ class EvidenceWindow(BaseModel):
     related: bool = False
 
 
-def read_contexts(service, windows):
+def read_contexts(service, windows, *, worker_selected=False):
     from .development_risks import require
     check = service.current_check()
     version = (check['dirty_seq'], check.get('scan_id'))
     from .review_delivery import merge_windows, json_bytes, response_budget
     from .performance_trace import review_mark
     review_mark('evidence_plan_start')
-    planned = merge_windows((w.file_path, w.start_line, w.end_line, w.related) for w in windows)
+    requested = ((w.file_path, w.start_line, w.end_line, w.related) for w in windows)
+    planned = list(dict.fromkeys(requested)) if worker_selected else merge_windows(requested)
     review_mark('evidence_plan_done')
     evidence, errors = [], []
     remaining = response_budget(check) - 8192
     for path, start, end, related in planned:
         try:
-            item = service.read(path, start, end, related=related)
+            if worker_selected:
+                item = service.read(path, start, end, related=related, worker_selected=True)
+            else:
+                item = service.read(path, start, end, related=related)
             require(item['dirty_seq'] == version[0], 'DEVELOPMENT_RISK_VERSION_STALE')
             size = json_bytes(item)
             if size > remaining:

@@ -2,7 +2,7 @@
 from pathlib import Path
 
 
-def input_failure(arguments, errors):
+def input_failure(errors, *, planner=False):
     """Field names only: never echo a capability or arbitrary invalid input."""
     fields = []
     def leaf_errors(error):
@@ -13,7 +13,7 @@ def input_failure(arguments, errors):
                 yield from leaf_errors(child)
         else:
             yield error
-    known = {'check_ref', 'workspace_path', 'agent_ref', 'audit_token', 'action',
+    known = {'check_ref', 'workspace_path', 'session_ref', 'agent_ref', 'audit_token', 'action',
              'batch_id', 'request_id', 'observations', 'business_reviews', 'windows', 'task_result',
              'conclusion', 'gaps', 'hypotheses', 'resolves', 'evidence_refs',
              'direction', 'question', 'acceptance', 'priority', 'asset_ids', 'depends_on',
@@ -38,10 +38,13 @@ def input_failure(arguments, errors):
         else:
             fields.append(dict(field=path, code='INVALID'))
     unique = list({(f['field'], f['code']): f for f in fields}.values())[:20]
-    return dict(status='INPUT_INVALID', reason_code='AUDIT_REQUEST_INVALID', field_errors=unique,
-        recoverable=True, review_saved=False, scanner_run=False,
-        message='审计请求参数不完整或无效。使用父任务 stream_started 返回的完整 child_call；'
-                '仅修正列出的字段后重试一次，保留原批次、证据和判断。不要猜测身份或重新扫描。')
+    message = ('深度审计计划未保存。按 deep_prepare 返回的 plan_task_schema 修正列出的字段，'
+               '保留原检查及会话引用，在同一轮重试一次。' if planner else
+               '审计请求参数不完整或无效。使用父任务 stream_started 返回的完整 child_call；'
+               '仅修正列出的字段后重试一次，保留原批次、证据和判断。不要猜测身份或重新扫描。')
+    return dict(status='INPUT_INVALID',
+        reason_code='DEVELOPMENT_CHECK_REQUEST_INVALID' if planner else 'AUDIT_REQUEST_INVALID',
+        field_errors=unique, recoverable=True, review_saved=False, scanner_run=False, message=message)
 
 
 def delegated_risks(application, workspace_path, check_ref, audit_token, agent_ref):

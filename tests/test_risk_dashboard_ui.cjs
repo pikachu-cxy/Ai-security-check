@@ -6,16 +6,34 @@ class Element {
  querySelectorAll(selector){return this.children.flatMap(c=>[...((c.tag==='input'||c.tag==='select')?[c]:[]),...c.querySelectorAll(selector)])}
 }
 const row={id:'risk1',title:'<script>unsafe</script>',editor:'codex',editor_label:'Codex',project:'project',location:'query.py:2',severity:'高',status:'待处理',editable:true,revision:'revision',description:'description'};
-async function page({search='',result,post,get}={}){
+async function page({search='',result,post,get,session={csrf:'fixture-token'}}={}){
  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element()]));
  els.archived.value='false';const requests=[];
  const document={getElementById:id=>els[id],createElement:tag=>new Element(tag),querySelectorAll:()=>[],addEventListener(){}};
  const ctx=vm.createContext({document,URLSearchParams,Date,Set,crypto:{randomUUID:()=> 'request-0001'},structuredClone,
    window:{location:{search,assign:url=>requests.push(url)}},history:{replaceState(){}},setTimeout:()=>{},
-   fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/session'?{csrf:'fixture-token'}:options?.method==='POST'?(post||{results:[]}):(get?.(url)||result||{status:'AVAILABLE',risks:[row],total:5000,partial:false,note:'fixture',statistics:{status:{待处理:5000},editor:{codex:5000}}})}}});
+   fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/session'?session:url==='/api/session/authorize'?{csrf:'approved-token'}:options?.method==='POST'?(post||{results:[]}):(get?.(url)||result||{status:'AVAILABLE',risks:[row],total:5000,partial:false,note:'fixture',statistics:{status:{待处理:5000},editor:{codex:5000}}})}}});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],ctx);
  await new Promise(resolve=>setImmediate(resolve));return {els,requests,ctx};
 }
+test('direct dashboard explains missing write access and retains the form after approval',async()=>{
+ const values={agent:{audit_business_logic:false}};
+ const {els,requests}=await page({session:{csrf:null,browser_write_prompt:true},
+   get:url=>url==='/api/config'?{values,revision:'v1'}:null,post:{values,revision:'v2'}});
+ await els.settingsOpen.onclick();
+ const [setting]=els.configFields.querySelectorAll('input,select');
+ setting.checked=true;
+ assert.equal(els.authorizeWrite.hidden,false);
+ await els.configSave.onclick();
+ assert.match(els.message.textContent,/启用写入/);
+ assert.ok(!requests.some(r=>r.url==='/api/config'&&r.options.method==='POST'));
+ await els.authorizeWrite.onclick();
+ assert.equal(els.authorizeWrite.hidden,true);
+ await els.configSave.onclick();
+ const save=requests.find(r=>r.url==='/api/config'&&r.options.method==='POST');
+ assert.equal(save.options.headers['X-CSRF-Token'],'approved-token');
+ assert.equal(JSON.parse(save.options.body).values.agent.audit_business_logic,true);
+});
 test('session/worktree links survive in server-side filters and counts use all matching rows',async()=>{
  const {els,requests}=await page({search:'?project=project&workspace=work&session=chat&editor=codex'});
  const url=new URL(requests[1].url,'http://localhost');assert.equal(url.searchParams.get('workspace'),'work');assert.equal(url.searchParams.get('session'),'chat');

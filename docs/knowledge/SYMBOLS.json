@@ -108,42 +108,42 @@
     },
     {
       "path": "src/security_runtime/audit_assets.py",
-      "sha256": "8c94d7a4f57448a7fa513bd07d842fb1501ef7fcb65a8dbb410548f765ffbdac",
+      "sha256": "657e9f8734448490789ab25651f30aded67ffddd18819df0cdc14f861fd82ab1",
       "purpose": "Bounded, evidence-backed source-region assets for a development audit.",
       "symbols": [
         {
           "name": "_identifier",
-          "line": 25
+          "line": 24
         },
         {
           "name": "_changed_lines",
-          "line": 30
+          "line": 29
         },
         {
           "name": "_windows",
-          "line": 46
+          "line": 45
         },
         {
           "name": "plan",
-          "line": 72
+          "line": 71
         },
         {
           "name": "project",
-          "line": 142
+          "line": 144
         },
         {
           "name": "first_package",
-          "line": 177
+          "line": 180
         },
         {
           "name": "bound",
-          "line": 191
+          "line": 194
         }
       ]
     },
     {
       "path": "src/security_runtime/audit_graph_view.py",
-      "sha256": "566aacc5b2e937993bfb219f2e6012d5281480cd584d1d9bd2a69dc5e42bf8e2",
+      "sha256": "6131cfb7c41a5082946db863e0e5c4b01fb9f6d4614ebec6c90508a70871ccdc",
       "purpose": "Read-only projections of the saved, version-bound local audit graphs.",
       "symbols": [
         {
@@ -156,11 +156,11 @@
         },
         {
           "name": "dashboard_view",
-          "line": 106
+          "line": 107
         },
         {
           "name": "evidence_view",
-          "line": 156
+          "line": 157
         }
       ]
     },
@@ -181,7 +181,7 @@
     },
     {
       "path": "src/security_runtime/audit_stream_adapter.py",
-      "sha256": "028e5a3577e467993e054d9771f6ea5197711d3f32ed8163457561709c1dd096",
+      "sha256": "f8e320c50d77d639e70795cca287c71074106e73b77b56baf449a707da10d32a",
       "purpose": "Dedicated delegated audit boundary; a capability never authorizes other tools.",
       "symbols": [
         {
@@ -190,13 +190,13 @@
         },
         {
           "name": "delegated_risks",
-          "line": 47
+          "line": 50
         }
       ]
     },
     {
       "path": "src/security_runtime/audit_stream_service.py",
-      "sha256": "603cfdcf6c53b673fbef879f6badd995fb20afc25e4bd52483acc3cfaa020a92",
+      "sha256": "2cd27a814b1a3cdebe68bd3c97e7e04fe6419c39342838d1584c49ae7cda95a2",
       "purpose": "Owner-authorized child audit capability and durable result reception.",
       "symbols": [
         {
@@ -221,35 +221,35 @@
         },
         {
           "name": "validate_commit",
-          "line": 280
+          "line": 287
         },
         {
           "name": "valid_reviews",
-          "line": 290
+          "line": 297
         },
         {
           "name": "assessment_current",
-          "line": 313
+          "line": 320
         },
         {
           "name": "_status",
-          "line": 327
+          "line": 334
         },
         {
           "name": "revalidate",
-          "line": 343
+          "line": 350
         },
         {
           "name": "absent",
-          "line": 379
+          "line": 386
         },
         {
           "name": "absence_evidence",
-          "line": 390
+          "line": 397
         },
         {
           "name": "_scrub",
-          "line": 406
+          "line": 413
         }
       ]
     },
@@ -2319,7 +2319,7 @@
     },
     {
       "path": "src/security_runtime/deep_audit.py",
-      "sha256": "125597add7347534bfcf49a362c596494ca638bf29399fb8a0db2ff07195045a",
+      "sha256": "f5fb98bbd791adf908cda9a9cc33d2dca2d7a0feb2233b3ff082f04a9b72c705",
       "purpose": "Planner handoff, shared board and task leases for bounded, read-only business audits.",
       "symbols": [
         {
@@ -2372,63 +2372,63 @@
         },
         {
           "name": "manage",
-          "line": 179
+          "line": 181
         },
         {
           "name": "_plan",
-          "line": 232
+          "line": 234
         },
         {
           "name": "_claim",
-          "line": 274
+          "line": 277
         },
         {
           "name": "_task",
-          "line": 298
+          "line": 301
         },
         {
           "name": "process",
-          "line": 309
+          "line": 312
         },
         {
           "name": "_board",
-          "line": 348
+          "line": 355
         },
         {
           "name": "decide",
-          "line": 389
+          "line": 396
         },
         {
           "name": "_read",
-          "line": 412
+          "line": 419
         },
         {
           "name": "_receipt",
-          "line": 438
+          "line": 446
         },
         {
           "name": "_submit",
-          "line": 443
+          "line": 451
         },
         {
           "name": "_proof_refs",
-          "line": 486
+          "line": 495
         },
         {
           "name": "finish",
-          "line": 492
+          "line": 501
         },
         {
           "name": "validate_finish",
-          "line": 553
+          "line": 562
         },
         {
           "name": "seal_finish",
-          "line": 561
+          "line": 570
         },
         {
           "name": "revalidate",
-          "line": 590
+          "line": 599
         }
       ]
     },
@@ -3171,7 +3171,7 @@
     },
     {
       "path": "src/security_runtime/development_risks.py",
-      "sha256": "e4cad13b26c5c1f98ff9c002a2a914645684d092d58b7084be97619ccf6c44c6",
+      "sha256": "16ed26a45d9d90a44df7723866d626d598b02e5a2625620925d943dbf04f064f",
       "purpose": "Version-bound development findings and repairs, independent of scanner truth.",
       "symbols": [
         {
@@ -3395,7 +3395,7 @@
     },
     {
       "path": "src/security_runtime/development_views.py",
-      "sha256": "562a2e8bc9d7106450cd9d3f171c0b2986d4aad4591e072cd2b23e008aa1c2bc",
+      "sha256": "11aeb3932e8b2fa4f1e2f5f175b9b191ac688fa3e89849a8f0d2ecde380f59a6",
       "purpose": "Compact MCP projections; never change saved risks or review requirements.",
       "symbols": [
         {
@@ -3408,35 +3408,35 @@
         },
         {
           "name": "pending_review_context",
-          "line": 49
+          "line": 53
         },
         {
           "name": "pending_evidence",
-          "line": 61
+          "line": 65
         },
         {
           "name": "review_page",
-          "line": 84
+          "line": 88
         },
         {
           "name": "risk_summary",
-          "line": 187
+          "line": 191
         },
         {
           "name": "batch_report_page",
-          "line": 201
+          "line": 205
         },
         {
           "name": "final_report_receipt",
-          "line": 300
+          "line": 304
         },
         {
           "name": "review_receipt",
-          "line": 317
+          "line": 321
         },
         {
           "name": "closeout_page",
-          "line": 328
+          "line": 332
         }
       ]
     },
@@ -4860,7 +4860,7 @@
     },
     {
       "path": "src/security_runtime/global_mcp.py",
-      "sha256": "62ce60174471558b60281449c344254955a242db176b23bafc81d800bc4b1e17",
+      "sha256": "802cb1282209c03d5111071a8c41de56000b7e06ad4df20336000094cccdc877",
       "purpose": "Thin user-level MCP router; security logic remains workspace-bound.",
       "symbols": [
         {
@@ -4869,107 +4869,107 @@
         },
         {
           "name": "global_runtime_info",
-          "line": 71
+          "line": 76
         },
         {
           "name": "GlobalWorkspaces",
-          "line": 91
+          "line": 96
         },
         {
           "name": "GlobalWorkspaces.__init__",
-          "line": 92
+          "line": 97
         },
         {
           "name": "GlobalWorkspaces._child",
-          "line": 129
-        },
-        {
-          "name": "GlobalWorkspaces.root",
           "line": 134
         },
         {
+          "name": "GlobalWorkspaces.root",
+          "line": 139
+        },
+        {
           "name": "GlobalWorkspaces.admit",
-          "line": 138
+          "line": 143
         },
         {
           "name": "GlobalWorkspaces.validate_layers",
-          "line": 158
+          "line": 163
         },
         {
           "name": "GlobalWorkspaces.bind_session",
-          "line": 164
+          "line": 169
         },
         {
           "name": "GlobalWorkspaces.binding_diagnostics",
-          "line": 177
+          "line": 182
         },
         {
           "name": "GlobalWorkspaces.bootstrap",
-          "line": 187
+          "line": 192
         },
         {
           "name": "GlobalWorkspaces.retry_product_epoch",
-          "line": 222
+          "line": 227
         },
         {
           "name": "GlobalWorkspaces._start_epoch_initialization",
-          "line": 254
+          "line": 259
         },
         {
           "name": "GlobalWorkspaces._remember_ready",
-          "line": 288
+          "line": 293
         },
         {
           "name": "GlobalWorkspaces._snapshot_readiness",
-          "line": 294
+          "line": 299
         },
         {
           "name": "GlobalWorkspaces._restore_existing",
-          "line": 335
+          "line": 340
         },
         {
           "name": "GlobalWorkspaces._initialize_into",
-          "line": 354
+          "line": 359
         },
         {
           "name": "GlobalWorkspaces._initialization_failure",
-          "line": 366
+          "line": 371
         },
         {
           "name": "GlobalWorkspaces._initialize",
-          "line": 374
+          "line": 379
         },
         {
           "name": "GlobalWorkspaces.wait_for_bootstrap",
-          "line": 420
+          "line": 425
         },
         {
           "name": "GlobalWorkspaces.close",
-          "line": 439
+          "line": 444
         },
         {
           "name": "_NoProjectSeed",
-          "line": 452
+          "line": 457
         },
         {
           "name": "_NoProjectSeed.load",
-          "line": 454
+          "line": 459
         },
         {
           "name": "_advisory",
-          "line": 458
+          "line": 463
         },
         {
           "name": "_task_request_rejected",
-          "line": 492
+          "line": 497
         },
         {
           "name": "_scan_request_rejected",
-          "line": 526
+          "line": 531
         },
         {
           "name": "create_global_server",
-          "line": 544
+          "line": 549
         }
       ]
     },
@@ -5162,7 +5162,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "b152d731771ef001cc273305f27ad15ab322657a8543a74e4ff78a5d5d2dc300",
+      "sha256": "129459fc35e959b215c0c021e118fcb0a67c3ac05f5a16de5e77e7e4cc2db530",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -7338,7 +7338,7 @@
     },
     {
       "path": "src/security_runtime/mcp_tools/development_check.py",
-      "sha256": "6c4b574f3288d6951b90574c2fec360f3d2b2b432275e89c6f37b8ef95af24a1",
+      "sha256": "d966619eddf403386d55a289338fc959ea181e29f8d11c37d7a023da48d64144",
       "purpose": "Lightweight observed-edit checks; strict task audits remain a separate API.",
       "symbols": [
         {
@@ -10617,72 +10617,84 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "9c2f93591566d0288b0bed4f65429d4ea1de0885f8dd7cf450a39248f2665735",
+      "sha256": "09eb96f063b42e4a7ab0a9fa48af9215ed59fe4a89e3a13e440e8a69e0ba2034",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
-          "name": "clean",
-          "line": 26
-        },
-        {
-          "name": "open_readonly",
+          "name": "approve_browser_write",
           "line": 30
         },
         {
+          "name": "clean",
+          "line": 47
+        },
+        {
+          "name": "open_readonly",
+          "line": 51
+        },
+        {
           "name": "display",
-          "line": 35
+          "line": 56
         },
         {
           "name": "signed_rows",
-          "line": 46
+          "line": 67
         },
         {
           "name": "records",
-          "line": 69
+          "line": 90
         },
         {
           "name": "Server",
-          "line": 199
+          "line": 220
         },
         {
           "name": "Server.__init__",
-          "line": 201
+          "line": 222
         },
         {
           "name": "Handler",
-          "line": 210
+          "line": 233
         },
         {
           "name": "Handler.log_message",
-          "line": 211
+          "line": 234
         },
         {
           "name": "Handler.authorized",
-          "line": 213
+          "line": 236
         },
         {
           "name": "Handler.reply",
-          "line": 224
+          "line": 247
+        },
+        {
+          "name": "Handler.write_cookie",
+          "line": 263
+        },
+        {
+          "name": "Handler.authorize_browser_write",
+          "line": 266
         },
         {
           "name": "Handler.query",
-          "line": 238
+          "line": 295
         },
         {
           "name": "Handler.do_GET",
-          "line": 244
+          "line": 301
         },
         {
           "name": "Handler.do_POST",
-          "line": 336
+          "line": 394
         },
         {
           "name": "serve",
-          "line": 423
+          "line": 484
         },
         {
           "name": "launch",
-          "line": 443
+          "line": 504
         }
       ]
     },

@@ -48,6 +48,11 @@ _PRODUCT_EPOCH_PAUSES = {'BUSY': 'BASELINE_BUSY',
 def _development_request_rejected(reason='DEVELOPMENT_CHECK_REQUEST_REJECTED'):
     from mcp.types import CallToolResult, TextContent
     messages = {
+        'AUDIT_FINDING_WITHOUT_COVERAGE':
+            '发现缺少同文件的 business_reviews。为每个发现文件补交逐文件审阅记录，'
+            '可沿用当前任务已取得的同文件证据，在本批重试提交。总体 task_result 不计入文件覆盖。',
+        'DEVELOPMENT_RISK_LOCATION_UNREAD':
+            '提交引用的证据未覆盖申报文件或行号。核对文件与证据引用；需要补证时只读取缺失范围。',
         'TASK_CONNECTION_SCOPE_MISMATCH':
             '该检查创建于连接范围，当前请求的归属与原连接不一致（可能携带了聊天 session_ref）。'
             '请核对创建时的参数并保留原检查；不得自动迁移、删除有效凭据或重建检查绕过校验。'
@@ -655,9 +660,11 @@ def create_global_server(*, workspaces=None, host='codex'):
                 return CallToolResult(isError=True, structuredContent=data,
                     content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
             if name in DEVELOPMENT_CHECK_TOOLS:
-                if name == 'process_development_audit' and isinstance(arguments, dict):
+                planner = (name == 'manage_development_audit' and isinstance(arguments, dict)
+                           and arguments.get('action') == 'deep_plan')
+                if planner or (name == 'process_development_audit' and isinstance(arguments, dict)):
                     from .audit_stream_adapter import input_failure
-                    data = input_failure(arguments, validators[name].iter_errors(arguments))
+                    data = input_failure(validators[name].iter_errors(arguments), planner=planner)
                     return CallToolResult(isError=True, structuredContent=data,
                         content=[TextContent(type='text', text=json.dumps(data, ensure_ascii=False))])
                 return _development_request_rejected('DEVELOPMENT_CHECK_REQUEST_INVALID')

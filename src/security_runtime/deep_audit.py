@@ -167,9 +167,11 @@ def _initial_view(job):
     return dict(status(job), asset_graph=job['asset_graph'],
                 first_package=job.get('first_package', []),
                 changed_paths=job['paths'][:50], execution_mode='deep',
-                planner_instruction='按业务问题规划最多 4 个只读任务，每个任务绑定 SOURCE_REGION 资产 ID，'
-                '填写方向、问题、一句可核对的验收条件、优先级、建议证据范围及依赖。'
-                '只使用 first_package 与 asset_graph 中的实际代码，不推断未取得的片段。'
+                plan_task_schema=AuditTask.model_json_schema(),
+                planner_instruction='按业务问题规划最多 4 个只读任务，绑定 SOURCE_REGION 或定位未知的 FILE 资产 ID，'
+                'deep_plan 的 tasks 每项严格使用 plan_task_schema 中的字段；'
+                'asset_ids 是资产 ID 数组，priority 是 1–5 的整数。参数被拒绝时保留本轮并修正后重试一次。'
+                'FILE 只有文件定位和总行数，由 Worker 决定读取范围；首包没有源码时仍可按文件规划。'
                 f"提交 deep_plan 后，先并发启动 {job['worker_limit']} 个真实只读子 Agent，"
                 '用 deep_started 分别登记实际 ID，再分别交付各自 child_call。'
                 '子 Agent 自己领取、取证、发布观察并提交；父会话用 deep_status 查看黑板与结论，'
@@ -234,7 +236,8 @@ def _plan(job, values):
     require(1 <= len(values) <= MAX_TASKS and wave <= 2, 'DEEP_AUDIT_PLAN_LIMIT')
     require(not any(t['state'] == 'RUNNING' for t in job['tasks']), 'DEEP_AUDIT_TASKS_PENDING')
     assets = {node['id']: node for node in job['asset_graph']['nodes']
-              if node['kind'] == 'SOURCE_REGION'}
+              if node['kind'] == 'SOURCE_REGION'
+              or (node['kind'] == 'FILE' and node.get('locator') == audit_assets.CHANGED_LINES_UNKNOWN)}
     unresolved = {gap['id'] for gap in _unresolved(job)}
     allowed = set(job['paths']) | set(job['related'])
     known = {t['id'] for t in job['tasks']}
@@ -248,7 +251,7 @@ def _plan(job, values):
         task['paths'] = sorted(paths)
         require(len(paths) <= 8 and paths <= allowed, 'DEEP_AUDIT_PATH_FORBIDDEN')
         require(set(task['depends_on']) <= known, 'DEEP_AUDIT_DEPENDENCY_INVALID')
-        require(all(w['file_path'] in paths and w['start_line'] <= w['end_line'] < w['start_line'] + 80
+        require(all(w['file_path'] in paths and w['start_line'] <= w['end_line']
                     for w in task['evidence_windows']), 'AUDIT_WINDOWS_INVALID')
         require((wave == 1 and not task['resolves']) or
                 (task['resolves'] and set(task['resolves']) <= unresolved), 'DEEP_AUDIT_FOLLOWUP_INVALID')
@@ -323,8 +326,12 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             if task:
                 output['task'] = {k: v for k, v in task.items() if k != 'result'}
                 output['assets'] = [n for n in job['asset_graph']['nodes'] if n['id'] in task['asset_ids']]
-                output['instructions'] = ('先按需要 read 后直接 submit，使用已读取的 evidence_refs、'
-                    'business_reviews、observations 和 task_result。未提交前可用 board 发布有证据的观察；'
+                output['instructions'] = ('按任务自行选择文件和行段，用 read 取证后直接 submit。'
+                    '单窗可超过 80 行；遇到响应容量限制时缩短行段。无变更行定位的 FILE 提供总行数。'
+                    '每个实际审阅的本轮文件提交一条 business_reviews，'
+                    '含 file_path、rationale、同文件 evidence_refs 和 coverage；部分覆盖时列出 uncovered。'
+                    '即使未发现问题也提交文件回执。每条 observations 的文件必须有同次提交的文件回执；'
+                    'task_result 记录总体结论。未提交前可用 board 发布有证据的观察；'
                     'board 只共享摘要和引用索引，其他任务仍需自行取证。提交后可用 claim 领下一项。'
                     '没有任务时向父会话报告空闲，等待续接。')
         elif action == 'recover':
@@ -423,7 +430,8 @@ def _read(risks, token, agent_ref, batch_id, windows):
         require(job['windows_used'] + len(windows) <= MAX_WINDOWS, 'DEEP_AUDIT_BUDGET_EXHAUSTED')
         job['windows_used'] += len(windows)
         risks.checks._put(db, risks.ref, row)
-    result = read_contexts(risks, [EvidenceWindow(**dict(w, related=True)) for w in windows])
+    result = read_contexts(risks, [EvidenceWindow(**dict(w, related=True)) for w in windows],
+                           worker_selected=True)
     with risks.checks.transaction() as db:
         row = risks.checks._get(db, risks.ref)
         job = authenticate(row, token, agent_ref)
@@ -462,6 +470,7 @@ def _submit(risks, ledger, row, job, task, batch, token, request_id, observation
     supported = set(task['paths']) & set(job['paths'])
     require(all(v['file_path'] in supported for v in [*values, *coverage]), 'AUDIT_PATH_NOT_CLAIMED')
     checked_paths = {item['file_path'] for item in coverage}
+    require(all(item['file_path'] in checked_paths for item in values), 'AUDIT_FINDING_WITHOUT_COVERAGE')
     proof_paths = set()
     for item in [*values, *coverage, conclusion]:
         refs = item['evidence_refs']
@@ -471,7 +480,7 @@ def _submit(risks, ledger, row, job, task, batch, token, request_id, observation
         require(all(e['dirty_seq'] == job['dirty_seq'] for e in evidence), 'AUDIT_ROUND_CHANGED')
         if 'file_path' in item:
             path = item['file_path']
-            require(path in checked_paths and any(e['file_path'] == path and
+            require(any(e['file_path'] == path and
                     ('line_start' not in item or
                      e['line_start'] <= item['line_start'] <= item['line_end'] <= e['line_end'])
                     for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')

@@ -109,6 +109,37 @@ def test_cross_language_graph_returns_source_and_two_workers_claim(prepared):
     assert all(task['acceptance'] and task['planner_decision'] == 'PENDING' for task in claimed)
 
 
+def test_worker_can_take_evidence_beyond_line_80_without_git_diff(sample):
+    root, service, _, _ = sample
+    path = 'new_module.py'
+    (root / path).write_text('# context\n' * 100 + 'value = 1\n', encoding='utf-8')
+    ref = service.begin(root, 'worker-chosen-evidence')['check_ref']
+    service.record(root, ref, [path])
+    risks = DevelopmentRisks(service, root, ref)
+    with risks.checks.transaction() as db:
+        row = risks.checks._get(db, ref)
+        row['effective_config']['values']['development']['business_audit_mode'] = 'deep'
+        risks.checks._put(db, ref, row)
+
+    prepared = deep_audit.manage(risks, 'prepare', host_parallel=True)
+    assert prepared['first_package'] == []
+    file, = prepared['asset_graph']['nodes']
+    assert file['kind'] == 'FILE' and file['line_count'] == 101
+    window = dict(file_path=path, start_line=1, end_line=101)
+    deep_audit.manage(risks, 'plan', tasks=[dict(asset_ids=[file['id']], priority=1,
+        direction='赋值检查', question='核实赋值是否符合预期', acceptance='读取实际赋值行',
+        evidence_windows=[window])])
+    child = deep_audit.manage(risks, 'started', agent_ref='file-worker')['child_call']['arguments']
+    worker = {key: child[key] for key in ('audit_token', 'agent_ref')}
+    task = process(risks, 'claim', **worker)['task']
+    result = process(risks, 'read', **worker, batch_id=task['batch_id'], windows=[window])
+    proof, = result['evidence']
+    assert (proof['line_start'], proof['line_end']) == (1, 101)
+    assert proof['content'].splitlines()[-1] == 'value = 1'
+    assert process(risks, 'submit', **worker, batch_id=task['batch_id'],
+        request_id='worker-chosen-file-proof', **payload(path, proof['evidence_ref']))['status'] == 'VERIFIED'
+
+
 def test_concurrent_claim_reads_and_idempotent_receipts(prepared):
     _, _, _, risks, path, base, workers = prepared
     ready = Barrier(2, timeout=20)
@@ -359,7 +390,10 @@ def test_accepted_tasks_publish_one_combined_report(prepared):
     assert all(set(task['asset_ids']) <= asset_ids for task in page['audit_graph']['tasks'])
     ledger = risks.load()
     assert len(ledger['risks']) == 1 and len(ledger['reviews']) == 1
-    assert '本轮计划范围已完成' in report_lines(check)[0]
+    assert report_lines(check) == ['深度业务审计本轮计划范围已完成。']
+    assert page['audit_graph']['reviewed_paths'] == [path]
+    assert page['audit_graph']['stop_reason'] == '已核验计划内的归属与状态边界'
+    assert page['asset_graph']['gaps']
     assert len([b for b in check['audit_stream']['batches'].values() if b.get('aggregate')]) == 1
     assert deep_audit.manage(risks, 'finish', reason='重复结束')['stage'] == 'COMPLETE'
     assert len(risks.load()['reviews']) == 1
