@@ -20,11 +20,18 @@ def test_defaults_and_invalid_settings(config):
     values = read_config()['values']
     assert values['storage']['development_max_records'] == 1024
     assert values['agent'] == dict(review_scanner_findings=True, audit_business_logic=False)
+    assert values['development']['business_audit_mode'] == 'deep'
+    assert values['development']['business_audit_workers'] == 2
     assert values['development']['stop_fallback']['enabled']
     for text in ['oops = true', '[agent]\nreview_scanner_findings=1',
                  '[storage]\ndevelopment_max_records=0', 'invalid [']:
         config.write_text(text)
         assert describe_config()['status'] == 'INVALID'
+
+
+def test_explicit_standard_audit_mode_overrides_default(config):
+    config.write_text('[development]\nbusiness_audit_mode="standard"\n')
+    assert read_config()['values']['development']['business_audit_mode'] == 'standard'
 
 
 def test_default_analysis_policy_and_explicit_audit_opt_in(check, config):

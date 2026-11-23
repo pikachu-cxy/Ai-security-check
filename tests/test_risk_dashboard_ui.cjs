@@ -2,19 +2,25 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const html=fs.readFileSync(path.join(__dirname,'../src/security_runtime/assets/risk_dashboard.html'),'utf8');
 class Element {
  constructor(tag='div'){this.tag=tag;this.value='';this.textContent='';this.children=[];this.style={};this.dataset={};this.checked=false;this.classList={add:()=>{},remove:()=>{},toggle:()=>{}}}
+ setAttribute(name,value){this[name]=value} removeAttribute(name){delete this[name]}
  append(...v){this.children.push(...v)} replaceChildren(...v){this.children=v} focus(){} scrollIntoView(){} showModal(){this.open=true} close(){this.open=false} addEventListener(n,fn){this['on'+n]=fn}
  querySelectorAll(selector){return this.children.flatMap(c=>[...((c.tag==='input'||c.tag==='select')?[c]:[]),...c.querySelectorAll(selector)])}
 }
 const row={id:'risk1',title:'<script>unsafe</script>',editor:'codex',editor_label:'Codex',project:'project',location:'query.py:2',severity:'高',status:'待处理',editable:true,revision:'revision',description:'description'};
-async function page({search='',result,post,get,session={csrf:'fixture-token'}}={}){
+async function page({search='',pathname='/risks',result,post,get,session={csrf:'fixture-token'}}={}){
  const els=Object.fromEntries([...html.matchAll(/id="([^"]+)"/g)].map(m=>[m[1],new Element()]));
- els.archived.value='false';const requests=[];
+ els.archived.value='false';const requests=[],timers=new Map();
+ let timerId=0;
+ const location={pathname,search,assign:url=>requests.push(url)};
+ const navigate=path=>{const url=new URL(path,'http://localhost');location.pathname=url.pathname;location.search=url.search};
+
  const document={getElementById:id=>els[id],createElement:tag=>new Element(tag),querySelectorAll:()=>[],addEventListener(){}};
  const ctx=vm.createContext({document,URLSearchParams,Date,Set,crypto:{randomUUID:()=> 'request-0001'},structuredClone,
-   window:{location:{search,assign:url=>requests.push(url)}},history:{replaceState(){}},setTimeout:()=>{},
+   window:{location},history:{replaceState:(_,__,path)=>navigate(path),pushState:(_,__,path)=>navigate(path)},
+   setTimeout:fn=>{timers.set(++timerId,fn);return timerId},clearTimeout:id=>timers.delete(id),
    fetch:async(url,options)=>{requests.push({url,options});return {ok:true,json:async()=>url==='/api/session'?session:url==='/api/session/authorize'?{csrf:'approved-token'}:options?.method==='POST'?(post||{results:[]}):(get?.(url)||result||{status:'AVAILABLE',risks:[row],total:5000,partial:false,note:'fixture',statistics:{status:{待处理:5000},editor:{codex:5000}}})}}});
  vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],ctx);
- await new Promise(resolve=>setImmediate(resolve));return {els,requests,ctx};
+ await new Promise(resolve=>setImmediate(resolve));return {els,requests,ctx,timers,location};
 }
 test('direct dashboard explains missing write access and retains the form after approval',async()=>{
  const values={agent:{audit_business_logic:false}};
@@ -209,4 +215,38 @@ test('Stop waiting mode shows the host limit and round-trips without changing sc
  assert.equal(saved.values.development.stop_fallback.wait_mode,'wait_for_result');
  assert.equal(saved.values.scan.execution.sast_timeout_seconds,45);
  assert.ok(JSON.stringify(els.configFields.children).includes('不支持无限等待'));
+});
+
+test('direct update links use the dashboard and resume an active install without a new submission',async()=>{
+ let update={active_version:'0.3.15',job:{status:'ACTIVATING'},release_check:'FRESH'};
+ const {els,requests,ctx,timers}=await page({pathname:'/updates',get:url=>url==='/api/updates'?update:null});
+ assert.equal(els.pageTitle.textContent,'工具更新');
+ assert.equal(els.updatesOpen['aria-current'],'page');
+ assert.equal(els.riskView.hidden,true);
+ assert.equal(els.updateView.hidden,false);
+ assert.match(els.updateState.textContent,/正在试启动/);
+ assert.ok(!requests.some(r=>r.url.startsWith('/api/risks')));
+ assert.equal(timers.size,1);
+ vm.runInContext("showView('risks')",ctx);
+ assert.equal(timers.size,0);
+ update={active_version:'0.3.16',job:{status:'INSTALLED_AWAITING_CONNECTION'},release_check:'FRESH'};
+ els.updatesOpen.onclick();
+ await tick();
+ assert.equal(els.updateActive.textContent,'0.3.16');
+ assert.match(els.updateState.textContent,/重启 Codex/);
+ assert.ok(!requests.some(r=>r.options?.method==='POST'));
+});
+test('update navigation preserves risk filters when returning to the list',async()=>{
+ const {els,ctx,requests,location}=await page({search:'?workspace=work&session=chat',
+   get:url=>url==='/api/updates'?{active_version:'0.3.16',release_check:'STALE'}:null});
+ els.updatesOpen.onclick();
+ await tick();
+ assert.equal(location.pathname,'/updates');
+ assert.equal(els.updateCheck.hidden,false);
+ assert.equal(els.updateApply.hidden,true);
+ vm.runInContext("showView('risks')",ctx);
+ await tick();
+ assert.equal(location.pathname,'/risks');
+ assert.equal(location.search,'?workspace=work&session=chat');
+ assert.match(requests.at(-1).url,/workspace=work&session=chat/);
 });

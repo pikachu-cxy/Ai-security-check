@@ -36,6 +36,10 @@ def test_command_host_new_edit_continues_bound_executor_without_registration(sam
     from security_runtime.business_audit import offer
     root, service, ref, _ = sample
     risks, args, batch, review = child(sample)
+    with risks.checks.transaction() as db:
+        check = risks.checks._get(db, ref)
+        check['effective_config']['values']['development']['business_audit_mode'] = 'standard'
+        risks.checks._put(db, ref, check)
     assert process(risks, 'submit', batch_id=batch['batch_id'], request_id='first-file',
                    business_reviews=[review], **args)['review_saved']
     (root/'later.py').write_text('later = True\n')
@@ -98,9 +102,44 @@ def test_unissued_parent_evidence_cannot_be_used_by_child(sample):
     risks,args,batch,review=child(sample)
     (sample[0]/'secret_context.py').write_text('protected = True\n')
     ref=risks.read('secret_context.py',1,1,related=True)['evidence_ref']
-    with pytest.raises(ValueError,match='NOT_ISSUED'):
-        process(risks,'submit',batch_id=batch['batch_id'],request_id='request-bad-ref',
-                business_reviews=[dict(review,evidence_refs=[*review['evidence_refs'],ref])],**args)
+    kwargs = dict(batch_id=batch['batch_id'], request_id='request-bad-ref', **args)
+    rejected = process(risks, 'submit', business_reviews=[
+        dict(review, evidence_refs=[*review['evidence_refs'], ref])], **kwargs)
+    assert not rejected['received']
+    assert rejected['errors'][0]['reason_code'] == 'AUDIT_EVIDENCE_NOT_ISSUED'
+    assert process(risks, 'submit', business_reviews=[review], **kwargs)['review_saved']
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_next_batch_reuses_only_authorized_current_evidence(sample, changed):
+    root, service, ref, risks = sample
+    risks, args, batch, first = child(sample)
+    (root/'second.py').write_text('value = 1\n')
+    service.record(root, ref, ['second.py'])
+    saved = process(risks, 'submit', batch_id=batch['batch_id'], request_id='first-save',
+                    business_reviews=[first], **args)
+    next_batch = saved['next_batch']['batch']['batch_id']
+    evidence = process(risks, 'read', batch_id=next_batch,
+        windows=[dict(file_path='second.py', start_line=1, end_line=1)], **args)['evidence'][0]
+    second = dict(first, file_path='second.py',
+                  evidence_refs=[evidence['evidence_ref'], *first['evidence_refs']])
+    submit = dict(batch_id=next_batch, request_id='second-save', **args)
+    denied = process(risks, 'submit', business_reviews=[second], **submit)
+    assert not denied['received']
+    assert denied['errors'] == [dict(file_path='second.py', evidence_path='query.py',
+        reason_code='AUDIT_RELATED_AUTHORIZATION_REQUIRED', next_action='stream_authorize_paths')]
+    manage(risks, 'authorize_paths', related_paths=['query.py'])
+    if changed:
+        (root/'query.py').write_text('value = 2\n')
+        stale = process(risks, 'submit', business_reviews=[second], **submit)
+        assert not stale['received']
+        assert stale['errors'] == [dict(file_path='second.py', evidence_path='query.py',
+            reason_code='DEVELOPMENT_RISK_EVIDENCE_STALE', next_action='read')]
+        refreshed = process(risks, 'read', batch_id=next_batch,
+            windows=[dict(file_path='query.py', start_line=1, end_line=1)], **args)['evidence'][0]
+        second['evidence_refs'][1] = refreshed['evidence_ref']
+    assert process(risks, 'submit', business_reviews=[second], **submit)['review_saved']
+    assert set(valid_reviews(risks.current_check())) == {'query.py', 'second.py'}
 
 
 def test_result_survives_publication_failure_and_recover(sample,monkeypatch):

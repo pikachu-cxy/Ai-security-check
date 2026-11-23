@@ -6,11 +6,11 @@
 
 - 激活后的 Codex 同步见 `runtime_update.py`，复用 `integration_recovery.py` 的签名迁移与配置校验，更新页展示同步进度和待修复状态。
 
-- 工具更新页的手动刷新和候选过期处理见 `risk_dashboard.py`、`runtime_update.py`、`assets/runtime_updates.html` 和 `test_runtime_update.py`。
+- 工具更新页的手动刷新和候选过期处理见 `risk_dashboard.py`、`runtime_update.py`、`assets/risk_dashboard.html` 的更新视图、`test_risk_dashboard_ui.cjs` 和 `test_runtime_update.py`。
 
 - `runtime_update.py` 负责发行检测、缓存、候选、下载与更新任务。`delivery.py` 负责槽位和活动指针。`development_check_worker.py` 派发后台刷新。
 - 跨版本试启动由 `delivery.py` 将已核验目标包身份传给 `codex_integration.py:probe_runtime`。升级和回滚沿用同一校验，回归见 `test_runtime_update.py`。
-- `mcp_tools/development_check.py` 调用 `review_delivery.py` 的末页交付装饰器，保持 `development_views.py` 原分流。宿主按 `host_development.py` 与 `tasks/ownership.py` 的指导附上更新尾注。本机更新链接、同源提交及按钮见 `dashboard_service.py`、`risk_dashboard.py`、`assets/runtime_updates.html`。CLI 见 `cli.py`。
+- `mcp_tools/development_check.py` 调用 `review_delivery.py` 的末页交付装饰器，保持 `development_views.py` 原分流。宿主按 `host_development.py` 与 `tasks/ownership.py` 的指导附上更新尾注。本机更新链接、同源提交及按钮见 `dashboard_service.py`、`risk_dashboard.py`、`assets/risk_dashboard.html`。CLI 见 `cli.py`。
 - MCP Apps 资源和兼容切换见 `runtime_update_app.py`、`assets/runtime_update_card.html`、`global_mcp.py`、`mcp_tool_groups.py`、`mcp_update_proxy.py`、`workspace_binding_status.py`。构建写入 Hook 兼容身份见 `scripts/build/build_standalone.py`。定向验收见 `test_runtime_update.py` 与 `test_mcp_runtime_updates.py`。
 
 ## SAST 文件能力与复查
@@ -157,6 +157,7 @@ OpenGrep macOS 载荷复用：`opengrep_payload.py` 在安装/显式准备时从
 
 | 修改范围 | 源码入口 | 定向验证 |
 | --- | --- | --- |
+| 审计模式默认值与宿主分流 | `user_config.py`、`business_audit.py:offer` | `tests/test_user_config_stop.py`、`tests/test_host_development_parity.py` |
 | 通用源码片段与首包 | `audit_assets.py`、`audit_stream_service.py:process` | `tests/test_audit_assets.py`、`tests/test_audit_stream_service.py` |
 | Planner 协议、黑板、任务租约与最终发布 | `deep_audit.py`、`incremental_audit.py`、`development_risks.py`、`mcp_tools/development_check.py` | `tests/test_deep_audit.py`、`tests/test_incremental_audit.py`、`tests/test_business_audit.py` |
 | 原报告交付和两图追溯 | `development_views.py`、`development_stop.py`、`audit_graph_view.py`、`risk_dashboard.py`、`assets/risk_dashboard.html` | `tests/test_deep_audit.py`、`tests/test_dashboard_delivery.py`、`tests/test_risk_dashboard_ui.cjs` |

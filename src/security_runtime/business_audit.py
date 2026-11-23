@@ -192,7 +192,7 @@ def offer(hooks, root, owner, ref, *, prefer_active_executor=False):
         check.update(audit_offered_seq=check['dirty_seq'], audit_offered_at=time.time())
         store._put(db, ref, check)
         active = continuation(check) if prefer_active_executor else None
-    if batch_config(check)['development']['business_audit_mode'] == 'deep':
+    if owner.get('host') == 'codex' and batch_config(check)['development']['business_audit_mode'] == 'deep':
         return ('本轮启用深度业务审计，check_ref='+ref+'。收到本提示即在当前开发期通过 development_review 调用'
                 ' manage_development_audit 的 deep_prepare，不要等到 Stop 交付阶段（Stop 不新建业务审计）。'
                 'session_ref 必须原样取自本会话宿主原生上下文（SessionStart/PostToolUse 注入的 task_session_ref），'

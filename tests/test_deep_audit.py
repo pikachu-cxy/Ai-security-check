@@ -333,6 +333,24 @@ def test_finish_stays_partial_until_every_task_is_accepted(prepared):
     assert not valid_reviews(risks.current_check())
 
 
+def test_finish_returns_cleanup_for_sealed_round_even_after_next_edit(prepared, monkeypatch):
+    root, service, ref, risks, path, _, workers = prepared
+    task = process(risks, 'claim', **workers[0])['task']
+    original = risks._submit
+
+    def submit_then_edit(*args, **kwargs):
+        result = original(*args, **kwargs)
+        service.record(root, ref, [path])
+        return result
+
+    monkeypatch.setattr(risks, '_submit', submit_then_edit)
+    reply = deep_audit.manage(risks, 'finish', reason='结束当前审计')
+    assert reply['stage'] == 'PARTIAL'
+    assert reply['registered_worker_refs'] == [worker['agent_ref'] for worker in workers]
+    assert 'audit_token' not in str(reply)
+    assert risks.current_check()['audit_stream']['batches'][task['batch_id']]['status'] == 'CANCELLED'
+
+
 def test_related_guard_is_task_authorized_and_rechecked_at_finish(prepared):
     root, _, _, risks, path, _, workers = prepared
     guard = root / 'guard.py'

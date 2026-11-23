@@ -26,7 +26,7 @@ DEFAULTS = {
         'update_interval_seconds': 0, 'stale_policy': 'allow_with_gap'}},
     'agent': {'review_scanner_findings': True, 'audit_business_logic': False},
     'development': {'business_audit_delivery': 'fast', 'review_response_bytes': 65536, 'repair_recheck_enabled': False,
-                    'business_audit_mode': 'standard', 'business_audit_workers': 2,
+                    'business_audit_mode': 'deep', 'business_audit_workers': 2,
                     'stop_fallback': {'enabled': True, 'wait_mode': 'bounded', 'native_wait_seconds': 18, 'wait_timeout_seconds': 120, 'max_continuations': 2}},
 }
 

@@ -14,7 +14,7 @@
 
 文字回退和可点击链接分别限频。已交付文字回退的批次仍可在后台恢复后获得链接，已交付链接的批次继续沿用原去重规则。
 
-`GET /updates` 与 `GET /api/updates` 只读。报告链接生成前核对同构建的后台健康和更新路由标识，指向普通本机 `/updates`。直接访问或从风险管理的「工具更新」进入都可以在页面点击确认。安装 `POST /api/updates` 验证回环 Host、同源 Origin 和 JSON 请求，只接收 `{"candidate_id": "..."}`，无需 Cookie 或链接授权。服务校验本地官方候选是否有效，并在后台重新核验发行和包摘要。风险处置、设置和关闭服务继续沿用原鉴权。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
+`GET /updates` 与 `GET /api/updates` 只读。`/updates` 与风险管理共用页面，直接进入「工具更新」视图。报告链接生成前核对同构建的后台健康和更新路由标识，指向普通本机 `/updates`。直接访问或从风险管理的「工具更新」进入都可以在页面点击确认。安装 `POST /api/updates` 验证回环 Host、同源 Origin 和 JSON 请求，只接收 `{"candidate_id": "..."}`，无需 Cookie 或链接授权。服务校验本地官方候选是否有效，并在后台重新核验发行和包摘要。风险处置、设置和关闭服务继续沿用原鉴权。命令行提供 `security-check update status --json` 和显式 `security-check update apply --candidate-id … --json`。冻结程序须通过签名活动安装校验。状态分别暴露候选、磁盘活动构建和当前服务进程构建，页面没有当前聊天连接身份时留空。
 
 `ui://ai-security-runtime/runtime-update` 使用 `text/html;profile=mcp-app`，支持标准初始化与 `ui/open-link`。报告工具暂未绑定资源，标准桥接会传送整份工具参数与结果。带代理的包仍用全局 `security-check mcp` 入口，按 `mcp_proxy_contract`、`mcp_hook_identity`、存储契约、初始化及发现结果和签名会话路由决定切换资格。需由同一连接读取 `get_runtime_info` 核实实际构建。
 
@@ -338,6 +338,8 @@ GET /api/detail 必须带 id、revision，仅可再带 context（0–20，默认
 
 子任务首次 claim 返回固定批次、首批证据及从 Observation 模型生成的必填字段清单。证据足够直接 submit；不重新读取同一窗口。参数校验失败返回有界 `field_errors`，嵌套字段使用 observations.0.description 等路径；未知字段只返回合法字段列表，不回显输入值、任意键名或凭据。领取、保存和状态查询仍沿原权限边界。
 
+标准增量审计可复用同轮、同一执行者和同一授权下已结束批次签发的证据。证据路径仍须在当前批次范围或明确授权的关联路径内，提交时核对文件内容及申报位置。可纠正的证据问题在写入回执前返回 `AUDIT_SUBMISSION_NEEDS_CORRECTION`，逐项带 `file_path`、`reason_code`、`next_action` 和适用的 `evidence_path`。`received=false` 时沿用原批次和请求 ID 修正；已接收请求的去重和恢复沿用原提交内容。源文件已被新编辑版本取代时，旧版本不计入完成进度。
+
 `stream_failed` 由父会话携带已绑定 agent_ref 记录执行失败；不需要旧协议的 audit_id。`executor_stage` 区分未派发、已派发、已领取与失败，不能把登记成功当作审计已保存。已绑定 continuation 直接提供原执行者，无需先额外查询状态。
 
 静态复核完成而业务审计未完成时，原提交回执仍返回完整静态报告、链接和独立 audit_continuation；`STATIC_REPORT_READY_AUDIT_PENDING` 不代表业务审计完成。候选首次响应可附同文件当前有效 `related_confirmed`，仅供判断是否同一问题。跨来源关联使用原 duplicate_of，须校验当前审计结果与覆盖扫描位置的证据；不以文件相同自动合并。相关摘要受原响应预算裁剪，不挤掉候选身份；截断明确标识。
@@ -350,7 +352,7 @@ Cursor / WorkBuddy 的编辑适配通过 host_development 请求已有审计 off
 
 `stream_prepare/started` 和 `process_development_audit(action=claim)` 的原身份与授权不变。流式领取的 `context.asset_graph` 提供 `FILE`/`SOURCE_REGION` 节点、带证据引用的边和缺口。可独立使用 `read` 补证。首包不解锁图外文件，已有显式授权的关联路径才纳入提取。
 
-深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产图和已读取的首包源码。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：Planner 可绑定 `SOURCE_REGION` 或变更行未知的 `FILE`。每个源码片段带路径、实际行范围、源码哈希、证据引用和定位来源（`GIT_HEAD_DIFF`），只有同版本证据读取成功后才入图。首包源码直接复用这次取证的内容。变更行未知时仅提供文件路径和总行数，由 Worker 选择并读取所需行段。配置保持 `standard` 默认值，深度模式下 `business_audit_workers` 支持 2 或 3。非 Codex、宿主未声明并发或没有可取证资产时回落既有单 Worker 协议。
+深度模式通过所有者接口 `deep_prepare(host_parallel=true)` 取得首轮资产图和已读取的首包源码。资产图与语言、框架无关，用 `FILE → SOURCE_REGION` 表示：Planner 可绑定 `SOURCE_REGION` 或变更行未知的 `FILE`。每个源码片段带路径、实际行范围、源码哈希、证据引用和定位来源（`GIT_HEAD_DIFF`），只有同版本证据读取成功后才入图。首包源码直接复用这次取证的内容。变更行未知时仅提供文件路径和总行数，由 Worker 选择并读取所需行段。业务审计启用后默认选择 `deep`，`business_audit_workers` 默认 2、可选 3。显式配置 `standard` 时走单 Worker。非 Codex、宿主未声明并发或没有可取证资产时回落既有单 Worker 协议。
 
 `deep_prepare.plan_task_schema` 由 `deep_plan.tasks` 使用的 `AuditTask` 模型生成。每项必填 `direction`、`question`、`acceptance`、整数 `priority`（1–5）和 `asset_ids` 数组；`paths` 与 `depends_on` 可选。分组和直接调用共享校验，格式错误返回 `field_errors`，保留当前轮次供修正后重试。
 
@@ -364,6 +366,6 @@ Planner 提交 `deep_plan(tasks=...)`，字段为 `direction/question/acceptance
 
 `process_development_audit(action=board)` 是运行中的共享黑板。带 `batch_id`、`request_id` 和 `board_entries`（`summary` + `evidence_refs`）时发布，任务必须仍为 `RUNNING`、租约有效、版本未变，且引用必须已签发给该任务；Runtime 补齐 `seq`、任务 ID、Worker、轮次和发布时间。只带 `after_seq` 时读取同轮增量。同一 `request_id` 重试不新增条目，内容不同则拒绝。黑板只共享脱敏摘要和引用索引，不含源码、Worker 凭据或跨任务读取权限；把该源码用于自己的结论仍须按原权限取证。条目是有证据的观察，不是已确认风险。
 
-`deep_status` 返回任务状态、黑板条目、已提交任务的结论和待补缺口，不必等整波任务完成。`deep_decide_task(task_id, receipt_id, decision, reason)` 仅父会话可调用，对当前版本的有效回执记录 `ACCEPTED`、`NEEDS_EVIDENCE` 或 `INCONCLUSIVE`，未判定为 `PENDING`；只有 `ACCEPTED` 解锁依赖任务。Planner 用 `deep_finish(reason=...)` 提议结束：必需任务均已接受、关键缺口已解决且覆盖与版本校验通过才报 `COMPLETE`，否则 `PARTIAL` 并保留已接受结果、未接受任务和剩余缺口。未被接受的观察不作为已确认风险交付。Stop 读取原交付时可收尾带缺口的深度任务，沿原扫描和报告链路。
+`deep_status` 返回任务状态、黑板条目、已提交任务的结论和待补缺口，不必等整波任务完成。`deep_decide_task(task_id, receipt_id, decision, reason)` 仅父会话可调用，对当前版本的有效回执记录 `ACCEPTED`、`NEEDS_EVIDENCE` 或 `INCONCLUSIVE`，未判定为 `PENDING`；只有 `ACCEPTED` 解锁依赖任务。Planner 用 `deep_finish(reason=...)` 提议结束：必需任务均已接受、关键缺口已解决且覆盖与版本校验通过才报 `COMPLETE`，否则 `PARTIAL` 并保留已接受结果、未接受任务和剩余缺口。未被接受的观察不作为已确认风险交付。Stop 读取原交付时可收尾带缺口的深度任务，沿原扫描和报告链路。`deep_finish` 封存成功后返回 `registered_worker_refs` 和关闭指引。宿主同时保留实际启动但未登记成功的 Worker ID，调用其关闭操作并核对回执。报告保存与宿主退出是两个独立结果。
 
 `GET /api/audit-graphs?editor=…&workspace=…&check=…&seq=…` 在本机风险管理页读取签名检查记录和当前输入序号。可附 `evidence` 查看图中已引用证据，附匹配的 `asset` 定位节点行范围。代码经脱敏，摘要变化时只显示保存位置。该接口不提交复核或创建新证据。

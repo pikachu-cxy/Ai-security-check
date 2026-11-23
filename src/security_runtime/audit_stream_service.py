@@ -8,7 +8,8 @@ import secrets
 import time
 
 from . import incremental_audit as state
-from .development_risks import BusinessReview, Observation, require, safe
+from .development_risks import BusinessReview, DevelopmentRiskError, Observation, require, safe
+from .local_evidence import EvidenceUnavailable
 from .scan_request import relative_path
 
 
@@ -109,6 +110,77 @@ def _public_batch(batch):
     return {k: v for k, v in batch.items() if k not in {'token', 'token_hash', 'receipts', 'asset_graph'}}
 
 
+def _validate_submission(risks, check, batch, observations, reviews, ledger):
+    stream = check['audit_stream']
+    current = next(r for r in stream['rounds'] if r['round_id'] == batch['round_id'])
+    issued = set(batch.get('issued_evidence', []))
+    reusable = {ref for earlier in stream['batches'].values()
+                if earlier['round_id'] == batch['round_id'] and earlier['status'] == 'COMPLETE'
+                and not earlier.get('task_id') and not earlier.get('aggregate')
+                and earlier['agent_ref'] == batch['agent_ref'] and earlier['token_hash'] == batch['token_hash']
+                for ref in earlier.get('issued_evidence', [])}
+    allowed = set(batch['versions']) | set(check['audit_delegate'].get('related_paths', []))
+    reviewed = {review['file_path'] for review in reviews}
+    checked, errors, superseded = {}, [], []
+    items = [(review, False) for review in reviews] + [(observation, True) for observation in observations]
+    for item, finding in items:
+        path = item['file_path']
+        reason, dependency, action = None, path, 'submit'
+        refs = item['evidence_refs']
+        if path not in batch['versions']:
+            reason = 'AUDIT_PATH_NOT_CLAIMED'
+        elif current['required'].get(path) != batch['versions'][path] or path in current.get('superseded', {}):
+            if path not in superseded:
+                superseded.append(path)
+            continue
+        elif finding and path not in reviewed:
+            reason = 'AUDIT_FINDING_WITHOUT_COVERAGE'
+        elif not finding and item['coverage'] == 'PARTIAL' and not item['uncovered']:
+            reason = 'BUSINESS_COVERAGE_DETAIL_REQUIRED'
+        elif not finding and item['coverage'] == 'COMPLETE' and item['uncovered']:
+            reason = 'BUSINESS_COVERAGE_CONFLICT'
+        elif finding and item['line_end'] < item['line_start']:
+            reason = 'DEVELOPMENT_RISK_LOCATION_INVALID'
+        else:
+            has_location = False
+            action = 'read'
+            for ref in refs:
+                evidence = ledger['evidence'].get(ref, {})
+                if ref not in issued and (ref not in reusable or not evidence):
+                    reason = 'AUDIT_EVIDENCE_NOT_ISSUED'
+                    break
+                dependency = evidence.get('file_path', path)
+                if dependency not in allowed:
+                    reason, action = 'AUDIT_RELATED_AUTHORIZATION_REQUIRED', 'stream_authorize_paths'
+                    break
+                if ref not in checked:
+                    try:
+                        risks.evidence(ledger, [ref])
+                    except DevelopmentRiskError as error:
+                        checked[ref] = error.reason_code
+                    except (EvidenceUnavailable, OSError):
+                        checked[ref] = 'EVIDENCE_READ_FAILED'
+                    else:
+                        checked[ref] = None
+                if checked[ref]:
+                    reason = checked[ref]
+                    break
+                if dependency == path and (not finding or (
+                        evidence['line_start'] <= item['line_start'] <= item['line_end'] <= evidence['line_end'])):
+                    has_location = True
+            if not reason and not has_location:
+                dependency = path
+                reason = 'DEVELOPMENT_RISK_LOCATION_UNREAD' if refs else 'DEVELOPMENT_RISK_EVIDENCE_REQUIRED'
+        if reason:
+            error = dict(file_path=path, reason_code=reason, next_action=action)
+            if action != 'submit':
+                error['evidence_path'] = dependency
+            if action == 'read' and finding and dependency == path:
+                error.update(start_line=item['line_start'], end_line=item['line_end'])
+            errors.append(error)
+    return {ref for ref, error in checked.items() if error is None}, errors, superseded
+
+
 def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=None,
             windows=None, observations=(), business_reviews=(), task_result=None,
             board_entries=(), after_seq=0):
@@ -159,7 +231,8 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
                 instruction='没有预取源码的文件由 Worker 按任务选择行段并调用 read。'
                             '单窗可超过 80 行；遇到响应容量限制时缩短行段。'
                             '发现项使用 observations 的完整字段，report_content 不能代替必填的 description、impact、fix_advice；不传 kind。'
-                            '没有发现则 observations=[]，仍提交已审路径的 business_reviews。原样保留身份、batch_id 和稳定 request_id。')
+                            '没有发现则 observations=[]，仍提交已审路径的 business_reviews。同轮已授权且未变化的证据可复用。'
+                            'received=false 时按 errors 修正，沿用原 batch_id 和 request_id；已接收的请求重试保持提交内容不变。')
         return result
     if action == 'recover' and request_id:
         check = risks.current_check()
@@ -220,11 +293,24 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             if key not in {'file_path', 'issue_key', 'decision', 'severity', 'category', 'evidence_refs'}:
                 v[key] = _scrub(value)
     payload = dict(observations=values, business_reviews=reviews)
+    superseded = []
     with risks.checks.transaction() as db:
         check = risks.checks._get(db, risks.ref)
         batch = _batch(check, batch_id, audit_token, agent_ref)
-        require(all(v['file_path'] in batch['versions'] for v in [*values, *reviews]), 'AUDIT_PATH_NOT_CLAIMED')
-        receipt = state.receive(check, batch_id, audit_token, request_id, payload)
+        require(isinstance(request_id, str) and 8 <= len(request_id) <= 128,
+                'BUSINESS_AUDIT_REQUEST_INVALID')
+        if request_id not in check['audit_stream'].get('receipts', {}):
+            refs, errors, superseded = _validate_submission(risks, check, batch, values, reviews, risks.load(db))
+            if errors:
+                return dict(received=False, applied=False, error='AUDIT_SUBMISSION_NEEDS_CORRECTION',
+                            batch_id=batch_id, errors=errors, scanner_run=False)
+            batch['issued_evidence'] = sorted(set(batch.get('issued_evidence', [])) | refs)
+        try:
+            receipt = state.receive(check, batch_id, audit_token, request_id, payload)
+        except ValueError as error:
+            if str(error) not in {'BUSINESS_AUDIT_REQUEST_CONFLICT', 'BUSINESS_AUDIT_RESULT_ALREADY_RECEIVED'}:
+                raise
+            raise DevelopmentRiskError(str(error)) from error
         risks.checks._put(db, risks.ref, check)
     if receipt.get('status') != 'RECEIVED':
         return dict(receipt={k:receipt[k] for k in ('request_id','status','applied_paths')},
@@ -239,10 +325,11 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
     issued = set(batch.get('issued_evidence', []))
     for review in reviews:
         refs = review['evidence_refs']
-        require(set(refs) <= issued, 'AUDIT_EVIDENCE_NOT_ISSUED')
         try:
-            require(current['required'].get(review['file_path']) == batch['versions'][review['file_path']],
+            require(current['required'].get(review['file_path']) == batch['versions'][review['file_path']]
+                    and review['file_path'] not in current.get('superseded', {}),
                     'BUSINESS_AUDIT_INPUT_CHANGED')
+            require(set(refs) <= issued, 'AUDIT_EVIDENCE_NOT_ISSUED')
             evidence = risks.evidence(ledger, refs)
             require(any(e['file_path'] == review['file_path'] for e in evidence), 'DEVELOPMENT_RISK_LOCATION_UNREAD')
             dependencies[review['file_path']] = [e['file_path'] for e in evidence]
@@ -251,9 +338,9 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
             pass  # Retained in inbox; not accepted as current coverage.
     valid = {v['file_path'] for v in valid_reviews_list}
     for value in values:
-        require(set(value['evidence_refs']) <= issued, 'AUDIT_EVIDENCE_NOT_ISSUED')
         try:
             require(value['file_path'] in valid, 'AUDIT_FINDING_WITHOUT_COVERAGE')
+            require(set(value['evidence_refs']) <= issued, 'AUDIT_EVIDENCE_NOT_ISSUED')
             risks.evidence(ledger, value['evidence_refs'])
             valid_values.append(value)
         except (ValueError, OSError):
@@ -281,6 +368,7 @@ def process(risks, action, *, audit_token, agent_ref, batch_id=None, request_id=
     next_batch = process(risks, 'claim', audit_token=audit_token, agent_ref=agent_ref)
     return dict(received=True, applied=bool(valid), review_saved=bool(valid),
                 applied_paths=sorted(valid), pending_paths=sorted(set(batch['versions'])-valid),
+                superseded_paths=superseded,
                 next_batch=next_batch, scanner_run=False)
 
 

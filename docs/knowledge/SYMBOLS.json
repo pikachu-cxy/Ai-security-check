@@ -196,60 +196,64 @@
     },
     {
       "path": "src/security_runtime/audit_stream_service.py",
-      "sha256": "2cd27a814b1a3cdebe68bd3c97e7e04fe6419c39342838d1584c49ae7cda95a2",
+      "sha256": "546ee20e628607b490517d47c5e51c94b01403a33fa5b9a45e355c4cbbebf6a0",
       "purpose": "Owner-authorized child audit capability and durable result reception.",
       "symbols": [
         {
           "name": "authenticate",
-          "line": 15
+          "line": 16
         },
         {
           "name": "manage",
-          "line": 32
+          "line": 33
         },
         {
           "name": "_batch",
-          "line": 103
+          "line": 104
         },
         {
           "name": "_public_batch",
-          "line": 108
+          "line": 109
+        },
+        {
+          "name": "_validate_submission",
+          "line": 113
         },
         {
           "name": "process",
-          "line": 112
+          "line": 184
         },
         {
           "name": "validate_commit",
-          "line": 287
+          "line": 375
         },
         {
           "name": "valid_reviews",
-          "line": 297
+          "line": 385
         },
         {
           "name": "assessment_current",
-          "line": 320
+          "line": 408
         },
         {
           "name": "_status",
-          "line": 334
+          "line": 422
         },
         {
           "name": "revalidate",
-          "line": 350
+          "line": 438
         },
         {
           "name": "absent",
-          "line": 386
+          "line": 474
         },
         {
           "name": "absence_evidence",
-          "line": 397
+          "line": 485
         },
         {
           "name": "_scrub",
-          "line": 413
+          "line": 501
         }
       ]
     },
@@ -478,7 +482,7 @@
     },
     {
       "path": "src/security_runtime/business_audit.py",
-      "sha256": "396e158dab30e88c81d87dc62dd6864cbb56631fa5678c74ac49481562126ba4",
+      "sha256": "30a4b19c7b850095a48b06e797bf06b4a97d54da86a356dd8653ba382fe7b747",
       "purpose": "Host-scheduled, version-bound read-only audit handoffs during development.",
       "symbols": [
         {
@@ -2138,7 +2142,7 @@
     },
     {
       "path": "src/security_runtime/dashboard_service.py",
-      "sha256": "536e3bd0d54af7223a181175562cdd5914b6a87d2ac9341a4171e3ba9aecb182",
+      "sha256": "e5a1b453138fd23bc9deabf6a866e0f55dec54fc6e1ef6f6015a729516b2b929",
       "purpose": "Shared local dashboard lifecycle, independent of scan and review transactions.",
       "symbols": [
         {
@@ -2319,7 +2323,7 @@
     },
     {
       "path": "src/security_runtime/deep_audit.py",
-      "sha256": "f5fb98bbd791adf908cda9a9cc33d2dca2d7a0feb2233b3ff082f04a9b72c705",
+      "sha256": "fd3cd1ffa3dd4bbeab82fe8ec447fec3269747d2ed13fecbf813adcbecdc07fa",
       "purpose": "Planner handoff, shared board and task leases for bounded, read-only business audits.",
       "symbols": [
         {
@@ -2372,63 +2376,67 @@
         },
         {
           "name": "manage",
-          "line": 181
+          "line": 182
         },
         {
           "name": "_plan",
-          "line": 234
+          "line": 235
         },
         {
           "name": "_claim",
-          "line": 277
+          "line": 278
         },
         {
           "name": "_task",
-          "line": 301
+          "line": 302
         },
         {
           "name": "process",
-          "line": 312
+          "line": 313
         },
         {
           "name": "_board",
-          "line": 355
+          "line": 356
         },
         {
           "name": "decide",
-          "line": 396
+          "line": 397
         },
         {
           "name": "_read",
-          "line": 419
+          "line": 420
         },
         {
           "name": "_receipt",
-          "line": 446
+          "line": 447
         },
         {
           "name": "_submit",
-          "line": 451
+          "line": 452
         },
         {
           "name": "_proof_refs",
-          "line": 495
+          "line": 496
+        },
+        {
+          "name": "_finish_view",
+          "line": 502
         },
         {
           "name": "finish",
-          "line": 501
+          "line": 508
         },
         {
           "name": "validate_finish",
-          "line": 562
+          "line": 572
         },
         {
           "name": "seal_finish",
-          "line": 570
+          "line": 580
         },
         {
           "name": "revalidate",
-          "line": 599
+          "line": 609
         }
       ]
     },
@@ -5162,7 +5170,7 @@
     },
     {
       "path": "src/security_runtime/guidance/development_check_guidance.py",
-      "sha256": "129459fc35e959b215c0c021e118fcb0a67c3ac05f5a16de5e77e7e4cc2db530",
+      "sha256": "1f2fd2891b513d7d0e36d12db0803b742b5c00eb6fea7dd40612dcd234892a2e",
       "purpose": "Default observed-edit workflow; strict task audits keep their original method.",
       "symbols": []
     },
@@ -10617,7 +10625,7 @@
     },
     {
       "path": "src/security_runtime/risk_dashboard.py",
-      "sha256": "09eb96f063b42e4a7ab0a9fa48af9215ed59fe4a89e3a13e440e8a69e0ba2034",
+      "sha256": "c98f07af33354a641b58a4e585e1791daabfe445b6a35e7f2ae4aec34b30f893",
       "purpose": "Authenticated local management of persisted Runtime findings and development risks.",
       "symbols": [
         {
@@ -10686,15 +10694,15 @@
         },
         {
           "name": "Handler.do_POST",
-          "line": 394
+          "line": 392
         },
         {
           "name": "serve",
-          "line": 484
+          "line": 482
         },
         {
           "name": "launch",
-          "line": 504
+          "line": 502
         }
       ]
     },
@@ -17628,7 +17636,7 @@
     },
     {
       "path": "src/security_runtime/user_config.py",
-      "sha256": "a3c9b6b4fb4966ada1380a1999a774959e12929beef30ec9e2402cf7891ebdbe",
+      "sha256": "073e7f895b1871d7940dfe4140f0dd8d1bd78daf4fe4dd831e8084d36e7684a3",
       "purpose": "User-owned product preferences, independent of project source and install versions.",
       "symbols": [
         {

@@ -175,7 +175,8 @@ def _initial_view(job):
                 f"提交 deep_plan 后，先并发启动 {job['worker_limit']} 个真实只读子 Agent，"
                 '用 deep_started 分别登记实际 ID，再分别交付各自 child_call。'
                 '子 Agent 自己领取、取证、发布观察并提交；父会话用 deep_status 查看黑板与结论，'
-                '用 deep_decide_task 验收，无法派发时使用 deep_finish 结束并记录宿主限制。')
+                '用 deep_decide_task 验收，无法派发时使用 deep_finish 结束并记录宿主限制。'
+                '保留本轮实际启动的子 Agent ID，供保存结果后逐个关闭。')
 
 
 def manage(risks, action, *, tasks=(), agent_ref=None, reason=None, related_paths=(), host_parallel=False,
@@ -498,12 +499,18 @@ def _proof_refs(payload):
     return {ref for item in items for ref in item['evidence_refs']}
 
 
+def _finish_view(job):
+    return dict(status(job), registered_worker_refs=list(job['workers']),
+                cleanup_instruction='Runtime 已封存结果。父会话用宿主关闭工具关闭本轮实际启动的 Worker，'
+                '也包括启动成功但登记失败的 Worker。以宿主回执核对退出；无法关闭时如实记录。')
+
+
 def finish(risks, reason):
     check = risks.current_check()
     job = current(check)
     require(job, 'AUDIT_ROUND_CHANGED')
     if job['stage'] in {'COMPLETE', 'PARTIAL'}:
-        return status(job)
+        return _finish_view(job)
     require(isinstance(reason, str) and 0 < len(reason.strip()) <= 500, 'DEEP_AUDIT_REASON_REQUIRED')
     values, reviews, proof, gaps = {}, {}, set(), []
     ledger = risks.load()
@@ -556,7 +563,10 @@ def finish(risks, reason):
     risks._submit([v for v in list(values.values())[:50] if v['file_path'] in reviews],
         job['dirty_seq'], business_reviews=list(reviews.values()), return_risks=False,
         scan_id=None, audit_id=None, stream_commit=commit)
-    return status(current(risks.current_check()))
+    # Successful publication sealed this snapshot even if another edit now
+    # makes it historical. Return that round's cleanup handoff.
+    return _finish_view(dict(job, stage='PARTIAL' if commit['gaps'] else 'COMPLETE',
+                             stop_reason=commit['stop_reason']))
 
 
 def validate_finish(risks, row, check, commit):

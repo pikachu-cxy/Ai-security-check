@@ -2,7 +2,9 @@
 
 ## 0.3.16 — 2026-11-18
 
-- Optional deep business logic audits in Codex support files and source regions across languages and use two workers by default. Planning errors and missing per-file review receipts return actionable diagnostics.
+- Business auditing is off by default. Once enabled, Codex hosts with parallel support default to a planner and two workers. Single-worker mode can reuse authorized, unchanged evidence within a round and returns per-file submission guidance.
+- Deep audit closeout hands the host the worker list for shutdown. Windows CLI verification covered three dispatch cycles and worker reuse. Explicit shutdown and slot release in Codex Desktop still need verification.
+- Tool updates now appear inside the risk dashboard and retain their direct link. The page retries temporary status connection failures and prompts for an editor restart after installation.
 - Workers choose evidence ranges when Git cannot locate changed lines. A single window can exceed 80 lines within the response budget.
 - Completed deep audits show a single completion line in chat. The risk dashboard retains batch assets, tasks, evidence locations, and coverage details.
 - On macOS, the risk dashboard can request system approval directly before saving settings or changing risk dispositions.

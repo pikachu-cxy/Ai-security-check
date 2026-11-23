@@ -78,7 +78,7 @@ jobs:
               MARK_LATEST=false
               ;;
             refs/heads/feature/runtime-mvp:v0.3.16)
-              OLD_TAG=03deb464c390c902b466c337e01d892bd0c3744c
+              OLD_TAG=c81a1f85f44f4da61852b9c46762695b098385c2
               RELEASE_ID=449616723
               MARK_LATEST=true
               ;;

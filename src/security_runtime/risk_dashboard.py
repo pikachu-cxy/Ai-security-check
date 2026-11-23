@@ -316,10 +316,8 @@ class Handler(BaseHTTPRequestHandler):
         # Loopback reads stay open; the Host check above is the boundary that
         # blocks cross-site and DNS-rebinding access to this process.
         try:
-            if path in ('/risks', '/risks/'):
+            if path in ('/risks', '/risks/', '/updates'):
                 self.reply(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
-            elif path == '/updates':
-                self.reply(200, PAGE.with_name('runtime_updates.html').read_bytes(), 'text/html; charset=utf-8')
             elif path == '/api/updates':
                 from .runtime_update import update_status
                 if self.query():
